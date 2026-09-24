@@ -38,7 +38,9 @@ Live build: `4e1e68fdfd7b919eaa5fbbad5929feb4` (1,718,240 bytes), deployed 24/09
 ## Menu polish (third cut) and source control
 
 - Team rows are flex rows: label (wraps cleanly), a small chevron on the right, then the pages on their own line. Row-level highlight for the active team; the sidebar rules are prefixed `body nav.wa-nav` so they beat the wave114 skin, which is kept last in `<head>`.
-- Git: `/root/wa-hub` is now a git repository (branch `main`, first commit `2629e39` = this deploy). `.gitignore` keeps harness outputs, screenshots and keys out. Standing rule from here: every deploy ends with a commit (message names the wave and the live md5) and a push to GitHub once the remote and token are in place (vault `GITHUB_TOKEN`, app_config `github_repo`).
+- Git: `/root/wa-hub` is a git repository (branch `main`). `.gitignore` keeps harness outputs, screenshots, keys and `.pushed.json` out.
+- GitHub: **https://github.com/steelmacdonald-wa/welfareavenue-wa-hub** (private). The build sandbox cannot push directly (its egress proxy swaps in the session's own GitHub identity), so pushes go through the `repo-sync` edge function: `build/repo_push.py "<message>"` sends changed files as blobs and makes one commit via the Git Data API with the vault `GITHUB_TOKEN` (fine-grained PAT of steelmacdonald-wa, Contents read/write). The script needs `/tmp/wa.secret` (WA_TRIGGER_SECRET) in the session; `app_config.github_repo` records the repo. First push: commit `123efe54`, 195 files.
+- Standing rule from here: every deploy ends with `git commit` (message names the wave and the live md5) and `python3 build/repo_push.py "<same message>"`, so GitHub always matches the site.
 
 ## Backend
 
