@@ -1,0 +1,238 @@
+/* =====================================================================
+   WA v116h the Hub inbox (24/09/26): hub@welfareavenue.com, filed automatically
+   =====================================================================
+   Steel: members cc the hub on emails so it can pull updates on
+   initiatives and tasks: invoices, Loom meeting summaries, anything
+   worth keeping. His call on the flow: fully automatic, with an
+   activity trail and an undo.
+   - mail-pull v2 (edge function, cron every 30 minutes) reads the
+     inbox through domain-wide delegation, classifies each email
+     (invoice, meeting summary, update, noise) with the model (keyword
+     rules as fallback) and files it: invoices become Finance tasks with
+     the attachments stored; meeting summaries go through the transcript
+     pipeline; other threads land as an update on the team's page; noise
+     is ignored. hub_mail keeps the trail; change_log gets a row; Slack
+     gets one line per filing.
+   - This page (#hubmail, Meetings menu, leaders and admins) shows what
+     came in and what happened to it, with Undo, "File to a team" for
+     emails the model could not place, "File anyway" for ignored mail,
+     attachment links and a Sync now button.
+   ===================================================================== */
+(function () {
+  if (window.__wa116h) return; window.__wa116h = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var H = { host: null, rows: [], state: null, filter: 'all', loaded: 0, busy: false };
+  var KIND = { invoice: ['Invoice', GOLD, 'I'], meeting_summary: ['Meeting summary', PURPLE, 'M'], update: ['Update', GREEN, 'U'], noise: ['Ignored', '#8a8781', 'N'] };
+
+  var css = document.createElement('style');
+  css.id = 'wa116hcss';
+  css.textContent = '' +
+    '#hubmail{max-width:1240px;}' +
+    '#hubmail .card{padding:20px 22px;}' +
+    '.w116mb .top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 14px;font-size:12.5px;color:var(--wa-muted);}' +
+    '.w116mb .top .sp{flex:1 1 auto;}' +
+    '.w116mb .top button{font-family:' + HEAD + ';font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;background:' + GOLD + ';color:' + GREEN + ';border:none;border-radius:10px;padding:8px 16px;cursor:pointer;}' +
+    '.w116mb .top button[disabled]{opacity:.6;cursor:default;}' +
+    '.w116mb .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px;margin:0 0 16px;}' +
+    '.w116mb .sum .k{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;}' +
+    '.w116mb .sum .k b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:30px;line-height:1;color:' + GREEN + ';margin:0 0 6px;}' +
+    '.w116mb .sum .k.warn b{color:' + FLAG + ';}' +
+    '.w116mb .sum .k.on{outline:2px solid ' + GOLD + ';}' +
+    '.w116mb .how{background:rgba(16,63,57,.05);border-radius:14px;padding:12px 16px;font-size:13px;line-height:1.5;color:var(--wa-text);margin:0 0 16px;}' +
+    '.w116mb .how b{color:' + GREEN + ';}' +
+    '.w116mb .how code{font-family:' + BODY + ';font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border-radius:6px;padding:1px 6px;}' +
+    '.w116mr{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 0;border-top:1px solid rgba(16,63,57,.08);}' +
+    '.w116mr:first-of-type{border-top:none;}' +
+    '.w116mr .k{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-weight:600;font-size:18px;color:' + CREAM + ';}' +
+    '.w116mr .b{min-width:0;}' +
+    '.w116mr .b .m1{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11px;color:var(--wa-muted);margin:0 0 3px;}' +
+    '.w116mr .b .m1 .kd{font-weight:800;letter-spacing:.6px;text-transform:uppercase;font-size:10px;}' +
+    '.w116mr .b .t{font-size:14.5px;font-weight:700;color:var(--wa-text);line-height:1.3;}' +
+    '.w116mr .b .s{font-size:12.5px;color:var(--wa-muted);line-height:1.45;margin:3px 0 0;}' +
+    '.w116mr .b .f{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin:7px 0 0;}' +
+    '.w116mr .b .f .d{width:9px;height:9px;border-radius:50%;display:inline-block;flex:0 0 auto;}' +
+    '.w116mr .b .f .st{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:2px 8px;background:rgba(16,63,57,.10);color:' + GREEN + ';}' +
+    '.w116mr .b .f .st.warn{background:rgba(179,64,47,.14);color:' + FLAG + ';}' +
+    '.w116mr .b .f .st.mut{background:rgba(121,119,115,.14);color:#5c5a56;}' +
+    '.w116mr .b .f a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}' +
+    '.w116mr .b .f a:hover{text-decoration:underline;}' +
+    '.w116mr .b .f .att{display:inline-flex;align-items:center;gap:4px;background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:999px;padding:2px 9px;font-size:11.5px;}' +
+    '.w116mr .a{display:flex;flex-direction:column;gap:6px;align-items:flex-end;}' +
+    '.w116mr .a a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;white-space:nowrap;}' +
+    '.w116mr .a a.warn{color:' + FLAG + ';}' +
+    '.w116mr .a a:hover{text-decoration:underline;}' +
+    '.w116mb .empty{font-size:13px;color:var(--wa-muted);margin:0;padding:8px 0;}' +
+    '.w116mb .chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 6px;}' +
+    '.w116mb .chip{display:inline-flex;align-items:center;gap:6px;font-family:' + BODY + ';font-size:12px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.07);border:1px solid transparent;border-radius:999px;padding:5px 12px;cursor:pointer;white-space:nowrap;}' +
+    '.w116mb .chip.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '.w116mb .chip .n{font-size:10.5px;opacity:.75;}' +
+    '.w116mm label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:10px 0 4px;}' +
+    '.w116mm select{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13px;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:var(--wa-card);}' +
+    '@media (max-width:740px){.w116mr{grid-template-columns:36px minmax(0,1fr);}.w116mr .a{grid-column:2;flex-direction:row;align-items:center;}.w116mr .k{width:32px;height:32px;font-size:15px;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || (staff() ? 'member' : 'viewer'); } catch (e) { return 'viewer'; } }
+  function canAct() { var r = role(); return r === 'admin' || r === 'leader'; }
+  function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || (T.labels && T.labels[d]) || d || ''; }
+  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function fmt(d) { if (!d) return ''; try { return new Date(d).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }); } catch (e) { return String(d); } }
+  function ago(d) { if (!d) return 'never'; var m = Math.round((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
+  function money(n) { return '$' + Number(n || 0).toLocaleString('en-CA', { maximumFractionDigits: 2 }); }
+
+  async function load() {
+    try {
+      var r = await db.from('hub_mail').select('id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, links, error, reason, undone_at, undone_by').order('internal_date', { ascending: false }).limit(300);
+      H.rows = (r && r.data) || [];
+      var s = await db.from('hub_mail_state').select('*').eq('id', 1).maybeSingle();
+      H.state = (s && s.data) || null;
+      H.loaded = Date.now();
+    } catch (e) { /* offline */ }
+  }
+  function filedText(x) {
+    var f = x.filed || {};
+    if (x.status === 'undone') return { st: 'undone', cls: 'mut', text: 'Undone ' + (x.undone_by ? 'by ' + E(String(x.undone_by).split('@')[0]) : '') };
+    if (x.status === 'failed') return { st: 'failed', cls: 'warn', text: E(x.error || 'Filing failed') };
+    if (x.status === 'ignored') return { st: 'ignored', cls: 'mut', text: E(x.reason || 'noise') };
+    if (f.type === 'task') return { st: 'Finance task', cls: '', link: '#task/' + f.id, text: 'Task on the Finance board' };
+    if (f.type === 'update') return { st: 'Team update', cls: '', link: '#team/' + f.department, text: 'Update on the ' + E(label(f.department)) + ' page' };
+    if (f.type === 'transcript') return { st: 'Transcript pipeline', cls: '', link: '#transcripts', text: 'In the Transcript Archive; tasks, updates and decisions follow' };
+    if (f.type === 'inbox') return { st: 'needs a team', cls: 'warn', text: 'The model could not tell which team this belongs to' };
+    return { st: x.status || 'new', cls: 'mut', text: '' };
+  }
+  function attHtml(x) {
+    var atts = Array.isArray(x.attachments) ? x.attachments : [];
+    if (!atts.length) return '';
+    return atts.map(function (a) { return a.path ? '<a class="att" data-hact="att" data-path="' + E(a.path) + '" title="' + E(a.filename) + '">&#128206; ' + E(String(a.filename).slice(0, 34)) + '</a>' : '<span class="att" title="Still in the hub inbox">&#128206; ' + E(String(a.filename).slice(0, 34)) + '</span>'; }).join('');
+  }
+  function row(x) {
+    var k = KIND[x.kind] || KIND.update; var ft = filedText(x); var f = x.filed || {};
+    var dept = x.department || f.department;
+    return '<div class="w116mr" data-mid="' + E(x.id) + '"><span class="k" style="background:' + k[1] + '">' + k[2] + '</span>' +
+      '<div class="b"><div class="m1"><span class="kd" style="color:' + k[1] + '">' + E(k[0]) + '</span><span>' + E(x.from_name || x.from_email || '') + (x.from_name ? ' &lt;' + E(x.from_email) + '&gt;' : '') + '</span><span>' + E(fmt(x.internal_date)) + '</span>' + (x.amount != null ? '<span><b>' + E(money(x.amount)) + '</b>' + (x.due_date ? ' due ' + E(x.due_date) : '') + '</span>' : '') + '</div>' +
+      '<div class="t">' + E(x.title || x.subject || '(no subject)') + '</div>' + (x.summary ? '<div class="s">' + E(x.summary) + '</div>' : (x.subject && x.title !== x.subject ? '<div class="s">' + E(x.subject) + '</div>' : '')) +
+      '<div class="f">' + (dept ? '<span class="d" style="background:' + color(dept) + '"></span><span>' + E(label(dept)) + '</span>' : '') + '<span class="st ' + ft.cls + '">' + E(ft.st) + '</span>' + (ft.link ? '<a data-hact="go" data-hash="' + E(ft.link) + '">' + ft.text + ' &rarr;</a>' : (ft.text ? '<span style="color:var(--wa-muted)">' + ft.text + '</span>' : '')) + attHtml(x) + '</div></div>' +
+      '<div class="a">' + (!canAct() ? '' :
+        (x.status === 'filed' && f.type !== 'inbox' ? '<a class="warn" data-hact="undo">Undo</a><a data-hact="refile">Move to another team</a>' : '') +
+        (x.status === 'filed' && f.type === 'inbox' ? '<a data-hact="refile">File to a team</a>' : '') +
+        (x.status === 'ignored' || x.status === 'undone' || x.status === 'failed' ? '<a data-hact="refile">File anyway</a>' : '')) + '</div></div>';
+  }
+  function render() {
+    var host = H.host; if (!host || !document.body.contains(host)) return;
+    var rows = H.rows; var st = H.state || {};
+    var month = new Date(Date.now() - 30 * 86400000).toISOString();
+    var recent = rows.filter(function (x) { return x.internal_date && x.internal_date > month; });
+    var n = function (fn) { return recent.filter(fn).length; };
+    var needs = rows.filter(function (x) { return x.status === 'filed' && (x.filed || {}).type === 'inbox'; }).length;
+    var shown = rows.filter(function (x) {
+      if (H.filter === 'all') return x.status !== 'ignored';
+      if (H.filter === 'needs') return x.status === 'filed' && (x.filed || {}).type === 'inbox';
+      if (H.filter === 'ignored') return x.status === 'ignored';
+      if (H.filter === 'other') return x.status === 'undone' || x.status === 'failed';
+      return x.kind === H.filter && x.status !== 'ignored';
+    });
+    var html = '<div class="w116mb">' +
+      '<div class="top"><span>Last check ' + E(ago(st.last_sync_at)) + (st.last_result ? ' \u00b7 ' + E(st.last_result) : '') + (st.last_error ? ' \u00b7 <span style="color:' + FLAG + '">' + E(st.last_error) + '</span>' : '') + ' \u00b7 the hub checks every 30 minutes</span><span class="sp"></span>' + (canAct() ? '<button data-hact="sync"' + (H.busy ? ' disabled' : '') + '>' + (H.busy ? 'Checking...' : 'Check the inbox now') + '</button>' : '') + '</div>' +
+      '<div class="sum">' +
+      '<div class="k' + (H.filter === 'all' ? ' on' : '') + '" data-hact="filter" data-f="all"><b>' + n(function (x) { return x.status === 'filed'; }) + '</b>filed in 30 days</div>' +
+      '<div class="k' + (H.filter === 'invoice' ? ' on' : '') + '" data-hact="filter" data-f="invoice"><b>' + n(function (x) { return x.kind === 'invoice' && x.status === 'filed'; }) + '</b>invoices to Finance</div>' +
+      '<div class="k' + (H.filter === 'meeting_summary' ? ' on' : '') + '" data-hact="filter" data-f="meeting_summary"><b>' + n(function (x) { return x.kind === 'meeting_summary' && x.status === 'filed'; }) + '</b>meeting summaries</div>' +
+      '<div class="k' + (H.filter === 'update' ? ' on' : '') + '" data-hact="filter" data-f="update"><b>' + n(function (x) { return x.kind === 'update' && x.status === 'filed'; }) + '</b>team updates</div>' +
+      '<div class="k' + (needs ? ' warn' : '') + (H.filter === 'needs' ? ' on' : '') + '" data-hact="filter" data-f="needs"><b>' + needs + '</b>waiting for a team</div>' +
+      '<div class="k' + (H.filter === 'ignored' ? ' on' : '') + '" data-hact="filter" data-f="ignored"><b>' + n(function (x) { return x.status === 'ignored'; }) + '</b>ignored as noise</div>' +
+      '</div>' +
+      '<div class="how"><b>How it works.</b> Cc <code>hub@welfareavenue.com</code> on anything worth keeping. Invoices and receipts become tasks on the Finance board with the attachment saved; Loom, Otter and other meeting summaries go through the transcript pipeline (tasks, updates and decisions); anything else lands as an update on the team\'s page. Every filing is logged in Activity and posted to Slack; Undo takes it back.</div>' +
+      '<div class="chips">' + [['all', 'Everything filed'], ['invoice', 'Invoices'], ['meeting_summary', 'Meeting summaries'], ['update', 'Updates'], ['needs', 'Waiting for a team'], ['other', 'Undone or failed'], ['ignored', 'Ignored']].map(function (c) { return '<span class="chip' + (H.filter === c[0] ? ' on' : '') + '" data-hact="filter" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
+    html += shown.length ? shown.map(row).join('') : '<p class="empty">' + (rows.length ? 'Nothing here with this filter.' : 'Nothing filed yet. The first email cc\'d to hub@welfareavenue.com shows up here within half an hour.') + '</p>';
+    html += '</div>';
+    host.innerHTML = html;
+  }
+  async function show() {
+    var sec = panel(); if (!sec) return;
+    H.host = document.getElementById('w116mailhost'); if (!H.host) return;
+    if (!H.loaded) H.host.innerHTML = '<p class="read">Loading the inbox...</p>';
+    await load(); render();
+  }
+  async function call(body) {
+    var r = await db.functions.invoke('mail-pull', { body: body });
+    if (r && r.error) throw r.error;
+    if (r && r.data && r.data.error) throw new Error(r.data.error);
+    return (r && r.data) || {};
+  }
+  function refileModal(x) {
+    var depts = T.order.slice();
+    var kinds = [['update', 'Team update'], ['invoice', 'Invoice (Finance task)'], ['meeting_summary', 'Meeting summary (transcript pipeline)']];
+    openModal('<div class="w116mm"><h3>File this email</h3><p class="m-sub">' + E(x.title || x.subject || '') + '</p>' +
+      '<label>As</label><select id="w116mk">' + kinds.map(function (k) { return '<option value="' + k[0] + '"' + ((x.kind === 'noise' ? 'update' : x.kind) === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select>' +
+      '<label>Team</label><select id="w116md">' + depts.map(function (d) { return '<option value="' + d + '"' + ((x.department || '') === d ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116mc">Cancel</button><button class="btn" id="w116ms">File it</button></div></div>');
+    document.getElementById('w116mc').addEventListener('click', closeModal);
+    document.getElementById('w116ms').addEventListener('click', async function () {
+      var b = document.getElementById('w116ms'); b.disabled = true;
+      try { await call({ action: 'refile', mail_id: x.id, kind: document.getElementById('w116mk').value, department: document.getElementById('w116md').value }); closeModal(); toast('Filed'); await load(); render(); }
+      catch (e) { b.disabled = false; toast('Could not file it: ' + String(e.message || e).slice(0, 80)); }
+    });
+  }
+  if (!document.body.dataset.wa116hWired) {
+    document.body.dataset.wa116hWired = '1';
+    document.body.addEventListener('click', async function (e) {
+      if (!H.host || !H.host.contains(e.target)) return;
+      var a = e.target.closest('[data-hact]'); if (!a) return;
+      var act = a.getAttribute('data-hact');
+      var rowEl = a.closest('.w116mr'); var x = rowEl ? H.rows.filter(function (r) { return String(r.id) === rowEl.getAttribute('data-mid'); })[0] : null;
+      if (act === 'filter') { H.filter = a.getAttribute('data-f'); render(); return; }
+      if (act === 'go') { location.hash = a.getAttribute('data-hash'); return; }
+      if (act === 'att') {
+        try { var s = await db.storage.from('hub-mail').createSignedUrl(a.getAttribute('data-path'), 600); if (s && s.data && s.data.signedUrl) window.open(s.data.signedUrl, '_blank', 'noopener'); else toast('Could not open the attachment'); } catch (err) { toast('Could not open the attachment'); }
+        return;
+      }
+      if (!canAct()) return;
+      if (act === 'sync') { if (H.busy) return; H.busy = true; render(); try { var r = await call({ action: 'sync', wait: true, max: 40 }); toast((r.fresh || 0) + ' new, ' + (r.filed || 0) + ' filed, ' + (r.ignored || 0) + ' ignored'); } catch (err) { toast('Check failed: ' + String(err.message || err).slice(0, 80)); } H.busy = false; await load(); render(); return; }
+      if (!x) return;
+      if (act === 'undo') { if (!confirm('Undo this filing? What it created is removed; the email stays here so it can be filed again.')) return; try { var u = await call({ action: 'undo', mail_id: x.id }); toast('Undone: ' + ((u.removed || []).join(', ') || 'nothing to remove')); await load(); render(); } catch (err) { toast('Could not undo: ' + String(err.message || err).slice(0, 80)); } return; }
+      if (act === 'refile') { refileModal(x); return; }
+    });
+  }
+
+  /* ---------- panel, menu, permissions ---------- */
+  function panel() {
+    var main = document.querySelector('main'); if (!main) return null;
+    var sec = document.getElementById('hubmail');
+    if (!sec) {
+      sec = document.createElement('section'); sec.id = 'hubmail'; sec.className = 'panel';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Meetings</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
+      main.appendChild(sec);
+    }
+    return sec;
+  }
+  panel();
+  if (window.WA_NAV && WA_NAV.register) {
+    WA_NAV.register({ id: 'hubmail', label: 'Hub inbox', group: 'meetings', dot: '#2A8C7A', gate: 'leader', panel: false, onShow: function () { show(); } });
+  }
+  /* the tab belongs in the Meetings group after every rebuild of the bar */
+  function place() {
+    try {
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      var b = bar.querySelector('.tab[data-tab="hubmail"]'); if (!b) return;
+      var host = bar.querySelector('.tab-group[data-w42g="meetings"] .tab-group-p'); if (!host) return;
+      if (b.parentNode !== host || b !== host.lastElementChild) host.appendChild(b);
+    } catch (e) { /* cosmetic */ }
+  }
+  try { var __t116h; new MutationObserver(function () { clearTimeout(__t116h); __t116h = setTimeout(place, 120); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  if (typeof startApp === 'function') {
+    var __sa116h = startApp;
+    startApp = async function () {
+      var r = await __sa116h.apply(this, arguments);
+      try {
+        panel(); place(); [400, 1200, 3000].forEach(function (ms) { setTimeout(place, ms); });
+        /* people with a per-person tab list: leaders and admins get the page too */
+        if (typeof WA40_MINE !== 'undefined' && WA40_MINE && Array.isArray(WA40_MINE.tabs) && WA40_MINE.tabs.length && canAct() && WA40_MINE.tabs.indexOf('hubmail') < 0) WA40_MINE.tabs.push('hubmail');
+        if (typeof wa40Enforce === 'function') wa40Enforce(); if (String(location.hash || '') === '#hubmail') { try { applyHash(); } catch (e) { /* fine */ } } } catch (e) { console.warn('wave116h boot', e); }
+      return r;
+    };
+  }
+})();

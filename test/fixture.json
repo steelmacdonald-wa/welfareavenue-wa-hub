@@ -15946,5 +15946,153 @@
    "created_by": "steel.macdonald@welfareavenue.com",
    "created_at": "2026-07-01T12:00:00+00:00"
   }
+ ],
+ "hub_mail": [
+  {
+   "id": 1,
+   "gmail_id": "g1",
+   "internal_date": "2026-08-06T13:00:00+00:00",
+   "from_email": "suhaib@welfareavenue.com",
+   "from_name": "Suhaib",
+   "subject": "Fwd: Invoice 2041 from Marche Central Foods",
+   "title": "Invoice 2041, Marche Central Foods",
+   "summary": "September produce order for the Sunday servings, $1,284.50 due October 10.",
+   "kind": "invoice",
+   "department": "fundraising",
+   "amount": 1284.5,
+   "due_date": "2026-10-10",
+   "status": "filed",
+   "filed": {
+    "type": "task",
+    "id": 12,
+    "department": "fundraising"
+   },
+   "attachments": [
+    {
+     "filename": "invoice-2041.pdf",
+     "mime": "application/pdf",
+     "size": 84000,
+     "attachmentId": "x",
+     "path": "1/invoice-2041.pdf"
+    }
+   ],
+   "links": [],
+   "error": null,
+   "reason": "model",
+   "undone_at": null,
+   "undone_by": null
+  },
+  {
+   "id": 2,
+   "gmail_id": "g2",
+   "internal_date": "2026-08-05T20:00:00+00:00",
+   "from_email": "ian.odhiambo@welfareavenue.com",
+   "from_name": "Ian Odhiambo",
+   "subject": "Re: Rally Paper sponsor deck",
+   "title": "Desjardins confirms $2,500 Rally Paper sponsorship",
+   "summary": "Logo on the volunteer shirts; Alexis drafts the agreement, signature by Friday.",
+   "kind": "update",
+   "department": "marketing",
+   "amount": null,
+   "due_date": null,
+   "status": "filed",
+   "filed": {
+    "type": "update",
+    "id": 50,
+    "department": "marketing"
+   },
+   "attachments": [],
+   "links": [],
+   "error": null,
+   "reason": "model",
+   "undone_at": null,
+   "undone_by": null
+  },
+  {
+   "id": 3,
+   "gmail_id": "g3",
+   "internal_date": "2026-08-04T16:00:00+00:00",
+   "from_email": "shima@welfareavenue.com",
+   "from_name": "Shima",
+   "subject": "Loom | Program dev weekly",
+   "title": "Program development weekly recap",
+   "summary": "Feedback system pilot, brochure partners, two new initiatives.",
+   "kind": "meeting_summary",
+   "department": "progdev",
+   "amount": null,
+   "due_date": null,
+   "status": "filed",
+   "filed": {
+    "type": "transcript",
+    "id": 170,
+    "department": "progdev"
+   },
+   "attachments": [],
+   "links": [
+    "https://www.loom.com/share/abc"
+   ],
+   "error": null,
+   "reason": "model",
+   "undone_at": null,
+   "undone_by": null
+  },
+  {
+   "id": 4,
+   "gmail_id": "g4",
+   "internal_date": "2026-08-03T16:00:00+00:00",
+   "from_email": "partner@example.org",
+   "from_name": "Sam Partner",
+   "subject": "Community kitchen collaboration",
+   "title": "Community kitchen collaboration proposal",
+   "summary": "A partner proposes a shared kitchen day in October.",
+   "kind": "update",
+   "department": null,
+   "amount": null,
+   "due_date": null,
+   "status": "filed",
+   "filed": {
+    "type": "inbox",
+    "id": null,
+    "needs": "department"
+   },
+   "attachments": [],
+   "links": [],
+   "error": null,
+   "reason": "model",
+   "undone_at": null,
+   "undone_by": null
+  },
+  {
+   "id": 5,
+   "gmail_id": "g5",
+   "internal_date": "2026-08-02T16:00:00+00:00",
+   "from_email": "no-reply@accounts.google.com",
+   "from_name": "Google",
+   "subject": "Security alert",
+   "title": "Security alert",
+   "summary": "",
+   "kind": "noise",
+   "department": null,
+   "amount": null,
+   "due_date": null,
+   "status": "ignored",
+   "filed": {},
+   "attachments": [],
+   "links": [],
+   "error": null,
+   "reason": "system or calendar mail",
+   "undone_at": null,
+   "undone_by": null
+  }
+ ],
+ "hub_mail_state": [
+  {
+   "id": 1,
+   "last_sync_at": "2026-08-06T15:42:00+00:00",
+   "last_internal_date": "2026-08-06T13:00:00+00:00",
+   "runs": 12,
+   "last_result": "2 new, 1 filed, 1 ignored, 0 failed",
+   "last_error": null
+  }
  ]
 }

@@ -1,6 +1,6 @@
 # 24/09/26 - Hub wave116: team pages, task boards, scoped agendas, calendar sync
 
-Live build: `c2df2e542e7507012b0538f1bc6dcc67` (1,869,480 bytes), deployed 24/09/26 23:15 UTC via site_files parts + host-sync (fifth cut: Strategy goal pages + Executive dashboard). Earlier cuts the same day: `e29e8974…` (Projects page, menu fix), `4e1e68fd…` (menu polish), `c4013f71…`, `e95e28eb…`. Previous: wave115 `fbb59f49…` (1,561,454).
+Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09/26 23:40 UTC via site_files parts + host-sync (sixth cut: Hub inbox). Fifth cut `c2df2e54…` (Strategy goal pages + Executive dashboard) at 23:15. Earlier cuts the same day: `e29e8974…` (Projects page, menu fix), `4e1e68fd…` (menu polish), `c4013f71…`, `e95e28eb…`. Previous: wave115 `fbb59f49…` (1,561,454).
 
 ## What Steel asked for
 
@@ -59,9 +59,15 @@ Live build: `c2df2e542e7507012b0538f1bc6dcc67` (1,869,480 bytes), deployed 24/09
 - "Open decisions" is "Executive decisions". Each decision names the executive who decides: Ian (Marketing, fundraising events), Shima (Montreal operations, program development), Suhaib (Grants, Toronto operations, HR, finance), Steel (Board, financial decisions). The area sets the default (Marketing, Events, Fundraising -> Ian; Ops MTL, Program Development -> Shima; Grants, Ops TO, HR, Finance -> Suhaib; Board -> Steel); legacy "Both" reads Steel & Suhaib. Filter chips, the add/edit modal (areas gained Program Development, Events, Finance) and the wave111 Decisions waiting folder use the names.
 - "What's new" sits under the KPI strip and shows only major announcements: manual posts (`hub_announcements`; admins and leaders post, pin, set an expiry, take down), departures and hub invitations (change_log), transactions and donations of $1,000 or more in the last 60 days (finance_transactions, only for people who can open Finances), cancelled serving events. "N new since you last looked" uses the last visit. The old what's-new strip is hidden.
 
-## hub@ inbox
+## hub@ inbox (`116h_wave116h`, `mail-pull` v2)
 
-- Steel enabled domain-wide delegation for the service account (client id 107460787452614031265, gmail.readonly + calendar.readonly). `mail-pull` v1 (probe) reads hub@welfareavenue.com as itself: profile, labels, newest messages. Ingestion (invoices -> Finances, Loom/Otter summaries -> transcripts, cc'd threads -> updates with confirmation) is next.
+- Steel enabled domain-wide delegation for the service account (client id 107460787452614031265, gmail.readonly + calendar.readonly); `mail-pull` reads hub@welfareavenue.com as itself. Steel's call on the flow: **fully automatic, with an activity trail and an undo**.
+- Cron `wa-mail-pull` (jobid 14, :12 and :42 every hour) calls `mail-pull {action:'sync'}`: new messages since the last one (14 days back on the first run), noise filtered by rule (Google notices, calendar mail, newsletters, mail from hub@ itself), the rest classified by the model (`file_email` tool; Haiku 4.5 then Sonnet; keyword rules as fallback): kind (invoice, meeting_summary, update, noise), team, one line summary, amount, vendor, dates.
+- Filing: invoices become Finance tasks (`dept_tasks` fundraising / Finance, flagged Budget or purchase at $1,000+) with attachments stored in the private `hub-mail` bucket; meeting summaries become `transcripts` rows sent through `process-transcript` (short link-only emails become updates instead); everything else lands as a `dept_updates` entry on the team's page; an email the model cannot place waits on the Hub inbox page ("File to a team"). Every filing writes `hub_mail.filed`, a change_log row (`hub_mail`) and one Slack line.
+- `hub_mail` + `hub_mail_state` (migration `wa116h_hub_mail`). Actions: `probe`, `sync`, `undo {mail_id}` (removes what the email created; for transcripts also the AI-tagged tasks, updates and open decisions), `refile {mail_id, kind?, department?}`, `test {from, subject, body}` (files a made-up email, for checks).
+- Hub inbox page (`#hubmail`, Meetings menu, leaders and admins): last check, tiles, filters, each email with what happened and where, attachment links (signed urls), Undo, Move to another team, File to a team, File anyway, Check the inbox now.
+- First sync: 8 messages, all noise (Google welcome and security notices, the two calendar invitations). Test invoice and test update filed correctly through the rules fallback and were undone.
+- **Blocker for the model path**: the vault `ANTHROPIC_API_KEY` returns "credit balance too low", which also stops `process-transcript`, goal suggestions and the Brain. Top up the Anthropic console balance; nothing else changes.
 
 ## Backend
 
