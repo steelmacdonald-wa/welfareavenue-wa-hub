@@ -1,0 +1,102 @@
+/* =====================================================================
+   WA v34 goals explainer, cleaner header, dashboard feel
+   (29/07/26)
+   1. A "How this fits together" button at the top of the Goals page:
+      a flow diagram from meeting transcripts, to tasks, to projects,
+      to department quarterly goals, to the organizational goals tier.
+      Anyone new to the Hub can onboard from that one screen.
+   2. The header sheds its clutter: the feed and legend lines are gone
+      (the transcript page already explains the automation where you
+      actually use it) and the subtitle is one calm line.
+   3. A visual pass across the whole Hub: compact header, sticky pill
+      navigation that follows you down the page, softer cards, cleaner
+      tables and buttons. Same bones, dashboard feel.
+   ===================================================================== */
+
+(function () {
+  if (document.getElementById('wa34css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa34css';
+  st.textContent = '' +
+    /* header: compact and calm */
+    'header.wa-header{padding:15px 24px 13px;}' +
+    '.wa-meta,.wa-legend{display:none !important;}' +
+    '.wa-brandrow h1{font-size:18px;letter-spacing:.1px;}' +
+    '.wa-brandrow .sub{font-size:12.5px;opacity:.85;}' +
+    '.wa-toolbar{padding:6px 24px;}' +
+    /* sticky pill navigation */
+    'nav.wa-nav{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.94);' +
+    '-webkit-backdrop-filter:blur(9px) saturate(1.15);backdrop-filter:blur(9px) saturate(1.15);' +
+    'border-bottom:1px solid var(--wa-line);}' +
+    'nav.wa-nav .wa-wrap{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:6px 0;}' +
+    '.tab{padding:7px 13px;border-radius:999px;border-bottom:none;margin:2px 1px;font-weight:600;font-size:13px;transition:background .15s,color .15s;}' +
+    '.tab:hover{background:rgba(31,95,79,.07);color:var(--wa-ink);}' +
+    '.tab.active{background:rgba(31,95,79,.11);color:var(--wa-green);border-bottom:none;}' +
+    '@media (max-width:760px){nav.wa-nav .wa-wrap{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;}nav.wa-nav .wa-wrap::-webkit-scrollbar{display:none;}.tab{flex:0 0 auto;}}' +
+    /* cards and content */
+    '.card{border-radius:16px;border-color:#e9e4d7;box-shadow:0 1px 2px rgba(20,40,30,.03),0 14px 34px -24px rgba(20,48,43,.18);}' +
+    '.card > h2{font-size:17px;}' +
+    'main{padding-top:22px;}' +
+    '.wa-tbl thead th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-muted);font-weight:700;}' +
+    '.wa-tbl tbody tr:hover td{background:rgba(31,95,79,.035);}' +
+    '.btn{border-radius:10px;}' +
+    'input,select,textarea{border-radius:9px;}' +
+    '.fchip{border-radius:999px;}' +
+    /* the goals flow diagram */
+    '.w34flow{display:flex;flex-direction:column;gap:2px;margin:10px 0;}' +
+    '.w34box{border:1px solid rgba(44,122,102,.3);border-left:4px solid #2c7a66;border-radius:11px;padding:9px 13px;background:#fff;}' +
+    '.w34box b{display:block;font-size:13.5px;color:#1f5f4f;margin-bottom:1px;}' +
+    '.w34box span{font-size:12.5px;color:#5b6b66;line-height:1.45;display:block;}' +
+    '.w34arr{text-align:center;color:#2c7a66;font-size:15px;line-height:1.3;}' +
+    '.w34org{border-left-color:#d4a13c;background:rgba(212,161,60,.06);}' +
+    '.w34org b{color:#8a6414;}';
+  document.head.appendChild(st);
+
+  /* declutter the header now */
+  try {
+    document.querySelectorAll('.wa-meta, .wa-legend').forEach(function (el) { el.remove(); });
+    var sub = document.querySelector('.wa-brandrow .sub');
+    if (sub) sub.textContent = 'The Welfare Avenue operating hub';
+  } catch (e) { /* non-fatal */ }
+})();
+
+/* ---------- the goals explainer ---------- */
+function wa34How() {
+  openModal('<h3>How work becomes goals here</h3>' +
+    '<p class="m-sub">This is the spine of the Hub. Everything starts as a conversation and rolls up to the mission, mostly on its own.</p>' +
+    '<div class="w34flow">' +
+    '<div class="w34box"><b>1. Meeting transcripts</b><span>Paste any meeting into the Transcript Archive. The AI reads it within a few minutes.</span></div>' +
+    '<div class="w34arr">&darr;</div>' +
+    '<div class="w34box"><b>2. Tasks</b><span>Every action item from the meeting lands on the right department board, with an owner, a status, and a due date.</span></div>' +
+    '<div class="w34arr">&darr;</div>' +
+    '<div class="w34box"><b>3. Projects</b><span>Related tasks group into named projects, like Flag Football 2026 or the donor program. New tasks file themselves into the right project; anything that does not fit sits in General tasks.</span></div>' +
+    '<div class="w34arr">&darr;</div>' +
+    '<div class="w34box"><b>4. Department quarterly goals</b><span>Each department sets SMART goals for the quarter and attaches its projects to them, so goal progress reflects the real work underneath.</span></div>' +
+    '<div class="w34arr">&darr;</div>' +
+    '<div class="w34box w34org"><b>5. Organizational goals</b><span>The overarching tier at the top of this page. Department goals and their projects roll up here, so anyone can see how the daily work ladders to the mission.</span></div>' +
+    '</div>' +
+    '<p class="m-sub">The AI helps at every level: it files tasks into projects, suggests which goal a new project serves, proposes department goals from your meetings, and runs gap analysis on any goal (open one and ask for the missing tasks).</p>' +
+    '<div class="m-actions"><button class="btn" id="w34hc">Got it</button></div>');
+  var c = document.getElementById('w34hc');
+  if (c) c.addEventListener('click', function () { closeModal(); });
+}
+
+(function () {
+  if (typeof renderGoalsPage === 'function') {
+    var __gp34 = renderGoalsPage;
+    renderGoalsPage = async function () {
+      await __gp34();
+      try {
+        var body = document.getElementById('glBody');
+        if (body && !document.getElementById('w34how')) {
+          body.insertAdjacentHTML('afterbegin',
+            '<div style="margin:0 0 12px"><button class="btn ghost" id="w34how" style="font-size:12.5px">How this fits together: transcripts &rarr; tasks &rarr; projects &rarr; goals</button></div>');
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  document.body.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#w34how');
+    if (b) { try { wa34How(); } catch (x) { /* non-fatal */ } }
+  });
+})();

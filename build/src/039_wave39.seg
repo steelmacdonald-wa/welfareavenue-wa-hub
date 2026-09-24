@@ -1,0 +1,334 @@
+/* =====================================================================
+   WA v39 department pages, reordered and polished
+   (29/07/26)
+   Every department page now reads in the order that matters:
+   1. Executive decisions for that department, in a slick collapsible
+      right at the top (closed by default, count on the chip).
+   2. The department's quarterly goals: click into any goal, see and
+      link its projects, jump to the full goals page.
+   3. The department's tools (Volunteering manager for ops, Training
+      and onboarding for HR, the org chart for board, projects and
+      goals everywhere).
+   4. Then the familiar card: meetings, updates, summary, and tasks.
+   Also across the Hub: action links now look like actual buttons, and
+   task rows are cleaner, with the owner dropdown right on the row for
+   quick reassignment.
+   ===================================================================== */
+
+(function () {
+  if (document.getElementById('wa39css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa39css';
+  st.textContent = '' +
+    /* slick decisions dropdown */
+    '.w39dd{background:#fff;border-radius:18px;margin:0 0 14px;box-shadow:0 1px 2px rgba(20,40,30,.02),0 16px 40px -28px rgba(20,48,43,.2);overflow:hidden;}' +
+    '.w39dd > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 20px;font-weight:700;font-size:14px;color:var(--wa-ink,#14302b);}' +
+    '.w39dd > summary::-webkit-details-marker{display:none;}' +
+    '.w39dd > summary .chev{margin-left:auto;transition:transform .25s;color:#8a958f;font-size:13px;}' +
+    '.w39dd[open] > summary .chev{transform:rotate(180deg);}' +
+    '.w39dd > summary .cnt{background:rgba(212,161,60,.16);color:#8a6414;border-radius:999px;padding:2px 11px;font-size:11.5px;font-weight:700;}' +
+    '.w39dd .bd{padding:2px 20px 14px;}' +
+    '.w39dec{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid #f2f4f3;font-size:13px;}' +
+    '.w39dec:first-child{border-top:none;}' +
+    '.w39dec .fl{color:#d4a13c;flex:none;}' +
+    /* goals block */
+    '.w39goals{background:#fff;border-radius:18px;margin:0 0 14px;padding:16px 20px;box-shadow:0 1px 2px rgba(20,40,30,.02),0 16px 40px -28px rgba(20,48,43,.2);}' +
+    '.w39goals h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;}' +
+    '.w39goal{padding:9px 0;border-top:1px solid #f2f4f3;}' +
+    '.w39goal:first-of-type{border-top:none;}' +
+    '.w39goal .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:600;color:var(--wa-ink,#14302b);}' +
+    '.w39q{font-size:10.5px;border:1px solid rgba(44,122,102,.4);color:#2c7a66;border-radius:999px;padding:1px 9px;font-weight:700;}' +
+    '.w39goal .m{font-size:12px;color:#7b8a86;margin-top:2px;}' +
+    '.w39pchip{display:inline-block;font-size:11px;background:rgba(31,95,79,.08);color:#1f5f4f;border-radius:999px;padding:2px 10px;margin:3px 5px 0 0;cursor:pointer;font-weight:600;}' +
+    '.w39pchip:hover{background:rgba(31,95,79,.14);}' +
+    /* tools row */
+    '.w39tools{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 14px;}' +
+    '.w39tool{background:#fff;border:none;border-radius:14px;padding:10px 16px;font-size:12.5px;font-weight:700;color:#1f5f4f;cursor:pointer;box-shadow:0 1px 2px rgba(20,40,30,.03),0 12px 30px -24px rgba(20,48,43,.25);transition:transform .12s;}' +
+    '.w39tool:hover{transform:translateY(-1px);background:rgba(31,95,79,.05);}' +
+    '.w39tool .ic{margin-right:6px;}' +
+    /* everything that pretended to be a link becomes a button */
+    '.w37edit,[data-w33bref],[data-w30a],[data-w30r],[data-w26e],[data-w31re],[data-w27sg],[data-w33pp]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '.w37edit:hover,[data-w33bref]:hover,[data-w26e]:hover,[data-w31re]:hover,[data-w27sg]:hover{background:rgba(31,95,79,.07);border-color:rgba(31,95,79,.35);}' +
+    '.btn.mini{border-radius:999px;}' +
+    /* cleaner task rows with the reassign right there */
+    '.checklist li{list-style:none;background:#fafbfa;border:1px solid #f0f2f1;border-radius:12px;padding:9px 12px;margin:7px 0;transition:background .15s;}' +
+    '.checklist li:hover{background:#f3f6f4;}' +
+    '.checklist{padding-left:0;}' +
+    '.checklist li .w28sel{border-radius:999px;background:#fff;}' +
+    '.subsection{border-left:none;padding-left:0;}' +
+    '.subhead{font-size:13px;}';
+  document.head.appendChild(st);
+})();
+
+function wa39DeptDecisions(id) {
+  var list = (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []).filter(function (d) {
+    if (d.done) return false;
+    var a = String(d.area || '').toLowerCase();
+    var lbl = String((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[id]) || id).toLowerCase();
+    return a === id || a.indexOf(id) >= 0 || (a && lbl.indexOf(a) >= 0) || a.split(/[ ,\/]+/).indexOf(id) >= 0;
+  });
+  if (!list.length) return '';
+  return '<details class="w39dd w39top"><summary>Executive decisions'
+    + '<span class="cnt">' + list.length + ' open</span><span class="chev">&#9662;</span></summary><div class="bd">'
+    + list.map(function (d) {
+      return '<div class="w39dec"><span class="fl">&#9873;</span><span style="flex:1">' + esc(d.title || '')
+        + (d.owner ? ' <span style="font-size:11px;color:#7b8a86">(' + esc(d.owner) + ')</span>' : '') + '</span>'
+        + '<a class="w37edit" href="#decision/' + d.id + '">open</a></div>';
+    }).join('') + '</div></details>';
+}
+
+function wa39DeptGoals(id) {
+  var goals = (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) {
+    return g.department === id && g.status !== 'archived' && g.status !== 'done';
+  });
+  if (!goals.length) return '';
+  var nowQ = (typeof wa30Now === 'function') ? wa30Now() : '';
+  goals.sort(function (a, b) {
+    var ac = a.quarter === nowQ ? 0 : 1, bc = b.quarter === nowQ ? 0 : 1;
+    return ac - bc || String(a.quarter).localeCompare(String(b.quarter));
+  });
+  var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#2c7a66';
+  var projs = (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []);
+  var html = '<div class="w39goals w39top"><h3 style="color:' + col + '">Quarterly goals</h3>';
+  goals.slice(0, 6).forEach(function (g) {
+    var linked = projs.filter(function (p) { return String(p.goal_id) === String(g.id) && p.status === 'active'; });
+    html += '<div class="w39goal"><div class="t"><span class="w39q">' + esc(g.quarter || '') + '</span>' + esc(g.title || '')
+      + '<span style="margin-left:auto"><a class="w37edit" data-w39ge="' + g.id + '">edit and link projects</a></span></div>'
+      + (g.measure ? '<div class="m">Measured by: ' + esc(g.measure) + '</div>' : '')
+      + '<div>' + (linked.length
+        ? linked.map(function (p) { return '<span class="w39pchip" data-w39pp="' + p.id + '">' + esc(p.name) + '</span>'; }).join('')
+        : '<span style="font-size:11.5px;color:#9aa5a1">No projects linked yet.</span>') + '</div>'
+      + '</div>';
+  });
+  html += '<div style="margin-top:8px"><a class="w37edit" href="#goals">Open the full goals page &raquo;</a></div></div>';
+  return html;
+}
+
+function wa39DeptTools(id) {
+  var tools = [];
+  if (id === 'opsmtl' || id === 'opsto') {
+    tools.push(['&#129387;', 'Volunteering manager', '#volunteering']);
+    tools.push(['&#128214;', 'Recipes', '#volunteering/recipes']);
+  }
+  if (id === 'hr') {
+    tools.push(['&#127891;', 'Training', '#training']);
+    tools.push(['&#128202;', 'Onboarding board', '#training']);
+  }
+  if (id === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
+  if (id === 'marketing') tools.push(['&#127891;', 'Training paths', '#training']);
+  tools.push(['&#127919;', 'Goals', '#goals']);
+  tools.push(['&#128194;', 'Projects', 'scroll:projects']);
+  if (!tools.length) return '';
+  return '<div class="w39tools w39top">' + tools.map(function (t) {
+    return '<button class="w39tool" data-w39t="' + esc(t[2]) + '"><span class="ic">' + t[0] + '</span>' + t[1] + '</button>';
+  }).join('') + '</div>';
+}
+
+function wa39Recompose(id) {
+  var panel = document.getElementById(id);
+  if (!panel || !panel.querySelector('.dept-card')) return;
+  panel.querySelectorAll('.w39top').forEach(function (x) { x.remove(); });
+  var html = wa39DeptDecisions(id) + wa39DeptGoals(id) + wa39DeptTools(id);
+  if (html) panel.insertAdjacentHTML('afterbegin', html);
+}
+
+/* ---------- onboarding: pace, help, and the HR setup checklist ---------- */
+var WA39_HELP = [];
+var WA39_HRT = [];
+var WA39_HRS = [];
+
+async function wa39OnbLoad() {
+  try {
+    var h = await db.from('onboarding_help').select('*').eq('status', 'open');
+    WA39_HELP = (h && h.data) || [];
+    var t = await db.from('hr_setup_template').select('*').eq('active', true).order('sort');
+    WA39_HRT = (t && t.data) || [];
+    var s = await db.from('hr_setup_steps').select('*');
+    WA39_HRS = (s && s.data) || [];
+  } catch (e) { /* offline */ }
+}
+
+function wa39Pace(o) {
+  if (o.status === 'completed') return null;
+  var days = Math.max(0, (Date.now() - new Date(String(o.started_at) + 'T12:00:00').getTime()) / 86400000);
+  var expected = Math.min(100, Math.round(days / 60 * 100));
+  var p = wa37Pct(o.id).pct;
+  if (p >= Math.min(99, expected + 10)) return ['ahead', '#2c7a66'];
+  if (p + 15 < expected) return ['falling behind', '#b3402f'];
+  return ['on track', '#7b8a86'];
+}
+
+async function wa39OnbAugment() {
+  var host = document.querySelector('#training .w36onb');
+  if (!host) return;
+  await wa39OnbLoad();
+  /* the onboardee's ask-for-help button */
+  var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+  var mine = me ? WA37.onbs.filter(function (o) { return o.status === 'active' && o.person_name.toLowerCase() === me.name.toLowerCase(); })[0] : null;
+  if (mine && !host.querySelector('[data-w39ask]')) {
+    var anchor = host.querySelector('.w37week');
+    if (anchor) anchor.insertAdjacentHTML('beforebegin',
+      '<div style="margin:0 0 8px"><button class="w39tool" data-w39ask="' + mine.id + '">&#9995; Stuck on a step? Ask for help in Slack</button></div>');
+  }
+  /* HR rows: pace chip, help badge, HR setup progress */
+  host.querySelectorAll('.w37hr-row').forEach(function (row) {
+    if (row.querySelector('.w39pace')) return;
+    var open = row.querySelector('[data-w37open]');
+    if (!open) return;
+    var oid = open.getAttribute('data-w37open');
+    var o = WA37.onbs.filter(function (x) { return String(x.id) === String(oid); })[0];
+    if (!o) return;
+    var pace = wa39Pace(o);
+    var helpN = WA39_HELP.filter(function (x) { return String(x.onboarding_id) === String(oid); }).length;
+    var hrMine = WA39_HRS.filter(function (x) { return String(x.onboarding_id) === String(oid); });
+    var hrDone = hrMine.filter(function (x) { return x.done; }).length;
+    var bits = '';
+    if (pace) bits += '<span class="w39pace" style="font-size:10.5px;border:1px solid ' + pace[1] + ';color:' + pace[1] + ';border-radius:999px;padding:1px 9px;font-weight:700">' + pace[0] + '</span>';
+    if (helpN) bits += '<span class="w39pace" style="font-size:10.5px;background:#b3402f;color:#fff;border-radius:999px;padding:2px 9px;font-weight:700">' + helpN + ' asking for help</span>';
+    bits += '<a class="w37edit w39pace" data-w39hr="' + oid + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>';
+    bits += '<a class="w37edit w39pace" style="color:#b3402f !important" data-w39del="' + oid + '">remove</a>';
+    open.insertAdjacentHTML('beforebegin', bits);
+  });
+}
+
+function wa39HelpModal(onbId) {
+  var m = wa37StepsFor(onbId);
+  var undone = WA37.tmpl.filter(function (t) { return m[t.id] && !m[t.id].done; });
+  openModal('<h3>Ask for help</h3>'
+    + '<p class="m-sub">This posts to the #onboarding-updates channel in Slack so HR and your manager see it right away.</p>'
+    + '<label>Which step are you stuck on?</label><select id="w39hs">'
+    + undone.map(function (t) { return '<option value="' + esc(t.name) + '">' + esc(t.section + ': ' + t.name) + '</option>'; }).join('')
+    + '</select>'
+    + '<label>What is the problem? (optional)</label><textarea id="w39hn" rows="3" placeholder="What you tried, what happened"></textarea>'
+    + '<div class="m-actions"><button class="btn" id="w39hgo">Send it to Slack</button> <button class="btn ghost" id="w39hc">Cancel</button></div>');
+  document.getElementById('w39hc').addEventListener('click', function () { closeModal(); });
+  document.getElementById('w39hgo').addEventListener('click', async function () {
+    var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+    var btn = document.getElementById('w39hgo');
+    btn.disabled = true;
+    var r = await db.from('onboarding_help').insert({
+      onboarding_id: Number(onbId),
+      person_name: (me && me.name) || 'A team member',
+      step_name: (document.getElementById('w39hs').value || 'an onboarding step'),
+      note: (document.getElementById('w39hn').value || '').trim() || null
+    });
+    if (r.error) { btn.disabled = false; toast('Could not send it'); return; }
+    closeModal();
+    toast('Sent. HR and your manager will see it in Slack.');
+  });
+}
+
+function wa39HrModal(onbId) {
+  var o = WA37.onbs.filter(function (x) { return String(x.id) === String(onbId); })[0];
+  if (!o) return;
+  var mine = {};
+  WA39_HRS.forEach(function (s) { if (String(s.onboarding_id) === String(onbId)) mine[s.template_id] = s; });
+  var phases = [];
+  WA39_HRT.forEach(function (t) { if (phases.indexOf(t.phase) < 0) phases.push(t.phase); });
+  var html = '<h3>HR setup for ' + esc(o.person_name) + '</h3>'
+    + '<p class="m-sub">The end to end setup from the Onboarding SOP 2025/26: accounts, invites, the onboarding call, and the manager follow-through.</p>';
+  phases.forEach(function (ph) {
+    html += '<div style="margin:10px 0 2px;font-weight:700;color:#1f5f4f;font-size:13px">' + esc(ph) + '</div>';
+    WA39_HRT.filter(function (t) { return t.phase === ph; }).forEach(function (t) {
+      var s = mine[t.id];
+      if (!s) return;
+      html += '<div class="w37step' + (s.done ? ' done' : '') + '" style="border-bottom:1px solid #f2f4f3">'
+        + '<input type="checkbox" data-w39hrchk="' + s.id + '"' + (s.done ? ' checked' : '') + ' />'
+        + '<div style="flex:1"><div class="nm">' + esc(t.name) + '</div>'
+        + (t.description ? '<div class="ds">' + esc(t.description) + '</div>' : '')
+        + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + esc(s.done_by) + '</div>' : '')
+        + '</div></div>';
+    });
+  });
+  html += '<div class="m-actions"><button class="btn ghost" id="w39hrc">Close</button></div>';
+  openModal(html);
+  document.getElementById('w39hrc').addEventListener('click', function () { closeModal(); wa37Mount(); });
+}
+
+if (typeof wa37Mount === 'function') {
+  (function () {
+    var __m39 = wa37Mount;
+    wa37Mount = async function () {
+      await __m39();
+      try { await wa39OnbAugment(); } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+(function () {
+  if (typeof renderSection === 'function') {
+    var __rs39 = renderSection;
+    renderSection = function (id) {
+      __rs39(id);
+      try { wa39Recompose(id); } catch (e) { /* non-fatal */ }
+    };
+  }
+  function wire() {
+    if (document.body.dataset.wa39Wired) return;
+    document.body.dataset.wa39Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-w39t]');
+      if (t) {
+        var dest = t.getAttribute('data-w39t');
+        if (dest === 'scroll:projects') {
+          var panel = t.closest('.panel');
+          var card = panel && panel.querySelector('.w27-chips');
+          if (card) card.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          else location.hash = '#goals';
+        } else location.hash = dest;
+        return;
+      }
+      var ge = e.target.closest && e.target.closest('[data-w39ge]');
+      if (ge && typeof wa29GoalModal === 'function') {
+        try { wa29GoalModal(Number(ge.getAttribute('data-w39ge'))); } catch (x) { /* non-fatal */ }
+        return;
+      }
+      var pp = e.target.closest && e.target.closest('[data-w39pp]');
+      if (pp) { location.hash = '#project/' + pp.getAttribute('data-w39pp'); return; }
+      var ask = e.target.closest && e.target.closest('[data-w39ask]');
+      if (ask) { try { wa39HelpModal(ask.getAttribute('data-w39ask')); } catch (x) { /* non-fatal */ } return; }
+      var hr = e.target.closest && e.target.closest('[data-w39hr]');
+      if (hr) { try { wa39HrModal(hr.getAttribute('data-w39hr')); } catch (x) { /* non-fatal */ } return; }
+      var del = e.target.closest && e.target.closest('[data-w39del]');
+      if (del) {
+        var oid2 = del.getAttribute('data-w39del');
+        var o2 = WA37.onbs.filter(function (x) { return String(x.id) === String(oid2); })[0];
+        openModal('<h3>Remove this onboarding?</h3><p class="m-sub">This deletes ' + esc(o2 ? o2.person_name : 'this person') + '\'s onboarding, their checklist progress, and the HR setup checklist. It cannot be undone.</p>'
+          + '<div class="m-actions"><button class="btn" id="w39dgo" style="background:#b3402f">Yes, remove it</button> <button class="btn ghost" id="w39dc">Keep it</button></div>');
+        document.getElementById('w39dc').addEventListener('click', function () { closeModal(); });
+        document.getElementById('w39dgo').addEventListener('click', async function () {
+          var r = await db.from('onboardings').delete().eq('id', Number(oid2));
+          if (r.error) { toast('Could not remove it'); return; }
+          closeModal();
+          await wa37Load(true);
+          toast('Onboarding removed');
+          wa37Mount();
+        });
+        return;
+      }
+    });
+    document.body.addEventListener('change', async function (e) {
+      var chk = e.target.closest && e.target.closest('[data-w39hrchk]');
+      if (!chk) return;
+      var patch = { done: chk.checked, done_at: chk.checked ? new Date().toISOString() : null, done_by: chk.checked ? ((typeof who === 'function') ? who() : 'dashboard') : null };
+      var r = await db.from('hr_setup_steps').update(patch).eq('id', Number(chk.getAttribute('data-w39hrchk')));
+      if (r.error) { toast('Could not save that'); chk.checked = !chk.checked; return; }
+      WA39_HRS.forEach(function (s) { if (String(s.id) === String(chk.getAttribute('data-w39hrchk'))) { s.done = patch.done; s.done_by = patch.done_by; } });
+      toast('Saved');
+    });
+  }
+  wire();
+  var __sa39 = startApp;
+  startApp = async function () {
+    await __sa39();
+    try {
+      wire();
+      /* goals and projects load async; recompose once they are in */
+      setTimeout(function () {
+        try {
+          if (typeof DEPT_ORDER !== 'undefined') DEPT_ORDER.forEach(function (d) { wa39Recompose(d); });
+        } catch (e) { /* non-fatal */ }
+      }, 1200);
+    } catch (e) { /* non-fatal */ }
+  };
+})();

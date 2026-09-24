@@ -1,0 +1,173 @@
+/* =====================================================================
+   WA v6 UI enhancements (23/07/26)
+   Agenda builder: per-department Agendas card. AI-drafted agendas from
+   transcripts and live projects (build-agenda edge fn), items linked to
+   real dept_tasks with live checkboxes (checking completes the task),
+   add / reorder / delete items, draft -> final -> done lifecycle.
+   Also: renderSection is wrapped so injected cards survive single-dept
+   re-renders (fixes exec/request cards vanishing after a task toggle).
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.agenda-card{border-left:4px solid #8455ff;}'
+    + '.ag-row{padding:9px 0;border-top:1px dashed var(--wa-line);font-size:13px;}'
+    + '.ag-row:first-of-type{border-top:none;}'
+    + '.ag-head{cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}'
+    + '.ag-head .t{font-weight:700;}'
+    + '.ag-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;background:var(--wa-muted);}'
+    + '.ag-st.draft{background:#8455ff;}'
+    + '.ag-st.final{background:#4a7c59;}'
+    + '.ag-body{display:none;margin-top:8px;}'
+    + '.ag-row.open .ag-body{display:block;}'
+    + '.ag-item{border:1px solid var(--wa-line);border-radius:9px;padding:9px 11px;margin:7px 0;background:#faf9f4;}'
+    + '.ag-item .k{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:1px 6px;border-radius:8px;color:#fff;margin-right:7px;}'
+    + '.ag-item .it{font-weight:700;font-size:13px;}'
+    + '.ag-item .nts{font-size:12px;color:var(--wa-muted);margin-top:3px;}'
+    + '.ag-task{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-top:5px;}'
+    + '.ag-task.done span{text-decoration:line-through;color:var(--wa-muted);}'
+    + '.ag-ictl{margin-top:6px;display:flex;gap:6px;}'
+    + '.ag-ictl button{background:none;border:none;color:var(--wa-muted);cursor:pointer;font-size:11px;text-decoration:underline;padding:0;}'
+    + '.ag-add{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap;}'
+    + '.ag-add input{flex:1;min-width:140px;padding:6px 9px;border:1px solid var(--wa-line);border-radius:7px;font-size:12.5px;}'
+    + '.ag-foot{margin-top:9px;display:flex;gap:8px;flex-wrap:wrap;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+var AGENDAS_CACHE = [], AG_ITEMS_CACHE = [], WA_AG_OPEN = {};
+var AG_KIND_COLOR = { project: '#4a7c59', decision: '#a87f2c', update: '#3a6ea5', topic: '#6f6b64' };
+
+async function waLoadAgendas() { /* superseded: wave7 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+function waTaskById(id) { return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).find(function (t) { return t.id === id; }); }
+
+function renderDeptAgendaCards() { /* superseded: wave7 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+function waWireAgendaCard(card, d) {
+  card.querySelectorAll('[data-agtog]').forEach(function (h) {
+    h.addEventListener('click', function () {
+      var id = Number(h.dataset.agtog);
+      WA_AG_OPEN[id] = !WA_AG_OPEN[id];
+      h.parentElement.classList.toggle('open');
+    });
+  });
+  card.querySelectorAll('[data-aggen]').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      b.disabled = true; b.textContent = 'Drafting from transcripts...';
+      try {
+        const { data, error } = await db.functions.invoke('build-agenda', { body: { department: d } });
+        if (error || !(data && data.ok)) throw (error || new Error((data && data.error) || 'failed'));
+        toast('Agenda drafted: ' + (data.items || 0) + ' items');
+        await waLoadAgendas();
+        if (data.agenda_id) WA_AG_OPEN[data.agenda_id] = true;
+        renderDeptAgendaCards();
+      } catch (e) {
+        toast('Could not draft the agenda, try again');
+        b.disabled = false; b.innerHTML = '&#10024; Generate agenda from recent activity';
+      }
+    });
+  });
+  card.querySelectorAll('[data-agtask]').forEach(function (cb) {
+    cb.addEventListener('change', async function () {
+      var tid = Number(cb.dataset.agtask);
+      var ok = await toggleTask(tid, cb.checked);
+      if (!ok) { cb.checked = !cb.checked; toast('Could not update the task'); return; }
+      var row = waTaskById(tid);
+      if (row) row.done = cb.checked;
+      renderSection(cb.dataset.agdept);
+      renderDashboard(); renderNeedsMe();
+    });
+  });
+  card.querySelectorAll('[data-agadd]').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      var aid = Number(b.dataset.agadd);
+      var t = card.querySelector('[data-agnt="' + aid + '"]').value.trim();
+      var n = card.querySelector('[data-agnn="' + aid + '"]').value.trim();
+      if (!t) { toast('Add an item title'); return; }
+      var maxSort = AG_ITEMS_CACHE.filter(function (i) { return i.agenda_id === aid; }).reduce(function (m, i) { return Math.max(m, i.sort); }, -1);
+      var r = await db.from('agenda_items').insert({ agenda_id: aid, kind: 'topic', title: t, notes: n || null, sort: maxSort + 1 });
+      if (r.error) { toast('Could not add'); return; }
+      await waLoadAgendas(); renderDeptAgendaCards();
+    });
+  });
+  function move(iid, dir) {
+    var it = AG_ITEMS_CACHE.find(function (x) { return x.id === iid; });
+    if (!it) return;
+    var sibs = AG_ITEMS_CACHE.filter(function (x) { return x.agenda_id === it.agenda_id; }).sort(function (a, b) { return a.sort - b.sort; });
+    var idx = sibs.indexOf(it), swap = sibs[idx + dir];
+    if (!swap) return;
+    Promise.all([
+      db.from('agenda_items').update({ sort: swap.sort }).eq('id', it.id),
+      db.from('agenda_items').update({ sort: it.sort }).eq('id', swap.id)
+    ]).then(async function () { await waLoadAgendas(); renderDeptAgendaCards(); });
+  }
+  card.querySelectorAll('[data-agup]').forEach(function (b) { b.addEventListener('click', function () { move(Number(b.dataset.agup), -1); }); });
+  card.querySelectorAll('[data-agdn]').forEach(function (b) { b.addEventListener('click', function () { move(Number(b.dataset.agdn), 1); }); });
+  card.querySelectorAll('[data-agdel]').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      await db.from('agenda_items').delete().eq('id', Number(b.dataset.agdel));
+      await waLoadAgendas(); renderDeptAgendaCards();
+    });
+  });
+  function setStatus(aid, status) {
+    db.from('agendas').update({ status: status, updated_at: new Date().toISOString() }).eq('id', aid)
+      .then(async function (r) {
+        if (r.error) { toast('Could not update'); return; }
+        try { await db.from('change_log').insert({ entity_type: 'agenda', entity_id: String(aid), field: 'status', old_value: null, new_value: status, changed_by: who() }); } catch (e) { /* audit only */ }
+        await waLoadAgendas(); renderDeptAgendaCards();
+      });
+  }
+  card.querySelectorAll('[data-agfin]').forEach(function (b) { b.addEventListener('click', function () { setStatus(Number(b.dataset.agfin), 'final'); }); });
+  card.querySelectorAll('[data-agdraft]').forEach(function (b) { b.addEventListener('click', function () { setStatus(Number(b.dataset.agdraft), 'draft'); }); });
+  card.querySelectorAll('[data-agdone]').forEach(function (b) { b.addEventListener('click', function () { setStatus(Number(b.dataset.agdone), 'done'); }); });
+  card.querySelectorAll('[data-agkill]').forEach(function (b) {
+    b.addEventListener('click', async function () {
+      if (!confirm('Delete this agenda for everyone?')) return;
+      await db.from('agendas').delete().eq('id', Number(b.dataset.agkill));
+      await waLoadAgendas(); renderDeptAgendaCards();
+    });
+  });
+}
+
+(function () {
+  var __ras6 = renderAllSections;
+  renderAllSections = function () {
+    __ras6();
+    try { renderDeptAgendaCards(); } catch (e) { /* non-fatal */ }
+  };
+  if (typeof renderSection === 'function') {
+    var __rs6 = renderSection;
+    renderSection = function (deptId) {
+      __rs6(deptId);
+      try {
+        renderDeptExecCards();
+        renderDeptRequestCards();
+        renderDeptAgendaCards();
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  var __sa6 = startApp;
+  startApp = async function () {
+    await __sa6();
+    try {
+      if (isStaff()) { await waLoadAgendas(); renderDeptAgendaCards(); }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+/* WA v6b: executive meeting agendas (1on1s and leaders meetings) on Overview */
+var WA_LEADERS = [];
+async function waLoadLeaders() {
+  if (WA_LEADERS.length) return;
+  try {
+    var r = await db.from('team_members').select('name, department, role').eq('active', true).order('name');
+    if (!r.error) WA_LEADERS = r.data || [];
+  } catch (e) { /* offline */ }
+}
+async function renderExecAgendaCard() { /* superseded: wave7 moved this to the Agendas page and replaced the binding with a stub; body removed in Phase 0 compaction */ }
+(function () {
+  /* dead v6b wrap: wave7 reset renderDeptAgendaCards without capture; removed in Phase 0 compaction */
+})();
+
+

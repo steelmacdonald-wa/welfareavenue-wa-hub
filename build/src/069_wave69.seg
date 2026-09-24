@@ -1,0 +1,287 @@
+/* =====================================================================
+   WA v69 the Strategy map learns rollups and focus
+   (04/08/26)
+   1. Rollup counts everywhere: project nodes and cards show open and
+      done task counts; department goal nodes show how many projects
+      sit under them plus the task rollup; organizational goal nodes
+      roll up their direct projects AND everything under their child
+      quarterly goals.
+   2. Click to focus: clicking any node on the map pulls its whole
+      linked chain to the TOP of all three columns (so a project at the
+      top and an org goal at the bottom sit next to each other),
+      redraws the connectors, and dims the rest. Click again or hit
+      Clear to restore the original order. Hover still previews.
+   3. The project modal's goal dropdown is grouped: organizational
+      goals first, then each department's quarterly goals, so linking
+      a project to either tier is obvious. (Dept goal -> org goal
+      linking already lives in the goal modal's rolls-up select.)
+   ===================================================================== */
+(function () {
+  if (window.__wa69) return;
+  window.__wa69 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa69css';
+  st.textContent = '' +
+    '.w69c{display:block;font-size:10px;color:#5b6b66;margin-top:2px;}' +
+    '.w69c b{color:#1f5f4f;}' +
+    '#w69bar{display:flex;gap:10px;align-items:center;background:rgba(31,95,79,.07);border-radius:10px;padding:7px 12px;margin:0 0 10px;font-size:12.5px;color:#14302b;}' +
+    '#w69bar button{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#1f5f4f;cursor:pointer;margin-left:auto;}' +
+    '.w68node{cursor:pointer;}';
+  document.head.appendChild(st);
+
+  var WA69 = { tasks: null, focus: null };
+
+  async function w69Tasks() {
+    if (WA69.tasks) return WA69.tasks;
+    try {
+      var r = await db.from('dept_tasks').select('id,project_id,done').not('project_id', 'is', null).limit(2000);
+      var by = {};
+      ((r && r.data) || []).forEach(function (t) {
+        var k = String(t.project_id);
+        by[k] = by[k] || { open: 0, done: 0 };
+        if (t.done) by[k].done++; else by[k].open++;
+      });
+      WA69.tasks = by;
+    } catch (e) { WA69.tasks = {}; }
+    return WA69.tasks;
+  }
+  function w69Projects() {
+    var p = (typeof WA27_PROJECTS !== 'undefined' && WA27_PROJECTS && WA27_PROJECTS.length) ? WA27_PROJECTS : [];
+    return p.filter(function (x) { return x.status === 'active'; });
+  }
+  function w69PC(pid) { return (WA69.tasks && WA69.tasks[String(pid)]) || { open: 0, done: 0 }; }
+  function w69GoalRoll(gid, isOrg) {
+    var projs = w69Projects().filter(function (p) { return String(p.goal_id) === String(gid); });
+    if (isOrg) {
+      var kids = (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) {
+        return String(g.parent_goal_id) === String(gid);
+      });
+      kids.forEach(function (k) {
+        w69Projects().forEach(function (p) {
+          if (String(p.goal_id) === String(k.id) && projs.indexOf(p) < 0) projs.push(p);
+        });
+      });
+    }
+    var open = 0, done = 0;
+    projs.forEach(function (p) { var c = w69PC(p.id); open += c.open; done += c.done; });
+    return { projects: projs.length, open: open, done: done };
+  }
+  function w69Line(txt) { return '<span class="w69c">' + txt + '</span>'; }
+
+  /* ---------- decorate the map nodes and project cards ---------- */
+  async function w69Decorate() {
+    try {
+      await w69Tasks();
+      /* map nodes */
+      document.querySelectorAll('#w68map .w68node').forEach(function (n, i) {
+        if (!n.dataset.w69i) n.dataset.w69i = String(i);
+        if (n.dataset.w69c) return;
+        n.dataset.w69c = '1';
+        var id = n.getAttribute('data-w68n') || '';
+        var kind = id.slice(0, 1), raw = id.slice(1);
+        var html = '';
+        if (kind === 'P') {
+          var c = w69PC(raw);
+          html = w69Line('<b>' + c.open + '</b> open \u00b7 ' + c.done + ' done');
+        } else if (kind === 'G') {
+          var r1 = w69GoalRoll(raw, false);
+          html = w69Line('<b>' + r1.projects + '</b> ' + (r1.projects === 1 ? 'project' : 'projects') + ' \u00b7 <b>' + r1.open + '</b> open \u00b7 ' + r1.done + ' done');
+        } else if (kind === 'O') {
+          var r2 = w69GoalRoll(raw, true);
+          html = w69Line('<b>' + r2.projects + '</b> ' + (r2.projects === 1 ? 'project' : 'projects') + ' \u00b7 <b>' + r2.open + '</b> open \u00b7 ' + r2.done + ' done');
+        }
+        if (html) n.insertAdjacentHTML('beforeend', html);
+      });
+      /* each department can add its own project right from the Projects tab */
+      if (typeof isStaff === 'function' && isStaff() && typeof wa27ProjectModal === 'function') {
+        document.querySelectorAll('#w68projview .w68pdept h4').forEach(function (h) {
+          if (h.querySelector('[data-w69add]')) return;
+          var label = (h.childNodes[0] && h.childNodes[0].textContent ? h.childNodes[0].textContent : h.textContent).trim();
+          var dept = null;
+          if (typeof DEPT_LABEL !== 'undefined') {
+            Object.keys(DEPT_LABEL).forEach(function (k) { if (DEPT_LABEL[k] === label) dept = k; });
+          }
+          if (!dept) dept = label;
+          h.insertAdjacentHTML('beforeend',
+            ' <a data-w69add="' + esc(dept) + '" style="font-size:11.5px;font-weight:700;cursor:pointer;margin-left:8px">+ Add a project</a>');
+        });
+      }
+      /* project cards on the Projects tab: open + done */
+      document.querySelectorAll('#w68projview .w68proj').forEach(function (card) {
+        if (card.dataset.w69c) return;
+        card.dataset.w69c = '1';
+        var link = card.querySelector('[data-w39pp]');
+        if (!link) return;
+        var c = w69PC(link.getAttribute('data-w39pp'));
+        card.querySelectorAll('.w68pill').forEach(function (pill) {
+          if (pill.classList.contains('goal') || pill.classList.contains('none')) return;
+          pill.textContent = c.open + ' open \u00b7 ' + c.done + ' done';
+        });
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---------- click to focus: pull the chain to the top ---------- */
+  function w69Edges() {
+    var out = [];
+    document.querySelectorAll('#w68map path.w68e').forEach(function (p) {
+      var e = (p.getAttribute('data-w68e') || '').split('|');
+      if (e.length === 2) out.push(e);
+    });
+    return out;
+  }
+  function w69Connected(id) {
+    var set = {};
+    set[id] = 1;
+    var edges = w69Edges();
+    var grew = true;
+    while (grew) {
+      grew = false;
+      edges.forEach(function (e) {
+        if (set[e[0]] && !set[e[1]]) { set[e[1]] = 1; grew = true; }
+        if (set[e[1]] && !set[e[0]]) { set[e[0]] = 1; grew = true; }
+      });
+    }
+    return set;
+  }
+  function w69Apply() {
+    var map = document.getElementById('w68map');
+    if (!map) return;
+    if (!WA69.focus) {
+      map.querySelectorAll('.w68node, path.w68e').forEach(function (x) { x.classList.remove('hl'); x.classList.remove('dim'); });
+      return;
+    }
+    var set = w69Connected(WA69.focus);
+    map.querySelectorAll('.w68node').forEach(function (n) {
+      var k = n.getAttribute('data-w68n');
+      n.classList.toggle('hl', !!set[k]);
+      n.classList.toggle('dim', !set[k]);
+    });
+    map.querySelectorAll('path.w68e').forEach(function (p) {
+      var e = (p.getAttribute('data-w68e') || '').split('|');
+      var on = set[e[0]] && set[e[1]];
+      p.classList.toggle('hl', !!on);
+      p.classList.toggle('dim', !on);
+    });
+  }
+  function w69Order(set) {
+    var map = document.getElementById('w68map');
+    if (!map) return;
+    map.querySelectorAll('.w68col').forEach(function (col) {
+      var nodes = Array.from(col.querySelectorAll('.w68node'));
+      if (!nodes.length) return;
+      nodes.sort(function (a, b) {
+        var ac = set ? (set[a.getAttribute('data-w68n')] ? 0 : 1) : 0;
+        var bc = set ? (set[b.getAttribute('data-w68n')] ? 0 : 1) : 0;
+        return ac - bc || Number(a.dataset.w69i || 0) - Number(b.dataset.w69i || 0);
+      });
+      nodes.forEach(function (n) { col.appendChild(n); });
+    });
+  }
+  function w69Redraw() {
+    try { window.dispatchEvent(new Event('resize')); } catch (e) { /* fine */ }
+  }
+  function w69Bar(on, label) {
+    var old = document.getElementById('w69bar');
+    if (old) old.remove();
+    if (!on) return;
+    var map = document.getElementById('w68map');
+    if (!map) return;
+    map.insertAdjacentHTML('beforebegin',
+      '<div id="w69bar">Showing everything linked to <b>&nbsp;' + esc(label) + '&nbsp;</b> (pulled to the top).'
+      + '<button id="w69clear">Show everything</button></div>');
+  }
+  function w69Focus(id, label) {
+    if (WA69.focus === id) { w69Clear(); return; }
+    WA69.focus = id;
+    w69Order(w69Connected(id));
+    w69Apply();
+    w69Bar(true, label);
+    w69Redraw();
+  }
+  function w69Clear() {
+    WA69.focus = null;
+    w69Order(null);
+    w69Apply();
+    w69Bar(false);
+    w69Redraw();
+  }
+
+  if (!document.body.dataset.wa69Wired) {
+    document.body.dataset.wa69Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var add = e.target.closest && e.target.closest('[data-w69add]');
+      if (add) {
+        if (typeof wa27ProjectModal === 'function') wa27ProjectModal(add.getAttribute('data-w69add'), null);
+        return;
+      }
+      if (e.target.closest && e.target.closest('#w69clear')) { w69Clear(); return; }
+      var n = e.target.closest && e.target.closest('#w68map .w68node');
+      if (n) {
+        var label = (n.childNodes[0] && n.childNodes[0].textContent) ? n.childNodes[0].textContent.trim() : 'this';
+        w69Focus(n.getAttribute('data-w68n'), label.slice(0, 60));
+      }
+    });
+    /* after wave68's mouseout wipes the classes, put the focus back */
+    document.body.addEventListener('mouseout', function (e) {
+      var n = e.target.closest && e.target.closest('.w68node');
+      if (n && WA69.focus) setTimeout(w69Apply, 0);
+    });
+  }
+
+  /* ---------- grouped goal dropdown in the project modal ---------- */
+  function w69GoalSelect() {
+    try {
+      var sel = document.getElementById('w27pg');
+      if (!sel || sel.dataset.w69g) return;
+      sel.dataset.w69g = '1';
+      var cur = sel.value;
+      var goals = (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) {
+        return ['closed', 'done', 'archived'].indexOf(String(g.status)) < 0;
+      });
+      var org = goals.filter(function (g) { return g.department === 'org'; });
+      var dl = function (d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d; };
+      var html = '<option value="">No goal link</option>';
+      if (org.length) {
+        html += '<optgroup label="Organizational goals (long term)">' + org.map(function (g) {
+          return '<option value="' + g.id + '">' + esc(String(g.title).slice(0, 70)) + '</option>';
+        }).join('') + '</optgroup>';
+      }
+      var depts = [];
+      goals.forEach(function (g) { if (g.department !== 'org' && depts.indexOf(g.department) < 0) depts.push(g.department); });
+      depts.forEach(function (d) {
+        html += '<optgroup label="' + esc(dl(d)) + ' (quarterly)">' + goals.filter(function (g) { return g.department === d; }).map(function (g) {
+          return '<option value="' + g.id + '">' + esc((g.quarter ? g.quarter + ': ' : '') + String(g.title).slice(0, 70)) + '</option>';
+        }).join('') + '</optgroup>';
+      });
+      sel.innerHTML = html;
+      sel.value = cur;
+    } catch (e) { /* non-fatal */ }
+  }
+
+  try {
+    var __w69mo;
+    new MutationObserver(function () {
+      clearTimeout(__w69mo);
+      __w69mo = setTimeout(function () {
+        w69GoalSelect();
+        if (document.querySelector('#w68map .w68node:not([data-w69c])')
+          || document.querySelector('#w68projview .w68proj:not([data-w69c])')) {
+          WA69.focus = null;
+          w69Decorate();
+        }
+      }, 250);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  if (typeof renderGoalsPage === 'function') {
+    var __gp69 = renderGoalsPage;
+    renderGoalsPage = async function () {
+      WA69.focus = null;
+      WA69.tasks = null; /* refresh counts on each page render */
+      await __gp69.apply(this, arguments);
+      setTimeout(w69Decorate, 200);
+    };
+  }
+})();

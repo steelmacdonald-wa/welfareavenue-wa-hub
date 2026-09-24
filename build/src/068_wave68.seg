@@ -1,0 +1,347 @@
+/* =====================================================================
+   WA v68 the Goals page becomes Strategy: four tabs
+   (04/08/26)
+   The Work menu tab renames from Goals to Strategy, and the page splits
+   into four tabs:
+   1. Projects: every active project grouped by department, with its
+      status, linked goal, and open task count; click through to the
+      project page.
+   2. Department goals: the existing quarter-by-quarter view (edit,
+      link projects, AI suggestions), unchanged, minus the org tier.
+   3. Organizational goals: the yearly and multi-year direction that
+      department goals and projects roll up into.
+   4. The map: a three-column linkage diagram (projects, department
+      quarterly goals, organizational goals) with drawn connectors;
+      hover any node to light up everything it links to.
+   The underlying page machinery (waGoalRow, edit modals, suggestions,
+   the "How this fits together" button) is untouched; v68 only
+   reorganizes the rendered DOM and adds the two new views.
+   ===================================================================== */
+(function () {
+  if (window.__wa68) return;
+  window.__wa68 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa68css';
+  st.textContent = '' +
+    '#w68tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;}' +
+    '.w68tab{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#3d4642;cursor:pointer;}' +
+    '.w68tab.on{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w68sub{font-size:12.5px;color:#6b7a75;margin:0 0 10px;}' +
+    '.w68pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;align-items:start;}' +
+    '.w68pdept{margin:0 0 16px;}' +
+    '.w68pdept h4{margin:0 0 8px;font-size:13px;}' +
+    '.w68proj{background:#fff;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:12px;padding:11px 13px;}' +
+    '.w68proj b{font-size:13px;color:#14302b;display:block;margin-bottom:3px;}' +
+    '.w68proj .d{font-size:12px;color:#5b6b66;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;}' +
+    '.w68pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:0 4px 4px 0;background:#eef2f0;color:#3d4642;}' +
+    '.w68pill.goal{background:rgba(212,161,60,.15);color:#8a6414;}' +
+    '.w68pill.none{background:#f2f2f0;color:#9aa5a1;}' +
+    '.w68open{font-size:11.5px;color:#1f5f4f;font-weight:700;cursor:pointer;}' +
+    '#w68map{position:relative;}' +
+    '#w68map svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}' +
+    '.w68cols{position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;gap:70px;z-index:1;}' +
+    '.w68col h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#1f5f4f;}' +
+    '.w68col .hint{font-size:11px;color:#8b968f;margin:0 0 10px;}' +
+    '.w68node{background:#fff;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:10px;padding:7px 10px;font-size:12px;color:#14302b;margin:0 0 8px;cursor:default;line-height:1.35;}' +
+    '.w68node .m{font-size:10.5px;color:#8b968f;}' +
+    '.w68node.hl{box-shadow:0 0 0 2px rgba(31,95,79,.55);}' +
+    '.w68node.dim{opacity:.32;}' +
+    'path.w68e{fill:none;stroke:#c9d4cf;stroke-width:1.6;}' +
+    'path.w68e.hl{stroke:#1f5f4f;stroke-width:2.4;}' +
+    'path.w68e.dim{opacity:.15;}' +
+    '@media (max-width:800px){.w68cols{gap:26px;}}';
+  document.head.appendChild(st);
+
+  var WA68 = { view: 'dept', edges: [], projects: null };
+  function w68Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w68Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+
+  async function w68Projects() {
+    var p = (typeof WA27_PROJECTS !== 'undefined' && WA27_PROJECTS && WA27_PROJECTS.length) ? WA27_PROJECTS : WA68.projects;
+    if (p && p.length) return p;
+    try {
+      var r = await db.from('projects').select('*').order('department').order('sort');
+      WA68.projects = (r && r.data) || [];
+    } catch (e) { WA68.projects = []; }
+    return WA68.projects;
+  }
+  function w68GoalById(id) {
+    var out = null;
+    (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) { if (String(g.id) === String(id)) out = g; });
+    return out;
+  }
+  function w68OpenTasks(pid) {
+    try {
+      return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) {
+        return !t.done && String(t.project_id) === String(pid);
+      }).length;
+    } catch (e) { return 0; }
+  }
+  function w68ProjName(p, all) {
+    var nm = p.name;
+    if (p.parent_id) {
+      all.forEach(function (x) { if (String(x.id) === String(p.parent_id)) nm = x.name + ' > ' + nm; });
+    }
+    return nm;
+  }
+
+  /* ---------- the Projects view ---------- */
+  function w68ProjView(projects) {
+    var act = projects.filter(function (p) { return p.status === 'active'; });
+    var order = (typeof DEPT_ORDER !== 'undefined') ? DEPT_ORDER.slice() : [];
+    act.forEach(function (p) { if (order.indexOf(p.department) < 0) order.push(p.department); });
+    var html = '<p class="w68sub">Every active project, by department. Tasks from meetings route into these automatically; each project rolls up into a goal.</p>';
+    order.forEach(function (d) {
+      var ps = act.filter(function (p) { return p.department === d; });
+      if (!ps.length) return;
+      html += '<div class="w68pdept"><h4 style="color:' + w68Col(d) + '">' + esc(w68Lab(d)) + '</h4><div class="w68pgrid">';
+      ps.forEach(function (p) {
+        var g = p.goal_id ? w68GoalById(p.goal_id) : null;
+        var open = w68OpenTasks(p.id);
+        html += '<div class="w68proj" style="border-left-color:' + w68Col(d) + '">'
+          + '<b>' + esc(w68ProjName(p, projects)) + '</b>'
+          + (p.description ? '<div class="d">' + esc(p.description) + '</div>' : '')
+          + '<div>'
+          + (g ? '<span class="w68pill goal">&#127919; ' + esc(g.title.slice(0, 60)) + (g.title.length > 60 ? '...' : '') + '</span>'
+               : '<span class="w68pill none">no goal linked yet</span>')
+          + '<span class="w68pill">' + open + ' open ' + (open === 1 ? 'task' : 'tasks') + '</span>'
+          + '</div>'
+          + '<a class="w68open" data-w39pp="' + p.id + '">Open the project page &raquo;</a>'
+          + '</div>';
+      });
+      html += '</div></div>';
+    });
+    if (html.indexOf('w68proj') < 0) html += '<p class="read">No active projects yet.</p>';
+    return html;
+  }
+
+  /* ---------- the map view ---------- */
+  function w68Node(kind, id, dept, title, meta) {
+    return '<div class="w68node" data-w68n="' + kind + id + '" style="border-left-color:' + w68Col(dept) + '">'
+      + esc(title) + (meta ? '<div class="m">' + esc(meta) + '</div>' : '') + '</div>';
+  }
+  function w68MapView(projects) {
+    var goals = (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) {
+      return ['closed', 'done', 'archived'].indexOf(String(g.status)) < 0;
+    });
+    var org = goals.filter(function (g) { return g.department === 'org'; });
+    var dept = goals.filter(function (g) { return g.department !== 'org'; });
+    var act = projects.filter(function (p) { return p.status === 'active'; });
+    var orgIds = {}; org.forEach(function (g) { orgIds[String(g.id)] = 1; });
+    var deptIds = {}; dept.forEach(function (g) { deptIds[String(g.id)] = 1; });
+
+    WA68.edges = [];
+    act.forEach(function (p) {
+      if (!p.goal_id) return;
+      if (deptIds[String(p.goal_id)]) WA68.edges.push(['P' + p.id, 'G' + p.goal_id]);
+      else if (orgIds[String(p.goal_id)]) WA68.edges.push(['P' + p.id, 'O' + p.goal_id]);
+    });
+    dept.forEach(function (g) {
+      if (g.parent_goal_id && orgIds[String(g.parent_goal_id)]) WA68.edges.push(['G' + g.id, 'O' + g.parent_goal_id]);
+    });
+
+    var html = '<p class="w68sub">How it all connects: projects feed department quarterly goals, and both roll up into the long term organizational goals. Hover anything to light up its links.</p>'
+      + '<div id="w68map"><svg></svg><div class="w68cols">'
+      + '<div class="w68col"><h4>Projects</h4><div class="hint">the work underway</div>'
+      + act.map(function (p) { return w68Node('P', p.id, p.department, w68ProjName(p, projects), w68Lab(p.department)); }).join('')
+      + '</div>'
+      + '<div class="w68col"><h4>Department goals</h4><div class="hint">quarterly</div>'
+      + dept.map(function (g) { return w68Node('G', g.id, g.department, g.title, w68Lab(g.department) + (g.quarter ? ' \u00b7 ' + g.quarter : '')); }).join('')
+      + '</div>'
+      + '<div class="w68col"><h4>Organizational goals</h4><div class="hint">yearly and multi-year</div>'
+      + org.map(function (g) { return w68Node('O', g.id, 'board', g.title, g.quarter || 'long term'); }).join('')
+      + '</div>'
+      + '</div></div>';
+    return html;
+  }
+  function w68Draw() {
+    var map = document.getElementById('w68map');
+    if (!map || map.offsetParent === null) return;
+    var svg = map.querySelector('svg');
+    if (!svg) return;
+    var box = map.getBoundingClientRect();
+    svg.setAttribute('viewBox', '0 0 ' + box.width + ' ' + map.scrollHeight);
+    svg.style.height = map.scrollHeight + 'px';
+    var pos = {};
+    map.querySelectorAll('.w68node').forEach(function (n) {
+      var r = n.getBoundingClientRect();
+      pos[n.getAttribute('data-w68n')] = {
+        l: r.left - box.left, r: r.right - box.left,
+        y: r.top - box.top + r.height / 2
+      };
+    });
+    var d = '';
+    var parts = [];
+    WA68.edges.forEach(function (e) {
+      var a = pos[e[0]], b = pos[e[1]];
+      if (!a || !b) return;
+      var x1 = a.r, y1 = a.y, x2 = b.l, y2 = b.y;
+      var mx = (x1 + x2) / 2;
+      parts.push('<path class="w68e" data-w68e="' + e[0] + '|' + e[1] + '" d="M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ', ' + mx + ' ' + y2 + ', ' + x2 + ' ' + y2 + '" />');
+    });
+    svg.innerHTML = parts.join('');
+  }
+  function w68Connected(id) {
+    var set = {};
+    set[id] = 1;
+    var grew = true;
+    while (grew) {
+      grew = false;
+      WA68.edges.forEach(function (e) {
+        if (set[e[0]] && !set[e[1]]) { set[e[1]] = 1; grew = true; }
+        if (set[e[1]] && !set[e[0]]) { set[e[0]] = 1; grew = true; }
+      });
+    }
+    return set;
+  }
+  function w68Hover(id) {
+    var map = document.getElementById('w68map');
+    if (!map) return;
+    if (!id) {
+      map.querySelectorAll('.w68node, path.w68e').forEach(function (x) { x.classList.remove('hl'); x.classList.remove('dim'); });
+      return;
+    }
+    var set = w68Connected(id);
+    map.querySelectorAll('.w68node').forEach(function (n) {
+      var k = n.getAttribute('data-w68n');
+      n.classList.toggle('hl', !!set[k]);
+      n.classList.toggle('dim', !set[k]);
+    });
+    map.querySelectorAll('path.w68e').forEach(function (p) {
+      var e = (p.getAttribute('data-w68e') || '').split('|');
+      var on = set[e[0]] && set[e[1]];
+      p.classList.toggle('hl', !!on);
+      p.classList.toggle('dim', !on);
+    });
+  }
+
+  /* ---------- tabs ---------- */
+  function w68Show(view) {
+    WA68.view = view;
+    ['proj', 'dept', 'org', 'map'].forEach(function (v) {
+      var el = document.getElementById('w68' + v + 'view');
+      if (el) el.style.display = v === view ? '' : 'none';
+    });
+    document.querySelectorAll('.w68tab').forEach(function (t) {
+      t.classList.toggle('on', t.getAttribute('data-w68v') === view);
+    });
+    if (view === 'map') setTimeout(w68Draw, 60);
+  }
+  if (!document.body.dataset.wa68Wired) {
+    document.body.dataset.wa68Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-w68v]');
+      if (t) w68Show(t.getAttribute('data-w68v'));
+    });
+    document.body.addEventListener('mouseover', function (e) {
+      var n = e.target.closest && e.target.closest('.w68node');
+      if (n) w68Hover(n.getAttribute('data-w68n'));
+    });
+    document.body.addEventListener('mouseout', function (e) {
+      var n = e.target.closest && e.target.closest('.w68node');
+      if (n) w68Hover(null);
+    });
+    window.addEventListener('resize', function () {
+      clearTimeout(window.__w68rz);
+      window.__w68rz = setTimeout(w68Draw, 200);
+    });
+  }
+
+  async function w68Tabs() {
+    try {
+      var body = document.getElementById('glBody');
+      if (!body || document.getElementById('w68tabs')) return;
+      var projects = await w68Projects();
+
+      /* keep the "How this fits together" button on top, split the rest */
+      var keepTop = null, orgBlock = null, rest = [];
+      Array.from(body.children).forEach(function (ch) {
+        if (ch.querySelector && ch.querySelector('#w34how')) keepTop = ch;
+        else if (ch.classList && ch.classList.contains('w30org')) orgBlock = ch;
+        else rest.push(ch);
+      });
+
+      var tabs = document.createElement('div');
+      tabs.id = 'w68tabs';
+      tabs.innerHTML = '<button class="w68tab" data-w68v="proj">Projects</button>'
+        + '<button class="w68tab" data-w68v="dept">Department goals</button>'
+        + '<button class="w68tab" data-w68v="org">Organizational goals</button>'
+        + '<button class="w68tab" data-w68v="map">The map</button>';
+
+      var projView = document.createElement('div');
+      projView.id = 'w68projview';
+      projView.innerHTML = w68ProjView(projects);
+
+      var deptView = document.createElement('div');
+      deptView.id = 'w68deptview';
+      deptView.insertAdjacentHTML('afterbegin', '<p class="w68sub">Quarterly goals by department; they roll up into the organizational tier. Edit, link projects, and review the AI suggestions here.</p>');
+      rest.forEach(function (ch) { deptView.appendChild(ch); });
+
+      var orgView = document.createElement('div');
+      orgView.id = 'w68orgview';
+      orgView.insertAdjacentHTML('afterbegin', '<p class="w68sub">The yearly and multi-year direction of Welfare Avenue (one to ten years out). Department quarterly goals and projects roll up here.</p>');
+      if (orgBlock) orgView.appendChild(orgBlock);
+
+      var mapView = document.createElement('div');
+      mapView.id = 'w68mapview';
+      mapView.innerHTML = w68MapView(projects);
+
+      body.innerHTML = '';
+      if (keepTop) body.appendChild(keepTop);
+      body.appendChild(tabs);
+      body.appendChild(projView);
+      body.appendChild(deptView);
+      body.appendChild(orgView);
+      body.appendChild(mapView);
+
+      var head = document.querySelector('#goals .card h2');
+      if (head) head.textContent = 'Strategy';
+      var intro = document.querySelector('#goals .card p.read');
+      if (intro) intro.textContent = 'Projects flow into department quarterly goals; both roll up into the long term organizational goals. Browse each tier, or open the map to see how everything links.';
+
+      w68Show(WA68.view || 'dept');
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (typeof renderGoalsPage === 'function') {
+    var __gp68 = renderGoalsPage;
+    renderGoalsPage = async function () {
+      await __gp68.apply(this, arguments);
+      await w68Tabs();
+    };
+  }
+
+  /* ---------- rename the nav tab (the bar is rebuilt by the nav registry) ---------- */
+  function w68Rename() {
+    try {
+      var bar = document.getElementById('tabBar');
+      if (bar) {
+        bar.querySelectorAll('button, a').forEach(function (el) {
+          if ((el.textContent || '').trim() === 'Goals') {
+            el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');
+          }
+        });
+      }
+      document.querySelectorAll('.w39tool').forEach(function (el) {
+        if ((el.textContent || '').trim() === 'Goals') {
+          el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  try {
+    var __w68mo;
+    new MutationObserver(function () {
+      clearTimeout(__w68mo);
+      __w68mo = setTimeout(w68Rename, 200);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+  if (typeof startApp === 'function') {
+    var __sa68 = startApp;
+    startApp = async function () {
+      await __sa68();
+      setTimeout(w68Rename, 400);
+    };
+  }
+})();

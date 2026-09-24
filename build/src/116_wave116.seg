@@ -1,0 +1,913 @@
+/* =====================================================================
+   WA v116 team pages (24/09/26): one page per team, fed by the hub calendar
+   =====================================================================
+   Steel: "For the drop down of each department, it should hold a
+   different page for each team... each their own Agenda tool (the
+   Agenda tab under Meetings is the master agenda tool that only admins
+   can view and query), each their own Overview page that holds clear
+   bullet point form updates, mentions from other departments, and other
+   pertinent KPIs... Operations Montreal should have the Volunteering
+   tool under its drop down... Fundraising & Finances: Grants, Event
+   Fundraising, Donor Relations and Finance each get their own task
+   management page (ClickUp-like) with their projects; Finance also
+   opens the existing Finance tool... sync meeting times to what
+   hub@welfareavenue.com has on its calendar... on one's home page they
+   should see exactly what meetings they have upcoming."
+   1. Routes: #team/<dept> (Overview), #team/<dept>/agenda,
+      #team/<dept>/tasks[/<workstream>], #team/fundraising/<board>
+      (grants, events, donors, finance) and #team/opsmtl/volunteering.
+      One panel (#team) hosts them all; the classic #dept/<d> page stays
+      reachable (Executive decisions, Transcripts, the footer link).
+   2. Departments menu: clicking a team opens its Overview; the flyout
+      lists the team's pages, then Executive decisions and Transcripts.
+   3. Overview: KPI tiles from live data, tracked KPIs (metrics table,
+      editable by staff), updates in bullet form, mentions from other
+      teams, upcoming meetings (hub calendar), projects, team.
+   4. Agenda: the existing agenda tool, scoped to the team (department
+      locked, filter hidden). The master Agendas page is admins only.
+   5. Calendar: public.hub_events mirrors hub@welfareavenue.com every 30
+      minutes (edge fn calendar-sync + cron). Department meeting chips
+      read the synced cache instead of each person's own Google Calendar,
+      and Home gains "Your upcoming meetings" (who accepted, join link).
+   The task boards themselves live in wave116b (w116Board).
+   ===================================================================== */
+(function () {
+  if (window.__wa116) return; window.__wa116 = true;
+  var T = window.WA_TEAMS;
+  if (!T) return;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', GROUND = '#1F201E', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var W116 = window.W116 = { cur: null, events: [], eventsAt: 0, calState: null, mentions: null, projects: null, metrics: null, agCard: null, agHome: null, vol: {} };
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style');
+  css.id = 'wa116css';
+  css.textContent = '' +
+    '#team{max-width:1240px;}' +
+    '.w116crumb{font-family:' + BODY + ';font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--wa-muted);margin:2px 0 6px;}' +
+    '.w116crumb a{color:inherit;cursor:pointer;text-decoration:none;}' +
+    '.w116crumb a:hover{color:' + GREEN + ';}' +
+    '.w116top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:0 0 14px;}' +
+    '.w116top h2{font-family:' + HEAD + ';font-weight:500;font-size:38px;line-height:1.05;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';margin:0;display:flex;align-items:center;gap:12px;}' +
+    '.w116top h2 .dot{width:14px;height:14px;border-radius:4px;display:inline-block;flex:0 0 auto;}' +
+    '.w116top .sub{font-family:' + BODY + ';font-size:13px;color:var(--wa-muted);margin:4px 0 0;max-width:640px;}' +
+    '.w116right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}' +
+    '.w116seg{display:inline-flex;background:rgba(16,63,57,.08);border-radius:12px;padding:3px;gap:2px;flex-wrap:wrap;}' +
+    '.w116seg a{font-family:' + BODY + ';font-size:13px;font-weight:600;color:' + GREEN + ';padding:7px 14px;border-radius:9px;cursor:pointer;text-decoration:none;white-space:nowrap;}' +
+    '.w116seg a.on{background:var(--wa-card);box-shadow:0 1px 2px rgba(16,63,57,.12);}' +
+    '.w116seg a:hover{color:' + GREEN + ';background:rgba(255,250,242,.7);}' +
+    '.w116avs{display:inline-flex;align-items:center;}' +
+    '.w116av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-weight:700;flex:0 0 auto;border:2px solid var(--wa-card);box-sizing:border-box;}' +
+    '.w116av img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '.w116avs .w116av{margin-left:-7px;}' +
+    '.w116avs .w116av:first-child{margin-left:0;}' +
+    '.w116avs .more{font-size:11px;font-weight:700;color:var(--wa-muted);margin-left:6px;}' +
+    '.w116next{display:inline-flex;align-items:center;gap:8px;background:var(--wa-card);border:1px solid rgba(16,63,57,.10);border-radius:999px;padding:6px 12px 6px 8px;font-size:12.5px;color:var(--wa-text);}' +
+    '.w116next .ic{width:24px;height:24px;border-radius:50%;background:' + GOLD + ';display:inline-flex;align-items:center;justify-content:center;color:' + GREEN + ';font-weight:800;font-size:12px;}' +
+    '.w116next a{color:' + GREEN + ';font-weight:700;text-decoration:none;}' +
+    '.w116grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;align-items:start;}' +
+    '.w116col{display:flex;flex-direction:column;gap:16px;min-width:0;}' +
+    '.w116card{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);padding:18px 20px;}' +
+    '.w116card h3{font-family:' + BODY + ';font-weight:700;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;}' +
+    '.w116card h3 .lnk{font-size:11px;letter-spacing:.4px;text-transform:none;font-weight:600;color:var(--wa-muted);cursor:pointer;}' +
+    '.w116card h3 .lnk:hover{color:' + GREEN + ';}' +
+    '.w116kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 16px;}' +
+    '.w116kpi{display:flex;flex-direction:column;align-items:flex-start;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;min-width:0;}' +
+    '.w116kpi:hover{border-color:rgba(16,63,57,.25);}' +
+    '.w116kpi b{font-family:' + HEAD + ';font-weight:600;font-size:30px;line-height:1;color:' + GREEN + ';margin:0 0 6px;white-space:nowrap;}' +
+    '.w116kpi.warn b{color:' + FLAG + ';}' +
+    '.w116kpi small{font-size:11px;color:var(--wa-muted);}' +
+    /* tracked metrics */
+    '.w116met{display:flex;flex-direction:column;gap:9px;}' +
+    '.w116met .row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;font-size:13px;}' +
+    '.w116met .lab{color:var(--wa-text);}' +
+    '.w116met .val{font-family:' + HEAD + ';font-size:20px;font-weight:600;color:' + GREEN + ';white-space:nowrap;cursor:pointer;}' +
+    '.w116met .val:hover{text-decoration:underline dotted;}' +
+    '.w116met .val small{font-family:' + BODY + ';font-size:11px;font-weight:500;color:var(--wa-muted);margin-left:4px;}' +
+    '.w116met .bar{grid-column:1 / -1;height:5px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;}' +
+    '.w116met .bar i{display:block;height:100%;background:' + GOLD + ';border-radius:3px;}' +
+    '.w116met input{font-family:' + HEAD + ';font-size:18px;width:110px;padding:2px 6px;border:1px solid rgba(16,63,57,.3);border-radius:6px;}' +
+    /* bullet updates */
+    '.w116upd{display:flex;flex-direction:column;gap:12px;}' +
+    '.w116upd .u{border-left:3px solid ' + GOLD + ';padding:2px 0 2px 12px;}' +
+    '.w116upd .hd{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--wa-muted);margin:0 0 4px;}' +
+    '.w116upd .hd b{color:' + GREEN + ';}' +
+    '.w116upd .hd a{color:' + GREEN + ';cursor:pointer;text-decoration:none;font-weight:600;}' +
+    '.w116upd ul{margin:0;padding:0 0 0 18px;}' +
+    '.w116upd li{font-size:13.5px;line-height:1.45;margin:0 0 3px;color:var(--wa-text);}' +
+    '.w116src{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;border-radius:999px;padding:1px 7px;background:rgba(111,100,171,.14);color:' + PURPLE + ';}' +
+    '.w116src.slack{background:rgba(58,110,165,.14);color:#3a6ea5;}' +
+    '.w116src.manual{background:rgba(16,63,57,.10);color:' + GREEN + ';}' +
+    /* mentions */
+    '.w116men{display:flex;flex-direction:column;gap:10px;}' +
+    '.w116men .m{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;font-size:13px;}' +
+    '.w116men .m .t{color:var(--wa-text);}' +
+    '.w116men .m .t b{color:' + GREEN + ';}' +
+    '.w116men .m .q{color:var(--wa-muted);font-size:12.5px;font-style:italic;margin-top:2px;}' +
+    '.w116men .m .w{font-size:11.5px;color:var(--wa-muted);margin-top:2px;}' +
+    '.w116men .m .w a{color:' + GREEN + ';cursor:pointer;text-decoration:none;font-weight:600;}' +
+    '.w116pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 8px;color:#fff;white-space:nowrap;}' +
+    /* events */
+    '.w116evl{display:flex;flex-direction:column;gap:8px;}' +
+    '.w116ev{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;}' +
+    '.w116ev.past{opacity:.55;}' +
+    '.w116evd{text-align:center;background:var(--wa-card);border-radius:10px;padding:6px 4px;border:1px solid rgba(16,63,57,.10);}' +
+    '.w116evd b{display:block;font-family:' + HEAD + ';font-size:22px;line-height:1;color:' + GREEN + ';}' +
+    '.w116evd span{display:block;font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);margin-top:2px;}' +
+    '.w116evb .t{font-size:14px;font-weight:700;color:var(--wa-text);}' +
+    '.w116evb .s{font-size:12px;color:var(--wa-muted);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}' +
+    '.w116evb .s a{color:' + GREEN + ';font-weight:700;text-decoration:none;}' +
+    '.w116evb .s .w116avs .w116av{border-width:1.5px;}' +
+    '.w116rsvp{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;border-radius:999px;padding:3px 9px;white-space:nowrap;}' +
+    '.w116rsvp.accepted{background:rgba(16,63,57,.12);color:' + GREEN + ';}' +
+    '.w116rsvp.tentative{background:rgba(220,165,39,.22);color:#7a5a0f;}' +
+    '.w116rsvp.declined{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '.w116rsvp.needsAction{background:rgba(121,119,115,.14);color:var(--wa-muted);}' +
+    '.w116rsvp.today{background:' + GOLD + ';color:' + GREEN + ';}' +
+    '.w116av.st-accepted{box-shadow:0 0 0 2px #2c7a66;}' +
+    '.w116av.st-declined{box-shadow:0 0 0 2px ' + FLAG + ';opacity:.6;}' +
+    '.w116av.st-tentative{box-shadow:0 0 0 2px ' + GOLD + ';}' +
+    '.w116empty{color:var(--wa-muted);font-size:13px;margin:0;}' +
+    '.w116note{font-size:12px;color:var(--wa-muted);margin:8px 0 0;}' +
+    /* projects */
+    '.w116pro{display:flex;flex-direction:column;gap:10px;}' +
+    '.w116pro .p{cursor:pointer;}' +
+    '.w116pro .p .n{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:600;color:var(--wa-text);}' +
+    '.w116pro .p .n span{color:var(--wa-muted);font-weight:500;font-size:12px;white-space:nowrap;}' +
+    '.w116pro .p .n:hover{color:' + GREEN + ';}' +
+    '.w116pro .bar{height:5px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;margin-top:5px;}' +
+    '.w116pro .bar i{display:block;height:100%;background:' + GREEN + ';border-radius:3px;}' +
+    '.w116team{display:flex;flex-direction:column;gap:8px;}' +
+    '.w116team .r{display:flex;align-items:center;gap:10px;font-size:13px;cursor:pointer;}' +
+    '.w116team .r:hover b{color:' + GREEN + ';}' +
+    '.w116team .r b{color:var(--wa-text);font-weight:600;}' +
+    '.w116team .r span{color:var(--wa-muted);font-size:12px;}' +
+    /* board cards on the Fundraising & Finances overview */
+    '.w116boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 16px;}' +
+    '.w116bcard{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);border-top:4px solid ' + GREEN + ';}' +
+    '.w116bcard:hover{border-color:rgba(16,63,57,.25);}' +
+    '.w116bcard .n{font-family:' + HEAD + ';font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';}' +
+    '.w116bcard .s{font-size:12px;color:var(--wa-muted);margin:2px 0 8px;}' +
+    '.w116bcard .k{display:flex;gap:12px;font-size:12px;color:var(--wa-muted);}' +
+    '.w116bcard .k b{color:var(--wa-text);}' +
+    '.w116foot{margin:18px 0 0;font-size:12.5px;color:var(--wa-muted);display:flex;gap:14px;flex-wrap:wrap;}' +
+    '.w116foot a{color:' + GREEN + ';cursor:pointer;font-weight:600;text-decoration:none;}' +
+    '.w116agnote{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:rgba(220,165,39,.16);border-radius:12px;padding:10px 14px;font-size:13px;margin:0 0 12px;}' +
+    '.w116agnote a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}' +
+    '#w116agHost .ag-page-card > h2{display:none;}' +
+    '#w116agHost .ag-page-card > p.read:first-of-type{display:none;}' +
+    /* sidebar flyout: pages first, then the classic links */
+    'body nav.wa-nav #tabBar .w42sub a.w116sec{margin-top:6px;padding-top:6px;border-top:1px solid rgba(16,63,57,.10);font-size:11.5px;}' +
+    'body nav.wa-nav #tabBar .w42sub a.w116sec + a.w116sec{margin-top:0;padding-top:3px;border-top:none;}' +
+    'body nav.wa-nav #tabBar .w42sub a.on{color:' + GREEN + ';font-weight:700;}' +
+    'body nav.wa-nav #tabBar .w42sub a.w116ind{padding-left:12px;}' +
+    'body nav.wa-nav #tabBar .w42sub .tab.w116tool{display:block;width:auto;font-size:12.5px;font-weight:500;color:var(--wa-muted);padding:3px 0;background:none;border-radius:0;gap:0;}' +
+    'body nav.wa-nav #tabBar .w42sub .tab.w116tool .tabdot{display:none;}' +
+    'body nav.wa-nav #tabBar .w42sub .tab.w116tool:hover{color:' + GREEN + ';background:none;}' +
+    'body nav.wa-nav #tabBar .w42sub .tab.w116tool.active{color:' + GREEN + ';font-weight:700;background:none;box-shadow:none;}' +
+    'body nav.wa-nav #tabBar .w42d:hover > .w42sub{display:none !important;}' +
+    'body nav.wa-nav #tabBar .w42d .tab.active ~ .w42sub{display:none !important;}' +
+    'body nav.wa-nav #tabBar .w42d.w116open > .w42sub{display:flex !important;}' +
+    'body nav.wa-nav #tabBar .w42d.w116open > .tab{color:' + GREEN + ';}' +
+    /* team rows: label, chevron, then the pages on their own line */
+    'body nav.wa-nav #tabBar .w42d{display:flex;flex-wrap:wrap;align-items:center;border-radius:10px;transition:background .12s;}' +
+    'body nav.wa-nav #tabBar .w42d > .tab{flex:1 1 0;min-width:0;width:auto;padding:7px 2px 7px 12px;gap:9px;font-size:13.2px;white-space:normal;line-height:1.25;border-radius:10px;box-shadow:none;}' +
+    'body nav.wa-nav #tabBar .w42d > .tab .tabdot{flex:0 0 auto;}' +
+    'body nav.wa-nav #tabBar .w42d:hover{background:rgba(16,63,57,.05);}' +
+    'body nav.wa-nav #tabBar .w42d:hover > .tab{background:none;}' +
+    'body nav.wa-nav #tabBar .w42d.w116act{background:rgba(16,63,57,.10);}' +
+    'body nav.wa-nav #tabBar .w42d.w116act > .tab,body nav.wa-nav #tabBar .w42d.w116act > .tab.active{background:none;box-shadow:none;color:' + GREEN + ';font-weight:700;}' +
+    'body nav.wa-nav #tabBar .w116chev{flex:0 0 auto;width:22px;height:22px;margin:0 4px 0 0;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--wa-muted);font-size:9px;opacity:.65;transition:transform .18s ease,opacity .12s,background .12s;}' +
+    'body nav.wa-nav #tabBar .w42d:hover .w116chev{opacity:1;}' +
+    'body nav.wa-nav #tabBar .w116chev:hover{background:rgba(16,63,57,.10);color:' + GREEN + ';}' +
+    'body nav.wa-nav #tabBar .w42d.w116open > .w116chev{transform:rotate(180deg);color:' + GREEN + ';opacity:1;}' +
+    'body nav.wa-nav #tabBar .w42d > .w42sub{flex:0 0 100%;padding:0 0 8px 34px;gap:1px;}' +
+    'body nav.wa-nav #tabBar .w42d > .w42sub a,body nav.wa-nav #tabBar .w42sub .tab.w116tool{padding:4px 8px 4px 0;border-radius:6px;}' +
+    'body nav.wa-nav #tabBar .w42d > .w42sub a.on,body nav.wa-nav #tabBar .w42sub .tab.w116tool.active{color:' + GREEN + ';font-weight:700;}' +
+    '#tabBar .w116chev{display:none;}' +
+    'body nav.wa-nav #tabBar .w116chev{display:inline-flex;}' +
+    '#tabBar .w42sub .tab.w116tool{font-size:12.8px;font-weight:600;padding:8px 12px;}' +
+    /* home: upcoming meetings */
+    '#w116home{margin:0 0 16px;}' +
+    '#needsMeBtn{display:none !important;}' +
+    '#w116home .w116evl{gap:6px;}' +
+    '@media (max-width:900px){.w116grid{grid-template-columns:1fr;}.w116top h2{font-size:30px;}}' +
+    '@media (max-width:740px){.w116ev{grid-template-columns:46px minmax(0,1fr);}.w116ev .w116rsvp{grid-column:2;justify-self:start;}.w116seg a{padding:6px 10px;font-size:12px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function admin() { try { return typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'; } catch (e) { return false; } }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || T.labels[d] || d; }
+  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function members(d) { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.department === d && m.active !== false; }); }
+  function allowedDept(d) {
+    try { var a = (typeof wa40Allowed === 'function') ? wa40Allowed() : null; return !a || a.indexOf(d) >= 0; } catch (e) { return true; }
+  }
+  var PAL = [['#103F39', '#FFFAF2'], ['#6F64AB', '#FFFAF2'], ['#DCA527', '#1F201E'], ['#2A8C7A', '#FFFAF2'], ['#c87a2f', '#FFFAF2'], ['#3a6ea5', '#FFFAF2'], ['#B3402F', '#FFFAF2']];
+  function initials(name) {
+    var p = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+  }
+  function palette(name) { var h = 0, s = String(name || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return PAL[h % PAL.length]; }
+  function memberByEmail(em) { em = lower(em); if (!em) return null; return members0().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function memberByName(n) { n = lower(n); if (!n) return null; var all = members0(); return all.filter(function (m) { return lower(m.name) === n; })[0] || all.filter(function (m) { return lower(m.name).split(' ')[0] === n.split(' ')[0]; })[0] || null; }
+  function members0() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []); }
+  function av(person, size, cls) {
+    var name = (person && person.name) || (typeof person === 'string' ? person : '') || '';
+    var url = person && person.avatar_url;
+    var pal = palette(name);
+    var st = 'width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.38) + 'px;';
+    if (url) return '<span class="w116av ' + (cls || '') + '" title="' + E(name) + '" style="' + st + '"><img src="' + E(url) + '" alt="' + E(name) + '" /></span>';
+    return '<span class="w116av ' + (cls || '') + '" title="' + E(name) + '" style="' + st + 'background:' + pal[0] + ';color:' + pal[1] + '">' + E(initials(name)) + '</span>';
+  }
+  window.w116Avatar = av;
+  function stack(list, size, max) {
+    max = max || 6;
+    var out = '<span class="w116avs">' + list.slice(0, max).map(function (p) { return av(p.person || p, size, p.cls || ''); }).join('');
+    if (list.length > max) out += '<span class="more">+' + (list.length - max) + '</span>';
+    return out + '</span>';
+  }
+  /* the team lives in Montreal and Toronto: every calendar time is shown in that zone, like the department chips */
+  var TZ = 'America/Toronto';
+  function dayKey(iso) { try { return new Date(iso).toLocaleDateString('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: TZ }); } catch (e) { return ''; } }
+  function fmtTime(iso) { try { return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: TZ }); } catch (e) { return ''; } }
+  function fmtDay(iso) { try { return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: TZ }); } catch (e) { return ''; } }
+  function dayNum(iso) { try { return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', timeZone: TZ }); } catch (e) { return ''; } }
+  function dow(iso) { try { return new Date(iso).toLocaleDateString('en-US', { weekday: 'short', timeZone: TZ }); } catch (e) { return ''; } }
+  function relDay(iso) {
+    var k = dayKey(iso), t = dayKey(new Date().toISOString()), tm = dayKey(new Date(Date.now() + 86400000).toISOString());
+    if (k === t) return 'Today'; if (k === tm) return 'Tomorrow'; return fmtDay(iso);
+  }
+  function go(h) { location.hash = h; }
+
+  /* ---------- data: calendar mirror (hub@welfareavenue.com) ---------- */
+  async function loadEvents(force) {
+    if (!force && W116.eventsAt && Date.now() - W116.eventsAt < 4 * 60000) return W116.events;
+    try {
+      var sinceMs = Date.now() - 3 * 3600000;
+      var r = await db.from('hub_events').select('*').gte('start_at', new Date(Date.now() - 8 * 86400000).toISOString()).order('start_at', { ascending: true }).limit(500);
+      var rows = (r && r.data) || [];
+      W116.events = rows.filter(function (e) { return e && e.start_at && (e.status || 'confirmed') !== 'cancelled' && Date.parse(e.end_at || e.start_at) >= sinceMs; })
+        .sort(function (a, b) { return Date.parse(a.start_at) - Date.parse(b.start_at); });
+      W116.eventsAt = Date.now();
+      try { var s = await db.from('hub_calendar_state').select('*').limit(3); W116.calState = ((s && s.data) || [])[0] || null; } catch (e2) { /* fine */ }
+    } catch (e) { /* offline: keep what we had */ }
+    return W116.events;
+  }
+  function myEvents() {
+    var em = myEmail(); var me = memberByEmail(em); var alt = me ? lower(me.email) : '';
+    return W116.events.filter(function (e) {
+      var at = e.attendee_emails || [];
+      return at.indexOf(em) >= 0 || (alt && at.indexOf(alt) >= 0) || lower(e.organizer) === em;
+    });
+  }
+  function teamEvents(d) {
+    var emails = members(d).map(function (m) { return lower(m.email); }).filter(Boolean);
+    return W116.events.filter(function (e) {
+      if (e.department === d) return true;
+      if (e.department) return false;
+      var at = e.attendee_emails || []; var n = 0;
+      at.forEach(function (x) { if (emails.indexOf(x) >= 0) n++; });
+      return n >= 2;
+    });
+  }
+  function myStatus(e) {
+    var em = myEmail(); var me = memberByEmail(em); var alt = me ? lower(me.email) : '';
+    var a = (e.attendees || []).filter(function (x) { return x.email === em || (alt && x.email === alt); })[0];
+    return a ? (a.status || 'needsAction') : (lower(e.organizer) === em ? 'accepted' : '');
+  }
+  function attendeeStack(e, size) {
+    var list = (e.attendees || []).map(function (a) {
+      var m = memberByEmail(a.email);
+      return { person: m || { name: a.name || a.email.split('@')[0] }, cls: 'st-' + (a.status || 'needsAction') };
+    });
+    return list.length ? stack(list, size || 20, 7) : '';
+  }
+  function eventRow(e, opts) {
+    opts = opts || {};
+    var st = myStatus(e);
+    var going = (e.attendees || []).filter(function (a) { return a.status === 'accepted'; }).length;
+    var total = (e.attendees || []).length;
+    var isToday = dayKey(e.start_at) === dayKey(new Date().toISOString());
+    var past = new Date(e.end_at || e.start_at) < new Date();
+    var when = e.all_day ? 'All day' : (fmtTime(e.start_at) + (e.end_at ? ' to ' + fmtTime(e.end_at) : ''));
+    var rsvp = '';
+    if (opts.mine) {
+      var map = { accepted: 'Going', tentative: 'Maybe', declined: 'Declined', needsAction: 'No reply yet' };
+      rsvp = st ? '<a class="w116rsvp ' + E(st) + (isToday && st === 'accepted' ? ' today' : '') + '" href="' + E(e.html_link || '#') + '" target="_blank" rel="noopener" title="Open in Google Calendar to change your reply">' + (map[st] || st) + '</a>' : '<span></span>';
+    } else rsvp = isToday ? '<span class="w116rsvp today">Today</span>' : '<span></span>';
+    return '<div class="w116ev' + (past ? ' past' : '') + '" data-w116ev="' + E(e.id) + '">' +
+      '<div class="w116evd"><b>' + E(dayNum(e.start_at)) + '</b><span>' + E(dow(e.start_at)) + '</span></div>' +
+      '<div class="w116evb"><div class="t">' + E(e.summary || 'Meeting') + '</div>' +
+      '<div class="s"><span>' + E(relDay(e.start_at)) + ' &middot; ' + E(when) + '</span>' +
+      (e.department && !opts.hideDept ? '<span class="w116pill" style="background:' + color(e.department) + '">' + E(T.short[e.department] || label(e.department)) + '</span>' : '') +
+      (total ? '<span title="' + going + ' of ' + total + ' accepted">' + attendeeStack(e, 18) + ' <span>' + going + '/' + total + ' going</span></span>' : '') +
+      (e.meet_link ? '<a href="' + E(e.meet_link) + '" target="_blank" rel="noopener">Join</a>' : '') +
+      (e.html_link && !opts.mine ? '<a href="' + E(e.html_link) + '" target="_blank" rel="noopener" style="font-weight:500">Calendar</a>' : '') +
+      '</div></div>' + rsvp + '</div>';
+  }
+  function calNote() {
+    var s = W116.calState;
+    if (!s) return '';
+    if (s.last_ok === false) return '<p class="w116note">Calendar sync is not connected yet' + (admin() ? ': ' + E(s.last_note || '') : '') + '.</p>';
+    return '';
+  }
+  window.w116EventRow = eventRow;
+  window.w116LoadEvents = loadEvents;
+
+  /* department meeting chips: the synced cache is the source now (no per-person Google Calendar reads) */
+  if (typeof loadMeetings === 'function') {
+    loadMeetings = async function () {
+      try {
+        MEETINGS = {};
+        (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).forEach(function (id) {
+          var meta = (typeof DB_META !== 'undefined' && DB_META[id]) || {};
+          if (meta.meeting_cache && meta.meeting_cache_at && (Date.now() - new Date(meta.meeting_cache_at).getTime()) < 10 * 86400000) MEETINGS[id] = meta.meeting_cache;
+        });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- data: mentions, projects, metrics ---------- */
+  async function loadMentions() {
+    if (W116.mentions) return W116.mentions;
+    try { var r = await db.from('mentions').select('*').order('meeting_date', { ascending: false }).limit(400); W116.mentions = (r && r.data) || []; }
+    catch (e) { W116.mentions = []; }
+    return W116.mentions;
+  }
+  async function loadProjects(force) {
+    if (!force && typeof WA27_PROJECTS !== 'undefined' && WA27_PROJECTS && WA27_PROJECTS.length) { W116.projects = WA27_PROJECTS; return W116.projects; }
+    if (W116.projects && !force) return W116.projects;
+    try { var r = await db.from('projects').select('*').order('sort', { ascending: true }); W116.projects = (r && r.data) || []; }
+    catch (e) { W116.projects = W116.projects || []; }
+    return W116.projects;
+  }
+  async function loadMetrics(force) {
+    if (W116.metrics && !force) return W116.metrics;
+    try { var r = await db.from('metrics').select('*').order('sort', { ascending: true }); W116.metrics = (r && r.data) || []; }
+    catch (e) { W116.metrics = W116.metrics || []; }
+    return W116.metrics;
+  }
+  window.w116Projects = function () { return W116.projects || (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []) || []; };
+
+  /* ---------- scope helpers shared with the boards ---------- */
+  function boardDef(d, key) { return ((T.boards[d]) || []).filter(function (b) { return b.key === key; })[0] || null; }
+  function projectsFor(d, board) {
+    var all = window.w116Projects();
+    if (board) {
+      var ids = T.boardProjects[board.key] || [];
+      return all.filter(function (p) { return ids.indexOf(Number(p.id)) >= 0 || (p.department === d && lower(p.name).indexOf(lower(board.ws).split(' ')[0]) >= 0 && ids.length === 0); });
+    }
+    return all.filter(function (p) { return p.department === d; });
+  }
+  function tasksFor(d, board, ws) {
+    var rows = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return t.department === d; });
+    if (board) {
+      var ids = T.boardProjects[board.key] || [];
+      rows = rows.filter(function (t) { return t.subsection === board.ws || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0); });
+    } else if (ws) rows = rows.filter(function (t) { return (t.subsection || 'General') === ws; });
+    return rows;
+  }
+  window.w116TasksFor = tasksFor;
+  window.w116ProjectsFor = projectsFor;
+
+  /* ---------- the panel ---------- */
+  function host() {
+    var sec = document.getElementById('team');
+    if (!sec) return null;
+    var h = document.getElementById('w116host');
+    if (!h) { h = document.createElement('div'); h.id = 'w116host'; sec.appendChild(h); }
+    return h;
+  }
+  function pagesOf(d) {
+    var out = [];
+    (T.pages[d] || ['overview', 'agenda', 'tasks']).forEach(function (p) {
+      if (p === 'overview') out.push({ key: 'overview', label: 'Overview', hash: '#team/' + d });
+      else if (p === 'agenda') out.push({ key: 'agenda', label: 'Agenda', hash: '#team/' + d + '/agenda' });
+      else if (p === 'tasks') out.push({ key: 'tasks', label: 'Tasks', hash: '#team/' + d + '/tasks' });
+      else if (p === 'volunteering') { if (tabVisible('volunteering')) out.push({ key: 'volunteering', label: 'Volunteering', hash: '#volunteering' }); }
+      else if (p === 'boards') {
+        (T.boards[d] || []).forEach(function (b) { out.push({ key: b.key, label: b.label, hash: '#team/' + d + '/' + b.key, board: b }); });
+        out.push({ key: 'tasks', label: 'All tasks', hash: '#team/' + d + '/tasks' });
+      }
+    });
+    if (d === 'fundraising' && tabVisible('finances')) out.push({ key: 'finances', label: 'Finances', hash: '#finances', tool: true });
+    if (d === 'hr' && tabVisible('hrcentre')) out.push({ key: 'hrcentre', label: 'HR centre', hash: '#hrcentre', tool: true });
+    return out;
+  }
+  function tabVisible(id) {
+    var b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]');
+    return !!b && b.style.display !== 'none';
+  }
+  function header(d, cur, title, sub) {
+    var pages = pagesOf(d);
+    var ms = members(d);
+    var next = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(); })[0];
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/' + E(d) + '">' + E(label(d)) + '</a>' + (title ? ' &middot; ' + E(title) : '') + '</div>' +
+      '<div class="w116top"><div><h2><span class="dot" style="background:' + color(d) + '"></span>' + E(title || label(d)) + '</h2>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + '</div>' +
+      '<div class="w116right">' + (ms.length ? '<span title="' + E(ms.map(function (m) { return m.name; }).join(', ')) + '" data-w116go="#orgchart" style="cursor:pointer">' + stack(ms, 28, 6) + '</span>' : '') +
+      (next ? '<span class="w116next"><span class="ic">&#9200;</span><span><b>' + E(relDay(next.start_at)) + '</b> ' + E(next.all_day ? '' : fmtTime(next.start_at)) + ' &middot; ' + E(next.summary) + (next.meet_link ? ' &middot; <a href="' + E(next.meet_link) + '" target="_blank" rel="noopener">Join</a>' : '') + '</span></span>' : '') +
+      '</div></div>' +
+      '<div class="w116seg" style="margin:0 0 18px">' + pages.map(function (p) { return '<a data-w116go="' + E(p.hash) + '" class="' + (p.key === cur ? 'on' : '') + '">' + E(p.label) + '</a>'; }).join('') + '</div>';
+  }
+  function markNav(d, page) {
+    try {
+      document.querySelectorAll('#tabBar .tab.active').forEach(function (t) { t.classList.remove('active'); });
+      var b = document.querySelector('#tabBar .tab[data-tab="' + d + '"]');
+      if (b) b.classList.add('active');
+      document.querySelectorAll('#tabBar .w42sub a.on').forEach(function (a) { a.classList.remove('on'); });
+      var row = b && b.closest ? b.closest('.w42d') : null;
+      if (row) { var a = row.querySelector('.w42sub a[data-w116page="' + page + '"]'); if (a) a.classList.add('on'); }
+      syncOpen();
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---------- Overview ---------- */
+  function sentences(text) {
+    var s = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!s) return [];
+    var parts = s.split(/(?<=[.!?])\s+(?=[A-Z0-9"'(])|;\s+/);
+    return parts.map(function (p) { return p.trim(); }).filter(function (p) { return p.length > 2; });
+  }
+  function srcOf(u) {
+    var l = lower((u.entry_label || '') + ' ' + (u.added_by || ''));
+    if (l.indexOf('slack') >= 0) return ['slack', 'Slack'];
+    if (l.indexOf('otter') >= 0 || l.indexOf('loom') >= 0 || l.indexOf('plaud') >= 0 || l.indexOf('ai:') >= 0) return ['meeting', 'Meeting'];
+    return ['manual', 'Note'];
+  }
+  function txFor(u) {
+    try {
+      var t = String(u.added_by || '').replace(/^AI:\s*/i, '').trim();
+      if (!t || typeof txCache === 'undefined') return null;
+      return txCache.filter(function (x) { return lower(x.title) === lower(t); })[0] || null;
+    } catch (e) { return null; }
+  }
+  var KEYS = {
+    opsmtl: /montreal|\bmtl\b|community kitchen|serving/i,
+    progdev: /program development|program dev|beneficiar|survey|research/i,
+    opsto: /toronto|ontario/i,
+    marketing: /marketing|instagram|linkedin|social media|brand|website|newsletter|content/i,
+    fundraising: /fundrais|donor|grant|sponsor|keela|flag football|rally paper|gift basket|finance|budget/i,
+    hr: /\bhr\b|human resources|onboard|recruit|hiring|volunteer coordinator|policy/i,
+    board: /board meeting|governance|board member|\bboard\b/i
+  };
+  function updatesHtml(d, limit) {
+    var rows = (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []).filter(function (u) { return u.department === d; })
+      .sort(function (a, b) { return String(b.created_at).localeCompare(String(a.created_at)); }).slice(0, limit || 6);
+    if (!rows.length) return '<p class="w116empty">No updates yet. Upload a meeting transcript or add an update on the department page.</p>';
+    return '<div class="w116upd">' + rows.map(function (u) {
+      var src = srcOf(u); var tx = txFor(u);
+      var bullets = sentences(u.text).slice(0, 5);
+      return '<div class="u"><div class="hd"><b>' + E(u.entry_label || (u.created_at ? String(u.created_at).slice(0, 10) : '')) + '</b><span class="w116src ' + src[0] + '">' + src[1] + '</span>' +
+        (tx ? '<a data-w116go="#tx/' + E(tx.id) + '">' + E(tx.title) + '</a>' : '') +
+        (u.confidential ? '<span class="w116src manual">confidential</span>' : '') + '</div>' +
+        '<ul>' + bullets.map(function (b) { return '<li>' + E(b) + '</li>'; }).join('') + '</ul></div>';
+    }).join('') + '</div>';
+  }
+  function mentionsHtml(d) {
+    var names = members(d).map(function (m) { return lower(m.name); });
+    var firsts = names.map(function (n) { return n.split(' ')[0]; });
+    var men = (W116.mentions || []).filter(function (m) {
+      if (!m.person || m.department === d) return false;
+      var p = lower(m.person); var f = p.split(' ')[0];
+      return names.indexOf(p) >= 0 || firsts.indexOf(f) >= 0;
+    }).slice(0, 8);
+    var re = KEYS[d];
+    var cross = (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []).filter(function (u) { return u.department !== d && re && re.test(u.text || ''); })
+      .sort(function (a, b) { return String(b.created_at).localeCompare(String(a.created_at)); }).slice(0, 6);
+    if (!men.length && !cross.length) return '<p class="w116empty">When another team\'s meeting or update talks about this team, it shows up here.</p>';
+    var html = '<div class="w116men">';
+    men.forEach(function (m) {
+      var person = memberByName(m.person);
+      html += '<div class="m">' + av(person || { name: m.person }, 30) + '<div><div class="t"><b>' + E(m.person) + '</b> was mentioned in ' + E(m.meeting_title || 'a meeting') + '</div>' +
+        (m.context || m.quote ? '<div class="q">' + E(m.context || m.quote) + '</div>' : '') +
+        '<div class="w"><span class="w116pill" style="background:' + color(m.department) + '">' + E(T.short[m.department] || label(m.department)) + '</span> ' + E(m.meeting_date || '') +
+        (m.transcript_id ? ' &middot; <a data-w116go="#tx/' + E(m.transcript_id) + '">open the meeting</a>' : '') + '</div></div></div>';
+    });
+    cross.forEach(function (u) {
+      var hit = sentences(u.text).filter(function (s) { return re.test(s); })[0] || String(u.text || '').slice(0, 200);
+      html += '<div class="m"><span class="w116av" style="width:30px;height:30px;font-size:11px;background:' + color(u.department) + '">' + E(initials(T.short[u.department] || u.department)) + '</span>' +
+        '<div><div class="t"><b>' + E(label(u.department)) + '</b> update' + (u.entry_label ? ', ' + E(u.entry_label) : '') + '</div><div class="q">' + E(hit) + '</div></div></div>';
+    });
+    return html + '</div>';
+  }
+  function kpiTiles(d, board) {
+    var tasks = tasksFor(d, board, null);
+    var today = dayKey(new Date().toISOString());
+    var open = tasks.filter(function (t) { return !t.done; });
+    var overdue = open.filter(function (t) { return t.due_date && t.due_date < today; });
+    var since = new Date(Date.now() - 30 * 86400000).toISOString();
+    var done30 = tasks.filter(function (t) { return t.done && ((t.closed_at && t.closed_at >= since) || (!t.closed_at && t.updated_at && t.updated_at >= since)); });
+    var projs = projectsFor(d, board).filter(function (p) { return (p.status || 'active') === 'active'; });
+    var tx = (typeof txCache !== 'undefined' ? txCache : []).filter(function (x) { return typeof txDeptKey === 'function' && txDeptKey(x.department) === d && x.meeting_date && x.meeting_date >= since.slice(0, 10); });
+    var up = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(); });
+    var tHash = board ? '#team/' + d + '/' + board.key : '#team/' + d + '/tasks';
+    var tiles = [
+      { n: open.length, l: 'open tasks', h: tHash },
+      { n: overdue.length, l: 'overdue', h: tHash + (board ? '' : '') , warn: overdue.length > 0, q: 'overdue' },
+      { n: done30.length, l: 'done, last 30 days', h: tHash, q: 'done' },
+      { n: projs.length, l: 'active projects', h: tHash, q: 'projects' }
+    ];
+    if (!board) tiles.push({ n: tx.length, l: 'meetings, last 30 days', h: '#transcripts' });
+    tiles.push({ n: up.length, l: 'upcoming meetings', h: up.length ? '#w116meet' : '#team/' + d, q: 'meet' });
+    return '<div class="w116kpis">' + tiles.map(function (t) {
+      return '<div class="w116kpi' + (t.warn ? ' warn' : '') + '" data-w116go="' + E(t.h) + '"' + (t.q ? ' data-w116q="' + t.q + '"' : '') + '><b>' + t.n + '</b><span>' + t.l + '</span></div>';
+    }).join('') + '</div>';
+  }
+  function metricsHtml(d) {
+    var rows = (W116.metrics || []).filter(function (m) { return m.department === d; });
+    if (!rows.length) return '<p class="w116empty">No tracked KPIs yet.' + (staff() ? ' Add rows to the metrics table (key, label, target, unit, department) and they appear here.' : '') + '</p>';
+    return '<div class="w116met">' + rows.map(function (m) {
+      var cur = m.current_value == null ? null : Number(m.current_value); var tgt = m.target_value == null ? null : Number(m.target_value);
+      var pct = (cur != null && tgt) ? Math.max(0, Math.min(100, Math.round(cur / tgt * 100))) : null;
+      return '<div class="row"><span class="lab">' + E(m.label || m.key) + (tgt != null ? ' <small style="color:var(--wa-muted)">target ' + E(tgt.toLocaleString()) + (m.unit ? ' ' + E(m.unit) : '') + '</small>' : '') + '</span>' +
+        '<span class="val" data-w116met="' + E(m.id) + '" title="' + (staff() ? 'Click to update' : '') + '">' + (cur == null ? '<span style="color:var(--wa-muted);font-size:14px">not tracked yet</span>' : E(cur.toLocaleString())) + (m.unit && cur != null ? '<small>' + E(m.unit) + '</small>' : '') + '</span>' +
+        (pct != null ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function projectsHtml(d, board) {
+    var projs = projectsFor(d, board).filter(function (p) { return (p.status || 'active') === 'active'; });
+    var all = window.w116Projects();
+    if (!projs.length) return '<p class="w116empty">No active projects.</p>';
+    var byId = {}; all.forEach(function (p) { byId[p.id] = p; });
+    return '<div class="w116pro">' + projs.map(function (p) {
+      var ts = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return Number(t.project_id) === Number(p.id); });
+      var done = ts.filter(function (t) { return t.done; }).length;
+      var pct = ts.length ? Math.round(done / ts.length * 100) : 0;
+      var parent = p.parent_id && byId[p.parent_id] ? byId[p.parent_id].name + ' \u203a ' : '';
+      return '<div class="p" data-w116go="#project/' + E(p.id) + '"><div class="n"><span>' + E(parent + p.name) + '</span><span>' + done + '/' + ts.length + '</span></div><div class="bar"><i style="width:' + pct + '%"></i></div></div>';
+    }).join('') + '</div>';
+  }
+  function teamHtml(d) {
+    var ms = members(d);
+    if (!ms.length) return '<p class="w116empty">No one on the roster yet.</p>';
+    return '<div class="w116team">' + ms.map(function (m) {
+      return '<div class="r" data-w116go="#person/' + E(m.id) + '">' + av(m, 30) + '<div><b>' + E(m.name) + '</b>' + (m.role ? '<br><span>' + E(m.role) + '</span>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function eventsHtml(d) {
+    var ev = teamEvents(d).filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(Date.now() - 3600000); }).slice(0, 5);
+    if (!ev.length) return '<p class="w116empty">Nothing on the hub calendar for this team yet.' + (admin() ? ' Invite hub@welfareavenue.com to the team meeting and it appears here.' : '') + '</p>' + calNote();
+    return '<div class="w116evl">' + ev.map(function (e) { return eventRow(e, { hideDept: true }); }).join('') + '</div>';
+  }
+  function boardsHtml(d) {
+    var bs = T.boards[d] || [];
+    if (!bs.length) return '';
+    var today = dayKey(new Date().toISOString());
+    return '<div class="w116boards">' + bs.map(function (b) {
+      var ts = tasksFor(d, b, null); var open = ts.filter(function (t) { return !t.done; }); var od = open.filter(function (t) { return t.due_date && t.due_date < today; });
+      var pr = projectsFor(d, b).filter(function (p) { return (p.status || 'active') === 'active'; });
+      return '<div class="w116bcard" style="border-top-color:' + E(b.color) + '" data-w116go="#team/' + E(d) + '/' + E(b.key) + '"><div class="n">' + E(b.label) + '</div><div class="s">' + E(b.blurb || '') + '</div>' +
+        '<div class="k"><span><b>' + open.length + '</b> open</span>' + (od.length ? '<span style="color:' + FLAG + '"><b style="color:' + FLAG + '">' + od.length + '</b> overdue</span>' : '') + '<span><b>' + pr.length + '</b> projects</span>' + (b.tool ? '<span>+ ' + E(b.toolLabel || 'tool') + '</span>' : '') + '</div></div>';
+    }).join('') + '</div>';
+  }
+  async function renderOverview(d) {
+    var h = host(); if (!h) return;
+    var meta = (typeof DB_META !== 'undefined' && DB_META[d]) || {};
+    h.innerHTML = header(d, 'overview', null, meta.read ? E(meta.read) : '') + '<p class="w116empty">Loading...</p>';
+    await Promise.all([loadEvents(), loadMentions(), loadProjects(), loadMetrics()]);
+    if (!W116.cur || W116.cur.d !== d || W116.cur.page !== 'overview') return;
+    var html = header(d, 'overview', null, meta.read ? E(meta.read) : '') +
+      boardsHtml(d) +
+      kpiTiles(d, null) +
+      '<div class="w116grid"><div class="w116col">' +
+      '<div class="w116card"><h3>Updates <span class="lnk" data-w116go="#dept/' + E(d) + '">full department page</span></h3>' + updatesHtml(d, 6) + '</div>' +
+      '<div class="w116card"><h3>Mentions from other teams</h3>' + mentionsHtml(d) + '</div>' +
+      '</div><div class="w116col">' +
+      '<div class="w116card" id="w116meet"><h3>Upcoming meetings <span class="lnk" data-w116go="#team/' + E(d) + '/agenda">agenda</span></h3>' + eventsHtml(d) + '</div>' +
+      '<div class="w116card"><h3>KPIs we track</h3>' + metricsHtml(d) + '</div>' +
+      '<div class="w116card"><h3>Projects <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">tasks</span></h3>' + projectsHtml(d, null) + '</div>' +
+      '<div class="w116card"><h3>Team <span class="lnk" data-w116go="#orgchart">org chart</span></h3>' + teamHtml(d) + '</div>' +
+      '</div></div>' +
+      '<div class="w116foot"><a data-w116go="#dept/' + E(d) + '">Open the full department page (executive decisions, progress notes, workstreams)</a><a data-w116go="#transcripts">Transcripts</a></div>';
+    h.innerHTML = html;
+    if (d === 'opsmtl') volunteeringTiles(d);
+  }
+  async function volunteeringTiles(d) {
+    try {
+      var today = dayKey(new Date().toISOString());
+      var ev = await db.from('volunteer_events').select('id, event_date, status, kind, location').gte('event_date', today).order('event_date', { ascending: true }).limit(12);
+      var rows = ((ev && ev.data) || []).filter(function (e) { return e.event_date >= today && (e.status || '') !== 'cancelled' && (e.kind || 'service') === 'service' && (!e.location || lower(e.location).indexOf('toronto') < 0); });
+      var next = rows[0];
+      var grid = document.querySelector('#w116host .w116kpis');
+      if (!grid || !W116.cur || W116.cur.d !== d) return;
+      var tile = document.createElement('div');
+      tile.className = 'w116kpi';
+      tile.setAttribute('data-w116go', next ? '#volunteering/e/' + next.id : '#volunteering');
+      tile.innerHTML = '<b>' + (next ? E(new Date(next.event_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) : '\u2014') + '</b><span>next serving event</span>';
+      grid.appendChild(tile);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---------- Agenda (the existing tool, scoped) ---------- */
+  function mountAgenda(d) {
+    var h = host(); if (!h) return;
+    h.innerHTML = header(d, 'agenda', 'Agenda', 'Meeting agendas for ' + E(label(d)) + ', drafted from transcripts, projects and open work.') +
+      '<div class="w116agnote"><span>Agendas here are scoped to <b>' + E(label(d)) + '</b>.' + (admin() ? ' You are an admin, so the <a data-w116go="#agendas">master agenda tool</a> shows every team.' : '') + '</span></div>' +
+      '<div id="w116agHost"></div>';
+    var card = document.querySelector('#agendas .ag-page-card') || W116.agCard;
+    var slot = document.getElementById('w116agHost');
+    if (!card || !slot) { if (slot) slot.innerHTML = '<p class="w116empty">The agenda tool is not available in this build.</p>'; return; }
+    W116.agCard = card;
+    slot.appendChild(card);
+    try {
+      if (typeof waInitAgendasPage === 'function') waInitAgendasPage();
+      var tsel = document.getElementById('agNewType'), dsel = document.getElementById('agNewDept'), fsel = document.getElementById('agFilterDept');
+      if (tsel) { tsel.value = 'department'; tsel.dispatchEvent(new Event('change')); tsel.style.display = 'none'; }
+      if (dsel) { if (!dsel.querySelector('option[value="' + d + '"]')) { var o = document.createElement('option'); o.value = d; o.textContent = label(d); dsel.appendChild(o); } dsel.value = d; dsel.style.display = 'none'; }
+      if (fsel) { if (!fsel.querySelector('option[value="' + d + '"]')) { var o2 = document.createElement('option'); o2.value = d; o2.textContent = label(d); fsel.appendChild(o2); } fsel.value = d; fsel.style.display = 'none'; }
+      if (typeof waRenderAgendasPage === 'function') waRenderAgendasPage();
+    } catch (e) { /* non-fatal */ }
+  }
+  function unmountAgenda() {
+    var card = W116.agCard; var home = document.getElementById('agendas');
+    if (!card || !home || card.parentNode === home) return;
+    home.appendChild(card);
+    try {
+      ['agNewType', 'agNewDept', 'agFilterDept'].forEach(function (id) { var el = document.getElementById(id); if (el) el.style.display = ''; });
+      var fsel = document.getElementById('agFilterDept'); if (fsel) fsel.value = 'all';
+      var tsel = document.getElementById('agNewType'); if (tsel) tsel.dispatchEvent(new Event('change'));
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---------- Tasks and boards (rendered by wave116b) ---------- */
+  function renderTasks(d, board, ws) {
+    var h = host(); if (!h) return;
+    var title = board ? board.label : 'Tasks';
+    var sub = board ? E(board.blurb || '') : 'Every open task for ' + E(label(d)) + ', grouped the way you want it.';
+    var extra = '';
+    if (board && board.tool) {
+      extra = '<div class="w116seg" style="margin:-8px 0 16px"><a class="on">Tasks by project</a><a data-w116go="#' + E(board.tool) + '">' + E(board.toolLabel || 'Tool') + ' (QuickBooks, statements, forecast) &#8594;</a></div>';
+    }
+    h.innerHTML = header(d, board ? board.key : 'tasks', title, sub) + extra + '<div id="w116tasks"><p class="w116empty">Loading tasks...</p></div>';
+    var slot = document.getElementById('w116tasks');
+    if (window.w116Board && window.w116Board.render) {
+      loadProjects().then(function () { if (W116.cur && W116.cur.d === d) window.w116Board.render(slot, { dept: d, board: board, ws: ws || null }); });
+    } else slot.innerHTML = '<p class="w116empty">The task board is not available in this build.</p>';
+  }
+
+  /* ---------- routing ---------- */
+  function route(h) {
+    var p = String(h || '').split('/');
+    var d = p[1] || '', page = p[2] || 'overview', sub = p[3] || '';
+    if (!d || T.order.indexOf(d) < 0) { go('#mypage'); return; }
+    if (!allowedDept(d)) { go('#overview'); return; }
+    if (page === 'volunteering') { go('#volunteering'); return; }
+    var board = boardDef(d, page);
+    var key = board ? page : page;
+    if (page !== 'agenda') unmountAgenda();
+    W116.cur = { d: d, page: board ? 'board' : page, key: key, sub: sub, board: board };
+    markNav(d, key);
+    try { document.title = label(d) + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    if (board) renderTasks(d, board, null);
+    else if (page === 'agenda') mountAgenda(d);
+    else if (page === 'tasks') renderTasks(d, null, sub ? decodeURIComponent(sub) : null);
+    else renderOverview(d);
+    if (window.w116Board && window.w116Board.closeDrawer) { try { window.w116Board.closeDrawer(); } catch (e) { /* fine */ } }
+  }
+  window.w116Route = function () { if (W116.cur) route('team/' + W116.cur.d + '/' + (W116.cur.page === 'board' ? W116.cur.key : W116.cur.page) + (W116.cur.sub ? '/' + W116.cur.sub : '')); };
+  window.w116Refresh = function () { try { window.w116Route(); } catch (e) { /* non-fatal */ } };
+
+  /* ---------- nav: the Departments menu ---------- */
+  /* tools that live inside a team's menu: the real tab button moves in, so its wiring and role gating stay intact */
+  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finances']], hr: [['hrcentre', 'HR centre']] };
+  function flyout(d) {
+    var pages = pagesOf(d).filter(function (p) { return !p.tool && p.key !== 'volunteering'; });
+    var html = pages.map(function (p) {
+      return '<a data-w116="' + E(p.hash) + '" data-w116page="' + E(p.key) + '"' + (p.board ? ' class="w116ind"' : '') + '>' + E(p.label) + '</a>';
+    }).join('');
+    return html;
+  }
+  function adopt(bar, d, row) {
+    var sub = row.querySelector('.w42sub'); if (!sub) return;
+    (ADOPT[d] || []).forEach(function (pair) {
+      var btn = bar.querySelector('.tab[data-tab="' + pair[0] + '"]'); if (!btn) return;
+      var dot = btn.querySelector('.tabdot');
+      btn.innerHTML = (dot ? dot.outerHTML : '') + pair[1];
+      btn.classList.add('w116tool');
+      sub.appendChild(btn);
+    });
+  }
+  function syncOpen() {
+    try {
+      document.querySelectorAll('#tabBar .w42d').forEach(function (row) {
+        var own = row.querySelector(':scope > .tab.active');
+        var inner = row.querySelector('.w42sub .tab.active');
+        row.classList.toggle('w116open', !!(own || inner));
+        row.classList.toggle('w116act', !!(own || inner));
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  function restructureNav() {
+    var bar = document.getElementById('tabBar'); if (!bar) return;
+    var main = document.querySelector('main');
+    T.order.forEach(function (d) {
+      var b = bar.querySelector('.tab[data-tab="' + d + '"]'); if (!b) return;
+      var row = b.closest ? b.closest('.w42d') : null;
+      if (!row) {
+        /* a team the older nav did not wrap: give it the same row shape */
+        row = document.createElement('div'); row.className = 'w42d';
+        b.parentNode.insertBefore(row, b); row.appendChild(b);
+        var sub = document.createElement('div'); sub.className = 'w42sub'; row.appendChild(sub);
+      }
+      var s = row.querySelector('.w42sub');
+      if (s) {
+        /* park any adopted tool buttons before the links are rebuilt, so they survive */
+        Array.prototype.slice.call(s.querySelectorAll('.tab')).forEach(function (b) { bar.appendChild(b); });
+        s.innerHTML = flyout(d); s.dataset.w116 = '1';
+      }
+      adopt(bar, d, row);
+      if (!row.querySelector('.w116chev')) {
+        var ch = document.createElement('span'); ch.className = 'w116chev'; ch.setAttribute('title', 'Show pages'); ch.innerHTML = '&#9660;';
+        ch.setAttribute('data-w116chev', d);
+        row.insertBefore(ch, s || null);
+      }
+    });
+    syncOpen();
+    if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
+    /* order inside the Departments group follows the teams registry */
+    var grp = bar.querySelector('.tab-group[data-w42g="departments"] .tab-group-p');
+    if (grp) T.order.forEach(function (d) { var b = grp.querySelector('.tab[data-tab="' + d + '"]'); var row = b && b.closest ? b.closest('.w42d') : null; if (row) grp.appendChild(row); });
+    /* the group header only shows when a team is visible */
+    try { var grpH = bar.querySelector('.tab-group[data-w42g="departments"] .tab-group-h'); if (grpH) grpH.style.display = T.order.some(function (d) { var b = bar.querySelector('.tab[data-tab="' + d + '"]'); return b && b.style.display !== 'none'; }) ? '' : 'none'; } catch (e) { /* fine */ }
+  }
+  window.w116Nav = restructureNav;
+  /* later waves rebuild the bar on timers; when a tool drifts out of its team menu or the Strategy group dissolves, put it back */
+  function navConsistent() {
+    var bar = document.getElementById('tabBar'); if (!bar) return true;
+    for (var d in ADOPT) {
+      var row = (function () { var b = bar.querySelector('.tab[data-tab="' + d + '"]'); return b && b.closest ? b.closest('.w42d') : null; })();
+      if (!row) continue;
+      for (var i = 0; i < ADOPT[d].length; i++) {
+        var btn = bar.querySelector('.tab[data-tab="' + ADOPT[d][i][0] + '"]');
+        if (btn && !row.contains(btn)) return false;
+      }
+      var sub = row.querySelector('.w42sub');
+      if (!sub || !sub.dataset.w116) return false;
+    }
+    if (window.w116StrategyOk && !window.w116StrategyOk()) return false;
+    return true;
+  }
+  var navTimer = null;
+  function watchNav() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.dataset.w116watch) return;
+    bar.dataset.w116watch = '1';
+    new MutationObserver(function () {
+      clearTimeout(navTimer);
+      navTimer = setTimeout(function () {
+        try { if (!navConsistent()) { restructureNav(); if (window.w116Strategy) window.w116Strategy(); } } catch (e) { /* non-fatal */ }
+      }, 80);
+    }).observe(bar, { childList: true, subtree: true });
+  }
+  if (!document.body.dataset.wa116Wired) {
+    document.body.dataset.wa116Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w116],[data-w116go]');
+      if (!a) return;
+      var h = a.getAttribute('data-w116') || a.getAttribute('data-w116go');
+      if (!h) return;
+      e.preventDefault();
+      document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      document.body.classList.remove('wa-mob-open');
+      if (h === '#w116meet') { var m = document.getElementById('w116meet'); if (m) m.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+      if (a.hasAttribute('data-w116q') && window.w116Board) { try { window.w116Board.preset(a.getAttribute('data-w116q')); } catch (e2) { /* fine */ } }
+      if (location.hash === h) { try { applyHash(); } catch (e3) { /* fine */ } } else location.hash = h;
+    });
+    document.addEventListener('click', function (e) {
+      var ch = e.target.closest && e.target.closest('[data-w116chev]');
+      if (!ch) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      var row = ch.closest('.w42d'); if (row) row.classList.toggle('w116open');
+    }, true);
+    /* clicking a team in the menu opens its Overview (capture phase beats the base tab handler) */
+    document.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('#tabBar .tab');
+      if (!b) return;
+      var id = b.getAttribute('data-tab');
+      if (T.order.indexOf(id) < 0) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      document.body.classList.remove('wa-mob-open');
+      location.hash = '#team/' + id;
+    }, true);
+    /* tracked KPI values: click to update (staff) */
+    document.body.addEventListener('click', function (e) {
+      var v = e.target.closest && e.target.closest('[data-w116met]');
+      if (!v || !staff() || v.querySelector('input')) return;
+      var id = v.getAttribute('data-w116met');
+      var m = (W116.metrics || []).filter(function (x) { return String(x.id) === String(id); })[0];
+      if (!m) return;
+      var inp = document.createElement('input'); inp.type = 'number'; inp.value = m.current_value == null ? '' : m.current_value;
+      v.innerHTML = ''; v.appendChild(inp); inp.focus();
+      var done = false;
+      async function save() {
+        if (done) return; done = true;
+        var val = inp.value === '' ? null : Number(inp.value);
+        var r = await db.from('metrics').update({ current_value: val, updated_at: new Date().toISOString() }).eq('id', m.id);
+        if (r && r.error) { toast('Could not save the KPI'); } else { m.current_value = val; toast('KPI updated'); try { logChange('metric', m.id, 'current_value', null, val); } catch (e2) { /* fine */ } }
+        window.w116Refresh();
+      }
+      inp.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') save(); if (ev.key === 'Escape') { done = true; window.w116Refresh(); } });
+      inp.addEventListener('blur', save);
+    });
+  }
+
+  /* ---------- Home: your upcoming meetings ---------- */
+  function homeHtml() {
+    var ev = myEvents().filter(function (e) { return new Date(e.end_at || e.start_at) >= new Date(Date.now() - 3600000); }).slice(0, 6);
+    var inner;
+    if (!W116.eventsAt) inner = '<p class="mp-empty">Loading the hub calendar...</p>';
+    else if (!ev.length) inner = '<p class="mp-empty">No meetings with your name on the hub calendar in the next two months.' + (W116.calState && W116.calState.last_ok ? '' : ' The calendar sync has not run successfully yet.') + '</p>';
+    else inner = '<div class="w116evl">' + ev.map(function (e) { return eventRow(e, { mine: true }); }).join('') + '</div>';
+    return inner + '<p class="w116note">From hub@welfareavenue.com\'s calendar. Reply to an invite in Google Calendar and it updates here within 30 minutes.</p>';
+  }
+  function injectHome() {
+    var page = document.getElementById('mypage');
+    if (!page) return;
+    var sec = document.getElementById('w116home');
+    if (!sec) {
+      sec = document.createElement('div'); sec.className = 'mp-sec'; sec.id = 'w116home';
+      /* right under the greeting and stat tiles, above the checklists, so the day's meetings are the first thing you read */
+      var anchor = page.querySelector('.mp-online') || page.querySelector('.mp-chips') || page.querySelector('.mp-head');
+      if (anchor && anchor.parentNode) anchor.insertAdjacentElement('afterend', sec);
+      else { var grid = page.querySelector('.mp-grid'); var col = grid ? (grid.querySelector('.w74col') || grid) : null; if (!col) return; col.insertBefore(sec, col.firstChild); }
+    }
+    sec.innerHTML = '<h3>Your upcoming meetings</h3>' + homeHtml();
+  }
+  if (typeof renderMyPage === 'function') {
+    var __rmp116 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rmp116.apply(this, arguments);
+      try { injectHome(); loadEvents().then(function () { injectHome(); }); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  /* ---------- permissions and registration ---------- */
+  function enrol() {
+    try {
+      if (typeof WA40_TABS === 'undefined' || typeof WA40_DEFAULTS === 'undefined') return;
+      ['progdev', 'team'].forEach(function (id) {
+        if (WA40_TABS.indexOf(id) < 0) WA40_TABS.push(id);
+        ['admin', 'leader', 'member'].forEach(function (r) { if (WA40_DEFAULTS[r] && WA40_DEFAULTS[r].indexOf(id) < 0) WA40_DEFAULTS[r].push(id); });
+      });
+      /* the master agenda tool is admins only; teams keep their own scoped agenda */
+      ['leader', 'member', 'viewer'].forEach(function (r) {
+        var arr = WA40_DEFAULTS[r]; if (!arr) return;
+        var i = arr.indexOf('agendas'); if (i >= 0) arr.splice(i, 1);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  function enrolMine() {
+    try {
+      if (typeof WA40_MINE === 'undefined' || !WA40_MINE || !Array.isArray(WA40_MINE.tabs) || !WA40_MINE.tabs.length) return;
+      var tabs = WA40_MINE.tabs;
+      if (tabs.indexOf('opsmtl') >= 0 && tabs.indexOf('progdev') < 0) tabs.push('progdev');
+      if (T.order.some(function (d) { return tabs.indexOf(d) >= 0; }) && tabs.indexOf('team') < 0) tabs.push('team');
+      /* the master agenda tool stays admins only even when an older per-person override lists it */
+      if (WA40_MINE.role !== 'admin') { var ai = tabs.indexOf('agendas'); if (ai >= 0) tabs.splice(ai, 1); }
+    } catch (e) { /* non-fatal */ }
+  }
+  enrol();
+  if (window.WA_NAV && WA_NAV.register) {
+    WA_NAV.register({ id: 'team', gate: 'member', panel: true, onShow: function (h) { try { route(h); } catch (e) { console.warn('team route', e); } } });
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116 = showPanel;
+    showPanel = function () {
+      var out = __sp116.apply(this, arguments);
+      try { syncOpen(); } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  /* leaving the team pages puts the agenda tool back where the master page expects it */
+  window.addEventListener('hashchange', function () {
+    var h = String(location.hash || '');
+    if (h.indexOf('#team/') !== 0) { unmountAgenda(); if (W116.cur) W116.cur = null; if (window.w116Board && window.w116Board.closeDrawer) { try { window.w116Board.closeDrawer(); } catch (e) { /* fine */ } } }
+  });
+
+  if (typeof startApp === 'function') {
+    var __sa116 = startApp;
+    startApp = async function () {
+      var r = await __sa116.apply(this, arguments);
+      try {
+        enrol(); enrolMine();
+        if (typeof wa40Enforce === 'function') wa40Enforce();
+        restructureNav();
+        watchNav();
+        [400, 1200, 3000].forEach(function (ms) { setTimeout(function () { try { if (!navConsistent()) { restructureNav(); if (window.w116Strategy) window.w116Strategy(); } } catch (e) { /* fine */ } }, ms); });
+        loadEvents().then(function () {
+          try { if (String(location.hash || '').indexOf('#team/') === 0) window.w116Refresh(); } catch (e) { /* fine */ }
+          try { if (document.getElementById('w116home')) injectHome(); } catch (e) { /* fine */ }
+        });
+        if (String(location.hash || '').indexOf('#team/') === 0) { try { applyHash(); } catch (e) { /* fine */ } }
+      } catch (e) { console.warn('wave116 boot', e); }
+      return r;
+    };
+  }
+})();

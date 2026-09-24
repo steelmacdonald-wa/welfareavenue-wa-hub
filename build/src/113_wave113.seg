@@ -1,0 +1,644 @@
+/* =====================================================================
+   WA v113 People and access: user management inside Admin (24/09/26)
+   =====================================================================
+   Steel: "I need to also have a user management module with the
+   ability to invite new users." Chosen shape: inside the Admin page,
+   one "People and access" card that unifies three things the Hub kept
+   apart: the roster (team_members), Hub access (hub_roles) and the
+   sign-in system (wa_hub_logins). Every person gets one row with a
+   status: Active (has signed in), Invited (account or access exists,
+   never signed in), Not invited (has an email, nothing else), No email
+   (cannot be invited until one is added), Removed (blocked). Per row:
+   invite, resend, copy a one-time sign-in link, add a missing email,
+   change access, per-page overrides (the wave72 modal), remove or
+   invite again. Checkboxes plus "Invite selected" and an "Invite by
+   list" paste box do bulk invites through hub-invite v2 'bulk_invite'.
+   Leaders: hub-invite v2 lets a department leader invite members into
+   their own department (server forces department and member access);
+   the button lives on their department page in the links row. Admins
+   see the same button on every department page.
+   The classic "who sees what" table is kept (never remove a feature),
+   folded under a link on its card; wave110's Access requests card in
+   that card stays visible. Slack DM on invite comes from hub-invite v2
+   calling notify 'invited'. Wrapped (CURRENT bindings at load):
+   wa40Render, showPanel, startApp. Loads BEFORE wave110 in MANIFEST.
+   ===================================================================== */
+(function () {
+  if (window.__wa113) return; window.__wa113 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w113card{margin-bottom:16px;}' +
+    '#w113card .w113sum{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px;}' +
+    '#w113card .w113chip{display:inline-flex;align-items:center;gap:6px;background:#eef4f1;border-radius:999px;padding:5px 12px;font-size:12.5px;color:#14302b;cursor:pointer;border:1px solid transparent;}' +
+    '#w113card .w113chip b{font-size:14px;}' +
+    '#w113card .w113chip.on{border-color:#2c7a66;background:#dcebe5;}' +
+    '#w113card .w113bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}' +
+    '#w113card .w113bar input[type=text],#w113card .w113bar select{padding:7px 10px;border:1px solid #d8e6e0;border-radius:9px;font-size:13px;}' +
+    '#w113card .w113bar input[type=text]{min-width:220px;flex:1 1 220px;}' +
+    '#w113card .w113bar .w113right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w113btn{background:#2c7a66;color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;}' +
+    '.w113btn.ghost{background:#eef4f1;color:#1f5f4f;}' +
+    '.w113btn.warn{background:#fff;color:#b3402f;border:1px solid #e7c3bd;}' +
+    '.w113btn:disabled{opacity:.55;cursor:default;}' +
+    '#w113tbl{width:100%;border-collapse:collapse;font-size:13px;}' +
+    '#w113tbl th{text-align:left;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:#7b8a86;padding:6px 6px;border-bottom:1px solid #d8e6e0;}' +
+    '#w113tbl td{padding:8px 6px;border-top:1px solid #f0f4f2;vertical-align:middle;}' +
+    '#w113tbl tr.w113sel td{background:#f5faf8;}' +
+    '#w113tbl .w113mut{font-size:11.5px;color:#7b8a86;}' +
+    '#w113tbl input[type=checkbox]{accent-color:#2c7a66;width:16px;height:16px;cursor:pointer;}' +
+    '#w113tbl select{padding:4px 6px;border:1px solid #d8e6e0;border-radius:7px;font-size:12px;}' +
+    '#w113tbl .w113st{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:700;white-space:nowrap;}' +
+    '.w113st.active{background:#dcebe5;color:#1f5f4f;}' +
+    '.w113st.invited{background:#fdf1d6;color:#8a5a12;}' +
+    '.w113st.notinvited{background:#e9eef5;color:#3a4a6b;}' +
+    '.w113st.noemail{background:#f4f4f4;color:#6b7670;}' +
+    '.w113st.removed,.w113st.blocked{background:#f9e3df;color:#8f2f22;}' +
+    '#w113tbl .w113act{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}' +
+    '#w113tbl .w113act a{font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    '#w113tbl .w113act a.rm{color:#b3402f;}' +
+    '#w113tbl .w113em{display:flex;gap:4px;align-items:center;}' +
+    '#w113tbl .w113em input{padding:4px 7px;border:1px solid #d8e6e0;border-radius:7px;font-size:12px;width:200px;}' +
+    '#w113card details{margin-top:12px;}' +
+    '#w113card summary{cursor:pointer;font-size:13px;color:#5c6b66;}' +
+    '.w113modal label{display:block;font-size:12px;color:#5c6b66;margin:10px 0 4px;}' +
+    '.w113modal input[type=text],.w113modal select,.w113modal textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d8e6e0;border-radius:9px;font-size:13px;}' +
+    '.w113modal textarea{min-height:110px;font-family:inherit;}' +
+    '.w113modal .w113two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+    '.w113modal .w113lock{padding:8px 10px;background:#f4f7f5;border-radius:9px;font-size:13px;color:#14302b;}' +
+    '.w113modal .w113res{margin-top:12px;padding:12px;background:#f4f7f5;border-radius:10px;font-size:13px;line-height:1.55;}' +
+    '.w113modal .w113res b.ok{color:#1f5f4f;}' +
+    '.w113modal .w113res b.no{color:#8a5a12;}' +
+    '.w113modal .w113acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}' +
+    '.w113modal .w113rows{max-height:260px;overflow:auto;border:1px solid #eef2f0;border-radius:9px;margin-top:8px;}' +
+    '.w113modal .w113rows div{padding:6px 10px;border-top:1px solid #f0f4f2;font-size:12.5px;display:flex;gap:8px;}' +
+    '.w113modal .w113rows div:first-child{border-top:none;}' +
+    '.w113modal .w113rows .ok{color:#1f5f4f;font-weight:700;}' +
+    '.w113modal .w113rows .no{color:#b3402f;font-weight:700;}' +
+    '.w113modal .w113rows .mut{color:#7b8a86;margin-left:auto;text-align:right;}' +
+    '.w113modal .w113ok{font-size:12px;color:#5c6b66;margin-top:6px;}' +
+    '.wa24-links button.w113dept{background:#eef4f1;color:#1f5f4f;}' +
+    '@media (max-width:700px){#w113tbl .w113hide{display:none;}.w113modal .w113two{grid-template-columns:1fr;}}';
+  document.head.appendChild(css);
+
+  var FOUNDERS113 = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var DEPTS113 = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+  var ROLES113 = ['admin', 'leader', 'member', 'viewer'];
+  var ROLE_HELP = { member: 'Member (the work surfaces)', leader: 'Leader (every page)', viewer: 'Viewer (overview only)', admin: 'Admin (manages everything)' };
+  var STATUS_LABEL = { active: 'Active', invited: 'Invited, not signed in', notinvited: 'Not invited yet', noemail: 'No email yet', removed: 'Removed', blocked: 'Removed' };
+  var W113 = { people: [], roles: {}, logins: {}, loaded: false, q: '', dept: '', status: '', sel: {}, loading: null };
+
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function isAdmin() {
+    if (FOUNDERS113.indexOf(myEmail()) >= 0) return true;
+    try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; }
+  }
+  function isLeader() { try { return !!(WA40_MINE && WA40_MINE.role === 'leader'); } catch (e) { return false; } }
+  function myDept() { try { return (WA_ME && WA_ME.department) || null; } catch (e) { return null; } }
+  function deptLabel(d) { try { return (DEPT_LABEL && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function siteUrl() { return 'https://wa-exec-dashboard.netlify.app/'; }
+  function ago(ts) {
+    if (!ts) return '';
+    var ms = Date.now() - new Date(ts).getTime();
+    if (isNaN(ms) || ms < 0) return 'just now';
+    var m = Math.floor(ms / 60000);
+    if (m < 60) return (m < 1 ? 'just now' : m + ' min ago');
+    var h = Math.floor(m / 60);
+    if (h < 48) return h + ' h ago';
+    var d = Math.floor(h / 24);
+    if (d < 60) return d + ' days ago';
+    return String(ts).slice(0, 10);
+  }
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return fallbackCopy(text); });
+    } catch (e) { /* fall through */ }
+    return Promise.resolve(fallbackCopy(text));
+  }
+  function fallbackCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand('copy');
+      ta.remove();
+      return !!ok;
+    } catch (e) { return false; }
+  }
+  function inviteMessage(name) {
+    var first = String(name || '').split(' ')[0] || 'there';
+    return 'Hi ' + first + ', you have been added to the Welfare Avenue Hub, the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves.\n\nSign in with your Welfare Avenue Google account at ' + siteUrl() + '\n\nThe 60 second tour starts on your first visit, and a short getting-started checklist on your home page walks you through the rest.';
+  }
+
+  /* ---------- data ---------- */
+  async function load() {
+    if (W113.loading) return W113.loading;
+    W113.loading = (async function () {
+      try {
+        var r = await Promise.all([
+          db.from('team_members').select('id,name,email,department,role,active').order('name'),
+          db.from('hub_roles').select('*'),
+          db.rpc('wa_hub_logins')
+        ]);
+        W113.people = (r[0] && r[0].data) || [];
+        W113.roles = {};
+        ((r[1] && r[1].data) || []).forEach(function (x) { W113.roles[lower(x.email)] = x; });
+        W113.logins = {};
+        ((r[2] && r[2].data) || []).forEach(function (l) { W113.logins[lower(l.email)] = l; });
+        W113.loaded = true;
+      } catch (e) { /* keep whatever we had */ }
+      W113.loading = null;
+    })();
+    return W113.loading;
+  }
+  function mk(p, em) {
+    var role = em ? W113.roles[em] : null;
+    var login = em ? W113.logins[em] : null;
+    var st;
+    if (role && role.role === 'blocked') st = 'blocked';
+    else if (p && p.active === false) st = 'removed';
+    else if (!em) st = 'noemail';
+    else if (login && login.last_sign_in_at) st = 'active';
+    else if (login || role) st = 'invited';
+    else st = 'notinvited';
+    return {
+      id: p ? p.id : null,
+      name: p ? (p.name || '') : ((role && role.note) || em.split('@')[0]),
+      title: p ? (p.role || '') : '',
+      dept: p ? (p.department || '') : '',
+      email: em,
+      role: role ? role.role : '',
+      tabs: role && Array.isArray(role.tabs) && role.tabs.length ? role.tabs : null,
+      login: login || null,
+      status: st,
+      founder: FOUNDERS113.indexOf(em) >= 0
+    };
+  }
+  function allRows() {
+    var out = [], seen = {};
+    W113.people.forEach(function (p) {
+      var em = lower(p.email);
+      if (em) seen[em] = 1;
+      out.push(mk(p, em));
+    });
+    Object.keys(W113.roles).forEach(function (em) { if (!seen[em]) out.push(mk(null, em)); });
+    return out;
+  }
+  function isRemoved(r) { return r.status === 'removed' || r.status === 'blocked'; }
+  function matches(r) {
+    if (W113.dept && r.dept !== W113.dept) return false;
+    if (W113.status && r.status !== W113.status && !(W113.status === 'removed' && isRemoved(r))) return false;
+    if (W113.q) {
+      var q = W113.q.toLowerCase();
+      if ((r.name + ' ' + r.email + ' ' + r.title + ' ' + deptLabel(r.dept)).toLowerCase().indexOf(q) < 0) return false;
+    }
+    return true;
+  }
+  function selectable(r) { return !!r.email && r.status !== 'active'; }
+  function rowKey(r) { return r.email || ('id:' + r.id); }
+
+  /* ---------- card ---------- */
+  function ensureCard() {
+    var panel = document.getElementById('adminpanel');
+    if (!panel || !isAdmin()) return null;
+    var card = document.getElementById('w113card');
+    if (card) return card;
+    card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'w113card';
+    card.innerHTML = '<h2>People and access</h2>'
+      + '<p class="read">Everyone on the roster, what they can see, and whether they have signed in. Invite people one at a time or in bulk; the Hub emails a sign-in invitation, sends a Slack welcome when it can find them, and gives you a message and a one-time link to share yourself. Department leaders can invite members into their own team from their department page.</p>'
+      + '<div id="w113body"><p class="read">Loading people...</p></div>';
+    panel.insertBefore(card, panel.firstChild);
+    foldClassic(panel);
+    return card;
+  }
+  function foldClassic(panel) {
+    try {
+      var h2s = panel.querySelectorAll('.card > h2');
+      for (var i = 0; i < h2s.length; i++) {
+        if ((h2s[i].textContent || '').indexOf('Admin: who sees what') === 0 && !h2s[i].querySelector('[data-w113fold]')) {
+          var card = h2s[i].parentNode;
+          var p = card.querySelector(':scope > p.read');
+          var body = card.querySelector('#w40body');
+          if (p) p.style.display = 'none';
+          if (body) body.style.display = 'none';
+          var a = document.createElement('a');
+          a.setAttribute('data-w113fold', '1');
+          a.style.cssText = 'font-size:12px;font-weight:400;margin-left:12px;color:#2c7a66;cursor:pointer;text-decoration:underline;';
+          a.textContent = 'Show the classic roles table';
+          a.addEventListener('click', function () {
+            var open = body && body.style.display !== 'none';
+            if (p) p.style.display = open ? 'none' : '';
+            if (body) body.style.display = open ? 'none' : '';
+            a.textContent = open ? 'Show the classic roles table' : 'Hide the classic roles table';
+          });
+          h2s[i].appendChild(a);
+          h2s[i].childNodes[0].textContent = 'Access requests and the classic roles table';
+        }
+      }
+    } catch (e) { /* cosmetic */ }
+  }
+
+  function paint() {
+    var body = document.getElementById('w113body');
+    if (!body) return;
+    if (!W113.loaded) { body.innerHTML = '<p class="read">Loading people...</p>'; return; }
+    var rows = allRows();
+    var counts = { active: 0, invited: 0, notinvited: 0, noemail: 0, removed: 0 };
+    rows.forEach(function (r) { if (isRemoved(r)) counts.removed++; else counts[r.status]++; });
+    var chip = function (key, label) {
+      return '<span class="w113chip' + (W113.status === key ? ' on' : '') + '" data-w113st="' + key + '"><b>' + counts[key] + '</b>' + label + '</span>';
+    };
+    var selCount = Object.keys(W113.sel).length;
+    var html = '<div class="w113sum">'
+      + chip('active', 'active') + chip('invited', 'invited, not signed in') + chip('notinvited', 'not invited yet') + chip('noemail', 'no email yet') + chip('removed', 'removed')
+      + '</div>'
+      + '<div class="w113bar">'
+      + '<input type="text" id="w113q" placeholder="Search name, email or role" value="' + esc(W113.q) + '" />'
+      + '<select id="w113dept"><option value="">All departments</option>' + DEPTS113.map(function (d) { return '<option value="' + d + '"' + (W113.dept === d ? ' selected' : '') + '>' + esc(deptLabel(d)) + '</option>'; }).join('') + '</select>'
+      + '<div class="w113right">'
+      + (selCount ? '<button class="w113btn" data-w113bulk="1">Invite selected (' + selCount + ')</button>' : '')
+      + '<button class="w113btn ghost" data-w113list="1">Invite by list</button>'
+      + '<button class="w113btn" data-w113new="1">+ Invite someone</button>'
+      + '</div></div>';
+    var live = rows.filter(function (r) { return !isRemoved(r) && matches(r); });
+    var removed = rows.filter(function (r) { return isRemoved(r) && (W113.status === 'removed' || W113.status === '') && matches(r); });
+    var order = { notinvited: 0, noemail: 1, invited: 2, active: 3 };
+    live.sort(function (a, b) {
+      var d = (order[a.status] || 0) - (order[b.status] || 0);
+      return d || String(a.name).localeCompare(String(b.name));
+    });
+    var selAll = live.filter(selectable);
+    html += '<table id="w113tbl"><thead><tr>'
+      + '<th><input type="checkbox" id="w113all" title="Select everyone below who can be invited"' + (selAll.length && selAll.every(function (r) { return W113.sel[rowKey(r)]; }) ? ' checked' : '') + (selAll.length ? '' : ' disabled') + ' /></th>'
+      + '<th>Person</th><th class="w113hide">Department</th><th>Email</th><th>Status</th><th>Access</th><th class="w113hide">Pages</th><th></th></tr></thead><tbody>';
+    if (!live.length) html += '<tr><td colspan="8" class="w113mut">Nobody matches.</td></tr>';
+    live.forEach(function (r) { html += rowHtml(r); });
+    html += '</tbody></table>';
+    if (W113.status !== 'removed' && counts.removed) {
+      html += '<details' + (W113.status === 'removed' ? ' open' : '') + '><summary>Removed people (' + counts.removed + ')</summary><table id="w113tbl2" style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px"><tbody>'
+        + removed.map(function (r) { return rowHtml(r); }).join('') + '</tbody></table></details>';
+    } else if (W113.status === 'removed') {
+      html += (removed.length ? '' : '<p class="w113mut" style="margin-top:8px">Nobody has been removed.</p>');
+    }
+    html += '<p class="w113mut" style="margin-top:10px">Status: Active means the person has signed in at least once. Invited means an account or access exists but they have not signed in yet: resend the email or copy a sign-in link for them. Access changes apply the next time they load the Hub.</p>';
+    body.innerHTML = html;
+  }
+  function rowHtml(r) {
+    var key = rowKey(r);
+    var sel = !!W113.sel[key];
+    var stTxt = STATUS_LABEL[r.status] || r.status;
+    var sub = r.status === 'active' && r.login ? 'signed in ' + ago(r.login.last_sign_in_at) : (r.status === 'invited' && r.login ? 'account created ' + ago(r.login.account_created) : '');
+    var roleSel = r.email && !isRemoved(r)
+      ? '<select data-w40r="' + esc(r.email) + '" data-w113role="' + esc(r.email) + '">' + ROLES113.map(function (x) { return '<option value="' + x + '"' + (x === (r.role || 'member') ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' + (r.founder ? '<div class="w113mut">founder, always admin</div>' : '')
+      : '<span class="w113mut">' + (isRemoved(r) ? 'blocked' : 'needs an email') + '</span>';
+    var pages = r.email && !isRemoved(r) ? '<a data-w40t="' + esc(r.email) + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline;white-space:nowrap">' + (r.tabs ? esc(r.tabs.length + ' pages') : 'role default') + '</a>' : '';
+    var emailCell = r.email ? '<span style="font-size:12px">' + esc(r.email) + '</span>'
+      : (r.id ? '<div class="w113em"><input type="text" data-w113emin="' + r.id + '" placeholder="name@welfareavenue.com" /><a data-w113emsave="' + r.id + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline">Save</a></div>' : '');
+    var acts = [];
+    if (isRemoved(r)) {
+      if (r.email) acts.push('<a data-w113again="' + esc(r.email) + '">Invite again</a>');
+    } else if (r.status === 'notinvited') {
+      acts.push('<a data-w113inv="' + esc(r.email) + '">Invite</a>');
+      if (!r.founder) acts.push('<a class="rm" data-w113rm="' + esc(r.email) + '">Remove</a>');
+    } else if (r.status === 'invited') {
+      acts.push('<a data-w113resend="' + esc(r.email) + '">Resend</a>');
+      acts.push('<a data-w113link="' + esc(r.email) + '">Copy sign-in link</a>');
+      if (!r.founder) acts.push('<a class="rm" data-w113rm="' + esc(r.email) + '">Remove</a>');
+    } else if (r.status === 'active') {
+      acts.push('<a data-w113link="' + esc(r.email) + '">Sign-in link</a>');
+      if (!r.founder) acts.push('<a class="rm" data-w113rm="' + esc(r.email) + '">Remove</a>');
+    }
+    return '<tr' + (sel ? ' class="w113sel"' : '') + ' data-w113row="' + esc(key) + '">'
+      + '<td>' + (selectable(r) ? '<input type="checkbox" data-w113cb="' + esc(key) + '"' + (sel ? ' checked' : '') + ' />' : '') + '</td>'
+      + '<td><b>' + esc(r.name) + '</b>' + (r.title ? '<div class="w113mut">' + esc(r.title) + '</div>' : '') + '</td>'
+      + '<td class="w113hide">' + esc(deptLabel(r.dept)) + '</td>'
+      + '<td>' + emailCell + '</td>'
+      + '<td><span class="w113st ' + esc(r.status) + '">' + esc(stTxt) + '</span>' + (sub ? '<div class="w113mut">' + esc(sub) + '</div>' : '') + '</td>'
+      + '<td>' + roleSel + '</td>'
+      + '<td class="w113hide">' + pages + '</td>'
+      + '<td><div class="w113act">' + acts.join('') + '</div></td></tr>';
+  }
+  async function refresh() {
+    await load();
+    try { if (typeof wa40Load === 'function') await wa40Load(); } catch (e) { /* fine */ }
+    paint();
+  }
+
+  /* ---------- server calls ---------- */
+  async function call(body) {
+    var r = await db.functions.invoke('hub-invite', { body: body });
+    if (r.error) {
+      var msg = '';
+      try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ }
+      throw new Error(msg || r.error.message || 'failed');
+    }
+    if (!r.data) throw new Error('no reply from the Hub');
+    if (r.data.error) throw new Error(r.data.error);
+    return r.data;
+  }
+  function findRow(email) { return allRows().filter(function (r) { return r.email === lower(email); })[0] || null; }
+
+  /* ---------- modals ---------- */
+  function modal(html) {
+    openModal('<div class="w113modal">' + html + '</div>');
+  }
+  function resultHtml(res, name) {
+    var h = '<div class="w113res">'
+      + '<div><b class="ok">' + (res.existed ? 'Profile updated' : 'Profile created') + '</b> for ' + esc(name || res.name || res.email) + ' with ' + esc(res.hub_role || '') + ' access.</div>'
+      + '<div>Sign-in email: ' + (res.email_sent ? '<b class="ok">sent</b>' : '<b class="no">not sent</b>' + (res.note && res.note !== 'not requested' ? ' <span class="w113mut">(' + esc(String(res.note).slice(0, 110)) + ')</span>' : (res.note === 'not requested' ? ' <span class="w113mut">(you chose not to)</span>' : ''))) + '</div>'
+      + '<div>Slack welcome: ' + (res.slack === 'sent' || res.slack === 'sent_channel' ? '<b class="ok">sent</b>' : '<b class="no">not sent</b> <span class="w113mut">(' + esc(res.slack === 'no_slack' ? 'not found in the WA Slack yet' : (res.slack || 'skipped')) + ')</span>') + '</div>'
+      + '</div>'
+      + '<label>A message you can paste into Slack or email</label>'
+      + '<textarea id="w113msg" readonly>' + esc(inviteMessage(name || res.name)) + '</textarea>'
+      + '<div class="w113acts">'
+      + '<button class="w113btn ghost" data-w113copymsg="1">Copy the message</button>'
+      + (isAdmin() ? '<button class="w113btn ghost" data-w113copylink="' + esc(res.email) + '">Copy a one-time sign-in link</button>' : '')
+      + '<button class="w113btn" data-w113done="1">Done</button>'
+      + '</div><div class="w113ok" id="w113okline"></div>';
+    return h;
+  }
+  function inviteModal(preset) {
+    preset = preset || {};
+    var leader = !isAdmin() && isLeader();
+    var dept = leader ? myDept() : (preset.department || myDept() || DEPTS113[0]);
+    var deptField = leader
+      ? '<div class="w113lock">' + esc(deptLabel(dept)) + ' <span class="w113mut">(your department)</span></div>'
+      : '<select id="w113d">' + DEPTS113.map(function (d) { return '<option value="' + d + '"' + (d === dept ? ' selected' : '') + '>' + esc(deptLabel(d)) + '</option>'; }).join('') + '</select>';
+    var accessField = leader
+      ? '<div class="w113lock">Member (the work surfaces)</div>'
+      : '<select id="w113hr">' + ROLES113.slice().sort(function (a, b) { return ['member', 'leader', 'viewer', 'admin'].indexOf(a) - ['member', 'leader', 'viewer', 'admin'].indexOf(b); }).map(function (x) { return '<option value="' + x + '"' + (x === (preset.hub_role || 'member') ? ' selected' : '') + '>' + esc(ROLE_HELP[x]) + '</option>'; }).join('') + '</select>';
+    modal('<h3>' + (preset.again ? 'Invite ' + esc(preset.name || preset.email) + ' again' : (preset.email ? 'Invite ' + esc(preset.name || preset.email) : 'Invite someone to the Hub')) + '</h3>'
+      + '<p class="m-sub">' + (leader ? 'They join your department as a member. An admin can widen their access later.' : 'This creates their profile, sets what they can see, emails a sign-in invitation and sends a Slack welcome when the Hub can find them. They can also sign in with Google using this email straight away.') + '</p>'
+      + '<div class="w113two"><div><label>Full name</label><input type="text" id="w113n" placeholder="First Last" value="' + esc(preset.name || '') + '" /></div>'
+      + '<div><label>Email</label><input type="text" id="w113e" placeholder="name@welfareavenue.com" value="' + esc(preset.email || '') + '"' + (preset.email ? ' readonly' : '') + ' /></div></div>'
+      + '<div class="w113two"><div><label>Department</label>' + deptField + '</div>'
+      + '<div><label>Role title</label><input type="text" id="w113rt" placeholder="e.g. Content manager" value="' + esc(preset.role_title || '') + '" /></div></div>'
+      + '<label>Hub access</label>' + accessField
+      + '<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="w113se" checked /> Email them a sign-in invitation now</label>'
+      + '<div class="w113acts" id="w113formacts"><button class="w113btn" id="w113go">' + (preset.again ? 'Invite again' : 'Create the profile and invite') + '</button><button class="w113btn ghost" data-w113cancel="1">Cancel</button></div>'
+      + '<div id="w113out"></div>');
+    var go = document.getElementById('w113go');
+    go.addEventListener('click', async function () {
+      var name = (document.getElementById('w113n').value || '').trim();
+      var email = lower(document.getElementById('w113e').value);
+      if (!name || email.indexOf('@') < 1) { toast('A name and a valid email are needed'); return; }
+      var body = { action: 'invite', name: name, email: email, role_title: (document.getElementById('w113rt').value || '').trim(), send_email: !!document.getElementById('w113se').checked };
+      var dsel = document.getElementById('w113d'); if (dsel) body.department = dsel.value;
+      var hsel = document.getElementById('w113hr'); if (hsel) body.hub_role = hsel.value;
+      go.disabled = true; go.textContent = 'Inviting...';
+      try {
+        var res = await call(body);
+        res.hub_role = hsel ? hsel.value : 'member';
+        var form = document.querySelector('.w113modal');
+        if (form) form.innerHTML = '<h3>' + esc(name) + ' is on the Hub</h3>' + resultHtml(res, name);
+        toast(res.email_sent ? 'Invitation email sent' : 'Profile saved; share the message or a link with them');
+        refresh();
+      } catch (e) {
+        go.disabled = false; go.textContent = preset.again ? 'Invite again' : 'Create the profile and invite';
+        toast('Could not invite: ' + String(e.message || e).slice(0, 90));
+      }
+    });
+  }
+  function parseList(text) {
+    var out = [];
+    String(text || '').split(/\n|;/).forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var em = null, name = '';
+      var m = line.match(/<([^>]+)>/);
+      if (m) { em = lower(m[1]); name = line.slice(0, m.index).replace(/[,"]/g, ' ').trim(); }
+      else {
+        var parts = line.split(/[,\t]/).map(function (s) { return s.trim(); });
+        var hit = parts.filter(function (s) { return s.indexOf('@') > 0; })[0];
+        if (hit) { em = lower(hit); name = parts.filter(function (s) { return s !== hit; }).join(' ').trim(); }
+        else if (line.indexOf('@') > 0) { var sp = line.split(/\s+/); hit = sp.filter(function (s) { return s.indexOf('@') > 0; })[0]; em = lower(hit); name = sp.filter(function (s) { return s !== hit; }).join(' ').trim(); }
+      }
+      if (!em) return;
+      if (!name) name = em.split('@')[0].split(/[._-]+/).map(function (s) { return s ? s[0].toUpperCase() + s.slice(1) : ''; }).join(' ');
+      out.push({ name: name, email: em });
+    });
+    return out;
+  }
+  function bulkModal(people, title, opts) {
+    opts = opts || {};
+    var leader = !isAdmin() && isLeader();
+    var dept = leader ? myDept() : (opts.department || '');
+    var list = people.map(function (p) { return '<div><span>' + esc(p.name) + '</span><span class="mut">' + esc(p.email) + (p.department ? ' &middot; ' + esc(deptLabel(p.department)) : '') + '</span></div>'; }).join('');
+    modal('<h3>' + esc(title) + '</h3>'
+      + '<p class="m-sub">' + people.length + ' ' + (people.length === 1 ? 'person' : 'people') + '. Each gets a profile (or keeps their existing one), the access below, a sign-in email if you leave that on, and a Slack welcome when the Hub can find them.</p>'
+      + '<div class="w113rows">' + list + '</div>'
+      + '<div class="w113two">'
+      + '<div><label>Department' + (opts.perPerson ? ' (only for people without one)' : '') + '</label>' + (leader ? '<div class="w113lock">' + esc(deptLabel(dept)) + '</div>' : '<select id="w113bd">' + (opts.perPerson ? '<option value="">Keep each person\'s department</option>' : '') + DEPTS113.map(function (d) { return '<option value="' + d + '"' + (d === dept ? ' selected' : '') + '>' + esc(deptLabel(d)) + '</option>'; }).join('') + '</select>') + '</div>'
+      + '<div><label>Hub access for this batch</label>' + (leader ? '<div class="w113lock">Member</div>' : '<select id="w113bh"><option value="">Keep each person\'s current access (new people become members)</option>' + ['member', 'leader', 'viewer', 'admin'].map(function (x) { return '<option value="' + x + '">Everyone: ' + esc(ROLE_HELP[x]) + '</option>'; }).join('') + '</select>') + '</div></div>'
+      + '<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="w113bse" checked /> Email each person a sign-in invitation</label>'
+      + '<p class="w113mut" style="margin-top:6px">The email system allows only a few invitation emails per hour; anyone whose email cannot be sent still gets their profile and access, and you can share the sign-in message with them yourself.</p>'
+      + '<div class="w113acts"><button class="w113btn" id="w113bgo">Invite ' + people.length + ' ' + (people.length === 1 ? 'person' : 'people') + '</button><button class="w113btn ghost" data-w113cancel="1">Cancel</button></div>');
+    document.getElementById('w113bgo').addEventListener('click', async function () {
+      var go = this;
+      var bd = document.getElementById('w113bd'); var bh = document.getElementById('w113bh');
+      var se = !!document.getElementById('w113bse').checked;
+      var batch = people.map(function (p) {
+        var cur = W113.roles[p.email] && W113.roles[p.email].role;
+        var role = bh && bh.value ? bh.value : ((cur && cur !== 'blocked') ? cur : 'member');
+        return { name: p.name, email: p.email, role_title: p.role_title || '', department: (bd && bd.value) || p.department || '', hub_role: leader ? 'member' : role, send_email: se };
+      });
+      go.disabled = true; go.textContent = 'Inviting...';
+      try {
+        var res = await call({ action: 'bulk_invite', people: batch });
+        var results = res.results || [];
+        var box = document.querySelector('.w113modal');
+        box.innerHTML = '<h3>' + res.sent + ' of ' + results.length + ' invited</h3>'
+          + '<div class="w113rows">' + results.map(function (x) {
+            return '<div><span class="' + (x.ok ? 'ok' : 'no') + '">' + (x.ok ? 'OK' : 'Failed') + '</span><span>' + esc(x.name || x.email) + '</span><span class="mut">'
+              + (x.ok ? ('email ' + (x.email_sent ? 'sent' : 'not sent') + ' &middot; Slack ' + (x.slack === 'sent' || x.slack === 'sent_channel' ? 'sent' : 'not sent')) : esc(x.error || 'error')) + '</span></div>';
+          }).join('') + '</div>'
+          + '<label>A message you can paste for anyone whose email did not go out</label>'
+          + '<textarea id="w113msg" readonly>' + esc(inviteMessage('')) + '</textarea>'
+          + '<div class="w113acts"><button class="w113btn ghost" data-w113copymsg="1">Copy the message</button><button class="w113btn" data-w113done="1">Done</button></div><div class="w113ok" id="w113okline"></div>';
+        W113.sel = {};
+        refresh();
+      } catch (e) {
+        go.disabled = false; go.textContent = 'Invite ' + people.length;
+        toast('Could not invite: ' + String(e.message || e).slice(0, 90));
+      }
+    });
+  }
+  function listModal() {
+    modal('<h3>Invite by list</h3>'
+      + '<p class="m-sub">One person per line: "Name, email", "Name &lt;email&gt;" or just the email (the name is guessed from it and can be fixed on their profile later).</p>'
+      + '<textarea id="w113paste" placeholder="Amina Diallo, amina.diallo@welfareavenue.com&#10;Jordan Lee &lt;jordan.lee@welfareavenue.com&gt;&#10;sam.ortiz@welfareavenue.com"></textarea>'
+      + '<div class="w113acts"><button class="w113btn" id="w113pgo">Review the list</button><button class="w113btn ghost" data-w113cancel="1">Cancel</button></div>');
+    document.getElementById('w113pgo').addEventListener('click', function () {
+      var people = parseList(document.getElementById('w113paste').value);
+      if (!people.length) { toast('No emails found in the list'); return; }
+      bulkModal(people, 'Invite ' + people.length + ' from the list', { perPerson: false });
+    });
+  }
+  async function linkFor(email, lineEl) {
+    try {
+      if (lineEl) lineEl.textContent = 'Generating the link...';
+      var res = await call({ action: 'link', email: email });
+      var ok = await copyText(res.link);
+      if (lineEl) lineEl.innerHTML = (ok ? 'Copied. ' : 'Could not copy automatically, here it is: ') + '<input type="text" readonly value="' + esc(res.link) + '" style="width:100%;margin-top:4px;font-size:11px" onclick="this.select()" /><span class="w113mut">One-time link' + (res.existing_account ? ' for their existing account' : ', creates their account when opened') + '. It expires after the sign-in link timeout; generate a fresh one if it has.</span>';
+      toast(ok ? 'Sign-in link copied' : 'Link ready to copy');
+    } catch (e) {
+      if (lineEl) lineEl.textContent = 'Could not make a link: ' + String(e.message || e).slice(0, 90);
+      toast('Could not make a link');
+    }
+  }
+  function linkModal(email) {
+    var r = findRow(email);
+    modal('<h3>Sign-in link for ' + esc((r && r.name) || email) + '</h3>'
+      + '<p class="m-sub">A one-time link that signs them straight in. Paste it into a Slack DM or an email. Anyone with the link can use it once, so send it only to them.</p>'
+      + '<div class="w113ok" id="w113okline"></div>'
+      + '<label>Or the plain message</label><textarea id="w113msg" readonly>' + esc(inviteMessage(r && r.name)) + '</textarea>'
+      + '<div class="w113acts"><button class="w113btn ghost" data-w113copymsg="1">Copy the message</button><button class="w113btn" data-w113done="1">Done</button></div>');
+    linkFor(email, document.getElementById('w113okline'));
+  }
+  function removeModal(email) {
+    var r = findRow(email);
+    modal('<h3>Remove ' + esc((r && r.name) || email) + ' from the Hub?</h3>'
+      + '<p class="m-sub">Their profile is deactivated, their access is blocked, and their sign-in is revoked. Their tasks, updates and history all stay. You can invite them again later from the removed list.</p>'
+      + '<div class="w113acts"><button class="w113btn warn" id="w113rmgo">Remove them</button><button class="w113btn ghost" data-w113cancel="1">Cancel</button></div>');
+    document.getElementById('w113rmgo').addEventListener('click', async function () {
+      this.disabled = true;
+      try {
+        var res = await call({ action: 'remove', email: email });
+        closeModal();
+        toast('Removed from the Hub' + (res.auth_deleted ? ' and signed out everywhere' : ''));
+        delete W113.sel[email];
+        refresh();
+      } catch (e) { this.disabled = false; toast('Could not remove: ' + String(e.message || e).slice(0, 90)); }
+    });
+  }
+  async function saveEmail(id) {
+    var inp = document.querySelector('input[data-w113emin="' + id + '"]');
+    var email = lower(inp && inp.value);
+    if (email.indexOf('@') < 1) { toast('Type a valid email first'); return; }
+    try {
+      var res = await call({ action: 'set_email', member_id: Number(id), email: email });
+      toast('Email saved for ' + (res.name || 'the profile') + '; they can be invited now');
+      refresh();
+    } catch (e) { toast('Could not save: ' + String(e.message || e).slice(0, 90)); }
+  }
+
+  /* ---------- department page button (leaders and admins) ---------- */
+  function deptButton(d) {
+    if (DEPTS113.indexOf(d) < 0) return;
+    var panel = document.getElementById(d);
+    if (!panel) return;
+    var links = panel.querySelector('.wa24-links');
+    if (!links || links.querySelector('.w113dept')) return;
+    var can = isAdmin() || (isLeader() && myDept() === d);
+    if (!can) return;
+    var b = document.createElement('button');
+    b.className = 'w113dept';
+    b.setAttribute('data-w113deptinv', d);
+    b.textContent = '+ Invite a team member';
+    links.appendChild(b);
+  }
+  var ARMED113 = {};
+  function armDept(d) {
+    var panel = document.getElementById(d);
+    if (!panel || ARMED113[d]) return;
+    ARMED113[d] = 1;
+    var t = null;
+    try {
+      new MutationObserver(function () { clearTimeout(t); t = setTimeout(function () { deptButton(d); }, 350); }).observe(panel, { childList: true, subtree: true });
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('input', function (e) {
+    if (e.target && e.target.id === 'w113q') {
+      W113.q = e.target.value;
+      clearTimeout(W113.qt);
+      W113.qt = setTimeout(function () { var el = document.getElementById('w113q'); var pos = el ? el.selectionStart : 0; paint(); var el2 = document.getElementById('w113q'); if (el2) { el2.focus(); try { el2.setSelectionRange(pos, pos); } catch (x) { /* fine */ } } }, 220);
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target;
+    if (!t) return;
+    if (t.id === 'w113dept') { W113.dept = t.value; paint(); return; }
+    if (t.id === 'w113all') {
+      var rows = allRows().filter(function (r) { return !isRemoved(r) && matches(r) && selectable(r); });
+      rows.forEach(function (r) { if (t.checked) W113.sel[rowKey(r)] = 1; else delete W113.sel[rowKey(r)]; });
+      paint(); return;
+    }
+    var cb = t.closest && t.closest('input[data-w113cb]');
+    if (cb) {
+      var k = cb.getAttribute('data-w113cb');
+      if (cb.checked) W113.sel[k] = 1; else delete W113.sel[k];
+      paint(); return;
+    }
+    var rs = t.closest && t.closest('select[data-w113role]');
+    if (rs) {
+      /* wave40's own handler saves the role; refresh our view once it has */
+      var em = rs.getAttribute('data-w113role'), val = rs.value;
+      if (W113.roles[em]) W113.roles[em].role = val; else W113.roles[em] = { email: em, role: val };
+      setTimeout(refresh, 900);
+    }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w113st]'))) { var k = el.getAttribute('data-w113st'); W113.status = (W113.status === k ? '' : k); paint(); return; }
+    if (t.closest('[data-w113new]')) { inviteModal({}); return; }
+    if (t.closest('[data-w113list]')) { listModal(); return; }
+    if (t.closest('[data-w113bulk]')) {
+      var picked = allRows().filter(function (r) { return W113.sel[rowKey(r)]; }).map(function (r) { return { name: r.name, email: r.email, department: r.dept, role_title: r.title }; });
+      if (!picked.length) { toast('Tick some people first'); return; }
+      bulkModal(picked, 'Invite the selected people', { perPerson: true });
+      return;
+    }
+    if ((el = t.closest('[data-w113inv]'))) { var r1 = findRow(el.getAttribute('data-w113inv')); inviteModal(r1 ? { name: r1.name, email: r1.email, department: r1.dept, role_title: r1.title, hub_role: r1.role || 'member' } : { email: el.getAttribute('data-w113inv') }); return; }
+    if ((el = t.closest('[data-w113again]'))) { var r2 = findRow(el.getAttribute('data-w113again')); inviteModal(r2 ? { name: r2.name, email: r2.email, department: r2.dept, role_title: r2.title, hub_role: 'member', again: true } : { email: el.getAttribute('data-w113again'), again: true }); return; }
+    if ((el = t.closest('[data-w113resend]'))) { var r3 = findRow(el.getAttribute('data-w113resend')); inviteModal(r3 ? { name: r3.name, email: r3.email, department: r3.dept, role_title: r3.title, hub_role: r3.role || 'member', again: true } : { email: el.getAttribute('data-w113resend'), again: true }); return; }
+    if ((el = t.closest('[data-w113link]'))) { linkModal(el.getAttribute('data-w113link')); return; }
+    if ((el = t.closest('[data-w113rm]'))) { removeModal(el.getAttribute('data-w113rm')); return; }
+    if ((el = t.closest('[data-w113emsave]'))) { saveEmail(el.getAttribute('data-w113emsave')); return; }
+    if ((el = t.closest('[data-w113deptinv]'))) { inviteModal({ department: el.getAttribute('data-w113deptinv') }); return; }
+    if (t.closest('[data-w113cancel]')) { try { closeModal(); } catch (x) { /* fine */ } return; }
+    if (t.closest('[data-w113done]')) { try { closeModal(); } catch (x) { /* fine */ } return; }
+    if (t.closest('[data-w113copymsg]')) {
+      var ta = document.getElementById('w113msg');
+      if (ta) copyText(ta.value).then(function (ok) { var line = document.getElementById('w113okline'); if (line) line.textContent = ok ? 'Message copied.' : 'Could not copy automatically; select the text above and copy it.'; toast(ok ? 'Message copied' : 'Select the text and copy it'); });
+      return;
+    }
+    if ((el = t.closest('[data-w113copylink]'))) { linkFor(el.getAttribute('data-w113copylink'), document.getElementById('w113okline')); return; }
+  });
+
+  /* ---------- wiring ---------- */
+  if (typeof wa40Render === 'function') {
+    var __w40r113 = wa40Render;
+    wa40Render = async function () {
+      var out = await __w40r113.apply(this, arguments);
+      try {
+        if (ensureCard()) { await load(); paint(); }
+      } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp113 = showPanel;
+    showPanel = function (id) {
+      var out = __sp113.apply(this, arguments);
+      try { if (DEPTS113.indexOf(id) >= 0 && (isAdmin() || isLeader())) { armDept(id); setTimeout(function () { deptButton(id); }, 300); } } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa113 = startApp;
+    startApp = async function () {
+      var r = await __sa113.apply(this, arguments);
+      try { if (isAdmin() || isLeader()) DEPTS113.forEach(function (d) { armDept(d); deptButton(d); }); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  window.w113Debug = function () { return { loaded: W113.loaded, rows: allRows().map(function (r) { return { name: r.name, email: r.email, status: r.status, role: r.role, dept: r.dept }; }), sel: W113.sel }; };
+})();
+

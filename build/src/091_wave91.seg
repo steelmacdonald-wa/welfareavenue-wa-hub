@@ -1,0 +1,232 @@
+/* =====================================================================
+   WA v91 finances insight (07/08/26): explanations + budget math + learning
+   =====================================================================
+   1. Hover explanations: every budget line, KPI tile, chart row and
+      ledger category carries a plain-language note on what it means.
+   2. Budget math: editing any quarterly budget recomputes that line's
+      FY total automatically (FY = Q1+Q2+Q3+Q4) before the repaint.
+   3. Review and learn: a "Needs your review" fold lists the AI's
+      low-confidence allocations; fixing or confirming one clears it.
+      Whenever staff reallocates ANY transaction, a small prompt offers
+      to save the correction as a rule in the AI guidance
+      (app_config finance_ai_guidance), so every future statement
+      import learns from it. finance-import v4 already reads that key.
+   ===================================================================== */
+(function () {
+  if (window.__wa91) return; window.__wa91 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w91help{cursor:help;border-bottom:1px dotted rgba(127,127,127,.55);}' +
+    '#w91review .fin-note{margin:4px 0 8px;}' +
+    '#w91review summary{cursor:pointer;font-weight:800;font-size:14px;color:#b07b2e;list-style:none;}' +
+    '#w91review{background:rgba(176,123,46,.07);border-radius:10px;padding:10px 14px;margin:12px 0;}' +
+    '.w91row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(127,127,127,.15);font-size:12px;}' +
+    '.w91row:first-of-type{border-top:none;}' +
+    '.w91row .d{color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.w91row .n{font-weight:600;flex:1 1 180px;min-width:140px;}' +
+    '.w91row .amt{font-weight:700;white-space:nowrap;}' +
+    '.w91row .amt.pos{color:#3f9c7f;}.w91row .amt.neg{color:#c96b5f;}' +
+    '.w91row select{font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;max-width:150px;}' +
+    '.w91row select option{color:#1c2b27;}' +
+    '.w91ok{background:transparent;border:1px solid #2c7a66;color:#2c7a66;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;}' +
+    '#w91snack{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:9999;background:#14302b;color:#fff;border-radius:12px;padding:12px 16px;font-size:12.5px;max-width:min(560px,92vw);box-shadow:0 6px 24px rgba(0,0,0,.3);display:flex;gap:10px;align-items:center;flex-wrap:wrap;}' +
+    '#w91snack b{color:#9fd6c3;}' +
+    '#w91snack button{border:none;border-radius:999px;padding:6px 12px;font-size:11.5px;font-weight:700;cursor:pointer;}' +
+    '#w91snack .yes{background:#2c7a66;color:#fff;}' +
+    '#w91snack .no{background:transparent;color:#cfe0da;border:1px solid #4a6a62;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. plain-language explanations ---------- */
+  var EXPLAIN = {
+    '4100 Donation': 'Money given to the charity: e-transfer donations, cheque deposits, online giving. Income.',
+    '4110 FlagPlus Football': 'Income from the FlagPlus football league partnership.',
+    '4200 Grants': 'Grant income from governments, cities, municipalities and foundations.',
+    'Services': 'Money earned for services provided, including Stripe payouts. Income.',
+    '5020 Purchases - COS': 'Food and groceries bought for the Sunday serving events (Instacart, MAXI, Costco and similar). The core cost of serving.',
+    'Supplies and materials - COS': 'Non-food supplies and equipment used at serving events: containers, utensils, tables, gear.',
+    '6010 Transportation fees': 'Getting people and food where they need to be: gas, parking, rides, van rentals.',
+    '6020 Meal and entertainment expenses': 'Restaurant meals, cafes and food that is NOT for serving events: volunteer meals, meetings.',
+    '6030 Subscription fees': 'Recurring software and memberships: DigitalOcean, QuickBooks, Loom, Keela, LinkedIn and similar.',
+    '7035 Office expenses': 'Office supplies and hardware for admin work, not for events.',
+    '7090 Telecommunication': 'Phone and internet, including OpenPhone.',
+    '7120 Publicity and Promotion': 'Getting the word out: ads (Meta, Google), printing, event listings.',
+    '7145 Lease payments': 'Storage units and space: U-Haul storage, Depotium.',
+    'Other': 'Bank fees, government fees, and anything that does not fit the other lines.'
+  };
+  var KPI_EXPLAIN = {
+    'Income FY to date': 'All money that came in since the fiscal year started (Oct 1). Duplicates excluded.',
+    'Spend FY to date': 'All money that went out since Oct 1. Duplicates excluded.',
+    'Net FY to date': 'Income minus spending so far this fiscal year. Positive means the bank balance grew.'
+  };
+  function w91Explain(cat) {
+    if (EXPLAIN[cat]) return EXPLAIN[cat];
+    if (typeof WA_FIN_CATS_IN !== 'undefined' && WA_FIN_CATS_IN.indexOf(cat) >= 0) return 'An income budget line your team added.';
+    return 'A budget line your team added.';
+  }
+
+  function w91Decorate() {
+    var sec = document.getElementById('finances');
+    if (!sec) return;
+    sec.querySelectorAll('table.fin-tab tbody tr td:first-child').forEach(function (td) {
+      var cat = (td.textContent || '').trim();
+      if (!cat || cat === 'Total') return;
+      td.title = w91Explain(cat);
+      td.classList.add('w91help');
+    });
+    sec.querySelectorAll('.fin-kpi').forEach(function (k) {
+      var label = (k.querySelector('.k') || {}).textContent || '';
+      var key = Object.keys(KPI_EXPLAIN).filter(function (x) { return label.indexOf(x) === 0; })[0];
+      if (key) { k.title = KPI_EXPLAIN[key]; k.classList.add('w91help'); }
+      else if (label.indexOf('spend vs budget') > 0) { k.title = 'What this quarter has spent so far, against the total expense budget set for the quarter.'; k.classList.add('w91help'); }
+    });
+    sec.querySelectorAll('#w90charts .w90row').forEach(function (r) {
+      var lab = ((r.querySelector('.l') || {}).textContent || '').trim();
+      if (!lab) return;
+      var ex = EXPLAIN[lab];
+      if (ex && r.title.indexOf(ex) < 0) r.title = (r.title ? r.title + ' | ' : '') + ex;
+    });
+    sec.querySelectorAll('select[data-ftc]').forEach(function (s) {
+      s.title = w91Explain(s.value);
+      s.querySelectorAll('option').forEach(function (o) { o.title = w91Explain(o.value); });
+    });
+  }
+
+  /* ---------- 2. quarter edits recompute the FY total ---------- */
+  function w91BudgetMath(sec) {
+    if (sec.dataset.w91bud) return;
+    sec.dataset.w91bud = '1';
+    sec.addEventListener('change', function (e) {
+      var el = e.target;
+      if (!el || !el.classList || !el.classList.contains('fin-bud')) return;
+      var k = el.getAttribute('data-fbud') || '';
+      var p = k.split('|')[0];
+      var cat = k.split('|').slice(1).join('|');
+      if (p === 'FY' || !cat) return;
+      var tot = 0;
+      ['Q1', 'Q2', 'Q3', 'Q4'].forEach(function (q) {
+        tot += (q === p) ? (Number(el.value) || 0) : waFinBudget(q, cat);
+      });
+      WA_FIN_EDITS['FY|' + cat] = String(Math.round(tot * 100) / 100);
+    }, true);
+  }
+
+  /* ---------- 3a. needs-review fold ---------- */
+  function w91Review() {
+    var sec = document.getElementById('finances');
+    if (!sec || !isStaff() || document.getElementById('w91review')) return;
+    var anchor = document.getElementById('w90charts') || sec.querySelector('.fin-kpis');
+    if (!anchor) return;
+    var low = (WA_FIN_TX || []).filter(function (t) {
+      return (t.duplicate_of === null || t.duplicate_of === undefined) && /low confidence/i.test(t.allocated_by || '');
+    });
+    if (!low.length) return;
+    var shown = low.slice(0, 30);
+    var deptOpts = function (cur) {
+      return WA_FIN_DEPTS.map(function (x) {
+        return '<option value="' + x[0] + '"' + (x[0] === cur ? ' selected' : '') + '>' + x[1] + '</option>';
+      }).join('');
+    };
+    var catOpts = function (cur) {
+      return WA_FIN_CATS_IN.concat(WA_FIN_CATS_EX).map(function (c) {
+        return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>';
+      }).join('');
+    };
+    var rows = shown.map(function (t) {
+      var amt = Number(t.amount);
+      var dd = new Date(t.txn_date + 'T12:00:00');
+      var dl = dd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      return '<div class="w91row">' +
+        '<span class="d">' + esc(dl) + '</span>' +
+        '<span class="n" title="' + esc(t.description) + '">' + esc(String(t.description).slice(0, 44)) + '</span>' +
+        '<span class="amt ' + (amt >= 0 ? 'pos' : 'neg') + '">' + waFinMoney(amt, true) + '</span>' +
+        '<select data-w91d="' + t.id + '" title="Department">' + deptOpts(t.department) + '</select>' +
+        '<select data-w91c="' + t.id + '" title="' + esc(w91Explain(t.category)) + '">' + catOpts(t.category) + '</select>' +
+        '<button class="w91ok" data-w91ok="' + t.id + '">Looks right</button>' +
+        '</div>';
+    }).join('');
+    var more = low.length > shown.length ? '<div class="fin-note">Showing 30 of ' + low.length + '.</div>' : '';
+    var d = document.createElement('details');
+    d.id = 'w91review';
+    d.open = true;
+    d.innerHTML = '<summary>Needs your review (' + low.length + ')</summary>' +
+      '<div class="fin-note">The AI was not sure about these allocations. Fix the department or category (hover any category for what it means), or hit Looks right to confirm. Fixing one teaches the AI for future imports.</div>' +
+      rows + more;
+    anchor.insertAdjacentElement('afterend', d);
+    d.querySelectorAll('[data-w91d]').forEach(function (el) {
+      el.addEventListener('change', function () { waFinAlloc(Number(el.getAttribute('data-w91d')), { department: el.value }); });
+    });
+    d.querySelectorAll('[data-w91c]').forEach(function (el) {
+      el.addEventListener('change', function () { waFinAlloc(Number(el.getAttribute('data-w91c')), { category: el.value }); });
+    });
+    d.querySelectorAll('[data-w91ok]').forEach(function (el) {
+      el.addEventListener('click', async function () {
+        await waFinAlloc(Number(el.getAttribute('data-w91ok')), {});
+      });
+    });
+  }
+
+  /* ---------- 3b. reallocation teaches the AI ---------- */
+  function w91Snack(html) {
+    var old = document.getElementById('w91snack');
+    if (old) old.remove();
+    var s = document.createElement('div');
+    s.id = 'w91snack';
+    s.innerHTML = html;
+    document.body.appendChild(s);
+    return s;
+  }
+  function w91LearnPrompt(row) {
+    var deptLabel = (WA_FIN_DEPTS.filter(function (x) { return x[0] === row.department; })[0] || ['', row.department])[1];
+    var rule = 'Transactions described like "' + String(row.description).slice(0, 80) + '": category "' + row.category + '", department ' + row.department + '.';
+    var s = w91Snack('<span>Teach the AI? Always file <b>' + esc(String(row.description).slice(0, 40)) + '</b> as <b>' + esc(row.category) + '</b> / <b>' + esc(deptLabel) + '</b> on future imports.</span>' +
+      '<button class="yes">Save rule</button><button class="no">No thanks</button>');
+    var t = setTimeout(function () { s.remove(); }, 15000);
+    s.querySelector('.no').addEventListener('click', function () { clearTimeout(t); s.remove(); });
+    s.querySelector('.yes').addEventListener('click', async function () {
+      clearTimeout(t);
+      s.querySelector('.yes').disabled = true;
+      try {
+        var r = await db.from('app_config').select('value').eq('key', 'finance_ai_guidance').maybeSingle();
+        var cur = (r && r.data && r.data.value) || '';
+        var probe = '"' + String(row.description).slice(0, 40);
+        if (cur.indexOf(probe) >= 0) {
+          cur = cur.split('\n').filter(function (l) { return l.indexOf(probe) < 0; }).join('\n');
+        }
+        var next = (cur ? cur.replace(/\s+$/, '') + '\n' : '') + rule;
+        if (next.length > 4000) { s.remove(); toast('Guidance is full: trim it in the import window first'); return; }
+        var r2 = await db.from('app_config').upsert({ key: 'finance_ai_guidance', value: next, updated_at: new Date().toISOString() });
+        s.remove();
+        toast(r2.error ? 'Could not save the rule' : 'Saved: future imports will follow it');
+      } catch (e) { s.remove(); toast('Could not save the rule'); }
+    });
+  }
+  if (typeof waFinAlloc === 'function') {
+    var __al91 = waFinAlloc;
+    waFinAlloc = async function (id, patch) {
+      await __al91.apply(this, arguments);
+      try {
+        if (!patch || (!('category' in patch) && !('department' in patch))) return;
+        var row = (WA_FIN_TX || []).filter(function (t) { return t.id === id; })[0];
+        if (!row) return;
+        var applied = Object.keys(patch).every(function (k) { return row[k] === patch[k]; });
+        if (applied) w91LearnPrompt(row);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- wire into the render cycle ---------- */
+  if (typeof waFinRender === 'function') {
+    var __fr91 = waFinRender;
+    waFinRender = function () {
+      __fr91.apply(this, arguments);
+      try {
+        var sec = document.getElementById('finances');
+        if (!sec) return;
+        w91Review();
+        w91Decorate();
+        w91BudgetMath(sec);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

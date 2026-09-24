@@ -1,0 +1,356 @@
+/* =====================================================================
+   WA v26 volunteering usability wave (29/07/26)
+   1. Calendar: upcoming events at the top, past events tucked into a
+      dropdown, most recent first.
+   2. Volunteers: search by name, email or phone; every record editable
+      (name, phones, emails, address, car, tags, notes) with a one-click
+      clear of the review flag.
+   3. Event checklists: steps about texting or confirming volunteers get
+      a "Text volunteers" shortcut that opens the texting tool for that
+      event.
+   4. Master SOP: "add a photo" on any step; photos land in the step
+      details on the master and on every event checklist.
+   5. ClickUp-style tasks: parents show a chevron and subtask count,
+      collapse and expand their subtree, and depth guides make the
+      hierarchy readable.
+   ===================================================================== */
+
+var WA26_Q = '';
+
+(function () {
+  if (document.getElementById('wa26css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa26css';
+  st.textContent = '' +
+    '.w26search{width:100%;max-width:340px;padding:8px 11px;border:1px solid rgba(127,127,127,.35);border-radius:9px;font-size:13px;margin:0 0 10px;}' +
+    '.w26c{border:0;background:none;cursor:pointer;font-size:11px;padding:0 5px 0 0;color:var(--wa-muted,#7b8a86);}' +
+    '.w26n{display:inline-block;margin-left:6px;font-size:10.5px;color:var(--wa-muted,#7b8a86);border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;}' +
+    '.w26hide{display:none !important;}' +
+    '.vl-d1,.vl-d2,.vl-d3{border-left:2px solid rgba(44,122,102,.14);padding-left:10px;}' +
+    '.w26p > .vl-t > .vl-name{font-weight:600;}' +
+    '.vl-ev.past{opacity:.82;}';
+  document.head.appendChild(st);
+})();
+
+/* ---------- 1. calendar: upcoming first, past in a dropdown ---------- */
+if (typeof waVolRenderCalendar === 'function') {
+  waVolRenderCalendar = function () {
+    var nxt = waVolNextEvent();
+    var nextId = nxt ? nxt.id : -1;
+    var today = waVolToday();
+    var html = '';
+    if (nxt) {
+      var d = waVolDaysTo(nxt.event_date);
+      var ph = waVolPhaseNow(nxt.event_date);
+      var phLabel = '';
+      WA_VOL_PHASES.forEach(function (p) { if (p[0] === ph) phLabel = p[1]; });
+      html += '<div class="vl-hero">'
+        + '<h3>Next event: ' + esc(waVolDate(nxt.event_date, true)) + '</h3>'
+        + '<div class="vl-when">' + (d === 0 ? 'Today' : (d === 1 ? 'Tomorrow' : 'In ' + d + ' days')) + '. '
+        + 'You are in the "' + esc(phLabel) + '" part of the checklist. '
+        + nxt.roster_confirmed + ' of ' + nxt.roster_count + ' roster slots confirmed, '
+        + nxt.steps_done + ' of ' + nxt.steps_total + ' steps done.</div>'
+        + '<div style="margin-top:10px"><button class="btn mini" data-vlev="' + nxt.id + '">Open this event</button></div>'
+        + '</div>';
+    }
+    var up = WA_VOL_EVENTS.filter(function (e) { return e.event_date >= today; });
+    var past = WA_VOL_EVENTS.filter(function (e) { return e.event_date < today; });
+    past.sort(function (a, b) { return a.event_date < b.event_date ? 1 : -1; });
+    var month = '';
+    if (up.length) {
+      html += '<h3 class="block" style="color:#2c7a66">Upcoming</h3>';
+      up.forEach(function (e) {
+        var m = waVolMonth(e.event_date);
+        if (m !== month) {
+          if (month) html += '</div>';
+          html += '<div class="vl-month">' + esc(m) + '</div><div class="vl-grid">';
+          month = m;
+        }
+        html += waVolEventCard(e, nextId);
+      });
+      if (month) html += '</div>';
+    }
+    if (past.length) {
+      html += '<details class="vl-phase" style="margin-top:16px"><summary>Past events <span class="vl-nums">' + past.length + '</span></summary><div class="vl-body">';
+      month = '';
+      past.forEach(function (e) {
+        var m = waVolMonth(e.event_date);
+        if (m !== month) {
+          if (month) html += '</div>';
+          html += '<div class="vl-month">' + esc(m) + '</div><div class="vl-grid">';
+          month = m;
+        }
+        html += waVolEventCard(e, nextId);
+      });
+      if (month) html += '</div>';
+      html += '</div></details>';
+    }
+    if (!WA_VOL_EVENTS.length) html += '<p class="vl-empty">No events loaded yet.</p>';
+    waVolPaint(html);
+  };
+}
+
+/* ---------- 2. volunteers: search plus editable records ---------- */
+function wa26PersonRowData(p) {
+  var bits = [p.full_name || ''].concat(p.emails || []).concat(p.tags || []).concat(p.roles || []);
+  var digits = (p.phones || []).map(function (x) { return String(x).replace(/\D/g, ''); });
+  return (bits.join(' ') + ' ' + digits.join(' ')).toLowerCase();
+}
+
+function wa26ApplySearch() {
+  var q = (WA26_Q || '').toLowerCase().trim();
+  var qd = q.replace(/\D/g, '');
+  document.querySelectorAll('#volunteering tbody tr[data-p26]').forEach(function (tr) {
+    var hay = tr.getAttribute('data-search') || '';
+    var hit = !q || hay.indexOf(q) >= 0 || (qd.length >= 3 && hay.indexOf(qd) >= 0);
+    tr.style.display = hit ? '' : 'none';
+  });
+}
+
+if (typeof waVolRenderPeople === 'function') {
+  waVolRenderPeople = function () {
+    var counts = {};
+    WA_VOL_PEOPLE.forEach(function (p) {
+      var set = {};
+      (p.roles || []).forEach(function (r) { set[r] = 1; });
+      (p.tags || []).forEach(function (r) { set[r] = 1; });
+      Object.keys(set).forEach(function (r) { counts[r] = (counts[r] || 0) + 1; });
+    });
+    var chips = '<span class="fchip' + (WA_VOL_ROLEFILTER ? '' : ' on') + '" data-vlrole="">Everyone (' + WA_VOL_PEOPLE.length + ')</span>'
+      + Object.keys(counts).sort().map(function (r) {
+        return '<span class="fchip' + (WA_VOL_ROLEFILTER === r ? ' on' : '') + '" data-vlrole="' + esc(r) + '">' + esc(waVolRoleLabel(r)) + ' (' + counts[r] + ')</span>';
+      }).join('');
+    var list = WA_VOL_PEOPLE.filter(function (p) {
+      if (!WA_VOL_ROLEFILTER) return true;
+      return (p.roles || []).indexOf(WA_VOL_ROLEFILTER) >= 0 || (p.tags || []).indexOf(WA_VOL_ROLEFILTER) >= 0;
+    });
+    var showAddr = WA_VOL_ROLEFILTER === 'cook';
+    var showCar = WA_VOL_ROLEFILTER === 'driver';
+    var staff = typeof isStaff === 'function' && isStaff();
+    var flagged = WA_VOL_PEOPLE.filter(function (p) { return p.needs_review; }).length;
+    var html = '<input class="w26search" id="w26q" type="search" placeholder="Search name, email or phone" value="' + esc(WA26_Q) + '" />';
+    html += '<div class="filters" style="margin-bottom:12px">' + chips + '</div>';
+    if (flagged) html += '<div class="vl-flag" style="margin:0 0 14px">' + flagged + ' records need a human eye before any bulk message goes out. They are marked below; open one to clear its flag.</div>';
+    html += '<div class="vl-tblwrap"><table class="wa-tbl"><thead><tr><th>Name</th><th>Tags</th><th>Phone</th><th>Email</th>'
+      + (showAddr ? '<th>Address</th>' : '') + (showCar ? '<th>Car</th>' : '')
+      + '<th>Notes</th>' + (staff ? '<th></th>' : '') + '</tr></thead><tbody>'
+      + list.map(function (p) {
+        var tagset = {};
+        (p.roles || []).forEach(function (r) { tagset[r] = 1; });
+        (p.tags || []).forEach(function (r) { tagset[r] = 1; });
+        return '<tr data-p26="' + p.id + '" data-search="' + esc(wa26PersonRowData(p)) + '"><td><b>' + esc(p.full_name || '') + '</b>'
+          + (p.quo_contact_id ? ' <span class="vl-bub" title="Linked to Quo contacts">Quo</span>' : '')
+          + (p.needs_review ? '<br /><span class="vl-bub warn">' + esc(p.review_note || 'needs review') + '</span>' : '') + '</td>'
+          + '<td>' + Object.keys(tagset).sort().map(function (r) { return '<span class="vl-bub">' + esc(waVolRoleLabel(r)) + '</span>'; }).join('') + '</td>'
+          + '<td>' + esc((p.phones || []).join(', ')) + '</td>'
+          + '<td>' + esc((p.emails || []).join(', ')) + '</td>'
+          + (showAddr ? '<td style="max-width:220px">' + esc(p.address || '') + '</td>' : '')
+          + (showCar ? '<td>' + esc(p.car_type || '') + '</td>' : '')
+          + '<td style="max-width:220px">' + esc((p.notes || '').slice(0, 120)) + '</td>'
+          + (staff ? '<td><a class="ed" data-w26e="' + p.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline;font-size:12px">edit</a></td>' : '')
+          + '</tr>';
+      }).join('') + '</tbody></table></div>';
+    waVolPaint(html);
+    var q = document.getElementById('w26q');
+    if (q) q.addEventListener('input', function () { WA26_Q = this.value; wa26ApplySearch(); });
+    wa26ApplySearch();
+  };
+}
+
+function wa26PersonModal(pid) {
+  var p = null;
+  WA_VOL_PEOPLE.forEach(function (x) { if (String(x.id) === String(pid)) p = x; });
+  if (!p) return;
+  openModal('<h3>Edit volunteer</h3>' +
+    '<label>Full name</label><input type="text" id="p26Name" value="' + esc(p.full_name || '') + '" />' +
+    '<div class="m-row"><div><label>Phones (comma separated)</label><input type="text" id="p26Phones" value="' + esc((p.phones || []).join(', ')) + '" /></div>' +
+    '<div><label>Emails (comma separated)</label><input type="text" id="p26Emails" value="' + esc((p.emails || []).join(', ')) + '" /></div></div>' +
+    '<div class="m-row"><div><label>Address</label><input type="text" id="p26Addr" value="' + esc(p.address || '') + '" placeholder="For cook pickups" /></div>' +
+    '<div><label>Car</label><input type="text" id="p26Car" value="' + esc(p.car_type || '') + '" placeholder="For drivers" /></div></div>' +
+    '<label>Tags (comma separated: cook, driver, server...)</label><input type="text" id="p26Tags" value="' + esc((p.tags || []).join(', ')) + '" />' +
+    '<label>Notes</label><textarea id="p26Notes" rows="3">' + esc(p.notes || '') + '</textarea>' +
+    (p.needs_review ? '<label style="display:flex;gap:7px;align-items:center;margin-top:8px"><input type="checkbox" id="p26Clr" style="width:15px;height:15px" /> Clear the review flag (' + esc(p.review_note || 'needs review') + ')</label>' : '') +
+    '<div class="m-actions"><button class="btn" id="p26Save">Save</button> <button class="btn ghost" id="p26Cancel">Cancel</button></div>');
+  var cancel = document.getElementById('p26Cancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var save = document.getElementById('p26Save');
+  if (save) save.addEventListener('click', async function () {
+    function splitList(id) {
+      return (document.getElementById(id).value || '').split(/[,;]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    }
+    var patch = {
+      full_name: (document.getElementById('p26Name').value || '').trim(),
+      phones: splitList('p26Phones'),
+      emails: splitList('p26Emails'),
+      address: (document.getElementById('p26Addr').value || '').trim() || null,
+      car_type: (document.getElementById('p26Car').value || '').trim() || null,
+      tags: splitList('p26Tags').map(function (x) { return x.toLowerCase(); }),
+      notes: (document.getElementById('p26Notes').value || '').trim() || null
+    };
+    if (!patch.full_name) { toast('The volunteer needs a name'); return; }
+    var clr = document.getElementById('p26Clr');
+    if (clr && clr.checked) { patch.needs_review = false; patch.review_note = null; }
+    save.disabled = true;
+    var r = await db.from('volunteer_people').update(patch).eq('id', p.id);
+    if (r.error) { save.disabled = false; toast('Save failed'); return; }
+    Object.keys(patch).forEach(function (k) { p[k] = patch[k]; });
+    closeModal();
+    toast('Saved');
+    try { waVolRender(); } catch (e) { /* non-fatal */ }
+  });
+}
+
+/* ---------- 3 to 5. step decorations: texting shortcut, photos, nesting ---------- */
+var WA26_TXT_RE = /\b(text|texts|texting|sms|whatsapp|message|messages|remind|reminder|follow.?up|contact|confirm|confirming|reach out)\b/i;
+
+if (typeof waVolStepHtml === 'function') {
+  (function () {
+    var __sh26 = waVolStepHtml;
+    waVolStepHtml = function (t, s) {
+      var html = __sh26(t, s);
+      try {
+        /* depth marker for the nesting pass (class caps at vl-d3) */
+        html = html.replace('data-vlstep="', 'data-w26d="' + (t.depth || 0) + '" data-vlstep="');
+        var staff = typeof isStaff === 'function' && isStaff();
+        /* photo upload link joins the structural row on the master SOP */
+        if (WA24_EDIT && staff) {
+          html = html.replace('data-w25x="' + t.id + '">remove</a>', 'data-w25x="' + t.id + '">remove</a> <a class="ed" data-w26ph="' + t.id + '">add a photo</a>');
+        }
+        /* texting shortcut on event checklists for steps about contacting people */
+        if (!WA24_EDIT && staff && s && String(s.id).indexOf('tmpl-') !== 0 && WA26_TXT_RE.test(t.name || '')) {
+          html += '<div class="wa24-sx"><a class="ed" data-w26tx="1" style="color:#2c7a66;cursor:pointer;text-decoration:underline">Text volunteers for this step</a></div>';
+        }
+      } catch (e) { /* non-fatal */ }
+      return html;
+    };
+  })();
+}
+
+function wa26Nest() {
+  document.querySelectorAll('#volunteering .vl-body').forEach(function (body) {
+    var kids = Array.prototype.slice.call(body.children);
+    var steps = kids.filter(function (el) { return el.classList && el.classList.contains('vl-step'); });
+    steps.forEach(function (el, i) {
+      if (el.dataset.w26nested) return;
+      el.dataset.w26nested = '1';
+      var d = parseInt(el.getAttribute('data-w26d') || '0', 10);
+      var count = 0;
+      for (var j = i + 1; j < steps.length; j++) {
+        var dj = parseInt(steps[j].getAttribute('data-w26d') || '0', 10);
+        if (dj <= d) break;
+        count++;
+      }
+      if (!count) return;
+      el.classList.add('w26p');
+      var name = el.querySelector('.vl-name');
+      if (!name) return;
+      var c = document.createElement('button');
+      c.className = 'w26c';
+      c.innerHTML = '&#9662;';
+      c.setAttribute('data-w26c', '1');
+      c.title = 'Collapse or expand subtasks';
+      name.insertBefore(c, name.firstChild);
+      var badge = document.createElement('span');
+      badge.className = 'w26n';
+      badge.textContent = count + (count === 1 ? ' subtask' : ' subtasks');
+      name.appendChild(badge);
+    });
+  });
+}
+
+function wa26Toggle(btn) {
+  var step = btn.closest('.vl-step');
+  if (!step) return;
+  var d = parseInt(step.getAttribute('data-w26d') || '0', 10);
+  var collapse = btn.dataset.open !== '0';
+  btn.dataset.open = collapse ? '0' : '1';
+  btn.innerHTML = collapse ? '&#9656;' : '&#9662;';
+  var el = step.nextElementSibling;
+  var inSub = false;
+  while (el) {
+    if (el.classList.contains('vl-step')) {
+      var dj = parseInt(el.getAttribute('data-w26d') || '0', 10);
+      if (dj <= d) break;
+      inSub = true;
+      el.classList.toggle('w26hide', collapse);
+      if (!collapse) {
+        var cc = el.querySelector('.w26c');
+        if (cc) { cc.innerHTML = '&#9662;'; cc.dataset.open = '1'; }
+      }
+    } else if (inSub) {
+      el.classList.toggle('w26hide', collapse);
+    }
+    el = el.nextElementSibling;
+  }
+}
+
+/* ---------- photo upload ---------- */
+function wa26Photo(tid) {
+  var input = document.getElementById('w26file');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.id = 'w26file';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+  }
+  input.onchange = async function () {
+    var file = input.files && input.files[0];
+    input.value = '';
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { toast('That photo is over 8 MB. Pick a smaller one.'); return; }
+    toast('Uploading the photo...');
+    try {
+      var ext = (file.name.split('.').pop() || 'png').toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+      var path = tid + '/wa-' + Date.now() + '.' + ext;
+      var up = await db.storage.from('sop-shots').upload(path, file, { contentType: file.type || 'image/png' });
+      if (up.error) throw up.error;
+      var pub = db.storage.from('sop-shots').getPublicUrl(path);
+      var url = pub && pub.data ? pub.data.publicUrl : '';
+      if (!url) throw new Error('no url');
+      var ins = await db.from('sop_shots').insert({ template_id: tid, attachment_id: 'wa-upload-' + Date.now(), public_url: url, title: file.name, sort: 500 });
+      if (ins.error) throw ins.error;
+      toast('Photo added. It shows on this step in the master SOP and every event.');
+      var open = (typeof wa25OpenSecs === 'function') ? wa25OpenSecs() : [];
+      if (typeof wa25Reload === 'function') wa25Reload(open);
+    } catch (e) { toast('Could not upload the photo'); }
+  };
+  input.click();
+}
+
+/* ---------- render wrappers and wiring ---------- */
+(function () {
+  ['waVolRenderSop', 'waVolRenderEvent'].forEach(function (fn) {
+    if (typeof window[fn] === 'function') {
+      var inner = window[fn];
+      window[fn] = function () {
+        inner();
+        try { wa26Nest(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  });
+
+  function wire() {
+    var sec = document.getElementById('volunteering');
+    if (!sec || sec.dataset.wa26Wired) return;
+    sec.dataset.wa26Wired = '1';
+    sec.addEventListener('click', function (e) {
+      var c = e.target.closest('[data-w26c]');
+      if (c) { wa26Toggle(c); return; }
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var ed = e.target.closest('[data-w26e]');
+      if (ed) { try { wa26PersonModal(ed.getAttribute('data-w26e')); } catch (x) { /* non-fatal */ } return; }
+      var ph = e.target.closest('[data-w26ph]');
+      if (ph) { try { wa26Photo(ph.getAttribute('data-w26ph')); } catch (x) { /* non-fatal */ } return; }
+      var tx = e.target.closest('[data-w26tx]');
+      if (tx && typeof waTxtModal === 'function') { try { waTxtModal(); } catch (x) { /* non-fatal */ } return; }
+    });
+  }
+  wire();
+  var __sa26 = startApp;
+  startApp = async function () {
+    await __sa26();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

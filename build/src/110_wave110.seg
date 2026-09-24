@@ -1,0 +1,257 @@
+/* =====================================================================
+   WA v110 boot veil + self-provisioning + access requests (08/08/26)
+   =====================================================================
+   1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
+      set once startApp has fully resolved through every wave wrapper
+      (this wave loads last, so its startApp wrap finishes last) plus a
+      short settle; a 9s failsafe always reveals the page. Ends the
+      "last five versions flash by" on load.
+   2. Self-provisioning: any @welfareavenue.com sign-in with no
+      hub_roles row writes its own row as 'member' (RLS allows exactly
+      that and nothing else), so admins see every real user in the
+      roles table instead of an implicit default.
+   3. Access requests: a "Request more access" button on My page (and
+      on the overview for anyone) opens a modal: pick what you want
+      (a role step up, or specific pages) + a reason; lands in
+      wa_access_requests, pings the Slack channel via notify. Admins get
+      an "Access requests" card in the Admin panel (above the roles
+      table): Grant applies the change to hub_roles (role change or tab
+      override) under the admin's own RLS and marks the request; Decline
+      marks it. Everything change_logged.
+   ===================================================================== */
+(function () {
+  if (window.__wa110) return; window.__wa110 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w110btn{margin-left:8px;}' +
+    '#w110ar table{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    '#w110ar td{padding:6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:top;}' +
+    '#w110ar .mut{color:var(--wa-muted,#8592a3);font-size:11px;}' +
+    '.w110st{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 8px;}' +
+    '.w110st.new{background:rgba(255,171,0,.16);color:#a06f00;}' +
+    '.w110st.granted{background:rgba(44,122,102,.14);color:#1f5f4f;}' +
+    '.w110st.declined{background:rgba(133,146,163,.16);color:#566a7f;}';
+  document.head.appendChild(css);
+
+  var TAB_LABEL = {
+    dashboard: 'Dashboard', opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing',
+    fundraising: 'Fundraising & Grants', hr: 'Human Resources', board: 'Board & Governance',
+    training: 'My trainings', transcripts: 'Transcript archive', activity: 'Activity',
+    adminpanel: 'Admin', finances: 'Finances', brain: 'The Brain', hrcentre: 'HR centre'
+  };
+  function me() {
+    return {
+      email: ((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(),
+      name: (typeof USER !== 'undefined' && USER && (USER.name || USER.email)) || ''
+    };
+  }
+
+  /* ---------- 1. boot veil ---------- */
+  function w110Reveal() {
+    try { document.documentElement.classList.add('wa-ready'); } catch (e) { /* no */ }
+    try { setTimeout(function () { var v = document.getElementById('wa110veil'); if (v) v.remove(); }, 450); } catch (e) { /* no */ }
+  }
+  setTimeout(w110Reveal, 9000);
+
+  /* ---------- 2. self-provisioning ---------- */
+  async function w110Provision() {
+    try {
+      var m = me();
+      if (!m.email || m.email.indexOf('@welfareavenue.com') < 0) return;
+      var roles = (typeof WA40_ROLES !== 'undefined' && WA40_ROLES) || [];
+      if (roles.some(function (r) { return r.email === m.email; })) return;
+      var r = await db.from('hub_roles').select('email').eq('email', m.email);
+      if (r.data && r.data.length) return;
+      var ins = await db.from('hub_roles').insert({ email: m.email, role: 'member', note: m.name || null, updated_by: 'self (first sign-in)', updated_at: new Date().toISOString() });
+      if (!ins.error) {
+        try { await db.from('change_log').insert({ entity_type: 'hub_role', entity_id: m.email, field: 'created', old_value: null, new_value: 'member (self-provisioned on first sign-in)', changed_by: m.email }); } catch (e) { /* audit */ }
+        if (typeof WA40_ROLES !== 'undefined') WA40_ROLES.push({ email: m.email, role: 'member', tabs: null, note: m.name });
+      }
+    } catch (e) { /* silent: member default applies anyway */ }
+  }
+
+  /* ---------- 3. access requests ---------- */
+  function w110Modal() {
+    var m = me();
+    var role = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member';
+    var pages = Object.keys(TAB_LABEL).filter(function (k) { return k !== 'adminpanel'; });
+    openModal(
+      '<h3>Request more access</h3>' +
+      '<p class="read" style="margin:4px 0 8px">You are a <b>' + esc(role) + '</b>. Ask for a bigger role or specific pages; an admin reviews it and you will see the result on your page.</p>' +
+      '<label class="w101lbl">What do you need?</label>' +
+      '<select id="w110want" style="width:100%;box-sizing:border-box">' +
+      '<option value="role:leader">Leader role (every page, edit rights on team boards)</option>' +
+      '<option value="role:admin">Admin role (roles, settings, HR centre)</option>' +
+      pages.map(function (k) { return '<option value="tab:' + k + '">Page: ' + esc(TAB_LABEL[k]) + '</option>'; }).join('') +
+      '<option value="other">Something else (describe below)</option>' +
+      '</select>' +
+      '<label class="w101lbl">Why (one or two lines)</label>' +
+      '<input type="text" id="w110why" maxlength="300" style="width:100%;box-sizing:border-box" placeholder="Example: I co-lead the Toronto serving events" />' +
+      '<div style="margin-top:12px"><button class="btn" id="w110go">Send the request</button> <button class="btn ghost" id="w110x">Cancel</button></div>'
+    );
+    document.getElementById('w110x').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w110go').addEventListener('click', async function () {
+      var want = (document.getElementById('w110want') || {}).value || 'other';
+      var why = ((document.getElementById('w110why') || {}).value || '').trim();
+      if (want === 'other' && why.length < 6) { toast('Tell us what you need'); return; }
+      this.disabled = true;
+      var ins = await db.from('wa_access_requests').insert({ email: m.email, name: m.name, role_now: role, wanted: want, reason: why || null });
+      if (ins.error) { this.disabled = false; toast('Could not send it'); return; }
+      try {
+        await db.functions.invoke('notify', { body: { event: 'change_request_text', text: ':key: Access request from ' + m.name + ' (' + m.email + '): ' + want + (why ? ' - ' + why : '') + '. Review in Admin > Access requests.' } });
+      } catch (e) { /* best-effort ping */ }
+      closeModal();
+      toast('Request sent to the admins');
+      w110MyStatus();
+    });
+  }
+  function w110Button(host, id) {
+    if (!host || document.getElementById(id)) return;
+    var b = document.createElement('button');
+    b.className = 'btn ghost mini';
+    b.id = id;
+    b.textContent = 'Request more access';
+    b.addEventListener('click', w110Modal);
+    host.appendChild(b);
+  }
+  async function w110MyStatus() {
+    try {
+      var m = me();
+      if (!m.email) return;
+      var box = document.getElementById('w110mine');
+      var r = await db.from('wa_access_requests').select('*').eq('email', m.email).order('id', { ascending: false }).limit(3);
+      var rows = (r.data) || [];
+      if (!box) {
+        var panel = document.getElementById('mypage');
+        var heading = panel && panel.querySelector('h2');
+        if (!heading) return;
+        box = document.createElement('div');
+        box.id = 'w110mine';
+        box.style.cssText = 'margin:6px 0 10px;font-size:12px;';
+        heading.insertAdjacentElement('afterend', box);
+        w110Button(box, 'w110btn');
+      }
+      var list = box.querySelector('.w110list');
+      if (!list) { list = document.createElement('span'); list.className = 'w110list'; list.style.marginLeft = '10px'; box.appendChild(list); }
+      list.innerHTML = rows.map(function (q) {
+        var w = q.wanted.indexOf('tab:') === 0 ? (TAB_LABEL[q.wanted.slice(4)] || q.wanted.slice(4)) : q.wanted.replace('role:', '') + ' role';
+        return '<span class="w110st ' + esc(q.status) + '" title="' + esc(q.reason || '') + '">' + esc(w) + ': ' + esc(q.status) + '</span> ';
+      }).join('');
+    } catch (e) { /* optional */ }
+  }
+
+  /* admin card */
+  async function w110AdminCard() {
+    var body = document.getElementById('w40body');
+    if (!body || document.getElementById('w110ar')) return;
+    if (!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin')) return;
+    var card = document.createElement('div');
+    card.id = 'w110ar';
+    card.style.cssText = 'margin:0 0 14px;padding:10px 12px;background:#fbfbfd;border:1px solid #eef0f4;border-radius:10px;';
+    card.innerHTML = '<h3 class="block" style="margin-top:0">Access requests</h3><div id="w110arbody">Loading...</div>';
+    body.insertAdjacentElement('beforebegin', card);
+    await w110AdminRender();
+  }
+  async function w110AdminRender() {
+    var b = document.getElementById('w110arbody');
+    if (!b) return;
+    try {
+      var r = await db.from('wa_access_requests').select('*').order('id', { ascending: false }).limit(40);
+      var rows = (r.data) || [];
+      var open = rows.filter(function (q) { return q.status === 'new'; });
+      if (!rows.length) { b.innerHTML = '<p class="read">No requests yet. People ask from their My page.</p>'; return; }
+      var html = '<table><tbody>' + rows.slice(0, 25).map(function (q) {
+        var w = q.wanted.indexOf('tab:') === 0 ? 'Page: ' + (TAB_LABEL[q.wanted.slice(4)] || q.wanted.slice(4)) : (q.wanted.indexOf('role:') === 0 ? q.wanted.slice(5) + ' role' : 'Other');
+        return '<tr><td><b>' + esc(q.name || q.email) + '</b><div class="mut">' + esc(q.email) + ' &middot; now ' + esc(q.role_now || 'member') + ' &middot; ' + esc(String(q.created_at).slice(0, 10)) + '</div></td>'
+          + '<td>' + esc(w) + (q.reason ? '<div class="mut">' + esc(q.reason) + '</div>' : '') + '</td>'
+          + '<td style="white-space:nowrap">' + (q.status === 'new'
+            ? '<button class="btn mini" data-w110g="' + q.id + '">Grant</button> <button class="btn ghost mini" data-w110d="' + q.id + '">Decline</button>'
+            : '<span class="w110st ' + esc(q.status) + '">' + esc(q.status) + '</span><div class="mut">' + esc((q.decided_by || '').split('@')[0]) + '</div>') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+      html += '<p class="mut" style="margin:8px 0 0">' + open.length + ' waiting. Grant applies the change to the roles table below immediately.</p>';
+      b.innerHTML = html;
+      b.querySelectorAll('[data-w110g],[data-w110d]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var grant = this.hasAttribute('data-w110g');
+          var id = Number(this.getAttribute(grant ? 'data-w110g' : 'data-w110d'));
+          var q = rows.filter(function (x) { return x.id === id; })[0];
+          if (!q) return;
+          this.disabled = true;
+          var admin = me().email;
+          if (grant) {
+            var ok = await w110Apply(q, admin);
+            if (!ok) { this.disabled = false; return; }
+          }
+          var up = await db.from('wa_access_requests').update({ status: grant ? 'granted' : 'declined', decided_by: admin, decided_at: new Date().toISOString() }).eq('id', id);
+          if (up.error) { toast('Could not save the decision'); this.disabled = false; return; }
+          toast(grant ? 'Granted' : 'Declined');
+          w110AdminRender();
+          try { if (typeof wa40Load === 'function') { await wa40Load(); } if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+        });
+      });
+    } catch (e) { b.innerHTML = '<p class="read">Could not load requests.</p>'; }
+  }
+  async function w110Apply(q, admin) {
+    try {
+      var cur = (typeof WA40_ROLES !== 'undefined' ? WA40_ROLES : []).filter(function (r) { return r.email === q.email; })[0];
+      var patch;
+      if (q.wanted.indexOf('role:') === 0) {
+        var role = q.wanted.slice(5);
+        if (['admin', 'leader', 'member', 'viewer'].indexOf(role) < 0) { toast('Unknown role'); return false; }
+        patch = { email: q.email, role: role, updated_by: admin, updated_at: new Date().toISOString() };
+        if (cur && Array.isArray(cur.tabs)) patch.tabs = cur.tabs;
+      } else if (q.wanted.indexOf('tab:') === 0) {
+        var tab = q.wanted.slice(4);
+        var base = cur && Array.isArray(cur.tabs) && cur.tabs.length ? cur.tabs.slice()
+          : ((typeof WA40_DEFAULTS !== 'undefined' && WA40_DEFAULTS[(cur && cur.role) || 'member']) || []).slice();
+        if (base.indexOf(tab) < 0) base.push(tab);
+        patch = { email: q.email, role: (cur && cur.role) || 'member', tabs: base, updated_by: admin, updated_at: new Date().toISOString() };
+      } else {
+        toast('Free-text request: set the role or tabs in the table below, then decline or grant to close it');
+        return true;
+      }
+      var r = await db.from('hub_roles').upsert(patch, { onConflict: 'email' });
+      if (r.error) { toast('Could not update the role: ' + (r.error.message || '')); return false; }
+      try { await db.from('change_log').insert({ entity_type: 'hub_role', entity_id: q.email, field: q.wanted.indexOf('role:') === 0 ? 'role' : 'tabs', old_value: cur ? (q.wanted.indexOf('role:') === 0 ? cur.role : JSON.stringify(cur.tabs || null)) : null, new_value: q.wanted + ' (access request #' + q.id + ')', changed_by: admin }); } catch (e) { /* audit */ }
+      return true;
+    } catch (e) { toast('Could not apply the change'); return false; }
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof wa40Render === 'function') {
+    var __w40r110 = wa40Render;
+    wa40Render = async function () {
+      await __w40r110.apply(this, arguments);
+      try { w110AdminCard(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  (function () {
+    var t = null;
+    function arm() {
+      var my = document.getElementById('mypage');
+      if (my && !my.dataset.w110mo) {
+        my.dataset.w110mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t);
+          t = setTimeout(function () { try { if (my.children.length && !document.getElementById('w110mine')) w110MyStatus(); } catch (e) { /* non-fatal */ } }, 380);
+        }).observe(my, { childList: true });
+        if (my.children.length) { try { w110MyStatus(); } catch (e) { /* non-fatal */ } }
+      }
+    }
+    if (typeof startApp === 'function') {
+      var __sa110 = startApp;
+      startApp = async function () {
+        try { await __sa110.apply(this, arguments); }
+        finally {
+          /* every earlier wave's wrapper has resolved by now */
+          setTimeout(w110Reveal, 250);
+        }
+        try { arm(); } catch (e) { /* non-fatal */ }
+        try { await w110Provision(); } catch (e) { /* non-fatal */ }
+      };
+    } else {
+      setTimeout(w110Reveal, 1500);
+    }
+  })();
+})();

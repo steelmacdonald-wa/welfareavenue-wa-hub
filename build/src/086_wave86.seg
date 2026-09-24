@@ -1,0 +1,155 @@
+/* =====================================================================
+   WA v86 Phase 2 (S4 + S6 + S7): the Admin page can prove what happened
+   =====================================================================
+   1. Audit trail: a filterable viewer over change_log (who, what kind,
+      free text, 50 at a time) at the bottom of the Admin page.
+   2. Security status card: what Phase 2 enforces, when the nightly
+      backup last ran, the state of the inventory share link, the
+      Anthropic spend cap note, and the 2FA hardening checklist.
+   Server truth: change_log and hub_settings reads go through RLS.
+   ===================================================================== */
+(function () {
+  if (window.__wa86) return; window.__wa86 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w86card{margin-top:16px;}' +
+    '.w86bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:8px 0 10px;}' +
+    '.w86bar input,.w86bar select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:9px;font-size:12.5px;}' +
+    '.w86tbl{width:100%;font-size:12px;border-collapse:collapse;}' +
+    '.w86tbl th{text-align:left;color:#7b8a86;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;padding:6px 8px;border-bottom:1px solid var(--wa-line);}' +
+    '.w86tbl td{padding:7px 8px;border-bottom:1px solid #eef2f0;vertical-align:top;}' +
+    '.w86tbl td.w{white-space:nowrap;color:#7b8a86;}' +
+    '.w86sec{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:8px;}' +
+    '.w86s{background:#f6f8f7;border-radius:12px;padding:11px 13px;font-size:12.5px;line-height:1.5;}' +
+    '.w86s b{display:block;font-size:12px;color:#14302b;margin-bottom:3px;}' +
+    '.w86ok{color:#2c7a66;font-weight:700;}' +
+    '.w86todo{color:#b3402f;font-weight:700;}';
+  document.head.appendChild(css);
+
+  var W86 = { rows: [], offset: 0, wired: false };
+
+  function w86Esc(s) { return (typeof esc === 'function') ? esc(String(s == null ? '' : s)) : String(s == null ? '' : s); }
+
+  async function w86Load(reset) {
+    if (reset) { W86.rows = []; W86.offset = 0; }
+    var q = db.from('change_log').select('*').order('id', { ascending: false }).range(W86.offset, W86.offset + 49);
+    var kind = (document.getElementById('w86kind') || {}).value || '';
+    var who = (document.getElementById('w86who') || {}).value || '';
+    if (kind) q = q.eq('entity_type', kind);
+    if (who) q = q.eq('changed_by', who);
+    var r = await q;
+    var rows = (r && r.data) || [];
+    W86.rows = W86.rows.concat(rows);
+    W86.offset += rows.length;
+    w86Paint(rows.length === 50);
+  }
+
+  function w86Paint(more) {
+    var body = document.getElementById('w86rows');
+    if (!body) return;
+    var txt = ((document.getElementById('w86q') || {}).value || '').toLowerCase();
+    var rows = W86.rows.filter(function (r) {
+      if (!txt) return true;
+      return (JSON.stringify(r) || '').toLowerCase().indexOf(txt) >= 0;
+    });
+    body.innerHTML = rows.length ? rows.map(function (r) {
+      var when = (r.changed_at || r.created_at || '').toString().slice(0, 16).replace('T', ' ');
+      return '<tr><td class="w">' + w86Esc(when) + '</td><td class="w">' + w86Esc(r.changed_by) + '</td>' +
+        '<td class="w">' + w86Esc(r.entity_type) + (r.field ? ' / ' + w86Esc(r.field) : '') + '</td>' +
+        '<td>' + w86Esc((r.new_value || '').toString().slice(0, 140)) + '</td></tr>';
+    }).join('') : '<tr><td colspan="4" style="color:var(--wa-muted)">Nothing matches.</td></tr>';
+    var mb = document.getElementById('w86more');
+    if (mb) mb.style.display = more ? 'inline-flex' : 'none';
+  }
+
+  async function w86Status() {
+    var el = document.getElementById('w86status');
+    if (!el) return;
+    var backup = 'no run recorded yet';
+    try {
+      var b = await db.from('change_log').select('entity_id,new_value').eq('entity_type', 'db_backup').order('id', { ascending: false }).limit(1);
+      if (b && b.data && b.data.length) backup = b.data[0].entity_id + ' (' + b.data[0].new_value + ')';
+    } catch (e) { /* non-fatal */ }
+    var share = 'unknown';
+    try {
+      var s = await db.from('hub_settings').select('value').eq('key', 'inventory_share').maybeSingle();
+      var v = (s && s.data && s.data.value) || {};
+      share = v.token ? ('active' + (v.expires ? ', expires ' + String(v.expires).slice(0, 10) : ', no expiry')) : 'revoked';
+    } catch (e) { /* non-fatal */ }
+    el.innerHTML =
+      '<div class="w86s"><b>Server-side permissions</b><span class="w86ok">Enforced.</span> Roles, blocked accounts, restricted meetings, agenda visibility and the hours allowlist are checked in the database, not just the browser. Signed-out and non-roster accounts read nothing.</div>' +
+      '<div class="w86s"><b>Nightly backup</b>Every public table exports to private storage nightly (30 day retention), with a tested restore path. Last run: ' + w86Esc(backup) + '</div>' +
+      '<div class="w86s"><b>Inventory share link</b>' + w86Esc(share) + '. Links now expire (90 days by default) and can be revoked from the Volunteering page. Bad-link guesses are rate limited.</div>' +
+      '<div class="w86s"><b>Security headers</b><span class="w86ok">Live.</span> Content Security Policy, HSTS, frame-deny and referrer policy are served by the host on every page load.</div>' +
+      '<div class="w86s"><b>Anthropic spend cap</b><span class="w86todo">Manual step.</span> Set a monthly spend limit in the Anthropic console (console.anthropic.com &gt; Billing &gt; Limits) so the assistant and transcript AI can never run away. Document the amount here once set.</div>' +
+      '<div class="w86s"><b>Two-factor sign-in</b><span class="w86todo">Manual step.</span> Turn on 2FA for the Supabase account, the Netlify account, and the Google admin account that owns the OAuth app. Each takes about two minutes in that service\'s account settings.</div>';
+  }
+
+  function w86Ensure() {
+    var panel = document.getElementById('adminpanel');
+    if (!panel || document.getElementById('w86card')) return;
+    var card = document.createElement('div');
+    card.className = 'card w86card';
+    card.id = 'w86card';
+    card.innerHTML =
+      '<h2>Security and audit</h2>' +
+      '<div class="w86sec" id="w86status"></div>' +
+      '<h3 class="block" style="margin-top:16px">Audit trail</h3>' +
+      '<p class="read" style="font-size:12px">Every change in the Hub, newest first: who did what, and when. Filter by kind or person, or search the text.</p>' +
+      '<div class="w86bar">' +
+      '<input id="w86q" placeholder="Search the log..." />' +
+      '<select id="w86kind"><option value="">All kinds</option></select>' +
+      '<select id="w86who"><option value="">Everyone</option></select>' +
+      '<button class="btn ghost mini" id="w86refresh">Refresh</button></div>' +
+      '<table class="w86tbl"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Detail</th></tr></thead><tbody id="w86rows"></tbody></table>' +
+      '<div style="margin-top:8px"><button class="btn ghost mini" id="w86more" style="display:none">Load 50 more</button></div>';
+    panel.appendChild(card);
+
+    (async function () {
+      try {
+        var kinds = await db.from('change_log').select('entity_type').order('entity_type').limit(1000);
+        var seen = {};
+        ((kinds && kinds.data) || []).forEach(function (r) { seen[r.entity_type] = 1; });
+        document.getElementById('w86kind').innerHTML = '<option value="">All kinds</option>' +
+          Object.keys(seen).sort().map(function (k) { return '<option>' + w86Esc(k) + '</option>'; }).join('');
+        var whos = await db.from('change_log').select('changed_by').order('changed_by').limit(1000);
+        var seen2 = {};
+        ((whos && whos.data) || []).forEach(function (r) { if (r.changed_by) seen2[r.changed_by] = 1; });
+        document.getElementById('w86who').innerHTML = '<option value="">Everyone</option>' +
+          Object.keys(seen2).sort().map(function (k) { return '<option>' + w86Esc(k) + '</option>'; }).join('');
+      } catch (e) { /* non-fatal */ }
+      w86Load(true);
+      w86Status();
+    })();
+
+    document.getElementById('w86refresh').addEventListener('click', function () { w86Load(true); w86Status(); });
+    document.getElementById('w86more').addEventListener('click', function () { w86Load(false); });
+    document.getElementById('w86q').addEventListener('input', function () { w86Paint(true); });
+    document.getElementById('w86kind').addEventListener('change', function () { w86Load(true); });
+    document.getElementById('w86who').addEventListener('change', function () { w86Load(true); });
+  }
+
+  /* the admin panel repaints via wa40Render; keep the card present */
+  if (typeof wa40Render === 'function') {
+    var __ar86 = wa40Render;
+    wa40Render = async function () {
+      await __ar86.apply(this, arguments);
+      try { w86Ensure(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp86 = showPanel;
+    showPanel = function (id) {
+      __sp86.apply(this, arguments);
+      if (id === 'adminpanel') { try { w86Ensure(); } catch (e) { /* non-fatal */ } }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa86 = startApp;
+    startApp = async function () {
+      await __sa86.apply(this, arguments);
+      try { w86Ensure(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

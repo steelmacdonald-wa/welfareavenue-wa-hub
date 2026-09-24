@@ -1,0 +1,138 @@
+/* =====================================================================
+   WA v2 UI enhancements (injected 22/07/26)
+   1. What's new: grouped per-department card grid with new-counts
+   2. Transcript archive: department colour chips (menu colours)
+   3. Transcript "Move..." department control (staff)
+   Overrides the earlier renderWhatsNew / renderTranscripts via hoisting.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.wn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}'
+    + '.wn-card{background:#faf9f4;border:1px solid var(--wa-line);border-top:3px solid var(--wa-muted);border-radius:10px;padding:9px 12px;font-size:12.5px;}'
+    + '.wn-card-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}'
+    + '.wn-card-h .t{font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.6px;}'
+    + '.wn-badge{background:var(--wa-gold);color:var(--wa-ink);border-radius:10px;font-size:10.5px;font-weight:700;padding:1px 7px;margin-left:8px;}'
+    + '.wn-row{padding:5px 0;border-top:1px dashed var(--wa-line);cursor:pointer;}'
+    + '.wn-row:first-of-type{border-top:none;}'
+    + '.wn-row:hover .wn-text{color:var(--wa-green);}'
+    + '.wn-row .wn-text{max-height:38px;overflow:hidden;}'
+    + '.tx-item .deptchip{color:#fff;}'
+    + '.tx-deptedit{margin-left:auto;}'
+    + '.tx-deptedit select{font-size:11.5px;border:1px solid var(--wa-line);border-radius:6px;padding:2px 4px;background:#fff;color:var(--wa-text);}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+function renderWhatsNew() {
+  var el = document.getElementById("whatsNew");
+  if (!el) return;
+  var items = [];
+  DB_UPDATES.forEach(function (u) {
+    items.push({ when: u.created_at, dept: u.department, text: (u.entry_label ? u.entry_label + ": " : "") + (u.text || ""), hash: "#dept/" + u.department });
+  });
+  getDecisions().filter(function (d) { return !d.done && d.opened; }).forEach(function (d) {
+    items.push({ when: d.opened, dept: "__exec", text: d.title, hash: "#decision/" + d.ref });
+  });
+  items.sort(function (a, b) { return new Date(b.when) - new Date(a.when); });
+  if (!items.length) { el.style.display = "none"; return; }
+  var groups = {};
+  items.forEach(function (i) { var k = i.dept || "__exec"; (groups[k] = groups[k] || []).push(i); });
+  var order = ["__exec"].concat(DEPT_ORDER).filter(function (k) { return groups[k] && groups[k].length; });
+  Object.keys(groups).forEach(function (k) { if (order.indexOf(k) < 0) order.push(k); });
+  var totalNew = 0;
+  var html = order.map(function (k) {
+    var rows = groups[k].slice(0, 4);
+    var col = k === "__exec" ? "#a87f2c" : (DEPT_COLOR[k] || "#6b7670");
+    var lab = k === "__exec" ? "Executive decisions" : (DEPT_LABEL[k] || k);
+    var newN = groups[k].filter(function (i) { return LAST_SEEN ? new Date(i.when) > new Date(LAST_SEEN) : false; }).length;
+    totalNew += newN;
+    return '<div class="wn-card" style="border-top-color:' + col + '">'
+      + '<div class="wn-card-h"><span class="t" style="color:' + col + '">' + lab + '</span>'
+      + (newN ? '<span class="wn-badge">' + newN + ' new</span>' : '') + '</div>'
+      + rows.map(function (i) {
+          var isNew = LAST_SEEN ? new Date(i.when) > new Date(LAST_SEEN) : false;
+          return '<div class="wn-row" data-hash="' + i.hash + '"><div class="wn-text">'
+            + (isNew ? '<span class="wn-new"></span>' : '') + esc(i.text)
+            + '</div><div class="wn-when">' + fmtDay(i.when) + '</div></div>';
+        }).join('')
+      + '</div>';
+  }).join('');
+  el.style.display = "block";
+  el.innerHTML = "<h3>What&#39;s new since you last looked"
+    + (totalNew ? ' <span class="wn-badge">' + totalNew + ' new</span>' : '')
+    + '</h3><div class="wn-grid">' + html + '</div>';
+  el.querySelectorAll(".wn-row").forEach(function (w) {
+    w.addEventListener("click", function () { location.hash = w.dataset.hash; });
+  });
+}
+
+function renderTranscripts() {
+  var list = document.getElementById("txList");
+  if (!list || !isStaff()) return;
+  var filt = document.getElementById("txFilter").value;
+  var q = (document.getElementById("txSearch").value || "").toLowerCase();
+  var rows = txCache.filter(function (r) {
+    return (!filt || r.department === filt || txDeptKey(r.department) === txDeptKey(filt))
+      && (!q || ((r.title || "") + " " + (r.ai_summary || "")).toLowerCase().indexOf(q) >= 0);
+  });
+  if (!rows.length) {
+    list.innerHTML = '<div class="tx-empty">No transcripts yet for this view. Use the form above to add one.</div>';
+    return;
+  }
+  list.innerHTML = rows.map(function (r) {
+    var k = txDeptKey(r.department);
+    var col = DEPT_COLOR[k] || "#6b7670";
+    var lab = DEPT_LABEL[k] || (r.department || "");
+    var dateStr = r.meeting_date ? new Date(r.meeting_date + "T12:00:00").toLocaleDateString() : "";
+    var deptSel = '<span class="tx-deptedit" title="Change department"><select data-txdept="' + r.id + '">'
+      + '<option value="">Move...</option>'
+      + DEPT_ORDER.map(function (d) { return '<option value="' + d + '"' + (d === k ? ' disabled' : '') + '>' + (DEPT_LABEL[d] || d) + '</option>'; }).join('')
+      + '</select></span>';
+    return '<div class="tx-item" data-tx="' + r.id + '">'
+      + '<div class="tx-head">'
+      + '<span class="deptchip" style="background:' + col + ';">' + esc(lab) + '</span>' + (r.board_only ? '<span class="lock-tag">board only</span>' : '')
+      + '<span class="tx-title">' + esc(r.title || "Untitled") + '</span>'
+      + txStatusChip(r)
+      + '<span class="tx-date">' + dateStr + '</span>'
+      + '</div>'
+      + (r.processed && r.ai_summary ? '<div class="tx-sum">' + esc(r.ai_summary) + '</div>' : '')
+      + '<div class="tx-actions">'
+      + (r.source_url ? '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;">Source &#8599;</a>' : '')
+      + (!txProcessing(r) ? '<button class="btn ghost mini" data-reproc="' + r.id + '">&#8635; Reprocess</button>' : '')
+      + deptSel
+      + '</div>'
+      + '<div class="tx-body">' + escapeHtml(r.body || "") + '</div>'
+      + '</div>';
+  }).join("");
+  list.querySelectorAll(".tx-item .tx-head").forEach(function (h) {
+    h.addEventListener("click", function (e) { if (e.target.closest("[data-goto]")) return; h.parentElement.classList.toggle("open"); });
+  });
+  list.querySelectorAll("[data-goto]").forEach(function (c) { c.addEventListener("click", function () { location.hash = c.dataset.goto; }); });
+  list.querySelectorAll("[data-reproc]").forEach(function (b) {
+    b.addEventListener("click", function (e) { e.stopPropagation(); reprocessTx(Number(b.dataset.reproc)); });
+  });
+  list.querySelectorAll("[data-txdept]").forEach(function (s) {
+    s.addEventListener("click", function (e) { e.stopPropagation(); });
+    s.addEventListener("change", function (e) {
+      e.stopPropagation();
+      var id = Number(s.dataset.txdept), to = s.value;
+      if (!to) return;
+      moveTranscriptDept(id, to);
+    });
+  });
+}
+
+async function moveTranscriptDept(id, to) {
+  var row = txCache.find(function (r) { return r.id === id; });
+  var from = row ? row.department : null;
+  var r = await db.from("transcripts").update({ department: to }).eq("id", id);
+  if (r.error) { toast("Could not move transcript"); return; }
+  try {
+    await db.from("change_log").insert({ entity_type: "transcript", entity_id: String(id), field: "department", old_value: from, new_value: to, changed_by: who() });
+  } catch (e) { /* log only */ }
+  toast("Moved to " + (DEPT_LABEL[to] || to));
+  await loadTranscripts();
+}
+
+

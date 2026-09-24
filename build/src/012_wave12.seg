@@ -1,0 +1,69 @@
+/* =====================================================================
+   WA v12 UI enhancements (25/07/26)
+   Presence: a heartbeat updates user_state every 3 minutes while the
+   dashboard is open; anyone seen in the last 10 minutes counts as
+   online. Shown as an "Online now" line on My page and live green
+   dots on the org chart.
+   ===================================================================== */
+(function () {
+  var st = document.createElement('style');
+  st.textContent = ''
+    + '.wa-on{display:inline-block;width:8px;height:8px;border-radius:50%;background:#57c98b;margin-right:6px;box-shadow:0 0 0 2px rgba(87,201,139,.25);}'
+    + '.mp-online{font-size:12px;color:var(--wa-muted);margin:-6px 0 12px;}';
+  document.head.appendChild(st);
+})();
+
+var WA_PRESENCE = [];
+async function waHeartbeat() {
+  try {
+    if (USER.email) {
+      await db.from('user_state').upsert({ email: USER.email.toLowerCase(), last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    }
+  } catch (e) { /* presence is best effort */ }
+}
+async function waLoadPresence() {
+  try {
+    var r = await db.from('user_state').select('email, last_seen_at');
+    WA_PRESENCE = r.data || [];
+  } catch (e) { /* offline */ }
+}
+function waNameForEmail(email) {
+  var m = (WA_ROSTER || []).find(function (x) { return (x.email || '').toLowerCase() === (email || '').toLowerCase(); });
+  if (m) return m.name;
+  var p = (email || '').split('@')[0].split('.')[0];
+  return p ? p.charAt(0).toUpperCase() + p.slice(1) : email;
+}
+function waOnlineEmails() {
+  var cut = Date.now() - 10 * 60000;
+  return WA_PRESENCE.filter(function (p) { return p.last_seen_at && new Date(p.last_seen_at).getTime() > cut; });
+}
+
+(function () {
+  /* dead wrap removed in Phase 0 compaction: wave74 replaced renderMyPage outright, so the presence line is re-implemented there */
+  var __roc12 = renderOrgChart;
+  renderOrgChart = async function () {
+    await __roc12();
+    try {
+      await waLoadPresence();
+      var onNames = waOnlineEmails().map(function (p) { return waNameForEmail(p.email).toLowerCase(); });
+      document.querySelectorAll('#ocBody [data-ocp]').forEach(function (el) {
+        var n = (el.dataset.ocp || '').toLowerCase();
+        if (onNames.some(function (o) { return n.indexOf(o.split(' ')[0]) === 0 || o.indexOf(n.split(' ')[0]) === 0; })) {
+          if (!el.querySelector('.wa-on')) el.insertAdjacentHTML('afterbegin', '<span class="wa-on" title="Online now"></span>');
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  };
+  var __sa12 = startApp;
+  startApp = async function () {
+    await __sa12();
+    try {
+      if (isStaff()) {
+        waHeartbeat();
+        setInterval(waHeartbeat, 180000);
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

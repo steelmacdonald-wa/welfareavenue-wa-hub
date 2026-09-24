@@ -1,0 +1,56 @@
+/* =====================================================================
+   WA v32 assignee dropdowns on the master SOP
+   (29/07/26)
+   Every step on the Volunteering > SOP master template now carries the
+   same color-coded people dropdown used everywhere else. Changing it
+   saves to the master template and flows straight through to every
+   upcoming planned event; events already in progress or done keep
+   their own assignments.
+   Also fixed underneath: owner edits on master rows used to be sent
+   to the per-event table with a broken id, so they never saved. They
+   now write to the template itself. The due date box is hidden on
+   master rows, because dues belong to real events and anchor to each
+   event date.
+   ===================================================================== */
+
+(function () {
+  /* master rows carry ids like "tmpl-42"; route their saves to the template */
+  if (typeof waVolSaveStepField === 'function') {
+    var __sf32 = waVolSaveStepField;
+    waVolSaveStepField = async function (id, field, value) {
+      var sid = String(id || '');
+      if (sid.indexOf('tmpl-') !== 0) return __sf32(id, field, value);
+      if (field !== 'owner') return;
+      /* sop_template ids are text (ClickUp ids), never coerce to Number */
+      var tid = sid.slice(5);
+      if (!tid) return;
+      var r = await db.from('sop_template').update({ default_owner: value || null }).eq('id', tid);
+      if (r.error) { toast('Could not save the assignee'); return; }
+      if (typeof WA_VOL_TMPL !== 'undefined') {
+        WA_VOL_TMPL.forEach(function (t) {
+          if (String(t.id) === String(tid)) t.default_owner = value || null;
+        });
+      }
+      toast('Saved to the master and all upcoming planned events');
+    };
+  }
+
+  /* swap the owner inputs on the master SOP for people dropdowns */
+  if (typeof waVolRenderSop === 'function') {
+    var __rs32 = waVolRenderSop;
+    waVolRenderSop = function () {
+      __rs32();
+      try {
+        var sec = document.getElementById('volunteering');
+        if (!sec) return;
+        sec.querySelectorAll('input[data-vldue^="tmpl-"]').forEach(function (el) {
+          el.style.display = 'none';
+        });
+        if (typeof wa28SwapInput !== 'function' || typeof WA28_PEOPLE === 'undefined' || !WA28_PEOPLE.length) return;
+        sec.querySelectorAll('input[data-vlowner^="tmpl-"]').forEach(function (el) {
+          wa28SwapInput(el, ['data-vlowner']);
+        });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

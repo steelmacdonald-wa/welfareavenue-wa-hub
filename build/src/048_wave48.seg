@@ -1,0 +1,56 @@
+/* =====================================================================
+   WA v48 visible dropdown buttons
+   (02/08/26)
+   The expand and collapse controls on tasks stop hiding.
+   - Subtask toggles in the volunteering SOP and event checklists
+     become real pill buttons: a bigger caret button plus the
+     "N subtasks" count badge, both clickable, with hover states.
+   - Section dropdowns get a clear caret and a hover highlight:
+     volunteering phases, onboarding weeks (which had no caret at
+     all), the master onboarding weeks, decisions dropdowns, goals
+     quarters and departments, meeting updates, and the Decided list.
+   Pure styling plus one click-forwarder; no behavior changes.
+   ===================================================================== */
+(function () {
+  if (document.getElementById('wa48css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa48css';
+  st.textContent = '' +
+    /* subtask toggle: caret pill + clickable count pill */
+    '.w26c{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;' +
+    'border:1px solid #cfe0da;background:#fff;border-radius:999px;font-size:13px;color:#1f5f4f;' +
+    'margin:0 8px 0 0;padding:0;cursor:pointer;flex:none;}' +
+    '.w26c:hover{background:rgba(31,95,79,.12);border-color:rgba(31,95,79,.45);}' +
+    '.w26n{display:inline-flex;align-items:center;margin-left:8px;font-size:11px;font-weight:700;' +
+    'color:#1f5f4f;border:1px solid #cfe0da;background:#fff;border-radius:999px;padding:2px 11px;cursor:pointer;}' +
+    '.w26n:hover{background:rgba(31,95,79,.12);border-color:rgba(31,95,79,.45);}' +
+    /* volunteering phase sections: bigger caret, hover */
+    '.vl-phase>summary:before{font-size:15px;color:#1f5f4f;font-weight:700;}' +
+    '.vl-phase>summary:hover{background:rgba(31,95,79,.05);}' +
+    '.vl-phase>summary{border-radius:11px;}' +
+    '.vl-phase[open]>summary{border-radius:11px 11px 0 0;}' +
+    /* onboarding weeks had no caret at all */
+    '.w37week>summary:before{content:"\\25B8";color:#1f5f4f;font-size:14px;font-weight:700;flex:none;}' +
+    '.w37week[open]>summary:before{content:"\\25BE";}' +
+    '.w37week>summary:hover{background:rgba(31,95,79,.05);border-radius:16px;}' +
+    '.w37week[open]>summary:hover{border-radius:16px 16px 0 0;}' +
+    /* master onboarding weeks, decisions dropdowns: hover + louder chev */
+    '.w46wk>summary:hover,.w39dd>summary:hover{background:rgba(31,95,79,.05);border-radius:12px;}' +
+    '.w46wk>summary .chev,.w39dd>summary .chev{font-size:15px;color:#1f5f4f;font-weight:700;}' +
+    /* goals quarters and departments, meeting updates, decided list: hover */
+    '.w29q>summary:hover,.w29d>summary:hover,.wa21-upd>summary:hover,details.completed summary:hover{background:rgba(31,95,79,.06);border-radius:9px;}' +
+    '.w29q>summary,.w29d>summary,.wa21-upd>summary{padding-left:4px;padding-right:4px;}';
+  document.head.appendChild(st);
+
+  /* the count badge toggles too */
+  if (!document.body.dataset.wa48Wired) {
+    document.body.dataset.wa48Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var n = e.target.closest && e.target.closest('.w26n');
+      if (!n) return;
+      var name = n.closest('.vl-name');
+      var btn = name && name.querySelector('.w26c');
+      if (btn && typeof wa26Toggle === 'function') wa26Toggle(btn);
+    });
+  }
+})();

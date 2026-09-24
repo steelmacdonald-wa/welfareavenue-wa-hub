@@ -1,0 +1,387 @@
+/* =====================================================================
+   WA v44 the training centre
+   (01/08/26)
+   The Training page grows up.
+   1. Your training, first: a personal dashboard at the top: to do,
+      done, assigned counts, onboarding progress, overdue onboarding
+      steps, and your outstanding trainings as a working list.
+   2. An HR dashboard (admins and leaders): the onboarding board and
+      master editor in one place, plus a per-person training table
+      with one-click "Assign trainings" (checkbox the catalog for any
+      person; unticking removes an assignment unless it is done).
+   3. The master onboarding editor now edits everything: name,
+      instructions, a link field, the week it belongs to, its position,
+      priority (shows the "important" badge), and where new steps sit
+      (top level or under a parent). Retire still works.
+   4. Checklists now show due dates: an amber chip when a step has a
+      date, red when it is overdue.
+   Everything rides the existing tables; no schema changes.
+   ===================================================================== */
+(function () {
+  if (document.getElementById('wa44css')) return;
+
+  var st = document.createElement('style');
+  st.id = 'wa44css';
+  st.textContent = '' +
+    '.w44me,.w44hr{background:#f6f8f7;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
+    '.w44me h3,.w44hr h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
+    '.w44tiles{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px;}' +
+    '.w44tile{background:#fff;border-radius:14px;padding:10px 16px;min-width:96px;box-shadow:0 1px 2px rgba(20,40,30,.04);}' +
+    '.w44tile b{display:block;font-size:20px;color:#14302b;line-height:1.2;}' +
+    '.w44tile span{font-size:11.5px;color:#7b8a86;font-weight:600;}' +
+    '.w44tile.warn b{color:#b3402f;}' +
+    '.w44bar{display:inline-block;flex:1;height:8px;background:#e3e9e6;border-radius:999px;overflow:hidden;min-width:120px;}' +
+    '.w44bar i{display:block;height:100%;background:#2c7a66;border-radius:999px;}' +
+    '.w44row{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e8edea;font-size:13px;}' +
+    '.w44row:first-of-type{border-top:none;}' +
+    '.w44row .t{flex:1;font-weight:600;color:#14302b;}' +
+    '.w44row a.go{font-size:12px;color:#2c7a66;text-decoration:none;font-weight:600;}' +
+    '.w44tbl{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    '.w44tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#7b8a86;padding:4px 8px;}' +
+    '.w44tbl td{padding:5px 8px;border-top:1px solid #e8edea;}' +
+    '.w44wrap{max-height:340px;overflow:auto;background:#fff;border-radius:12px;padding:4px 8px;}' +
+    '.w44due{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:rgba(212,161,60,.16);color:#8a6414;}' +
+    '.w44due.late{background:rgba(179,64,47,.12);color:#b3402f;}' +
+    '[data-w44as],[data-w44mark]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;' +
+    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w44as]:hover,[data-w44mark]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w44cat{margin:6px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#7b8a86;font-weight:700;}';
+  document.head.appendChild(st);
+
+  function wa44CanEdit() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) {
+        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader';
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  }
+  function wa44Today() { return new Date().toISOString().slice(0, 10); }
+  function wa44Sections() {
+    var secs = [];
+    try {
+      Object.keys(WA37_WEEK_ORDER).forEach(function (k) { secs.push(k); });
+      WA37.tmpl.forEach(function (t) { if (t.section && secs.indexOf(t.section) < 0) secs.push(t.section); });
+    } catch (e) { /* defaults */ }
+    if (!secs.length) secs = ['WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', '60 DAYS'];
+    return secs;
+  }
+
+  /* ---- 4. checklists show due dates ---- */
+  if (typeof wa37Checklist === 'function' && typeof wa37StepsFor === 'function' && typeof wa37Weeks === 'function') {
+    wa37Checklist = function (onb, canTick) {
+      var m = wa37StepsFor(onb.id);
+      var today = wa44Today();
+      var html = '';
+      wa37Weeks().forEach(function (wk, i) {
+        var wkSteps = wk.steps.filter(function (t) { return m[t.id]; });
+        if (!wkSteps.length) return;
+        var d = wkSteps.filter(function (t) { return m[t.id].done; }).length;
+        html += '<details class="w37week"' + (i === 0 && d < wkSteps.length ? ' open' : '') + '><summary>' + esc(wk.name)
+          + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / wkSteps.length) + '%"></i></span>'
+          + '<span style="font-size:11.5px;color:#7b8a86;font-weight:500">' + d + ' of ' + wkSteps.length + '</span></summary><div class="w37wbody">';
+        wkSteps.forEach(function (t) {
+          var s = m[t.id];
+          var due = '';
+          if (!s.done && s.due_date) {
+            due = '<span class="w44due' + (String(s.due_date) < today ? ' late' : '') + '">due ' + esc(String(s.due_date)) + '</span>';
+          }
+          html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (s.done ? ' done' : '') + '">'
+            + '<input type="checkbox" data-w37chk="' + s.id + '"' + (s.done ? ' checked' : '') + (canTick ? '' : ' disabled') + ' />'
+            + '<div style="flex:1;min-width:0"><div class="nm">' + esc(t.name)
+            + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
+            + (t.description ? '<div class="ds">' + wa37Md(t.description) + '</div>' : '')
+            + (t.content_pending ? '<div class="ds" style="opacity:.7">Full instructions are syncing from ClickUp. <a href="' + esc(t.clickup_url || '#') + '" target="_blank" rel="noopener">Open the ClickUp task</a> in the meantime.</div>' : '')
+            + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + esc(s.done_by) + '</div>' : '')
+            + '</div></div>';
+        });
+        html += '</div></details>';
+      });
+      return html;
+    };
+  }
+
+  /* ---- 3. the master editor edits everything ---- */
+  function wa44SecSelect(id, current) {
+    return '<select id="' + id + '" class="w36sel">' + wa44Sections().map(function (s) {
+      return '<option value="' + esc(s) + '"' + (s === current ? ' selected' : '') + '>' + esc(s) + '</option>';
+    }).join('') + '</select>';
+  }
+  if (typeof wa37EditStep === 'function') {
+    wa37EditStep = function (tid) {
+      var t = WA37.tmpl.filter(function (x) { return x.id === tid; })[0];
+      if (!t) return;
+      openModal('<h3>Edit this onboarding step</h3>'
+        + '<p class="m-sub">Changes flow instantly to everyone, including onboardings already in flight.</p>'
+        + '<label>Step name</label><input type="text" id="w44en" value="' + esc(t.name) + '" />'
+        + '<label>Instructions (links welcome, markdown works)</label><textarea id="w44ed" rows="6">' + esc(t.description || '') + '</textarea>'
+        + '<label>Add a link (appended to the instructions)</label><input type="text" id="w44el" placeholder="https://..." />'
+        + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:end">'
+        + '<div><label>Week</label><br/>' + wa44SecSelect('w44ew', t.section) + '</div>'
+        + '<div><label>Position</label><br/><input type="number" id="w44eo" style="width:80px" value="' + (t.sort || 0) + '" /></div>'
+        + '<div><label>Priority</label><br/><select id="w44ep" class="w36sel"><option value="">Normal</option><option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>Important</option></select></div>'
+        + '</div>'
+        + '<p class="m-sub" style="margin-top:6px">Position orders steps within the week (smaller numbers first). Subtasks keep their parent.</p>'
+        + '<div class="m-actions"><button class="btn" id="w44es">Save</button> <button class="btn ghost" id="w44ec">Cancel</button></div>');
+      document.getElementById('w44ec').addEventListener('click', function () { wa37Master(); });
+      document.getElementById('w44es').addEventListener('click', async function () {
+        var nm = (document.getElementById('w44en').value || '').trim();
+        if (!nm) { toast('The step needs a name'); return; }
+        var desc = (document.getElementById('w44ed').value || '').trim();
+        var link = (document.getElementById('w44el').value || '').trim();
+        if (link) {
+          if (link.indexOf('http') !== 0) link = 'https://' + link;
+          if (desc.indexOf(link) < 0) desc = (desc ? desc + '\n\n' : '') + '[Open the link](' + link + ')';
+        }
+        var srt = parseInt(document.getElementById('w44eo').value, 10);
+        var r = await db.from('onboarding_template').update({
+          name: nm,
+          description: desc || null,
+          section: document.getElementById('w44ew').value,
+          sort: isNaN(srt) ? (t.sort || 0) : srt,
+          priority: document.getElementById('w44ep').value || null,
+          content_pending: false,
+          updated_at: new Date().toISOString()
+        }).eq('id', tid);
+        if (r.error) { toast('Could not save it'); return; }
+        await wa37Load(true);
+        toast('Saved to the master and every active onboarding');
+        wa37Master();
+      });
+    };
+  }
+  if (typeof wa37AddStep === 'function') {
+    wa37AddStep = function (section) {
+      var parents = [];
+      try {
+        parents = WA37.tmpl.filter(function (t) { return t.section === section && !t.parent_id; });
+      } catch (e) { /* none */ }
+      openModal('<h3>Add a step to ' + esc(section) + '</h3>'
+        + '<p class="m-sub">Everyone still mid-onboarding gets it immediately, unticked.</p>'
+        + '<label>Step name</label><input type="text" id="w44an" placeholder="What they need to do" />'
+        + '<label>Instructions (optional, markdown works)</label><textarea id="w44ad" rows="5"></textarea>'
+        + '<label>Add a link (appended to the instructions)</label><input type="text" id="w44al" placeholder="https://..." />'
+        + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;align-items:end">'
+        + '<div><label>Week</label><br/>' + wa44SecSelect('w44aw', section) + '</div>'
+        + '<div><label>Priority</label><br/><select id="w44app" class="w36sel"><option value="">Normal</option><option value="high">Important</option></select></div>'
+        + '<div><label>Sits under</label><br/><select id="w44ap" class="w36sel"><option value="">Top level</option>'
+        + parents.map(function (p) { return '<option value="' + esc(p.id) + '">' + esc(p.name) + '</option>'; }).join('')
+        + '</select></div>'
+        + '</div>'
+        + '<div class="m-actions"><button class="btn" id="w44as2">Add it</button> <button class="btn ghost" id="w44ac">Cancel</button></div>');
+      document.getElementById('w44ac').addEventListener('click', function () { wa37Master(); });
+      document.getElementById('w44as2').addEventListener('click', async function () {
+        var nm = (document.getElementById('w44an').value || '').trim();
+        if (!nm) { toast('Give the step a name'); return; }
+        var sec = document.getElementById('w44aw').value;
+        var desc = (document.getElementById('w44ad').value || '').trim();
+        var link = (document.getElementById('w44al').value || '').trim();
+        if (link) {
+          if (link.indexOf('http') !== 0) link = 'https://' + link;
+          desc = (desc ? desc + '\n\n' : '') + '[Open the link](' + link + ')';
+        }
+        var parent = document.getElementById('w44ap').value || null;
+        var maxSort = 0;
+        WA37.tmpl.forEach(function (t) { if (t.section === sec && t.sort > maxSort) maxSort = t.sort; });
+        var r = await db.from('onboarding_template').insert({
+          id: 'wa' + Math.random().toString(36).slice(2, 10),
+          section: sec, name: nm,
+          description: desc || null,
+          parent_id: parent,
+          priority: document.getElementById('w44app').value || null,
+          sort: maxSort + 10, active: true, content_pending: false
+        });
+        if (r.error) { toast('Could not add it'); return; }
+        await wa37Load(true);
+        toast('Added to the master and every active onboarding');
+        wa37Master();
+      });
+    };
+  }
+
+  /* ---- 1 + 2. personal dashboard and HR dashboard ---- */
+  function wa44MyProg() {
+    var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+    if (!me) return { me: null, rows: [] };
+    var rows = (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).filter(function (p) {
+      return String(p.person_name || '').toLowerCase() === me.name.toLowerCase();
+    });
+    return { me: me, rows: rows };
+  }
+  async function wa44Compose() {
+    try {
+      var body = document.getElementById('w36body');
+      if (!body || !body.querySelector('.w36onb')) return;
+      if (typeof wa37Load === 'function') { try { await wa37Load(false); } catch (e) { /* offline */ } }
+      var onbEl = body.querySelector('.w36onb');
+
+      /* personal dashboard */
+      var old = body.querySelector('.w44me');
+      if (old) old.remove();
+      var mp = wa44MyProg();
+      var byId = {};
+      (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).forEach(function (t) { byId[String(t.id)] = t; });
+      var done = mp.rows.filter(function (p) { return p.status === 'done'; });
+      var todo = mp.rows.filter(function (p) { return p.status !== 'done'; });
+      var mine = null, overdue = 0, onbPct = null;
+      try {
+        if (mp.me && typeof WA37 !== 'undefined') {
+          mine = WA37.onbs.filter(function (o) { return o.status === 'active' && o.person_name.toLowerCase() === mp.me.name.toLowerCase(); })[0];
+          if (mine) {
+            onbPct = wa37Pct(mine.id).pct;
+            var today = wa44Today();
+            WA37.steps.forEach(function (s) {
+              if (s.onboarding_id === mine.id && !s.done && s.due_date && String(s.due_date) < today) overdue++;
+            });
+          }
+        }
+      } catch (e) { /* no onboarding data */ }
+      var pct = mp.rows.length ? Math.round(100 * done.length / mp.rows.length) : 0;
+      var html = '<div class="w44me"><h3>Your training</h3><div class="w44tiles">'
+        + '<div class="w44tile' + (todo.length ? '' : '') + '"><b>' + todo.length + '</b><span>to do</span></div>'
+        + '<div class="w44tile"><b>' + done.length + '</b><span>done</span></div>'
+        + '<div class="w44tile"><b>' + mp.rows.length + '</b><span>assigned to you</span></div>'
+        + (onbPct !== null ? '<div class="w44tile"><b>' + onbPct + '%</b><span>onboarding</span></div>' : '')
+        + (overdue ? '<div class="w44tile warn"><b>' + overdue + '</b><span>onboarding steps overdue</span></div>' : '')
+        + '</div>';
+      if (mp.rows.length) {
+        html += '<div style="display:flex;gap:10px;align-items:center;margin:0 0 8px"><span class="w44bar"><i style="width:' + pct + '%"></i></span>'
+          + '<span style="font-size:12px;color:#7b8a86;font-weight:600">' + pct + '% of your trainings done</span></div>';
+      }
+      if (todo.length) {
+        html += todo.slice(0, 12).map(function (p) {
+          var t = byId[String(p.training_id)];
+          if (!t) return '';
+          return '<div class="w44row"><span class="t">' + esc(t.title) + '</span>'
+            + (t.resource_url ? '<a class="go" href="' + esc(t.resource_url) + '" target="_blank" rel="noopener">Open &raquo;</a>' : '')
+            + '<a data-w36me="' + t.id + '" data-st="todo" data-w44mark="1">Mark done</a></div>';
+        }).join('');
+        if (todo.length > 12) html += '<p class="m-sub">And ' + (todo.length - 12) + ' more below in the catalog.</p>';
+      } else if (mp.rows.length) {
+        html += '<p class="m-sub" style="margin:0">All caught up. Nice.</p>';
+      } else {
+        html += '<p class="m-sub" style="margin:0">Nothing assigned to you yet. Browse the catalog below, or ask your lead.</p>';
+      }
+      html += '</div>';
+      onbEl.insertAdjacentHTML('beforebegin', html);
+
+      /* HR dashboard */
+      var oldHr = body.querySelector('.w44hr');
+      var rescued = null;
+      if (oldHr) {
+        var ob = oldHr.querySelector('.w44hrblock');
+        if (ob && ob.firstElementChild) { rescued = ob.firstElementChild; rescued.remove(); }
+        oldHr.remove();
+      }
+      if (wa44CanEdit()) {
+        var hr = document.createElement('div');
+        hr.className = 'w44hr';
+        hr.innerHTML = '<h3>HR dashboard</h3><div class="w44hrblock"></div><div class="w44hrtrain"></div>';
+        onbEl.insertAdjacentElement('afterend', hr);
+        /* move the onboarding board (assign select, master editor, live rows) in here;
+           a fresh render inside .w36onb wins, else keep the block moved last time */
+        var assign = body.querySelector('.w36onb #w37assign');
+        var block = assign ? (assign.parentElement && assign.parentElement.parentElement) : rescued;
+        if (block) hr.querySelector('.w44hrblock').appendChild(block);
+        /* per-person training table */
+        var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice();
+        var byPerson = {};
+        (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).forEach(function (p) {
+          var k = String(p.person_name || '').toLowerCase();
+          byPerson[k] = byPerson[k] || { a: 0, d: 0 };
+          byPerson[k].a++;
+          if (p.status === 'done') byPerson[k].d++;
+        });
+        people.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+        var rows = people.map(function (p) {
+          var s = byPerson[String(p.name).toLowerCase()] || { a: 0, d: 0 };
+          return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(p.department || '') + '</span></td>'
+            + '<td>' + s.a + '</td><td>' + s.d + '</td><td>' + (s.a - s.d) + '</td>'
+            + '<td><a data-w44as="' + esc(p.name) + '">Assign trainings</a></td></tr>';
+        }).join('');
+        hr.querySelector('.w44hrtrain').innerHTML = '<h3 style="margin-top:12px">Training by person</h3>'
+          + '<div class="w44wrap"><table class="w44tbl"><thead><tr><th>Person</th><th>Assigned</th><th>Done</th><th>To do</th><th></th></tr></thead>'
+          + '<tbody>' + rows + '</tbody></table></div>';
+      }
+
+      /* catalog heading */
+      if (!body.querySelector('.w44cat')) {
+        var firstCat = body.querySelector('.w36cat');
+        if (firstCat) firstCat.insertAdjacentHTML('beforebegin', '<div class="w44cat">The full catalog</div>');
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  function wa44AssignModal(name) {
+    var rows = (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).filter(function (p) {
+      return String(p.person_name || '').toLowerCase() === name.toLowerCase();
+    });
+    var have = {};
+    rows.forEach(function (p) { have[String(p.training_id)] = p.status; });
+    var cats = {};
+    (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).forEach(function (t) {
+      (cats[t.category] = cats[t.category] || []).push(t);
+    });
+    var html = '<h3>Trainings for ' + esc(name) + '</h3>'
+      + '<p class="m-sub">Tick to assign, untick to remove. Completed trainings stay on their record.</p>'
+      + '<div style="max-height:320px;overflow:auto">';
+    Object.keys(cats).forEach(function (c) {
+      html += '<div style="font-weight:700;font-size:12px;color:#1f5f4f;margin:8px 0 2px">' + esc(c) + '</div>';
+      cats[c].forEach(function (t) {
+        var stt = have[String(t.id)];
+        html += '<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px">'
+          + '<input type="checkbox" class="w44cb" value="' + t.id + '"' + (stt ? ' checked' : '') + (stt === 'done' ? ' disabled' : '') + ' style="width:15px;height:15px" /> '
+          + esc(t.title) + (stt === 'done' ? ' <span class="w36pill done">done</span>' : '') + '</label>';
+      });
+    });
+    html += '</div><div class="m-actions"><button class="btn" id="w44asv">Save</button> <button class="btn ghost" id="w44acx">Cancel</button></div>';
+    openModal(html);
+    document.getElementById('w44acx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w44asv').addEventListener('click', async function () {
+      var picked = {};
+      Array.prototype.slice.call(document.querySelectorAll('.w44cb:checked')).forEach(function (c) { picked[c.value] = 1; });
+      var adds = [], removals = [];
+      Object.keys(picked).forEach(function (tid) { if (!have[tid]) adds.push(Number(tid)); });
+      Object.keys(have).forEach(function (tid) { if (!picked[tid] && have[tid] !== 'done') removals.push(Number(tid)); });
+      var by = (typeof who === 'function') ? who() : 'HR';
+      var ok = true;
+      if (adds.length) {
+        var r1 = await db.from('training_progress').upsert(adds.map(function (tid) {
+          return { training_id: tid, person_name: name, status: 'assigned', assigned_by: by, updated_at: new Date().toISOString() };
+        }), { onConflict: 'training_id,person_name' });
+        if (r1.error) ok = false;
+      }
+      for (var i = 0; i < removals.length; i++) {
+        var r2 = await db.from('training_progress').delete().eq('training_id', removals[i]).eq('person_name', name).neq('status', 'done');
+        if (r2.error) ok = false;
+      }
+      if (!ok) { toast('Some changes did not save'); return; }
+      closeModal();
+      try { await wa36Load(true); wa36Render(); } catch (e) { /* non-fatal */ }
+      toast('Saved: ' + adds.length + ' assigned, ' + removals.length + ' removed');
+    });
+  }
+
+  /* ---- wiring ---- */
+  if (typeof wa36Render === 'function') {
+    var __r44 = wa36Render;
+    wa36Render = async function () {
+      await __r44.apply(this, arguments);
+      await wa44Compose();
+    };
+  }
+  if (typeof wa37Mount === 'function') {
+    var __m44 = wa37Mount;
+    wa37Mount = async function () {
+      await __m44.apply(this, arguments);
+      await wa44Compose();
+    };
+  }
+  if (!document.body.dataset.wa44Wired) {
+    document.body.dataset.wa44Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w44as]');
+      if (a && wa44CanEdit()) wa44AssignModal(a.getAttribute('data-w44as'));
+    });
+  }
+})();

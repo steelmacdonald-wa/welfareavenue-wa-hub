@@ -1,0 +1,258 @@
+/* =====================================================================
+   WA v106 renames, HR tabs, event management (07/08/26)
+   =====================================================================
+   Steel, round sixteen:
+   1. The individuals' Training tab becomes "My trainings" (nav label +
+      page heading); the HR centre's internal Training tab keeps its name.
+      Policy sign-offs already sit at the TOP of My trainings (wave105).
+   2. The Volunteering tab becomes "MTL volunteering".
+   3. HR centre gains two more section tabs after Commitment, Training,
+      Onboarding, Recruitment: "Policies" and "Discipline", and the
+      wave105 cards MOVE into them (wave52's Hours-tab pattern).
+   4. Events: staff can CANCEL (and restore) an event from the top of
+      its page, and ADD new events (any date, 2027 included) from the
+      calendar. Codes continue the WA-<yy>-<seq> convention.
+   ===================================================================== */
+(function () {
+  if (window.__wa106) return; window.__wa106 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w106cancel{margin-top:10px;}' +
+    '.w106sec{display:none;}' +
+    '.w106sec.on{display:block;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1 + 2. renames ---------- */
+  function w106Renames() {
+    try {
+      var t = document.querySelector('#tabBar .tab[data-tab="training"]');
+      if (t && t.textContent.indexOf('My trainings') < 0) {
+        t.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>My trainings';
+      }
+      var v = document.querySelector('#tabBar .tab[data-tab="volunteering"]');
+      if (v && v.textContent.indexOf('MTL volunteering') < 0) {
+        v.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>MTL volunteering';
+      }
+      var th = document.querySelector('#training .card > h2');
+      if (th && th.textContent.trim() === 'Training') th.textContent = 'My trainings';
+    } catch (e) { /* cosmetic */ }
+  }
+
+  /* ---------- 3. HR centre: Policies + Discipline tabs ---------- */
+  function w106HrTabs() {
+    var body = document.getElementById('w46body');
+    if (!body) return;
+    var tabs = body.querySelector('.w47tabs');
+    if (!tabs) return;
+    if (!tabs.querySelector('[data-w47v="policies"]')) {
+      tabs.insertAdjacentHTML('beforeend',
+        '<button class="w47tab" data-w47v="policies">Policies</button>' +
+        '<button class="w47tab" data-w47v="discipline">Discipline</button>');
+    }
+    if (!document.getElementById('w106polsec')) {
+      body.insertAdjacentHTML('beforeend',
+        '<div id="w106polsec" class="w106sec"></div><div id="w106discsec" class="w106sec"></div>');
+    }
+    /* adopt the wave105 cards into their sections (listeners survive) */
+    var pol = document.getElementById('w105pol');
+    var polsec = document.getElementById('w106polsec');
+    if (pol && polsec && pol.parentElement !== polsec) polsec.appendChild(pol);
+    var disc = document.getElementById('w105disc');
+    var discsec = document.getElementById('w106discsec');
+    if (disc && discsec && disc.parentElement !== discsec) discsec.appendChild(disc);
+    /* deep link support, mirroring the Hours tab */
+    var h = String(location.hash || '');
+    if ((h.indexOf('#hrcentre/policies') === 0 || h.indexOf('#hrcentre/discipline') === 0)) {
+      var want = h.indexOf('policies') > 0 ? 'policies' : 'discipline';
+      var sec = document.getElementById(want === 'policies' ? 'w106polsec' : 'w106discsec');
+      if (sec && !sec.dataset.w106shown) {
+        sec.dataset.w106shown = '1';
+        w106Show(want);
+        body.querySelectorAll('.w46sec').forEach(function (x) { x.style.display = 'none'; });
+        body.querySelectorAll('.w47tab').forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-w47v') === want); });
+      }
+    }
+  }
+  function w106Show(view) {
+    var pol = document.getElementById('w106polsec');
+    var disc = document.getElementById('w106discsec');
+    if (pol) pol.classList.toggle('on', view === 'policies');
+    if (disc) disc.classList.toggle('on', view === 'discipline');
+  }
+  if (!document.body.dataset.wa106Wired) {
+    document.body.dataset.wa106Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var tb = e.target.closest && e.target.closest('.w47tab');
+      if (!tb) return;
+      w106HrTabs();
+      w106Show(tb.getAttribute('data-w47v'));
+    });
+  }
+
+  /* ---------- 4a. cancel / restore at the top of an event page ---------- */
+  function w106EventButtons() {
+    try {
+      if (typeof isStaff !== 'function' || !isStaff()) return;
+      var ev = null;
+      (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []).forEach(function (e) {
+        if (typeof WA_VOL_EVENT !== 'undefined' && e.id === WA_VOL_EVENT) ev = e;
+      });
+      if (!ev) return;
+      var hero = document.querySelector('#volunteering .vl-hero');
+      if (!hero || document.getElementById('w106cancel')) return;
+      var wrap = document.createElement('div');
+      wrap.id = 'w106cancel';
+      var cancelled = String(ev.status || '').indexOf('cancel') === 0;
+      wrap.innerHTML = cancelled
+        ? '<button class="btn mini" id="w106rest">Restore this event</button>'
+        : '<button class="btn ghost mini" id="w106can">Cancel this event</button>';
+      hero.appendChild(wrap);
+      var can = document.getElementById('w106can');
+      if (can) can.addEventListener('click', function () {
+        openModal(
+          '<h3>Cancel this event?</h3>' +
+          '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ev.code || 'The event') + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
+          '<label class="w101lbl">Reason (kept in the event notes)</label>' +
+          '<input type="text" id="w106why" maxlength="200" style="width:100%;box-sizing:border-box" />' +
+          '<div style="margin-top:12px"><button class="btn" id="w106go">Cancel the event</button> <button class="btn ghost" id="w106no">Keep it</button></div>'
+        );
+        document.getElementById('w106no').addEventListener('click', function () { closeModal(); });
+        document.getElementById('w106go').addEventListener('click', async function () {
+          this.disabled = true;
+          var why = (document.getElementById('w106why') || {}).value || '';
+          var patch = { status: 'cancelled' };
+          if (why) patch.notes = ((ev.notes ? ev.notes + ' | ' : '') + 'Cancelled: ' + why).slice(0, 800);
+          var r = await db.from('volunteer_events').update(patch).eq('id', ev.id);
+          if (r.error) { this.disabled = false; toast('Could not cancel it'); return; }
+          try {
+            await db.from('change_log').insert({
+              entity_type: 'volunteer_event', entity_id: String(ev.id), field: 'status',
+              old_value: ev.status || null, new_value: 'cancelled' + (why ? ': ' + why : ''),
+              changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'staff'
+            });
+          } catch (e2) { /* audit best-effort */ }
+          closeModal();
+          toast('Event cancelled');
+          WA_VOL_LOADED = false; WA_VOL_DETAIL = null;
+          waVolRender();
+        });
+      });
+      var rest = document.getElementById('w106rest');
+      if (rest) rest.addEventListener('click', async function () {
+        this.disabled = true;
+        var r = await db.from('volunteer_events').update({ status: 'planned' }).eq('id', ev.id);
+        if (r.error) { this.disabled = false; toast('Could not restore it'); return; }
+        toast('Event restored');
+        WA_VOL_LOADED = false; WA_VOL_DETAIL = null;
+        waVolRender();
+      });
+    } catch (e) { /* decorative */ }
+  }
+
+  /* ---------- 4b. add an event from the calendar ---------- */
+  function w106NextCode(dateStr) {
+    var yy = String(dateStr || '').slice(2, 4) || String(new Date().getFullYear()).slice(2);
+    var max = 0;
+    (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []).forEach(function (e) {
+      var m = /^WA-(\d{2})-(\d+)$/.exec(e.code || '');
+      if (m && m[1] === yy) max = Math.max(max, Number(m[2]));
+    });
+    return 'WA-' + yy + '-' + (max + 1);
+  }
+  function w106AddButton() {
+    try {
+      if (typeof isStaff !== 'function' || !isStaff()) return;
+      var sec = document.getElementById('volunteering');
+      if (!sec || document.getElementById('w106add')) return;
+      /* only on the calendar view (the hero back-button marks detail views) */
+      if (sec.querySelector('.vl-back')) return;
+      /* anchor above the hero or first month; an EMPTY calendar still gets
+         the button (that is exactly when you need to add events) */
+      var anchor = sec.querySelector('.vl-hero') || sec.querySelector('.vl-month') || sec.querySelector('.vl-empty');
+      if (!anchor) return;
+      var btn = document.createElement('button');
+      btn.className = 'btn ghost mini';
+      btn.id = 'w106add';
+      btn.textContent = '+ Add an event';
+      btn.style.margin = '0 0 10px';
+      anchor.parentElement.insertBefore(btn, anchor);
+      btn.addEventListener('click', function () {
+        openModal(
+          '<h3>Add an event</h3>' +
+          '<p class="read" style="margin:4px 0 8px">Any date works, 2027 included. The code follows on automatically.</p>' +
+          '<label class="w101lbl">Date</label><input type="date" id="w106d" style="width:100%;box-sizing:border-box" />' +
+          '<label class="w101lbl">Title</label><input type="text" id="w106t" placeholder="Food distribution" style="width:100%;box-sizing:border-box" />' +
+          '<label class="w101lbl">Location</label><input type="text" id="w106l" placeholder="Berri-UQAM" style="width:100%;box-sizing:border-box" />' +
+          '<label class="w101lbl">Season</label><input type="text" id="w106s" placeholder="Winter" style="width:100%;box-sizing:border-box" />' +
+          '<label class="w101lbl">Notes (optional)</label><input type="text" id="w106n" maxlength="400" style="width:100%;box-sizing:border-box" />' +
+          '<div style="margin-top:12px"><button class="btn" id="w106save">Add the event</button> <button class="btn ghost" id="w106x">Cancel</button></div>'
+        );
+        document.getElementById('w106x').addEventListener('click', function () { closeModal(); });
+        document.getElementById('w106save').addEventListener('click', async function () {
+          var d = (document.getElementById('w106d') || {}).value;
+          var t = ((document.getElementById('w106t') || {}).value || '').trim();
+          if (!d || !t) { toast('A date and a title are the minimum'); return; }
+          this.disabled = true;
+          var row = {
+            code: w106NextCode(d), event_date: d, title: t, kind: 'service', status: 'planned',
+            location: ((document.getElementById('w106l') || {}).value || '').trim() || null,
+            season: ((document.getElementById('w106s') || {}).value || '').trim() || null,
+            notes: ((document.getElementById('w106n') || {}).value || '').trim() || null
+          };
+          var r = await db.from('volunteer_events').insert(row);
+          if (r.error) { this.disabled = false; toast('Could not add it: ' + (r.error.message || '')); return; }
+          try {
+            await db.from('change_log').insert({
+              entity_type: 'volunteer_event', entity_id: row.code, field: 'created',
+              old_value: null, new_value: t + ' on ' + d,
+              changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'staff'
+            });
+          } catch (e2) { /* audit best-effort */ }
+          closeModal();
+          toast('Event added: ' + row.code);
+          WA_VOL_LOADED = false;
+          waVolRender();
+        });
+      });
+    } catch (e) { /* decorative */ }
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof waVolRender === 'function') {
+    var __vr106 = waVolRender;
+    waVolRender = async function () {
+      await __vr106.apply(this, arguments);
+      try { w106EventButtons(); w106AddButton(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  (function () {
+    var t106 = null;
+    function arm() {
+      w106Renames();
+      setTimeout(w106Renames, 900);
+      setTimeout(w106Renames, 2600);
+      var hr = document.getElementById('hrcentre');
+      if (hr && !hr.dataset.w106mo) {
+        hr.dataset.w106mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t106);
+          t106 = setTimeout(function () { try { w106HrTabs(); } catch (e) { /* non-fatal */ } }, 380);
+        }).observe(hr, { childList: true, subtree: true });
+        try { w106HrTabs(); } catch (e) { /* non-fatal */ }
+      }
+      var tr = document.getElementById('training');
+      if (tr && !tr.dataset.w106mo) {
+        tr.dataset.w106mo = '1';
+        new MutationObserver(function () { w106Renames(); }).observe(tr, { childList: true });
+      }
+    }
+    if (typeof startApp === 'function') {
+      var __sa106 = startApp;
+      startApp = async function () {
+        await __sa106.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+})();

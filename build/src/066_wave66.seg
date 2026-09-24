@@ -1,0 +1,107 @@
+/* =====================================================================
+   WA v66 leadership meetings can be open to everyone
+   (04/08/26)
+   v65 locked a Leadership meeting to leaders-and-admins visibility.
+   Now the Meeting visibility select stays usable: the fan-out across
+   all departments happens either way, and the uploader chooses whether
+   the meeting (and everything it files) is open to everyone, kept to
+   leaders and admins, or confidential to picked people. The note under
+   the form explains the current choice, and the pipeline guide and
+   preview popup wording follow along. Server side: process-leadership
+   v2 stamps rows with the transcript's visibility (null = open), and
+   transcript-requests v6 keys the leadership spread off the department
+   field too.
+   ===================================================================== */
+(function () {
+  if (window.__wa66) return;
+  window.__wa66 = 1;
+
+  function w66IsLeadDept() {
+    var dep = document.getElementById('txDept');
+    return !!(dep && dep.value === 'Leadership meeting');
+  }
+
+  function w66Note() {
+    var note = document.getElementById('w65leadnote');
+    if (!note) return;
+    var sel = document.getElementById('w62type');
+    var v = sel ? sel.value : 'leadership';
+    if (v === 'department') {
+      note.textContent = 'Leadership meeting, open to everyone: its updates, tasks and suggested requests spread across ALL departments, and the whole team can see them.';
+    } else if (v === 'private') {
+      note.textContent = 'Leadership meeting, confidential: it spreads across ALL departments, but only the people you pick (plus admins) see the meeting and what it files.';
+    } else {
+      note.textContent = 'Leadership meeting: its updates, tasks and suggested requests spread across ALL departments. Visible to leaders and admins only.';
+    }
+  }
+
+  /* runs after wave65's sync (registered later on the same targets) */
+  function w66Sync() {
+    try {
+      var sel = document.getElementById('w62type');
+      if (!sel) return;
+      if (w66IsLeadDept()) {
+        sel.disabled = false; /* v65 locked it; the choice is yours again */
+        w66Note();
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (!document.body.dataset.wa66Wired) {
+    document.body.dataset.wa66Wired = '1';
+    document.body.addEventListener('change', function (e) {
+      if (!e.target) return;
+      if (e.target.id === 'txDept') setTimeout(w66Sync, 0);
+      if (e.target.id === 'w62type' && w66IsLeadDept()) setTimeout(w66Note, 0);
+    });
+  }
+
+  /* keep the popups honest about the choice */
+  function w66PatchModals() {
+    try {
+      /* the v65 preview modal note */
+      document.querySelectorAll('.modal-back p').forEach(function (p) {
+        var t = p.textContent || '';
+        if (t.indexOf('stay visible to leaders and admins only') >= 0) {
+          var sel = document.getElementById('w62type');
+          var v = sel ? sel.value : 'leadership';
+          if (v === 'department') {
+            p.textContent = 'Leadership meeting, open to everyone: items spread across every department and the whole team can see them.';
+          } else if (v === 'private') {
+            p.textContent = 'Leadership meeting, confidential: items spread across every department but only the people you picked (plus admins) see them.';
+          }
+        }
+      });
+      document.querySelectorAll('.modal-back .w61sec .t span').forEach(function (s) {
+        var t = s.textContent || '';
+        if (t.indexOf('Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only.') >= 0) {
+          s.textContent = t.replace(
+            'Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only.',
+            'Leadership meetings spread their tasks and updates across ALL departments; you choose whether they are open to everyone, kept to leaders and admins, or confidential.');
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  try {
+    var __w66mo;
+    new MutationObserver(function () {
+      clearTimeout(__w66mo);
+      __w66mo = setTimeout(w66PatchModals, 120);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  if (typeof showPanel === 'function') {
+    var __sp66 = showPanel;
+    showPanel = function (id) {
+      __sp66(id);
+      if (id === 'transcripts') setTimeout(w66Sync, 350);
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa66 = startApp;
+    startApp = async function () {
+      await __sa66();
+      setTimeout(w66Sync, 450);
+    };
+  }
+})();

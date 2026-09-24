@@ -1,0 +1,125 @@
+/* =====================================================================
+   WA v98 task management pass (07/08/26): Namviek visuals, full depth
+   =====================================================================
+   Second half of the Namviek inspiration (hudy9x/namviek). Decoration
+   only: every dropdown, button and behaviour stays.
+   1. Kanban board: Namviek-style columns (soft grey wells, white cards
+      with shadow + hover lift, count pills in the column headers).
+   2. Colour-coded status: the status chip on board cards and a status
+      left-border on every list task row (In progress cyan, Blocked
+      red, Waiting amber, Done green); flagged tasks carry the red
+      priority edge.
+   3. Owner avatars: the wave21 initials bubbles now also appear on
+      LIST rows and My page rows, in front of the owner name.
+   4. Workstream headers gain live open-task count pills.
+   Applied by a debounced MutationObserver over <main>, so wave77's
+   continuous repaints re-decorate automatically; every decoration is
+   guarded so it never doubles up.
+   ===================================================================== */
+(function () {
+  if (window.__wa98) return; window.__wa98 = true;
+
+  var css = document.createElement('style');
+  css.id = 'wa98css';
+  css.textContent = '' +
+    /* board */
+    '.wa21-board{gap:12px;}' +
+    '.wa21-col{background:#f4f5f9;border:1px solid #eceef4;border-radius:10px;flex:0 0 248px;padding:10px;}' +
+    '.wa21-colh{color:#566a7f;font-size:12.5px;}' +
+    '.wa21-colh .n{opacity:1;background:#fff;border:1px solid #e2e5ea;border-radius:999px;padding:0 8px;font-size:10.5px;color:#697a8d;font-weight:700;}' +
+    '.wa21-card{background:#fff;border:1px solid #e7e9f0;box-shadow:0 1px 3px 0 rgba(67,89,113,.1);transition:box-shadow .15s,border-color .15s;}' +
+    '.wa21-card:hover{border-color:rgba(44,122,102,.5);box-shadow:0 3px 10px 0 rgba(67,89,113,.16);}' +
+    /* status pills */
+    '.wa21-st{border:none;font-weight:700;background:rgba(133,146,163,.14);color:#697a8d;}' +
+    '.w98st-open{background:rgba(133,146,163,.14);color:#697a8d;}' +
+    '.w98st-inprogress{background:rgba(3,195,236,.14);color:#0a8fac;}' +
+    '.w98st-blocked{background:rgba(255,62,29,.14);color:#c4402a;}' +
+    '.w98st-waiting{background:rgba(255,171,0,.18);color:#a06f00;}' +
+    '.w98st-done{background:rgba(44,122,102,.14);color:#1f5f4f;}' +
+    /* status edge on list rows */
+    'ul.checklist li[data-task]{border-left:3px solid #e7e9f0;}' +
+    'ul.checklist li[data-task].w98b-inprogress{border-left-color:#03c3ec;}' +
+    'ul.checklist li[data-task].w98b-blocked{border-left-color:#ff3e1d;}' +
+    'ul.checklist li[data-task].w98b-waiting{border-left-color:#ffab00;}' +
+    'ul.checklist li[data-task].w98b-done{border-left-color:#2c7a66;}' +
+    'ul.checklist li[data-task].w98flag{border-left-color:#ff3e1d;}' +
+    /* avatars on list rows */
+    '.ci-sub .wa21-bub{vertical-align:-4px;margin-right:5px;}' +
+    /* workstream count pills: SIBLINGS of the subhead, never inside it
+       (wave77 matches workstreams by the subhead's text; polluting it
+       makes legitimate empty workstreams look unknown and get removed) */
+    '.subsection h3.subhead{display:inline-block;margin-right:0;}' +
+    '.w98count{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;background:rgba(44,122,102,.12);color:#1f5f4f;border-radius:999px;font-size:10.5px;font-weight:700;margin-left:8px;padding:0 6px;vertical-align:3px;}';
+  document.head.appendChild(css);
+
+  function w98Status(s, done, fallback) {
+    var t = String(s || '').toLowerCase();
+    if (t.indexOf('progress') >= 0) return 'inprogress';
+    if (t.indexOf('block') >= 0) return 'blocked';
+    if (t.indexOf('wait') >= 0) return 'waiting';
+    if (t.indexOf('done') >= 0 || done) return 'done';
+    return fallback;
+  }
+
+  function w98Decorate() {
+    /* list rows: status edge + flag edge + owner avatar */
+    document.querySelectorAll('li[data-task]').forEach(function (li) {
+      if (li.dataset.w98) return;
+      li.dataset.w98 = '1';
+      var id = Number(li.dataset.task);
+      var t = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).find(function (x) { return x.id === id; });
+      if (!t) return;
+      li.classList.add('w98b-' + w98Status(t.status, t.done, 'open'));
+      if (t.flag && !t.done) li.classList.add('w98flag');
+      try {
+        var sub = li.querySelector('.ci-sub');
+        if (sub && t.owner && typeof wa21Bubble === 'function' && !sub.querySelector('.wa21-bub')) {
+          sub.insertAdjacentHTML('afterbegin', wa21Bubble(t.owner, true) + ' ');
+        }
+      } catch (e) { /* avatar is optional */ }
+    });
+    /* board/status chips: colour by their text */
+    document.querySelectorAll('.wa21-st').forEach(function (el) {
+      if (el.dataset.w98) return;
+      el.dataset.w98 = '1';
+      var s = el.getAttribute('title') || el.textContent || '';
+      el.classList.add('w98st-' + w98Status(s, false, 'open'));
+    });
+    /* workstream headers: open-task counts */
+    document.querySelectorAll('.subsection').forEach(function (ss) {
+      var h = ss.querySelector('h3.subhead');
+      if (!h) return;
+      var n = ss.querySelectorAll('li[data-task]:not(.done)').length;
+      var pill = h.nextElementSibling;
+      if (!pill || !pill.classList || !pill.classList.contains('w98count')) {
+        pill = document.createElement('span');
+        pill.className = 'w98count';
+        h.insertAdjacentElement('afterend', pill);
+      }
+      var txt = String(n);
+      if (pill.textContent !== txt) pill.textContent = txt;
+    });
+  }
+
+  (function () {
+    var t98 = null;
+    function arm() {
+      var main = document.querySelector('main');
+      if (!main || main.dataset.w98mo) return;
+      main.dataset.w98mo = '1';
+      var mo = new MutationObserver(function () {
+        clearTimeout(t98);
+        t98 = setTimeout(function () { try { w98Decorate(); } catch (e) { /* non-fatal */ } }, 250);
+      });
+      mo.observe(main, { childList: true, subtree: true });
+      try { w98Decorate(); } catch (e) { /* non-fatal */ }
+    }
+    if (typeof startApp === 'function') {
+      var __sa98 = startApp;
+      startApp = async function () {
+        await __sa98.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+})();

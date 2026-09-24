@@ -1,0 +1,86 @@
+/* =====================================================================
+   WA v15 UI enhancements (25/07/26)
+   Goals: a dedicated Goals page (own menu button) plus a compact goals
+   card on every department page. Data lives in the goals table, loaded
+   from the ClickUp goals space for the current fiscal quarter
+   (Q4 FY2026, fiscal year end September 30).
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.gl-card{border-left:4px solid var(--wa-gold);}'
+    + '.gl-row{padding:8px 0;border-top:1px dashed var(--wa-line);font-size:13px;}'
+    + '.gl-row:first-of-type{border-top:none;}'
+    + '.gl-row .t{font-weight:700;}'
+    + '.gl-row .m{color:var(--wa-muted);font-size:12px;margin-top:2px;}'
+    + '.gl-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#e8efe9;color:#2c5a44;margin-left:8px;}'
+    + '.gl-bar{height:6px;background:var(--wa-paper);border-radius:4px;margin-top:6px;overflow:hidden;}'
+    + '.gl-bar i{display:block;height:100%;background:var(--wa-green);border-radius:4px;}'
+    + '.gl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}'
+    + '.gl-dept{background:#fff;border:1px solid var(--wa-line);border-top:3px solid var(--wa-muted);border-radius:11px;padding:12px 14px;}'
+    + '.gl-dept h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('goals')) {
+    var sec = document.createElement('section');
+    sec.id = 'goals';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Goals: Q4 FY2026</h2><p class="read">Department goals for the final quarter of the fiscal year (July to September, year end September 30), pulled from the ClickUp goals space.</p><div id="glBody">Loading...</div></div>';
+    main.appendChild(sec);
+  }
+})();
+
+var GOALS_CACHE = [];
+async function waLoadGoals() {
+  try {
+    var r = await db.from('goals').select('*').order('department').order('sort');
+    if (!r.error) GOALS_CACHE = r.data || [];
+  } catch (e) { /* offline */ }
+}
+function waGoalRow(g) { /* superseded: wave16 reset without capture; superseded; body removed in Phase 0 compaction */ }
+async function renderGoalsPage() { /* superseded: wave29 reset this binding without capture; superseded; body removed in Phase 0 compaction */ }
+function renderDeptGoalsCards() { /* superseded: wave43 reset without capture; superseded; body removed in Phase 0 compaction */ }
+(function () {
+  var __ras15 = renderAllSections;
+  renderAllSections = function () {
+    __ras15();
+    try { renderDeptGoalsCards(); } catch (e) { /* non-fatal */ }
+  };
+  var __rs15 = renderSection;
+  renderSection = function (deptId) {
+    __rs15(deptId);
+    try { renderDeptGoalsCards(); } catch (e) { /* non-fatal */ }
+  };
+  var __ah15 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'goals') { showPanel('goals'); renderGoalsPage(); return; }
+    __ah15();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#goals') {
+      try { showPanel('goals'); renderGoalsPage(); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa15 = startApp;
+  startApp = async function () {
+    await __sa15();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="goals"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'goals';
+          b.innerHTML = '<span class="tabdot" style="background:#d4a13c"></span>Goals';
+          bar.insertBefore(b, bar.querySelector('.tab-group') || null);
+        }
+        await waLoadGoals();
+        renderDeptGoalsCards();
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

@@ -1,0 +1,188 @@
+/* =====================================================================
+   WA v38 chat actions you confirm
+   (29/07/26)
+   The assistant in the bottom right can now put in requests and add
+   tasks, for any type of request: tell it "put in a request to HR to
+   recruit..." or "add a task for marketing to...". It drafts the
+   action and shows a confirmation card in the chat; NOTHING is filed,
+   added, closed, or changed until you press Confirm. Closing tasks and
+   completing or re-statusing requests now go through the same
+   confirm-first flow.
+   ===================================================================== */
+
+(function () {
+  if (document.getElementById('wa38css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa38css';
+  st.textContent = '' +
+    '.wac-card{background:#fff;border:1px solid rgba(44,122,102,.4);border-left:4px solid #2c7a66;border-radius:12px;padding:10px 12px;margin:7px 0;font-size:12.5px;box-shadow:0 8px 20px -14px rgba(20,48,43,.3);}' +
+    '.wac-card b{color:#1f5f4f;font-size:12.5px;}' +
+    '.wac-card .f{margin:3px 0 0;color:#5b6b66;white-space:pre-wrap;}' +
+    '.wac-card .act{display:flex;gap:7px;margin-top:8px;}' +
+    '.wac-card button{border:none;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;}' +
+    '.wac-card .go{background:#1f5f4f;color:#fff;}' +
+    '.wac-card .no{background:#f1f3f2;color:#5b6b66;}' +
+    '.wac-card.decided{opacity:.75;border-left-color:#9aa5a1;}' +
+    '.wac-card .res{margin-top:7px;font-size:12px;font-weight:600;color:#1f5f4f;}' +
+    '.wac-card .res.err{color:#b3402f;}' +
+    '#waChatBtn{background:#1f5f4f;}';
+  document.head.appendChild(st);
+})();
+
+var WA38_PENDING = {};
+var WA38_N = 0;
+
+function wa38FieldLines(p) {
+  var i = p.input || {};
+  var lines = [];
+  var L = { opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Grants', hr: 'Human Resources', board: 'Board' };
+  if (p.name === 'create_request') {
+    lines.push('To: ' + (L[i.department] || i.department));
+    if (i.type_key) lines.push('Type: ' + i.type_key);
+    if (i.assignee) lines.push('For: ' + i.assignee);
+    if (i.details) lines.push(String(i.details));
+  } else if (p.name === 'create_task') {
+    lines.push('Board: ' + (L[i.department] || i.department));
+    if (i.owner) lines.push('Owner: ' + i.owner);
+    if (i.due_date) lines.push('Due: ' + i.due_date);
+    if (i.detail) lines.push(String(i.detail));
+  } else if (p.name === 'set_request_status') {
+    lines.push('New status: ' + i.status);
+  } else if (p.name === 'close_task' && i.note) {
+    lines.push('Note: ' + i.note);
+  }
+  return lines.join('\n');
+}
+
+function wa38Card(p) {
+  var m = document.getElementById('wacMsgs');
+  if (!m) return;
+  WA38_N += 1;
+  var key = 'p' + WA38_N;
+  WA38_PENDING[key] = p;
+  var d = document.createElement('div');
+  d.className = 'wac-card';
+  d.id = 'wac-' + key;
+  d.innerHTML = '<b>' + esc(p.summary || p.name) + '</b>'
+    + (wa38FieldLines(p) ? '<div class="f">' + esc(wa38FieldLines(p)) + '</div>' : '')
+    + '<div class="act"><button class="go" data-w38go="' + key + '">Confirm, do it</button>'
+    + '<button class="no" data-w38no="' + key + '">Cancel</button></div>';
+  m.appendChild(d);
+  m.scrollTop = m.scrollHeight;
+}
+
+async function wa38Execute(key) {
+  var p = WA38_PENDING[key];
+  var card = document.getElementById('wac-' + key);
+  if (!p || !card) return;
+  var go = card.querySelector('.go');
+  if (go) { go.disabled = true; go.textContent = 'Doing it...'; }
+  try {
+    var r = await db.functions.invoke('ask', { body: { execute: { name: p.name, input: p.input } } });
+    if (r.error) throw r.error;
+    var out = (r.data && r.data.executed) || {};
+    card.classList.add('decided');
+    card.querySelector('.act').remove();
+    var res = document.createElement('div');
+    res.className = 'res' + (out.ok ? '' : ' err');
+    res.textContent = out.ok ? (out.detail || 'Done.') : ('Could not do it: ' + (out.error || 'unknown problem'));
+    card.appendChild(res);
+    if (out.ok) {
+      toast('Done');
+      try {
+        if (typeof loadAll === 'function') { await loadAll(); renderAllSections(); renderDashboard(); }
+        if (typeof waLoadRequests === 'function') { await waLoadRequests(); renderDeptRequestCards(); }
+      } catch (e2) { /* refresh best effort */ }
+    }
+  } catch (e) {
+    card.classList.add('decided');
+    var res2 = document.createElement('div');
+    res2.className = 'res err';
+    res2.textContent = 'Could not reach the Hub. Nothing was changed. Try again.';
+    card.appendChild(res2);
+    if (go) { go.disabled = false; go.textContent = 'Confirm, do it'; }
+  }
+  delete WA38_PENDING[key];
+}
+
+function wa38Cancel(key) {
+  var card = document.getElementById('wac-' + key);
+  if (card) {
+    card.classList.add('decided');
+    var act = card.querySelector('.act');
+    if (act) act.remove();
+    var res = document.createElement('div');
+    res.className = 'res';
+    res.style.color = '#7b8a86';
+    res.textContent = 'Cancelled. Nothing was filed.';
+    card.appendChild(res);
+  }
+  delete WA38_PENDING[key];
+}
+
+/* replace the send pipeline: hide the old input row, mount ours */
+function wa38Patch() {
+  var panel = document.getElementById('waChatPanel');
+  if (!panel || document.getElementById('w38in')) return;
+  var oldRow = panel.querySelector('.wac-in');
+  if (oldRow) oldRow.style.display = 'none';
+  var h = panel.querySelector('.wac-h small');
+  if (h) h.textContent = 'Ask anything, put in requests, add tasks. You confirm before anything is saved.';
+  var row = document.createElement('div');
+  row.className = 'wac-in';
+  row.innerHTML = '<input id="w38in" placeholder="Ask, or: put in a request to HR to..." />'
+    + '<button id="w38send" title="Send">&#10148;</button>';
+  panel.appendChild(row);
+
+  function addMsg(cls, text, sources) {
+    var m = document.getElementById('wacMsgs');
+    var d = document.createElement('div');
+    d.className = 'wac-m ' + cls;
+    d.innerHTML = '<span>' + esc(text) + '</span>' + (sources && sources.length ? '<div class="wac-src">Sources: ' + esc(sources.join('; ')) + '</div>' : '');
+    m.appendChild(d);
+    m.scrollTop = m.scrollHeight;
+    return d;
+  }
+  async function send() {
+    var inp = document.getElementById('w38in');
+    var q = (inp.value || '').trim();
+    if (!q) return;
+    inp.value = '';
+    addMsg('user', q);
+    WA_CHAT_HIST.push({ role: 'user', content: q });
+    var thinking = addMsg('bot', 'Thinking...');
+    try {
+      var r = await db.functions.invoke('ask', { body: { question: q, history: WA_CHAT_HIST.slice(-6, -1) } });
+      if (r.error) throw r.error;
+      thinking.remove();
+      var data = r.data || {};
+      var ans = data.answer || 'I could not find that in the dashboard data.';
+      addMsg('bot', ans, data.sources);
+      (data.proposals || []).forEach(function (p) { wa38Card(p); });
+      WA_CHAT_HIST.push({ role: 'assistant', content: ans });
+    } catch (e) {
+      thinking.remove();
+      addMsg('bot', 'Something went wrong, try again.');
+    }
+  }
+  document.getElementById('w38send').addEventListener('click', send);
+  document.getElementById('w38in').addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+}
+
+(function () {
+  if (typeof waInitChat === 'function') {
+    var __ic38 = waInitChat;
+    waInitChat = function () {
+      __ic38();
+      try { wa38Patch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  document.body.addEventListener('click', function (e) {
+    var go = e.target.closest && e.target.closest('[data-w38go]');
+    if (go) { wa38Execute(go.getAttribute('data-w38go')); return; }
+    var no = e.target.closest && e.target.closest('[data-w38no]');
+    if (no) { wa38Cancel(no.getAttribute('data-w38no')); return; }
+  });
+  /* if the widget already exists (wave loaded after boot), patch now */
+  try { wa38Patch(); } catch (e) { /* non-fatal */ }
+})();

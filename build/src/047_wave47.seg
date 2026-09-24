@@ -1,0 +1,666 @@
+/* =====================================================================
+   WA v47 HR views, recruitment depth, SOP roles, agenda groups
+   (02/08/26)
+   1. The HR centre splits into three toggled dashboards: Onboarding,
+      Trainings, Recruitment. Deep links: #hrcentre/onboarding,
+      #hrcentre/training, #hrcentre/recruitment.
+   2. Each dashboard gains bar charts: average completion by module
+      (onboarding), completion by category (trainings), average days
+      per stage and days open per position (recruitment).
+   3. Hiring requests open into a detail view: candidates with their
+      interview stage and notes, the job description link, and linked
+      HR tasks. Stored on the request itself (details), so it rides
+      the existing requests plumbing.
+   4. Master onboarding: sections can be added (90 DAYS, 6 MONTHS,
+      anything), ordered sensibly.
+   5. Assigning trainings gets a search box.
+   6. Volunteering: "The SOP" chip becomes "Master program SOP", and
+      the master gains ROLES: named bundles of steps (for example
+      Coordinating and confirming volunteers). Assign a person to a
+      role and every linked step gets that owner at once, propagating
+      to upcoming events through the existing trigger. Roles live in
+      the new sop_roles table.
+   7. Agendas: when viewing all departments, the list groups under
+      Executive and leaders first, then each department, newest first
+      within its status.
+   ===================================================================== */
+(function () {
+  if (window.__wa47) return;
+  window.__wa47 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa47css';
+  st.textContent = '' +
+    '.w47tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '.w47tab{border:1px solid #e3e7e5;background:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#3d4642;cursor:pointer;}' +
+    '.w47tab.on{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w47tab:hover{border-color:rgba(31,95,79,.4);}' +
+    '.w47chart{background:#fff;border-radius:12px;padding:10px 14px;margin:10px 0 4px;}' +
+    '.w47chart h4{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#7b8a86;}' +
+    '.w47bar{display:flex;gap:10px;align-items:center;margin:5px 0;font-size:12px;color:#3d4642;}' +
+    '.w47bar .lb{width:170px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w47bar .tr{flex:1;height:10px;background:#eef2f0;border-radius:0 4px 4px 0;position:relative;}' +
+    '.w47bar .tr i{display:block;height:100%;background:#2c7a66;border-radius:0 4px 4px 0;min-width:2px;}' +
+    '.w47bar.warn .tr i{background:#b3402f;}' +
+    '.w47bar .vl{flex:none;font-size:11.5px;font-weight:700;color:#14302b;min-width:44px;}' +
+    '[data-w47open],[data-w47as],[data-w47sec],[data-w47ra],[data-w47re],[data-w47rd]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
+    'padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w47open]:hover,[data-w47as]:hover,[data-w47sec]:hover,[data-w47ra]:hover,[data-w47re]:hover,[data-w47rd]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '[data-w47rd]{color:#b3402f !important;}' +
+    '.w47cand{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f2f4f3;font-size:12.5px;flex-wrap:wrap;}' +
+    '.w47cnum{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(132,85,255,.12);color:#5b32c7;}' +
+    '.w47roles{background:#f6f8f7;border-radius:14px;padding:12px 14px;margin:0 0 12px;}' +
+    '.w47roles h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#1f5f4f;}' +
+    '.w47agh{display:flex;gap:8px;align-items:center;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#fff;border-radius:999px;padding:4px 14px;margin:14px 0 6px;width:fit-content;}';
+  document.head.appendChild(st);
+
+  function wa47IsHr() {
+    try {
+      return typeof WA40_MINE !== 'undefined' && WA40_MINE && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader');
+    } catch (e) { return false; }
+  }
+  function wa47Days(a, b) {
+    try { return Math.max(0, Math.round((new Date(b || Date.now()) - new Date(a)) / 86400000)); } catch (e) { return 0; }
+  }
+  function wa47Bars(title, rows) {
+    if (!rows.length) return '';
+    var max = 0;
+    rows.forEach(function (r) { if (r.value > max) max = r.value; });
+    if (!max) max = 1;
+    return '<div class="w47chart"><h4>' + esc(title) + '</h4>' + rows.map(function (r) {
+      return '<div class="w47bar' + (r.warn ? ' warn' : '') + '" title="' + esc(r.label + ': ' + r.text) + '">'
+        + '<span class="lb">' + esc(r.label) + '</span>'
+        + '<span class="tr"><i style="width:' + Math.max(2, Math.round(100 * r.value / max)) + '%"></i></span>'
+        + '<span class="vl">' + esc(r.text) + '</span></div>';
+    }).join('') + '</div>';
+  }
+  try {
+    if (typeof WA37_WEEK_ORDER !== 'undefined') {
+      if (!WA37_WEEK_ORDER['90 DAYS']) WA37_WEEK_ORDER['90 DAYS'] = 6;
+      if (!WA37_WEEK_ORDER['6 MONTHS']) WA37_WEEK_ORDER['6 MONTHS'] = 7;
+    }
+  } catch (e) { /* absent */ }
+
+  /* ================= HR centre: three toggled dashboards ================= */
+  var WA47_VIEW = 'onboarding';
+  var WA47 = { reqs: [], log: [], types: {}, loaded: 0 };
+  var CAND_STAGES = ['applied', 'phone screen', 'interview', 'second round', 'offer', 'hired', 'declined'];
+
+  async function wa47Load(force) {
+    if (WA47.loaded && !force && (Date.now() - WA47.loaded) < 30000) return;
+    try {
+      var r1 = await db.from('dept_requests').select('*').in('type_key', ['hiring-request', 'onboarding-request']).order('created_at');
+      WA47.reqs = (r1 && r1.data) || [];
+      var r2 = await db.from('change_log').select('entity_id,old_value,new_value,changed_at').eq('entity_type', 'request').eq('field', 'status').order('changed_at');
+      WA47.log = (r2 && r2.data) || [];
+      var r3 = await db.from('request_types').select('key,label,statuses').in('key', ['hiring-request', 'onboarding-request']);
+      ((r3 && r3.data) || []).forEach(function (t) { WA47.types[t.key] = t; });
+      WA47.loaded = Date.now();
+    } catch (e) { /* offline */ }
+  }
+  function wa47Req(id) { return WA47.reqs.filter(function (r) { return String(r.id) === String(id); })[0]; }
+  function wa47Det(r) {
+    var d = (r && r.details && typeof r.details === 'object') ? r.details : {};
+    return { jd_url: d.jd_url || '', candidates: Array.isArray(d.candidates) ? d.candidates : [], task_refs: Array.isArray(d.task_refs) ? d.task_refs : [], rest: d };
+  }
+
+  function wa47ViewOf(sec) {
+    var h3 = sec.querySelector('h3');
+    var t = h3 ? h3.textContent : '';
+    if (t.indexOf('Trainings') === 0) return 'training';
+    if (t.indexOf('Recruitment') === 0) return 'recruitment';
+    return 'onboarding';
+  }
+  function wa47Apply() {
+    var body = document.getElementById('w46body');
+    if (!body) return;
+    body.querySelectorAll('.w46sec').forEach(function (sec) {
+      sec.style.display = wa47ViewOf(sec) === WA47_VIEW ? '' : 'none';
+    });
+    body.querySelectorAll('.w47tab').forEach(function (c) {
+      c.classList.toggle('on', c.getAttribute('data-w47v') === WA47_VIEW);
+    });
+  }
+  function wa47Decorate() {
+    try {
+      var body = document.getElementById('w46body');
+      if (!body || !body.querySelector('.w46sec')) return;
+      if (!body.querySelector('.w47tabs')) {
+        body.insertAdjacentHTML('afterbegin', '<div class="w47tabs">'
+          + '<button class="w47tab" data-w47v="onboarding">Onboarding</button>'
+          + '<button class="w47tab" data-w47v="training">Training</button>'
+          + '<button class="w47tab" data-w47v="recruitment">Recruitment</button>'
+          + '</div>');
+      }
+      /* searchable assign modal takes over from the plain one */
+      body.querySelectorAll('[data-w44as]').forEach(function (a) {
+        a.setAttribute('data-w47as', a.getAttribute('data-w44as'));
+        a.removeAttribute('data-w44as');
+      });
+      /* add-a-section pill on the master */
+      var master = document.getElementById('w46master');
+      if (master && !master.parentElement.querySelector('[data-w47sec]')) {
+        master.insertAdjacentHTML('beforebegin', '<div style="margin:0 0 6px"><a data-w47sec="1">+ Add a section (90 DAYS, 6 MONTHS...)</a></div>');
+      }
+      wa47Apply();
+      wa47Charts();
+    } catch (e) { /* non-fatal */ }
+  }
+
+  var WA47_CHARTING = false;
+  async function wa47Charts() {
+    var body = document.getElementById('w46body');
+    if (!body || body.querySelector('.w47chart') || WA47_CHARTING) return;
+    WA47_CHARTING = true;
+    try {
+      await wa47Load(false);
+      var secs = Array.prototype.slice.call(body.querySelectorAll('.w46sec'));
+      var onbSec = null, trSec = null, recSec = null;
+      secs.forEach(function (s) {
+        var v = wa47ViewOf(s);
+        var h3 = (s.querySelector('h3') || {}).textContent || '';
+        if (v === 'training' && !trSec) trSec = s;
+        if (v === 'recruitment' && !recSec) recSec = s;
+        if (v === 'onboarding' && h3.indexOf('Onboarding') === 0) onbSec = s;
+      });
+      /* onboarding: average completion by module across active onboardings */
+      if (onbSec && typeof WA37 !== 'undefined' && typeof wa37Weeks === 'function') {
+        var act = WA37.onbs.filter(function (o) { return o.status === 'active'; });
+        if (act.length) {
+          var stepsBy = {};
+          WA37.steps.forEach(function (s) {
+            if (act.some(function (o) { return o.id === s.onboarding_id; })) {
+              (stepsBy[s.template_id] = stepsBy[s.template_id] || []).push(s);
+            }
+          });
+          var rows = [];
+          wa37Weeks().forEach(function (wk) {
+            var tot = 0, done = 0;
+            wk.steps.forEach(function (t) {
+              (stepsBy[t.id] || []).forEach(function (s) { tot++; if (s.done) done++; });
+            });
+            if (tot) rows.push({ label: wk.name, value: Math.round(100 * done / tot), text: Math.round(100 * done / tot) + '%' });
+          });
+          onbSec.insertAdjacentHTML('beforeend', wa47Bars('Average completion by module (active onboardings)', rows));
+        }
+      }
+      /* trainings: completion by category */
+      if (trSec && typeof WA36_TRAININGS !== 'undefined') {
+        var catOf = {};
+        WA36_TRAININGS.forEach(function (t) { catOf[String(t.id)] = t.category || 'General'; });
+        var agg = {};
+        (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).forEach(function (p) {
+          var c = catOf[String(p.training_id)] || 'General';
+          agg[c] = agg[c] || { t: 0, d: 0 };
+          agg[c].t++;
+          if (p.status === 'done') agg[c].d++;
+        });
+        var rows2 = Object.keys(agg).map(function (c) {
+          return { label: c, value: Math.round(100 * agg[c].d / agg[c].t), text: agg[c].d + ' of ' + agg[c].t };
+        });
+        rows2.sort(function (a, b) { return b.value - a.value; });
+        trSec.insertAdjacentHTML('beforeend', wa47Bars('Completion by category (all assignments)', rows2));
+      }
+      /* recruitment: avg days per stage + days open per position + detail pills */
+      if (recSec) {
+        var hires = WA47.reqs.filter(function (r) { return r.type_key === 'hiring-request'; });
+        var stageAgg = {}, stageOrder = (WA47.types['hiring-request'] || {}).statuses || [];
+        hires.forEach(function (r) {
+          var tr = WA47.log.filter(function (l) { return String(l.entity_id) === String(r.id); });
+          var prevAt = r.created_at, prevStage = tr.length ? tr[0].old_value : r.status;
+          tr.forEach(function (x) {
+            var k = prevStage || '';
+            stageAgg[k] = stageAgg[k] || { n: 0, d: 0 };
+            stageAgg[k].n++;
+            stageAgg[k].d += wa47Days(prevAt, x.changed_at);
+            prevAt = x.changed_at;
+            prevStage = x.new_value;
+          });
+        });
+        var rows3 = [];
+        stageOrder.forEach(function (s) {
+          if (stageAgg[s] && stageAgg[s].n) {
+            var avg = Math.round(stageAgg[s].d / stageAgg[s].n);
+            rows3.push({ label: s, value: avg, text: avg + 'd avg' });
+          }
+        });
+        var openRows = hires.filter(function (r) { return !r.done; }).map(function (r) {
+          var d = wa47Days(r.created_at);
+          return { label: r.title, value: d, text: d + 'd', warn: d > 30 };
+        });
+        var charts = wa47Bars('Average days per stage (all hiring requests)', rows3)
+          + wa47Bars('Days open per position', openRows);
+        var anchor = recSec.querySelector('h3');
+        var tiles = recSec.querySelector('.w44tiles');
+        if (tiles) tiles.insertAdjacentHTML('afterend', charts);
+        else if (anchor) anchor.insertAdjacentHTML('afterend', charts);
+        /* candidates + details pill on each hiring row */
+        recSec.querySelectorAll('select[data-w46st]').forEach(function (sel) {
+          var id = sel.getAttribute('data-w46st');
+          var r = wa47Req(id);
+          if (!r || r.type_key !== 'hiring-request') return;
+          if (sel.parentElement.querySelector('[data-w47open="' + id + '"]')) return;
+          var det = wa47Det(r);
+          sel.insertAdjacentHTML('afterend',
+            (det.candidates.length ? '<span class="w47cnum">' + det.candidates.length + ' candidate' + (det.candidates.length === 1 ? '' : 's') + '</span>' : '')
+            + '<a data-w47open="' + id + '">candidates and details</a>');
+        });
+      }
+    } catch (e) { /* non-fatal */ }
+    WA47_CHARTING = false;
+  }
+
+  /* watch the panel so decoration survives every internal re-render */
+  function wa47Watch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel || panel.dataset.w47mo) return;
+    panel.dataset.w47mo = '1';
+    var mo = new MutationObserver(function () { wa47Decorate(); });
+    mo.observe(panel, { childList: true, subtree: true });
+    wa47Decorate();
+  }
+  if (typeof startApp === 'function') {
+    var __sa47 = startApp;
+    startApp = async function () {
+      await __sa47();
+      try {
+        if (window.WA_NAV && WA_NAV.pages) {
+          WA_NAV.pages.forEach(function (pg) {
+            if (pg.id !== 'hrcentre') return;
+            var orig = pg.onShow;
+            pg.onShow = function (h) {
+              var sub = String(h || '').split('/')[1];
+              if (sub === 'training' || sub === 'recruitment' || sub === 'onboarding') WA47_VIEW = sub;
+              if (orig) orig(h);
+              wa47Watch();
+            };
+          });
+          if ((location.hash || '').indexOf('#hrcentre') === 0) { try { applyHash(); } catch (e2) { /* boot */ } }
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---- recruitment detail modal ---- */
+  var WA47_CAND = [], WA47_TASKS = [];
+  function wa47CandList() {
+    var host = document.getElementById('w47cl');
+    if (!host) return;
+    host.innerHTML = WA47_CAND.length ? WA47_CAND.map(function (c, i) {
+      return '<div class="w47cand"><b style="min-width:110px">' + esc(c.name) + '</b>'
+        + '<select class="w36sel" data-w47cs="' + i + '">' + CAND_STAGES.map(function (s) {
+          return '<option value="' + s + '"' + (s === c.stage ? ' selected' : '') + '>' + s + '</option>';
+        }).join('') + '</select>'
+        + '<input type="text" data-w47cno="' + i + '" placeholder="notes" value="' + esc(c.notes || '') + '" style="flex:1;min-width:120px" />'
+        + '<a class="w37edit" style="color:#b3402f !important" data-w47cx="' + i + '">remove</a></div>';
+    }).join('') : '<p class="m-sub">No candidates yet.</p>';
+  }
+  function wa47TaskList() {
+    var host = document.getElementById('w47tl');
+    if (!host) return;
+    var tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
+    host.innerHTML = WA47_TASKS.length ? WA47_TASKS.map(function (ref, i) {
+      var t = tasks.filter(function (x) { return String(x.ref) === String(ref); })[0];
+      return '<div class="w47cand"><a href="#task/' + esc(String(ref)) + '" style="flex:1;color:#2c7a66;text-decoration:none;font-weight:600" onclick="closeModal()">'
+        + esc(t ? t.title : 'Task ' + ref) + '</a>'
+        + (t && t.done ? '<span class="w46stage">done</span>' : '')
+        + '<a class="w37edit" style="color:#b3402f !important" data-w47tx="' + i + '">unlink</a></div>';
+    }).join('') : '<p class="m-sub">No linked tasks yet.</p>';
+  }
+  function wa47Detail(id) {
+    var r = wa47Req(id);
+    if (!r) return;
+    var det = wa47Det(r);
+    WA47_CAND = det.candidates.map(function (c) { return { name: c.name, stage: c.stage || 'applied', notes: c.notes || '' }; });
+    WA47_TASKS = det.task_refs.slice();
+    var hrTasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return t.department === 'hr' && !t.done; });
+    openModal('<h3>' + esc(r.title) + '</h3>'
+      + '<p class="m-sub">Stage: ' + esc(r.status) + ' &middot; opened ' + wa47Days(r.created_at) + ' days ago</p>'
+      + '<label>Job description link</label><input type="text" id="w47jd" value="' + esc(det.jd_url) + '" placeholder="https://docs.google.com/..." />'
+      + (det.jd_url ? '<p class="m-sub" style="margin:2px 0"><a href="' + esc(det.jd_url) + '" target="_blank" rel="noopener" style="color:#2c7a66">Open the job description</a></p>' : '')
+      + '<h4 style="margin:12px 0 2px;font-size:12.5px">Candidates</h4><div id="w47cl"></div>'
+      + '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">'
+      + '<input type="text" id="w47cn" placeholder="Candidate name" style="flex:1;min-width:130px" />'
+      + '<select class="w36sel" id="w47cstg">' + CAND_STAGES.map(function (s) { return '<option>' + s + '</option>'; }).join('') + '</select>'
+      + '<button class="btn ghost mini" data-w47cadd="1">Add</button></div>'
+      + '<h4 style="margin:12px 0 2px;font-size:12.5px">Linked recruitment tasks</h4><div id="w47tl"></div>'
+      + '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">'
+      + '<select class="w36sel" id="w47ts" style="max-width:280px"><option value="">Link an open HR task...</option>'
+      + hrTasks.map(function (t) { return '<option value="' + esc(String(t.ref)) + '">' + esc(t.title) + '</option>'; }).join('')
+      + '</select><button class="btn ghost mini" data-w47tadd="1">Link</button></div>'
+      + '<div class="m-actions"><button class="btn" id="w47dsv" data-w47req="' + r.id + '">Save</button> <button class="btn ghost" id="w47dcx">Cancel</button></div>');
+    wa47CandList();
+    wa47TaskList();
+    document.getElementById('w47dcx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w47dsv').addEventListener('click', async function () {
+      /* pull edited stages and notes */
+      document.querySelectorAll('[data-w47cs]').forEach(function (s) { WA47_CAND[Number(s.getAttribute('data-w47cs'))].stage = s.value; });
+      document.querySelectorAll('[data-w47cno]').forEach(function (s) { WA47_CAND[Number(s.getAttribute('data-w47cno'))].notes = s.value; });
+      var merged = {};
+      Object.keys(det.rest).forEach(function (k) { merged[k] = det.rest[k]; });
+      merged.jd_url = (document.getElementById('w47jd').value || '').trim() || null;
+      merged.candidates = WA47_CAND;
+      merged.task_refs = WA47_TASKS;
+      var res = await db.from('dept_requests').update({ details: merged, updated_at: new Date().toISOString(), updated_by: (typeof who === 'function') ? who() : 'HR' }).eq('id', r.id);
+      if (res.error) { toast('Could not save it'); return; }
+      closeModal();
+      toast('Saved');
+      await wa47Load(true);
+      var body = document.getElementById('w46body');
+      if (body) { body.querySelectorAll('.w47chart').forEach(function (c) { c.remove(); }); wa47Charts(); }
+    });
+  }
+
+  /* ---- add a section to the master onboarding ---- */
+  function wa47SecModal() {
+    openModal('<h3>Add a section to the master onboarding</h3>'
+      + '<p class="m-sub">A section is a module like WEEK 1 or 60 DAYS. It appears once it has a first step.</p>'
+      + '<label>Section name</label><input type="text" id="w47sn" list="w47sl" placeholder="90 DAYS" style="text-transform:uppercase" />'
+      + '<datalist id="w47sl"><option value="90 DAYS"></option><option value="6 MONTHS"></option><option value="WEEK 5"></option></datalist>'
+      + '<label>First step in this section</label><input type="text" id="w47fs" placeholder="What they need to do" />'
+      + '<div class="m-actions"><button class="btn" id="w47ss">Add it</button> <button class="btn ghost" id="w47sc">Cancel</button></div>');
+    document.getElementById('w47sc').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w47ss').addEventListener('click', async function () {
+      var sec = (document.getElementById('w47sn').value || '').trim().toUpperCase();
+      var fs = (document.getElementById('w47fs').value || '').trim();
+      if (!sec || !fs) { toast('Name the section and its first step'); return; }
+      var r = await db.from('onboarding_template').insert({
+        id: 'wa' + Math.random().toString(36).slice(2, 10),
+        section: sec, name: fs, sort: 10, active: true, content_pending: false
+      });
+      if (r.error) { toast('Could not add it'); return; }
+      try {
+        if (typeof WA37_WEEK_ORDER !== 'undefined' && !WA37_WEEK_ORDER[sec]) {
+          var mx = 0;
+          Object.keys(WA37_WEEK_ORDER).forEach(function (k) { if (WA37_WEEK_ORDER[k] < 9 && WA37_WEEK_ORDER[k] > mx) mx = WA37_WEEK_ORDER[k]; });
+          WA37_WEEK_ORDER[sec] = mx + 1;
+        }
+      } catch (e) { /* fine */ }
+      await wa37Load(true);
+      toast('Section added');
+      wa37Master();
+    });
+  }
+
+  /* ---- searchable training assignment ---- */
+  function wa47AssignModal(name) {
+    var rows = (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).filter(function (p) {
+      return String(p.person_name || '').toLowerCase() === name.toLowerCase();
+    });
+    var have = {};
+    rows.forEach(function (p) { have[String(p.training_id)] = p.status; });
+    var list = (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).slice();
+    list.sort(function (a, b) { return String(a.category).localeCompare(String(b.category)) || String(a.title).localeCompare(String(b.title)); });
+    var html = '<h3>Trainings for ' + esc(name) + '</h3>'
+      + '<p class="m-sub">Tick to assign, untick to remove. Completed trainings stay on their record.</p>'
+      + '<input type="search" id="w47q" placeholder="Search trainings..." style="width:100%;margin:2px 0 8px" />'
+      + '<div style="max-height:300px;overflow:auto">';
+    list.forEach(function (t) {
+      var stt = have[String(t.id)];
+      html += '<label data-w47tr="1" data-search="' + esc((t.title + ' ' + (t.category || '')).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px">'
+        + '<input type="checkbox" class="w47cb" value="' + t.id + '"' + (stt ? ' checked' : '') + (stt === 'done' ? ' disabled' : '') + ' style="width:15px;height:15px" /> '
+        + esc(t.title) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span>'
+        + (stt === 'done' ? ' <span class="w36pill done">done</span>' : '') + '</label>';
+    });
+    html += '</div><div class="m-actions"><button class="btn" id="w47asv">Save</button> <button class="btn ghost" id="w47acx">Cancel</button></div>';
+    openModal(html);
+    document.getElementById('w47q').addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('[data-w47tr]').forEach(function (l) {
+        l.style.display = !q || l.getAttribute('data-search').indexOf(q) >= 0 ? 'flex' : 'none';
+      });
+    });
+    document.getElementById('w47acx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w47asv').addEventListener('click', async function () {
+      var picked = {};
+      document.querySelectorAll('.w47cb:checked').forEach(function (c) { picked[c.value] = 1; });
+      var adds = [], removals = [];
+      Object.keys(picked).forEach(function (tid) { if (!have[tid]) adds.push(Number(tid)); });
+      Object.keys(have).forEach(function (tid) { if (!picked[tid] && have[tid] !== 'done') removals.push(Number(tid)); });
+      var by = (typeof who === 'function') ? who() : 'HR';
+      var ok = true;
+      if (adds.length) {
+        var r1 = await db.from('training_progress').upsert(adds.map(function (tid) {
+          return { training_id: tid, person_name: name, status: 'assigned', assigned_by: by, updated_at: new Date().toISOString() };
+        }), { onConflict: 'training_id,person_name' });
+        if (r1.error) ok = false;
+      }
+      for (var i = 0; i < removals.length; i++) {
+        var r2 = await db.from('training_progress').delete().eq('training_id', removals[i]).eq('person_name', name).neq('status', 'done');
+        if (r2.error) ok = false;
+      }
+      if (!ok) { toast('Some changes did not save'); return; }
+      closeModal();
+      toast('Saved: ' + adds.length + ' assigned, ' + removals.length + ' removed');
+      try { await wa36Load(true); } catch (e) { /* fine */ }
+      var body = document.getElementById('w46body');
+      if (body) { location.hash = '#hrcentre/training'; applyHash(); }
+    });
+  }
+
+  /* ================= volunteering: master program SOP + roles ================= */
+  var WA47_ROLES = [], WA47_RLOADED = false;
+  async function wa47RolesLoad(force) {
+    if (WA47_RLOADED && !force) return;
+    try {
+      var r = await db.from('sop_roles').select('*').order('name');
+      WA47_ROLES = (r && r.data) || [];
+      WA47_RLOADED = true;
+    } catch (e) { /* offline */ }
+  }
+  if (typeof waVolPaint === 'function') {
+    var __vp47 = waVolPaint;
+    waVolPaint = function () {
+      __vp47.apply(this, arguments);
+      try {
+        var chip = document.querySelector('#volunteering [data-vl="sop"]');
+        if (chip) chip.textContent = 'Master program SOP';
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  function wa47RolesHtml() {
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+    var html = '<div class="w47roles" id="w47roles"><h4>Roles: bulk assignment</h4>'
+      + '<p class="m-sub" style="margin:0 0 6px">A role bundles master steps (for example Coordinating and confirming volunteers). Pick a person on a role and every linked step gets that owner, including upcoming events.</p>';
+    if (!WA47_ROLES.length) html += '<p class="m-sub">No roles yet.</p>';
+    WA47_ROLES.forEach(function (ro) {
+      var ids = Array.isArray(ro.step_ids) ? ro.step_ids : [];
+      var owners = {};
+      (typeof WA_VOL_TMPL !== 'undefined' ? WA_VOL_TMPL : []).forEach(function (t) {
+        if (ids.indexOf(t.id) >= 0 && t.default_owner) owners[t.default_owner] = (owners[t.default_owner] || 0) + 1;
+      });
+      var cur = Object.keys(owners).sort(function (a, b) { return owners[b] - owners[a]; })[0] || '';
+      html += '<div class="w46row"><b style="min-width:150px">' + esc(ro.name) + '</b>'
+        + '<span class="w46days">' + ids.length + ' steps</span>'
+        + '<select class="w36sel" data-w47rb="' + ro.id + '"><option value="">Assign to...</option>'
+        + people.map(function (p) { return '<option value="' + esc(p.name) + '"' + (p.name === cur ? ' selected' : '') + '>' + esc(p.name) + '</option>'; }).join('')
+        + '</select>'
+        + '<a data-w47re="' + ro.id + '">edit</a><a data-w47rd="' + ro.id + '">delete</a></div>';
+    });
+    html += '<div style="margin-top:6px"><a data-w47ra="1">+ Create a role</a></div></div>';
+    return html;
+  }
+  if (typeof waVolRenderSop === 'function') {
+    var __sop47 = waVolRenderSop;
+    waVolRenderSop = function () {
+      __sop47.apply(this, arguments);
+      try {
+        if (typeof isStaff === 'function' && !isStaff()) return;
+        var intro = document.querySelector('#volunteering .vl-empty');
+        if (intro && !document.getElementById('w47roles')) {
+          intro.insertAdjacentHTML('afterend', wa47RolesHtml());
+          wa47RolesLoad(false).then(function () {
+            var host = document.getElementById('w47roles');
+            if (host) host.outerHTML = wa47RolesHtml();
+          });
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  function wa47RoleModal(rid) {
+    var ro = WA47_ROLES.filter(function (x) { return String(x.id) === String(rid); })[0];
+    var ids = ro && Array.isArray(ro.step_ids) ? ro.step_ids : [];
+    var steps = (typeof WA_VOL_TMPL !== 'undefined' ? WA_VOL_TMPL : []);
+    var html = '<h3>' + (ro ? 'Edit role' : 'Create a role') + '</h3>'
+      + '<label>Role name</label><input type="text" id="w47rn" value="' + esc(ro ? ro.name : '') + '" placeholder="Coordinating and confirming volunteers" />'
+      + '<label style="margin-top:8px;display:block">Steps in this role</label>'
+      + '<input type="search" id="w47rq" placeholder="Search the master SOP..." style="width:100%;margin:2px 0 6px" />'
+      + '<div style="max-height:280px;overflow:auto">';
+    steps.forEach(function (t) {
+      html += '<label data-w47sr="1" data-search="' + esc(((t.section || '') + ' ' + t.name).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center;padding:2px 0;font-size:12.5px">'
+        + '<input type="checkbox" class="w47rcb" value="' + esc(t.id) + '"' + (ids.indexOf(t.id) >= 0 ? ' checked' : '') + ' style="width:14px;height:14px;flex:none" /> '
+        + '<span style="color:#9aa5a1;font-size:10.5px;flex:none">' + esc(t.section || '') + '</span> ' + esc(t.name) + '</label>';
+    });
+    html += '</div><div class="m-actions"><button class="btn" id="w47rsv">Save</button> <button class="btn ghost" id="w47rcx">Cancel</button></div>';
+    openModal(html);
+    document.getElementById('w47rq').addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('[data-w47sr]').forEach(function (l) {
+        l.style.display = !q || l.getAttribute('data-search').indexOf(q) >= 0 ? 'flex' : 'none';
+      });
+    });
+    document.getElementById('w47rcx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w47rsv').addEventListener('click', async function () {
+      var nm = (document.getElementById('w47rn').value || '').trim();
+      if (!nm) { toast('Name the role'); return; }
+      var picked = [];
+      document.querySelectorAll('.w47rcb:checked').forEach(function (c) { picked.push(c.value); });
+      var patch = { name: nm, step_ids: picked, updated_at: new Date().toISOString(), updated_by: (typeof who === 'function') ? who() : 'staff' };
+      var r;
+      if (ro) r = await db.from('sop_roles').update(patch).eq('id', ro.id);
+      else r = await db.from('sop_roles').insert(patch);
+      if (r.error) { toast('Could not save the role'); return; }
+      closeModal();
+      toast('Role saved (' + picked.length + ' steps)');
+      await wa47RolesLoad(true);
+      var host = document.getElementById('w47roles');
+      if (host) host.outerHTML = wa47RolesHtml();
+    });
+  }
+
+  /* ================= agendas grouped by department ================= */
+  if (typeof waRenderAgendasPage === 'function') {
+    var __ag47 = waRenderAgendasPage;
+    waRenderAgendasPage = async function () {
+      await __ag47.apply(this, arguments);
+      try {
+        var fd = (document.getElementById('agFilterDept') || {}).value || 'all';
+        if (fd !== 'all') return;
+        var body = document.getElementById('agPageBody');
+        if (!body) return;
+        var rows = Array.prototype.slice.call(body.querySelectorAll('.ag-row'));
+        if (rows.length < 2) return;
+        var byId = {};
+        (typeof AGENDAS_CACHE !== 'undefined' ? AGENDAS_CACHE : []).forEach(function (a) { byId[String(a.id)] = a; });
+        var groups = {};
+        rows.forEach(function (row) {
+          var a = byId[String(row.getAttribute('data-ag'))];
+          var g = (!a || (a.scope || 'department') !== 'department') ? '__exec' : (a.department || '__other');
+          (groups[g] = groups[g] || []).push({ row: row, a: a });
+        });
+        var order = ['__exec'].concat(typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).concat(['__other']);
+        var stOrder = { draft: 0, final: 1, done: 2 };
+        var frag = document.createDocumentFragment();
+        order.forEach(function (g) {
+          if (!groups[g] || !groups[g].length) return;
+          var label = g === '__exec' ? 'Executive and leaders meetings' : g === '__other' ? 'Other' : ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[g]) || g);
+          var color = g === '__exec' ? '#8455ff' : ((typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[g]) || '#6f6b64');
+          var h = document.createElement('div');
+          h.className = 'w47agh';
+          h.style.background = color;
+          h.textContent = label + ' (' + groups[g].length + ')';
+          frag.appendChild(h);
+          groups[g].sort(function (x, y) {
+            var sx = x.a ? (stOrder[x.a.status] !== undefined ? stOrder[x.a.status] : 1) : 1;
+            var sy = y.a ? (stOrder[y.a.status] !== undefined ? stOrder[y.a.status] : 1) : 1;
+            return sx - sy || ((y.a ? y.a.id : 0) - (x.a ? x.a.id : 0));
+          });
+          groups[g].forEach(function (x) { frag.appendChild(x.row); });
+        });
+        body.insertBefore(frag, body.firstChild);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ================= wiring ================= */
+  if (!document.body.dataset.wa47Wired) {
+    document.body.dataset.wa47Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var v = e.target.closest && e.target.closest('.w47tab');
+      if (v) {
+        WA47_VIEW = v.getAttribute('data-w47v');
+        try { history.replaceState(null, '', '#hrcentre/' + WA47_VIEW); } catch (e2) { /* fine */ }
+        wa47Apply();
+        return;
+      }
+      var op = e.target.closest && e.target.closest('[data-w47open]');
+      if (op) { if (wa47IsHr()) wa47Detail(op.getAttribute('data-w47open')); return; }
+      var as = e.target.closest && e.target.closest('[data-w47as]');
+      if (as) { if (wa47IsHr()) wa47AssignModal(as.getAttribute('data-w47as')); return; }
+      var sc = e.target.closest && e.target.closest('[data-w47sec]');
+      if (sc) { if (wa47IsHr()) wa47SecModal(); return; }
+      var ca = e.target.closest && e.target.closest('[data-w47cadd]');
+      if (ca) {
+        var nm = (document.getElementById('w47cn').value || '').trim();
+        if (!nm) { toast('Name the candidate'); return; }
+        WA47_CAND.push({ name: nm, stage: document.getElementById('w47cstg').value, notes: '' });
+        document.getElementById('w47cn').value = '';
+        wa47CandList();
+        return;
+      }
+      var cx = e.target.closest && e.target.closest('[data-w47cx]');
+      if (cx) {
+        document.querySelectorAll('[data-w47cs]').forEach(function (s) { WA47_CAND[Number(s.getAttribute('data-w47cs'))].stage = s.value; });
+        document.querySelectorAll('[data-w47cno]').forEach(function (s) { WA47_CAND[Number(s.getAttribute('data-w47cno'))].notes = s.value; });
+        WA47_CAND.splice(Number(cx.getAttribute('data-w47cx')), 1);
+        wa47CandList();
+        return;
+      }
+      var ta = e.target.closest && e.target.closest('[data-w47tadd]');
+      if (ta) {
+        var sel = document.getElementById('w47ts');
+        if (sel && sel.value && WA47_TASKS.indexOf(sel.value) < 0) { WA47_TASKS.push(sel.value); wa47TaskList(); }
+        return;
+      }
+      var tx = e.target.closest && e.target.closest('[data-w47tx]');
+      if (tx) { WA47_TASKS.splice(Number(tx.getAttribute('data-w47tx')), 1); wa47TaskList(); return; }
+      var ra = e.target.closest && e.target.closest('[data-w47ra]');
+      if (ra) { if (typeof isStaff === 'function' && isStaff()) wa47RoleModal(null); return; }
+      var re = e.target.closest && e.target.closest('[data-w47re]');
+      if (re) { if (typeof isStaff === 'function' && isStaff()) wa47RoleModal(re.getAttribute('data-w47re')); return; }
+      var rd = e.target.closest && e.target.closest('[data-w47rd]');
+      if (rd) {
+        if (!(typeof isStaff === 'function' && isStaff())) return;
+        if (!confirm('Delete this role? Step owners stay as they are.')) return;
+        db.from('sop_roles').delete().eq('id', Number(rd.getAttribute('data-w47rd'))).then(async function (r) {
+          if (r.error) { toast('Could not delete it'); return; }
+          await wa47RolesLoad(true);
+          var host = document.getElementById('w47roles');
+          if (host) host.outerHTML = wa47RolesHtml();
+          toast('Role deleted');
+        });
+        return;
+      }
+    });
+    document.body.addEventListener('change', async function (e) {
+      var rb = e.target.closest && e.target.closest('[data-w47rb]');
+      if (rb && rb.value) {
+        if (!(typeof isStaff === 'function' && isStaff())) return;
+        var ro = WA47_ROLES.filter(function (x) { return String(x.id) === String(rb.getAttribute('data-w47rb')); })[0];
+        if (!ro) return;
+        var ids = Array.isArray(ro.step_ids) ? ro.step_ids : [];
+        if (!ids.length) { toast('This role has no steps yet'); return; }
+        var r = await db.from('sop_template').update({ default_owner: rb.value, updated_at: new Date().toISOString() }).in('id', ids);
+        if (r.error) { toast('Could not assign the role'); return; }
+        try {
+          (typeof WA_VOL_TMPL !== 'undefined' ? WA_VOL_TMPL : []).forEach(function (t) {
+            if (ids.indexOf(t.id) >= 0) t.default_owner = rb.value;
+          });
+        } catch (e2) { /* fine */ }
+        toast(rb.value + ' now owns ' + ids.length + ' steps (upcoming events updated)');
+        try { waVolRenderSop(); } catch (e3) { /* fine */ }
+        return;
+      }
+    });
+  }
+})();

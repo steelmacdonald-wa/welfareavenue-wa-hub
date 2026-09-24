@@ -1,0 +1,173 @@
+/* =====================================================================
+   WA v59 roles on the steps themselves
+   (03/08/26)
+   Steps that belong to a role (sop_roles) now show it inline, in both
+   the Master program SOP and every upcoming event checklist: a role
+   chip plus a dropdown of everyone in the org. Picking a person
+   assigns the WHOLE role: every linked step gets that owner in the
+   master SOP (sop_template.default_owner) AND in every planned
+   upcoming event (sop_event_steps.owner), in one action. The roles
+   block dropdown at the top of the SOP now also pushes to upcoming
+   events (v47 only updated the master).
+   ===================================================================== */
+(function () {
+  if (window.__wa59) return;
+  window.__wa59 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa59css';
+  st.textContent = '' +
+    '.w59role{display:inline-block;background:rgba(132,85,255,.12);color:#5b32c7;border-radius:999px;padding:1px 9px;' +
+    'font-size:10.5px;font-weight:800;margin-right:6px;vertical-align:middle;}' +
+    '.w59sel{max-width:170px;font-size:11.5px;}';
+  document.head.appendChild(st);
+
+  var WA59 = { roles: [], loaded: false };
+  async function wa59Load(force) {
+    if (WA59.loaded && !force) return;
+    try {
+      var r = await db.from('sop_roles').select('*').order('name');
+      WA59.roles = (r && r.data) || [];
+      WA59.loaded = true;
+    } catch (e) { /* offline */ }
+  }
+  function wa59RoleOf(tid) {
+    for (var i = 0; i < WA59.roles.length; i++) {
+      var ids = Array.isArray(WA59.roles[i].step_ids) ? WA59.roles[i].step_ids : [];
+      if (ids.indexOf(tid) >= 0) return WA59.roles[i];
+    }
+    return null;
+  }
+  function wa59Tmpl(row) {
+    var ds = String(row.getAttribute('data-vlstep') || '');
+    if (ds.indexOf('tmpl-') === 0) return ds.slice(5);
+    var det = (typeof WA_VOL_DETAIL !== 'undefined') ? WA_VOL_DETAIL : null;
+    if (det && det.steps) {
+      for (var i = 0; i < det.steps.length; i++) {
+        if (String(det.steps[i].id) === ds) return det.steps[i].template_id;
+      }
+    }
+    return null;
+  }
+  function wa59Decorate() {
+    try {
+      if (!(typeof isStaff === 'function' && isStaff())) return;
+      if (!WA59.roles.length) return;
+      var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+      document.querySelectorAll('#volunteering .vl-step').forEach(function (row) {
+        if (row.querySelector('.w59role')) return;
+        var tid = wa59Tmpl(row);
+        if (!tid) return;
+        var role = wa59RoleOf(tid);
+        if (!role) return;
+        var meta = row.querySelector('.vl-meta');
+        if (!meta) return;
+        var ownerIn = meta.querySelector('[data-vlowner]');
+        var cur = ownerIn ? String(ownerIn.value || '').trim() : '';
+        var html = '<span class="w59role" title="Assigning this role sets the owner on every linked step, master SOP and all upcoming events">' + esc(role.name) + '</span>'
+          + '<select class="vl-in w59sel" data-w59r="' + role.id + '"><option value="">assign the role to...</option>'
+          + people.map(function (p) {
+            return '<option value="' + esc(p.name) + '"' + (p.name === cur ? ' selected' : '') + '>' + esc(p.name) + '</option>';
+          }).join('')
+          + '</select> ';
+        meta.insertAdjacentHTML('afterbegin', html);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  async function wa59Events(ids, name) {
+    /* push the owner into every planned upcoming event */
+    var today = new Date();
+    var iso = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+    var evs = null;
+    try { evs = await db.from('volunteer_events').select('id').eq('status', 'planned').gte('event_date', iso); } catch (e) { /* offline */ }
+    var evIds = ((evs && evs.data) || []).map(function (x) { return x.id; });
+    if (!evIds.length) return 0;
+    var r = await db.from('sop_event_steps').update({ owner: name }).in('event_id', evIds).in('template_id', ids);
+    if (r.error) return -1;
+    try {
+      if (typeof WA_VOL_DETAIL !== 'undefined' && WA_VOL_DETAIL && WA_VOL_DETAIL.steps) {
+        WA_VOL_DETAIL.steps.forEach(function (s) { if (ids.indexOf(s.template_id) >= 0) s.owner = name; });
+      }
+    } catch (e) { /* fine */ }
+    return evIds.length;
+  }
+  async function wa59Assign(roleId, name, el) {
+    var role = WA59.roles.filter(function (x) { return String(x.id) === String(roleId); })[0];
+    if (!role || !name) return;
+    var ids = Array.isArray(role.step_ids) ? role.step_ids : [];
+    if (!ids.length) { toast('This role has no steps yet'); return; }
+    if (el) el.disabled = true;
+    var r = await db.from('sop_template').update({ default_owner: name, updated_at: new Date().toISOString() }).in('id', ids);
+    if (r.error) { if (el) el.disabled = false; toast('Could not assign the role'); return; }
+    var evN = await wa59Events(ids, name);
+    try {
+      (typeof WA_VOL_TMPL !== 'undefined' ? WA_VOL_TMPL : []).forEach(function (t) {
+        if (ids.indexOf(t.id) >= 0) t.default_owner = name;
+      });
+    } catch (e) { /* fine */ }
+    try {
+      await db.from('change_log').insert({
+        entity_type: 'sop_role', entity_id: String(role.id), field: 'assigned',
+        old_value: null, new_value: role.name + ' -> ' + name + ' (' + ids.length + ' steps, ' + Math.max(0, evN) + ' upcoming events)',
+        changed_by: (typeof who === 'function') ? who() : 'staff'
+      });
+    } catch (e) { /* log only */ }
+    if (el) el.disabled = false;
+    toast(name + ' now owns "' + role.name + '": ' + ids.length + ' steps'
+      + (evN > 0 ? ' across ' + evN + ' upcoming event' + (evN === 1 ? '' : 's') : '') + (evN === -1 ? ' (events did not update)' : ''));
+    try {
+      if (typeof WA_VOL_DETAIL !== 'undefined' && WA_VOL_DETAIL && typeof WA_VOL_EVENT !== 'undefined' && WA_VOL_EVENT && WA_VOL_DETAIL.id === WA_VOL_EVENT) {
+        waVolRenderEvent();
+      } else if (typeof waVolRenderSop === 'function') {
+        waVolRenderSop();
+      }
+    } catch (e) { /* fine */ }
+    setTimeout(wa59Decorate, 80);
+  }
+
+  if (!document.body.dataset.wa59Wired) {
+    document.body.dataset.wa59Wired = '1';
+    document.body.addEventListener('change', function (e) {
+      var sel = e.target.closest && e.target.closest('[data-w59r]');
+      if (sel && sel.value) {
+        if (typeof isStaff === 'function' && isStaff()) wa59Assign(sel.getAttribute('data-w59r'), sel.value, sel);
+        return;
+      }
+      /* the roles block at the top of the SOP (v47) only updates the
+         master; ride along and push to upcoming events too */
+      var rb = e.target.closest && e.target.closest('[data-w47rb]');
+      if (rb && rb.value && typeof isStaff === 'function' && isStaff()) {
+        wa59Load(false).then(function () {
+          var role = WA59.roles.filter(function (x) { return String(x.id) === String(rb.getAttribute('data-w47rb')); })[0];
+          if (!role) return;
+          var ids = Array.isArray(role.step_ids) ? role.step_ids : [];
+          if (ids.length) wa59Events(ids, rb.value);
+        });
+      }
+    });
+  }
+
+  if (typeof waVolRenderSop === 'function') {
+    var __sop59 = waVolRenderSop;
+    waVolRenderSop = function () {
+      __sop59.apply(this, arguments);
+      wa59Load(false).then(function () { setTimeout(wa59Decorate, 60); });
+    };
+  }
+  if (typeof waVolRenderEvent === 'function') {
+    var __ev59 = waVolRenderEvent;
+    waVolRenderEvent = function () {
+      __ev59.apply(this, arguments);
+      wa59Load(false).then(function () { setTimeout(wa59Decorate, 60); });
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa59 = startApp;
+    startApp = async function () {
+      await __sa59();
+      try { await wa59Load(false); } catch (e) { /* non-fatal */ }
+      try { wa59Decorate(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

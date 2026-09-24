@@ -1,0 +1,190 @@
+/* =====================================================================
+   WA v58 training page order + quiet completed onboardings
+   (03/08/26)
+   1. Order: on the Training page your onboarding comes first, your
+      assigned trainings sit right under it, and the full catalog of
+      trainings and paths to choose from stays below.
+   2. Once your onboarding is COMPLETE the whole checklist minimizes to
+      a single "complete" bar (with a view link). The exception: when
+      HR edits a step in the master onboarding after you finished, only
+      that changed step surfaces, with its new instructions and a
+      confirm button ("Got it, I am up to date"). Confirmations are
+      stored per person per change (public.onboarding_update_acks);
+      master edits stamp onboarding_template.updated_at via trigger.
+   ===================================================================== */
+(function () {
+  if (window.__wa58) return;
+  window.__wa58 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa58css';
+  st.textContent = '' +
+    '#w58bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:10px 14px;margin:6px 0 4px;}' +
+    '#w58bar b{color:#1f5f4f;font-size:13.5px;}' +
+    '#w58bar a{cursor:pointer;color:#2c7a66;font-size:12px;font-weight:600;}' +
+    '.w58upd{background:rgba(212,161,60,.1);border:1px solid rgba(212,161,60,.35);border-radius:12px;padding:10px 14px;margin:8px 0 4px;}' +
+    '.w58upd h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#8a6414;}' +
+    '.w58st{padding:7px 0;border-top:1px solid rgba(212,161,60,.25);}' +
+    '.w58st:first-of-type{border-top:none;}' +
+    '.w58st .nm{font-size:13.5px;font-weight:700;color:#14302b;}' +
+    '.w58st .sec{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#8a6414;margin-left:8px;}' +
+    '.w58st .ds{font-size:12.5px;color:#5b6b66;margin:3px 0 6px;line-height:1.5;}' +
+    '[data-w58ack]{display:inline-block;background:#1f5f4f;color:#fff !important;border-radius:999px;padding:3px 13px;' +
+    'font-size:11.5px;cursor:pointer;font-weight:700;line-height:1.5;border:none;}' +
+    '[data-w58ack]:hover{background:#2c7a66;}' +
+    '.w58hid{display:none !important;}';
+  document.head.appendChild(st);
+
+  /* ---- 1. order: onboarding, then your trainings, then the catalog ---- */
+  function wa58Order() {
+    try {
+      var body = document.getElementById('w36body');
+      if (!body) return;
+      var me = body.querySelector('.w44me');
+      var onb = body.querySelector('.w36onb');
+      if (!me || !onb) return;
+      /* if "Your training" currently sits above onboarding, move it below */
+      if (me.compareDocumentPosition(onb) & Node.DOCUMENT_POSITION_FOLLOWING) {
+        onb.insertAdjacentElement('afterend', me);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---- 2. minimized completed onboarding + update confirmations ---- */
+  var WA58 = { acks: {}, ackedFor: null };
+  async function wa58LoadAcks(onbId) {
+    try {
+      var r = await db.from('onboarding_update_acks').select('*').eq('onboarding_id', Number(onbId));
+      WA58.acks = {};
+      ((r && r.data) || []).forEach(function (a) {
+        var k = String(a.template_id);
+        if (!WA58.acks[k] || WA58.acks[k] < a.template_updated_at) WA58.acks[k] = a.template_updated_at;
+      });
+      WA58.ackedFor = onbId;
+    } catch (e) { /* offline */ }
+  }
+  function wa58Pending(mine) {
+    if (!mine || !mine.completed_at || typeof WA37 === 'undefined') return [];
+    return (WA37.tmpl || []).filter(function (t) {
+      if (!t.active || !t.updated_at) return false;
+      if (String(t.updated_at) <= String(mine.completed_at)) return false;
+      var ack = WA58.acks[String(t.id)];
+      return !(ack && String(ack) >= String(t.updated_at));
+    });
+  }
+  async function wa58Onb() {
+    try {
+      var host = document.querySelector('#training .w36onb');
+      if (!host || host.querySelector('#w58bar')) return;
+      var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+      if (!me || typeof WA37 === 'undefined') return;
+      var mine = (WA37.onbs || []).filter(function (o) {
+        return o.status === 'completed' && String(o.person_name || '').toLowerCase() === String(me.name || '').toLowerCase();
+      })[0];
+      if (!mine) return;
+      if (WA58.ackedFor !== mine.id) await wa58LoadAcks(mine.id);
+      if (host.querySelector('#w58bar')) return;
+      /* hide the checklist, the intro line and the progress row */
+      Array.prototype.slice.call(host.children).forEach(function (ch) {
+        var isWeek = ch.classList && ch.classList.contains('w37week');
+        var isIntro = ch.tagName === 'P' && ch.classList.contains('read');
+        var isProgress = false;
+        try { isProgress = !!ch.querySelector(':scope > .w37bar'); } catch (e2) { /* old browsers */ }
+        if (isWeek || isIntro || isProgress) ch.classList.add('w58hid');
+      });
+      var pend = wa58Pending(mine);
+      var html = '<div id="w58bar"><b>Onboarding complete</b>'
+        + '<span style="font-size:12px;color:#7b8a86">finished ' + esc(String(mine.completed_at || '').slice(0, 10)) + '</span>'
+        + '<a data-w58show="1">View the checklist</a></div>';
+      if (pend.length) {
+        html += '<div class="w58upd"><h4>Updated since you finished (' + pend.length + ')</h4>'
+          + '<p class="m-sub" style="margin:0 0 4px">HR changed these onboarding steps. Read each one and confirm you are up to date.</p>'
+          + pend.map(function (t) {
+            return '<div class="w58st" data-w58row="' + esc(String(t.id)) + '"><span class="nm">' + esc(t.name) + '</span><span class="sec">' + esc(t.section || '') + '</span>'
+              + (t.description ? '<div class="ds">' + (typeof wa37Md === 'function' ? wa37Md(t.description) : esc(t.description)) + '</div>' : '<div class="ds"></div>')
+              + '<button data-w58ack="' + esc(String(t.id)) + '" data-w58onb="' + mine.id + '" data-w58up="' + esc(String(t.updated_at)) + '">Got it, I am up to date</button></div>';
+          }).join('')
+          + '</div>';
+      }
+      var h3 = host.querySelector('h3');
+      if (h3) h3.insertAdjacentHTML('afterend', html);
+      else host.insertAdjacentHTML('afterbegin', html);
+    } catch (e) { /* non-fatal */ }
+  }
+  async function wa58Ack(btn) {
+    var tid = btn.getAttribute('data-w58ack');
+    var onbId = btn.getAttribute('data-w58onb');
+    var up = btn.getAttribute('data-w58up');
+    btn.disabled = true;
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var r = await db.from('onboarding_update_acks').insert({
+      onboarding_id: Number(onbId), template_id: tid, template_updated_at: up, acked_by: by
+    });
+    if (r.error) { btn.disabled = false; toast('Could not save the confirmation'); return; }
+    WA58.acks[String(tid)] = up;
+    toast('Noted, thanks');
+    var row = document.querySelector('[data-w58row="' + tid + '"]');
+    if (row) row.remove();
+    var box = document.querySelector('.w58upd');
+    if (box && !box.querySelector('.w58st')) box.remove();
+  }
+
+  if (!document.body.dataset.wa58Wired) {
+    document.body.dataset.wa58Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var sh = e.target.closest && e.target.closest('[data-w58show]');
+      if (sh) {
+        var host = document.querySelector('#training .w36onb');
+        if (!host) return;
+        var hidden = host.querySelectorAll('.w58hid');
+        if (hidden.length) {
+          hidden.forEach(function (x) { x.classList.remove('w58hid'); x.setAttribute('data-w58was', '1'); });
+          sh.textContent = 'Hide the checklist';
+        } else {
+          host.querySelectorAll('[data-w58was]').forEach(function (x) { x.classList.add('w58hid'); });
+          sh.textContent = 'View the checklist';
+        }
+        return;
+      }
+      var ak = e.target.closest && e.target.closest('[data-w58ack]');
+      if (ak) { wa58Ack(ak); return; }
+    });
+  }
+
+  function wa58Apply() {
+    wa58Order();
+    wa58Onb();
+  }
+  if (typeof wa37Mount === 'function') {
+    var __mt58 = wa37Mount;
+    wa37Mount = async function () {
+      var out = await __mt58.apply(this, arguments);
+      try { wa58Apply(); } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  function wa58Watch() {
+    var panel = document.getElementById('training');
+    if (!panel) return;
+    if (!panel.dataset.w58mo) {
+      panel.dataset.w58mo = '1';
+      var mo = new MutationObserver(function () { wa58Order(); });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    wa58Apply();
+  }
+  if (typeof showPanel === 'function') {
+    var __sp58 = showPanel;
+    showPanel = function (id) {
+      __sp58(id);
+      try { if (id === 'training') setTimeout(wa58Watch, 250); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa58 = startApp;
+    startApp = async function () {
+      await __sa58();
+      try { wa58Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

@@ -1,0 +1,210 @@
+/* =====================================================================
+   WA v108 branded onboarding email builder (07/08/26)
+   =====================================================================
+   Steel: "as easy as putting in the right information into a form and
+   it inputs information into an html wa branded email welcome."
+   The HR welcome kit's email section gains a small form (first name,
+   last name, job title, start date, prep sessions, onboarding lead,
+   WA email, sender). One button renders BOTH:
+   - the plain-text email into the kit's existing textarea (so the
+     existing Copy and mail-app buttons keep working, mailto refreshed),
+   - a Welfare Avenue branded HTML email (green #003F38 header with the
+     wordmark, white card, green step numbers) with Copy as rich text
+     (paste straight into Gmail) and Download .html.
+   Body copy comes from app_config 'onboarding_email_template' (Steel's
+   Google Doc template, Drive id 16PrDJkT0A1A60vXr--aUbFHUsDGiyJKj...),
+   so wording edits are a config change, not a rebuild. Wave46's kit is
+   untouched: this decorates the open modal (no removals).
+   ===================================================================== */
+(function () {
+  if (window.__wa108) return; window.__wa108 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w108f{background:#fbfbfd;border:1px solid #eef0f4;border-radius:10px;padding:10px 12px;margin:0 0 10px;}' +
+    '#w108f .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
+    '#w108f label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#8592a3);margin:0 0 2px;}' +
+    '#w108f input{width:100%;box-sizing:border-box;padding:6px 9px;font-size:12.5px;}' +
+    '#w108f .wide{grid-column:1 / -1;}' +
+    '#w108prev{border:1px solid #e7e9f0;border-radius:10px;margin-top:10px;max-height:280px;overflow-y:auto;}';
+  document.head.appendChild(css);
+
+  var W108_TPL = null;
+  async function w108Tpl() {
+    if (W108_TPL !== null) return W108_TPL;
+    try {
+      var r = await db.from('app_config').select('value').eq('key', 'onboarding_email_template');
+      W108_TPL = (r.data && r.data[0] && r.data[0].value) || '';
+    } catch (e) { W108_TPL = ''; }
+    return W108_TPL;
+  }
+  function w108Fill(tpl, v) {
+    return tpl
+      .replace(/\{\{first_name\}\}/g, v.first || '[FIRST NAME]')
+      .replace(/\{\{job_title\}\}/g, v.title || '[JOB TITLE]')
+      .replace(/\{\{start_date\}\}/g, v.start || '[START DATE]')
+      .replace(/\{\{prep_day\}\}/g, v.prep || '[PREP DAY]')
+      .replace(/\{\{session_1\}\}/g, v.s1 || '[SESSION 1]')
+      .replace(/\{\{session_2\}\}/g, v.s2 || '[SESSION 2]')
+      .replace(/\{\{wa_email\}\}/g, v.email || '[first.last@welfareavenue.com]')
+      .replace(/\{\{sender_name\}\}/g, v.sender || 'The Welfare Avenue team');
+  }
+  function w108Date(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || '')) return '';
+    var d = new Date(iso + 'T12:00:00');
+    var names = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var n = d.getDate();
+    var suf = n % 10 === 1 && n !== 11 ? 'st' : (n % 10 === 2 && n !== 12 ? 'nd' : (n % 10 === 3 && n !== 13 ? 'rd' : 'th'));
+    return days[d.getDay()] + ', ' + names[d.getMonth()] + ' ' + n + suf + ', ' + d.getFullYear();
+  }
+  /* branded HTML email: table layout + inline styles for mail clients */
+  function w108Html(v) {
+    var G = '#003F38', ACC = '#2c7a66';
+    var step = function (n, title, body) {
+      return '<tr><td style="vertical-align:top;padding:10px 12px 10px 0;width:34px">'
+        + '<div style="width:28px;height:28px;border-radius:999px;background:' + ACC + ';color:#ffffff;font-weight:bold;text-align:center;line-height:28px;font-family:Arial,sans-serif;font-size:14px">' + n + '</div></td>'
+        + '<td style="padding:8px 0"><p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:14px;color:#243029"><b>' + title + '</b></p>'
+        + '<p style="margin:0;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#4a5551">' + body + '</p></td></tr>';
+    };
+    var a = function (url, label) { return '<a href="' + url + '" style="color:' + ACC + '">' + label + '</a>'; };
+    return '<!doctype html><html><body style="margin:0;padding:0;background:#f5f5f9">'
+      + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f9;padding:24px 0"><tr><td align="center">'
+      + '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">'
+      + '<tr><td style="background:' + G + ';border-radius:12px 12px 0 0;padding:26px 32px;text-align:center">'
+      + '<div style="font-family:Arial Black,Arial,sans-serif;font-weight:900;font-size:26px;letter-spacing:2px;color:#f5f5f3;line-height:1.15">WELFARE<br>AVENUE</div></td></tr>'
+      + '<tr><td style="background:#ffffff;padding:28px 32px;border-radius:0 0 12px 12px">'
+      + '<p style="font-family:Arial,sans-serif;font-size:15px;color:#243029;margin:0 0 14px">Dear <b>' + esc(v.first || '[FIRST NAME]') + '</b>,</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#243029;margin:0 0 12px">Congratulations and welcome to the team at <b>Welfare Avenue</b>! We are excited you have accepted the <b>' + esc(v.title || '[JOB TITLE]') + '</b> role within our organization.</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#243029;margin:0 0 6px">Your official start date is <b>' + esc(v.start || '[START DATE]') + '</b>. Before then, we will meet on <b>' + esc(v.prep || '[PREP DAY]') + '</b> for two short sessions:</p>'
+      + '<ul style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.7;color:#243029;margin:0 0 16px 0;padding-left:22px">'
+      + '<li>' + esc(v.s1 || '[SESSION 1]') + '</li><li>' + esc(v.s2 || '[SESSION 2]') + '</li></ul>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:0 0 6px"><b>To get started, please complete these steps:</b></p>'
+      + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%">'
+      + step(1, 'Activate your Welfare Avenue Google account',
+          a('https://www.loom.com/share/welfare-avenue-google-setup', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
+          + 'Email: <b>' + esc(v.email || '[first.last@welfareavenue.com]') + '</b><br>Temporary password (change after first login): <b>Welfare Avenue</b>')
+      + step(2, 'Accept your platform invitations',
+          'Each invite arrives in your new <b>' + esc(v.email || 'Welfare Avenue') + '</b> inbox: '
+          + a('https://slack.com/help/articles/212675257-Join-a-Slack-workspace', 'Slack') + ', '
+          + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ', '
+          + a('https://www.canva.com/help/join-team/', 'Canva') + ', '
+          + a('https://support.keela.co/hc/en-us/articles/360042989711-Adding-and-Editing-Users', 'Keela') + ' and '
+          + a('https://help.clickup.com/hc/en-us/articles/6303456942231-Join-a-Workspace', 'ClickUp') + '. Each link shows how to join when invited.')
+      + step(3, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
+      + step(4, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
+      + '</table>'
+      + '<p style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.65;color:#4a5551;margin:14px 0 0">If you run into any technical issues or have questions, please reach out; we are here to make your onboarding smooth and welcoming.</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:16px 0 0">Looking forward to seeing all the great work you will do with us!</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:14px 0 0">Warmly,<br><b>' + esc(v.sender || 'The Welfare Avenue team') + '</b><br>Welfare Avenue</p>'
+      + '</td></tr>'
+      + '<tr><td style="padding:14px 8px;text-align:center;font-family:Arial,sans-serif;font-size:11px;color:#8592a3">Welfare Avenue, Montreal and Toronto &middot; welfareavenue.com</td></tr>'
+      + '</table></td></tr></table></body></html>';
+  }
+  function w108Vals() {
+    var g = function (id) { return ((document.getElementById(id) || {}).value || '').trim(); };
+    var first = g('w108first'), last = g('w108last');
+    var email = g('w108mail');
+    if (!email && first && last) email = (first + '.' + last).toLowerCase().replace(/[^a-z.\-]/g, '') + '@welfareavenue.com';
+    return {
+      first: first, last: last, title: g('w108title'),
+      start: w108Date(g('w108start')) || g('w108start'),
+      prep: g('w108prep'), s1: g('w108s1'), s2: g('w108s2'),
+      lead: g('w108lead'), email: email,
+      sender: (typeof USER !== 'undefined' && USER && USER.name) || ''
+    };
+  }
+  async function w108Build() {
+    var v = w108Vals();
+    var tpl = await w108Tpl();
+    /* plain text into the kit textarea (existing copy button keeps working) */
+    var ta = document.getElementById('w46em');
+    if (ta && tpl) {
+      ta.value = w108Fill(tpl, v);
+      var subj = 'Welcome to Welfare Avenue! Your Next Steps';
+      var mail = document.querySelector('#modalBox a[href^="mailto:"]');
+      if (mail) mail.setAttribute('href', 'mailto:' + (v.email && v.email.indexOf('[') < 0 ? '' : '') + '?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(ta.value));
+    }
+    var html = w108Html(v);
+    window.__w108html = html;
+    var prev = document.getElementById('w108prev');
+    if (prev) {
+      prev.innerHTML = '<iframe id="w108if" style="width:100%;height:270px;border:0" sandbox=""></iframe>';
+      var f = document.getElementById('w108if');
+      f.setAttribute('srcdoc', html);
+    }
+    var acts = document.getElementById('w108acts');
+    if (acts) acts.style.display = '';
+    toast('Email built: plain text updated, branded version below');
+  }
+  async function w108CopyHtml() {
+    var html = window.__w108html || '';
+    if (!html) return;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        var item = new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([(document.getElementById('w46em') || {}).value || ''], { type: 'text/plain' })
+        });
+        await navigator.clipboard.write([item]);
+        toast('Branded email copied: paste into Gmail');
+        return;
+      }
+    } catch (e) { /* fall through */ }
+    try { await navigator.clipboard.writeText(html); toast('HTML source copied'); } catch (e2) { toast('Copy failed'); }
+  }
+  function w108Download() {
+    var html = window.__w108html || '';
+    if (!html) return;
+    var blob = new Blob([html], { type: 'text/html' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'welcome-email.html';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 3000);
+  }
+
+  function w108Inject() {
+    var ta = document.getElementById('w46em');
+    if (!ta || document.getElementById('w108f')) return;
+    /* first name from the kit heading: "Welcome kit for <name>" */
+    var h3 = document.querySelector('#modalBox h3');
+    var m = /Welcome kit for\s+(.+)$/.exec((h3 && h3.textContent) || '');
+    var full = (m && m[1] || '').trim();
+    var first = full.split(/\s+/)[0] || '';
+    var last = full.split(/\s+/).slice(1).join(' ');
+    var box = document.createElement('div');
+    box.id = 'w108f';
+    box.innerHTML =
+      '<label style="font-size:11px;color:#1f5f4f;margin-bottom:6px">Fill the form, press Build: the plain email below updates and a branded version appears.</label>' +
+      '<div class="grid">' +
+      '<div><label>First name</label><input id="w108first" value="' + esc(first) + '" /></div>' +
+      '<div><label>Last name</label><input id="w108last" value="' + esc(last) + '" /></div>' +
+      '<div><label>Job title</label><input id="w108title" placeholder="Volunteer Coordinator" /></div>' +
+      '<div><label>Start date</label><input id="w108start" type="date" /></div>' +
+      '<div><label>Prep day</label><input id="w108prep" placeholder="Friday, May 15th" /></div>' +
+      '<div><label>Onboarding lead</label><input id="w108lead" placeholder="Amanda" /></div>' +
+      '<div class="wide"><label>Session 1</label><input id="w108s1" placeholder="6:30 PM, team meeting" /></div>' +
+      '<div class="wide"><label>Session 2</label><input id="w108s2" placeholder="7:30 PM, onboarding session (software access, job description)" /></div>' +
+      '<div class="wide"><label>WA email (blank = first.last@welfareavenue.com)</label><input id="w108mail" placeholder="auto" /></div>' +
+      '</div>' +
+      '<div style="margin-top:8px"><button class="btn mini" id="w108go">Build the email</button> ' +
+      '<span id="w108acts" style="display:none"><button class="btn ghost mini" id="w108copy">Copy branded email</button> ' +
+      '<button class="btn ghost mini" id="w108dl">Download .html</button></span></div>' +
+      '<div id="w108prev" style="display:none"></div>';
+    ta.parentElement.insertBefore(box, ta);
+    document.getElementById('w108go').addEventListener('click', function () {
+      document.getElementById('w108prev').style.display = '';
+      w108Build();
+    });
+    document.getElementById('w108copy').addEventListener('click', w108CopyHtml);
+    document.getElementById('w108dl').addEventListener('click', w108Download);
+  }
+
+  try {
+    new MutationObserver(function () {
+      try { w108Inject(); } catch (e) { /* non-fatal */ }
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* kit keeps its classic email */ }
+})();

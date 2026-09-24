@@ -1,0 +1,273 @@
+/* =====================================================================
+   WA v37 onboarding, live from the master
+   (29/07/26)
+   The ClickUp onboarding package is now a master SOP inside the Hub.
+   Five modules (Week 1 to 4 and 60 Days) with every step and its full
+   instructions. HR assigns an onboarding to any team member in one
+   click; the person gets their own click-open weekly modules with
+   checkboxes on the Training tab and their profile; HR sees a live
+   progress board of where everyone is. Editing the master (rename,
+   rewrite, add or retire a step) flows instantly to every onboarding
+   still in flight, exactly like the volunteering SOP. Completed
+   onboardings keep their history.
+   ===================================================================== */
+
+var WA37 = { tmpl: [], onbs: [], steps: [], loaded: false };
+var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 DAYS': 5 };
+
+(function () {
+  if (document.getElementById('wa37css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa37css';
+  st.textContent = '' +
+    '.w37bar{height:9px;border-radius:999px;background:#eef1ef;overflow:hidden;flex:1;min-width:120px;}' +
+    '.w37bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2c7a66,#1f5f4f);transition:width .3s;}' +
+    '.w37week{background:#fff;border-radius:16px;margin:8px 0;box-shadow:0 1px 2px rgba(20,40,30,.03),0 14px 34px -26px rgba(20,48,43,.22);}' +
+    '.w37week > summary{cursor:pointer;padding:12px 16px;font-weight:700;color:#1f5f4f;font-size:14px;display:flex;gap:10px;align-items:center;list-style:none;}' +
+    '.w37week > summary::-webkit-details-marker{display:none;}' +
+    '.w37week[open] > summary{border-bottom:1px solid #f0f2f1;}' +
+    '.w37wbody{padding:6px 16px 12px;}' +
+    '.w37step{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #f4f6f5;align-items:flex-start;}' +
+    '.w37step:last-child{border-bottom:none;}' +
+    '.w37step input[type=checkbox]{width:17px;height:17px;margin-top:2px;flex:none;}' +
+    '.w37step.child{margin-left:26px;}' +
+    '.w37step .nm{font-size:13.5px;font-weight:600;color:var(--wa-ink,#14302b);}' +
+    '.w37step .nm .pr{font-size:10px;border:1px solid #c87a2f;color:#c87a2f;border-radius:999px;padding:0 7px;margin-left:6px;vertical-align:middle;}' +
+    '.w37step .ds{font-size:12.5px;color:#5b6b66;line-height:1.5;margin-top:2px;}' +
+    '.w37step .ds a{color:#2c7a66;}' +
+    '.w37step.done .nm{color:#9aa5a1;text-decoration:line-through;}' +
+    '.w37hr-row{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #f2f4f3;font-size:13px;flex-wrap:wrap;}' +
+    '.w37hr-row b{min-width:110px;}' +
+    '.w37hr-row .mini{font-size:11px;color:#7b8a86;}' +
+    '.w37edit{font-size:11.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;}';
+  document.head.appendChild(st);
+})();
+
+async function wa37Load(force) {
+  if (WA37.loaded && !force) return;
+  try {
+    var t = await db.from('onboarding_template').select('*').eq('active', true).order('sort').order('id');
+    WA37.tmpl = (t && t.data) || [];
+    var o = await db.from('onboardings').select('*').order('started_at', { ascending: false });
+    WA37.onbs = (o && o.data) || [];
+    var act = WA37.onbs.map(function (x) { return x.id; });
+    if (act.length) {
+      var s = await db.from('onboarding_steps').select('*').in('onboarding_id', act);
+      WA37.steps = (s && s.data) || [];
+    } else WA37.steps = [];
+    WA37.loaded = true;
+  } catch (e) { /* offline */ }
+}
+
+function wa37Md(s) {
+  if (!s) return '';
+  if (typeof waVolMd === 'function') { try { return waVolMd(s); } catch (e) { } }
+  return '<p>' + esc(s) + '</p>';
+}
+function wa37Weeks() {
+  var by = {};
+  WA37.tmpl.forEach(function (t) { (by[t.section] = by[t.section] || []).push(t); });
+  return Object.keys(by).sort(function (a, b) { return (WA37_WEEK_ORDER[a] || 9) - (WA37_WEEK_ORDER[b] || 9); })
+    .map(function (k) { return { name: k, steps: by[k] }; });
+}
+function wa37StepsFor(onbId) {
+  var m = {};
+  WA37.steps.forEach(function (s) { if (String(s.onboarding_id) === String(onbId)) m[s.template_id] = s; });
+  return m;
+}
+function wa37Pct(onbId) {
+  var m = wa37StepsFor(onbId);
+  var ids = Object.keys(m);
+  if (!ids.length) return { done: 0, total: 0, pct: 0 };
+  var d = ids.filter(function (k) { return m[k].done; }).length;
+  return { done: d, total: ids.length, pct: Math.round(100 * d / ids.length) };
+}
+
+function wa37Checklist(onb, canTick) { /* superseded: wave44 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+/* ---------- the block on the Training tab ---------- */
+async function wa37Mount() {
+  var host = document.querySelector('#training .w36onb');
+  if (!host) return;
+  await wa37Load(false);
+  var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+  var staff = typeof isStaff === 'function' && isStaff();
+  var mine = me ? WA37.onbs.filter(function (o) {
+    return o.status !== 'cancelled' && o.person_name.toLowerCase() === me.name.toLowerCase();
+  })[0] : null;
+
+  var html = '';
+  if (mine) {
+    var p = wa37Pct(mine.id);
+    html += '<h3>' + (mine.status === 'completed' ? 'Your onboarding: complete!' : 'Your onboarding') + '</h3>'
+      + '<div style="display:flex;gap:10px;align-items:center;margin:4px 0 10px"><span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
+      + '<b style="font-size:13px;color:#1f5f4f">' + p.pct + '%</b><span style="font-size:12px;color:#7b8a86">' + p.done + ' of ' + p.total + ' steps</span></div>'
+      + '<p class="read" style="margin:0 0 8px">Each module below opens up. Work top to bottom, tick things off as you go, and lean on your onboarding channel whenever something is unclear. The '
+      + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a> is the companion doc.</p>'
+      + wa37Checklist(mine, true);
+  } else {
+    html += '<h3>New here? Start with onboarding</h3>'
+      + '<p class="read" style="margin:0 0 6px">Follow the <a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a>, then work through the training path for your team below.</p>';
+  }
+
+  if (staff) {
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+    var activeNames = WA37.onbs.filter(function (o) { return o.status === 'active'; }).map(function (o) { return o.person_name.toLowerCase(); });
+    html += '<div style="border-top:1px solid rgba(31,95,79,.15);margin-top:12px;padding-top:10px">'
+      + '<h3 style="font-size:13.5px">Onboarding board (HR)</h3>'
+      + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">'
+      + '<select class="w36sel" id="w37assign"><option value="">Assign an onboarding to...</option>'
+      + people.filter(function (pp) { return activeNames.indexOf(pp.name.toLowerCase()) < 0; })
+        .map(function (pp) { return '<option value="' + esc(String(pp.id)) + '">' + esc(pp.name) + ' (' + esc(pp.department) + ')</option>'; }).join('')
+      + '</select>'
+      + '<a class="w37edit" data-w37master="1">Edit the master onboarding</a></div>';
+    var act = WA37.onbs.filter(function (o) { return o.status === 'active'; });
+    var done = WA37.onbs.filter(function (o) { return o.status === 'completed'; });
+    if (!act.length) html += '<p class="m-sub">Nobody is mid-onboarding right now.</p>';
+    act.forEach(function (o) {
+      var p = wa37Pct(o.id);
+      html += '<div class="w37hr-row"><b>' + esc(o.person_name) + '</b>'
+        + '<span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
+        + '<span style="font-size:12px;color:#1f5f4f;font-weight:700">' + p.pct + '%</span>'
+        + '<span class="mini">' + p.done + ' of ' + p.total + ' &middot; started ' + esc(String(o.started_at)) + '</span>'
+        + '<a class="w37edit" data-w37open="' + o.id + '">open their checklist</a></div>';
+    });
+    if (done.length) html += '<p class="m-sub" style="margin-top:6px">' + done.length + ' completed onboarding' + (done.length === 1 ? '' : 's') + ' on record.</p>';
+    html += '</div>';
+  }
+  host.innerHTML = html;
+}
+
+/* staff view of one person's checklist */
+function wa37OpenModal(onbId) {
+  var o = WA37.onbs.filter(function (x) { return String(x.id) === String(onbId); })[0];
+  if (!o) return;
+  var p = wa37Pct(o.id);
+  openModal('<h3>' + esc(o.person_name) + '\'s onboarding (' + p.pct + '%)</h3>'
+    + '<p class="m-sub">Started ' + esc(String(o.started_at)) + (o.assigned_by ? ' &middot; assigned by ' + esc(o.assigned_by) : '') + '. You can tick steps on their behalf.</p>'
+    + '<div id="w37modal">' + wa37Checklist(o, true) + '</div>'
+    + '<div class="m-actions"><button class="btn ghost" id="w37close">Close</button></div>');
+  var c = document.getElementById('w37close');
+  if (c) c.addEventListener('click', function () { closeModal(); wa37Mount(); });
+}
+
+/* master editor */
+function wa37Master() { /* superseded: wave46 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+function wa37EditStep(tid) { /* superseded: wave44 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+function wa37AddStep(section) { /* superseded: wave44 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+/* profile block */
+async function wa37Profile(mid) {
+  var sec = document.getElementById('personpage');
+  if (!sec) return;
+  try {
+    await wa37Load(false);
+    var o = WA37.onbs.filter(function (x) { return String(x.member_id) === String(mid) && x.status !== 'cancelled'; })[0];
+    if (!o) return;
+    var card = sec.querySelector('.card');
+    if (!card || card.querySelector('.w37profbar')) return;
+    var p = wa37Pct(o.id);
+    var stats = document.getElementById('w33stats');
+    var html = '<div class="w37profbar" style="display:flex;gap:10px;align-items:center;margin:2px 0 10px;max-width:520px">'
+      + '<span style="font-size:12px;font-weight:700;color:#1f5f4f;white-space:nowrap">Onboarding' + (o.status === 'completed' ? ': complete' : '') + '</span>'
+      + '<span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
+      + '<span style="font-size:12px;color:#7b8a86;white-space:nowrap">' + p.done + ' of ' + p.total + '</span></div>';
+    if (stats) stats.insertAdjacentHTML('afterend', html);
+    else card.insertAdjacentHTML('afterbegin', html);
+  } catch (e) { /* non-fatal */ }
+}
+
+if (typeof wa33Person === 'function') {
+  (function () {
+    var __pp37 = wa33Person;
+    wa33Person = async function (mid) {
+      await __pp37(mid);
+      try { await wa37Profile(mid); } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+if (typeof wa36Render === 'function') {
+  (function () {
+    var __r37 = wa36Render;
+    wa36Render = async function () {
+      await __r37();
+      try { await wa37Mount(); } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  function wire() {
+    if (document.body.dataset.wa37Wired) return;
+    document.body.dataset.wa37Wired = '1';
+    document.body.addEventListener('change', async function (e) {
+      var chk = e.target.closest && e.target.closest('[data-w37chk]');
+      if (chk) {
+        var sid = Number(chk.getAttribute('data-w37chk'));
+        var patch = { done: chk.checked, done_at: chk.checked ? new Date().toISOString() : null, done_by: chk.checked ? ((typeof who === 'function') ? who() : 'dashboard') : null };
+        var r = await db.from('onboarding_steps').update(patch).eq('id', sid);
+        if (r.error) { toast('Could not save that'); chk.checked = !chk.checked; return; }
+        var row = null;
+        WA37.steps.forEach(function (s) { if (String(s.id) === String(sid)) { s.done = patch.done; s.done_at = patch.done_at; s.done_by = patch.done_by; row = s; } });
+        if (row) {
+          var p = wa37Pct(row.onboarding_id);
+          var o = WA37.onbs.filter(function (x) { return String(x.id) === String(row.onboarding_id); })[0];
+          if (o && p.total > 0 && p.done === p.total && o.status === 'active') {
+            await db.from('onboardings').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', o.id);
+            o.status = 'completed';
+            toast('Onboarding complete. Congratulations!');
+          } else if (o && o.status === 'completed' && p.done < p.total) {
+            await db.from('onboardings').update({ status: 'active', completed_at: null }).eq('id', o.id);
+            o.status = 'active';
+            toast('Saved');
+          } else toast('Saved');
+        }
+        if (!document.getElementById('w37modal')) wa37Mount();
+        return;
+      }
+      var as = e.target.closest && e.target.closest('#w37assign');
+      if (as && as.value) {
+        var mid = Number(as.value);
+        as.disabled = true;
+        try {
+          var r2 = await db.rpc('onboarding_assign', { p_member_id: mid, p_by: (typeof who === 'function') ? who() : 'dashboard' });
+          if (r2.error) throw r2.error;
+          await wa37Load(true);
+          toast('Onboarding assigned');
+          wa37Mount();
+        } catch (x) { toast('Could not assign it'); as.disabled = false; }
+        return;
+      }
+    });
+    document.body.addEventListener('click', function (e) {
+      var op = e.target.closest && e.target.closest('[data-w37open]');
+      if (op) { wa37OpenModal(op.getAttribute('data-w37open')); return; }
+      var ms = e.target.closest && e.target.closest('[data-w37master]');
+      if (ms) { wa37Master(); return; }
+      var ed = e.target.closest && e.target.closest('[data-w37e]');
+      if (ed) { wa37EditStep(ed.getAttribute('data-w37e')); return; }
+      var ad = e.target.closest && e.target.closest('[data-w37add]');
+      if (ad) { wa37AddStep(ad.getAttribute('data-w37add')); return; }
+      var xx = e.target.closest && e.target.closest('[data-w37x]');
+      if (xx) {
+        var tid = xx.getAttribute('data-w37x');
+        db.from('onboarding_template').update({ active: false, updated_at: new Date().toISOString() }).eq('id', tid).then(async function (r) {
+          if (r.error) { toast('Could not retire it'); return; }
+          await wa37Load(true);
+          toast('Retired from the master and active onboardings');
+          wa37Master();
+        });
+        return;
+      }
+    });
+  }
+  wire();
+  var __sa37 = startApp;
+  startApp = async function () {
+    await __sa37();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

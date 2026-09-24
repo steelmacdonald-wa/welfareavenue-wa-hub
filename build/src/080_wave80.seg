@@ -1,0 +1,165 @@
+/* =====================================================================
+   WA v80 Phase 1 (U4 + audit 7 + audit 8): empty states that act,
+   counts that agree, and roles that tell the truth
+   =====================================================================
+   1. Actionable empty states: wherever a list is empty, the message
+      offers the next step (add one, or see how it fills from meetings).
+   2. Count sync: visible "(N)" counters recount from the rendered rows
+      beside them, so a number can never disagree with its list.
+   3. Admin panel: the three founder-failsafe accounts show their
+      EFFECTIVE role (admin, enforced server-side) instead of a
+      dropdown that can display something else.
+   ===================================================================== */
+(function () {
+  if (window.__wa80) return; window.__wa80 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w80act{font-size:12px;margin-top:4px;}' +
+    '.w80act a{cursor:pointer;text-decoration:underline;color:#2c7a66;margin-right:12px;}' +
+    '.w80chip{display:inline-block;background:#eef4f1;border:1px solid #cfe0d8;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;color:#14302b;}' +
+    '.w80note{font-size:10.5px;color:#7b8a86;display:block;margin-top:2px;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. actionable empty states ---------- */
+  function w80Dept(id) {
+    var panel = document.getElementById(id);
+    if (!panel) return;
+    /* empty workstream subsections */
+    panel.querySelectorAll('.wa21-list .subsection').forEach(function (ss) {
+      if (ss.querySelector('[data-task]') || ss.querySelector('.w80act')) return;
+      var emptyEl = null;
+      ss.querySelectorAll('p, li').forEach(function (p) { if (/no open tasks/i.test(p.textContent || '')) emptyEl = p; });
+      if (!emptyEl) return;
+      var act = document.createElement('div');
+      act.className = 'w80act';
+      act.innerHTML = '<a data-w80add="task">+ Add a task</a><a data-w80how>How tasks arrive from meetings</a>';
+      var host = emptyEl.closest('ul') || emptyEl;
+      host.parentNode.insertBefore(act, host.nextSibling);
+    });
+    /* empty folds (wave77) */
+    var folds = { goals: ['No quarterly goals here yet.', '#goals', 'Set one on the Strategy page'],
+                  requests: ['Nothing waiting on this team.', '#requests', 'File a request'],
+                  updates: ['Updates arrive automatically from meeting transcripts.', '#transcripts', 'Upload a transcript'] };
+    Object.keys(folds).forEach(function (k) {
+      var fold = panel.querySelector('[data-w77="' + k + '"] .w77b');
+      if (!fold || fold.querySelector('.w80act')) return;
+      var has = fold.querySelector('[data-task], .w39goal, .req-row, li, .wa21-upd-row, .upd-row');
+      if (has) return;
+      if (!fold.textContent.trim() || fold.textContent.trim().length < 4) {
+        var d = folds[k];
+        var el = document.createElement('div');
+        el.className = 'w80act';
+        el.innerHTML = '<span style="color:var(--wa-muted)">' + d[0] + '</span> <a data-w80go="' + d[1] + '">' + d[2] + '</a>';
+        fold.appendChild(el);
+      }
+    });
+  }
+
+  document.body.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    var add = t.closest('[data-w80add]');
+    if (add) {
+      var panel = add.closest('.panel');
+      var btn = panel && panel.querySelector('[data-add="task"]');
+      if (btn) btn.click();
+      return;
+    }
+    var how = t.closest('[data-w80how]');
+    if (how) { location.hash = '#transcripts'; return; }
+    var go = t.closest('[data-w80go]');
+    if (go) { location.hash = go.getAttribute('data-w80go'); return; }
+  });
+
+  /* ---------- 2. counts recount from the DOM beside them ---------- */
+  function w80Counts() {
+    /* Decided (N) on the Decisions page */
+    try {
+      var done = document.getElementById('decisionDoneList');
+      if (done) {
+        var n = done.querySelectorAll('[data-decision]').length;
+        var wrap = document.getElementById('decDoneWrap');
+        var sm = wrap && wrap.querySelector('summary');
+        if (sm && /\(\d+\)/.test(sm.textContent)) sm.textContent = sm.textContent.replace(/\(\d+\)/, '(' + n + ')');
+      }
+    } catch (e) { /* non-fatal */ }
+    /* Incoming requests (N) cards on dept pages */
+    try {
+      document.querySelectorAll('.card.req-card').forEach(function (card) {
+        var h = card.querySelector('h2');
+        if (!h) return;
+        var n = card.querySelectorAll('.req-row').length;
+        if (/\(\d+\)/.test(h.textContent)) h.textContent = h.textContent.replace(/\(\d+\)/, '(' + n + ')');
+      });
+      /* wave77 fold summaries recount too */
+      document.querySelectorAll('[data-w77="requests"]').forEach(function (f) {
+        var nEl = f.querySelector('summary .w77n');
+        if (nEl) nEl.textContent = String(f.querySelectorAll('.req-row').length);
+      });
+      document.querySelectorAll('[data-w77="goals"]').forEach(function (f) {
+        var nEl = f.querySelector('summary .w77n');
+        if (nEl) nEl.textContent = String(f.querySelectorAll('.w39goal').length);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---------- 3. founder accounts show the effective role ---------- */
+  var W80_FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  function w80Admin() {
+    W80_FOUNDERS.forEach(function (em) {
+      document.querySelectorAll('select[data-w40r="' + em + '"]').forEach(function (sel) {
+        var chip = document.createElement('span');
+        chip.innerHTML = '<span class="w80chip">admin</span><span class="w80note">founder failsafe: this account is always admin, enforced in the database</span>';
+        sel.parentNode.replaceChild(chip, sel);
+      });
+    });
+  }
+
+  /* ---------- run after paints ---------- */
+  function w80All() {
+    try { (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).forEach(w80Dept); } catch (e) { /* non-fatal */ }
+    w80Counts();
+    w80Admin();
+  }
+  if (typeof renderSection === 'function') {
+    var __rs80 = renderSection;
+    renderSection = function (id) {
+      __rs80.apply(this, arguments);
+      try { w80Dept(id); w80Counts(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof renderDecisions === 'function') {
+    var __rd80 = renderDecisions;
+    renderDecisions = function () {
+      __rd80.apply(this, arguments);
+      try { w80Counts(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof wa40Render === 'function') {
+    var __ar80 = wa40Render;
+    wa40Render = async function () {
+      await __ar80.apply(this, arguments);
+      try { w80Admin(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa80 = startApp;
+    startApp = async function () {
+      await __sa80.apply(this, arguments);
+      try { w80All(); } catch (e) { /* non-fatal */ }
+      /* wave77 reconciles dept panels continuously; re-apply after each pass */
+      try {
+        (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).forEach(function (d) {
+          var p = document.getElementById(d);
+          if (p && !p.dataset.w80wired) {
+            p.dataset.w80wired = '1';
+            p.addEventListener('wa77sync', function () {
+              setTimeout(function () { try { w80Dept(d); w80Counts(); } catch (e) { /* non-fatal */ } }, 60);
+            });
+          }
+        });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

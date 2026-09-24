@@ -1,0 +1,698 @@
+/* =====================================================================
+   WA v65 leadership meetings, upload preview, goal wins, mentions,
+   request refinements, transcript pipeline guide, and drag to reorder
+   the master SOPs
+   (04/08/26)
+   1. The transcript form's "Meeting type" is now "Meeting visibility",
+      and the department dropdown gains "Leadership meeting (all
+      departments)": it locks visibility to leadership and the new
+      process-leadership function spreads its updates and tasks across
+      every department (the request scanner spreads suggestions too).
+   2. Uploading a transcript first shows a preview popup of everything
+      the system intends to do (updates, tasks, closures, decisions,
+      requests, goal wins, mentions); nothing saves until approved.
+   3. Goal wins: concrete progress detected in meetings appears under
+      each goal in the department Quarterly goals block.
+   4. Mentions: people discussed in a meeting they did not attend get
+      a Mentions section on My page with a "Got it" button.
+   5. Requests: suggestions that refine an existing open request are
+      labelled and apply onto that request instead of duplicating it.
+   6. The transcripts "How this page works" popup becomes a full
+      pipeline guide.
+   7. Both master editors (onboarding and the volunteering SOP) get
+      drag handles: drag steps up and down, across sections, and next
+      to a main task to promote a subtask (or next to a subtask to
+      nest). Reorders do not resurface steps for completed members.
+   ===================================================================== */
+(function () {
+  if (window.__wa65) return;
+  window.__wa65 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa65css';
+  st.textContent = '' +
+    '#w65leadnote{background:rgba(132,85,255,.1);border-radius:10px;padding:7px 11px;font-size:12px;color:#5b32c7;margin:6px 0 0;}' +
+    '.w65sec{margin:0 0 10px;}' +
+    '.w65sec h4{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#1f5f4f;}' +
+    '.w65row{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-top:1px dashed #e3e7e5;font-size:12.5px;}' +
+    '.w65row:first-of-type{border-top:none;}' +
+    '.w65dep{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;color:#fff;flex:0 0 auto;}' +
+    '.w65mut{color:#7b8a86;font-size:11.5px;}' +
+    '.w65wrap{max-height:56vh;overflow-y:auto;padding-right:6px;}' +
+    '.w65warn{background:rgba(179,64,47,.08);border-radius:10px;padding:6px 10px;font-size:12px;color:#8c2c1c;}' +
+    '.w65wins{margin-top:5px;}' +
+    '.w65win{display:flex;gap:7px;align-items:baseline;font-size:12px;color:#5b6b66;padding:2px 0;}' +
+    '.w65win .st{color:#8a6414;font-weight:800;flex:0 0 auto;}' +
+    '.w65win .dt{color:#9aa5a1;font-size:10.5px;flex:0 0 auto;}' +
+    '.w65men{padding:7px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;}' +
+    '.w65men:first-of-type{border-top:none;}' +
+    '.w65men.seen{opacity:.55;}' +
+    '.w65men .mt{font-weight:700;}' +
+    '.w65men .mq{color:#7b8a86;font-size:11.5px;font-style:italic;}' +
+    '.w65new{display:inline-block;background:#d4a13c;color:#fff;border-radius:999px;padding:0 7px;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-left:6px;vertical-align:middle;}' +
+    '.w65got{font-size:11.5px;color:#1f5f4f;cursor:pointer;font-weight:700;}' +
+    '.w65ref{background:rgba(212,161,60,.13);border-radius:8px;padding:4px 9px;font-size:11.5px;color:#8a6414;margin:4px 0;}' +
+    '.w65h{cursor:grab;color:#9aa5a1;font-weight:800;user-select:none;flex:0 0 auto;padding:0 2px;}' +
+    '.w65dragging{opacity:.35;}' +
+    '.w65before{box-shadow:inset 0 2px 0 0 #1f5f4f;}' +
+    '.w65after{box-shadow:inset 0 -2px 0 0 #1f5f4f;}' +
+    '.w65hint{font-size:11.5px;color:#7b8a86;background:#f6f8f7;border-radius:8px;padding:5px 10px;margin:4px 0 8px;}';
+  document.head.appendChild(st);
+
+  function w65Esc(s) { return (typeof esc === 'function') ? esc(s) : String(s || ''); }
+  function w65Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w65Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+  function w65Date(s) {
+    if (!s) return '';
+    try { return new Date(String(s) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+    catch (e) { return String(s); }
+  }
+  var W65_ADMINS = ['steel.macdonald', 'suhaib.abdillahi', 'ian.odhiambo', 'valex.sanon', 'tuna.kaynak', 'michael.michailidis'];
+  var W65_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;
+  function w65IsAdmin() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin') return true;
+      var e = String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      return W65_ADMINS.indexOf(e.split('@')[0]) >= 0;
+    } catch (e) { return false; }
+  }
+  function w65IsLeader() {
+    try {
+      var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+      return !!(me && (me.department === 'board' || W65_LEAD.test(me.role || '')));
+    } catch (e) { return false; }
+  }
+  function w65SeeRow(r) {
+    var v = r.visibility;
+    if (!v || v === 'department') return true;
+    if (w65IsAdmin()) return true;
+    if (v === 'leadership') return w65IsLeader();
+    return false;
+  }
+
+  /* =========== 1. transcript form: visibility rename + leadership =========== */
+  function w65TxForm() {
+    try {
+      var sel = document.getElementById('w62type');
+      if (sel && sel.parentElement) {
+        var lab = sel.parentElement.querySelector('label');
+        if (lab && lab.textContent === 'Meeting type') lab.textContent = 'Meeting visibility';
+      }
+      var dep = document.getElementById('txDept');
+      if (dep && !dep.querySelector('option[value="Leadership meeting"]')) {
+        var op = document.createElement('option');
+        op.value = 'Leadership meeting';
+        op.textContent = 'Leadership meeting (all departments)';
+        dep.appendChild(op);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  function w65DeptSync() {
+    try {
+      var dep = document.getElementById('txDept');
+      var sel = document.getElementById('w62type');
+      if (!dep || !sel) return;
+      var isLead = dep.value === 'Leadership meeting';
+      if (isLead) {
+        sel.value = 'leadership';
+        sel.dispatchEvent(new Event('change'));
+        sel.disabled = true;
+        if (!document.getElementById('w65leadnote')) {
+          sel.parentElement.insertAdjacentHTML('beforeend',
+            '<div id="w65leadnote">Leadership meeting: leaders from every department attend, so its updates, tasks and suggested requests spread across ALL departments. Visible to leaders and admins only.</div>');
+        }
+      } else {
+        sel.disabled = false;
+        var n = document.getElementById('w65leadnote');
+        if (n) n.remove();
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  if (!document.body.dataset.wa65Tx) {
+    document.body.dataset.wa65Tx = '1';
+    document.body.addEventListener('change', function (e) {
+      if (e.target && e.target.id === 'txDept') w65DeptSync();
+    });
+  }
+
+  /* =========== 2. the upload preview popup =========== */
+  function w65PlanRows(items, fn) {
+    if (!items || !items.length) return '<p class="w65mut" style="margin:2px 0">Nothing.</p>';
+    return items.map(fn).join('');
+  }
+  function w65Plan(p, isLead) {
+    var h = '<h3>What this upload will do</h3>'
+      + '<p class="m-sub">' + w65Esc(p.summary || '') + '</p>'
+      + (isLead ? '<p class="w65mut" style="margin:0 0 8px">Leadership meeting: items spread across every department and stay visible to leaders and admins only.</p>' : '')
+      + '<div class="w65wrap">';
+    h += '<div class="w65sec"><h4>New tasks (' + (p.new_tasks || []).length + ')</h4>'
+      + w65PlanRows(p.new_tasks, function (t) {
+        return '<div class="w65row"><span class="w65dep" style="background:' + w65Col(t.department) + '">' + w65Esc(w65Lab(t.department)) + '</span>'
+          + '<span>' + w65Esc(t.title) + '</span><span class="w65mut" style="margin-left:auto">' + w65Esc(t.owner || '') + '</span></div>';
+      }) + '</div>';
+    var closes = p.close_tasks || [];
+    h += '<div class="w65sec"><h4>Tasks it will close (' + closes.length + ')</h4>';
+    if (closes.length) {
+      h += '<div class="w65warn" style="margin-bottom:4px">Closing needs clear proof in the meeting; double-check these.</div>'
+        + closes.map(function (c) {
+          return '<div class="w65row"><span>' + w65Esc(c.title) + '</span><span class="w65mut" style="margin-left:auto">&quot;' + w65Esc((c.evidence || '').slice(0, 90)) + '&quot;</span></div>';
+        }).join('');
+    } else h += '<p class="w65mut" style="margin:2px 0">Nothing.</p>';
+    h += '</div>';
+    h += '<div class="w65sec"><h4>Updates (' + (p.new_updates || []).length + ')</h4>'
+      + w65PlanRows(p.new_updates, function (u) {
+        return '<div class="w65row"><span class="w65dep" style="background:' + w65Col(u.department) + '">' + w65Esc(w65Lab(u.department)) + '</span><span>' + w65Esc(u.gist) + '</span></div>';
+      }) + '</div>';
+    h += '<div class="w65sec"><h4>Suggested requests (' + (p.requests || []).length + ', confirm-first)</h4>'
+      + w65PlanRows(p.requests, function (r) {
+        return '<div class="w65row"><span class="w65dep" style="background:' + w65Col(r.department) + '">' + w65Esc(w65Lab(r.department)) + '</span>'
+          + '<span>' + w65Esc(r.title) + (r.kind === 'refine' ? ' <span class="w65mut">(updates an existing request)</span>' : '') + '</span></div>';
+      }) + '</div>';
+    h += '<div class="w65sec"><h4>Executive decisions (' + (p.new_decisions || []).length + ')</h4>'
+      + w65PlanRows(p.new_decisions, function (d) { return '<div class="w65row"><span>' + w65Esc(d) + '</span></div>'; }) + '</div>';
+    h += '<div class="w65sec"><h4>Goal wins (' + (p.goal_wins || []).length + ')</h4>'
+      + w65PlanRows(p.goal_wins, function (w) {
+        return '<div class="w65row"><span class="st" style="color:#8a6414;font-weight:800">&#10038;</span><span>' + w65Esc(w.win) + '</span><span class="w65mut" style="margin-left:auto">' + w65Esc((w.goal || '').slice(0, 60)) + '</span></div>';
+      }) + '</div>';
+    h += '<div class="w65sec"><h4>People to keep in the loop (' + (p.mentions || []).length + ')</h4>'
+      + w65PlanRows(p.mentions, function (m) { return '<div class="w65row"><span>' + w65Esc(m) + '</span></div>'; }) + '</div>';
+    h += '</div>'
+      + '<p class="m-sub" style="margin-top:8px">This is a close estimate from the same AI that will process the meeting; exact wording can differ. Nothing is saved until you approve. Suggested requests, comments and due dates always wait for a human to accept them.</p>'
+      + '<div class="m-actions"><button class="btn" id="w65go">Approve: upload and process</button> <button class="btn ghost" id="w65cx">Cancel</button></div>';
+    return h;
+  }
+  function w65Approve() {
+    window.__wa65ok = 1;
+    try { closeModal(); } catch (e) { /* fine */ }
+    var b = document.getElementById('txSave');
+    if (b) b.click();
+    setTimeout(function () { window.__wa65ok = 0; }, 1500);
+  }
+  async function w65Preview() {
+    openModal('<h3>Checking what this will do</h3><p class="m-sub">Reading the transcript against the board, one moment...</p>'
+      + '<div class="m-actions"><button class="btn ghost" id="w65cx">Cancel</button></div>');
+    var cx = document.getElementById('w65cx');
+    if (cx) cx.addEventListener('click', function () { closeModal(); });
+    var payload = {
+      department: (document.getElementById('txDept') || {}).value || '',
+      title: ((document.getElementById('txTitle') || {}).value || '').trim(),
+      meeting_date: (document.getElementById('txDate') || {}).value || null,
+      body: ((document.getElementById('txBody') || {}).value || '').trim(),
+      visibility: (document.getElementById('w62type') || {}).value || 'department'
+    };
+    try {
+      var r = await db.functions.invoke('transcript-preview', { body: payload });
+      if (r.error || !(r.data && r.data.ok)) throw (r.error || new Error('failed'));
+      openModal(w65Plan(r.data.preview || {}, !!r.data.is_leadership));
+    } catch (e) {
+      openModal('<h3>Could not build the preview</h3>'
+        + '<p class="m-sub">The preview service did not answer. You can still upload; processing works the same either way.</p>'
+        + '<div class="m-actions"><button class="btn" id="w65go">Upload anyway</button> <button class="btn ghost" id="w65cx">Cancel</button></div>');
+    }
+    var go = document.getElementById('w65go');
+    if (go) go.addEventListener('click', w65Approve);
+    var cx2 = document.getElementById('w65cx');
+    if (cx2) cx2.addEventListener('click', function () { closeModal(); });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#txSave');
+    if (!b || window.__wa65ok) return;
+    var t = ((document.getElementById('txTitle') || {}).value || '').trim();
+    var body = ((document.getElementById('txBody') || {}).value || '').trim();
+    if (!t || !body) return; /* let the normal validation speak */
+    e.preventDefault();
+    e.stopPropagation();
+    w65Preview();
+  }, true);
+
+  /* =========== 3. goal wins under the quarterly goals =========== */
+  var WA65W = { rows: null, at: 0, loading: false };
+  async function w65LoadWins() {
+    if (WA65W.loading) return;
+    if (WA65W.rows && (Date.now() - WA65W.at) < 120000) return;
+    WA65W.loading = true;
+    try {
+      var r = await db.from('goal_wins').select('*').order('id', { ascending: false }).limit(200);
+      WA65W.rows = (r && r.data) || [];
+      WA65W.at = Date.now();
+    } catch (e) { WA65W.rows = WA65W.rows || []; }
+    WA65W.loading = false;
+  }
+  function w65PaintWins(deptId) {
+    try {
+      var panel = document.getElementById(deptId);
+      if (!panel || !WA65W.rows || !WA65W.rows.length) return;
+      panel.querySelectorAll('.w39goal').forEach(function (g) {
+        if (g.querySelector('.w65wins')) return;
+        var ed = g.querySelector('[data-w39ge]');
+        if (!ed) return;
+        var gid = String(ed.getAttribute('data-w39ge'));
+        var wins = WA65W.rows.filter(function (w) { return String(w.goal_id) === gid && w65SeeRow(w); }).slice(0, 3);
+        if (!wins.length) return;
+        g.insertAdjacentHTML('beforeend', '<div class="w65wins">' + wins.map(function (w) {
+          return '<div class="w65win"><span class="st">&#10038;</span><span>' + w65Esc(w.win) + '</span>'
+            + '<span class="dt">' + w65Esc(w65Date(w.meeting_date)) + '</span></div>';
+        }).join('') + '</div>');
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa39Recompose === 'function') {
+    var __rc65 = wa39Recompose;
+    wa39Recompose = function (id) {
+      __rc65.apply(this, arguments);
+      if (WA65W.rows) { w65PaintWins(id); }
+      else { w65LoadWins().then(function () { w65PaintWins(id); }); }
+    };
+  }
+
+  /* =========== 4. mentions on My page =========== */
+  async function w65Mentions() {
+    try {
+      if (typeof WA_ME === 'undefined' || !WA_ME || !WA_ME.name) return;
+      var grid = document.querySelector('#mpBody .mp-grid');
+      if (!grid || document.getElementById('w65menbox')) return;
+      var r = await db.from('mentions').select('*').eq('person', WA_ME.name).order('id', { ascending: false }).limit(10);
+      var rows = (r && r.data) || [];
+      if (!rows.length) return;
+      var unseen = rows.filter(function (m) { return !m.seen; }).length;
+      var html = '<div class="mp-sec" id="w65menbox"><h3>Mentions' + (unseen ? ' (' + unseen + ' new)' : '') + '</h3>'
+        + '<p class="w65mut" style="margin:0 0 4px">You came up in these meetings you were not in, so you stay in the loop.</p>'
+        + rows.map(function (m) {
+          return '<div class="w65men' + (m.seen ? ' seen' : '') + '" data-w65mid="' + m.id + '">'
+            + '<div class="mt">' + w65Esc(m.meeting_title || 'A meeting') + ' <span class="w65mut">' + w65Esc(w65Date(m.meeting_date)) + '</span>'
+            + (m.seen ? '' : '<span class="w65new">new</span>') + '</div>'
+            + (m.context ? '<div>' + w65Esc(m.context) + '</div>' : '')
+            + (m.quote ? '<div class="mq">&quot;' + w65Esc(m.quote) + '&quot;</div>' : '')
+            + (m.seen ? '' : '<a class="w65got" data-w65got="' + m.id + '">Got it</a>')
+            + '</div>';
+        }).join('') + '</div>';
+      grid.insertAdjacentHTML('afterbegin', html);
+    } catch (e) { /* non-fatal */ }
+  }
+  if (!document.body.dataset.wa65Men) {
+    document.body.dataset.wa65Men = '1';
+    document.body.addEventListener('click', async function (e) {
+      var a = e.target && e.target.closest && e.target.closest('[data-w65got]');
+      if (!a) return;
+      var id = Number(a.getAttribute('data-w65got'));
+      try { await db.from('mentions').update({ seen: true }).eq('id', id); } catch (e2) { /* fine */ }
+      var row = a.closest('.w65men');
+      if (row) { row.classList.add('seen'); a.remove(); var nb = row.querySelector('.w65new'); if (nb) nb.remove(); }
+    });
+  }
+  /* dead wrap removed in Phase 0 compaction: wave74 replaced renderMyPage outright and renders its own mentions list (.w74men) plus a decoy #w65menbox */
+
+  /* =========== 5. refine suggestions on the requests page =========== */
+  var WA65R = { map: null };
+  async function w65LoadRefs() {
+    try {
+      var r = await db.from('request_suggestions').select('id,target_request_id,details,quote,title')
+        .eq('status', 'pending').eq('kind', 'refine').limit(30);
+      var rows = (r && r.data) || [];
+      var map = {};
+      if (rows.length) {
+        var ids = rows.map(function (x) { return x.target_request_id; }).filter(Boolean);
+        var t = await db.from('dept_requests').select('id,title,details').in('id', ids);
+        var byId = {};
+        ((t && t.data) || []).forEach(function (x) { byId[String(x.id)] = x; });
+        rows.forEach(function (s) {
+          var tgt = byId[String(s.target_request_id)];
+          if (tgt) map[String(s.id)] = { s: s, t: tgt };
+        });
+      }
+      WA65R.map = map;
+    } catch (e) { WA65R.map = WA65R.map || {}; }
+  }
+  function w65DecorateRefs() {
+    try {
+      if (!WA65R.map) return;
+      Object.keys(WA65R.map).forEach(function (id) {
+        var a = document.querySelector('[data-w50a="' + id + '"]');
+        if (!a) return;
+        var row = a.closest('.w50row');
+        if (!row || row.dataset.w65r) return;
+        row.dataset.w65r = '1';
+        var tgt = WA65R.map[id].t;
+        row.insertAdjacentHTML('afterbegin',
+          '<div class="w65ref">Not a new request: this refines the open request <b>' + w65Esc(tgt.title) + '</b>. Accepting adds the update onto it.</div>');
+        a.textContent = 'Apply to the existing request';
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof renderRequestsModule === 'function') {
+    var __rr65 = renderRequestsModule;
+    renderRequestsModule = function () {
+      var out = __rr65.apply(this, arguments);
+      w65LoadRefs().then(function () {
+        [400, 1000, 2200].forEach(function (ms) { setTimeout(w65DecorateRefs, ms); });
+      });
+      return out;
+    };
+  }
+  document.addEventListener('click', async function (e) {
+    var a = e.target && e.target.closest && e.target.closest('[data-w50a]');
+    if (!a || !WA65R.map) return;
+    var id = String(a.getAttribute('data-w50a'));
+    var pair = WA65R.map[id];
+    if (!pair) return; /* a normal suggestion: let wave50 handle it */
+    e.preventDefault();
+    e.stopPropagation();
+    a.textContent = 'Applying...';
+    try {
+      var by = (typeof who === 'function') ? who() : 'staff';
+      var add = '\n\nUpdate from a meeting: ' + (pair.s.details || pair.s.title || '')
+        + (pair.s.quote ? '\n"' + pair.s.quote + '"' : '');
+      var r1 = await db.from('dept_requests').update({
+        details: (pair.t.details || '') + add,
+        updated_at: new Date().toISOString(), updated_by: by
+      }).eq('id', pair.t.id);
+      if (r1.error) throw r1.error;
+      await db.from('request_suggestions').update({
+        status: 'accepted', request_id: pair.t.id,
+        decided_by: by, decided_at: new Date().toISOString()
+      }).eq('id', Number(id));
+      try {
+        await db.from('change_log').insert({
+          entity_type: 'request', entity_id: String(pair.t.id), field: 'refined',
+          old_value: null, new_value: (pair.s.title || '').slice(0, 200), changed_by: by
+        });
+      } catch (e3) { /* log only */ }
+      delete WA65R.map[id];
+      toast('Added onto the existing request');
+      var row = a.closest('.w50row');
+      if (row) row.remove();
+    } catch (e2) {
+      toast('Could not apply it');
+      a.textContent = 'Apply to the existing request';
+    }
+  }, true);
+
+  /* =========== 6. the transcripts pipeline guide =========== */
+  function w65Pipe(items, hot) {
+    return '<div class="w61pipe">' + items.map(function (x, i) {
+      return '<span class="bx' + (i === hot ? ' grn' : '') + '">' + x + '</span>' + (i < items.length - 1 ? '<span class="ar">&#8594;</span>' : '');
+    }).join('') + '</div>';
+  }
+  function w65Sec(vis, title, text) {
+    return '<div class="w61sec"><div class="v">' + vis + '</div><div class="t"><b>' + title + '</b><span>' + text + '</span></div></div>';
+  }
+  function w65TxGuide() {
+    var pill = function (t, c) { return '<span style="display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:1px 3px 1px 0;background:' + (c || '#eef2f0') + ';color:' + (c ? '#fff' : '#14302b') + '">' + t + '</span>'; };
+    return '<h3>Transcript archive</h3>'
+      + '<p class="w60sub">Drop in any meeting; the Hub reads it and runs the boards.</p>'
+      + w65Pipe(['Paste the transcript', 'Preview the actions', 'Approve', 'AI files everything'], 3)
+      + '<div class="w61wrap">'
+      + w65Sec(w65Pipe(['transcript', 'preview', 'approve'], 1), 'You approve before anything saves',
+        'Saving first shows a popup of every action the system intends to take: new tasks, closures, updates, decisions, suggested requests, goal wins and mentions. Nothing is stored until you approve it.')
+      + w65Sec(pill('summary') + pill('updates') + pill('tasks', '#1f5f4f'), 'What the AI files on the boards',
+        'A one line summary (posted to Slack), 1 to 3 update entries, and new tasks with owners from the roster and due dates when the meeting states them. It never edits or deletes existing content, it only adds or closes.')
+      + w65Sec(pill('close', '#b3402f') + pill('evidence'), 'Closing needs proof',
+        'A task is closed only when the meeting clearly says the work is done, shipped, or dropped, and every closure carries a quote as evidence. Merely discussing a task adds a comment instead, which also stops duplicate tasks.')
+      + w65Sec(pill('projects', '#2c7a66') + pill('serving events'), 'Tasks land in the right place',
+        'Each new task is routed to the project it belongs to (project descriptions carry routing rules), and operations tasks for a serving Sunday attach to that event&#39;s checklist. Everything else sits in the department&#39;s General list.')
+      + w65Sec(pill('requests', '#d4a13c') + pill('due dates') + pill('comments'), 'Suggestions wait for a human',
+        'Cross team asks become request suggestions routed to the team that actions them; if the ask matches an open request it becomes an update on that request, not a duplicate. Due dates and task comments are suggested the same confirm-first way, always with a quote.')
+      + w65Sec(pill('&#10038; goal wins', '#8a6414'), 'Progress shows up under the goals',
+        'Concrete progress on a quarterly goal (something shipped, raised, signed or measured) is recorded as a win and appears under that goal on the department page.')
+      + w65Sec(pill('mentions', '#5b32c7'), 'Absent people stay in the loop',
+        'If someone on the roster is discussed in a meeting they were not in, a Mentions card appears on their My page with the context and a Got it button.')
+      + w65Sec(pill('department') + pill('leadership', '#5b32c7') + pill('confidential', '#b3402f'), 'Meeting visibility',
+        'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick. Restricted meetings never leak into the chat assistant, agendas or shared suggestions.')
+      + '</div>'
+      + '<div class="m-actions"><button class="btn ghost" id="w65gc">Close</button></div>';
+  }
+  if (!document.body.dataset.wa65Guide) {
+    document.body.dataset.wa65Guide = '1';
+    document.body.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-w43help]');
+      if (b && b.getAttribute('data-w43help') === 'transcripts') {
+        setTimeout(function () {
+          openModal(w65TxGuide());
+          var c = document.getElementById('w65gc');
+          if (c) c.addEventListener('click', function () { closeModal(); });
+        }, 0);
+      }
+    });
+  }
+
+  /* =========== 7. drag to reorder the master editors =========== */
+  var W65D = { id: null, kind: null };
+  function w65HandleHtml(kind, id) {
+    return '<span class="w65h" title="Drag to move" data-w65h="' + kind + ':' + w65Esc(String(id)) + '">&#8942;&#8942;</span>';
+  }
+  function w65ClearMarks(scope) {
+    (scope || document).querySelectorAll('.w65before,.w65after').forEach(function (x) {
+      x.classList.remove('w65before'); x.classList.remove('w65after');
+    });
+  }
+  function w65WireRow(row, kind, id) {
+    if (row.dataset.w65d) return;
+    row.dataset.w65d = kind + ':' + id;
+    row.setAttribute('draggable', 'true');
+    row.addEventListener('dragstart', function (e) {
+      W65D.id = String(id); W65D.kind = kind;
+      row.classList.add('w65dragging');
+      try { e.dataTransfer.setData('text/plain', String(id)); e.dataTransfer.effectAllowed = 'move'; } catch (e2) { /* fine */ }
+    });
+    row.addEventListener('dragend', function () {
+      row.classList.remove('w65dragging');
+      w65ClearMarks();
+      W65D.id = null;
+    });
+    row.addEventListener('dragover', function (e) {
+      if (!W65D.id || W65D.kind !== kind || String(id) === W65D.id) return;
+      e.preventDefault();
+      var r = row.getBoundingClientRect();
+      var before = (e.clientY - r.top) < r.height / 2;
+      w65ClearMarks();
+      row.classList.add(before ? 'w65before' : 'w65after');
+    });
+    row.addEventListener('drop', function (e) {
+      if (!W65D.id || W65D.kind !== kind || String(id) === W65D.id) return;
+      e.preventDefault();
+      var r = row.getBoundingClientRect();
+      var before = (e.clientY - r.top) < r.height / 2;
+      w65ClearMarks();
+      if (kind === 'onb') w65OnbDrop(W65D.id, String(id), before);
+      else w65SopDrop(W65D.id, String(id), before);
+      W65D.id = null;
+    });
+  }
+
+  /* ---- onboarding master (the wa37Master modal) ---- */
+  async function w65OnbDrop(dragId, targetId, before) {
+    try {
+      var all = (typeof WA37 !== 'undefined' && WA37.tmpl) ? WA37.tmpl : [];
+      var drag = all.filter(function (x) { return String(x.id) === dragId; })[0];
+      var target = all.filter(function (x) { return String(x.id) === targetId; })[0];
+      if (!drag || !target) return;
+      if (String(target.parent_id || '') === dragId) { toast('A step cannot nest under its own subtask'); return; }
+      var kids = all.filter(function (x) { return String(x.parent_id || '') === dragId; })
+        .sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+      var block = [drag].concat(kids);
+      var blockIds = block.map(function (x) { return String(x.id); });
+      /* the new home: the target's section and parent */
+      var sec = target.section;
+      var list = all.filter(function (x) { return x.section === sec && blockIds.indexOf(String(x.id)) < 0; })
+        .sort(function (a, b) { return (a.sort || 0) - (b.sort || 0) || String(a.id).localeCompare(String(b.id)); });
+      var ti = list.map(function (x) { return String(x.id); }).indexOf(targetId);
+      if (ti < 0) return;
+      list.splice(before ? ti : ti + 1, 0, block[0]);
+      /* children ride right behind the parent */
+      for (var k = 1; k < block.length; k++) list.splice(list.indexOf(block[0]) + k, 0, block[k]);
+      drag.section = sec;
+      drag.parent_id = target.parent_id || null;
+      kids.forEach(function (c) { c.section = sec; });
+      var ups = [];
+      list.forEach(function (x, i) {
+        var want = (i + 1) * 10;
+        if (x.sort !== want || String(x.id) === dragId || blockIds.indexOf(String(x.id)) >= 0) {
+          x.sort = want;
+          ups.push(db.from('onboarding_template').update({
+            sort: want, section: x.section, parent_id: x.parent_id || null
+          }).eq('id', x.id));
+        }
+      });
+      await Promise.all(ups);
+      try {
+        await db.from('change_log').insert({
+          entity_type: 'onboarding', entity_id: String(drag.id), field: 'moved',
+          old_value: null, new_value: sec + (drag.parent_id ? ' (as a subtask)' : ''),
+          changed_by: (typeof who === 'function') ? who() : 'staff'
+        });
+      } catch (e2) { /* log only */ }
+      toast('Moved');
+      if (typeof wa37Load === 'function') await wa37Load(true);
+      if (typeof wa37Master === 'function') wa37Master();
+    } catch (e) { toast('Could not move it'); }
+  }
+  function w65OnbDecorate() {
+    try {
+      var edits = document.querySelectorAll('[data-w37e]');
+      if (!edits.length) return;
+      var any = false;
+      edits.forEach(function (a) {
+        var row = (a.closest && a.closest('.w46st')) || a.parentElement;
+        if (!row || row.dataset.w65d) return;
+        var id = a.getAttribute('data-w37e');
+        row.insertAdjacentHTML('afterbegin', w65HandleHtml('onb', id));
+        w65WireRow(row, 'onb', id);
+        any = true;
+      });
+      if (any && !document.getElementById('w65onbhint')) {
+        var host = document.getElementById('w46master')
+          || ((edits[0].closest && edits[0].closest('.modal-card, .modal')) || null);
+        if (host) {
+          host.insertAdjacentHTML('afterbegin',
+            '<div class="w65hint" id="w65onbhint">Drag any step by its handle: up or down, into another week, next to a main task to make it a main task, or next to a subtask to nest it there. Reordering never re-alerts people who already finished.</div>');
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa37Master === 'function') {
+    var __ms65 = wa37Master;
+    wa37Master = function () {
+      __ms65.apply(this, arguments);
+      setTimeout(w65OnbDecorate, 60);
+    };
+  }
+  /* the HR centre paints the master editor directly, so watch for it */
+  try {
+    var __w65mo;
+    var w65MoKick = function () {
+      clearTimeout(__w65mo);
+      __w65mo = setTimeout(function () {
+        if (document.querySelector('[data-w37e]:not([data-w65seen])')) {
+          document.querySelectorAll('[data-w37e]').forEach(function (a) { a.setAttribute('data-w65seen', '1'); });
+          w65OnbDecorate();
+        }
+      }, 250);
+    };
+    new MutationObserver(w65MoKick).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  /* ---- volunteering master SOP ---- */
+  function w65SopKidsOf(all, id) {
+    var out = [];
+    var direct = all.filter(function (x) { return String(x.parent_id || '') === String(id); });
+    direct.forEach(function (c) { out.push(c); out = out.concat(w65SopKidsOf(all, c.id)); });
+    return out;
+  }
+  async function w65SopDrop(dragId, targetId, before) {
+    try {
+      var all = (typeof WA_VOL_TMPL !== 'undefined') ? WA_VOL_TMPL : [];
+      var drag = all.filter(function (x) { return String(x.id) === dragId; })[0];
+      var target = all.filter(function (x) { return String(x.id) === targetId; })[0];
+      if (!drag || !target) return;
+      var block, insertAt, rest, ti;
+      if ((drag.depth || 0) === 0) {
+        /* a section header: move the whole section around the target's section */
+        block = all.filter(function (x) { return x.section === drag.section; });
+        var blockIds0 = block.map(function (x) { return String(x.id); });
+        if (target.section === drag.section) { toast('That is the same section'); return; }
+        rest = all.filter(function (x) { return blockIds0.indexOf(String(x.id)) < 0; });
+        var secRows = rest.map(function (x) { return x.section; });
+        insertAt = before ? secRows.indexOf(target.section) : secRows.lastIndexOf(target.section) + 1;
+        if (insertAt < 0) return;
+      } else {
+        var kids = w65SopKidsOf(all, dragId);
+        var blockIds = [dragId].concat(kids.map(function (x) { return String(x.id); }));
+        if (blockIds.indexOf(targetId) >= 0) { toast('A step cannot move into itself'); return; }
+        rest = all.filter(function (x) { return blockIds.indexOf(String(x.id)) < 0; });
+        ti = rest.map(function (x) { return String(x.id); }).indexOf(targetId);
+        if (ti < 0) return;
+        var newParent, newDepth;
+        if ((target.depth || 0) === 0) {
+          /* dropped on a section header: become its first step */
+          newParent = target.id;
+          newDepth = 1;
+          insertAt = ti + 1;
+        } else {
+          newParent = target.parent_id || null;
+          newDepth = target.depth || 1;
+          insertAt = before ? ti : ti + 1;
+          if (!before) { /* after a step means after its whole subtree */
+            var tKids = w65SopKidsOf(rest, targetId).map(function (x) { return String(x.id); });
+            while (insertAt < rest.length && tKids.indexOf(String(rest[insertAt].id)) >= 0) insertAt++;
+          }
+        }
+        var delta = newDepth - (drag.depth || 0);
+        drag.section = target.section;
+        drag.parent_id = newParent;
+        drag.depth = newDepth;
+        kids.forEach(function (c) { c.section = target.section; c.depth = Math.max(1, (c.depth || 1) + delta); });
+        block = [drag].concat(kids);
+      }
+      var merged = rest.slice(0, insertAt).concat(block, rest.slice(insertAt));
+      /* global renumber (the SOP loads ordered by sort across sections) */
+      var ups = [];
+      merged.forEach(function (x, i) {
+        var want = (i + 1) * 10;
+        var isMoved = block.indexOf(x) >= 0;
+        if (x.sort !== want || isMoved) {
+          x.sort = want;
+          ups.push(db.from('sop_template').update({
+            sort: want, section: x.section, parent_id: x.parent_id || null, depth: x.depth || 0
+          }).eq('id', x.id));
+        }
+      });
+      /* keep the in-memory order in sync so the re-render is right */
+      WA_VOL_TMPL.length = 0;
+      merged.forEach(function (x) { WA_VOL_TMPL.push(x); });
+      await Promise.all(ups);
+      try {
+        await db.from('change_log').insert({
+          entity_type: 'sop', entity_id: String(drag.id), field: 'moved',
+          old_value: null, new_value: sec + (drag.parent_id ? ' (nested)' : ' (main step)'),
+          changed_by: (typeof who === 'function') ? who() : 'staff'
+        });
+      } catch (e2) { /* log only */ }
+      toast('Moved in the master; future events pick it up');
+      if (typeof waVolRenderSop === 'function') waVolRenderSop();
+    } catch (e) { toast('Could not move it'); }
+  }
+  function w65SopDecorate() {
+    try {
+      if (!(typeof isStaff === 'function' && isStaff())) return;
+      var panel = document.getElementById('volunteering');
+      if (!panel) return;
+      var rows = panel.querySelectorAll('.vl-step[data-vlstep^="tmpl-"]');
+      if (!rows.length) return;
+      rows.forEach(function (row) {
+        if (row.dataset.w65d) return;
+        var id = String(row.getAttribute('data-vlstep')).slice(5);
+        row.insertAdjacentHTML('afterbegin', w65HandleHtml('sop', id));
+        w65WireRow(row, 'sop', id);
+      });
+      if (!panel.querySelector('#w65sophint')) {
+        var firstPhase = panel.querySelector('.vl-phase');
+        if (firstPhase) firstPhase.insertAdjacentHTML('beforebegin',
+          '<div class="w65hint" id="w65sophint">Drag any step by its handle: up or down, into another section, next to a main step to promote a subtask, or next to a subtask to nest. Changes apply to the master and future events.</div>');
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof waVolRenderSop === 'function') {
+    var __sop65 = waVolRenderSop;
+    waVolRenderSop = function () {
+      __sop65.apply(this, arguments);
+      setTimeout(w65SopDecorate, 80);
+    };
+  }
+
+  /* =========== wiring =========== */
+  if (typeof showPanel === 'function') {
+    var __sp65 = showPanel;
+    showPanel = function (id) {
+      __sp65(id);
+      if (id === 'transcripts') setTimeout(function () { w65TxForm(); w65DeptSync(); }, 220);
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa65 = startApp;
+    startApp = async function () {
+      await __sa65();
+      try { setTimeout(function () { w65TxForm(); }, 300); } catch (e) { /* non-fatal */ }
+      try { w65LoadWins(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

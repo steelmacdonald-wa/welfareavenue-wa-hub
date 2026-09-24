@@ -1,0 +1,72 @@
+/* =====================================================================
+   WA v82 Phase 1 (U7): the header box searches everything
+   =====================================================================
+   renderSearch is replaced (the base version is superseded): on top of
+   decisions, tasks, updates and transcripts it now searches people,
+   goals, projects, trainings, agendas and requests, grouped, from the
+   caches already in memory. Transcript deep search still streams in
+   from the search_transcripts RPC exactly as before.
+   ===================================================================== */
+(function () {
+  if (window.__wa82) return; window.__wa82 = true;
+
+  var css = document.createElement('style');
+  css.textContent = '.sr-type{min-width:86px;}.search-pop{max-height:60vh;overflow-y:auto;}';
+  document.head.appendChild(css);
+
+  renderSearch = function (q) {
+    var ql = q.toLowerCase();
+    var out = [];
+    function has(s) { return (s || '').toLowerCase().indexOf(ql) >= 0; }
+
+    DB_DECISIONS.filter(function (d) { return has(d.title); }).slice(0, 4)
+      .forEach(function (d) { out.push({ t: 'Decision', label: d.title, hash: '#decision/' + d.id }); });
+    DB_TASKS.filter(function (t) { return has((t.title || '') + ' ' + (t.owner || '')); }).slice(0, 5)
+      .forEach(function (t) { out.push({ t: (DEPT_LABEL[t.department] || 'Task') + (t.done ? ', done' : ''), label: t.title, hash: '#task/' + t.id }); });
+    try {
+      DB_MEMBERS.filter(function (m) { return m.active !== false && has((m.name || '') + ' ' + (m.role || '')); }).slice(0, 4)
+        .forEach(function (m) { out.push({ t: 'Person', label: m.name + (m.role ? ', ' + m.role : ''), hash: '#person/' + m.id }); });
+    } catch (e) { /* non-fatal */ }
+    try {
+      (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return has((g.title || '') + ' ' + (g.quarter || '')); }).slice(0, 3)
+        .forEach(function (g) { out.push({ t: 'Goal', label: (g.quarter ? g.quarter + ': ' : '') + g.title, hash: '#goals' }); });
+    } catch (e) { /* non-fatal */ }
+    try {
+      (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).filter(function (p) { return has(p.name); }).slice(0, 3)
+        .forEach(function (p) { out.push({ t: 'Project', label: p.name, hash: '#project/' + p.id }); });
+    } catch (e) { /* non-fatal */ }
+    try {
+      (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).filter(function (tr) { return has((tr.title || tr.name || '') + ' ' + (tr.description || '')); }).slice(0, 3)
+        .forEach(function (tr) { out.push({ t: 'Training', label: tr.title || tr.name, hash: '#training' }); });
+    } catch (e) { /* non-fatal */ }
+    try {
+      (typeof AGENDAS_CACHE !== 'undefined' ? AGENDAS_CACHE : []).filter(function (a) { return has((a.title || '') + ' ' + (a.purpose || '')); }).slice(0, 3)
+        .forEach(function (a) { out.push({ t: 'Agenda', label: a.title || 'Agenda', hash: '#agendas' }); });
+    } catch (e) { /* non-fatal */ }
+    try {
+      (typeof REQ_CACHE !== 'undefined' ? REQ_CACHE : []).filter(function (r) {
+        return has((r.status || '') + ' ' + JSON.stringify(r.details || {}));
+      }).slice(0, 3).forEach(function (r) {
+        var rt = (typeof REQ_TYPES !== 'undefined' ? REQ_TYPES : []).filter(function (x) { return x.id === r.type_id || x.key === r.type; })[0];
+        out.push({ t: 'Request', label: ((rt && rt.label) || 'Request') + (r.status ? ', ' + r.status : ''), hash: '#requests' });
+      });
+    } catch (e) { /* non-fatal */ }
+    DB_UPDATES.filter(function (u) { return has(u.text); }).slice(0, 3)
+      .forEach(function (u) { out.push({ t: (DEPT_LABEL[u.department] || '') + ' update', label: (u.entry_label ? u.entry_label + ': ' : '') + (u.text || '').slice(0, 90), hash: '#dept/' + u.department }); });
+    txSearchResults.slice(0, 4)
+      .forEach(function (r) { out.push({ t: 'Transcript', label: (r.title || 'Untitled') + (r.snippet ? ': ' + r.snippet.slice(0, 70) : ''), hash: '#tx/' + r.id }); });
+
+    var pop = document.getElementById('searchResults');
+    pop.innerHTML = out.length
+      ? out.map(function (o) { return '<div class="sr" data-hash="' + o.hash + '"><span class="sr-type">' + esc(o.t) + '</span>' + esc(o.label) + '</div>'; }).join('')
+      : '<div class="sr" style="color:var(--wa-muted);">No matches anywhere in the Hub</div>';
+    pop.style.display = 'block';
+    pop.querySelectorAll('.sr[data-hash]').forEach(function (s) {
+      s.addEventListener('click', function () {
+        pop.style.display = 'none';
+        document.getElementById('globalSearch').value = '';
+        location.hash = s.dataset.hash;
+      });
+    });
+  };
+})();

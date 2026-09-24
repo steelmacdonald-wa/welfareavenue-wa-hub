@@ -1,0 +1,166 @@
+/* =====================================================================
+   WA v104 project leads, progress bars, contributors (07/08/26)
+   =====================================================================
+   Steel (07/08/26): "assign project lead(s) to each project... add
+   progress bars to each project page (tasks complete on all tasks), as
+   well as all the contributors to the project".
+   Named project pages gain a status strip under the description:
+   1. Progress bar: completed / all tasks on the project, every team.
+   2. Leads: projects.leads (jsonb list of roster names) shown as chips
+      (clickable to their profile via wave100); staff edit them in a
+      roster-picker modal; changes are change_logged.
+   3. Contributors: everyone with a task on the project (open or done),
+      as clickable chips with open-task counts, sorted busiest first.
+   Implemented by wrapping the CURRENT wa27RenderProject binding (wave99
+   replaced it; 100/101 wrapped it; this wraps again) and injecting after
+   the description, so every existing control stays untouched.
+   ===================================================================== */
+(function () {
+  if (window.__wa104) return; window.__wa104 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w104{margin:10px 0 14px;padding:12px 14px;background:#fbfbfd;border:1px solid #eef0f4;border-radius:10px;}' +
+    '#w104 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:7px 0;}' +
+    '#w104 .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--wa-muted,#8592a3);min-width:96px;}' +
+    '.w104track{flex:1;min-width:160px;max-width:420px;height:8px;background:#e7e9f0;border-radius:999px;overflow:hidden;}' +
+    '.w104fill{height:100%;background:linear-gradient(90deg,#2c7a66,#1baf7a);border-radius:999px;transition:width .4s;}' +
+    '.w104pct{font-size:12.5px;font-weight:700;color:#1f5f4f;white-space:nowrap;}' +
+    '.w104done .w104fill{background:linear-gradient(90deg,#1baf7a,#1baf7a);}' +
+    '#w104 .as-chip{margin:2px 4px 2px 0;}' +
+    '.w104lead{background:rgba(255,171,0,.16)!important;color:#7a5800!important;border:1px solid rgba(255,171,0,.35);}' +
+    '.w104lead:before{content:"\\2605  ";font-size:10px;}' +
+    '.w104n{font-size:10.5px;color:var(--wa-muted,#8592a3);margin-left:3px;}' +
+    '.w104edit{font-size:11.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;}' +
+    '#w104pick{max-height:260px;overflow-y:auto;border:1px solid #e7e9f0;border-radius:8px;padding:8px 10px;margin:8px 0;}' +
+    '#w104pick label{display:block;font-size:13px;padding:3px 2px;cursor:pointer;}' +
+    '#w104pick input{margin-right:7px;accent-color:#2c7a66;}';
+  document.head.appendChild(css);
+
+  function w104Names(v) {
+    if (Array.isArray(v)) return v.filter(Boolean).map(String);
+    if (typeof v === 'string' && v.trim()) { try { var a = JSON.parse(v); return Array.isArray(a) ? a.filter(Boolean).map(String) : []; } catch (e) { return []; } }
+    return [];
+  }
+
+  async function w104EditLeads(p, current) {
+    var roster = [];
+    try {
+      var r = await db.from('team_members').select('id, name').eq('active', true).order('name');
+      roster = (r && r.data) || [];
+    } catch (e) { /* fall through to empty */ }
+    var cur = {};
+    current.forEach(function (n) { cur[n.toLowerCase()] = 1; });
+    openModal(
+      '<h3>Project leads: ' + esc(p.name) + '</h3>' +
+      '<p class="read" style="margin:4px 0 6px">Pick one or more leads. They show at the top of the project page.</p>' +
+      '<input type="text" id="w104filter" placeholder="Filter people..." style="width:100%;box-sizing:border-box;margin:2px 0 0" />' +
+      '<div id="w104pick">' + roster.map(function (m) {
+        var on = cur[(m.name || '').toLowerCase()] ? ' checked' : '';
+        return '<label data-n="' + esc((m.name || '').toLowerCase()) + '"><input type="checkbox" value="' + esc(m.name) + '"' + on + ' />' + esc(m.name) + '</label>';
+      }).join('') + '</div>' +
+      '<div style="margin-top:10px"><button class="btn" id="w104save">Save leads</button> ' +
+      '<button class="btn ghost" id="w104cancel">Cancel</button></div>'
+    );
+    document.getElementById('w104filter').addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('#w104pick label').forEach(function (l) {
+        l.style.display = (l.getAttribute('data-n') || '').indexOf(q) >= 0 ? '' : 'none';
+      });
+    });
+    document.getElementById('w104cancel').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w104save').addEventListener('click', async function () {
+      var picked = [];
+      document.querySelectorAll('#w104pick input:checked').forEach(function (i) { picked.push(i.value); });
+      var b = this; b.disabled = true; b.textContent = 'Saving...';
+      try {
+        var res = await db.from('projects').update({ leads: picked }).eq('id', p.id);
+        if (res.error) throw res.error;
+        try {
+          await db.from('change_log').insert({
+            entity_type: 'project', entity_id: String(p.id), field: 'leads',
+            old_value: current.join(', ') || null, new_value: picked.join(', ') || null,
+            changed_by: (typeof USER !== 'undefined' && USER && USER.email) || 'staff'
+          });
+        } catch (e) { /* audit is best-effort */ }
+        closeModal();
+        toast(picked.length ? 'Leads saved' : 'Leads cleared');
+        if (typeof wa27RenderProject === 'function' && typeof WA27_VIEW !== 'undefined' && WA27_VIEW) {
+          wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+        }
+      } catch (e) { b.disabled = false; b.textContent = 'Save leads'; toast('Could not save leads'); }
+    });
+  }
+
+  function w104Chip(name, extraClass, sub) {
+    return '<span class="as-chip' + (extraClass ? ' ' + extraClass : '') + '">' + esc(name) + '</span>' + (sub ? '<span class="w104n">' + esc(sub) + '</span>' : '');
+  }
+
+  async function w104Inject(ref) {
+    try {
+      if (ref === 'general') return;
+      var sec = document.getElementById('projectpage');
+      if (!sec || document.getElementById('w104')) return;
+      var card = sec.querySelector('.card');
+      var desc = sec.querySelector('.w27-desc');
+      if (!card || !desc) return;
+      var p = wa27Find(ref);
+      if (!p) return;
+      var staff = typeof isStaff === 'function' && isStaff();
+
+      var r = await db.from('dept_tasks').select('id, owner, done').eq('project_id', p.id);
+      var tasks = (r && r.data) || [];
+      var total = tasks.length;
+      var done = tasks.filter(function (t) { return t.done; }).length;
+      var pct = total ? Math.round(done * 100 / total) : 0;
+
+      /* contributors: everyone with a task, open counts shown */
+      var contrib = {};
+      tasks.forEach(function (t) {
+        String(t.owner || '').split(/\s*(?:\+|&|\/|,| and )\s*/i).forEach(function (n) {
+          n = n.trim();
+          if (!n) return;
+          var c = contrib[n] = contrib[n] || { open: 0, done: 0 };
+          if (t.done) c.done++; else c.open++;
+        });
+      });
+      var people = Object.keys(contrib).sort(function (a, b) {
+        return (contrib[b].open - contrib[a].open) || (contrib[b].done - contrib[a].done) || a.localeCompare(b);
+      });
+
+      var leads = w104Names(p.leads);
+      var leadHtml = leads.length
+        ? leads.map(function (n) { return w104Chip(n, 'w104lead'); }).join(' ')
+        : '<span class="w104n" style="margin-left:0">No lead assigned yet.</span>';
+      if (staff) leadHtml += ' <span class="w104edit" id="w104el">' + (leads.length ? 'edit' : 'assign leads') + '</span>';
+
+      var peopleHtml = people.length
+        ? people.map(function (n) {
+            var c = contrib[n];
+            return w104Chip(n, leads.some(function (l) { return l.toLowerCase() === n.toLowerCase(); }) ? 'w104lead' : '', c.open ? c.open + ' open' : 'all done');
+          }).join(' ')
+        : '<span class="w104n" style="margin-left:0">No tasks assigned yet.</span>';
+
+      var box = document.createElement('div');
+      box.id = 'w104';
+      box.innerHTML =
+        '<div class="row' + (total && done === total ? ' w104done' : '') + '"><span class="lbl">Progress</span>' +
+        '<div class="w104track"><div class="w104fill" style="width:' + pct + '%"></div></div>' +
+        '<span class="w104pct">' + done + ' of ' + total + ' task' + (total === 1 ? '' : 's') + ' complete (' + pct + '%)</span></div>' +
+        '<div class="row"><span class="lbl">Lead' + (leads.length > 1 ? 's' : '') + '</span><span>' + leadHtml + '</span></div>' +
+        '<div class="row"><span class="lbl">Contributors</span><span>' + peopleHtml + '</span></div>';
+      var goal = sec.querySelector('.w27-goal');
+      (goal || desc).insertAdjacentElement('afterend', box);
+      var el = document.getElementById('w104el');
+      if (el) el.addEventListener('click', function () { w104EditLeads(p, leads); });
+    } catch (e) { /* decorative: never break the page */ }
+  }
+
+  if (typeof wa27RenderProject === 'function') {
+    var __rp104 = wa27RenderProject;
+    wa27RenderProject = async function (ref, deptForGeneral) {
+      await __rp104.apply(this, arguments);
+      try { await w104Inject(ref); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

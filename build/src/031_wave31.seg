@@ -1,0 +1,544 @@
+/* =====================================================================
+   WA v31 confirmations, templates, event summary, recipes, requests
+   (29/07/26)
+   1. Public confirmation page at #confirm/<token>: no login needed.
+      Role-aware questions: servers say what they are bringing; cooks say
+      where they cook, whose food, and if they need containers; drivers
+      give vehicle type and model; photographers give their camera; team
+      leaders just confirm. Answers land on the event roster instantly
+      (confirmed, declined, or needs attention).
+   2. Text volunteers gains templates per audience, all carrying a
+      personal {{confirm_link}}.
+   3. Every event page gets a live summary: confirmations by role, the
+      cars coming, cook locations and addresses, containers needed, a
+      Google Maps pickup route, the server itinerary link (editable),
+      and checklist progress.
+   4. A Recipes tab in Volunteering (backed by the Google Drive folder)
+      and a recipe dropdown per cook on the event summary.
+   5. Requests reach people: open requests for you or your department
+      show on your home card, assignable to a person.
+   6. The dashboard is now the Welfare Avenue Hub: new title and the
+      Welfare Avenue sign logo in the header, the sign-in card, and the
+      volunteer confirmation page.
+   7. The Text volunteers window shows the Quo web login for staff
+      (stored behind staff-only row security, never in the page source).
+   ===================================================================== */
+
+var WA31_RECIPES = [];
+var WA31_RLOADED = false;
+var WA31_LOGO = 'data:image/png;base64,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';
+
+(function () {
+  if (document.getElementById('wa31css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa31css';
+  st.textContent = '' +
+    '.w31sum{border:1px solid rgba(44,122,102,.4);background:rgba(44,122,102,.05);border-radius:11px;padding:10px 14px;margin:12px 0;}' +
+    '.w31sum h4{margin:0 0 6px;color:#2c7a66;font-size:14px;}' +
+    '.w31sum .row{font-size:12.5px;margin:3px 0;}' +
+    '.w31sum .b{display:inline-block;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:1px 8px;font-size:11.5px;margin:1px 3px 1px 0;}' +
+    '.w31sum .ok{border-color:#2c7a66;color:#2c7a66;}' +
+    '.w31sum .no{border-color:#b3402f;color:#b3402f;}' +
+    '.w31sum a{color:#2c7a66;}' +
+    '.w31cook{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(127,127,127,.15);font-size:12.5px;}' +
+    '.w31req{border-top:1px solid rgba(127,127,127,.15);padding:6px 0;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
+    '.w31rec{border-bottom:1px solid rgba(127,127,127,.15);padding:8px 0;font-size:13.5px;}' +
+    '.wa-logo.w31img{width:auto;height:auto;background:transparent !important;border-radius:0;}' +
+    '.wa-logo.w31img img{height:48px;width:auto;display:block;}' +
+    '.gate-card .wa-logo.w31img img{height:76px;margin:0 auto;}';
+  document.head.appendChild(st);
+})();
+
+/* ---------- 0. Welfare Avenue Hub retitle and logo ---------- */
+(function () {
+  try {
+    document.title = 'Welfare Avenue Hub';
+    var h1 = document.querySelector('.wa-brandrow h1');
+    if (h1) h1.textContent = 'Welfare Avenue Hub';
+    var g2 = document.querySelector('.gate-card h2');
+    if (g2) g2.textContent = 'Welfare Avenue Hub';
+    var els = document.querySelectorAll('.wa-logo');
+    for (var i = 0; i < els.length; i++) {
+      els[i].className += ' w31img';
+      els[i].innerHTML = '<img src="' + WA31_LOGO + '" alt="Welfare Avenue">';
+    }
+  } catch (e) { /* non-fatal */ }
+})();
+
+/* ---------- 1. public confirmation page ---------- */
+(function () {
+  var h = decodeURIComponent(location.hash || '');
+  if (h.indexOf('#confirm/') !== 0) return;
+  var token = h.slice(9).split('?')[0].trim();
+  window.__wa31Confirm = true;
+  if (typeof showGate === 'function') {
+    var __sg31 = showGate;
+    showGate = function (x, y) { if (window.__wa31Confirm) return; __sg31(x, y); };
+  }
+  var wrap = document.createElement('div');
+  wrap.id = 'wa31c';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#f4f7f6;overflow:auto;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1c2b27;';
+  wrap.innerHTML = '<div style="max-width:460px;margin:0 auto;padding:28px 18px"><img src="' + WA31_LOGO + '" alt="Welfare Avenue" style="height:66px;display:block;margin:0 0 8px"><div style="font-weight:800;color:#1f5f4f;font-size:19px;margin-bottom:4px">Welfare Avenue</div><div id="wa31body" style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 14px rgba(20,48,43,.08)">Loading your invitation...</div></div>';
+  function mount() { if (document.body) { document.body.appendChild(wrap); } else { setTimeout(mount, 30); } }
+  mount();
+
+  function el(id) { return document.getElementById(id); }
+  function val(id) { var e = el(id); return e ? e.value : ''; }
+  function checked(name) {
+    var e = document.querySelector('input[name="' + name + '"]:checked');
+    return e ? e.value : '';
+  }
+  function esc31(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+  function form(info) {
+    var role = String(info.role || '').toLowerCase();
+    var a = info.answers || {};
+    var d = new Date(String(info.event_date) + 'T12:00:00');
+    var dateStr = isNaN(d) ? String(info.event_date) : d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+    var html = '<h2 style="margin:0 0 4px;font-size:18px">Hi ' + esc31(String(info.name || '').split(' ')[0]) + '!</h2>'
+      + '<p style="margin:0 0 12px;font-size:14px;color:#5b6b66">You are on the volunteer list as a <b>' + esc31(info.role || 'volunteer') + '</b> for our serving event on <b>' + esc31(dateStr) + '</b> in ' + esc31(info.location || 'Montreal') + '.</p>';
+    if (info.already) html += '<p style="font-size:12.5px;background:rgba(44,122,102,.08);border-radius:8px;padding:7px 10px">You already answered (' + esc31(info.already) + '). You can update your answer below.</p>';
+    var radio = function (name, v, label, cur) {
+      return '<label style="display:flex;gap:8px;align-items:center;padding:7px 0;font-size:14.5px;cursor:pointer"><input type="radio" name="' + name + '" value="' + v + '"' + (cur === v ? ' checked' : '') + ' style="width:17px;height:17px" /> ' + label + '</label>';
+    };
+    var input = function (id, label, cur, ph) {
+      return '<label style="display:block;font-size:12.5px;color:#5b6b66;margin-top:10px">' + label + '</label><input id="' + id + '" value="' + esc31(cur || '') + '" placeholder="' + (ph || '') + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #cdd8d4;border-radius:9px;font-size:14px" />';
+    };
+    html += '<div style="border-top:1px solid #e4ebe8;margin-top:6px;padding-top:6px"><b style="font-size:14px">Can you make it?</b>'
+      + radio('att', 'yes', 'Yes, I will be there', a.attending || '')
+      + radio('att', 'no', 'Sorry, I cannot make it', a.attending || '') + '</div>';
+    html += '<div id="wa31x">';
+    if (role.indexOf('server') === 0 || role.indexOf('dish') === 0) {
+      html += input('x_bringing', 'What are you bringing to the event? (water, serving spoons, nothing is fine too)', a.bringing, 'What you are bringing');
+    } else if (role.indexOf('cook') === 0) {
+      html += '<div style="margin-top:10px"><b style="font-size:13.5px">Where are you cooking?</b>'
+        + radio('loc', 'our kitchen', 'At the Welfare Avenue kitchen', a.cook_location || '')
+        + radio('loc', 'home', 'From home', a.cook_location || '') + '</div>'
+        + '<div style="margin-top:6px"><b style="font-size:13.5px">Whose ingredients?</b>'
+        + radio('food', 'own food', 'I am cooking my own ingredients', a.food_source || '')
+        + radio('food', 'provided', 'Welfare Avenue provides the food', a.food_source || '') + '</div>'
+        + '<div style="margin-top:6px"><b style="font-size:13.5px">Containers?</b>'
+        + radio('cont', 'needs containers', 'I need containers for the food', a.containers || '')
+        + radio('cont', 'has containers', 'I have my own containers', a.containers || '') + '</div>';
+    } else if (role.indexOf('driver') === 0) {
+      html += '<label style="display:block;font-size:12.5px;color:#5b6b66;margin-top:10px">What type of car will you drive?</label>'
+        + '<select id="x_vehicle" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #cdd8d4;border-radius:9px;font-size:14px">'
+        + ['', 'Sedan', 'Hatchback', 'SUV', 'Truck', 'Van'].map(function (v) {
+          return '<option value="' + v + '"' + ((a.vehicle || '') === v ? ' selected' : '') + '>' + (v || 'Pick one') + '</option>';
+        }).join('') + '</select>'
+        + input('x_model', 'Car model (for example Toyota Corolla)', a.model, 'Make and model');
+    } else if (role.indexOf('photo') === 0) {
+      html += input('x_camera', 'What camera will you use?', a.camera, 'Camera make and model');
+    }
+    html += input('x_note', 'Anything else we should know? (optional)', a.note, '');
+    html += '</div>';
+    html += '<button id="wa31go" style="margin-top:16px;width:100%;padding:12px;background:#1f5f4f;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Send my answer</button>'
+      + '<p style="font-size:11px;color:#8b9a95;margin-top:10px">Questions? Text the Welfare Phone: 438 808 7754.</p>';
+    el('wa31body').innerHTML = html;
+    el('wa31go').addEventListener('click', async function () {
+      var att = checked('att');
+      if (!att) { el('wa31go').textContent = 'Pick yes or no first'; return; }
+      el('wa31go').disabled = true;
+      el('wa31go').textContent = 'Sending...';
+      var p = { attending: att, note: val('x_note') || null };
+      if (el('x_bringing')) p.bringing = val('x_bringing') || null;
+      if (document.querySelector('input[name="loc"]')) {
+        p.cook_location = checked('loc') || null;
+        p.food_source = checked('food') || null;
+        p.containers = checked('cont') || null;
+      }
+      if (el('x_vehicle')) { p.vehicle = val('x_vehicle') || null; p.model = val('x_model') || null; }
+      if (el('x_camera')) p.camera = val('x_camera') || null;
+      try {
+        var r = await db.rpc('volunteer_confirm_submit', { p_token: token, p: p });
+        if (r.error || !(r.data && r.data.ok)) throw new Error('save failed');
+        el('wa31body').innerHTML = '<h2 style="margin:0 0 6px;font-size:18px">' + (att === 'yes' ? 'You are confirmed. Thank you!' : 'Thanks for letting us know.') + '</h2>'
+          + '<p style="font-size:14px;color:#5b6b66">' + (att === 'yes' ? 'We have everything we need. See you at the event, and watch for the itinerary text a couple of days before.' : 'No worries at all. We hope to see you at a future serving event.') + '</p>';
+      } catch (e) {
+        el('wa31go').disabled = false;
+        el('wa31go').textContent = 'Try again';
+      }
+    });
+  }
+
+  var tries = 0;
+  var iv = setInterval(async function () {
+    tries += 1;
+    if (typeof window.db === 'undefined' || !window.db || !window.db.rpc) {
+      if (tries > 100) { clearInterval(iv); el('wa31body').innerHTML = 'Could not load. Refresh the page.'; }
+      return;
+    }
+    clearInterval(iv);
+    try {
+      var r = await db.rpc('volunteer_confirm_get', { p_token: token });
+      if (r.error || !r.data) {
+        el('wa31body').innerHTML = '<b>This link is not valid.</b><p style="font-size:13px;color:#5b6b66">It may have been replaced by a newer text. Reply to our message and we will sort it out.</p>';
+        return;
+      }
+      form(r.data);
+    } catch (e) {
+      el('wa31body').innerHTML = 'Could not load. Refresh the page.';
+    }
+  }, 100);
+})();
+
+/* ---------- 2. texting templates with confirm links ---------- */
+var WA31_TPL = {
+  cook: 'Hi {{first_name}}, it is Welfare Avenue. Confirming you as a COOK for our {{event_date}} serving event. Tap here to confirm and tell us where you are cooking and if you need containers: {{confirm_link}}',
+  server: 'Hi {{first_name}}, it is Welfare Avenue. Confirming you as a SERVER for {{event_date}}. Tap here to confirm and tell us what you are bringing: {{confirm_link}}',
+  driver: 'Hi {{first_name}}, it is Welfare Avenue. Confirming you as a DRIVER for {{event_date}}. Tap here to confirm and tell us which car you will drive: {{confirm_link}}',
+  photographer: 'Hi {{first_name}}, it is Welfare Avenue. Confirming you as our PHOTOGRAPHER for {{event_date}}. Confirm and tell us your camera here: {{confirm_link}}',
+  team_lead: 'Hi {{first_name}}, it is Welfare Avenue. Confirming you as a TEAM LEADER for {{event_date}}. One tap to confirm: {{confirm_link}}',
+  availability: 'Hi {{first_name}}, it is Welfare Avenue. We would love your help at our Sunday serving event on {{event_date}}. Can you make it? Reply YES or NO. Thank you!'
+};
+
+if (typeof waTxtModal === 'function') {
+  (function () {
+    var __tm31 = waTxtModal;
+    waTxtModal = function () {
+      __tm31();
+      try {
+        var msg = document.getElementById('vtMsg');
+        if (!msg || document.getElementById('vtTpl')) return;
+        var sel = document.createElement('select');
+        sel.id = 'vtTpl';
+        sel.innerHTML = '<option value="">Templates...</option>'
+          + '<option value="cook">Confirm cooks (with confirm link)</option>'
+          + '<option value="server">Confirm servers (with confirm link)</option>'
+          + '<option value="driver">Confirm drivers (with confirm link)</option>'
+          + '<option value="photographer">Confirm photographer (with confirm link)</option>'
+          + '<option value="team_lead">Confirm team leaders (with confirm link)</option>'
+          + '<option value="availability">Availability outreach (reply YES or NO)</option>';
+        sel.style.marginBottom = '6px';
+        msg.parentNode.insertBefore(sel, msg);
+        var note = document.createElement('p');
+        note.className = 'm-sub';
+        note.textContent = '{{confirm_link}} becomes a personal confirmation page per volunteer; their answers land on the event roster automatically.';
+        msg.parentNode.insertBefore(note, msg);
+        try {
+          db.from('staff_notes').select('v').eq('k', 'quo_login').maybeSingle().then(function (r) {
+            if (r && r.data && r.data.v && !document.getElementById('w31quo') && msg.parentNode) {
+              var q = document.createElement('p');
+              q.className = 'm-sub';
+              q.id = 'w31quo';
+              q.textContent = r.data.v;
+              msg.parentNode.insertBefore(q, msg);
+            }
+          });
+        } catch (x) { /* non-fatal */ }
+        sel.addEventListener('change', function () {
+          if (WA31_TPL[sel.value]) msg.value = WA31_TPL[sel.value];
+          var aud = document.getElementById('vtAud');
+          if (aud && ['cook', 'driver', 'server', 'photographer'].indexOf(sel.value) >= 0) {
+            var has = false;
+            aud.querySelectorAll('option').forEach(function (o) { if (o.value === sel.value) has = true; });
+            if (has && aud.value !== 'roster') aud.value = sel.value;
+          }
+        });
+      } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* replace the preview builder so the audience role travels with the batch */
+if (typeof waTxtPreview === 'function') {
+  waTxtPreview = async function (ev, dateStr) {
+    var out = document.getElementById('vtOut');
+    var msg = (document.getElementById('vtMsg').value || '').trim();
+    if (msg.length < 5) { toast('Write the message first'); return; }
+    var aud = document.getElementById('vtAud').value;
+    var stat = aud === 'roster' ? document.getElementById('vtStat').value : '';
+    out.innerHTML = '<p class="m-sub">Building the preview...</p>';
+    try {
+      var who = await waTxtResolve(aud, stat);
+      if (!who.ids.length && !who.phones.length) {
+        out.innerHTML = '<p class="m-sub">Nobody matches that audience with a phone on file.</p>';
+        return;
+      }
+      WA_TXT_PAYLOAD = {
+        message: msg,
+        person_ids: who.ids,
+        phones: who.phones,
+        event_id: ev ? ev.id : null,
+        event_date: dateStr,
+        role: ['cook', 'driver', 'server', 'dishwasher', 'photographer'].indexOf(aud) >= 0 ? aud : null,
+        dry_run: true
+      };
+      var r = await db.functions.invoke('quo-send', { body: WA_TXT_PAYLOAD });
+      if (r.error) throw r.error;
+      var d = r.data || {};
+      var rows = (d.previews || []).slice(0, 8).map(function (p) {
+        return '<div style="border-top:1px solid rgba(127,127,127,.25);padding:6px 0;font-size:12px;">' +
+          '<b>' + esc(p.name || p.phone) + '</b> <span style="opacity:.6">' + esc(p.phone) + '</span><br />' + esc(p.text) + '</div>';
+      }).join('');
+      var more = d.recipients > 8 ? '<p class="m-sub">plus ' + (d.recipients - 8) + ' more with the same wording.</p>' : '';
+      out.innerHTML = '<h4 style="margin:12px 0 4px">' + d.recipients + (d.recipients === 1 ? ' text ready' : ' texts ready') + '</h4>' +
+        (d.skipped_no_phone ? '<p class="m-sub">' + d.skipped_no_phone + ' skipped with no phone on file.</p>' : '') +
+        (d.skipped_no_link ? '<p class="m-sub">' + d.skipped_no_link + ' skipped: no volunteer record to attach a confirm link to.</p>' : '') +
+        rows + more +
+        '<div class="m-actions"><button class="btn" id="vtSend">Send ' + d.recipients + (d.recipients === 1 ? ' text' : ' texts') + ' now</button></div>';
+      var send = document.getElementById('vtSend');
+      if (send) send.addEventListener('click', waTxtSend);
+    } catch (e) {
+      out.innerHTML = '<p class="m-sub">Preview failed. Try again.</p>';
+    }
+  };
+}
+
+/* ---------- recipes cache ---------- */
+async function wa31LoadRecipes(force) {
+  if (WA31_RLOADED && !force) return;
+  try {
+    var r = await db.from('recipes').select('*').eq('active', true).order('sort').order('id');
+    WA31_RECIPES = (r.data) || [];
+    WA31_RLOADED = true;
+  } catch (e) { /* offline */ }
+}
+
+/* ---------- 3. event summary ---------- */
+async function wa31Summary() {
+  if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'event' || !WA_VOL_DETAIL) return;
+  var sec = document.getElementById('volunteering');
+  if (!sec || sec.querySelector('.w31sum')) return;
+  var anchor = sec.querySelector('.vl-back');
+  if (!anchor) return;
+  try { await waVolLoadPeople(); } catch (e) { /* non-fatal */ }
+  await wa31LoadRecipes(false);
+  var ev = null;
+  WA_VOL_EVENTS.forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; });
+  var roster = WA_VOL_DETAIL.roster || [];
+  var staff = typeof isStaff === 'function' && isStaff();
+  var byPerson = {};
+  (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []).forEach(function (p) { byPerson[String(p.id)] = p; });
+
+  var counts = { confirmed: 0, declined: 0, waiting: 0 };
+  roster.forEach(function (r) {
+    var s = String(r.status || '').toLowerCase();
+    if (s.indexOf('confirm') === 0) counts.confirmed += 1;
+    else if (s.indexOf('declin') === 0) counts.declined += 1;
+    else counts.waiting += 1;
+  });
+  var cooks = roster.filter(function (r) { return String(r.role || '').toLowerCase().indexOf('cook') === 0; });
+  var drivers = roster.filter(function (r) { return String(r.role || '').toLowerCase().indexOf('driver') === 0; });
+  var servers = roster.filter(function (r) { return ['server', 'dishwasher'].indexOf(String(r.role || '').toLowerCase()) >= 0; });
+  var photos = roster.filter(function (r) { return String(r.role || '').toLowerCase().indexOf('photo') === 0; });
+
+  var homeAddrs = [];
+  var cookRows = cooks.map(function (r) {
+    var c = r.confirm || {};
+    var p = r.person_id ? byPerson[String(r.person_id)] : null;
+    var addr = (p && p.address) || '';
+    if (String(c.cook_location || '') === 'home' && addr) homeAddrs.push(addr);
+    var bits = [];
+    if (c.cook_location) bits.push('<span class="b">' + esc(c.cook_location) + '</span>');
+    if (c.food_source) bits.push('<span class="b">' + esc(c.food_source) + '</span>');
+    if (c.containers) bits.push('<span class="b' + (c.containers === 'needs containers' ? ' no' : '') + '">' + esc(c.containers) + '</span>');
+    if (addr) bits.push('<span class="b">' + esc(addr) + '</span>');
+    var recSel = '';
+    if (staff) {
+      recSel = '<select class="w28sel" data-w31r="' + r.id + '"><option value="">Assign a recipe</option>'
+        + WA31_RECIPES.map(function (x) {
+          return '<option value="' + x.id + '"' + (String(r.recipe_id) === String(x.id) ? ' selected' : '') + '>' + esc(x.name) + '</option>';
+        }).join('') + '</select>';
+    }
+    var rec = null;
+    WA31_RECIPES.forEach(function (x) { if (String(x.id) === String(r.recipe_id)) rec = x; });
+    return '<div class="w31cook"><b>' + esc(r.person_name || '') + '</b>'
+      + '<span class="b' + (String(r.status || '').toLowerCase().indexOf('confirm') === 0 ? ' ok' : '') + '">' + esc(r.status || 'TBD') + '</span>'
+      + bits.join('')
+      + recSel
+      + (rec && rec.drive_url ? ' <a href="' + esc(rec.drive_url) + '" target="_blank" rel="noopener">recipe</a>' : '')
+      + '</div>';
+  }).join('');
+
+  var carList = drivers.map(function (r) {
+    var c = r.confirm || {};
+    return '<span class="b' + (String(r.status || '').toLowerCase().indexOf('confirm') === 0 ? ' ok' : '') + '">' + esc(r.person_name || '')
+      + (c.vehicle ? ': ' + esc(c.vehicle) + (c.model ? ' (' + esc(c.model) + ')' : '') : ': car TBD') + '</span>';
+  }).join(' ');
+  var bringing = servers.filter(function (r) { return r.confirm && r.confirm.bringing; }).map(function (r) {
+    return '<span class="b">' + esc(r.person_name.split(' ')[0]) + ': ' + esc(r.confirm.bringing) + '</span>';
+  }).join(' ');
+  var cams = photos.filter(function (r) { return r.confirm && r.confirm.camera; }).map(function (r) {
+    return '<span class="b">' + esc(r.person_name.split(' ')[0]) + ': ' + esc(r.confirm.camera) + '</span>';
+  }).join(' ');
+  var needCont = cooks.filter(function (r) { return r.confirm && r.confirm.containers === 'needs containers'; }).length;
+  var route = homeAddrs.length
+    ? 'https://www.google.com/maps/dir/' + homeAddrs.map(function (a) { return encodeURIComponent(a); }).join('/')
+    : null;
+
+  var div = document.createElement('div');
+  div.className = 'w31sum';
+  div.innerHTML = '<h4>Event summary</h4>'
+    + '<div class="row"><span class="b ok">' + counts.confirmed + ' confirmed</span><span class="b no">' + counts.declined + ' declined</span><span class="b">' + counts.waiting + ' waiting</span>'
+    + (ev && ev.steps_total ? '<span class="b">' + ev.steps_done + ' of ' + ev.steps_total + ' checklist steps done</span>' : '')
+    + (needCont ? '<span class="b no">' + needCont + (needCont === 1 ? ' cook needs containers' : ' cooks need containers') + '</span>' : '') + '</div>'
+    + (carList ? '<div class="row"><b>Cars:</b> ' + carList + '</div>' : '')
+    + (bringing ? '<div class="row"><b>Servers bringing:</b> ' + bringing + '</div>' : '')
+    + (cams ? '<div class="row"><b>Cameras:</b> ' + cams + '</div>' : '')
+    + (route ? '<div class="row"><a href="' + esc(route) + '" target="_blank" rel="noopener">Google Maps pickup route for the home cooks (' + homeAddrs.length + ' stops)</a></div>' : '')
+    + '<div class="row">' + (ev && ev.itinerary_url ? '<a href="' + esc(ev.itinerary_url) + '" target="_blank" rel="noopener">Open the server and photographer itinerary</a>' : 'No itinerary link yet.')
+    + (staff ? ' <input type="text" class="vl-in" style="width:230px" placeholder="Paste the Canva itinerary link" value="' + esc((ev && ev.itinerary_url) || '') + '" data-w31itin="' + (ev ? ev.id : '') + '" />' : '') + '</div>'
+    + (cooks.length ? '<div style="margin-top:6px"><b style="font-size:13px">Cooks and recipes</b>' + cookRows + '</div>' : '');
+  var after = anchor.nextElementSibling && anchor.nextElementSibling.tagName === 'SPAN' ? anchor.nextElementSibling : anchor;
+  after.insertAdjacentElement('afterend', div);
+}
+
+/* ---------- 4. recipes tab ---------- */
+async function wa31Recipes() {
+  await wa31LoadRecipes(true);
+  var staff = typeof isStaff === 'function' && isStaff();
+  var html = '<p class="vl-empty" style="padding:0 0 12px">The recipe library, linked to the Google Drive recipes folder. Assign one to each cook from any event page summary.</p>';
+  WA31_RECIPES.forEach(function (x) {
+    html += '<div class="w31rec"><b>' + esc(x.name) + '</b>'
+      + (x.drive_url ? ' <a href="' + esc(x.drive_url) + '" target="_blank" rel="noopener" style="color:#2c7a66">open in Drive</a>' : '')
+      + (x.notes ? '<div style="font-size:12px;color:var(--wa-muted,#7b8a86)">' + esc(x.notes) + '</div>' : '')
+      + (staff ? '<div style="font-size:11.5px;margin-top:3px"><a data-w31re="' + x.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">edit</a></div>' : '')
+      + '</div>';
+  });
+  if (staff) html += '<div class="wa24-links" style="margin-top:12px"><button data-w31ra2="1">Add a recipe</button></div>';
+  waVolPaint(html);
+}
+
+function wa31RecipeModal(rid) {
+  var x = null;
+  WA31_RECIPES.forEach(function (r) { if (String(r.id) === String(rid)) x = r; });
+  openModal('<h3>' + (x ? 'Edit recipe' : 'Add a recipe') + '</h3>' +
+    '<label>Recipe name</label><input type="text" id="w31rn" value="' + esc(x ? x.name : '') + '" />' +
+    '<label>Google Drive link</label><input type="text" id="w31rl" value="' + esc(x ? (x.drive_url || '') : '') + '" placeholder="https://drive.google.com/..." />' +
+    '<label>Notes</label><textarea id="w31rno" rows="2">' + esc(x ? (x.notes || '') : '') + '</textarea>' +
+    (x ? '<label style="display:flex;gap:7px;align-items:center;margin-top:8px"><input type="checkbox" id="w31rar" style="width:15px;height:15px" /> Remove from the library</label>' : '') +
+    '<div class="m-actions"><button class="btn" id="w31rs">Save</button> <button class="btn ghost" id="w31rc">Cancel</button></div>');
+  var c = document.getElementById('w31rc');
+  if (c) c.addEventListener('click', function () { closeModal(); });
+  var s = document.getElementById('w31rs');
+  if (s) s.addEventListener('click', async function () {
+    var name = (document.getElementById('w31rn').value || '').trim();
+    if (!name) { toast('The recipe needs a name'); return; }
+    s.disabled = true;
+    var patch = {
+      name: name,
+      drive_url: (document.getElementById('w31rl').value || '').trim() || null,
+      notes: (document.getElementById('w31rno').value || '').trim() || null
+    };
+    var ar = document.getElementById('w31rar');
+    if (ar && ar.checked) patch.active = false;
+    var r;
+    if (x) r = await db.from('recipes').update(patch).eq('id', x.id);
+    else { patch.sort = 99; r = await db.from('recipes').insert(patch); }
+    if (r.error) { s.disabled = false; toast('Could not save it'); return; }
+    closeModal();
+    toast('Saved');
+    wa31Recipes();
+  });
+}
+
+/* ---------- 5. requests on the home card ---------- */
+async function wa31Reqs() {
+  var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+  var card = document.querySelector('#overview .w28my');
+  if (!me || !card || card.querySelector('.w31req')) return;
+  try {
+    var r = await db.from('dept_requests').select('*').eq('done', false).order('id', { ascending: false }).limit(30);
+    var reqs = ((r && r.data) || []).filter(function (q) {
+      return (q.assignee && q.assignee.toLowerCase() === me.name.toLowerCase()) || q.department === me.department;
+    });
+    if (!reqs.length) return;
+    var staff = typeof isStaff === 'function' && isStaff();
+    var html = '<h3 class="block" style="margin-top:14px;color:#2c7a66">Requests for you and your department (' + reqs.length + ')</h3>';
+    reqs.slice(0, 8).forEach(function (q) {
+      html += '<div class="w31req"><span style="flex:1;min-width:0"><b>' + esc(q.title || q.type_key || 'Request') + '</b>'
+        + ' <span style="font-size:11px;opacity:.6">' + esc(q.status || '') + '</span></span>'
+        + '<span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 7px;color:#7b8a86">' + esc(q.department || '') + '</span>'
+        + (staff ? '<select class="w28sel" data-w31ra="' + q.id + '"><option value="">' + (q.assignee ? esc(q.assignee) : 'Assign to...') + '</option>'
+          + (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).map(function (p) {
+            return '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>';
+          }).join('') + '</select>' : '')
+        + '</div>';
+    });
+    var wrap = document.createElement('div');
+    wrap.innerHTML = html;
+    card.appendChild(wrap);
+  } catch (e) { /* non-fatal */ }
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  if (typeof waVolShell === 'function') {
+    var __sh31 = waVolShell;
+    waVolShell = function (inner) {
+      var html = __sh31(inner);
+      try {
+        html = html.replace('Inventory</span>', 'Inventory</span><span class="fchip' + (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'recipes' ? ' on' : '') + '" data-vl="recipes">Recipes</span>');
+      } catch (e) { /* non-fatal */ }
+      return html;
+    };
+  }
+  if (typeof waVolRender === 'function') {
+    var __vr31 = waVolRender;
+    waVolRender = async function () {
+      if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'recipes') {
+        try { await waVolLoad(false); } catch (e) { /* non-fatal */ }
+        await wa31Recipes();
+        return;
+      }
+      await __vr31();
+    };
+  }
+  if (typeof waVolRenderEvent === 'function') {
+    var __ev31 = waVolRenderEvent;
+    waVolRenderEvent = function () {
+      __ev31();
+      try { wa31Summary(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  function wire() {
+    if (document.body.dataset.wa31Wired) return;
+    document.body.dataset.wa31Wired = '1';
+    document.body.addEventListener('change', async function (e) {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var rr = e.target.closest('select[data-w31r]');
+      if (rr) {
+        var r1 = await db.from('event_roster').update({ recipe_id: Number(rr.value) || null }).eq('id', Number(rr.getAttribute('data-w31r')));
+        if (r1.error) { toast('Could not assign the recipe'); return; }
+        (WA_VOL_DETAIL && WA_VOL_DETAIL.roster || []).forEach(function (x) {
+          if (String(x.id) === String(rr.getAttribute('data-w31r'))) x.recipe_id = Number(rr.value) || null;
+        });
+        toast('Recipe assigned');
+        return;
+      }
+      var it = e.target.closest('input[data-w31itin]');
+      if (it) {
+        var r2 = await db.from('volunteer_events').update({ itinerary_url: (it.value || '').trim() || null }).eq('id', Number(it.getAttribute('data-w31itin')));
+        if (r2.error) { toast('Could not save the itinerary link'); return; }
+        WA_VOL_EVENTS.forEach(function (x) { if (String(x.id) === String(it.getAttribute('data-w31itin'))) x.itinerary_url = (it.value || '').trim() || null; });
+        toast('Itinerary link saved');
+        return;
+      }
+      var ra = e.target.closest('select[data-w31ra]');
+      if (ra && ra.value) {
+        var r3 = await db.from('dept_requests').update({ assignee: ra.value, updated_at: new Date().toISOString(), updated_by: (typeof who === 'function' ? who() : 'dashboard') }).eq('id', Number(ra.getAttribute('data-w31ra')));
+        if (r3.error) { toast('Could not assign it'); return; }
+        toast('Request assigned to ' + ra.value);
+        return;
+      }
+    });
+    document.body.addEventListener('click', function (e) {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var re = e.target.closest('[data-w31re]');
+      if (re) { try { wa31RecipeModal(re.getAttribute('data-w31re')); } catch (x) { /* non-fatal */ } return; }
+      var ra2 = e.target.closest('[data-w31ra2]');
+      if (ra2) { try { wa31RecipeModal(null); } catch (x) { /* non-fatal */ } return; }
+    });
+  }
+  wire();
+  var __sa31 = startApp;
+  startApp = async function () {
+    await __sa31();
+    try {
+      wire();
+      wa31Reqs();
+    } catch (e) { /* non-fatal */ }
+  };
+})();

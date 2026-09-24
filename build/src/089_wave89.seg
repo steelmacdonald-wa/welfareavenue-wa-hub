@@ -1,0 +1,148 @@
+/* =====================================================================
+   WA v89 Phase 4 (R1 UI + R2): notification settings + live Welcome kit
+   =====================================================================
+   1. Home gains a small "Slack notifications" fold: five per-person
+      switches (request filed, task handed to you, meeting suggestion
+      accepted, mentioned in a meeting, invited to the Hub) saved to
+      wa_notify_prefs (RLS: own row only). A "Send me a test" link
+      calls the notify fn so anyone can confirm their delivery.
+   2. The HR Welcome kit's channel message gains "Send to their Slack":
+      live sending of the (editable) welcome message through the notify
+      fn, with the delivery outcome shown inline. Copy buttons stay.
+   ===================================================================== */
+(function () {
+  if (window.__wa89) return; window.__wa89 = true;
+
+  var EVENTS = [
+    ['request_filed', 'A request is filed for my team'],
+    ['task_reassigned', 'A task is handed to me'],
+    ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'],
+    ['mentioned', 'A meeting mentions me'],
+    ['invited', 'Someone I invited joins the Hub']
+  ];
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w89row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;}' +
+    '.w89row input{accent-color:#2c7a66;}' +
+    '.w89note{font-size:11px;color:#7b8a86;margin-top:6px;}' +
+    '.w89test{font-size:11.5px;color:#2c7a66;text-decoration:underline;cursor:pointer;}' +
+    '[data-w89kit]{background:#2c7a66;color:#fff;border:none;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;margin-left:6px;}' +
+    '.w89out{font-size:11.5px;margin-left:8px;font-weight:700;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. settings fold on Home ---------- */
+  var W89 = { disabled: [] };
+
+  async function w89Load() {
+    try {
+      var em = (typeof USER !== 'undefined' && USER && USER.email) || '';
+      var r = await db.from('wa_notify_prefs').select('disabled').eq('email', em).maybeSingle();
+      W89.disabled = (r && r.data && r.data.disabled) || [];
+      if (!Array.isArray(W89.disabled)) W89.disabled = [];
+    } catch (e) { W89.disabled = []; }
+  }
+
+  async function w89Save() {
+    try {
+      var em = (typeof USER !== 'undefined' && USER && USER.email) || '';
+      await db.from('wa_notify_prefs').upsert({ email: em, disabled: W89.disabled, updated_at: new Date().toISOString() });
+      toast('Notification settings saved');
+    } catch (e) { toast('Could not save settings'); }
+  }
+
+  function w89Render() {
+    var grid = document.querySelector('#mypage .mp-grid');
+    if (!grid || document.getElementById('w89box')) return;
+    var right = grid.children[1] || grid;
+    var d = document.createElement('details');
+    d.className = 'mp-sec';
+    d.id = 'w89box';
+    d.innerHTML = '<summary style="cursor:pointer;font-weight:800;font-size:13px;color:#14302b;list-style:none">Slack notifications</summary>' +
+      '<div style="margin-top:6px">' +
+      EVENTS.map(function (ev) {
+        var on = W89.disabled.indexOf(ev[0]) < 0;
+        return '<label class="w89row"><input type="checkbox" data-w89ev="' + ev[0] + '"' + (on ? ' checked' : '') + '/> ' + ev[1] + '</label>';
+      }).join('') +
+      '<div class="w89note">Delivered as a Slack DM (or a ping in the dashboard channel until DMs are enabled). <span class="w89test" data-w89test>Send me a test</span></div>' +
+      '</div>';
+    right.appendChild(d);
+    d.querySelectorAll('[data-w89ev]').forEach(function (c) {
+      c.addEventListener('change', function () {
+        var k = c.getAttribute('data-w89ev');
+        W89.disabled = W89.disabled.filter(function (x) { return x !== k; });
+        if (!c.checked) W89.disabled.push(k);
+        w89Save();
+      });
+    });
+    d.querySelector('[data-w89test]').addEventListener('click', async function () {
+      try {
+        await db.functions.invoke('notify', { body: { event: 'test' } });
+        toast('Test sent, check Slack');
+      } catch (e) { toast('Test failed to send'); }
+    });
+  }
+
+  if (typeof renderMyPage === 'function') {
+    var __mp89 = renderMyPage;
+    renderMyPage = async function () {
+      await __mp89.apply(this, arguments);
+      try { await w89Load(); w89Render(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- 2. live Welcome kit sending ---------- */
+  function w89KitDecorate() {
+    var ta = document.getElementById('w46sm');
+    if (!ta || document.querySelector('[data-w89kit]')) return;
+    var h3 = document.querySelector('#modalBox h3');
+    var name = h3 ? (h3.textContent || '').replace('Welcome kit for', '').trim() : '';
+    var row = ta.parentNode.querySelector('div');
+    if (!row) return;
+    var b = document.createElement('button');
+    b.setAttribute('data-w89kit', name);
+    b.textContent = 'Send to their Slack';
+    row.appendChild(b);
+    var out = document.createElement('span');
+    out.className = 'w89out';
+    row.appendChild(out);
+    b.addEventListener('click', async function () {
+      var member = null;
+      try {
+        member = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).find(function (m) {
+          return (m.name || '').toLowerCase() === name.toLowerCase() && m.email;
+        }) || (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).find(function (m) {
+          return (m.name || '').toLowerCase().split(' ')[0] === name.toLowerCase().split(' ')[0] && m.email;
+        });
+      } catch (e) { /* fine */ }
+      if (!member || !member.email) { out.textContent = 'No roster email for ' + name; out.style.color = '#b3402f'; return; }
+      b.disabled = true; b.textContent = 'Sending...';
+      try {
+        var r = await db.functions.invoke('notify', { body: { event: 'welcome_kit', email: member.email, text: ta.value } });
+        var oc = r && r.data && r.data.outcome;
+        if (oc === 'sent' || oc === 'sent_channel') {
+          out.textContent = oc === 'sent' ? 'Sent as a DM' : 'Sent (channel ping until DMs are enabled)';
+          out.style.color = '#2c7a66';
+        } else {
+          out.textContent = 'Not delivered: ' + (oc || 'error') + ' (copy button still works)';
+          out.style.color = '#b3402f';
+        }
+      } catch (e) {
+        out.textContent = 'Send failed (copy button still works)';
+        out.style.color = '#b3402f';
+      }
+      b.disabled = false; b.textContent = 'Send to their Slack';
+    });
+  }
+  var mo = new MutationObserver(function () { w89KitDecorate(); });
+  if (typeof startApp === 'function') {
+    var __sa89 = startApp;
+    startApp = async function () {
+      await __sa89.apply(this, arguments);
+      try {
+        var box = document.getElementById('modalBox');
+        if (box) mo.observe(box, { childList: true, subtree: true });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

@@ -1,0 +1,272 @@
+/* =====================================================================
+   WA v77 Phase 1 (U1): department pages, one clean scan path
+   =====================================================================
+   Every department page becomes: compact header (banner, this period's
+   narrative, priorities, quick tools, folded team) -> ONE task area
+   (the workstream tabs) -> collapsible sections below (requests, goals,
+   projects, updates, transcripts). Legacy narrative subsections that
+   duplicate the tabs and hold no tasks are removed from the DOM.
+   Mechanics: a RECONCILER, not a one-shot move. The dept renderers
+   re-create the requests card, tools row and projects card on every
+   repaint, so a per-panel debounced MutationObserver re-homes fresh
+   elements into the folds each time. All wiring is delegated clicks on
+   data attributes, so moving nodes keeps everything working. Fold
+   open/closed state is remembered per browser in localStorage.
+   After each reconcile pass the panel dispatches 'wa77sync' (wave80
+   listens to re-apply empty states and counts).
+   ===================================================================== */
+(function () {
+  if (window.__wa77) return; window.__wa77 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w77f{background:#fff;border:1px solid var(--wa-line);border-radius:14px;margin:14px 0;padding:0 16px;}' +
+    '.w77f>summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;font-weight:800;font-size:13.5px;color:#14302b;padding:13px 2px;}' +
+    '.w77f>summary::-webkit-details-marker{display:none;}' +
+    '.w77f>summary:before{content:"\\25B8";font-size:11px;color:#7b8a86;transition:transform .15s;}' +
+    '.w77f[open]>summary:before{transform:rotate(90deg);}' +
+    '.w77f>summary .w77n{font-weight:600;font-size:11.5px;color:#7b8a86;}' +
+    '.w77f>.w77b{padding:2px 2px 14px;}' +
+    '.w77f .card{border:none;box-shadow:none;margin:0;padding:0;background:transparent;}' +
+    '.w77f .w39goals{margin:0;}' +
+    '.w77team{margin:10px 0 0;}' +
+    '.w77team>summary{cursor:pointer;list-style:none;font-weight:800;font-size:12.5px;color:#14302b;}' +
+    '.w77team>summary::-webkit-details-marker{display:none;}' +
+    '.w77team>summary:before{content:"\\25B8";font-size:10px;color:#7b8a86;margin-right:6px;}' +
+    '.w77team[open]>summary:before{content:"\\25BE";}' +
+    '.w77tools{margin:12px 0 0;}';
+  document.head.appendChild(css);
+
+  var FOLDS = [
+    ['requests', 'Incoming requests'],
+    ['goals', 'Quarterly goals'],
+    ['projects', 'Projects'],
+    ['updates', 'Most recent updates'],
+    ['transcripts', 'Transcripts that contributed']
+  ];
+
+  function w77Key(dept, name) { return 'wa77.' + dept + '.' + name; }
+
+  function w77MkFold(dept, name, label, defOpen) {
+    var d = document.createElement('details');
+    d.className = 'w77f';
+    d.setAttribute('data-w77', name);
+    var saved = null;
+    try { saved = localStorage.getItem(w77Key(dept, name)); } catch (e) { /* fine */ }
+    d.open = saved === null ? !!defOpen : saved === '1';
+    d.innerHTML = '<summary>' + esc(label) + ' <span class="w77n"></span></summary><div class="w77b"></div>';
+    d.addEventListener('toggle', function () {
+      try { localStorage.setItem(w77Key(dept, name), d.open ? '1' : '0'); } catch (e) { /* fine */ }
+    });
+    return d;
+  }
+
+  function w77Region(panel, id, card) {
+    var region = panel.querySelector('[data-w77r]');
+    if (!region) {
+      region = document.createElement('div');
+      region.setAttribute('data-w77r', '1');
+      card.parentNode.insertBefore(region, card.nextSibling);
+    } else if (region.previousElementSibling !== card) {
+      card.parentNode.insertBefore(region, card.nextSibling);
+    }
+    FOLDS.forEach(function (f) {
+      if (!region.querySelector('[data-w77="' + f[0] + '"]')) {
+        region.appendChild(w77MkFold(id, f[0], f[1], false));
+      }
+    });
+    return region;
+  }
+
+  function w77Body(region, name) {
+    return region.querySelector('[data-w77="' + name + '"] .w77b');
+  }
+  function w77Num(region, name, n) {
+    var el = region.querySelector('[data-w77="' + name + '"] summary .w77n');
+    if (el) el.textContent = (n === null || n === undefined) ? '' : String(n);
+  }
+
+  function w77TabNames(panel) {
+    return Array.prototype.map.call(panel.querySelectorAll('.w71tab'), function (t) {
+      return (t.textContent || '').replace(/\s*\d+\s*$/, '').trim().toLowerCase();
+    });
+  }
+
+  function w77Ensure(id) {
+    var panel = document.getElementById(id);
+    if (!panel || !panel.classList || !panel.classList.contains('panel')) return;
+    var card = panel.querySelector('.card.dept-card');
+    if (!card) return;
+    var changed = false;
+    var region = w77Region(panel, id, card);
+
+    /* ---- 1. legacy narrative subsections out (tabbed depts only) ---- */
+    var tabs = w77TabNames(panel);
+    if (tabs.length) {
+      panel.querySelectorAll('.wa21-list .subsection').forEach(function (ss) {
+        var h = ss.querySelector('.subhead');
+        if (!h) return;
+        var name = (h.textContent || '').trim().toLowerCase();
+        if (tabs.indexOf(name) >= 0) return;
+        if (ss.querySelector('[data-task]')) return;
+        ss.remove(); changed = true;
+      });
+    }
+
+    /* ---- 2. fold the team tags ---- */
+    var teamH = null;
+    card.querySelectorAll('h3.block').forEach(function (h) {
+      if ((h.textContent || '').trim() === 'Team') teamH = h;
+    });
+    var tags = teamH ? card.querySelector('.team-tags') : null;
+    if (teamH && tags && !tags.closest('.w77team')) {
+      var oldTd = card.querySelector('.w77team');
+      if (oldTd) oldTd.remove();
+      var td = document.createElement('details');
+      td.className = 'w77team';
+      td.innerHTML = '<summary>Team (' + tags.querySelectorAll('.team-tag').length + ')</summary>';
+      teamH.parentNode.insertBefore(td, teamH);
+      teamH.remove();
+      td.appendChild(tags);
+      changed = true;
+    }
+
+    /* ---- 3. quick tools into the header card (fresh copy wins) ---- */
+    var freshTools = null;
+    panel.querySelectorAll('.w39tools').forEach(function (t) {
+      if (!t.classList.contains('w77tools')) freshTools = t;
+    });
+    if (freshTools) {
+      var oldTools = card.querySelector('.w39tools.w77tools');
+      if (oldTools && oldTools !== freshTools) oldTools.remove();
+      freshTools.classList.add('w77tools');
+      freshTools.classList.remove('w39top');
+      var anchor = card.querySelector('.w77team') || card.querySelector('ul.prio');
+      if (anchor && freshTools.previousElementSibling !== anchor) anchor.parentNode.insertBefore(freshTools, anchor.nextSibling);
+      else if (!anchor) card.appendChild(freshTools);
+      changed = true;
+    }
+
+    /* ---- 4. requests card into its fold (fresh copy wins) ---- */
+    var rb = w77Body(region, 'requests');
+    var freshReq = null;
+    panel.querySelectorAll('.card.req-card').forEach(function (r) {
+      if (!rb.contains(r)) freshReq = r;
+    });
+    if (freshReq) {
+      rb.innerHTML = '';
+      rb.appendChild(freshReq);
+      var rh = freshReq.querySelector('h2'); if (rh) rh.remove();
+      changed = true;
+    }
+    var reqN = rb.querySelectorAll('.req-row').length;
+    w77Num(region, 'requests', reqN);
+    try {
+      if (reqN > 0 && localStorage.getItem(w77Key(id, 'requests')) === null) {
+        region.querySelector('[data-w77="requests"]').open = true;
+      }
+    } catch (e) { /* fine */ }
+
+    /* ---- 5. quarterly goals bar into its fold ---- */
+    var gb = w77Body(region, 'goals');
+    var freshGoals = null;
+    panel.querySelectorAll('.w39goals').forEach(function (g) {
+      if (!gb.contains(g)) freshGoals = g;
+    });
+    if (freshGoals) {
+      gb.innerHTML = '';
+      freshGoals.classList.remove('w39top');
+      var gh = freshGoals.querySelector('h3'); if (gh) gh.remove();
+      gb.appendChild(freshGoals);
+      changed = true;
+    }
+    w77Num(region, 'goals', gb.querySelectorAll('.w39goal').length);
+
+    /* ---- 6. projects card into its fold ---- */
+    var pb = w77Body(region, 'projects');
+    var freshProj = null;
+    panel.querySelectorAll('.w27-card').forEach(function (p) {
+      if (!pb.contains(p)) freshProj = p;
+    });
+    if (freshProj) {
+      pb.innerHTML = '';
+      pb.appendChild(freshProj);
+      var ph = freshProj.querySelector('h2'); if (ph) ph.remove();
+      changed = true;
+    }
+
+    /* ---- 7. updates details into its fold ---- */
+    var ub = w77Body(region, 'updates');
+    var freshUpd = null;
+    panel.querySelectorAll('details.wa21-upd').forEach(function (u) {
+      if (!ub.contains(u) && !u.classList.contains('w77f')) freshUpd = u;
+    });
+    if (freshUpd) {
+      ub.innerHTML = '';
+      var uw = freshUpd.querySelector('.wa21-updwrap');
+      if (uw) { ub.appendChild(uw); freshUpd.remove(); }
+      else ub.appendChild(freshUpd);
+      changed = true;
+    }
+
+    /* ---- 8. transcripts-that-contributed block into its fold ---- */
+    var tb = w77Body(region, 'transcripts');
+    var txH = null;
+    panel.querySelectorAll('.wa21-list h3.block, .card.dept-card h3.block').forEach(function (h) {
+      if (!tb.contains(h) && (h.textContent || '').indexOf('Transcripts that contributed') >= 0) txH = h;
+    });
+    if (txH) {
+      tb.innerHTML = '';
+      var node = txH.nextSibling;
+      while (node) {
+        var next = node.nextSibling;
+        if (node.nodeType === 1 && ((node.classList && node.classList.contains('w27-card')) || (node.matches && node.matches('h3.block')))) break;
+        tb.appendChild(node);
+        node = next;
+      }
+      txH.remove();
+      changed = true;
+    }
+
+    if (changed) {
+      try { panel.dispatchEvent(new CustomEvent('wa77sync', { detail: { id: id } })); } catch (e) { /* non-fatal */ }
+    }
+  }
+
+  var W77_MO = {};
+  var W77_T = {};
+  function w77Watch(id) {
+    if (W77_MO[id]) return;
+    var panel = document.getElementById(id);
+    if (!panel) return;
+    var mo = new MutationObserver(function () {
+      clearTimeout(W77_T[id]);
+      W77_T[id] = setTimeout(function () { try { w77Ensure(id); } catch (e) { /* non-fatal */ } }, 200);
+    });
+    mo.observe(panel, { childList: true, subtree: true });
+    W77_MO[id] = mo;
+  }
+
+  function w77All() {
+    try {
+      (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).forEach(function (d) {
+        try { w77Ensure(d); w77Watch(d); } catch (e) { /* per-dept non-fatal */ }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (typeof renderSection === 'function') {
+    var __rs77 = renderSection;
+    renderSection = function (id) {
+      __rs77.apply(this, arguments);
+      try { w77Ensure(id); w77Watch(id); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa77 = startApp;
+    startApp = async function () {
+      await __sa77.apply(this, arguments);
+      try { w77All(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

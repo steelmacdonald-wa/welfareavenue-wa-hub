@@ -1,0 +1,263 @@
+/* =====================================================================
+   WA v72 people management from the Admin page + ClickUp cleanup
+   (04/08/26)
+   1. Invite someone: a form on the Admin page creates their profile
+      (team_members), sets their access level (hub_roles), and emails
+      them a sign-in invitation via the hub-invite edge function. If
+      the email cannot be sent, the profile still lands and the admin
+      is told to share the link by hand.
+   2. Remove someone: a Remove action per row deactivates the profile,
+      blocks their access (role 'blocked'; this wave signs blocked
+      users out at the gate), and revokes their sign-in.
+   3. Easier access: the tab-override modal gets friendly page names,
+      grouped sections and one-click presets instead of raw ids.
+   4. Founder failsafe (client side, pairs with the DB trigger): the
+      founders' emails are always treated as admin even if hub_roles
+      misses them, so a lockout like today's cannot recur.
+   5. ClickUp remnants disappear from view (approved by Steel): the
+      weekly ClickUp chips, "Open this task in ClickUp" links, and
+      ClickUp wording in page intros.
+   ===================================================================== */
+(function () {
+  if (window.__wa72) return;
+  window.__wa72 = 1;
+
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+
+  var st = document.createElement('style');
+  st.id = 'wa72css';
+  st.textContent = '' +
+    '#w72bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f6f8f7;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:12.5px;color:#3d4642;}' +
+    '#w72bar button{border:none;background:#1f5f4f;color:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;cursor:pointer;}' +
+    '[data-w72rm]{color:#b3402f !important;font-size:12px;cursor:pointer;font-weight:700;}' +
+    '.w72grp{margin:8px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1f5f4f;font-weight:800;}' +
+    '.w72preset{display:inline-block;border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#1f5f4f;cursor:pointer;margin:0 6px 8px 0;}' +
+    /* hide ClickUp remnants */
+    '.info-chip[title*="ClickUp"]{display:none !important;}' +
+    'a[href*="clickup.com"]{display:none !important;}';
+  document.head.appendChild(st);
+
+  /* ---- founder failsafe: never locked out again ---- */
+  function w72Failsafe() {
+    try {
+      var em = String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      if (FOUNDERS.indexOf(em) >= 0 && typeof WA40_MINE !== 'undefined') {
+        if (!WA40_MINE) WA40_MINE = { email: em, role: 'admin', tabs: null };
+        else if (WA40_MINE.role !== 'admin') { WA40_MINE.role = 'admin'; WA40_MINE.tabs = null; }
+      }
+      /* blocked users are shown the gate */
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'blocked') {
+        try { db.auth.signOut(); } catch (e2) { /* proceed */ }
+        if (typeof showGate === 'function') showGate('denied', em);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---- friendly page names for the access modal ---- */
+  var W72_LABELS = {
+    mypage: 'My page', overview: 'Decisions', dashboard: 'Dashboard', goals: 'Strategy',
+    agendas: 'Agendas', requests: 'Requests', importantinfo: 'Important info',
+    opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing',
+    fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
+    volunteering: 'Volunteering', training: 'Training', hrcentre: 'HR centre',
+    orgchart: 'Org chart', transcripts: 'Transcript archive', activity: 'Activity',
+    finances: 'Finances', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
+  };
+  var W72_GROUPS = [
+    ['Home and work', ['mypage', 'overview', 'dashboard', 'goals', 'agendas', 'requests', 'importantinfo', 'create', 'finances']],
+    ['Departments', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']],
+    ['People and programs', ['volunteering', 'training', 'hrcentre', 'orgchart']],
+    ['Archive and admin', ['transcripts', 'activity', 'adminpanel']]
+  ];
+  function w72TabModal(email) {
+    var row = (typeof WA40_ROLES !== 'undefined' ? WA40_ROLES : []).filter(function (r) { return r.email === email; })[0];
+    var cur = row && Array.isArray(row.tabs) ? row.tabs : [];
+    var all = (typeof WA40_TABS !== 'undefined' ? WA40_TABS : []).concat(['adminpanel']);
+    function box(t) {
+      if (all.indexOf(t) < 0) return '';
+      return '<label style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px 3px 6px;font-size:12.5px;border:1px solid var(--wa-line);border-radius:999px;margin:0 6px 6px 0;cursor:pointer;background:#fff">'
+        + '<input type="checkbox" class="w40cb" value="' + t + '"' + (cur.indexOf(t) >= 0 ? ' checked' : '') + ' style="width:14px;height:14px" /> '
+        + esc(W72_LABELS[t] || t) + '</label>';
+    }
+    var known = [];
+    var html = '<h3>What ' + esc(email.split('@')[0]) + ' can see</h3>'
+      + '<p class="m-sub">Leave everything unticked to use the role default (the simple option). Tick pages to hand-pick exactly what they see instead.</p>'
+      + '<div style="margin:0 0 6px">'
+      + '<span class="w72preset" data-w72p="none">Role default</span>'
+      + '<span class="w72preset" data-w72p="all">Everything</span>'
+      + '<span class="w72preset" data-w72p="work">Work surfaces only</span>'
+      + '</div><div style="max-height:46vh;overflow-y:auto">';
+    W72_GROUPS.forEach(function (g) {
+      var boxes = g[1].map(function (t) { known.push(t); return box(t); }).join('');
+      if (boxes) html += '<div class="w72grp">' + g[0] + '</div>' + boxes;
+    });
+    var extra = all.filter(function (t) { return known.indexOf(t) < 0; });
+    if (extra.length) html += '<div class="w72grp">Other</div>' + extra.map(box).join('');
+    html += '</div><div class="m-actions"><button class="btn" id="w40ts">Save</button> <button class="btn ghost" id="w40tc">Cancel</button></div>';
+    openModal(html);
+    document.getElementById('w40tc').addEventListener('click', function () { closeModal(); });
+    document.querySelectorAll('[data-w72p]').forEach(function (p) {
+      p.addEventListener('click', function () {
+        var mode = p.getAttribute('data-w72p');
+        document.querySelectorAll('.w40cb').forEach(function (c) {
+          if (mode === 'none') c.checked = false;
+          else if (mode === 'all') c.checked = true;
+          else c.checked = ['mypage', 'overview', 'goals', 'agendas', 'requests', 'importantinfo', 'training',
+            'opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'volunteering', 'transcripts'].indexOf(c.value) >= 0;
+        });
+      });
+    });
+    document.getElementById('w40ts').addEventListener('click', async function () {
+      var picked = Array.prototype.slice.call(document.querySelectorAll('.w40cb:checked')).map(function (c) { return c.value; });
+      var r = await db.from('hub_roles').upsert({
+        email: email, role: (row && row.role) || 'member',
+        tabs: picked.length ? picked : null,
+        updated_by: (typeof who === 'function') ? who() : 'admin', updated_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+      if (r.error) { toast('Could not save it'); return; }
+      closeModal();
+      if (typeof wa40Load === 'function') await wa40Load();
+      toast('Saved');
+      if (typeof wa40Render === 'function') wa40Render();
+    });
+  }
+  if (typeof wa40TabModal === 'function') { wa40TabModal = w72TabModal; }
+
+  /* ---- invite and remove ---- */
+  function w72InviteModal() {
+    var depts = (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).map(function (d) {
+      return '<option value="' + d + '">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d) + '</option>';
+    }).join('');
+    openModal('<h3>Invite someone to the Hub</h3>'
+      + '<p class="m-sub">This creates their profile, sets what they can access, and emails them a sign-in invitation. They can also sign in with Google using this email once invited.</p>'
+      + '<div class="m-row"><div><label>Full name</label><input type="text" id="w72n" placeholder="First Last" /></div>'
+      + '<div><label>Email</label><input type="text" id="w72e" placeholder="name@welfareavenue.com" /></div></div>'
+      + '<div class="m-row"><div><label>Department</label><select id="w72d">' + depts + '</select></div>'
+      + '<div><label>Role title</label><input type="text" id="w72rt" placeholder="e.g. Content manager" /></div></div>'
+      + '<label>Hub access</label><select id="w72hr">'
+      + '<option value="member" selected>Member (the work surfaces)</option>'
+      + '<option value="leader">Leader (every page)</option>'
+      + '<option value="viewer">Viewer (overview only)</option>'
+      + '<option value="admin">Admin (manages everything)</option>'
+      + '</select>'
+      + '<div class="m-actions"><button class="btn" id="w72go">Create the profile and send the invite</button> <button class="btn ghost" id="w72cx">Cancel</button></div>');
+    document.getElementById('w72cx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w72go').addEventListener('click', async function () {
+      var name = (document.getElementById('w72n').value || '').trim();
+      var email = (document.getElementById('w72e').value || '').trim().toLowerCase();
+      if (!name || email.indexOf('@') < 1) { toast('A name and a valid email are needed'); return; }
+      this.disabled = true;
+      this.textContent = 'Inviting...';
+      try {
+        var r = await db.functions.invoke('hub-invite', { body: {
+          action: 'invite', name: name, email: email,
+          department: document.getElementById('w72d').value,
+          role_title: (document.getElementById('w72rt').value || '').trim(),
+          hub_role: document.getElementById('w72hr').value
+        } });
+        if (r.error || !(r.data && r.data.ok)) throw (r.error || new Error((r.data && r.data.error) || 'failed'));
+        closeModal();
+        toast(r.data.email_sent
+          ? 'Profile created and the invitation email is on its way'
+          : 'Profile created. The email could not be sent (' + (r.data.note || 'limit') + '), so share the Hub link with them directly.');
+        if (typeof wa40Load === 'function') await wa40Load();
+        if (typeof wa40Render === 'function') wa40Render();
+      } catch (e) {
+        this.disabled = false;
+        this.textContent = 'Create the profile and send the invite';
+        toast('Could not invite: ' + String(e.message || e).slice(0, 80));
+      }
+    });
+  }
+  function w72Remove(email) {
+    openModal('<h3>Remove ' + esc(email) + ' from the Hub?</h3>'
+      + '<p class="m-sub">Their profile is deactivated, their access is blocked, and their sign-in is revoked. Their tasks, updates and history all stay. You can invite them again later.</p>'
+      + '<div class="m-actions"><button class="btn" id="w72rmgo" style="background:#b3402f">Remove them</button> <button class="btn ghost" id="w72rmc">Cancel</button></div>');
+    document.getElementById('w72rmc').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w72rmgo').addEventListener('click', async function () {
+      this.disabled = true;
+      try {
+        var r = await db.functions.invoke('hub-invite', { body: { action: 'remove', email: email } });
+        if (r.error || !(r.data && r.data.ok)) throw (r.error || new Error((r.data && r.data.error) || 'failed'));
+        closeModal();
+        toast('Removed from the Hub' + (r.data.auth_deleted ? ' and signed out everywhere' : ''));
+        if (typeof wa40Load === 'function') await wa40Load();
+        if (typeof wa40Render === 'function') wa40Render();
+      } catch (e) {
+        this.disabled = false;
+        toast('Could not remove: ' + String(e.message || e).slice(0, 80));
+      }
+    });
+  }
+
+  /* decorate the admin table: invite bar + remove per row */
+  function w72Admin() {
+    try {
+      var body = document.getElementById('w40body');
+      if (!body || body.querySelector('#w72bar')) return;
+      var table = body.querySelector('table.wa-tbl');
+      if (!table) return;
+      body.insertAdjacentHTML('afterbegin',
+        '<div id="w72bar"><b style="color:#1f5f4f">People</b> Invite someone new, change what each person sees, or remove access.'
+        + '<button id="w72inv" style="margin-left:auto">+ Invite someone</button></div>');
+      var headRow = table.querySelector('thead tr');
+      if (headRow && headRow.children.length === 4) headRow.insertAdjacentHTML('beforeend', '<th></th>');
+      table.querySelectorAll('tbody tr').forEach(function (tr) {
+        if (tr.querySelector('[data-w72rm]')) return;
+        var sel = tr.querySelector('[data-w40r]');
+        var em = sel ? sel.getAttribute('data-w40r') : null;
+        if (!em) { tr.insertAdjacentHTML('beforeend', '<td></td>'); return; }
+        tr.insertAdjacentHTML('beforeend',
+          FOUNDERS.indexOf(em) >= 0
+            ? '<td><span style="font-size:11px;color:#9aa5a1">founder</span></td>'
+            : '<td><a data-w72rm="' + esc(em) + '">Remove</a></td>');
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa40Render === 'function') {
+    var __ar72 = wa40Render;
+    wa40Render = async function () {
+      await __ar72.apply(this, arguments);
+      setTimeout(w72Admin, 40);
+    };
+  }
+  if (!document.body.dataset.wa72Wired) {
+    document.body.dataset.wa72Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('#w72inv')) { w72InviteModal(); return; }
+      var rm = e.target.closest && e.target.closest('[data-w72rm]');
+      if (rm) { w72Remove(rm.getAttribute('data-w72rm')); return; }
+    });
+  }
+
+  /* ---- ClickUp wording out of the page intros ---- */
+  function w72Copy() {
+    try {
+      var tp = document.querySelector('#training .card > p.read');
+      if (tp && tp.textContent.indexOf('ClickUp') >= 0) {
+        tp.textContent = 'The training catalog: browse by path or category, open a card for the details, and track progress. Everyone\'s progress shows on their profile.';
+      }
+      document.querySelectorAll('.vl-empty').forEach(function (p) {
+        if (p.textContent.indexOf('ClickUp') >= 0) {
+          p.textContent = 'The master template. Every event gets a copy of exactly this, so editing an event never changes the template.';
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  try {
+    var __w72mo;
+    new MutationObserver(function () {
+      clearTimeout(__w72mo);
+      __w72mo = setTimeout(w72Copy, 400);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  if (typeof startApp === 'function') {
+    var __sa72 = startApp;
+    startApp = async function () {
+      await __sa72();
+      setTimeout(w72Failsafe, 200);
+      setTimeout(w72Copy, 500);
+    };
+  }
+})();

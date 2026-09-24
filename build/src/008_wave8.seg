@@ -1,0 +1,70 @@
+/* =====================================================================
+   WA v8 UI enhancements (25/07/26)
+   Board-only confidentiality tier. Rows flagged board_only are blocked
+   at the database level for everyone outside the board circle; this
+   layer adds the tags, the decision toggle (circle only), and a Board
+   only checkbox on transcript upload. The transcript processor also
+   auto-flags sensitive content (departures, personnel, compensation,
+   legal) and errs toward flagging; circle members can unflag.
+   ===================================================================== */
+var WA_IS_CIRCLE = false;
+
+document.addEventListener('click', async function (e) {
+  var b = e.target.closest('[data-boardonly]');
+  if (!b || !WA_IS_CIRCLE) return;
+  e.stopPropagation();
+  var id = Number(b.dataset.boardonly);
+  var row = (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []).find(function (d) { return d.id === id; });
+  var to = !(row && row.board_only);
+  var r = await db.from('decisions').update({ board_only: to, updated_at: new Date().toISOString(), updated_by: who() }).eq('id', id);
+  if (r.error) { toast('Could not change visibility'); return; }
+  if (row) row.board_only = to;
+  try {
+    await db.from('change_log').insert({ entity_type: 'decision', entity_id: String(id), field: 'board_only', old_value: String(!to), new_value: String(to), changed_by: who(), board_only: true });
+  } catch (err) { /* audit only */ }
+  toast(to ? 'Now board only: hidden from staff' : 'Now visible to staff');
+  renderDeptExecCards();
+});
+
+saveTranscript = async function () {
+  const dept = document.getElementById("txDept").value;
+  const date = document.getElementById("txDate").value;
+  const title = document.getElementById("txTitle").value.trim();
+  const src = document.getElementById("txSource").value.trim();
+  const body = document.getElementById("txBody").value.trim();
+  if (!title || !body) { toast("Add a title and transcript text"); return; }
+  const bo = document.getElementById("txBoardOnly");
+  const boardOnly = !!(bo && bo.checked);
+  const row = { department: dept, meeting_date: date || null, title: title, body: body, source_url: src || null, created_at: new Date().toISOString(), added_by: who(), board_only: boardOnly };
+  const r = await db.from("transcripts").insert(row).select("id").single();
+  if (r.error) { toast("Save failed, check connection"); return; }
+  if (r.data) PENDING.add(r.data.id);
+  ["txTitle", "txBody", "txDate", "txSource"].forEach(x => document.getElementById(x).value = "");
+  if (bo) bo.checked = false;
+  toast(boardOnly ? "Saved as board only. Everything derived from it stays hidden from staff" : "Saved. AI processing started, the department page updates in a few minutes");
+  await loadTranscripts();
+};
+
+(function () {
+  var __sa8 = startApp;
+  startApp = async function () {
+    await __sa8();
+    try {
+      var r = await db.rpc('is_board_circle');
+      WA_IS_CIRCLE = r && r.data === true;
+      if (WA_IS_CIRCLE) {
+        var deptSel = document.getElementById('txDept');
+        if (deptSel && !document.getElementById('txBoardOnly')) {
+          var holder = deptSel.parentElement;
+          var d = document.createElement('div');
+          d.innerHTML = '<label style="font-size:12.5px;color:#a87f2c;font-weight:700;"><input type="checkbox" id="txBoardOnly" style="margin-right:6px;vertical-align:middle;" />Board only (hidden from all staff, visible to the board circle)</label>';
+          d.style.marginTop = '8px';
+          holder.appendChild(d);
+        }
+        renderDeptExecCards();
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

@@ -1,0 +1,324 @@
+/* =====================================================================
+   WA v30 quarters ahead, suggested goals, organizational tier (29/07/26)
+   1. The goals page now shows the upcoming FY2027 quarters (fiscal year
+      October 1 to September 30) with their date ranges, ready for goals
+      before any exist. Current quarter opens first, then the future in
+      order, then the past.
+   2. Each department gets AI suggested goals drawn from its transcripts,
+      updates, tasks and projects. Suggestions are clearly marked, never
+      auto added: one click opens the add form prefilled for review.
+   3. An Organizational goals block sits at the top: the high level goals
+      that department quarterly goals and projects roll up to, linked via
+      a "rolls up to" field on every department goal.
+   ===================================================================== */
+
+var WA30_IDEAS = {};
+
+(function () {
+  if (document.getElementById('wa30css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa30css';
+  st.textContent = '' +
+    '.w30org{border:1px solid rgba(168,127,44,.5);background:rgba(168,127,44,.05);border-radius:11px;padding:10px 14px;margin:0 0 16px;}' +
+    '.w30org>h3{margin:2px 0 4px;color:#a87f2c;font-size:15px;}' +
+    '.w30org .sub{font-size:12.5px;color:var(--wa-muted,#7b8a86);margin:0 0 8px;}' +
+    '.w30kids{display:inline-block;font-size:11px;border:1px solid rgba(168,127,44,.4);color:#a87f2c;border-radius:8px;padding:1px 8px;margin:2px 0 8px;}' +
+    '.w30i{margin:6px 0 10px;border:1px dashed rgba(168,127,44,.5);border-radius:9px;padding:2px 12px 8px;background:rgba(168,127,44,.04);}' +
+    '.w30i>summary{cursor:pointer;font-size:12px;color:#a87f2c;padding:6px 0;}' +
+    '.w30sug{border-top:1px solid rgba(127,127,127,.18);padding:7px 0;font-size:13px;}' +
+    '.w30sug .m{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:2px;}' +
+    '.w30sug .why{font-size:11.5px;color:#a87f2c;margin-top:2px;}' +
+    '.w30qr{font-weight:400;font-size:11.5px;opacity:.6;margin-left:8px;}';
+  document.head.appendChild(st);
+})();
+
+/* ---------- fiscal quarters (Oct 1 to Sep 30) ---------- */
+function wa30Now() {
+  var d = new Date();
+  var m = d.getMonth() + 1;
+  var y = d.getFullYear();
+  if (m >= 10) return { q: 1, fy: y + 1 };
+  if (m <= 3) return { q: 2, fy: y };
+  if (m <= 6) return { q: 3, fy: y };
+  return { q: 4, fy: y };
+}
+
+function wa30Quarters() {
+  var cur = wa30Now();
+  var out = [];
+  var q = cur.q, fy = cur.fy;
+  for (var i = 0; i < 5; i++) {
+    out.push('Q' + q + ' FY' + fy);
+    q += 1;
+    if (q > 4) { q = 1; fy += 1; }
+  }
+  return out;
+}
+
+function wa30QRange(qstr) {
+  var qm = String(qstr || '').match(/Q(\d)/i);
+  var fm = String(qstr || '').match(/FY\s*(\d{4})/i);
+  if (!qm || !fm) return '';
+  var q = Number(qm[1]), fy = Number(fm[1]);
+  if (q === 1) return 'Oct 1 to Dec 31, ' + (fy - 1);
+  if (q === 2) return 'Jan 1 to Mar 31, ' + fy;
+  if (q === 3) return 'Apr 1 to Jun 30, ' + fy;
+  return 'Jul 1 to Sep 30, ' + fy;
+}
+
+async function wa30LoadIdeas() {
+  try {
+    var r = await db.from('goal_ideas').select('*');
+    WA30_IDEAS = {};
+    ((r && r.data) || []).forEach(function (row) { WA30_IDEAS[row.department] = row.payload || {}; });
+  } catch (e) { /* offline */ }
+}
+
+/* ---------- goals page: org tier, quarters ahead, suggestions ---------- */
+if (typeof renderGoalsPage === 'function') {
+  renderGoalsPage = async function () {
+    var body = document.getElementById('glBody');
+    if (!body) return;
+    if (typeof isStaff === 'function' && !isStaff()) {
+      body.innerHTML = '<p class="read">Goals are available to staff accounts.</p>';
+      return;
+    }
+    if (typeof waLoadGoals === 'function') await waLoadGoals();
+    await wa30LoadIdeas();
+    var all = wa29Goals();
+    var head = document.querySelector('#goals .card h2');
+    if (head) head.textContent = 'Goals';
+    var intro = document.querySelector('#goals .card p.read');
+    if (intro) intro.textContent = 'Organizational goals at the top, then quarter by quarter. Department quarterly goals and projects roll up into the organizational tier.';
+
+    var org = all.filter(function (g) { return g.department === 'org'; });
+    var dept = all.filter(function (g) { return g.department !== 'org'; });
+    var html = '<div class="w30org"><h3>Organizational goals</h3>'
+      + '<div class="sub">The high level direction of Welfare Avenue. Department quarterly goals and projects roll up here.</div>';
+    if (!org.length) html += '<p class="read" style="margin:0 0 8px">None defined yet. Add the first one.</p>';
+    org.forEach(function (g) {
+      var kids = dept.filter(function (x) { return String(x.parent_goal_id) === String(g.id); }).length;
+      html += waGoalRow(g);
+      html += '<span class="w30kids">' + kids + (kids === 1 ? ' quarterly goal rolls' : ' quarterly goals roll') + ' up here</span>';
+      html += '<div class="w29ge"><a data-w29ge="' + g.id + '">edit goal</a></div>';
+    });
+    html += '<div class="wa24-links"><button data-w29ga="org|FY2027">Add an organizational goal</button></div></div>';
+
+    var upcoming = wa30Quarters();
+    var quarters = upcoming.slice();
+    dept.forEach(function (g) { var q = g.quarter || 'No quarter'; if (quarters.indexOf(q) < 0) quarters.push(q); });
+    var curKey = wa29QKey(upcoming[0]);
+    quarters.sort(function (a, b) {
+      var ka = wa29QKey(a), kb = wa29QKey(b);
+      var fa = ka >= curKey, fb = kb >= curKey;
+      if (fa && fb) return ka - kb;
+      if (!fa && !fb) return kb - ka;
+      return fa ? -1 : 1;
+    });
+
+    quarters.forEach(function (q, qi) {
+      var inQ = dept.filter(function (g) { return (g.quarter || 'No quarter') === q; });
+      var isUpcoming = wa29QKey(q) >= curKey;
+      if (!inQ.length && !isUpcoming) return;
+      var range = wa30QRange(q);
+      html += '<details class="w29q"' + (qi === 0 ? ' open' : '') + '><summary>' + esc(q)
+        + (range ? '<span class="w30qr">' + esc(range) + '</span>' : '')
+        + ' <span style="font-weight:400;font-size:12px;opacity:.65">' + inQ.length + (inQ.length === 1 ? ' goal' : ' goals') + '</span></summary>';
+      var depts = (typeof DEPT_ORDER !== 'undefined') ? DEPT_ORDER.slice() : [];
+      inQ.forEach(function (g) { if (depts.indexOf(g.department) < 0) depts.push(g.department); });
+      depts.forEach(function (d) {
+        var gs = inQ.filter(function (g) { return g.department === d; });
+        var ideas = (WA30_IDEAS[d] && WA30_IDEAS[d].suggestions) || [];
+        var here = ideas.filter(function (s, i) {
+          var sq = s.quarter && wa29QKey(s.quarter) >= curKey ? s.quarter : upcoming[1];
+          s._idx = i;
+          return sq === q;
+        });
+        if (!gs.length && !isUpcoming) return;
+        if (!gs.length && !here.length && qi !== 0 && !isUpcoming) return;
+        var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d;
+        var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64';
+        html += '<details class="w29d" style="border-left-color:' + col + '"><summary style="color:' + col + '">' + esc(label) + '<span class="n">' + gs.length + (gs.length === 1 ? ' goal' : ' goals') + (here.length ? ' &middot; ' + here.length + ' suggested' : '') + '</span></summary>';
+        gs.forEach(function (g) {
+          html += waGoalRow(g);
+          html += '<div class="w29ge"><a data-w29ge="' + g.id + '">edit goal</a></div>';
+        });
+        if (!gs.length) html += '<p class="read" style="margin:4px 0">No goals here yet.</p>';
+        if (here.length) {
+          html += '<details class="w30i" open><summary>Suggested goals (AI, from transcripts and the board; nothing is added until you say so)</summary>';
+          here.forEach(function (s) {
+            html += '<div class="w30sug"><b>' + esc(s.title || '') + '</b>'
+              + '<div class="m">' + esc(s.detail || '') + (s.measure ? ' Measure: ' + esc(s.measure) : '') + '</div>'
+              + '<div class="why">' + esc(s.why || '') + '</div>'
+              + '<div style="margin-top:5px"><button class="btn mini" data-w30a="' + esc(d) + '|' + s._idx + '">Review and add</button></div></div>';
+          });
+          html += '<div style="margin-top:6px;font-size:11px;opacity:.6">Generated ' + esc(String((WA30_IDEAS[d] && WA30_IDEAS[d].generated) || '').slice(0, 10)) + ' &middot; <a data-w30r="' + esc(d) + '" style="cursor:pointer;text-decoration:underline">refresh suggestions</a></div>';
+          html += '</details>';
+        } else if (qi === 0) {
+          html += '<div style="font-size:11px;opacity:.6;margin:2px 0 6px"><a data-w30r="' + esc(d) + '" style="cursor:pointer;text-decoration:underline">Generate suggested goals for ' + esc(label) + '</a></div>';
+        }
+        html += '<div class="wa24-links w29add"><button data-w29ga="' + esc(d) + '|' + esc(q) + '">Add a goal</button></div>';
+        html += '</details>';
+      });
+      html += '</details>';
+    });
+    html += '<div class="wa24-links" style="margin-top:6px"><button data-w29ga="|">Add a goal in any department or quarter</button></div>';
+    body.innerHTML = html;
+    WA29_FOCUS = null;
+  };
+}
+
+/* ---------- goal editor with the organizational tier ---------- */
+if (typeof wa29GoalModal === 'function') {
+  wa29GoalModal = function (gid, presetDept, presetQ, prefill) {
+    var g = null;
+    if (gid) (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (x) { if (String(x.id) === String(gid)) g = x; });
+    var isOrg = g ? g.department === 'org' : presetDept === 'org';
+    var depts = ((typeof DEPT_ORDER !== 'undefined') ? DEPT_ORDER.slice() : ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']);
+    depts.push('org');
+    var deptOpts = depts.map(function (d) {
+      var label = d === 'org' ? 'Organization (overarching)' : ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d);
+      var sel = g ? g.department === d : presetDept === d;
+      return '<option value="' + esc(d) + '"' + (sel ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+    var stats = ['not started', 'in progress', 'in review', 'delayed', 'closed'];
+    var statOpts = stats.map(function (s) {
+      var sel = g ? g.status === s : s === 'not started';
+      return '<option value="' + s + '"' + (sel ? ' selected' : '') + '>' + s + '</option>';
+    }).join('');
+    var quarters = wa30Quarters();
+    (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (x) { if (x.quarter && quarters.indexOf(x.quarter) < 0) quarters.push(x.quarter); });
+    var orgGoals = wa29Goals().filter(function (x) { return x.department === 'org'; });
+    var parentOpts = '<option value="">No organizational goal link</option>' + orgGoals.map(function (x) {
+      var sel = g && String(g.parent_goal_id) === String(x.id);
+      return '<option value="' + x.id + '"' + (sel ? ' selected' : '') + '>' + esc(String(x.title).slice(0, 75)) + '</option>';
+    }).join('');
+    var linked = g ? WA27_PROJECTS.filter(function (p) { return String(p.goal_id) === String(g.id); }) : [];
+    var linkedHtml = linked.length ? '<div class="w29lp">' + linked.map(function (p) {
+      return '<span class="pjx">' + esc(wa27Name(p)) + '<a data-w29ul="' + p.id + '" title="Unlink">&times;</a></span>';
+    }).join('') + '</div>' : (g ? '<p class="m-sub" style="margin:4px 0">No projects linked yet.</p>' : '');
+    var attachable = WA27_PROJECTS.filter(function (p) { return !g || String(p.goal_id) !== String(g.id); });
+    var attachOpts = '<option value="">Attach a project...</option>' + attachable.map(function (p) {
+      return '<option value="' + p.id + '">' + esc(p.department + ': ' + wa27Name(p)) + '</option>';
+    }).join('');
+    openModal('<h3>' + (g ? 'Edit goal' : (isOrg ? 'Add an organizational goal' : 'Add a goal')) + '</h3>' +
+      '<p class="m-sub">' + (isOrg ? 'The overarching direction. Department quarterly goals and projects roll up to this.' : 'The description helps match projects to this goal automatically, so say what winning looks like in plain words.') + '</p>' +
+      '<label>Goal title</label><input type="text" id="w29t" value="' + esc(g ? g.title : '') + '" />' +
+      '<label>Description</label><textarea id="w29de" rows="3">' + esc(g ? (g.detail || '') : '') + '</textarea>' +
+      '<div class="m-row"><div><label>Measure of success</label><input type="text" id="w29m" value="' + esc(g ? (g.measure || '') : '') + '" placeholder="What number or outcome counts" /></div>' +
+      '<div><label>Due date</label><input type="date" id="w29dd" value="' + esc(g ? (g.due_date || '') : '') + '" /></div></div>' +
+      '<div class="m-row"><div><label>Department</label><select id="w29dp"' + (g ? ' disabled' : '') + '>' + deptOpts + '</select></div>' +
+      '<div><label>' + (isOrg ? 'Horizon (FY2027, Long term...)' : 'Quarter') + '</label><input type="text" id="w29q" list="w29ql" value="' + esc(g ? (g.quarter || '') : (presetQ || 'Q1 FY2027')) + '" placeholder="Q1 FY2027" /><datalist id="w29ql">' + quarters.map(function (q) { return '<option value="' + esc(q) + '"></option>'; }).join('') + '</datalist></div></div>' +
+      '<label>Status</label><select id="w29st">' + statOpts + '</select>' +
+      (!isOrg ? '<label style="margin-top:8px">Rolls up to organizational goal</label><select id="w30pg">' + parentOpts + '</select>' : '') +
+      (g ? '<label style="margin-top:8px">Linked projects</label>' + linkedHtml +
+        '<select id="w29at">' + attachOpts + '</select>' +
+        '<label style="display:flex;gap:7px;align-items:center;margin-top:10px"><input type="checkbox" id="w29ar" style="width:15px;height:15px" /> Archive this goal (removes it from every view)</label>' : '') +
+      '<div class="m-actions"><button class="btn" id="w29sv">' + (g ? 'Save the goal' : 'Add the goal') + '</button> <button class="btn ghost" id="w29cx">Cancel</button></div>');
+    if (prefill) {
+      try {
+        if (prefill.title) document.getElementById('w29t').value = prefill.title;
+        if (prefill.detail) document.getElementById('w29de').value = prefill.detail;
+        if (prefill.measure) document.getElementById('w29m').value = prefill.measure;
+      } catch (e) { /* non-fatal */ }
+    }
+    var cancel = document.getElementById('w29cx');
+    if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+    var at = document.getElementById('w29at');
+    if (at && g) at.addEventListener('change', async function () {
+      var pid = Number(at.value);
+      if (!pid) return;
+      var r = await db.from('projects').update({ goal_id: g.id }).eq('id', pid);
+      if (r.error) { toast('Could not link it'); return; }
+      toast('Project linked');
+      await wa27Load(true);
+      wa29GoalModal(g.id);
+    });
+    document.querySelectorAll('[data-w29ul]').forEach(function (a) {
+      a.addEventListener('click', async function () {
+        var r = await db.from('projects').update({ goal_id: null }).eq('id', Number(a.getAttribute('data-w29ul')));
+        if (r.error) { toast('Could not unlink it'); return; }
+        toast('Project unlinked');
+        await wa27Load(true);
+        wa29GoalModal(g.id);
+      });
+    });
+    var save = document.getElementById('w29sv');
+    if (save) save.addEventListener('click', async function () {
+      var title = (document.getElementById('w29t').value || '').trim();
+      if (!title) { toast('The goal needs a title'); return; }
+      save.disabled = true;
+      var patch = {
+        title: title,
+        detail: (document.getElementById('w29de').value || '').trim() || null,
+        measure: (document.getElementById('w29m').value || '').trim() || null,
+        due_date: (document.getElementById('w29dd').value || '') || null,
+        quarter: (document.getElementById('w29q').value || '').trim() || 'Q1 FY2027',
+        status: document.getElementById('w29st').value,
+        updated_by: (typeof who === 'function' ? who() : 'dashboard'),
+        updated_at: new Date().toISOString()
+      };
+      var pg = document.getElementById('w30pg');
+      if (pg) patch.parent_goal_id = Number(pg.value) || null;
+      var ar = document.getElementById('w29ar');
+      if (ar && ar.checked) patch.status = 'archived';
+      var r;
+      if (g) r = await db.from('goals').update(patch).eq('id', g.id);
+      else {
+        patch.department = document.getElementById('w29dp').value;
+        patch.source = 'dashboard';
+        patch.sort = 999;
+        r = await db.from('goals').insert(patch);
+      }
+      if (r.error) { save.disabled = false; toast('Could not save the goal'); return; }
+      closeModal();
+      toast(g ? 'Goal saved' : 'Goal added');
+      try {
+        if (typeof waLoadGoals === 'function') await waLoadGoals();
+        if (typeof renderGoalsPage === 'function') renderGoalsPage();
+        if (typeof renderDeptGoalsCards === 'function') renderDeptGoalsCards();
+      } catch (e) { /* non-fatal */ }
+    });
+  };
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  function wire() {
+    if (document.body.dataset.wa30Wired) return;
+    document.body.dataset.wa30Wired = '1';
+    document.body.addEventListener('click', async function (e) {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var a = e.target.closest('[data-w30a]');
+      if (a) {
+        var bits = (a.getAttribute('data-w30a') || '|').split('|');
+        var idea = ((WA30_IDEAS[bits[0]] || {}).suggestions || [])[Number(bits[1])];
+        if (idea) {
+          try { wa29GoalModal(null, bits[0], idea.quarter || 'Q1 FY2027', idea); } catch (x) { /* non-fatal */ }
+        }
+        return;
+      }
+      var rf = e.target.closest('[data-w30r]');
+      if (rf) {
+        var d = rf.getAttribute('data-w30r');
+        rf.textContent = 'Thinking about ' + d + '... twenty seconds or so';
+        try {
+          var r = await db.functions.invoke('goal-propose', { body: { department: d } });
+          if (r.error) throw r.error;
+          toast('Fresh suggestions ready');
+          if (typeof renderGoalsPage === 'function') renderGoalsPage();
+        } catch (x) {
+          toast('Could not generate suggestions. Try again in a minute.');
+          rf.textContent = 'refresh suggestions';
+        }
+        return;
+      }
+    });
+  }
+  wire();
+  var __sa30 = startApp;
+  startApp = async function () {
+    await __sa30();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

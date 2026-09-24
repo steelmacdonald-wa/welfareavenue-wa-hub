@@ -1,0 +1,195 @@
+/* =====================================================================
+   WA v18 UI enhancements (26/07/26)
+   Create studio, photo graphics: upload a photo behind the social tile
+   (dark overlay keeps the words readable), pick a platform format
+   (Square for Instagram, Story 9:16, Landscape 1.91:1 for LinkedIn/X),
+   and download a true PNG image via html2canvas alongside the branded
+   HTML page. Photos live in the public content-images storage bucket.
+   Overrides the v17 graphic renderers via assignment.
+   ===================================================================== */
+(function () {
+  var st = document.createElement('style');
+  st.textContent = ''
+    + '.gfx-card.f-story{aspect-ratio:9/16;}'
+    + '.gfx-card.f-land{aspect-ratio:1.91/1;}'
+    + '.gfx-card.f-land .gfx-rule{margin:8px 0 12px;}'
+    + '.gfx-card.f-land .gfx-head{margin-bottom:8px;}'
+    + '.gfx-card.f-land .gfx-cta{margin-top:12px;}'
+    + '.gfx-card.f-land .gfx-foot{margin-top:12px;}'
+    + '#cdGfxOpts input[type=file]{border:1px dashed var(--wa-line);border-radius:8px;padding:8px;background:#fff;}';
+  document.head.appendChild(st);
+  var goBtn = document.getElementById('cdGo');
+  if (goBtn && !document.getElementById('cdGfxOpts')) {
+    var w = document.createElement('div');
+    w.id = 'cdGfxOpts';
+    w.style.display = 'none';
+    w.innerHTML = '<label>Graphic format</label>'
+      + '<select id="cdFmt"><option value="square">Square (Instagram, 1:1)</option><option value="story">Story (Instagram/TikTok, 9:16)</option><option value="landscape">Landscape (LinkedIn/X, 1.91:1)</option></select>'
+      + '<label>Photo (optional)</label><input type="file" id="cdImg" accept="image/*" style="width:100%;font-size:12px;box-sizing:border-box;" />'
+      + '<div class="cd-hint" id="cdImgHint">A photo sits behind the text with a dark overlay so the words stay readable.</div>';
+    goBtn.parentElement.insertBefore(w, goBtn);
+  }
+})();
+
+var WA_CD_IMG = null;
+
+function waCdSyncGfx() {
+  var t = document.getElementById('cdType');
+  var o = document.getElementById('cdGfxOpts');
+  if (t && o) o.style.display = (t.value === 'graphic') ? 'block' : 'none';
+}
+(function () { waCdSyncGfx(); })();
+
+function waGfxClass(d) {
+  var f = d.format || 'square';
+  return 'gfx-card' + (f === 'story' ? ' f-story' : (f === 'landscape' ? ' f-land' : ''));
+}
+function waGfxCardStyle(d) {
+  return d.image_url ? 'background:linear-gradient(rgba(25,22,21,.45),rgba(25,22,21,.62)),url(' + esc(d.image_url) + ') center/cover;' : '';
+}
+
+waCdGraphicHtml = function (d) {
+  var bodyEnd = '</bo' + 'dy>', htmlEnd = '</ht' + 'ml>';
+  var wide = (d.format === 'story') ? 'width:min(50vmin,460px);' : 'width:min(88vmin,720px);';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>' + esc(d.title || 'Welfare Avenue graphic') + '</title>'
+    + '<style>body{margin:0;background:#f2ebe3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}'
+    + '.gfx-card{' + wide + '}'
+    + WA_GFX_CSS
+    + '.gfx-card.f-story{aspect-ratio:9/16;}.gfx-card.f-land{aspect-ratio:1.91/1;}'
+    + '.gfx-card.f-land .gfx-rule{margin:8px 0 12px;}.gfx-card.f-land .gfx-head{margin-bottom:8px;}.gfx-card.f-land .gfx-cta{margin-top:12px;}.gfx-card.f-land .gfx-foot{margin-top:12px;}'
+    + '@media print{body{background:#fff;}}'
+    + '</style></head><body>'
+    + '<div class="' + waGfxClass(d) + '" style="' + waGfxCardStyle(d) + '">' + waCdGfxInner(d) + '</div>'
+    + bodyEnd + htmlEnd;
+};
+waCdGfxPreview = function (d) {
+  var maxw = (d.format === 'story') ? '260px' : '430px';
+  return '<style>' + WA_GFX_CSS + '</style><div class="' + waGfxClass(d) + '" style="max-width:' + maxw + ';margin:0 auto;' + waGfxCardStyle(d) + '">' + waCdGfxInner(d) + '</div>';
+};
+
+waCdRenderPreview = function () {
+  var box = document.getElementById('cdPrev');
+  if (!box) return;
+  var d = WA_CD_CUR;
+  if (!d) { box.innerHTML = '<p class="read">Your draft will appear here.</p>'; return; }
+  var isG = d.content_type === 'graphic';
+  box.innerHTML = ''
+    + '<div class="cd-prev-head"><div class="brand">Welfare Avenue</div><div class="tag">Service is solidarity, not charity. &middot; ' + esc(WA_CD_TYPE_LABEL[d.content_type] || 'Content') + ' for ' + esc((d.audience || '').replace(/_/g, ' ')) + '</div></div>'
+    + '<div class="cd-prev-body">'
+    + (d.subject_line && !isG ? '<div class="cd-subject">' + esc(d.subject_line) + '</div>' : '')
+    + (isG ? waCdGfxPreview(d) : '<div class="cd-doc">' + waMd(d.body_md) + '</div>')
+    + (d.short_version && !isG ? '<div class="cd-sub"><strong>Short version:</strong><br>' + waMd(d.short_version) + '</div>' : '')
+    + (d.notes ? '<div class="cd-notes"><strong>Check before sending:</strong> ' + esc(d.notes) + '</div>' : '')
+    + '<div class="cd-acts">'
+    + '<button data-cdact="copy">&#128203; Copy text</button>'
+    + (isG ? '<button data-cdact="png">&#128444; Download PNG</button>' : '')
+    + '<button data-cdact="md">&#11015; Markdown</button>'
+    + '<button data-cdact="html">&#11015; Branded page</button>'
+    + '<button data-cdact="print">&#128424; Print / PDF</button>'
+    + '<button data-cdact="review">&#128172; Send to Slack for review</button>'
+    + '</div>'
+    + '<div class="cd-refine"><input id="cdRefIn" placeholder="Refine it: e.g. warmer, shorter, add the October date" /><button id="cdRefGo">Refine</button></div>'
+    + '</div>';
+};
+
+async function waCdPng(d) {
+  toast('Rendering PNG...');
+  if (!window.html2canvas) {
+    try {
+      await new Promise(function (res, rej) {
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+        s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    } catch (x) { toast('Could not load the PNG renderer, use the branded page instead'); return; }
+  }
+  var dims = d.format === 'story' ? [1080, 1920] : (d.format === 'landscape' ? [1200, 628] : [1080, 1080]);
+  var land = d.format === 'landscape';
+  var fix = land
+    ? '.gfx-brand{font-size:22px!important;}.gfx-rule{width:70px!important;height:6px!important;}.gfx-head{font-size:52px!important;}.gfx-line{font-size:24px!important;}.gfx-cta{font-size:22px!important;padding:12px 30px!important;}.gfx-foot{font-size:16px!important;}'
+    : '.gfx-brand{font-size:28px!important;letter-spacing:8px!important;}.gfx-rule{width:110px!important;height:9px!important;margin:26px 0 40px!important;}.gfx-head{font-size:68px!important;margin-bottom:30px!important;}.gfx-line{font-size:32px!important;}.gfx-cta{font-size:30px!important;padding:18px 44px!important;margin-top:40px!important;}.gfx-foot{font-size:22px!important;margin-top:46px!important;}';
+  var host = document.createElement('div');
+  host.style.cssText = 'position:fixed;left:-99999px;top:0;';
+  host.innerHTML = '<style>' + WA_GFX_CSS + fix + '</style>'
+    + '<div id="waPngNode" class="' + waGfxClass(d) + '" style="width:' + dims[0] + 'px;height:' + dims[1] + 'px;aspect-ratio:auto;border-radius:0;' + waGfxCardStyle(d) + '">' + waCdGfxInner(d) + '</div>';
+  document.body.appendChild(host);
+  try {
+    var canvas = await html2canvas(document.getElementById('waPngNode'), { useCORS: true, backgroundColor: null, scale: 1 });
+    canvas.toBlob(function (b) {
+      if (!b) { toast('PNG export failed, use the branded page instead'); return; }
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = waCdSlug(d) + '-' + (d.format || 'square') + '.png';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+    }, 'image/png');
+  } catch (x) { toast('PNG export failed, use the branded page instead'); }
+  host.remove();
+}
+
+waCdGenerate = async function () {
+  var btn = document.getElementById('cdGo');
+  var brief = (document.getElementById('cdBrief').value || '').trim();
+  if (!brief) { toast('Write a brief first: what is it, the facts, the ask'); return; }
+  btn.disabled = true; btn.textContent = 'Writing in the WA voice...';
+  try {
+    var type = document.getElementById('cdType').value;
+    var payload = {
+      content_type: type,
+      audience: document.getElementById('cdAud').value,
+      language: document.getElementById('cdLang').value,
+      brief: brief
+    };
+    var dep = document.getElementById('cdDept').value;
+    if (dep) payload.department = dep;
+    var r = await db.functions.invoke('draft-content', { body: payload });
+    if (r.error || !(r.data && r.data.ok)) { toast('Could not generate: ' + ((r.data && r.data.error) || 'network issue, try again')); }
+    else {
+      WA_CD_CUR = r.data.draft;
+      if (type === 'graphic') {
+        var fmtEl = document.getElementById('cdFmt');
+        var fmt = fmtEl ? fmtEl.value : 'square';
+        var upd = { format: fmt };
+        if (WA_CD_IMG) upd.image_url = WA_CD_IMG;
+        try { await db.from('content_drafts').update(upd).eq('id', WA_CD_CUR.id); } catch (x) { /* cosmetic */ }
+        WA_CD_CUR.format = fmt;
+        WA_CD_CUR.image_url = WA_CD_IMG || null;
+        WA_CD_IMG = null;
+        var fi = document.getElementById('cdImg');
+        if (fi) fi.value = '';
+        var hint = document.getElementById('cdImgHint');
+        if (hint) hint.textContent = 'A photo sits behind the text with a dark overlay so the words stay readable.';
+      }
+      waCdRenderPreview(); waCdLoadList(); toast('Draft ready');
+    }
+  } catch (e) { toast('Could not generate the draft'); }
+  btn.disabled = false; btn.textContent = 'Write it';
+};
+
+document.addEventListener('change', async function (e) {
+  if (e.target && e.target.id === 'cdType') { waCdSyncGfx(); return; }
+  if (e.target && e.target.id === 'cdImg') {
+    var f = e.target.files && e.target.files[0];
+    if (!f) return;
+    if (f.size > 8 * 1024 * 1024) { toast('Photo too big (8 MB max)'); e.target.value = ''; return; }
+    var hint = document.getElementById('cdImgHint');
+    if (hint) hint.textContent = 'Uploading photo...';
+    var path = 'gfx/' + Date.now() + '-' + f.name.replace(/[^a-zA-Z0-9._-]/g, '');
+    try {
+      var r = await db.storage.from('content-images').upload(path, f, { upsert: false });
+      if (r.error) { toast('Upload failed: ' + r.error.message); if (hint) hint.textContent = 'Upload failed, try another photo.'; return; }
+      var pu = db.storage.from('content-images').getPublicUrl(path);
+      WA_CD_IMG = (pu.data && pu.data.publicUrl) ? pu.data.publicUrl : null;
+      if (hint) hint.textContent = 'Photo attached. It will sit behind the words on the tile.';
+      toast('Photo attached');
+    } catch (x) { toast('Upload failed'); if (hint) hint.textContent = 'Upload failed, try another photo.'; }
+  }
+});
+document.addEventListener('click', function (e) {
+  var b = e.target.closest('[data-cdact="png"]');
+  if (b && WA_CD_CUR) waCdPng(WA_CD_CUR);
+});
+

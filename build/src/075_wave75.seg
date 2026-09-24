@@ -1,0 +1,272 @@
+/* =====================================================================
+   WA v75 the assistant steps forward (06/08/26)
+   Steel: "make the WA chat assistant more apparent, I want users to
+   know it's there."
+   1. The bottom-right sparkle circle becomes a labelled pill button:
+      "Ask the Hub". Same id (#waChatBtn), so wave4's open/close
+      listener keeps working untouched.
+   2. First-visit nudge: until a person opens the chat once (or closes
+      the nudge), the pill pulses gently and a small dark callout above
+      it explains what the assistant can do. Remembered per browser in
+      localStorage ('wa75nudge').
+   3. My page card: a full-width "Ask the Hub anything" card between
+      the attention strip and the two columns, with tappable example
+      questions that open the chat prefilled. Only rendered when the
+      chat button exists (the assistant is staff-gated by wave4).
+   4. (Steel, mid-build) Time commitments on the home page are for
+      leaders only: the card is removed after render unless the viewer
+      is an admin, a hub 'leader', on the board, or has a leadership
+      role title (same regex family as v62). The async hours fill
+      already bails when #mpHours is gone.
+   5. (Steel, mid-build) Steel and Suhaib are board members but also
+      operational executives, so the board exemption should not apply
+      to them: their minimum is 8h/wk. wave54's wa54Min is IIFE-private
+      and keys off department==='board', so this is a post-render patch
+      on the Commitment dashboard (#w52hours): a MutationObserver spots
+      each rewrite, swaps their 'exempt' chip for 'X.Xh / 8h exec',
+      flags + floats the row when under 8, updates the header wording,
+      and adds them to the not-checking-in list when fully silent.
+   Wiring: decorates after startApp (chat mounts inside wave4's own
+   startApp wrap); renderMyPage wrapped outermost after v74's full
+   replacement. window.w75Open(prefill) opens the panel and focuses
+   the v38 input (falls back to the v4 input if v38 is absent).
+   ===================================================================== */
+(function () {
+  if (window.__wa75) return;
+  window.__wa75 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa75css';
+  st.textContent = '' +
+    '#waChatBtn{width:auto !important;height:auto !important;border-radius:999px !important;padding:12px 20px 12px 15px;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;}' +
+    '#waChatBtn .w75ic{font-size:17px;line-height:1;}' +
+    '#waChatBtn.w75pulse{animation:w75p 2.4s ease-out infinite;}' +
+    '@keyframes w75p{0%{box-shadow:0 6px 18px rgba(0,0,0,.28),0 0 0 0 rgba(132,85,255,.45);}70%{box-shadow:0 6px 18px rgba(0,0,0,.28),0 0 0 13px rgba(132,85,255,0);}100%{box-shadow:0 6px 18px rgba(0,0,0,.28),0 0 0 0 rgba(132,85,255,0);}}' +
+    '#w75nudge{position:fixed;right:22px;bottom:88px;width:272px;background:#191615;color:#f2ebe3;border-radius:14px;padding:14px 16px;font-size:12.5px;line-height:1.5;box-shadow:0 12px 34px rgba(0,0,0,.32);z-index:59;}' +
+    '#w75nudge:after{content:"";position:absolute;bottom:-7px;right:34px;width:14px;height:14px;background:#191615;transform:rotate(45deg);}' +
+    '#w75nudge b{display:block;font-size:13px;margin-bottom:3px;}' +
+    '#w75nudge .x{position:absolute;top:6px;right:10px;background:none;border:none;color:#f2ebe3;opacity:.6;cursor:pointer;font-size:14px;padding:2px;}' +
+    '#w75nudge .x:hover{opacity:1;}' +
+    '#w75nudge .go{margin-top:9px;background:#8455ff;color:#fff;border:none;border-radius:999px;padding:6px 15px;font-weight:700;cursor:pointer;font-size:12px;}' +
+    '#w75card{margin:0 0 14px;border:1px solid #e0d5ff;background:linear-gradient(105deg,#faf8ff,#f3edff);}' +
+    '#w75card h3{color:#5a3bbf !important;}' +
+    '#w75card p{margin:0 0 4px;font-size:12.5px;color:#4b4560;line-height:1.5;}' +
+    '.w75q{display:inline-block;background:#fff;border:1px solid #d9cbff;color:#5a3bbf;border-radius:999px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;margin:6px 6px 0 0;}' +
+    '.w75q:hover{background:#ece3ff;}';
+  document.head.appendChild(st);
+
+  function w75Seen() {
+    try { return localStorage.getItem('wa75nudge') === '1'; } catch (e) { return true; }
+  }
+  function w75Mark() {
+    try { localStorage.setItem('wa75nudge', '1'); } catch (e) { /* private mode */ }
+  }
+  function w75Dismiss() {
+    w75Mark();
+    var n = document.getElementById('w75nudge');
+    if (n && n.parentNode) n.parentNode.removeChild(n);
+    var b = document.getElementById('waChatBtn');
+    if (b) b.classList.remove('w75pulse');
+  }
+
+  window.w75Open = function (prefill) {
+    var btn = document.getElementById('waChatBtn');
+    var panel = document.getElementById('waChatPanel');
+    if (!btn || !panel) return;
+    w75Dismiss();
+    if (panel.style.display !== 'flex') btn.click();
+    var inp = document.getElementById('w38in') || document.getElementById('wacInput');
+    if (inp) {
+      if (prefill) inp.value = prefill;
+      try { inp.focus(); } catch (e) { /* non-fatal */ }
+    }
+  };
+
+  function w75Decorate() {
+    try {
+      var btn = document.getElementById('waChatBtn');
+      if (!btn || btn.dataset.w75) return;
+      btn.dataset.w75 = '1';
+      btn.innerHTML = '<span class="w75ic">&#10024;</span>Ask the Hub';
+      btn.title = 'Ask the WA assistant anything, or tell it to file a request or task';
+      btn.addEventListener('click', w75Dismiss);
+      if (!w75Seen()) {
+        btn.classList.add('w75pulse');
+        if (!document.getElementById('w75nudge')) {
+          var n = document.createElement('div');
+          n.id = 'w75nudge';
+          n.innerHTML = '<button class="x" data-w75x="1" title="Close">&#10005;</button>'
+            + '<b>Meet the WA assistant</b>'
+            + 'Ask what is happening anywhere in Welfare Avenue, or type a request or task and it will file it for you. You confirm before anything is saved.'
+            + '<br /><button class="go" data-w75go="1">Try it</button>';
+          document.body.appendChild(n);
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (!document.body.dataset.wa75Wired) {
+    document.body.dataset.wa75Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      if (!e.target.closest) return;
+      if (e.target.closest('[data-w75x]')) { w75Dismiss(); return; }
+      if (e.target.closest('[data-w75go]')) { window.w75Open(''); return; }
+      var q = e.target.closest('[data-w75q]');
+      if (q) window.w75Open(q.getAttribute('data-w75q'));
+    });
+  }
+
+  /* My page card, only when the assistant exists on this account */
+  var W75_EXAMPLES = [
+    'What is happening across Welfare Avenue this week?',
+    'What is blocking my department right now?',
+    'Put in a request to marketing to promote our next event',
+    'Add a task for me to follow up with a volunteer'
+  ];
+  function w75Card() {
+    try {
+      if (!document.getElementById('waChatBtn')) return;
+      var body = document.getElementById('mpBody');
+      if (!body || document.getElementById('w75card')) return;
+      var grid = body.querySelector('.mp-grid');
+      if (!grid) return;
+      var card = document.createElement('div');
+      card.className = 'mp-sec';
+      card.id = 'w75card';
+      card.innerHTML = '<h3>&#10024; Ask the Hub anything</h3>'
+        + '<p>The WA assistant (bottom right) answers from live Hub data and can file requests and tasks for you. Try one:</p>'
+        + W75_EXAMPLES.map(function (x) {
+            return '<span class="w75q" data-w75q="' + x.replace(/"/g, '&quot;') + '">' + x + '</span>';
+          }).join('');
+      grid.parentNode.insertBefore(card, grid);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* time commitments: leaders only */
+  function w75Leader() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE
+        && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader')) return true;
+      var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+      return !!(me && (me.department === 'board' || /\b(lead|leader|director|manager|chair|co-)/i.test(me.role || '')));
+    } catch (e) { return true; }
+  }
+  function w75Hours() {
+    try {
+      if (w75Leader()) return;
+      var slot = document.getElementById('mpHours');
+      if (!slot) return;
+      var sec = slot.closest ? slot.closest('.mp-sec') : null;
+      if (sec && sec.parentNode) sec.parentNode.removeChild(sec);
+      else if (slot.parentNode) slot.parentNode.removeChild(slot);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (typeof renderMyPage === 'function') {
+    var __mp75 = renderMyPage;
+    renderMyPage = async function () {
+      await __mp75.apply(this, arguments);
+      w75Card();
+      w75Hours();
+    };
+  }
+
+  /* operational executives: board-exempt no more, 8h/wk minimum */
+  var W75_EXECS = ['steel', 'suhaib'];
+  var W75_EXEC_MIN = 8;
+  function w75IsExec(name) {
+    var ft = String(name || '').trim().split(/\s+/)[0].toLowerCase();
+    return W75_EXECS.indexOf(ft) >= 0;
+  }
+  function w75ExecFix() {
+    try {
+      var sec = document.getElementById('w52hours');
+      if (!sec) return;
+      var rows = sec.querySelectorAll('table tbody tr');
+      var silentExecs = [];
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var cells = row.children;
+        if (cells.length < 4) continue;
+        var nameEl = cells[0].querySelector('b');
+        var name = nameEl ? nameEl.textContent : cells[0].textContent;
+        if (!w75IsExec(name)) continue;
+        var avg = parseFloat(cells[2].textContent) || 0;
+        var cur = parseFloat(cells[3].textContent) || 0;
+        if (avg === 0 && cur === 0) silentExecs.push(name);
+        if (row.dataset.w75x) continue;
+        row.dataset.w75x = '1';
+        var low = avg < W75_EXEC_MIN;
+        cells[2].innerHTML = (low
+          ? '<span style="color:#b3402f;font-weight:700">' + avg.toFixed(1) + 'h</span>'
+          : avg.toFixed(1) + 'h')
+          + ' / ' + W75_EXEC_MIN + 'h <span class="w54ex">exec</span>';
+        if (low) {
+          row.classList.add('w54low');
+          var tb = row.parentNode;
+          if (tb && tb.firstChild !== row) tb.insertBefore(row, tb.firstChild);
+        }
+      }
+      /* editable-minimums bar note */
+      var spans = sec.querySelectorAll('.w54edit span');
+      for (var s = 0; s < spans.length; s++) {
+        if (spans[s].textContent.indexOf('the board is exempt') === 0 && spans[s].innerHTML.indexOf('executives') < 0) {
+          spans[s].innerHTML = 'the board is exempt from check-ins, except operational executives (Steel, Suhaib): ' + W75_EXEC_MIN + 'h minimum';
+        }
+      }
+      /* header + silent-list wording and entries */
+      var h4s = sec.querySelectorAll('h4');
+      for (var j = 0; j < h4s.length; j++) {
+        var h = h4s[j];
+        if (h.textContent.indexOf('People (') === 0 && h.innerHTML.indexOf('executives') < 0) {
+          h.innerHTML = h.innerHTML.replace('board exempt', 'board exempt, operational executives ' + W75_EXEC_MIN + 'h');
+        }
+        if (h.textContent.indexOf('Not checking in at all') === 0 && h.innerHTML.indexOf('executives') < 0) {
+          h.innerHTML = h.innerHTML.replace('board exempt', 'board exempt except operational executives');
+        }
+      }
+      if (silentExecs.length) {
+        var silentBox = null;
+        for (var j2 = 0; j2 < h4s.length; j2++) {
+          if (h4s[j2].textContent.indexOf('Not checking in at all') === 0) { silentBox = h4s[j2].parentNode; break; }
+        }
+        if (silentBox) {
+          var flags = silentBox.querySelector('.w52flags');
+          if (!flags) {
+            var empty = silentBox.querySelector('p.m-sub');
+            flags = document.createElement('div');
+            flags.className = 'w52flags';
+            if (empty) silentBox.insertBefore(flags, empty); else silentBox.appendChild(flags);
+          }
+          silentExecs.forEach(function (n) {
+            if (flags.innerHTML.indexOf(n) >= 0) return;
+            var sp = document.createElement('span');
+            sp.className = 'w52flag';
+            sp.innerHTML = n + ' <small>Executive &middot; min ' + W75_EXEC_MIN + 'h/wk</small>';
+            flags.appendChild(sp);
+          });
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  (function () {
+    var queued = false;
+    var mo = new MutationObserver(function () {
+      if (queued) return;
+      queued = true;
+      setTimeout(function () { queued = false; w75ExecFix(); }, 120);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  })();
+
+  if (typeof startApp === 'function') {
+    var __sa75 = startApp;
+    startApp = async function () {
+      await __sa75();
+      setTimeout(w75Decorate, 200);
+      setTimeout(w75Card, 400);
+    };
+  }
+  /* in case chat was already mounted before this wave ran */
+  setTimeout(w75Decorate, 800);
+})();

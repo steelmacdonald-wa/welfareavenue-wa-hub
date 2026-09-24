@@ -1,0 +1,306 @@
+/* =====================================================================
+   WA v92 finances horizons (07/08/26): time frames, forecast, drilldowns,
+   nonprofit health
+   =====================================================================
+   1. Time frame pills at the top of Finances: one pill per fiscal year
+      that has data (ready for the bulk upload of past-year PDFs) plus a
+      Forecast toggle on the current year. Every table, chart, KPI and
+      the ledger follow the selected year (waFinFYNow is wrapped; all of
+      wave22/90/91 already derive from it).
+   2. Forecast rendering itself lives in wave90's charts (edited 07/08/26):
+      dashed/translucent projected bars and a dashed net line from the
+      average of the last three months with data, labelled as an estimate.
+   3. Merchant drilldowns: click any category row in "Where the money
+      goes" / "comes from" to expand the merchants inside it (Instacart
+      vs the rest of Purchases, and so on).
+   4. Nonprofit health panel: program / fundraising / admin split,
+      fundraising cost per dollar raised, net margin, average monthly
+      spend with a 3-6 month reserve target, grants reliance; each with
+      a plain-language hover note and benchmark, plus a short guidelines
+      fold for a young Canadian charity. Benchmarks: Charity Navigator /
+      BBB program-ratio guidance, sector reserve guidance, CRA basics.
+   ===================================================================== */
+(function () {
+  if (window.__wa92) return; window.__wa92 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w92pills{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 10px;}' +
+    '.w92pills .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);margin-right:2px;}' +
+    '.w92pill{border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;}' +
+    '.w92pill.on{background:#2c7a66;border-color:#2c7a66;color:#fff;}' +
+    '.w92pill.fc{border-style:dashed;}' +
+    '.w92pill.fc.on{background:#b07b2e;border-color:#b07b2e;}' +
+    '.w92note{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin:-4px 0 8px;}' +
+    '.w92can .l{cursor:pointer;}' +
+    '.w92can .l:before{content:"\\25B8 ";font-size:9px;color:var(--wa-muted,#7b8a86);}' +
+    '.w92can.open .l:before{content:"\\25BE ";}' +
+    '.w92sub{margin:2px 0 6px 18px;padding-left:8px;border-left:2px solid rgba(127,127,127,.25);}' +
+    '.w92sub .w90row{margin:2px 0;font-size:11px;}' +
+    '.w92sub .w90row .l{flex-basis:108px;cursor:default;}' +
+    '.w92sub .w90row .l:before{content:"";}' +
+    '#w92health{margin:12px 0;}' +
+    '#w92health h3{margin-bottom:2px;}' +
+    '.w92hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:8px 0;}' +
+    '.w92hcard{background:rgba(127,127,127,.07);border-radius:10px;padding:10px 12px;cursor:help;}' +
+    '.w92hcard .t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);}' +
+    '.w92hcard .v{font-size:17px;font-weight:800;margin:2px 0;}' +
+    '.w92hcard .b{font-size:11px;color:var(--wa-muted,#7b8a86);}' +
+    '.w92dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;}' +
+    '.w92dot.ok{background:#3f9c7f;}.w92dot.warn{background:#b07b2e;}.w92dot.bad{background:#c96b5f;}.w92dot.na{background:rgba(127,127,127,.4);}' +
+    '#w92guide{font-size:12px;margin-top:4px;}' +
+    '#w92guide summary{cursor:pointer;font-weight:700;color:#2c7a66;font-size:12.5px;}' +
+    '#w92guide p{margin:6px 0;font-size:12px;}';
+  document.head.appendChild(css);
+
+  var W92 = { years: null, loading: false };
+
+  /* ---------- time frame plumbing ---------- */
+  var __fy92 = waFinFYNow;
+  waFinFYNow = function () { return window.WA_FIN_FYSEL || __fy92(); };
+  var __qn92 = waFinQNow;
+  waFinQNow = function () {
+    var nat = __fy92();
+    if (window.WA_FIN_FYSEL && window.WA_FIN_FYSEL !== nat) return 'Q4';
+    return __qn92();
+  };
+
+  async function w92LoadYears() {
+    if (W92.years || W92.loading) return;
+    W92.loading = true;
+    try {
+      var r = await db.from('finance_transactions').select('txn_date').order('txn_date', { ascending: true }).limit(1);
+      var nat = __fy92();
+      var first = nat;
+      if (r && r.data && r.data[0] && r.data[0].txn_date) {
+        var d = String(r.data[0].txn_date);
+        var y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7));
+        first = m >= 10 ? y + 1 : y;
+      }
+      var ys = [];
+      for (var y2 = Math.max(first, nat - 8); y2 <= nat; y2++) ys.push(y2);
+      W92.years = ys;
+    } catch (e) { W92.years = [__fy92()]; }
+    W92.loading = false;
+    try { w92Pills(); } catch (e2) { /* non-fatal */ }
+  }
+
+  function w92Pills() {
+    var sec = document.getElementById('finances');
+    if (!sec) return;
+    var head = sec.querySelector('.fin-head');
+    if (!head || document.getElementById('w92pills')) return;
+    var nat = __fy92();
+    var sel = window.WA_FIN_FYSEL || nat;
+    var years = W92.years || [nat];
+    var html = '<span class="lbl">Time frame</span>' + years.map(function (y) {
+      return '<button class="w92pill' + (y === sel ? ' on' : '') + '" data-w92y="' + y + '">FY' + String(y).slice(-2) + '</button>';
+    }).join('');
+    if (sel === nat) {
+      html += '<button class="w92pill fc' + (window.WA_FIN_FC ? ' on' : '') + '" data-w92fc="1" title="Project the rest of the year from the average of the last three months with data. Clearly marked as an estimate.">Forecast</button>';
+    }
+    var wrap = document.createElement('div');
+    wrap.className = 'w92pills';
+    wrap.id = 'w92pills';
+    wrap.innerHTML = html;
+    head.insertAdjacentElement('afterend', wrap);
+    if (sel !== nat) {
+      var note = document.createElement('div');
+      note.className = 'w92note';
+      note.textContent = 'Viewing FY' + String(sel).slice(-2) + ' (Oct 1 ' + (sel - 1) + ' to Sep 30 ' + sel + '). Quarter columns and charts follow this year.';
+      wrap.insertAdjacentElement('afterend', note);
+    }
+    wrap.querySelectorAll('[data-w92y]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var y = Number(b.getAttribute('data-w92y'));
+        if (y === (window.WA_FIN_FYSEL || nat)) return;
+        window.WA_FIN_FYSEL = (y === nat ? null : y);
+        if (y !== nat) window.WA_FIN_FC = false;
+        b.textContent = '...';
+        await waFinLoad(true);
+        waFinRender();
+      });
+    });
+    var fc = wrap.querySelector('[data-w92fc]');
+    if (fc) fc.addEventListener('click', function () {
+      window.WA_FIN_FC = !window.WA_FIN_FC;
+      waFinRender();
+    });
+    w92LoadYears();
+  }
+
+  /* ---------- merchant drilldowns ---------- */
+  function w92Merchant(desc) {
+    var s = String(desc || '').toLowerCase()
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/[#*]/g, ' ')
+      .replace(/\b\d{2,}\b/g, ' ')
+      .replace(/[^a-z0-9 ]/g, ' ')
+      .replace(/\s+/g, ' ').trim();
+    var words = s.split(' ').slice(0, 2).join(' ');
+    return words || 'other';
+  }
+  function w92Pretty(key) {
+    return key.split(' ').map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' ');
+  }
+  function w92SubRows(cat, income) {
+    var agg = {}, total = 0;
+    (WA_FIN_TX || []).forEach(function (t) {
+      if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+      if ((t.category || '') !== cat) return;
+      var a = Number(t.amount);
+      if (income ? a < 0 : a >= 0) return;
+      var v = Math.abs(a);
+      var k = w92Merchant(t.description);
+      agg[k] = (agg[k] || 0) + v;
+      total += v;
+    });
+    var items = Object.keys(agg).map(function (k) { return { k: k, v: agg[k] }; })
+      .sort(function (a, b) { return b.v - a.v; });
+    var top = items.slice(0, 8);
+    var rest = items.slice(8).reduce(function (n, x) { return n + x.v; }, 0);
+    if (rest > 0.005) top.push({ k: 'everything else', v: rest });
+    if (!top.length) return '<div class="w90row"><span class="l">No transactions in this view.</span></div>';
+    var max = top[0].v;
+    return top.map(function (x) {
+      var pct = total > 0 ? Math.round(x.v / total * 100) : 0;
+      return '<div class="w90row" title="' + esc(w92Pretty(x.k)) + ': ' + waFinMoney(x.v, true) + ' (' + pct + '% of ' + esc(cat) + ')">' +
+        '<span class="l">' + esc(w92Pretty(x.k)) + '</span>' +
+        '<span class="b"><i style="width:' + Math.max(1, Math.round(x.v / max * 100)) + '%;background:' + (income ? '#3f9c7f' : '#c96b5f') + ';opacity:.7"></i></span>' +
+        '<span class="v">' + waFinMoney(x.v) + ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">' + pct + '%</span></span></div>';
+    }).join('');
+  }
+  function w92Drill() {
+    var charts = document.getElementById('w90charts');
+    if (!charts) return;
+    charts.querySelectorAll('.w90box').forEach(function (box) {
+      var t = (box.querySelector('.w90t') || {}).textContent || '';
+      var goes = t.indexOf('Where the money goes') === 0;
+      var comes = t.indexOf('Where the money comes from') === 0;
+      if (!goes && !comes) return;
+      box.querySelectorAll(':scope > .w90row').forEach(function (r) {
+        if (r.classList.contains('w92can')) return;
+        r.classList.add('w92can');
+        var lab = r.querySelector('.l');
+        if (!lab) return;
+        lab.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var open = r.classList.toggle('open');
+          var next = r.nextElementSibling;
+          if (next && next.classList.contains('w92sub')) { next.remove(); return; }
+          if (!open) return;
+          var cat = (lab.textContent || '').trim();
+          var sub = document.createElement('div');
+          sub.className = 'w92sub';
+          sub.innerHTML = w92SubRows(cat, comes);
+          r.insertAdjacentElement('afterend', sub);
+        });
+      });
+      if (!box.querySelector('[data-w92hint]')) {
+        var hint = document.createElement('div');
+        hint.className = 'w90leg';
+        hint.setAttribute('data-w92hint', '1');
+        hint.innerHTML = '<span>Click a line to see the merchants inside it.</span>';
+        box.appendChild(hint);
+      }
+    });
+  }
+
+  /* ---------- nonprofit health panel ---------- */
+  function w92Health() {
+    var sec = document.getElementById('finances');
+    if (!sec || document.getElementById('w92health')) return;
+    var anchor = document.getElementById('w91review') || document.getElementById('w90charts');
+    if (!anchor) return;
+    var prog = 0, fundr = 0, admin = 0, totSpd = 0, totInc = 0, contrib = 0, grants = 0;
+    var monthsWith = {};
+    (WA_FIN_TX || []).forEach(function (t) {
+      if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+      var a = Number(t.amount);
+      if (a >= 0) {
+        totInc += a;
+        if (t.category === '4100 Donation' || t.category === '4200 Grants') contrib += a;
+        if (t.category === '4200 Grants') grants += a;
+      } else {
+        var v = -a;
+        totSpd += v;
+        monthsWith[String(t.txn_date).slice(0, 7)] = 1;
+        var d = t.department || 'org';
+        if (d === 'opsmtl' || d === 'opsto') prog += v;
+        else if (d === 'fundraising' || d === 'marketing') fundr += v;
+        else admin += v;
+      }
+    });
+    var nMonths = Object.keys(monthsWith).length || 1;
+    var avgMonth = totSpd / nMonths;
+    function pct(x) { return Math.round(x * 100) + '%'; }
+    function dot(st) { return '<span class="w92dot ' + st + '"></span>'; }
+    var cards = [];
+    if (totSpd > 0) {
+      var pr = prog / totSpd;
+      cards.push({
+        t: 'Program spending', v: dot(pr >= 0.65 ? 'ok' : (pr >= 0.5 ? 'warn' : 'bad')) + pct(pr) + ' of spending',
+        b: 'Target: 65% or more on the mission itself. Ops Montreal + Ops Toronto count as program here.',
+        tip: 'Program expense ratio = program spending / total spending. Charity watchdogs (Charity Navigator, BBB) look for 65-70%+. Mapping used: Ops Montreal and Ops Toronto = program; Fundraising and Marketing = fundraising; HR, Board, Org-wide = admin. Reallocate transactions to sharpen this.'
+      });
+      var ad = admin / totSpd;
+      cards.push({
+        t: 'Admin overhead', v: dot(ad <= 0.35 ? 'ok' : (ad <= 0.45 ? 'warn' : 'bad')) + pct(ad) + ' of spending',
+        b: 'Target: under 35%. Some overhead is healthy; zero overhead is a myth.',
+        tip: 'Admin ratio = (HR + Board + Org-wide spending) / total spending. Under 35% is the common watchdog benchmark. Do not starve it to zero: software, insurance and good books are what keep a charity alive.'
+      });
+    }
+    if (contrib > 0) {
+      var fe = fundr / contrib;
+      cards.push({
+        t: 'Cost to raise $1', v: dot(fe <= 0.2 ? 'ok' : (fe <= 0.35 ? 'warn' : 'bad')) + '$' + fe.toFixed(2),
+        b: 'Target: under $0.20 spent per dollar of donations and grants.',
+        tip: 'Fundraising efficiency = (Fundraising + Marketing spending) / (donations + grants received). Under $0.20 per dollar raised is the standard benchmark.'
+      });
+    }
+    if (totInc > 0) {
+      var nm = (totInc - totSpd) / totInc;
+      cards.push({
+        t: 'Net margin', v: dot(nm >= 0 ? 'ok' : (nm >= -0.1 ? 'warn' : 'bad')) + pct(nm),
+        b: nm >= 0 ? 'Running a surplus: money available to reinvest or reserve.' : 'Spending more than comes in this period.',
+        tip: 'Net margin = (income - spending) / income. Occasional deficits are normal; sustained ones eat reserves.'
+      });
+      var gr = grants / totInc;
+      cards.push({
+        t: 'Grants reliance', v: dot(gr <= 0.5 ? 'ok' : 'warn') + pct(gr) + ' of income',
+        b: gr > 0 ? 'Watch diversification if one funder dominates.' : 'No grant income recorded yet. Recategorise grant deposits to 4200 Grants to track this.',
+        tip: 'Grants reliance = grant income / total income. Diversified income (individual donations + grants + earned revenue) is safer than depending on one source.'
+      });
+    }
+    cards.push({
+      t: 'Average monthly spend', v: waFinMoney(avgMonth),
+      b: 'Reserves target: 3 to 6 months = ' + waFinMoney(avgMonth * 3) + ' to ' + waFinMoney(avgMonth * 6) + '. Compare against the actual bank balance.',
+      tip: 'Average across the ' + nMonths + ' month(s) with spending in this view. Sector guidance: hold 3 to 6 months of operating costs in unrestricted reserves. The Hub does not know the bank balance; check it against this range.'
+    });
+    var d = document.createElement('div');
+    d.id = 'w92health';
+    d.innerHTML = '<h3 class="block" style="color:#2c7a66">Nonprofit health</h3>' +
+      '<div class="fin-note">Standard charity-sector measures computed from this time frame. Hover any card for the formula and benchmark. Department mapping: Ops = program, Fundraising + Marketing = fundraising, HR + Board + Org-wide = admin.</div>' +
+      '<div class="w92hgrid">' + cards.map(function (c) {
+        return '<div class="w92hcard" title="' + esc(c.tip) + '"><div class="t">' + c.t + '</div><div class="v">' + c.v + '</div><div class="b">' + c.b + '</div></div>';
+      }).join('') + '</div>' +
+      '<details id="w92guide"><summary>Guidelines for a young Canadian charity</summary>' +
+      '<p>Spend most of every dollar on the mission: watchdogs look for 65% or more on program work, under 35% on overhead, and under $0.20 to raise each donated dollar. These are guidelines, not law, and a growing charity can sit outside them for a season with a good reason.</p>' +
+      '<p>Build a cushion: 3 to 6 months of operating costs in unrestricted reserves is the standard target, so one lost grant or a slow season never threatens payroll or the serving events.</p>' +
+      '<p>CRA basics: file the T3010 return within six months of the fiscal year end (WA year ends Sep 30, so file by Mar 31), keep books, records and donation receipts for at least six years, and issue receipts only for true gifts. The disbursement quota (minimum annual charitable spending) only starts to matter once investment assets not used for charity work exceed $100,000.</p>' +
+      '<p>Diversify income deliberately: individual donations plus grants plus earned revenue beats any single source. Track grants under 4200 Grants so reliance stays visible.</p>' +
+      '</details>';
+    anchor.insertAdjacentElement('afterend', d);
+  }
+
+  /* ---------- wire into the render cycle ---------- */
+  if (typeof waFinRender === 'function') {
+    var __fr92 = waFinRender;
+    waFinRender = function () {
+      __fr92.apply(this, arguments);
+      try { w92Pills(); } catch (e) { /* non-fatal */ }
+      try { w92Drill(); } catch (e) { /* non-fatal */ }
+      try { w92Health(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

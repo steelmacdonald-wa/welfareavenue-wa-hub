@@ -1,0 +1,137 @@
+/* =====================================================================
+   WA v50 requests suggested from meetings
+   (02/08/26)
+   Transcripts now feed the requests portal, confirm-first. A scanner
+   (edge function transcript-requests, cron every 2 hours) reads each
+   newly processed meeting and captures explicit cross-team asks as
+   pending suggestions with a verbatim quote and a confidence score.
+   This wave adds the inbox: a "Suggested from meetings" block at the
+   top of the Requests page where staff Accept (files the real request
+   through the normal plumbing, attributed to the accepter) or Dismiss.
+   Nothing is ever filed without a human click.
+   ===================================================================== */
+(function () {
+  if (window.__wa50) return;
+  window.__wa50 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa50css';
+  st.textContent = '' +
+    '.w50box{background:#f6f8f7;border-radius:14px;padding:12px 16px;margin:0 0 14px;}' +
+    '.w50box h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
+    '.w50row{background:#fff;border-radius:12px;padding:10px 14px;margin:8px 0;}' +
+    '.w50t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:700;color:#14302b;}' +
+    '.w50dep{font-size:10.5px;font-weight:700;color:#fff;border-radius:999px;padding:2px 10px;}' +
+    '.w50conf{font-size:10.5px;font-weight:700;color:#8a6414;background:rgba(212,161,60,.16);border-radius:999px;padding:2px 9px;}' +
+    '.w50q{font-size:12px;color:#7b8a86;font-style:italic;margin:4px 0 2px;}' +
+    '.w50d{font-size:12.5px;color:#3d4642;margin:2px 0 6px;}' +
+    '[data-w50a],[data-w50x],[data-w50tx]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 12px;' +
+    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:700;line-height:1.5;margin:1px 4px 1px 0;}' +
+    '[data-w50a]{background:#1f5f4f;color:#fff !important;border-color:#1f5f4f;}' +
+    '[data-w50a]:hover{background:#2c7a66;}' +
+    '[data-w50x]:hover,[data-w50tx]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '[data-w50x]{color:#b3402f !important;}';
+  document.head.appendChild(st);
+
+  var WA50 = { rows: [], loaded: false };
+  async function wa50Load() {
+    try {
+      var r = await db.from('request_suggestions').select('*').eq('status', 'pending').order('id', { ascending: false }).limit(20);
+      WA50.rows = (r && r.data) || [];
+      WA50.loaded = true;
+    } catch (e) { WA50.rows = []; }
+  }
+
+  function wa50Html() {
+    if (!WA50.rows.length) return '';
+    var dl = (typeof DEPT_LABEL !== 'undefined') ? DEPT_LABEL : {};
+    var dc = (typeof DEPT_COLOR !== 'undefined') ? DEPT_COLOR : {};
+    var html = '<div class="w50box" id="w50box"><h3>Suggested from meetings (' + WA50.rows.length + ')</h3>'
+      + '<p class="m-sub" style="margin:0 0 4px">The AI spotted these asks in recent transcripts. Nothing is filed until you accept it.</p>';
+    WA50.rows.forEach(function (s) {
+      html += '<div class="w50row">'
+        + '<div class="w50t"><span class="w50dep" style="background:' + (dc[s.department] || '#6f6b64') + '">' + esc(dl[s.department] || s.department) + '</span>'
+        + esc(s.title)
+        + '<span class="w50conf">confidence ' + (s.confidence || '?') + '/10</span></div>'
+        + (s.quote ? '<div class="w50q">&quot;' + esc(s.quote) + '&quot;</div>' : '')
+        + (s.details ? '<div class="w50d">' + esc(s.details) + '</div>' : '')
+        + '<div><a data-w50a="' + s.id + '">Accept and file it</a>'
+        + '<a data-w50x="' + s.id + '">Dismiss</a>'
+        + '<a data-w50tx="' + s.transcript_id + '">Open the meeting</a>'
+        + (s.assignee ? '<span style="font-size:11.5px;color:#7b8a86">suggested assignee: ' + esc(s.assignee) + '</span>' : '')
+        + '</div></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  async function wa50Inject() {
+    try {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var body = document.getElementById('reqBody');
+      if (!body) return;
+      if (!WA50.loaded) await wa50Load();
+      var old = document.getElementById('w50box');
+      if (old) old.remove();
+      if (WA50.rows.length) body.insertAdjacentHTML('afterbegin', wa50Html());
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (typeof renderRequestsModule === 'function') {
+    var __rr50 = renderRequestsModule;
+    renderRequestsModule = function () {
+      var out = __rr50.apply(this, arguments);
+      WA50.loaded = false;
+      wa50Inject();
+      return out;
+    };
+  }
+
+  async function wa50Accept(id, el) {
+    var s = WA50.rows.filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!s) return;
+    el.textContent = 'Filing...';
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var status = 'requested';
+    try {
+      var rt = await db.from('request_types').select('default_status').eq('key', s.type_key).maybeSingle();
+      if (rt && rt.data && rt.data.default_status) status = rt.data.default_status;
+    } catch (e) { /* default */ }
+    var details = (s.details || '') + (s.quote ? '\n\nFrom the meeting: "' + s.quote + '"' : '');
+    var ins = await db.from('dept_requests').insert({
+      type_key: s.type_key || 'other', department: s.department, title: s.title,
+      details: details || null, status: status, done: false,
+      requested_by: 'Meeting AI (accepted by ' + by + ')',
+      assignee: s.assignee || null
+    }).select('id').single();
+    if (ins.error) { toast('Could not file it'); el.textContent = 'Accept and file it'; return; }
+    await db.from('change_log').insert({ entity_type: 'request', entity_id: String(ins.data.id), field: 'created', old_value: null, new_value: s.title, changed_by: 'Meeting AI (accepted by ' + by + ')' });
+    await db.from('request_suggestions').update({ status: 'accepted', request_id: ins.data.id, decided_by: by, decided_at: new Date().toISOString() }).eq('id', s.id);
+    toast('Filed to ' + ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[s.department]) || s.department));
+    WA50.loaded = false;
+    try { renderRequestsModule(); } catch (e) { wa50Inject(); }
+  }
+  async function wa50Dismiss(id) {
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var r = await db.from('request_suggestions').update({ status: 'dismissed', decided_by: by, decided_at: new Date().toISOString() }).eq('id', Number(id));
+    if (r.error) { toast('Could not dismiss it'); return; }
+    WA50.rows = WA50.rows.filter(function (x) { return String(x.id) !== String(id); });
+    var old = document.getElementById('w50box');
+    if (old) old.remove();
+    var body = document.getElementById('reqBody');
+    if (body && WA50.rows.length) body.insertAdjacentHTML('afterbegin', wa50Html());
+    toast('Dismissed');
+  }
+
+  if (!document.body.dataset.wa50Wired) {
+    document.body.dataset.wa50Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w50a]');
+      if (a) { if (typeof isStaff === 'function' && isStaff()) wa50Accept(a.getAttribute('data-w50a'), a); return; }
+      var x = e.target.closest && e.target.closest('[data-w50x]');
+      if (x) { if (typeof isStaff === 'function' && isStaff()) wa50Dismiss(x.getAttribute('data-w50x')); return; }
+      var t = e.target.closest && e.target.closest('[data-w50tx]');
+      if (t) { location.hash = '#tx/' + t.getAttribute('data-w50tx'); return; }
+    });
+  }
+})();

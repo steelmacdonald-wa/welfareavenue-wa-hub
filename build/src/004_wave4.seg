@@ -1,0 +1,393 @@
+/* =====================================================================
+   WA v4 UI enhancements (injected 22/07/26)
+   1. Rebrand: palette from WA Branding Collab deck (forest #4a7c59,
+      purple #8455ff, cream #f2ebe3, charcoal #191615), tagline.
+   2. Menu revamp: uppercase tabs, per-department colours, dropdowns.
+   3. Important info page (staff only): passwords, training videos,
+      shared folders, key links. Table: info_links (RLS staff only).
+   4. Task move between departments (itemLi override + wire wrapper).
+   5. Chat assistant widget (bottom right) calling the ask function.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + ':root{--wa-ink:#191615;--wa-green:#4a7c59;--wa-green-soft:#5d9070;--wa-gold:#8455ff;--wa-gold-soft:#e6def7;--wa-paper:#f2ebe3;--wa-line:#dfd7c9;--wa-text:#262523;--wa-muted:#6f6b64;}'
+    + '.wa-logo{background:#8455ff;color:#fff;}'
+    + '.setup-banner{color:#3d2f7a;}'
+    + '.wn-badge{color:#fff;}'
+    + '.tab{text-transform:uppercase;font-size:11.5px;letter-spacing:.7px;font-weight:700;padding:14px 13px;}'
+    + '.wa-dd{position:absolute;background:#fff;border:1px solid var(--wa-line);border-top:none;border-radius:0 0 10px 10px;box-shadow:0 10px 24px rgba(0,0,0,.10);min-width:200px;z-index:40;display:none;}'
+    + '.wa-dd a{display:block;padding:9px 14px;font-size:12.5px;color:var(--wa-text);cursor:pointer;text-decoration:none;font-weight:600;}'
+    + '.wa-dd a:hover{background:var(--wa-paper);color:var(--wa-green);}'
+    + '.move-btn{background:none;border:none;color:var(--wa-muted);cursor:pointer;font-size:11px;text-decoration:underline;padding:0 4px;}'
+    + '.move-sel{font-size:11px;margin-left:4px;border:1px solid var(--wa-line);border-radius:5px;}'
+    + '.info-sec h3{margin:18px 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-green);}'
+    + '.info-row{display:flex;align-items:center;gap:9px;padding:7px 0;border-top:1px dashed var(--wa-line);font-size:13px;flex-wrap:wrap;}'
+    + '.info-row .lbl{font-weight:600;}'
+    + '.info-row .dep{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;}'
+    + '.info-row .nts{color:var(--wa-muted);font-size:11.5px;flex-basis:100%;padding-left:2px;}'
+    + '.info-row .sec{font-family:monospace;letter-spacing:2px;background:var(--wa-paper);border-radius:6px;padding:2px 8px;}'
+    + '.info-row .mini-x{background:none;border:none;color:#b3402f;cursor:pointer;font-size:13px;margin-left:auto;}'
+    + '.info-add{margin-top:14px;padding:12px;border:1px dashed var(--wa-line);border-radius:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}'
+    + '.info-add input,.info-add select{padding:6px 8px;border:1px solid var(--wa-line);border-radius:7px;font-size:12.5px;}'
+    + '.pw-note{background:#fdf3ec;border:1px solid #ecd4bd;color:#7a4a1f;border-radius:9px;padding:9px 12px;font-size:12px;margin:8px 0 4px;}'
+    + '#waChatBtn{position:fixed;right:22px;bottom:22px;width:54px;height:54px;border-radius:50%;background:#8455ff;color:#fff;border:none;box-shadow:0 6px 18px rgba(0,0,0,.28);cursor:pointer;font-size:23px;z-index:60;}'
+    + '#waChatBtn:hover{transform:scale(1.06);}'
+    + '#waChatPanel{position:fixed;right:22px;bottom:86px;width:340px;max-width:92vw;height:470px;max-height:70vh;background:#fff;border:1px solid var(--wa-line);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.24);display:none;flex-direction:column;overflow:hidden;z-index:60;}'
+    + '.wac-h{background:#191615;color:#f2ebe3;padding:11px 14px;font-weight:700;font-size:13px;letter-spacing:.4px;}'
+    + '.wac-h small{display:block;font-weight:400;opacity:.65;font-size:10.5px;margin-top:1px;}'
+    + '.wac-msgs{flex:1;overflow-y:auto;padding:12px;}'
+    + '.wac-m{margin:6px 0;font-size:12.5px;line-height:1.45;}'
+    + '.wac-m.user{text-align:right;}'
+    + '.wac-m.user span{background:#4a7c59;color:#fff;border-radius:12px 12px 2px 12px;padding:7px 10px;display:inline-block;max-width:85%;text-align:left;}'
+    + '.wac-m.bot span{background:var(--wa-paper);border-radius:12px 12px 12px 2px;padding:7px 10px;display:inline-block;max-width:92%;white-space:pre-wrap;}'
+    + '.wac-src{font-size:10.5px;color:var(--wa-muted);margin-top:3px;}'
+    + '.wac-in{display:flex;gap:7px;padding:10px;border-top:1px solid var(--wa-line);}'
+    + '.wac-in input{flex:1;padding:8px 11px;border:1px solid var(--wa-line);border-radius:9px;font-size:12.5px;}'
+    + '.wac-in button{background:#4a7c59;color:#fff;border:none;border-radius:9px;padding:8px 13px;cursor:pointer;font-weight:700;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+/* ---- brand: department colours + tagline + tab accents ---- */
+(function () {
+  DEPT_COLOR.opsmtl = '#4a7c59';
+  DEPT_COLOR.opsto = '#3a6ea5';
+  DEPT_COLOR.marketing = '#8455ff';
+  DEPT_COLOR.fundraising = '#c87a2f';
+  DEPT_COLOR.hr = '#b3402f';
+  DEPT_COLOR.board = '#44403c';
+  var st = document.createElement('style');
+  st.textContent = DEPT_ORDER.map(function (d) {
+    return '.tab[data-tab=' + d + '].active{color:' + DEPT_COLOR[d] + ';border-bottom-color:' + DEPT_COLOR[d] + ';}';
+  }).join('');
+  document.head.appendChild(st);
+  var sub = document.querySelector('.wa-brandrow .sub');
+  if (sub) sub.textContent = 'Service is solidarity, not charity. Executive knowledge base.';
+  document.querySelectorAll('#tabBar .tab').forEach(function (t) {
+    var d = t.dataset.tab, dot = t.querySelector('.tabdot');
+    if (dot && DEPT_COLOR[d]) dot.style.background = DEPT_COLOR[d];
+  });
+})();
+
+/* ---- menu dropdowns ---- */
+(function () {
+  var nav = document.querySelector('nav.wa-nav') || document.getElementById('tabBar');
+  if (!nav) return;
+  var dd = document.createElement('div');
+  dd.className = 'wa-dd';
+  document.body.appendChild(dd);
+  var hideT = null, curDept = null;
+  function hide() { dd.style.display = 'none'; curDept = null; }
+  function showFor(tab, dept) {
+    curDept = dept;
+    var r = tab.getBoundingClientRect();
+    dd.innerHTML = '<a data-act="overview">Overview</a>'
+      + '<a data-act="exec">Executive decisions</a>'
+      + '<a data-act="agenda">Agendas</a>'
+      + '<a data-act="tx">Transcripts</a>';
+    dd.style.left = Math.round(r.left) + 'px';
+    dd.style.top = Math.round(r.bottom) + 'px';
+    dd.style.position = 'fixed';
+    dd.style.display = 'block';
+    dd.querySelectorAll('a').forEach(function (a) {
+      a.addEventListener('click', function () {
+        var act = a.dataset.act, d = curDept;
+        hide();
+        if (act === 'overview') { location.hash = '#dept/' + d; }
+        if (act === 'exec') {
+          location.hash = '#dept/' + d;
+          setTimeout(function () {
+            var c = document.querySelector('#' + d + ' .exec-card');
+            if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            else toast('No executive decisions for ' + (DEPT_LABEL[d] || d) + ' right now');
+          }, 380);
+        }
+        if (act === 'agenda') {
+          location.hash = '#agendas';
+          setTimeout(function () {
+            try { var f = document.getElementById('agFilterDept'); if (f) { f.value = d; waRenderAgendasPage(); } } catch (e) { /* boot */ }
+          }, 300);
+        }
+        if (act === 'tx') {
+          location.hash = '#transcripts';
+          setTimeout(function () {
+            var f = document.getElementById('txFilter');
+            if (f) {
+              var opt = Array.prototype.slice.call(f.options).find(function (o) {
+                return txDeptKey(o.value) === d || txDeptKey(o.text) === d;
+              });
+              if (opt) { f.value = opt.value; renderTranscripts(); }
+            }
+          }, 380);
+        }
+      });
+    });
+  }
+  document.querySelectorAll('#tabBar .tab').forEach(function (t) {
+    var d = t.dataset.tab;
+    if (DEPT_ORDER.indexOf(d) < 0) return;
+    t.addEventListener('mouseenter', function () { clearTimeout(hideT); showFor(t, d); });
+    t.addEventListener('mouseleave', function () { hideT = setTimeout(hide, 350); });
+  });
+  dd.addEventListener('mouseenter', function () { clearTimeout(hideT); });
+  dd.addEventListener('mouseleave', function () { hideT = setTimeout(hide, 250); });
+  window.addEventListener('scroll', hide);
+})();
+
+/* ---- task move between departments ---- */
+function itemLi(it) {
+  let dateLine;
+  if (it.done) {
+    const dd = daysBetween(it.opened, it.closed);
+    dateLine = (it.opened ? "Opened " + fmtDay(it.opened) + " &middot; " : "") + "Closed " + (fmtDay(it.closed) || "?") + (dd != null ? " &middot; " + dd + "d to close" : "");
+  } else {
+    const age = daysBetween(it.opened, new Date().toISOString());
+    dateLine = it.opened ? "Opened " + fmtDay(it.opened) + (age != null && age > 0 ? " &middot; " + age + "d open" : "") : "";
+  }
+  const chips = (it.assignees || []).map(a => '<span class="as-chip">' + esc(a.name) + "</span>").join("");
+  const btns = isStaff() && !it.done
+    ? ' <button class="edit-btn" data-edit="' + it.ref + '">edit</button><button class="reassign-btn" data-ref="' + it.ref + '" title="Reassign owner">reassign</button><button class="move-btn" data-move="' + it.ref + '" title="Move to another department">move</button>'
+    : "";
+  return '<li data-task="' + it.ref + '" class="' + (it.done ? "done" : "") + '">' +
+    '<input type="checkbox" data-ref="' + it.ref + '" ' + (it.done ? "checked" : "") + (isStaff() ? "" : " disabled") + " />" +
+    '<div class="ci-body">' +
+      '<div class="ci-title">' + (it.flag ? '<span class="flag">&#9873; </span>' : "") + it.title + catTag(it.cat) + (it.confidential && isStaff() ? '<span class="lock-tag">board hidden</span>' : "") + dueBadge(it) + "</div>" +
+      '<div class="ci-sub">Owner: ' + (it.owner || "unassigned") + (it.status ? " &middot; " + it.status : "") + btns + "</div>" +
+      (chips ? '<div class="ci-sub">' + chips + "</div>" : "") +
+      (it.flag && it.note ? '<div class="ci-sub" style="font-style:italic;">Why: ' + esc(it.note) + "</div>" : "") +
+      '<div class="ci-meta">' + dateLine + (it.done && it.by ? " &middot; by " + it.by : "") + "</div>" +
+    "</div></li>";
+}
+
+async function waMoveTask(ref, to) {
+  var row = (typeof DB_TASKS !== "undefined" ? DB_TASKS : []).find(function (t) { return t.id === ref; });
+  var from = row ? row.department : null;
+  if (!to || to === from) return;
+  var r = await db.from("dept_tasks").update({ department: to, subsection: null, updated_at: new Date().toISOString(), updated_by: who() }).eq("id", ref);
+  if (r.error) { toast("Could not move task"); return; }
+  try {
+    await db.from("change_log").insert({ entity_type: "task", entity_id: String(ref), field: "department", old_value: from, new_value: to, changed_by: who() });
+  } catch (e) { /* log only */ }
+  toast("Task moved to " + (DEPT_LABEL[to] || to));
+  await loadAll();
+  renderAllSections(); renderDashboard(); renderNeedsMe();
+}
+
+(function () {
+  if (typeof wireTaskEvents !== "function") return;
+  var __wte = wireTaskEvents;
+  wireTaskEvents = function (scope) {
+    __wte(scope);
+    scope.querySelectorAll("[data-move]").forEach(function (b) {
+      b.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var ref = Number(b.dataset.move);
+        var row = (typeof DB_TASKS !== "undefined" ? DB_TASKS : []).find(function (t) { return t.id === ref; });
+        var cur = row ? row.department : null;
+        var sel = document.createElement("select");
+        sel.className = "move-sel";
+        sel.innerHTML = '<option value="">Move to...</option>' + DEPT_ORDER.map(function (d) {
+          return '<option value="' + d + '"' + (d === cur ? " disabled" : "") + '>' + (DEPT_LABEL[d] || d) + "</option>";
+        }).join("");
+        b.replaceWith(sel);
+        sel.focus();
+        sel.addEventListener("change", function () { if (sel.value) waMoveTask(ref, sel.value); });
+      });
+    });
+  };
+})();
+
+/* ---- Important info page (staff only) ---- */
+(function () {
+  var main = document.querySelector("main");
+  if (main && !document.getElementById("importantinfo")) {
+    var sec = document.createElement("section");
+    sec.id = "importantinfo";
+    sec.className = "panel";
+    sec.innerHTML = '<div class="card info-sec" id="infoCard"><h2>Important info</h2><div id="infoBody">Loading...</div></div>';
+    main.appendChild(sec);
+  }
+})();
+
+var INFO_CACHE = [];
+async function renderInfoPage() {
+  var body = document.getElementById("infoBody");
+  if (!body) return;
+  if (!isStaff()) { body.innerHTML = '<p class="read">This page is available to Welfare Avenue staff accounts only.</p>'; return; }
+  var r = await db.from("info_links").select("*").order("kind").order("sort").order("label");
+  if (r.error) { body.innerHTML = '<p class="read">Could not load. Refresh to retry.</p>'; return; }
+  INFO_CACHE = r.data || [];
+  var kinds = [
+    { k: "password", title: "Logins and passwords", note: '<div class="pw-note">Visible to every signed-in WA staff account, never to board viewers. Keep it to shared team logins (Canva, social accounts, tools). Do not store banking, government, or personal credentials here.</div>' },
+    { k: "video", title: "Training videos (Loom)", note: "" },
+    { k: "folder", title: "Shared Google Drive folders", note: "" },
+    { k: "link", title: "Other key links", note: "" }
+  ];
+  body.innerHTML = kinds.map(function (K) {
+    var rows = INFO_CACHE.filter(function (i) { return i.kind === K.k; });
+    return '<h3>' + K.title + '</h3>' + K.note + (rows.length ? rows.map(function (i) {
+      var dep = i.department && DEPT_LABEL[i.department] ? '<span class="dep" style="background:' + (DEPT_COLOR[i.department] || "#6f6b64") + '">' + DEPT_LABEL[i.department] + '</span>' : '';
+      var main2 = '<span class="lbl">' + esc(i.label) + '</span>' + dep;
+      if (K.k === "password") {
+        main2 += (i.username ? ' <span style="color:var(--wa-muted);font-size:12px;">' + esc(i.username) + '</span>' : '')
+          + ' <span class="sec" data-sec="' + i.id + '">&bull;&bull;&bull;&bull;&bull;&bull;</span>'
+          + ' <button class="btn ghost mini" data-reveal="' + i.id + '">Show</button>'
+          + ' <button class="btn ghost mini" data-copy="' + i.id + '">Copy</button>'
+          + (i.url ? ' <a href="' + esc(i.url) + '" target="_blank" rel="noopener" style="font-size:12px;">Open &#8599;</a>' : '');
+      } else {
+        main2 += (i.url ? ' <a href="' + esc(i.url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;">Open &#8599;</a>' : '');
+      }
+      return '<div class="info-row">' + main2
+        + '<button class="mini-x" data-del="' + i.id + '" title="Remove">&#10005;</button>'
+        + (i.notes ? '<div class="nts">' + esc(i.notes) + '</div>' : '') + '</div>';
+    }).join("") : '<div class="info-row" style="color:var(--wa-muted);">Nothing here yet. Add the first one below.</div>');
+  }).join("")
+  + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="video">Training video</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
+  + '<input id="ii-label" placeholder="Label, e.g. Canva team login" />'
+  + '<input id="ii-url" placeholder="URL (optional for passwords)" />'
+  + '<input id="ii-user" placeholder="Username / email (passwords)" />'
+  + '<input id="ii-secret" placeholder="Password (passwords only)" type="password" />'
+  + '<select id="ii-dept"><option value="">No department</option>' + DEPT_ORDER.map(function (d) { return '<option value="' + d + '">' + DEPT_LABEL[d] + '</option>'; }).join("") + '</select>'
+  + '<input id="ii-notes" placeholder="Notes (optional)" />'
+  + '<button class="btn mini" id="ii-add" style="background:var(--wa-green);color:#fff;border:none;border-radius:7px;cursor:pointer;">Add</button></div>';
+
+  body.querySelectorAll("[data-reveal]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var i = INFO_CACHE.find(function (x) { return x.id === Number(b.dataset.reveal); });
+      var el = body.querySelector('[data-sec="' + b.dataset.reveal + '"]');
+      if (!i || !el) return;
+      if (b.textContent === "Show") { el.textContent = i.secret || "(empty)"; b.textContent = "Hide"; }
+      else { el.innerHTML = "&bull;&bull;&bull;&bull;&bull;&bull;"; b.textContent = "Show"; }
+    });
+  });
+  body.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var i = INFO_CACHE.find(function (x) { return x.id === Number(b.dataset.copy); });
+      if (i && i.secret) { navigator.clipboard.writeText(i.secret).then(function () { toast("Copied"); }); }
+    });
+  });
+  body.querySelectorAll("[data-del]").forEach(function (b) {
+    b.addEventListener("click", async function () {
+      if (!confirm("Remove this entry for everyone?")) return;
+      await db.from("info_links").delete().eq("id", Number(b.dataset.del));
+      renderInfoPage();
+    });
+  });
+  var add = document.getElementById("ii-add");
+  if (add) add.addEventListener("click", async function () {
+    var v = function (id) { return (document.getElementById(id).value || "").trim(); };
+    if (!v("ii-label")) { toast("Add a label"); return; }
+    var r2 = await db.from("info_links").insert({
+      kind: v("ii-kind") || "link", label: v("ii-label"), url: v("ii-url") || null,
+      username: v("ii-user") || null, secret: v("ii-secret") || null,
+      department: v("ii-dept") || null, notes: v("ii-notes") || null, added_by: who()
+    });
+    if (r2.error) { toast("Could not save"); return; }
+    toast("Added");
+    renderInfoPage();
+  });
+}
+
+(function () {
+  if (typeof applyHash === "function") {
+    var __ah = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || "").replace(/^#/, "");
+      if (h === "importantinfo") { showPanel("importantinfo"); renderInfoPage(); return; }
+      __ah();
+    };
+  }
+})();
+
+/* ---- chat assistant widget ---- */
+var WA_CHAT_HIST = [];
+function waInitChat() {
+  if (document.getElementById("waChatBtn")) return;
+  var btn = document.createElement("button");
+  btn.id = "waChatBtn";
+  btn.innerHTML = "&#10024;";
+  btn.title = "Ask the WA assistant";
+  var panel = document.createElement("div");
+  panel.id = "waChatPanel";
+  panel.innerHTML = '<div class="wac-h">WA Assistant<small>Ask anything, or tell me to close tasks and complete requests. Staff only.</small></div>'
+    + '<div class="wac-msgs" id="wacMsgs"><div class="wac-m bot"><span>Hi, ask me anything about what is happening across Welfare Avenue. I answer only from the dashboard data.</span></div></div>'
+    + '<div class="wac-in"><input id="wacInput" placeholder="e.g. What is blocking the kitchen pilot?" /><button id="wacMic" title="Voice input">&#127908;</button><button id="wacSend">&#10148;</button></div>';
+  document.body.appendChild(btn);
+  document.body.appendChild(panel);
+  btn.addEventListener("click", function () {
+    panel.style.display = panel.style.display === "flex" ? "none" : "flex";
+    if (panel.style.display === "flex") document.getElementById("wacInput").focus();
+  });
+  function addMsg(cls, text, sources) {
+    var m = document.getElementById("wacMsgs");
+    var d = document.createElement("div");
+    d.className = "wac-m " + cls;
+    d.innerHTML = "<span>" + esc(text) + "</span>" + (sources && sources.length ? '<div class="wac-src">Sources: ' + esc(sources.join("; ")) + "</div>" : "");
+    m.appendChild(d);
+    m.scrollTop = m.scrollHeight;
+    return d;
+  }
+  async function send() {
+    var inp = document.getElementById("wacInput");
+    var q = (inp.value || "").trim();
+    if (!q) return;
+    inp.value = "";
+    addMsg("user", q);
+    WA_CHAT_HIST.push({ role: "user", content: q });
+    var thinking = addMsg("bot", "Thinking...");
+    try {
+      const { data, error } = await db.functions.invoke("ask", { body: { question: q, history: WA_CHAT_HIST.slice(-6, -1) } });
+      if (error) throw error;
+      thinking.remove();
+      var ans = (data && data.answer) || "I could not find that in the dashboard data.";
+      addMsg("bot", ans, data && data.sources);
+      if (data && data.actions_done) {
+        try {
+          await loadAll();
+          renderAllSections(); renderDashboard(); renderNeedsMe();
+          await waLoadRequests(); renderDeptRequestCards();
+        } catch (e2) { /* refresh best effort */ }
+        toast(data.actions_done + (data.actions_done === 1 ? " change applied" : " changes applied"));
+      }
+      WA_CHAT_HIST.push({ role: "assistant", content: ans });
+    } catch (e) {
+      thinking.remove();
+      addMsg("bot", "Something went wrong, try again.");
+    }
+  }
+  document.getElementById("wacSend").addEventListener("click", send);
+  document.getElementById("wacInput").addEventListener("keydown", function (e) { if (e.key === "Enter") send(); });
+}
+
+/* ---- staff-gated boot additions ---- */
+(function () {
+  if (typeof startApp !== "function") return;
+  var __sa = startApp;
+  startApp = async function () {
+    await __sa();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById("tabBar");
+        if (bar && !bar.querySelector('[data-tab="importantinfo"]')) {
+          var b = document.createElement("button");
+          b.className = "tab";
+          b.dataset.tab = "importantinfo";
+          b.innerHTML = '<span class="tabdot" style="background:#8455ff"></span>Important info';
+          var act = document.getElementById("actTabBtn");
+          if (act) bar.insertBefore(b, act); else bar.appendChild(b);
+        }
+        waInitChat();
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+/* WA v4b: routing safety for the Important info panel */
+window.addEventListener("hashchange", function () {
+  if ((location.hash || "") === "#importantinfo") {
+    try { showPanel("importantinfo"); renderInfoPage(); } catch (e) { /* boot */ }
+  }
+});
+
+

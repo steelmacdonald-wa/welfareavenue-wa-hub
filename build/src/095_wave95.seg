@@ -1,0 +1,35 @@
+/* =====================================================================
+   WA v95 nav tidy (07/08/26): Important info + The Brain into More
+   =====================================================================
+   Steel's ask: declutter the top bar. The Important info and Brain
+   tabs move inside the More flyout (joining Finances, Activity and
+   Admin). Buttons keep their ids, handlers and role gating; only the
+   parent changes, so deep links and wa40Enforce keep working.
+   ===================================================================== */
+(function () {
+  if (window.__wa95) return; window.__wa95 = true;
+
+  function w95Tidy() {
+    var bar = document.getElementById('tabBar');
+    if (!bar) return;
+    var more = bar.querySelector('.tab-group[data-w42g="more"] .tab-group-p');
+    if (!more) return;
+    ['importantinfo', 'brain'].forEach(function (id) {
+      var t = bar.querySelector(':scope > .tab[data-tab="' + id + '"]');
+      if (t) more.appendChild(t);
+    });
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa95 = startApp;
+    startApp = async function () {
+      await __sa95.apply(this, arguments);
+      try {
+        w95Tidy();
+        /* the Brain tab can register a beat later than the bar build */
+        setTimeout(w95Tidy, 800);
+        setTimeout(w95Tidy, 2500);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

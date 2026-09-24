@@ -1,0 +1,148 @@
+/* =====================================================================
+   WA v53 agendas: only yours, and purpose-driven drafting
+   (03/08/26)
+   1. Visibility: non-admins now only see agendas they are part of:
+      named attendee (or with_person), their own department's meetings,
+      leaders meetings if they lead (or sit on the board), or agendas
+      they generated themselves. Admins (hub_roles) still see all.
+      Filter applied at the cache level so every agenda surface follows.
+   2. Purpose-driven drafting: a "Purpose and structure" box on the
+      agenda builder. Whatever you type rides along to the build-agenda
+      function (v5), which uses it as the blueprint: the agenda mirrors
+      the stated structure and pulls only tasks and topics that serve
+      it. The purpose is stored and shown on the drafted agenda.
+   ===================================================================== */
+(function () {
+  if (window.__wa53) return;
+  window.__wa53 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa53css';
+  st.textContent = '' +
+    '#w53purpose{width:100%;min-height:52px;margin-top:8px;padding:8px 10px;border:1px solid rgba(127,127,127,.35);' +
+    'border-radius:10px;font-size:12.5px;font-family:inherit;resize:vertical;box-sizing:border-box;}' +
+    '.w53pl{font-size:12px;color:#7b8a86;background:rgba(132,85,255,.07);border-radius:8px;padding:6px 10px;margin:2px 0 8px;}' +
+    '.w53pl b{color:#5b32c7;}' +
+    '.w53note{font-size:11.5px;color:#9aa5a1;margin:4px 0 0;}';
+  document.head.appendChild(st);
+
+  var WA53_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;
+
+  function wa53IsAdmin() {
+    try { return typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'; } catch (e) { return false; }
+  }
+  function wa53First(s) { return String(s || '').trim().split(/\s+/)[0].toLowerCase(); }
+  function wa53Mine(a) {
+    try {
+      if (wa53IsAdmin()) return true;
+      var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+      var email = String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      var pfx = email.split('@')[0];
+      /* you always see what you generated */
+      if (pfx && String(a.created_by || '').toLowerCase().indexOf(pfx) >= 0) return true;
+      var myFirst = me ? wa53First(me.name) : (pfx ? pfx.split('.')[0] : '');
+      if (myFirst) {
+        var att = Array.isArray(a.attendees) ? a.attendees : [];
+        for (var i = 0; i < att.length; i++) { if (wa53First(att[i]) === myFirst) return true; }
+        if (a.with_person && String(a.with_person).toLowerCase().indexOf(myFirst) >= 0) return true;
+      }
+      var scope = a.scope || 'department';
+      if (scope === 'department' && me && a.department && a.department === me.department) return true;
+      if (scope === 'leaders' && me && (me.department === 'board' || WA53_LEAD.test(me.role || ''))) return true;
+      return false;
+    } catch (e) { return true; }
+  }
+
+  /* filter the agenda cache after every load */
+  if (typeof waLoadAgendas === 'function') {
+    var __la53 = waLoadAgendas;
+    waLoadAgendas = async function () {
+      await __la53.apply(this, arguments);
+      try {
+        if (wa53IsAdmin()) return;
+        if (typeof waResolveMe === 'function') { try { await waResolveMe(); } catch (e2) { /* fine */ } }
+        if (typeof AGENDAS_CACHE !== 'undefined' && Array.isArray(AGENDAS_CACHE)) {
+          AGENDAS_CACHE = AGENDAS_CACHE.filter(wa53Mine);
+          if (typeof AG_ITEMS_CACHE !== 'undefined' && Array.isArray(AG_ITEMS_CACHE)) {
+            var keep = {};
+            AGENDAS_CACHE.forEach(function (a) { keep[String(a.id)] = 1; });
+            AG_ITEMS_CACHE = AG_ITEMS_CACHE.filter(function (i) { return keep[String(i.agenda_id)]; });
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* the purpose box on the builder */
+  function wa53EnsureBox() {
+    try {
+      var gen = document.getElementById('agNewGen');
+      if (!gen || document.getElementById('w53purpose')) return;
+      var host = gen.closest('.ag-new') || gen.parentElement;
+      if (!host) return;
+      host.insertAdjacentHTML('beforeend',
+        '<textarea id="w53purpose" placeholder="Purpose and structure (optional): what this meeting is for and how it should run. Example: monthly marketing planning, 15 min on last month, then the content calendar, then blockers."></textarea>'
+        + '<p class="w53note">The AI treats this as the blueprint: the agenda follows your structure and only pulls in the tasks and topics that fit it.</p>');
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* show the purpose on drafted agendas */
+  if (typeof waAgendaRowHtml === 'function') {
+    var __row53 = waAgendaRowHtml;
+    waAgendaRowHtml = function (a) {
+      var html = __row53.apply(this, arguments);
+      try {
+        if (a && a.purpose) {
+          html = html.replace('<div class="ag-body">',
+            '<div class="ag-body"><div class="w53pl"><b>Purpose:</b> ' + esc(String(a.purpose).slice(0, 400)) + '</div>');
+        }
+      } catch (e) { /* non-fatal */ }
+      return html;
+    };
+  }
+
+  if (typeof waRenderAgendasPage === 'function') {
+    var __rap53 = waRenderAgendasPage;
+    waRenderAgendasPage = async function () {
+      var out = await __rap53.apply(this, arguments);
+      wa53EnsureBox();
+      return out;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp53 = showPanel;
+    showPanel = function (id) {
+      __sp53(id);
+      try { if (id === 'agendas') wa53EnsureBox(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa53 = startApp;
+    startApp = async function () {
+      await __sa53();
+      /* ride the purpose along on every build-agenda call (wrapped here so
+         it captures the real client, after auth and offline stubs settle) */
+      try {
+        if (db && db.functions && db.functions.invoke && !db.functions.__w53) {
+          var __inv53 = db.functions.invoke.bind(db.functions);
+          db.functions.invoke = function (name, opts) {
+            try {
+              if (name === 'build-agenda') {
+                var ta = document.getElementById('w53purpose');
+                var v = ta && (ta.value || '').trim();
+                if (v) {
+                  opts = opts || {};
+                  opts.body = Object.assign({}, opts.body || {}, { purpose: v.slice(0, 1200) });
+                }
+              }
+            } catch (e) { /* pass through */ }
+            return __inv53(name, opts);
+          };
+          db.functions.__w53 = 1;
+        }
+      } catch (e) { /* non-fatal */ }
+      try { wa53EnsureBox(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

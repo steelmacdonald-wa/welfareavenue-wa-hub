@@ -1,0 +1,108 @@
+/* =====================================================================
+   WA v70 projects show who is working in them
+   (04/08/26)
+   Projects belong to a department but the work inside them often does
+   not: operations people carry tasks under Rally Paper (a fundraising
+   project), marketing carries tasks under Flag Football. So project
+   cards on the Strategy page now show an "open tasks by team" row of
+   department-coloured chips with counts, and the map's project nodes
+   carry matching coloured dots, so every department can spot the
+   projects from other departments' initiatives that they have tasks
+   in. Data comes straight from dept_tasks (task department vs project
+   department).
+   ===================================================================== */
+(function () {
+  if (window.__wa70) return;
+  window.__wa70 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa70css';
+  st.textContent = '' +
+    '.w70row{margin-top:5px;font-size:10px;color:#8b968f;}' +
+    '.w70chip{display:inline-block;border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:800;margin:2px 3px 0 0;}' +
+    '.w70chip.x{box-shadow:0 0 0 1px currentColor inset;}' +
+    '.w70dots{margin-top:3px;line-height:1;}' +
+    '.w70dot{display:inline-block;width:9px;height:9px;border-radius:999px;margin-right:4px;vertical-align:middle;}';
+  document.head.appendChild(st);
+
+  var WA70 = { by: null };
+  async function w70Load() {
+    if (WA70.by) return WA70.by;
+    try {
+      var r = await db.from('dept_tasks').select('id,project_id,department,done')
+        .not('project_id', 'is', null).eq('done', false).limit(2000);
+      var by = {};
+      ((r && r.data) || []).forEach(function (t) {
+        var k = String(t.project_id);
+        by[k] = by[k] || {};
+        by[k][t.department] = (by[k][t.department] || 0) + 1;
+      });
+      WA70.by = by;
+    } catch (e) { WA70.by = {}; }
+    return WA70.by;
+  }
+  function w70Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w70Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+
+  async function w70Decorate() {
+    try {
+      var by = await w70Load();
+      /* project cards: open tasks by team */
+      document.querySelectorAll('#w68projview .w68proj').forEach(function (card) {
+        if (card.dataset.w70) return;
+        var link = card.querySelector('[data-w39pp]');
+        if (!link) return;
+        card.dataset.w70 = '1';
+        var pid = String(link.getAttribute('data-w39pp'));
+        var depts = by[pid] ? Object.keys(by[pid]) : [];
+        if (!depts.length) return;
+        var projDept = null;
+        try {
+          (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (p) {
+            if (String(p.id) === pid) projDept = p.department;
+          });
+        } catch (e) { /* fine */ }
+        depts.sort(function (a, b) { return by[pid][b] - by[pid][a]; });
+        var chips = depts.map(function (d) {
+          var c = w70Col(d);
+          return '<span class="w70chip' + (projDept && d !== projDept ? ' x' : '') + '" style="background:' + c + '1f;color:' + c + '" title="'
+            + esc(w70Lab(d)) + ': ' + by[pid][d] + ' open">' + esc(w70Lab(d)) + ' ' + by[pid][d] + '</span>';
+        }).join('');
+        link.insertAdjacentHTML('beforebegin', '<div class="w70row">Open tasks by team: ' + chips + '</div>');
+      });
+      /* map project nodes: coloured dots per team with open tasks */
+      document.querySelectorAll('#w68map .w68node[data-w68n^="P"]').forEach(function (n) {
+        if (n.dataset.w70) return;
+        n.dataset.w70 = '1';
+        var pid = String(n.getAttribute('data-w68n')).slice(1);
+        var depts = by[pid] ? Object.keys(by[pid]) : [];
+        if (!depts.length) return;
+        n.insertAdjacentHTML('beforeend', '<div class="w70dots">' + depts.map(function (d) {
+          return '<span class="w70dot" style="background:' + w70Col(d) + '" title="' + esc(w70Lab(d)) + ': ' + by[pid][d] + ' open"></span>';
+        }).join('') + '</div>');
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  try {
+    var __w70mo;
+    new MutationObserver(function () {
+      clearTimeout(__w70mo);
+      __w70mo = setTimeout(function () {
+        if (document.querySelector('#w68projview .w68proj:not([data-w70])')
+          || document.querySelector('#w68map .w68node[data-w68n^="P"]:not([data-w70])')) {
+          w70Decorate();
+        }
+      }, 350);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  if (typeof renderGoalsPage === 'function') {
+    var __gp70 = renderGoalsPage;
+    renderGoalsPage = async function () {
+      WA70.by = null; /* refresh on each page render */
+      await __gp70.apply(this, arguments);
+      setTimeout(w70Decorate, 350);
+    };
+  }
+})();

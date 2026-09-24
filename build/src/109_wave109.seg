@@ -1,0 +1,109 @@
+/* =====================================================================
+   WA v109 complete your tasks from the home page (08/08/26)
+   =====================================================================
+   Steel: "I want the home page to enable anyone to complete tasks that
+   are assigned to them." The My page (home for signed-in staff) lists
+   each person's open tasks (wave74 via waTaskLine) but as read-only
+   lines. Now:
+   1. Every task row on My page carries a checkbox (and a task id).
+      Ticking it calls the canonical toggleTask (same save path as the
+      department pages: dept_tasks update + change_log + toast), the
+      row fades with a strikethrough, and the My page counts refresh.
+      An Undo link on the row reopens it for 10 seconds in case of a
+      slip, then the row leaves the list on the next repaint.
+   2. The same rows become clickable to open the task on its page
+      (title text), so context is one tap away.
+   Implementation: waTaskLine is WRAPPED (global function; wave74 calls
+   it through w74TaskLine) to add the checkbox only while My page is
+   rendering (WA109_MY flag set around renderMyPage), so other callers
+   of waTaskLine, if any, keep the plain line. Team members' tasks in
+   the "your team" fold are NOT ticked by others: the checkbox only
+   appears for rows in the signed-in person's own section (owner match).
+   ===================================================================== */
+(function () {
+  if (window.__wa109) return; window.__wa109 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.mp-task.w109{align-items:center;}' +
+    '.mp-task.w109 input[type=checkbox]{accent-color:#2c7a66;width:17px;height:17px;cursor:pointer;flex:0 0 auto;margin:0;}' +
+    '.mp-task.w109 .w109t{cursor:pointer;}' +
+    '.mp-task.w109 .w109t:hover{text-decoration:underline;color:#1f5f4f;}' +
+    '.mp-task.w109.w109done{opacity:.55;}' +
+    '.mp-task.w109.w109done .w109t{text-decoration:line-through;}' +
+    '.w109undo{font-size:11px;color:#2c7a66;cursor:pointer;margin-left:6px;font-weight:700;}';
+  document.head.appendChild(css);
+
+  var WA109_MY = false;
+  function w109Mine(t) {
+    try {
+      var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+      if (!me || !me.name) return false;
+      var ft = (typeof waFirstTok === 'function') ? waFirstTok(me.name) : me.name.toLowerCase().split(' ')[0];
+      return (t.owner || '').toLowerCase().indexOf(ft) >= 0;
+    } catch (e) { return false; }
+  }
+
+  if (typeof waTaskLine === 'function') {
+    var __tl109 = waTaskLine;
+    waTaskLine = function (t) {
+      var base = __tl109.apply(this, arguments);
+      if (!WA109_MY || !t || !t.id || t.done || !w109Mine(t)) return base;
+      /* add id + checkbox + clickable title to the base row */
+      return base
+        .replace('<div class="mp-task">', '<div class="mp-task w109" data-w109="' + t.id + '"><input type="checkbox" data-w109cb="' + t.id + '" title="Mark done" />')
+        .replace('<span>' + esc(t.title) + '</span>', '<span class="w109t" data-w109open="' + t.id + '">' + esc(t.title) + '</span>');
+    };
+  }
+  if (typeof renderMyPage === 'function') {
+    var __rm109 = renderMyPage;
+    renderMyPage = async function () {
+      WA109_MY = true;
+      try { return await __rm109.apply(this, arguments); }
+      finally { WA109_MY = false; }
+    };
+  }
+
+  /* interactions */
+  document.addEventListener('change', async function (e) {
+    var cb = e.target && e.target.closest && e.target.closest('input[data-w109cb]');
+    if (!cb) return;
+    var id = Number(cb.getAttribute('data-w109cb'));
+    var row = cb.closest('.mp-task');
+    if (!id || typeof toggleTask !== 'function') return;
+    cb.disabled = true;
+    var ok = await toggleTask(id, cb.checked);
+    cb.disabled = false;
+    if (!ok) { cb.checked = !cb.checked; return; }
+    if (row) {
+      row.classList.toggle('w109done', cb.checked);
+      var old = row.querySelector('.w109undo');
+      if (old) old.remove();
+      if (cb.checked) {
+        var u = document.createElement('span');
+        u.className = 'w109undo';
+        u.textContent = 'Undo';
+        u.setAttribute('data-w109undo', String(id));
+        row.appendChild(u);
+        setTimeout(function () {
+          if (u.isConnected && row.classList.contains('w109done')) {
+            u.remove();
+            /* let the page repaint its counts and sections */
+            try { if (typeof renderMyPage === 'function') renderMyPage(); } catch (e2) { /* fine */ }
+          }
+        }, 10000);
+      }
+    }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var un = e.target && e.target.closest && e.target.closest('[data-w109undo]');
+    if (un) {
+      var row = un.closest('.mp-task');
+      var cb = row && row.querySelector('input[data-w109cb]');
+      if (cb) { cb.checked = false; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+      return;
+    }
+    var op = e.target && e.target.closest && e.target.closest('[data-w109open]');
+    if (op) { location.hash = '#task/' + op.getAttribute('data-w109open'); }
+  });
+})();

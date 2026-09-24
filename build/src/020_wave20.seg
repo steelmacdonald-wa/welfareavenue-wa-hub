@@ -1,0 +1,676 @@
+/* =====================================================================
+   WA v20 UI enhancements (27/07/26)
+   Volunteering: the biweekly Sunday serving programme, end to end.
+   1. New staff tab "Volunteering" with five views: the 2026 calendar,
+      a single event, the master SOP, the volunteer list and inventory.
+   2. Every event gets the identical 94 step SOP checklist, seeded from
+      the ClickUp list and kept in sop_event_steps, so the template is
+      the same every fortnight and progress is tracked per event.
+   3. Each step carries its verbatim ClickUp description, its ClickUp
+      link and its screenshots, rehosted permanently in Supabase storage.
+   4. Per event roster grouped by role, with contact details and a
+      status any staff member can change.
+   5. Event specific tasks arriving from operations transcripts land in
+      sop_event_extras and show under "Added this event". Ad hoc and
+      corporate volunteering stay in the department task lists.
+   Overrides applyHash and startApp via assignment.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '#volunteering .vl-sub{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 16px;}'
+    + '.vl-sub .fchip{cursor:pointer;}'
+    + '.vl-hero{border:1px solid var(--wa-line);border-radius:12px;padding:16px 18px;background:linear-gradient(180deg,#f7fbf8,#fff);margin-bottom:18px;}'
+    + '.vl-hero h3{margin:0 0 4px;font-size:17px;color:var(--wa-ink);}'
+    + '.vl-hero .vl-when{font-size:12.5px;color:var(--wa-muted);}'
+    + '.vl-month{margin:0 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-muted);border-bottom:1px solid var(--wa-line);padding-bottom:5px;}'
+    + '.vl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:12px;margin:0 0 20px;}'
+    + '.vl-ev{border:1px solid var(--wa-line);border-radius:11px;padding:13px 14px;background:#fff;cursor:pointer;transition:box-shadow .15s,transform .15s;}'
+    + '.vl-ev:hover{box-shadow:0 3px 14px rgba(0,0,0,.09);transform:translateY(-1px);}'
+    + '.vl-ev.past{opacity:.62;}'
+    + '.vl-ev.next{border-color:var(--wa-green);box-shadow:0 0 0 2px rgba(74,124,89,.14);}'
+    + '.vl-ev h4{margin:0 0 3px;font-size:14px;color:var(--wa-ink);}'
+    + '.vl-ev .vl-code{font-size:11px;color:var(--wa-muted);letter-spacing:.4px;}'
+    + '.vl-pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;letter-spacing:.3px;color:#fff;vertical-align:middle;}'
+    + '.vl-pill.grey{background:#8b8f96;}.vl-pill.green{background:#4a7c59;}.vl-pill.amber{background:#c87a2f;}'
+    + '.vl-pill.red{background:#b3402f;}.vl-pill.blue{background:#3a6ea5;}.vl-pill.purple{background:#8455ff;}'
+    + '.vl-bar{height:6px;border-radius:6px;background:#e8e3dc;overflow:hidden;margin:9px 0 5px;}'
+    + '.vl-bar i{display:block;height:100%;background:var(--wa-green);}'
+    + '.vl-nums{font-size:11.5px;color:var(--wa-muted);}'
+    + '.vl-bub{display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;border-radius:20px;font-size:11px;background:#eef3ef;color:#2f5c43;border:1px solid #dbe6de;}'
+    + '.vl-bub.warn{background:#fdf3e6;color:#8a5417;border-color:#f0dcc0;}'
+    + '.vl-bub.off{background:#f3f0ee;color:#8b8f96;border-color:#e6e0da;}'
+    + '.vl-back{background:none;border:0;color:var(--wa-green);font:inherit;font-size:12.5px;cursor:pointer;padding:0;margin:0 0 10px;}'
+    + '.vl-back:hover{text-decoration:underline;}'
+    + '.vl-phase{border:1px solid var(--wa-line);border-radius:11px;margin:0 0 12px;background:#fff;}'
+    + '.vl-phase>summary{cursor:pointer;padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--wa-ink);list-style:none;display:flex;align-items:center;gap:9px;}'
+    + '.vl-phase>summary::-webkit-details-marker{display:none;}'
+    + '.vl-phase>summary:before{content:"\\25B8";color:var(--wa-muted);font-size:11px;}'
+    + '.vl-phase[open]>summary:before{content:"\\25BE";}'
+    + '.vl-phase.now>summary{background:#f3f8f4;border-radius:11px 11px 0 0;}'
+    + '.vl-phase .vl-body{padding:4px 14px 12px;border-top:1px solid var(--wa-line);}'
+    + '.vl-sec{margin:12px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.55px;color:var(--wa-muted);}'
+    + '.vl-step{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f0ece7;}'
+    + '.vl-step:last-child{border-bottom:0;}'
+    + '.vl-step input[type=checkbox]{width:17px;height:17px;accent-color:var(--wa-green);margin-top:2px;flex:0 0 auto;cursor:pointer;}'
+    + '.vl-step .vl-t{flex:1;min-width:0;}'
+    + '.vl-step .vl-name{font-size:13.5px;color:var(--wa-ink);line-height:1.35;}'
+    + '.vl-step.done .vl-name{text-decoration:line-through;color:var(--wa-muted);}'
+    + '.vl-step .vl-meta{font-size:11.5px;color:var(--wa-muted);margin-top:2px;}'
+    + '.vl-d1{margin-left:16px;}.vl-d2{margin-left:32px;}.vl-d3{margin-left:48px;}'
+    + '.vl-more{background:none;border:1px solid var(--wa-line);border-radius:6px;color:var(--wa-muted);font:inherit;font-size:10.5px;padding:1px 7px;cursor:pointer;margin-left:6px;}'
+    + '.vl-more:hover{border-color:var(--wa-green);color:var(--wa-green);}'
+    + '.vl-det{display:none;margin:8px 0 4px;padding:11px 13px;border-left:3px solid var(--wa-green-soft,#cfe0d5);background:#fbfaf8;border-radius:0 8px 8px 0;font-size:12.5px;line-height:1.55;color:var(--wa-text);}'
+    + '.vl-det.open{display:block;}'
+    + '.vl-det p{margin:0 0 7px;}.vl-det ul{margin:0 0 7px;padding-left:19px;}.vl-det li{margin:1px 0;}'
+    + '.vl-det a{color:var(--wa-green);}'
+    + '.vl-h{font-weight:700;color:var(--wa-ink);margin:12px 0 5px;line-height:1.3;}'
+    + '.vl-h:first-child{margin-top:0;}'
+    + '.vl-h1{font-size:14.5px;}.vl-h2{font-size:13.5px;}.vl-h3{font-size:12.5px;}'
+    + '.vl-h4{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--wa-muted);}'
+    + '.vl-mimg{display:block;max-width:100%;width:440px;margin:9px 0;border:1px solid var(--wa-line);border-radius:8px;cursor:zoom-in;background:#fff;}'
+    + '.vl-noimg{color:#8b8f96;font-style:italic;}'
+    + '.vl-shots{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}'
+    + '.vl-shots img{width:104px;height:70px;object-fit:cover;border:1px solid var(--wa-line);border-radius:7px;cursor:zoom-in;background:#fff;}'
+    + '.vl-flag{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:12px;background:#fdf3e6;color:#7a4a12;border:1px solid #f0dcc0;}'
+    + '.vl-flag.lock{background:#f4f1fb;color:#4a3a7a;border-color:#ded4f5;}'
+    + '.vl-role{margin:0 0 14px;}'
+    + '.vl-role h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);}'
+    + '.vl-per{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0ece7;font-size:13px;}'
+    + '.vl-per:last-child{border-bottom:0;}'
+    + '.vl-per b{font-weight:600;color:var(--wa-ink);}'
+    + '.vl-per .vl-c{font-size:11.5px;color:var(--wa-muted);}'
+    + '.vl-per select{font:inherit;font-size:11.5px;padding:2px 5px;border:1px solid var(--wa-line);border-radius:6px;background:#fff;color:var(--wa-text);}'
+    + '.vl-in{font:inherit;font-size:11.5px;padding:2px 6px;border:1px solid var(--wa-line);border-radius:6px;background:#fff;color:var(--wa-text);}'
+    + '.vl-in.w90{width:96px;}'
+    + '.vl-tblwrap{overflow-x:auto;}'
+    + '#volunteering table.wa-tbl td{vertical-align:top;}'
+    + '.vl-empty{font-size:12.5px;color:var(--wa-muted);padding:10px 0;}'
+    + '.vl-lb img{max-width:100%;max-height:70vh;display:block;margin:0 auto;border-radius:8px;}'
+    + '@media (max-width:740px){.vl-grid{grid-template-columns:1fr;}.vl-d1,.vl-d2,.vl-d3{margin-left:10px;}}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+var WA_VOL_EVENTS = [];
+var WA_VOL_TMPL = [];
+var WA_VOL_SHOTS = {};
+var WA_VOL_SHOTBYATT = {};
+var WA_VOL_PEOPLE = [];
+var WA_VOL_INV = [];
+var WA_VOL_LOADED = false;
+var WA_VOL_VIEW = 'calendar';
+var WA_VOL_EVENT = null;
+var WA_VOL_DETAIL = null;
+var WA_VOL_ROLEFILTER = '';
+
+var WA_VOL_PHASES = [
+  ['t_minus_2w', 'Two weeks out'],
+  ['t_minus_1w', 'One week out'],
+  ['week_of', 'Week of the event'],
+  ['event_day', 'Event day'],
+  ['post_event', 'After the event'],
+  ['anytime', 'Anytime']
+];
+var WA_VOL_ROLELABEL = {
+  server: 'Servers', cook: 'Cooks', driver: 'Drivers', photographer: 'Photographers',
+  dishwasher: 'Dishwashers', team_leader: 'Team leaders', community_debrief: 'Community debrief',
+  community_talker: 'Community talkers'
+};
+/* the vocabulary actually used in the volunteering sheet, plus the two we add when
+   somebody drops out. Anything else already in the row is preserved, see waVolRosterSelect. */
+var WA_VOL_STATUSES = ['Confirmed', 'Waiting For Response', 'TBD', 'Unavailable', 'Cancelled'];
+
+/* ---------- small helpers ---------- */
+function waVolDate(iso, long) {
+  if (!iso) return '';
+  try {
+    var d = new Date(iso + 'T12:00:00Z');
+    return d.toLocaleDateString('en-CA', long
+      ? { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }
+      : { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+  } catch (e) { return iso; }
+}
+function waVolMonth(iso) {
+  try {
+    return new Date(iso + 'T12:00:00Z').toLocaleDateString('en-CA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  } catch (e) { return ''; }
+}
+function waVolToday() { return new Date().toISOString().slice(0, 10); }
+function waVolDaysTo(iso) {
+  var a = new Date(waVolToday() + 'T12:00:00Z').getTime();
+  var b = new Date(iso + 'T12:00:00Z').getTime();
+  return Math.round((b - a) / 86400000);
+}
+function waVolPhaseNow(iso) {
+  var d = waVolDaysTo(iso);
+  if (d > 14) return 't_minus_2w';
+  if (d > 7) return 't_minus_1w';
+  if (d > 0) return 'week_of';
+  if (d === 0) return 'event_day';
+  return 'post_event';
+}
+function waVolStatusPill(s) {
+  var v = (s || '').toLowerCase();
+  var c = 'grey';
+  if (v.indexOf('confirm') === 0 || v === 'completed') c = 'green';
+  else if (v.indexOf('wait') === 0 || v === 'tentative' || v === 'planned') c = 'amber';
+  else if (v.indexOf('cancel') === 0 || v.indexOf('declin') === 0 || v.indexOf('unavail') === 0) c = 'red';
+  else if (v === 'in progress') c = 'blue';
+  return '<span class="vl-pill ' + c + '">' + esc(s || 'Not set') + '</span>';
+}
+/* A blank first option matters: a roster row with no status must not read as Confirmed
+   just because Confirmed happens to be first in the list. */
+function waVolRosterSelect(r) {
+  var cur = r.status || '';
+  var opts = '<option value=""' + (cur ? '' : ' selected') + '>Not set</option>'
+    + WA_VOL_STATUSES.map(function (s) {
+      return '<option' + (cur === s ? ' selected' : '') + '>' + esc(s) + '</option>';
+    }).join('');
+  if (cur && WA_VOL_STATUSES.indexOf(cur) < 0) opts += '<option selected>' + esc(cur) + '</option>';
+  return '<select data-vlrstat="' + r.id + '"' + (isStaff() ? '' : ' disabled') + '>' + opts + '</select>';
+}
+function waVolRoleLabel(r) {
+  if (WA_VOL_ROLELABEL[r]) return WA_VOL_ROLELABEL[r];
+  return (r || 'other').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); });
+}
+
+/* ClickUp attachment URLs expire and need a login, so every one of them is
+   swapped for our rehosted copy in the sop-shots bucket. The id in the ClickUp
+   path is the attachment id, which is exactly what we keyed the rehost on. */
+function waVolShotFor(url) {
+  var m = /clickup-attachments\.com\/[^/]+\/([0-9a-f-]{36})/i.exec(url || '');
+  return (m && WA_VOL_SHOTBYATT[m[1]]) || null;
+}
+
+/* Minimal markdown for the verbatim ClickUp descriptions. Escapes first, so
+   nothing in the source text can inject markup. It covers the shapes ClickUp
+   actually exports: ## headings, _underscore_ emphasis, mailto links, and
+   screenshots dropped into the middle of a heading line. */
+function waVolMd(src) {
+  if (!src) return '';
+  var raw = String(src).replace(/https?:\/\/[a-z0-9.\-]*clickup-attachments\.com\/[^\s)"'<>]+/gi, function (u) {
+    return waVolShotFor(u) || u;
+  });
+  var lines = esc(raw).split(/\r?\n/);
+  var out = [], inList = false;
+  function img(u, alt) {
+    if (/clickup-attachments/.test(u)) {
+      return '<p class="vl-noimg">A screenshot sits here in ClickUp that could not be copied across. Open the task in ClickUp to see it.</p>';
+    }
+    return '<img class="vl-mimg" src="' + u + '" alt="' + (alt || 'Screenshot') + '" data-vlshot="' + u + '" loading="lazy" />';
+  }
+  function inline(t) {
+    t = t.replace(/\[([^\]]+)\]\((mailto:[^)\s]+)\)/g, '<a href="$2">$1</a>');
+    t = t.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    t = t.replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+    t = t.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
+    t = t.replace(/__([^_\n]+)__/g, '<b>$1</b>');
+    t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<i>$2</i>');
+    t = t.replace(/(^|[^\w_])_([^_\n]+)_(?![\w_])/g, '$1<i>$2</i>');
+    t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+    return t;
+  }
+  for (var i = 0; i < lines.length; i++) {
+    var imgs = [];
+    var L = lines[i].replace(/!\[([^\]]*)\]\(([^)\s]*)\)/g, function (_m, alt, u) { imgs.push(img(u, alt)); return ''; });
+    var h = /^\s*(#{1,4})\s*(.*)$/.exec(L);
+    var m = h ? null : /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(L);
+    if (m) {
+      if (!inList) { out.push('<ul>'); inList = true; }
+      out.push('<li>' + inline(m[2]) + '</li>');
+      if (imgs.length) { out.push('</ul>'); inList = false; out.push(imgs.join('')); }
+      continue;
+    }
+    if (inList) { out.push('</ul>'); inList = false; }
+    /* a screenshot wedged into a heading line belongs above the heading it interrupts */
+    if (imgs.length) out.push(imgs.join(''));
+    var body = h ? h[2] : L;
+    if (!body.trim()) continue;
+    if (h) out.push('<div class="vl-h vl-h' + h[1].length + '">' + inline(body) + '</div>');
+    else out.push('<p>' + inline(body) + '</p>');
+  }
+  if (inList) out.push('</ul>');
+  return out.join('');
+}
+
+/* ---------- loaders ---------- */
+async function waVolLoad(force) {
+  if (WA_VOL_LOADED && !force) return;
+  var res = await Promise.all([
+    db.from('volunteer_event_summary').select('*').order('event_date', { ascending: true }),
+    db.from('sop_template').select('id,parent_id,depth,sort,section,name,description,clickup_url,phase,default_owner,needs_review,review_note,has_secret').eq('active', true).order('sort', { ascending: true }),
+    db.from('sop_shots').select('template_id,attachment_id,public_url,title,sort').order('sort', { ascending: true })
+  ]);
+  WA_VOL_EVENTS = (res[0].data) || [];
+  WA_VOL_TMPL = (res[1].data) || [];
+  WA_VOL_SHOTS = {};
+  WA_VOL_SHOTBYATT = {};
+  ((res[2].data) || []).forEach(function (s) {
+    (WA_VOL_SHOTS[s.template_id] = WA_VOL_SHOTS[s.template_id] || []).push(s);
+    var key = String(s.attachment_id || '').replace(/\.[^.]+$/, '');
+    if (key) WA_VOL_SHOTBYATT[key] = s.public_url;
+  });
+  WA_VOL_LOADED = true;
+}
+async function waVolLoadEvent(id) {
+  var res = await Promise.all([
+    db.from('event_roster').select('*').eq('event_id', id).order('role', { ascending: true }).order('sort', { ascending: true }),
+    db.from('sop_event_steps').select('*').eq('event_id', id),
+    db.from('sop_event_extras').select('*').eq('event_id', id).order('id', { ascending: true })
+  ]);
+  WA_VOL_DETAIL = {
+    id: id,
+    roster: (res[0].data) || [],
+    steps: (res[1].data) || [],
+    extras: (res[2].data) || []
+  };
+}
+async function waVolLoadPeople() {
+  if (WA_VOL_PEOPLE.length) return;
+  var r = await db.from('volunteer_people').select('*').order('full_name', { ascending: true });
+  WA_VOL_PEOPLE = (r.data) || [];
+}
+async function waVolLoadInv() {
+  if (WA_VOL_INV.length) return;
+  var r = await db.from('volunteer_inventory').select('*').order('sort', { ascending: true });
+  WA_VOL_INV = (r.data) || [];
+}
+
+/* ---------- shell ---------- */
+function waVolShell(inner) {
+  var tabs = [['calendar', 'Calendar'], ['sop', 'The SOP'], ['people', 'Volunteers'], ['inventory', 'Inventory']];
+  var chips = tabs.map(function (t) {
+    return '<span class="fchip' + (WA_VOL_VIEW === t[0] ? ' on' : '') + '" data-vl="' + t[0] + '">' + t[1] + '</span>';
+  }).join('');
+  return '<div class="card">'
+    + '<h2 style="color:#2c7a66">Volunteering<span class="deptchip" style="background:#2c7a66">Montreal</span></h2>'
+    + '<p class="read">The biweekly Sunday serving programme. Every event runs the same 94 step checklist, pulled from the ClickUp SOP with its original wording, links and screenshots. Tick steps here and the whole team sees it.</p>'
+    + '<div class="vl-sub">' + chips + '</div>'
+    + inner + '</div>';
+}
+function waVolPaint(inner) {
+  var el = document.getElementById('volunteering');
+  if (el) el.innerHTML = waVolShell(inner);
+}
+
+/* ---------- calendar ---------- */
+function waVolNextEvent() {
+  var t = waVolToday(), pick = null;
+  WA_VOL_EVENTS.forEach(function (e) {
+    if (e.kind === 'service' && e.status !== 'cancelled' && e.event_date >= t && !pick) pick = e;
+  });
+  return pick;
+}
+function waVolEventCard(e, nextId) {
+  var pct = e.steps_total ? Math.round((e.steps_done / e.steps_total) * 100) : 0;
+  var past = e.event_date < waVolToday();
+  var cls = 'vl-ev' + (past ? ' past' : '') + (e.id === nextId ? ' next' : '');
+  var bits = '';
+  if (e.roster_count) bits += '<span class="vl-bub">' + e.roster_confirmed + ' of ' + e.roster_count + ' confirmed</span>';
+  else bits += '<span class="vl-bub off">No roster yet</span>';
+  if (e.extras_open) bits += '<span class="vl-bub warn">' + e.extras_open + ' extra task' + (e.extras_open === 1 ? '' : 's') + '</span>';
+  return '<div class="' + cls + '" data-vlev="' + e.id + '">'
+    + '<h4>' + esc(waVolDate(e.event_date)) + ' &middot; ' + esc(e.title || 'Event') + '</h4>'
+    + '<div class="vl-code">' + esc(e.code || '') + ' &middot; ' + esc(e.season || '') + ' ' + waVolStatusPill(e.status) + '</div>'
+    + (e.steps_total ? '<div class="vl-bar"><i style="width:' + pct + '%"></i></div>'
+      + '<div class="vl-nums">' + e.steps_done + ' of ' + e.steps_total + ' SOP steps done</div>' : '')
+    + '<div style="margin-top:6px">' + bits + '</div>'
+    + '</div>';
+}
+function waVolRenderCalendar() { /* superseded: wave26 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+/* ---------- one event ---------- */
+function waVolStepTree(steps) {
+  var byId = {}, tmplById = {};
+  WA_VOL_TMPL.forEach(function (t) { tmplById[t.id] = t; });
+  steps.forEach(function (s) { byId[s.template_id] = s; });
+  var rows = [];
+  WA_VOL_TMPL.forEach(function (t) {
+    var s = byId[t.id];
+    if (!s) return;
+    rows.push({ t: t, s: s });
+  });
+  return rows;
+}
+function waVolStepHtml(t, s) {
+  var desc = t.description || '';
+  /* screenshots ClickUp already places inside the description get rendered in
+     position by waVolMd, so the gallery underneath only shows the loose ones */
+  var shots = (WA_VOL_SHOTS[t.id] || []).filter(function (x) {
+    var key = String(x.attachment_id || '').replace(/\.[^.]+$/, '');
+    return !(key && desc.indexOf(key) >= 0);
+  });
+  var hasDet = !!(t.description || shots.length || t.clickup_url || t.needs_review || t.has_secret);
+  var det = '';
+  if (hasDet) {
+    det = '<div class="vl-det" id="vld-' + esc(t.id) + '">'
+      + (t.description ? waVolMd(t.description) : '<p style="color:#8b8f96">No description in ClickUp for this step.</p>')
+      + (shots.length ? '<div class="vl-shots">' + shots.map(function (x) {
+        return '<img src="' + esc(x.public_url) + '" alt="' + esc(x.title || 'Screenshot') + '" data-vlshot="' + esc(x.public_url) + '" loading="lazy" />';
+      }).join('') + '</div>' : '')
+      + (t.needs_review ? '<div class="vl-flag">Needs review: ' + esc(t.review_note || '') + '</div>' : '')
+      + (t.has_secret ? '<div class="vl-flag lock">A password was written into this step in ClickUp. It has been removed here. Ask Steel or Suhaib for the credential.</div>' : '')
+      + (t.clickup_url ? '<div style="margin-top:9px"><a href="' + esc(t.clickup_url) + '" target="_blank" rel="noopener">Open this task in ClickUp</a></div>' : '')
+      + '</div>';
+  }
+  return '<div class="vl-step' + (s.done ? ' done' : '') + ' vl-d' + Math.min(t.depth || 0, 3) + '" data-vlstep="' + s.id + '">'
+    + '<input type="checkbox" data-vlchk="' + s.id + '"' + (s.done ? ' checked' : '') + (isStaff() ? '' : ' disabled') + ' />'
+    + '<div class="vl-t">'
+    + '<div class="vl-name">' + esc(t.name || '')
+    + (hasDet ? '<button class="vl-more" data-vlmore="' + esc(t.id) + '">details</button>' : '')
+    + (t.needs_review ? ' <span class="vl-pill amber">review</span>' : '')
+    + '</div>'
+    + '<div class="vl-meta">'
+    + '<input class="vl-in" style="width:120px" placeholder="owner" value="' + esc(s.owner || t.default_owner || '') + '" data-vlowner="' + s.id + '"' + (isStaff() ? '' : ' disabled') + ' /> '
+    + '<input class="vl-in w90" type="date" value="' + esc(s.due_date || '') + '" data-vldue="' + s.id + '"' + (isStaff() ? '' : ' disabled') + ' />'
+    + (s.done && s.done_by ? ' <span style="margin-left:6px">done by ' + esc(s.done_by) + '</span>' : '')
+    + '</div>'
+    + det
+    + '</div></div>';
+}
+function waVolRenderEvent() {
+  var ev = null;
+  WA_VOL_EVENTS.forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; });
+  if (!ev || !WA_VOL_DETAIL || WA_VOL_DETAIL.id !== WA_VOL_EVENT) {
+    waVolPaint('<p class="vl-empty">Loading event...</p>');
+    return;
+  }
+  var D = WA_VOL_DETAIL;
+  var pct = D.steps.length ? Math.round((D.steps.filter(function (s) { return s.done; }).length / D.steps.length) * 100) : 0;
+  var html = '<button class="vl-back" data-vl="calendar">&larr; All events</button>';
+
+  html += '<div class="vl-hero"><h3>' + esc(waVolDate(ev.event_date, true)) + ' &middot; ' + esc(ev.title || '') + '</h3>'
+    + '<div class="vl-when">' + esc(ev.code || '') + ' &middot; ' + esc(ev.season || '') + ' &middot; ' + esc(ev.location || '') + ' ' + waVolStatusPill(ev.status) + '</div>'
+    + (ev.notes ? '<div class="vl-when" style="margin-top:7px">' + esc(ev.notes) + '</div>' : '')
+    + '<div class="vl-bar"><i style="width:' + pct + '%"></i></div>'
+    + '<div class="vl-nums">' + D.steps.filter(function (s) { return s.done; }).length + ' of ' + D.steps.length + ' steps done</div>'
+    + '</div>';
+
+  /* roster */
+  html += '<h3 class="block">Who is on this event</h3>';
+  if (!D.roster.length) {
+    html += '<p class="vl-empty">Nobody is rostered yet for this date.</p>';
+  } else {
+    var byRole = {};
+    D.roster.forEach(function (r) { (byRole[r.role] = byRole[r.role] || []).push(r); });
+    Object.keys(byRole).sort().forEach(function (role) {
+      var list = byRole[role];
+      var conf = list.filter(function (r) { return (r.status || '').toLowerCase().indexOf('confirm') === 0; }).length;
+      html += '<div class="vl-role"><h4>' + esc(waVolRoleLabel(role)) + ' &middot; ' + conf + ' of ' + list.length + ' confirmed</h4>';
+      list.forEach(function (r) {
+        var d = r.detail || {};
+        var contact = [];
+        if (d.phone) contact.push(esc(String(d.phone)));
+        if (d.email) contact.push(esc(String(d.email)));
+        if (d.pickup_time) contact.push('pickup ' + esc(String(d.pickup_time)));
+        if (d.type_of_food) contact.push(esc(String(d.type_of_food)));
+        html += '<div class="vl-per"><b>' + esc(r.person_name || 'Unnamed') + '</b>'
+          + waVolRosterSelect(r)
+          + (contact.length ? '<span class="vl-c">' + contact.join(' &middot; ') + '</span>' : '')
+          + (r.notes ? '<span class="vl-c">' + esc(r.notes) + '</span>' : '')
+          + (r.person_id ? '' : '<span class="vl-bub warn">not matched to a volunteer record</span>')
+          + '</div>';
+      });
+      html += '</div>';
+    });
+  }
+
+  /* extras from transcripts */
+  html += '<h3 class="block">Added for this event</h3>'
+    + '<p class="vl-empty" style="padding:0 0 8px">Tasks that came out of an operations meeting for this specific date. Ad hoc, corporate and special volunteering stays on the department task lists.</p>';
+  if (!D.extras.length) html += '<p class="vl-empty">Nothing extra yet.</p>';
+  else {
+    html += '<ul class="checklist">' + D.extras.map(function (x) {
+      return '<li><input type="checkbox" data-vlxchk="' + x.id + '"' + (x.done ? ' checked' : '') + (isStaff() ? '' : ' disabled') + ' />'
+        + '<div class="ci-body"><div class="ci-title"' + (x.done ? ' style="text-decoration:line-through;color:#8b8f96"' : '') + '>' + esc(x.title || '') + '</div>'
+        + (x.detail ? '<div class="ci-sub">' + esc(x.detail) + '</div>' : '')
+        + '<div class="ci-meta">' + esc(x.owner || 'unassigned') + (x.due_date ? ' &middot; due ' + esc(x.due_date) : '') + ' &middot; from ' + esc(x.source || 'manual') + '</div></div></li>';
+    }).join('') + '</ul>';
+  }
+  if (isStaff()) html += '<div class="add-row"><button class="btn ghost mini" data-vladd="1">+ Add a task for this event</button></div>';
+
+  /* SOP checklist */
+  html += '<h3 class="block" style="margin-top:22px">The checklist for this event</h3>';
+  var rows = waVolStepTree(D.steps);
+  var nowPhase = waVolPhaseNow(ev.event_date);
+  WA_VOL_PHASES.forEach(function (p) {
+    var mine = rows.filter(function (r) { return (r.t.phase || 'anytime') === p[0]; });
+    if (!mine.length) return;
+    var doneN = mine.filter(function (r) { return r.s.done; }).length;
+    var isNow = p[0] === nowPhase;
+    var body = '', sec = '';
+    mine.forEach(function (r) {
+      if (r.t.section !== sec) { sec = r.t.section; body += '<div class="vl-sec">' + esc(sec || '') + '</div>'; }
+      body += waVolStepHtml(r.t, r.s);
+    });
+    html += '<details class="vl-phase' + (isNow ? ' now' : '') + '"' + (isNow ? ' open' : '') + '>'
+      + '<summary>' + esc(p[1]) + ' <span class="vl-nums">' + doneN + ' of ' + mine.length + '</span>'
+      + (isNow ? ' <span class="vl-pill green">now</span>' : '') + '</summary>'
+      + '<div class="vl-body">' + body + '</div></details>';
+  });
+  waVolPaint(html);
+}
+
+/* ---------- master SOP ---------- */
+function waVolRenderSop() {
+  var html = '<p class="vl-empty" style="padding:0 0 12px">The master template, straight from the ClickUp list. Every event gets a copy of exactly this, so editing an event never changes the template. Re-run the ClickUp import to pull changes across.</p>';
+  var sec = '';
+  WA_VOL_TMPL.forEach(function (t) {
+    if (t.section !== sec) {
+      if (sec) html += '</div></details>';
+      sec = t.section;
+      var n = WA_VOL_TMPL.filter(function (x) { return x.section === sec; }).length;
+      html += '<details class="vl-phase"><summary>' + esc(sec || '') + ' <span class="vl-nums">' + n + ' steps</span></summary><div class="vl-body">';
+    }
+    html += waVolStepHtml(t, { id: 'tmpl-' + t.id, done: false, owner: t.default_owner || '', due_date: '' })
+      .replace('type="checkbox"', 'type="checkbox" disabled');
+  });
+  if (sec) html += '</div></details>';
+  waVolPaint(html);
+}
+
+/* ---------- volunteers ---------- */
+function waVolRenderPeople() { /* superseded: wave24/26 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+/* ---------- inventory ---------- */
+function waVolRenderInv() {
+  var html = '<p class="vl-empty" style="padding:0 0 12px">Counted stock from the inventory tab of the volunteering sheet.</p>'
+    + '<div class="vl-tblwrap"><table class="wa-tbl"><thead><tr><th>Category</th><th>Item</th><th>Unit</th><th>In</th><th>Remaining</th><th>Reorder</th></tr></thead><tbody>'
+    + WA_VOL_INV.map(function (r) {
+      return '<tr><td>' + esc(r.category || '') + '</td><td>' + esc(r.item || '') + '</td><td>' + esc(r.unit || '') + '</td>'
+        + '<td>' + esc(r.qty_in || '') + '</td><td>' + esc(r.qty_remaining || '') + '</td>'
+        + '<td>' + (r.reorder_needed ? '<span class="vl-bub warn">' + esc(r.reorder_needed) + '</span>' : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+  waVolPaint(html);
+}
+
+/* ---------- router for the page ---------- */
+async function waVolRender() {
+  try {
+    await waVolLoad(false);
+    if (WA_VOL_VIEW === 'event' && WA_VOL_EVENT) {
+      if (!WA_VOL_DETAIL || WA_VOL_DETAIL.id !== WA_VOL_EVENT) {
+        waVolPaint('<p class="vl-empty">Loading event...</p>');
+        await waVolLoadEvent(WA_VOL_EVENT);
+      }
+      waVolRenderEvent();
+    } else if (WA_VOL_VIEW === 'sop') {
+      waVolRenderSop();
+    } else if (WA_VOL_VIEW === 'people') {
+      await waVolLoadPeople();
+      waVolRenderPeople();
+    } else if (WA_VOL_VIEW === 'inventory') {
+      await waVolLoadInv();
+      waVolRenderInv();
+    } else {
+      waVolRenderCalendar();
+    }
+  } catch (e) {
+    waVolPaint('<p class="vl-empty">Could not load the volunteering data. ' + esc(String(e && e.message || e)) + '</p>');
+  }
+}
+
+/* ---------- writes ---------- */
+async function waVolToggleStep(id, done, box) {
+  var patch = { done: done, done_at: done ? new Date().toISOString() : null, done_by: done ? who() : null };
+  var r = await db.from('sop_event_steps').update(patch).eq('id', Number(id));
+  if (r.error) { toast('Could not save that step'); if (box) box.checked = !done; return; }
+  var row = document.querySelector('[data-vlstep="' + id + '"]');
+  if (row) row.classList.toggle('done', done);
+  if (WA_VOL_DETAIL) {
+    WA_VOL_DETAIL.steps.forEach(function (s) { if (String(s.id) === String(id)) { s.done = done; s.done_by = patch.done_by; } });
+  }
+  WA_VOL_LOADED = false;
+}
+async function waVolSaveStepField(id, field, value) {
+  var patch = {};
+  patch[field] = value || null;
+  var r = await db.from('sop_event_steps').update(patch).eq('id', Number(id));
+  if (r.error) toast('Could not save');
+  else toast('Saved');
+}
+async function waVolSaveRoster(id, status) {
+  status = status || null;
+  var r = await db.from('event_roster').update({ status: status }).eq('id', Number(id));
+  if (r.error) { toast('Could not save'); return; }
+  toast('Roster updated');
+  if (WA_VOL_DETAIL) WA_VOL_DETAIL.roster.forEach(function (x) { if (String(x.id) === String(id)) x.status = status; });
+  WA_VOL_LOADED = false;
+}
+async function waVolToggleExtra(id, done, box) {
+  var r = await db.from('sop_event_extras').update({ done: done }).eq('id', Number(id));
+  if (r.error) { toast('Could not save'); if (box) box.checked = !done; return; }
+  if (WA_VOL_DETAIL) WA_VOL_DETAIL.extras.forEach(function (x) { if (String(x.id) === String(id)) x.done = done; });
+  WA_VOL_LOADED = false;
+}
+function waVolAddExtraModal() {
+  openModal('<h3 style="margin:0 0 12px">Add a task for this event</h3>'
+    + '<div class="m-row"><label>Task</label><input id="vlxT" class="vl-in" style="width:100%" placeholder="What needs doing" /></div>'
+    + '<div class="m-row"><label>Detail</label><textarea id="vlxD" class="vl-in" style="width:100%;min-height:70px"></textarea></div>'
+    + '<div class="m-row"><label>Owner</label><input id="vlxO" class="vl-in" style="width:100%" value="' + esc(who()) + '" /></div>'
+    + '<div class="m-row"><label>Due</label><input id="vlxU" class="vl-in" type="date" /></div>'
+    + '<div class="m-foot"><button class="btn ghost" data-vlx="cancel">Cancel</button><button class="btn" data-vlx="save">Add task</button></div>');
+}
+async function waVolSaveExtra() {
+  var t = (document.getElementById('vlxT') || {}).value || '';
+  if (!t.trim()) { toast('Give the task a name'); return; }
+  var row = {
+    event_id: WA_VOL_EVENT,
+    title: t.trim(),
+    detail: ((document.getElementById('vlxD') || {}).value || '').trim() || null,
+    owner: ((document.getElementById('vlxO') || {}).value || '').trim() || null,
+    due_date: ((document.getElementById('vlxU') || {}).value || '') || null,
+    source: 'manual'
+  };
+  var r = await db.from('sop_event_extras').insert(row);
+  if (r.error) { toast('Could not add that'); return; }
+  closeModal();
+  WA_VOL_LOADED = false;
+  WA_VOL_DETAIL = null;
+  toast('Task added');
+  waVolRender();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', function (e) {
+  var t = e.target;
+  var sub = t.closest && t.closest('[data-vl]');
+  if (sub) {
+    WA_VOL_VIEW = sub.getAttribute('data-vl');
+    WA_VOL_EVENT = null;
+    location.hash = WA_VOL_VIEW === 'calendar' ? '#volunteering' : '#volunteering/' + WA_VOL_VIEW;
+    return;
+  }
+  var ev = t.closest && t.closest('[data-vlev]');
+  if (ev) {
+    location.hash = '#volunteering/e/' + ev.getAttribute('data-vlev');
+    return;
+  }
+  var more = t.closest && t.closest('[data-vlmore]');
+  if (more) {
+    var box = document.getElementById('vld-' + more.getAttribute('data-vlmore'));
+    if (box) box.classList.toggle('open');
+    return;
+  }
+  var shot = t.closest && t.closest('[data-vlshot]');
+  if (shot) {
+    openModal('<div class="vl-lb"><img src="' + esc(shot.getAttribute('data-vlshot')) + '" alt="Screenshot" /></div>'
+      + '<div class="m-foot"><a class="btn ghost" href="' + esc(shot.getAttribute('data-vlshot')) + '" target="_blank" rel="noopener">Open full size</a></div>');
+    return;
+  }
+  var role = t.closest && t.closest('[data-vlrole]');
+  if (role && document.getElementById('volunteering') && document.getElementById('volunteering').classList.contains('active')) {
+    WA_VOL_ROLEFILTER = role.getAttribute('data-vlrole');
+    waVolRenderPeople();
+    return;
+  }
+  var add = t.closest && t.closest('[data-vladd]');
+  if (add) { waVolAddExtraModal(); return; }
+  var xact = t.closest && t.closest('[data-vlx]');
+  if (xact) {
+    if (xact.getAttribute('data-vlx') === 'save') waVolSaveExtra();
+    else closeModal();
+    return;
+  }
+});
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (!t || !t.getAttribute) return;
+  if (t.getAttribute('data-vlchk')) { waVolToggleStep(t.getAttribute('data-vlchk'), t.checked, t); return; }
+  if (t.getAttribute('data-vlxchk')) { waVolToggleExtra(t.getAttribute('data-vlxchk'), t.checked, t); return; }
+  if (t.getAttribute('data-vlrstat')) { waVolSaveRoster(t.getAttribute('data-vlrstat'), t.value); return; }
+  if (t.getAttribute('data-vlowner')) { waVolSaveStepField(t.getAttribute('data-vlowner'), 'owner', t.value); return; }
+  if (t.getAttribute('data-vldue')) { waVolSaveStepField(t.getAttribute('data-vldue'), 'due_date', t.value); return; }
+});
+
+/* ---------- panel, route, tab ---------- */
+(function () {
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('volunteering')) {
+    var sec = document.createElement('section');
+    sec.id = 'volunteering';
+    sec.className = 'panel';
+    main.appendChild(sec);
+  }
+  function openVol(h) {
+    if (h !== 'volunteering' && h.indexOf('volunteering/') !== 0) return false;
+    if (!isStaff()) return false;
+    var rest = h.slice('volunteering'.length).replace(/^\//, '');
+    if (!rest) { WA_VOL_VIEW = 'calendar'; WA_VOL_EVENT = null; }
+    else if (rest.indexOf('e/') === 0) { WA_VOL_VIEW = 'event'; WA_VOL_EVENT = Number(rest.slice(2)); }
+    else { WA_VOL_VIEW = rest; WA_VOL_EVENT = null; }
+    showPanel('volunteering');
+    waVolRender();
+    return true;
+  }
+  var __ah20 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (openVol(h)) return;
+    __ah20();
+  };
+  window.addEventListener('hashchange', function () {
+    try {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h === 'volunteering' || h.indexOf('volunteering/') === 0) openVol(h);
+    } catch (err) { /* boot */ }
+  });
+  var __sa20 = startApp;
+  startApp = async function () {
+    await __sa20();
+    try {
+      if (!isStaff()) return;
+      var bar = document.getElementById('tabBar');
+      if (bar && !bar.querySelector('[data-tab="volunteering"]')) {
+        var b = document.createElement('button');
+        b.className = 'tab';
+        b.dataset.tab = 'volunteering';
+        b.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Volunteering';
+        bar.insertBefore(b, bar.querySelector('.tab-group') || null);
+      }
+      var h0 = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h0 === 'volunteering' || h0.indexOf('volunteering/') === 0) applyHash();
+    } catch (err) { /* non-fatal */ }
+  };
+})();

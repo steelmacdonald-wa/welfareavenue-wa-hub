@@ -1,0 +1,261 @@
+/* =====================================================================
+   WA v61 deep page guides
+   (03/08/26)
+   The help popups grow into full, scrollable guides. Same shape as
+   v60 up top (one-line purpose + numbered flow), then a "How it
+   works, in detail" area: one visual + a couple of precise sentences
+   per feature, drawn from how the Hub actually behaves. Department
+   pages get the fullest guide (views, gating, flags, confidential,
+   what completing does, and why tasks never disappear). Reuses the
+   v60 mock styles; replaces the v60 popup content the same way v60
+   replaced v43's (later listener wins the modal).
+   ===================================================================== */
+(function () {
+  if (window.__wa61) return;
+  window.__wa61 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa61css';
+  st.textContent = '' +
+    '.w61wrap{max-height:58vh;overflow-y:auto;padding-right:8px;margin-top:4px;}' +
+    '.w61h{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;font-weight:800;margin:14px 0 6px;}' +
+    '.w61sec{display:flex;gap:12px;align-items:flex-start;background:#f6f8f7;border-radius:12px;padding:10px 12px;margin:0 0 8px;}' +
+    '.w61sec .v{flex:0 0 168px;display:flex;flex-direction:column;gap:5px;justify-content:center;min-height:30px;}' +
+    '.w61sec .t{flex:1;min-width:0;}' +
+    '.w61sec .t b{display:block;font-size:12.5px;color:#14302b;margin-bottom:2px;}' +
+    '.w61sec .t span{font-size:12px;color:#5b6b66;line-height:1.5;}' +
+    '.w61pipe{display:flex;gap:4px;align-items:center;flex-wrap:wrap;}' +
+    '.w61pipe .bx{background:#fff;border:1px solid #dde5e1;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:800;color:#14302b;white-space:nowrap;}' +
+    '.w61pipe .bx.grn{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w61pipe .ar{color:#9ab3ab;font-weight:800;font-size:11px;}' +
+    '@media (max-width:640px){.w61sec{flex-direction:column;}.w61sec .v{flex:none;width:100%;}}';
+  document.head.appendChild(st);
+
+  /* ---- mocks (v60 classes are global; these builders remake them) ---- */
+  function mTask(pills, opts) {
+    opts = opts || {};
+    return '<div class="w60task' + (opts.late ? ' late' : '') + '"><span class="cb' + (opts.done ? ' on' : '') + '"></span><span class="ln"></span>'
+      + (pills || []).map(function (p) { return '<span class="w60p ' + (p[1] || '') + '">' + p[0] + '</span>'; }).join('') + '</div>';
+  }
+  function mBar(pct) { return '<div class="w60barw"><span class="w60bar"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div>'; }
+  function mPills(arr) {
+    return '<div class="w60pr">' + arr.map(function (x) { return '<span class="w60p ' + (x[1] || '') + '">' + x[0] + '</span>'; }).join('') + '</div>';
+  }
+  function mCal() {
+    var h = '<div class="w60cal">';
+    for (var i = 0; i < 14; i++) h += '<i' + (i === 9 ? ' class="on"' : '') + '></i>';
+    return h + '</div>';
+  }
+  function mPeople(names) {
+    return '<div>' + names.map(function (n) { return '<span class="w60per"><i></i>' + n + '</span>'; }).join('') + '</div>';
+  }
+  function mDoc() { return '<div class="w60doc"><i></i><i></i><i></i></div>'; }
+  function mPipe(steps, hi) {
+    return '<div class="w61pipe">' + steps.map(function (s, i) {
+      return '<span class="bx' + (i === hi ? ' grn' : '') + '">' + s + '</span>' + (i < steps.length - 1 ? '<span class="ar">&rarr;</span>' : '');
+    }).join('') + '</div>';
+  }
+  function flow(steps) {
+    return '<div class="w60flow">' + steps.map(function (s, i) {
+      return '<span class="w60step"><i>' + (i + 1) + '</i>' + s + '</span>' + (i < steps.length - 1 ? '<span class="ar">&rarr;</span>' : '');
+    }).join('') + '</div>';
+  }
+  function sec(vis, title, txt) {
+    return '<div class="w61sec"><div class="v">' + vis + '</div><div class="t"><b>' + title + '</b><span>' + txt + '</span></div></div>';
+  }
+
+  var T = {
+    mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
+    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training',
+    volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
+    adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
+  };
+
+  function wa61Body(k) {
+    var sub = '', fl = [], secs = '';
+    if (k === 'dept') {
+      sub = 'Everything this department is doing: updates, tasks, projects, requests and decisions.';
+      fl = ['Read the updates', 'Work the tasks', 'File into projects'];
+      secs = '<div class="w61h">Tasks: the basics</div>'
+        + sec(mTask([], { done: true }), 'Ticking completes for everyone',
+          'The checkbox saves instantly, stamps who did it and when, and shows on every screen. Untick to reopen. Only signed-in staff can tick; the board view is read-only.')
+        + sec(mPills([['edit'], ['reassign'], ['move']]), 'Edit, reassign, move',
+          'Edit changes title, owner, due date and more. Reassign switches the owner. Move sends the task to another department. Every change is written to the Activity log with who and when.')
+        + sec(mTask([['project: Flag Football'], ['due Aug 12', 'gold']]), 'Project and due date pills',
+          'Every task carries two pills: link it to a project (or General), and set or clear a due date with quick picks. Both are one click, both are logged.')
+        + sec(mTask([], { late: true }), 'Yellow means overdue',
+          'A task past its due date turns light yellow everywhere it appears until it is done or re-dated.')
+        + '<div class="w61h">Gating and visibility</div>'
+        + sec(mPills([['&#9873; flagged', 'red'], ['reason required', 'gold']]), 'Flagged = executive attention',
+          'Flagging a task sends it to the executive decisions flow and requires a category and a short reason; the AI drafts one if you leave it blank.')
+        + sec(mPills([['board hidden', 'vio']]), 'Confidential stays off the board view',
+          'Tick Confidential on a task or update and board viewers never see it. Staff see it with a "board hidden" tag.')
+        + sec(mPipe(['open', 'done'], 1), 'Tasks are never deleted',
+          'There is no delete. Tasks complete (and can reopen), or move to another department or project. The full history stays in the Activity log, so nothing silently disappears.')
+        + '<div class="w61h">Where things come from</div>'
+        + sec(mPipe(['meeting', 'transcript', 'this page']), 'Meetings feed the page',
+          'Drop a transcript in the Archive and within minutes the AI files updates and tasks here, tagged to this department, with a summary posted to Slack.')
+        + sec(mTask([['meeting', 'vio'], ['3 comments']]), 'Comments collect on each task',
+          'The newest note shows on the row. Add your own, or let the AI attach progress notes when a meeting or Slack clearly discusses that task; each links back to its source.')
+        + sec(mPills([['List'], ['Board'], ['Calendar'], ['by assignee']]), 'Three views, one truth',
+          'Switch between List, Board and Calendar or filter by assignee; it is the same data, so ticking in one view updates all of them.')
+        + sec(mPills([['General tasks'], ['Projects', 'grn']]), 'The Projects card',
+          'Tasks group into projects that roll up to quarterly goals. Open a chip for that project&#39;s page; General holds tasks with no project yet.');
+    } else if (k === 'mypage') {
+      sub = 'Your day at a glance: your work, your hours, your people.';
+      fl = ['See your tasks', 'Check your hours', 'Jump anywhere'];
+      secs = sec(mTask([['due Aug 12', 'gold']]), 'Your open tasks, all departments',
+          'Everything owned by you, sorted by due date, clickable straight to its department page.')
+        + sec(mBar(72), 'Your tracked hours',
+          'From the Slack check-in channels, last 3 weeks. A check in or out counts at its message time; sessions without a check out do not count.')
+        + sec(mPeople(['Suhaib', 'Ian']), 'Who is online',
+          'Green dot means active in the Hub right now.');
+    } else if (k === 'overview') {
+      sub = 'The org at a glance, and the calls only executives can make.';
+      fl = ['Scan the tiles', 'Review decisions', 'Record the call'];
+      secs = sec(mTask([['decision', 'vio']], { done: true }), 'Ticking records the decision',
+          'You are asked for a short note on what was decided; it moves to the Decided list below with the note and date. Nothing is deleted.')
+        + sec(mDoc(), 'AI recommendation on each',
+          'Each open decision carries a suggested call grounded in recent meetings; treat it as a brief, not an answer.')
+        + sec(mPills([['+ Add decision', 'grn']]), 'Anything can become a decision',
+          'Add one directly, or flag a task on a department page and it arrives here with its reason.');
+    } else if (k === 'dashboard') {
+      sub = 'How work is moving, per department.';
+      fl = ['Pick a department', 'Spot the red', 'Click any row'];
+      secs = sec(mBar(45), 'Completion and cycle times',
+          'How much gets done and how long it takes, per department, so slow-downs show early.')
+        + sec(mTask([['7d overdue', 'red']], { late: true }), 'Overdue and aging',
+          'Overdue tasks and old undecided decisions surface here with their age. Every row links to the real item.');
+    } else if (k === 'requests') {
+      sub = 'Ask another team for something concrete, and track it.';
+      fl = ['Pick the type', 'Fill the form', 'Track the status'];
+      secs = sec(mPipe(['you ask', 'their page', 'done'], 0), 'It routes itself',
+          'Pick a request type and it lands on the receiving department&#39;s page with a status both sides see update live.')
+        + sec(mTask([['from a meeting', 'vio']]), 'AI-suggested requests',
+          'When a meeting clearly contains a cross-team ask, it appears at the top as a suggestion with the exact quote. Nothing is filed until a person clicks Accept; Dismiss makes it go away.');
+    } else if (k === 'agendas') {
+      sub = 'AI-drafted agendas, grounded in your real work.';
+      fl = ['Pick type + people', 'Type the purpose', 'Generate'];
+      secs = sec(mDoc(), 'The purpose box is the blueprint',
+          'Write what the meeting is for and how it should run ("15 min on numbers, then the calendar, then blockers") and the agenda mirrors that structure, pulling only tasks and topics that fit.')
+        + sec(mTask([], { done: true }), 'Items carry live tasks',
+          'Agenda items link real tasks; ticking one in the agenda completes the actual task on its department page.')
+        + sec(mPills([['only your meetings', 'vio']]), 'You see your agendas',
+          'Members see agendas they are part of: their department&#39;s, meetings they are named in, leaders meetings if they lead, and ones they created. Admins see all.')
+        + sec(mPills([['draft', 'gold'], ['final', 'grn'], ['share link']]), 'Finalize and share',
+          'Reorder, add items, mark final, and share a private link with people outside the Hub.');
+    } else if (k === 'importantinfo') {
+      sub = 'Shared links, tools and credentials.';
+      fl = ['Find it', 'Reveal if masked', 'Add your own'];
+      secs = sec('<div class="w60task"><span class="w60p">Canva login</span><span class="w60mask">&bull;&bull;&bull;&bull;&bull;&bull;</span><span class="w60p grn">reveal</span></div>', 'Secrets stay masked',
+          'Credentials show as dots until you click reveal. Add entries with the form at the bottom.');
+    } else if (k === 'goals') {
+      sub = 'Quarterly goals, rolling up to the organization.';
+      fl = ['Pick the quarter', 'Open a department', 'Link the work'];
+      secs = sec(mPipe(['task', 'project', 'goal', 'org'], 2), 'The rollup chain',
+          'Tasks live in projects, projects link to department goals, department goals roll into the Organization tier. Link a project from the goal row or from the project itself.')
+        + sec(mDoc(), 'AI-suggested goals',
+          'Per-department suggestions drawn from recent work; accept the useful ones, ignore the rest.');
+    } else if (k === 'create') {
+      sub = 'Branded content in the WA voice.';
+      fl = ['Describe it', 'Generate', 'Refine or download'];
+      secs = sec(mDoc(), 'Emails, posts, reports, letters',
+          'Describe what you need; refine with follow-ups; copy, download, or send for review. Graphics take a format and an optional photo.');
+    } else if (k === 'finances') {
+      sub = 'Budget vs actual, and every transaction.';
+      fl = ['Check the budget', 'Drill the ledger', 'Log or import'];
+      secs = sec(mBar(81), 'Budget vs actual by category',
+          'Spending against plan per category and department. The fiscal year runs October 1 to September 30.')
+        + sec(mTask([['reallocate'], ['duplicate', 'red']]), 'Fix transactions inline',
+          'Re-allocate a transaction to the right category, mark duplicates, import a statement, or log an expense.');
+    } else if (k === 'orgchart') {
+      sub = 'The live structure, from the roster.';
+      fl = ['Find the person', 'Open their profile', 'Jump to their page'];
+      secs = sec(mPeople(['Valex', 'Natasha', 'Tuna']), 'Built from the roster',
+          'Update a role or department in the roster and the chart follows. Green dot = online now. Click through for bio, plate, stats and training.');
+    } else if (k === 'training') {
+      sub = 'Onboarding first, your trainings next, the catalog below.';
+      fl = ['Finish onboarding', 'Do what is assigned', 'Browse the rest'];
+      secs = sec(mBar(40), 'Onboarding, module by module',
+          'Weekly modules open one by one; tick steps as you go. Big steps fold their subtasks behind a pill so the list stays short. Stuck? The help button posts to Slack.')
+        + sec(mTask([['assigned', 'gold']]), 'Your assigned trainings',
+          'What HR or your lead assigned sits right under your onboarding with open links and a mark-done button. The full catalog to browse is below.')
+        + sec(mPills([['confirm updates', 'gold']]), 'Finished? It stays quiet',
+          'A completed onboarding collapses to one line. If HR later changes a step, only that step resurfaces with its new instructions and a confirm button, so you always know what changed.');
+    } else if (k === 'volunteering') {
+      sub = 'The serving programme, end to end.';
+      fl = ['Open an event', 'Work the checklist', 'Confirm the roster'];
+      secs = sec(mCal(), 'Calendar to event page',
+          'Each event page holds its checklist, roster and confirmations, texting, replies and the driver itinerary.')
+        + sec(mPipe(['Master SOP', 'upcoming events'], 0), 'One playbook, every event',
+          'The Master program SOP is the template; edits flow into all planned upcoming events automatically. Past events keep their history.')
+        + sec(mTask([['Coordinating volunteers', 'vio'], ['assign to...']]), 'Roles assign in bulk',
+          'Steps that belong to a role show a dropdown of the whole org. Pick a person and every linked step gets that owner, in the master and across all upcoming events at once.');
+    } else if (k === 'transcripts') {
+      sub = 'Drop in any meeting; the Hub does the rest.';
+      fl = ['Paste or import', 'Tag the department', 'Save'];
+      secs = sec(mPipe(['transcript', 'AI scan', 'boards'], 1), 'What the scan produces',
+          'A summary posts to Slack, updates and tasks file to the department page, and suggestions appear for requests, task comments and due dates, all confirm-first with quotes.')
+        + sec(mDoc(), 'The archive remembers',
+          'Every transcript shows what it contributed. Search and filter below; Reprocess if something did not land.');
+    } else if (k === 'activity') {
+      sub = 'The change log of everything.';
+      fl = ['Filter', 'Scan', 'Click through'];
+      secs = sec(mDoc(), 'Who changed what, when',
+          'Every tick, edit, move, assignment and decision lands here. This is also why nothing needs deleting: history is always recoverable.');
+    } else if (k === 'adminpanel') {
+      sub = 'Who sees what.';
+      fl = ['Pick a person', 'Set the role', 'Override if needed'];
+      secs = sec(mPills([['admin', 'grn'], ['leader'], ['member'], ['viewer', 'gold']]), 'Four roles',
+          'Admins manage everything; leaders see every page; members see the work surfaces; viewers see the overview only. Tab overrides beat the role default. Applies on next load.');
+    } else if (k === 'projectpage') {
+      sub = 'One project, its tasks and goal.';
+      fl = ['Tick things done', 'Quick-add', 'Move tasks'];
+      secs = sec(mTask([['move']], { done: true }), 'Same tasks, project lens',
+          'These are the department&#39;s real tasks filtered to this project; ticking here completes them everywhere. Move sends a task to another project or back to General.');
+    } else if (k === 'personpage') {
+      sub = 'One person, in full.';
+      fl = ['Read the bio', 'See their plate', 'Check their training'];
+      secs = sec(mBar(75), 'Live, not a profile form',
+          'The bio, plate, stats and training progress all come from real Hub data, so the page is always current.');
+    } else if (k === 'hrcentre') {
+      sub = 'People operations, in four dashboards.';
+      fl = ['Pick a tab', 'Act', 'Check Commitment'];
+      secs = sec(mPills([['Onboarding', 'grn'], ['Trainings'], ['Recruitment'], ['Commitment']]), 'Four tabs, one page',
+          'Onboarding: the board, the Welcome kit and the master editor. Trainings: assignments and the catalog. Recruitment: pipelines with candidates and JDs. Commitment: hours and output.')
+        + sec(mPills([['Bulk assign', 'grn'], ['team'], ['everyone']]), 'Assign trainings at scale',
+          'Pick people, a team, or the whole org plus the trainings; existing records are never overwritten, done stays done.')
+        + sec(mBar(52), 'Commitment, measured',
+          'Average hours per team, who is under their minimum (editable, board exempt), tasks completed per week, and who is not checking in. Update from Slack on demand.')
+        + sec(mPills([['restricted', 'red']]), 'Access is limited',
+          'Only the HR access list (Steel, Suhaib, Ian, Natasha, Valex, Tuna) can open this page.');
+    } else {
+      return null;
+    }
+    return '<h3>' + (T[k] || 'This page') + '</h3>'
+      + '<p class="w60sub">' + sub + '</p>'
+      + flow(fl)
+      + '<div class="w61wrap">' + secs + '</div>'
+      + '<div class="m-actions"><button class="btn ghost" id="w61c">Close</button></div>';
+  }
+
+  function wa61Open(k) {
+    var html = wa61Body(k);
+    if (!html) return;
+    openModal(html);
+    var c = document.getElementById('w61c');
+    if (c) c.addEventListener('click', function () { closeModal(); });
+  }
+
+  /* registered after v60, so this content wins the modal */
+  if (!document.body.dataset.wa61Wired) {
+    document.body.dataset.wa61Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-w43help]');
+      if (b) { setTimeout(function () { wa61Open(b.getAttribute('data-w43help')); }, 0); return; }
+      var h = e.target.closest && e.target.closest('[data-w46help]');
+      if (h) { setTimeout(function () { wa61Open('hrcentre'); }, 0); return; }
+    });
+  }
+})();

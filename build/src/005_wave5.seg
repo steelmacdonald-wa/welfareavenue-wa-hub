@@ -1,0 +1,219 @@
+/* =====================================================================
+   WA v5 UI enhancements (injected 22/07/26)
+   Department requests module: searchable request catalogue (tab
+   "Requests"), typed submission forms from request_types, incoming
+   request cards on each department panel with per-type status sets.
+   Tables: request_types, dept_requests (RLS staff only).
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.req-search{width:100%;max-width:420px;padding:9px 13px;border:1px solid var(--wa-line);border-radius:10px;font-size:13px;margin:6px 0 14px;}'
+    + '.req-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;}'
+    + '.req-type{background:#faf9f4;border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;cursor:pointer;}'
+    + '.req-type:hover{border-color:var(--wa-green);box-shadow:0 3px 10px rgba(0,0,0,.05);}'
+    + '.req-type .t{font-weight:700;font-size:13px;}'
+    + '.req-type .d{font-size:12px;color:var(--wa-muted);margin-top:3px;}'
+    + '.req-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;display:inline-block;margin-bottom:5px;}'
+    + '.req-form{max-width:560px;}'
+    + '.req-form label{display:block;font-size:12px;color:var(--wa-muted);margin:10px 0 3px;}'
+    + '.req-form input,.req-form textarea,.req-form select{width:100%;padding:8px 10px;border:1px solid var(--wa-line);border-radius:8px;font-size:13px;box-sizing:border-box;}'
+    + '.req-form textarea{min-height:90px;resize:vertical;}'
+    + '.req-card{border-left:4px solid var(--wa-green);}'
+    + '.req-row{padding:9px 0;border-top:1px dashed var(--wa-line);font-size:13px;}'
+    + '.req-row:first-of-type{border-top:none;}'
+    + '.req-row .rt{font-weight:700;}'
+    + '.req-row .rm{font-size:11.5px;color:var(--wa-muted);margin-top:2px;}'
+    + '.req-row .rd{font-size:12px;background:var(--wa-paper);border-radius:8px;padding:7px 10px;margin-top:6px;display:none;white-space:pre-wrap;}'
+    + '.req-row.open .rd{display:block;}'
+    + '.req-row select{font-size:12px;border:1px solid var(--wa-line);border-radius:6px;padding:3px 6px;margin-right:8px;}'
+    + '.req-actions{margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('requests')) {
+    var sec = document.createElement('section');
+    sec.id = 'requests';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Department requests</h2><p class="read">Find the request you need, fill it in, and it lands on the receiving department&#39;s page with the right status track. Modelled on the ClickUp SOP templates.</p><div id="reqBody">Loading...</div></div>';
+    main.appendChild(sec);
+  }
+})();
+
+var REQ_TYPES = [], REQ_CACHE = [];
+async function waLoadRequests() {
+  try {
+    var a = await db.from('request_types').select('*').eq('enabled', true).order('sort').order('label');
+    if (!a.error) REQ_TYPES = a.data || [];
+    var b = await db.from('dept_requests').select('*').order('created_at', { ascending: false });
+    if (!b.error) REQ_CACHE = b.data || [];
+  } catch (e) { /* offline */ }
+}
+function waReqType(key) { return REQ_TYPES.find(function (t) { return t.key === key; }); }
+
+function renderRequestsModule(q) {
+  var body = document.getElementById('reqBody');
+  if (!body) return;
+  if (!isStaff()) { body.innerHTML = '<p class="read">Requests are available to staff accounts only.</p>'; return; }
+  if (!REQ_TYPES.length) { body.innerHTML = '<p class="read">No request types are set up yet. They are being imported from the ClickUp SOP templates; check back shortly.</p>'; return; }
+  var ql = (q || '').toLowerCase();
+  var types = REQ_TYPES.filter(function (t) {
+    return !ql || (t.label + ' ' + (t.description || '') + ' ' + (DEPT_LABEL[t.department] || '')).toLowerCase().indexOf(ql) >= 0;
+  });
+  var mine = REQ_CACHE.slice(0, 6);
+  body.innerHTML = '<input class="req-search" id="reqSearch" placeholder="Search request types, e.g. post, email, reimbursement" value="' + esc(q || '') + '" />'
+    + '<div class="req-grid">' + (types.length ? types.map(function (t) {
+        return '<div class="req-type" data-rt="' + esc(t.key) + '">'
+          + '<span class="req-dep" style="background:' + (DEPT_COLOR[t.department] || '#6f6b64') + '">' + (DEPT_LABEL[t.department] || t.department) + '</span>'
+          + '<div class="t">' + esc(t.label) + '</div>'
+          + '<div class="d">' + esc(t.description || '') + '</div></div>';
+      }).join('') : '<p class="read">No request type matches that search.</p>') + '</div>'
+    + (mine.length ? '<h3 style="margin:20px 0 4px;font-size:13px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-green);">Recent requests</h3>'
+      + mine.map(function (r) {
+          var t = waReqType(r.type_key);
+          return '<div class="req-row"><span class="rt">' + esc(r.title) + '</span> <span class="rm">' + esc(t ? t.label : (r.type_key || '')) + ' &middot; for ' + (DEPT_LABEL[r.department] || r.department) + ' &middot; ' + esc(r.status || '') + (r.done ? ' &middot; completed' : '') + ' &middot; by ' + esc(r.requested_by || '') + '</span></div>';
+        }).join('') : '');
+  var si = document.getElementById('reqSearch');
+  si.addEventListener('input', function () { renderRequestsModule(si.value); });
+  if (ql) { si.focus(); si.setSelectionRange(si.value.length, si.value.length); }
+  body.querySelectorAll('[data-rt]').forEach(function (c) {
+    c.addEventListener('click', function () { renderRequestForm(c.dataset.rt); });
+  });
+}
+
+function renderRequestForm(key) {
+  var body = document.getElementById('reqBody');
+  var t = waReqType(key);
+  if (!body || !t) return;
+  var fields = Array.isArray(t.fields) && t.fields.length ? t.fields : [{ name: 'details', label: 'Details', type: 'textarea', required: true }];
+  body.innerHTML = '<a style="cursor:pointer;font-size:12.5px;font-weight:600;" id="reqBack">&#8592; All request types</a>'
+    + '<div class="req-form"><h3 style="margin:12px 0 2px;">' + esc(t.label) + '</h3>'
+    + '<p class="read" style="margin-top:2px;">' + esc(t.description || '') + ' Goes to ' + (DEPT_LABEL[t.department] || t.department) + '.</p>'
+    + '<label>Request title *</label><input id="rq-title" placeholder="Short summary of what you need" />'
+    + fields.map(function (f, i) {
+        var inp = f.type === 'textarea' ? '<textarea id="rq-f' + i + '"></textarea>'
+          : '<input id="rq-f' + i + '" type="' + (f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'url' ? 'url' : 'text') + '" />';
+        return '<label>' + esc(f.label) + (f.required ? ' *' : '') + '</label>' + inp;
+      }).join('')
+    + '<div style="margin-top:14px;"><button class="btn mini" id="rq-send" style="background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:700;">Submit request</button></div></div>';
+  document.getElementById('reqBack').addEventListener('click', function () { renderRequestsModule(''); });
+  document.getElementById('rq-send').addEventListener('click', async function () {
+    var title = (document.getElementById('rq-title').value || '').trim();
+    if (!title) { toast('Add a request title'); return; }
+    var details = {};
+    for (var i = 0; i < fields.length; i++) {
+      var v = (document.getElementById('rq-f' + i).value || '').trim();
+      if (fields[i].required && !v) { toast('Fill in: ' + fields[i].label); return; }
+      if (v) details[fields[i].label] = v;
+    }
+    var statuses = Array.isArray(t.statuses) ? t.statuses : [];
+    var r = await db.from('dept_requests').insert({
+      type_key: t.key, department: t.department, title: title, details: details,
+      status: t.default_status || statuses[0] || 'Requested', requested_by: who()
+    });
+    if (r.error) { toast('Could not submit, try again'); return; }
+    try { await db.from('change_log').insert({ entity_type: 'request', entity_id: t.key, field: 'created', old_value: null, new_value: title, changed_by: who() }); } catch (e) {}
+    toast('Request sent to ' + (DEPT_LABEL[t.department] || t.department));
+    await waLoadRequests();
+    renderRequestsModule('');
+    renderDeptRequestCards();
+  });
+}
+
+function renderDeptRequestCards() {
+  DEPT_ORDER.forEach(function (d) {
+    var panel = document.getElementById(d);
+    if (!panel) return;
+    var old = panel.querySelector('.req-card');
+    if (old) old.remove();
+    var rows = REQ_CACHE.filter(function (r) { return r.department === d && !r.done; });
+    if (!rows.length) return;
+    var card = document.createElement('div');
+    card.className = 'card req-card';
+    card.innerHTML = '<h2 style="color:var(--wa-green);">&#9993; Incoming requests (' + rows.length + ')</h2>'
+      + rows.map(function (r) {
+          var t = waReqType(r.type_key);
+          var statuses = (t && Array.isArray(t.statuses) && t.statuses.length) ? t.statuses : ['Requested', 'In progress', 'Done'];
+          return '<div class="req-row" data-req="' + r.id + '">'
+            + '<span class="rt">' + esc(r.title) + '</span>'
+            + '<div class="rm">' + esc(t ? t.label : (r.type_key || 'Request')) + ' &middot; from ' + esc(r.requested_by || 'unknown') + ' &middot; ' + fmtDay(r.created_at) + ' &middot; <a style="cursor:pointer;" data-tog="' + r.id + '">details</a></div>'
+            + '<div class="rd">' + esc(Object.entries(r.details || {}).map(function (kv) { return kv[0] + ': ' + kv[1]; }).join(String.fromCharCode(10)) || 'No details given') + '</div>'
+            + '<div class="req-actions">'
+            + (isStaff() ? '<select data-rst="' + r.id + '">' + statuses.map(function (s) { return '<option' + (s === r.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>'
+              + '<button class="btn ghost mini" data-rdone="' + r.id + '">Complete</button>' : '<span class="rm">' + esc(r.status || '') + '</span>')
+            + '</div></div>';
+        }).join('');
+    var exec = panel.querySelector('.exec-card');
+    if (exec && exec.nextSibling) panel.insertBefore(card, exec.nextSibling);
+    else panel.insertBefore(card, panel.firstChild ? panel.firstChild.nextSibling : null);
+    card.querySelectorAll('[data-tog]').forEach(function (a) {
+      a.addEventListener('click', function () { a.closest('.req-row').classList.toggle('open'); });
+    });
+    card.querySelectorAll('[data-rst]').forEach(function (s) {
+      s.addEventListener('change', async function () {
+        var id = Number(s.dataset.rst);
+        var row = REQ_CACHE.find(function (x) { return x.id === id; });
+        var from = row ? row.status : null;
+        var r2 = await db.from('dept_requests').update({ status: s.value, updated_at: new Date().toISOString(), updated_by: who() }).eq('id', id);
+        if (r2.error) { toast('Could not update status'); return; }
+        if (row) row.status = s.value;
+        try { await db.from('change_log').insert({ entity_type: 'request', entity_id: String(id), field: 'status', old_value: from, new_value: s.value, changed_by: who() }); } catch (e) {}
+        toast('Status: ' + s.value);
+      });
+    });
+    card.querySelectorAll('[data-rdone]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var id = Number(b.dataset.rdone);
+        var r2 = await db.from('dept_requests').update({ done: true, done_at: new Date().toISOString(), updated_at: new Date().toISOString(), updated_by: who() }).eq('id', id);
+        if (r2.error) { toast('Could not complete'); return; }
+        var row = REQ_CACHE.find(function (x) { return x.id === id; });
+        if (row) row.done = true;
+        try { await db.from('change_log').insert({ entity_type: 'request', entity_id: String(id), field: 'done', old_value: 'false', new_value: 'true', changed_by: who() }); } catch (e) {}
+        toast('Request completed');
+        renderDeptRequestCards();
+      });
+    });
+  });
+}
+
+(function () {
+  var __ras5 = renderAllSections;
+  renderAllSections = function () {
+    __ras5();
+    try { renderDeptRequestCards(); } catch (e) { /* non-fatal */ }
+  };
+  var __ah5 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'requests') { showPanel('requests'); renderRequestsModule(''); return; }
+    __ah5();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#requests') {
+      try { showPanel('requests'); renderRequestsModule(''); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa5 = startApp;
+  startApp = async function () {
+    await __sa5();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="requests"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'requests';
+          b.innerHTML = '<span class="tabdot" style="background:#4a7c59"></span>Requests';
+          var info = bar.querySelector('[data-tab="importantinfo"]');
+          var act = document.getElementById('actTabBtn');
+          bar.insertBefore(b, info || act || null);
+        }
+        await waLoadRequests();
+        renderDeptRequestCards();
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

@@ -1,0 +1,490 @@
+/* =====================================================================
+   WA v52 projects, due dates, and hours move to HR
+   (03/08/26)
+   Three things in one wave.
+   1. Any task can be linked to a project by hand: every task row grows
+      a "project" pill (current project or + project) opening a picker
+      of active projects across departments, plus a due date pill.
+   2. Due dates everywhere: set or clear a date from the row (with
+      quick picks), overdue tasks get a light yellow tint, and the
+      transcript scanner (v3) now suggests due dates it hears in
+      meetings; suggestions show on the row as confirm-first chips.
+   3. Hours leave the department pages and the dashboard. The HR centre
+      gets an Hours tab: average weekly hours per team, who is below
+      their minimum (managers and up 6h, everyone else 4h), and who is
+      not checking in at all. The HR centre itself is now limited to
+      the HR access list (Steel, Suhaib, Ian, Natasha, Valex, Tuna).
+   ===================================================================== */
+(function () {
+  if (window.__wa52) return;
+  window.__wa52 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa52css';
+  st.textContent = '' +
+    '.w52late{background:rgba(212,161,60,.14) !important;border-radius:10px;}' +
+    '.w52row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px;font-size:11.5px;}' +
+    'span.w52row{display:inline-flex;margin:0 0 0 8px;}' +
+    '[data-w52p],[data-w52d]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:1px 9px;' +
+    'font-size:10.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.6;text-decoration:none !important;}' +
+    '[data-w52p]:hover,[data-w52d]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w52sug{display:inline-flex;gap:7px;align-items:center;background:rgba(212,161,60,.16);color:#8a6414;border-radius:999px;padding:1px 10px;font-size:10.5px;font-weight:700;}' +
+    '.w52sug a{cursor:pointer;color:#1f5f4f;font-weight:800;}' +
+    '.w52sug a:hover{text-decoration:underline;}' +
+    '.w52sug [data-w52no]{color:#b3402f;}' +
+    '.w52quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}' +
+    '.w52quick a{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:2px 11px;font-size:11px;color:#1f5f4f;cursor:pointer;font-weight:700;}' +
+    '.w52quick a:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w52flags{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w52flag{background:rgba(179,64,47,.1);color:#b3402f;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;}' +
+    '.w52flag small{font-weight:600;opacity:.75;}';
+  document.head.appendChild(st);
+
+  function wa52Today() {
+    var d = new Date();
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function wa52Day(iso) {
+    try { return new Date(iso + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch (e) { return iso; }
+  }
+  function wa52T(tid) {
+    var a = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
+    for (var i = 0; i < a.length; i++) { if (String(a[i].id) === String(tid)) return a[i]; }
+    return null;
+  }
+  function wa52ProjName(pid) {
+    if (!pid) return null;
+    var p = (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).filter(function (x) { return String(x.id) === String(pid); })[0];
+    if (!p) return 'project ' + pid;
+    return (typeof wa27Name === 'function') ? wa27Name(p) : p.name;
+  }
+
+  /* ---- pending due date suggestions ---- */
+  var WA52 = { sug: {}, loaded: false };
+  async function wa52Load(force) {
+    if (WA52.loaded && !force) return;
+    try {
+      var r = await db.from('task_due_suggestions').select('*').eq('status', 'pending').order('id', { ascending: false }).limit(200);
+      WA52.sug = {};
+      ((r && r.data) || []).forEach(function (s) {
+        var k = String(s.task_id);
+        if (!WA52.sug[k]) WA52.sug[k] = s;
+      });
+      WA52.loaded = true;
+    } catch (e) { /* offline */ }
+  }
+
+  /* ---- row decoration ---- */
+  function wa52Bits(t, withProject) {
+    var tid = String(t.id);
+    var h = '';
+    if (withProject) {
+      var pn = wa52ProjName(t.project_id);
+      h += '<a data-w52p="' + tid + '">' + (pn ? 'project: ' + esc(pn) : '+ project') + '</a>';
+    }
+    h += '<a data-w52d="' + tid + '">' + (t.due_date ? 'due ' + esc(wa52Day(t.due_date)) : '+ due date') + '</a>';
+    var s = WA52.sug[tid];
+    if (s && !t.due_date && !t.done) {
+      h += '<span class="w52sug" title="' + esc(s.quote || '') + '">AI suggests ' + esc(wa52Day(s.due_date))
+        + ' <a data-w52ok="' + s.id + '" data-w52task="' + tid + '">accept</a>'
+        + '<a data-w52no="' + s.id + '" data-w52task="' + tid + '">dismiss</a></span>';
+    }
+    return h;
+  }
+  function wa52Decorate() {
+    try {
+      var today = wa52Today();
+      var staff = typeof isStaff === 'function' && isStaff();
+      document.querySelectorAll('li[data-task]').forEach(function (li) {
+        var t = wa52T(li.getAttribute('data-task'));
+        if (!t) return;
+        li.classList.toggle('w52late', !t.done && !!t.due_date && t.due_date < today);
+        if (!staff) return;
+        var body = li.querySelector('.ci-body');
+        if (!body) return;
+        var html = '<div class="w52row">' + wa52Bits(t, true) + '</div>';
+        var old = body.querySelector('.w52row');
+        if (old) { old.outerHTML = html; return; }
+        var anchor = body.querySelector('.w51last');
+        if (anchor) anchor.insertAdjacentHTML('beforebegin', html);
+        else body.insertAdjacentHTML('beforeend', html);
+      });
+      document.querySelectorAll('.w27-task').forEach(function (row) {
+        var cb = row.querySelector('input[data-w27t]');
+        if (!cb) return;
+        var t = wa52T(cb.getAttribute('data-w27t'));
+        if (!t) return;
+        row.classList.toggle('w52late', !t.done && !!t.due_date && t.due_date < today);
+        if (!staff) return;
+        var meta = row.querySelector('.meta');
+        if (!meta) return;
+        var html = '<span class="w52row">' + wa52Bits(t, false) + '</span>';
+        var old2 = row.querySelector('.w52row');
+        if (old2) { old2.outerHTML = html; } else { meta.insertAdjacentHTML('beforeend', html); }
+      });
+      /* strip any hours leftovers from department pages and the dashboard */
+      document.querySelectorAll('h3.block').forEach(function (h3) {
+        if (h3.textContent.indexOf('Hours in (') === 0) {
+          var nx = h3.nextElementSibling;
+          if (nx && nx.classList && nx.classList.contains('team-tags')) nx.remove();
+          h3.remove();
+        }
+      });
+      document.querySelectorAll('.card h2').forEach(function (h2) {
+        if (h2.textContent === 'Team hours') { try { h2.parentElement.remove(); } catch (e2) { /* fine */ } }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---- writes and refresh ---- */
+  async function wa52AfterWrite() {
+    try { if (typeof wa27Load === 'function') await wa27Load(true); } catch (e) { /* fine */ }
+    try {
+      var pp = document.getElementById('projectpage');
+      if (typeof WA27_VIEW !== 'undefined' && WA27_VIEW && pp && pp.classList.contains('on')) {
+        wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+      } else if (typeof renderAllSections === 'function') {
+        renderAllSections();
+      }
+    } catch (e) { /* fine */ }
+    try {
+      if (typeof DEPT_ORDER !== 'undefined' && typeof wa27DeptCard === 'function') {
+        DEPT_ORDER.forEach(function (d) { try { wa27DeptCard(d); } catch (e2) { /* fine */ } });
+      }
+    } catch (e) { /* fine */ }
+    setTimeout(wa52Decorate, 60);
+  }
+
+  function wa52ProjModal(tid) {
+    var t = wa52T(tid);
+    if (!t) return;
+    var byDept = {};
+    (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (p) {
+      (byDept[p.department] = byDept[p.department] || []).push(p);
+    });
+    var opts = '<option value="">General tasks (no project)</option>';
+    Object.keys(byDept).sort().forEach(function (d) {
+      var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d;
+      opts += '<optgroup label="' + esc(label) + '">' + byDept[d].map(function (p) {
+        return '<option value="' + p.id + '"' + (String(t.project_id || '') === String(p.id) ? ' selected' : '') + '>' + esc(wa52ProjName(p.id)) + '</option>';
+      }).join('') + '</optgroup>';
+    });
+    openModal('<h3>Link to a project</h3>'
+      + '<p class="m-sub">' + esc(t.title || '') + '</p>'
+      + '<label>Project</label><select id="w52pp">' + opts + '</select>'
+      + '<div class="m-actions"><button class="btn" id="w52pgo">Save</button> <button class="btn ghost" id="w52pc">Cancel</button></div>');
+    document.getElementById('w52pc').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w52pgo').addEventListener('click', async function () {
+      var el = this;
+      el.disabled = true;
+      var v = document.getElementById('w52pp').value;
+      var nv = v ? Number(v) : null;
+      var r = await db.from('dept_tasks').update({
+        project_id: nv,
+        updated_by: (typeof who === 'function') ? who() : 'staff',
+        updated_at: new Date().toISOString()
+      }).eq('id', Number(tid));
+      if (r.error) { el.disabled = false; toast('Could not link it'); return; }
+      try { logChange('dept_task', Number(tid), 'project', wa52ProjName(t.project_id) || 'General', wa52ProjName(nv) || 'General'); } catch (e) { /* log only */ }
+      t.project_id = nv;
+      closeModal();
+      toast(nv ? 'Linked to ' + (wa52ProjName(nv) || 'the project') : 'Moved to General tasks');
+      wa52AfterWrite();
+    });
+  }
+
+  function wa52DueModal(tid) {
+    var t = wa52T(tid);
+    if (!t) return;
+    var s = WA52.sug[String(tid)];
+    openModal('<h3>Due date</h3>'
+      + '<p class="m-sub">' + esc(t.title || '') + '</p>'
+      + '<label>Due on</label><input type="date" id="w52dd" value="' + esc(t.due_date || '') + '" />'
+      + '<div class="w52quick">'
+      + '<a data-w52q="1">Tomorrow</a><a data-w52q="7">In a week</a><a data-w52q="14">In two weeks</a><a data-w52q="eom">End of month</a>'
+      + '</div>'
+      + (s && !t.due_date ? '<p class="m-sub" style="margin-top:8px">The AI heard <b>' + esc(wa52Day(s.due_date)) + '</b> in a meeting'
+        + (s.quote ? ': &quot;' + esc(String(s.quote).slice(0, 140)) + '&quot;' : '') + '</p>' : '')
+      + '<div class="m-actions"><button class="btn" id="w52dgo">Save</button> '
+      + (t.due_date ? '<button class="btn ghost" id="w52dclr">Clear the date</button> ' : '')
+      + '<button class="btn ghost" id="w52dc">Cancel</button></div>');
+    document.getElementById('w52dc').addEventListener('click', function () { closeModal(); });
+    document.querySelectorAll('[data-w52q]').forEach(function (a) {
+      a.addEventListener('click', function () {
+        var q = a.getAttribute('data-w52q');
+        var d = new Date();
+        if (q === 'eom') d = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        else d.setDate(d.getDate() + Number(q));
+        document.getElementById('w52dd').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+      });
+    });
+    async function save(v) {
+      var r = await db.from('dept_tasks').update({
+        due_date: v,
+        updated_by: (typeof who === 'function') ? who() : 'staff',
+        updated_at: new Date().toISOString()
+      }).eq('id', Number(tid));
+      if (r.error) { toast('Could not save the date'); return; }
+      try { logChange('dept_task', Number(tid), 'due_date', t.due_date, v); } catch (e) { /* log only */ }
+      t.due_date = v;
+      closeModal();
+      toast(v ? 'Due ' + wa52Day(v) : 'Date cleared');
+      wa52AfterWrite();
+    }
+    document.getElementById('w52dgo').addEventListener('click', function () { save(document.getElementById('w52dd').value || null); });
+    var clr = document.getElementById('w52dclr');
+    if (clr) clr.addEventListener('click', function () { save(null); });
+  }
+
+  async function wa52Accept(sid, tid) {
+    var s = WA52.sug[String(tid)];
+    if (!s || String(s.id) !== String(sid)) return;
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var t = wa52T(tid);
+    var r = await db.from('dept_tasks').update({ due_date: s.due_date, updated_by: by, updated_at: new Date().toISOString() }).eq('id', Number(tid));
+    if (r.error) { toast('Could not set the date'); return; }
+    await db.from('task_due_suggestions').update({ status: 'accepted', decided_by: by, decided_at: new Date().toISOString() }).eq('id', Number(sid));
+    try { logChange('dept_task', Number(tid), 'due_date', t ? t.due_date : null, s.due_date); } catch (e) { /* log only */ }
+    if (t) t.due_date = s.due_date;
+    delete WA52.sug[String(tid)];
+    toast('Due ' + wa52Day(s.due_date));
+    wa52AfterWrite();
+  }
+  async function wa52Dismiss(sid, tid) {
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var r = await db.from('task_due_suggestions').update({ status: 'dismissed', decided_by: by, decided_at: new Date().toISOString() }).eq('id', Number(sid));
+    if (r.error) { toast('Could not dismiss it'); return; }
+    delete WA52.sug[String(tid)];
+    toast('Dismissed');
+    wa52Decorate();
+  }
+
+  /* ---- hours leave the department pages ---- */
+  try { hoursBlock = function () { return ''; }; } catch (e) { /* fine */ }
+  try { hoursCardHtml = function () { return ''; }; } catch (e) { /* fine */ }
+
+  /* ---- HR access list ---- */
+  var WA52_HR = [
+    'steel.macdonald@welfareavenue.com',
+    'suhaib.abdillahi@welfareavenue.com',
+    'ian.odhiambo@welfareavenue.com',
+    'natasha.sharp@welfareavenue.com',
+    'valex.sanon@welfareavenue.com',
+    'tuna.kaynak@welfareavenue.com'
+  ];
+  function wa52HrOk() {
+    try {
+      return WA52_HR.indexOf(String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase()) >= 0;
+    } catch (e) { return false; }
+  }
+
+  /* ---- the Hours dashboard in the HR centre ---- */
+  var WA52_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;
+  function wa52Min(m) { return (m.department === 'board' || WA52_LEAD.test(m.role || '')) ? 6 : 4; }
+  function wa52HoursData() {
+    var members = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; });
+    var hours = (typeof DB_HOURS !== 'undefined' ? DB_HOURS : []);
+    var thisWeek = (typeof weekStartOf === 'function') ? weekStartOf(new Date()) : '';
+    var wk = [];
+    for (var i = 1; i <= 3; i++) {
+      var d = new Date();
+      d.setDate(d.getDate() - 7 * i);
+      wk.push(weekStartOf(d));
+    }
+    var byKey = {};
+    hours.forEach(function (h) {
+      var n = String(h.member_name || h.slack_name || '').toLowerCase();
+      if (!n) return;
+      var r = byKey[n] || (byKey[n] = { cur: 0, w3: 0, matched: false });
+      var hh = Number(h.hours || 0);
+      if (h.week_start === thisWeek) r.cur += hh;
+      else if (wk.indexOf(h.week_start) >= 0) r.w3 += hh;
+    });
+    function lookup(name) {
+      var full = String(name || '').toLowerCase();
+      if (byKey[full]) return byKey[full];
+      var ft = full.split(/\s+/)[0];
+      for (var k in byKey) { if (k.split(/\s+/)[0] === ft) return byKey[k]; }
+      return null;
+    }
+    var rows = [], silent = [];
+    members.forEach(function (m) {
+      var h = lookup(m.name);
+      var min = wa52Min(m);
+      if (!h) { silent.push({ m: m, min: min }); return; }
+      h.matched = true;
+      rows.push({ m: m, min: min, cur: h.cur, avg: h.w3 / 3 });
+    });
+    var unmatched = [];
+    for (var k2 in byKey) { if (!byKey[k2].matched) unmatched.push(k2); }
+    return { rows: rows, silent: silent, unmatched: unmatched };
+  }
+  function wa52HoursHtml() {
+    var d = wa52HoursData();
+    var dl = (typeof DEPT_LABEL !== 'undefined') ? DEPT_LABEL : {};
+    var below = d.rows.filter(function (r) { return r.avg < r.min; }).sort(function (a, b) { return (a.avg - a.min) - (b.avg - b.min); });
+    var byDept = {};
+    d.rows.forEach(function (r) {
+      var k = r.m.department || 'other';
+      (byDept[k] = byDept[k] || []).push(r.avg);
+    });
+    var maxAvg = 0.1;
+    var teamRows = Object.keys(byDept).map(function (k) {
+      var a = byDept[k];
+      var avg = a.reduce(function (s2, x) { return s2 + x; }, 0) / a.length;
+      if (avg > maxAvg) maxAvg = avg;
+      return { k: k, avg: avg, n: a.length };
+    }).sort(function (a, b) { return b.avg - a.avg; });
+    var html = '<div class="w44tiles">'
+      + '<div class="w44tile"><b>' + d.rows.length + '</b><span>people checking in</span></div>'
+      + '<div class="w44tile' + (below.length ? ' warn' : '') + '"><b>' + below.length + '</b><span>below their minimum</span></div>'
+      + '<div class="w44tile' + (d.silent.length ? ' warn' : '') + '"><b>' + d.silent.length + '</b><span>not checking in</span></div>'
+      + '<div class="w44tile"><b>' + (d.rows.length - below.length) + '</b><span>meeting their minimum</span></div>'
+      + '</div>'
+      + '<div class="w47chart"><h4>Average weekly hours per team (last 3 full weeks, people with check-ins)</h4>'
+      + (teamRows.length ? teamRows.map(function (r) {
+        var w = Math.max(2, Math.round(r.avg / maxAvg * 100));
+        return '<div class="w47bar"><span class="lb">' + esc(dl[r.k] || r.k) + ' (' + r.n + ')</span>'
+          + '<span class="tr"><i style="width:' + w + '%"></i></span><span class="vl">' + r.avg.toFixed(1) + 'h</span></div>';
+      }).join('') : '<p class="m-sub">No tracked check-ins yet.</p>')
+      + '</div>';
+    html += '<div class="w47chart"><h4>Below their weekly minimum (managers and up 6h, everyone else 4h)</h4>'
+      + (below.length ? '<table class="w49tbl"><thead><tr><th>Person</th><th>Team</th><th>Role</th><th>Avg / min</th><th>This week</th></tr></thead><tbody>'
+        + below.map(function (r) {
+          return '<tr><td><b>' + esc(r.m.name) + '</b></td><td>' + esc(dl[r.m.department] || r.m.department || '') + '</td>'
+            + '<td>' + esc(r.m.role || '') + '</td>'
+            + '<td><span style="color:#b3402f;font-weight:700">' + r.avg.toFixed(1) + 'h</span> / ' + r.min + 'h</td>'
+            + '<td>' + r.cur.toFixed(1) + 'h</td></tr>';
+        }).join('') + '</tbody></table>'
+        : '<p class="m-sub">Everyone with check-ins is at or above their minimum.</p>')
+      + '</div>';
+    html += '<div class="w47chart"><h4>Not checking in at all (no tracked check-ins in the last 4 weeks)</h4>'
+      + (d.silent.length ? '<div class="w52flags">' + d.silent.map(function (s) {
+        return '<span class="w52flag">' + esc(s.m.name) + ' <small>' + esc(dl[s.m.department] || s.m.department || '') + ' &middot; min ' + s.min + 'h/wk</small></span>';
+      }).join('') + '</div>' : '<p class="m-sub">Everyone on the roster has at least one tracked check-in.</p>')
+      + (d.unmatched.length ? '<p class="m-sub" style="margin-top:8px">Check-in names with no roster match: ' + d.unmatched.map(esc).join(', ') + '</p>' : '')
+      + '<p class="m-sub" style="margin-top:8px">Hours come from the Slack check-in-out channels: a check in or out counts at its message time, and sessions missing a check out are not counted. Minimums: 6h per week for managers and up, 4h for everyone else.</p>'
+      + '</div>';
+    return html;
+  }
+
+  function wa52HrDecorate() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!wa52HrOk()) {
+      if (!panel.querySelector('#w52denied') && panel.innerHTML !== '') {
+        panel.innerHTML = '<div class="card" id="w52denied"><h2>HR centre</h2>'
+          + '<p class="read">This area is limited to the HR access list: Steel, Suhaib, Ian, Natasha, Valex and Tuna. Ask Steel if you need access.</p></div>';
+      }
+      return;
+    }
+    var body = document.getElementById('w46body');
+    if (!body) return;
+    var tabs = body.querySelector('.w47tabs');
+    if (tabs && !tabs.querySelector('[data-w47v="hours"]')) {
+      tabs.insertAdjacentHTML('beforeend', '<button class="w47tab" data-w47v="hours">Hours</button>');
+    }
+    var sec = body.querySelector('#w52hours');
+    if (!sec) {
+      body.insertAdjacentHTML('beforeend', '<div id="w52hours" style="display:none"></div>');
+      sec = body.querySelector('#w52hours');
+      try { sec.innerHTML = wa52HoursHtml(); } catch (e) { /* fine */ }
+    }
+    if (String(location.hash || '').indexOf('#hrcentre/hours') === 0 && sec.style.display === 'none' && !sec.dataset.w52shown) {
+      sec.dataset.w52shown = '1';
+      sec.style.display = '';
+      body.querySelectorAll('.w46sec').forEach(function (x) { x.style.display = 'none'; });
+      body.querySelectorAll('.w47tab').forEach(function (c) { c.classList.toggle('on', c.getAttribute('data-w47v') === 'hours'); });
+    }
+  }
+  function wa52HrWatch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!panel.dataset.w52mo) {
+      panel.dataset.w52mo = '1';
+      var mo = new MutationObserver(function () { wa52HrDecorate(); });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    wa52HrDecorate();
+  }
+
+  /* ---- wiring ---- */
+  if (!document.body.dataset.wa52Wired) {
+    document.body.dataset.wa52Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var staff = typeof isStaff === 'function' && isStaff();
+      var p = e.target.closest && e.target.closest('[data-w52p]');
+      if (p) { if (staff) wa52ProjModal(p.getAttribute('data-w52p')); return; }
+      var d = e.target.closest && e.target.closest('[data-w52d]');
+      if (d) { if (staff) wa52DueModal(d.getAttribute('data-w52d')); return; }
+      var ok = e.target.closest && e.target.closest('[data-w52ok]');
+      if (ok) { if (staff) wa52Accept(ok.getAttribute('data-w52ok'), ok.getAttribute('data-w52task')); return; }
+      var no = e.target.closest && e.target.closest('[data-w52no]');
+      if (no) { if (staff) wa52Dismiss(no.getAttribute('data-w52no'), no.getAttribute('data-w52task')); return; }
+      var tb = e.target.closest && e.target.closest('.w47tab');
+      if (tb) {
+        var sec = document.getElementById('w52hours');
+        if (sec) {
+          if (tb.getAttribute('data-w47v') === 'hours') {
+            try { sec.innerHTML = wa52HoursHtml(); } catch (e2) { /* fine */ }
+            sec.style.display = '';
+          } else {
+            sec.style.display = 'none';
+          }
+        }
+      }
+    });
+  }
+
+  if (typeof renderSection === 'function') {
+    var __rs52 = renderSection;
+    renderSection = function (id) {
+      __rs52(id);
+      wa52Decorate();
+    };
+  }
+  if (typeof renderAllSections === 'function') {
+    var __ras52 = renderAllSections;
+    renderAllSections = function () {
+      __ras52.apply(this, arguments);
+      wa52Decorate();
+    };
+  }
+  if (typeof wa27RenderProject === 'function') {
+    var __pr52 = wa27RenderProject;
+    wa27RenderProject = function () {
+      var out = __pr52.apply(this, arguments);
+      setTimeout(wa52Decorate, 140);
+      return out;
+    };
+  }
+  if (typeof wa40Enforce === 'function') {
+    var __enf52 = wa40Enforce;
+    wa40Enforce = function () {
+      __enf52.apply(this, arguments);
+      try {
+        if (!wa52HrOk()) {
+          var tb = document.querySelector('.tab[data-tab="hrcentre"]');
+          if (tb) tb.style.display = 'none';
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp52 = showPanel;
+    showPanel = function (id) {
+      __sp52(id);
+      try { if (id === 'hrcentre') wa52HrWatch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa52 = startApp;
+    startApp = async function () {
+      await __sa52();
+      try { await wa52Load(false); } catch (e) { /* non-fatal */ }
+      try { wa52Decorate(); } catch (e) { /* non-fatal */ }
+      try { wa52HrWatch(); } catch (e) { /* non-fatal */ }
+      try { wa40Enforce(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

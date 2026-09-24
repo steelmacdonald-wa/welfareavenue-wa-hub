@@ -1,0 +1,76 @@
+/* =====================================================================
+   WA v78 Phase 1 (U2): one personal queue, on Home
+   =====================================================================
+   Home's "Needs your attention" strip (wave74) is the one canonical
+   personal queue. The old needs-me routes and the header button land
+   on Home now, and the Decisions page "Your plate" card becomes a
+   compact pointer instead of a second copy of the same list.
+   ===================================================================== */
+(function () {
+  if (window.__wa78) return; window.__wa78 = true;
+
+  /* route the old hashes to Home */
+  if (typeof applyHash === 'function') {
+    var __ah78 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      var a = h.split('/')[0];
+      if (a === 'needs-me' || a === 'needsme') {
+        if (typeof isStaff === 'function' && isStaff()) {
+          showPanel('mypage');
+          if (typeof renderMyPage === 'function') renderMyPage();
+        } else showPanel('overview');
+        return;
+      }
+      __ah78();
+    };
+  }
+
+  /* if anything still shows the needsme panel, it points Home */
+  function w78Needsme() {
+    var p = document.getElementById('needsme');
+    if (!p) return;
+    p.innerHTML = '<div class="card"><h2>Needs me</h2>' +
+      '<p class="read">Your personal queue lives on Home now: overdue tasks, unseen mentions and requests for your team, all in one place.</p>' +
+      '<div class="wa24-links"><button data-w78home>Open Home</button></div></div>';
+  }
+
+  /* Decisions page: "Your plate" becomes a compact pointer to Home */
+  function w78Plate() {
+    var ov = document.getElementById('overview');
+    if (!ov) return;
+    ov.querySelectorAll('.card h2').forEach(function (h) {
+      if ((h.textContent || '').indexOf('Your plate') !== 0) return;
+      var card = h.closest('.card');
+      if (!card || card.getAttribute('data-w78') === '1') return;
+      card.setAttribute('data-w78', '1');
+      var name = (h.textContent || '').replace('Your plate,', '').trim();
+      card.innerHTML = '<h2 style="color:#2c7a66">Your plate' + (name ? ', ' + esc(name) : '') + '</h2>' +
+        '<p class="read">Everything that needs you personally now lives in one queue on Home.</p>' +
+        '<div class="wa24-links"><button data-w78home>Open your Home queue</button></div>';
+    });
+  }
+
+  document.body.addEventListener('click', function (e) {
+    if (e.target && e.target.closest && e.target.closest('[data-w78home]')) location.hash = '#mypage';
+  });
+
+  var w78t = null;
+  function w78Watch() {
+    var ov = document.getElementById('overview');
+    if (!ov) return;
+    var mo = new MutationObserver(function () {
+      clearTimeout(w78t);
+      w78t = setTimeout(w78Plate, 120);
+    });
+    mo.observe(ov, { childList: true, subtree: true });
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa78 = startApp;
+    startApp = async function () {
+      await __sa78.apply(this, arguments);
+      try { w78Needsme(); w78Plate(); w78Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

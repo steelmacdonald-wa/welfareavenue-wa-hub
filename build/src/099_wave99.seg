@@ -1,0 +1,96 @@
+/* =====================================================================
+   WA v99 project pages show every team's tasks (07/08/26)
+   =====================================================================
+   Bug (Steel, 07/08/26): a named project's page only listed tasks from
+   the project's HOME department, because wave27's loader filtered
+   .eq('department', dept) before filtering by project. Cross-team
+   tasks (a marketing post for the Community Kitchen Pilot, HR's
+   rental assessment) were counted on the index cards but invisible on
+   the project page itself. Since the round-nine routing pass made
+   cross-team assignment the norm, this showed up everywhere.
+   Fix: wa27RenderProject is REPLACED (it is a global function): named
+   projects now load by project_id across ALL departments; General
+   pages stay department-scoped (that is their meaning). Task rows gain
+   a small team chip using the department colour vars so cross-team
+   tasks are recognisable, mirroring the index cards. Checkbox, move
+   link, add-a-task and edit-project behaviours are identical.
+   ===================================================================== */
+(function () {
+  if (window.__wa99) return; window.__wa99 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w99dep{display:inline-block;font-size:9.5px;font-weight:700;border-radius:6px;padding:1px 7px;margin-left:6px;color:#fff;vertical-align:1px;white-space:nowrap;}';
+  document.head.appendChild(css);
+
+  var DEPT_COL = {
+    opsmtl: 'var(--c-opsmtl,#2c7a66)', opsto: 'var(--c-opsto,#3a6ea5)',
+    marketing: 'var(--c-mkt,#8a5cc4)', fundraising: 'var(--c-fund,#c87a2f)',
+    hr: 'var(--c-hr,#b3402f)', board: 'var(--c-board,#4a4f57)'
+  };
+  function w99DeptChip(t, homeDept) {
+    if (!t.department || t.department === homeDept) return '';
+    var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[t.department]) || t.department;
+    return '<span class="w99dep" style="background:' + (DEPT_COL[t.department] || '#6b7670') + '">' + esc(label) + '</span>';
+  }
+
+  if (typeof wa27RenderProject === 'function') {
+    wa27RenderProject = async function (ref, deptForGeneral) {
+      var sec = document.getElementById('projectpage');
+      if (!sec) return;
+      await wa27Load(false);
+      var isGen = ref === 'general';
+      var p = isGen ? null : wa27Find(ref);
+      var dept = isGen ? deptForGeneral : (p ? p.department : null);
+      if (!dept) { sec.innerHTML = '<div class="card"><p class="read">Project not found.</p></div>'; return; }
+      WA27_VIEW = { ref: ref, dept: dept };
+      var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[dept]) || dept;
+      /* THE FIX: named projects load across every department */
+      var q = db.from('dept_tasks').select('*').order('done').order('id', { ascending: false });
+      if (isGen) q = q.eq('department', dept).is('project_id', null);
+      else q = q.eq('project_id', p.id);
+      var r = await q;
+      var tasks = (r.data) || [];
+      if (isGen) tasks = tasks.filter(function (t) { return !t.done; });
+      var open = tasks.filter(function (t) { return !t.done; });
+      var done = tasks.filter(function (t) { return t.done; });
+      var staff = typeof isStaff === 'function' && isStaff();
+      var g = p && p.goal_id ? wa27Goal(p.goal_id) : null;
+
+      function row(t) {
+        return '<div class="w27-task' + (t.done ? ' done' : '') + '">'
+          + '<input type="checkbox" data-w27t="' + t.id + '"' + (t.done ? ' checked' : '') + (staff ? '' : ' disabled') + ' />'
+          + '<div style="flex:1;min-width:0"><span class="tt">' + esc(t.title || '') + '</span>' + w99DeptChip(t, dept)
+          + '<div class="meta">' + esc(t.owner || 'unassigned')
+          + (t.due_date ? ' &middot; due ' + esc(t.due_date) : '')
+          + (t.flag ? ' &middot; flagged' : '')
+          + (staff ? ' &middot; <a class="mv" data-w27mv="' + t.id + '">move</a>' : '')
+          + '</div></div></div>';
+      }
+
+      var crossCount = open.filter(function (t) { return t.department && t.department !== dept; }).length;
+      /* teams involved summary (parity with the index cards) */
+      var byTeam = {};
+      open.forEach(function (t) { var d2 = t.department || dept; byTeam[d2] = (byTeam[d2] || 0) + 1; });
+      var teamLine = Object.keys(byTeam).sort(function (a, b) { return byTeam[b] - byTeam[a]; }).map(function (d2) {
+        var l2 = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d2]) || d2;
+        return '<span class="w99dep" style="background:' + (DEPT_COL[d2] || '#6b7670') + ';margin-left:0">' + esc(l2) + ' ' + byTeam[d2] + '</span>';
+      }).join(' ');
+      var html = '<div class="card">'
+        + '<button class="vl-back" data-w27back="' + dept + '">&larr; ' + esc(label) + '</button>'
+        + '<h2 style="color:#2c7a66">' + esc(isGen ? 'General tasks' : wa27Name(p)) + '<span class="deptchip" style="background:#2c7a66">' + esc(label) + '</span></h2>'
+        + (isGen
+          ? '<p class="w27-desc">Open tasks with no project yet. Move one into a project with its move link.</p>'
+          : '<p class="w27-desc">' + esc(p.description || 'No description yet.') + (staff ? ' <a class="mv" data-w27edit="' + p.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">edit project</a>' : '') + '</p>')
+        + (g ? '<div class="w27-goal">Rolls up to the goal: <b>' + esc(g.title) + '</b>' + (g.status ? ' <span style="opacity:.7">(' + esc(g.status) + ')</span>' : '') + '</div>' : '')
+        + (!isGen && open.length ? '<div style="margin:2px 0 10px;font-size:12px;color:var(--wa-muted,#7b8a86)">Teams involved: ' + teamLine + '</div>' : '')
+        + '<h3 class="block">Open (' + open.length + ')</h3>'
+        + (crossCount ? '<p class="read" style="margin:0 0 8px">Tasks from every team working on this project. Chips mark tasks owned outside ' + esc(label) + '.</p>' : '')
+        + (open.length ? open.map(row).join('') : '<p class="read">Nothing open here right now.</p>')
+        + (staff ? '<div class="add-row" style="margin-top:10px"><input type="text" id="w27nt" placeholder="Add a task to ' + esc(isGen ? 'General' : p.name) + '" style="max-width:340px;padding:7px 10px;border:1px solid rgba(127,127,127,.35);border-radius:8px;font-size:13px" /> <button class="btn mini" id="w27ntgo">Add</button></div>' : '')
+        + (done.length ? '<details class="completed" style="margin-top:14px"><summary>Completed (' + done.length + ')</summary>' + done.map(row).join('') + '</details>' : '')
+        + '</div>';
+      sec.innerHTML = html;
+    };
+  }
+})();

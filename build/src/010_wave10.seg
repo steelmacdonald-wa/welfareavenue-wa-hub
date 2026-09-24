@@ -1,0 +1,66 @@
+/* =====================================================================
+   WA v10 UI enhancements (25/07/26)
+   Fundraising and Grants page: view toggle (Everything / Fundraising /
+   Grants). Classification: subsection keywords first (grant vs event,
+   donor, sponsor, fundrais), then people: Grants = Suhaib, Melvina,
+   Shima; Fundraising = Alexis, Danielle, Rami, Amanda, Jemeela;
+   Daniela and anything ambiguous shows in both views.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.fr-toggle{display:flex;gap:6px;margin:0 0 12px;}'
+    + '.fr-toggle button{padding:7px 15px;border:1px solid var(--wa-line);background:#fff;border-radius:18px;cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);}'
+    + '.fr-toggle button.on{background:#c87a2f;color:#fff;border-color:#c87a2f;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+var WA_FR_VIEW = 'all';
+function waFrGroup(t) {
+  var s = (t.subsection || '').toLowerCase(), o = (t.owner || '').toLowerCase();
+  if (s.indexOf('grant') >= 0) return 'grants';
+  if (s.indexOf('event') >= 0 || s.indexOf('donor') >= 0 || s.indexOf('sponsor') >= 0 || s.indexOf('fundrais') >= 0) return 'fund';
+  var G = ['suhaib', 'melvina', 'shima'];
+  var F = ['alexis', 'danielle', 'rami', 'amanda', 'jemeela'];
+  var g = G.some(function (n) { return o.indexOf(n) >= 0; });
+  var f = F.some(function (n) { return o.indexOf(n) >= 0; });
+  if (g && !f) return 'grants';
+  if (f && !g) return 'fund';
+  return 'both';
+}
+function waApplyFrFilter() {
+  var panel = document.getElementById('fundraising');
+  if (!panel) return;
+  var bar = panel.querySelector('.fr-toggle');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'fr-toggle';
+    bar.innerHTML = '<button data-frv="all">Everything</button><button data-frv="fund">Fundraising</button><button data-frv="grants">Grants</button>';
+    panel.insertBefore(bar, panel.firstChild);
+    bar.querySelectorAll('button').forEach(function (b) {
+      b.addEventListener('click', function () { WA_FR_VIEW = b.dataset.frv; waApplyFrFilter(); });
+    });
+  }
+  bar.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.dataset.frv === WA_FR_VIEW); });
+  panel.querySelectorAll('li[data-task]').forEach(function (li) {
+    var t = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).find(function (x) { return x.id === Number(li.dataset.task); });
+    if (!t || t.department !== 'fundraising') return;
+    var g = waFrGroup(t);
+    li.style.display = (WA_FR_VIEW === 'all' || g === 'both' || g === WA_FR_VIEW) ? '' : 'none';
+  });
+}
+(function () {
+  var __ras10 = renderAllSections;
+  renderAllSections = function () {
+    __ras10();
+    try { waApplyFrFilter(); } catch (e) { /* non-fatal */ }
+  };
+  var __rs10 = renderSection;
+  renderSection = function (deptId) {
+    __rs10(deptId);
+    try { if (deptId === 'fundraising') waApplyFrFilter(); } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

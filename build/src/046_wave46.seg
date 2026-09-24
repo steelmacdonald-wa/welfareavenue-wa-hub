@@ -1,0 +1,470 @@
+/* =====================================================================
+   WA v46 the HR centre
+   (02/08/26)
+   HR gets its own page; Training goes back to being personal.
+   1. Training page now shows ONLY your own training: your dashboard,
+      your onboarding checklist, the catalog. Every HR tool leaves it.
+   2. New page: HR centre (People menu, leaders and admins).
+      - Onboarding board: tiles (active, completed, running late, avg
+        progress), assign an onboarding, live rows with pace, help
+        flags, HR-setup progress, open-checklist, remove, and a
+        Welcome kit per person.
+      - Master onboarding editor, inline, SOP-style: weeks as
+        dropdowns, every step row with edit / add subtask / retire pills,
+        add a step per week. Uses the rich v44 editors underneath.
+      - Trainings: org tiles, the training-by-person table with
+        Assign trainings, and catalog editing (add and edit moved
+        here from the Training page).
+      - Recruitment tracker: the hiring-request pipeline with days in
+        stage and total days per position (stage history from the
+        change log), average days to hire, plus the member pipeline
+        (onboarding-request). Stage changes made here are logged so
+        the timing data keeps building.
+   3. Welcome kit automation: assigning an onboarding opens a kit with
+      the onboarding email, the Slack channel message, and the
+      create-onboarding checklist from the HR SOP doc, name and dates
+      prefilled, with copy buttons.
+   ===================================================================== */
+(function () {
+  if (window.__wa46) return;
+  window.__wa46 = 1;
+
+  var SOP_DOC = 'https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit';
+
+  var st = document.createElement('style');
+  st.id = 'wa46css';
+  st.textContent = '' +
+    '.w46sec{background:#f6f8f7;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
+    '.w46sec > h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
+    '.w46wk{background:#fff;border-radius:12px;margin:6px 0;padding:2px 12px;}' +
+    '.w46wk > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 2px;font-weight:700;font-size:13px;color:#14302b;}' +
+    '.w46wk > summary::-webkit-details-marker{display:none;}' +
+    '.w46wk > summary .chev{margin-left:auto;transition:transform .25s;color:#8a958f;font-size:12px;}' +
+    '.w46wk[open] > summary .chev{transform:rotate(180deg);}' +
+    '.w46st{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f2f4f3;font-size:12.8px;}' +
+    '.w46st.sub{margin-left:22px;font-size:12.3px;color:#3d4642;}' +
+    '.w46st .nm{flex:1;min-width:0;}' +
+    '.w46st .pr{font-size:10px;font-weight:800;color:#b3402f;border:1px solid #b3402f;border-radius:999px;padding:0 7px;margin-left:6px;}' +
+    '[data-w46kit],[data-w46sub],[data-w46addtr]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;' +
+    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w46kit]:hover,[data-w46sub]:hover,[data-w46addtr]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w46row{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e8edea;font-size:13px;flex-wrap:wrap;}' +
+    '.w46row:first-of-type{border-top:none;}' +
+    '.w46stage{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 10px;background:rgba(31,95,79,.1);color:#1f5f4f;}' +
+    '.w46days{font-size:11.5px;color:#7b8a86;}' +
+    '.w46days.late{color:#b3402f;font-weight:700;}' +
+    '.w46kittxt{width:100%;min-height:110px;font-size:12px;font-family:inherit;border:1px solid #e3e7e5;border-radius:10px;padding:8px;}' +
+    '.w46tl{display:flex;gap:4px;flex-wrap:wrap;font-size:10.5px;color:#7b8a86;margin-top:2px;}' +
+    '.w46tl span{background:#eef2f0;border-radius:999px;padding:1px 8px;}';
+  document.head.appendChild(st);
+
+  function wa46IsHr() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) {
+        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader';
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  }
+  function wa46Days(a, b) {
+    try { return Math.max(0, Math.round((new Date(b || Date.now()) - new Date(a)) / 86400000)); } catch (e) { return 0; }
+  }
+  function wa46Plus7() {
+    var d = new Date(Date.now() + 7 * 86400000);
+    return d.toDateString();
+  }
+
+  /* ---- 1. the Training page becomes personal only ---- */
+  function wa46Scrub() {
+    try {
+      var p = document.getElementById('training');
+      if (!p) return;
+      var hr = p.querySelector('.w44hr');
+      if (hr) hr.remove();
+      p.querySelectorAll('[data-w43ta]').forEach(function (el) {
+        var wrap = el.parentElement;
+        if (wrap && wrap.children.length === 1) wrap.remove(); else el.remove();
+      });
+      p.querySelectorAll('[data-w43te]').forEach(function (el) { el.remove(); });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa36Render === 'function') {
+    var __r46 = wa36Render;
+    wa36Render = async function () {
+      await __r46.apply(this, arguments);
+      wa46Scrub();
+    };
+  }
+  if (typeof wa37Mount === 'function') {
+    var __m46 = wa37Mount;
+    wa37Mount = async function () {
+      await __m46.apply(this, arguments);
+      wa46Scrub();
+    };
+  }
+
+  /* ---- welcome kit templates (from the HR SOP doc) ---- */
+  function wa46EmailBody(first) {
+    return 'Dear ' + first + ',\n\n' +
+      'Congratulations and welcome to the team at Welfare Avenue!\n\n' +
+      'We are excited you have accepted the [job title] within our organization. You will be starting [start date], and we cannot wait to have you on board. To get started, please take the following steps:\n\n' +
+      '1. Confirm your availability for two meetings: a 1-on-1 introductory meeting with the manager you will report to, [manager name and position], and your in-person group onboarding session with [manager name] at [date]. This step is crucial.\n' +
+      '2. Activate your Welfare Avenue Google account. Watch the setup video: https://www.loom.com/share/522090b198054eb4aab13e0365efadf6\n' +
+      '   Email: [new WA email]\n   Password (change it after your first sign in): [password]\n' +
+      '3. Join the Slack workspace using the invitation sent to your new Welfare Avenue Gmail.\n' +
+      '4. Sign the contract, sent via DocuSign to your personal email.\n' +
+      '5. Review your job description and prepare questions to ask your director.\n\n' +
+      'If you run into any technical issues or have any questions, do not hesitate to reach out. We are here to make your onboarding experience smooth and welcoming.\n\n' +
+      'Looking forward to seeing all the great work you will do with us!\n\n[your signature]';
+  }
+  function wa46SlackMsg(first) {
+    return 'Hi ' + first + '!\n\n' +
+      'This channel is solely for your onboarding journey over the next month. I will be here to assist you with anything that you need during this process. Please let us know if you encounter any problems during your onboarding tasks; we will help as quickly as we can.\n\n' +
+      '[Their direct manager] and I will be your direct managers, so we will be completing your 30-day eval together.\n\n' +
+      'Week 1 will need to be completed by ' + wa46Plus7() + '. If you need more time, please let us know.\n\n' +
+      'Good luck! We are here by your side.';
+  }
+  function wa46Kit(name) {
+    var first = String(name || '').split(' ')[0];
+    var subj = 'Welcome to Welfare Avenue! Your Next Steps';
+    var body = wa46EmailBody(first);
+    openModal('<h3>Welcome kit for ' + esc(name) + '</h3>'
+      + '<p class="m-sub">Everything from the HR SOP for a new assignment: send the email once they have accepted, set up their accounts, then post the channel message. <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#2c7a66">Open the full HR SOP</a>.</p>'
+      + '<details open><summary style="font-weight:700;font-size:13px;cursor:pointer">1. Onboarding email</summary>'
+      + '<p class="m-sub" style="margin:4px 0">Subject: ' + esc(subj) + '</p>'
+      + '<textarea class="w46kittxt" id="w46em">' + esc(body) + '</textarea>'
+      + '<div style="margin:6px 0"><button class="btn ghost mini" data-w46copy="w46em">Copy the email</button> '
+      + '<a class="btn ghost mini" style="text-decoration:none" href="mailto:?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body) + '">Open in your mail app</a></div></details>'
+      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">2. Set up their accounts</summary>'
+      + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
+      + '<li>Create their Welfare Avenue Gmail and send the password</li>'
+      + '<li>Send the Slack invitation to their WA Gmail</li>'
+      + '<li>Create their onboarding channel: #onboarding-' + esc(first.toLowerCase()) + '</li>'
+      + '<li>Post the channel message below, then assign week 1</li>'
+      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#2c7a66">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva and Keela invites, drives, weekly meeting)</li>'
+      + '</ul></details>'
+      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">3. Onboarding channel message</summary>'
+      + '<textarea class="w46kittxt" id="w46sm">' + esc(wa46SlackMsg(first)) + '</textarea>'
+      + '<div style="margin:6px 0"><button class="btn ghost mini" data-w46copy="w46sm">Copy the message</button></div></details>'
+      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">4. Manager checklist</summary>'
+      + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
+      + '<li>Assign the onboardee tasks in a meeting</li>'
+      + '<li>Review quizzes and share correct answers</li>'
+      + '<li>Perform the 30-day eval</li>'
+      + '</ul></details>'
+      + '<div class="m-actions"><button class="btn" id="w46kc">Done</button></div>');
+    var c = document.getElementById('w46kc');
+    if (c) c.addEventListener('click', function () { closeModal(); });
+  }
+
+  /* ---- data ---- */
+  var WA46 = { reqs: [], log: [], types: {}, loaded: false };
+  async function wa46Load(force) {
+    if (WA46.loaded && !force) return;
+    try {
+      var r1 = await db.from('dept_requests').select('*').in('type_key', ['hiring-request', 'onboarding-request']).order('created_at');
+      WA46.reqs = (r1 && r1.data) || [];
+      var r2 = await db.from('change_log').select('entity_id,old_value,new_value,changed_at').eq('entity_type', 'request').eq('field', 'status').order('changed_at');
+      WA46.log = (r2 && r2.data) || [];
+      var r3 = await db.from('request_types').select('key,label,statuses').in('key', ['hiring-request', 'onboarding-request']);
+      ((r3 && r3.data) || []).forEach(function (t) { WA46.types[t.key] = t; });
+      WA46.loaded = true;
+    } catch (e) { /* offline */ }
+  }
+  function wa46Trans(id) {
+    return WA46.log.filter(function (l) { return String(l.entity_id) === String(id); });
+  }
+
+  /* ---- section builders ---- */
+  function wa46OnbSection() {
+    var onbs = (typeof WA37 !== 'undefined' ? WA37.onbs : []).filter(function (o) { return o.status !== 'cancelled'; });
+    var act = onbs.filter(function (o) { return o.status === 'active'; });
+    var done = onbs.filter(function (o) { return o.status === 'completed'; });
+    var late = 0, pctSum = 0;
+    act.forEach(function (o) {
+      var p = wa37Pct(o.id).pct;
+      pctSum += p;
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      if (p < expected - 15) late++;
+    });
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+    var activeNames = act.map(function (o) { return o.person_name.toLowerCase(); });
+    var html = '<div class="w46sec"><h3>Onboarding</h3><div class="w44tiles">'
+      + '<div class="w44tile"><b>' + act.length + '</b><span>mid-onboarding</span></div>'
+      + '<div class="w44tile"><b>' + done.length + '</b><span>completed</span></div>'
+      + '<div class="w44tile' + (late ? ' warn' : '') + '"><b>' + late + '</b><span>running late</span></div>'
+      + (act.length ? '<div class="w44tile"><b>' + Math.round(pctSum / act.length) + '%</b><span>avg progress</span></div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 8px">'
+      + '<select class="w36sel" data-w46assign="1"><option value="">Assign an onboarding to...</option>'
+      + people.filter(function (pp) { return activeNames.indexOf(String(pp.name).toLowerCase()) < 0; })
+        .map(function (pp) { return '<option value="' + esc(String(pp.id)) + '" data-name="' + esc(pp.name) + '">' + esc(pp.name) + ' (' + esc(pp.department || '') + ')</option>'; }).join('')
+      + '</select>'
+      + '<a class="w37edit" href="' + SOP_DOC + '" target="_blank" rel="noopener">Open the HR onboarding SOP (doc)</a></div>';
+    if (!act.length) html += '<p class="m-sub">Nobody is mid-onboarding right now.</p>';
+    act.forEach(function (o) {
+      var p = wa37Pct(o.id);
+      var expected = Math.min(100, Math.round(wa46Days(o.started_at) / 60 * 100));
+      var isLate = p.pct < expected - 15;
+      var helpN = (typeof WA39_HELP !== 'undefined' ? WA39_HELP : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); }).length;
+      var hrMine = (typeof WA39_HRS !== 'undefined' ? WA39_HRS : []).filter(function (x) { return String(x.onboarding_id) === String(o.id); });
+      var hrDone = hrMine.filter(function (x) { return x.done; }).length;
+      html += '<div class="w46row"><b>' + esc(o.person_name) + '</b>'
+        + '<span class="w37bar" style="max-width:150px"><i style="width:' + p.pct + '%"></i></span>'
+        + '<span style="font-size:12px;color:#1f5f4f;font-weight:700">' + p.pct + '%</span>'
+        + '<span class="w46days' + (isLate ? ' late' : '') + '">day ' + wa46Days(o.started_at) + (isLate ? ' &middot; behind pace' : '') + '</span>'
+        + (helpN ? '<span class="w46stage" style="background:#b3402f;color:#fff">' + helpN + ' asking for help</span>' : '')
+        + '<a class="w37edit" data-w37open="' + o.id + '">checklist</a>'
+        + (hrMine.length ? '<a class="w37edit" data-w39hr="' + o.id + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>' : '')
+        + '<a data-w46kit="' + esc(o.person_name) + '">Welcome kit</a>'
+        + '<a class="w37edit" style="color:#b3402f !important" data-w39del="' + o.id + '">remove</a>'
+        + '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  function wa46MasterHtml() {
+    var html = '<div class="w46sec"><h3>Master onboarding</h3>'
+      + '<p class="m-sub" style="margin:0 0 6px">Changes flow to everyone still mid-onboarding. Edit a step for its name, instructions, link, week, position and priority. Retiring removes it from active onboardings.</p><div id="w46master">';
+    html += wa46MasterInner();
+    html += '</div></div>';
+    return html;
+  }
+  function wa46MasterInner() {
+    if (typeof wa37Weeks !== 'function') return '';
+    var html = '';
+    wa37Weeks().forEach(function (wk) {
+      html += '<details class="w46wk"><summary>' + esc(wk.name)
+        + '<span style="font-size:11px;color:#7b8a86;font-weight:600">' + wk.steps.length + ' steps</span>'
+        + '<a class="w37edit" data-w37add="' + esc(wk.name) + '" style="margin-left:8px">+ add a step</a>'
+        + '<span class="chev">&#9662;</span></summary>';
+      wk.steps.forEach(function (t) {
+        html += '<div class="w46st' + (t.parent_id ? ' sub' : '') + '"><span class="nm">' + esc(t.name)
+          + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + '</span>'
+          + '<a class="w37edit" data-w37e="' + esc(t.id) + '">edit</a>'
+          + (!t.parent_id ? '<a data-w46sub="' + esc(t.id) + '">+ subtask</a>' : '')
+          + '<a class="w37edit" style="color:#b3402f !important" data-w37x="' + esc(t.id) + '">retire</a>'
+          + '</div>';
+      });
+      html += '</details>';
+    });
+    return html;
+  }
+
+  function wa46TrainSection() {
+    var trainings = (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []);
+    var prog = (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []);
+    var doneN = prog.filter(function (p) { return p.status === 'done'; }).length;
+    var peopleCovered = {};
+    prog.forEach(function (p) { peopleCovered[String(p.person_name).toLowerCase()] = 1; });
+    var byPerson = {};
+    prog.forEach(function (p) {
+      var k = String(p.person_name || '').toLowerCase();
+      byPerson[k] = byPerson[k] || { a: 0, d: 0 };
+      byPerson[k].a++;
+      if (p.status === 'done') byPerson[k].d++;
+    });
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice();
+    people.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    var html = '<div class="w46sec"><h3>Training</h3><div class="w44tiles">'
+      + '<div class="w44tile"><b>' + trainings.length + '</b><span>in the catalog</span></div>'
+      + '<div class="w44tile"><b>' + Object.keys(peopleCovered).length + '</b><span>people with assignments</span></div>'
+      + '<div class="w44tile"><b>' + (prog.length ? Math.round(100 * doneN / prog.length) : 0) + '%</b><span>org completion</span></div>'
+      + '<div class="w44tile"><b>' + (prog.length - doneN) + '</b><span>outstanding</span></div>'
+      + '</div>'
+      + '<div style="margin:0 0 8px"><a data-w43ta="1" data-w46addtr="1">+ Add a training</a></div>'
+      + '<div class="w44wrap"><table class="w44tbl"><thead><tr><th>Person</th><th>Assigned</th><th>Done</th><th>To do</th><th></th></tr></thead><tbody>'
+      + people.map(function (p) {
+        var s = byPerson[String(p.name).toLowerCase()] || { a: 0, d: 0 };
+        return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(p.department || '') + '</span></td>'
+          + '<td>' + s.a + '</td><td>' + s.d + '</td><td>' + (s.a - s.d) + '</td>'
+          + '<td><a data-w44as="' + esc(p.name) + '">Assign trainings</a></td></tr>';
+      }).join('')
+      + '</tbody></table></div>'
+      + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#1f5f4f">Edit the catalog (' + trainings.length + ')</summary><div style="max-height:260px;overflow:auto;margin-top:4px">'
+      + trainings.map(function (t) {
+        return '<div class="w46row"><span style="flex:1;font-size:12.5px"><b>' + esc(t.title) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span></span>'
+          + '<a data-w43te="' + t.id + '">Edit</a></div>';
+      }).join('')
+      + '</div></details></div>';
+    return html;
+  }
+
+  function wa46Pipeline(typeKey, title) {
+    var t = WA46.types[typeKey] || { statuses: [] };
+    var reqs = WA46.reqs.filter(function (r) { return r.type_key === typeKey; });
+    var open = reqs.filter(function (r) { return !r.done; });
+    var html = '<h3 style="margin-top:12px">' + esc(title) + '</h3>';
+    if (!reqs.length) return html + '<p class="m-sub">Nothing here yet. These arrive through the Requests page.</p>';
+    reqs.slice().reverse().forEach(function (r) {
+      var tr = wa46Trans(r.id);
+      var lastChange = tr.length ? tr[tr.length - 1].changed_at : r.created_at;
+      var inStage = wa46Days(lastChange);
+      var total = wa46Days(r.created_at, r.done ? r.done_at : null);
+      /* per-stage durations */
+      var tl = '';
+      if (tr.length) {
+        var prevAt = r.created_at, prevStage = tr[0].old_value;
+        tr.forEach(function (x) {
+          tl += '<span>' + esc(prevStage || '') + ': ' + wa46Days(prevAt, x.changed_at) + 'd</span>';
+          prevAt = x.changed_at; prevStage = x.new_value;
+        });
+        tl += '<span>' + esc(prevStage || '') + ': ' + wa46Days(prevAt) + 'd and counting</span>';
+      }
+      html += '<div class="w46row"><b style="flex:1;min-width:140px">' + esc(r.title) + '</b>'
+        + '<select class="w36sel" data-w46st="' + r.id + '">'
+        + (t.statuses || []).map(function (s) { return '<option value="' + esc(s) + '"' + (s === r.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('')
+        + '</select>'
+        + '<span class="w46days' + (inStage > 14 && !r.done ? ' late' : '') + '">' + inStage + 'd in stage</span>'
+        + '<span class="w46days">' + total + 'd total</span>'
+        + (r.done ? '<span class="w46stage">closed</span>' : '')
+        + (tl ? '<div class="w46tl" style="flex-basis:100%">' + tl + '</div>' : '')
+        + '</div>';
+    });
+    return html + '<p class="m-sub" style="margin-top:4px">' + open.length + ' open. New positions come in as requests (Requests page, "' + esc((WA46.types[typeKey] || {}).label || typeKey) + '").</p>';
+  }
+
+  function wa46RecruitSection() {
+    var hires = WA46.reqs.filter(function (r) { return r.type_key === 'hiring-request'; });
+    var open = hires.filter(function (r) { return !r.done; });
+    /* time to hire: created -> first transition into offer accepted or official member */
+    var times = [];
+    hires.forEach(function (r) {
+      var hit = wa46Trans(r.id).filter(function (x) { return x.new_value === 'offer accepted' || x.new_value === 'official member'; })[0];
+      if (hit) times.push(wa46Days(r.created_at, hit.changed_at));
+    });
+    var avg = times.length ? Math.round(times.reduce(function (a, b) { return a + b; }, 0) / times.length) : null;
+    var longest = 0;
+    open.forEach(function (r) { var d = wa46Days(r.created_at); if (d > longest) longest = d; });
+    var interviewing = open.filter(function (r) { return r.status === 'interviewing'; }).length;
+    var html = '<div class="w46sec"><h3>Recruitment</h3><div class="w44tiles">'
+      + '<div class="w44tile"><b>' + open.length + '</b><span>open positions</span></div>'
+      + '<div class="w44tile"><b>' + interviewing + '</b><span>interviewing</span></div>'
+      + '<div class="w44tile"><b>' + (avg === null ? '-' : avg + 'd') + '</b><span>avg days to hire</span></div>'
+      + '<div class="w44tile' + (longest > 30 ? ' warn' : '') + '"><b>' + longest + 'd</b><span>longest open</span></div>'
+      + '</div>'
+      + wa46Pipeline('hiring-request', 'Positions (hiring requests)')
+      + wa46Pipeline('onboarding-request', 'New member pipeline (onboarding requests)')
+      + '</div>';
+    return html;
+  }
+
+  /* ---- the page ---- */
+  async function wa46Render() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!wa46IsHr()) { panel.innerHTML = '<div class="card"><h2>HR centre</h2><p class="read">This page is for admins and leaders.</p></div>'; return; }
+    panel.innerHTML = '<div class="card"><h2>HR centre <button class="w43help" data-w46help="1">&#63; How this page works</button></h2>'
+      + '<p class="read">Onboarding, trainings and recruitment for the whole organization. Personal training lives on the Training page.</p>'
+      + '<div id="w46body">Loading...</div></div>';
+    try {
+      await Promise.all([
+        (typeof wa37Load === 'function' ? wa37Load(false) : null),
+        (typeof wa36Load === 'function' ? wa36Load(false) : null),
+        (typeof wa39OnbLoad === 'function' ? wa39OnbLoad() : null),
+        wa46Load(true)
+      ]);
+    } catch (e) { /* partial data is fine */ }
+    var body = document.getElementById('w46body');
+    if (!body) return;
+    body.innerHTML = wa46OnbSection() + wa46MasterHtml() + wa46TrainSection() + wa46RecruitSection();
+  }
+
+  /* the master modal becomes a page refresh */
+  if (typeof wa37Master === 'function') {
+    wa37Master = function () {
+      try { closeModal(); } catch (e) { /* none open */ }
+      var host = document.getElementById('w46master');
+      if (host) host.innerHTML = wa46MasterInner();
+    };
+  }
+
+  /* ---- wiring ---- */
+  if (!document.body.dataset.wa46Wired) {
+    document.body.dataset.wa46Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var k = e.target.closest && e.target.closest('[data-w46kit]');
+      if (k) { wa46Kit(k.getAttribute('data-w46kit')); return; }
+      var sb = e.target.closest && e.target.closest('[data-w46sub]');
+      if (sb) {
+        var tid = sb.getAttribute('data-w46sub');
+        var t = (typeof WA37 !== 'undefined' ? WA37.tmpl : []).filter(function (x) { return x.id === tid; })[0];
+        if (t && typeof wa37AddStep === 'function') {
+          wa37AddStep(t.section);
+          setTimeout(function () {
+            var sel = document.getElementById('w44ap');
+            if (sel) sel.value = tid;
+          }, 60);
+        }
+        return;
+      }
+      var cp = e.target.closest && e.target.closest('[data-w46copy]');
+      if (cp) {
+        var ta = document.getElementById(cp.getAttribute('data-w46copy'));
+        if (ta) {
+          ta.select();
+          try { document.execCommand('copy'); toast('Copied'); } catch (e2) { toast('Select and copy manually'); }
+        }
+        return;
+      }
+      var h = e.target.closest && e.target.closest('[data-w46help]');
+      if (h) {
+        openModal('<h3>HR centre</h3><div class="w43hm">'
+          + '<p>The organization view of people operations. Regular members never see this page; their own training and onboarding live on the Training page.</p>'
+          + '<p>Onboarding: who is mid-onboarding, their progress and pace, who is asking for help. Assign an onboarding from the dropdown; the Welcome kit opens with the onboarding email, channel message and setup checklist prefilled.</p>'
+          + '<p>Master onboarding: the program itself. Open a week, edit any step (name, instructions, link, week, position, priority), add steps and subtasks, retire what no longer fits. Changes reach everyone mid-onboarding instantly.</p>'
+          + '<p>Trainings: catalog editing, and per-person assignment with the Assign trainings buttons.</p>'
+          + '<p>Recruitment: every hiring request with its stage, days in stage and total days open, plus average days to hire. Change stages here; every change is logged, which is what powers the timing data.</p>'
+          + '</div><div class="m-actions"><button class="btn" id="w46hc">Got it</button></div>');
+        var c = document.getElementById('w46hc');
+        if (c) c.addEventListener('click', function () { closeModal(); });
+        return;
+      }
+    });
+    document.body.addEventListener('change', async function (e) {
+      var a = e.target.closest && e.target.closest('[data-w46assign]');
+      if (a && a.value) {
+        if (!wa46IsHr()) return;
+        var opt = a.options[a.selectedIndex];
+        var nm = opt ? opt.getAttribute('data-name') : '';
+        var r = await db.rpc('onboarding_assign', { p_member_id: Number(a.value), p_by: (typeof who === 'function') ? who() : 'HR' });
+        if (r.error) { toast('Could not assign it'); return; }
+        toast('Onboarding assigned' + (nm ? ' to ' + nm : ''));
+        try { await wa37Load(true); } catch (e2) { /* non-fatal */ }
+        wa46Render();
+        if (nm) wa46Kit(nm);
+        return;
+      }
+      var s = e.target.closest && e.target.closest('[data-w46st]');
+      if (s) {
+        if (!wa46IsHr()) return;
+        var id = Number(s.getAttribute('data-w46st'));
+        var req = WA46.reqs.filter(function (x) { return x.id === id; })[0];
+        if (!req || req.status === s.value) return;
+        var old = req.status;
+        var r1 = await db.from('dept_requests').update({ status: s.value, updated_at: new Date().toISOString(), updated_by: (typeof who === 'function') ? who() : 'HR' }).eq('id', id);
+        if (r1.error) { toast('Could not change the stage'); return; }
+        await db.from('change_log').insert({ entity_type: 'request', entity_id: String(id), field: 'status', old_value: old, new_value: s.value, changed_by: (typeof who === 'function') ? who() : 'HR' });
+        toast('Stage: ' + s.value);
+        await wa46Load(true);
+        wa46Render();
+        return;
+      }
+    });
+  }
+
+  /* ---- register the page after the nav is rebuilt ---- */
+  if (typeof startApp === 'function') {
+    var __sa46 = startApp;
+    startApp = async function () {
+      await __sa46();
+      try {
+        if (window.WA_NAV && typeof WA_NAV.register === 'function') {
+          WA_NAV.register({ id: 'hrcentre', label: 'HR centre', group: 'people', dot: '#b3402f', gate: 'leader', onShow: function () { wa46Render(); } });
+          if ((location.hash || '') === '#hrcentre') { try { applyHash(); } catch (e) { /* boot */ } }
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

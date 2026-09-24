@@ -1,0 +1,759 @@
+/* =====================================================================
+   WA v116b task boards (24/09/26): the ClickUp-style work surface
+   =====================================================================
+   Steel: "a clean interface with the robust functionality it already
+   has, but additional capabilities like ClickUp or Asana would have."
+   One component, w116Board, rendered inside the team pages (wave116):
+   - Views: List (grouped), Board (kanban by status), Calendar (by due
+     date). Group by project, workstream, status, owner, due window.
+   - Filters: mine, owner, status, project, due (overdue, this week),
+     flagged, search, show done. Sort: manual, due, updated, title.
+     View settings remember themselves per team.
+   - Quick add in every group (Enter saves, prefilled from the group),
+     inline status and owner changes, drag and drop between statuses,
+     projects, workstreams, owners and days, plus drag to reorder.
+   - Bulk select: status, owner, due date, project, mark done.
+   - Task drawer: title, status, owner, assignees, due, project,
+     workstream, executive flag with reason, confidential, comments
+     thread, recent activity, open on the department page, delete.
+   Every write goes through the same dept_tasks rows, change_log
+   entries and in-memory caches the rest of the Hub uses, then the
+   classic department page repaints so both stay in step.
+   ===================================================================== */
+(function () {
+  if (window.__wa116b) return; window.__wa116b = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var STATUSES = ['Open', 'In progress', 'Waiting', 'Blocked', 'Done'];
+  var STCOL = { 'Open': ['rgba(121,119,115,.16)', '#5c5a56'], 'In progress': ['rgba(3,195,236,.16)', '#0a8fac'], 'Waiting': ['rgba(220,165,39,.22)', '#7a5a0f'], 'Blocked': ['rgba(179,64,47,.14)', FLAG], 'Done': ['rgba(16,63,57,.14)', GREEN] };
+  var B = { slot: null, scope: null, st: null, sel: {}, drawer: null, drag: null, calMonth: null };
+
+  var css = document.createElement('style');
+  css.id = 'wa116bcss';
+  css.textContent = '' +
+    '.w116b{position:relative;}' +
+    '.w116tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '.w116tb .sp{flex:1 1 auto;}' +
+    '.w116tb .flt{display:contents;}' +
+    '.w116tb .tog.fbtn{display:none;}' +
+    '.w116tb select,.w116tb input[type=search]{font-family:' + BODY + ';font-size:12.5px;color:var(--wa-text);background:var(--wa-card);border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:7px 10px;}' +
+    '.w116tb input[type=search]{min-width:180px;}' +
+    '.w116tb .tog{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--wa-muted);background:var(--wa-card);border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:6px 10px;cursor:pointer;user-select:none;}' +
+    '.w116tb .tog.on{background:rgba(16,63,57,.10);color:' + GREEN + ';border-color:transparent;font-weight:700;}' +
+    '.w116tb .new{font-family:' + HEAD + ';font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;background:' + GOLD + ';color:' + GREEN + ';border:none;border-radius:10px;padding:8px 16px;cursor:pointer;}' +
+    '.w116tb .new:hover{filter:brightness(1.04);}' +
+    '.w116bulk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:' + GREEN + ';color:' + CREAM + ';border-radius:12px;padding:8px 12px;margin:0 0 12px;font-size:12.5px;}' +
+    '.w116bulk select,.w116bulk input{font-family:' + BODY + ';font-size:12px;border-radius:8px;border:none;padding:5px 8px;}' +
+    '.w116bulk button{font-family:' + BODY + ';font-size:12px;font-weight:700;border-radius:8px;border:none;padding:6px 10px;cursor:pointer;background:' + GOLD + ';color:' + GREEN + ';}' +
+    '.w116bulk button.ghost{background:rgba(255,250,242,.16);color:' + CREAM + ';}' +
+    /* groups and rows */
+    '.w116g{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);margin:0 0 12px;overflow:hidden;}' +
+    '.w116g.drop{outline:2px dashed rgba(16,63,57,.35);outline-offset:-4px;}' +
+    '.w116gh{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;user-select:none;}' +
+    '.w116gh .chev{width:18px;height:18px;border-radius:5px;background:rgba(16,63,57,.08);display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:' + GREEN + ';transition:transform .15s;}' +
+    '.w116g.closed .w116gh .chev{transform:rotate(-90deg);}' +
+    '.w116g.closed .w116rows{display:none;}' +
+    '.w116gh b{font-family:' + BODY + ';font-size:13.5px;color:var(--wa-text);}' +
+    '.w116gh .n{font-size:11px;font-weight:700;color:var(--wa-muted);background:rgba(16,63,57,.08);border-radius:999px;padding:1px 8px;}' +
+    '.w116gh .bar{flex:0 0 90px;height:5px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;}' +
+    '.w116gh .bar i{display:block;height:100%;background:' + GREEN + ';}' +
+    '.w116gh .sp{flex:1 1 auto;}' +
+    '.w116gh .add{font-size:12px;font-weight:700;color:' + GREEN + ';opacity:.7;}' +
+    '.w116gh .add:hover{opacity:1;}' +
+    '.w116rows{padding:0 6px 6px;}' +
+    '.w116r{display:grid;grid-template-columns:22px 22px minmax(0,1fr) auto auto auto auto;gap:8px;align-items:center;padding:7px 8px;border-radius:10px;cursor:pointer;border-left:3px solid transparent;}' +
+    '.w116r:hover{background:rgba(16,63,57,.05);}' +
+    '.w116r.sel{background:rgba(220,165,39,.18);}' +
+    '.w116r.dragging{opacity:.4;}' +
+    '.w116r.over{box-shadow:inset 0 2px 0 ' + GOLD + ';}' +
+    '.w116r.st-inprogress{border-left-color:#03c3ec;}.w116r.st-blocked{border-left-color:' + FLAG + ';}.w116r.st-waiting{border-left-color:' + GOLD + ';}.w116r.st-done{border-left-color:' + GREEN + ';}' +
+    '.w116r input[type=checkbox]{margin:0;accent-color:' + GREEN + ';}' +
+    '.w116done{width:18px;height:18px;border-radius:50%;border:1.5px solid rgba(16,63,57,.35);display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:' + CREAM + ';}' +
+    '.w116done:hover{border-color:' + GREEN + ';background:rgba(16,63,57,.10);}' +
+    '.w116r.done .w116done{background:' + GREEN + ';border-color:' + GREEN + ';}' +
+    '.w116r.done .w116t{text-decoration:line-through;color:var(--wa-muted);}' +
+    '.w116t{font-size:13.5px;color:var(--wa-text);min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}' +
+    '.w116t .ttl{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}' +
+    '.w116tag{font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;white-space:nowrap;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '.w116tag.ws{background:rgba(111,100,171,.14);color:' + PURPLE + ';}' +
+    '.w116tag.flag{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '.w116tag.conf{background:rgba(121,119,115,.16);color:#5c5a56;}' +
+    '.w116tag.cm{background:none;color:var(--wa-muted);font-weight:600;}' +
+    '.w116as{display:inline-flex;align-items:center;}' +
+    '.w116as .w116av{margin-left:-6px;}.w116as .w116av:first-child{margin-left:0;}' +
+    '.w116as .none{width:22px;height:22px;border-radius:50%;border:1.5px dashed rgba(16,63,57,.3);display:inline-flex;align-items:center;justify-content:center;font-size:12px;color:var(--wa-muted);}' +
+    '.w116due{font-size:11.5px;font-weight:700;color:var(--wa-muted);white-space:nowrap;min-width:52px;text-align:right;}' +
+    '.w116due.over{color:' + FLAG + ';}.w116due.soon{color:#7a5a0f;}' +
+    '.w116st{font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:3px 9px;white-space:nowrap;cursor:pointer;}' +
+    '.w116qa{padding:4px 8px 6px 52px;}' +
+    '.w116qa input{width:100%;font-family:' + BODY + ';font-size:13px;padding:7px 10px;border:1px solid rgba(16,63,57,.25);border-radius:9px;background:var(--wa-card);}' +
+    '.w116qa small{display:block;color:var(--wa-muted);font-size:11px;margin-top:3px;}' +
+    '.w116empty2{padding:8px 14px 12px;font-size:12.5px;color:var(--wa-muted);}' +
+    /* kanban */
+    '.w116kb{display:flex;gap:12px;overflow-x:auto;padding:2px 2px 12px;align-items:flex-start;}' +
+    '.w116kc{flex:0 0 250px;background:rgba(16,63,57,.05);border-radius:14px;padding:10px;min-height:120px;}' +
+    '.w116kc.drop{background:rgba(220,165,39,.22);}' +
+    '.w116kch{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;padding:2px 4px 8px;}' +
+    '.w116kch .n{margin-left:auto;font-size:11px;background:var(--wa-card);border-radius:999px;padding:1px 8px;color:var(--wa-muted);}' +
+    '.w116kd{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:10px 12px;margin:0 0 8px;cursor:pointer;box-shadow:0 1px 3px rgba(16,63,57,.08);}' +
+    '.w116kd:hover{border-color:rgba(16,63,57,.3);}' +
+    '.w116kd.dragging{opacity:.4;}' +
+    '.w116kd .ttl{font-size:13px;color:var(--wa-text);margin:0 0 6px;}' +
+    '.w116kd .ft{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}' +
+    '.w116kd .ft .w116tag{max-width:150px;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w116kc .w116qa{padding:0;}' +
+    /* calendar */
+    '.w116cal{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:12px;}' +
+    '.w116calh{display:flex;align-items:center;gap:10px;margin:0 4px 10px;}' +
+    '.w116calh b{font-family:' + HEAD + ';font-size:22px;font-weight:600;color:' + GREEN + ';text-transform:uppercase;letter-spacing:.3px;}' +
+    '.w116calh button{background:rgba(16,63,57,.08);border:none;border-radius:8px;padding:4px 10px;cursor:pointer;color:' + GREEN + ';font-weight:700;}' +
+    '.w116calg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;}' +
+    '.w116calg .dow{font-size:10.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);text-align:center;padding:2px 0 6px;}' +
+    '.w116cd{min-height:88px;border-radius:10px;background:rgba(16,63,57,.04);padding:5px 6px;font-size:11px;color:var(--wa-muted);}' +
+    '.w116cd.other{opacity:.45;}' +
+    '.w116cd.today{outline:2px solid ' + GOLD + ';}' +
+    '.w116cd.drop{background:rgba(220,165,39,.22);}' +
+    '.w116cd .d{font-weight:700;margin:0 0 3px;}' +
+    '.w116cp{display:block;font-size:11px;color:var(--wa-text);background:var(--wa-card);border-left:3px solid ' + GREEN + ';border-radius:5px;padding:2px 6px;margin:0 0 3px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.w116cp.over{border-left-color:' + FLAG + ';}.w116cp.done{border-left-color:rgba(16,63,57,.3);text-decoration:line-through;color:var(--wa-muted);}' +
+    '.w116cd .more{font-size:10.5px;color:' + GREEN + ';font-weight:700;cursor:pointer;}' +
+    /* drawer */
+    '#w116dr{position:fixed;top:0;right:0;bottom:0;width:460px;max-width:100vw;background:var(--wa-card);box-shadow:-12px 0 40px rgba(16,63,57,.18);z-index:120;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .18s ease;}' +
+    '#w116dr.open{transform:none;}' +
+    '#w116drb{position:fixed;inset:0;background:rgba(31,32,30,.25);z-index:119;display:none;}' +
+    '#w116drb.open{display:block;}' +
+    '.w116drh{display:flex;align-items:center;gap:8px;padding:14px 16px 10px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '.w116drh .x{margin-left:auto;background:rgba(16,63,57,.08);border:none;border-radius:8px;width:30px;height:30px;cursor:pointer;color:' + GREEN + ';font-weight:800;}' +
+    '.w116drh .w116st{font-size:11px;}' +
+    '.w116drc{flex:1 1 auto;overflow:auto;padding:14px 16px 24px;}' +
+    '.w116drc textarea.ttl{width:100%;font-family:' + HEAD + ';font-size:24px;font-weight:600;line-height:1.15;color:' + GREEN + ';border:none;background:none;resize:none;padding:0;margin:0 0 12px;outline:none;}' +
+    '.w116drc textarea.ttl:focus{background:rgba(16,63,57,.05);border-radius:8px;}' +
+    '.w116f{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px 12px;align-items:center;margin:0 0 8px;font-size:13px;}' +
+    '.w116f label{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);}' +
+    '.w116f select,.w116f input[type=date],.w116f input[type=text]{font-family:' + BODY + ';font-size:13px;color:var(--wa-text);background:var(--wa-card);border:1px solid rgba(16,63,57,.14);border-radius:9px;padding:6px 9px;width:100%;box-sizing:border-box;}' +
+    '.w116f .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}' +
+    '.w116chip{display:inline-flex;align-items:center;gap:5px;background:rgba(16,63,57,.08);border-radius:999px;padding:2px 8px 2px 2px;font-size:12px;color:var(--wa-text);}' +
+    '.w116chip .rm{cursor:pointer;color:var(--wa-muted);font-weight:800;padding:0 2px;}' +
+    '.w116chip .rm:hover{color:' + FLAG + ';}' +
+    '.w116f .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--wa-text);}' +
+    '.w116drs{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';margin:18px 0 8px;}' +
+    '.w116cmt{border-top:1px solid rgba(16,63,57,.08);padding:8px 0;font-size:13px;}' +
+    '.w116cmt .hd{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--wa-muted);flex-wrap:wrap;}' +
+    '.w116cmt .hd b{color:var(--wa-text);}' +
+    '.w116cmt .bd{margin-top:3px;color:var(--wa-text);}' +
+    '.w116cmt .qt{font-size:12px;color:var(--wa-muted);font-style:italic;margin-top:2px;}' +
+    '.w116cmtn{display:flex;gap:8px;align-items:flex-end;margin-top:8px;}' +
+    '.w116cmtn textarea{flex:1 1 auto;font-family:' + BODY + ';font-size:13px;min-height:54px;border:1px solid rgba(16,63,57,.14);border-radius:9px;padding:8px;}' +
+    '.w116act{font-size:12px;color:var(--wa-muted);padding:3px 0;border-top:1px solid rgba(16,63,57,.06);}' +
+    '.w116act b{color:var(--wa-text);font-weight:600;}' +
+    '.w116drf{display:flex;gap:8px;flex-wrap:wrap;padding:10px 16px 14px;border-top:1px solid rgba(16,63,57,.10);}' +
+    '.w116drf button,.w116cmtn button{font-family:' + BODY + ';font-size:12.5px;font-weight:700;border:none;border-radius:9px;padding:8px 12px;cursor:pointer;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '.w116drf button.pri,.w116cmtn button{background:' + GOLD + ';color:' + GREEN + ';}' +
+    '.w116drf button.warn{color:' + FLAG + ';background:rgba(179,64,47,.10);margin-left:auto;}' +
+    '@media (max-width:740px){.w116tb .tog.fbtn{display:inline-flex;}.w116tb .flt{display:none;width:100%;flex-wrap:wrap;gap:6px;}.w116tb.showf .flt{display:flex;}.w116tb .sp{display:none;}.w116tb input[type=search]{flex:1 1 auto;}' +
+    '.w116r{grid-template-columns:22px 22px minmax(0,1fr) auto;}.w116r .w116as,.w116r .w116due,.w116r .w116st{display:none;}.w116qa{padding-left:8px;}#w116dr{width:100vw;}.w116tb input[type=search]{min-width:120px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function addDays(iso, n) { var d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); }
+  function me() { try { var em = lower(USER && USER.email); return (DB_MEMBERS || []).filter(function (m) { return lower(m.email) === em; })[0] || null; } catch (e) { return null; } }
+  function myName() { var m = me(); if (m) return m.name; try { return (USER && USER.name) || ''; } catch (e) { return ''; } }
+  function memberById(id) { try { return MEMBER_BY_ID[id] || null; } catch (e) { return null; } }
+  function members(d) { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; }).sort(function (a, b) { return (a.department === d ? 0 : 1) - (b.department === d ? 0 : 1) || String(a.name).localeCompare(String(b.name)); }); }
+  function av(p, size, cls) { return window.w116Avatar ? window.w116Avatar(p, size, cls) : '<span class="w116av" style="width:' + size + 'px;height:' + size + 'px">' + E(String((p && p.name) || '?').slice(0, 1)) + '</span>'; }
+  function assigneeIds(t) { return (typeof DB_ASSIGN !== 'undefined' ? DB_ASSIGN : []).filter(function (a) { return Number(a.task_id) === Number(t.id); }).map(function (a) { return Number(a.member_id); }); }
+  function assignees(t) { return assigneeIds(t).map(memberById).filter(Boolean); }
+  function bucket(t) {
+    if (t.done) return 'Done';
+    var s = lower(t.status);
+    if (s.indexOf('progress') >= 0) return 'In progress';
+    if (s.indexOf('wait') >= 0) return 'Waiting';
+    if (s.indexOf('block') >= 0) return 'Blocked';
+    return 'Open';
+  }
+  function stKey(b) { return b.toLowerCase().replace(/\s+/g, ''); }
+  function stPill(t, extra) { var b = bucket(t); var c = STCOL[b]; return '<span class="w116st ' + (extra || '') + '" data-act="status" style="background:' + c[0] + ';color:' + c[1] + '" title="' + E(t.status || b) + '">' + E(b) + '</span>'; }
+  function projects() { return window.w116Projects ? window.w116Projects() : []; }
+  function projById(id) { return projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
+  function projLabel(p) { if (!p) return ''; var par = p.parent_id ? projById(p.parent_id) : null; return (par ? par.name + ' \u203a ' : '') + p.name; }
+  function dueInfo(t) {
+    if (!t.due_date) return { cls: '', txt: '' };
+    var d = t.due_date, tdy = today();
+    var lbl = new Date(d + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (t.done) return { cls: '', txt: lbl };
+    if (d < tdy) return { cls: 'over', txt: lbl };
+    if (d === tdy) return { cls: 'soon', txt: 'Today' };
+    if (d === addDays(tdy, 1)) return { cls: 'soon', txt: 'Tomorrow' };
+    if (d <= addDays(tdy, 7)) return { cls: 'soon', txt: lbl };
+    return { cls: '', txt: lbl };
+  }
+  function comments(t) { try { return window.__w116cm && window.__w116cm[String(t.id)] || 0; } catch (e) { return 0; } }
+  function wsList(d) {
+    var out = [];
+    try { (SECTIONS[d] && SECTIONS[d].subsections || []).forEach(function (s) { if (out.indexOf(s.title) < 0) out.push(s.title); }); } catch (e) { /* fine */ }
+    if (out.indexOf('General') < 0) out.unshift('General');
+    (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).forEach(function (t) { if (t.department === d && t.subsection && out.indexOf(t.subsection) < 0) out.push(t.subsection); });
+    return out;
+  }
+  function key(scope) { return 'wa116.' + scope.dept + '.' + (scope.board ? scope.board.key : (scope.ws || 'all')); }
+  function loadState(scope) {
+    var def = { view: 'list', group: scope.board ? 'project' : (scope.dept === 'fundraising' && !scope.ws ? 'board' : 'workstream'), sort: 'manual', mine: false, owner: '', status: '', project: '', due: '', flag: false, done: false, q: '', closed: {} };
+    try { var s = JSON.parse(localStorage.getItem(key(scope)) || 'null'); if (s) Object.keys(def).forEach(function (k) { if (s[k] !== undefined) def[k] = s[k]; }); } catch (e) { /* fine */ }
+    return def;
+  }
+  function saveState() { try { var s = Object.assign({}, B.st); s.q = ''; localStorage.setItem(key(B.scope), JSON.stringify(s)); } catch (e) { /* fine */ } }
+  function boardOf(t) {
+    var bs = T.boards[t.department] || [];
+    for (var i = 0; i < bs.length; i++) {
+      var b = bs[i]; var ids = T.boardProjects[b.key] || [];
+      if (t.subsection === b.ws || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0)) return b;
+    }
+    return null;
+  }
+
+  /* ---------- writes ---------- */
+  function who0() { try { return who(); } catch (e) { return 'staff'; } }
+  function log(t, field, a, b) { try { logChange('dept_task', t.id, field, a, b); } catch (e) { /* fine */ } }
+  async function patch(t, p, logs) {
+    var now = new Date().toISOString();
+    var full = Object.assign({}, p, { updated_by: who0(), updated_at: now });
+    var r = await db.from('dept_tasks').update(full).eq('id', t.id);
+    if (r && r.error) { toast('Save failed, check the connection'); return false; }
+    Object.keys(full).forEach(function (k) { t[k] = full[k]; });
+    (logs || []).forEach(function (l) { log(t, l[0], l[1], l[2]); });
+    return true;
+  }
+  function after() {
+    render();
+    var d = B.scope && B.scope.dept;
+    setTimeout(function () {
+      try { if (d && typeof renderSection === 'function') renderSection(d); } catch (e) { /* fine */ }
+      try { if (typeof renderNeedsMe === 'function') renderNeedsMe(); } catch (e) { /* fine */ }
+    }, 40);
+  }
+  async function setStatus(t, st) {
+    var old = bucket(t);
+    if (st === old && t.status === st) return;
+    var isDone = st === 'Done';
+    var p = { status: st, done: isDone, closed_at: isDone ? new Date().toISOString() : null };
+    if (await patch(t, p, [[isDone ? 'done' : 'status', old, st]])) { toast(isDone ? 'Marked done' : 'Status: ' + st); after(); }
+  }
+  async function setOwner(t, name) {
+    var old = t.owner || '';
+    if (await patch(t, { owner: name || '' }, [['owner', old || 'unassigned', name || 'unassigned']])) { toast(name ? 'Owner: ' + name : 'Owner cleared'); after(); }
+  }
+  async function setDue(t, d) {
+    var old = t.due_date || null;
+    if (d === old) return;
+    if (await patch(t, { due_date: d || null }, [['due_date', old, d || null]])) { toast(d ? 'Due ' + d : 'Due date cleared'); after(); }
+  }
+  async function setProject(t, pid) {
+    var old = t.project_id ? projLabel(projById(t.project_id)) : 'none';
+    var np = pid ? projById(pid) : null;
+    if (Number(t.project_id || 0) === Number(pid || 0)) return;
+    if (await patch(t, { project_id: pid ? Number(pid) : null }, [['project', old, np ? projLabel(np) : 'none']])) { toast(np ? 'Moved to ' + np.name : 'Removed from project'); after(); }
+  }
+  async function setWs(t, ws) {
+    var old = t.subsection || 'General';
+    var nv = (!ws || ws === 'General') ? null : ws;
+    if ((t.subsection || null) === nv) return;
+    if (await patch(t, { subsection: nv }, [['workstream', old, nv || 'General']])) { toast('Workstream: ' + (nv || 'General')); after(); }
+  }
+  async function setAssignees(t, ids) {
+    var cur = assigneeIds(t);
+    var toAdd = ids.filter(function (i) { return cur.indexOf(i) < 0; });
+    var toDel = cur.filter(function (i) { return ids.indexOf(i) < 0; });
+    if (!toAdd.length && !toDel.length) return;
+    if (toAdd.length) { var r1 = await db.from('task_assignees').insert(toAdd.map(function (i) { return { task_id: t.id, member_id: i }; })); if (r1 && r1.error) { toast('Could not add the assignee'); return; } }
+    if (toDel.length) { var r2 = await db.from('task_assignees').delete().eq('task_id', t.id).in('member_id', toDel); if (r2 && r2.error) { toast('Could not remove the assignee'); return; } }
+    DB_ASSIGN = DB_ASSIGN.filter(function (a) { return !(Number(a.task_id) === Number(t.id) && toDel.indexOf(Number(a.member_id)) >= 0); });
+    toAdd.forEach(function (i) { DB_ASSIGN.push({ task_id: t.id, member_id: i }); });
+    var nm = function (arr) { return arr.map(function (i) { return (memberById(i) || {}).name; }).filter(Boolean).join(', ') || 'none'; };
+    log(t, 'assignees', nm(cur), nm(ids));
+    toast('Assignees updated'); after();
+  }
+  async function addTask(title, pre) {
+    title = String(title || '').trim();
+    if (!title) return null;
+    var d = B.scope.dept;
+    var row = { department: d, subsection: pre.ws && pre.ws !== 'General' ? pre.ws : null, title: title, owner: pre.owner != null ? pre.owner : (myName() || ''), status: pre.status || 'Open', flag: false, priority: false, done: false, sort: 999, due_date: pre.due || null, project_id: pre.project ? Number(pre.project) : null, confidential: false, updated_by: who0(), updated_at: new Date().toISOString(), opened_at: new Date().toISOString() };
+    if (pre.status === 'Done') { row.done = true; row.closed_at = new Date().toISOString(); }
+    var r = await db.from('dept_tasks').insert(row).select('*').single();
+    if (r && r.error) { toast('Could not add the task'); return null; }
+    var saved = (r && r.data) || row;
+    if (!saved.id) saved.id = -Date.now();
+    DB_TASKS.push(saved);
+    log(saved, 'added', null, title);
+    if (pre.assignee) { try { await db.from('task_assignees').insert({ task_id: saved.id, member_id: pre.assignee }); DB_ASSIGN.push({ task_id: saved.id, member_id: pre.assignee }); } catch (e) { /* fine */ } }
+    toast('Task added');
+    after();
+    return saved;
+  }
+  async function delTask(t) {
+    if (!confirm('Delete "' + t.title + '"? This cannot be undone.')) return;
+    var r = await db.from('dept_tasks').delete().eq('id', t.id);
+    if (r && r.error) { toast('Could not delete the task'); return; }
+    DB_TASKS = DB_TASKS.filter(function (x) { return Number(x.id) !== Number(t.id); });
+    DB_ASSIGN = DB_ASSIGN.filter(function (a) { return Number(a.task_id) !== Number(t.id); });
+    try { logChange('dept_task', t.id, 'deleted', t.title, null); } catch (e) { /* fine */ }
+    toast('Task deleted'); closeDrawer(); after();
+  }
+  async function reorder(groupRows, movedId, beforeId) {
+    var ids = groupRows.map(function (t) { return Number(t.id); }).filter(function (i) { return i !== Number(movedId); });
+    var at = beforeId ? ids.indexOf(Number(beforeId)) : ids.length;
+    if (at < 0) at = ids.length;
+    ids.splice(at, 0, Number(movedId));
+    var byId = {}; groupRows.forEach(function (t) { byId[Number(t.id)] = t; });
+    var writes = [];
+    ids.forEach(function (id, i) { var t = byId[id]; var s = (i + 1) * 10; if (t && Number(t.sort) !== s) { t.sort = s; writes.push(db.from('dept_tasks').update({ sort: s }).eq('id', id)); } });
+    B.st.sort = 'manual';
+    render();
+    try { await Promise.all(writes); } catch (e) { toast('Order not saved'); }
+  }
+
+  /* ---------- selection of tasks ---------- */
+  function scopeRows() {
+    var s = B.scope; var st = B.st;
+    var rows = window.w116TasksFor ? window.w116TasksFor(s.dept, s.board, s.ws) : DB_TASKS.filter(function (t) { return t.department === s.dept; });
+    var tdy = today(), wk = addDays(tdy, 7);
+    var meN = lower(myName()); var meM = me();
+    return rows.filter(function (t) {
+      if (!st.done && t.done && !(st.status === 'Done')) return false;
+      if (st.status && bucket(t) !== st.status) return false;
+      if (st.mine) { var mine = lower(t.owner) === meN || (meN && lower(t.owner).indexOf(meN.split(' ')[0]) === 0) || (meM && assigneeIds(t).indexOf(Number(meM.id)) >= 0); if (!mine) return false; }
+      if (st.owner) { var o = lower(t.owner); if (st.owner === '__none' ? !!o : (o !== lower(st.owner) && (!assignees(t).some(function (m) { return lower(m.name) === lower(st.owner); })))) return false; }
+      if (st.project) { if (st.project === '__none' ? !!t.project_id : Number(t.project_id) !== Number(st.project)) return false; }
+      if (st.due === 'overdue' && !(t.due_date && t.due_date < tdy && !t.done)) return false;
+      if (st.due === 'today' && t.due_date !== tdy) return false;
+      if (st.due === 'week' && !(t.due_date && t.due_date >= tdy && t.due_date <= wk)) return false;
+      if (st.due === 'none' && t.due_date) return false;
+      if (st.flag && !t.flag) return false;
+      if (st.q) { var q = lower(st.q); if (lower(t.title).indexOf(q) < 0 && lower(t.owner).indexOf(q) < 0 && lower(t.subsection).indexOf(q) < 0 && lower(projLabel(projById(t.project_id))).indexOf(q) < 0) return false; }
+      return true;
+    }).sort(function (a, b) {
+      if (st.sort === 'due') return String(a.due_date || '9999').localeCompare(String(b.due_date || '9999')) || (a.sort || 0) - (b.sort || 0);
+      if (st.sort === 'updated') return String(b.updated_at || '').localeCompare(String(a.updated_at || ''));
+      if (st.sort === 'title') return String(a.title).localeCompare(String(b.title));
+      return (a.sort || 0) - (b.sort || 0) || Number(a.id) - Number(b.id);
+    });
+  }
+  function groupsFor(rows) {
+    var st = B.st, s = B.scope, out = [];
+    function add(k, name, list, pre, color) { out.push({ key: k, name: name, rows: list, pre: pre || {}, color: color }); }
+    if (st.group === 'project') {
+      var projs = (window.w116ProjectsFor ? window.w116ProjectsFor(s.dept, s.board) : projects().filter(function (p) { return p.department === s.dept; })).slice();
+      var seen = {}; projs.forEach(function (p) { seen[Number(p.id)] = 1; });
+      rows.forEach(function (t) { if (t.project_id && !seen[Number(t.project_id)]) { var p = projById(t.project_id); if (p) { projs.push(p); seen[Number(p.id)] = 1; } } });
+      projs.sort(function (a, b) { return (a.parent_id ? projLabel(a) : a.name).localeCompare(b.parent_id ? projLabel(b) : b.name); });
+      projs.forEach(function (p) { var list = rows.filter(function (t) { return Number(t.project_id) === Number(p.id); }); if (list.length || (p.status || 'active') === 'active') add('p' + p.id, projLabel(p), list, { project: p.id, ws: s.board ? s.board.ws : null }); });
+      var none = rows.filter(function (t) { return !t.project_id; });
+      add('p0', 'No project', none, { ws: s.board ? s.board.ws : (s.ws || null) });
+    } else if (st.group === 'workstream') {
+      wsList(s.dept).forEach(function (w) { var list = rows.filter(function (t) { return (t.subsection || 'General') === w; }); if (list.length || w === 'General' || !s.ws) add('w' + w, w, list, { ws: w }); });
+    } else if (st.group === 'status') {
+      STATUSES.forEach(function (b) { add('s' + b, b, rows.filter(function (t) { return bucket(t) === b; }), { status: b }, STCOL[b][1]); });
+    } else if (st.group === 'assignee') {
+      var names = []; rows.forEach(function (t) { var o = t.owner || ''; if (o && names.indexOf(o) < 0) names.push(o); });
+      names.sort().forEach(function (n) { add('a' + n, n, rows.filter(function (t) { return t.owner === n; }), { owner: n }); });
+      add('a0', 'Unassigned', rows.filter(function (t) { return !t.owner; }), { owner: '' });
+    } else if (st.group === 'due') {
+      var tdy = today(), wk = addDays(tdy, 7);
+      add('d1', 'Overdue', rows.filter(function (t) { return t.due_date && t.due_date < tdy && !t.done; }), { due: addDays(tdy, -1) }, FLAG);
+      add('d2', 'Today', rows.filter(function (t) { return t.due_date === tdy; }), { due: tdy });
+      add('d3', 'This week', rows.filter(function (t) { return t.due_date && t.due_date > tdy && t.due_date <= wk; }), { due: addDays(tdy, 3) });
+      add('d4', 'Later', rows.filter(function (t) { return t.due_date && t.due_date > wk; }), { due: addDays(tdy, 14) });
+      add('d5', 'No due date', rows.filter(function (t) { return !t.due_date || (t.done && t.due_date < tdy); }), {});
+    } else if (st.group === 'board') {
+      (T.boards[s.dept] || []).forEach(function (b) { add('b' + b.key, b.label, rows.filter(function (t) { return boardOf(t) === b; }), { ws: b.ws }, b.color); });
+      add('b0', 'Everything else', rows.filter(function (t) { return !boardOf(t); }), {});
+    } else add('all', 'All tasks', rows, { ws: s.board ? s.board.ws : (s.ws || null) });
+    return out;
+  }
+
+  /* ---------- rendering ---------- */
+  function rowHtml(t) {
+    var as = assignees(t); var du = dueInfo(t); var p = t.project_id ? projById(t.project_id) : null; var b = bucket(t);
+    var showP = B.st.group !== 'project' && p; var showW = B.st.group !== 'workstream' && t.subsection && !(B.scope.board);
+    return '<div class="w116r st-' + stKey(b) + (t.done ? ' done' : '') + (B.sel[t.id] ? ' sel' : '') + '" data-tid="' + E(t.id) + '" draggable="true">' +
+      '<span class="w116chk"><input type="checkbox" data-act="sel"' + (B.sel[t.id] ? ' checked' : '') + ' /></span>' +
+      '<span class="w116done" data-act="toggle" title="' + (t.done ? 'Reopen' : 'Mark done') + '">' + (t.done ? '&#10003;' : '') + '</span>' +
+      '<span class="w116t"><span class="ttl">' + E(t.title) + '</span>' +
+      (t.flag ? '<span class="w116tag flag" title="' + E(t.reason_note || 'Needs an executive decision') + '">exec</span>' : '') +
+      (t.confidential ? '<span class="w116tag conf">confidential</span>' : '') +
+      (showP ? '<span class="w116tag" title="Project">' + E(p.name) + '</span>' : '') +
+      (showW ? '<span class="w116tag ws">' + E(t.subsection) + '</span>' : '') +
+      (comments(t) ? '<span class="w116tag cm">&#128172; ' + comments(t) + '</span>' : '') + '</span>' +
+      '<span class="w116as" data-act="owner" title="' + E(t.owner ? 'Owner: ' + t.owner : 'Set an owner') + '">' + (t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 22) : '<span class="none">+</span>') + as.filter(function (m) { return lower(m.name) !== lower(t.owner); }).slice(0, 3).map(function (m) { return av(m, 22); }).join('') + '</span>' +
+      '<span class="w116due ' + du.cls + '" data-act="due" title="' + E(t.due_date || 'Set a due date') + '">' + (du.txt || '&#8212;') + '</span>' +
+      stPill(t) + '</div>';
+  }
+  function qaHtml(gkey, hint) {
+    return '<div class="w116qa" data-qa="' + E(gkey) + '" style="display:none"><input type="text" placeholder="Task title, Enter to save, Esc to cancel" /><small>' + E(hint || '') + '</small></div>';
+  }
+  function groupHtml(g) {
+    var open = g.rows.filter(function (t) { return !t.done; }).length, done = g.rows.length - open;
+    var pct = g.rows.length ? Math.round(done / g.rows.length * 100) : 0;
+    var closed = B.st.closed && B.st.closed[g.key];
+    var pre = []; if (g.pre.project) pre.push('project: ' + E(g.name)); if (g.pre.ws) pre.push('workstream: ' + E(g.pre.ws)); if (g.pre.status) pre.push('status: ' + g.pre.status); if (g.pre.owner) pre.push('owner: ' + E(g.pre.owner)); if (g.pre.due) pre.push('due ' + g.pre.due);
+    return '<div class="w116g' + (closed ? ' closed' : '') + '" data-g="' + E(g.key) + '"><div class="w116gh" data-act="fold"><span class="chev">&#9660;</span>' +
+      (g.color ? '<span class="w116av" style="width:10px;height:10px;border-radius:3px;background:' + g.color + ';border:none"></span>' : '') +
+      '<b>' + E(g.name) + '</b><span class="n">' + open + '</span>' + (g.rows.length ? '<span class="bar" title="' + done + ' of ' + g.rows.length + ' done"><i style="width:' + pct + '%"></i></span>' : '') +
+      '<span class="sp"></span><span class="add" data-act="qa" data-g="' + E(g.key) + '">+ Add task</span></div>' +
+      '<div class="w116rows">' + (g.rows.length ? g.rows.map(rowHtml).join('') : '<div class="w116empty2">Nothing here' + (B.st.q || B.st.owner || B.st.status || B.st.due || B.st.mine ? ' with these filters' : '') + '.</div>') + qaHtml(g.key, pre.join(' \u00b7 ')) + '</div></div>';
+  }
+  function kanbanHtml(rows) {
+    return '<div class="w116kb">' + STATUSES.map(function (b) {
+      var list = rows.filter(function (t) { return bucket(t) === b; });
+      return '<div class="w116kc" data-kst="' + E(b) + '"><div class="w116kch" style="color:' + STCOL[b][1] + '">' + E(b) + '<span class="n">' + list.length + '</span></div>' +
+        list.map(function (t) {
+          var p = t.project_id ? projById(t.project_id) : null; var du = dueInfo(t); var as = assignees(t);
+          return '<div class="w116kd" data-tid="' + E(t.id) + '" draggable="true"><div class="ttl">' + E(t.title) + '</div><div class="ft">' +
+            (p ? '<span class="w116tag">' + E(p.name) + '</span>' : (t.subsection ? '<span class="w116tag ws">' + E(t.subsection) + '</span>' : '<span></span>')) +
+            '<span style="display:inline-flex;align-items:center;gap:6px">' + (t.flag ? '<span class="w116tag flag">exec</span>' : '') + (du.txt ? '<span class="w116due ' + du.cls + '" style="min-width:0">' + du.txt + '</span>' : '') +
+            (t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 20) : '') + as.filter(function (m) { return lower(m.name) !== lower(t.owner); }).slice(0, 2).map(function (m) { return av(m, 20); }).join('') + '</span></div></div>';
+        }).join('') +
+        '<span class="add" data-act="qa" data-g="s' + E(b) + '" style="font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;opacity:.7">+ Add</span>' + qaHtml('s' + b, 'status: ' + b) + '</div>';
+    }).join('') + '</div>';
+  }
+  function calHtml(rows) {
+    var m0 = B.calMonth || new Date();
+    var m = new Date(m0.getFullYear() + '-' + String(m0.getMonth() + 1).padStart(2, '0') + '-01T12:00:00'); B.calMonth = m;
+    var first = new Date(m.toISOString().slice(0, 10) + 'T12:00:00'); first.setDate(1 - ((m.getDay() + 6) % 7));
+    var tdy = today();
+    var byDay = {}; rows.forEach(function (t) { if (t.due_date) (byDay[t.due_date] = byDay[t.due_date] || []).push(t); });
+    var cells = '';
+    for (var i = 0; i < 42; i++) {
+      var d = new Date(first.toISOString().slice(0, 10) + 'T12:00:00'); d.setDate(first.getDate() + i);
+      var k = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+      var list = byDay[k] || [];
+      cells += '<div class="w116cd' + (d.getMonth() !== m.getMonth() ? ' other' : '') + (k === tdy ? ' today' : '') + '" data-day="' + k + '"><div class="d">' + d.getDate() + '</div>' +
+        list.slice(0, 3).map(function (t) { return '<span class="w116cp' + (t.done ? ' done' : (t.due_date < tdy ? ' over' : '')) + '" data-tid="' + E(t.id) + '" draggable="true" title="' + E(t.title) + '">' + E(t.title) + '</span>'; }).join('') +
+        (list.length > 3 ? '<span class="more" data-act="more" data-day="' + k + '">+' + (list.length - 3) + ' more</span>' : '') + '</div>';
+    }
+    return '<div class="w116cal"><div class="w116calh"><button data-act="cal" data-n="-1">&#8249;</button><b>' + E(m.toLocaleDateString([], { month: 'long', year: 'numeric' })) + '</b><button data-act="cal" data-n="1">&#8250;</button><button data-act="cal" data-n="0" style="margin-left:auto">Today</button></div>' +
+      '<div class="w116calg">' + ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (x) { return '<div class="dow">' + x + '</div>'; }).join('') + cells + '</div>' +
+      '<p class="w116note" style="margin:8px 4px 0">Drag a task onto another day to change its due date. Tasks without a due date are not shown here.</p></div>';
+  }
+  function toolbarHtml(rows) {
+    var st = B.st, s = B.scope;
+    var groups = [['project', 'Project'], ['workstream', 'Workstream'], ['status', 'Status'], ['assignee', 'Owner'], ['due', 'Due date'], ['none', 'No grouping']];
+    if (s.dept === 'fundraising' && !s.board) groups.unshift(['board', 'Sub-team']);
+    if (s.board) groups = groups.filter(function (g) { return g[0] !== 'workstream'; });
+    var ms = members(s.dept);
+    var projs = window.w116ProjectsFor ? window.w116ProjectsFor(s.dept, s.board) : projects().filter(function (p) { return p.department === s.dept; });
+    var nSel = Object.keys(B.sel).length;
+    var html = '<div class="w116tb' + (B.showf ? ' showf' : '') + '">' +
+      '<span class="w116seg">' + [['list', 'List'], ['board', 'Board'], ['cal', 'Calendar']].map(function (v) { return '<a data-act="view" data-v="' + v[0] + '" class="' + (st.view === v[0] ? 'on' : '') + '">' + v[1] + '</a>'; }).join('') + '</span>' +
+      (st.view === 'list' ? '<select data-act="group" title="Group by">' + groups.map(function (g) { return '<option value="' + g[0] + '"' + (st.group === g[0] ? ' selected' : '') + '>By ' + g[1].toLowerCase() + '</option>'; }).join('') + '</select>' : '') +
+      '<span class="tog fbtn' + (B.showf ? ' on' : '') + '" data-act="fbtn">&#9776; Filters</span>' +
+      '<span class="flt">' +
+      '<span class="tog' + (st.mine ? ' on' : '') + '" data-act="mine">&#9679; Mine</span>' +
+      '<select data-act="owner" title="Owner"><option value="">Anyone</option><option value="__none"' + (st.owner === '__none' ? ' selected' : '') + '>Unassigned</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '"' + (st.owner === m.name ? ' selected' : '') + '>' + E(m.name) + '</option>'; }).join('') + '</select>' +
+      '<select data-act="status" title="Status"><option value="">Any status</option>' + STATUSES.map(function (b) { return '<option value="' + b + '"' + (st.status === b ? ' selected' : '') + '>' + b + '</option>'; }).join('') + '</select>' +
+      '<select data-act="project" title="Project"><option value="">Any project</option><option value="__none"' + (st.project === '__none' ? ' selected' : '') + '>No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (String(st.project) === String(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + '</option>'; }).join('') + '</select>' +
+      '<select data-act="due" title="Due"><option value="">Any due date</option>' + [['overdue', 'Overdue'], ['today', 'Due today'], ['week', 'Due this week'], ['none', 'No due date']].map(function (o) { return '<option value="' + o[0] + '"' + (st.due === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<span class="tog' + (st.flag ? ' on' : '') + '" data-act="flag" title="Needs an executive decision">&#9873; Exec</span>' +
+      '<span class="tog' + (st.done ? ' on' : '') + '" data-act="done">&#10003; Show done</span>' +
+      '<select data-act="sort" title="Sort">' + [['manual', 'Manual order'], ['due', 'By due date'], ['updated', 'Recently updated'], ['title', 'A to Z']].map(function (o) { return '<option value="' + o[0] + '"' + (st.sort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<span class="tog" data-act="selall" title="Select every task shown">&#9745; Select all</span>' +
+      '</span><span class="sp"></span><input type="search" data-act="q" placeholder="Search tasks" value="' + E(st.q) + '" />' +
+      '<button class="new" data-act="new">+ New task</button></div>';
+    if (nSel) {
+      html += '<div class="w116bulk"><b>' + nSel + ' selected</b>' +
+        '<select data-bulk="status"><option value="">Set status...</option>' + STATUSES.map(function (b) { return '<option value="' + b + '">' + b + '</option>'; }).join('') + '</select>' +
+        '<select data-bulk="owner"><option value="">Set owner...</option><option value="__none">Unassigned</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '">' + E(m.name) + '</option>'; }).join('') + '</select>' +
+        '<input type="date" data-bulk="due" title="Set due date" />' +
+        '<select data-bulk="project"><option value="">Move to project...</option><option value="__none">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '">' + E(projLabel(p)) + '</option>'; }).join('') + '</select>' +
+        '<button data-bulk="done">Mark done</button><button class="ghost" data-bulk="clear">Clear</button></div>';
+    }
+    return html;
+  }
+  function render() {
+    if (!B.slot || !B.scope || !document.body.contains(B.slot)) return;
+    var rows = scopeRows();
+    var body;
+    if (B.st.view === 'board') body = kanbanHtml(rows);
+    else if (B.st.view === 'cal') body = calHtml(rows);
+    else { var gs = groupsFor(rows); body = gs.map(groupHtml).join(''); }
+    var total = (window.w116TasksFor ? window.w116TasksFor(B.scope.dept, B.scope.board, B.scope.ws) : []).filter(function (t) { return !t.done; }).length;
+    B.slot.innerHTML = '<div class="w116b">' + toolbarHtml(rows) + body +
+      '<p class="w116note">' + rows.length + ' shown \u00b7 ' + total + ' open in total. Click a task for details; drag to reorder or move between groups.</p></div>';
+    var q = B.slot.querySelector('input[data-act="q"]'); if (q && B.qFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); B.qFocus = false; }
+  }
+  var qTimer = null;
+
+  /* ---------- drawer ---------- */
+  function drawerEls() {
+    var dr = document.getElementById('w116dr'), bk = document.getElementById('w116drb');
+    if (!dr) {
+      bk = document.createElement('div'); bk.id = 'w116drb'; bk.addEventListener('click', closeDrawer); document.body.appendChild(bk);
+      dr = document.createElement('aside'); dr.id = 'w116dr'; dr.setAttribute('aria-label', 'Task'); document.body.appendChild(dr);
+      dr.addEventListener('click', drawerClick);
+      dr.addEventListener('change', drawerChange);
+      dr.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDrawer(); });
+    }
+    return { dr: dr, bk: bk };
+  }
+  function taskById(id) { return (DB_TASKS || []).filter(function (t) { return String(t.id) === String(id); })[0] || null; }
+  async function openDrawer(id) {
+    var t = taskById(id); if (!t) return;
+    var els = drawerEls(); B.drawer = t.id;
+    var d = t.department; var ms = members(d); var as = assigneeIds(t);
+    var projs = projects().filter(function (p) { return (p.status || 'active') === 'active'; }).sort(function (a, b) { return (a.department === d ? 0 : 1) - (b.department === d ? 0 : 1) || projLabel(a).localeCompare(projLabel(b)); });
+    var b = bucket(t);
+    var owners = ms.map(function (m) { return m.name; }); if (t.owner && owners.indexOf(t.owner) < 0) owners.unshift(t.owner);
+    els.dr.innerHTML = '<div class="w116drh">' + stPill(t) + '<span style="font-size:12px;color:var(--wa-muted)">#' + E(t.id) + ' \u00b7 ' + E((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d) + '</span><button class="x" data-dact="close" title="Close (Esc)">&#10005;</button></div>' +
+      '<div class="w116drc">' +
+      '<textarea class="ttl" data-dfield="title" rows="1" style="overflow:hidden">' + E(t.title) + '</textarea>' +
+      '<div class="w116f">' +
+      '<label>Status</label><select data-dfield="status">' + STATUSES.map(function (s) { return '<option value="' + s + '"' + (b === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>' +
+      '<label>Owner</label><select data-dfield="owner"><option value="">Unassigned</option>' + owners.map(function (n) { return '<option value="' + E(n) + '"' + (t.owner === n ? ' selected' : '') + '>' + E(n) + '</option>'; }).join('') + '<option value="__custom">Type a name...</option></select>' +
+      '<label>Assignees</label><div class="chips">' + as.map(function (i) { var m = memberById(i); return m ? '<span class="w116chip">' + av(m, 18) + E(m.name) + '<span class="rm" data-dact="rmas" data-id="' + i + '">&#10005;</span></span>' : ''; }).join('') +
+      '<select data-dfield="addas" style="width:auto"><option value="">+ Add</option>' + ms.filter(function (m) { return as.indexOf(Number(m.id)) < 0; }).map(function (m) { return '<option value="' + m.id + '">' + E(m.name) + (m.department !== d ? ' (' + E(T.short[m.department] || m.department) + ')' : '') + '</option>'; }).join('') + '</select></div>' +
+      '<label>Due date</label><input type="date" data-dfield="due" value="' + E(t.due_date || '') + '" />' +
+      '<label>Project</label><select data-dfield="project"><option value="">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (Number(t.project_id) === Number(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + (p.department !== d ? ' (' + E(T.short[p.department] || p.department) + ')' : '') + '</option>'; }).join('') + '</select>' +
+      '<label>Workstream</label><select data-dfield="ws">' + wsList(d).map(function (w) { return '<option value="' + E(w) + '"' + ((t.subsection || 'General') === w ? ' selected' : '') + '>' + E(w) + '</option>'; }).join('') + '</select>' +
+      '<label>Flags</label><div><label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="flag"' + (t.flag ? ' checked' : '') + ' /> Needs an executive decision</label>' +
+      '<label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="conf"' + (t.confidential ? ' checked' : '') + ' /> Confidential (hidden from the board view)</label></div>' +
+      (t.flag ? '<label>Why</label><input type="text" data-dfield="note" value="' + E(t.reason_note || '') + '" placeholder="One line for the executives" />' : '') +
+      '</div>' +
+      '<div class="w116drs">Comments</div><div id="w116cm"><p class="w116note">Loading...</p></div>' +
+      '<div class="w116cmtn"><textarea id="w116cmtx" placeholder="Add a comment..."></textarea><button data-dact="comment">Post</button></div>' +
+      '<div class="w116drs">Activity</div><div id="w116acts"><p class="w116note">Loading...</p></div>' +
+      '<p class="w116note">Added ' + E(t.opened_at ? String(t.opened_at).slice(0, 10) : 'earlier') + (t.updated_by ? ' \u00b7 last change by ' + E(t.updated_by) : '') + (t.closed_at ? ' \u00b7 closed ' + E(String(t.closed_at).slice(0, 10)) : '') + '</p>' +
+      '</div>' +
+      '<div class="w116drf"><button class="pri" data-dact="toggle">' + (t.done ? 'Reopen' : 'Mark done') + '</button><button data-dact="open">Department page</button><button class="warn" data-dact="del">Delete</button></div>';
+    els.dr.classList.add('open'); els.bk.classList.add('open');
+    var ta = els.dr.querySelector('textarea.ttl');
+    if (ta) { var grow = function () { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }; ta.addEventListener('input', grow); setTimeout(grow, 0); }
+    loadThread(t);
+  }
+  async function loadThread(t) {
+    try {
+      var r = await db.from('task_comments').select('*').eq('task_id', Number(t.id)).order('created_at', { ascending: false }).limit(40);
+      var rows = (r && r.data) || [];
+      var el = document.getElementById('w116cm'); if (!el || B.drawer !== t.id) return;
+      el.innerHTML = rows.length ? rows.map(function (c) {
+        return '<div class="w116cmt"><div class="hd"><b>' + E(c.author || 'someone') + '</b><span>' + E(String(c.created_at || '').slice(0, 10)) + '</span>' + (c.source && c.source !== 'manual' ? '<span class="w116tag ws">' + E(c.source === 'transcript' ? 'meeting' : c.source) + '</span>' : '') + (c.source_ref && c.source !== 'manual' ? '<a data-w116go="#tx/' + E(c.source_ref) + '" style="color:' + GREEN + ';cursor:pointer;font-weight:600">' + E(c.source_label || 'open the meeting') + '</a>' : '') + '</div><div class="bd">' + E(c.body) + '</div>' + (c.quote ? '<div class="qt">&quot;' + E(c.quote) + '&quot;</div>' : '') + '</div>';
+      }).join('') : '<p class="w116note">No comments yet.</p>';
+      window.__w116cm = window.__w116cm || {}; window.__w116cm[String(t.id)] = rows.length;
+    } catch (e) { /* fine */ }
+    try {
+      var a = await db.from('change_log').select('field, old_value, new_value, changed_by, changed_at').eq('entity_id', String(t.id)).in('entity_type', ['dept_task', 'task']).order('changed_at', { ascending: false }).limit(20);
+      var acts = (a && a.data) || [];
+      var el2 = document.getElementById('w116acts'); if (!el2 || B.drawer !== t.id) return;
+      el2.innerHTML = acts.length ? acts.map(function (c) { return '<div class="w116act"><b>' + E(c.field) + '</b>' + (c.old_value ? ' ' + E(String(c.old_value).slice(0, 60)) + ' \u2192' : '') + ' ' + E(String(c.new_value || '').slice(0, 80)) + ' <span>\u00b7 ' + E(c.changed_by || '') + ' \u00b7 ' + E(String(c.changed_at || '').slice(0, 10)) + '</span></div>'; }).join('') : '<p class="w116note">No recorded changes yet.</p>';
+    } catch (e) { /* fine */ }
+  }
+  function closeDrawer() {
+    var dr = document.getElementById('w116dr'), bk = document.getElementById('w116drb');
+    if (dr) dr.classList.remove('open'); if (bk) bk.classList.remove('open');
+    B.drawer = null;
+  }
+  async function drawerClick(e) {
+    var a = e.target.closest && e.target.closest('[data-dact]'); if (!a) return;
+    var t = taskById(B.drawer); if (!t) return;
+    var act = a.getAttribute('data-dact');
+    if (act === 'close') closeDrawer();
+    if (act === 'toggle') { await setStatus(t, t.done ? 'Open' : 'Done'); openDrawer(t.id); }
+    if (act === 'open') { closeDrawer(); location.hash = '#task/' + t.id; }
+    if (act === 'del') delTask(t);
+    if (act === 'rmas') { await setAssignees(t, assigneeIds(t).filter(function (i) { return i !== Number(a.getAttribute('data-id')); })); openDrawer(t.id); }
+    if (act === 'comment') {
+      var tx = document.getElementById('w116cmtx'); var txt = (tx && tx.value || '').trim(); if (!txt) { toast('Write the comment first'); return; }
+      var r = await db.from('task_comments').insert({ task_id: Number(t.id), body: txt.slice(0, 800), author: who0(), source: 'manual' });
+      if (r && r.error) { toast('Could not save the comment'); return; }
+      tx.value = ''; toast('Comment added'); loadThread(t); log(t, 'comment', null, txt.slice(0, 120));
+    }
+  }
+  async function drawerChange(e) {
+    var f = e.target.closest && e.target.closest('[data-dfield]'); if (!f) return;
+    var t = taskById(B.drawer); if (!t) return;
+    var k = f.getAttribute('data-dfield');
+    if (k === 'title') { var v = f.value.trim(); if (v && v !== t.title) { var old = t.title; if (await patch(t, { title: v }, [['title', old, v]])) { toast('Title saved'); after(); } } }
+    if (k === 'status') { await setStatus(t, f.value); openDrawer(t.id); }
+    if (k === 'owner') { var nv = f.value; if (nv === '__custom') { nv = prompt('Owner name:', t.owner || ''); if (nv === null) { openDrawer(t.id); return; } } await setOwner(t, nv); openDrawer(t.id); }
+    if (k === 'addas') { if (f.value) { await setAssignees(t, assigneeIds(t).concat([Number(f.value)])); openDrawer(t.id); } }
+    if (k === 'due') await setDue(t, f.value || null);
+    if (k === 'project') await setProject(t, f.value || null);
+    if (k === 'ws') await setWs(t, f.value);
+    if (k === 'flag') { var on = f.checked; if (await patch(t, { flag: on }, [['flag', String(!on), String(on)]])) { toast(on ? 'Flagged for the executives' : 'Flag removed'); after(); openDrawer(t.id); } }
+    if (k === 'conf') { var c = f.checked; if (await patch(t, { confidential: c }, [['confidential', String(!c), String(c)]])) { toast(c ? 'Marked confidential' : 'No longer confidential'); after(); } }
+    if (k === 'note') { var n = f.value.trim(); if (await patch(t, { reason_note: n || null }, [['reason_note', t.reason_note, n]])) toast('Saved'); }
+  }
+
+  /* ---------- events ---------- */
+  function onClick(e) {
+    if (!B.slot || !B.slot.contains(e.target)) return;
+    var a = e.target.closest('[data-act]');
+    var rowEl = e.target.closest('.w116r,.w116kd,.w116cp');
+    var act = a ? a.getAttribute('data-act') : '';
+    if (act === 'view') { B.st.view = a.getAttribute('data-v'); saveState(); render(); return; }
+    if (act === 'fbtn') { B.showf = !B.showf; render(); return; }
+    if (act === 'selall') { var shown = scopeRows(); var all = shown.length && shown.every(function (t) { return B.sel[t.id]; }); B.sel = {}; if (!all) shown.forEach(function (t) { B.sel[t.id] = 1; }); render(); return; }
+    if (act === 'mine') { B.st.mine = !B.st.mine; saveState(); render(); return; }
+    if (act === 'flag') { B.st.flag = !B.st.flag; saveState(); render(); return; }
+    if (act === 'done') { B.st.done = !B.st.done; saveState(); render(); return; }
+    if (act === 'fold') { var g = a.closest('.w116g'); var k = g.getAttribute('data-g'); B.st.closed = B.st.closed || {}; if (B.st.closed[k]) delete B.st.closed[k]; else B.st.closed[k] = 1; saveState(); g.classList.toggle('closed'); return; }
+    if (act === 'qa') { e.stopPropagation(); var box = B.slot.querySelector('.w116qa[data-qa="' + a.getAttribute('data-g') + '"]'); if (box) { var g2 = box.closest('.w116g'); if (g2) g2.classList.remove('closed'); box.style.display = ''; var inp = box.querySelector('input'); inp.focus(); } return; }
+    if (act === 'new') { var first = B.slot.querySelector('.w116qa'); if (first) { var g3 = first.closest('.w116g'); if (g3) g3.classList.remove('closed'); first.style.display = ''; first.querySelector('input').focus(); first.scrollIntoView({ block: 'center', behavior: 'smooth' }); } return; }
+    if (act === 'cal') { var n = Number(a.getAttribute('data-n')); if (n === 0) B.calMonth = new Date(); else { var m = B.calMonth || new Date(); var mm = new Date(m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '-01T12:00:00'); mm.setMonth(mm.getMonth() + n); B.calMonth = mm; } render(); return; }
+    if (act === 'more') { B.st.view = 'list'; B.st.group = 'due'; saveState(); render(); return; }
+    if (!rowEl) return;
+    var tid = rowEl.getAttribute('data-tid'); var t = taskById(tid); if (!t) return;
+    if (act === 'sel') { if (a.checked) B.sel[t.id] = 1; else delete B.sel[t.id]; render(); return; }
+    if (act === 'toggle') { e.stopPropagation(); setStatus(t, t.done ? 'Open' : 'Done'); return; }
+    if (act === 'status') { e.stopPropagation(); inlineSelect(a, STATUSES.map(function (s) { return [s, s]; }), bucket(t), function (v) { setStatus(t, v); }); return; }
+    if (act === 'owner') { e.stopPropagation(); var opts = [['', 'Unassigned']].concat(members(t.department).map(function (m) { return [m.name, m.name]; })); inlineSelect(a, opts, t.owner || '', function (v) { setOwner(t, v); }); return; }
+    if (act === 'due') { e.stopPropagation(); inlineDate(a, t.due_date || '', function (v) { setDue(t, v || null); }); return; }
+    openDrawer(t.id);
+  }
+  function inlineSelect(anchor, opts, cur, cb) {
+    if (anchor.querySelector('select')) return;
+    var sel = document.createElement('select'); sel.style.cssText = 'font-size:12px;padding:3px 6px;border-radius:8px;border:1px solid rgba(16,63,57,.3);max-width:180px;';
+    sel.innerHTML = opts.map(function (o) { return '<option value="' + E(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('');
+    anchor.innerHTML = ''; anchor.appendChild(sel); sel.focus();
+    var done = false;
+    sel.addEventListener('change', function () { done = true; cb(sel.value); });
+    sel.addEventListener('blur', function () { setTimeout(function () { if (!done) render(); }, 150); });
+    sel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  }
+  function inlineDate(anchor, cur, cb) {
+    if (anchor.querySelector('input')) return;
+    var inp = document.createElement('input'); inp.type = 'date'; inp.value = cur; inp.style.cssText = 'font-size:12px;padding:3px 6px;border-radius:8px;border:1px solid rgba(16,63,57,.3);';
+    anchor.innerHTML = ''; anchor.appendChild(inp); inp.focus();
+    var done = false;
+    inp.addEventListener('change', function () { done = true; cb(inp.value); });
+    inp.addEventListener('blur', function () { setTimeout(function () { if (!done) render(); }, 150); });
+    inp.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  }
+  function onChange(e) {
+    if (!B.slot || !B.slot.contains(e.target)) return;
+    var a = e.target.closest('[data-act]'); var bk = e.target.closest('[data-bulk]');
+    if (a) {
+      var act = a.getAttribute('data-act');
+      if (['group', 'owner', 'status', 'project', 'due', 'sort'].indexOf(act) >= 0 && a.tagName === 'SELECT') { B.st[act] = a.value; saveState(); render(); }
+      return;
+    }
+    if (bk) bulk(bk.getAttribute('data-bulk'), bk.value);
+  }
+  async function bulk(kind, val) {
+    var ids = Object.keys(B.sel); if (!ids.length) return;
+    if (kind === 'clear') { B.sel = {}; render(); return; }
+    if (!val && kind !== 'done') return;
+    var ts = ids.map(taskById).filter(Boolean);
+    for (var i = 0; i < ts.length; i++) {
+      var t = ts[i];
+      if (kind === 'status') await patch(t, { status: val, done: val === 'Done', closed_at: val === 'Done' ? new Date().toISOString() : null }, [[val === 'Done' ? 'done' : 'status', bucket(t), val]]);
+      if (kind === 'owner') await patch(t, { owner: val === '__none' ? '' : val }, [['owner', t.owner || 'unassigned', val === '__none' ? 'unassigned' : val]]);
+      if (kind === 'due') await patch(t, { due_date: val }, [['due_date', t.due_date, val]]);
+      if (kind === 'project') await patch(t, { project_id: val === '__none' ? null : Number(val) }, [['project', t.project_id ? projLabel(projById(t.project_id)) : 'none', val === '__none' ? 'none' : projLabel(projById(val))]]);
+      if (kind === 'done') await patch(t, { status: 'Done', done: true, closed_at: new Date().toISOString() }, [['done', bucket(t), 'Done']]);
+    }
+    toast(ts.length + ' task' + (ts.length === 1 ? '' : 's') + ' updated');
+    B.sel = {}; after();
+  }
+  function onKey(e) {
+    if (!B.slot || !B.slot.contains(e.target)) return;
+    var qa = e.target.closest && e.target.closest('.w116qa');
+    if (qa && e.target.tagName === 'INPUT') {
+      if (e.key === 'Escape') { qa.style.display = 'none'; e.target.value = ''; return; }
+      if (e.key === 'Enter') {
+        var gk = qa.getAttribute('data-qa'); var pre = {};
+        var gs = groupsFor(scopeRows()); var g = gs.filter(function (x) { return x.key === gk; })[0];
+        if (g) pre = g.pre; else if (gk.charAt(0) === 's') pre = { status: gk.slice(1) };
+        if (pre.owner === '') pre.owner = '';
+        var title = e.target.value; e.target.value = '';
+        addTask(title, pre);
+      }
+      return;
+    }
+    if (e.target.getAttribute && e.target.getAttribute('data-act') === 'q') {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(function () { B.st.q = e.target.value; B.qFocus = true; render(); }, 220);
+    }
+  }
+  /* drag and drop: rows and cards carry the task id; groups, columns and days are drop targets */
+  function onDragStart(e) {
+    var el = e.target.closest && e.target.closest('.w116r,.w116kd,.w116cp'); if (!el || !B.slot || !B.slot.contains(el)) return;
+    B.drag = el.getAttribute('data-tid'); el.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', B.drag); } catch (x) { /* fine */ }
+  }
+  function onDragEnd() { B.drag = null; if (B.slot) B.slot.querySelectorAll('.dragging,.drop,.over').forEach(function (x) { x.classList.remove('dragging', 'drop', 'over'); }); }
+  function onDragOver(e) {
+    if (!B.drag || !B.slot || !B.slot.contains(e.target)) return;
+    var tgt = e.target.closest('.w116g,.w116kc,.w116cd'); if (!tgt) return;
+    e.preventDefault();
+    B.slot.querySelectorAll('.drop').forEach(function (x) { if (x !== tgt) x.classList.remove('drop'); });
+    tgt.classList.add('drop');
+    var row = e.target.closest('.w116r');
+    B.slot.querySelectorAll('.w116r.over').forEach(function (x) { if (x !== row) x.classList.remove('over'); });
+    if (row && row.getAttribute('data-tid') !== B.drag) row.classList.add('over');
+  }
+  async function onDrop(e) {
+    if (!B.drag || !B.slot || !B.slot.contains(e.target)) return;
+    e.preventDefault();
+    var t = taskById(B.drag); var id = B.drag; onDragEnd();
+    if (!t) return;
+    var col = e.target.closest('.w116kc'); if (col) { await setStatus(t, col.getAttribute('data-kst')); return; }
+    var day = e.target.closest('.w116cd'); if (day) { await setDue(t, day.getAttribute('data-day')); return; }
+    var g = e.target.closest('.w116g'); if (!g) return;
+    var gk = g.getAttribute('data-g'); var gs = groupsFor(scopeRows()); var grp = gs.filter(function (x) { return x.key === gk; })[0]; if (!grp) return;
+    var row = e.target.closest('.w116r'); var beforeId = row ? row.getAttribute('data-tid') : null;
+    var same = grp.rows.some(function (x) { return String(x.id) === String(id); });
+    if (!same) {
+      var p = grp.pre;
+      if (B.st.group === 'project') await setProject(t, p.project || null);
+      else if (B.st.group === 'workstream') await setWs(t, p.ws || 'General');
+      else if (B.st.group === 'status') await setStatus(t, p.status);
+      else if (B.st.group === 'assignee') await setOwner(t, p.owner || '');
+      else if (B.st.group === 'due') { if (p.due) await setDue(t, p.due); else await setDue(t, null); }
+      else if (B.st.group === 'board') await setWs(t, p.ws || 'General');
+      grp = groupsFor(scopeRows()).filter(function (x) { return x.key === gk; })[0]; if (!grp) return;
+    }
+    if (String(beforeId) !== String(id)) await reorder(grp.rows, id, beforeId);
+  }
+  if (!document.body.dataset.wa116bWired) {
+    document.body.dataset.wa116bWired = '1';
+    document.body.addEventListener('click', onClick);
+    document.body.addEventListener('change', onChange);
+    document.body.addEventListener('keydown', onKey);
+    document.body.addEventListener('input', function (e) { if (e.target && e.target.getAttribute && e.target.getAttribute('data-act') === 'q') onKey(e); });
+    document.body.addEventListener('dragstart', onDragStart);
+    document.body.addEventListener('dragend', onDragEnd);
+    document.body.addEventListener('dragover', onDragOver);
+    document.body.addEventListener('drop', onDrop);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && B.drawer) closeDrawer(); });
+  }
+
+  async function loadCommentCounts() {
+    try {
+      var r = await db.from('task_comments').select('task_id').order('created_at', { ascending: false }).limit(800);
+      var m = {}; ((r && r.data) || []).forEach(function (c) { m[String(c.task_id)] = (m[String(c.task_id)] || 0) + 1; });
+      window.__w116cm = m;
+    } catch (e) { /* fine */ }
+  }
+
+  window.w116Board = {
+    render: function (slot, scope) {
+      B.slot = slot; B.scope = scope; B.st = loadState(scope); B.sel = {};
+      if (B.preset) { Object.assign(B.st, B.preset); B.preset = null; }
+      render();
+      if (!window.__w116cm) loadCommentCounts().then(function () { if (B.slot === slot) render(); });
+    },
+    preset: function (q) {
+      if (q === 'overdue') B.preset = { due: 'overdue', done: false, status: '' };
+      else if (q === 'done') B.preset = { done: true, status: 'Done', due: '' };
+      else if (q === 'projects') B.preset = { group: 'project', view: 'list' };
+      else B.preset = null;
+    },
+    refresh: render,
+    closeDrawer: closeDrawer,
+    open: openDrawer
+  };
+})();

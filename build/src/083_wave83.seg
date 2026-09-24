@@ -1,0 +1,50 @@
+/* =====================================================================
+   WA v83 Phase 1 (U8): the mobile pass
+   =====================================================================
+   Pure CSS with one JS touch: most volunteers open the Hub on a phone.
+   Single-column layouts, scrollable tab rows, tables that pan instead
+   of squash, near-full-screen modals, and the assistant drawer takes
+   the whole width. Nav groups already open on tap (wave42); the dept
+   flyout's sub-links stay desktop-only, the dept button itself works.
+   ===================================================================== */
+(function () {
+  if (window.__wa83) return; window.__wa83 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '@media (max-width: 760px) {' +
+      /* chrome */
+      'header .who, .who { flex-wrap: wrap; }' +
+      '#globalSearch { width: 46vw; min-width: 140px; }' +
+      '.footer { padding: 16px 14px 40px; }' +
+      /* panels and cards breathe less */
+      '.panel { padding: 0 2px; }' +
+      '.card { padding: 14px 12px; border-radius: 12px; }' +
+      '.dept-banner h2 { font-size: 19px; }' +
+      /* Home: one column */
+      '.mp-grid { display: block !important; }' +
+      '.mp-grid > * { margin-bottom: 14px; }' +
+      '.mp-chips { flex-wrap: wrap; }' +
+      /* workstream tabs scroll sideways instead of stacking forever */
+      '.w71tabs { display: flex; flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }' +
+      '.w71tabs .w71tab { flex: 0 0 auto; }' +
+      '.wa21-ctl { flex-wrap: wrap; gap: 6px; }' +
+      /* tables pan sideways (finances ledger, admin, commitment) */
+      '.panel table, .wa-tbl { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }' +
+      /* strategy map and columns stack */
+      '#goals .w68map, #goals .w68cols { overflow-x: auto; }' +
+      /* volunteering calendar pans */
+      '#volunteering { overflow-x: hidden; }' +
+      '#volunteering .vl-sub { flex-wrap: wrap; }' +
+      /* modals near full screen */
+      '#modalBox { width: 96vw !important; max-width: 96vw !important; max-height: 92vh; overflow-y: auto; }' +
+      /* assistant drawer takes the whole width */
+      '#waChatPanel { width: 100vw; max-width: 100vw; }' +
+      '#waChatBtn { right: 14px; bottom: 14px; }' +
+      /* folds tighter */
+      '.w77f { padding: 0 10px; }' +
+      /* touch targets */
+      '.tab, .tab-group-h { padding: 12px 12px; }' +
+    '}';
+  document.head.appendChild(css);
+})();

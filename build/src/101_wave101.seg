@@ -1,0 +1,147 @@
+/* =====================================================================
+   WA v101 send a project to Slack (07/08/26)
+   =====================================================================
+   Every named project page gets a "Send to Slack" button (staff): pick
+   any channel from the live workspace list, add an optional note, see
+   the full message before it goes. The message leads with the project
+   name hyperlinked to its Hub page, then the open tasks grouped by
+   person with real Slack @mentions (project-slack fn resolves names via
+   the wa_slack_names cache; Ian pinned to his welfareavenue.com
+   account). Until the Slack app gains the chat:write permission, sends
+   land in the Hub notifications channel with a clear explanation; the
+   channel picker lights up fully the moment the scope is added, with no
+   code change. Every send is change_logged server-side.
+   ===================================================================== */
+(function () {
+  if (window.__wa101) return; window.__wa101 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w101btn{margin-left:8px;}' +
+    '#w101prev{background:#f8f9fb;border:1px solid #e7e9f0;border-radius:8px;padding:10px 12px;margin:10px 0;font-size:12.5px;line-height:1.5;white-space:pre-wrap;max-height:300px;overflow-y:auto;color:#566a7f;}' +
+    '#w101warn{font-size:12px;color:#a06f00;margin:6px 0;}' +
+    '#w101warn.bad{color:#c4402a;}' +
+    '.w101lbl{display:block;font-size:12px;font-weight:600;color:#566a7f;margin:10px 0 4px;}' +
+    '#w101ch,#w101note{width:100%;box-sizing:border-box;}';
+  document.head.appendChild(css);
+
+  var W101_PREV = ''; /* display text without the note, note is spliced in live */
+
+  function w101Render() {
+    var box = document.getElementById('w101prev');
+    if (!box) return;
+    if (!W101_PREV) { box.textContent = 'Building the preview...'; return; }
+    var note = (document.getElementById('w101note') || {}).value || '';
+    var lines = W101_PREV.split('\n');
+    if (note.trim()) lines.splice(1, 0, note.trim());
+    box.textContent = lines.join('\n');
+  }
+
+  async function w101Open(p) {
+    openModal(
+      '<h3>Send to Slack</h3>' +
+      '<p class="read" style="margin:4px 0 8px">Posts the open tasks for <b>' + esc(p.name) + '</b> to a channel, with the project title linking back to this page and each person @mentioned on their tasks.</p>' +
+      '<label class="w101lbl" for="w101ch">Channel</label>' +
+      '<select id="w101ch"><option value="">Loading channels...</option></select>' +
+      '<label class="w101lbl" for="w101note">Optional note (appears under the title)</label>' +
+      '<input type="text" id="w101note" maxlength="600" placeholder="Example: quick status push before Saturday" />' +
+      '<div id="w101prev">Building the preview...</div>' +
+      '<div id="w101warn"></div>' +
+      '<div style="margin-top:10px"><button class="btn" id="w101send" disabled>Send to Slack</button> ' +
+      '<button class="btn ghost" id="w101cancel">Cancel</button></div>'
+    );
+    W101_PREV = '';
+    document.getElementById('w101cancel').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w101note').addEventListener('input', w101Render);
+
+    var sel = document.getElementById('w101ch');
+    var warn = document.getElementById('w101warn');
+    var sendBtn = document.getElementById('w101send');
+
+    /* channels and preview load together */
+    var chP = db.functions.invoke('project-slack', { body: { action: 'channels' } });
+    var pvP = db.functions.invoke('project-slack', { body: { action: 'preview', project_id: p.id } });
+
+    try {
+      var ch = await chP;
+      var list = (ch && ch.data && ch.data.channels) || [];
+      if (ch && (ch.error || (ch.data && ch.data.error)) || !list.length) {
+        sel.innerHTML = '<option value="">Could not load channels</option>';
+      } else {
+        var saved = null;
+        try { saved = localStorage.getItem('wa101.ch.' + p.id) || localStorage.getItem('wa101.ch'); } catch (e) { /* private mode */ }
+        sel.innerHTML = list.map(function (c) {
+          var label = '#' + c.name + (c.is_member ? '' : (c.is_private ? ' (private: invite @wa_hub first)' : ' (joins automatically)'));
+          return '<option value="' + esc(c.id) + '" data-name="' + esc(c.name) + '"' + (c.id === saved ? ' selected' : '') + '>' + esc(label) + '</option>';
+        }).join('');
+        sendBtn.disabled = false;
+      }
+    } catch (e) { sel.innerHTML = '<option value="">Could not load channels</option>'; }
+
+    try {
+      var pv = await pvP;
+      if (pv && pv.data && pv.data.text_display) {
+        W101_PREV = pv.data.text_display;
+        w101Render();
+        var un = pv.data.unresolved || [];
+        if (un.length) warn.textContent = 'No Slack account matched: ' + un.join(', ') + '. They appear as plain names, not @mentions.';
+      } else {
+        document.getElementById('w101prev').textContent = 'Could not build the preview' + (pv && pv.data && pv.data.error ? ': ' + pv.data.error : '.');
+      }
+    } catch (e) { document.getElementById('w101prev').textContent = 'Could not build the preview.'; }
+
+    sendBtn.addEventListener('click', async function () {
+      var opt = sel.options[sel.selectedIndex];
+      if (!opt || !opt.value) { warn.className = 'bad'; warn.id = 'w101warn'; warn.textContent = 'Pick a channel first.'; return; }
+      sendBtn.disabled = true; sendBtn.textContent = 'Sending...';
+      warn.classList.remove('bad'); warn.textContent = '';
+      try {
+        var r = await db.functions.invoke('project-slack', {
+          body: {
+            action: 'send', project_id: p.id, channel_id: opt.value,
+            channel_name: opt.getAttribute('data-name') || opt.value,
+            note: (document.getElementById('w101note').value || '').trim()
+          }
+        });
+        var d = (r && r.data) || {};
+        if (d.outcome === 'sent') {
+          try { localStorage.setItem('wa101.ch.' + p.id, opt.value); localStorage.setItem('wa101.ch', opt.value); } catch (e) { /* private mode */ }
+          toast('Posted to #' + (d.channel || 'Slack'));
+          closeModal();
+        } else if (d.outcome === 'sent_webhook') {
+          toast('Posted to the Hub notifications channel');
+          warn.textContent = d.note || 'Posted to the Hub notifications channel instead.';
+          sendBtn.textContent = 'Send to Slack'; sendBtn.disabled = false;
+        } else {
+          warn.classList.add('bad');
+          warn.textContent = d.error || (r && r.error && 'Could not send.') || 'Could not send.';
+          sendBtn.textContent = 'Send to Slack'; sendBtn.disabled = false;
+        }
+      } catch (e) {
+        warn.classList.add('bad'); warn.textContent = 'Could not send.';
+        sendBtn.textContent = 'Send to Slack'; sendBtn.disabled = false;
+      }
+    });
+  }
+
+  if (typeof wa27RenderProject === 'function') {
+    var __rp101 = wa27RenderProject;
+    wa27RenderProject = async function (ref, deptForGeneral) {
+      await __rp101.apply(this, arguments);
+      try {
+        if (ref === 'general') return;
+        if (typeof isStaff !== 'function' || !isStaff()) return;
+        var p = wa27Find(ref);
+        if (!p) return;
+        var h2 = document.querySelector('#projectpage .card h2');
+        if (!h2 || document.getElementById('w101btn')) return;
+        var b = document.createElement('button');
+        b.className = 'btn ghost mini';
+        b.id = 'w101btn';
+        b.textContent = 'Send to Slack';
+        b.addEventListener('click', function () { w101Open(p); });
+        h2.appendChild(b);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

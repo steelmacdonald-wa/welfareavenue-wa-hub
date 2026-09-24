@@ -1,0 +1,333 @@
+/* =====================================================================
+   WA v43 buttons, dedupe, and page help
+   (01/08/26)
+   Usability pass over the whole Hub.
+   1. Every text-link action becomes a slim pill button with a hover
+      state (edit, reassign, move, share, SOP editing, onboarding and
+      admin links, and friends). One consistent look everywhere.
+   2. Department pages stop repeating themselves: the executive
+      decisions card now lives INSIDE the Decisions dropdown at the
+      top (one decisions surface per page, recommendations included),
+      and the old compact goals card is retired in favour of the
+      Quarterly goals block (all goal editing lives on the Goals
+      page). The "All goals and quarters" jump is preserved as a pill
+      in the goals block. Nothing loses functionality; things stop
+      appearing twice.
+   3. Every major page gets a "? How this page works" button beside
+      its title that opens a plain-language explainer.
+   4. The training catalog becomes editable for admins and leaders
+      (add a training, edit any card), completing the item deferred
+      from v39.
+   ===================================================================== */
+(function () {
+  if (document.getElementById('wa43css')) return;
+
+  /* ---- 1. slim pill buttons everywhere ---- */
+  var PILL = '.edit-btn,.reassign-btn,.move-btn,[data-wa21more],[data-agshare],[data-w24e],' +
+    '[data-w25a],[data-w25u],[data-w25d],[data-w25x],[data-w26ph],[data-w26tx],' +
+    '[data-w29all],[data-w29ge],[data-w29ga],[data-w27add],[data-w27edit],[data-w27mv],' +
+    '[data-w37open],[data-w37master],[data-w37e],[data-w37x],[data-w37add],' +
+    '[data-w39hr],[data-w39del],[data-w39ask],[data-w40t],[data-ocmore],' +
+    '[data-w43ta],[data-w43te]';
+  var st = document.createElement('style');
+  st.id = 'wa43css';
+  st.textContent = '' +
+    PILL + '{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
+    'padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;' +
+    'cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    PILL.split(',').join(':hover,') + ':hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);color:#14302b !important;}' +
+    '.btn:hover{filter:brightness(.96);}' +
+    '.w39tool:hover,.wa24-links a:hover{background:rgba(31,95,79,.1);}' +
+    /* decisions card docked inside the dropdown */
+    '.w39dd .exec-card{box-shadow:none;border-left:none;margin:0;padding:0;background:transparent;}' +
+    '.w39dd .exec-card > h2,.w39dd .exec-card > p.read{display:none;}' +
+    /* page help */
+    '.w43help{float:right;display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
+    'padding:2px 11px;font-size:11.5px;font-weight:600;color:#1f5f4f;cursor:pointer;line-height:1.6;margin-left:8px;}' +
+    '.w43help:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w43helprow{text-align:right;margin:0 0 6px;}' +
+    '.w43hm p{font-size:13px;line-height:1.55;color:#3d4642;margin:8px 0;}';
+  document.head.appendChild(st);
+
+  /* ---- 2. department pages: one decisions surface, one goals surface ---- */
+  function wa43PlaceExec(id) {
+    try {
+      var panel = document.getElementById(id);
+      if (!panel) return;
+      var card = panel.querySelector('.exec-card');
+      if (card) {
+        var dd = panel.querySelector('.w39dd');
+        if (!dd) {
+          dd = document.createElement('details');
+          dd.className = 'w39dd w39top';
+          var n = card.querySelectorAll('.exec-item').length;
+          dd.innerHTML = '<summary>Executive decisions<span class="cnt">' + n + ' open</span><span class="chev">&#9662;</span></summary><div class="bd"></div>';
+          panel.insertBefore(dd, panel.firstChild);
+        }
+        var bd = dd.querySelector('.bd');
+        if (bd && card.parentElement !== bd) {
+          bd.innerHTML = '';
+          bd.appendChild(card);
+        }
+      }
+      /* retire the compact goals card on department pages only */
+      panel.querySelectorAll('.card.gl-card').forEach(function (el) { el.remove(); });
+      /* keep the "All goals and quarters" jump inside the goals block */
+      var gb = panel.querySelector('.w39goals');
+      if (gb && !gb.querySelector('[data-w29all]')) {
+        var tail = gb.lastElementChild;
+        if (tail) tail.insertAdjacentHTML('beforeend', ' <a class="w37edit" data-w29all="' + id + '">All goals and quarters</a>');
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof renderDeptGoalsCards === 'function') {
+    renderDeptGoalsCards = function () {
+      try {
+        document.querySelectorAll('section.panel:not(#goals) .card.gl-card').forEach(function (el) { el.remove(); });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof renderDeptExecCard === 'function') {
+    var __ec43 = renderDeptExecCard;
+    renderDeptExecCard = function (d) {
+      __ec43(d);
+      wa43PlaceExec(d);
+    };
+  }
+  if (typeof wa39Recompose === 'function') {
+    var __rc43 = wa39Recompose;
+    wa39Recompose = function (id) {
+      __rc43(id);
+      try {
+        var panel = document.getElementById(id);
+        if (panel && !panel.querySelector('.exec-card') && typeof renderDeptExecCard === 'function' && id !== 'board') {
+          renderDeptExecCard(id);
+        }
+      } catch (e) { /* non-fatal */ }
+      wa43PlaceExec(id);
+    };
+  }
+  if (typeof renderSection === 'function') {
+    var __rs43 = renderSection;
+    renderSection = function (id) {
+      __rs43(id);
+      wa43PlaceExec(id);
+      wa43HelpBtn(id);
+    };
+  }
+
+  /* ---- 3. page help ---- */
+  var WA43_TITLE = {
+    mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
+    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training',
+    volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
+    adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages'
+  };
+  var WA43_HELP = {
+    mypage: '<p>Your personal view: your open tasks across every department, your check-in hours, and who is online right now.</p><p>Click any task to jump to it on its department page. Use the chips at the top to jump to your department or the decisions list.</p>',
+    overview: '<p>The organization at a glance: stat tiles, your plate, requests waiting on you or your department, and the open executive decisions list.</p><p>Tick a decision to record what was decided (you will be asked for a note). Use + Add decision for a new one. Decided items stay in the Decided list below.</p>',
+    dashboard: '<p>How work is moving: task completion and cycle times, decision aging, overdue tasks, Slack check-in hours and ClickUp movement per department.</p><p>Everything links: click a decision or task row to open it.</p>',
+    dept: '<p>Everything one department is doing, in one place.</p><p>Top: the Decisions dropdown (executive calls for this department, with AI recommendations), the Quarterly goals block, and quick tools.</p><p>Below: updates from recent meetings (grouped by meeting, with speakers), workstreams and tasks. Switch the task view between List, Board and Calendar, or filter by assignee. Staff can add updates and tasks, and edit, reassign or move any task. Incoming requests and the Projects card sit at the bottom.</p>',
+    requests: '<p>The catalogue of things you can ask another department for. Pick a request type, fill the short form, and it routes to the right team.</p><p>Track status here or on the receiving department page; assignees and statuses update live.</p>',
+    agendas: '<p>Build an agenda for any meeting: pick the type, department and attendees, then Generate to draft one from recent transcripts and live tasks.</p><p>Items linked to real tasks carry live checkboxes. Reorder, add your own items, mark the agenda final, and share a private link with people outside the Hub.</p>',
+    importantinfo: '<p>Shared links, tools and key resources in one place. Secrets stay masked until you reveal them.</p><p>Staff can add entries with the form at the bottom.</p>',
+    goals: '<p>Quarterly goals, organized by quarter, then department, plus the Organization tier that department goals roll up to.</p><p>Add or edit goals, link projects to them, review AI suggested goals per department, and use the "How this fits together" button to see the flow from transcripts to tasks to projects to goals.</p>',
+    create: '<p>Draft branded content in the Welfare Avenue voice: emails, social posts, graphics, reports, newsletters and letters.</p><p>Describe what you need and Generate. Refine with follow-up instructions, copy or download the result, or send it for review. For graphics, pick a format and optionally add a photo.</p>',
+    finances: '<p>Budget vs actual by category, spending by department, and the full transaction ledger.</p><p>Re-allocate transactions inline, mark duplicates, import a statement, or log an expense. The fiscal year runs October 1 to September 30.</p>',
+    orgchart: '<p>The live structure, built from the roster. Green dots show who is online now.</p><p>Click anyone to open their profile, and from there their full page: bio, stats, current plate and training progress.</p>',
+    training: '<p>The training catalog by area, plus onboarding.</p><p>Mark trainings done for yourself or assign them to someone. New team members follow the weekly onboarding modules here; each person&#39;s progress shows on their people page, and HR sees the live onboarding board. Admins and leaders can add or edit catalog entries.</p>',
+    volunteering: '<p>The serving programme end to end.</p><p>Calendar: upcoming and past events. The SOP: the master checklist, editable, with changes flowing to upcoming events. Volunteers: everyone, searchable and editable. Inventory: stock plus purchase orders. Recipes: the cook library.</p><p>Open an event for its checklist, roster, confirmations, texting, Quo replies and driver itinerary.</p>',
+    transcripts: '<p>Paste or import any meeting transcript, tag the department, and save. The AI updates the department page within minutes and posts a summary to Slack.</p><p>Search and filter the archive below; every transcript shows what it contributed. Use Reprocess if something did not land.</p>',
+    activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',
+    adminpanel: '<p>Who sees what. Set each person&#39;s role: admins manage everything, leaders see every page, members see the work surfaces, viewers see the overview only.</p><p>Tab overrides win over the role default. Changes apply the next time the person loads the Hub.</p>',
+    projectpage: '<p>One project&#39;s tasks and details. Tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
+    personpage: '<p>One person: their AI bio, fiscal-year stats, current plate, finished work, and training and onboarding progress.</p>'
+  };
+  function wa43Key(id) {
+    if (typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(id) >= 0) return 'dept';
+    return WA43_HELP[id] ? id : null;
+  }
+  function wa43HelpBtn(id) {
+    try {
+      var key = wa43Key(id);
+      if (!key) return;
+      var panel = document.getElementById(id);
+      if (!panel || panel.querySelector('[data-w43help]')) return;
+      var host = key === 'dept' ? null : (panel.querySelector('.card h2') || panel.querySelector('h2'));
+      var b = document.createElement('button');
+      b.className = 'w43help';
+      b.setAttribute('data-w43help', key);
+      b.innerHTML = '&#63; How this page works';
+      if (host) host.appendChild(b);
+      else {
+        var row = document.createElement('div');
+        row.className = 'w43helprow';
+        row.appendChild(b);
+        panel.insertBefore(row, panel.firstChild);
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof showPanel === 'function') {
+    var __sp43 = showPanel;
+    showPanel = function (id) {
+      __sp43(id);
+      try {
+        var act = document.querySelector('.panel.active');
+        if (act) {
+          wa43HelpBtn(act.id);
+          /* some pages rewrite their own header right after showPanel */
+          setTimeout(function () { wa43HelpBtn(act.id); }, 500);
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof renderGoalsPage === 'function') {
+    var __gp43 = renderGoalsPage;
+    renderGoalsPage = function () {
+      var r = __gp43.apply(this, arguments);
+      wa43HelpBtn('goals');
+      return r;
+    };
+  }
+  if (typeof waFinRender === 'function') {
+    var __fr43 = waFinRender;
+    waFinRender = function () {
+      var r = __fr43.apply(this, arguments);
+      wa43HelpBtn('finances');
+      return r;
+    };
+  }
+  if (typeof waVolPaint === 'function') {
+    var __vp43 = waVolPaint;
+    waVolPaint = function () {
+      __vp43.apply(this, arguments);
+      wa43HelpBtn('volunteering');
+    };
+  }
+
+  /* ---- 4. editable training catalog (deferred from v39) ---- */
+  function wa43CanEdit() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) {
+        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader';
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  }
+  function wa43Decorate() {
+    try {
+      if (!wa43CanEdit()) return;
+      var body = document.getElementById('w36body');
+      if (!body) return;
+      if (!body.querySelector('[data-w43ta]')) {
+        var onb = body.querySelector('.w36onb');
+        var bar = document.createElement('div');
+        bar.style.cssText = 'margin:4px 0 10px;text-align:right;';
+        bar.innerHTML = '<a data-w43ta="1">+ Add a training</a>';
+        if (onb && onb.nextSibling) body.insertBefore(bar, onb.nextSibling);
+        else body.insertBefore(bar, body.firstChild);
+      }
+      body.querySelectorAll('.w36card').forEach(function (card) {
+        if (card.querySelector('[data-w43te]')) return;
+        var me = card.querySelector('[data-w36me]');
+        if (!me) return;
+        var row = card.querySelector('.w36row');
+        if (row) row.insertAdjacentHTML('beforeend', '<a data-w43te="' + me.getAttribute('data-w36me') + '">Edit</a>');
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa36Render === 'function') {
+    var __tr43 = wa36Render;
+    wa36Render = async function () {
+      await __tr43.apply(this, arguments);
+      wa43Decorate();
+    };
+  }
+  function wa43TrainModal(tid) {
+    var t = null;
+    try {
+      (WA36_TRAININGS || []).forEach(function (x) { if (String(x.id) === String(tid)) t = x; });
+    } catch (e) { /* new */ }
+    var cats = [];
+    try {
+      (WA36_TRAININGS || []).forEach(function (x) { if (x.category && cats.indexOf(x.category) < 0) cats.push(x.category); });
+    } catch (e) { /* empty */ }
+    function v(x) { return t && t[x] != null ? String(t[x]) : ''; }
+    openModal('<h3>' + (t ? 'Edit training' : 'Add a training') + '</h3>' +
+      '<label class="m-sub">Title</label><input id="w43tt" style="width:100%" value="' + esc(v('title')) + '" />' +
+      '<label class="m-sub" style="margin-top:8px;display:block">Category</label>' +
+      '<input id="w43tc" style="width:100%" list="w43cl" value="' + esc(v('category')) + '" />' +
+      '<datalist id="w43cl">' + cats.map(function (c) { return '<option value="' + esc(c) + '"></option>'; }).join('') + '</datalist>' +
+      '<label class="m-sub" style="margin-top:8px;display:block">Link (Loom, Slack, doc...)</label><input id="w43tu" style="width:100%" value="' + esc(v('resource_url')) + '" />' +
+      '<label class="m-sub" style="margin-top:8px;display:block">Length in minutes (optional)</label><input id="w43td" type="number" style="width:120px" value="' + (t && t.duration_sec ? Math.round(t.duration_sec / 60) : '') + '" />' +
+      '<label class="m-sub" style="margin-top:8px;display:block">Description (optional)</label><textarea id="w43tds" style="width:100%;min-height:60px">' + esc(v('description')) + '</textarea>' +
+      '<label class="m-sub" style="margin-top:8px;display:block">Path group (optional, e.g. Marketing path)</label><input id="w43tg" style="width:100%" value="' + esc(v('path_group')) + '" />' +
+      (t ? '<label style="display:flex;gap:7px;align-items:center;margin-top:10px;font-size:13px"><input type="checkbox" id="w43tar" style="width:15px;height:15px" /> Retire this training (hides it from the catalog)</label>' : '') +
+      '<div class="m-actions"><button class="btn" id="w43tsv">Save</button> <button class="btn ghost" id="w43tcx">Cancel</button></div>');
+    document.getElementById('w43tcx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w43tsv').addEventListener('click', async function () {
+      var title = document.getElementById('w43tt').value.trim();
+      if (!title) { toast('The training needs a title'); return; }
+      var mins = parseInt(document.getElementById('w43td').value, 10);
+      var patch = {
+        title: title,
+        category: document.getElementById('w43tc').value.trim() || 'General',
+        resource_url: document.getElementById('w43tu').value.trim() || null,
+        duration_sec: isNaN(mins) ? null : mins * 60,
+        description: document.getElementById('w43tds').value.trim() || null,
+        path_group: document.getElementById('w43tg').value.trim() || null
+      };
+      var ar = document.getElementById('w43tar');
+      if (ar && ar.checked) patch.active = false;
+      var r;
+      if (t) r = await db.from('trainings').update(patch).eq('id', t.id);
+      else { patch.source = 'hub'; patch.active = true; r = await db.from('trainings').insert(patch); }
+      if (r.error) { toast('Could not save the training'); return; }
+      closeModal();
+      try { await wa36Load(true); wa36Render(); } catch (e) { /* non-fatal */ }
+      toast('Saved');
+    });
+  }
+
+  /* ---- delegated clicks ---- */
+  if (!document.body.dataset.wa43Wired) {
+    document.body.dataset.wa43Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var h = e.target.closest && e.target.closest('[data-w43help]');
+      if (h) {
+        var key = h.getAttribute('data-w43help');
+        openModal('<h3>' + esc(WA43_TITLE[key] || 'This page') + '</h3><div class="w43hm">' + (WA43_HELP[key] || '') + '</div>' +
+          '<div class="m-actions"><button class="btn" id="w43hc">Got it</button></div>');
+        var c = document.getElementById('w43hc');
+        if (c) c.addEventListener('click', function () { closeModal(); });
+        return;
+      }
+      var ta = e.target.closest && e.target.closest('[data-w43ta]');
+      if (ta) { if (wa43CanEdit()) wa43TrainModal(null); return; }
+      var te = e.target.closest && e.target.closest('[data-w43te]');
+      if (te) { if (wa43CanEdit()) wa43TrainModal(te.getAttribute('data-w43te')); return; }
+    });
+  }
+
+  /* ---- boot ---- */
+  if (typeof startApp === 'function') {
+    var __sa43 = startApp;
+    startApp = async function () {
+      await __sa43();
+      try {
+        var act = document.querySelector('.panel.active');
+        if (act) wa43HelpBtn(act.id);
+        if (typeof DEPT_ORDER !== 'undefined') DEPT_ORDER.forEach(wa43PlaceExec);
+        wa43Decorate();
+        /* the v39 delayed recompose runs 1.2s after boot; sweep again after it */
+        setTimeout(function () {
+          try {
+            if (typeof DEPT_ORDER !== 'undefined') DEPT_ORDER.forEach(wa43PlaceExec);
+            document.querySelectorAll('section.panel:not(#goals) .card.gl-card').forEach(function (el) { el.remove(); });
+          } catch (e) { /* non-fatal */ }
+        }, 1800);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

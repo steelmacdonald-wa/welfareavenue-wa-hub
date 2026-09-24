@@ -1,0 +1,55 @@
+/* =====================================================================
+   WA v64 tasks route to the owner's department
+   (03/08/26)
+   Adding a NEW task from any department page now checks who it is
+   for: if the owner is on the roster and belongs to a different
+   department, the task files into THAT department instead, with a
+   toast saying where it went. Rules to stay safe: only new tasks
+   (edits never move), only when the owner matches exactly one active
+   roster member, and the workstream is cleared on reroute (it
+   belonged to the other department). Everything else about the task
+   modal is untouched.
+   ===================================================================== */
+(function () {
+  if (window.__wa64) return;
+  window.__wa64 = 1;
+
+  function wa64Match(ownerText) {
+    var q = String(ownerText || '').trim().toLowerCase();
+    if (!q) return null;
+    var members = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false && m.department; });
+    /* exact full-name match first */
+    var exact = members.filter(function (m) { return String(m.name || '').toLowerCase() === q; });
+    if (exact.length === 1) return exact[0];
+    /* then unique first-token match */
+    var ft = q.split(/\s+/)[0];
+    if (!ft) return null;
+    var firsts = members.filter(function (m) { return String(m.name || '').trim().split(/\s+/)[0].toLowerCase() === ft; });
+    if (firsts.length === 1) return firsts[0];
+    return null;
+  }
+
+  if (typeof saveTaskModal === 'function') {
+    var __stm64 = saveTaskModal;
+    saveTaskModal = async function (deptId, task) {
+      try {
+        if (!task) { /* only brand new tasks reroute */
+          var ownerEl = document.getElementById('tmOwner');
+          var m = wa64Match(ownerEl ? ownerEl.value : '');
+          if (m && m.department && m.department !== deptId
+            && typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(m.department) >= 0) {
+            var subEl = document.getElementById('tmSub');
+            if (subEl) subEl.value = '';
+            var out = await __stm64.call(this, m.department, task);
+            try {
+              toast('Filed to ' + ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[m.department]) || m.department)
+                + " (" + m.name.split(' ')[0] + "'s department)");
+            } catch (e2) { /* toast only */ }
+            return out;
+          }
+        }
+      } catch (e) { /* fall through to normal save */ }
+      return __stm64.apply(this, arguments);
+    };
+  }
+})();

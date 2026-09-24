@@ -1,0 +1,60 @@
+/* =====================================================================
+   WA v14 UI enhancements (25/07/26)
+   Voice to text in the chat assistant via the browser's built in
+   SpeechRecognition (Chrome, Edge, Safari incl. iOS; not Firefox).
+   Tap the mic, speak, words stream into the input, tap again or pause
+   to stop. Language follows the device locale, so French dictation
+   works for francophone team members.
+   ===================================================================== */
+(function () {
+  var st = document.createElement('style');
+  st.textContent = ''
+    + '#wacMic{background:var(--wa-paper);color:var(--wa-text);border:1px solid var(--wa-line);border-radius:9px;padding:8px 11px;cursor:pointer;font-size:14px;}'
+    + '#wacMic.rec{background:#b3402f;color:#fff;border-color:#b3402f;animation:waPulse 1.2s infinite;}'
+    + '@keyframes waPulse{0%{box-shadow:0 0 0 0 rgba(179,64,47,.5);}70%{box-shadow:0 0 0 9px rgba(179,64,47,0);}100%{box-shadow:0 0 0 0 rgba(179,64,47,0);}}';
+  document.head.appendChild(st);
+})();
+
+function waWireMic() {
+  var mic = document.getElementById('wacMic');
+  var inp = document.getElementById('wacInput');
+  if (!mic || !inp || mic.dataset.wired) return;
+  mic.dataset.wired = '1';
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    mic.style.opacity = '.4';
+    mic.title = 'Voice input is not supported in this browser';
+    mic.addEventListener('click', function () { toast('Voice input is not supported in this browser, try Chrome or Safari'); });
+    return;
+  }
+  var rec = null, active = false, base = '';
+  mic.addEventListener('click', function () {
+    if (active) { try { rec.stop(); } catch (e) { /* stopping */ } return; }
+    rec = new SR();
+    rec.lang = navigator.language || 'en-CA';
+    rec.interimResults = true;
+    rec.continuous = false;
+    base = inp.value ? inp.value + ' ' : '';
+    rec.onresult = function (ev) {
+      var txt = '';
+      for (var i = 0; i < ev.results.length; i++) { txt += ev.results[i][0].transcript; }
+      inp.value = base + txt;
+    };
+    rec.onend = function () { active = false; mic.classList.remove('rec'); inp.focus(); };
+    rec.onerror = function (ev) {
+      active = false; mic.classList.remove('rec');
+      if (ev.error === 'not-allowed') toast('Microphone permission was blocked, allow it for this site in the browser');
+    };
+    try { rec.start(); active = true; mic.classList.add('rec'); } catch (e) { toast('Could not start the microphone'); }
+  });
+}
+
+(function () {
+  var __sa14 = startApp;
+  startApp = async function () {
+    await __sa14();
+    try { if (isStaff()) waWireMic(); } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

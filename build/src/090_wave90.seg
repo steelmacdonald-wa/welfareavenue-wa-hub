@@ -1,0 +1,448 @@
+/* =====================================================================
+   WA v90 finances upgrade (07/08/26): PDF statement import + charts
+   =====================================================================
+   1. The Import bank statement modal accepts the bank's PDF directly
+      (finance-import v3 reads PDFs natively). CSV/text paths unchanged.
+   2. A Charts section on the Finances page: income vs spending by
+      month, net position over the year, spending by category, income
+      by source, department share of spending, and budget vs actual
+      bullet bars. All hand-drawn SVG/HTML, no new dependencies, and
+      every figure excludes flagged duplicates, same as the tables.
+   3. Add a budget line: staff can create new budget categories that
+      flow into the tables, the dropdowns, the charts, and the AI
+      importer (finance-import v4 reads them from finance_budgets).
+   4. Teach the AI: an editable guidance note (app_config key
+      finance_ai_guidance) appended to the importer's prompt, so the
+      team controls how donations and expenses get categorised.
+   ===================================================================== */
+(function () {
+  if (window.__wa90) return; window.__wa90 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w90grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:8px 0 4px;}' +
+    '.w90box{background:rgba(127,127,127,.07);border-radius:10px;padding:10px 12px;min-width:0;}' +
+    '.w90box.wide{grid-column:1/-1;}' +
+    '.w90t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);margin-bottom:6px;}' +
+    '.w90box svg{width:100%;height:auto;display:block;}' +
+    '.w90ax{font-size:9.5px;fill:var(--wa-muted,#7b8a86);}' +
+    '.w90row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:11.5px;}' +
+    '.w90row .l{flex:0 0 126px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w90row .b{flex:1;height:9px;border-radius:5px;background:rgba(127,127,127,.16);overflow:visible;position:relative;min-width:40px;}' +
+    '.w90row .b i{display:block;height:100%;border-radius:5px;}' +
+    '.w90row .b s{position:absolute;top:-3px;bottom:-3px;width:2px;background:currentColor;opacity:.5;text-decoration:none;}' +
+    '.w90row .v{flex:0 0 auto;font-weight:700;font-size:11px;min-width:54px;text-align:right;}' +
+    '.w90leg{display:flex;gap:14px;font-size:10.5px;color:var(--wa-muted,#7b8a86);margin-top:5px;flex-wrap:wrap;}' +
+    '.w90leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px;}' +
+    '@media (max-width:640px){.w90row .l{flex-basis:96px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function w90K(n) {
+    n = Math.round(Number(n) || 0);
+    var a = Math.abs(n), s = n < 0 ? '-$' : '$';
+    if (a >= 100000) return s + Math.round(a / 1000) + 'k';
+    if (a >= 10000) return s + (a / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    if (a >= 1000) return s + (a / 1000).toFixed(1) + 'k';
+    return s + a;
+  }
+  function w90Nice(v) {
+    if (!(v > 0)) return 100;
+    var p = Math.pow(10, Math.floor(Math.log(v) / Math.LN10));
+    var steps = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
+    for (var i = 0; i < steps.length; i++) { if (steps[i] * p >= v) return steps[i] * p; }
+    return 10 * p;
+  }
+  function w90Months() {
+    var y = waFinFYNow() - 1;
+    var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var arr = [];
+    for (var i = 0; i < 12; i++) {
+      var m = (9 + i) % 12 + 1;
+      var yy = m >= 10 ? y : y + 1;
+      arr.push({ key: yy + '-' + ('0' + m).slice(-2), label: names[m - 1], inc: 0, spd: 0 });
+    }
+    return arr;
+  }
+  function w90Data() {
+    var M = w90Months();
+    var idx = {};
+    M.forEach(function (m, i) { idx[m.key] = i; });
+    var byCatEx = {}, byCatIn = {}, byDept = {};
+    var any = false;
+    WA_FIN_TX.forEach(function (t) {
+      if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+      var a = Number(t.amount);
+      var mi = idx[String(t.txn_date).slice(0, 7)];
+      any = true;
+      if (a >= 0) {
+        if (mi !== undefined) M[mi].inc += a;
+        byCatIn[t.category || 'Uncategorised'] = (byCatIn[t.category || 'Uncategorised'] || 0) + a;
+      } else {
+        if (mi !== undefined) M[mi].spd += -a;
+        byCatEx[t.category || 'Uncategorised'] = (byCatEx[t.category || 'Uncategorised'] || 0) + -a;
+        byDept[t.department || 'org'] = (byDept[t.department || 'org'] || 0) + -a;
+      }
+    });
+    var now = new Date();
+    var nowKey = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+    var cut = idx[nowKey] !== undefined ? idx[nowKey] : 11;
+    for (var i = 11; i > cut; i--) { if (M[i].inc || M[i].spd) { cut = i; break; } }
+    /* v92 forecast: when the toggle is on and we are looking at the FY that
+       contains today, project the remaining months from the average of the
+       last three months that have data. Clearly marked as an estimate. */
+    var proj = null;
+    try {
+      var natFY = ((now.getMonth() + 1) >= 10 ? now.getFullYear() + 1 : now.getFullYear());
+      if (window.WA_FIN_FC && waFinFYNow() === natFY) {
+        var lastIdx = -1;
+        for (var li = 11; li >= 0; li--) { if (M[li].inc || M[li].spd) { lastIdx = li; break; } }
+        if (lastIdx >= 0 && lastIdx < 11) {
+          var from = Math.max(0, lastIdx - 2), cnt = lastIdx - from + 1, ai = 0, asp = 0;
+          for (var pi = from; pi <= lastIdx; pi++) { ai += M[pi].inc; asp += M[pi].spd; }
+          ai = ai / cnt; asp = asp / cnt;
+          for (var fi = lastIdx + 1; fi <= 11; fi++) { M[fi].pinc = ai; M[fi].pspd = asp; }
+          proj = { from: lastIdx + 1, avgInc: ai, avgSpd: asp, months: cnt };
+        }
+      }
+    } catch (e) { proj = null; }
+    return { M: M, cut: cut, byCatEx: byCatEx, byCatIn: byCatIn, byDept: byDept, any: any, proj: proj };
+  }
+  function w90Sorted(obj) {
+    return Object.keys(obj).map(function (k) { return { label: k, value: obj[k] }; })
+      .filter(function (x) { return x.value > 0.005; })
+      .sort(function (a, b) { return b.value - a.value; });
+  }
+
+  /* ---------- chart builders ---------- */
+  function w90ChartMonthly(M, proj) {
+    var W = 680, H = 210, padL = 46, padR = 8, padT = 10, padB = 22;
+    var max = 0;
+    M.forEach(function (m) { max = Math.max(max, m.inc, m.spd, m.pinc || 0, m.pspd || 0); });
+    max = w90Nice(max);
+    var ih = H - padT - padB, iw = (W - padL - padR) / M.length;
+    var bw = Math.max(5, Math.min(13, (iw - 10) / 2));
+    var s = '';
+    for (var i = 0; i <= 4; i++) {
+      var y = H - padB - ih * i / 4;
+      s += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="rgba(127,127,127,.22)" stroke-width="1"/>';
+      s += '<text x="' + (padL - 6) + '" y="' + (y + 3) + '" text-anchor="end" class="w90ax">' + w90K(max * i / 4) + '</text>';
+    }
+    M.forEach(function (m, i) {
+      var cx = padL + iw * i + iw / 2;
+      var hi = ih * m.inc / max, hs = ih * m.spd / max;
+      if (m.inc > 0) s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - hi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hi.toFixed(1) + '" rx="1.5" fill="#3f9c7f"><title>' + m.label + ' income: ' + waFinMoney(m.inc, true) + '</title></rect>';
+      if (m.spd > 0) s += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - padB - hs).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="1.5" fill="#c96b5f"><title>' + m.label + ' spending: ' + waFinMoney(m.spd, true) + '</title></rect>';
+      if (m.pinc) {
+        var phi = ih * m.pinc / max, phs = ih * (m.pspd || 0) / max;
+        s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - phi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + phi.toFixed(1) + '" rx="1.5" fill="#3f9c7f" fill-opacity="0.35" stroke="#3f9c7f" stroke-dasharray="3,2" stroke-width="1"><title>' + m.label + ' PROJECTED income: about ' + waFinMoney(m.pinc) + '</title></rect>';
+        s += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - padB - phs).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + phs.toFixed(1) + '" rx="1.5" fill="#c96b5f" fill-opacity="0.35" stroke="#c96b5f" stroke-dasharray="3,2" stroke-width="1"><title>' + m.label + ' PROJECTED spending: about ' + waFinMoney(m.pspd || 0) + '</title></rect>';
+      }
+      s += '<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 13) + '" text-anchor="middle" class="w90ax">' + m.label + '</text>';
+    });
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Income and spending by month">' + s + '</svg>' +
+      '<div class="w90leg"><span><i style="background:#3f9c7f"></i>Income</span><span><i style="background:#c96b5f"></i>Spending</span>' +
+      (proj ? '<span><i style="background:rgba(63,156,127,.35);border:1px dashed #3f9c7f"></i>Projected (average of the last ' + proj.months + ' months with data)</span>' : '<span>Hover a bar for the exact amount</span>') +
+      '</div>';
+  }
+
+  function w90ChartNet(M, cut, proj) {
+    var W = 680, H = 190, padL = 46, padR = 52, padT = 12, padB = 22;
+    var cum = [], c = 0, i;
+    for (i = 0; i <= cut; i++) { c += M[i].inc - M[i].spd; cum.push(c); }
+    var end = proj ? 11 : cut;
+    if (proj) { cum = cum.slice(0, proj.from); c = cum[cum.length - 1]; }
+    var pcum = [], pc = c;
+    if (proj) {
+      for (i = proj.from; i <= 11; i++) { pc += (M[i].pinc || 0) - (M[i].pspd || 0); pcum.push(pc); }
+    }
+    var min = 0, max = 0;
+    cum.concat(pcum).forEach(function (v) { min = Math.min(min, v); max = Math.max(max, v); });
+    if (max - min < 1) { max = min + 1; }
+    var span = max - min;
+    max += span * 0.08; min -= span * 0.08;
+    var ih = H - padT - padB, iwid = W - padL - padR;
+    function X(j) { return padL + (end ? iwid * j / end : iwid / 2); }
+    function Y(v) { return padT + (max - v) / (max - min) * ih; }
+    var s = '';
+    var y0 = Y(0);
+    s += '<line x1="' + padL + '" y1="' + y0.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + y0.toFixed(1) + '" stroke="rgba(127,127,127,.4)" stroke-width="1" stroke-dasharray="3,3"/>';
+    s += '<text x="' + (padL - 6) + '" y="' + (y0 + 3).toFixed(1) + '" text-anchor="end" class="w90ax">$0</text>';
+    var pts = cum.map(function (v, j) { return X(j).toFixed(1) + ',' + Y(v).toFixed(1); }).join(' ');
+    var last = cum[cum.length - 1];
+    var col = last >= 0 ? '#3f9c7f' : '#c96b5f';
+    s += '<polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    cum.forEach(function (v, j) {
+      s += '<circle cx="' + X(j).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" fill="' + col + '"><title>End of ' + M[j].label + ': ' + waFinMoney(v, true) + ' net</title></circle>';
+    });
+    for (i = 0; i <= end; i++) {
+      s += '<text x="' + X(i).toFixed(1) + '" y="' + (H - padB + 13) + '" text-anchor="middle" class="w90ax">' + M[i].label + '</text>';
+    }
+    var endVal = last;
+    if (proj && pcum.length) {
+      var ppts = [X(cum.length - 1).toFixed(1) + ',' + Y(last).toFixed(1)].concat(pcum.map(function (v, j) {
+        return X(proj.from + j).toFixed(1) + ',' + Y(v).toFixed(1);
+      })).join(' ');
+      var pcol = pcum[pcum.length - 1] >= 0 ? '#3f9c7f' : '#c96b5f';
+      s += '<polyline points="' + ppts + '" fill="none" stroke="' + pcol + '" stroke-width="2" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>';
+      pcum.forEach(function (v, j) {
+        s += '<circle cx="' + X(proj.from + j).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" fill="none" stroke="' + pcol + '" stroke-width="1.5"><title>End of ' + M[proj.from + j].label + ' PROJECTED: about ' + waFinMoney(v) + ' net</title></circle>';
+      });
+      endVal = pcum[pcum.length - 1];
+      col = pcol;
+    }
+    s += '<text x="' + (X(end) + 7).toFixed(1) + '" y="' + (Y(endVal) + 3).toFixed(1) + '" class="w90ax" style="font-weight:700;fill:' + col + '">' + (proj ? '~' : '') + w90K(endVal) + '</text>';
+    var note = '';
+    if (proj && pcum.length) {
+      note = '<div class="w90leg"><span>If the last ' + proj.months + ' months with data continue: about ' + w90K(proj.avgInc) + ' in and ' + w90K(proj.avgSpd) + ' out per month, ending the year near <b>' + w90K(endVal) + '</b> net. An estimate, not a promise.</span></div>';
+    }
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Net position month by month">' + s + '</svg>' + note;
+  }
+
+  function w90HBars(items, color, total) {
+    var max = items.length ? items[0].value : 1;
+    return items.map(function (x) {
+      var pct = Math.max(1, Math.round(x.value / max * 100));
+      var share = total > 0 ? Math.round(x.value / total * 100) : 0;
+      return '<div class="w90row" title="' + esc(x.label) + ': ' + waFinMoney(x.value, true) + (total > 0 ? ' (' + share + '% of total)' : '') + '">' +
+        '<span class="l">' + esc(x.label) + '</span>' +
+        '<span class="b"><i style="width:' + pct + '%;background:' + color + '"></i></span>' +
+        '<span class="v">' + w90K(x.value) + (total > 0 ? ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">' + share + '%</span>' : '') + '</span></div>';
+    }).join('');
+  }
+
+  function w90Bullets() {
+    var rows = [];
+    var max = 1;
+    WA_FIN_CATS_EX.forEach(function (c) {
+      var bud = waFinBudget('FY', c);
+      var act = waFinActualCat('FY', c, false);
+      if (bud <= 0 && act <= 0) return;
+      max = Math.max(max, bud, act);
+      rows.push({ c: c, bud: bud, act: act });
+    });
+    if (!rows.length) return '<div class="fin-note">Set FY budgets in the table above to see this chart.</div>';
+    rows.sort(function (a, b) { return Math.max(b.bud, b.act) - Math.max(a.bud, a.act); });
+    return rows.map(function (r) {
+      var over = r.bud > 0 && r.act > r.bud;
+      var wAct = Math.round(r.act / max * 100);
+      var wBud = Math.round(r.bud / max * 100);
+      var tip = esc(r.c) + ': spent ' + waFinMoney(r.act, true) + ' of ' + waFinMoney(r.bud) + ' FY budget' + (over ? ' (over budget)' : '');
+      return '<div class="w90row" title="' + tip + '">' +
+        '<span class="l">' + esc(r.c) + '</span>' +
+        '<span class="b"><i style="width:' + wAct + '%;background:' + (over ? '#c96b5f' : '#2c7a66') + '"></i>' +
+        (r.bud > 0 ? '<s style="left:' + wBud + '%"></s>' : '') + '</span>' +
+        '<span class="v' + (over ? '" style="color:#c96b5f' : '') + '">' + w90K(r.act) + ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">/ ' + w90K(r.bud) + '</span></span></div>';
+    }).join('') + '<div class="w90leg"><span><i style="background:#2c7a66"></i>Spent</span><span><i style="background:#c96b5f"></i>Over budget</span><span>| marks the FY budget</span></div>';
+  }
+
+  function w90Charts() {
+    var sec = document.getElementById('finances');
+    if (!sec) return;
+    var kpis = sec.querySelector('.fin-kpis');
+    if (!kpis || document.getElementById('w90charts')) return;
+    var d = w90Data();
+    var html;
+    if (!d.any) {
+      html = '<div id="w90charts"><h3 class="block" style="color:#2c7a66">Charts</h3>' +
+        '<div class="fin-note">Charts appear once transactions are imported.</div></div>';
+    } else {
+      var ex = w90Sorted(d.byCatEx), inn = w90Sorted(d.byCatIn), dep = w90Sorted(d.byDept);
+      var totEx = ex.reduce(function (n, x) { return n + x.value; }, 0);
+      var totIn = inn.reduce(function (n, x) { return n + x.value; }, 0);
+      var deptName = {};
+      WA_FIN_DEPTS.forEach(function (x) { deptName[x[0]] = x[1]; });
+      dep.forEach(function (x) { x.label = deptName[x.label] || x.label; });
+      html = '<div id="w90charts"><h3 class="block" style="color:#2c7a66">Charts</h3>' +
+        '<div class="fin-note">The ' + waFinFYLabel() + ' picture at a glance. Duplicates excluded, same as the tables. Hover anything for exact amounts.</div>' +
+        '<div class="w90grid">' +
+        '<div class="w90box wide"><div class="w90t">Income vs spending by month' + (d.proj ? ' (with forecast)' : '') + '</div>' + w90ChartMonthly(d.M, d.proj) + '</div>' +
+        '<div class="w90box wide"><div class="w90t">Net position over the year' + (d.proj ? ' (with forecast)' : '') + '</div>' + w90ChartNet(d.M, d.cut, d.proj) + '</div>' +
+        '<div class="w90box"><div class="w90t">Where the money goes</div>' + w90HBars(ex, '#c96b5f', totEx) + '</div>' +
+        '<div class="w90box"><div class="w90t">Where the money comes from</div>' + (inn.length ? w90HBars(inn, '#3f9c7f', totIn) : '<div class="fin-note">No income recorded yet this year.</div>') + '</div>' +
+        '<div class="w90box"><div class="w90t">Department share of spending</div>' + w90HBars(dep, '#2c7a66', totEx) + '</div>' +
+        '<div class="w90box"><div class="w90t">Budget vs actual (FY, expenses)</div>' + w90Bullets() + '</div>' +
+        '</div></div>';
+    }
+    kpis.insertAdjacentHTML('afterend', html);
+  }
+
+  if (typeof waFinRender === 'function') {
+    var __fr90 = waFinRender;
+    waFinRender = function () {
+      __fr90.apply(this, arguments);
+      try { w90Charts(); } catch (e) { /* non-fatal */ }
+      try { w90Buttons(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- custom budget lines ---------- */
+  function w90MergeCats() {
+    (WA_FIN_BUD || []).forEach(function (b) {
+      if (b.scope !== 'category' || !b.key) return;
+      if (WA_FIN_CATS_IN.indexOf(b.key) >= 0 || WA_FIN_CATS_EX.indexOf(b.key) >= 0) return;
+      (b.kind === 'income' ? WA_FIN_CATS_IN : WA_FIN_CATS_EX).push(b.key);
+    });
+  }
+  if (typeof waFinLoad === 'function') {
+    var __fl90 = waFinLoad;
+    waFinLoad = async function () {
+      await __fl90.apply(this, arguments);
+      try { w90MergeCats(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  function w90BudLineModal() {
+    openModal('<h3>Add a budget line</h3>' +
+      '<p class="m-sub">Creates a new category everywhere at once: the budget tables, the allocation dropdowns, the charts, and the AI importer. Set its quarterly budgets in the table afterwards.</p>' +
+      '<label>Name</label><input type="text" id="w90bname" maxlength="60" placeholder="7150 Insurance" />' +
+      '<label>Type</label><select id="w90bkind"><option value="expense">Expense</option><option value="income">Income</option></select>' +
+      '<div class="m-actions"><button class="btn" id="w90bgo">Add line</button> <button class="btn ghost" id="w90bcancel">Cancel</button></div>');
+    var cancel = document.getElementById('w90bcancel');
+    if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+    var go = document.getElementById('w90bgo');
+    if (go) go.addEventListener('click', async function () {
+      var name = (document.getElementById('w90bname').value || '').replace(/\s+/g, ' ').trim();
+      var kind = document.getElementById('w90bkind').value === 'income' ? 'income' : 'expense';
+      if (name.length < 2) { toast('Give the line a name'); return; }
+      if (WA_FIN_CATS_IN.indexOf(name) >= 0 || WA_FIN_CATS_EX.indexOf(name) >= 0) { toast('That line already exists'); return; }
+      go.disabled = true;
+      var r = await db.from('finance_budgets').upsert({
+        fiscal_year: waFinFYLabel(), period: 'FY', scope: 'category', key: name,
+        kind: kind, amount: 0, updated_by: who(), updated_at: new Date().toISOString()
+      }, { onConflict: 'fiscal_year,period,scope,key' });
+      if (r.error) { go.disabled = false; toast('Could not add the line'); return; }
+      closeModal();
+      toast('Budget line added');
+      await waFinLoad(true);
+      waFinRender();
+    });
+  }
+
+  function w90Buttons() {
+    var sec = document.getElementById('finances');
+    if (!sec) return;
+    var act = sec.querySelector('.fin-actions');
+    if (!act || act.querySelector('[data-w90bud]')) return;
+    var b = document.createElement('button');
+    b.className = 'btn ghost mini';
+    b.setAttribute('data-w90bud', '1');
+    b.textContent = 'Add a budget line';
+    b.addEventListener('click', w90BudLineModal);
+    act.appendChild(b);
+  }
+
+  /* ---------- PDF-capable import modal ---------- */
+  if (typeof waFinImportModal === 'function') {
+    waFinImportModal = function () {
+      openModal('<h3>Import a bank statement</h3>' +
+        '<p class="m-sub">Choose the statement PDF straight from the bank, a CSV export, or paste the text. The AI extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
+        '<label>Statement file name</label><input type="text" id="finFile" placeholder="July 31, 2026.pdf" />' +
+        '<label>PDF, CSV or text file</label><input type="file" id="finUpload" accept=".pdf,.csv,.txt,application/pdf" />' +
+        '<div id="finPdfNote" class="fin-note" style="display:none"></div>' +
+        '<div id="finTextWrap"><label>Or paste the statement text</label><textarea id="finText" rows="8" placeholder="Paste the full statement text here"></textarea></div>' +
+        '<details id="w90guide" style="margin:10px 0 2px"><summary style="cursor:pointer;font-size:12px;font-weight:700">Teach the AI how to categorise</summary>' +
+        '<p class="m-sub">The AI already knows the chart of accounts, every budget line you have added, and the usual Welfare Avenue merchants. Add your own rules here, for example: Tim Hortons on event Sundays is volunteer meals, use 6020. E-transfers from board members are 4100 Donation. Saved rules apply to every future import.</p>' +
+        '<textarea id="w90gtext" rows="5" maxlength="4000" placeholder="Loading current guidance..."></textarea>' +
+        '<div style="margin-top:6px"><button class="btn ghost mini" id="w90gsave">Save guidance</button> <span id="w90gout" class="fin-note" style="display:inline"></span></div>' +
+        '</details>' +
+        '<div class="m-actions"><button class="btn" id="finGo">Import</button> <button class="btn ghost" id="finCancel">Cancel</button></div>');
+      (async function () {
+        var ta = document.getElementById('w90gtext');
+        if (!ta) return;
+        try {
+          var r = await db.from('app_config').select('value').eq('key', 'finance_ai_guidance').maybeSingle();
+          ta.value = (r && r.data && r.data.value) || '';
+          ta.placeholder = 'Your categorisation rules, one per line';
+        } catch (e) { ta.placeholder = 'Could not load saved guidance'; }
+        var sv = document.getElementById('w90gsave');
+        if (sv) sv.addEventListener('click', async function () {
+          var out = document.getElementById('w90gout');
+          sv.disabled = true;
+          var r2 = await db.from('app_config').upsert({ key: 'finance_ai_guidance', value: ta.value.slice(0, 4000), updated_at: new Date().toISOString() });
+          sv.disabled = false;
+          if (out) out.textContent = r2.error ? 'Save failed' : 'Saved. The next import uses it.';
+        });
+      })();
+      var pdfB64 = '';
+      var note = document.getElementById('finPdfNote');
+      var wrap = document.getElementById('finTextWrap');
+      function clearPdf() {
+        pdfB64 = '';
+        if (note) { note.style.display = 'none'; note.innerHTML = ''; }
+        if (wrap) wrap.style.display = '';
+        var u = document.getElementById('finUpload');
+        if (u) u.value = '';
+      }
+      var up = document.getElementById('finUpload');
+      if (up) up.addEventListener('change', function () {
+        var f = this.files && this.files[0];
+        if (!f) return;
+        var isPdf = /\.pdf$/i.test(f.name || '') || (f.type || '').indexOf('pdf') >= 0;
+        var fn = document.getElementById('finFile');
+        if (fn && !fn.value) fn.value = f.name;
+        if (isPdf) {
+          if (f.size > 11 * 1024 * 1024) { toast('That PDF is over 11MB. Export a smaller one or paste the text.'); this.value = ''; return; }
+          var fr = new FileReader();
+          fr.onload = function () {
+            var s = String(fr.result || '');
+            var comma = s.indexOf(',');
+            pdfB64 = comma >= 0 ? s.slice(comma + 1) : '';
+            if (!pdfB64) { toast('Could not read that PDF'); clearPdf(); return; }
+            if (note) {
+              note.innerHTML = 'PDF attached: <b>' + esc(f.name) + '</b> (' + Math.max(1, Math.round(f.size / 1024)) + ' KB). <a class="fin-lnk" id="finPdfClear">Remove</a>';
+              note.style.display = '';
+              var cl = document.getElementById('finPdfClear');
+              if (cl) cl.addEventListener('click', clearPdf);
+            }
+            if (wrap) wrap.style.display = 'none';
+          };
+          fr.readAsDataURL(f);
+        } else {
+          clearPdf();
+          if (fn && !fn.value) fn.value = f.name;
+          var fr2 = new FileReader();
+          fr2.onload = function () {
+            var t = document.getElementById('finText');
+            if (t) t.value = String(fr2.result || '').slice(0, 80000);
+          };
+          fr2.readAsText(f);
+        }
+      });
+      var cancel = document.getElementById('finCancel');
+      if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+      var go = document.getElementById('finGo');
+      if (go) go.addEventListener('click', async function () {
+        var fname = (document.getElementById('finFile').value || '').trim() || 'statement';
+        var body;
+        if (pdfB64) {
+          body = { pdf_base64: pdfB64, filename: fname };
+        } else {
+          var text = (document.getElementById('finText').value || '').trim();
+          if (text.length < 60) { toast('Choose a PDF or paste the statement text first'); return; }
+          body = { statement_text: text, filename: fname };
+        }
+        go.disabled = true;
+        go.textContent = 'Importing (about a minute)...';
+        try {
+          var r = await db.functions.invoke('finance-import', { body: body });
+          if (r.error) throw r.error;
+          var d = r.data || {};
+          closeModal();
+          if (d.all_duplicates) {
+            toast('Every transaction in that statement was already in the ledger (re-import). Nothing double-counted.');
+          } else {
+            toast('Imported ' + (d.imported || 0) + ' transactions' + (d.duplicates ? ', ' + d.duplicates + ' duplicates flagged' : ''));
+            if (d.period_warning) setTimeout(function () { toast('Heads up: ' + d.period_warning); }, 2600);
+          }
+          await waFinLoad(true);
+          waFinRender();
+        } catch (err) {
+          go.disabled = false;
+          go.textContent = 'Import';
+          toast('Import failed');
+        }
+      });
+    };
+  }
+})();

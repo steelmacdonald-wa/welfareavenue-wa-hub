@@ -1,0 +1,149 @@
+/* =====================================================================
+   WA v29 goals reorganization (29/07/26)
+   1. The goals page is organized as dropdowns: quarters first (newest
+      open), then departments inside each quarter, then every goal. Each
+      department goals card links through to its full list.
+   2. Goals are editable: add, edit, archive. Every goal carries a
+      description (used to match projects automatically), a measure, a
+      quarter, a status and a due date.
+   3. Projects attach to goals from the goal side too: link and unlink
+      in the goal editor.
+   4. Creating or editing a project suggests the best-matching goal from
+      the project name and description.
+   ===================================================================== */
+
+var WA29_FOCUS = null;
+
+(function () {
+  if (document.getElementById('wa29css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa29css';
+  st.textContent = '' +
+    '.w29q{margin:0 0 14px;border:1px solid rgba(127,127,127,.25);border-radius:11px;padding:4px 14px 10px;}' +
+    '.w29q>summary{cursor:pointer;font-weight:700;font-size:15px;padding:8px 0;color:#a87f2c;}' +
+    '.w29d{margin:8px 0;border-left:3px solid rgba(127,127,127,.25);padding-left:12px;}' +
+    '.w29d>summary{cursor:pointer;font-weight:600;font-size:13px;padding:5px 0;}' +
+    '.w29d>summary .n{opacity:.6;font-weight:400;margin-left:6px;font-size:11.5px;}' +
+    '.w29add{margin:6px 0 2px;}' +
+    '.w29ge{font-size:11.5px;margin:2px 0 12px;}' +
+    '.w29ge a{color:#2c7a66;cursor:pointer;text-decoration:underline;opacity:.85;}' +
+    '.w29lp{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0;font-size:12px;}' +
+    '.w29lp .pjx{border:1px solid rgba(44,122,102,.45);color:#2c7a66;border-radius:8px;padding:2px 9px;}' +
+    '.w29lp .pjx a{cursor:pointer;margin-left:5px;opacity:.7;}' +
+    '.w29hint{font-size:12px;color:#a87f2c;margin:4px 0 0;}' +
+    '.w29hint a{cursor:pointer;text-decoration:underline;}';
+  document.head.appendChild(st);
+})();
+
+function wa29QKey(q) {
+  var m = String(q || '').match(/FY\s*(\d{4})/i);
+  var fy = m ? Number(m[1]) : 0;
+  var qm = String(q || '').match(/Q(\d)/i);
+  return fy * 10 + (qm ? Number(qm[1]) : 0);
+}
+
+function wa29Goals() {
+  return (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return g.status !== 'archived'; });
+}
+
+/* ---------- goals page: quarter > department > goals ---------- */
+if (typeof renderGoalsPage === 'function') {
+  /* dead: wave30 reset renderGoalsPage again without capture; removed in Phase 0 compaction */
+}
+
+/* ---------- goal editor ---------- */
+function wa29GoalModal(gid, presetDept, presetQ) { /* superseded: wave30 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+/* ---------- dept preview cards link through ---------- */
+if (typeof renderDeptGoalsCards === 'function') {
+  (function () {
+    /* dead wrap: wave43 reset renderDeptGoalsCards without capture; removed in Phase 0 compaction */
+  })();
+}
+
+/* ---------- project modal: suggest the best goal ---------- */
+function wa29Score(text, g) {
+  var stop = { the: 1, and: 1, for: 1, with: 1, that: 1, this: 1, from: 1, into: 1, our: 1, all: 1, are: 1 };
+  var toks = String(text || '').toLowerCase().split(/[^a-z0-9]+/).filter(function (t) { return t.length > 3 && !stop[t]; });
+  var hay = (String(g.title || '') + ' ' + String(g.detail || '') + ' ' + String(g.measure || '')).toLowerCase();
+  var score = 0;
+  var seen = {};
+  toks.forEach(function (t) { if (!seen[t] && hay.indexOf(t) >= 0) { score += 1; seen[t] = 1; } });
+  return score;
+}
+
+function wa29SuggestGoal() {
+  var name = (document.getElementById('w27pn') || { value: '' }).value || '';
+  var desc = (document.getElementById('w27pd') || { value: '' }).value || '';
+  var sel = document.getElementById('w27pg');
+  var hint = document.getElementById('w29gh');
+  if (!sel || !hint) return;
+  var text = name + ' ' + desc;
+  if (text.trim().length < 6) { hint.innerHTML = ''; return; }
+  var best = null, bestScore = 1;
+  wa29Goals().forEach(function (g) {
+    var s = wa29Score(text, g);
+    if (s > bestScore) { bestScore = s; best = g; }
+  });
+  if (!best || String(sel.value) === String(best.id)) { hint.innerHTML = ''; return; }
+  hint.innerHTML = 'Suggested goal: ' + esc(String(best.title).slice(0, 80)) + ' <a data-w29use="' + best.id + '">use it</a>';
+  var use = hint.querySelector('[data-w29use]');
+  if (use) use.addEventListener('click', function () {
+    sel.value = String(best.id);
+    hint.innerHTML = 'Linked to: ' + esc(String(best.title).slice(0, 80));
+  });
+}
+
+if (typeof wa27ProjectModal === 'function') {
+  (function () {
+    var __pm29 = wa27ProjectModal;
+    wa27ProjectModal = function (dept, existing) {
+      __pm29(dept, existing);
+      try {
+        var sel = document.getElementById('w27pg');
+        if (!sel || document.getElementById('w29gh')) return;
+        var hint = document.createElement('div');
+        hint.className = 'w29hint';
+        hint.id = 'w29gh';
+        sel.insertAdjacentElement('afterend', hint);
+        ['w27pn', 'w27pd'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener('input', wa29SuggestGoal);
+        });
+        wa29SuggestGoal();
+      } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  function wire() {
+    if (document.body.dataset.wa29Wired) return;
+    document.body.dataset.wa29Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var all = e.target.closest('[data-w29all]');
+      if (all) {
+        WA29_FOCUS = all.getAttribute('data-w29all');
+        location.hash = '#goals';
+        try { if (typeof renderGoalsPage === 'function') renderGoalsPage(); } catch (x) { /* non-fatal */ }
+        return;
+      }
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var ge = e.target.closest('[data-w29ge]');
+      if (ge) { try { wa29GoalModal(Number(ge.getAttribute('data-w29ge'))); } catch (x) { /* non-fatal */ } return; }
+      var ga = e.target.closest('[data-w29ga]');
+      if (ga) {
+        var bits = (ga.getAttribute('data-w29ga') || '|').split('|');
+        try { wa29GoalModal(null, bits[0] || null, bits[1] || null); } catch (x) { /* non-fatal */ }
+        return;
+      }
+    });
+  }
+  wire();
+  var __sa29 = startApp;
+  startApp = async function () {
+    await __sa29();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

@@ -1,0 +1,249 @@
+/* =====================================================================
+   WA v25 master SOP structural editing (29/07/26)
+   The SOP tab is the source of truth for event checklists. On top of
+   v24's per-step editing (name, assignee, help link, notes), staff can
+   now add steps and subtasks, remove steps, move steps (with their
+   subtasks) up and down, reorder whole sections, add new sections and
+   rename sections. Structure changes propagate to every upcoming
+   planned event through database triggers; events in progress or
+   completed keep their records. Section open/closed state survives
+   re-renders.
+   ===================================================================== */
+
+(function () {
+  if (document.getElementById('wa25css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa25css';
+  st.textContent = '.wa24-sx.w25row{margin-top:-4px;opacity:.75;}' +
+    '.wa24-sx.w25row:hover{opacity:1;}' +
+    '.wa25-secadd{margin:14px 0 2px;}';
+  document.head.appendChild(st);
+})();
+
+function wa25Subtree(id) {
+  var ids = [String(id)], grew = true;
+  while (grew) {
+    grew = false;
+    WA_VOL_TMPL.forEach(function (t) {
+      if (t.parent_id && ids.indexOf(String(t.parent_id)) >= 0 && ids.indexOf(String(t.id)) < 0) {
+        ids.push(String(t.id));
+        grew = true;
+      }
+    });
+  }
+  return ids;
+}
+
+function wa25Find(id) {
+  var hit = null;
+  WA_VOL_TMPL.forEach(function (t) { if (String(t.id) === String(id)) hit = t; });
+  return hit;
+}
+
+async function wa25Reload(openSecs) {
+  try {
+    await waVolLoad(true);
+    await waVolRender();
+    if (openSecs && openSecs.length) {
+      document.querySelectorAll('#volunteering details').forEach(function (d) {
+        var s = d.querySelector('summary');
+        var label = s ? (s.textContent || '').trim() : '';
+        openSecs.forEach(function (o) { if (label.indexOf(o) === 0) d.open = true; });
+      });
+    }
+  } catch (e) { toast('Could not refresh. Reload the page.'); }
+}
+
+function wa25OpenSecs() {
+  var out = [];
+  document.querySelectorAll('#volunteering details[open]').forEach(function (d) {
+    var s = d.querySelector('summary');
+    if (s) out.push((s.textContent || '').replace(/\d+ steps$/, '').trim());
+  });
+  return out;
+}
+
+/* ---------- add step or subtask ---------- */
+function wa25AddModal(anchorId) {
+  var a = wa25Find(anchorId);
+  if (!a) return;
+  var defPlace = (a.depth === 0) ? 'child' : 'after';
+  openModal('<h3>Add a step to the master SOP</h3>' +
+    '<p class="m-sub">The new step appears in the master SOP and on the checklist of every upcoming planned event. Events already in progress are not touched.</p>' +
+    '<label>Where</label><select id="w25Place">' +
+    '<option value="child"' + (defPlace === 'child' ? ' selected' : '') + '>As a subtask of &quot;' + esc(a.name || '') + '&quot;</option>' +
+    '<option value="after"' + (defPlace === 'after' ? ' selected' : '') + '>Right after &quot;' + esc(a.name || '') + '&quot;, same level</option>' +
+    '</select>' +
+    '<label>Step name</label><input type="text" id="w25Name" placeholder="What needs to happen" />' +
+    '<div class="m-row"><div><label>Assignee</label><input type="text" id="w25Owner" placeholder="Who owns this step" /></div>' +
+    '<div><label>Help link (Google Drive or doc)</label><input type="text" id="w25Help" placeholder="https://..." /></div></div>' +
+    '<label>Notes and how-to</label><textarea id="w25Desc" rows="4"></textarea>' +
+    '<div class="m-actions"><button class="btn" id="w25Save">Add the step</button> <button class="btn ghost" id="w25Cancel">Cancel</button></div>');
+  var cancel = document.getElementById('w25Cancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var save = document.getElementById('w25Save');
+  if (save) save.addEventListener('click', async function () {
+    var name = (document.getElementById('w25Name').value || '').trim();
+    if (!name) { toast('The step needs a name'); return; }
+    save.disabled = true;
+    var open = wa25OpenSecs();
+    if (open.indexOf(a.section) < 0) open.push(a.section);
+    var r = await db.rpc('sop_step_insert', {
+      p_anchor: String(a.id),
+      p_mode: document.getElementById('w25Place').value,
+      p_name: name,
+      p_owner: (document.getElementById('w25Owner').value || '').trim() || null,
+      p_help: (document.getElementById('w25Help').value || '').trim() || null,
+      p_desc: (document.getElementById('w25Desc').value || '').trim() || null
+    });
+    if (r.error) { save.disabled = false; toast('Could not add the step'); return; }
+    closeModal();
+    toast('Added to the master SOP and all upcoming planned events.');
+    wa25Reload(open);
+  });
+}
+
+/* ---------- add section ---------- */
+function wa25SecModal() {
+  openModal('<h3>Add a section</h3>' +
+    '<p class="m-sub">A section groups related steps, like Itineraries or Post Event. It lands at the bottom of the SOP; use the move links to place it. Add steps to it with &quot;add a step&quot;.</p>' +
+    '<label>Section name</label><input type="text" id="w25SecName" placeholder="Name the section" />' +
+    '<div class="m-actions"><button class="btn" id="w25SecSave">Add the section</button> <button class="btn ghost" id="w25SecCancel">Cancel</button></div>');
+  var cancel = document.getElementById('w25SecCancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var save = document.getElementById('w25SecSave');
+  if (save) save.addEventListener('click', async function () {
+    var name = (document.getElementById('w25SecName').value || '').trim();
+    if (!name) { toast('The section needs a name'); return; }
+    save.disabled = true;
+    var open = wa25OpenSecs();
+    open.push(name);
+    var r = await db.rpc('sop_step_insert', { p_anchor: null, p_mode: 'section', p_name: name, p_owner: null, p_help: null, p_desc: null });
+    if (r.error) { save.disabled = false; toast('Could not add the section'); return; }
+    closeModal();
+    toast('Section added at the bottom of the SOP.');
+    wa25Reload(open);
+  });
+}
+
+/* ---------- remove ---------- */
+function wa25DelModal(tid) {
+  var t = wa25Find(tid);
+  if (!t) return;
+  var n = wa25Subtree(tid).length;
+  var what = (t.depth === 0)
+    ? 'the whole &quot;' + esc(t.name || '') + '&quot; section (' + n + ' steps)'
+    : '&quot;' + esc(t.name || '') + '&quot;' + (n > 1 ? ' and its ' + (n - 1) + ' subtasks' : '');
+  openModal('<h3>Remove from the master SOP</h3>' +
+    '<p class="m-sub">This removes ' + what + ' from the master SOP and from the checklist of every upcoming planned event. Events already in progress or completed keep their records. Steel or Suhaib can restore it from the database if needed.</p>' +
+    '<div class="m-actions"><button class="btn" id="w25DelGo" style="background:#b3402f">Remove</button> <button class="btn ghost" id="w25DelCancel">Cancel</button></div>');
+  var cancel = document.getElementById('w25DelCancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var go = document.getElementById('w25DelGo');
+  if (go) go.addEventListener('click', async function () {
+    go.disabled = true;
+    var open = wa25OpenSecs();
+    var r = await db.rpc('sop_step_deactivate', { p_id: String(tid) });
+    if (r.error) { go.disabled = false; toast('Could not remove it'); return; }
+    closeModal();
+    toast('Removed from the master SOP and upcoming planned events.');
+    wa25Reload(open);
+  });
+}
+
+/* ---------- move ---------- */
+async function wa25Move(tid, dir) {
+  var open = wa25OpenSecs();
+  var r = await db.rpc('sop_step_move', { p_id: String(tid), p_dir: dir });
+  if (r.error) { toast('Could not move it'); return; }
+  if (r.data !== true) { toast('Already at the edge of its group'); return; }
+  wa25Reload(open);
+}
+
+/* ---------- render hooks ---------- */
+if (typeof waVolStepHtml === 'function') {
+  (function () {
+    var __sh25 = waVolStepHtml;
+    waVolStepHtml = function (t, s) {
+      var html = __sh25(t, s);
+      try {
+        if (WA24_EDIT && typeof isStaff === 'function' && isStaff()) {
+          html += '<div class="wa24-sx w25row">' +
+            '<a class="ed" data-w25a="' + t.id + '">add a step</a> ' +
+            '<a class="ed" data-w25u="' + t.id + '">move up</a> ' +
+            '<a class="ed" data-w25d="' + t.id + '">move down</a> ' +
+            '<a class="ed" data-w25x="' + t.id + '">remove</a></div>';
+        }
+      } catch (e) { /* non-fatal */ }
+      return html;
+    };
+  })();
+}
+
+if (typeof waVolRenderSop === 'function') {
+  (function () {
+    var __rs25 = waVolRenderSop;
+    waVolRenderSop = function () {
+      /* keep local section labels in step with renamed section headers */
+      try {
+        WA_VOL_TMPL.forEach(function (h) {
+          if (h.depth === 0 && h.section !== h.name) {
+            var old = h.section;
+            WA_VOL_TMPL.forEach(function (x) { if (x.section === old) x.section = h.name; });
+          }
+        });
+      } catch (e) { /* non-fatal */ }
+      var open = wa25OpenSecs();
+      __rs25();
+      try {
+        document.querySelectorAll('#volunteering details').forEach(function (d) {
+          var s = d.querySelector('summary');
+          var label = s ? (s.textContent || '').trim() : '';
+          open.forEach(function (o) { if (o && label.indexOf(o) === 0) d.open = true; });
+        });
+        var intro = document.querySelector('#volunteering .vl-empty');
+        if (intro) intro.textContent = 'This is the master SOP, the source of truth for every event. Edit a step or change its assignee, add or remove steps, or reorder them: every upcoming planned event updates to match. Events already in progress keep their own checklist.';
+        if (typeof isStaff === 'function' && isStaff() && !document.querySelector('#volunteering [data-w25sec]')) {
+          var all = document.querySelectorAll('#volunteering details');
+          var last = all.length ? all[all.length - 1] : null;
+          if (last) {
+            var row = document.createElement('div');
+            row.className = 'wa24-links wa25-secadd';
+            var b = document.createElement('button');
+            b.setAttribute('data-w25sec', '1');
+            b.textContent = 'Add a section';
+            row.appendChild(b);
+            last.insertAdjacentElement('afterend', row);
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  function wire() {
+    var sec = document.getElementById('volunteering');
+    if (!sec || sec.dataset.wa25Wired) return;
+    sec.dataset.wa25Wired = '1';
+    sec.addEventListener('click', function (e) {
+      var el = e.target.closest('[data-w25a],[data-w25u],[data-w25d],[data-w25x],[data-w25sec]');
+      if (!el) return;
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      try {
+        if (el.hasAttribute('data-w25a')) wa25AddModal(el.getAttribute('data-w25a'));
+        else if (el.hasAttribute('data-w25u')) wa25Move(el.getAttribute('data-w25u'), -1);
+        else if (el.hasAttribute('data-w25d')) wa25Move(el.getAttribute('data-w25d'), 1);
+        else if (el.hasAttribute('data-w25x')) wa25DelModal(el.getAttribute('data-w25x'));
+        else if (el.hasAttribute('data-w25sec')) wa25SecModal();
+      } catch (err) { /* non-fatal */ }
+    });
+  }
+  wire();
+  var __sa25 = startApp;
+  startApp = async function () {
+    await __sa25();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

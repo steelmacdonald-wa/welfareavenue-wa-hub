@@ -1,0 +1,483 @@
+/* =====================================================================
+   WA v105 HR tools: time off, policy sign-offs, discipline (07/08/26)
+   =====================================================================
+   Grounded in the Agency Handbook (Section 3 time-off, Section 5
+   discipline) and the Performance & Discipline Tracking doc in Drive.
+   1. HR centre (access-list gated, like wave103):
+      - Time off: pending requests w/ approve or decline, this-FY totals
+        per person and category, and a direct log form for HR.
+      - Policies and sign-offs: registry of policy docs (Drive links),
+        who has signed, who has not; HR can add a policy.
+      - Discipline tracker: the handbook ladders (acknowledgement,
+        time commitment, missed meetings, conduct) with per-step levels,
+        notes, doc links and clean-slate marking. People can see their
+        OWN record (handbook: "Employees can ask to see their record").
+   2. My page: "Your time off" (FY totals, own history, Request time off
+      modal that also files a Hub request routed to HR) and "Policies to
+      review" (open the Drive doc, then one-click sign off).
+   3. The sign-off fold also appears on the Training page, so reading
+      and signing the policies is part of master onboarding.
+   FY runs Oct 1 to Sep 30 (Welfare Avenue fiscal year).
+   ===================================================================== */
+(function () {
+  if (window.__wa105) return; window.__wa105 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w105card table{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '.w105card th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#8592a3);padding:4px 6px;}' +
+    '.w105card td{padding:5px 6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:top;}' +
+    '.w105mut{color:var(--wa-muted,#8592a3);font-size:11px;}' +
+    '.w105pend{background:rgba(255,171,0,.14);color:#a06f00;border-radius:6px;padding:1px 8px;font-size:10.5px;font-weight:700;}' +
+    '.w105ok{background:rgba(44,122,102,.14);color:#1f5f4f;border-radius:6px;padding:1px 8px;font-size:10.5px;font-weight:700;}' +
+    '.w105no{background:rgba(255,62,29,.12);color:#c4402a;border-radius:6px;padding:1px 8px;font-size:10.5px;font-weight:700;}' +
+    '.w105form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;padding-top:10px;border-top:1px dashed #e7e9f0;}' +
+    '.w105form label{display:block;font-size:10.5px;font-weight:700;color:var(--wa-muted,#8592a3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;}' +
+    '.w105form select,.w105form input{padding:7px 10px;font-size:13px;}' +
+    '.w105sign{background:#fff;border:1px solid rgba(44,122,102,.35);border-radius:10px;padding:10px 12px;margin:8px 0;}' +
+    '.w105sign b{color:#1f5f4f;}';
+  document.head.appendChild(css);
+
+  var TO_CATS = {
+    vacation: 'Vacation', school_break: 'School break', sick: 'Mental health / sick',
+    bereavement: 'Bereavement', religious: 'Religious holiday', wedding: 'Wedding', other: 'Other'
+  };
+  var TO_POLICY = {
+    vacation: '4 weeks in years 0-1, 5 weeks in years 1-2, 6 weeks in years 3-5. Volunteering 4 times a year earns an extra week, up to two.',
+    school_break: 'Full-time students only: 4 weeks a year, during exam periods, at most 1.5 weeks at a time, half commitment continues.',
+    sick: '7 days total a year.', bereavement: 'Two weeks for the loss of a loved one.',
+    religious: 'Days for religious holidays (Eid, Hanukkah and others).', wedding: 'Days off for your own or a close family wedding.', other: ''
+  };
+  var DISC = {
+    ack_messages: { label: 'Acknowledgement of messages (24h)', steps: ['Verbal warning', 'Written message on Slack by HR', 'Verbal warning by HR', 'Written email warning', 'Termination'] },
+    time_commitment: { label: 'Monthly time commitment', steps: ['Verbal warning', 'Written message on Slack by HR', 'Verbal warning by HR', 'Termination'] },
+    missed_meetings: { label: 'Missed 2 meetings in a row', steps: ['Verbal warning', '2nd verbal warning', '1st written warning', 'Termination'] },
+    conduct: { label: 'Standards of conduct (Section 4)', steps: ['1st formal warning', '2nd formal warning', '3rd formal warning / termination'] },
+    other: { label: 'Other', steps: ['Verbal warning', 'Written warning', 'Final warning'] }
+  };
+  function w105FY() {
+    var n = new Date();
+    var y = n.getMonth() >= 9 ? n.getFullYear() : n.getFullYear() - 1;
+    return { start: y + '-10-01', label: 'FY' + String(y + 1).slice(2) };
+  }
+  function w105Days(a, b) {
+    var d = (new Date(b) - new Date(a)) / 86400000 + 1;
+    return d > 0 ? Math.round(d * 2) / 2 : 0;
+  }
+  function w105Me() {
+    return {
+      email: ((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(),
+      name: (typeof USER !== 'undefined' && USER && (USER.name || USER.email)) || 'me'
+    };
+  }
+  async function w105IsHR() {
+    if (window.__w105hr !== undefined) return window.__w105hr;
+    try {
+      var r = await db.from('wa_hr_access').select('email').eq('email', w105Me().email);
+      window.__w105hr = !!(r.data && r.data.length);
+    } catch (e) { window.__w105hr = false; }
+    return window.__w105hr;
+  }
+
+  /* ============ HR centre: time off ============ */
+  async function w105TimeCard(panel) {
+    if (document.getElementById('w105to')) return;
+    var card = document.createElement('div');
+    card.className = 'card w105card';
+    card.id = 'w105to';
+    card.innerHTML = '<h2>Time off</h2><p class="read">Requests come from each person\'s My page (and the Requests page); approve or decline them here. Totals count approved days in the current fiscal year (Oct 1 to Sep 30).</p><div id="w105tobody">Loading...</div>';
+    panel.appendChild(card);
+    await w105TimeRender();
+  }
+  async function w105TimeRender() {
+    var body = document.getElementById('w105tobody');
+    if (!body) return;
+    try {
+      var fy = w105FY();
+      var r = await db.from('wa_timeoff').select('*').order('created_at', { ascending: false });
+      var rows = (r.data) || [];
+      var pend = rows.filter(function (t) { return t.status === 'requested'; });
+      var html = '';
+      if (pend.length) {
+        html += '<h3 class="block">Waiting on a decision (' + pend.length + ')</h3><table><tbody>';
+        pend.forEach(function (t) {
+          html += '<tr><td><b>' + esc(t.name) + '</b><div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + (t.note ? ': ' + esc(t.note) : '') + '</div></td>'
+            + '<td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + '<div class="w105mut">' + t.days + ' day' + (t.days === 1 ? '' : 's') + '</div></td>'
+            + '<td style="white-space:nowrap"><button class="btn mini" data-w105ap="' + t.id + '">Approve</button> <button class="btn ghost mini" data-w105de="' + t.id + '">Decline</button></td></tr>';
+        });
+        html += '</tbody></table>';
+      } else {
+        html += '<p class="read">No requests waiting.</p>';
+      }
+      var appr = rows.filter(function (t) { return t.status === 'approved' && t.start_date >= fy.start; });
+      var per = {};
+      appr.forEach(function (t) {
+        var p = per[t.name] = per[t.name] || {};
+        p[t.category] = (p[t.category] || 0) + Number(t.days || 0);
+      });
+      var names = Object.keys(per).sort();
+      if (names.length) {
+        html += '<h3 class="block">Approved days taken this ' + fy.label + '</h3><table><thead><tr><th>Person</th>' + Object.keys(TO_CATS).map(function (c) { return '<th>' + TO_CATS[c].split(' ')[0] + '</th>'; }).join('') + '</tr></thead><tbody>';
+        names.forEach(function (n) {
+          html += '<tr><td><b>' + esc(n) + '</b></td>' + Object.keys(TO_CATS).map(function (c) { return '<td>' + (per[n][c] || '') + '</td>'; }).join('') + '</tr>';
+        });
+        html += '</tbody></table>';
+      }
+      html += '<div class="w105form"><div><label>Person</label><select id="w105lp"></select></div>'
+        + '<div><label>Type</label><select id="w105lc">' + Object.keys(TO_CATS).map(function (c) { return '<option value="' + c + '">' + TO_CATS[c] + '</option>'; }).join('') + '</select></div>'
+        + '<div><label>From</label><input type="date" id="w105ls" /></div>'
+        + '<div><label>To</label><input type="date" id="w105le" /></div>'
+        + '<div><button class="btn mini" id="w105lgo">Log time off</button></div></div>'
+        + '<p class="w105mut" style="margin:6px 0 0">Handbook: vacation 4 to 6 weeks by tenure (plus volunteer bonus weeks), 7 mental health and sick days, 2 weeks bereavement. All time off is mutually exclusive.</p>';
+      body.innerHTML = html;
+      try {
+        var rr = await db.from('team_members').select('name, email').eq('active', true).order('name');
+        var sel = document.getElementById('w105lp');
+        if (sel) sel.innerHTML = ((rr.data) || []).map(function (m) { return '<option value="' + esc((m.email || '').toLowerCase()) + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</option>'; }).join('');
+      } catch (e) { /* roster optional */ }
+      body.querySelectorAll('[data-w105ap],[data-w105de]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var ap = this.hasAttribute('data-w105ap');
+          var id = Number(this.getAttribute(ap ? 'data-w105ap' : 'data-w105de'));
+          this.disabled = true;
+          var u = await db.from('wa_timeoff').update({ status: ap ? 'approved' : 'declined', decided_by: w105Me().email, decided_at: new Date().toISOString() }).eq('id', id);
+          if (u.error) { toast('Could not save the decision'); this.disabled = false; return; }
+          toast(ap ? 'Approved' : 'Declined');
+          w105TimeRender();
+        });
+      });
+      var go = document.getElementById('w105lgo');
+      if (go) go.addEventListener('click', async function () {
+        var sel2 = document.getElementById('w105lp');
+        var opt = sel2 && sel2.options[sel2.selectedIndex];
+        var s = (document.getElementById('w105ls') || {}).value, e = (document.getElementById('w105le') || {}).value;
+        if (!opt || !s || !e || e < s) { toast('Pick a person and valid dates'); return; }
+        this.disabled = true;
+        var ins = await db.from('wa_timeoff').insert({
+          email: opt.value || '', name: opt.getAttribute('data-name') || 'unknown',
+          category: (document.getElementById('w105lc') || {}).value || 'other',
+          start_date: s, end_date: e, days: w105Days(s, e),
+          status: 'approved', decided_by: w105Me().email, decided_at: new Date().toISOString()
+        });
+        this.disabled = false;
+        if (ins.error) { toast('Could not log it'); return; }
+        toast('Logged');
+        w105TimeRender();
+      });
+    } catch (e) { body.innerHTML = '<p class="read">Could not load time off.</p>'; }
+  }
+
+  /* ============ HR centre: policies and sign-offs ============ */
+  async function w105PolCard(panel) {
+    if (document.getElementById('w105pol')) return;
+    var card = document.createElement('div');
+    card.className = 'card w105card';
+    card.id = 'w105pol';
+    card.innerHTML = '<h2>Policies and sign-offs</h2><p class="read">Each policy links to its document in Google Drive. Everyone signs off on required policies from their My page (part of onboarding); this table shows who has and who has not.</p><div id="w105polbody">Loading...</div>';
+    panel.appendChild(card);
+    try {
+      var res = await Promise.all([
+        db.from('wa_policies').select('*').eq('active', true).order('sort'),
+        db.from('wa_policy_signoffs').select('email, name, policy_key, signed_at'),
+        db.from('team_members').select('name, email').eq('active', true)
+      ]);
+      var pols = (res[0].data) || [];
+      var signs = (res[1].data) || [];
+      var roster = ((res[2].data) || []).filter(function (m) { return m.email; });
+      var html = '<table><thead><tr><th>Policy</th><th>Signed</th><th>Not yet signed</th></tr></thead><tbody>';
+      pols.forEach(function (p) {
+        var got = signs.filter(function (s) { return s.policy_key === p.key; });
+        var gotEmails = {};
+        got.forEach(function (s) { gotEmails[s.email] = 1; });
+        var missing = p.required ? roster.filter(function (m) { return !gotEmails[(m.email || '').toLowerCase()]; }).map(function (m) { return m.name; }) : [];
+        html += '<tr><td><a href="' + esc(p.url) + '" target="_blank" rel="noopener"><b>' + esc(p.title) + '</b></a>' + (p.required ? '' : ' <span class="w105mut">(reference only)</span>') + ' <span class="w104edit" data-w105pe="' + esc(p.key) + '" data-t="' + esc(p.title) + '" data-u="' + esc(p.url) + '">edit</span></td>'
+          + '<td><span class="w105ok">' + got.length + '</span></td>'
+          + '<td class="w105mut">' + (p.required ? (missing.length ? esc(missing.slice(0, 12).join(', ')) + (missing.length > 12 ? ' and ' + (missing.length - 12) + ' more' : '') : 'Everyone with a Hub account has signed.') : '') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      html += '<div class="w105form"><div><label>Title</label><input type="text" id="w105pt" placeholder="New policy name" style="min-width:200px" /></div>'
+        + '<div><label>Drive link</label><input type="text" id="w105pu" placeholder="https://docs.google.com/..." style="min-width:240px" /></div>'
+        + '<div><button class="btn mini" id="w105pgo">Add policy</button></div></div>';
+      document.getElementById('w105polbody').innerHTML = html;
+      card.querySelectorAll('[data-w105pe]').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var key = this.getAttribute('data-w105pe');
+          openModal(
+            '<h3>Edit policy</h3>' +
+            '<label class="w101lbl">Title</label><input type="text" id="w105et" value="' + esc(this.getAttribute('data-t')) + '" style="width:100%;box-sizing:border-box" />' +
+            '<label class="w101lbl">Drive link</label><input type="text" id="w105eu" value="' + esc(this.getAttribute('data-u')) + '" style="width:100%;box-sizing:border-box" />' +
+            '<div style="margin-top:12px"><button class="btn" id="w105ego">Save</button> <button class="btn ghost" id="w105ex">Cancel</button> <button class="btn ghost" id="w105eret" style="float:right">Retire policy</button></div>'
+          );
+          document.getElementById('w105ex').addEventListener('click', function () { closeModal(); });
+          document.getElementById('w105ego').addEventListener('click', async function () {
+            var t = (document.getElementById('w105et') || {}).value || '', u = (document.getElementById('w105eu') || {}).value || '';
+            if (t.length < 3 || u.indexOf('http') !== 0) { toast('Keep a name and a valid link'); return; }
+            var up = await db.from('wa_policies').update({ title: t, url: u }).eq('key', key);
+            if (up.error) { toast('Could not save'); return; }
+            closeModal(); toast('Policy updated');
+            card.remove(); w105PolCard(panel);
+          });
+          document.getElementById('w105eret').addEventListener('click', async function () {
+            var up = await db.from('wa_policies').update({ active: false }).eq('key', key);
+            if (up.error) { toast('Could not retire it'); return; }
+            closeModal(); toast('Policy retired (sign-offs kept)');
+            card.remove(); w105PolCard(panel);
+          });
+        });
+      });
+      document.getElementById('w105pgo').addEventListener('click', async function () {
+        var t = (document.getElementById('w105pt') || {}).value || '', u = (document.getElementById('w105pu') || {}).value || '';
+        if (t.length < 3 || u.indexOf('http') !== 0) { toast('Give the policy a name and a link'); return; }
+        var key = t.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+        var ins = await db.from('wa_policies').insert({ key: key, title: t, url: u, required: true, sort: 50 });
+        if (ins.error) { toast('Could not add it'); return; }
+        toast('Policy added; sign-offs start collecting');
+        card.remove();
+        w105PolCard(panel);
+      });
+    } catch (e) { document.getElementById('w105polbody').innerHTML = '<p class="read">Could not load policies.</p>'; }
+  }
+
+  /* ============ HR centre: discipline tracker ============ */
+  async function w105DiscCard(panel) {
+    if (document.getElementById('w105disc')) return;
+    var card = document.createElement('div');
+    card.className = 'card w105card';
+    card.id = 'w105disc';
+    card.innerHTML = '<h2>Discipline tracker</h2><p class="read">Progressive discipline per the handbook (Section 5) and the Performance and Discipline Tracking doc. Every entry is dated and attributed; people can see their own record. A clean slate closes out a category for a person.</p><div id="w105dbody">Loading...</div>';
+    panel.appendChild(card);
+    await w105DiscRender();
+  }
+  async function w105DiscRender() {
+    var body = document.getElementById('w105dbody');
+    if (!body) return;
+    try {
+      var r = await db.from('wa_discipline').select('*').order('created_at', { ascending: false });
+      var rows = (r.data) || [];
+      var byP = {};
+      rows.forEach(function (d) { (byP[d.name] = byP[d.name] || []).push(d); });
+      var html = '';
+      var names = Object.keys(byP).sort();
+      if (!names.length) html += '<p class="read">Clean record across the team. Nothing tracked yet.</p>';
+      names.forEach(function (n) {
+        var open = byP[n].filter(function (d) { return !d.clean_slate; });
+        html += '<h3 class="block">' + esc(n) + (open.length ? '' : ' <span class="w105ok">clean slate</span>') + '</h3><table><tbody>';
+        byP[n].slice(0, 8).forEach(function (d) {
+          html += '<tr><td style="white-space:nowrap" class="w105mut">' + esc(d.incident_date) + '</td>'
+            + '<td>' + esc((DISC[d.category] || {}).label || d.category) + ': <b>' + esc(d.level) + '</b>'
+            + (d.clean_slate ? ' <span class="w105ok">clean slate applied</span>' : '')
+            + (d.note ? '<div class="w105mut">' + esc(d.note) + '</div>' : '')
+            + (d.doc_url ? ' <a href="' + esc(d.doc_url) + '" target="_blank" rel="noopener" class="w105mut">document</a>' : '') + '</td>'
+            + '<td class="w105mut">' + esc((d.recorded_by || '').split('@')[0]) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      });
+      var stepOpts = function (cat) { return (DISC[cat].steps).map(function (s) { return '<option>' + s + '</option>'; }).join(''); };
+      html += '<div class="w105form"><div><label>Person</label><select id="w105dp"></select></div>'
+        + '<div><label>Category</label><select id="w105dc">' + Object.keys(DISC).map(function (c) { return '<option value="' + c + '">' + DISC[c].label + '</option>'; }).join('') + '</select></div>'
+        + '<div><label>Step</label><select id="w105dl">' + stepOpts('ack_messages') + '</select></div>'
+        + '<div><label>Date</label><input type="date" id="w105dd" /></div>'
+        + '<div style="flex:1;min-width:170px"><label>Note</label><input type="text" id="w105dn" placeholder="What happened" style="width:100%;box-sizing:border-box" /></div>'
+        + '<div><button class="btn mini" id="w105dgo">Record</button> <button class="btn ghost mini" id="w105dcs">Clean slate</button></div></div>';
+      body.innerHTML = html;
+      try {
+        var rr = await db.from('team_members').select('name, email').eq('active', true).order('name');
+        var sel = document.getElementById('w105dp');
+        if (sel) sel.innerHTML = ((rr.data) || []).map(function (m) { return '<option value="' + esc((m.email || '').toLowerCase()) + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</option>'; }).join('');
+      } catch (e) { /* roster optional */ }
+      var dc = document.getElementById('w105dc');
+      if (dc) dc.addEventListener('change', function () {
+        document.getElementById('w105dl').innerHTML = stepOpts(this.value);
+      });
+      async function record(clean) {
+        var sel2 = document.getElementById('w105dp');
+        var opt = sel2 && sel2.options[sel2.selectedIndex];
+        if (!opt) return;
+        var ins = await db.from('wa_discipline').insert({
+          email: opt.value || '', name: opt.getAttribute('data-name') || 'unknown',
+          category: (document.getElementById('w105dc') || {}).value || 'other',
+          level: clean ? 'Clean slate' : ((document.getElementById('w105dl') || {}).value || 'Verbal warning'),
+          incident_date: (document.getElementById('w105dd') || {}).value || new Date().toISOString().slice(0, 10),
+          note: (document.getElementById('w105dn') || {}).value || null,
+          clean_slate: !!clean,
+          recorded_by: w105Me().email
+        });
+        if (ins.error) { toast('Could not record it'); return; }
+        toast(clean ? 'Clean slate recorded' : 'Recorded');
+        w105DiscRender();
+      }
+      document.getElementById('w105dgo').addEventListener('click', function () { record(false); });
+      document.getElementById('w105dcs').addEventListener('click', function () { record(true); });
+    } catch (e) { body.innerHTML = '<p class="read">Could not load the tracker.</p>'; }
+  }
+
+  /* ============ My page: your time off + policy sign-offs ============ */
+  function w105ReqModal() {
+    var me = w105Me();
+    openModal(
+      '<h3>Request time off</h3>' +
+      '<p class="read" style="margin:4px 0 8px">Goes to HR for a decision, and shows up in the Requests flow. Remember the handbook: tell your director on Slack and set your status.</p>' +
+      '<label class="w101lbl">Type</label><select id="w105rc" style="width:100%;box-sizing:border-box">' + Object.keys(TO_CATS).map(function (c) { return '<option value="' + c + '">' + TO_CATS[c] + '</option>'; }).join('') + '</select>' +
+      '<div id="w105rp" class="w105mut" style="margin:4px 0 6px">' + esc(TO_POLICY.vacation) + '</div>' +
+      '<label class="w101lbl">From</label><input type="date" id="w105rs" style="width:100%;box-sizing:border-box" />' +
+      '<label class="w101lbl">To</label><input type="date" id="w105re" style="width:100%;box-sizing:border-box" />' +
+      '<label class="w101lbl">Note (optional)</label><input type="text" id="w105rn" maxlength="300" style="width:100%;box-sizing:border-box" />' +
+      '<div style="margin-top:12px"><button class="btn" id="w105rgo">Send the request</button> <button class="btn ghost" id="w105rx">Cancel</button></div>'
+    );
+    document.getElementById('w105rc').addEventListener('change', function () {
+      document.getElementById('w105rp').textContent = TO_POLICY[this.value] || '';
+    });
+    document.getElementById('w105rx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w105rgo').addEventListener('click', async function () {
+      var c = (document.getElementById('w105rc') || {}).value || 'vacation';
+      var s = (document.getElementById('w105rs') || {}).value, e = (document.getElementById('w105re') || {}).value;
+      var n = (document.getElementById('w105rn') || {}).value || '';
+      if (!s || !e || e < s) { toast('Pick valid dates'); return; }
+      this.disabled = true;
+      var ins = await db.from('wa_timeoff').insert({ email: me.email, name: me.name, category: c, start_date: s, end_date: e, days: w105Days(s, e), status: 'requested', note: n || null });
+      if (ins.error) { this.disabled = false; toast('Could not send it'); return; }
+      try {
+        await db.from('dept_requests').insert({
+          type_key: 'time-off', department: 'hr',
+          title: 'Time off: ' + me.name + ', ' + s + ' to ' + e + ' (' + (TO_CATS[c] || c) + ')',
+          details: n, status: 'requested', done: false, requested_by: me.name
+        });
+      } catch (e2) { /* the wa_timeoff row is the source of truth */ }
+      closeModal();
+      toast('Request sent to HR');
+      w105MyRender();
+    });
+  }
+  async function w105MyCards() {
+    var panel = document.getElementById('mypage');
+    if (!panel || !panel.children.length || document.getElementById('w105my')) return;
+    var me = w105Me();
+    if (!me.email) return;
+    var card = document.createElement('div');
+    card.className = 'card w105card';
+    card.id = 'w105my';
+    card.innerHTML = '<h2>Your time off <button class="btn mini" id="w105req">Request time off</button></h2><div id="w105mybody">Loading...</div>';
+    panel.appendChild(card);
+    document.getElementById('w105req').addEventListener('click', w105ReqModal);
+    await w105MyRender();
+    await w105SignCard(panel, 'w105sign');
+  }
+  async function w105MyRender() {
+    var body = document.getElementById('w105mybody');
+    if (!body) return;
+    try {
+      var me = w105Me();
+      var fy = w105FY();
+      var r = await db.from('wa_timeoff').select('*').eq('email', me.email).order('start_date', { ascending: false });
+      var rows = (r.data) || [];
+      var tot = {};
+      rows.filter(function (t) { return t.status === 'approved' && t.start_date >= fy.start; })
+        .forEach(function (t) { tot[t.category] = (tot[t.category] || 0) + Number(t.days || 0); });
+      var totLine = Object.keys(tot).map(function (c) { return '<b>' + tot[c] + '</b> ' + TO_CATS[c].toLowerCase() + ' day' + (tot[c] === 1 ? '' : 's'); }).join(', ');
+      var html = '<p class="read" style="margin-top:0">' + (totLine ? 'Taken this ' + fy.label + ': ' + totLine + '.' : 'No time off taken yet this ' + fy.label + '.')
+        + ' <span class="w105mut">Vacation runs 4 to 6 weeks by tenure; volunteering 4 times a year adds a week (up to two). 7 mental health and sick days a year.</span></p>';
+      if (rows.length) {
+        html += '<table><tbody>' + rows.slice(0, 8).map(function (t) {
+          var chip = t.status === 'approved' ? '<span class="w105ok">approved</span>' : (t.status === 'declined' ? '<span class="w105no">declined</span>' : '<span class="w105pend">waiting</span>');
+          return '<tr><td>' + esc(TO_CATS[t.category] || t.category) + '</td><td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + ' <span class="w105mut">(' + t.days + 'd)</span></td><td>' + chip + '</td></tr>';
+        }).join('') + '</tbody></table>';
+      }
+      body.innerHTML = html;
+    } catch (e) { body.innerHTML = '<p class="read">Could not load your time off.</p>'; }
+  }
+
+  /* shared: policies-to-sign fold (My page + Training page onboarding).
+     prepend=true puts the fold at the TOP of the panel (Steel, round 16:
+     policies sit above onboarding and trainings on My trainings). */
+  async function w105SignCard(panel, id, prepend) {
+    if (document.getElementById(id)) return;
+    var me = w105Me();
+    if (!me.email) return;
+    try {
+      var res = await Promise.all([
+        db.from('wa_policies').select('*').eq('active', true).eq('required', true).order('sort'),
+        db.from('wa_policy_signoffs').select('policy_key, signed_at').eq('email', me.email)
+      ]);
+      var pols = (res[0].data) || [];
+      if (!pols.length) return;
+      var mine = {};
+      ((res[1].data) || []).forEach(function (s) { mine[s.policy_key] = s.signed_at; });
+      var card = document.createElement('div');
+      card.className = 'card w105card';
+      card.id = id;
+      var pending = pols.filter(function (p) { return !mine[p.key]; });
+      var html = '<h2>Policies' + (pending.length ? ' <span class="w105pend">' + pending.length + ' to review</span>' : '') + '</h2>'
+        + '<p class="read">Reading and signing these is part of onboarding. Open the document, read it, then sign off; your sign-off is recorded for HR with a date.</p>';
+      pols.forEach(function (p) {
+        if (mine[p.key]) {
+          html += '<div class="w105sign"><b>' + esc(p.title) + '</b> <span class="w105ok">signed ' + esc(String(mine[p.key]).slice(0, 10)) + '</span> <a class="w105mut" href="' + esc(p.url) + '" target="_blank" rel="noopener">read again</a></div>';
+        } else {
+          html += '<div class="w105sign"><b>' + esc(p.title) + '</b><div style="margin-top:6px"><a class="btn ghost mini" href="' + esc(p.url) + '" target="_blank" rel="noopener" style="text-decoration:none">Open and read</a> <button class="btn mini" data-w105sk="' + esc(p.key) + '">I have read and reviewed this</button></div></div>';
+        }
+      });
+      card.innerHTML = html;
+      if (prepend && panel.firstChild) panel.insertBefore(card, panel.firstChild);
+      else panel.appendChild(card);
+      card.querySelectorAll('[data-w105sk]').forEach(function (b) {
+        b.addEventListener('click', async function () {
+          this.disabled = true;
+          var ins = await db.from('wa_policy_signoffs').insert({ email: me.email, name: me.name, policy_key: this.getAttribute('data-w105sk') });
+          if (ins.error) { this.disabled = false; toast('Could not record the sign-off'); return; }
+          toast('Sign-off recorded, thank you');
+          card.remove();
+          w105SignCard(panel, id, prepend);
+        });
+      });
+    } catch (e) { /* fold is optional */ }
+  }
+
+  /* ============ wiring ============ */
+  async function w105HrCards() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel || !panel.children.length || panel.querySelector('#w52denied')) return;
+    if (typeof isStaff !== 'function' || !isStaff()) return;
+    if (!(await w105IsHR())) return;
+    await w105TimeCard(panel);
+    await w105PolCard(panel);
+    await w105DiscCard(panel);
+  }
+  (function () {
+    var t105 = null, t105b = null, t105c = null;
+    function arm() {
+      var hr = document.getElementById('hrcentre');
+      if (hr && !hr.dataset.w105mo) {
+        hr.dataset.w105mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t105);
+          t105 = setTimeout(function () { try { w105HrCards(); } catch (e) { /* non-fatal */ } }, 320);
+        }).observe(hr, { childList: true });
+        if (hr.children.length) { try { w105HrCards(); } catch (e) { /* non-fatal */ } }
+      }
+      var my = document.getElementById('mypage');
+      if (my && !my.dataset.w105mo) {
+        my.dataset.w105mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t105b);
+          t105b = setTimeout(function () { try { w105MyCards(); } catch (e) { /* non-fatal */ } }, 320);
+        }).observe(my, { childList: true });
+        if (my.children.length) { try { w105MyCards(); } catch (e) { /* non-fatal */ } }
+      }
+      var tr = document.getElementById('training');
+      if (tr && !tr.dataset.w105mo) {
+        tr.dataset.w105mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t105c);
+          t105c = setTimeout(function () { try { if (tr.children.length && !tr.querySelector('#w52denied')) w105SignCard(tr, 'w105signt', true); } catch (e) { /* non-fatal */ } }, 320);
+        }).observe(tr, { childList: true });
+        if (tr.children.length) { try { w105SignCard(tr, 'w105signt', true); } catch (e) { /* non-fatal */ } }
+      }
+    }
+    if (typeof startApp === 'function') {
+      var __sa105 = startApp;
+      startApp = async function () {
+        await __sa105.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+})();

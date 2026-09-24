@@ -1,0 +1,236 @@
+/* =====================================================================
+   WA v96 change the Hub (07/08/26): edit with AI + change requests
+   =====================================================================
+   A new "Change the Hub" card at the bottom of the Admin page, two
+   halves, admins only:
+   1. EDIT WITH AI: describe a CONTENT change in plain language
+      (important info links, budget amounts, new budget lines, AI
+      categorisation rules). The hub-edit fn translates it into a
+      bounded list of operations; the admin sees the preview and
+      applies it. Operations execute under the admin's OWN permissions
+      (RLS), one change_log entry each. Site code is out of scope by
+      design: the assistant says so and points at the request lane.
+   2. REQUEST A BUILD: describe any bigger change (features, layout,
+      code). It is saved to wa_change_requests, posted to Slack
+      (notify v6 change_request event), and listed here with a status
+      dropdown (open / planned / done / declined) so nothing is lost.
+      Builds then run through the tested Cowork deploy pipeline.
+   ===================================================================== */
+(function () {
+  if (window.__wa96) return; window.__wa96 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w96card h3{color:#2c7a66;margin:14px 0 4px;}' +
+    '#w96card textarea{width:100%;font-size:12.5px;min-height:64px;}' +
+    '#w96ops{margin:10px 0;}' +
+    '.w96op{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid rgba(127,127,127,.15);font-size:12.5px;}' +
+    '.w96op:first-child{border-top:none;}' +
+    '.w96op .tag{font-size:10px;border-radius:7px;padding:2px 8px;font-weight:700;white-space:nowrap;background:rgba(44,122,102,.12);color:#1f5f4f;}' +
+    '.w96op .tag.bad{background:rgba(201,107,95,.14);color:#b3402f;}' +
+    '.w96req{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-top:1px solid rgba(127,127,127,.15);font-size:12.5px;}' +
+    '.w96req:first-child{border-top:none;}' +
+    '.w96req .t{flex:1 1 260px;min-width:180px;}' +
+    '.w96req .mut{font-size:11px;color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.w96req select{font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;}' +
+    '.w96req select option{color:#1c2b27;}' +
+    '#w96card .m-sub{margin:2px 0 8px;}';
+  document.head.appendChild(css);
+
+  var FOUNDERS96 = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  function w96IsAdmin() {
+    try {
+      var em = ((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      return FOUNDERS96.indexOf(em) >= 0 || (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin');
+    } catch (e) { return false; }
+  }
+
+  function w96OpLine(o) {
+    var lab = '', tag = o.op, bad = false;
+    if (o.op === 'add_info_link') lab = 'Add info link "' + (o.label || '') + '"' + (o.url ? ' (' + o.url + ')' : '') + (o.department ? ' under ' + o.department : '');
+    else if (o.op === 'update_info_link') lab = 'Update info link #' + o.id + (o.label ? ' to "' + o.label + '"' : '') + (o.url ? ', url ' + o.url : '') + (o.notes ? ', notes updated' : '');
+    else if (o.op === 'remove_info_link') lab = 'Remove info link #' + o.id;
+    else if (o.op === 'set_budget') lab = 'Set ' + (o.period || 'FY') + ' budget for ' + (o.category || '?') + ' to $' + Number(o.amount || 0).toLocaleString();
+    else if (o.op === 'add_budget_line') lab = 'Add ' + (o.line_kind || 'expense') + ' budget line "' + (o.label || o.category || '') + '"';
+    else if (o.op === 'add_guidance_rule') lab = 'Teach the importer: ' + (o.rule || '');
+    else if (o.op === 'unsupported') { lab = o.reason || 'Not something the content assistant can do.'; tag = 'not possible here'; bad = true; }
+    else { lab = 'Unknown operation'; tag = 'skipped'; bad = true; }
+    return '<div class="w96op"><span class="tag' + (bad ? ' bad' : '') + '">' + esc(tag) + '</span><span>' + esc(lab) + '</span></div>';
+  }
+
+  async function w96Apply(ops) {
+    var done = 0, failed = 0;
+    for (var i = 0; i < ops.length; i++) {
+      var o = ops[i];
+      try {
+        var r = null;
+        if (o.op === 'add_info_link') {
+          r = await db.from('info_links').insert({ kind: o.kind || 'link', label: String(o.label || '').slice(0, 200), url: o.url || null, department: o.department || null, notes: o.notes || null, added_by: who(), updated_at: new Date().toISOString() });
+        } else if (o.op === 'update_info_link') {
+          var patch = { updated_at: new Date().toISOString() };
+          if (o.label) patch.label = String(o.label).slice(0, 200);
+          if (o.url) patch.url = o.url;
+          if (o.department !== undefined && o.department !== null) patch.department = o.department;
+          if (o.notes !== undefined && o.notes !== null) patch.notes = o.notes;
+          r = await db.from('info_links').update(patch).eq('id', Number(o.id));
+        } else if (o.op === 'remove_info_link') {
+          r = await db.from('info_links').delete().eq('id', Number(o.id));
+        } else if (o.op === 'set_budget') {
+          var cat = String(o.category || '');
+          var kind = (typeof WA_FIN_CATS_IN !== 'undefined' && WA_FIN_CATS_IN.indexOf(cat) >= 0) ? 'income' : 'expense';
+          r = await db.from('finance_budgets').upsert({
+            fiscal_year: waFinFYLabel(), period: o.period || 'FY', scope: 'category', key: cat,
+            kind: kind, amount: Number(o.amount) || 0, updated_by: who(), updated_at: new Date().toISOString()
+          }, { onConflict: 'fiscal_year,period,scope,key' });
+        } else if (o.op === 'add_budget_line') {
+          r = await db.from('finance_budgets').upsert({
+            fiscal_year: waFinFYLabel(), period: 'FY', scope: 'category', key: String(o.label || o.category || '').slice(0, 60),
+            kind: o.line_kind === 'income' ? 'income' : 'expense', amount: 0, updated_by: who(), updated_at: new Date().toISOString()
+          }, { onConflict: 'fiscal_year,period,scope,key' });
+        } else if (o.op === 'add_guidance_rule') {
+          var g = await db.from('app_config').select('value').eq('key', 'finance_ai_guidance').maybeSingle();
+          var cur = (g && g.data && g.data.value) || '';
+          var next = (cur ? cur.replace(/\s+$/, '') + '\n' : '') + String(o.rule || '').slice(0, 300);
+          if (next.length > 4000) { failed += 1; continue; }
+          r = await db.from('app_config').upsert({ key: 'finance_ai_guidance', value: next, updated_at: new Date().toISOString() });
+        } else { continue; }
+        if (r && r.error) { failed += 1; continue; }
+        done += 1;
+        try {
+          await db.from('change_log').insert({
+            entity_type: 'hub_edit', entity_id: o.op, field: 'applied',
+            old_value: null, new_value: JSON.stringify(o).slice(0, 280), changed_by: who()
+          });
+        } catch (e) { /* audit only */ }
+      } catch (e) { failed += 1; }
+    }
+    return { done: done, failed: failed };
+  }
+
+  function w96EditModal() {
+    openModal('<h3>Edit the Hub with AI</h3>' +
+      '<p class="m-sub">Content edits in plain language: important info links, budget amounts, new budget lines, or a rule for the statement importer. Example: "add a link to our new insurance policy doc at drive.google.com/... under org-wide" or "set the Q2 marketing publicity budget to 500". Code and feature changes belong in Request a build below. You will see exactly what will change before anything happens.</p>' +
+      '<textarea id="w96in" rows="3" maxlength="2000" placeholder="Describe the content change"></textarea>' +
+      '<div id="w96ops"></div>' +
+      '<div class="m-actions"><button class="btn" id="w96go">Preview</button> <button class="btn ghost" id="w96cancel">Cancel</button></div>');
+    var ops = null;
+    var cancel = document.getElementById('w96cancel');
+    if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+    var go = document.getElementById('w96go');
+    if (go) go.addEventListener('click', async function () {
+      var box = document.getElementById('w96ops');
+      if (!ops) {
+        var text = (document.getElementById('w96in').value || '').trim();
+        if (text.length < 5) { toast('Describe the change first'); return; }
+        go.disabled = true; go.textContent = 'Thinking...';
+        try {
+          var r = await db.functions.invoke('hub-edit', { body: { instruction: text } });
+          if (r.error) throw r.error;
+          var d = r.data || {};
+          ops = (d.operations || []).filter(function (o) { return o && o.op; });
+          var real = ops.filter(function (o) { return o.op !== 'unsupported'; });
+          box.innerHTML = '<p class="m-sub"><b>' + esc(d.summary || 'Proposed changes') + '</b></p>' +
+            (ops.length ? ops.map(w96OpLine).join('') : '<div class="w96op"><span>No operations proposed.</span></div>');
+          go.disabled = false;
+          if (real.length) { go.textContent = 'Apply ' + real.length + (real.length === 1 ? ' change' : ' changes'); }
+          else { go.textContent = 'Preview'; ops = null; }
+        } catch (e) {
+          go.disabled = false; go.textContent = 'Preview';
+          box.innerHTML = '<div class="w96op"><span class="tag bad">error</span><span>The assistant could not process that. Try rephrasing, or file it as a build request.</span></div>';
+        }
+        return;
+      }
+      go.disabled = true; go.textContent = 'Applying...';
+      var real2 = ops.filter(function (o) { return o.op !== 'unsupported'; });
+      var res = await w96Apply(real2);
+      closeModal();
+      toast(res.failed ? res.done + ' applied, ' + res.failed + ' failed' : 'Applied: ' + res.done + (res.done === 1 ? ' change' : ' changes'));
+      try { if (typeof WA_FIN_LOADED !== 'undefined' && WA_FIN_LOADED) { await waFinLoad(true); waFinRender(); } } catch (e) { /* fine */ }
+    });
+  }
+
+  function w96RequestModal() {
+    openModal('<h3>Request a build</h3>' +
+      '<p class="m-sub">Anything bigger: features, layout, new pages, automations. It gets logged here and posted to Slack, and ships through the tested build pipeline (offline test battery, verified deploys), never straight to the live site.</p>' +
+      '<textarea id="w96rin" rows="4" maxlength="2000" placeholder="What should change, and why it helps"></textarea>' +
+      '<div class="m-actions"><button class="btn" id="w96rgo">File the request</button> <button class="btn ghost" id="w96rcancel">Cancel</button></div>');
+    var cancel = document.getElementById('w96rcancel');
+    if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+    var go = document.getElementById('w96rgo');
+    if (go) go.addEventListener('click', async function () {
+      var text = (document.getElementById('w96rin').value || '').trim();
+      if (text.length < 10) { toast('Say a little more about the change'); return; }
+      go.disabled = true;
+      var r = await db.from('wa_change_requests').insert({ requested_by: who(), request: text }).select('id').single();
+      if (r.error || !r.data) { go.disabled = false; toast('Could not file the request'); return; }
+      try { db.functions.invoke('notify', { body: { event: 'change_request', request_id: r.data.id } }); } catch (e) { /* best effort */ }
+      closeModal();
+      toast('Filed and posted to Slack');
+      w96Refresh();
+    });
+  }
+
+  async function w96Refresh() {
+    var list = document.getElementById('w96list');
+    if (!list) return;
+    try {
+      var r = await db.from('wa_change_requests').select('*').order('id', { ascending: false }).limit(30);
+      var rows = (r && r.data) || [];
+      if (!rows.length) { list.innerHTML = '<p class="m-sub">No requests yet.</p>'; return; }
+      list.innerHTML = rows.map(function (x) {
+        var d = new Date(x.created_at);
+        var dl = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return '<div class="w96req"><span class="t" title="' + esc(x.request) + '">' + esc(String(x.request).slice(0, 90)) + '</span>' +
+          '<span class="mut">' + esc((x.requested_by || '').split('@')[0]) + ' ' + esc(dl) + '</span>' +
+          '<select data-w96st="' + x.id + '">' +
+          ['open', 'planned', 'done', 'declined'].map(function (s) {
+            return '<option value="' + s + '"' + (s === x.status ? ' selected' : '') + '>' + s + '</option>';
+          }).join('') + '</select></div>';
+      }).join('');
+      list.querySelectorAll('[data-w96st]').forEach(function (s) {
+        s.addEventListener('change', async function () {
+          var res = await db.from('wa_change_requests').update({ status: s.value, updated_by: who(), updated_at: new Date().toISOString() }).eq('id', Number(s.getAttribute('data-w96st')));
+          toast(res.error ? 'Could not update' : 'Request marked ' + s.value);
+        });
+      });
+    } catch (e) { list.innerHTML = '<p class="m-sub">Could not load requests.</p>'; }
+  }
+
+  function w96Card() {
+    var panel = document.getElementById('adminpanel');
+    if (!panel || document.getElementById('w96card') || !w96IsAdmin()) return;
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'w96card';
+    card.innerHTML = '<h2>Change the Hub</h2>' +
+      '<p class="read">Two lanes. Content edits happen right here with a preview; anything bigger gets filed, posted to Slack, and built through the tested pipeline.</p>' +
+      '<h3 class="block">Edit content with AI</h3>' +
+      '<p class="m-sub">Info links, budget amounts, budget lines, importer rules. Preview first, nothing applies until you confirm, everything is change-logged.</p>' +
+      '<button class="btn mini" id="w96edit">Edit with AI</button>' +
+      '<h3 class="block">Request a build</h3>' +
+      '<p class="m-sub">Features, layout, code. Filed here and posted to Slack; shipped through the tested deploy pipeline with an approval gate.</p>' +
+      '<button class="btn ghost mini" id="w96request">Request a build</button>' +
+      '<div id="w96list" style="margin-top:10px"><p class="m-sub">Loading requests...</p></div>';
+    panel.appendChild(card);
+    document.getElementById('w96edit').addEventListener('click', w96EditModal);
+    document.getElementById('w96request').addEventListener('click', w96RequestModal);
+    w96Refresh();
+  }
+
+  /* adminpanel re-renders via wa40Render (global): wrap it */
+  if (typeof wa40Render === 'function') {
+    var __ar96 = wa40Render;
+    wa40Render = async function () {
+      var out = await __ar96.apply(this, arguments);
+      try { w96Card(); } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa96 = startApp;
+    startApp = async function () {
+      await __sa96.apply(this, arguments);
+      try { w96Card(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

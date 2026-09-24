@@ -1,0 +1,120 @@
+/* =====================================================================
+   WA v79 Phase 1 (U3): one canonical quarter format
+   =====================================================================
+   Canonical form: "Q1 FY2027" (fiscal year Oct 1 to Sep 30, labelled by
+   ending year). Freetext variants like "Q4 2026" or "q4 fy 2026" are
+   normalised in memory when goals load (the database migration to match
+   ships with this wave). The goal modal's quarter freetext becomes a
+   picker, and empty quarter buckets beyond the current and next quarter
+   collapse behind a "show empty quarters" link on the Strategy page.
+   Org-tier horizons (FY2027, Long term...) stay freetext on purpose.
+   ===================================================================== */
+(function () {
+  if (window.__wa79) return; window.__wa79 = true;
+
+  function w79Norm(q) {
+    if (!q) return q;
+    var s = String(q).trim();
+    var m = s.match(/^q\s*([1-4])\s*(?:fy)?\s*'?(\d{2,4})$/i) ||
+            s.match(/^(?:fy)?\s*'?(\d{2,4})\s*q\s*([1-4])$/i);
+    if (!m) return s;
+    var qn, yr;
+    if (/^q/i.test(s)) { qn = m[1]; yr = m[2]; } else { qn = m[2]; yr = m[1]; }
+    if (yr.length === 2) yr = '20' + yr;
+    return 'Q' + qn + ' FY' + yr;
+  }
+  window.waQNorm = w79Norm;
+
+  /* current + upcoming fiscal quarters (Oct-Sep, labelled by ending year) */
+  function w79Quarters(n) {
+    var out = [];
+    var d = new Date();
+    var mth = d.getMonth();                 /* 0..11 */
+    var fq = Math.floor(((mth + 3) % 12) / 3) + 1;   /* Oct=Q1 */
+    var fy = d.getFullYear() + (mth >= 9 ? 1 : 0);
+    for (var i = 0; i < (n || 6); i++) {
+      out.push('Q' + fq + ' FY' + fy);
+      fq++; if (fq > 4) { fq = 1; fy++; }
+    }
+    return out;
+  }
+
+  /* normalise the cache whenever goals load */
+  if (typeof waLoadGoals === 'function') {
+    var __lg79 = waLoadGoals;
+    waLoadGoals = async function () {
+      var r = await __lg79.apply(this, arguments);
+      try {
+        (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) {
+          if (g && g.quarter) g.quarter = w79Norm(g.quarter);
+        });
+      } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  /* goal modal: quarter becomes a picker (dept tier only) */
+  if (typeof wa29GoalModal === 'function') {
+    var __gm79 = wa29GoalModal;
+    wa29GoalModal = function () {
+      __gm79.apply(this, arguments);
+      try {
+        var inp = document.getElementById('w29q');
+        if (!inp || inp.tagName === 'SELECT') return;
+        var lab = inp.closest('div') && inp.closest('div').querySelector('label');
+        if (lab && /horizon/i.test(lab.textContent || '')) return;   /* org tier stays freetext */
+        var cur = w79Norm(inp.value || '');
+        var opts = w79Quarters(6);
+        if (cur && opts.indexOf(cur) < 0) opts.unshift(cur);
+        opts.push('No quarter');
+        var sel = document.createElement('select');
+        sel.id = 'w29q';
+        sel.innerHTML = opts.map(function (q) {
+          return '<option value="' + esc(q === 'No quarter' ? '' : q) + '"' +
+            ((q === cur || (q === 'No quarter' && !cur)) ? ' selected' : '') + '>' + esc(q) + '</option>';
+        }).join('');
+        inp.parentNode.replaceChild(sel, inp);
+        var dl = document.getElementById('w29ql'); if (dl) dl.remove();
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* Strategy page: collapse empty quarters beyond current + next */
+  function w79Collapse() {
+    var page = document.getElementById('goals');
+    if (!page) return;
+    var keep = w79Quarters(2);
+    var hidden = 0;
+    var qs = page.querySelectorAll('details.w29q');
+    qs.forEach(function (d) {
+      var sm = d.querySelector('summary');
+      var label = sm ? (sm.textContent || '').trim().split('\n')[0] : '';
+      var qname = (label.match(/^Q[1-4] FY\d{4}/) || [label])[0];
+      var n = d.querySelectorAll('.w29ge').length;
+      if (n === 0 && keep.indexOf(qname) < 0) { d.style.display = 'none'; d.setAttribute('data-w79hid', '1'); hidden++; }
+      else { d.style.display = ''; d.removeAttribute('data-w79hid'); }
+    });
+    var old = page.querySelector('[data-w79show]');
+    if (old) old.remove();
+    if (hidden > 0 && qs.length) {
+      var a = document.createElement('div');
+      a.setAttribute('data-w79show', '1');
+      a.style.cssText = 'font-size:12px;margin:4px 0 10px;';
+      a.innerHTML = '<a style="cursor:pointer;text-decoration:underline;color:var(--wa-muted)">Show ' + hidden + ' empty quarter' + (hidden === 1 ? '' : 's') + '</a>';
+      a.firstChild.addEventListener('click', function () {
+        page.querySelectorAll('[data-w79hid]').forEach(function (d) { d.style.display = ''; d.removeAttribute('data-w79hid'); });
+        a.remove();
+      });
+      var last = qs[qs.length - 1];
+      if (last && last.parentNode) last.parentNode.insertBefore(a, last.nextSibling);
+    }
+  }
+
+  if (typeof renderGoalsPage === 'function') {
+    var __gp79 = renderGoalsPage;
+    renderGoalsPage = async function () {
+      await __gp79.apply(this, arguments);
+      try { w79Collapse(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

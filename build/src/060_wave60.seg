@@ -1,0 +1,273 @@
+/* =====================================================================
+   WA v60 visual page help
+   (03/08/26)
+   The "? How this page works" popups get a redesign: one line on the
+   purpose, a numbered how-to flow, and a small grid of miniature UI
+   mockups (task rows, progress bars, pills, calendars) so members see
+   what the page does instead of reading about it. Short on words by
+   design. Rides the existing v43 buttons (and the HR centre one): the
+   old handler opens its modal, this wave immediately replaces the
+   content with the visual version.
+   ===================================================================== */
+(function () {
+  if (window.__wa60) return;
+  window.__wa60 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa60css';
+  st.textContent = '' +
+    '.w60sub{font-size:13px;color:#3d4642;margin:2px 0 10px;}' +
+    '.w60flow{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin:0 0 12px;}' +
+    '.w60step{display:inline-flex;gap:7px;align-items:center;background:#f1f5f3;border-radius:999px;padding:5px 12px 5px 6px;font-size:12px;font-weight:700;color:#14302b;}' +
+    '.w60step i{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:#1f5f4f;color:#fff;font-style:normal;font-size:11px;font-weight:800;}' +
+    '.w60flow .ar{color:#9ab3ab;font-weight:800;padding:0 2px;}' +
+    '.w60grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
+    '.w60card{background:#f6f8f7;border-radius:12px;padding:10px 12px;}' +
+    '.w60card .vis{min-height:34px;display:flex;flex-direction:column;justify-content:center;gap:5px;margin-bottom:7px;}' +
+    '.w60card .cap{font-size:11.5px;color:#5b6b66;font-weight:600;line-height:1.35;}' +
+    '.w60task{display:flex;gap:6px;align-items:center;background:#fff;border-radius:8px;padding:5px 8px;}' +
+    '.w60task .cb{width:12px;height:12px;border:2px solid #9ab3ab;border-radius:3px;flex:none;}' +
+    '.w60task .cb.on{background:#2c7a66;border-color:#2c7a66;}' +
+    '.w60task .ln{height:6px;background:#dde5e1;border-radius:3px;flex:1;min-width:26px;}' +
+    '.w60task.late{background:rgba(212,161,60,.18);}' +
+    '.w60p{display:inline-block;background:#fff;border:1px solid #dde5e1;border-radius:999px;padding:0 8px;font-size:9.5px;font-weight:800;color:#1f5f4f;line-height:1.8;white-space:nowrap;}' +
+    '.w60p.gold{background:rgba(212,161,60,.16);border-color:transparent;color:#8a6414;}' +
+    '.w60p.grn{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w60p.vio{background:rgba(132,85,255,.12);border-color:transparent;color:#5b32c7;}' +
+    '.w60p.red{background:rgba(179,64,47,.1);border-color:transparent;color:#b3402f;}' +
+    '.w60pr{display:flex;gap:4px;flex-wrap:wrap;}' +
+    '.w60barw{display:flex;gap:7px;align-items:center;}' +
+    '.w60bar{flex:1;height:8px;background:#dde5e1;border-radius:4px;overflow:hidden;}' +
+    '.w60bar i{display:block;height:100%;background:#2c7a66;border-radius:4px;}' +
+    '.w60barw b{font-size:10.5px;color:#1f5f4f;}' +
+    '.w60cal{display:grid;grid-template-columns:repeat(7,12px);gap:3px;}' +
+    '.w60cal i{width:12px;height:12px;border-radius:3px;background:#e3eae7;}' +
+    '.w60cal i.on{background:#2c7a66;}' +
+    '.w60per{display:inline-flex;gap:5px;align-items:center;font-size:10.5px;font-weight:700;color:#3d4642;margin-right:8px;}' +
+    '.w60per i{width:8px;height:8px;border-radius:50%;background:#3bb273;}' +
+    '.w60doc{background:#fff;border-radius:8px;padding:7px 9px;display:flex;flex-direction:column;gap:4px;}' +
+    '.w60doc i{height:5px;background:#dde5e1;border-radius:3px;}' +
+    '.w60doc i:nth-child(2){width:70%;}' +
+    '.w60doc i:nth-child(3){width:45%;}' +
+    '.w60mask{letter-spacing:2px;color:#9aa5a1;font-weight:800;font-size:11px;}';
+  document.head.appendChild(st);
+
+  /* ---- tiny mock builders ---- */
+  function mTask(pills, opts) {
+    opts = opts || {};
+    return '<div class="w60task' + (opts.late ? ' late' : '') + '"><span class="cb' + (opts.done ? ' on' : '') + '"></span><span class="ln"></span>'
+      + (pills || []).map(function (p) { return '<span class="w60p ' + (p[1] || '') + '">' + p[0] + '</span>'; }).join('') + '</div>';
+  }
+  function mBar(pct) {
+    return '<div class="w60barw"><span class="w60bar"><i style="width:' + pct + '%"></i></span><b>' + pct + '%</b></div>';
+  }
+  function mPills(arr) {
+    return '<div class="w60pr">' + arr.map(function (x) { return '<span class="w60p ' + (x[1] || '') + '">' + x[0] + '</span>'; }).join('') + '</div>';
+  }
+  function mCal() {
+    var h = '<div class="w60cal">';
+    for (var i = 0; i < 14; i++) h += '<i' + (i === 9 ? ' class="on"' : '') + '></i>';
+    return h + '</div>';
+  }
+  function mPeople(names) {
+    return '<div>' + names.map(function (n) { return '<span class="w60per"><i></i>' + n + '</span>'; }).join('') + '</div>';
+  }
+  function mDoc() { return '<div class="w60doc"><i></i><i></i><i></i></div>'; }
+  function mSecret() { return '<div class="w60task"><span class="w60p">Canva login</span><span class="w60mask">&bull;&bull;&bull;&bull;&bull;&bull;</span><span class="w60p grn">reveal</span></div>'; }
+
+  function card(vis, cap) { return '<div class="w60card"><div class="vis">' + vis + '</div><div class="cap">' + cap + '</div></div>'; }
+  function flow(steps) {
+    return '<div class="w60flow">' + steps.map(function (s, i) {
+      return '<span class="w60step"><i>' + (i + 1) + '</i>' + s + '</span>' + (i < steps.length - 1 ? '<span class="ar">&rarr;</span>' : '');
+    }).join('') + '</div>';
+  }
+
+  var T = {
+    mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
+    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training',
+    volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
+    adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
+  };
+
+  function wa60Html(k) {
+    var sub = '', fl = [], cards = [];
+    if (k === 'mypage') {
+      sub = 'Your day at a glance.';
+      fl = ['See your tasks', 'Check your hours', 'Jump anywhere'];
+      cards = [
+        card(mTask([['due Aug 12', 'gold']]), 'Your open tasks, every department'),
+        card(mBar(72), 'Your tracked check-in hours'),
+        card(mPeople(['Suhaib', 'Ian']), 'Who is online right now'),
+        card(mPills([['My department'], ['Decisions']]), 'Chips jump you straight there')
+      ];
+    } else if (k === 'overview') {
+      sub = 'The org at a glance, and the decisions only executives can make.';
+      fl = ['Scan the tiles', 'Review open decisions', 'Tick to record the call'];
+      cards = [
+        card(mTask([['decision', 'vio']], { done: true }), 'Tick = decided; add a short note'),
+        card(mPills([['+ Add decision', 'grn']]), 'File a new decision'),
+        card(mDoc(), 'AI recommendation on each one'),
+        card(mBar(64), 'Stat tiles: the org right now')
+      ];
+    } else if (k === 'dashboard') {
+      sub = 'How work is moving, per department.';
+      fl = ['Pick a department', 'Spot the red', 'Click any row'];
+      cards = [
+        card(mBar(45), 'Completion and cycle times'),
+        card(mTask([['7d overdue', 'red']], { late: true }), 'Overdue work, tinted'),
+        card(mPills([['ClickUp'], ['decisions aging']]), 'Movement and aging, linked')
+      ];
+    } else if (k === 'dept') {
+      sub = 'Everything this department is doing.';
+      fl = ['Read the updates', 'Work the tasks', 'File into projects'];
+      cards = [
+        card(mTask([['project: Flag Football'], ['due Aug 12', 'gold']]), 'Tasks carry project + due pills'),
+        card(mTask([], { late: true }), 'Yellow = overdue'),
+        card(mPills([['General tasks'], ['Projects', 'grn']]), 'The Projects card, with open counts'),
+        card(mDoc(), 'Meeting updates, grouped by meeting')
+      ];
+    } else if (k === 'requests') {
+      sub = 'Ask another team for something concrete.';
+      fl = ['Pick the type', 'Fill the short form', 'Track the status'];
+      cards = [
+        card(mPills([['requested', 'gold'], ['in progress'], ['done', 'grn']]), 'Statuses update live, both sides'),
+        card(mTask([['from a meeting', 'vio']]), 'AI-suggested asks: accept or dismiss')
+      ];
+    } else if (k === 'agendas') {
+      sub = 'AI-drafted agendas, grounded in your real work.';
+      fl = ['Pick type + people', 'Type the purpose', 'Generate'];
+      cards = [
+        card(mDoc(), 'The purpose box shapes the whole agenda'),
+        card(mTask([], { done: true }), 'Agenda items tick real tasks'),
+        card(mPills([['draft', 'gold'], ['final', 'grn'], ['share link']]), 'Finalize and share'),
+        card(mPills([['only your meetings', 'vio']]), 'You see agendas you are part of')
+      ];
+    } else if (k === 'importantinfo') {
+      sub = 'Shared links, tools and credentials.';
+      fl = ['Find it', 'Reveal if masked', 'Add your own'];
+      cards = [
+        card(mSecret(), 'Secrets stay masked until revealed'),
+        card(mPills([['Canva'], ['Keela'], ['Drive']]), 'One place for every tool')
+      ];
+    } else if (k === 'goals') {
+      sub = 'Quarterly goals, rolling up to the organization.';
+      fl = ['Pick the quarter', 'Open a department', 'Link the work'];
+      cards = [
+        card(mBar(58), 'Progress per goal'),
+        card(mPills([['project', 'grn'], ['&rarr;'], ['goal', 'vio']]), 'Projects roll up into goals'),
+        card(mDoc(), 'AI-suggested goals per department')
+      ];
+    } else if (k === 'create') {
+      sub = 'Branded content in the WA voice.';
+      fl = ['Describe it', 'Generate', 'Refine or download'];
+      cards = [
+        card(mDoc(), 'Emails, posts, reports, letters'),
+        card(mPills([['graphic'], ['+ photo'], ['send for review', 'grn']]), 'Graphics too, with formats')
+      ];
+    } else if (k === 'finances') {
+      sub = 'Budget vs actual, and every transaction.';
+      fl = ['Check the budget', 'Drill into the ledger', 'Log or import'];
+      cards = [
+        card(mBar(81), 'Budget vs actual by category'),
+        card(mTask([['reallocate'], ['duplicate', 'red']]), 'Fix transactions inline'),
+        card(mPills([['FY: Oct 1 to Sep 30', 'gold']]), 'The fiscal year')
+      ];
+    } else if (k === 'orgchart') {
+      sub = 'The live structure, from the roster.';
+      fl = ['Find the person', 'Open their profile', 'Jump to their page'];
+      cards = [
+        card(mPeople(['Valex', 'Natasha', 'Tuna']), 'Green dot = online now'),
+        card(mBar(66), 'Their page: plate, stats, training')
+      ];
+    } else if (k === 'training') {
+      sub = 'Onboarding first, then your trainings, then the catalog.';
+      fl = ['Finish onboarding', 'Do what is assigned', 'Browse the rest'];
+      cards = [
+        card(mBar(40), 'Your onboarding progress'),
+        card(mTask([['2 subtasks']]), 'Big steps fold their subtasks'),
+        card(mTask([['assigned', 'gold']]), 'Assigned trainings sit up top'),
+        card(mPills([['confirm updates', 'gold']]), 'Done? Only HR changes resurface')
+      ];
+    } else if (k === 'volunteering') {
+      sub = 'The serving programme, end to end.';
+      fl = ['Open an event', 'Work the checklist', 'Confirm the roster'];
+      cards = [
+        card(mCal(), 'Calendar of events'),
+        card(mTask([['Coordinating volunteers', 'vio'], ['assign to...']]), 'Role pills assign every linked step'),
+        card(mPills([['SOP'], ['inventory'], ['recipes'], ['texting']]), 'Master SOP flows to upcoming events'),
+        card(mPeople(['Mary', 'cooks x4']), 'Roster and confirmations per event')
+      ];
+    } else if (k === 'transcripts') {
+      sub = 'Drop in any meeting; the Hub does the rest.';
+      fl = ['Paste or import', 'Tag the department', 'Save'];
+      cards = [
+        card(mDoc(), 'Summary, tasks and updates extracted'),
+        card(mPills([['comments', 'vio'], ['requests', 'gold'], ['due dates']]), 'AI suggestions flow to the boards'),
+        card(mPills([['posted to Slack', 'grn']]), 'The team sees the summary')
+      ];
+    } else if (k === 'activity') {
+      sub = 'The change log of everything.';
+      fl = ['Filter', 'Scan', 'Click through'];
+      cards = [
+        card(mDoc(), 'Every change, who and when')
+      ];
+    } else if (k === 'adminpanel') {
+      sub = 'Who sees what.';
+      fl = ['Pick a person', 'Set the role', 'Override tabs if needed'];
+      cards = [
+        card(mPills([['admin', 'grn'], ['leader'], ['member'], ['viewer', 'gold']]), 'Roles set the default pages'),
+        card(mDoc(), 'Applies on their next load')
+      ];
+    } else if (k === 'projectpage') {
+      sub = 'One project, its tasks and goal.';
+      fl = ['Tick things done', 'Quick-add', 'Move tasks'];
+      cards = [
+        card(mTask([['move']], { done: true }), 'Move tasks between projects'),
+        card(mPills([['rolls up to a goal', 'vio']]), 'Linked to the quarterly goals')
+      ];
+    } else if (k === 'personpage') {
+      sub = 'One person, in full.';
+      fl = ['Read the bio', 'See their plate', 'Check their training'];
+      cards = [
+        card(mTask([['3 open', 'gold']]), 'Their current plate'),
+        card(mBar(75), 'Training progress')
+      ];
+    } else if (k === 'hrcentre') {
+      sub = 'People operations, in four dashboards.';
+      fl = ['Pick a tab', 'Act', 'Check Commitment'];
+      cards = [
+        card(mPills([['Onboarding', 'grn'], ['Trainings'], ['Recruitment'], ['Commitment']]), 'Four dashboards, one page'),
+        card(mPills([['Bulk assign', 'grn'], ['team'], ['everyone']]), 'Assign trainings to many at once'),
+        card(mTask([['interviewing', 'gold']]), 'Hiring pipeline with candidates'),
+        card(mBar(52), 'Hours vs minimums, tasks per week')
+      ];
+    } else {
+      return null;
+    }
+    return '<h3>' + (T[k] || 'This page') + '</h3>'
+      + '<p class="w60sub">' + sub + '</p>'
+      + flow(fl)
+      + '<div class="w60grid">' + cards.join('') + '</div>'
+      + '<div class="m-actions"><button class="btn ghost" id="w60c">Close</button></div>';
+  }
+
+  function wa60Open(k) {
+    var html = wa60Html(k);
+    if (!html) return;
+    openModal(html);
+    var c = document.getElementById('w60c');
+    if (c) c.addEventListener('click', function () { closeModal(); });
+  }
+
+  /* run after the old handlers so this content wins */
+  if (!document.body.dataset.wa60Wired) {
+    document.body.dataset.wa60Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-w43help]');
+      if (b) { setTimeout(function () { wa60Open(b.getAttribute('data-w43help')); }, 0); return; }
+      var h = e.target.closest && e.target.closest('[data-w46help]');
+      if (h) { setTimeout(function () { wa60Open('hrcentre'); }, 0); return; }
+    });
+  }
+})();

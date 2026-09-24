@@ -1,0 +1,451 @@
+/* =====================================================================
+   WA v21 department pages (27/07/26)
+   Collapsible per-meeting updates table (meeting, key updates, who was
+   speaking), assignee filtering, and board and calendar task views with
+   name bubbles, on every department section. Wraps renderSection; the
+   list view keeps the original rendering untouched.
+   ===================================================================== */
+
+var WA21_VIEW = {};
+var WA21_WHO = {};
+var WA21_MON = {};
+var WA21_TX = null;
+var WA21_ACTIVE = null;
+
+(function () {
+  if (document.getElementById('wa21css')) return;
+  var css = '' +
+    '.wa21-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0 10px;}' +
+    '.wa21-ctlab{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--wa-muted,#7b8a86);}' +
+    '.wa21-who{font-size:12.5px;padding:4px 8px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;max-width:180px;}' +
+    '.wa21-who option{color:#1c2b27;}' +
+    '.wa21-seg{display:inline-flex;border:1px solid rgba(127,127,127,.35);border-radius:8px;overflow:hidden;}' +
+    '.wa21-seg button{font-size:12px;padding:4px 11px;border:0;background:transparent;color:inherit;cursor:pointer;}' +
+    '.wa21-seg button + button{border-left:1px solid rgba(127,127,127,.25);}' +
+    '.wa21-seg button.on{background:#2c7a66;color:#fff;}' +
+    '.wa21-bub{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;color:#fff;font-size:9.5px;font-weight:700;flex:0 0 auto;letter-spacing:.02em;}' +
+    '.wa21-bub.sm{width:17px;height:17px;font-size:8px;}' +
+    '.wa21-bubs{display:inline-flex;gap:3px;align-items:center;flex-wrap:wrap;}' +
+    '.wa21-board{display:flex;gap:10px;overflow-x:auto;padding:4px 0 10px;align-items:flex-start;}' +
+    '.wa21-col{flex:0 0 216px;background:rgba(127,127,127,.10);border-radius:10px;padding:8px;}' +
+    '.wa21-colh{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:700;margin:0 0 4px;}' +
+    '.wa21-colh .n{opacity:.65;font-weight:600;}' +
+    '.wa21-card{background:rgba(255,255,255,.07);border:1px solid rgba(127,127,127,.28);border-radius:8px;padding:7px 8px;margin:6px 0;cursor:pointer;}' +
+    '.wa21-card:hover{border-color:#2c7a66;}' +
+    '.wa21-ct{font-size:12.5px;line-height:1.35;}' +
+    '.wa21-cm{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;}' +
+    '.wa21-due,.wa21-st{font-size:10.5px;padding:1px 7px;border-radius:9px;border:1px solid rgba(127,127,127,.4);color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.wa21-due.soon{border-color:#2c7a66;color:#2c7a66;}' +
+    '.wa21-due.late{border-color:#b3564d;color:#b3564d;font-weight:700;}' +
+    '.wa21-calh{display:flex;align-items:center;justify-content:space-between;margin:4px 0 8px;font-size:14px;}' +
+    '.wa21-calh button{border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;border-radius:7px;padding:2px 10px;cursor:pointer;font-size:12px;}' +
+    '.wa21-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}' +
+    '.wa21-dow{font-size:10px;text-align:center;color:var(--wa-muted,#7b8a86);text-transform:uppercase;letter-spacing:.05em;padding:2px 0;}' +
+    '.wa21-day{min-height:64px;border:1px solid rgba(127,127,127,.22);border-radius:6px;padding:3px 4px;font-size:10.5px;overflow:hidden;}' +
+    '.wa21-day.out{opacity:.4;}' +
+    '.wa21-day.today{border-color:#2c7a66;box-shadow:0 0 0 1px #2c7a66 inset;}' +
+    '.wa21-dn{font-size:9.5px;color:var(--wa-muted,#7b8a86);text-align:right;}' +
+    '.wa21-chip{display:flex;align-items:center;gap:3px;background:rgba(44,122,102,.16);border-radius:5px;padding:2px 3px;margin-top:2px;cursor:pointer;white-space:nowrap;overflow:hidden;}' +
+    '.wa21-chip span{overflow:hidden;text-overflow:ellipsis;}' +
+    '.wa21-calfoot{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:8px;}' +
+    '.wa21-calfoot details{margin-top:4px;}' +
+    '.wa21-calfoot li{cursor:pointer;margin:2px 0;}' +
+    '.wa21-upd{margin:4px 0 14px;}' +
+    '.wa21-upd > summary{cursor:pointer;font-weight:700;font-size:13.5px;list-style:revert;}' +
+    '.wa21-upd .wa21-hint{font-weight:400;font-size:11px;color:var(--wa-muted,#7b8a86);margin-left:8px;}' +
+    '.wa21-updwrap{overflow-x:auto;margin-top:8px;}' +
+    '.wa21-updtab{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    '.wa21-updtab th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 8px;}' +
+    '.wa21-updtab td{padding:8px;border-top:1px solid rgba(127,127,127,.22);vertical-align:top;}' +
+    '.wa21-mt{white-space:nowrap;font-weight:700;font-size:12px;}' +
+    'ul.wa21-b{margin:0;padding-left:16px;}' +
+    'ul.wa21-b li{margin:2px 0;}' +
+    'ul.wa21-b li.wa21-hid{display:none;}' +
+    'ul.wa21-b li.wa21-hid.show{display:list-item;}' +
+    'a.wa21-more{font-size:11px;cursor:pointer;text-decoration:underline;color:#2c7a66;}' +
+    '.wa21-names{font-size:10.5px;color:var(--wa-muted,#7b8a86);margin-top:3px;max-width:150px;}' +
+    '@media (max-width:640px){.wa21-col{flex-basis:172px;}.wa21-day{min-height:46px;}.wa21-mt{white-space:normal;}}';
+  var st = document.createElement('style');
+  st.id = 'wa21css';
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+function wa21Initials(name) {
+  var p = String(name || '').trim().split(/\s+/);
+  var a = (p[0] || '').charAt(0);
+  var b = p.length > 1 ? p[p.length - 1].charAt(0) : (p[0] || '').charAt(1);
+  return (a + (b || '')).toUpperCase();
+}
+function wa21Hue(name) {
+  var h = 0, s = String(name || '');
+  for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return h;
+}
+function wa21Bubble(name, small) {
+  return '<span class="wa21-bub' + (small ? ' sm' : '') + '" title="' + esc(name) + '" style="background:hsl(' + wa21Hue(name) + ',45%,37%)">' + esc(wa21Initials(name)) + '</span>';
+}
+function wa21TaskNames(t) {
+  var out = [];
+  (t.assignees || []).forEach(function (a) { if (a && a.name && out.indexOf(a.name) < 0) out.push(a.name); });
+  if (!out.length && t.owner) {
+    String(t.owner).split(/[;,]/).forEach(function (x) {
+      x = x.replace(/\(.*?\)/g, '').trim();
+      if (x && out.indexOf(x) < 0) out.push(x);
+    });
+  }
+  return out;
+}
+function wa21Trunc(s, n) {
+  s = String(s || '');
+  return s.length > n ? s.slice(0, n - 1) + '...' : s;
+}
+
+async function wa21LoadTx() {
+  if (WA21_TX) return;
+  try {
+    var r = await db.from('transcripts').select('id, title, meeting_date, department, speakers').order('id', { ascending: false }).limit(400);
+    WA21_TX = (r && r.data) || [];
+  } catch (e) { WA21_TX = []; }
+}
+
+function wa21Speakers(id, group) {
+  var by = String(group.by || '');
+  if (by.indexOf('AI: ') === 0 && WA21_TX) {
+    var title = by.slice(4);
+    var cands = WA21_TX.filter(function (t) { return t.department === id && t.title === title; });
+    if (cands.length) {
+      var at = new Date(group.at || 0).getTime();
+      cands.sort(function (a, b) {
+        var da = Math.abs(new Date((a.meeting_date || '1970-01-01') + 'T12:00:00').getTime() - at);
+        var db2 = Math.abs(new Date((b.meeting_date || '1970-01-01') + 'T12:00:00').getTime() - at);
+        return da - db2;
+      });
+      return cands[0].speakers || [];
+    }
+    return [];
+  }
+  if (by.indexOf('@') > 0) {
+    var nm = by.split('@')[0].replace(/[._]/g, ' ').split(' ').map(function (w) {
+      return w.charAt(0).toUpperCase() + w.slice(1);
+    }).join(' ').trim();
+    return nm ? [nm] : [];
+  }
+  return by ? [by] : [];
+}
+
+function wa21UpdatesTable(id, card) {
+  var heads = card.querySelectorAll('h3.block');
+  var head = null;
+  for (var i = 0; i < heads.length; i++) {
+    if (heads[i].textContent.trim() === 'Most recent updates') { head = heads[i]; break; }
+  }
+  if (!head) return;
+  var ul = head.nextElementSibling;
+  if (!ul || !ul.classList || !ul.classList.contains('updates')) return;
+
+  var rows = (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []).filter(function (r) { return r.department === id; });
+  if (!rows.length) return;
+  rows.sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
+
+  var groups = [];
+  var byLabel = {};
+  rows.forEach(function (r) {
+    var key = (r.entry_label || 'Undated') + '|' + String(r.added_by || '');
+    if (!byLabel[key]) {
+      byLabel[key] = { label: r.entry_label || 'Undated', by: r.added_by || '', at: r.created_at, rows: [] };
+      groups.push(byLabel[key]);
+    }
+    byLabel[key].rows.push(r);
+  });
+  groups.forEach(function (g) {
+    g.rows.sort(function (a, b) { return new Date(a.created_at) - new Date(b.created_at); });
+  });
+
+  var body = groups.map(function (g, gi) {
+    var lis = g.rows.map(function (u, i) {
+      var lock = u.confidential && isStaff() ? '<span class="lock-tag">board hidden</span> ' : '';
+      var cls = i >= 3 ? ' class="wa21-hid"' : '';
+      return '<li' + cls + '>' + lock + u.text + '</li>';
+    }).join('');
+    var more = g.rows.length > 3
+      ? '<a class="wa21-more" data-wa21more="' + gi + '">+' + (g.rows.length - 3) + ' more</a>'
+      : '';
+    var speakers = wa21Speakers(id, g);
+    var who = speakers.length
+      ? '<span class="wa21-bubs">' + speakers.slice(0, 6).map(function (n) { return wa21Bubble(n, true); }).join('') +
+        (speakers.length > 6 ? '<span class="wa21-names">+' + (speakers.length - 6) + '</span>' : '') + '</span>' +
+        '<div class="wa21-names">' + esc(speakers.slice(0, 6).map(function (n) { return n.split(' ')[0]; }).join(', ')) + '</div>'
+      : '<span class="wa21-names">&middot;</span>';
+    return '<tr><td class="wa21-mt">' + esc(g.label) + '</td>' +
+      '<td><ul class="wa21-b" data-wa21g="' + gi + '">' + lis + '</ul>' + more + '</td>' +
+      '<td>' + who + '</td></tr>';
+  }).join('');
+
+  var det = document.createElement('details');
+  det.className = 'wa21-upd';
+  det.innerHTML = '<summary>Most recent updates: ' + groups.length + (groups.length === 1 ? ' meeting' : ' meetings') +
+    '<span class="wa21-hint">latest ' + esc(groups[0].label) + '</span></summary>' +
+    '<div class="wa21-updwrap"><table class="wa21-updtab"><thead><tr><th>Meeting</th><th>Key updates</th><th>Who was speaking</th></tr></thead><tbody>' +
+    body + '</tbody></table></div>';
+  head.style.display = 'none';
+  ul.parentNode.insertBefore(det, ul);
+  ul.remove();
+  det.addEventListener('click', function (e) {
+    var a = e.target.closest('[data-wa21more]');
+    if (!a) return;
+    e.preventDefault();
+    var g = det.querySelector('[data-wa21g="' + a.getAttribute('data-wa21more') + '"]');
+    if (!g) return;
+    var hid = g.querySelectorAll('.wa21-hid');
+    var open = hid.length && hid[0].classList.contains('show');
+    for (var i = 0; i < hid.length; i++) hid[i].classList.toggle('show', !open);
+    a.textContent = open ? '+' + hid.length + ' more' : 'show fewer';
+  });
+}
+
+function wa21DueChip(t) {
+  if (!t.due) return '';
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var d = new Date(t.due + 'T12:00:00');
+  var cls = '';
+  if (!t.done) {
+    var diff = (d - today) / 86400000;
+    if (diff < 0) cls = ' late'; else if (diff <= 7) cls = ' soon';
+  }
+  var lbl = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return '<span class="wa21-due' + cls + '">' + esc(lbl) + '</span>';
+}
+
+function wa21Card(t) {
+  var flag = t.flag ? '<span title="Flagged">&#9873; </span>' : '';
+  var st = t.status && t.status !== 'Open' ? '<span class="wa21-st" title="' + esc(t.status) + '">' + esc(wa21Trunc(t.status, 22)) + '</span>' : '';
+  return '<div class="wa21-card" data-wa21t="' + t.ref + '"><div class="wa21-ct">' + flag + esc(t.title) + '</div>' +
+    ((t.due || st) ? '<div class="wa21-cm">' + wa21DueChip(t) + st + '</div>' : '') + '</div>';
+}
+
+function wa21Board(id, tasks) {
+  var open = tasks.filter(function (t) { return !t.done; });
+  var cols = [];
+  var byName = {};
+  open.forEach(function (t) {
+    var names = wa21TaskNames(t);
+    if (!names.length) names = ['Unassigned'];
+    names.forEach(function (n) {
+      if (!byName[n]) { byName[n] = []; cols.push(n); }
+      byName[n].push(t);
+    });
+  });
+  cols.sort(function (a, b) {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return byName[b].length - byName[a].length || a.localeCompare(b);
+  });
+  if (!cols.length) return '<p style="color:var(--wa-muted,#7b8a86);font-size:12.5px;">No open tasks for this view.</p>';
+  return '<div class="wa21-board">' + cols.map(function (n) {
+    return '<div class="wa21-col"><div class="wa21-colh">' +
+      (n === 'Unassigned' ? '' : wa21Bubble(n)) + '<span>' + esc(n) + '</span><span class="n">' + byName[n].length + '</span></div>' +
+      byName[n].map(wa21Card).join('') + '</div>';
+  }).join('') + '</div>';
+}
+
+function wa21Cal(id, tasks) {
+  var mon = WA21_MON[id];
+  if (!mon) {
+    var now = new Date();
+    mon = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+    WA21_MON[id] = mon;
+  }
+  var y = Number(mon.slice(0, 4)), m = Number(mon.slice(5, 7)) - 1;
+  var first = new Date(y, m, 1);
+  var daysIn = new Date(y, m + 1, 0).getDate();
+  var lead = first.getDay();
+  var todayIso = (function () { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
+
+  var open = tasks.filter(function (t) { return !t.done; });
+  var inMonth = {};
+  var other = 0, noDue = [];
+  open.forEach(function (t) {
+    if (!t.due) { noDue.push(t); return; }
+    if (t.due.slice(0, 7) === mon) {
+      var day = Number(t.due.slice(8, 10));
+      if (!inMonth[day]) inMonth[day] = [];
+      inMonth[day].push(t);
+    } else { other += 1; }
+  });
+
+  var title = first.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  var html = '<div class="wa21-calh"><button data-wa21m="-1" title="Previous month">&#9664;</button><b>' + esc(title) + '</b><button data-wa21m="1" title="Next month">&#9654;</button></div>';
+  html += '<div class="wa21-cal">';
+  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(function (d) { html += '<div class="wa21-dow">' + d + '</div>'; });
+  var cell;
+  for (cell = 0; cell < lead; cell++) html += '<div class="wa21-day out"></div>';
+  for (var day = 1; day <= daysIn; day++) {
+    var iso = mon + '-' + ('0' + day).slice(-2);
+    var chips = (inMonth[day] || []).map(function (t) {
+      var names = wa21TaskNames(t);
+      return '<div class="wa21-chip" data-wa21t="' + t.ref + '" title="' + esc(t.title + (names.length ? ' (' + names.join(', ') + ')' : '')) + '">' +
+        names.slice(0, 2).map(function (n) { return wa21Bubble(n, true); }).join('') +
+        '<span>' + esc(wa21Trunc(t.title, 16)) + '</span></div>';
+    }).join('');
+    html += '<div class="wa21-day' + (iso === todayIso ? ' today' : '') + '"><div class="wa21-dn">' + day + '</div>' + chips + '</div>';
+  }
+  var trail = (lead + daysIn) % 7;
+  if (trail) for (cell = trail; cell < 7; cell++) html += '<div class="wa21-day out"></div>';
+  html += '</div>';
+
+  var monthCount = Object.keys(inMonth).reduce(function (n, k) { return n + inMonth[k].length; }, 0);
+  html += '<div class="wa21-calfoot">' + monthCount + ' due this month &middot; ' + other + ' due in other months &middot; ' + noDue.length + ' with no due date';
+  if (noDue.length) {
+    html += '<details><summary>No due date (' + noDue.length + ')</summary><ul>' +
+      noDue.map(function (t) {
+        var names = wa21TaskNames(t);
+        return '<li data-wa21t="' + t.ref + '">' + esc(t.title) + (names.length ? ' <span class="wa21-names" style="display:inline">(' + esc(names.join(', ')) + ')</span>' : '') + '</li>';
+      }).join('') + '</ul></details>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function wa21EditTask(id, ref) {
+  if (!isStaff() || typeof taskModal !== 'function') return;
+  try {
+    var t = getTasks(id).filter(function (x) { return String(x.ref) === String(ref); })[0];
+    if (t) taskModal(id, t);
+  } catch (e) { /* non-fatal */ }
+}
+
+function wa21Controls(id, card) {
+  var heads = card.querySelectorAll('h3.block');
+  var head = null;
+  for (var i = 0; i < heads.length; i++) {
+    var t = heads[i].textContent.trim();
+    if (t === 'Workstreams' || t.indexOf('Open items') === 0) { head = heads[i]; break; }
+  }
+  if (!head) return;
+
+  var wrap = document.createElement('div');
+  wrap.className = 'wa21-list';
+  var stop = null;
+  var walk = head;
+  var toMove = [];
+  while (walk) {
+    var isStop = (walk.classList && (walk.classList.contains('add-row') || walk.classList.contains('completed'))) ||
+      (walk.tagName === 'H3' && walk !== head && walk.textContent.indexOf('Transcripts that contributed') >= 0);
+    if (isStop) { stop = walk; break; }
+    toMove.push(walk);
+    walk = walk.nextElementSibling;
+  }
+  head.parentNode.insertBefore(wrap, head);
+  toMove.forEach(function (n) { wrap.appendChild(n); });
+
+  var tasksAll = getTasks(id);
+  var names = [];
+  tasksAll.forEach(function (t) {
+    wa21TaskNames(t).forEach(function (n) { if (names.indexOf(n) < 0) names.push(n); });
+  });
+  names.sort(function (a, b) { return a.localeCompare(b); });
+  var cur = WA21_WHO[id] || '';
+  if (cur && names.indexOf(cur) < 0) { cur = ''; WA21_WHO[id] = ''; }
+  var view = WA21_VIEW[id] || 'list';
+
+  var ctl = document.createElement('div');
+  ctl.className = 'wa21-ctl';
+  ctl.innerHTML = '<span class="wa21-ctlab">Tasks</span>' +
+    '<select class="wa21-who"><option value="">Everyone</option>' +
+    names.map(function (n) { return '<option value="' + esc(n) + '"' + (n === cur ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') +
+    '</select>' +
+    '<span class="wa21-seg">' +
+    [['list', 'List'], ['board', 'Board'], ['cal', 'Calendar']].map(function (v) {
+      return '<button data-wa21v="' + v[0] + '"' + (view === v[0] ? ' class="on"' : '') + '>' + v[1] + '</button>';
+    }).join('') + '</span>';
+  card.insertBefore(ctl, wrap);
+
+  var alt = document.createElement('div');
+  alt.className = 'wa21-alt';
+  card.insertBefore(alt, wrap.nextSibling);
+
+  var f = WA21_WHO[id] || '';
+  var shown = f ? tasksAll.filter(function (t) {
+    var fl = f.toLowerCase();
+    return wa21TaskNames(t).some(function (n) { return n.toLowerCase() === fl; }) ||
+      String(t.owner || '').toLowerCase().indexOf(fl) >= 0;
+  }) : tasksAll;
+
+  if (view === 'board') { wrap.style.display = 'none'; alt.innerHTML = wa21Board(id, shown); }
+  else if (view === 'cal') { wrap.style.display = 'none'; alt.innerHTML = wa21Cal(id, shown); }
+
+  ctl.querySelector('.wa21-who').addEventListener('change', function () {
+    WA21_WHO[id] = this.value;
+    renderSection(id);
+  });
+  ctl.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-wa21v]');
+    if (!b) return;
+    WA21_VIEW[id] = b.getAttribute('data-wa21v');
+    renderSection(id);
+  });
+  alt.addEventListener('click', function (e) {
+    var mBtn = e.target.closest('[data-wa21m]');
+    if (mBtn) {
+      var mon = WA21_MON[id];
+      if (!mon) { var now = new Date(); mon = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2); }
+      var y = Number(mon.slice(0, 4)), m = Number(mon.slice(5, 7)) - 1 + Number(mBtn.getAttribute('data-wa21m'));
+      var d = new Date(y, m, 1);
+      WA21_MON[id] = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2);
+      renderSection(id);
+      return;
+    }
+    var tEl = e.target.closest('[data-wa21t]');
+    if (tEl) wa21EditTask(id, tEl.getAttribute('data-wa21t'));
+  });
+}
+
+function wa21Enhance(id) {
+  var el = document.getElementById(id);
+  var card = el ? el.querySelector('.dept-card') : null;
+  if (!card || card.dataset.wa21) return;
+  card.dataset.wa21 = '1';
+  try { wa21UpdatesTable(id, card); } catch (e) { /* non-fatal */ }
+  try { wa21Controls(id, card); } catch (e) { /* non-fatal */ }
+}
+
+(function () {
+  var __gt21 = getTasks;
+  getTasks = function (id) {
+    var rows = __gt21(id);
+    if (WA21_ACTIVE !== id) return rows;
+    var f = WA21_WHO[id];
+    if (!f) return rows;
+    var fl = f.toLowerCase();
+    return rows.filter(function (t) {
+      return wa21TaskNames(t).some(function (n) { return n.toLowerCase() === fl; }) ||
+        String(t.owner || '').toLowerCase().indexOf(fl) >= 0;
+    });
+  };
+
+  var __rs21 = renderSection;
+  renderSection = function (id) {
+    WA21_ACTIVE = id;
+    try { __rs21(id); } finally { WA21_ACTIVE = null; }
+    try { wa21Enhance(id); } catch (e) { /* non-fatal */ }
+  };
+
+  var __sa21 = startApp;
+  startApp = async function () {
+    await __sa21();
+    try {
+      await wa21LoadTx();
+      if (typeof renderAllSections === 'function') renderAllSections();
+    } catch (e) { /* non-fatal */ }
+  };
+
+  /* If the app somehow booted before this wave installed, enhance in place. */
+  try {
+    if (document.querySelector('.dept-card')) {
+      wa21LoadTx().then(function () {
+        try { if (typeof renderAllSections === 'function') renderAllSections(); } catch (e) { /* non-fatal */ }
+      });
+    }
+  } catch (e) { /* non-fatal */ }
+})();

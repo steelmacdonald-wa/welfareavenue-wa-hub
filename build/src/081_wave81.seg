@@ -1,0 +1,109 @@
+/* =====================================================================
+   WA v81 Phase 1 (U6): the assistant becomes a proper drawer
+   =====================================================================
+   Same ids, same wave4 toggle, same wave38 pipeline. The panel is now a
+   full-height drawer on the right, and when it opens on an empty
+   thread it offers three starter prompts that match the page you are
+   on. Clicking a prompt prefills the input; you still press send.
+   ===================================================================== */
+(function () {
+  if (window.__wa81) return; window.__wa81 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#waChatPanel{top:0;right:0;bottom:0;height:100vh;max-height:100vh;width:400px;max-width:96vw;border-radius:0;border-top:none;border-bottom:none;border-right:none;box-shadow:-14px 0 40px rgba(0,0,0,.22);}' +
+    '.w81chips{padding:4px 12px 10px;display:flex;flex-direction:column;gap:6px;}' +
+    '.w81chips .w81h{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:#7b8a86;font-weight:800;}' +
+    '.w81chip{text-align:left;background:#f2f7f5;border:1px solid #d8e6e0;border-radius:10px;padding:8px 10px;font-size:12.5px;color:#14302b;cursor:pointer;}' +
+    '.w81chip:hover{background:#e8f1ed;}' +
+    '#w81close{position:absolute;top:10px;right:12px;background:none;border:none;color:#fff;font-size:20px;line-height:1;cursor:pointer;opacity:.85;z-index:2;}' +
+    '#w81close:hover{opacity:1;}' +
+    '#waChatPanel .wac-h{position:relative;padding-right:40px;}';
+  document.head.appendChild(css);
+
+  /* the full-height drawer covers the pill, so it needs its own close */
+  function w81Close() {
+    var panel = document.getElementById('waChatPanel');
+    var head = panel && panel.querySelector('.wac-h');
+    if (!head || document.getElementById('w81close')) return;
+    var x = document.createElement('button');
+    x.id = 'w81close';
+    x.innerHTML = '&#10005;';
+    x.title = 'Close';
+    x.addEventListener('click', function () { panel.style.display = 'none'; });
+    head.appendChild(x);
+  }
+
+  var W81_PROMPTS = {
+    mypage: ['What should I focus on this week?', 'What did I miss since last week?', 'Which of my tasks are overdue?'],
+    overview: ['Which decisions are still open?', 'What was decided this month?', 'What needs a decision from the EDs?'],
+    goals: ['Which goals have no project attached?', 'How are this quarter\'s goals shaping up?', 'Which team is furthest behind on its goals?'],
+    transcripts: ['Summarise the last leadership meeting', 'What was discussed about fundraising this month?', 'Which meetings mentioned me?'],
+    volunteering: ['What is left to prepare for the next serving event?', 'Which SOP steps have no owner?', 'How many volunteers joined the last event?'],
+    hrcentre: ['Who is still mid-onboarding?', 'Who has not checked in hours for two weeks?', 'Which roles are we recruiting for?'],
+    requests: ['Which requests are waiting on marketing?', 'What kinds of requests can I file?', 'Which requests have been open longest?'],
+    finances: ['How much did we raise this quarter?', 'What were the biggest expenses this quarter?', 'How is spending tracking against budget?'],
+    _dept: ['What is blocking DEPT right now?', 'Summarise DEPT progress this period', 'Who carries the most open tasks in DEPT?'],
+    _default: ['What happened across Welfare Avenue this week?', 'What needs attention today?', 'Who is mentioned most in recent meetings?']
+  };
+
+  function w81Prompts() {
+    var active = document.querySelector('.panel.active');
+    var id = active ? active.id : '';
+    if (W81_PROMPTS[id]) return W81_PROMPTS[id];
+    try {
+      if (typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(id) >= 0) {
+        var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[id]) || id;
+        return W81_PROMPTS._dept.map(function (p) { return p.replace('DEPT', label); });
+      }
+    } catch (e) { /* non-fatal */ }
+    return W81_PROMPTS._default;
+  }
+
+  function w81Input() { return document.getElementById('w38in') || document.getElementById('wacInput'); }
+
+  function w81Inject() {
+    var panel = document.getElementById('waChatPanel');
+    var msgs = document.getElementById('wacMsgs');
+    if (!panel || !msgs || panel.style.display !== 'flex') return;
+    var old = panel.querySelector('.w81chips');
+    if (old) old.remove();
+    if (msgs.querySelectorAll('.wac-m').length > 1) return;   /* real thread already */
+    var box = document.createElement('div');
+    box.className = 'w81chips';
+    box.innerHTML = '<span class="w81h">Try asking</span>' + w81Prompts().map(function (p) {
+      return '<button class="w81chip">' + esc(p) + '</button>';
+    }).join('');
+    var inRow = panel.querySelector('.wac-in');
+    panel.insertBefore(box, inRow || null);
+    box.querySelectorAll('.w81chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var inp = w81Input();
+        if (inp) { inp.value = b.textContent; inp.focus(); }
+      });
+    });
+  }
+
+  /* runs after wave4's toggle listener on the same button */
+  function w81Wire() {
+    var btn = document.getElementById('waChatBtn');
+    if (!btn || btn.dataset.w81) return;
+    btn.dataset.w81 = '1';
+    btn.addEventListener('click', function () { setTimeout(function () { w81Close(); w81Inject(); }, 30); });
+    w81Close();
+  }
+  if (typeof startApp === 'function') {
+    var __sa81 = startApp;
+    startApp = async function () {
+      await __sa81.apply(this, arguments);
+      try { w81Wire(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof window.w75Open === 'function') {
+    var __o81 = window.w75Open;
+    window.w75Open = function () {
+      __o81.apply(this, arguments);
+      try { setTimeout(w81Inject, 30); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

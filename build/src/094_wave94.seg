@@ -1,0 +1,374 @@
+/* =====================================================================
+   WA v94 finance dashboard (07/08/26): sections + interactive charts
+   =====================================================================
+   The Finances page becomes a sectioned dashboard. Nothing is removed:
+   every block waves 22 and 90-93 render is MOVED (reconciler-style)
+   into one of five sections behind a sub-nav, and the two headline
+   charts upgrade to fully interactive Chart.js versions (tooltips on
+   every mark, clickable legends, forecast overlays) loaded lazily from
+   cdn.jsdelivr.net (CSP already allows it; The Brain set the pattern).
+   If the CDN is unreachable the wave90 SVG charts stay: the dashboard
+   degrades, never breaks.
+   Sections: Overview (KPIs, health, finance tasks + meetings),
+   Trends (interactive monthly + net + a new FY-over-FY comparison),
+   Money map (where money goes / comes from with merchant drilldowns,
+   department share), Budget (tables + bullet bars), Transactions
+   (review queue, ledger, imported statements).
+   Chart colors follow the validated dataviz palette: income #1baf7a,
+   spending #eb6834, net line #2a78d6, FY series from the fixed
+   categorical order. The ledger doubles as the table view, so every
+   charted number is reachable without hovering.
+   ===================================================================== */
+(function () {
+  if (window.__wa94) return; window.__wa94 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w94nav{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 14px;border-bottom:2px solid rgba(127,127,127,.15);padding-bottom:10px;}' +
+    '.w94tab{border:none;background:transparent;color:var(--wa-muted,#7b8a86);border-radius:999px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer;}' +
+    '.w94tab.on{background:#2c7a66;color:#fff;}' +
+    '.w94tab:hover:not(.on){background:rgba(44,122,102,.1);color:#14302b;}' +
+    '.w94sec{min-height:120px;}' +
+    '.w94grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:8px 0;}' +
+    '.w94wide{background:rgba(127,127,127,.07);border-radius:10px;padding:12px 14px;margin:10px 0;}' +
+    '.w94wide .w90t{margin-bottom:8px;}' +
+    '.w94wide canvas{max-height:280px;}' +
+    '.w94empty{font-size:12px;color:var(--wa-muted,#7b8a86);padding:20px 0;}';
+  document.head.appendChild(css);
+
+  var SECS = [
+    ['overview', 'Overview'],
+    ['trends', 'Trends'],
+    ['money', 'Money map'],
+    ['budget', 'Budget'],
+    ['txns', 'Transactions']
+  ];
+  var CJS_URL = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js';
+  var W94 = { lib: 'idle', charts: [], all: null, allAt: 0 };
+
+  function w94Cur() {
+    try { return localStorage.getItem('wa94.sec') || 'overview'; } catch (e) { return 'overview'; }
+  }
+  function w94Show(id) {
+    try { localStorage.setItem('wa94.sec', id); } catch (e) { /* fine */ }
+    document.querySelectorAll('#finances .w94sec').forEach(function (s) {
+      s.style.display = s.getAttribute('data-w94sec') === id ? '' : 'none';
+    });
+    document.querySelectorAll('#w94nav .w94tab').forEach(function (t) {
+      t.classList.toggle('on', t.getAttribute('data-w94tab') === id);
+    });
+    if (id === 'trends') w94Interactive();
+  }
+
+  /* ---------- restructure the rendered page into sections ---------- */
+  function w94Build() {
+    var sec = document.getElementById('finances');
+    if (!sec || document.getElementById('w94nav')) return;
+    var card = sec.querySelector(':scope > .card');
+    if (!card) return;
+    var pills = document.getElementById('w92pills');
+    if (!pills) return;
+
+    /* nav goes right after the pills (and the past-FY note if present) */
+    var anchor = pills;
+    if (anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('w92note')) anchor = anchor.nextElementSibling;
+    var nav = document.createElement('div');
+    nav.id = 'w94nav';
+    nav.innerHTML = SECS.map(function (s) {
+      return '<button class="w94tab" data-w94tab="' + s[0] + '">' + s[1] + '</button>';
+    }).join('');
+    anchor.insertAdjacentElement('afterend', nav);
+
+    var shells = {};
+    var frag = document.createDocumentFragment();
+    SECS.forEach(function (s) {
+      var d = document.createElement('div');
+      d.className = 'w94sec';
+      d.setAttribute('data-w94sec', s[0]);
+      shells[s[0]] = d;
+      frag.appendChild(d);
+    });
+    /* insert shells right after the nav, in order */
+    var after = nav;
+    SECS.forEach(function (s) { after.insertAdjacentElement('afterend', shells[s[0]]); after = shells[s[0]]; });
+
+    function mv(el, home) { if (el && shells[home]) shells[home].appendChild(el); }
+
+    /* fixed-id blocks */
+    mv(sec.querySelector('.fin-kpis'), 'overview');
+    mv(document.getElementById('w92health'), 'overview');
+    mv(document.getElementById('w93tasks'), 'overview');
+    mv(document.getElementById('w93meet'), 'overview');
+    mv(document.getElementById('w91review'), 'txns');
+
+    /* split the wave90 chart grid: wide boxes -> trends, small -> money map,
+       budget bullets -> budget */
+    var w90 = document.getElementById('w90charts');
+    if (w90) {
+      var trendsGrid = document.createElement('div');
+      trendsGrid.id = 'w94staticwide';
+      var moneyGrid = document.createElement('div');
+      moneyGrid.className = 'w94grid';
+      var bulletBox = null;
+      w90.querySelectorAll('.w90box').forEach(function (box) {
+        var t = ((box.querySelector('.w90t') || {}).textContent || '');
+        if (box.classList.contains('wide')) trendsGrid.appendChild(box);
+        else if (t.indexOf('Budget vs actual') === 0) bulletBox = box;
+        else moneyGrid.appendChild(box);
+      });
+      shells.trends.appendChild(trendsGrid);
+      shells.money.appendChild(moneyGrid);
+      if (bulletBox) {
+        var bg = document.createElement('div');
+        bg.className = 'w94grid';
+        bg.appendChild(bulletBox);
+        shells.budget.appendChild(bg);
+      }
+      w90.remove();
+    }
+
+    /* walk the remaining flat card children and bucket by heading */
+    var bucket = null;
+    Array.prototype.slice.call(card.children).forEach(function (el) {
+      if (el.id === 'w94nav' || el.classList.contains('w94sec') || el.classList.contains('fin-head') || el.id === 'w92pills' || el.classList.contains('w92note')) return;
+      var txt = (el.tagName === 'H3') ? (el.textContent || '') : '';
+      if (txt.indexOf('Charts') === 0) { el.remove(); return; }
+      if (txt.indexOf('Budget vs actual') === 0) bucket = 'budget';
+      else if (txt.indexOf('Spending by department') === 0) bucket = 'money';
+      else if (txt.indexOf('Transactions') === 0) bucket = 'txns';
+      if (bucket) mv(el, bucket);
+    });
+
+    /* trends: interactive mount points above the static fallback */
+    var mount = document.createElement('div');
+    mount.id = 'w94live';
+    mount.innerHTML =
+      '<div class="w94wide" style="display:none"><div class="w90t">Income vs spending by month (interactive)</div><canvas id="w94c1"></canvas></div>' +
+      '<div class="w94wide" style="display:none"><div class="w90t">Net position over the year (interactive)</div><canvas id="w94c2"></canvas></div>' +
+      '<div class="w94wide" style="display:none"><div class="w90t">Year over year: how each fiscal year compares</div><canvas id="w94c3"></canvas><div class="fin-note" id="w94c3note"></div></div>';
+    shells.trends.insertBefore(mount, shells.trends.firstChild);
+
+    nav.querySelectorAll('.w94tab').forEach(function (b) {
+      b.addEventListener('click', function () { w94Show(b.getAttribute('data-w94tab')); });
+    });
+    w94Show(w94Cur());
+  }
+
+  /* ---------- data helpers (independent of wave90 internals) ---------- */
+  function w94Months() {
+    var y = waFinFYNow() - 1;
+    var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var arr = [], idx = {};
+    for (var i = 0; i < 12; i++) {
+      var m = (9 + i) % 12 + 1;
+      var yy = m >= 10 ? y : y + 1;
+      var key = yy + '-' + ('0' + m).slice(-2);
+      arr.push({ key: key, label: names[m - 1], inc: 0, spd: 0 });
+      idx[key] = i;
+    }
+    (WA_FIN_TX || []).forEach(function (t) {
+      if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+      var i2 = idx[String(t.txn_date).slice(0, 7)];
+      if (i2 === undefined) return;
+      var a = Number(t.amount);
+      if (a >= 0) arr[i2].inc += a; else arr[i2].spd += -a;
+    });
+    var now = new Date();
+    var natFY = (now.getMonth() + 1) >= 10 ? now.getFullYear() + 1 : now.getFullYear();
+    var proj = null;
+    if (window.WA_FIN_FC && waFinFYNow() === natFY) {
+      var last = -1;
+      for (var li = 11; li >= 0; li--) { if (arr[li].inc || arr[li].spd) { last = li; break; } }
+      if (last >= 0 && last < 11) {
+        var from = Math.max(0, last - 2), cnt = last - from + 1, ai = 0, asp = 0;
+        for (var p = from; p <= last; p++) { ai += arr[p].inc; asp += arr[p].spd; }
+        proj = { from: last + 1, avgInc: ai / cnt, avgSpd: asp / cnt, months: cnt };
+      }
+    }
+    return { M: arr, proj: proj };
+  }
+
+  async function w94AllYears() {
+    if (W94.all && (Date.now() - W94.allAt) < 300000) return W94.all;
+    try {
+      var out = [], page = 0, chunk;
+      do {
+        chunk = await db.from('finance_transactions').select('txn_date, amount, duplicate_of').order('id', { ascending: true }).range(page * 1000, page * 1000 + 999);
+        out = out.concat((chunk && chunk.data) || []);
+        page += 1;
+      } while (chunk && chunk.data && chunk.data.length === 1000 && page < 10);
+      var fy = {};
+      out.forEach(function (t) {
+        if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+        var d = String(t.txn_date);
+        var y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7));
+        var f = m >= 10 ? y + 1 : y;
+        var row = fy[f] || { inc: 0, spd: 0 };
+        var a = Number(t.amount);
+        if (a >= 0) row.inc += a; else row.spd += -a;
+        fy[f] = row;
+      });
+      W94.all = Object.keys(fy).map(Number).sort().map(function (y2) {
+        return { fy: 'FY' + String(y2).slice(-2), inc: fy[y2].inc, spd: fy[y2].spd };
+      });
+      W94.allAt = Date.now();
+    } catch (e) { W94.all = W94.all || []; }
+    return W94.all;
+  }
+
+  /* ---------- interactive charts ---------- */
+  function w94Money(v) { return waFinMoney(v, true); }
+  function w94Destroy() {
+    W94.charts.forEach(function (c) { try { c.destroy(); } catch (e) { /* fine */ } });
+    W94.charts = [];
+  }
+  function w94LoadLib(cb) {
+    if (window.Chart) { W94.lib = 'ok'; cb(); return; }
+    if (W94.lib === 'loading' || W94.lib === 'fail') return;
+    W94.lib = 'loading';
+    var s = document.createElement('script');
+    s.src = CJS_URL;
+    s.onload = function () { W94.lib = 'ok'; cb(); };
+    s.onerror = function () { W94.lib = 'fail'; };
+    document.head.appendChild(s);
+  }
+
+  var INC = '#1baf7a', SPD = '#eb6834', NET = '#2a78d6';
+  var CAT8 = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+
+  function w94Interactive() {
+    var live = document.getElementById('w94live');
+    if (!live) return;
+    w94LoadLib(function () { w94Mount(); });
+    if (window.Chart) w94Mount();
+  }
+
+  function w94Mount() {
+    var live = document.getElementById('w94live');
+    if (!live || !window.Chart || live.dataset.mounted) return;
+    live.dataset.mounted = '1';
+    var stat = document.getElementById('w94staticwide');
+    if (stat) stat.style.display = 'none';
+    live.querySelectorAll('.w94wide').forEach(function (b) { b.style.display = ''; });
+    w94Destroy();
+    var d = w94Months();
+    var labels = d.M.map(function (m) { return m.label; });
+    var incData = d.M.map(function (m, i) { return (d.proj && i >= d.proj.from) ? null : Math.round(m.inc); });
+    var spdData = d.M.map(function (m, i) { return (d.proj && i >= d.proj.from) ? null : Math.round(m.spd); });
+    var pInc = d.M.map(function (m, i) { return (d.proj && i >= d.proj.from) ? Math.round(d.proj.avgInc) : null; });
+    var pSpd = d.M.map(function (m, i) { return (d.proj && i >= d.proj.from) ? Math.round(d.proj.avgSpd) : null; });
+    function money(ctx) { return ' ' + (ctx.dataset.label || '') + ': ' + w94Money(ctx.parsed.y); }
+    var c1 = document.getElementById('w94c1');
+    if (c1) {
+      var sets = [
+        { label: 'Income', data: incData, backgroundColor: INC, borderRadius: 3, maxBarThickness: 22 },
+        { label: 'Spending', data: spdData, backgroundColor: SPD, borderRadius: 3, maxBarThickness: 22 }
+      ];
+      if (d.proj) {
+        sets.push({ label: 'Projected income', data: pInc, backgroundColor: INC + '59', borderColor: INC, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
+        sets.push({ label: 'Projected spending', data: pSpd, backgroundColor: SPD + '59', borderColor: SPD, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
+      }
+      W94.charts.push(new Chart(c1, {
+        type: 'bar',
+        data: { labels: labels, datasets: sets },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: money } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return '$' + Number(v).toLocaleString(); } } }, x: { grid: { display: false } } }
+        }
+      }));
+    }
+    var c2 = document.getElementById('w94c2');
+    if (c2) {
+      var cum = [], c = 0, cut = 11;
+      var lastData = -1;
+      d.M.forEach(function (m, i) { if (m.inc || m.spd) lastData = i; });
+      var now = new Date();
+      var nowKey = now.getFullYear() + '-' + ('0' + (now.getMonth() + 1)).slice(-2);
+      d.M.forEach(function (m, i) { if (m.key === nowKey) cut = i; });
+      if (lastData > cut) cut = lastData;
+      var end = d.proj ? 11 : cut;
+      var endActual = d.proj ? d.proj.from - 1 : cut;
+      for (var i3 = 0; i3 <= end; i3++) {
+        if (i3 <= endActual) { c += d.M[i3].inc - d.M[i3].spd; cum.push(Math.round(c * 100) / 100); }
+        else if (d.proj) { c += d.proj.avgInc - d.proj.avgSpd; cum.push(Math.round(c * 100) / 100); }
+      }
+      W94.charts.push(new Chart(c2, {
+        type: 'line',
+        data: {
+          labels: labels.slice(0, end + 1),
+          datasets: [{
+            label: 'Net position', data: cum, borderColor: NET, backgroundColor: NET,
+            pointRadius: 4, pointHoverRadius: 6, borderWidth: 2.5, tension: 0.15,
+            segment: { borderDash: function (ctx) { return d.proj && ctx.p1DataIndex > endActual ? [6, 5] : undefined; } },
+            pointStyle: function (ctx) { return d.proj && ctx.dataIndex > endActual ? 'circle' : 'circle'; },
+            pointBackgroundColor: function (ctx) { return d.proj && ctx.dataIndex > endActual ? '#ffffff' : NET; }
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (ctx) { return ' Net' + (d.proj && ctx.dataIndex > endActual ? ' (projected)' : '') + ': ' + w94Money(ctx.parsed.y); } } }
+          },
+          scales: { y: { ticks: { callback: function (v) { return '$' + Number(v).toLocaleString(); } }, grid: { color: function (ctx2) { return ctx2.tick && ctx2.tick.value === 0 ? 'rgba(0,0,0,.35)' : 'rgba(127,127,127,.15)'; } } }, x: { grid: { display: false } } }
+        }
+      }));
+    }
+    w94AllYears().then(function (all) {
+      var c3 = document.getElementById('w94c3');
+      if (!c3 || !all || all.length < 2) {
+        var box = c3 && c3.closest('.w94wide');
+        if (box && (!all || all.length < 2)) box.style.display = 'none';
+        return;
+      }
+      W94.charts.push(new Chart(c3, {
+        type: 'bar',
+        data: {
+          labels: all.map(function (x) { return x.fy; }),
+          datasets: [
+            { label: 'Income', data: all.map(function (x) { return Math.round(x.inc); }), backgroundColor: INC, borderRadius: 3, maxBarThickness: 34 },
+            { label: 'Spending', data: all.map(function (x) { return Math.round(x.spd); }), backgroundColor: SPD, borderRadius: 3, maxBarThickness: 34 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+          plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: money } } },
+          scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return '$' + Number(v).toLocaleString(); } } }, x: { grid: { display: false } } }
+        }
+      }));
+      var note = document.getElementById('w94c3note');
+      if (note) {
+        var latest = all[all.length - 1];
+        note.textContent = 'Every fiscal year in the ledger, duplicates excluded. ' + latest.fy + ' is in progress. Hover any bar; click a legend entry to hide a series.';
+      }
+    });
+  }
+
+  /* ---------- wire in (outermost wrapper: runs after waves 90-93) ---------- */
+  if (typeof waFinRender === 'function') {
+    var __fr94 = waFinRender;
+    waFinRender = function () {
+      w94Destroy();
+      __fr94.apply(this, arguments);
+      try {
+        w94Build();
+        var live = document.getElementById('w94live');
+        if (live) delete live.dataset.mounted;
+        if (w94Cur() === 'trends') w94Interactive();
+        /* wave93 refreshes its folds asynchronously by re-inserting them after
+           the pills row: scoop any escapees back into the Overview section */
+        var scoop = function () {
+          var ov = document.querySelector('#finances .w94sec[data-w94sec="overview"]');
+          if (!ov) return;
+          ['w93tasks', 'w93meet'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && !ov.contains(el)) ov.appendChild(el);
+          });
+        };
+        setTimeout(scoop, 1200);
+        setTimeout(scoop, 3200);
+      } catch (e) { /* non-fatal: the flat page still renders */ }
+    };
+  }
+})();

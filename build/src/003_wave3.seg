@@ -1,0 +1,102 @@
+/* =====================================================================
+   WA v3 UI enhancements (injected 22/07/26)
+   Per-department executive decision cards with AI recommendations.
+   Decisions whose area maps to a department surface inside that
+   department's page (board excluded); the full queue stays in
+   Open Executive Decisions.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.exec-card{border-left:4px solid #a87f2c;}'
+    + '.exec-item{padding:8px 0;border-top:1px dashed var(--wa-line);}'
+    + '.exec-item:first-of-type{border-top:none;}'
+    + '.exec-line b{font-size:13.5px;}'
+    + '.exec-owner{margin-left:8px;font-size:11px;color:var(--wa-muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;}'
+    + '.exec-move{font-size:12.5px;color:var(--wa-muted);margin-top:2px;}'
+    + '.rec-box{background:#f6efe0;border:1px solid #e7d7b0;border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12.5px;white-space:pre-wrap;}'
+    + '.exec-actions{margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+function waAreaKey(a) {
+  var s = (a || "").toLowerCase();
+  if (s.indexOf("mtl") >= 0 || s.indexOf("montreal") >= 0) return "opsmtl";
+  if (s === "ops to" || s.indexOf("toronto") >= 0) return "opsto";
+  if (s.indexOf("fund") >= 0 || s.indexOf("grant") >= 0) return "fundraising";
+  if (s.indexOf("market") >= 0) return "marketing";
+  if (s === "hr" || s.indexOf("human") >= 0) return "hr";
+  if (s.indexOf("board") >= 0) return "board";
+  return null;
+}
+
+function renderDeptExecCards() {
+  DEPT_ORDER.filter(function (d) { return d !== "board"; }).forEach(renderDeptExecCard);
+}
+
+function renderDeptExecCard(deptId) {
+  var panel = document.getElementById(deptId);
+  if (!panel) return;
+  var existing = panel.querySelector(".exec-card");
+  if (existing) existing.remove();
+  var rows = (typeof DB_DECISIONS !== "undefined" ? DB_DECISIONS : []).filter(function (d) {
+    return !d.done && waAreaKey(d.area) === deptId;
+  });
+  if (!rows.length) return;
+  var card = document.createElement("div");
+  card.className = "card exec-card";
+  card.innerHTML = '<h2 style="color:#a87f2c;">&#9873; Executive decisions: ' + (DEPT_LABEL[deptId] || deptId) + '</h2>'
+    + '<p class="read" style="margin-top:2px;">Calls that sit with Steel and Suhaib, not the department team. The full queue stays in Open Executive Decisions.</p>'
+    + rows.map(function (d) {
+        return '<div class="exec-item" data-dec="' + d.id + '">'
+          + '<div class="exec-line"><b>' + esc(d.title) + '</b>' + catTag(d.reason_category) + (d.board_only ? '<span class="lock-tag">board only</span>' : '')
+          + (d.owner ? '<span class="exec-owner">' + esc(d.owner) + '</span>' : '') + '</div>'
+          + (d.suggested_move ? '<div class="exec-move">Suggested move: ' + esc(d.suggested_move) + '</div>' : '')
+          + '<div class="exec-rec" id="rec-' + deptId + '-' + d.id + '">'
+          + (d.recommendation ? '<div class="rec-box">' + esc(d.recommendation) + '</div>' : '') + '</div>'
+          + '<div class="exec-actions">'
+          + (isStaff() ? '<button class="btn ghost mini" data-rec="' + d.id + '">' + (d.recommendation ? '&#8635; Refresh recommendation' : '&#10024; Get recommendation') + '</button>' : '')
+          + '<button class="btn ghost mini" data-opendec="' + d.id + '">Open in decisions</button>' + (typeof WA_IS_CIRCLE !== 'undefined' && WA_IS_CIRCLE ? '<button class="btn ghost mini" data-boardonly="' + d.id + '">' + (d.board_only ? 'Make staff visible' : 'Board only') + '</button>' : '')
+          + '</div></div>';
+      }).join('');
+  panel.insertBefore(card, panel.firstChild);
+  card.querySelectorAll("[data-rec]").forEach(function (b) {
+    b.addEventListener("click", function () { waGetRecommendation(Number(b.dataset.rec), deptId, b); });
+  });
+  card.querySelectorAll("[data-opendec]").forEach(function (b) {
+    b.addEventListener("click", function () { location.hash = "#decision/" + b.dataset.opendec; });
+  });
+}
+
+async function waGetRecommendation(id, deptId, btn) {
+  btn.disabled = true;
+  var prior = btn.innerHTML;
+  btn.textContent = "Thinking...";
+  try {
+    const { data, error } = await db.functions.invoke("recommend-decision", { body: { decision_id: id } });
+    if (error) throw error;
+    var rec = data && data.recommendation;
+    if (!rec) throw new Error(data && data.error || "empty");
+    var row = (typeof DB_DECISIONS !== "undefined" ? DB_DECISIONS : []).find(function (d) { return d.id === id; });
+    if (row) row.recommendation = rec;
+    var slot = document.getElementById("rec-" + deptId + "-" + id);
+    if (slot) slot.innerHTML = '<div class="rec-box">' + esc(rec) + '</div>';
+    btn.innerHTML = "&#8635; Refresh recommendation";
+    toast("Recommendation ready");
+  } catch (e) {
+    btn.innerHTML = prior;
+    toast("Recommendation failed, try again");
+  }
+  btn.disabled = false;
+}
+
+if (typeof renderAllSections === "function") {
+  var __waRAS = renderAllSections;
+  renderAllSections = function () {
+    __waRAS();
+    try { renderDeptExecCards(); } catch (e) { /* non-fatal */ }
+  };
+}
+
+

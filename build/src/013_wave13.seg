@@ -1,0 +1,115 @@
+/* =====================================================================
+   WA v13 UI enhancements (25/07/26)
+   Menu organization and mobile support. The tab bar regroups into:
+   My page, Decisions, Dashboard, then three click-to-open groups:
+   Departments, Workspace (Agendas, Requests, Important info, Org
+   chart), Records (Transcript archive, Activity). Existing buttons are
+   MOVED, not recreated, so the original delegated click routing keeps
+   working. On screens under 740px the bar collapses into a hamburger
+   menu with full-width rows. The old per-department hover flyout is
+   retired (its destinations all live in the organized menu now).
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.wa-dd{display:none !important;}'
+    + '.tab-group{position:relative;display:inline-block;}'
+    + '.tab-group-h{border:none;background:none;cursor:pointer;padding:14px 13px;font-size:11.5px;font-weight:700;color:var(--wa-muted);text-transform:uppercase;letter-spacing:.7px;border-bottom:3px solid transparent;}'
+    + '.tab-group-h:hover{color:var(--wa-text);}'
+    + '.tab-group-h .caret{font-size:9px;margin-left:4px;}'
+    + '.tab-group-h.active{color:var(--wa-green);border-bottom-color:var(--wa-green);}'
+    + '.tab-group-p{display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid var(--wa-line);border-radius:0 0 10px 10px;box-shadow:0 10px 26px rgba(0,0,0,.13);min-width:220px;z-index:45;padding:4px 0;}'
+    + '.tab-group.open .tab-group-p{display:block;}'
+    + '.tab-group-p .tab{display:block;width:100%;text-align:left;border-bottom:none;padding:10px 16px;}'
+    + '#waNavToggle{display:none;background:none;border:1px solid var(--wa-line);border-radius:9px;padding:7px 13px;font-size:16px;cursor:pointer;margin:7px 0;color:var(--wa-text);}'
+    + '@media (max-width: 740px){'
+    + '#waNavToggle{display:inline-block;}'
+    + '#tabBar{display:none;flex-direction:column;width:100%;gap:0;}'
+    + 'body.wa-mob-open #tabBar{display:flex;}'
+    + '#tabBar .tab{width:100%;text-align:left;padding:12px 14px;}'
+    + '.tab-group{display:block;width:100%;}'
+    + '.tab-group-h{width:100%;text-align:left;padding:12px 14px;}'
+    + '.tab-group-p{position:static;box-shadow:none;border:none;border-left:3px solid var(--wa-line);margin-left:12px;min-width:0;border-radius:0;}'
+    + '.mp-grid{grid-template-columns:1fr;}'
+    + 'main{padding:18px 12px 90px;}'
+    + '.mp-hours{display:block;overflow-x:auto;white-space:nowrap;}'
+    + '.wa-header{padding:20px 14px 16px;}'
+    + '#waChatPanel{right:4vw;width:92vw;}'
+    + '}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+function waOrganizeNav() {
+  var bar = document.getElementById('tabBar');
+  if (!bar || bar.dataset.waOrg) return;
+  bar.dataset.waOrg = '1';
+  function grab(id) { return bar.querySelector('[data-tab="' + id + '"]'); }
+  function mkGroup(label, ids) {
+    var g = document.createElement('span');
+    g.className = 'tab-group';
+    var h = document.createElement('button');
+    h.className = 'tab-group-h';
+    h.innerHTML = label + ' <span class="caret">&#9660;</span>';
+    var p = document.createElement('div');
+    p.className = 'tab-group-p';
+    ids.forEach(function (id) { var b = grab(id); if (b) p.appendChild(b); });
+    g.appendChild(h); g.appendChild(p);
+    h.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var was = g.classList.contains('open');
+      bar.querySelectorAll('.tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      if (!was) g.classList.add('open');
+    });
+    return p.children.length ? g : null;
+  }
+  var order = [];
+  ['mypage', 'overview', 'dashboard'].forEach(function (id) { var b = grab(id); if (b) order.push(b); });
+  var gD = mkGroup('Departments', ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board']);
+  var gW = mkGroup('Workspace', ['agendas', 'requests', 'importantinfo', 'orgchart']);
+  var gR = mkGroup('Records', ['transcripts', 'activity']);
+  [gD, gW, gR].forEach(function (g) { if (g) order.push(g); });
+  order.forEach(function (el) { bar.appendChild(el); });
+  bar.addEventListener('click', function (e) {
+    if (e.target.closest('.tab')) {
+      bar.querySelectorAll('.tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      document.body.classList.remove('wa-mob-open');
+      var t = document.getElementById('waNavToggle');
+      if (t) t.innerHTML = '&#9776; Menu';
+    }
+  });
+  document.addEventListener('click', function (e) {
+    if (!bar.contains(e.target)) bar.querySelectorAll('.tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+  });
+  var wrap = bar.parentElement || bar;
+  if (!document.getElementById('waNavToggle')) {
+    var t = document.createElement('button');
+    t.id = 'waNavToggle';
+    t.innerHTML = '&#9776; Menu';
+    t.addEventListener('click', function () {
+      var open = document.body.classList.toggle('wa-mob-open');
+      t.innerHTML = open ? '&#10005; Close' : '&#9776; Menu';
+    });
+    wrap.insertBefore(t, bar);
+  }
+}
+
+(function () {
+  var __sp13 = showPanel;
+  showPanel = function (id) {
+    __sp13(id);
+    try {
+      document.querySelectorAll('#tabBar .tab-group').forEach(function (g) {
+        var h = g.querySelector('.tab-group-h');
+        if (h) h.classList.toggle('active', !!g.querySelector('.tab.active'));
+      });
+    } catch (e) { /* non-fatal */ }
+  };
+  var __sa13 = startApp;
+  startApp = async function () {
+    await __sa13();
+    try { if (isStaff()) waOrganizeNav(); } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

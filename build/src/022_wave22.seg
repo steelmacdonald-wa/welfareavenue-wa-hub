@@ -1,0 +1,531 @@
+/* =====================================================================
+   WA v22 finances and budgeting (27/07/26)
+   Staff-only Finances page inside the Fundraising department: budget vs
+   actual by category (from the Welfare Avenue Budget 2025-2026 sheet),
+   spending by department, the full transaction ledger from imported bank
+   statements with inline re-allocation and duplicate handling, bank
+   statement import (paste or CSV) and manual expense logging.
+   Fiscal year Oct 1 to Sep 30. Quarters: Q1 Oct-Dec, Q2 Jan-Mar,
+   Q3 Apr-Jun, Q4 Jul-Sep.
+   ===================================================================== */
+
+var WA_FIN_LOADED = false;
+var WA_FIN_BUD = [];
+var WA_FIN_TX = [];
+var WA_FIN_STMTS = [];
+var WA_FIN_Q = '';
+var WA_FIN_DEPT = '';
+var WA_FIN_SEARCH = '';
+var WA_FIN_EDITS = {};
+
+var WA_FIN_DEPTS = [
+  ['opsmtl', 'Ops Montreal'], ['opsto', 'Ops Toronto'], ['marketing', 'Marketing'],
+  ['fundraising', 'Fundraising'], ['hr', 'HR'], ['board', 'Board'], ['org', 'Org-wide']
+];
+var WA_FIN_CATS_IN = ['4100 Donation', '4110 FlagPlus Football', 'Services'];
+var WA_FIN_CATS_EX = ['5020 Purchases - COS', 'Supplies and materials - COS', '6010 Transportation fees', '6020 Meal and entertainment expenses', '6030 Subscription fees', '7035 Office expenses', '7090 Telecommunication', '7120 Publicity and Promotion', '7145 Lease payments', 'Other'];
+
+(function () {
+  if (document.getElementById('wa22css')) return;
+  var css = '' +
+    '#finances .fin-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}' +
+    '#finances .fin-head h2{margin:0;}' +
+    '#finances .fin-fy{font-size:11.5px;color:var(--wa-muted,#7b8a86);}' +
+    '#finances .fin-actions{margin-left:auto;display:flex;gap:8px;}' +
+    '.fin-kpis{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;}' +
+    '.fin-kpi{background:rgba(127,127,127,.10);border-radius:10px;padding:9px 14px;min-width:130px;}' +
+    '.fin-kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);}' +
+    '.fin-kpi .v{font-size:18px;font-weight:700;margin-top:2px;}' +
+    '.fin-kpi .v.pos{color:#3f9c7f;}.fin-kpi .v.neg{color:#c96b5f;}' +
+    '.fin-wrap{overflow-x:auto;}' +
+    'table.fin-tab{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '.fin-tab th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 7px;white-space:nowrap;}' +
+    '.fin-tab th:first-child{text-align:left;}' +
+    '.fin-tab td{padding:5px 7px;border-top:1px solid rgba(127,127,127,.2);text-align:right;white-space:nowrap;}' +
+    '.fin-tab td:first-child{text-align:left;white-space:normal;font-weight:600;}' +
+    '.fin-tab tr.tot td{font-weight:700;border-top:2px solid rgba(127,127,127,.4);}' +
+    '.fin-tab .a{color:var(--wa-muted,#7b8a86);font-size:11px;}' +
+    '.fin-tab .over{color:#c96b5f;font-weight:700;}' +
+    'input.fin-bud{width:74px;font-size:11.5px;text-align:right;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;}' +
+    'input.fin-bud.chg{border-color:#2c7a66;}' +
+    '.fin-bar{height:5px;border-radius:3px;background:rgba(127,127,127,.25);overflow:hidden;min-width:70px;}' +
+    '.fin-bar i{display:block;height:100%;background:#2c7a66;}' +
+    '.fin-bar i.over{background:#c96b5f;}' +
+    '.fin-dept{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;}' +
+    '.fin-dcard{background:rgba(127,127,127,.10);border-radius:9px;padding:8px 12px;min-width:118px;}' +
+    '.fin-dcard .n{font-size:11px;font-weight:700;}' +
+    '.fin-dcard .s{font-size:15px;font-weight:700;margin-top:1px;}' +
+    '.fin-dcard .q{font-size:10px;color:var(--wa-muted,#7b8a86);}' +
+    '.fin-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 8px;}' +
+    '.fin-ctl select,.fin-ctl input{font-size:12px;padding:4px 8px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;}' +
+    '.fin-ctl option{color:#1c2b27;}' +
+    'table.fin-led{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '.fin-led th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 6px;}' +
+    '.fin-led td{padding:5px 6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:middle;}' +
+    '.fin-led td.amt{text-align:right;font-weight:700;white-space:nowrap;}' +
+    '.fin-led td.amt.pos{color:#3f9c7f;}.fin-led td.amt.neg{color:#c96b5f;}' +
+    '.fin-led select{font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;max-width:132px;}' +
+    '.fin-led option{color:#1c2b27;}' +
+    '.fin-led tr.dup td{opacity:.55;}' +
+    '.fin-led tr.dup td.desc{text-decoration:line-through;}' +
+    '.fin-badge{font-size:9.5px;border:1px solid rgba(127,127,127,.4);border-radius:7px;padding:1px 6px;color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.fin-badge.dup{border-color:#c96b5f;color:#c96b5f;}' +
+    'a.fin-lnk{font-size:10.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    '.fin-stmts{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:10px;}' +
+    '.fin-stmts li{margin:2px 0;}' +
+    '.fin-note{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin:6px 0;}' +
+    '@media (max-width:640px){.fin-kpi{min-width:100px;}.fin-led select{max-width:96px;}}';
+  var st = document.createElement('style');
+  st.id = 'wa22css';
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+function waFinFYNow() {
+  var d = new Date();
+  return (d.getMonth() + 1) >= 10 ? d.getFullYear() + 1 : d.getFullYear();
+}
+function waFinFYLabel() { return 'FY' + String(waFinFYNow()).slice(-2); }
+function waFinFYStart() { return (waFinFYNow() - 1) + '-10-01'; }
+function waFinFYEnd() { return waFinFYNow() + '-09-30'; }
+function waFinQOf(dstr) {
+  var m = Number(String(dstr).slice(5, 7));
+  if (m >= 10) return 'Q1';
+  if (m <= 3) return 'Q2';
+  if (m <= 6) return 'Q3';
+  return 'Q4';
+}
+function waFinQNow() {
+  var d = new Date();
+  return waFinQOf(d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-01');
+}
+function waFinMoney(n, dec) {
+  var neg = n < 0;
+  var v = Math.abs(Number(n) || 0);
+  var s = '$' + v.toLocaleString('en-CA', { minimumFractionDigits: dec ? 2 : 0, maximumFractionDigits: dec ? 2 : 0 });
+  return neg ? '-' + s : s;
+}
+function waFinFp(date, amount, desc) {
+  var norm = String(desc || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return date + '|' + Number(amount).toFixed(2) + '|' + norm;
+}
+
+async function waFinLoad(force) {
+  if (WA_FIN_LOADED && !force) return;
+  var r = await Promise.all([
+    db.from('finance_budgets').select('*').eq('fiscal_year', waFinFYLabel()),
+    db.from('finance_transactions').select('*').gte('txn_date', waFinFYStart()).lte('txn_date', waFinFYEnd()).order('txn_date', { ascending: false }).order('id', { ascending: false }).limit(1500),
+    db.from('finance_statements').select('*').order('id', { ascending: false }).limit(20)
+  ]);
+  WA_FIN_BUD = r[0].data || [];
+  WA_FIN_TX = r[1].data || [];
+  WA_FIN_STMTS = r[2].data || [];
+  WA_FIN_LOADED = true;
+}
+
+function waFinBudget(period, key) {
+  var edited = WA_FIN_EDITS[period + '|' + key];
+  if (edited !== undefined) return Number(edited) || 0;
+  var row = WA_FIN_BUD.filter(function (b) { return b.scope === 'category' && b.period === period && b.key === key; })[0];
+  return row ? Number(row.amount) : 0;
+}
+function waFinActualCat(period, key, income) {
+  var sum = 0;
+  WA_FIN_TX.forEach(function (t) {
+    if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+    if (t.category !== key) return;
+    if (period !== 'FY' && waFinQOf(t.txn_date) !== period) return;
+    sum += Number(t.amount);
+  });
+  return income ? sum : -sum;
+}
+function waFinDeptSpend(period, dept) {
+  var sum = 0;
+  WA_FIN_TX.forEach(function (t) {
+    if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+    if (t.department !== dept) return;
+    if (WA_FIN_CATS_IN.indexOf(t.category) >= 0) return;
+    if (period !== 'FY' && waFinQOf(t.txn_date) !== period) return;
+    sum += Number(t.amount);
+  });
+  return -sum;
+}
+
+function waFinBudTable(cats, income, label) {
+  var periods = ['Q1', 'Q2', 'Q3', 'Q4', 'FY'];
+  var head = '<tr><th>' + label + '</th>' + periods.map(function (p) {
+    return '<th>' + p + ' budget</th><th>' + p + ' actual</th>';
+  }).join('') + '<th>FY used</th></tr>';
+  var totB = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, FY: 0 };
+  var totA = { Q1: 0, Q2: 0, Q3: 0, Q4: 0, FY: 0 };
+  var rows = cats.map(function (c) {
+    var cells = periods.map(function (p) {
+      var b = waFinBudget(p, c);
+      var a = waFinActualCat(p, c, income);
+      totB[p] += b; totA[p] += a;
+      var over = !income && b > 0 && a > b;
+      var bud = isStaff()
+        ? '<input class="fin-bud" data-fbud="' + esc(p + '|' + c) + '" value="' + (b ? b.toFixed(2) : '0') + '" />'
+        : waFinMoney(b);
+      return '<td>' + bud + '</td><td class="a' + (over ? ' over' : '') + '">' + waFinMoney(a, true) + '</td>';
+    }).join('');
+    var bFY = waFinBudget('FY', c);
+    var aFY = waFinActualCat('FY', c, income);
+    var pct = bFY > 0 ? Math.round(aFY / bFY * 100) : (aFY > 0 ? 100 : 0);
+    var bar = '<div class="fin-bar" title="' + pct + '% of FY budget"><i class="' + (pct > 100 ? 'over' : '') + '" style="width:' + Math.min(100, Math.max(0, pct)) + '%"></i></div>';
+    return '<tr><td>' + esc(c) + '</td>' + cells + '<td>' + bar + ' <span class="a">' + pct + '%</span></td></tr>';
+  }).join('');
+  var totRow = '<tr class="tot"><td>Total</td>' + periods.map(function (p) {
+    return '<td>' + waFinMoney(totB[p]) + '</td><td class="a">' + waFinMoney(totA[p], true) + '</td>';
+  }).join('') + '<td></td></tr>';
+  return '<div class="fin-wrap"><table class="fin-tab"><thead>' + head + '</thead><tbody>' + rows + totRow + '</tbody></table></div>';
+}
+
+function waFinLedger() {
+  var q = WA_FIN_Q, d = WA_FIN_DEPT, s = WA_FIN_SEARCH.toLowerCase();
+  var rows = WA_FIN_TX.filter(function (t) {
+    if (q && waFinQOf(t.txn_date) !== q) return false;
+    if (d && t.department !== d) return false;
+    if (s && (t.description || '').toLowerCase().indexOf(s) < 0 && (t.category || '').toLowerCase().indexOf(s) < 0) return false;
+    return true;
+  });
+  var shown = rows.slice(0, 250);
+  var deptOpts = function (cur) {
+    return WA_FIN_DEPTS.map(function (x) {
+      return '<option value="' + x[0] + '"' + (x[0] === cur ? ' selected' : '') + '>' + x[1] + '</option>';
+    }).join('');
+  };
+  var catOpts = function (cur) {
+    return WA_FIN_CATS_IN.concat(WA_FIN_CATS_EX).map(function (c) {
+      return '<option value="' + esc(c) + '"' + (c === cur ? ' selected' : '') + '>' + esc(c) + '</option>';
+    }).join('');
+  };
+  var body = shown.map(function (t) {
+    var isDup = t.duplicate_of !== null && t.duplicate_of !== undefined;
+    var amt = Number(t.amount);
+    var dsel = isStaff()
+      ? '<select data-ftd="' + t.id + '">' + deptOpts(t.department) + '</select>'
+      : esc((WA_FIN_DEPTS.filter(function (x) { return x[0] === t.department; })[0] || ['', t.department])[1]);
+    var csel = isStaff()
+      ? '<select data-ftc="' + t.id + '">' + catOpts(t.category) + '</select>'
+      : esc(t.category || '');
+    var badges = '<span class="fin-badge">' + esc(t.source === 'manual' ? 'manual' : 'statement') + '</span>';
+    if (isDup) {
+      badges += ' <span class="fin-badge dup" title="Excluded from totals; duplicate of transaction ' + t.duplicate_of + '">duplicate</span>';
+      if (isStaff()) badges += ' <a class="fin-lnk" data-fdup="' + t.id + '">not a duplicate</a>';
+    } else if (isStaff()) {
+      badges += ' <a class="fin-lnk" data-fmarkdup="' + t.id + '" title="Mark as a duplicate and exclude from totals">mark dup</a>';
+    }
+    var dd = new Date(t.txn_date + 'T12:00:00');
+    var dl = dd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    return '<tr' + (isDup ? ' class="dup"' : '') + '><td>' + esc(dl) + '</td>' +
+      '<td class="desc" title="' + esc(t.description) + '">' + esc(String(t.description).slice(0, 46)) + '</td>' +
+      '<td class="amt ' + (amt >= 0 ? 'pos' : 'neg') + '">' + waFinMoney(amt, true) + '</td>' +
+      '<td>' + dsel + '</td><td>' + csel + '</td><td>' + badges + '</td></tr>';
+  }).join('');
+  var more = rows.length > shown.length ? '<div class="fin-note">Showing ' + shown.length + ' of ' + rows.length + ' transactions. Narrow the filters to see the rest.</div>' : '';
+  return '<div class="fin-wrap"><table class="fin-led"><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Department</th><th>Category</th><th></th></tr></thead><tbody>' +
+    (body || '<tr><td colspan="6" class="fin-note">No transactions match.</td></tr>') + '</tbody></table></div>' + more;
+}
+
+function waFinRender() {
+  var sec = document.getElementById('finances');
+  if (!sec) return;
+  var qNow = waFinQNow();
+  var incFY = 0, spendFY = 0, spendQ = 0;
+  WA_FIN_TX.forEach(function (t) {
+    if (t.duplicate_of !== null && t.duplicate_of !== undefined) return;
+    var a = Number(t.amount);
+    if (a >= 0) incFY += a; else spendFY += -a;
+    if (a < 0 && waFinQOf(t.txn_date) === qNow) spendQ += -a;
+  });
+  var budExQ = WA_FIN_CATS_EX.reduce(function (n, c) { return n + waFinBudget(qNow, c); }, 0);
+  var kpis = '<div class="fin-kpis">' +
+    '<div class="fin-kpi"><div class="k">Income FY to date</div><div class="v pos">' + waFinMoney(incFY) + '</div></div>' +
+    '<div class="fin-kpi"><div class="k">Spend FY to date</div><div class="v neg">' + waFinMoney(spendFY) + '</div></div>' +
+    '<div class="fin-kpi"><div class="k">Net FY to date</div><div class="v ' + (incFY - spendFY >= 0 ? 'pos' : 'neg') + '">' + waFinMoney(incFY - spendFY) + '</div></div>' +
+    '<div class="fin-kpi"><div class="k">' + qNow + ' spend vs budget</div><div class="v">' + waFinMoney(spendQ) + ' <span class="a" style="font-size:11px;font-weight:400;">of ' + waFinMoney(budExQ) + '</span></div></div>' +
+    '</div>';
+
+  var deptCards = '<div class="fin-dept">' + WA_FIN_DEPTS.map(function (x) {
+    var fy = waFinDeptSpend('FY', x[0]);
+    var qq = waFinDeptSpend(qNow, x[0]);
+    if (!fy && !qq) return '';
+    return '<div class="fin-dcard"><div class="n">' + x[1] + '</div><div class="s">' + waFinMoney(fy) + '</div><div class="q">' + qNow + ': ' + waFinMoney(qq) + '</div></div>';
+  }).join('') + '</div>';
+
+  var saveBtn = isStaff() && Object.keys(WA_FIN_EDITS).length
+    ? ' <button class="btn mini" data-fsave="1">Save budget changes (' + Object.keys(WA_FIN_EDITS).length + ')</button>'
+    : '';
+
+  var qOpts = ['', 'Q1', 'Q2', 'Q3', 'Q4'].map(function (p) {
+    return '<option value="' + p + '"' + (p === WA_FIN_Q ? ' selected' : '') + '>' + (p || 'All quarters') + '</option>';
+  }).join('');
+  var dOpts = '<option value="">All departments</option>' + WA_FIN_DEPTS.map(function (x) {
+    return '<option value="' + x[0] + '"' + (x[0] === WA_FIN_DEPT ? ' selected' : '') + '>' + x[1] + '</option>';
+  }).join('');
+
+  var stmts = WA_FIN_STMTS.length
+    ? '<details class="fin-stmts"><summary>Imported statements (' + WA_FIN_STMTS.length + ')</summary><ul>' +
+      WA_FIN_STMTS.map(function (s) {
+        return '<li>' + esc(s.filename || 'statement') + ': ' + s.txn_count + ' transactions' +
+          (s.dup_count ? ' (' + s.dup_count + ' duplicates)' : '') + ', ' + esc(s.status) +
+          (s.period_start ? ', ' + esc(s.period_start) + ' to ' + esc(s.period_end || '') : '') + '</li>';
+      }).join('') + '</ul></details>'
+    : '';
+
+  sec.innerHTML = '<div class="card" style="border-top-color:#2c7a66">' +
+    '<div class="fin-head"><h2 style="color:#2c7a66">Finances and budgeting</h2>' +
+    '<span class="fin-fy">' + waFinFYLabel() + ': Oct 1 to Sep 30 &middot; budgets from the Budget 2025-2026 sheet</span>' +
+    (isStaff() ? '<span class="fin-actions"><button class="btn mini" data-fimp="1">Import bank statement</button><button class="btn ghost mini" data-fexp="1">Log an expense</button></span>' : '') +
+    '</div>' +
+    kpis +
+    '<h3 class="block" style="color:#2c7a66">Budget vs actual: income</h3>' + waFinBudTable(WA_FIN_CATS_IN, true, 'Income line') +
+    '<h3 class="block" style="color:#2c7a66">Budget vs actual: expenses' + saveBtn + '</h3>' + waFinBudTable(WA_FIN_CATS_EX, false, 'Expense line') +
+    '<h3 class="block" style="color:#2c7a66">Spending by department</h3>' +
+    '<div class="fin-note">Where the money goes when each transaction is allocated. Duplicates excluded.</div>' + deptCards +
+    '<h3 class="block" style="color:#2c7a66">Transactions</h3>' +
+    '<div class="fin-ctl"><select data-fq="1">' + qOpts + '</select><select data-fd="1">' + dOpts + '</select>' +
+    '<input type="text" data-fs="1" placeholder="Search description or category" value="' + esc(WA_FIN_SEARCH) + '" /></div>' +
+    waFinLedger() + stmts + '</div>';
+  waFinWire(sec);
+}
+
+function waFinWire(sec) {
+  sec.querySelectorAll('[data-fq]').forEach(function (el) {
+    el.addEventListener('change', function () { WA_FIN_Q = this.value; waFinRender(); });
+  });
+  sec.querySelectorAll('[data-fd]').forEach(function (el) {
+    el.addEventListener('change', function () { WA_FIN_DEPT = this.value; waFinRender(); });
+  });
+  sec.querySelectorAll('[data-fs]').forEach(function (el) {
+    el.addEventListener('input', function () {
+      WA_FIN_SEARCH = this.value;
+      clearTimeout(el._t);
+      el._t = setTimeout(function () { waFinRender(); }, 350);
+    });
+  });
+  sec.querySelectorAll('input.fin-bud').forEach(function (el) {
+    el.addEventListener('change', function () {
+      WA_FIN_EDITS[this.getAttribute('data-fbud')] = this.value;
+      this.classList.add('chg');
+      waFinRender();
+    });
+  });
+  if (!sec.dataset.finWired) {
+    sec.dataset.finWired = '1';
+    sec.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-fsave],[data-fimp],[data-fexp],[data-fdup],[data-fmarkdup]');
+      if (!t) return;
+      if (t.hasAttribute('data-fsave')) waFinSaveBudgets();
+      else if (t.hasAttribute('data-fimp')) waFinImportModal();
+      else if (t.hasAttribute('data-fexp')) waFinExpenseModal();
+      else if (t.hasAttribute('data-fdup')) waFinSetDup(Number(t.getAttribute('data-fdup')), null);
+      else if (t.hasAttribute('data-fmarkdup')) waFinMarkDup(Number(t.getAttribute('data-fmarkdup')));
+    });
+  }
+  sec.querySelectorAll('[data-ftd]').forEach(function (el) {
+    el.addEventListener('change', function () { waFinAlloc(Number(this.getAttribute('data-ftd')), { department: this.value }); });
+  });
+  sec.querySelectorAll('[data-ftc]').forEach(function (el) {
+    el.addEventListener('change', function () { waFinAlloc(Number(this.getAttribute('data-ftc')), { category: this.value }); });
+  });
+}
+
+async function waFinAlloc(id, patch) {
+  if (!isStaff()) return;
+  patch.allocated_by = who();
+  var r = await db.from('finance_transactions').update(patch).eq('id', id);
+  if (r.error) { toast('Save failed'); return; }
+  var row = WA_FIN_TX.filter(function (t) { return t.id === id; })[0];
+  if (row) { Object.keys(patch).forEach(function (k) { row[k] = patch[k]; }); }
+  toast('Reallocated');
+  waFinRender();
+}
+
+async function waFinSetDup(id, dupOf) {
+  if (!isStaff()) return;
+  var r = await db.from('finance_transactions').update({ duplicate_of: dupOf }).eq('id', id);
+  if (r.error) { toast('Save failed'); return; }
+  var row = WA_FIN_TX.filter(function (t) { return t.id === id; })[0];
+  if (row) row.duplicate_of = dupOf;
+  toast(dupOf === null ? 'Restored to totals' : 'Marked as duplicate');
+  waFinRender();
+}
+
+async function waFinSaveBudgets() {
+  if (!isStaff()) return;
+  var keys = Object.keys(WA_FIN_EDITS);
+  if (!keys.length) return;
+  var rows = keys.map(function (k) {
+    var parts = k.split('|');
+    var key = parts.slice(1).join('|');
+    var kind = WA_FIN_CATS_IN.indexOf(key) >= 0 ? 'income' : 'expense';
+    return {
+      fiscal_year: waFinFYLabel(), period: parts[0], scope: 'category', key: key,
+      kind: kind, amount: Number(WA_FIN_EDITS[k]) || 0, updated_by: who(), updated_at: new Date().toISOString()
+    };
+  });
+  var r = await db.from('finance_budgets').upsert(rows, { onConflict: 'fiscal_year,period,scope,key' });
+  if (r.error) { toast('Budget save failed'); return; }
+  WA_FIN_EDITS = {};
+  toast('Budgets saved');
+  await waFinLoad(true);
+  waFinRender();
+}
+
+async function waFinMarkDup(id) {
+  var row = WA_FIN_TX.filter(function (t) { return t.id === id; })[0];
+  if (!row) return;
+  var twin = WA_FIN_TX.filter(function (t) {
+    return t.id !== id && t.fingerprint === row.fingerprint && (t.duplicate_of === null || t.duplicate_of === undefined);
+  })[0];
+  if (!twin) { toast('No matching transaction found to pair it with'); return; }
+  waFinSetDup(id, twin.id);
+}
+
+function waFinImportModal() {
+  openModal('<h3>Import a bank statement</h3>' +
+    '<p class="m-sub">Paste the statement text (copy everything from the PDF) or choose a CSV export. The AI extracts every transaction, allocates each one to a department and budget category, and flags duplicates.</p>' +
+    '<label>Statement file name</label><input type="text" id="finFile" placeholder="July 31, 2026.pdf" />' +
+    '<label>CSV or text file</label><input type="file" id="finUpload" accept=".csv,.txt" />' +
+    '<label>Or paste the statement text</label><textarea id="finText" rows="8" placeholder="Paste the full statement text here"></textarea>' +
+    '<div class="m-actions"><button class="btn" id="finGo">Import</button> <button class="btn ghost" id="finCancel">Cancel</button></div>');
+  var up = document.getElementById('finUpload');
+  if (up) up.addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    var fr = new FileReader();
+    fr.onload = function () {
+      document.getElementById('finText').value = String(fr.result || '').slice(0, 80000);
+      var fn = document.getElementById('finFile');
+      if (fn && !fn.value) fn.value = f.name;
+    };
+    fr.readAsText(f);
+  });
+  var cancel = document.getElementById('finCancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var go = document.getElementById('finGo');
+  if (go) go.addEventListener('click', async function () {
+    var text = (document.getElementById('finText').value || '').trim();
+    var fname = (document.getElementById('finFile').value || '').trim() || 'pasted statement';
+    if (text.length < 60) { toast('Paste the statement text first'); return; }
+    go.disabled = true;
+    go.textContent = 'Importing (about a minute)...';
+    try {
+      var r = await db.functions.invoke('finance-import', { body: { statement_text: text, filename: fname } });
+      if (r.error) throw r.error;
+      var d = r.data || {};
+      closeModal();
+      toast('Imported ' + (d.imported || 0) + ' transactions' + (d.duplicates ? ', ' + d.duplicates + ' duplicates flagged' : ''));
+      await waFinLoad(true);
+      waFinRender();
+    } catch (err) {
+      go.disabled = false;
+      go.textContent = 'Import';
+      toast('Import failed');
+    }
+  });
+}
+
+function waFinExpenseModal() {
+  var today = new Date();
+  var iso = today.getFullYear() + '-' + ('0' + (today.getMonth() + 1)).slice(-2) + '-' + ('0' + today.getDate()).slice(-2);
+  openModal('<h3>Log an expense</h3>' +
+    '<p class="m-sub">For cash spends and anything that never hits the bank account.</p>' +
+    '<div class="m-row"><div><label>Date</label><input type="date" id="feDate" value="' + iso + '" /></div>' +
+    '<div><label>Amount (CAD)</label><input type="number" step="0.01" min="0" id="feAmt" placeholder="25.00" /></div></div>' +
+    '<label>Description</label><input type="text" id="feDesc" placeholder="What was it for" />' +
+    '<div class="m-row"><div><label>Department</label><select id="feDept">' +
+    WA_FIN_DEPTS.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join('') +
+    '</select></div><div><label>Category</label><select id="feCat">' +
+    WA_FIN_CATS_EX.map(function (c) { return '<option value="' + esc(c) + '">' + esc(c) + '</option>'; }).join('') +
+    '</select></div></div>' +
+    '<div class="m-actions"><button class="btn" id="feGo">Save expense</button> <button class="btn ghost" id="feCancel">Cancel</button></div>');
+  var cancel = document.getElementById('feCancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var go = document.getElementById('feGo');
+  if (go) go.addEventListener('click', async function () {
+    var date = document.getElementById('feDate').value;
+    var amt = Math.abs(Number(document.getElementById('feAmt').value || 0));
+    var desc = (document.getElementById('feDesc').value || '').trim();
+    if (!date || !amt || !desc) { toast('Date, amount and description are needed'); return; }
+    var row = {
+      txn_date: date, description: desc, amount: -amt,
+      department: document.getElementById('feDept').value,
+      category: document.getElementById('feCat').value,
+      source: 'manual', allocated_by: who(),
+      fingerprint: waFinFp(date, -amt, desc)
+    };
+    var r = await db.from('finance_transactions').insert(row);
+    if (r.error) { toast('Save failed'); return; }
+    closeModal();
+    toast('Expense logged');
+    await waFinLoad(true);
+    waFinRender();
+  });
+}
+
+(function () {
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('finances')) {
+    var sec = document.createElement('section');
+    sec.id = 'finances';
+    sec.className = 'panel';
+    main.appendChild(sec);
+  }
+
+  function openFin(h) {
+    if (h !== 'finances') return false;
+    if (!isStaff()) return false;
+    showPanel('finances');
+    if (!WA_FIN_LOADED) {
+      document.getElementById('finances').innerHTML = '<div class="card"><p class="fin-note">Loading finances...</p></div>';
+      waFinLoad().then(function () { waFinRender(); });
+    } else {
+      waFinRender();
+    }
+    return true;
+  }
+
+  var __ah22 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (openFin(h)) return;
+    __ah22();
+  };
+  window.addEventListener('hashchange', function () {
+    try {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h === 'finances') openFin(h);
+    } catch (err) { /* boot */ }
+  });
+
+  var __rs22 = renderSection;
+  renderSection = function (id) {
+    __rs22(id);
+    try {
+      if (id !== 'fundraising' || !isStaff()) return;
+      var card = document.querySelector('#fundraising .dept-card');
+      if (!card || card.querySelector('[data-fin-open]')) return;
+      var btn = document.createElement('button');
+      btn.className = 'btn mini';
+      btn.setAttribute('data-fin-open', '1');
+      btn.style.margin = '10px 0 0';
+      btn.innerHTML = 'Finances and budgeting &raquo;';
+      btn.addEventListener('click', function () { location.hash = '#finances'; });
+      var h2 = card.querySelector('h2');
+      if (h2 && h2.parentNode === card) card.insertBefore(btn, h2.nextSibling);
+      else card.insertBefore(btn, card.firstChild);
+    } catch (e) { /* non-fatal */ }
+  };
+
+  var __sa22 = startApp;
+  startApp = async function () {
+    await __sa22();
+    try {
+      var h0 = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h0 === 'finances') applyHash();
+    } catch (e) { /* non-fatal */ }
+  };
+})();

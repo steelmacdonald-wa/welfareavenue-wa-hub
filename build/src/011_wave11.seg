@@ -1,0 +1,163 @@
+/* =====================================================================
+   WA v11 UI enhancements (25/07/26)
+   Org chart tab: current structure derived live from the roster
+   (board circle, co executive directors, department leads, members,
+   Montreal split into Program development and Operations). Every
+   person is clickable and opens a profile card: role, department,
+   open tasks with due state, tracked hours, recent mentions.
+   Staff only. Deliberately shows the CURRENT structure, never the
+   board-only succession scenarios.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.oc-level{margin:14px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--wa-muted);}'
+    + '.oc-row{display:flex;gap:10px;flex-wrap:wrap;}'
+    + '.oc-card{background:#fff;border:1px solid var(--wa-line);border-top:3px solid var(--wa-muted);border-radius:11px;padding:10px 13px;min-width:190px;flex:1 1 220px;max-width:330px;}'
+    + '.oc-card h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}'
+    + '.oc-p{display:block;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;line-height:1.25;}'
+    + '.oc-p small{display:block;font-weight:400;font-size:11px;color:var(--wa-muted);}'
+    + '.oc-p:hover{background:var(--wa-paper);}'
+    + '.oc-more{background:none;border:none;color:var(--wa-green);cursor:pointer;font-size:11.5px;font-weight:700;padding:4px 8px;text-decoration:underline;}'
+    + '.oc-team{display:none;border-top:1px dashed var(--wa-line);margin-top:5px;padding-top:4px;}'
+    + '.oc-card.open .oc-team{display:block;}'
+    + '#ocModal{position:fixed;inset:0;background:rgba(20,20,18,.45);display:none;align-items:center;justify-content:center;z-index:80;}'
+    + '#ocModal .box{background:#fff;border-radius:14px;max-width:460px;width:92vw;max-height:80vh;overflow-y:auto;padding:18px 20px;box-shadow:0 18px 50px rgba(0,0,0,.3);}'
+    + '#ocModal h3{margin:0;}'
+    + '#ocModal .sub{color:var(--wa-muted);font-size:12.5px;margin:2px 0 10px;}'
+    + '#ocModal h5{margin:12px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-green);}'
+    + '#ocModal .x{float:right;background:none;border:none;font-size:18px;cursor:pointer;color:var(--wa-muted);}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('orgchart')) {
+    var sec = document.createElement('section');
+    sec.id = 'orgchart';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Organization chart</h2><p class="read">Live from the team roster: click any person to open their profile. Update someone&#39;s role or department in the roster and this chart follows.</p><div id="ocBody">Loading...</div></div>';
+    main.appendChild(sec);
+  }
+  var modal = document.createElement('div');
+  modal.id = 'ocModal';
+  modal.innerHTML = '<div class="box"><button class="x" id="ocClose">&#10005;</button><div id="ocProfile"></div></div>';
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function (e) { if (e.target === modal) modal.style.display = 'none'; });
+  modal.querySelector('#ocClose').addEventListener('click', function () { modal.style.display = 'none'; });
+})();
+
+var WA_BOARD_LABELS = null;
+function ocPerson(m) {
+  return '<span class="oc-p" data-ocp="' + esc(m.name) + '">' + esc(m.name) + '<small>' + esc(m.role || 'Team member') + '</small></span>';
+}
+async function renderOrgChart() {
+  var body = document.getElementById('ocBody');
+  if (!body) return;
+  if (!isStaff()) { body.innerHTML = '<p class="read">The org chart is available to staff accounts.</p>'; return; }
+  await waResolveMe();
+  if (WA_BOARD_LABELS === null) {
+    try { var b = await db.from('board_circle').select('email, label'); WA_BOARD_LABELS = b.data || []; } catch (e) { WA_BOARD_LABELS = []; }
+  }
+  var leadRe = /\b(lead|leader|director|manager|chair|co-)/i;
+  var execs = WA_ROSTER.filter(function (m) { return m.department === 'board' && /steel|suhaib/i.test(m.name); });
+  var boardOthers = WA_ROSTER.filter(function (m) { return m.department === 'board' && !/steel|suhaib/i.test(m.name); });
+  var html = '<div class="oc-level">Board of directors</div><div class="oc-row"><div class="oc-card" style="border-top-color:#44403c;max-width:none;">'
+    + '<div class="oc-row">' + boardOthers.map(ocPerson).join('') + '</div></div></div>';
+  html += '<div class="oc-level">Co executive directors</div><div class="oc-row"><div class="oc-card" style="border-top-color:#8455ff;max-width:none;"><div class="oc-row">'
+    + execs.map(ocPerson).join('') + '</div></div></div>';
+  html += '<div class="oc-level">Departments</div><div class="oc-row">';
+  DEPT_ORDER.filter(function (d) { return d !== 'board'; }).forEach(function (d) {
+    var members = WA_ROSTER.filter(function (m) { return m.department === d; });
+    var groups = [];
+    if (d === 'opsmtl') {
+      groups.push({ label: 'Program development', list: members.filter(function (m) { return waRolePrefix(m.role) === 'pd'; }) });
+      groups.push({ label: 'Operations', list: members.filter(function (m) { return waRolePrefix(m.role) !== 'pd'; }) });
+    } else {
+      groups.push({ label: null, list: members });
+    }
+    groups.forEach(function (g) {
+      if (!g.list.length) return;
+      var leads = g.list.filter(function (m) { return leadRe.test(m.role || ''); });
+      var rest = g.list.filter(function (m) { return leads.indexOf(m) < 0; });
+      html += '<div class="oc-card" style="border-top-color:' + (DEPT_COLOR[d] || '#6f6b64') + '">'
+        + '<h4 style="color:' + (DEPT_COLOR[d] || '#6f6b64') + '">' + (DEPT_LABEL[d] || d) + (g.label ? ': ' + g.label : '') + '</h4>'
+        + (leads.length ? leads.map(ocPerson).join('') : '')
+        + (rest.length ? '<button class="oc-more" data-ocmore="1">Show team (' + rest.length + ')</button><div class="oc-team">' + rest.map(ocPerson).join('') + '</div>' : '')
+        + '</div>';
+    });
+  });
+  html += '</div>';
+  body.innerHTML = html;
+  body.querySelectorAll('[data-ocmore]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var card = btn.closest('.oc-card');
+      card.classList.toggle('open');
+      btn.textContent = card.classList.contains('open') ? 'Hide team' : btn.textContent.replace('Hide team', 'Show team');
+    });
+  });
+  body.querySelectorAll('[data-ocp]').forEach(function (p) {
+    p.addEventListener('click', function () { waOpenProfile(p.dataset.ocp); });
+  });
+}
+async function waOpenProfile(name) {
+  var m = WA_ROSTER.find(function (x) { return x.name === name; });
+  if (!m) return;
+  var modal = document.getElementById('ocModal');
+  var box = document.getElementById('ocProfile');
+  var tasks = waTasksOf(m.name);
+  var boardRole = (WA_BOARD_LABELS || []).find(function (b) { return (b.label || '').toLowerCase().indexOf(waFirstTok(m.name)) >= 0; });
+  var ft = waFirstTok(m.name);
+  var mentions = (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []).filter(function (u) {
+    return (u.text || '').toLowerCase().indexOf(ft) >= 0;
+  }).sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); }).slice(0, 3);
+  box.innerHTML = '<h3>' + esc(m.name) + '</h3>'
+    + '<div class="sub">' + esc(m.role || 'Team member') + ' &middot; <span class="ag-dep" style="background:' + (DEPT_COLOR[m.department] || '#6f6b64') + '">' + (DEPT_LABEL[m.department] || m.department || '') + '</span>'
+    + (boardRole ? '<br/>Board: ' + esc(boardRole.label) : '')
+    + (m.email ? '<br/><a href="mailto:' + esc(m.email) + '">' + esc(m.email) + '</a>' : '') + '</div>'
+    + '<h5>Open tasks (' + tasks.length + ')</h5>'
+    + (tasks.length ? tasks.slice(0, 6).map(waTaskLine).join('') : '<p class="mp-empty">Nothing open right now.</p>')
+    + '<h5>Recent mentions</h5>'
+    + (mentions.length ? mentions.map(function (u) { return '<div class="mp-upd">' + esc((u.text || '').slice(0, 140)) + ' <span class="when">' + fmtDay(u.created_at) + '</span></div>'; }).join('') : '<p class="mp-empty">No recent update mentions.</p>')
+    + '<h5>Tracked hours (last 3 weeks)</h5><div id="ocHours" class="mp-empty">Loading...</div>';
+  modal.style.display = 'flex';
+  try {
+    var since = new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10);
+    var hr = await db.from('slack_hours').select('week_start, hours, sessions').eq('member_name', m.name).gte('week_start', since).order('week_start');
+    var slot = document.getElementById('ocHours');
+    if (!slot) return;
+    var rows = hr.data || [];
+    slot.innerHTML = rows.length
+      ? rows.map(function (x) { return x.week_start + ': <b>' + Number(x.hours || 0).toFixed(1) + 'h</b> (' + x.sessions + ' sessions)'; }).join('<br/>')
+      : 'No tracked check-ins in the last 3 weeks.';
+  } catch (e) { /* optional */ }
+}
+(function () {
+  var __ah11 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'orgchart') { showPanel('orgchart'); renderOrgChart(); return; }
+    __ah11();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#orgchart') {
+      try { showPanel('orgchart'); renderOrgChart(); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa11 = startApp;
+  startApp = async function () {
+    await __sa11();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="orgchart"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'orgchart';
+          b.innerHTML = '<span class="tabdot" style="background:#44403c"></span>Org chart';
+          bar.insertBefore(b, document.getElementById('txTabBtn') || null);
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

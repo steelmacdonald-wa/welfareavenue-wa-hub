@@ -1,0 +1,14 @@
+# harness outputs and baselines (regenerated per wave)
+test/cand_*/
+test/c1*/
+test/p*_*/
+test/shots_*/
+test/*.png
+# scratch
+*.bak*
+*.tmp
+__pycache__/
+# never commit keys
+*.key
+.env
+.pushed.json

@@ -1,0 +1,350 @@
+/* =====================================================================
+   WA v19 UI enhancements (27/07/26)
+   Shareable agenda links.
+   1. Staff: every agenda gets a Share button. It mints a private link,
+      writes a ready-to-paste Slack intro (meeting date + summary + the
+      item list + "click the link and add yours"), copies either piece,
+      posts it to Slack, or stops sharing.
+   2. Anyone holding a link opens a clean, branded page for that one
+      agenda: no sign in, read the items, add their own. Contributions
+      come back into the real agenda tagged with their name.
+   3. Staff deep link #agenda/<id> opens a single agenda on the Agendas
+      page with the filters cleared.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.ag-share{display:none;margin-top:10px;border:1px solid #d9ccff;border-radius:10px;padding:12px;background:#f7f5ff;}'
+    + '.ag-share.open{display:block;}'
+    + '.ag-share h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#8455ff;}'
+    + '.ag-share input,.ag-share textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--wa-line);border-radius:7px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--wa-ink);}'
+    + '.ag-share textarea{min-height:150px;resize:vertical;line-height:1.5;}'
+    + '.ag-share .row{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 12px;align-items:center;}'
+    + '.ag-share .hint{font-size:11.5px;color:var(--wa-muted);margin-top:5px;}'
+    + '.ag-from{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#8455ff;color:#fff;margin-left:7px;vertical-align:middle;}'
+    + '.ag-only{background:#f2eeff;border:1px solid #d9ccff;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    /* public share page */
+    + 'body.wa-shared > *:not(#agShare){display:none !important;}'
+    + '#agShare{display:none;position:fixed;inset:0;z-index:9000;overflow:auto;background:#f3f1ea;padding:26px 16px 60px;}'
+    + 'body.wa-shared #agShare{display:block;}'
+    + '.as-wrap{max-width:660px;margin:0 auto;}'
+    + '.as-brand{display:flex;align-items:center;gap:10px;margin-bottom:16px;}'
+    + '.as-brand .n{font-weight:800;font-size:14px;letter-spacing:.3px;color:var(--wa-ink);}'
+    + '.as-card{background:#fff;border:1px solid var(--wa-line);border-radius:14px;padding:22px 22px 24px;box-shadow:0 2px 14px rgba(20,48,43,.06);}'
+    + '.as-card h1{margin:0;font-size:23px;line-height:1.25;color:var(--wa-ink);}'
+    + '.as-date{font-size:13px;color:#8455ff;font-weight:700;margin-top:6px;}'
+    + '.as-sum{font-size:14.5px;line-height:1.6;color:var(--wa-ink);margin:14px 0 4px;}'
+    + '.as-h{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-muted);font-weight:700;margin:22px 0 8px;}'
+    + '.as-item{border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;margin:8px 0;background:#faf9f4;}'
+    + '.as-item .t{font-weight:700;font-size:14px;color:var(--wa-ink);}'
+    + '.as-item .n{font-size:13px;color:var(--wa-muted);margin-top:4px;line-height:1.5;}'
+    + '.as-item.mine{border-color:#d9ccff;background:#f7f5ff;}'
+    + '.as-add{margin-top:24px;border-top:1px solid var(--wa-line);padding-top:18px;}'
+    + '.as-add input,.as-add textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--wa-line);border-radius:9px;font-size:14px;font-family:inherit;margin-top:8px;background:#fff;color:var(--wa-ink);}'
+    + '.as-add textarea{min-height:74px;resize:vertical;}'
+    + '.as-go{margin-top:11px;background:var(--wa-green,#4a7c59);color:#fff;border:none;border-radius:9px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;}'
+    + '.as-go[disabled]{opacity:.55;cursor:default;}'
+    + '.as-msg{font-size:13.5px;margin-top:11px;color:#4a7c59;font-weight:600;}'
+    + '.as-msg.bad{color:#b3402f;}'
+    + '.as-foot{text-align:center;font-size:12px;color:var(--wa-muted);margin-top:18px;}'
+    + '@media(max-width:560px){.as-card{padding:18px 15px 20px;}.as-card h1{font-size:20px;}}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+})();
+
+var WA_AG_ONLY = 0, WA_SHARE = {};
+
+function waCopyText(t) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t); return true; }
+  } catch (e) { /* fall through */ }
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    return true;
+  } catch (e) { return false; }
+}
+
+/* ---------- staff: rows now show contributions and a Share button ---------- */
+
+waAgendaRowHtml = function (a) {
+  var items = AG_ITEMS_CACHE.filter(function (i) { return i.agenda_id === a.id; });
+  var shared = items.filter(function (i) { return i.source === 'shared'; }).length;
+  var openCls = WA_AG_OPEN[a.id] ? ' open' : '';
+  var chip = (a.scope || 'department') === 'department'
+    ? '<span class="ag-dep" style="background:' + (DEPT_COLOR[a.department] || '#6f6b64') + '">' + (DEPT_LABEL[a.department] || a.department || '') + '</span>'
+    : '<span class="ag-dep" style="background:#8455ff">' + (a.scope === 'leaders' ? 'Leaders' : esc(a.with_person || 'Executive')) + '</span>';
+  return '<div class="ag-row' + openCls + '" data-ag="' + a.id + '">'
+    + '<div class="ag-head" data-agtog="' + a.id + '">' + chip + '<span class="t">' + esc(a.title) + '</span>'
+    + '<span class="ag-st ' + esc(a.status) + '">' + esc(a.status) + '</span>'
+    + '<span style="font-size:11.5px;color:var(--wa-muted);">' + (a.meeting_date || '') + ' &middot; ' + items.length + ' items'
+    + (shared ? ' &middot; ' + shared + ' added by the team' : '')
+    + (a.share_token ? ' &middot; &#128279; shared' : '') + '</span></div>'
+    + '<div class="ag-body">'
+    + items.map(function (i) {
+        var tasks = (i.task_ids || []).map(waTaskById).filter(Boolean);
+        return '<div class="ag-item' + (i.source === 'shared' ? ' shared' : '') + '" data-agi="' + i.id + '">'
+          + '<span class="k" style="background:' + (AG_KIND_COLOR[i.kind] || '#6f6b64') + '">' + esc(i.kind) + '</span>'
+          + '<span class="it">' + esc(i.title) + '</span>'
+          + (i.source === 'shared' && i.created_by ? '<span class="ag-from">' + esc(i.created_by) + '</span>' : '')
+          + (i.notes ? '<div class="nts">' + esc(i.notes) + '</div>' : '')
+          + tasks.map(function (t) {
+              return '<div class="ag-task' + (t.done ? ' done' : '') + '"><input type="checkbox" data-agtask="' + t.id + '" data-agdept="' + esc(t.department || '') + '"' + (t.done ? ' checked' : '') + ' /><span>' + esc(t.title) + '</span><span style="color:var(--wa-muted);font-size:11px;">' + esc(t.owner || '') + '</span></div>';
+            }).join('')
+          + '<div class="ag-ictl"><button data-agup="' + i.id + '">up</button><button data-agdn="' + i.id + '">down</button><button data-agdel="' + i.id + '" style="color:#b3402f;">remove</button></div>'
+          + '</div>';
+      }).join('')
+    + '<div class="ag-add"><input data-agnt="' + a.id + '" placeholder="New item title" /><input data-agnn="' + a.id + '" placeholder="Notes (optional)" /><button class="btn ghost mini" data-agadd="' + a.id + '">Add item</button></div>'
+    + '<div class="ag-foot">'
+    + '<button class="btn ghost mini" data-agshare="' + a.id + '" style="color:#8455ff;font-weight:700;">&#128279; ' + (a.share_token ? 'Share link' : 'Get a share link') + '</button>'
+    + (a.status === 'draft' ? '<button class="btn ghost mini" data-agfin="' + a.id + '">Mark final</button>' : '<button class="btn ghost mini" data-agdraft="' + a.id + '">Back to draft</button>')
+    + (a.status === 'done' ? '' : '<button class="btn ghost mini" data-agdone="' + a.id + '">Archive (done)</button>')
+    + '<button class="btn ghost mini" data-agkill="' + a.id + '" style="color:#b3402f;">Delete</button>'
+    + '</div>'
+    + '<div class="ag-share" data-agsharebox="' + a.id + '"></div>'
+    + '</div></div>';
+};
+
+function waShareBoxHtml(aid, d) {
+  return '<h4>Private link for this agenda</h4>'
+    + '<input readonly data-shurl="' + aid + '" value="' + esc(d.url) + '" />'
+    + '<div class="row"><button class="btn ghost mini" data-shcopyurl="' + aid + '">Copy link</button>'
+    + '<button class="btn ghost mini" data-shopen="' + aid + '">Preview it</button>'
+    + '<button class="btn ghost mini" data-shrevoke="' + aid + '" style="color:#b3402f;margin-left:auto;">Stop sharing</button></div>'
+    + '<h4>Message for Slack</h4>'
+    + '<textarea data-shmsg="' + aid + '">' + esc(d.message) + '</textarea>'
+    + '<div class="row"><button class="btn ghost mini" data-shcopymsg="' + aid + '">Copy message</button>'
+    + '<button class="btn ghost mini" data-shpost="' + aid + '">Post it to Slack</button></div>'
+    + '<div class="hint">Anyone with the link can read this agenda and add items to it without signing in. They cannot see anything else on the dashboard. Edit the message before you copy it if you want.</div>';
+}
+
+async function waShareOpen(aid, box) {
+  box.classList.add('open');
+  box.innerHTML = '<p class="read">Making the link...</p>';
+  try {
+    const { data, error } = await db.functions.invoke('agenda-share', { body: { action: 'create_link', agenda_id: aid } });
+    if (error || !(data && data.ok)) throw (error || new Error('failed'));
+    WA_SHARE[aid] = data;
+    box.innerHTML = waShareBoxHtml(aid, data);
+    var a = AGENDAS_CACHE.find(function (x) { return x.id === aid; });
+    if (a) a.share_token = data.token;
+    waWireShareBox(box, aid);
+  } catch (e) {
+    box.innerHTML = '<p class="read">Could not make the link. Try again in a moment.</p>';
+  }
+}
+
+function waWireShareBox(box, aid) {
+  function msg() { var t = box.querySelector('[data-shmsg]'); return t ? t.value : ''; }
+  var u = box.querySelector('[data-shcopyurl]');
+  if (u) u.addEventListener('click', function () {
+    var f = box.querySelector('[data-shurl]');
+    if (f) { f.select(); waCopyText(f.value); toast('Link copied'); }
+  });
+  var m = box.querySelector('[data-shcopymsg]');
+  if (m) m.addEventListener('click', function () { waCopyText(msg()); toast('Message copied, paste it into Slack'); });
+  var o = box.querySelector('[data-shopen]');
+  if (o) o.addEventListener('click', function () {
+    var f = box.querySelector('[data-shurl]');
+    if (f) window.open(f.value, '_blank');
+  });
+  var p = box.querySelector('[data-shpost]');
+  if (p) p.addEventListener('click', async function () {
+    p.disabled = true; p.textContent = 'Posting...';
+    try {
+      const { data, error } = await db.functions.invoke('agenda-share', { body: { action: 'post_slack', agenda_id: aid, message: msg() } });
+      if (error || !(data && data.ok)) throw (error || new Error('failed'));
+      toast('Posted to Slack');
+    } catch (e) { toast('Slack did not accept it, copy the message instead'); }
+    p.disabled = false; p.textContent = 'Post it to Slack';
+  });
+  var r = box.querySelector('[data-shrevoke]');
+  if (r) r.addEventListener('click', async function () {
+    if (!confirm('Stop sharing? The link stops working for everyone who has it.')) return;
+    try {
+      await db.functions.invoke('agenda-share', { body: { action: 'revoke_link', agenda_id: aid } });
+      var a = AGENDAS_CACHE.find(function (x) { return x.id === aid; });
+      if (a) a.share_token = null;
+      delete WA_SHARE[aid];
+      box.classList.remove('open');
+      box.innerHTML = '';
+      toast('Sharing stopped');
+    } catch (e) { toast('Could not stop sharing'); }
+  });
+}
+
+(function () {
+  var __wire19 = waWireAgendaCard;
+  waWireAgendaCard = function (card, d) {
+    __wire19(card, d);
+    card.querySelectorAll('[data-agshare]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var aid = Number(b.dataset.agshare);
+        var box = card.querySelector('[data-agsharebox="' + aid + '"]');
+        if (!box) return;
+        if (box.classList.contains('open')) { box.classList.remove('open'); return; }
+        waShareOpen(aid, box);
+      });
+    });
+  };
+})();
+
+/* ---------- staff deep link: #agenda/<id> ---------- */
+
+(function () {
+  var __rap19 = waRenderAgendasPage;
+  waRenderAgendasPage = async function () {
+    await __rap19();
+    var body = document.getElementById('agPageBody');
+    if (!body) return;
+    if (!WA_AG_ONLY) return;
+    var hit = null;
+    body.querySelectorAll('.ag-row').forEach(function (r) {
+      if (Number(r.dataset.ag) === WA_AG_ONLY) { hit = r; r.classList.add('open'); }
+      else r.style.display = 'none';
+    });
+    WA_AG_OPEN[WA_AG_ONLY] = true;
+    var bar = document.createElement('div');
+    bar.className = 'ag-only';
+    bar.innerHTML = hit
+      ? '<span>Showing one agenda. Use Share to send it to the team.</span>'
+      : '<span>That agenda is not here anymore.</span>';
+    var b = document.createElement('button');
+    b.className = 'btn ghost mini';
+    b.textContent = 'Show all agendas';
+    b.style.marginLeft = 'auto';
+    b.addEventListener('click', function () {
+      WA_AG_ONLY = 0;
+      if (location.hash !== '#agendas') location.hash = '#agendas';
+      else waRenderAgendasPage();
+    });
+    bar.appendChild(b);
+    body.insertBefore(bar, body.firstChild);
+  };
+
+  function openOne(h) {
+    var m = /^agenda\/(\d+)$/.exec(h);
+    if (!m) return false;
+    WA_AG_ONLY = Number(m[1]);
+    showPanel('agendas');
+    try {
+      var fd = document.getElementById('agFilterDept'); if (fd) fd.value = 'all';
+      var fs = document.getElementById('agFilterStatus'); if (fs) fs.value = 'all';
+    } catch (e) { /* not built yet */ }
+    waRenderAgendasPage();
+    return true;
+  }
+
+  var __ah19 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (openOne(h)) return;
+    if (WA_AG_ONLY && h !== 'agendas') WA_AG_ONLY = 0;
+    __ah19();
+  };
+  window.addEventListener('hashchange', function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    try { openOne(h); } catch (e) { /* boot */ }
+  });
+})();
+
+/* ---------- the public page anyone with a link lands on ---------- */
+
+(function () {
+  var q = new URLSearchParams(location.search || '');
+  var token = q.get('a') || '';
+  if (!token) return;
+
+  document.body.classList.add('wa-shared');
+  var wrap = document.createElement('div');
+  wrap.id = 'agShare';
+  wrap.innerHTML = '<div class="as-wrap">'
+    + '<div class="as-brand"><div class="wa-logo">WA</div><span class="n">Welfare Avenue</span></div>'
+    + '<div class="as-card" id="asCard"><p class="as-sum">Opening the agenda...</p></div>'
+    + '<div class="as-foot">Shared from the Welfare Avenue dashboard.</div>'
+    + '</div>';
+  document.body.appendChild(wrap);
+
+  function asEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function remembered() {
+    try { return localStorage.getItem('wa_share_name') || ''; } catch (e) { return ''; }
+  }
+  function remember(n) {
+    try { localStorage.setItem('wa_share_name', n); } catch (e) { /* private mode */ }
+  }
+  async function call(payload) {
+    const { data, error } = await db.functions.invoke('agenda-share', { body: payload });
+    if (error) throw error;
+    return data;
+  }
+
+  function render(d) {
+    var card = document.getElementById('asCard');
+    if (!card) return;
+    var a = d.agenda, items = d.items || [];
+    card.innerHTML = '<h1>' + asEsc(a.title) + '</h1>'
+      + (a.meeting_date_pretty ? '<div class="as-date">' + asEsc(a.meeting_date_pretty) + '</div>' : '')
+      + '<p class="as-sum">' + asEsc(a.summary) + '</p>'
+      + '<div class="as-h">' + (items.length ? 'On the agenda' : 'Nothing on it yet') + '</div>'
+      + items.map(function (i) {
+          return '<div class="as-item' + (i.shared ? ' mine' : '') + '"><div class="t">' + asEsc(i.title) + '</div>'
+            + (i.notes ? '<div class="n">' + asEsc(i.notes) + '</div>' : '')
+            + (i.created_by ? '<div class="n">Added by ' + asEsc(i.created_by) + '</div>' : '')
+            + '</div>';
+        }).join('')
+      + (a.can_add
+        ? '<div class="as-add"><div class="as-h" style="margin-top:0;">Anything you want to add?</div>'
+          + '<input id="asName" placeholder="Your name" value="' + asEsc(remembered()) + '" />'
+          + '<input id="asWhat" placeholder="What do you want to talk about?" />'
+          + '<textarea id="asNotes" placeholder="Any detail worth knowing (optional)"></textarea>'
+          + '<button class="as-go" id="asGo">Add it to the agenda</button>'
+          + '<div class="as-msg" id="asMsg" style="display:none;"></div></div>'
+        : '<div class="as-add"><p class="as-sum">This meeting is closed, so the agenda is read only now.</p></div>');
+    var go = document.getElementById('asGo');
+    if (!go) return;
+    go.addEventListener('click', async function () {
+      var name = (document.getElementById('asName').value || '').trim();
+      var what = (document.getElementById('asWhat').value || '').trim();
+      var notes = (document.getElementById('asNotes').value || '').trim();
+      var msg = document.getElementById('asMsg');
+      function say(t, bad) {
+        msg.textContent = t;
+        msg.className = 'as-msg' + (bad ? ' bad' : '');
+        msg.style.display = 'block';
+      }
+      if (!name) { say('Add your name first so the team knows who raised it.', true); return; }
+      if (!what) { say('Tell us what you want to talk about.', true); return; }
+      go.disabled = true; go.textContent = 'Adding...';
+      try {
+        var r = await call({ action: 'add', token: token, name: name, title: what, notes: notes });
+        if (!(r && r.ok)) throw new Error((r && r.error) || 'failed');
+        remember(name);
+        var fresh = await call({ action: 'get', token: token });
+        render(fresh);
+        var m2 = document.getElementById('asMsg');
+        if (m2) { m2.textContent = 'Added. Thank you, it is on the agenda now.'; m2.className = 'as-msg'; m2.style.display = 'block'; }
+      } catch (e) {
+        go.disabled = false; go.textContent = 'Add it to the agenda';
+        say('That did not go through. Try again in a moment.', true);
+      }
+    });
+  }
+
+  function boot() {
+    call({ action: 'get', token: token }).then(function (d) {
+      if (!(d && d.ok)) throw new Error('gone');
+      render(d);
+    }).catch(function () {
+      var card = document.getElementById('asCard');
+      if (card) card.innerHTML = '<h1>This link is not active</h1><p class="as-sum">The agenda may have been archived or the link turned off. Ask whoever sent it for a fresh one.</p>';
+    });
+  }
+  if (typeof db !== 'undefined' && db) boot();
+  else window.addEventListener('load', boot);
+})();
+

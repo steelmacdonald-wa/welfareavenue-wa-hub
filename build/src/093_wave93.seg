@@ -1,0 +1,287 @@
+/* =====================================================================
+   WA v93 engagement + finance workspace (07/08/26)
+   =====================================================================
+   1. Hub engagement tracking: every signed-in load counts a visit and
+      a once-a-minute heartbeat counts time while the tab is visible
+      (wa_usage table via SECURITY DEFINER RPCs wa_usage_visit /
+      wa_usage_beat; counting starts 07/08/26).
+   2. HR centre gains a "Hub engagement" card (admins only): per person
+      last sign-in (auth), Hub opens and time on Hub (last 30 days),
+      and their effective access level, founder failsafe included, so
+      the admin flags can be eyeballed in one place.
+   3. Finances page: a "Finance tasks" fold at the top pulling open
+      tasks from EVERY department whose text looks finance-related
+      (budget, statement, grant, audit, reimbursement...). Tasks are
+      surfaced here, never moved: each row links to its home page.
+   4. Finance meetings: the transcript upload gains a
+      "Finance (Fundraising & Grants)" option (flows through the
+      protected pipeline as fundraising, which both dept mappers
+      already accept; the pipeline itself is untouched), and the
+      Finances page lists those meetings with one-click upload access.
+   ===================================================================== */
+(function () {
+  if (window.__wa93) return; window.__wa93 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w93eng table{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '#w93eng th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 6px;}' +
+    '#w93eng td{padding:5px 6px;border-top:1px solid rgba(127,127,127,.18);}' +
+    '#w93eng .mut{color:var(--wa-muted,#7b8a86);font-size:11px;}' +
+    '#w93eng .rolechip{font-size:10px;border:1px solid rgba(127,127,127,.4);border-radius:7px;padding:1px 7px;font-weight:700;}' +
+    '#w93eng .rolechip.admin{border-color:#2c7a66;color:#2c7a66;}' +
+    '#w93eng .rolechip.blocked{border-color:#c96b5f;color:#c96b5f;}' +
+    '#w93tasks summary, #w93meet summary{cursor:pointer;font-weight:800;font-size:13.5px;color:#2c7a66;list-style:none;}' +
+    '#w93tasks, #w93meet{background:rgba(44,122,102,.06);border-radius:10px;padding:9px 14px;margin:0 0 10px;}' +
+    '.w93row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:5px 0;border-top:1px solid rgba(127,127,127,.14);font-size:12px;}' +
+    '.w93row:first-of-type{border-top:none;}' +
+    '.w93row .t{font-weight:600;flex:1 1 220px;min-width:160px;}' +
+    '.w93row .dep{font-size:10px;border:1px solid rgba(127,127,127,.4);border-radius:7px;padding:1px 7px;color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.w93row .mut{font-size:11px;color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.w93row a{color:#2c7a66;cursor:pointer;font-size:11px;text-decoration:underline;white-space:nowrap;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. usage tracking ---------- */
+  function w93Track() {
+    try { db.rpc('wa_usage_visit'); } catch (e) { /* non-fatal */ }
+    var owed = 0;
+    setInterval(function () {
+      try {
+        if (document.visibilityState === 'visible') owed += 30;
+        if (owed >= 60) { var send = owed; owed = 0; db.rpc('wa_usage_beat', { p_seconds: send }); }
+      } catch (e) { /* non-fatal */ }
+    }, 30000);
+  }
+  if (typeof startApp === 'function') {
+    var __sa93 = startApp;
+    startApp = async function () {
+      await __sa93.apply(this, arguments);
+      try { w93Track(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- 2. HR centre engagement card (admins only) ---------- */
+  var FOUNDERS93 = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  function w93Ago(iso) {
+    if (!iso) return 'never';
+    var ms = Date.now() - new Date(iso).getTime();
+    var d = Math.floor(ms / 86400000);
+    if (d <= 0) return 'today';
+    if (d === 1) return 'yesterday';
+    if (d < 30) return d + ' days ago';
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function w93Dur(sec) {
+    sec = Number(sec) || 0;
+    if (sec < 60) return sec ? '<1 min' : '0';
+    var m = Math.round(sec / 60);
+    if (m < 60) return m + ' min';
+    return (m / 60).toFixed(1) + ' h';
+  }
+  async function w93Engagement() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel || document.getElementById('w93eng')) return;
+    var isAdmin = false;
+    try {
+      var em0 = ((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase();
+      isAdmin = FOUNDERS93.indexOf(em0) >= 0 || (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin');
+    } catch (e) { /* stay false */ }
+    if (!isAdmin) return;
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'w93eng';
+    card.innerHTML = '<h2>Hub engagement</h2><p class="read">Who is actually using the Hub. Last sign-in comes from the sign-in system; opens and time on Hub are counted from 07/08/26 onward (last 30 days shown). Visible to admins only.</p><div id="w93engbody">Loading...</div>';
+    panel.appendChild(card);
+    try {
+      var since = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+      var r = await Promise.all([
+        db.rpc('wa_hub_logins'),
+        db.from('wa_usage').select('*').gte('day', since),
+        db.from('hub_roles').select('email, role')
+      ]);
+      var logins = (r[0] && r[0].data) || [];
+      var usage = (r[1] && r[1].data) || [];
+      var roles = {};
+      ((r[2] && r[2].data) || []).forEach(function (x) { roles[x.email] = x.role; });
+      var use = {};
+      usage.forEach(function (u) {
+        var cur = use[u.email] || { sec: 0, visits: 0 };
+        cur.sec += Number(u.seconds) || 0;
+        cur.visits += Number(u.visits) || 0;
+        use[u.email] = cur;
+      });
+      var names = {};
+      try {
+        (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).forEach(function (p) {
+          if (p.email) names[String(p.email).toLowerCase()] = p.name;
+        });
+      } catch (e) { /* names optional */ }
+      var emails = {};
+      logins.forEach(function (l) { emails[l.email] = 1; });
+      Object.keys(use).forEach(function (e2) { emails[e2] = 1; });
+      Object.keys(roles).forEach(function (e2) { emails[e2] = 1; });
+      var rows = Object.keys(emails).map(function (em) {
+        var l = logins.filter(function (x) { return x.email === em; })[0];
+        var u = use[em] || { sec: 0, visits: 0 };
+        var role = roles[em] || (l ? 'signed in, no role set' : 'invited, never signed in');
+        var eff = FOUNDERS93.indexOf(em) >= 0 ? 'admin' : role;
+        var effNote = (FOUNDERS93.indexOf(em) >= 0 && role !== 'admin') ? ' (founder failsafe)' : '';
+        return { em: em, name: names[em] || em.split('@')[0], last: l ? l.last_sign_in_at : null, sec: u.sec, visits: u.visits, eff: eff, effNote: effNote };
+      }).sort(function (a, b) { return (b.last ? new Date(b.last).getTime() : 0) - (a.last ? new Date(a.last).getTime() : 0); });
+      var html = '<table><thead><tr><th>Person</th><th>Last sign-in</th><th>Hub opens (30d)</th><th>Time on Hub (30d)</th><th>Access</th></tr></thead><tbody>' +
+        rows.map(function (x) {
+          return '<tr><td><b>' + esc(x.name) + '</b><br/><span class="mut">' + esc(x.em) + '</span></td>' +
+            '<td>' + esc(w93Ago(x.last)) + '</td>' +
+            '<td>' + (x.visits || 0) + '</td>' +
+            '<td>' + w93Dur(x.sec) + '</td>' +
+            '<td><span class="rolechip ' + esc(x.eff) + '">' + esc(x.eff) + '</span><span class="mut">' + esc(x.effNote) + '</span></td></tr>';
+        }).join('') + '</tbody></table>' +
+        '<p class="m-sub" style="margin-top:8px">Access shown is the EFFECTIVE level: the three founder accounts are always admin (database failsafe), whatever the roles table says. Change roles in Admin.</p>';
+      document.getElementById('w93engbody').innerHTML = html;
+    } catch (e) {
+      var b = document.getElementById('w93engbody');
+      if (b) b.innerHTML = '<p class="read">Could not load engagement data.</p>';
+    }
+  }
+  /* wa46Render is private to wave46: watch the HR centre panel instead and
+     append the card whenever a repaint leaves it missing */
+  (function () {
+    var t93 = null;
+    function arm() {
+      var panel = document.getElementById('hrcentre');
+      if (!panel || panel.dataset.w93mo) return;
+      panel.dataset.w93mo = '1';
+      var mo = new MutationObserver(function () {
+        clearTimeout(t93);
+        t93 = setTimeout(function () { try { w93Engagement(); } catch (e) { /* non-fatal */ } }, 350);
+      });
+      mo.observe(panel, { childList: true });
+      if (panel.children.length) { try { w93Engagement(); } catch (e) { /* non-fatal */ } }
+    }
+    if (typeof startApp === 'function') {
+      var __sa93c = startApp;
+      startApp = async function () {
+        await __sa93c.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+
+  /* ---------- 3 + 4. finance tasks and finance meetings on Finances ---------- */
+  var FIN_RX = /(budget|financ|statement|bookkeep|bookeep|audit|quickbook|bank |banking|expense|reimburs|insur|grant|donat|donor|funding|cra\b|t3010|tax|invoice|receipt)/i;
+  var DEPT_LABEL93 = { opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', org: 'Org-wide' };
+  var W93 = { tasks: null, meets: null, at: 0 };
+
+  async function w93FinData() {
+    if (W93.tasks && (Date.now() - W93.at) < 300000) return;
+    try {
+      var r = await Promise.all([
+        db.from('dept_tasks').select('id, title, department, owner, due_date, subsection').eq('done', false).limit(600),
+        db.from('transcripts').select('id, title, meeting_date, department, processed').ilike('department', '%finance%').order('meeting_date', { ascending: false }).limit(25)
+      ]);
+      W93.tasks = ((r[0] && r[0].data) || []).filter(function (t) {
+        return FIN_RX.test((t.title || '') + ' ' + (t.subsection || ''));
+      });
+      W93.meets = ((r[1] && r[1].data) || []).filter(function (m) { return /finance/i.test(m.department || ''); });
+      W93.at = Date.now();
+    } catch (e) { W93.tasks = W93.tasks || []; W93.meets = W93.meets || []; }
+  }
+
+  function w93FinFolds() {
+    var sec = document.getElementById('finances');
+    if (!sec || document.getElementById('w93tasks')) return;
+    /* when the wave94 dashboard sections exist, the folds live in Overview */
+    var overview = sec.querySelector('.w94sec[data-w94sec="overview"]');
+    var anchor = document.getElementById('w92pills');
+    anchor = (anchor && anchor.nextElementSibling && anchor.nextElementSibling.classList.contains('w92note')) ? anchor.nextElementSibling : anchor;
+    if (!anchor) anchor = sec.querySelector('.fin-head');
+    if (!anchor && !overview) return;
+    var tasks = W93.tasks || [];
+    var meets = W93.meets || [];
+    var tHtml = tasks.slice(0, 25).map(function (t) {
+      var dep = t.department || 'org';
+      return '<div class="w93row"><span class="t" title="' + esc(t.title) + '">' + esc(String(t.title).slice(0, 70)) + '</span>' +
+        '<span class="dep">' + esc(DEPT_LABEL93[dep] || dep) + '</span>' +
+        (t.owner ? '<span class="mut">' + esc(t.owner) + '</span>' : '') +
+        (t.due_date ? '<span class="mut">due ' + esc(t.due_date) + '</span>' : '') +
+        '<a data-w93go="' + esc(dep) + '">open page</a></div>';
+    }).join('');
+    var mHtml = meets.slice(0, 10).map(function (m) {
+      return '<div class="w93row"><span class="t" title="' + esc(m.title || '') + '">' + esc(String(m.title || 'Finance meeting').slice(0, 70)) + '</span>' +
+        (m.meeting_date ? '<span class="mut">' + esc(m.meeting_date) + '</span>' : '') +
+        '<span class="mut">' + (m.processed ? 'processed' : 'processing') + '</span>' +
+        '<a data-w93tx="1">open meetings</a></div>';
+    }).join('');
+    var t = document.createElement('details');
+    t.id = 'w93tasks';
+    t.innerHTML = '<summary>Finance tasks across the Hub (' + tasks.length + ')</summary>' +
+      '<div class="fin-note">Open tasks from every department that look finance-related (budgets, statements, grants, receipts...). They stay on their home pages; this is one place to see them all.</div>' +
+      (tHtml || '<div class="w93row"><span class="mut">No open finance-related tasks right now.</span></div>') +
+      (tasks.length > 25 ? '<div class="fin-note">Showing 25 of ' + tasks.length + '.</div>' : '');
+    var m = document.createElement('details');
+    m.id = 'w93meet';
+    m.innerHTML = '<summary>Finance meetings (' + meets.length + ')</summary>' +
+      '<div class="fin-note">Meetings uploaded with the "Finance (Fundraising &amp; Grants)" tag. <a data-w93add style="color:#2c7a66;cursor:pointer;text-decoration:underline">Upload a finance meeting</a></div>' +
+      (mHtml || '<div class="w93row"><span class="mut">None yet. Upload the first one from the Meetings page.</span></div>');
+    if (overview) { overview.appendChild(t); overview.appendChild(m); }
+    else { anchor.insertAdjacentElement('afterend', m); anchor.insertAdjacentElement('afterend', t); }
+    sec.querySelectorAll('[data-w93go]').forEach(function (a) {
+      a.addEventListener('click', function () { location.hash = '#dept/' + a.getAttribute('data-w93go'); });
+    });
+    sec.querySelectorAll('[data-w93tx],[data-w93add]').forEach(function (a) {
+      a.addEventListener('click', function () {
+        location.hash = '#transcripts';
+        setTimeout(function () {
+          try {
+            var s = document.getElementById('txDept');
+            if (s) s.value = 'Finance (Fundraising & Grants)';
+          } catch (e) { /* fine */ }
+        }, 400);
+      });
+    });
+  }
+
+  /* transcript upload: Finance option (maps to fundraising in BOTH dept
+     mappers via the words it contains; the protected pipeline is untouched) */
+  function w93TxOption() {
+    var s = document.getElementById('txDept');
+    if (!s || s.querySelector('[data-w93fin]')) return;
+    var o = document.createElement('option');
+    o.value = 'Finance (Fundraising & Grants)';
+    o.setAttribute('data-w93fin', '1');
+    o.textContent = 'Finance (budgets, statements, grants)';
+    var after = null;
+    s.querySelectorAll('option').forEach(function (x) { if (x.value === 'fundraising') after = x; });
+    if (after && after.nextSibling) s.insertBefore(o, after.nextSibling);
+    else s.appendChild(o);
+  }
+  if (typeof startApp === 'function') {
+    var __sa93b = startApp;
+    startApp = async function () {
+      await __sa93b.apply(this, arguments);
+      try { w93TxOption(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  if (typeof waFinRender === 'function') {
+    var __fr93 = waFinRender;
+    waFinRender = function () {
+      __fr93.apply(this, arguments);
+      try {
+        w93FinFolds();
+        w93FinData().then(function () {
+          var old = document.getElementById('w93tasks');
+          var old2 = document.getElementById('w93meet');
+          if (old && old2 && W93.tasks) {
+            var openT = old.open, openM = old2.open;
+            old.remove(); old2.remove();
+            w93FinFolds();
+            var nt = document.getElementById('w93tasks'), nm = document.getElementById('w93meet');
+            if (nt) nt.open = openT;
+            if (nm) nm.open = openM;
+          }
+        });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

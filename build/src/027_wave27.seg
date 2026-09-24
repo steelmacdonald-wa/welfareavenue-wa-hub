@@ -1,0 +1,419 @@
+/* =====================================================================
+   WA v27 projects and goals flow (29/07/26)
+   Tasks flow into projects; projects flow into quarterly goals.
+   1. Every department page gets a Projects card: General tasks plus
+      each project with its open task count. Click through to a project
+      page with the description at the top, the linked goal, open and
+      completed tasks, quick add, and per task moves between projects.
+   2. Transcript uploads now file new tasks into the right project
+      automatically (process-transcript v6); anything unmatched lands in
+      General tasks.
+   3. Goal rows show their linked projects and a "Suggest missing tasks"
+      action: AI gap analysis against everything already open, with one
+      click add of any suggestion.
+   ===================================================================== */
+
+var WA27_PROJECTS = [];
+var WA27_COUNTS = {};
+var WA27_LOADED = false;
+
+(function () {
+  if (document.getElementById('wa27css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa27css';
+  st.textContent = '' +
+    '.w27-chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px;}' +
+    '.w27-chip{border:1px solid rgba(127,127,127,.35);border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer;background:rgba(44,122,102,.06);}' +
+    '.w27-chip b{font-weight:600;}' +
+    '.w27-chip .n{opacity:.65;margin-left:5px;}' +
+    '.w27-chip.gen{background:transparent;}' +
+    '.w27-desc{font-size:13.5px;color:var(--wa-muted,#7b8a86);margin:4px 0 12px;max-width:720px;}' +
+    '.w27-goal{font-size:12.5px;border:1px solid rgba(168,127,44,.4);background:rgba(168,127,44,.07);border-radius:9px;padding:8px 12px;margin:0 0 14px;max-width:720px;}' +
+    '.w27-task{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(127,127,127,.15);font-size:13.5px;}' +
+    '.w27-task input[type=checkbox]{width:16px;height:16px;margin-top:2px;flex:0 0 auto;cursor:pointer;}' +
+    '.w27-task.done .tt{text-decoration:line-through;opacity:.6;}' +
+    '.w27-task .meta{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:2px;}' +
+    '.w27-task a.mv{color:#2c7a66;cursor:pointer;text-decoration:underline;font-size:11.5px;}' +
+    '.w27gp{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 10px;font-size:11.5px;}' +
+    '.w27gp .pj{border:1px solid rgba(44,122,102,.45);color:#2c7a66;border-radius:8px;padding:1px 8px;cursor:pointer;}' +
+    '.w27gp a.sg{color:#a87f2c;cursor:pointer;text-decoration:underline;}' +
+    '.w27-sug{border-top:1px solid rgba(127,127,127,.2);padding:8px 0;font-size:13px;}' +
+    '.w27-sug .why{font-size:12px;color:var(--wa-muted,#7b8a86);margin-top:2px;}';
+  document.head.appendChild(st);
+})();
+
+async function wa27Load(force) {
+  if (WA27_LOADED && !force) return;
+  try {
+    var res = await Promise.all([
+      db.from('projects').select('*').eq('status', 'active').order('sort').order('id'),
+      db.from('dept_tasks').select('id, department, project_id').eq('done', false)
+    ]);
+    WA27_PROJECTS = (res[0].data) || [];
+    WA27_COUNTS = {};
+    ((res[1].data) || []).forEach(function (t) {
+      var k = t.project_id ? 'p' + t.project_id : 'g' + t.department;
+      WA27_COUNTS[k] = (WA27_COUNTS[k] || 0) + 1;
+    });
+    WA27_LOADED = true;
+  } catch (e) { /* offline */ }
+}
+
+function wa27Find(id) {
+  var hit = null;
+  WA27_PROJECTS.forEach(function (p) { if (String(p.id) === String(id)) hit = p; });
+  return hit;
+}
+
+function wa27Name(p) {
+  if (!p) return '';
+  var par = p.parent_id ? wa27Find(p.parent_id) : null;
+  return (par ? par.name + ' > ' : '') + p.name;
+}
+
+function wa27Goal(gid) {
+  var hit = null;
+  if (typeof GOALS_CACHE !== 'undefined') GOALS_CACHE.forEach(function (g) { if (String(g.id) === String(gid)) hit = g; });
+  return hit;
+}
+
+/* ---------- projects card on department pages ---------- */
+function wa27DeptCard(id) {
+  if (typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(id) < 0) return;
+  var panel = document.getElementById(id);
+  if (!panel) return;
+  var old = panel.querySelector('.w27-card');
+  if (old) old.remove();
+  var projs = WA27_PROJECTS.filter(function (p) { return p.department === id; });
+  var card = document.createElement('div');
+  card.className = 'card w27-card';
+  var chips = '<span class="w27-chip gen" data-w27o="general/' + id + '"><b>General tasks</b><span class="n">' + (WA27_COUNTS['g' + id] || 0) + ' open</span></span>';
+  projs.forEach(function (p) {
+    chips += '<span class="w27-chip" data-w27o="' + p.id + '"><b>' + esc(wa27Name(p)) + '</b><span class="n">' + (WA27_COUNTS['p' + p.id] || 0) + ' open</span></span>';
+  });
+  var staff = typeof isStaff === 'function' && isStaff();
+  card.innerHTML = '<h2 style="color:#2c7a66">Projects</h2>'
+    + '<p class="read" style="margin:0 0 4px">Tasks from transcripts file themselves into these projects; everything else sits in General tasks. Projects roll up into the quarterly goals.</p>'
+    + '<div class="w27-chips">' + chips + '</div>'
+    + (staff ? '<div class="wa24-links" style="margin-top:10px"><button data-w27add="' + id + '">Add a project</button></div>' : '');
+  var anchor = panel.querySelector('.dept-card');
+  if (anchor) anchor.insertAdjacentElement('afterend', card);
+  else panel.appendChild(card);
+}
+
+/* ---------- project page ---------- */
+var WA27_VIEW = null;
+
+async function wa27RenderProject(ref, deptForGeneral) {
+  var sec = document.getElementById('projectpage');
+  if (!sec) return;
+  await wa27Load(false);
+  var isGen = ref === 'general';
+  var p = isGen ? null : wa27Find(ref);
+  var dept = isGen ? deptForGeneral : (p ? p.department : null);
+  if (!dept) { sec.innerHTML = '<div class="card"><p class="read">Project not found.</p></div>'; return; }
+  WA27_VIEW = { ref: ref, dept: dept };
+  var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[dept]) || dept;
+  var q = db.from('dept_tasks').select('*').eq('department', dept).order('done').order('id', { ascending: false });
+  q = isGen ? q.is('project_id', null) : q.eq('project_id', p.id);
+  var r = await q;
+  var tasks = (r.data) || [];
+  if (isGen) tasks = tasks.filter(function (t) { return !t.done; });
+  var open = tasks.filter(function (t) { return !t.done; });
+  var done = tasks.filter(function (t) { return t.done; });
+  var staff = typeof isStaff === 'function' && isStaff();
+  var g = p && p.goal_id ? wa27Goal(p.goal_id) : null;
+
+  function row(t) {
+    return '<div class="w27-task' + (t.done ? ' done' : '') + '">'
+      + '<input type="checkbox" data-w27t="' + t.id + '"' + (t.done ? ' checked' : '') + (staff ? '' : ' disabled') + ' />'
+      + '<div style="flex:1;min-width:0"><span class="tt">' + esc(t.title || '') + '</span>'
+      + '<div class="meta">' + esc(t.owner || 'unassigned')
+      + (t.due_date ? ' &middot; due ' + esc(t.due_date) : '')
+      + (t.flag ? ' &middot; flagged' : '')
+      + (staff ? ' &middot; <a class="mv" data-w27mv="' + t.id + '">move</a>' : '')
+      + '</div></div></div>';
+  }
+
+  var html = '<div class="card">'
+    + '<button class="vl-back" data-w27back="' + dept + '">&larr; ' + esc(label) + '</button>'
+    + '<h2 style="color:#2c7a66">' + esc(isGen ? 'General tasks' : wa27Name(p)) + '<span class="deptchip" style="background:#2c7a66">' + esc(label) + '</span></h2>'
+    + (isGen
+      ? '<p class="w27-desc">Open tasks with no project yet. Move one into a project with its move link.</p>'
+      : '<p class="w27-desc">' + esc(p.description || 'No description yet.') + (staff ? ' <a class="mv" data-w27edit="' + p.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">edit project</a>' : '') + '</p>')
+    + (g ? '<div class="w27-goal">Rolls up to the goal: <b>' + esc(g.title) + '</b>' + (g.status ? ' <span style="opacity:.7">(' + esc(g.status) + ')</span>' : '') + '</div>' : '')
+    + '<h3 class="block">Open (' + open.length + ')</h3>'
+    + (open.length ? open.map(row).join('') : '<p class="read">Nothing open here right now.</p>')
+    + (staff ? '<div class="add-row" style="margin-top:10px"><input type="text" id="w27nt" placeholder="Add a task to ' + esc(isGen ? 'General' : p.name) + '" style="max-width:340px;padding:7px 10px;border:1px solid rgba(127,127,127,.35);border-radius:8px;font-size:13px" /> <button class="btn mini" id="w27ntgo">Add</button></div>' : '')
+    + (done.length ? '<details class="completed" style="margin-top:14px"><summary>Completed (' + done.length + ')</summary>' + done.map(row).join('') + '</details>' : '')
+    + '</div>';
+  sec.innerHTML = html;
+}
+
+function wa27OpenProject(ref) {
+  location.hash = '#project/' + ref;
+}
+
+/* ---------- modals ---------- */
+function wa27ProjectModal(dept, existing) {
+  var p = existing || null;
+  var goals = (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []);
+  var goalOpts = '<option value="">No goal link</option>' + goals.map(function (g) {
+    return '<option value="' + g.id + '"' + (p && String(p.goal_id) === String(g.id) ? ' selected' : '') + '>' + esc((g.department || '') + ': ' + String(g.title).slice(0, 70)) + '</option>';
+  }).join('');
+  var parents = WA27_PROJECTS.filter(function (x) { return x.department === dept && !x.parent_id && (!p || x.id !== p.id); });
+  var parOpts = '<option value="">Top level</option>' + parents.map(function (x) {
+    return '<option value="' + x.id + '"' + (p && String(p.parent_id) === String(x.id) ? ' selected' : '') + '>' + esc(x.name) + '</option>';
+  }).join('');
+  openModal('<h3>' + (p ? 'Edit project' : 'Add a project') + '</h3>' +
+    '<p class="m-sub">The description matters: transcript uploads use it to decide which tasks belong here. Say what the project covers in plain words.</p>' +
+    '<label>Project name</label><input type="text" id="w27pn" value="' + esc(p ? p.name : '') + '" />' +
+    '<label>Description (routing hint)</label><textarea id="w27pd" rows="3">' + esc(p ? (p.description || '') : '') + '</textarea>' +
+    '<div class="m-row"><div><label>Lives under</label><select id="w27pp">' + parOpts + '</select></div>' +
+    '<div><label>Rolls up to goal</label><select id="w27pg">' + goalOpts + '</select></div></div>' +
+    (p ? '<label style="display:flex;gap:7px;align-items:center;margin-top:8px"><input type="checkbox" id="w27parch" style="width:15px;height:15px" /> Archive this project (tasks keep their tag, chip disappears)</label>' : '') +
+    '<div class="m-actions"><button class="btn" id="w27ps">' + (p ? 'Save' : 'Add the project') + '</button> <button class="btn ghost" id="w27pc">Cancel</button></div>');
+  var cancel = document.getElementById('w27pc');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var save = document.getElementById('w27ps');
+  if (save) save.addEventListener('click', async function () {
+    var name = (document.getElementById('w27pn').value || '').trim();
+    if (!name) { toast('The project needs a name'); return; }
+    save.disabled = true;
+    var patch = {
+      name: name,
+      description: (document.getElementById('w27pd').value || '').trim() || null,
+      parent_id: Number(document.getElementById('w27pp').value) || null,
+      goal_id: Number(document.getElementById('w27pg').value) || null
+    };
+    var arch = document.getElementById('w27parch');
+    if (arch && arch.checked) patch.status = 'archived';
+    var r;
+    if (p) r = await db.from('projects').update(patch).eq('id', p.id);
+    else {
+      patch.department = dept;
+      patch.status = 'active';
+      r = await db.from('projects').insert(patch);
+    }
+    if (r.error) { save.disabled = false; toast('Could not save the project'); return; }
+    closeModal();
+    toast(p ? 'Project saved' : 'Project added');
+    await wa27Load(true);
+    if (typeof DEPT_ORDER !== 'undefined') DEPT_ORDER.forEach(function (d) { try { wa27DeptCard(d); } catch (e) { /* non-fatal */ } });
+    if (WA27_VIEW && !document.getElementById('projectpage').classList.contains('on')) return;
+    if (WA27_VIEW) wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+  });
+}
+
+function wa27MoveModal(taskId) {
+  var byDept = {};
+  WA27_PROJECTS.forEach(function (p) { (byDept[p.department] = byDept[p.department] || []).push(p); });
+  var opts = '<option value="">General tasks (no project)</option>';
+  Object.keys(byDept).sort().forEach(function (d) {
+    var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d;
+    opts += '<optgroup label="' + esc(label) + '">' + byDept[d].map(function (p) {
+      return '<option value="' + p.id + '">' + esc(wa27Name(p)) + '</option>';
+    }).join('') + '</optgroup>';
+  });
+  openModal('<h3>Move this task</h3>' +
+    '<p class="m-sub">Pick the project this task belongs to. General means no project.</p>' +
+    '<label>Project</label><select id="w27mvp">' + opts + '</select>' +
+    '<div class="m-actions"><button class="btn" id="w27mvgo">Move</button> <button class="btn ghost" id="w27mvc">Cancel</button></div>');
+  var cancel = document.getElementById('w27mvc');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var go = document.getElementById('w27mvgo');
+  if (go) go.addEventListener('click', async function () {
+    go.disabled = true;
+    var v = document.getElementById('w27mvp').value;
+    var r = await db.from('dept_tasks').update({ project_id: v ? Number(v) : null }).eq('id', taskId);
+    if (r.error) { go.disabled = false; toast('Could not move it'); return; }
+    closeModal();
+    toast('Moved');
+    await wa27Load(true);
+    if (WA27_VIEW) wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+  });
+}
+
+/* ---------- goal rows: linked projects and gap suggestions ---------- */
+if (typeof waGoalRow === 'function') {
+  (function () {
+    var __gr27 = waGoalRow;
+    waGoalRow = function (g) {
+      var html = __gr27(g);
+      try {
+        var linked = WA27_PROJECTS.filter(function (p) { return String(p.goal_id) === String(g.id); });
+        var bits = linked.map(function (p) {
+          return '<span class="pj" data-w27o="' + p.id + '">' + esc(wa27Name(p)) + ' (' + (WA27_COUNTS['p' + p.id] || 0) + ' open)</span>';
+        });
+        if (typeof isStaff === 'function' && isStaff()) bits.push('<a class="sg" data-w27sg="' + g.id + '">Suggest missing tasks</a>');
+        if (bits.length) html += '<div class="w27gp">' + bits.join(' ') + '</div>';
+      } catch (e) { /* non-fatal */ }
+      return html;
+    };
+  })();
+}
+
+async function wa27Suggest(goalId, forceRefresh) {
+  var g = wa27Goal(goalId);
+  if (!g) return;
+  var cached = g.suggestions && !forceRefresh ? g.suggestions : null;
+  openModal('<h3>What is missing for this goal</h3>' +
+    '<p class="m-sub">' + esc(String(g.title).slice(0, 140)) + '</p>' +
+    '<div id="w27sout">' + (cached ? '' : '<p class="m-sub">Reading the goal, its projects and every open task, then looking for gaps. Twenty seconds or so.</p>') + '</div>' +
+    '<div class="m-actions"><button class="btn ghost" id="w27sref">' + (cached ? 'Refresh the analysis' : 'Working...') + '</button> <button class="btn ghost" id="w27sc">Close</button></div>');
+  var closeB = document.getElementById('w27sc');
+  if (closeB) closeB.addEventListener('click', function () { closeModal(); });
+  var refB = document.getElementById('w27sref');
+  if (refB) refB.addEventListener('click', function () { wa27Suggest(goalId, true); });
+
+  function paint(payload) {
+    var out = document.getElementById('w27sout');
+    if (!out) return;
+    var sugs = (payload && payload.suggestions) || [];
+    var html = payload && payload.note ? '<p class="m-sub">' + esc(payload.note) + '</p>' : '';
+    if (!sugs.length) html += '<p class="m-sub">No gaps found: the open tasks already cover this goal.</p>';
+    sugs.forEach(function (s, i) {
+      var pj = s.project_id ? wa27Find(s.project_id) : null;
+      html += '<div class="w27-sug"><b>' + esc(s.title || '') + '</b>'
+        + '<div class="why">' + esc(s.why || '') + (pj ? ' Files under ' + esc(wa27Name(pj)) + '.' : ' Files under General tasks.') + '</div>'
+        + '<div style="margin-top:5px"><button class="btn mini" data-w27sa="' + i + '">Add as a task</button></div></div>';
+    });
+    out.innerHTML = html;
+    out.querySelectorAll('[data-w27sa]').forEach(function (b) {
+      b.addEventListener('click', async function () {
+        var s = sugs[Number(b.getAttribute('data-w27sa'))];
+        if (!s) return;
+        b.disabled = true;
+        var ins = await db.from('dept_tasks').insert({
+          department: g.department, title: String(s.title || '').slice(0, 300),
+          owner: '', status: 'Open', flag: false, priority: false, done: false, sort: 999,
+          project_id: s.project_id || null,
+          reason_note: 'AI goal gap suggestion: ' + String(s.why || '').slice(0, 300),
+          updated_by: 'AI: goal gap analysis', opened_at: new Date().toISOString()
+        });
+        if (ins.error) { b.disabled = false; toast('Could not add it'); return; }
+        b.textContent = 'Added';
+        toast('Task added');
+        wa27Load(true);
+      });
+    });
+  }
+
+  if (cached) { paint(cached); return; }
+  try {
+    var r = await db.functions.invoke('goal-suggest', { body: { goal_id: Number(goalId) } });
+    if (r.error) throw r.error;
+    g.suggestions = r.data;
+    if (refB) { refB.textContent = 'Refresh the analysis'; }
+    paint(r.data);
+  } catch (e) {
+    var out = document.getElementById('w27sout');
+    if (out) out.innerHTML = '<p class="m-sub">The analysis did not come back. Try again in a minute.</p>';
+    if (refB) refB.textContent = 'Try again';
+  }
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  function ensureSection() {
+    if (document.getElementById('projectpage')) return;
+    var main = document.querySelector('main');
+    if (!main) return;
+    var sec = document.createElement('section');
+    sec.id = 'projectpage';
+    sec.className = 'panel';
+    main.appendChild(sec);
+  }
+
+  function wire() {
+    ensureSection();
+    if (document.body.dataset.wa27Wired) return;
+    document.body.dataset.wa27Wired = '1';
+    document.body.addEventListener('click', async function (e) {
+      var o = e.target.closest('[data-w27o]');
+      if (o) { wa27OpenProject(o.getAttribute('data-w27o')); return; }
+      var back = e.target.closest('[data-w27back]');
+      if (back) { location.hash = '#dept/' + back.getAttribute('data-w27back'); return; }
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var add = e.target.closest('[data-w27add]');
+      if (add) { try { wa27ProjectModal(add.getAttribute('data-w27add'), null); } catch (x) { /* non-fatal */ } return; }
+      var ed = e.target.closest('[data-w27edit]');
+      if (ed) { try { wa27ProjectModal(wa27Find(ed.getAttribute('data-w27edit')).department, wa27Find(ed.getAttribute('data-w27edit'))); } catch (x) { /* non-fatal */ } return; }
+      var mv = e.target.closest('[data-w27mv]');
+      if (mv) { try { wa27MoveModal(Number(mv.getAttribute('data-w27mv'))); } catch (x) { /* non-fatal */ } return; }
+      var sg = e.target.closest('[data-w27sg]');
+      if (sg) { try { wa27Suggest(Number(sg.getAttribute('data-w27sg')), false); } catch (x) { /* non-fatal */ } return; }
+      var chk = e.target.closest('input[data-w27t]');
+      if (chk) {
+        var tid = Number(chk.getAttribute('data-w27t'));
+        var nowDone = chk.checked;
+        var r = await db.from('dept_tasks').update({ done: nowDone, closed_at: nowDone ? new Date().toISOString() : null, updated_at: new Date().toISOString(), updated_by: (typeof who === 'function' ? who() : 'dashboard') }).eq('id', tid);
+        if (r.error) { chk.checked = !nowDone; toast('Could not update the task'); return; }
+        try {
+          await db.from('change_log').insert({ entity_type: 'task', entity_id: String(tid), field: 'done', old_value: String(!nowDone), new_value: String(nowDone) + ' (project page)', changed_by: (typeof who === 'function' ? who() : 'dashboard') });
+        } catch (x) { /* non-fatal */ }
+        toast(nowDone ? 'Closed' : 'Reopened');
+        wa27Load(true);
+        if (WA27_VIEW) wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+        return;
+      }
+      var ntgo = e.target.closest('#w27ntgo');
+      if (ntgo && WA27_VIEW) {
+        var inp = document.getElementById('w27nt');
+        var title = (inp && inp.value || '').trim();
+        if (!title) { toast('Write the task first'); return; }
+        ntgo.disabled = true;
+        var isGen = WA27_VIEW.ref === 'general';
+        var ins = await db.from('dept_tasks').insert({
+          department: WA27_VIEW.dept, title: title.slice(0, 300), owner: '', status: 'Open',
+          flag: false, priority: false, done: false, sort: 999,
+          project_id: isGen ? null : Number(WA27_VIEW.ref),
+          updated_by: (typeof who === 'function' ? who() : 'dashboard'), opened_at: new Date().toISOString()
+        });
+        ntgo.disabled = false;
+        if (ins.error) { toast('Could not add the task'); return; }
+        toast('Task added');
+        await wa27Load(true);
+        wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept);
+        return;
+      }
+    });
+  }
+
+  if (typeof renderSection === 'function') {
+    var __rsec27 = renderSection;
+    renderSection = function (id) {
+      __rsec27(id);
+      try { wa27DeptCard(id); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  if (typeof applyHash === 'function') {
+    var __ah27 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h.indexOf('project/') === 0) {
+        var bits = h.split('/');
+        ensureSection();
+        try { wa27RenderProject(bits[1], bits[2] || null); } catch (e) { /* non-fatal */ }
+        showPanel('projectpage');
+        return;
+      }
+      __ah27();
+    };
+  }
+
+  var __sa27 = startApp;
+  startApp = async function () {
+    await __sa27();
+    try {
+      wire();
+      await wa27Load(false);
+      if (typeof DEPT_ORDER !== 'undefined') DEPT_ORDER.forEach(function (d) { try { wa27DeptCard(d); } catch (e) { /* non-fatal */ } });
+      if (typeof renderDeptGoalsCards === 'function') { try { renderDeptGoalsCards(); } catch (e) { /* non-fatal */ } }
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h.indexOf('project/') === 0) applyHash();
+    } catch (e) { /* non-fatal */ }
+  };
+  try { if (document.querySelector('main')) wire(); } catch (e) { /* boot */ }
+})();

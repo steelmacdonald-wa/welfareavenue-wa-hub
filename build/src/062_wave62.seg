@@ -1,0 +1,232 @@
+/* =====================================================================
+   WA v62 leadership and confidential meetings
+   (03/08/26)
+   The transcript archive learns meeting types. Uploading now offers:
+   - Department meeting: visible to everyone, as before.
+   - Leadership meeting: the transcript AND everything it produces
+     (updates, tasks, decisions) visible only to leaders and admins.
+   - Confidential: pick exactly who can see it; only those people (and
+     admins) see the transcript and its updates, tasks and decisions.
+   How it holds together: the transcript row carries visibility +
+   allowed_people; a DB trigger (wa_stamp_restricted) stamps the same
+   restriction onto the updates, tasks and decisions the AI files from
+   that meeting; this wave filters every cache (archive, boards,
+   decisions) per signed-in user; and the server functions (ask v6,
+   build-agenda v6, transcript-requests v4) exclude restricted
+   meetings so nothing leaks through chat, agendas or suggestions.
+   Client-side gating until RLS phase 2, like the rest of the Hub.
+   ===================================================================== */
+(function () {
+  if (window.__wa62) return;
+  window.__wa62 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa62css';
+  st.textContent = '' +
+    '.w62chip{display:inline-block;border-radius:999px;padding:1px 10px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle;}' +
+    '.w62chip.lead{background:rgba(132,85,255,.14);color:#5b32c7;}' +
+    '.w62chip.priv{background:rgba(179,64,47,.12);color:#b3402f;}' +
+    '#w62people{max-height:150px;overflow:auto;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px;margin-top:6px;}' +
+    '#w62people label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}';
+  document.head.appendChild(st);
+
+  var WA62_ADMINS = ['steel.macdonald', 'suhaib.abdillahi', 'ian.odhiambo', 'valex.sanon', 'tuna.kaynak', 'michael.michailidis'];
+  var WA62_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;
+  function wa62Email() { return String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(); }
+  function wa62IsAdmin() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin') return true;
+      return WA62_ADMINS.indexOf(wa62Email().split('@')[0]) >= 0;
+    } catch (e) { return false; }
+  }
+  function wa62First() {
+    var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+    var n = (me && me.name) || (typeof USER !== 'undefined' && USER && USER.name) || wa62Email().split('@')[0].split('.')[0];
+    return String(n || '').trim().split(/\s+/)[0].toLowerCase();
+  }
+  function wa62IsLeader() {
+    try {
+      var me = (typeof WA_ME !== 'undefined') ? WA_ME : null;
+      return !!(me && (me.department === 'board' || WA62_LEAD.test(me.role || '')));
+    } catch (e) { return false; }
+  }
+  function wa62InList(list) {
+    var f = wa62First();
+    if (!f || !Array.isArray(list)) return false;
+    for (var i = 0; i < list.length; i++) {
+      if (String(list[i] || '').trim().split(/\s+/)[0].toLowerCase() === f) return true;
+    }
+    return false;
+  }
+  /* transcripts: creator always sees their own upload */
+  function wa62SeeTx(t) {
+    var v = t.visibility;
+    if (!v || v === 'department') return true;
+    if (wa62IsAdmin()) return true;
+    var f = wa62First();
+    if (f && String(t.added_by || '').toLowerCase().indexOf(f) === 0) return true;
+    if (v === 'leadership') return wa62IsLeader();
+    if (v === 'private') return wa62InList(t.allowed_people);
+    return false;
+  }
+  /* updates and decisions */
+  function wa62SeeRow(r) {
+    var v = r.visibility;
+    if (!v || v === 'department') return true;
+    if (wa62IsAdmin()) return true;
+    if (v === 'leadership') return wa62IsLeader();
+    if (v === 'private') return wa62InList(r.allowed_people);
+    return false;
+  }
+  /* tasks: the assigned owner also sees their own task */
+  function wa62SeeTask(r) {
+    if (wa62SeeRow(r)) return true;
+    var f = wa62First();
+    return !!(f && String(r.owner || '').toLowerCase().indexOf(f) >= 0);
+  }
+
+  /* ---- the meeting type picker on the upload form ---- */
+  function wa62Ensure() {
+    try {
+      var save = document.getElementById('txSave');
+      if (!save || document.getElementById('w62type')) return;
+      var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice()
+        .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      save.insertAdjacentHTML('beforebegin',
+        '<div style="margin:0 0 10px">'
+        + '<label style="font-size:12.5px;color:var(--wa-muted);">Meeting type</label><br/>'
+        + '<select id="w62type" style="width:100%;margin-top:4px">'
+        + '<option value="department">Department meeting (visible to everyone)</option>'
+        + '<option value="leadership">Leadership meeting (leaders and admins only)</option>'
+        + '<option value="private">Confidential (only the people you pick)</option>'
+        + '</select>'
+        + '<div id="w62people" style="display:none">'
+        + people.map(function (p) {
+          return '<label><input type="checkbox" class="w62pcb" value="' + esc(p.name) + '" style="width:15px;height:15px" /> '
+            + esc(p.name) + ' <span style="color:#9aa5a1;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
+        }).join('')
+        + '</div>'
+        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) will see this meeting and the updates, tasks and decisions it creates. It stays out of the chat assistant, agendas and AI suggestions.</p>'
+        + '</div>');
+      var sel = document.getElementById('w62type');
+      sel.addEventListener('change', function () {
+        document.getElementById('w62people').style.display = sel.value === 'private' ? '' : 'none';
+        document.getElementById('w62note').style.display = sel.value === 'department' ? 'none' : '';
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* merge the meeting type into the transcript insert */
+  function wa62Merge(payload) {
+    var sel = document.getElementById('w62type');
+    if (!sel || sel.value === 'department') return payload;
+    var patch = { visibility: sel.value };
+    if (sel.value === 'private') {
+      var names = [];
+      document.querySelectorAll('.w62pcb:checked').forEach(function (c) { names.push(c.value); });
+      var mine = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) || (typeof who === 'function' ? who() : '');
+      if (mine && names.indexOf(mine) < 0) names.push(mine);
+      patch.allowed_people = names;
+    }
+    var out = Object.assign({}, payload, patch);
+    /* reset the picker for the next upload */
+    setTimeout(function () {
+      try {
+        sel.value = 'department';
+        document.getElementById('w62people').style.display = 'none';
+        document.getElementById('w62note').style.display = 'none';
+        document.querySelectorAll('.w62pcb:checked').forEach(function (c) { c.checked = false; });
+      } catch (e) { /* fine */ }
+    }, 500);
+    return out;
+  }
+
+  /* ---- visibility chips on archive rows ---- */
+  function wa62Chips() {
+    try {
+      var cache = (typeof txCache !== 'undefined') ? txCache : [];
+      var byId = {};
+      cache.forEach(function (t) { byId[String(t.id)] = t; });
+      document.querySelectorAll('#txList .tx-item').forEach(function (item) {
+        var t = byId[String(item.getAttribute('data-tx'))];
+        if (!t || !t.visibility || t.visibility === 'department') return;
+        var head = item.querySelector('.tx-head');
+        if (!head || head.querySelector('.w62chip')) return;
+        var chip = t.visibility === 'leadership'
+          ? '<span class="w62chip lead">leadership</span>'
+          : '<span class="w62chip priv">confidential' + (Array.isArray(t.allowed_people) ? ' &middot; ' + t.allowed_people.length : '') + '</span>';
+        head.insertAdjacentHTML('afterbegin', chip);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---- cache filtering ---- */
+  if (typeof loadTranscriptsData === 'function') {
+    var __ltd62 = loadTranscriptsData;
+    loadTranscriptsData = async function () {
+      await __ltd62.apply(this, arguments);
+      try {
+        if (typeof waResolveMe === 'function') { try { await waResolveMe(); } catch (e2) { /* fine */ } }
+        if (typeof txCache !== 'undefined' && Array.isArray(txCache)) txCache = txCache.filter(wa62SeeTx);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof renderTranscripts === 'function') {
+    var __rt62 = renderTranscripts;
+    renderTranscripts = function () {
+      __rt62.apply(this, arguments);
+      wa62Chips();
+    };
+  }
+  if (typeof loadAll === 'function') {
+    var __la62 = loadAll;
+    loadAll = async function () {
+      await __la62.apply(this, arguments);
+      try {
+        if (typeof waResolveMe === 'function') { try { await waResolveMe(); } catch (e2) { /* fine */ } }
+        if (wa62IsAdmin()) return;
+        if (typeof DB_UPDATES !== 'undefined' && Array.isArray(DB_UPDATES)) DB_UPDATES = DB_UPDATES.filter(wa62SeeRow);
+        if (typeof DB_TASKS !== 'undefined' && Array.isArray(DB_TASKS)) DB_TASKS = DB_TASKS.filter(wa62SeeTask);
+        if (typeof DB_DECISIONS !== 'undefined' && Array.isArray(DB_DECISIONS)) DB_DECISIONS = DB_DECISIONS.filter(wa62SeeRow);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  if (typeof showPanel === 'function') {
+    var __sp62 = showPanel;
+    showPanel = function (id) {
+      __sp62(id);
+      try { if (id === 'transcripts') setTimeout(wa62Ensure, 100); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa62 = startApp;
+    startApp = async function () {
+      await __sa62();
+      /* ride the meeting type along on the transcript insert (wrapped here
+         so offline stubs and the real client both get it) */
+      try {
+        if (db && db.from && !db.__w62) {
+          var __from62 = db.from.bind(db);
+          db.from = function (table) {
+            var b = __from62(table);
+            try {
+              if (table === 'transcripts' && b && typeof b.insert === 'function') {
+                var __ins = b.insert.bind(b);
+                b.insert = function (payload) {
+                  try {
+                    if (payload && !Array.isArray(payload)) payload = wa62Merge(payload);
+                  } catch (e2) { /* pass through */ }
+                  return __ins(payload);
+                };
+              }
+            } catch (e3) { /* pass through */ }
+            return b;
+          };
+          db.__w62 = 1;
+        }
+      } catch (e) { /* non-fatal */ }
+      try { wa62Ensure(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

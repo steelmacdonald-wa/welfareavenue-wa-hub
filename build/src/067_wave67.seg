@@ -1,0 +1,307 @@
+/* =====================================================================
+   WA v67 the training catalog becomes a browsable library
+   (04/08/26)
+   The Training page catalog and the HR centre Trainings tab get a
+   Netflix-style browser: one carousel row per training path (a tool or
+   learning path) and per category, a search box, and filter chips.
+   Categories are linked to departments (training_categories table) and
+   show as bubble tags in that department's colour. Cards open a detail
+   modal with the full description, the link, mark-done, assign, and
+   (admins and leaders) the existing edit modal. A new "Using the Hub"
+   path of 8 modules teaches the Hub itself.
+   ===================================================================== */
+(function () {
+  if (window.__wa67) return;
+  window.__wa67 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa67css';
+  st.textContent = '' +
+    '.w67bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 10px;}' +
+    '.w67q{flex:1;min-width:180px;max-width:320px;padding:7px 12px;border:1px solid var(--wa-line);border-radius:999px;font-size:13px;background:#fff;}' +
+    '.w67chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}' +
+    '.w67chip{display:inline-block;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid transparent;user-select:none;}' +
+    '.w67chip.path{background:#fff;border-color:var(--wa-line);color:#3d4642;font-weight:700;}' +
+    '.w67chip.on{outline:2px solid rgba(31,95,79,.55);outline-offset:1px;}' +
+    '.w67rowwrap{margin:0 0 16px;}' +
+    '.w67rh{display:flex;gap:10px;align-items:baseline;margin:0 0 6px;}' +
+    '.w67rh b{font-size:13.5px;color:#14302b;}' +
+    '.w67rh .n{font-size:11px;color:#8b968f;}' +
+    '.w67rh .nav{margin-left:auto;display:flex;gap:4px;}' +
+    '.w67rh .nav button{border:1px solid var(--wa-line);background:#fff;border-radius:999px;width:26px;height:26px;cursor:pointer;color:#1f5f4f;font-weight:800;line-height:1;}' +
+    '.w67row{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px;scroll-behavior:smooth;scrollbar-width:thin;}' +
+    '.w67card{flex:0 0 205px;max-width:205px;background:#fff;border:1px solid var(--wa-line);border-radius:12px;padding:11px 12px;cursor:pointer;transition:box-shadow .12s, transform .12s;}' +
+    '.w67card:hover{box-shadow:0 4px 14px rgba(20,48,43,.12);transform:translateY(-2px);}' +
+    '.w67card h5{margin:0 0 5px;font-size:12.8px;line-height:1.35;color:#14302b;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}' +
+    '.w67meta{font-size:10.5px;color:#8b968f;margin:0 0 6px;}' +
+    '.w67tag{display:inline-block;border-radius:999px;padding:1px 9px;font-size:9.5px;font-weight:800;margin:0 4px 4px 0;}' +
+    '.w67done{display:inline-block;border-radius:999px;padding:1px 9px;font-size:9.5px;font-weight:800;background:#e8efe9;color:#2c5a44;}' +
+    '.w67done.todo{background:#f6ecd2;color:#7a5a12;}' +
+    '.w67empty{font-size:12.5px;color:#8b968f;padding:6px 0;}' +
+    '#w67m .w67desc{max-height:44vh;overflow-y:auto;font-size:13px;line-height:1.55;color:#3d4642;margin:8px 0;}' +
+    '#w67m .w67desc p{margin:0 0 8px;}';
+  document.head.appendChild(st);
+
+  var WA67 = { cats: null };
+  async function w67Cats() {
+    if (WA67.cats) return WA67.cats;
+    try {
+      var r = await db.from('training_categories').select('*').order('sort');
+      WA67.cats = {};
+      ((r && r.data) || []).forEach(function (c) { WA67.cats[c.name] = c.department || null; });
+    } catch (e) { WA67.cats = {}; }
+    return WA67.cats;
+  }
+  function w67Dept(cat) { return (WA67.cats && WA67.cats[cat]) || null; }
+  function w67Color(cat) {
+    var d = w67Dept(cat);
+    return (d && typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64';
+  }
+  function w67Tag(cat) {
+    var c = w67Color(cat);
+    return '<span class="w67tag" style="background:' + c + '1f;color:' + c + '">' + esc(cat || '') + '</span>';
+  }
+  function w67Me() { return (typeof wa28Me === 'function') ? wa28Me() : null; }
+  function w67Mine(tid) {
+    var me = w67Me();
+    if (!me) return null;
+    var pr = (typeof wa36ProgFor === 'function') ? wa36ProgFor(tid) : [];
+    return pr.filter(function (x) { return String(x.person_name || '').toLowerCase() === me.name.toLowerCase(); })[0] || null;
+  }
+
+  function w67Card(t) {
+    var mine = w67Mine(t.id);
+    var meta = [];
+    if (t.duration_sec && typeof wa36Dur === 'function') meta.push(wa36Dur(t.duration_sec));
+    meta.push(t.source === 'clickup' ? 'ClickUp' : (t.source === 'loom' ? 'Loom' : 'In the Hub'));
+    return '<div class="w67card" data-w67t="' + t.id + '" data-w67cat="' + esc(t.category || '') + '"'
+      + ' data-w67path="' + esc(t.path_group || '') + '"'
+      + ' data-w67s="' + esc(((t.title || '') + ' ' + (t.description || '') + ' ' + (t.category || '') + ' ' + (t.path_group || '')).toLowerCase()) + '">'
+      + '<h5>' + esc(t.title) + '</h5>'
+      + '<div class="w67meta">' + esc(meta.join(' \u00b7 ')) + '</div>'
+      + w67Tag(t.category)
+      + (mine ? '<span class="w67done' + (mine.status === 'done' ? '' : ' todo') + '">' + (mine.status === 'done' ? 'done' : 'assigned to you') + '</span>' : '')
+      + '</div>';
+  }
+
+  function w67Row(key, title, subtitle, items) {
+    if (!items.length) return '';
+    return '<div class="w67rowwrap" data-w67row="' + esc(key) + '">'
+      + '<div class="w67rh"><b>' + esc(title) + '</b><span class="n">' + items.length
+      + (subtitle ? ' \u00b7 ' + esc(subtitle) : '') + '</span>'
+      + '<span class="nav"><button data-w67nav="-1">&#8249;</button><button data-w67nav="1">&#8250;</button></span></div>'
+      + '<div class="w67row">' + items.map(w67Card).join('') + '</div></div>';
+  }
+
+  function w67Browser(idSuffix) {
+    var all = (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).filter(function (t) { return t.active !== false; });
+    if (!all.length) return '';
+    var me = w67Me();
+    /* paths first */
+    var paths = {};
+    all.forEach(function (t) { if (t.path_group) (paths[t.path_group] = paths[t.path_group] || []).push(t); });
+    var pathKeys = Object.keys(paths).sort();
+    /* categories for everything else */
+    var cats = {};
+    all.forEach(function (t) { if (!t.path_group) (cats[t.category || 'General'] = cats[t.category || 'General'] || []).push(t); });
+    var catKeys = Object.keys(cats).sort(function (a, b) { return String(a).localeCompare(String(b)); });
+
+    /* chips cover every category, including ones only seen inside paths */
+    var chipCats = {};
+    all.forEach(function (t) { chipCats[t.category || 'General'] = 1; });
+    var chips = '<span class="w67chip path on" data-w67c="all" style="background:#1f5f4f;color:#fff;border-color:#1f5f4f">All</span>';
+    Object.keys(chipCats).sort().forEach(function (c) {
+      var col = w67Color(c);
+      chips += '<span class="w67chip" data-w67c="cat:' + esc(c) + '" style="background:' + col + '1f;color:' + col + '">' + esc(c) + '</span>';
+    });
+    pathKeys.forEach(function (p) {
+      chips += '<span class="w67chip path" data-w67c="path:' + esc(p) + '">' + esc(p) + '</span>';
+    });
+
+    var rows = '';
+    pathKeys.forEach(function (p) {
+      var items = paths[p].slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+      var sub = 'training path';
+      if (me) {
+        var d = items.filter(function (t) { var m = w67Mine(t.id); return m && m.status === 'done'; }).length;
+        sub = 'training path \u00b7 you: ' + d + ' of ' + items.length + ' done';
+      }
+      rows += w67Row('path:' + p, p, sub, items);
+    });
+    catKeys.forEach(function (c) {
+      rows += w67Row('cat:' + c, c, w67Dept(c) ? ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[w67Dept(c)]) || '') : '', cats[c].slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); }));
+    });
+
+    return '<div class="w67wrap" id="w67' + idSuffix + '" data-w67f="all" data-w67q="">'
+      + '<div class="w67bar"><input class="w67q" type="search" placeholder="Search the trainings..." />'
+      + '<div class="w67chips">' + chips + '</div></div>'
+      + rows
+      + '<p class="w67empty" style="display:none">Nothing matches that search.</p>'
+      + '</div>';
+  }
+
+  function w67Apply(wrap) {
+    var q = (wrap.dataset.w67q || '').toLowerCase();
+    var f = wrap.dataset.w67f || 'all';
+    var any = false;
+    wrap.querySelectorAll('.w67rowwrap').forEach(function (row) {
+      var key = row.getAttribute('data-w67row');
+      var rowVisible = 0;
+      row.querySelectorAll('.w67card').forEach(function (card) {
+        var ok = true;
+        if (q && (card.getAttribute('data-w67s') || '').indexOf(q) < 0) ok = false;
+        if (ok && f !== 'all') {
+          if (f.indexOf('path:') === 0) ok = key === f;
+          else if (f.indexOf('cat:') === 0) ok = ('cat:' + card.getAttribute('data-w67cat')) === f;
+        }
+        card.style.display = ok ? '' : 'none';
+        if (ok) rowVisible++;
+      });
+      row.style.display = rowVisible ? '' : 'none';
+      if (rowVisible) any = true;
+    });
+    var empty = wrap.querySelector('.w67empty');
+    if (empty) empty.style.display = any ? 'none' : '';
+  }
+
+  function w67Modal(tid) {
+    var t = null;
+    (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).forEach(function (x) { if (String(x.id) === String(tid)) t = x; });
+    if (!t) return;
+    var mine = w67Mine(t.id);
+    var pr = (typeof wa36ProgFor === 'function') ? wa36ProgFor(t.id) : [];
+    var doneN = pr.filter(function (x) { return x.status === 'done'; }).length;
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice()
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    var canEdit = false;
+    try { canEdit = typeof WA40_MINE !== 'undefined' && WA40_MINE && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader'); } catch (e) { /* no */ }
+    var desc = t.description
+      ? ((typeof waVolMd === 'function') ? waVolMd(t.description) : '<p>' + esc(t.description) + '</p>')
+      : '<p style="color:#8b968f">No description yet.</p>';
+    openModal('<div id="w67m"><h3 style="margin-bottom:2px">' + esc(t.title) + '</h3>'
+      + '<div style="margin:4px 0 2px">' + w67Tag(t.category)
+      + (t.path_group ? '<span class="w67tag" style="background:#eef2f0;color:#3d4642">' + esc(t.path_group) + '</span>' : '')
+      + (t.duration_sec && typeof wa36Dur === 'function' ? '<span class="w67tag" style="background:#eef2f0;color:#3d4642">' + wa36Dur(t.duration_sec) + '</span>' : '')
+      + (doneN ? '<span class="w67tag" style="background:#e8efe9;color:#2c5a44">' + doneN + ' people done</span>' : '')
+      + '</div>'
+      + '<div class="w67desc">' + desc + '</div>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
+      + (t.resource_url ? '<a class="btn mini" href="' + esc(t.resource_url) + '" target="_blank" rel="noopener" style="text-decoration:none">Open the training</a>' : '')
+      + '<button class="btn ghost mini" data-w36me="' + t.id + '" data-st="' + (mine && mine.status === 'done' ? 'done' : 'todo') + '">'
+      + (mine && mine.status === 'done' ? 'Mark not done' : 'Mark it done for me') + '</button>'
+      + '<select class="w36sel" data-w36assign="' + t.id + '"><option value="">Assign to...</option>'
+      + people.map(function (pp) { return '<option value="' + esc(pp.name) + '">' + esc(pp.name) + '</option>'; }).join('')
+      + '</select>'
+      + (canEdit ? '<a data-w43te="' + t.id + '" style="font-size:12px">Edit this training</a>' : '')
+      + '</div>'
+      + '<div class="m-actions"><button class="btn ghost" id="w67mc">Close</button></div></div>');
+    var c = document.getElementById('w67mc');
+    if (c) c.addEventListener('click', function () { closeModal(); });
+  }
+
+  /* ---- wiring (once, delegated) ---- */
+  if (!document.body.dataset.wa67Wired) {
+    document.body.dataset.wa67Wired = '1';
+    document.body.addEventListener('input', function (e) {
+      var q = e.target.closest && e.target.closest('.w67q');
+      if (!q) return;
+      var wrap = q.closest('.w67wrap');
+      wrap.dataset.w67q = q.value.trim().toLowerCase();
+      w67Apply(wrap);
+    });
+    document.body.addEventListener('click', function (e) {
+      var chip = e.target.closest && e.target.closest('[data-w67c]');
+      if (chip) {
+        var wrap = chip.closest('.w67wrap');
+        var cur = wrap.dataset.w67f;
+        var val = chip.getAttribute('data-w67c');
+        wrap.dataset.w67f = (cur === val) ? 'all' : val;
+        wrap.querySelectorAll('.w67chip').forEach(function (x) { x.classList.remove('on'); });
+        var sel = wrap.dataset.w67f === 'all' ? wrap.querySelector('[data-w67c="all"]') : chip;
+        if (sel) sel.classList.add('on');
+        w67Apply(wrap);
+        return;
+      }
+      var nav = e.target.closest && e.target.closest('[data-w67nav]');
+      if (nav) {
+        var row = nav.closest('.w67rowwrap').querySelector('.w67row');
+        if (row) row.scrollBy({ left: 430 * Number(nav.getAttribute('data-w67nav')), behavior: 'smooth' });
+        return;
+      }
+      var card = e.target.closest && e.target.closest('[data-w67t]');
+      if (card) { w67Modal(card.getAttribute('data-w67t')); return; }
+    });
+  }
+
+  /* ---- the personal Training page: swap the old flat catalog ---- */
+  async function w67TrainingPage() {
+    try {
+      var body = document.getElementById('w36body');
+      if (!body || body.querySelector('#w67me')) return;
+      if (typeof WA36_TRAININGS === 'undefined' || !WA36_TRAININGS.length) return;
+      await w67Cats();
+      var html = w67Browser('me');
+      if (!html) return;
+      var anchor = null;
+      body.querySelectorAll('.w44cat').forEach(function (x) {
+        if ((x.textContent || '').indexOf('The full catalog') >= 0) anchor = x;
+      });
+      var first = body.querySelector('.w36cat');
+      var host = document.createElement('div');
+      host.innerHTML = html;
+      if (anchor) anchor.insertAdjacentElement('afterend', host);
+      else if (first) first.insertAdjacentElement('beforebegin', host);
+      else body.appendChild(host);
+      /* retire the flat grid */
+      body.querySelectorAll('.w36cat, .w36grid').forEach(function (x) { x.remove(); });
+    } catch (e) { /* non-fatal */ }
+  }
+  if (typeof wa36Render === 'function') {
+    var __tr67 = wa36Render;
+    wa36Render = async function () {
+      await __tr67.apply(this, arguments);
+      setTimeout(w67TrainingPage, 250);
+    };
+  }
+
+  /* ---- the HR centre Trainings tab ---- */
+  async function w67HrCentre() {
+    try {
+      var body = document.getElementById('w46body');
+      if (!body || body.querySelector('#w67hr')) return;
+      var h3s = body.querySelectorAll('.w46sec h3');
+      var sec = null;
+      h3s.forEach(function (h) { if ((h.textContent || '').trim() === 'Trainings') sec = h.parentElement; });
+      if (!sec) return;
+      if (typeof WA36_TRAININGS === 'undefined' || !WA36_TRAININGS.length) {
+        if (typeof wa36Load === 'function') { try { await wa36Load(false); } catch (e2) { /* offline */ } }
+      }
+      await w67Cats();
+      var html = w67Browser('hr');
+      if (!html) return;
+      var tiles = sec.querySelector('.w44tiles');
+      var host = document.createElement('div');
+      host.innerHTML = '<div style="margin:10px 0 4px;font-weight:700;color:#1f5f4f;font-size:13px">Browse the catalog</div>' + html;
+      if (tiles) tiles.insertAdjacentElement('afterend', host);
+      else sec.appendChild(host);
+    } catch (e) { /* non-fatal */ }
+  }
+  try {
+    var __w67mo;
+    new MutationObserver(function () {
+      clearTimeout(__w67mo);
+      __w67mo = setTimeout(function () {
+        var body = document.getElementById('w46body');
+        if (body && !body.querySelector('#w67hr')) w67HrCentre();
+      }, 300);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* non-fatal */ }
+
+  if (typeof startApp === 'function') {
+    var __sa67 = startApp;
+    startApp = async function () {
+      await __sa67();
+      try { w67Cats(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

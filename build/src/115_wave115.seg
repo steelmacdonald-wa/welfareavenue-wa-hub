@@ -1,0 +1,406 @@
+/* =====================================================================
+   WA v115 profile menu and photo, top right (24/09/26)
+   =====================================================================
+   Steel: "add a profile setting section at the top right with a place
+   to add ones photo." The "Signed in: name / Sign out" pill in the top
+   row becomes a round avatar button (photo, or initials on a brand
+   colour). It opens a small profile menu: the person's name, role and
+   department, then Edit profile and photo, My page, Slack notifications
+   (wave89 fold), Request more access (wave110) and the existing Sign
+   out button (moved into the menu, same element, same handler).
+   Edit profile: choose a photo (cropped to a centred square and
+   resized to 512px JPEG in the browser), remove it, edit name and role
+   title; department and email are read-only here (admins manage those
+   in People and access). The photo lives in the public 'avatars'
+   storage bucket at u/<email>.jpg (RLS: staff write only their own
+   file, admins any), its URL in team_members.avatar_url (new column,
+   migration wa_profile_avatars). Photos then show in the top row, the
+   Home greeting, the My team rows, the person page header and the
+   People and access table. Board viewers get the avatar and Sign out
+   only (no roster row to edit). Wrapped (CURRENT bindings): renderMyPage,
+   wa33Person, startApp. Loads BEFORE wave110 in MANIFEST.
+   ===================================================================== */
+(function () {
+  if (window.__wa115) return; window.__wa115 = true;
+
+  var BUCKET = 'avatars';
+  var PAL = [['#103F39', '#FFFAF2'], ['#6F64AB', '#FFFAF2'], ['#DCA527', '#103F39']];
+  var W115 = { byId: {}, byEmail: {}, byName: {}, me: null, loaded: false, pending: null, remove: false, preview: null };
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.w115av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;background:#103F39;color:#FFFAF2;font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif;font-weight:700;flex:0 0 auto;vertical-align:middle;letter-spacing:.5px;}' +
+    '.w115av img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#w115btn{background:none;border:none;padding:0;cursor:pointer;border-radius:50%;box-shadow:0 0 0 2px rgba(16,63,57,.12);vertical-align:middle;margin-right:8px;}' +
+    '#w115btn:hover{box-shadow:0 0 0 3px rgba(220,165,39,.7);}' +
+    '.w115pill #whoName{cursor:pointer;}' +
+    '#w115menu{position:fixed;z-index:200;width:292px;background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;box-shadow:0 18px 50px rgba(16,63,57,.22);padding:14px 12px 10px;font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif;}' +
+    '#w115menu .w115head{display:flex;gap:12px;align-items:center;padding:2px 6px 12px;border-bottom:1px solid rgba(16,63,57,.10);margin-bottom:8px;}' +
+    '#w115menu .w115head b{display:block;font-size:14.5px;color:#1F201E;}' +
+    '#w115menu .w115head .w115mut{font-size:12px;color:#797773;line-height:1.35;}' +
+    '#w115menu .w115item{display:block;width:100%;text-align:left;background:none;border:none;padding:9px 10px;border-radius:10px;font:inherit;font-size:13.5px;font-weight:500;color:#1F201E;cursor:pointer;}' +
+    '#w115menu .w115item:hover{background:rgba(16,63,57,.07);color:#103F39;}' +
+    '#w115menu #signOutBtn{display:block;width:100%;text-align:left;margin:6px 0 0;border-radius:10px;padding:9px 10px;font-size:13.5px;font-weight:700;background:rgba(16,63,57,.07);color:#103F39;border:none;cursor:pointer;font-family:inherit;}' +
+    '.w115edit{font-family:"Space Grotesk","Helvetica Neue",Arial,sans-serif;}' +
+    '.w115edit .w115photo{display:flex;gap:16px;align-items:center;margin:4px 0 14px;flex-wrap:wrap;}' +
+    '.w115edit .w115photo .w115av{width:84px;height:84px;font-size:28px;}' +
+    '.w115edit .w115acts{display:flex;flex-direction:column;gap:6px;}' +
+    '.w115edit .w115choose{display:inline-flex;align-items:center;background:rgba(16,63,57,.08);color:#103F39;border-radius:10px;padding:8px 14px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}' +
+    '.w115edit .w115choose input{display:none;}' +
+    '.w115edit .w115rm{font-size:12px;color:#797773;cursor:pointer;text-decoration:underline;}' +
+    '.w115edit .w115hint{font-size:12px;color:#797773;margin-top:4px;}' +
+    '.w115edit label{display:block;font-size:12px;color:#5c6b66;margin:10px 0 4px;}' +
+    '.w115edit input[type=text]{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid rgba(16,63,57,.18);border-radius:10px;font-size:14px;font-family:inherit;}' +
+    '.w115edit .w115lock{padding:8px 10px;background:rgba(16,63,57,.05);border-radius:10px;font-size:13.5px;color:#1F201E;}' +
+    '.w115edit .w115save{display:flex;gap:8px;margin-top:16px;}' +
+    '.w115edit .w115go{background:#DCA527;color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}' +
+    '.w115edit .w115cx{background:rgba(16,63,57,.08);color:#103F39;border:none;border-radius:10px;padding:9px 16px;font-family:"Barlow Condensed","Arial Narrow",Arial,sans-serif;font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;}' +
+    '.mp-head .w115av{width:46px;height:46px;font-size:16px;margin-right:4px;align-self:center;}' +
+    '.w74mem summary .w115av{width:22px;height:22px;font-size:10px;margin-right:6px;}' +
+    '.w33head .w115av{width:52px;height:52px;font-size:18px;margin-right:4px;}' +
+    '#w113tbl .w115av{width:26px;height:26px;font-size:10.5px;margin-right:8px;}' +
+    '#w113tbl td .w115nm{display:inline-flex;align-items:center;}';
+  document.head.appendChild(css);
+
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function initials(name) {
+    var p = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (!p.length) return '?';
+    return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase();
+  }
+  function palette(name) {
+    var h = 0, s = String(name || '');
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return PAL[h % PAL.length];
+  }
+  function avatarHtml(person, size, extraCls) {
+    var name = (person && person.name) || '';
+    var url = person && person.avatar_url;
+    if (person && person.id && W115.me && person.id === W115.me.id && W115.preview) url = W115.preview;
+    var pal = palette(name);
+    var st = 'width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.38) + 'px;';
+    if (url) return '<span class="w115av ' + (extraCls || '') + '" style="' + st + '"><img src="' + esc(url) + '" alt="' + esc(name) + '" /></span>';
+    return '<span class="w115av ' + (extraCls || '') + '" style="' + st + 'background:' + pal[0] + ';color:' + pal[1] + '">' + esc(initials(name)) + '</span>';
+  }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function myName() { try { return (W115.me && W115.me.name) || (USER && USER.name) || myEmail().split('@')[0]; } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+
+  /* ---------- data ---------- */
+  async function load() {
+    try {
+      var r = await db.from('team_members').select('id,name,email,department,role,avatar_url,color').eq('active', true);
+      var rows = (r && r.data) || [];
+      W115.byId = {}; W115.byEmail = {}; W115.byName = {};
+      rows.forEach(function (m) {
+        W115.byId[m.id] = m;
+        if (m.email) W115.byEmail[lower(m.email)] = m;
+        if (m.name) W115.byName[lower(m.name)] = m;
+      });
+      W115.me = W115.byEmail[myEmail()] || null;
+      if (!W115.me) {
+        try { if (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.id && W115.byId[WA_ME.id]) W115.me = W115.byId[WA_ME.id]; } catch (e) { /* fine */ }
+      }
+      if (!W115.me) {
+        try { if (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name && W115.byName[lower(WA_ME.name)]) W115.me = W115.byName[lower(WA_ME.name)]; } catch (e) { /* fine */ }
+      }
+      W115.loaded = true;
+    } catch (e) { /* stays initials */ }
+  }
+  function personByName(name) {
+    var n = lower(name);
+    if (!n) return null;
+    if (W115.byName[n]) return W115.byName[n];
+    var first = n.split(' ')[0];
+    var hits = Object.keys(W115.byName).filter(function (k) { return k.split(' ')[0] === first; });
+    return hits.length === 1 ? W115.byName[hits[0]] : null;
+  }
+
+  /* ---------- top-right button + menu ---------- */
+  function mePerson() { return W115.me || { name: myName(), email: myEmail() }; }
+  function mount() {
+    var who = document.getElementById('whoName');
+    if (!who) return;
+    var pill = who.closest('.pill');
+    if (!pill) return;
+    pill.classList.add('w115pill');
+    var btn = document.getElementById('w115btn');
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'w115btn';
+      btn.type = 'button';
+      btn.title = 'Your profile';
+      btn.setAttribute('aria-haspopup', 'true');
+      pill.insertBefore(btn, pill.firstChild);
+      btn.addEventListener('click', function (e) { e.stopPropagation(); toggle(); });
+      who.addEventListener('click', function (e) { e.stopPropagation(); toggle(); });
+    }
+    btn.innerHTML = avatarHtml(mePerson(), 34);
+    if (!document.getElementById('w115menu')) {
+      var m = document.createElement('div');
+      m.id = 'w115menu';
+      m.style.display = 'none';
+      m.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.body.appendChild(m);
+      document.addEventListener('click', function () { close(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+      window.addEventListener('resize', function () { if (m.style.display !== 'none') place(); });
+    }
+  }
+  function renderMenu() {
+    var m = document.getElementById('w115menu');
+    if (!m) return;
+    var me = mePerson();
+    var dept = '';
+    try { dept = me.department ? ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[me.department]) || me.department) : ''; } catch (e) { dept = me.department || ''; }
+    var line = [me.role, dept].filter(Boolean).join(' \u00b7 ');
+    var so = document.getElementById('signOutBtn');
+    m.innerHTML = '<div class="w115head">' + avatarHtml(me, 52) + '<div><b>' + esc(me.name || myName()) + '</b>'
+      + (line ? '<div class="w115mut">' + esc(line) + '</div>' : '')
+      + '<div class="w115mut">' + esc(me.email || myEmail()) + '</div></div></div>'
+      + (W115.me && staff() ? '<button class="w115item" data-w115act="edit">Edit profile and photo</button>' : '')
+      + (staff() ? '<button class="w115item" data-w115act="mypage">My page</button>' : '')
+      + (staff() ? '<button class="w115item" data-w115act="notify">Slack notifications</button>' : '')
+      + (staff() ? '<button class="w115item" data-w115act="access">Request more access</button>' : '');
+    if (so) m.appendChild(so); /* the original Sign out button, same handler */
+    m.querySelectorAll('[data-w115act]').forEach(function (b) {
+      b.addEventListener('click', function () { act(b.getAttribute('data-w115act')); });
+    });
+  }
+  function place() {
+    var m = document.getElementById('w115menu'), btn = document.getElementById('w115btn');
+    if (!m || !btn) return;
+    var r = btn.getBoundingClientRect();
+    var right = Math.max(8, window.innerWidth - r.right);
+    m.style.top = (r.bottom + 8) + 'px';
+    m.style.right = right + 'px';
+    m.style.left = 'auto';
+    if (window.innerWidth < 340) { m.style.left = '8px'; m.style.right = '8px'; m.style.width = 'auto'; }
+  }
+  function toggle() {
+    var m = document.getElementById('w115menu');
+    if (!m) return;
+    if (m.style.display !== 'none') { close(); return; }
+    renderMenu();
+    m.style.display = 'block';
+    place();
+  }
+  function close() {
+    var m = document.getElementById('w115menu');
+    if (m) m.style.display = 'none';
+  }
+  function act(what) {
+    close();
+    if (what === 'edit') { editModal(); return; }
+    if (what === 'mypage') { location.hash = '#mypage'; return; }
+    if (what === 'notify') {
+      location.hash = '#mypage';
+      setTimeout(function () {
+        var box = document.getElementById('w89box');
+        if (box) { box.open = true; try { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { box.scrollIntoView(); } }
+      }, 700);
+      return;
+    }
+    if (what === 'access') {
+      location.hash = '#mypage';
+      setTimeout(function () {
+        var b = document.getElementById('w110btn');
+        if (b) b.click(); else { try { toast('Open My page to request more access'); } catch (e) { /* fine */ } }
+      }, 700);
+    }
+  }
+
+  /* ---------- edit profile ---------- */
+  function squareJpeg(file, size) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var u = URL.createObjectURL(file);
+      img.onload = function () {
+        try {
+          var s = Math.min(img.naturalWidth, img.naturalHeight);
+          var sx = (img.naturalWidth - s) / 2, sy = (img.naturalHeight - s) / 2;
+          var c = document.createElement('canvas');
+          c.width = size; c.height = size;
+          var ctx = c.getContext('2d');
+          ctx.fillStyle = '#FFFAF2'; ctx.fillRect(0, 0, size, size);
+          ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
+          URL.revokeObjectURL(u);
+          c.toBlob(function (b) { if (b) resolve(b); else reject(new Error('Could not encode the photo')); }, 'image/jpeg', 0.86);
+        } catch (e) { reject(e); }
+      };
+      img.onerror = function () { URL.revokeObjectURL(u); reject(new Error('That file is not an image the browser can read')); };
+      img.src = u;
+    });
+  }
+  function editModal() {
+    var me = W115.me;
+    if (!me) { try { toast('Your account is not linked to a team profile yet; ask an admin.'); } catch (e) { /* fine */ } return; }
+    W115.pending = null; W115.remove = false;
+    var dept = '';
+    try { dept = me.department ? ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[me.department]) || me.department) : 'No department set'; } catch (e) { dept = me.department || ''; }
+    openModal('<div class="w115edit"><h3>Your profile</h3>'
+      + '<p class="m-sub">Your photo shows next to your name across the Hub. Department and email are managed in People and access.</p>'
+      + '<div class="w115photo"><div id="w115prev">' + avatarHtml(me, 84) + '</div>'
+      + '<div class="w115acts"><label class="w115choose">Choose a photo<input type="file" id="w115file" accept="image/jpeg,image/png,image/webp" /></label>'
+      + ((me.avatar_url || W115.preview) ? '<span class="w115rm" data-w115rm="1">Remove the photo</span>' : '')
+      + '<div class="w115hint">JPG, PNG or WebP, up to 2 MB. It is cropped to a centred square.</div></div></div>'
+      + '<label>Name</label><input type="text" id="w115n" value="' + esc(me.name || '') + '" />'
+      + '<label>Role title</label><input type="text" id="w115rt" value="' + esc(me.role || '') + '" placeholder="e.g. Volunteer coordinator" />'
+      + '<label>Department</label><div class="w115lock">' + esc(dept) + '</div>'
+      + '<label>Email</label><div class="w115lock">' + esc(me.email || '') + '</div>'
+      + '<div class="w115save"><button class="w115go" id="w115save">Save</button><button class="w115cx" id="w115cancel">Cancel</button></div>'
+      + '<div class="w115hint" id="w115msg"></div></div>');
+    var file = document.getElementById('w115file');
+    file.addEventListener('change', async function () {
+      var f = file.files && file.files[0];
+      if (!f) return;
+      if (f.size > 2 * 1024 * 1024 * 6) { setMsg('That photo is very large; pick one under 12 MB.'); return; }
+      setMsg('Preparing the photo...');
+      try {
+        var blob = await squareJpeg(f, 512);
+        W115.pending = blob; W115.remove = false;
+        var url = URL.createObjectURL(blob);
+        document.getElementById('w115prev').innerHTML = '<span class="w115av" style="width:84px;height:84px"><img src="' + url + '" alt="" /></span>';
+        setMsg('Looks good. Save to keep it.');
+      } catch (e) { setMsg(String(e.message || e)); }
+    });
+    var rm = document.querySelector('[data-w115rm]');
+    if (rm) rm.addEventListener('click', function () {
+      W115.remove = true; W115.pending = null;
+      document.getElementById('w115prev').innerHTML = avatarHtml({ name: me.name }, 84);
+      setMsg('The photo will be removed when you save.');
+    });
+    document.getElementById('w115cancel').addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
+    document.getElementById('w115save').addEventListener('click', save);
+  }
+  function setMsg(t) { var m = document.getElementById('w115msg'); if (m) m.textContent = t || ''; }
+  async function save() {
+    var me = W115.me;
+    if (!me) return;
+    var btn = document.getElementById('w115save');
+    var name = (document.getElementById('w115n').value || '').trim();
+    var role = (document.getElementById('w115rt').value || '').trim();
+    if (!name) { setMsg('A name is needed.'); return; }
+    btn.disabled = true; btn.textContent = 'Saving...';
+    var old = { name: me.name, role: me.role, avatar_url: me.avatar_url || null };
+    var patch = {};
+    if (name !== me.name) patch.name = name;
+    if (role !== (me.role || '')) patch.role = role || null;
+    try {
+      var path = 'u/' + lower(me.email) + '.jpg';
+      if (W115.pending) {
+        var up = await db.storage.from(BUCKET).upload(path, W115.pending, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (up && up.error) throw new Error('Photo upload failed: ' + (up.error.message || 'storage error'));
+        var pub = db.storage.from(BUCKET).getPublicUrl(path);
+        patch.avatar_url = ((pub && pub.data && pub.data.publicUrl) || '') + '?v=' + Date.now();
+        try { W115.preview = URL.createObjectURL(W115.pending); } catch (e) { W115.preview = null; }
+      } else if (W115.remove) {
+        patch.avatar_url = null;
+        W115.preview = null;
+        try { await db.storage.from(BUCKET).remove([path]); } catch (e) { /* the row is what matters */ }
+      }
+      if (Object.keys(patch).length) {
+        var r = await db.from('team_members').update(patch).eq('id', me.id);
+        if (r && r.error) throw new Error('Could not save: ' + (r.error.message || ''));
+        Object.keys(patch).forEach(function (k) { me[k] = patch[k]; });
+        try { if (typeof WA_ME !== 'undefined' && WA_ME) { if (patch.name) WA_ME.name = patch.name; if ('role' in patch) WA_ME.role = patch.role; } } catch (e) { /* fine */ }
+        try {
+          await db.from('change_log').insert({ entity_type: 'member', entity_id: String(me.id), field: 'profile', old_value: JSON.stringify(old), new_value: JSON.stringify({ name: me.name, role: me.role, avatar_url: me.avatar_url ? 'set' : null }), changed_by: (typeof who === 'function') ? who() : me.name });
+        } catch (e) { /* audit only */ }
+      }
+      try { closeModal(); } catch (e) { /* fine */ }
+      W115.pending = null; W115.remove = false;
+      var wn = document.getElementById('whoName'); if (wn && patch.name) wn.textContent = patch.name;
+      mount(); decorateHome();
+      try { toast('Profile saved'); } catch (e) { /* fine */ }
+      try { if (typeof renderMyPage === 'function' && document.getElementById('mypage') && document.getElementById('mypage').classList.contains('active')) renderMyPage(); } catch (e) { /* fine */ }
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Save';
+      setMsg(String(e.message || e));
+    }
+  }
+
+  /* ---------- photos across the Hub ---------- */
+  function decorateHome() {
+    var head = document.querySelector('#mypage .mp-head');
+    if (head && !head.querySelector('.w115av')) {
+      var h2 = head.querySelector('h2');
+      if (h2) h2.insertAdjacentHTML('beforebegin', avatarHtml(mePerson(), 46));
+    }
+    document.querySelectorAll('#mypage .w74mem summary').forEach(function (s) {
+      if (s.querySelector('.w115av')) return;
+      var nm = s.querySelector('.nm');
+      if (!nm) return;
+      var p = personByName(nm.textContent);
+      nm.insertAdjacentHTML('beforebegin', avatarHtml(p || { name: nm.textContent }, 22));
+    });
+  }
+  function decoratePerson() {
+    var head = document.querySelector('#personpage .w33head');
+    if (!head || head.querySelector('.w115av')) return;
+    var h2 = head.querySelector('h2');
+    var p = h2 ? personByName(h2.textContent) : null;
+    if (!p) { var em = (head.textContent.match(/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i) || [])[0]; if (em) p = W115.byEmail[lower(em)] || null; }
+    if (!p || !p.avatar_url) return;
+    var dot = head.querySelector('.w33dot');
+    if (dot) dot.outerHTML = avatarHtml(p, 52); else if (h2) h2.insertAdjacentHTML('beforebegin', avatarHtml(p, 52));
+  }
+  function decoratePeople() {
+    document.querySelectorAll('#w113tbl tr[data-w113row], #w113tbl2 tr[data-w113row]').forEach(function (tr) {
+      if (tr.querySelector('.w115av')) return;
+      var key = tr.getAttribute('data-w113row') || '';
+      var p = W115.byEmail[lower(key)] || null;
+      var b = tr.querySelector('td:nth-child(2) b');
+      if (!b) return;
+      if (!p) { var n = b.textContent; p = personByName(n) || { name: n }; }
+      var wrap = document.createElement('span');
+      wrap.className = 'w115nm';
+      b.parentNode.insertBefore(wrap, b);
+      wrap.innerHTML = avatarHtml(p, 26);
+      wrap.appendChild(b);
+    });
+  }
+  var pt = null;
+  function armPeople() {
+    var body = document.getElementById('w113body');
+    if (!body || body.dataset.w115mo) return;
+    body.dataset.w115mo = '1';
+    try { new MutationObserver(function () { clearTimeout(pt); pt = setTimeout(decoratePeople, 120); }).observe(body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof renderMyPage === 'function') {
+    var __rm115 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm115.apply(this, arguments);
+      try { if (!W115.loaded) await load(); decorateHome(); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  if (typeof wa33Person === 'function') {
+    var __wp115 = wa33Person;
+    wa33Person = async function () {
+      var r = await __wp115.apply(this, arguments);
+      try { if (!W115.loaded) await load(); decoratePerson(); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp115 = showPanel;
+    showPanel = function (id) {
+      var out = __sp115.apply(this, arguments);
+      try { close(); if (id === 'adminpanel') setTimeout(function () { armPeople(); decoratePeople(); }, 500); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa115 = startApp;
+    startApp = async function () {
+      var r = await __sa115.apply(this, arguments);
+      try { await load(); mount(); decorateHome(); armPeople(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  window.w115Debug = function () { return { loaded: W115.loaded, me: W115.me, people: Object.keys(W115.byId).length, preview: !!W115.preview }; };
+})();
+

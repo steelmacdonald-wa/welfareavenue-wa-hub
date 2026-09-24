@@ -1,0 +1,183 @@
+/* =====================================================================
+   WA v63 editable inventory + sharing with volunteer leaders
+   (03/08/26)
+   1. In the Hub: the Volunteering > Inventory table becomes editable
+      for staff. In, Remaining and Reorder are inline inputs that save
+      on change (change-logged), and there is an add-item row.
+   2. Outside the Hub: "Share an editing link" creates a tokened link
+      to a standalone editor page (hosted in the public web bucket).
+      Volunteer leaders open it without an account, put in their name,
+      update counts or add items, and Save. Writes go through the
+      inventory-share edge function, which validates the token
+      (hub_settings 'inventory_share') and change-logs every save.
+      Revoke kills the link instantly.
+   ===================================================================== */
+(function () {
+  if (window.__wa63) return;
+  window.__wa63 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa63css';
+  st.textContent = '' +
+    '#w63bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f6f8f7;border-radius:12px;padding:9px 14px;margin:0 0 10px;font-size:12.5px;color:#3d4642;}' +
+    '[data-w63share],[data-w63add]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 13px;' +
+    'font-size:11.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.5;text-decoration:none !important;}' +
+    '[data-w63share]:hover,[data-w63add]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w63in{width:100%;max-width:110px;padding:4px 8px;border:1px solid rgba(127,127,127,.35);border-radius:8px;font-size:12.5px;}' +
+    '.w63in.wide{max-width:200px;}';
+  document.head.appendChild(st);
+
+  function wa63Fn() {
+    try { return (typeof FUNCTIONS_BASE !== 'undefined' ? FUNCTIONS_BASE : (typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL + '/functions/v1' : '')); } catch (e) { return ''; }
+  }
+
+  /* ---- editable table for staff ---- */
+  function wa63Decorate() {
+    try {
+      if (!(typeof isStaff === 'function' && isStaff())) return;
+      if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'inventory') return;
+      var panel = document.getElementById('volunteering');
+      if (!panel || panel.querySelector('#w63bar')) return;
+      var wrap = panel.querySelector('.vl-tblwrap');
+      if (!wrap) return;
+      wrap.insertAdjacentHTML('beforebegin',
+        '<div id="w63bar"><b style="color:#1f5f4f">Staff editing is on:</b> change In, Remaining or Reorder and it saves when you leave the box.'
+        + ' <a data-w63add="1">+ Add an item</a>'
+        + ' <a data-w63share="1">Share an editing link with volunteer leaders</a></div>');
+      var inv = (typeof WA_VOL_INV !== 'undefined' ? WA_VOL_INV : []);
+      var html = '<table class="wa-tbl"><thead><tr><th>Category</th><th>Item</th><th>Unit</th><th>In</th><th>Remaining</th><th>Reorder note</th></tr></thead><tbody>'
+        + inv.map(function (r) {
+          return '<tr><td>' + esc(r.category || '') + '</td><td>' + esc(r.item || '') + '</td><td>' + esc(r.unit || '') + '</td>'
+            + '<td><input class="w63in" data-w63f="qty_in" data-w63id="' + r.id + '" value="' + esc(r.qty_in || '') + '" /></td>'
+            + '<td><input class="w63in" data-w63f="qty_remaining" data-w63id="' + r.id + '" value="' + esc(r.qty_remaining || '') + '" /></td>'
+            + '<td><input class="w63in wide" data-w63f="reorder_needed" data-w63id="' + r.id + '" value="' + esc(r.reorder_needed || '') + '" /></td></tr>';
+        }).join('') + '</tbody></table>';
+      wrap.innerHTML = html;
+    } catch (e) { /* non-fatal */ }
+  }
+
+  async function wa63Save(input) {
+    var id = Number(input.getAttribute('data-w63id'));
+    var f = input.getAttribute('data-w63f');
+    if (!id || !f) return;
+    var v = (input.value || '').trim() || null;
+    var patch = { updated_at: new Date().toISOString() };
+    patch[f] = v;
+    var r = await db.from('volunteer_inventory').update(patch).eq('id', id);
+    if (r.error) { toast('Could not save'); return; }
+    try {
+      (typeof WA_VOL_INV !== 'undefined' ? WA_VOL_INV : []).forEach(function (x) { if (String(x.id) === String(id)) x[f] = v; });
+      await db.from('change_log').insert({
+        entity_type: 'inventory', entity_id: String(id), field: f, old_value: null, new_value: v,
+        changed_by: (typeof who === 'function') ? who() : 'staff'
+      });
+    } catch (e) { /* log only */ }
+    toast('Saved');
+  }
+
+  function wa63AddModal() {
+    openModal('<h3>Add an inventory item</h3>'
+      + '<div class="m-row"><div><label>Category</label><input type="text" id="w63c" placeholder="e.g. Serving supplies" /></div>'
+      + '<div><label>Unit</label><input type="text" id="w63u" placeholder="e.g. boxes" /></div></div>'
+      + '<label>Item</label><input type="text" id="w63i" placeholder="What is it" />'
+      + '<div class="m-row"><div><label>In</label><input type="text" id="w63qi" /></div>'
+      + '<div><label>Remaining</label><input type="text" id="w63qr" /></div></div>'
+      + '<div class="m-actions"><button class="btn" id="w63go">Add it</button> <button class="btn ghost" id="w63cx">Cancel</button></div>');
+    document.getElementById('w63cx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w63go').addEventListener('click', async function () {
+      var item = (document.getElementById('w63i').value || '').trim();
+      if (!item) { toast('Name the item'); return; }
+      this.disabled = true;
+      var row = {
+        category: (document.getElementById('w63c').value || '').trim() || null,
+        item: item,
+        unit: (document.getElementById('w63u').value || '').trim() || null,
+        qty_in: (document.getElementById('w63qi').value || '').trim() || null,
+        qty_remaining: (document.getElementById('w63qr').value || '').trim() || null,
+        sort: 9000, updated_at: new Date().toISOString()
+      };
+      var r = await db.from('volunteer_inventory').insert(row);
+      if (r.error) { this.disabled = false; toast('Could not add it'); return; }
+      try {
+        await db.from('change_log').insert({ entity_type: 'inventory', entity_id: 'new', field: 'added', old_value: null, new_value: item, changed_by: (typeof who === 'function') ? who() : 'staff' });
+      } catch (e) { /* log only */ }
+      closeModal();
+      toast('Added');
+      try {
+        if (typeof WA_VOL_INV !== 'undefined') WA_VOL_INV.push(row);
+        var bar = document.getElementById('w63bar');
+        if (bar) bar.remove();
+        if (typeof waVolRenderInv === 'function') waVolRenderInv();
+      } catch (e) { /* fine */ }
+    });
+  }
+
+  async function wa63ShareModal() {
+    openModal('<h3>Share the inventory for editing</h3>'
+      + '<p class="m-sub">One link for your volunteer leaders, no Hub account needed. They add their name, update the counts, and every save is logged in Activity. Revoke kills the link instantly.</p>'
+      + '<div id="w63sh"><p class="m-sub">Making the link...</p></div>'
+      + '<div class="m-actions"><button class="btn ghost" id="w63shc">Close</button></div>');
+    document.getElementById('w63shc').addEventListener('click', function () { closeModal(); });
+    try {
+      var r = await db.functions.invoke('inventory-share', { body: { action: 'create_link' } });
+      if (r.error || !(r.data && r.data.ok)) throw (r.error || new Error('failed'));
+      var host = document.getElementById('w63sh');
+      if (!host) return;
+      host.innerHTML = '<label>The editing link</label>'
+        + '<input type="text" id="w63url" readonly value="' + esc(r.data.url) + '" style="width:100%" />'
+        + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'
+        + '<button class="btn mini" id="w63cp">Copy the link</button>'
+        + '<button class="btn ghost mini" id="w63op">Open it</button>'
+        + '<button class="btn ghost mini" id="w63rv" style="color:#b3402f">Revoke the link</button></div>';
+      document.getElementById('w63cp').addEventListener('click', function () {
+        var f = document.getElementById('w63url');
+        f.select();
+        try { if (typeof waCopyText === 'function') waCopyText(f.value); else document.execCommand('copy'); } catch (e) { /* fine */ }
+        toast('Link copied');
+      });
+      document.getElementById('w63op').addEventListener('click', function () {
+        window.open(document.getElementById('w63url').value, '_blank');
+      });
+      document.getElementById('w63rv').addEventListener('click', async function () {
+        this.disabled = true;
+        var rr = await db.functions.invoke('inventory-share', { body: { action: 'revoke_link' } });
+        if (rr.error) { this.disabled = false; toast('Could not revoke it'); return; }
+        toast('Link revoked; old copies stop working');
+        closeModal();
+      });
+    } catch (e) {
+      var h2 = document.getElementById('w63sh');
+      if (h2) h2.innerHTML = '<p class="m-sub" style="color:#b3402f">Could not make the link, try again in a moment.</p>';
+    }
+  }
+
+  /* ---- wiring ---- */
+  if (!document.body.dataset.wa63Wired) {
+    document.body.dataset.wa63Wired = '1';
+    document.body.addEventListener('change', function (e) {
+      var i = e.target.closest && e.target.closest('[data-w63f]');
+      if (i && typeof isStaff === 'function' && isStaff()) wa63Save(i);
+    });
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w63add]');
+      if (a) { if (typeof isStaff === 'function' && isStaff()) wa63AddModal(); return; }
+      var s = e.target.closest && e.target.closest('[data-w63share]');
+      if (s) { if (typeof isStaff === 'function' && isStaff()) wa63ShareModal(); return; }
+    });
+  }
+
+  if (typeof waVolRenderInv === 'function') {
+    var __inv63 = waVolRenderInv;
+    waVolRenderInv = function () {
+      __inv63.apply(this, arguments);
+      setTimeout(wa63Decorate, 30);
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa63 = startApp;
+    startApp = async function () {
+      await __sa63();
+      try { wa63Decorate(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

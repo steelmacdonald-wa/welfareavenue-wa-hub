@@ -1,0 +1,59 @@
+/* =====================================================================
+   WA v41 the department dropdown returns
+   (30/07/26)
+   The hover menu on department tabs (Overview, Executive decisions,
+   Agendas, Transcripts) was opening UNDERNEATH the new floating sticky
+   navigation (its z-index predates the redesign), so it looked gone.
+   It now paints above everything, opens just below the nav pill even
+   when the tabs wrap to two rows, and matches the new aesthetic.
+   ===================================================================== */
+
+(function () {
+  if (document.getElementById('wa41css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa41css';
+  st.textContent = '' +
+    '.wa-dd{z-index:220 !important;border:none !important;border-radius:14px !important;' +
+    'box-shadow:0 18px 50px -12px rgba(20,48,43,.3) !important;overflow:hidden;padding:5px;min-width:210px;}' +
+    '.wa-dd a{border-radius:9px;font-size:12.8px;padding:8px 12px;}' +
+    '.wa-dd a:hover{background:rgba(31,95,79,.08);color:#1f5f4f;}';
+  document.head.appendChild(st);
+
+  /* after the original hover code positions the menu, snap it below the
+     whole nav pill so first-row tabs do not open it behind the second row */
+  /* v40's tab gating hid every nav button it did not recognize, which
+     swallowed the Workspace menu (agendas, important info, requests).
+     Gate only the tabs the role system actually knows about. */
+  if (typeof wa40Enforce === 'function' && typeof WA40_TABS !== 'undefined') {
+    var __en41 = wa40Enforce;
+    wa40Enforce = function () {
+      __en41();
+      var known = WA40_TABS.concat(['adminpanel']);
+      document.querySelectorAll('#tabBar .tab').forEach(function (t) {
+        var id = t.dataset.tab;
+        if (!id || known.indexOf(id) < 0) t.style.display = '';
+      });
+    };
+  }
+
+  var bar = document.getElementById('tabBar');
+  if (bar && !bar.dataset.wa41) {
+    bar.dataset.wa41 = '1';
+    bar.addEventListener('mouseover', function (e) {
+      var tab = e.target.closest && e.target.closest('.tab[data-tab]');
+      if (!tab) return;
+      setTimeout(function () {
+        var dd = document.querySelector('.wa-dd');
+        var nav = document.querySelector('nav.wa-nav');
+        if (!dd || !nav || dd.style.display === 'none' || !dd.style.display) return;
+        var nr = nav.getBoundingClientRect();
+        var tr = tab.getBoundingClientRect();
+        dd.style.position = 'fixed';
+        dd.style.top = Math.round(nr.bottom + 4) + 'px';
+        var left = Math.round(tr.left);
+        var maxLeft = window.innerWidth - 230;
+        dd.style.left = Math.max(8, Math.min(left, maxLeft)) + 'px';
+      }, 0);
+    });
+  }
+})();

@@ -1,0 +1,123 @@
+/* =====================================================================
+   WA v56 gather hours on demand
+   (03/08/26)
+   The Commitment tab gets an update bar: when the hours were last
+   gathered from Slack, and an "Update hours from Slack" button that
+   runs the hours-pull right now (instead of waiting for the schedule),
+   waits for the fresh numbers to land, reloads them, and re-renders
+   the dashboard.
+   ===================================================================== */
+(function () {
+  if (window.__wa56) return;
+  window.__wa56 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa56css';
+  st.textContent = '' +
+    '.w56bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#7b8a86;margin:0 0 8px;}' +
+    '[data-w56go]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 13px;' +
+    'font-size:11.5px;color:#1f5f4f;cursor:pointer;font-weight:700;line-height:1.5;}' +
+    '[data-w56go]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '[data-w56go][disabled]{opacity:.6;cursor:default;}';
+  document.head.appendChild(st);
+
+  function wa56MaxUpd() {
+    var top = null;
+    (typeof DB_HOURS !== 'undefined' ? DB_HOURS : []).forEach(function (h) {
+      if (h.updated_at && (!top || h.updated_at > top)) top = h.updated_at;
+    });
+    return top;
+  }
+  function wa56When(iso) {
+    if (!iso) return 'not yet';
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' '
+        + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return String(iso).slice(0, 16); }
+  }
+
+  function wa56Ensure() {
+    try {
+      var sec = document.getElementById('w52hours');
+      if (!sec || document.getElementById('w56bar')) return;
+      sec.insertAdjacentHTML('afterbegin',
+        '<div class="w56bar" id="w56bar"><span>Hours last gathered from Slack: <b style="color:#3d4642">' + wa56When(wa56MaxUpd()) + '</b></span>'
+        + '<button data-w56go="1">Update hours from Slack</button>'
+        + '<span style="font-size:11px">also runs automatically on the schedule</span></div>');
+    } catch (e) { /* non-fatal */ }
+  }
+
+  async function wa56Top() {
+    try {
+      var r = await db.from('slack_hours').select('updated_at').order('updated_at', { ascending: false }).limit(1);
+      return (r && r.data && r.data[0] && r.data[0].updated_at) || null;
+    } catch (e) { return null; }
+  }
+
+  var WA56_BUSY = false;
+  async function wa56Run(btn) {
+    if (WA56_BUSY) return;
+    WA56_BUSY = true;
+    btn.disabled = true;
+    btn.textContent = 'Updating from Slack...';
+    var before = await wa56Top();
+    var invoked = true;
+    try { await db.functions.invoke('hours-pull', { body: {} }); } catch (e) { invoked = false; }
+    var fresh = false;
+    if (invoked) {
+      var deadline = Date.now() + 100000;
+      while (Date.now() < deadline) {
+        await new Promise(function (res) { setTimeout(res, 6000); });
+        var top = await wa56Top();
+        if (top && top !== before) { fresh = true; break; }
+      }
+    }
+    /* reload the hours window the app uses (same as loadAll) */
+    try {
+      var rr = await db.from('slack_hours').select('*').gte('week_start', new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10));
+      if (rr && rr.data) DB_HOURS = rr.data;
+    } catch (e) { /* keep old data */ }
+    WA56_BUSY = false;
+    toast(fresh ? 'Hours updated from Slack' : (invoked ? 'The Slack pull is still finishing, check back in a minute' : 'Could not reach the Slack pull'));
+    /* re-render the tab through the normal path (v52 rebuild, v54 rewrite) */
+    var tab = document.querySelector('.w47tab[data-w47v="hours"]');
+    var sec = document.getElementById('w52hours');
+    if (tab && sec && sec.style.display !== 'none') tab.click();
+  }
+
+  if (!document.body.dataset.wa56Wired) {
+    document.body.dataset.wa56Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var go = e.target.closest && e.target.closest('[data-w56go]');
+      if (go) { wa56Run(go); return; }
+      var tb = e.target.closest && e.target.closest('.w47tab');
+      /* after v52 rebuilds and v54 rewrites, put the bar back */
+      if (tb && tb.getAttribute('data-w47v') === 'hours') setTimeout(wa56Ensure, 0);
+    });
+  }
+  function wa56Watch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!panel.dataset.w56mo) {
+      panel.dataset.w56mo = '1';
+      var mo = new MutationObserver(function () { wa56Ensure(); });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    wa56Ensure();
+  }
+  if (typeof showPanel === 'function') {
+    var __sp56 = showPanel;
+    showPanel = function (id) {
+      __sp56(id);
+      try { if (id === 'hrcentre') wa56Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa56 = startApp;
+    startApp = async function () {
+      await __sa56();
+      try { wa56Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

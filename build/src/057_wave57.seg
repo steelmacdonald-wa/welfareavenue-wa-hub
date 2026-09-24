@@ -1,0 +1,278 @@
+/* =====================================================================
+   WA v57 bulk training assignment + folded onboarding subtasks
+   (03/08/26)
+   1. Bulk assign trainings: a "Bulk assign" flow in the HR centre
+      Trainings dashboard. Pick the audience (specific people with a
+      searchable list, a whole team, or the whole organization), pick
+      the trainings, and everything lands in one shot. People who
+      already have a training keep their record (done stays done,
+      nothing duplicates); the toast says how many were new.
+   2. Folded subtasks: in onboarding checklists (the personal one on
+      the Training tab, the staff view of someone's checklist, and the
+      master onboarding editor in the HR centre) parent steps now
+      carry a "N subtasks" dropdown pill and their subtasks stay
+      hidden until opened, so the list reads short.
+   ===================================================================== */
+(function () {
+  if (window.__wa57) return;
+  window.__wa57 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa57css';
+  st.textContent = '' +
+    '.w57tg{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:0 9px;margin-left:8px;' +
+    'font-size:10.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.7;vertical-align:middle;text-decoration:none !important;}' +
+    '.w57tg:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '[data-w57bulk]{display:inline-block;background:#1f5f4f;color:#fff !important;border-radius:999px;padding:3px 13px;margin-left:8px;' +
+    'font-size:11.5px;cursor:pointer;font-weight:700;line-height:1.5;text-decoration:none !important;}' +
+    '[data-w57bulk]:hover{background:#2c7a66;}' +
+    '.w57who label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}' +
+    '.w57cnt{font-size:11.5px;color:#7b8a86;margin-left:6px;}';
+  document.head.appendChild(st);
+
+  /* ================= folded subtasks ================= */
+  function wa57Fold(root) {
+    try {
+      if (!root || typeof WA37 === 'undefined') return;
+      var tmplById = {};
+      (WA37.tmpl || []).forEach(function (t) { tmplById[String(t.id)] = t; });
+      var stepTmpl = {};
+      (WA37.steps || []).forEach(function (s) { stepTmpl[String(s.id)] = String(s.template_id); });
+      var rows = Array.prototype.slice.call(root.querySelectorAll('.w37step, .w46st'));
+      var byTmpl = {};
+      rows.forEach(function (row) {
+        var tid = row.dataset.w57id || null;
+        if (!tid) {
+          var chk = row.querySelector('[data-w37chk]');
+          if (chk) tid = stepTmpl[String(chk.getAttribute('data-w37chk'))] || null;
+          if (!tid) {
+            var e = row.querySelector('[data-w37e]');
+            if (e) tid = String(e.getAttribute('data-w37e'));
+          }
+          if (tid) row.dataset.w57id = tid;
+        }
+        if (tid) byTmpl[String(tid)] = row;
+      });
+      rows.forEach(function (row) {
+        var tid = row.dataset.w57id;
+        if (!tid) return;
+        var t = tmplById[String(tid)];
+        if (!t || !t.parent_id || !byTmpl[String(t.parent_id)]) return;
+        if (!row.hasAttribute('data-w57p')) {
+          row.setAttribute('data-w57p', String(t.parent_id));
+          if (row.dataset.w57shown !== '1') row.style.display = 'none';
+        }
+      });
+      rows.forEach(function (row) {
+        var tid = row.dataset.w57id;
+        if (!tid || row.querySelector('.w57tg')) return;
+        var kids = root.querySelectorAll('[data-w57p="' + tid + '"]');
+        if (!kids.length) return;
+        var open = kids[0].style.display !== 'none';
+        var nm = row.querySelector('.nm') || row;
+        var a = document.createElement('a');
+        a.className = 'w57tg';
+        a.setAttribute('data-w57t', tid);
+        a.textContent = (open ? '\u25BE ' : '\u25B8 ') + kids.length + ' subtask' + (kids.length === 1 ? '' : 's');
+        nm.appendChild(a);
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  function wa57FoldAll() {
+    document.querySelectorAll('.w37wbody').forEach(wa57Fold);
+    var master = document.getElementById('w46master');
+    if (master) wa57Fold(master);
+  }
+
+  /* ================= bulk training assignment ================= */
+  function wa57Depts() {
+    var seen = {}, out = [];
+    (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).forEach(function (p) {
+      var d = p.department || '';
+      if (d && !seen[d]) { seen[d] = 1; out.push(d); }
+    });
+    return out;
+  }
+  function wa57BulkModal() {
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice()
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    var dl = (typeof DEPT_LABEL !== 'undefined') ? DEPT_LABEL : {};
+    var trainings = (typeof WA36_TRAININGS !== 'undefined' ? WA36_TRAININGS : []).slice();
+    trainings.sort(function (a, b) { return String(a.category).localeCompare(String(b.category)) || String(a.title).localeCompare(String(b.title)); });
+    var html = '<h3>Bulk assign trainings</h3>'
+      + '<p class="m-sub">Pick who, pick what, assign in one go. Anyone who already has a training keeps their record; done stays done.</p>'
+      + '<label>Who gets them</label>'
+      + '<select id="w57scope">'
+      + '<option value="people">Specific people</option>'
+      + '<option value="team">A whole team</option>'
+      + '<option value="org">The whole organization (' + people.length + ' people)</option>'
+      + '</select>'
+      + '<select id="w57dept" style="display:none;margin-top:6px">'
+      + wa57Depts().map(function (d) { return '<option value="' + esc(d) + '">' + esc(dl[d] || d) + '</option>'; }).join('')
+      + '</select>'
+      + '<div id="w57people" class="w57who" style="max-height:170px;overflow:auto;margin-top:6px;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px">'
+      + people.map(function (p) {
+        return '<label><input type="checkbox" class="w57pcb" value="' + esc(p.name) + '" style="width:15px;height:15px" /> '
+          + esc(p.name) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(dl[p.department] || p.department || '') + '</span></label>';
+      }).join('')
+      + '</div>'
+      + '<label style="margin-top:10px">Trainings to assign</label>'
+      + '<input type="search" id="w57q" placeholder="Search trainings..." style="width:100%;margin:2px 0 6px" />'
+      + '<div style="max-height:190px;overflow:auto;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px" class="w57who">'
+      + trainings.map(function (t) {
+        return '<label data-w57tr="1" data-search="' + esc((t.title + ' ' + (t.category || '')).toLowerCase()) + '">'
+          + '<input type="checkbox" class="w57tcb" value="' + t.id + '" style="width:15px;height:15px" /> '
+          + esc(t.title) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span></label>';
+      }).join('')
+      + '</div>'
+      + '<div class="m-actions"><button class="btn" id="w57go">Assign them</button> <button class="btn ghost" id="w57cx">Cancel</button></div>';
+    openModal(html);
+    var scope = document.getElementById('w57scope');
+    scope.addEventListener('change', function () {
+      document.getElementById('w57dept').style.display = scope.value === 'team' ? '' : 'none';
+      document.getElementById('w57people').style.display = scope.value === 'people' ? '' : 'none';
+    });
+    document.getElementById('w57q').addEventListener('input', function () {
+      var q = this.value.toLowerCase();
+      document.querySelectorAll('[data-w57tr]').forEach(function (l) {
+        l.style.display = !q || l.getAttribute('data-search').indexOf(q) >= 0 ? 'flex' : 'none';
+      });
+    });
+    document.getElementById('w57cx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w57go').addEventListener('click', function () { wa57Go(this); });
+  }
+  async function wa57Go(btn) {
+    var scope = (document.getElementById('w57scope') || {}).value || 'people';
+    var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+    var targets = [];
+    if (scope === 'org') targets = people.map(function (p) { return p.name; });
+    else if (scope === 'team') {
+      var d = (document.getElementById('w57dept') || {}).value;
+      targets = people.filter(function (p) { return p.department === d; }).map(function (p) { return p.name; });
+    } else {
+      document.querySelectorAll('.w57pcb:checked').forEach(function (c) { targets.push(c.value); });
+    }
+    var tids = [];
+    document.querySelectorAll('.w57tcb:checked').forEach(function (c) { tids.push(Number(c.value)); });
+    if (!targets.length) { toast('Pick who gets the trainings'); return; }
+    if (!tids.length) { toast('Pick at least one training'); return; }
+    var have = {};
+    (typeof WA36_PROG !== 'undefined' ? WA36_PROG : []).forEach(function (p) {
+      have[String(p.training_id) + '|' + String(p.person_name || '').toLowerCase()] = 1;
+    });
+    var by = (typeof who === 'function') ? who() : 'HR';
+    var now = new Date().toISOString();
+    var rows = [], skipped = 0;
+    targets.forEach(function (nm) {
+      tids.forEach(function (tid) {
+        if (have[String(tid) + '|' + String(nm).toLowerCase()]) { skipped++; return; }
+        rows.push({ training_id: tid, person_name: nm, status: 'assigned', assigned_by: by, updated_at: now });
+      });
+    });
+    if (!rows.length) { toast('Everyone picked already has those trainings'); return; }
+    btn.disabled = true;
+    var r = await db.from('training_progress').upsert(rows, { onConflict: 'training_id,person_name' });
+    btn.disabled = false;
+    if (r.error) { toast('Could not assign them'); return; }
+    try {
+      await db.from('change_log').insert({
+        entity_type: 'training', entity_id: 'bulk', field: 'bulk_assign',
+        old_value: null,
+        new_value: tids.length + ' training' + (tids.length === 1 ? '' : 's') + ' to ' + targets.length + ' people (' + scope + '): ' + rows.length + ' new',
+        changed_by: by
+      });
+    } catch (e) { /* log only */ }
+    closeModal();
+    toast('Assigned ' + rows.length + ' new' + (skipped ? ', ' + skipped + ' already in place' : ''));
+    try { if (typeof wa36Load === 'function') await wa36Load(true); } catch (e) { /* fine */ }
+    try { location.hash = '#hrcentre/training'; applyHash(); } catch (e) { /* fine */ }
+  }
+
+  /* the entry pill in the Trainings dashboard */
+  function wa57Ensure() {
+    try {
+      var add = document.querySelector('#w46body [data-w46addtr]');
+      if (add && !document.querySelector('[data-w57bulk]')) {
+        add.insertAdjacentHTML('afterend', ' <a data-w57bulk="1">Bulk assign (teams, people, or everyone)</a>');
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ================= wiring ================= */
+  if (!document.body.dataset.wa57Wired) {
+    document.body.dataset.wa57Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var tg = e.target.closest && e.target.closest('[data-w57t]');
+      if (tg) {
+        e.preventDefault();
+        var tid = tg.getAttribute('data-w57t');
+        var root = (tg.closest && (tg.closest('.w37wbody') || tg.closest('#w46master'))) || document;
+        var kids = root.querySelectorAll('[data-w57p="' + tid + '"]');
+        if (!kids.length) return;
+        var show = kids[0].style.display === 'none';
+        kids.forEach(function (k) {
+          k.style.display = show ? '' : 'none';
+          k.dataset.w57shown = show ? '1' : '';
+        });
+        tg.textContent = (show ? '\u25BE ' : '\u25B8 ') + kids.length + ' subtask' + (kids.length === 1 ? '' : 's');
+        return;
+      }
+      var bk = e.target.closest && e.target.closest('[data-w57bulk]');
+      if (bk) { if (typeof isStaff === 'function' && isStaff()) wa57BulkModal(); return; }
+    });
+  }
+
+  if (typeof wa37Mount === 'function') {
+    var __mt57 = wa37Mount;
+    wa37Mount = async function () {
+      var out = await __mt57.apply(this, arguments);
+      try { wa57FoldAll(); } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  if (typeof wa37OpenModal === 'function') {
+    var __om57 = wa37OpenModal;
+    wa37OpenModal = function () {
+      var out = __om57.apply(this, arguments);
+      setTimeout(function () {
+        var m = document.getElementById('w37modal');
+        if (m) m.querySelectorAll('.w37wbody').forEach(wa57Fold);
+      }, 60);
+      return out;
+    };
+  }
+  function wa57Watch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!panel.dataset.w57mo) {
+      panel.dataset.w57mo = '1';
+      var mo = new MutationObserver(function () {
+        wa57Ensure();
+        var master = document.getElementById('w46master');
+        if (master) wa57Fold(master);
+      });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    wa57Ensure();
+    var master = document.getElementById('w46master');
+    if (master) wa57Fold(master);
+  }
+  if (typeof showPanel === 'function') {
+    var __sp57 = showPanel;
+    showPanel = function (id) {
+      __sp57(id);
+      try {
+        if (id === 'hrcentre') wa57Watch();
+        if (id === 'training') setTimeout(wa57FoldAll, 300);
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa57 = startApp;
+    startApp = async function () {
+      await __sa57();
+      try { wa57Watch(); } catch (e) { /* non-fatal */ }
+      try { wa57FoldAll(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

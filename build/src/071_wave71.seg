@@ -1,0 +1,195 @@
+/* =====================================================================
+   WA v71 department tasks split into workstream tabs
+   (04/08/26)
+   Every department page gets a tab row above its tasks: All plus the
+   department's workstreams (marketing: Website, Content, Digital
+   advertising and Google Ads, Branding; fundraising: Fundraising
+   events, Donor program, Grants; Ops Montreal: General, Logistics,
+   Inventory, Program development; Ops Toronto: General, Logistics;
+   HR: Organizational structure, Onboarding and recruitment, Trainings,
+   Team and community). Picking a tab filters ALL views (list, board,
+   calendar, the assignee filter) because the filter sits inside
+   getTasks during the render. Tabs show open counts; unfiled tasks
+   live in General; unknown subsections get their own auto tab so
+   nothing hides. The task modal's Workstream select now always offers
+   the canonical list (SECTIONS[..].subsections is patched at load).
+   Every existing task feature (comments, project pill, due pill,
+   flags, confidential, assignees) is untouched; the rows just get a
+   cleaner card look.
+   ===================================================================== */
+(function () {
+  if (window.__wa71) return;
+  window.__wa71 = 1;
+
+  var W71_WS = {
+    marketing: [
+      ['Website', 'The welfareavenue.com site: build, copy, SEO.'],
+      ['Content', 'Posts, reels, the calendar, and channel content.'],
+      ['Digital advertising and Google Ads', 'Paid and grant-funded advertising, tracking and results.'],
+      ['Branding', 'The brand refresh: identity, templates, branded assets.']
+    ],
+    fundraising: [
+      ['Fundraising events', 'Flag Football, Rally Paper, the Gift Basket Drive and friends.'],
+      ['Donor program', 'Donor relationships, stewardship, Keela, recurring giving.'],
+      ['Grants', 'Applications, reports, and funder relationships.']
+    ],
+    opsmtl: [
+      ['General', 'Day to day operations work.'],
+      ['Logistics', 'Transport, pickups, equipment and event logistics.'],
+      ['Inventory', 'Supplies, storage, and reordering.'],
+      ['Program development', "Shima's team: new programs and partnerships."]
+    ],
+    opsto: [
+      ['General', 'Day to day Toronto operations.'],
+      ['Logistics', 'Toronto transport, pickups and event logistics.']
+    ],
+    hr: [
+      ['Organizational structure', 'Policies, org chart, roles and accountability.'],
+      ['Onboarding and recruitment', 'Finding people and getting them started.'],
+      ['Trainings', 'The catalog, training paths, and assignments.'],
+      ['Team and community', 'Team bonding, EDI, and community building.']
+    ]
+  };
+
+  var st = document.createElement('style');
+  st.id = 'wa71css';
+  st.textContent = '' +
+    '.w71tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px;}' +
+    '.w71tab{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;color:#3d4642;cursor:pointer;line-height:1.4;}' +
+    '.w71tab .n{font-size:10px;font-weight:800;opacity:.55;margin-left:4px;}' +
+    '.w71tab.on{color:#fff;border-color:transparent;}' +
+    /* task rows: a calmer card look, same functionality */
+    '.checklist li{background:#fff;border:1px solid var(--wa-line);border-radius:10px;padding:9px 12px;margin:0 0 7px;list-style:none;transition:box-shadow .12s;}' +
+    '.checklist li:hover{box-shadow:0 3px 10px rgba(20,48,43,.08);}' +
+    '.checklist{padding-left:0;}' +
+    '.subsection{margin:0 0 14px;}' +
+    '.subsection .subhead{margin-bottom:2px;}';
+  document.head.appendChild(st);
+
+  /* ---- the task modal always offers the canonical workstreams ---- */
+  try {
+    if (typeof SECTIONS !== 'undefined') {
+      Object.keys(W71_WS).forEach(function (d) {
+        if (!SECTIONS[d]) return;
+        var col = SECTIONS[d].color || '#2c7a66';
+        var existing = (SECTIONS[d].subsections || []).map(function (s) { return s.title; });
+        var subs = W71_WS[d].map(function (w) {
+          return { title: w[0], color: col, summary: w[1] };
+        });
+        /* keep any pre-existing workstream not in the canonical list */
+        (SECTIONS[d].subsections || []).forEach(function (s) {
+          if (W71_WS[d].map(function (w) { return w[0]; }).indexOf(s.title) < 0) subs.push(s);
+        });
+        SECTIONS[d].subsections = subs;
+      });
+    }
+  } catch (e) { /* non-fatal */ }
+
+  var WA71_WS = {};      /* dept -> active tab ('All' default) */
+  var WA71_ACTIVE = null;
+
+  function w71Canon(id) {
+    return (W71_WS[id] || []).map(function (w) { return w[0]; });
+  }
+  function w71Match(t, ws) {
+    if (ws === 'General') return !t.subsection || t.subsection === 'General';
+    return t.subsection === ws;
+  }
+  function w71Tabs(id) {
+    var canon = w71Canon(id);
+    var tabs = canon.slice();
+    if (tabs.indexOf('General') < 0) tabs.push('General');
+    /* unknown subsections in the data become their own tabs */
+    (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).forEach(function (t) {
+      if (t.department === id && t.subsection && tabs.indexOf(t.subsection) < 0) tabs.push(t.subsection);
+    });
+    return tabs;
+  }
+
+  /* ---- the filter lives inside getTasks, so every view obeys it ---- */
+  if (typeof getTasks === 'function') {
+    var __gt71 = getTasks;
+    getTasks = function (id) {
+      var rows = __gt71(id);
+      var ws = WA71_WS[id];
+      if (WA71_ACTIVE !== id || !ws || ws === 'All') return rows;
+      return rows.filter(function (t) { return w71Match(t, ws); });
+    };
+  }
+
+  function w71Inject(id) {
+    try {
+      var el = document.getElementById(id);
+      var card = el ? el.querySelector('.dept-card') : null;
+      if (!card || card.querySelector('.w71tabs')) return;
+      var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#2c7a66';
+      var cur = WA71_WS[id] || 'All';
+      var open = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) {
+        return t.department === id && !t.done;
+      });
+      var tabs = w71Tabs(id);
+      var html = '<div class="w71tabs" data-w71d="' + esc(id) + '">'
+        + '<button class="w71tab' + (cur === 'All' ? ' on' : '') + '" data-w71t="All"'
+        + (cur === 'All' ? ' style="background:' + col + '"' : '') + '>All<span class="n">' + open.length + '</span></button>'
+        + tabs.map(function (ws) {
+          var n = open.filter(function (t) { return w71Match(t, ws); }).length;
+          return '<button class="w71tab' + (cur === ws ? ' on' : '') + '" data-w71t="' + esc(ws) + '"'
+            + (cur === ws ? ' style="background:' + col + '"' : '') + '>' + esc(ws) + '<span class="n">' + n + '</span></button>';
+        }).join('') + '</div>';
+      var anchor = card.querySelector('.wa21-ctl');
+      if (!anchor) {
+        card.querySelectorAll('h3.block').forEach(function (h) {
+          if (!anchor && (h.textContent.indexOf('Workstreams') >= 0 || h.textContent.indexOf('Open items') >= 0)) anchor = h;
+        });
+      }
+      if (anchor) anchor.insertAdjacentHTML('beforebegin', html);
+      else card.insertAdjacentHTML('beforeend', html);
+
+      /* on a specific tab, hide the other workstream blocks in list view */
+      if (cur !== 'All') {
+        card.querySelectorAll('.subsection').forEach(function (s) {
+          var h = s.querySelector('.subhead');
+          var t = h ? h.textContent.trim() : '';
+          var isGen = t.indexOf('General') === 0;
+          var show = (t === cur) || (cur === 'General' && isGen);
+          s.style.display = show ? '' : 'none';
+        });
+        card.querySelectorAll('h3.block').forEach(function (h) {
+          if (h.textContent.indexOf('Workstreams') >= 0) h.style.display = 'none';
+        });
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (!document.body.dataset.wa71Wired) {
+    document.body.dataset.wa71Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var b = e.target.closest && e.target.closest('[data-w71t]');
+      if (!b) return;
+      var bar = b.closest('.w71tabs');
+      var id = bar ? bar.getAttribute('data-w71d') : null;
+      if (!id) return;
+      WA71_WS[id] = b.getAttribute('data-w71t');
+      if (typeof renderSection === 'function') renderSection(id);
+    });
+  }
+
+  if (typeof renderSection === 'function') {
+    var __rs71 = renderSection;
+    renderSection = function (id) {
+      WA71_ACTIVE = id;
+      try { __rs71.apply(this, arguments); }
+      finally { WA71_ACTIVE = null; }
+      w71Inject(id);
+    };
+  }
+  if (typeof renderAllSections === 'function') {
+    var __ras71 = renderAllSections;
+    renderAllSections = function () {
+      __ras71.apply(this, arguments);
+      try {
+        (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).forEach(function (d) { w71Inject(d); });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

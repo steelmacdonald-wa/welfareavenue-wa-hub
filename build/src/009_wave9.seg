@@ -1,0 +1,140 @@
+/* =====================================================================
+   WA v9 UI enhancements (25/07/26)
+   Personal home page ("My page"): keyed to the signed-in user.
+   Their open tasks with due state, their team (people whose roles they
+   lead) with overdue counts, tailored updates from their department and
+   mentions, incoming requests for their department, and tracked time
+   commitments for them and their team. Staff land here by default;
+   the decisions Overview stays one click away.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.mp-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px;}'
+    + '.mp-head h2{margin:0;}'
+    + '.mp-chips{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px;}'
+    + '.mp-chip{background:#faf9f4;border:1px solid var(--wa-line);border-radius:10px;padding:7px 13px;font-size:12.5px;cursor:pointer;}'
+    + '.mp-chip b{font-size:15px;margin-right:5px;}'
+    + '.mp-chip.warn b{color:#b3402f;}'
+    + '.mp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;align-items:start;}'
+    + '.mp-sec{background:#fff;border:1px solid var(--wa-line);border-radius:12px;padding:13px 15px;}'
+    + '.mp-sec h3{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-green);}'
+    + '.mp-task{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;}'
+    + '.mp-task:first-of-type{border-top:none;}'
+    + '.mp-due{font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;background:#e8efe9;color:#2c5a44;flex:0 0 auto;}'
+    + '.mp-due.over{background:#f6dcd6;color:#8c2c1c;}'
+    + '.mp-due.soon{background:#f6ecd2;color:#7a5a12;}'
+    + '.mp-member{padding:7px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;}'
+    + '.mp-member:first-of-type{border-top:none;}'
+    + '.mp-member .nm{font-weight:700;}'
+    + '.mp-member .meta{color:var(--wa-muted);font-size:11.5px;}'
+    + '.mp-upd{padding:6px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;cursor:pointer;}'
+    + '.mp-upd:first-of-type{border-top:none;}'
+    + '.mp-upd:hover{color:var(--wa-green);}'
+    + '.mp-upd .when{color:var(--wa-muted);font-size:11px;}'
+    + '.mp-hours{width:100%;border-collapse:collapse;font-size:12px;}'
+    + '.mp-hours td,.mp-hours th{padding:4px 6px;border-bottom:1px dashed var(--wa-line);text-align:left;}'
+    + '.mp-hours th{color:var(--wa-muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;}'
+    + '.mp-empty{color:var(--wa-muted);font-size:12.5px;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('mypage')) {
+    var sec = document.createElement('section');
+    sec.id = 'mypage';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><div id="mpBody"><p class="read">Loading your page...</p></div></div>';
+    main.appendChild(sec);
+  }
+})();
+
+var WA_ROSTER = [], WA_ME = null, WA_MY_TEAM = [];
+function waFirstTok(s) { return (s || '').trim().split(/\s+/)[0].toLowerCase(); }
+function waRolePrefix(role) {
+  var r = (role || '').toLowerCase();
+  if (r.indexOf('program development') === 0) return 'pd';
+  if (r.indexOf('operations') === 0) return 'ops';
+  return null;
+}
+async function waResolveMe() {
+  if (WA_ME) return;
+  try {
+    var r = await db.from('team_members').select('name, email, department, role').eq('active', true);
+    WA_ROSTER = (r.data || []);
+  } catch (e) { WA_ROSTER = []; }
+  var em = (USER.email || '').toLowerCase();
+  WA_ME = WA_ROSTER.find(function (m) { return (m.email || '').toLowerCase() === em && em; }) || null;
+  if (!WA_ME) {
+    var ft = waFirstTok(USER.name || em.split('@')[0].split('.')[0]);
+    WA_ME = WA_ROSTER.find(function (m) { return waFirstTok(m.name) === ft; }) || null;
+  }
+  WA_MY_TEAM = [];
+  if (!WA_ME) return;
+  var leadRe = /\b(lead|leader|director|manager|chair|co-)/i;
+  var isExec = WA_ME.department === 'board';
+  var isLead = isExec || leadRe.test(WA_ME.role || '');
+  if (isExec) {
+    WA_MY_TEAM = WA_ROSTER.filter(function (m) { return m !== WA_ME && leadRe.test(m.role || ''); });
+  } else if (isLead) {
+    var mine = WA_ROSTER.filter(function (m) { return m !== WA_ME && m.department === WA_ME.department; });
+    var myPfx = WA_ME.department === 'opsmtl' ? waRolePrefix(WA_ME.role) : null;
+    WA_MY_TEAM = myPfx ? mine.filter(function (m) { return waRolePrefix(m.role) === myPfx; }) : mine;
+  }
+}
+function waTasksOf(name) {
+  var ft = waFirstTok(name);
+  return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) {
+    return !t.done && (t.owner || '').toLowerCase().indexOf(ft) >= 0;
+  });
+}
+function waDueBadge(t) {
+  if (!t.due_date) return '<span class="mp-due">no date</span>';
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var due = new Date(t.due_date + 'T00:00:00');
+  var diff = Math.round((due - today) / 86400000);
+  if (diff < 0) return '<span class="mp-due over">' + (-diff) + 'd overdue</span>';
+  if (diff === 0) return '<span class="mp-due soon">due today</span>';
+  if (diff <= 7) return '<span class="mp-due soon">due in ' + diff + 'd</span>';
+  return '<span class="mp-due">due ' + esc(t.due_date) + '</span>';
+}
+function waTaskLine(t) {
+  return '<div class="mp-task">' + waDueBadge(t) + '<span>' + esc(t.title) + '</span>'
+    + '<span style="color:var(--wa-muted);font-size:11px;margin-left:auto;">' + (DEPT_LABEL[t.department] || '') + '</span></div>';
+}
+
+async function renderMyPage() { /* superseded: wave74 rebuilt My page and replaced this binding outright; original body removed in Phase 0 compaction */ }
+
+(function () {
+  var __ah9 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'mypage') { showPanel('mypage'); renderMyPage(); return; }
+    if ((!h || h.indexOf('access_token=') >= 0) && isStaff()) { showPanel('mypage'); renderMyPage(); return; }
+    __ah9();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#mypage') {
+      try { showPanel('mypage'); renderMyPage(); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa9 = startApp;
+  startApp = async function () {
+    await __sa9();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="mypage"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'mypage';
+          b.innerHTML = '<span class="tabdot" style="background:#4a7c59"></span>My page';
+          bar.insertBefore(b, bar.firstChild);
+        }
+        if (!location.hash || location.hash === '#' ) { showPanel('mypage'); renderMyPage(); }
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

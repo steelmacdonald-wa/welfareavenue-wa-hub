@@ -1,0 +1,162 @@
+/* =====================================================================
+   WA v107 Drive in the Hub (07/08/26)
+   =====================================================================
+   The wa-hub-drive service account now indexes 8 shared drives into
+   wa_drive_docs (nightly drive-pull sync). This wave puts that to work:
+   1. Search everything now also searches Drive: file names AND the
+      extracted text of Google Docs. Results appear under the Hub's own
+      matches with a Drive tag and open the document in a new tab.
+      (Staff-scoped by RLS: members simply get no Drive rows.)
+   2. Source documents in Drive: the volunteering SOP page and the HR
+      centre's Onboarding section link to their source docs, driven by
+      app_config 'drive_source_links' so the list is editable without a
+      rebuild. "Or at least provide links to them" (Steel): the local
+      copies stay (no removals), the links sit on top.
+   ===================================================================== */
+(function () {
+  if (window.__wa107) return; window.__wa107 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '.sr .sr-type.w107d{background:rgba(66,133,244,.12);color:#3367d6;}' +
+    '.w107src{margin:2px 0 10px;font-size:12px;color:var(--wa-muted,#8592a3);}' +
+    '.w107src a{color:#2c7a66;font-weight:600;text-decoration:none;border:1px solid rgba(44,122,102,.35);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;display:inline-block;background:#fff;}' +
+    '.w107src a:hover{background:rgba(44,122,102,.08);}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. Drive results in search everything ---------- */
+  var W107_SEQ = 0;
+  async function w107Drive(q) {
+    var seq = ++W107_SEQ;
+    try {
+      if (!q || q.length < 3) return;
+      var ql = q.toLowerCase();
+      var r = await db.from('wa_drive_docs')
+        .select('file_id, name, url, mime')
+        .or('name.ilike.%' + q + '%,text_content.ilike.%' + q + '%')
+        .limit(30);
+      var rows = ((r && r.data) || []).filter(function (d) {
+        /* belt and braces for environments where ilike is not applied */
+        return (d.name || '').toLowerCase().indexOf(ql) >= 0 || true;
+      }).slice(0, 5);
+      if (seq !== W107_SEQ) return; /* a newer query superseded this one */
+      var pop = document.getElementById('searchResults');
+      if (!pop || pop.style.display === 'none') return;
+      if (pop.querySelector('[data-w107]')) return;
+      if (!rows.length) return;
+      /* replace the no-matches row if it is all there is */
+      var empty = !pop.querySelector('.sr[data-hash]') ? pop.querySelector('.sr') : null;
+      if (empty && (empty.textContent || '').indexOf('No matches') >= 0) empty.remove();
+      rows.forEach(function (d) {
+        var div = document.createElement('div');
+        div.className = 'sr';
+        div.setAttribute('data-w107', d.file_id);
+        var kind = d.mime === 'application/vnd.google-apps.document' ? 'Doc'
+          : d.mime === 'application/vnd.google-apps.spreadsheet' ? 'Sheet'
+          : d.mime === 'application/vnd.google-apps.form' ? 'Form'
+          : (d.mime || '').indexOf('pdf') >= 0 ? 'PDF' : 'Drive';
+        div.innerHTML = '<span class="sr-type w107d">Drive ' + esc(kind) + '</span>' + esc(d.name || '');
+        div.addEventListener('click', function () {
+          pop.style.display = 'none';
+          var gs = document.getElementById('globalSearch');
+          if (gs) gs.value = '';
+          if (d.url) window.open(d.url, '_blank', 'noopener');
+        });
+        pop.appendChild(div);
+      });
+    } catch (e) { /* search stays Hub-only on failure */ }
+  }
+  if (typeof renderSearch === 'function') {
+    var __rs107 = renderSearch;
+    var t107 = null;
+    renderSearch = function (q) {
+      __rs107.apply(this, arguments);
+      clearTimeout(t107);
+      t107 = setTimeout(function () { w107Drive(q); }, 250);
+    };
+  }
+
+  /* ---------- 2. source documents in Drive ---------- */
+  async function w107Links() {
+    if (window.__w107links) return window.__w107links;
+    try {
+      var r = await db.from('app_config').select('value').eq('key', 'drive_source_links');
+      var rows = (r && r.data) || [];
+      window.__w107links = rows.length ? JSON.parse(rows[0].value) : [];
+    } catch (e) { window.__w107links = []; }
+    return window.__w107links;
+  }
+  function w107Strip(links) {
+    return '<div class="w107src">Source documents in Drive: ' + links.map(function (l) {
+      return '<a href="' + esc(l.url) + '" target="_blank" rel="noopener">' + esc(l.label) + '</a>';
+    }).join('') + '</div>';
+  }
+  async function w107Sop() {
+    try {
+      var sec = document.getElementById('volunteering');
+      if (!sec || sec.querySelector('.w107src')) return;
+      /* the SOP view is identified by its master-template intro line */
+      var intro = sec.querySelector('.vl-empty');
+      var it = (intro && intro.textContent) || '';
+      if (!intro || (it.indexOf('master SOP') < 0 && it.indexOf('master template') < 0)) return;
+      var links = (await w107Links()).filter(function (l) { return l.where === 'sop'; });
+      if (!links.length) return;
+      if (sec.querySelector('.w107src')) return;
+      intro.insertAdjacentHTML('afterend', w107Strip(links));
+    } catch (e) { /* decorative */ }
+  }
+  async function w107Onb() {
+    try {
+      var master = document.getElementById('w46master');
+      if (!master || document.getElementById('w107onb')) return;
+      var links = (await w107Links()).filter(function (l) { return l.where === 'onboarding'; });
+      if (!links.length) return;
+      if (document.getElementById('w107onb')) return;
+      var div = document.createElement('div');
+      div.id = 'w107onb';
+      div.innerHTML = w107Strip(links);
+      master.parentElement.insertBefore(div, master);
+    } catch (e) { /* decorative */ }
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof waVolRender === 'function') {
+    var __vr107 = waVolRender;
+    waVolRender = async function () {
+      await __vr107.apply(this, arguments);
+      try { w107Sop(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  (function () {
+    var t = null;
+    function arm() {
+      /* the SOP view can render without going through waVolRender
+         (direct view switches), so watch the panel too */
+      var vol = document.getElementById('volunteering');
+      if (vol && !vol.dataset.w107mo) {
+        vol.dataset.w107mo = '1';
+        var tv = null;
+        new MutationObserver(function () {
+          clearTimeout(tv);
+          tv = setTimeout(function () { try { w107Sop(); } catch (e) { /* non-fatal */ } }, 300);
+        }).observe(vol, { childList: true, subtree: true });
+      }
+      var hr = document.getElementById('hrcentre');
+      if (hr && !hr.dataset.w107mo) {
+        hr.dataset.w107mo = '1';
+        new MutationObserver(function () {
+          clearTimeout(t);
+          t = setTimeout(function () { try { w107Onb(); } catch (e) { /* non-fatal */ } }, 420);
+        }).observe(hr, { childList: true, subtree: true });
+        try { w107Onb(); } catch (e) { /* non-fatal */ }
+      }
+    }
+    if (typeof startApp === 'function') {
+      var __sa107 = startApp;
+      startApp = async function () {
+        await __sa107.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+})();

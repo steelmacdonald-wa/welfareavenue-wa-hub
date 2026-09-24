@@ -1,0 +1,161 @@
+/* =====================================================================
+   WA v116c profiles: main responsibilities + job description (24/09/26)
+   =====================================================================
+   Steel: "I'd like for each person's profile to have a section with 3-5
+   of their main responsibilities and link to their job description in
+   the drive."
+   - Every person page (#person/<id>) gains "Main responsibilities": up to
+     five bullets and a link to the job description, both stored on
+     team_members (responsibilities jsonb, jd_url, jd_name).
+   - Admins, leaders and the person themselves can edit: a small editor
+     with five lines, a job-description picker fed by the Drive mirror
+     (wa_drive_docs, anything named like a job description), and "Pull
+     from the job description", which lifts the responsibilities section
+     out of the synced Google Doc text so nobody types them twice.
+   ===================================================================== */
+(function () {
+  if (window.__wa116c) return; window.__wa116c = true;
+  var GREEN = '#103F39', GOLD = '#DCA527';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var css = document.createElement('style');
+  css.id = 'wa116ccss';
+  css.textContent = '' +
+    '.w116resp{margin:8px 0 12px;background:rgba(16,63,57,.04);border-radius:14px;padding:12px 16px;}' +
+    '.w116resp h3.block{margin:0 0 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;}' +
+    '.w116resp h3.block a{font-size:11px;letter-spacing:.4px;text-transform:none;font-weight:600;color:var(--wa-muted);cursor:pointer;}' +
+    '.w116resp h3.block a:hover{color:' + GREEN + ';}' +
+    '.w116resp ol{margin:0;padding:0 0 0 20px;}' +
+    '.w116resp li{font-size:13.5px;line-height:1.45;margin:0 0 4px;color:var(--wa-text);}' +
+    '.w116resp .jd{font-size:12.5px;color:var(--wa-muted);margin:8px 0 0;}' +
+    '.w116resp .jd a{color:' + GREEN + ';font-weight:700;text-decoration:none;}' +
+    '.w116resp .jd a:hover{text-decoration:underline;}' +
+    '.w116resp .empty{font-size:13px;color:var(--wa-muted);margin:0;}' +
+    '.w116rl input,.w116rl select{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13px;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;margin:0 0 6px;background:var(--wa-card);}' +
+    '.w116rl label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:10px 0 4px;}' +
+    '.w116rl .row{display:flex;gap:8px;align-items:center;}' +
+    '.w116rl .row select{margin:0;}' +
+    '.w116rl .pull{white-space:nowrap;font-family:' + BODY + ';font-size:12px;font-weight:700;border:none;border-radius:9px;padding:8px 10px;cursor:pointer;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '.w116rl .note{font-size:11.5px;color:var(--wa-muted);margin:4px 0 0;}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member'; } catch (e) { return 'member'; } }
+  function canEdit(m) { var r = role(); return r === 'admin' || r === 'leader' || (m && m.email && lower(m.email) === myEmail()); }
+  function list(m) { var v = m && m.responsibilities; if (Array.isArray(v)) return v.map(function (x) { return String(x || '').trim(); }).filter(Boolean).slice(0, 5); return []; }
+
+  function sectionHtml(m) {
+    var items = list(m);
+    var edit = canEdit(m);
+    return '<div class="w116resp" id="w116resp" data-mid="' + E(m.id) + '"><h3 class="block" style="color:' + GREEN + '">Main responsibilities' + (edit ? '<a data-w116r="edit">' + (items.length || m.jd_url ? 'Edit' : 'Add') + '</a>' : '') + '</h3>' +
+      (items.length ? '<ol>' + items.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ol>' : '<p class="empty">No responsibilities listed yet.' + (edit ? ' Add three to five, or pull them from the job description.' : '') + '</p>') +
+      '<p class="jd">' + (m.jd_url ? 'Job description: <a href="' + E(m.jd_url) + '" target="_blank" rel="noopener">' + E(m.jd_name || 'open in Drive') + '</a>' : 'No job description linked' + (edit ? ' yet' : '') + '.') + '</p></div>';
+  }
+  function inject(m) {
+    var sec = document.getElementById('personpage'); if (!sec) return;
+    var old = document.getElementById('w116resp'); if (old) old.remove();
+    var stats = sec.querySelector('#w33stats');
+    var box = document.createElement('div'); box.innerHTML = sectionHtml(m);
+    var el = box.firstChild;
+    if (stats && stats.parentNode) stats.insertAdjacentElement('afterend', el);
+    else { var card = sec.querySelector('.card'); if (card) card.appendChild(el); }
+  }
+  var CUR = null;
+  if (typeof wa33Person === 'function') {
+    var __wp116 = wa33Person;
+    wa33Person = async function (mid) {
+      var r = await __wp116.apply(this, arguments);
+      try {
+        var q = await db.from('team_members').select('id, name, email, role, department, responsibilities, jd_url, jd_name').eq('id', Number(mid)).maybeSingle();
+        CUR = (q && q.data) || null;
+        if (CUR) inject(CUR);
+      } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  /* ---------- Drive job descriptions ---------- */
+  var JDS = null;
+  async function loadJds() {
+    if (JDS) return JDS;
+    try {
+      var r = await db.from('wa_drive_docs').select('file_id, name, url, mime, modified_time').order('name', { ascending: true }).limit(2000);
+      JDS = ((r && r.data) || []).filter(function (d) { var n = lower(d.name); return n.indexOf('job desc') >= 0 || /\bjd\b|jds\b/.test(n) || n.indexOf('role description') >= 0 || n.indexOf('roles & responsibilities') >= 0; });
+    } catch (e) { JDS = []; }
+    return JDS;
+  }
+  function extract(text) {
+    var lines = String(text || '').split(/\r?\n/).map(function (l) { return l.replace(/\s+/g, ' ').trim(); });
+    var start = -1;
+    for (var i = 0; i < lines.length; i++) { if (/responsibilit|duties|what you.ll do|what you will do|key tasks/i.test(lines[i]) && lines[i].length < 80) { start = i + 1; break; } }
+    if (start < 0) { for (var i2 = 0; i2 < lines.length; i2++) { if (/role overview|about the role|the role/i.test(lines[i2]) && lines[i2].length < 80) { start = i2 + 1; break; } } }
+    if (start < 0) start = 0;
+    var out = [];
+    for (var j = start; j < lines.length && out.length < 5; j++) {
+      var l = lines[j];
+      if (!l) continue;
+      if (out.length && /^(requirements|qualifications|skills|time commitment|what we offer|benefits|reports to|about|how to apply|hours|compensation|experience)/i.test(l)) break;
+      var b = l.replace(/^[-*\u2022\u25cf\u25e6\u2013\u2014\d.)\s]+/, '').trim();
+      if (b.length < 12 || b.length > 180) continue;
+      if (/^[A-Z][A-Za-z &]+:$/.test(b)) continue;
+      if (/responsibilit|^key tasks|^duties/i.test(b) && b.split(' ').length <= 4) continue;
+      if (b.split(' ').length <= 3 && !/[.!?]$/.test(b)) continue;
+      out.push(b);
+    }
+    return out;
+  }
+  async function editor(m) {
+    var items = list(m);
+    var jds = await loadJds();
+    var opts = '<option value="">No job description linked</option>' + jds.map(function (d) { return '<option value="' + E(d.url) + '" data-fid="' + E(d.file_id) + '"' + (m.jd_url && m.jd_url === d.url ? ' selected' : '') + '>' + E(String(d.name).trim()) + '</option>'; }).join('');
+    if (m.jd_url && !jds.some(function (d) { return d.url === m.jd_url; })) opts += '<option value="' + E(m.jd_url) + '" selected>' + E(m.jd_name || m.jd_url) + '</option>';
+    var rows = ''; for (var i = 0; i < 5; i++) rows += '<input type="text" class="w116ri" maxlength="180" placeholder="' + (i < 3 ? 'Responsibility ' + (i + 1) : 'Optional') + '" value="' + E(items[i] || '') + '" />';
+    openModal('<div class="w116rl"><h3>' + E(m.name) + ': main responsibilities</h3>' +
+      '<p class="m-sub">Three to five lines that say what this person owns. They show on the profile and help the assistant route work.</p>' +
+      '<label>Responsibilities</label>' + rows +
+      '<label>Job description (from the Drive)</label><div class="row"><select id="w116jd">' + opts + '</select><button class="pull" id="w116pull" type="button">Pull from the job description</button></div>' +
+      '<input type="url" id="w116jdurl" placeholder="Or paste a Drive link" value="' + (m.jd_url && !jds.some(function (d) { return d.url === m.jd_url; }) ? E(m.jd_url) : '') + '" />' +
+      '<p class="note">Documents appear here once they are shared with the hub\'s Drive account and named like a job description.</p>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116rc">Cancel</button><button class="btn" id="w116rs">Save</button></div></div>');
+    document.getElementById('w116rc').addEventListener('click', closeModal);
+    document.getElementById('w116pull').addEventListener('click', async function () {
+      var sel = document.getElementById('w116jd'); var o = sel.options[sel.selectedIndex]; var fid = o && o.getAttribute('data-fid');
+      if (!fid) { toast('Pick a job description first'); return; }
+      this.textContent = 'Reading...';
+      try {
+        var r = await db.from('wa_drive_docs').select('text_content').eq('file_id', fid).maybeSingle();
+        var got = extract(r && r.data && r.data.text_content);
+        if (!got.length) { toast('Could not find a responsibilities list in that document'); this.textContent = 'Pull from the job description'; return; }
+        var inputs = document.querySelectorAll('.w116ri');
+        got.forEach(function (g, k) { if (inputs[k]) inputs[k].value = g; });
+        toast(got.length + ' responsibilities pulled; edit them before saving');
+      } catch (e) { toast('Could not read the document'); }
+      this.textContent = 'Pull from the job description';
+    });
+    document.getElementById('w116rs').addEventListener('click', async function () {
+      var vals = Array.prototype.slice.call(document.querySelectorAll('.w116ri')).map(function (i) { return i.value.trim(); }).filter(Boolean).slice(0, 5);
+      var sel = document.getElementById('w116jd'); var url = sel.value || (document.getElementById('w116jdurl').value || '').trim() || null;
+      var name = null;
+      if (sel.value) name = String(sel.options[sel.selectedIndex].textContent || '').trim(); else if (url) name = 'Job description';
+      var patch = { responsibilities: vals, jd_url: url, jd_name: url ? name : null };
+      var r = await db.from('team_members').update(patch).eq('id', m.id);
+      if (r && r.error) { toast('Could not save'); return; }
+      try { logChange('team_member', m.id, 'responsibilities', list(m).join(' | ') || 'none', vals.join(' | ') || 'none'); } catch (e) { /* fine */ }
+      Object.assign(m, patch);
+      try { (DB_MEMBERS || []).forEach(function (x) { if (Number(x.id) === Number(m.id)) Object.assign(x, patch); }); } catch (e) { /* fine */ }
+      closeModal(); inject(m); toast('Profile updated');
+    });
+  }
+  if (!document.body.dataset.wa116cWired) {
+    document.body.dataset.wa116cWired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w116r]'); if (!a) return;
+      var box = a.closest('#w116resp'); var mid = box && box.getAttribute('data-mid');
+      var m = CUR && String(CUR.id) === String(mid) ? CUR : null;
+      if (!m) return;
+      if (!canEdit(m)) { toast('Only admins, leaders or the person can edit this'); return; }
+      editor(m);
+    });
+  }
+})();

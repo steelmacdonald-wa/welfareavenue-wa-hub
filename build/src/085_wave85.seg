@@ -1,0 +1,147 @@
+/* =====================================================================
+   WA v85 Phase 1 (U5 guides + page template): every page says what it
+   is for, and the help matches what you are looking at
+   =====================================================================
+   1. A one-line purpose under each page title (the consistent page
+      template: title, purpose, primary action, help).
+   2. Refreshed help guides for the pages whose guides predated the
+      v68-v77 changes: dept pages (workstream tabs + folds), Strategy
+      (four tabs + canonical quarters), Admin (invite/remove), Home
+      (v74 rebuild) and Training (the catalog). Registered after the
+      v60/v61/v65 help listeners, so this content wins those keys;
+      all other keys keep their existing guides.
+   ===================================================================== */
+(function () {
+  if (window.__wa85) return; window.__wa85 = true;
+
+  var css = document.createElement('style');
+  css.textContent = '.w85p{font-size:12.5px;color:#7b8a86;margin:-6px 0 12px;}';
+  document.head.appendChild(css);
+
+  /* ---------- 1. purpose lines ---------- */
+  var W85_PURPOSE = {
+    overview: 'Decisions across Welfare Avenue: what is open, what was decided, and your part in it.',
+    dashboard: 'The numbers behind the work: task movement, hours and momentum per team.',
+    transcripts: 'Upload a meeting and the Hub turns it into tasks, updates and decisions automatically.',
+    agendas: 'Meeting agendas, drafted from live work and shared before the meeting.',
+    goals: 'Projects, quarterly goals and the map of how they connect.',
+    requests: 'How teams ask each other for work, with a form for every kind of ask.',
+    importantinfo: 'Logins, links and documents the team reaches for most.',
+    finances: 'Statements, the ledger and budgets per team.',
+    orgchart: 'Who does what, across both cities.',
+    training: 'Your onboarding and the training catalog, tracked per person.',
+    volunteering: 'The serving programme: events, volunteers, the master SOP and inventory.',
+    hrcentre: 'Onboarding, training assignment, recruitment and time commitments in one place.',
+    activity: 'Everything that changed in the Hub, newest first.',
+    adminpanel: 'People, roles and access.',
+    create: 'Branded content drafts from a prompt.'
+  };
+  function w85Purpose(id) {
+    var txt = W85_PURPOSE[id];
+    if (!txt) return;
+    var panel = document.getElementById(id);
+    if (!panel || panel.querySelector('.w85p')) return;
+    var h = null;
+    if (id === 'overview') {
+      panel.querySelectorAll('h2').forEach(function (x) {
+        if (!h && (x.textContent || '').indexOf('Open decisions') >= 0) h = x;
+      });
+    }
+    if (!h) h = panel.querySelector('h2');
+    if (!h) return;
+    var p = document.createElement('p');
+    p.className = 'w85p';
+    p.textContent = txt;
+    h.parentNode.insertBefore(p, h.nextSibling);
+  }
+  function w85AllPurpose() { Object.keys(W85_PURPOSE).forEach(w85Purpose); }
+
+  /* some pages repaint their panel after showPanel; keep the line present */
+  var W85_MO = {};
+  function w85Watch(id) {
+    if (W85_MO[id]) return;
+    var panel = document.getElementById(id);
+    if (!panel) return;
+    var t = null;
+    var mo = new MutationObserver(function () {
+      clearTimeout(t);
+      t = setTimeout(function () { try { w85Purpose(id); } catch (e) { /* non-fatal */ } }, 180);
+    });
+    mo.observe(panel, { childList: true, subtree: true });
+    W85_MO[id] = mo;
+  }
+
+  if (typeof showPanel === 'function') {
+    var __sp85 = showPanel;
+    showPanel = function (id) {
+      __sp85.apply(this, arguments);
+      try { w85Purpose(id); w85Watch(id); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---------- 2. refreshed guides ---------- */
+  function sec(title, body) {
+    return '<div class="w61sec"><div class="t"><b>' + title + '</b><span>' + body + '</span></div></div>';
+  }
+  function w85Guide(k) {
+    var wrap = null;
+    if (k === 'dept') {
+      wrap = '<h2>How a department page works</h2><div class="w61wrap">' +
+        sec('The header is the story', 'Banner, this period\'s narrative, priorities and quick tools. The team list folds away under "Team".') +
+        sec('One task area', 'The tabs in the middle are the department\'s workstreams. All shows everything; each tab filters the same list, in list, board or calendar view.') +
+        sec('Tasks arrive on their own', 'Upload a meeting on the Meetings page and the Hub files tasks here automatically, with owner, workstream and project. You can always add one by hand with + Add task.') +
+        sec('Everything else folds', 'Requests, quarterly goals, projects, updates and source transcripts sit in collapsible sections below the tasks. The Hub remembers which ones you keep open.') +
+        '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
+    } else if (k === 'goals') {
+      wrap = '<h2>How Strategy works</h2><div class="w61wrap">' +
+        sec('Four tabs', 'Projects (the work), Department goals (quarterly targets), Organizational goals (the direction) and The map (how they all connect).') +
+        sec('Quarters are picked, not typed', 'Goals use one quarter format, like Q1 FY2027 (the fiscal year runs Oct 1 to Sep 30). Empty far-off quarters stay collapsed until you need them.') +
+        sec('The map answers "why"', 'Projects link to goals, department goals roll up to organizational ones. Click any node to pull its whole chain into focus.') +
+        sec('Wins are collected for you', 'When a meeting mentions progress on a goal, it appears on the goal as a win, quote included.') +
+        '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
+    } else if (k === 'adminpanel') {
+      wrap = '<h2>How Admin works</h2><div class="w61wrap">' +
+        sec('Invite by email', '+ Invite someone creates the account, files the person in their team and sends the sign-in invite in one step.') +
+        sec('Roles decide what people see', 'Viewer, member, leader, admin. The access editor next to each person sets exactly which pages their account shows, with sensible presets.') +
+        sec('Founders are always admins', 'The two founder accounts and the co-ED are locked to admin in the database itself, so nobody can lock the organisation out. That is why their role is a chip, not a dropdown.') +
+        sec('Removing someone', 'Remove deactivates the person, blocks sign-in and deletes the login. Their history in the Hub stays.') +
+        '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
+    } else if (k === 'mypage') {
+      wrap = '<h2>How Home works</h2><div class="w61wrap">' +
+        sec('Needs your attention', 'The strip at the top is your one personal queue: overdue tasks and meeting mentions you have not seen. Other pages point here.') +
+        sec('Your tasks, grouped', 'Overdue, due this week, later. Show all expands past the first eight.') +
+        sec('Mentions', 'When a meeting mentions you, it lands on the right with the quote. Got it marks it seen.') +
+        sec('Ask the Hub', 'The green pill answers questions from everything in the Hub. The card above your tasks has ready-made prompts to start from.') +
+        '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
+    } else if (k === 'training') {
+      wrap = '<h2>How Training works</h2><div class="w61wrap">' +
+        sec('Your onboarding first', 'Until it is complete, your onboarding checklist sits at the top. Tick steps as you go; changed steps resurface on their own.') +
+        sec('A browsable catalog', 'Search, filter by category or path, and open any card for the description and link. Mark done tracks your progress.') +
+        sec('Paths', 'Ordered sequences like "Using the Hub". Your progress per path shows on the row.') +
+        sec('Leaders assign', 'Leaders and admins can assign trainings from the same cards, one person or in bulk from the HR centre.') +
+        '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
+    }
+    if (!wrap) return false;
+    openModal(wrap);
+    var c = document.getElementById('w61c');
+    if (c) c.addEventListener('click', function () { closeModal(); });
+    return true;
+  }
+
+  /* registered after v60/v61/v65, so this handler's modal wins its keys */
+  document.body.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('[data-w43help]');
+    if (!b) return;
+    var k = b.getAttribute('data-w43help');
+    if (['dept', 'goals', 'adminpanel', 'mypage', 'training'].indexOf(k) < 0) return;
+    setTimeout(function () { try { w85Guide(k); } catch (e2) { /* non-fatal */ } }, 10);
+  });
+
+  if (typeof startApp === 'function') {
+    var __sa85 = startApp;
+    startApp = async function () {
+      await __sa85.apply(this, arguments);
+      try { w85AllPurpose(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

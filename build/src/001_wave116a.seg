@@ -1,0 +1,149 @@
+/* =====================================================================
+   WA v116a teams registry (24/09/26): runs FIRST after the base
+   =====================================================================
+   The base defines DEPT_ORDER, DEPT_LABEL, DEPT_COLOR and SECTIONS as
+   the six historical departments. This segment sits right after the
+   base in MANIFEST so that every later wave (nav groups, workstream
+   tabs, dashboards, filters) already sees the new shape:
+   - Program Development ('progdev') splits out of Operations Montreal,
+     with its own panel, tab button, colour and workstreams.
+   - Plain names (Steel's call): Operations Montreal, Program
+     Development, Operations Toronto, Fundraising & Finances.
+   - Fundraising & Finances carries four sub-teams as workstreams:
+     Grants, Event fundraising, Donor relations, Finance (each one a
+     task board with its projects; Finance also opens the Finance tool).
+   - The transcript upload selects gain the new team; txDeptKey learns
+     the new labels. Data rows move in the wa116 migration; the pipeline
+     learns the key in process-transcript v7. Build-time teams_remap.py
+     patches the label maps and workstream lists later waves hard code.
+   - WA_TEAMS is the one model wave116 (pages, nav, boards) reads.
+   ===================================================================== */
+(function () {
+  if (window.__wa116a) return; window.__wa116a = true;
+  var PD = 'progdev', PD_LABEL = 'Program Development', PD_COLOR = '#2A8C7A';
+  window.WA_TEAMS = {
+    order: ['opsmtl', PD, 'opsto', 'marketing', 'fundraising', 'hr', 'board'],
+    /* pages each team's menu offers, in order */
+    pages: {
+      opsmtl: ['overview', 'agenda', 'tasks', 'volunteering'],
+      progdev: ['overview', 'agenda', 'tasks'],
+      opsto: ['overview', 'agenda', 'tasks'],
+      marketing: ['overview', 'agenda', 'tasks'],
+      fundraising: ['overview', 'agenda', 'boards'],
+      hr: ['overview', 'agenda', 'tasks'],
+      board: ['overview', 'agenda', 'tasks']
+    },
+    /* sub-teams: a task board per workstream (plus its projects) */
+    boards: {
+      fundraising: [
+        { key: 'grants', label: 'Grants', ws: 'Grants', color: '#b8902f', blurb: 'Applications, reports and funder relationships.' },
+        { key: 'events', label: 'Event fundraising', ws: 'Fundraising events', color: '#c87a2f', blurb: 'Flag Football, Rally Paper, the Gift Basket Drive and friends.' },
+        { key: 'donors', label: 'Donor relations', ws: 'Donor program', color: '#2c8a6f', blurb: 'Donor program, corporate donors and sponsorships.' },
+        { key: 'finance', label: 'Finance', ws: 'Finance', color: '#3a6ea5', blurb: 'Bookkeeping, statements, budgets and forecasts.', tool: 'finances', toolLabel: 'Finances' }
+      ]
+    },
+    /* project ids that belong to a sub-team even when their tasks carry no workstream */
+    boardProjects: { grants: [23], events: [2, 11, 12, 13], donors: [1, 14], finance: [] },
+    labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance' },
+    short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising & Finances', hr: 'HR', board: 'Board' }
+  };
+  try {
+    if (DEPT_ORDER.indexOf(PD) < 0) DEPT_ORDER.splice(DEPT_ORDER.indexOf('opsmtl') + 1, 0, PD);
+    DEPT_LABEL.opsmtl = 'Operations Montreal';
+    DEPT_LABEL.opsto = 'Operations Toronto';
+    DEPT_LABEL.fundraising = 'Fundraising & Finances';
+    DEPT_LABEL[PD] = PD_LABEL;
+    DEPT_COLOR[PD] = PD_COLOR;
+    document.documentElement.style.setProperty('--c-progdev', PD_COLOR);
+  } catch (e) { /* base constants missing: nothing to extend */ }
+  try {
+    if (typeof SECTIONS !== 'undefined') {
+      if (SECTIONS.opsmtl) {
+        SECTIONS.opsmtl.title = 'Operations Montreal';
+        SECTIONS.opsmtl.subsections = (SECTIONS.opsmtl.subsections || []).filter(function (s) { return String(s.title || '').toLowerCase() !== 'program development'; });
+      }
+      if (SECTIONS.opsto) SECTIONS.opsto.title = 'Operations Toronto';
+      if (SECTIONS.fundraising) {
+        SECTIONS.fundraising.title = 'Fundraising &amp; Finances';
+        var fsubs = SECTIONS.fundraising.subsections || [];
+        if (!fsubs.some(function (s) { return s.title === 'Finance'; })) fsubs.push({ title: 'Finance', color: '#3a6ea5', summary: 'Bookkeeping, statements, budgets and forecasts.', items: [] });
+        SECTIONS.fundraising.subsections = fsubs;
+      }
+      if (!SECTIONS[PD]) {
+        SECTIONS[PD] = {
+          title: PD_LABEL,
+          color: 'var(--c-progdev)',
+          read: '',
+          progress: '',
+          priorities: [],
+          team: [],
+          updates: [],
+          contributed: 'Program Development meetings (Otter) and the #program-development Slack channel.',
+          subsections: [
+            { title: 'General', color: PD_COLOR, summary: 'Work that is not tied to one programme.', items: [] },
+            { title: 'Beneficiary programs', color: '#6F64AB', summary: 'Programmes for the people we serve: employment, feedback, referrals.', items: [] },
+            { title: 'Research and data', color: '#3a6ea5', summary: 'Surveys, evaluation and the numbers behind the programmes.', items: [] },
+            { title: 'Community team', color: '#c87a2f', summary: 'Community leads, partnerships and outreach.', items: [] }
+          ]
+        };
+      }
+    }
+  } catch (e) { /* non-fatal */ }
+  /* the transcript label to key mapping learns the new team (old labels keep working) */
+  try {
+    if (typeof txDeptKey === 'function') {
+      var __tdk116 = txDeptKey;
+      txDeptKey = function (label) {
+        var s = String(label || '').toLowerCase();
+        if (s === PD || (s.indexOf('program dev') >= 0 && s.indexOf('montreal') < 0 && s.indexOf('toronto') < 0 && s.indexOf('ops') < 0)) return PD;
+        return __tdk116(label);
+      };
+    }
+  } catch (e) { /* non-fatal */ }
+  function ensure() {
+    try {
+      var main = document.querySelector('main');
+      if (main && !document.getElementById(PD)) {
+        var s = document.createElement('section');
+        s.id = PD; s.className = 'panel';
+        var after = document.getElementById('opsmtl');
+        if (after && after.parentNode === main) after.insertAdjacentElement('afterend', s); else main.appendChild(s);
+      }
+      var bar = document.getElementById('tabBar');
+      if (bar) {
+        var col = function (k, fb) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[k]) || fb; } catch (e) { return fb; } };
+        var om = bar.querySelector('.tab[data-tab="opsmtl"]');
+        if (om) om.innerHTML = '<span class="tabdot" style="background:' + col('opsmtl', '#103F39') + '"></span>Operations Montreal';
+        var ot = bar.querySelector('.tab[data-tab="opsto"]');
+        if (ot) ot.innerHTML = '<span class="tabdot" style="background:' + col('opsto', '#3a6ea5') + '"></span>Operations Toronto';
+        var fu = bar.querySelector('.tab[data-tab="fundraising"]');
+        if (fu) fu.innerHTML = '<span class="tabdot" style="background:' + col('fundraising', '#c87a2f') + '"></span>Fundraising &amp; Finances';
+        if (!bar.querySelector('.tab[data-tab="' + PD + '"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab'; b.setAttribute('data-tab', PD);
+          b.innerHTML = '<span class="tabdot" style="background:' + PD_COLOR + '"></span>' + PD_LABEL;
+          if (om && om.parentNode) om.insertAdjacentElement('afterend', b); else bar.appendChild(b);
+        }
+      }
+      document.querySelectorAll('select').forEach(function (sel) {
+        var o = sel.querySelector('option[value="opsmtl"]');
+        if (o && !sel.querySelector('option[value="' + PD + '"]')) {
+          o.textContent = 'Operations Montreal';
+          var n = document.createElement('option'); n.value = PD; n.textContent = PD_LABEL;
+          o.insertAdjacentElement('afterend', n);
+        }
+        var ot2 = sel.querySelector('option[value="opsto"]');
+        if (ot2 && /Program Dev/.test(ot2.textContent)) ot2.textContent = 'Operations Toronto';
+        var fu2 = sel.querySelector('option[value="fundraising"]');
+        if (fu2 && /Grants/.test(fu2.textContent)) fu2.textContent = 'Fundraising & Finances';
+        var lm = sel.querySelector('option[value="Ops & Program Dev - Montreal"], option[value="Operations Montreal"]');
+        if (lm && !sel.querySelector('option[value="' + PD_LABEL + '"]')) {
+          var n2 = document.createElement('option'); n2.value = PD_LABEL; n2.textContent = PD_LABEL;
+          lm.insertAdjacentElement('afterend', n2);
+        }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  ensure();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensure);
+})();

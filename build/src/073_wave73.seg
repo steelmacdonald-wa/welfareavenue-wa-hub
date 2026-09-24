@@ -1,0 +1,167 @@
+/* =====================================================================
+   WA v73 the navigation slims down (all six proposals approved)
+   (04/08/26)
+   New bar: Home | Decisions | Departments | Meetings (Transcripts,
+   Agendas) | Strategy | Requests | People (Org chart, Training,
+   Volunteering, HR centre) | Important info | More (Finances,
+   Activity, Admin).
+   1. Dashboard merges into Decisions: its tab disappears and the
+      Decisions page gets an "Open the full dashboard" link (the page
+      itself still exists at #dashboard, nothing is deleted).
+   2. Meetings group: upload a meeting and build an agenda from one
+      place.
+   3. Activity moves under More with Admin.
+   4. Create (content drafter) leaves the bar and becomes a tool
+      button on the Marketing page (still at #create).
+   5. Volunteering and HR centre join the People group.
+   6. The full mobile pass stays queued as its own follow-up.
+   Everything is rearranged AFTER wave42 builds the bar, using the same
+   classes so the flyout styling, role gating (wa40Enforce) and empty
+   group hiding keep working. No page ids or hashes change, so every
+   deep link and permission list still holds.
+   ===================================================================== */
+(function () {
+  if (window.__wa73) return;
+  window.__wa73 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa73css';
+  st.textContent = '' +
+    '#w73dash{display:inline-flex;gap:8px;align-items:center;background:#f6f8f7;border-radius:999px;padding:5px 14px;font-size:12px;color:#3d4642;margin:0 0 10px;}' +
+    '#w73dash a{color:#1f5f4f;font-weight:700;cursor:pointer;}';
+  document.head.appendChild(st);
+
+  function w73Group(key, label, tabs) {
+    var g = document.createElement('span');
+    g.className = 'tab-group';
+    g.setAttribute('data-w42g', key);
+    var h = document.createElement('button');
+    h.className = 'tab-group-h';
+    h.innerHTML = label + ' <span class="caret">&#9660;</span>';
+    var p = document.createElement('div');
+    p.className = 'tab-group-p';
+    tabs.forEach(function (el) { if (el) p.appendChild(el); });
+    g.appendChild(h);
+    g.appendChild(p);
+    h.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var was = g.classList.contains('open');
+      document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      if (!was) g.classList.add('open');
+    });
+    return g;
+  }
+
+  function w73Nav() {
+    try {
+      var bar = document.getElementById('tabBar');
+      if (!bar || !bar.dataset.wa42 || bar.dataset.w73) return;
+      bar.dataset.w73 = '1';
+
+      /* dissolve wave42's groups, keeping the department flyout rows intact */
+      var deptRows = [];
+      Array.prototype.slice.call(bar.querySelectorAll('.tab-group')).forEach(function (g) {
+        Array.prototype.slice.call(g.querySelectorAll(':scope > .tab-group-p > *')).forEach(function (el) {
+          if (el.classList && el.classList.contains('w42d')) deptRows.push(el);
+          else if (el.classList && el.classList.contains('tab')) bar.appendChild(el);
+          else if (el.querySelector && el.querySelector('.tab')) bar.appendChild(el);
+        });
+        if (g.parentNode) g.parentNode.removeChild(g);
+      });
+      function grab(id) { return bar.querySelector('.tab[data-tab="' + id + '"]'); }
+
+      /* hide the merged and relocated tabs */
+      ['dashboard', 'create'].forEach(function (id) {
+        var b = grab(id);
+        if (b) { b.style.display = 'none'; b.dataset.w73hide = '1'; }
+      });
+
+      var order = [];
+      ['mypage', 'overview'].forEach(function (id) { var b = grab(id); if (b) order.push(b); });
+      order.push(w73Group('departments', 'Departments', deptRows));
+      order.push(w73Group('meetings', 'Meetings', [grab('transcripts'), grab('agendas')]));
+      var strat = grab('goals');
+      if (strat) order.push(strat);
+      var req = grab('requests');
+      if (req) order.push(req);
+      order.push(w73Group('people', 'People', [grab('orgchart'), grab('training'), grab('volunteering'), grab('hrcentre')]));
+      var info = grab('importantinfo');
+      if (info) order.push(info);
+      var more = w73Group('more', 'More', [grab('finances'), grab('activity'), grab('adminpanel')]);
+
+      /* anything else registered (now or in the future) keeps a home */
+      var placed = {};
+      order.forEach(function (el) {
+        if (el.classList && el.classList.contains('tab')) placed[el.getAttribute('data-tab')] = 1;
+        el.querySelectorAll && el.querySelectorAll('.tab').forEach(function (t) { placed[t.getAttribute('data-tab')] = 1; });
+      });
+      more.querySelectorAll('.tab').forEach(function (t) { placed[t.getAttribute('data-tab')] = 1; });
+      Array.prototype.slice.call(bar.querySelectorAll(':scope > .tab')).forEach(function (t) {
+        var id = t.getAttribute('data-tab');
+        if (!placed[id] && !t.dataset.w73hide) order.push(t);
+      });
+      order.push(more);
+
+      order.forEach(function (el) { if (el) bar.appendChild(el); });
+      if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* wa40Enforce re-shows tabs the role allows; keep the merged ones hidden */
+  if (typeof wa40Enforce === 'function') {
+    var __en73 = wa40Enforce;
+    wa40Enforce = function () {
+      __en73.apply(this, arguments);
+      try {
+        document.querySelectorAll('#tabBar .tab[data-w73hide]').forEach(function (t) { t.style.display = 'none'; });
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* Decisions carries the dashboard now */
+  function w73DashLink() {
+    try {
+      var panel = document.getElementById('overview');
+      if (!panel || document.getElementById('w73dash')) return;
+      var card = panel.querySelector('.card');
+      if (!card) return;
+      card.insertAdjacentHTML('afterbegin',
+        '<div id="w73dash">Looking for the numbers view? <a data-w73go="1">Open the full dashboard &raquo;</a></div>');
+    } catch (e) { /* non-fatal */ }
+  }
+  if (!document.body.dataset.wa73Wired) {
+    document.body.dataset.wa73Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('[data-w73go]')) { location.hash = '#dashboard'; }
+    });
+  }
+  if (typeof showPanel === 'function') {
+    var __sp73 = showPanel;
+    showPanel = function (id) {
+      __sp73(id);
+      if (id === 'overview') setTimeout(w73DashLink, 150);
+    };
+  }
+
+  /* the Content drafter becomes a Marketing page tool */
+  if (typeof wa39DeptTools === 'function') {
+    var __dt73 = wa39DeptTools;
+    wa39DeptTools = function (id) {
+      var html = __dt73.apply(this, arguments);
+      if (id === 'marketing' && html && html.indexOf('w39tools') >= 0 && html.indexOf('#create') < 0) {
+        html = html.replace(/<\/div>\s*$/,
+          '<button class="w39tool" data-w39t="#create"><span class="ic">&#9997;</span>Content drafter</button></div>');
+      }
+      return html;
+    };
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa73 = startApp;
+    startApp = async function () {
+      await __sa73();
+      setTimeout(w73Nav, 250);
+      setTimeout(w73DashLink, 600);
+    };
+  }
+})();

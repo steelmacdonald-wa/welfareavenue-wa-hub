@@ -1,0 +1,173 @@
+/* =====================================================================
+   WA v51 comments on every task
+   (02/08/26)
+   Every task can carry a conversation.
+   - The latest comment shows right on the task row (author, when, and
+     a source chip for meeting or Slack notes), with an "N comments"
+     pill that opens the full thread.
+   - The thread modal shows every comment newest first with its source
+     (you, a meeting transcript, or a Slack digest, each linking back
+     to the source) and a box to add your own.
+   - Automatic comments arrive from the transcript scanner (v2 of the
+     transcript-requests function): when a meeting or Slack pull
+     clearly discusses an open task, a progress note is attached with
+     a verbatim quote. Informational only; nothing changes state.
+   Works on department boards and project pages.
+   ===================================================================== */
+(function () {
+  if (window.__wa51) return;
+  window.__wa51 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa51css';
+  st.textContent = '' +
+    '.w51last{display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:11.8px;color:#5b6660;margin-top:3px;}' +
+    '.w51last .who{font-weight:700;color:#1f5f4f;}' +
+    '.w51src{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;border-radius:999px;padding:1px 7px;}' +
+    '.w51src.transcript{background:rgba(132,85,255,.14);color:#5b32c7;}' +
+    '.w51src.slack{background:rgba(58,110,165,.14);color:#3a6ea5;}' +
+    '.w51src.manual{background:rgba(31,95,79,.1);color:#1f5f4f;}' +
+    '[data-w51c]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:1px 9px;' +
+    'font-size:10.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.6;margin-left:6px;}' +
+    '[data-w51c]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w51cm{border-top:1px solid #f0f2f1;padding:8px 0;}' +
+    '.w51cm .hd{display:flex;gap:8px;align-items:center;font-size:12px;flex-wrap:wrap;}' +
+    '.w51cm .hd b{color:#14302b;}' +
+    '.w51cm .hd .dt{color:#9aa5a1;font-size:11px;}' +
+    '.w51cm .bd{font-size:13px;color:#3d4642;margin-top:3px;}' +
+    '.w51cm .qt{font-size:11.5px;color:#7b8a86;font-style:italic;margin-top:2px;}' +
+    '.w51cm .hd a{color:#2c7a66;font-size:11px;text-decoration:none;font-weight:600;}';
+  document.head.appendChild(st);
+
+  /* ---- data: one load, latest + counts per task ---- */
+  var WA51 = { latest: {}, count: {}, loaded: false };
+  async function wa51Load(force) {
+    if (WA51.loaded && !force) return;
+    try {
+      var r = await db.from('task_comments').select('id,task_id,body,author,source,created_at').order('created_at', { ascending: false }).limit(600);
+      WA51.latest = {};
+      WA51.count = {};
+      ((r && r.data) || []).forEach(function (c) {
+        var k = String(c.task_id);
+        WA51.count[k] = (WA51.count[k] || 0) + 1;
+        if (!WA51.latest[k]) WA51.latest[k] = c;
+      });
+      WA51.loaded = true;
+    } catch (e) { /* offline */ }
+  }
+  function wa51Day(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch (e) { return ''; }
+  }
+
+  /* ---- row decoration ---- */
+  function wa51RowHtml(tid) {
+    var k = String(tid);
+    var n = WA51.count[k] || 0;
+    var pill = '<a data-w51c="' + k + '">' + (n ? n + ' comment' + (n === 1 ? '' : 's') : '+ comment') + '</a>';
+    var c = WA51.latest[k];
+    if (!c) return '<div class="w51last">' + pill + '</div>';
+    return '<div class="w51last"><span class="w51src ' + esc(c.source || 'manual') + '">' + (c.source === 'transcript' ? 'meeting' : esc(c.source || 'note')) + '</span>'
+      + '<span class="who">' + esc(c.author || '') + ':</span>'
+      + '<span>' + esc(String(c.body || '').slice(0, 140)) + (String(c.body || '').length > 140 ? '...' : '') + '</span>'
+      + '<span style="color:#9aa5a1">' + wa51Day(c.created_at) + '</span>' + pill + '</div>';
+  }
+  function wa51Decorate() {
+    try {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      document.querySelectorAll('li[data-task]').forEach(function (li) {
+        var tid = li.getAttribute('data-task');
+        var body = li.querySelector('.ci-body');
+        if (!body) return;
+        var old = body.querySelector('.w51last');
+        var html = wa51RowHtml(tid);
+        if (old) { old.outerHTML = html; } else { body.insertAdjacentHTML('beforeend', html); }
+      });
+      document.querySelectorAll('.w27-task').forEach(function (row) {
+        var cb = row.querySelector('input[data-w27t]');
+        if (!cb) return;
+        var tid = cb.getAttribute('data-w27t');
+        var old = row.querySelector('.w51last');
+        var html = wa51RowHtml(tid);
+        if (old) { old.outerHTML = html; } else { row.insertAdjacentHTML('beforeend', html); }
+      });
+    } catch (e) { /* non-fatal */ }
+  }
+  async function wa51Refresh(force) {
+    await wa51Load(force);
+    wa51Decorate();
+  }
+
+  /* ---- thread modal ---- */
+  async function wa51Modal(tid) {
+    var task = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return String(t.ref) === String(tid) || String(t.id) === String(tid); })[0];
+    var title = task ? (task.title || '') : ('Task #' + tid);
+    var r = null;
+    try { r = await db.from('task_comments').select('*').eq('task_id', Number(tid)).order('created_at', { ascending: false }).limit(50); } catch (e) { /* offline */ }
+    var rows = (r && r.data) || [];
+    var list = rows.length ? rows.map(function (c) {
+      return '<div class="w51cm"><div class="hd">'
+        + '<span class="w51src ' + esc(c.source || 'manual') + '">' + (c.source === 'transcript' ? 'meeting' : esc(c.source || 'note')) + '</span>'
+        + '<b>' + esc(c.author || 'someone') + '</b>'
+        + '<span class="dt">' + wa51Day(c.created_at) + '</span>'
+        + (c.source_ref && c.source !== 'manual' ? '<a href="#tx/' + esc(String(c.source_ref)) + '" onclick="closeModal()">' + esc(c.source_label || 'open the meeting') + '</a>' : '')
+        + '</div><div class="bd">' + esc(c.body) + '</div>'
+        + (c.quote ? '<div class="qt">&quot;' + esc(c.quote) + '&quot;</div>' : '')
+        + '</div>';
+    }).join('') : '<p class="m-sub">No comments yet. Start the thread below.</p>';
+    openModal('<h3 style="font-size:15px">' + esc(title) + '</h3>'
+      + '<div style="max-height:320px;overflow:auto;margin:6px 0">' + list + '</div>'
+      + '<textarea id="w51new" placeholder="Add a comment..." style="width:100%;min-height:64px"></textarea>'
+      + '<div class="m-actions"><button class="btn" id="w51add" data-w51t="' + esc(String(tid)) + '">Add the comment</button> <button class="btn ghost" id="w51cl">Close</button></div>');
+    document.getElementById('w51cl').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w51add').addEventListener('click', async function () {
+      var txt = (document.getElementById('w51new').value || '').trim();
+      if (!txt) { toast('Write the comment first'); return; }
+      var ins = await db.from('task_comments').insert({
+        task_id: Number(tid), body: txt.slice(0, 800),
+        author: (typeof who === 'function') ? who() : 'staff', source: 'manual'
+      });
+      if (ins.error) { toast('Could not save the comment'); return; }
+      toast('Comment added');
+      await wa51Refresh(true);
+      wa51Modal(tid);
+    });
+  }
+
+  /* ---- wiring ---- */
+  if (!document.body.dataset.wa51Wired) {
+    document.body.dataset.wa51Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('[data-w51c]');
+      if (a && typeof isStaff === 'function' && isStaff()) wa51Modal(a.getAttribute('data-w51c'));
+    });
+  }
+  if (typeof renderSection === 'function') {
+    var __rs51 = renderSection;
+    renderSection = function (id) {
+      __rs51(id);
+      wa51Decorate();
+    };
+  }
+  if (typeof renderAllSections === 'function') {
+    var __ras51 = renderAllSections;
+    renderAllSections = function () {
+      __ras51.apply(this, arguments);
+      wa51Decorate();
+    };
+  }
+  if (typeof wa27RenderProject === 'function') {
+    var __pr51 = wa27RenderProject;
+    wa27RenderProject = function () {
+      var out = __pr51.apply(this, arguments);
+      setTimeout(wa51Decorate, 80);
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa51 = startApp;
+    startApp = async function () {
+      await __sa51();
+      try { await wa51Refresh(false); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

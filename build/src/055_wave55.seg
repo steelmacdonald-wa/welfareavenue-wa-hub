@@ -1,0 +1,42 @@
+/* =====================================================================
+   WA v55 the Hours tab becomes Commitment
+   (03/08/26)
+   Cosmetic rename: the HR centre tab (and the dashboard it opens) is
+   now called Commitment. Internals keep the 'hours' key so v52/v54
+   wiring and the #hrcentre/hours deep link continue to work.
+   ===================================================================== */
+(function () {
+  if (window.__wa55) return;
+  window.__wa55 = 1;
+
+  function wa55Rename() {
+    try {
+      var btn = document.querySelector('.w47tab[data-w47v="hours"]');
+      if (btn && btn.textContent !== 'Commitment') btn.textContent = 'Commitment';
+    } catch (e) { /* non-fatal */ }
+  }
+  function wa55Watch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!panel.dataset.w55mo) {
+      panel.dataset.w55mo = '1';
+      var mo = new MutationObserver(function () { wa55Rename(); });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    wa55Rename();
+  }
+  if (typeof showPanel === 'function') {
+    var __sp55 = showPanel;
+    showPanel = function (id) {
+      __sp55(id);
+      try { if (id === 'hrcentre') wa55Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa55 = startApp;
+    startApp = async function () {
+      await __sa55();
+      try { wa55Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

@@ -1,0 +1,139 @@
+/* =====================================================================
+   WA v97 Sneat re-skin (07/08/26): the whole Hub, WA green accent
+   =====================================================================
+   Visual-only wave, no behaviour changes. Adopts the design language of
+   the Sneat admin template (ThemeSelection, MIT free edition) requested
+   by Steel: Public Sans typography, soft #f5f5f9 canvas, borderless
+   white cards with the 0 2px 6px rgba(67,89,113,.12) shadow, rounded
+   pill navigation, softened inputs, tinted pill badges, and the Sneat
+   text scale (#566a7f headings, #697a8d body). The accent stays
+   Welfare Avenue green rather than Sneat purple (Steel's call), so the
+   brand survives the restyle. Implemented as token overrides on the
+   base :root variables plus targeted component restyles; the wave
+   loads last, so its CSS wins the cascade. Chart palette untouched
+   (it is validated separately).
+   ===================================================================== */
+(function () {
+  if (window.__wa97) return; window.__wa97 = true;
+
+  /* Public Sans (CSP already allows fonts.googleapis + fonts.gstatic) */
+  try {
+    var l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap';
+    document.head.appendChild(l);
+  } catch (e) { /* system font fallback is fine */ }
+
+  var css = document.createElement('style');
+  css.id = 'wa97css';
+  css.textContent = '' +
+    /* ---------- tokens ---------- */
+    ':root{' +
+    '--wa-paper:#f5f5f9;' +
+    '--wa-card:#ffffff;' +
+    '--wa-line:#e7e9f0;' +
+    '--wa-ink:#566a7f;' +
+    '--wa-text:#697a8d;' +
+    '--wa-muted:#8592a3;' +
+    '--wa-green:#2c7a66;' +
+    '--wa-green-soft:#1f5f4f;' +
+    '}' +
+    'body{font-family:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--wa-paper);color:var(--wa-text);}' +
+    'h1,h2,h3,h4{color:var(--wa-ink);}' +
+
+    /* ---------- cards ---------- */
+    '.card{border:none;border-radius:10px;box-shadow:0 2px 6px 0 rgba(67,89,113,.12);}' +
+    '.card > h2{color:var(--wa-ink);font-weight:700;letter-spacing:.1px;}' +
+
+    /* ---------- top bar + nav ---------- */
+    '#tabBar{background:#fff;border-radius:10px;box-shadow:0 2px 6px 0 rgba(67,89,113,.12);padding:6px 8px;}' +
+    '.tab{border-bottom:none;border-radius:8px;padding:9px 14px;font-weight:600;color:#697a8d;}' +
+    '.tab:hover{background:rgba(67,89,113,.06);color:var(--wa-ink);}' +
+    '.tab.active{background:rgba(44,122,102,.14);color:var(--wa-green);border-bottom-color:transparent;}' +
+    '.tab-group-h{border-radius:8px;padding:9px 14px;font-weight:600;color:#697a8d;border-bottom:none;}' +
+    '.tab-group-h:hover{background:rgba(67,89,113,.06);color:var(--wa-ink);}' +
+    '.tab-group.open .tab-group-h{background:rgba(44,122,102,.14);color:var(--wa-green);}' +
+    '.tab-group-p{border:none;border-radius:10px;box-shadow:0 4px 16px 0 rgba(67,89,113,.22);padding:6px;}' +
+    '.tab-group-p .tab{border-radius:8px;width:100%;text-align:left;}' +
+
+    /* ---------- buttons ---------- */
+    '.btn{border-radius:8px;padding:9px 18px;font-weight:600;font-size:13.5px;box-shadow:0 2px 4px 0 rgba(44,122,102,.35);transition:box-shadow .15s,background .15s;}' +
+    '.btn:hover{box-shadow:0 4px 10px 0 rgba(44,122,102,.35);}' +
+    '.btn.ghost{box-shadow:none;border:1px solid rgba(44,122,102,.5);}' +
+    '.btn.ghost:hover{background:rgba(44,122,102,.08);color:var(--wa-green);}' +
+    '.btn.mini{border-radius:7px;}' +
+
+    /* ---------- inputs ---------- */
+    'input[type=text],input[type=date],input[type=number],input[type=email],input[type=search],select,textarea{border:1px solid #d9dee3;border-radius:8px;background:#fff;color:var(--wa-text);padding:8px 12px;font-family:inherit;transition:border-color .15s,box-shadow .15s;}' +
+    'input[type=text]:focus,input[type=date]:focus,input[type=number]:focus,input[type=email]:focus,input[type=search]:focus,select:focus,textarea:focus{outline:none;border-color:var(--wa-green);box-shadow:0 0 0 3px rgba(44,122,102,.12);}' +
+
+    /* ---------- tables ---------- */
+    'table th{color:var(--wa-ink);}' +
+    'table td{border-color:#eceef1;}' +
+
+    /* ---------- inner panels: bordered, not tinted ---------- */
+    '.fin-kpi,.fin-dcard,.w90box,.w94wide,.w92hcard{background:#fff;border:1px solid #e7e9f0;border-radius:10px;box-shadow:none;}' +
+    '.fin-kpi .v{color:var(--wa-ink);}' +
+    '#w91review{background:#fff;border:1px solid #f0d9a8;border-radius:10px;}' +
+    '#w93tasks,#w93meet{background:#fff;border:1px solid rgba(44,122,102,.3);border-radius:10px;}' +
+
+    /* ---------- pills and badges ---------- */
+    '.fin-badge,.w80chip,.w93row .dep{background:rgba(44,122,102,.12);border:none;color:#1f5f4f;border-radius:6px;padding:2px 8px;font-weight:600;}' +
+    '.fin-badge.dup{background:rgba(255,62,29,.12);color:#c4402a;}' +
+    '#w93eng .rolechip{border:none;background:rgba(133,146,163,.16);color:#566a7f;border-radius:6px;}' +
+    '#w93eng .rolechip.admin{background:rgba(44,122,102,.14);color:#1f5f4f;}' +
+    '#w93eng .rolechip.blocked{background:rgba(255,62,29,.12);color:#c4402a;}' +
+
+    /* ---------- modal, toast, folds ---------- */
+    '#modalBox{border:none;border-radius:12px;box-shadow:0 6px 30px 0 rgba(67,89,113,.28);}' +
+    '.toast{border-radius:8px;box-shadow:0 4px 16px rgba(20,48,43,.3);}' +
+    'details summary{color:var(--wa-ink);}' +
+
+    /* ---------- dashboard sub-nav ---------- */
+    '#w94nav{border-bottom:none;background:#fff;border-radius:10px;box-shadow:0 2px 6px 0 rgba(67,89,113,.12);padding:6px 8px;gap:4px;}' +
+    '.w94tab{border-radius:8px;}' +
+    '.w94tab.on{box-shadow:0 2px 4px 0 rgba(44,122,102,.35);}' +
+
+    /* ---------- time pills ---------- */
+    '.w92pill{border-color:#d9dee3;color:#697a8d;}' +
+    '.w92pill.on{box-shadow:0 2px 4px 0 rgba(44,122,102,.35);}' +
+
+    /* ---------- task rows (Namviek-inspired: card rows, pills, hover) ---------- */
+    'ul.checklist li[data-task]{background:#fff;border:1px solid #e7e9f0;border-radius:8px;padding:10px 12px;margin:8px 0;transition:box-shadow .15s,border-color .15s;border-bottom:1px solid #e7e9f0;}' +
+    'ul.checklist li[data-task]:hover{border-color:rgba(44,122,102,.45);box-shadow:0 2px 8px 0 rgba(67,89,113,.14);}' +
+    'ul.checklist li[data-task].done{opacity:.6;}' +
+    'ul.checklist li[data-task].done .ci-title{text-decoration:line-through;}' +
+    'ul.checklist input[type=checkbox]{accent-color:#2c7a66;width:18px;height:18px;cursor:pointer;}' +
+    '.ci-title{color:var(--wa-ink);font-weight:600;}' +
+    '.ci-sub,.ci-meta{color:var(--wa-muted);}' +
+    '.due-badge{background:rgba(133,146,163,.14);color:#697a8d;border-radius:6px;font-weight:600;}' +
+    '.due-badge.amber{background:rgba(255,171,0,.16);color:#a06f00;border:none;}' +
+    '.due-badge.red{background:rgba(255,62,29,.14);color:#c4402a;border:none;}' +
+    '.as-chip{background:rgba(44,122,102,.12);color:#1f5f4f;border-radius:6px;font-weight:600;}' +
+    '.cat-tag{border-radius:6px;}' +
+    '.edit-btn,.reassign-btn{border:1px solid #e2e5ea;border-radius:6px;background:#fff;color:#697a8d;text-decoration:none;padding:2px 9px;margin-left:6px;font-weight:600;transition:border-color .15s,color .15s;}' +
+    '.edit-btn:hover,.reassign-btn:hover{border-color:rgba(44,122,102,.5);color:var(--wa-green);text-decoration:none;}' +
+    '.mp-task{background:#fff;border:1px solid #e7e9f0;border-radius:8px;padding:8px 10px;margin:6px 0;transition:box-shadow .15s,border-color .15s;}' +
+    '.mp-task:hover{border-color:rgba(44,122,102,.45);box-shadow:0 2px 8px 0 rgba(67,89,113,.14);}' +
+    '.req-card{background:#fff;border:1px solid #e7e9f0;border-radius:10px;box-shadow:none;transition:box-shadow .15s;}' +
+    '.req-card:hover{box-shadow:0 2px 8px 0 rgba(67,89,113,.14);}' +
+    '.subsection{border:1px solid #eef0f4;border-radius:10px;padding:12px 14px;background:#fbfbfd;}' +
+    '.subsection ul.checklist li{padding:10px 12px;}' +
+
+    /* ---------- footer ---------- */
+    '.footer,footer{color:#a1acb8;}';
+  document.head.appendChild(css);
+
+  /* keep this stylesheet LAST in <head> so later waves' css never outranks
+     the skin accidentally, and the skin keeps winning after boot */
+  try {
+    var mo = new MutationObserver(function () {
+      var last = document.head.lastElementChild;
+      if (last && last.id !== 'wa97css' && (last.tagName === 'STYLE')) {
+        var el = document.getElementById('wa97css');
+        if (el) document.head.appendChild(el);
+      }
+    });
+    mo.observe(document.head, { childList: true });
+  } catch (e) { /* cascade order at load time still applies */ }
+})();

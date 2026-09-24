@@ -1,0 +1,256 @@
+/* =====================================================================
+   WA v54 hours: editable minimums, board exempt, tasks per week
+   (03/08/26)
+   Rebuilds the HR centre Hours dashboard (on top of v52's section):
+   - The weekly minimums (was hardcoded 6h managers and up, 4h everyone
+     else) now live in public.hub_settings 'hours_minimums' and are
+     editable right in the tab (two inputs + Save, change-logged).
+   - The board is exempt: no minimum applies to board members and they
+     are never flagged for not checking in; if they do check in their
+     hours still show.
+   - Tasks completed per week: every person now shows how many tasks
+     they closed per week (average of the last 3 full weeks, plus this
+     week), matched by task owner. The below-minimum-only table becomes
+     a full people table with below-minimum rows highlighted first.
+   ===================================================================== */
+(function () {
+  if (window.__wa54) return;
+  window.__wa54 = 1;
+
+  var st = document.createElement('style');
+  st.id = 'wa54css';
+  st.textContent = '' +
+    '.w54edit{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:10px 14px;margin:0 0 10px;font-size:12.5px;color:#3d4642;}' +
+    '.w54edit b{color:#14302b;}' +
+    '.w54edit input{width:58px;padding:4px 8px;border:1px solid rgba(127,127,127,.35);border-radius:8px;font-size:12.5px;}' +
+    '.w54low td{background:rgba(179,64,47,.06);}' +
+    '.w54ex{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#7b8a86;background:#eef2f0;border-radius:999px;padding:1px 8px;}';
+  document.head.appendChild(st);
+
+  var WA54 = { min: { manager: 6, member: 4 }, loaded: false };
+  async function wa54LoadMin(force) {
+    if (WA54.loaded && !force) return;
+    try {
+      var r = await db.from('hub_settings').select('value').eq('key', 'hours_minimums').maybeSingle();
+      var v = r && r.data && r.data.value;
+      if (v) {
+        var mg = Number(v.manager), mm = Number(v.member);
+        if (mg > 0) WA54.min.manager = mg;
+        if (mm > 0) WA54.min.member = mm;
+      }
+      WA54.loaded = true;
+    } catch (e) { /* defaults hold */ }
+  }
+
+  var WA54_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;
+  /* board members are exempt: min 0, never flagged */
+  function wa54Min(m) {
+    if (m.department === 'board') return 0;
+    return WA54_LEAD.test(m.role || '') ? WA54.min.manager : WA54.min.member;
+  }
+
+  function wa54Data() {
+    var members = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; });
+    var hours = (typeof DB_HOURS !== 'undefined' ? DB_HOURS : []);
+    var tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
+    var thisWeek = (typeof weekStartOf === 'function') ? weekStartOf(new Date()) : '';
+    var wk = [];
+    for (var i = 1; i <= 3; i++) {
+      var d = new Date();
+      d.setDate(d.getDate() - 7 * i);
+      wk.push(weekStartOf(d));
+    }
+    var byKey = {};
+    hours.forEach(function (h) {
+      var n = String(h.member_name || h.slack_name || '').toLowerCase();
+      if (!n) return;
+      var r = byKey[n] || (byKey[n] = { cur: 0, w3: 0, matched: false });
+      var hh = Number(h.hours || 0);
+      if (h.week_start === thisWeek) r.cur += hh;
+      else if (wk.indexOf(h.week_start) >= 0) r.w3 += hh;
+    });
+    function lookup(name) {
+      var full = String(name || '').toLowerCase();
+      if (byKey[full]) return byKey[full];
+      var ft = full.split(/\s+/)[0];
+      for (var k in byKey) { if (k.split(/\s+/)[0] === ft) return byKey[k]; }
+      return null;
+    }
+    /* tasks closed per week, by owner text */
+    var doneRows = [];
+    tasks.forEach(function (t) {
+      if (!t.done || !t.closed_at) return;
+      var ws;
+      try { ws = weekStartOf(new Date(t.closed_at)); } catch (e) { return; }
+      if (ws === thisWeek) doneRows.push({ owner: String(t.owner || '').toLowerCase(), cur: 1, w3: 0 });
+      else if (wk.indexOf(ws) >= 0) doneRows.push({ owner: String(t.owner || '').toLowerCase(), cur: 0, w3: 1 });
+    });
+    function taskStats(name) {
+      var ft = String(name || '').trim().split(/\s+/)[0].toLowerCase();
+      var cur = 0, w3 = 0;
+      if (ft) {
+        doneRows.forEach(function (r) {
+          if (r.owner.indexOf(ft) >= 0) { cur += r.cur; w3 += r.w3; }
+        });
+      }
+      return { cur: cur, avg: w3 / 3 };
+    }
+    var rows = [], silent = [];
+    members.forEach(function (m) {
+      var h = lookup(m.name);
+      var min = wa54Min(m);
+      var ts = taskStats(m.name);
+      if (!h) {
+        if (m.department !== 'board') silent.push({ m: m, min: min, tasks: ts });
+        return;
+      }
+      h.matched = true;
+      rows.push({ m: m, min: min, cur: h.cur, avg: h.w3 / 3, tasks: ts });
+    });
+    var unmatched = [];
+    for (var k2 in byKey) { if (!byKey[k2].matched) unmatched.push(k2); }
+    return { rows: rows, silent: silent, unmatched: unmatched };
+  }
+
+  function wa54Html() {
+    var d = wa54Data();
+    var dl = (typeof DEPT_LABEL !== 'undefined') ? DEPT_LABEL : {};
+    var below = d.rows.filter(function (r) { return r.min > 0 && r.avg < r.min; });
+    var byDept = {};
+    d.rows.forEach(function (r) {
+      var k = r.m.department || 'other';
+      (byDept[k] = byDept[k] || []).push(r.avg);
+    });
+    var maxAvg = 0.1;
+    var teamRows = Object.keys(byDept).map(function (k) {
+      var a = byDept[k];
+      var avg = a.reduce(function (s2, x) { return s2 + x; }, 0) / a.length;
+      if (avg > maxAvg) maxAvg = avg;
+      return { k: k, avg: avg, n: a.length };
+    }).sort(function (a, b) { return b.avg - a.avg; });
+    var minTxt = 'managers and up ' + WA54.min.manager + 'h, everyone else ' + WA54.min.member + 'h, board exempt';
+    var people = d.rows.slice().sort(function (a, b) {
+      var ba = a.min > 0 && a.avg < a.min ? (a.avg - a.min) : 999;
+      var bb = b.min > 0 && b.avg < b.min ? (b.avg - b.min) : 999;
+      return ba - bb || b.avg - a.avg;
+    });
+    var html = '<div class="w54edit"><b>Weekly minimums:</b>'
+      + ' managers and up <input type="number" id="w54mgr" min="1" max="40" value="' + WA54.min.manager + '" />h,'
+      + ' everyone else <input type="number" id="w54mem" min="1" max="40" value="' + WA54.min.member + '" />h'
+      + ' <button class="btn mini" data-w54save="1">Save</button>'
+      + '<span style="color:#9aa5a1;font-size:11.5px">the board is exempt from check-ins</span></div>';
+    html += '<div class="w44tiles">'
+      + '<div class="w44tile"><b>' + d.rows.length + '</b><span>people checking in</span></div>'
+      + '<div class="w44tile' + (below.length ? ' warn' : '') + '"><b>' + below.length + '</b><span>below their minimum</span></div>'
+      + '<div class="w44tile' + (d.silent.length ? ' warn' : '') + '"><b>' + d.silent.length + '</b><span>not checking in</span></div>'
+      + '<div class="w44tile"><b>' + (d.rows.length - below.length) + '</b><span>meeting their minimum</span></div>'
+      + '</div>'
+      + '<div class="w47chart"><h4>Average weekly hours per team (last 3 full weeks, people with check-ins)</h4>'
+      + (teamRows.length ? teamRows.map(function (r) {
+        var w = Math.max(2, Math.round(r.avg / maxAvg * 100));
+        return '<div class="w47bar"><span class="lb">' + esc(dl[r.k] || r.k) + ' (' + r.n + ')</span>'
+          + '<span class="tr"><i style="width:' + w + '%"></i></span><span class="vl">' + r.avg.toFixed(1) + 'h</span></div>';
+      }).join('') : '<p class="m-sub">No tracked check-ins yet.</p>')
+      + '</div>';
+    html += '<div class="w47chart"><h4>People (' + esc(minTxt) + '; below-minimum rows first)</h4>'
+      + (people.length ? '<table class="w49tbl"><thead><tr><th>Person</th><th>Team</th><th>Avg h/wk / min</th><th>This week</th><th>Tasks done/wk</th><th>Tasks this week</th></tr></thead><tbody>'
+        + people.map(function (r) {
+          var low = r.min > 0 && r.avg < r.min;
+          var minCell = r.min > 0
+            ? (low ? '<span style="color:#b3402f;font-weight:700">' + r.avg.toFixed(1) + 'h</span> / ' + r.min + 'h'
+                   : r.avg.toFixed(1) + 'h / ' + r.min + 'h')
+            : r.avg.toFixed(1) + 'h <span class="w54ex">exempt</span>';
+          return '<tr' + (low ? ' class="w54low"' : '') + '><td><b>' + esc(r.m.name) + '</b></td>'
+            + '<td>' + esc(dl[r.m.department] || r.m.department || '') + '</td>'
+            + '<td>' + minCell + '</td>'
+            + '<td>' + r.cur.toFixed(1) + 'h</td>'
+            + '<td>' + r.tasks.avg.toFixed(1) + '</td>'
+            + '<td>' + r.tasks.cur + '</td></tr>';
+        }).join('') + '</tbody></table>'
+        : '<p class="m-sub">No tracked check-ins yet.</p>')
+      + '</div>';
+    html += '<div class="w47chart"><h4>Not checking in at all (no tracked check-ins in the last 4 weeks; board exempt)</h4>'
+      + (d.silent.length ? '<div class="w52flags">' + d.silent.map(function (s) {
+        return '<span class="w52flag">' + esc(s.m.name) + ' <small>' + esc(dl[s.m.department] || s.m.department || '') + ' &middot; min ' + s.min + 'h/wk'
+          + (s.tasks.avg ? ' &middot; ' + s.tasks.avg.toFixed(1) + ' tasks/wk' : '') + '</small></span>';
+      }).join('') + '</div>' : '<p class="m-sub">Everyone outside the board has at least one tracked check-in.</p>')
+      + (d.unmatched.length ? '<p class="m-sub" style="margin-top:8px">Check-in names with no roster match: ' + d.unmatched.map(esc).join(', ') + '</p>' : '')
+      + '<p class="m-sub" style="margin-top:8px">Hours come from the Slack check-in-out channels: a check in or out counts at its message time, and sessions missing a check out are not counted. Tasks done/wk counts completed board tasks by owner, averaged over the last 3 full weeks. Minimums are editable above; the board is exempt.</p>'
+      + '</div>';
+    return html;
+  }
+
+  function wa54Rewrite() {
+    var sec = document.getElementById('w52hours');
+    if (!sec) return;
+    try { sec.innerHTML = wa54Html(); sec.dataset.w54done = '1'; } catch (e) { /* keep v52's version */ }
+  }
+
+  async function wa54Save(btn) {
+    var mg = Math.max(1, Math.min(40, Number((document.getElementById('w54mgr') || {}).value) || 0));
+    var mm = Math.max(1, Math.min(40, Number((document.getElementById('w54mem') || {}).value) || 0));
+    if (!mg || !mm) { toast('Both minimums need a number of hours'); return; }
+    btn.disabled = true;
+    var by = (typeof who === 'function') ? who() : 'staff';
+    var old = WA54.min.manager + '/' + WA54.min.member;
+    var r = await db.from('hub_settings').upsert({
+      key: 'hours_minimums',
+      value: { manager: mg, member: mm },
+      updated_at: new Date().toISOString(),
+      updated_by: by
+    });
+    btn.disabled = false;
+    if (r.error) { toast('Could not save the minimums'); return; }
+    WA54.min = { manager: mg, member: mm };
+    try {
+      await db.from('change_log').insert({
+        entity_type: 'settings', entity_id: 'hours_minimums', field: 'minimums',
+        old_value: old, new_value: mg + '/' + mm, changed_by: by
+      });
+    } catch (e) { /* log only */ }
+    toast('Minimums saved: ' + mg + 'h managers and up, ' + mm + 'h everyone else');
+    wa54Rewrite();
+  }
+
+  /* rewrite v52's hours section whenever it appears or the tab opens */
+  if (!document.body.dataset.wa54Wired) {
+    document.body.dataset.wa54Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var sv = e.target.closest && e.target.closest('[data-w54save]');
+      if (sv) { wa54Save(sv); return; }
+      var tb = e.target.closest && e.target.closest('.w47tab');
+      /* runs after v52's listener (registered later), so v52 has already
+         rebuilt the section; overwrite it with the settings-driven version */
+      if (tb && tb.getAttribute('data-w47v') === 'hours') wa54Rewrite();
+    });
+  }
+  function wa54Watch() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel) return;
+    if (!panel.dataset.w54mo) {
+      panel.dataset.w54mo = '1';
+      var mo = new MutationObserver(function () {
+        var sec = document.getElementById('w52hours');
+        if (sec && !sec.dataset.w54done) wa54Rewrite();
+      });
+      mo.observe(panel, { childList: true, subtree: true });
+    }
+    var sec = document.getElementById('w52hours');
+    if (sec && !sec.dataset.w54done) wa54Rewrite();
+  }
+  if (typeof showPanel === 'function') {
+    var __sp54 = showPanel;
+    showPanel = function (id) {
+      __sp54(id);
+      try { if (id === 'hrcentre') wa54Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa54 = startApp;
+    startApp = async function () {
+      await __sa54();
+      try { await wa54LoadMin(false); } catch (e) { /* non-fatal */ }
+      try { wa54Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

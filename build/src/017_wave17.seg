@@ -1,0 +1,286 @@
+/* =====================================================================
+   WA v17 UI enhancements (26/07/26)
+   Create studio: anyone on staff can draft branded content (emails,
+   social posts, reports, newsletters, announcements, letters) in the
+   Welfare Avenue voice via the draft-content edge function. Live
+   branded preview, copy, downloadable assets (.md, branded .html,
+   print to PDF), refine loop, and a recent drafts list backed by the
+   content_drafts table. Staff only.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.cd-grid{display:grid;grid-template-columns:minmax(280px,400px) 1fr;gap:14px;align-items:start;}'
+    + '@media (max-width:860px){.cd-grid{grid-template-columns:1fr;}}'
+    + '.cd-form label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);margin:10px 0 3px;}'
+    + '.cd-form select,.cd-form textarea{width:100%;box-sizing:border-box;border:1px solid var(--wa-line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;background:#fff;}'
+    + '.cd-form textarea{min-height:110px;resize:vertical;}'
+    + '.cd-go{margin-top:12px;width:100%;background:#8455ff;color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;font-size:13.5px;cursor:pointer;}'
+    + '.cd-go:disabled{opacity:.55;cursor:wait;}'
+    + '.cd-hint{font-size:11px;color:var(--wa-muted);margin-top:3px;}'
+    + '.cd-prev-head{background:#4a7c59;color:#fff;border-radius:10px 10px 0 0;padding:12px 16px;}'
+    + '.cd-prev-head .brand{font-weight:900;letter-spacing:2px;font-size:13px;text-transform:uppercase;}'
+    + '.cd-prev-head .tag{font-size:11px;opacity:.85;margin-top:2px;}'
+    + '.cd-prev-body{background:#f2ebe3;border:1px solid var(--wa-line);border-top:none;border-radius:0 0 10px 10px;padding:16px 18px;color:#191615;}'
+    + '.cd-subject{font-weight:800;font-size:15px;margin-bottom:10px;}'
+    + '.cd-doc{background:#fff;border-radius:9px;padding:14px 16px;font-size:13.5px;line-height:1.55;}'
+    + '.cd-doc h2{font-size:15px;color:#4a7c59;margin:14px 0 6px;}'
+    + '.cd-doc h3{font-size:13.5px;color:#4a7c59;margin:12px 0 4px;}'
+    + '.cd-doc p{margin:0 0 10px;}'
+    + '.cd-doc ul,.cd-doc ol{margin:0 0 10px;padding-left:20px;}'
+    + '.cd-sub{background:#fff;border-left:3px solid #8455ff;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12.5px;}'
+    + '.cd-notes{background:#fdf6e3;border-left:3px solid #d4a13c;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12px;}'
+    + '.cd-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}'
+    + '.cd-acts button{background:#fff;border:1px solid var(--wa-line);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;}'
+    + '.cd-refine{display:flex;gap:6px;margin-top:10px;}'
+    + '.cd-refine input{flex:1;border:1px solid var(--wa-line);border-radius:8px;padding:7px 10px;font-size:12.5px;}'
+    + '.cd-refine button{background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-weight:700;font-size:12px;cursor:pointer;}'
+    + '.cd-item{padding:7px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;cursor:pointer;}'
+    + '.cd-item:first-of-type{border-top:none;}'
+    + '.cd-item .m{color:var(--wa-muted);font-size:11px;}'
+    + '.cd-item:hover .t{text-decoration:underline;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('create')) {
+    var sec = document.createElement('section');
+    sec.id = 'create';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Create branded content</h2>'
+      + '<p class="read">Draft emails, posts, reports and more in the Welfare Avenue voice. Give a clear brief, pick the audience, and refine until it is right. Facts you did not provide come back as [confirm: ...] placeholders, never invented.</p>'
+      + '<div id="cdWrap"><div class="cd-grid"><div>'
+      + '<div class="cd-form">'
+      + '<label>What are you making?</label>'
+      + '<select id="cdType"><option value="email">Email</option><option value="social_post">Social post</option><option value="graphic">Social graphic</option><option value="report">Report / one pager</option><option value="newsletter">Newsletter</option><option value="announcement">Announcement</option><option value="letter">Letter</option></select>'
+      + '<label>Who is it for?</label>'
+      + '<select id="cdAud"><option value="partners">Partners</option><option value="sponsors_donors">Sponsors and donors</option><option value="volunteers">Volunteers</option><option value="beneficiaries">Beneficiaries</option><option value="board">Board</option><option value="staff">Staff</option><option value="general_public">General public</option></select>'
+      + '<label>Language</label>'
+      + '<select id="cdLang"><option value="en">English</option><option value="fr">French</option></select>'
+      + '<label>Ground in a department (optional)</label>'
+      + '<select id="cdDept"><option value="">No grounding</option></select>'
+      + '<div class="cd-hint">Pulls that team&#39;s recent meeting notes, open tasks and Q4 goals into the draft. Board only material is always excluded.</div>'
+      + '<label>Brief</label>'
+      + '<textarea id="cdBrief" placeholder="What is this about? Include the facts you want used: names, dates, amounts, the ask, who signs it. The clearer the brief, the better the draft."></textarea>'
+      + '<button class="cd-go" id="cdGo">Write it</button>'
+      + '</div>'
+      + '<div class="card" style="margin-top:14px;"><h2 style="font-size:14px;">Recent drafts</h2><div id="cdList">Loading...</div></div>'
+      + '</div>'
+      + '<div id="cdPrev"><p class="read">Your draft will appear here with the Welfare Avenue branding, ready to copy, download or print.</p></div>'
+      + '</div></div></div>';
+    main.appendChild(sec);
+  }
+})();
+
+var WA_CD_CUR = null;
+var WA_CD_TYPE_LABEL = { email: 'Email', social_post: 'Social post', graphic: 'Social graphic', report: 'Report', newsletter: 'Newsletter', announcement: 'Announcement', letter: 'Letter', other: 'Content' };
+
+function waMdInline(s) {
+  return s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>');
+}
+function waMd(md) {
+  var lines = String(md || '').split(/\r?\n/);
+  var out = [], para = [], list = null;
+  function flushPara() { if (para.length) { out.push('<p>' + waMdInline(para.join(' ')) + '</p>'); para = []; } }
+  function flushList() { if (list) { out.push('<' + list.tag + '>' + list.items.map(function (i) { return '<li>' + waMdInline(i) + '</li>'; }).join('') + '</' + list.tag + '>'); list = null; } }
+  lines.forEach(function (raw) {
+    var line = esc(raw.trim());
+    if (!line) { flushPara(); flushList(); return; }
+    var h = line.match(/^(#{1,3})\s+(.*)$/);
+    if (h) { flushPara(); flushList(); out.push('<h' + (h[1].length === 1 ? 2 : h[1].length) + '>' + waMdInline(h[2]) + '</h' + (h[1].length === 1 ? 2 : h[1].length) + '>'); return; }
+    var ul = line.match(/^[-*]\s+(.*)$/);
+    if (ul) { flushPara(); if (!list || list.tag !== 'ul') { flushList(); list = { tag: 'ul', items: [] }; } list.items.push(ul[1]); return; }
+    var ol = line.match(/^\d+[.)]\s+(.*)$/);
+    if (ol) { flushPara(); if (!list || list.tag !== 'ol') { flushList(); list = { tag: 'ol', items: [] }; } list.items.push(ol[1]); return; }
+    flushList(); para.push(line);
+  });
+  flushPara(); flushList();
+  return out.join('');
+}
+
+var WA_GFX_CSS = ''
+  + '.gfx-card{background:#4a7c59;color:#f2ebe3;aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:7%;box-sizing:border-box;border-radius:14px;font-family:Arial,Helvetica,sans-serif;}'
+  + '.gfx-brand{font-weight:900;letter-spacing:4px;font-size:13px;}'
+  + '.gfx-rule{width:56px;height:5px;background:#8455ff;border-radius:3px;margin:14px 0 22px;}'
+  + '.gfx-head{font-weight:900;text-transform:uppercase;font-size:clamp(20px,5.5vmin,36px);line-height:1.12;letter-spacing:.5px;margin-bottom:16px;}'
+  + '.gfx-line{font-size:clamp(12px,2.4vmin,17px);line-height:1.5;opacity:.94;}'
+  + '.gfx-cta{margin-top:22px;background:#8455ff;color:#fff;font-weight:800;padding:10px 22px;border-radius:999px;font-size:clamp(12px,2.2vmin,15px);}'
+  + '.gfx-foot{margin-top:26px;font-size:11px;opacity:.8;}'
+  + '.gfx-foot .tag{font-style:italic;}';
+function waCdGfxInner(d) {
+  var lines = String(d.body_md || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean).slice(0, 3);
+  return '<div class="gfx-brand">WELFARE AVENUE</div>'
+    + '<div class="gfx-rule"></div>'
+    + '<div class="gfx-head">' + esc(d.subject_line || d.title || '') + '</div>'
+    + lines.map(function (l) { return '<div class="gfx-line">' + esc(l) + '</div>'; }).join('')
+    + (d.short_version ? '<div class="gfx-cta">' + esc(d.short_version) + '</div>' : '')
+    + '<div class="gfx-foot"><span class="tag">Service is solidarity, not charity.</span><br>welfareavenue.com</div>';
+}
+function waCdGraphicHtml(d) { /* superseded: wave18 reset without capture; superseded; body removed in Phase 0 compaction */ }
+function waCdGfxPreview(d) { /* superseded: wave18 reset without capture; superseded; body removed in Phase 0 compaction */ }
+function waCdBrandHtml(d) {
+  if (d.content_type === 'graphic') return waCdGraphicHtml(d);
+  var bodyEnd = '</bo' + 'dy>', htmlEnd = '</ht' + 'ml>';
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>' + esc(d.title || 'Welfare Avenue') + '</title>'
+    + '<style>body{margin:0;background:#f2ebe3;font-family:Georgia,\'Times New Roman\',serif;color:#191615;}'
+    + '.wrap{max-width:680px;margin:0 auto;padding:28px 20px;}'
+    + '.head{background:#4a7c59;color:#fff;padding:22px 26px;border-radius:12px 12px 0 0;}'
+    + '.head .b{font-family:Arial,Helvetica,sans-serif;font-weight:900;letter-spacing:3px;font-size:15px;text-transform:uppercase;}'
+    + '.head .t{font-size:12px;opacity:.85;margin-top:4px;font-style:italic;}'
+    + '.paper{background:#fff;padding:26px 30px;border-radius:0 0 12px 12px;font-size:15px;line-height:1.65;}'
+    + '.paper h2,.paper h3{font-family:Arial,Helvetica,sans-serif;color:#4a7c59;}'
+    + '.subj{font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:17px;margin-bottom:14px;border-bottom:3px solid #8455ff;padding-bottom:8px;}'
+    + '.foot{text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#6f6b64;padding:16px 0;}'
+    + '@media print{body{background:#fff;}.wrap{padding:0;}}'
+    + '</style></head><body><div class="wrap">'
+    + '<div class="head"><div class="b">Welfare Avenue</div><div class="t">Service is solidarity, not charity.</div></div>'
+    + '<div class="paper">'
+    + (d.subject_line ? '<div class="subj">' + esc(d.subject_line) + '</div>' : '')
+    + waMd(d.body_md)
+    + '</div>'
+    + '<div class="foot">welfareavenue.com</div>'
+    + '</div>' + bodyEnd + htmlEnd;
+}
+function waCdSlug(d) {
+  return ((d.title || 'wa-draft').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'wa-draft');
+}
+function waCdDownload(name, text, mime) {
+  var a = document.createElement('a');
+  var blob = new Blob([text], { type: mime });
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400);
+}
+
+function waCdRenderPreview() { /* superseded: wave18 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+async function waCdLoadList() {
+  var el = document.getElementById('cdList');
+  if (!el) return;
+  try {
+    var r = await db.from('content_drafts').select('id,created_at,created_by,content_type,audience,title').order('created_at', { ascending: false }).limit(12);
+    if (r.error) { el.innerHTML = '<p class="read">Could not load drafts.</p>'; return; }
+    var rows = r.data || [];
+    el.innerHTML = rows.length ? rows.map(function (d) {
+      return '<div class="cd-item" data-cdopen="' + d.id + '"><span class="t">' + esc(d.title || 'Untitled') + '</span><div class="m">' + esc(WA_CD_TYPE_LABEL[d.content_type] || d.content_type) + ' &middot; ' + esc((d.audience || '').replace(/_/g, ' ')) + ' &middot; ' + esc(d.created_by || '') + ' &middot; ' + fmtDay(d.created_at) + '</div></div>';
+    }).join('') : '<p class="read">Nothing drafted yet. Yours can be the first.</p>';
+  } catch (e) { el.innerHTML = '<p class="read">Could not load drafts.</p>'; }
+}
+
+function waRenderCreate() {
+  var wrap = document.getElementById('cdWrap');
+  if (!wrap) return;
+  if (!isStaff()) { wrap.innerHTML = '<p class="read">The Create studio is available to staff accounts.</p>'; return; }
+  var ds = document.getElementById('cdDept');
+  if (ds && ds.options.length < 2 && typeof DEPT_ORDER !== 'undefined') {
+    DEPT_ORDER.forEach(function (d) {
+      var o = document.createElement('option');
+      o.value = d;
+      o.textContent = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d;
+      ds.appendChild(o);
+    });
+  }
+  waCdLoadList();
+}
+
+async function waCdGenerate() { /* superseded: wave18 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+async function waCdRefine() {
+  if (!WA_CD_CUR) return;
+  var inp = document.getElementById('cdRefIn');
+  var ask = (inp.value || '').trim();
+  if (!ask) { toast('Say what to change first'); return; }
+  var go = document.getElementById('cdRefGo');
+  go.disabled = true; go.textContent = '...';
+  try {
+    var r = await db.functions.invoke('draft-content', {
+      body: {
+        draft_id: WA_CD_CUR.id, revision: ask,
+        content_type: WA_CD_CUR.content_type, audience: WA_CD_CUR.audience,
+        language: WA_CD_CUR.language, department: WA_CD_CUR.department || undefined,
+        brief: WA_CD_CUR.brief || ''
+      }
+    });
+    if (r.error || !(r.data && r.data.ok)) { toast('Could not refine: ' + ((r.data && r.data.error) || 'try again')); go.disabled = false; go.textContent = 'Refine'; }
+    else { WA_CD_CUR = r.data.draft; waCdRenderPreview(); waCdLoadList(); toast('Refined'); }
+  } catch (e) { toast('Could not refine the draft'); go.disabled = false; go.textContent = 'Refine'; }
+}
+
+document.addEventListener('click', async function (e) {
+  if (e.target.closest('#cdGo')) { waCdGenerate(); return; }
+  if (e.target.closest('#cdRefGo')) { waCdRefine(); return; }
+  var op = e.target.closest('[data-cdopen]');
+  if (op) {
+    var r = await db.from('content_drafts').select('*').eq('id', Number(op.dataset.cdopen)).maybeSingle();
+    if (r.data) { WA_CD_CUR = r.data; waCdRenderPreview(); }
+    return;
+  }
+  var act = e.target.closest('[data-cdact]');
+  if (act && WA_CD_CUR) {
+    var d = WA_CD_CUR, kind = act.dataset.cdact;
+    if (kind === 'review') {
+      act.disabled = true; act.textContent = 'Sending...';
+      try {
+        var rr = await db.functions.invoke('draft-content', { body: { action: 'send_review', draft_id: d.id } });
+        if (rr.error || !(rr.data && rr.data.ok)) { toast('Could not send: ' + ((rr.data && rr.data.error) || 'try again')); }
+        else { toast('Sent to ' + (rr.data.channel || 'Slack') + ' for review'); WA_CD_CUR.status = 'in review'; waCdLoadList(); }
+      } catch (x) { toast('Could not send for review'); }
+      act.disabled = false; act.innerHTML = '&#128172; Send to Slack for review';
+      return;
+    }
+    if (kind === 'copy') {
+      var txt = (d.subject_line ? 'Subject: ' + d.subject_line + '\n\n' : '') + (d.body_md || '');
+      try { await navigator.clipboard.writeText(txt); toast('Copied'); } catch (x) { toast('Could not copy on this browser'); }
+    } else if (kind === 'md') {
+      waCdDownload(waCdSlug(d) + '.md', (d.subject_line ? '# ' + d.subject_line + '\n\n' : '') + (d.body_md || ''), 'text/markdown');
+    } else if (kind === 'html') {
+      waCdDownload(waCdSlug(d) + '.html', waCdBrandHtml(d), 'text/html');
+    } else if (kind === 'print') {
+      var w = window.open('', '_blank');
+      if (!w) { toast('Allow popups to print'); return; }
+      w.document.write(waCdBrandHtml(d));
+      w.document.close();
+      setTimeout(function () { try { w.print(); } catch (x) { /* user closes */ } }, 350);
+    }
+    return;
+  }
+  var t17 = e.target.closest('[data-tab="create"]');
+  if (t17) { setTimeout(function () { try { waRenderCreate(); } catch (x) { /* boot */ } }, 60); }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && e.target && e.target.id === 'cdRefIn') { e.preventDefault(); waCdRefine(); }
+});
+
+(function () {
+  var __ah17 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'create') { showPanel('create'); waRenderCreate(); return; }
+    __ah17();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#create') {
+      try { showPanel('create'); waRenderCreate(); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa17 = startApp;
+  startApp = async function () {
+    await __sa17();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="create"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'create';
+          b.innerHTML = '<span class="tabdot" style="background:#8455ff"></span>Create';
+          bar.insertBefore(b, bar.querySelector('.tab-group') || null);
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

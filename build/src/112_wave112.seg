@@ -1,0 +1,325 @@
+/* =====================================================================
+   WA v112 getting-started checklist on My page (24/09/26)
+   =====================================================================
+   Steel: "I'd like to add an onboarding experience for users that are
+   added to the hub." Chosen shape: a getting-started checklist card on
+   My page, shown ONCE to everyone (current staff included), until the
+   person finishes it or dismisses it.
+   Five steps, each auto-ticked by doing the real thing, and each can
+   also be ticked by hand (someone with no tasks yet can still finish):
+     profile  open your own person page        (#person/<your id>)
+     dept     open your department page        (showPanel <your dept>)
+     task     tick off a task                  (toggleTask done=true)
+     brain    ask the Hub a question           (send in the chat panel)
+     info     read Important info              (showPanel importantinfo)
+   Steps the person cannot reach are dropped (ACCESS-GATE RULE: the
+   department and Important info steps need their tabs in wa40Allowed).
+   Board viewers and non-staff never see the card.
+   State lives server-side in wa_onboarding (one row per email, RLS: own
+   row for staff, admins read all), so it follows the person across
+   browsers. Rows are created lazily on the first tick or dismiss.
+   Marks that happen before the row loads are queued and applied after.
+   Wrapped (CURRENT bindings at load): renderMyPage, showPanel,
+   toggleTask, startApp. Loads BEFORE wave110 in MANIFEST (110 LAST).
+   ===================================================================== */
+(function () {
+  if (window.__wa112) return; window.__wa112 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w112card{background:#fff;border:1px solid #d8e6e0;border-left:4px solid #2c7a66;border-radius:14px;padding:16px 18px 12px;margin:0 0 16px;box-shadow:0 2px 10px rgba(20,48,43,.06);}' +
+    '#w112card .w112top{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}' +
+    '#w112card h3{margin:0;font-size:16px;color:#14302b;}' +
+    '#w112card .w112count{font-size:12.5px;color:#5c6b66;font-weight:700;}' +
+    '#w112card .w112links{margin-left:auto;display:flex;gap:12px;}' +
+    '#w112card .w112links a{font-size:12px;color:#7b8a86;cursor:pointer;text-decoration:underline;}' +
+    '#w112card .w112bar{height:6px;border-radius:999px;background:#eef4f1;margin:10px 0 8px;overflow:hidden;}' +
+    '#w112card .w112bar i{display:block;height:100%;background:#2c7a66;border-radius:999px;transition:width .3s;}' +
+    '#w112card .w112intro{font-size:13px;color:#3d4642;margin:0 0 6px;line-height:1.5;}' +
+    '.w112step{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid #f0f4f2;}' +
+    '.w112step:first-of-type{border-top:none;}' +
+    '.w112step input[type=checkbox]{accent-color:#2c7a66;width:17px;height:17px;margin:2px 0 0;cursor:pointer;flex:0 0 auto;}' +
+    '.w112step .w112txt{flex:1 1 auto;min-width:0;}' +
+    '.w112step .w112t{font-size:13.5px;font-weight:700;color:#14302b;}' +
+    '.w112step .w112d{font-size:12.5px;color:#5c6b66;line-height:1.45;margin-top:2px;}' +
+    '.w112step.done .w112t{text-decoration:line-through;color:#7b8a86;}' +
+    '.w112step.done .w112d{display:none;}' +
+    '.w112go{flex:0 0 auto;background:#eef4f1;color:#1f5f4f;border:none;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}' +
+    '.w112go:hover{background:#dcebe5;}' +
+    '.w112step.done .w112go{display:none;}' +
+    '#w112pill{display:inline-flex;align-items:center;gap:8px;background:#eef4f1;color:#1f5f4f;border:1px solid #d8e6e0;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;margin:0 0 14px;}' +
+    '#w112card.w112all{border-left-color:#d4a13c;}' +
+    '#w112card .w112yay{font-size:13.5px;color:#14302b;margin:6px 0 4px;line-height:1.5;}' +
+    '@media (max-width:560px){.w112step{flex-wrap:wrap;}.w112go{margin-left:27px;}#w112card .w112links{margin-left:0;width:100%;}}';
+  document.head.appendChild(css);
+
+  var W112 = {
+    loaded: false,     /* row fetched (or confirmed absent) */
+    row: null,         /* { email, steps, completed_at, dismissed_at } */
+    pending: [],       /* marks queued before load */
+    collapsed: false,  /* "Hide for now" this session */
+    myId: null,
+    justFinished: false
+  };
+  var DEPTS112 = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+
+  function w112Email() {
+    try { return ((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; }
+  }
+  function w112Eligible() {
+    try { if (typeof MODE !== 'undefined' && MODE === 'board') return false; } catch (e) { /* fine */ }
+    try { if (typeof isStaff === 'function' && !isStaff()) return false; } catch (e) { return false; }
+    return !!w112Email();
+  }
+  function w112Allowed(tab) {
+    try { return typeof wa40Allowed !== 'function' || wa40Allowed().indexOf(tab) >= 0; } catch (e) { return true; }
+  }
+  function w112MyDept() {
+    try { return (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || null; } catch (e) { return null; }
+  }
+
+  function w112Steps() {
+    var dept = w112MyDept();
+    var deptLabel = dept && typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[dept] ? DEPT_LABEL[dept] : 'your team';
+    var s = [];
+    s.push({ id: 'profile', t: 'Check your profile', d: 'Open your page and make sure your name, role and team look right. If something is off, tell an admin.', go: 'Open my profile' });
+    var deptOk = dept ? w112Allowed(dept) : DEPTS112.some(w112Allowed);
+    if (deptOk) s.push({ id: 'dept', t: 'Visit your department', d: 'Open the ' + deptLabel + ' page: tasks, workstreams and meeting notes live there.', go: dept ? 'Go to ' + deptLabel : 'Open Departments' });
+    s.push({ id: 'task', t: 'Tick off a task', d: 'Finish something with your name on it and tick it, here on My page or on your team page. Nothing assigned yet? Tick this one yourself.', go: 'See my tasks' });
+    if (document.getElementById('waChatBtn')) s.push({ id: 'brain', t: 'Ask the Hub a question', d: 'The assistant answers from everything in the Hub. Try: what is my team working on this week?', go: 'Ask now' });
+    if (w112Allowed('importantinfo')) s.push({ id: 'info', t: 'Read Important info', d: 'Policies, key contacts and what everyone at Welfare Avenue should know.', go: 'Open Important info' });
+    return s;
+  }
+  function w112Done(id) { return !!(W112.row && W112.row.steps && W112.row.steps[id]); }
+  function w112Visible() {
+    if (!w112Eligible() || !W112.loaded) return false;
+    if (W112.row && W112.row.dismissed_at) return false;
+    if (W112.row && W112.row.completed_at && !W112.justFinished) return false;
+    return true;
+  }
+
+  async function w112Save() {
+    var r = W112.row;
+    if (!r) return;
+    try {
+      await db.from('wa_onboarding').upsert({
+        email: r.email, steps: r.steps,
+        completed_at: r.completed_at || null, dismissed_at: r.dismissed_at || null,
+        updated_at: new Date().toISOString()
+      });
+    } catch (e) { /* non-fatal: the card stays usable; next change retries */ }
+  }
+  function w112Ensure() {
+    if (!W112.row) W112.row = { email: w112Email(), steps: {}, completed_at: null, dismissed_at: null };
+    if (!W112.row.steps || typeof W112.row.steps !== 'object') W112.row.steps = {};
+    return W112.row;
+  }
+
+  function w112Mark(id, on, manual) {
+    if (!w112Eligible()) return;
+    if (!W112.loaded) { W112.pending.push([id, on !== false]); return; }
+    var r = w112Ensure();
+    if (r.dismissed_at || (r.completed_at && !W112.justFinished)) return;
+    var val = on !== false;
+    if (!!r.steps[id] === val) return;
+    if (val) r.steps[id] = new Date().toISOString(); else delete r.steps[id];
+    var steps = w112Steps();
+    var all = steps.every(function (s) { return !!r.steps[s.id]; });
+    if (all && !r.completed_at) { r.completed_at = new Date().toISOString(); W112.justFinished = true; }
+    if (!all && r.completed_at) { r.completed_at = null; }
+    w112Save();
+    if (val && !manual) {
+      var st = steps.filter(function (s) { return s.id === id; })[0];
+      if (st) { try { toast('Getting started: "' + st.t + '" done'); } catch (e) { /* fine */ } }
+    }
+    w112Paint();
+  }
+
+  async function w112Load() {
+    if (W112.loaded || !w112Eligible()) return;
+    try {
+      var em = w112Email();
+      var res = await db.from('wa_onboarding').select('*').eq('email', em).maybeSingle();
+      W112.row = (res && res.data) ? res.data : null;
+    } catch (e) { W112.row = null; }
+    try {
+      var em2 = w112Email();
+      var mr = await db.from('team_members').select('id, email').eq('email', em2).maybeSingle();
+      W112.myId = (mr && mr.data && mr.data.id) ? mr.data.id : null;
+    } catch (e) { W112.myId = null; }
+    W112.loaded = true;
+    var q = W112.pending.slice(); W112.pending = [];
+    q.forEach(function (p) { w112Mark(p[0], p[1], false); });
+    w112Paint();
+  }
+
+  function w112Html() {
+    var steps = w112Steps();
+    var n = steps.filter(function (s) { return w112Done(s.id); }).length;
+    var pct = steps.length ? Math.round(100 * n / steps.length) : 0;
+    if (W112.collapsed) {
+      return '<button id="w112pill" data-w112open="1">&#10003; Getting started: ' + n + ' of ' + steps.length + ' done. Show</button>';
+    }
+    var all = n === steps.length;
+    var h = '<div id="w112card"' + (all ? ' class="w112all"' : '') + '>'
+      + '<div class="w112top"><h3>' + (all ? 'You are all set' : 'Get started with the Hub') + '</h3>'
+      + '<span class="w112count">' + n + ' of ' + steps.length + ' done</span>'
+      + '<span class="w112links">' + (all ? '<a data-w112close="1">Close</a>' : '<a data-w112hide="1">Hide for now</a><a data-w112dismiss="1">Don\'t show again</a>') + '</span></div>'
+      + '<div class="w112bar"><i style="width:' + pct + '%"></i></div>';
+    if (all) {
+      h += '<p class="w112yay">Nice work. You know your way around now: Home is your queue, your team page holds the work, and the assistant is one tap away whenever you need it.</p>';
+    } else {
+      h += '<p class="w112intro">Five quick things to find your way around. Each one ticks itself when you do it.</p>';
+      steps.forEach(function (s) {
+        var d = w112Done(s.id);
+        h += '<div class="w112step' + (d ? ' done' : '') + '">'
+          + '<input type="checkbox" data-w112cb="' + s.id + '"' + (d ? ' checked' : '') + ' title="' + (d ? 'Mark not done' : 'Mark done') + '" />'
+          + '<div class="w112txt"><div class="w112t">' + esc(s.t) + '</div><div class="w112d">' + esc(s.d) + '</div></div>'
+          + '<button class="w112go" data-w112go="' + s.id + '">' + esc(s.go) + '</button>'
+          + '</div>';
+      });
+    }
+    return h + '</div>';
+  }
+
+  function w112Paint() {
+    var body = document.getElementById('mpBody');
+    var old = document.getElementById('w112wrap');
+    if (!body || !w112Visible()) { if (old) old.remove(); return; }
+    var wrap = old;
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = 'w112wrap';
+      var anchor = body.querySelector('.mp-online');
+      if (anchor && anchor.parentNode === body) body.insertBefore(wrap, anchor.nextSibling);
+      else body.insertBefore(wrap, body.firstChild);
+    }
+    wrap.innerHTML = w112Html();
+  }
+
+  function w112Go(id) {
+    if (id === 'profile') {
+      if (W112.myId) { location.hash = '#person/' + W112.myId; }
+      else { try { toast('Your profile is not linked yet: ask an admin to add your email to the team roster.'); } catch (e) { /* fine */ } }
+      return;
+    }
+    if (id === 'dept') {
+      var d = w112MyDept();
+      if (d && w112Allowed(d)) { location.hash = '#dept/' + d; return; }
+      var any = DEPTS112.filter(w112Allowed)[0];
+      if (any) location.hash = '#dept/' + any;
+      return;
+    }
+    if (id === 'task') {
+      var secs = document.querySelectorAll('#mpBody .mp-sec');
+      var target = null;
+      secs.forEach(function (s) { var h3 = s.querySelector('h3'); if (!target && h3 && /^My tasks/.test(h3.textContent || '')) target = s; });
+      if (target) { try { target.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { target.scrollIntoView(); } }
+      return;
+    }
+    if (id === 'brain') {
+      var btn = document.getElementById('waChatBtn');
+      var panel = document.getElementById('waChatPanel');
+      if (btn && panel && panel.style.display !== 'flex') btn.click();
+      setTimeout(function () {
+        var inp = document.getElementById('w38in') || document.getElementById('wacInput');
+        if (inp) { if (!inp.value) inp.value = 'What is my team working on this week?'; try { inp.focus(); } catch (e) { /* fine */ } }
+      }, 60);
+      return;
+    }
+    if (id === 'info') { location.hash = '#importantinfo'; }
+  }
+
+  /* card interactions (delegated, survives repaints) */
+  document.addEventListener('change', function (e) {
+    var cb = e.target && e.target.closest && e.target.closest('input[data-w112cb]');
+    if (!cb) return;
+    w112Mark(cb.getAttribute('data-w112cb'), cb.checked, true);
+  }, true);
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null;
+    if (!t) return;
+    var go = t.closest('[data-w112go]');
+    if (go) { w112Go(go.getAttribute('data-w112go')); return; }
+    if (t.closest('[data-w112hide]')) { W112.collapsed = true; w112Paint(); return; }
+    if (t.closest('[data-w112open]')) { W112.collapsed = false; w112Paint(); return; }
+    if (t.closest('[data-w112dismiss]')) {
+      var r = w112Ensure();
+      r.dismissed_at = new Date().toISOString();
+      w112Save(); w112Paint();
+      try { toast('Checklist hidden. The 60 second tour is still in any help popup.'); } catch (e2) { /* fine */ }
+      return;
+    }
+    if (t.closest('[data-w112close]')) { W112.justFinished = false; w112Paint(); return; }
+  });
+
+  /* auto-tick: asking the Hub (capture phase, before send clears the input) */
+  function w112AskHook(inp) { if (inp && (inp.value || '').trim()) w112Mark('brain', true, false); }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#w38send, #wacSend');
+    if (!b) return;
+    w112AskHook(document.getElementById(b.id === 'w38send' ? 'w38in' : 'wacInput'));
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var inp = e.target;
+    if (inp && (inp.id === 'w38in' || inp.id === 'wacInput')) w112AskHook(inp);
+  }, true);
+
+  /* auto-tick: pages visited */
+  if (typeof showPanel === 'function') {
+    var __sp112 = showPanel;
+    showPanel = function (id) {
+      var out = __sp112.apply(this, arguments);
+      try {
+        if (id === 'importantinfo') w112Mark('info', true, false);
+        else if (DEPTS112.indexOf(id) >= 0) {
+          var mine = w112MyDept();
+          if (!mine || mine === id) w112Mark('dept', true, false);
+        } else if (id === 'personpage') {
+          var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+          if (W112.myId && h === 'person/' + W112.myId) w112Mark('profile', true, false);
+          else if (!W112.loaded) {
+            /* id not known yet: re-check once the row and id have loaded */
+            var hh = h;
+            setTimeout(function () { if (W112.myId && hh === 'person/' + W112.myId) w112Mark('profile', true, false); }, 2500);
+          }
+        }
+      } catch (e) { /* never block navigation */ }
+      return out;
+    };
+  }
+
+  /* auto-tick: finishing a task anywhere in the Hub */
+  if (typeof toggleTask === 'function') {
+    var __tt112 = toggleTask;
+    toggleTask = async function (ref, done) {
+      var ok = await __tt112.apply(this, arguments);
+      try { if (ok && done === true) w112Mark('task', true, false); } catch (e) { /* fine */ }
+      return ok;
+    };
+  }
+
+  /* paint on every My page render */
+  if (typeof renderMyPage === 'function') {
+    var __rm112 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm112.apply(this, arguments);
+      try { w112Paint(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  /* load state once the app (and roles) are up */
+  if (typeof startApp === 'function') {
+    var __sa112 = startApp;
+    startApp = async function () {
+      var r = await __sa112.apply(this, arguments);
+      try { await w112Load(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+
+  window.w112Debug = function () { return { loaded: W112.loaded, row: W112.row, myId: W112.myId, steps: w112Steps().map(function (s) { return s.id; }) }; };
+})();
+

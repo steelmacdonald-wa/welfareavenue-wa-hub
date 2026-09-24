@@ -1,0 +1,148 @@
+/* =====================================================================
+   WA v23 volunteer texting (27/07/26)
+   "Text volunteers" on the Volunteering pages: pick an audience (this
+   event's roster with a status filter, a tag like cooks or drivers, or
+   everyone with a phone), write the message with {{first_name}} and
+   {{event_date}} placeholders, PREVIEW the exact personalized texts
+   (dry run, nothing sends), then send for real from the Welfare Phone.
+   Backed by the quo-send edge function; every send is logged.
+   ===================================================================== */
+
+var WA_TXT_PAYLOAD = null;
+
+function waTxtEventDate(ev) {
+  if (!ev || !ev.event_date) return '';
+  var d = new Date(ev.event_date + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+function waTxtCurrentEvent() {
+  if (WA_VOL_VIEW === 'event' && WA_VOL_EVENT) {
+    var hit = null;
+    WA_VOL_EVENTS.forEach(function (e) { if (e.id === WA_VOL_EVENT) hit = e; });
+    return hit;
+  }
+  return null;
+}
+
+function waTxtAudiences(ev) {
+  var a = [];
+  if (ev) a.push(['roster', 'This event roster']);
+  a.push(['cook', 'All cooks'], ['driver', 'All drivers'], ['server', 'All servers'],
+    ['dishwasher', 'All dishwashers'], ['photographer', 'All photographers'],
+    ['all', 'Everyone with a phone']);
+  return a;
+}
+
+async function waTxtResolve(aud, stat) {
+  var ids = [], phones = [], names = 0;
+  if (aud === 'roster' && WA_VOL_DETAIL) {
+    WA_VOL_DETAIL.roster.forEach(function (r) {
+      if (stat && (String(r.status || '').toLowerCase().indexOf(stat) !== 0)) return;
+      if (r.person_id) { ids.push(r.person_id); }
+      else {
+        var d = r.detail || {};
+        var digits = String(d.phone || '').replace(/\D/g, '');
+        if (digits.length >= 10) phones.push(digits.slice(-10));
+      }
+      names += 1;
+    });
+  } else {
+    await waVolLoadPeople();
+    WA_VOL_PEOPLE.forEach(function (p) {
+      if (!p.phones || !p.phones.length) return;
+      if (aud === 'all' || (p.tags || []).indexOf(aud) >= 0 || (p.roles || []).indexOf(aud) >= 0) ids.push(p.id);
+    });
+  }
+  return { ids: ids, phones: phones, names: names };
+}
+
+function waTxtModal() {
+  var ev = waTxtCurrentEvent();
+  var dateStr = waTxtEventDate(ev || (typeof waVolNextEvent === 'function' ? waVolNextEvent() : null));
+  var defMsg = ev
+    ? 'Hi {{first_name}}, confirming you for the {{event_date}} serving event with Welfare Avenue. Reply YES to confirm or NO if you cannot make it. Thank you!'
+    : 'Hi {{first_name}}, it is Welfare Avenue. We would love your help at our Sunday serving event on {{event_date}}. Can you make it? Reply YES or NO. Thank you!';
+  var audOpts = waTxtAudiences(ev).map(function (x) {
+    return '<option value="' + x[0] + '">' + x[1] + '</option>';
+  }).join('');
+  openModal('<h3>Text volunteers</h3>' +
+    '<p class="m-sub">From the Welfare Phone (+1 438 808 7754). Preview first: nothing sends until you hit the send button. People sharing a phone number get one text.</p>' +
+    '<div class="m-row"><div><label>Who</label><select id="vtAud">' + audOpts + '</select></div>' +
+    '<div id="vtStatWrap"' + (ev ? '' : ' style="display:none"') + '><label>Roster status</label><select id="vtStat">' +
+    '<option value="">Everyone on the roster</option><option value="confirm">Confirmed</option>' +
+    '<option value="waiting">Waiting for response</option><option value="tbd">TBD</option></select></div></div>' +
+    '<label>Message ({{first_name}} and {{event_date}} fill in automatically)</label>' +
+    '<textarea id="vtMsg" rows="5">' + esc(defMsg) + '</textarea>' +
+    '<div class="m-actions"><button class="btn" id="vtPrev">Preview</button> <button class="btn ghost" id="vtCancel">Cancel</button></div>' +
+    '<div id="vtOut"></div>');
+  WA_TXT_PAYLOAD = null;
+  var cancel = document.getElementById('vtCancel');
+  if (cancel) cancel.addEventListener('click', function () { closeModal(); });
+  var audSel = document.getElementById('vtAud');
+  if (audSel) audSel.addEventListener('change', function () {
+    var w = document.getElementById('vtStatWrap');
+    if (w) w.style.display = this.value === 'roster' ? '' : 'none';
+  });
+  var prev = document.getElementById('vtPrev');
+  if (prev) prev.addEventListener('click', function () { waTxtPreview(ev, dateStr); });
+}
+
+async function waTxtPreview(ev, dateStr) { /* superseded: wave31 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+async function waTxtSend() {
+  if (!WA_TXT_PAYLOAD) return;
+  var btn = document.getElementById('vtSend');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
+  try {
+    var payload = {};
+    Object.keys(WA_TXT_PAYLOAD).forEach(function (k) { payload[k] = WA_TXT_PAYLOAD[k]; });
+    payload.dry_run = false;
+    var r = await db.functions.invoke('quo-send', { body: payload });
+    if (r.error) throw r.error;
+    var d = r.data || {};
+    closeModal();
+    toast('Sent ' + (d.sent || 0) + (d.sent === 1 ? ' text' : ' texts') + (d.failed ? ', ' + d.failed + ' failed' : ''));
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Send now'; }
+    toast('Send failed');
+  }
+}
+
+(function () {
+  var __vp23 = waVolPaint;
+  waVolPaint = function (inner) {
+    __vp23(inner);
+    try {
+      if (!isStaff()) return;
+      var sub = document.querySelector('#volunteering .vl-sub');
+      if (sub && !sub.querySelector('[data-vtxt]')) {
+        var s = document.createElement('span');
+        s.className = 'fchip';
+        s.setAttribute('data-vtxt', '1');
+        s.style.background = '#2c7a66';
+        s.style.color = '#fff';
+        s.textContent = 'Text volunteers';
+        sub.appendChild(s);
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+
+  function wire() {
+    var sec = document.getElementById('volunteering');
+    if (!sec || sec.dataset.txtWired) return;
+    sec.dataset.txtWired = '1';
+    sec.addEventListener('click', function (e) {
+      var t = e.target.closest('[data-vtxt]');
+      if (!t) return;
+      if (!isStaff()) return;
+      try { waTxtModal(); } catch (err) { /* non-fatal */ }
+    });
+  }
+  wire();
+  var __sa23 = startApp;
+  startApp = async function () {
+    await __sa23();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

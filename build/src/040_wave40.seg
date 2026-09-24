@@ -1,0 +1,144 @@
+/* =====================================================================
+   WA v40 roles, permissions, and the admin panel
+   (29/07/26)
+   Guardrails ahead of the wider rollout. Every signed-in person now
+   carries a role: admin, leader, member, or viewer. Roles decide which
+   tabs exist for them; per-person overrides are possible. Admins
+   (Steel, Suhaib, Ian, Valex, Michael, Tuna) get an Admin tab: set
+   anyone's role, override their visible tabs, see who has access.
+   Defaults: admins and leaders see everything; members see their work
+   surfaces (no Board & Governance, no Admin); viewers see the overview
+   only. This governs navigation; board-only data stays protected
+   server side as before.
+   ===================================================================== */
+
+var WA40_ROLES = [];
+var WA40_MINE = null;
+var WA40_TABS = ['overview', 'dashboard', 'opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board', 'training', 'transcripts', 'activity'];
+var WA40_DEFAULTS = {
+  admin: WA40_TABS.concat(['adminpanel']),
+  leader: WA40_TABS.slice(),
+  member: ['overview', 'dashboard', 'opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'training', 'transcripts'],
+  viewer: ['overview']
+};
+
+async function wa40Load() {
+  try {
+    var r = await db.from('hub_roles').select('*');
+    WA40_ROLES = (r && r.data) || [];
+    var em = (typeof USER !== 'undefined' && USER && USER.email ? USER.email : '').toLowerCase();
+    WA40_MINE = WA40_ROLES.filter(function (x) { return x.email === em; })[0]
+      || { email: em, role: em.indexOf('@welfareavenue.com') > 0 ? 'member' : 'viewer' };
+  } catch (e) { WA40_MINE = { role: 'member' }; }
+}
+function wa40Allowed() {
+  if (!WA40_MINE) return WA40_TABS;
+  if (Array.isArray(WA40_MINE.tabs) && WA40_MINE.tabs.length) return WA40_MINE.tabs;
+  return WA40_DEFAULTS[WA40_MINE.role] || WA40_DEFAULTS.member;
+}
+function wa40Enforce() {
+  var allowed = wa40Allowed();
+  document.querySelectorAll('#tabBar .tab').forEach(function (t) {
+    var id = t.dataset.tab;
+    t.style.display = allowed.indexOf(id) >= 0 ? '' : 'none';
+  });
+}
+
+/* admin tab + panel */
+(function () {
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('adminpanel')) {
+    var sec = document.createElement('section');
+    sec.id = 'adminpanel';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Admin: who sees what</h2>'
+      + '<p class="read">Set each person\'s role. Admins manage everything; leaders see every page; members see the work surfaces (no board page, no admin); viewers see the overview only. Tab overrides win over the role default.</p>'
+      + '<div id="w40body">Loading...</div></div>';
+    main.appendChild(sec);
+  }
+  var bar = document.getElementById('tabBar');
+  if (bar && !bar.querySelector('[data-tab="adminpanel"]')) {
+    var btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.setAttribute('data-tab', 'adminpanel');
+    btn.innerHTML = '<span class="tabdot" style="background:#44403c"></span>Admin';
+    bar.appendChild(btn);
+    btn.addEventListener('click', function () { if (typeof showPanel === 'function') showPanel('adminpanel'); });
+  }
+})();
+
+async function wa40Render() {
+  var body = document.getElementById('w40body');
+  if (!body) return;
+  if (!WA40_MINE || WA40_MINE.role !== 'admin') { body.innerHTML = '<p class="read">Only admins can manage roles.</p>'; return; }
+  var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).filter(function (p) { return p.email; });
+  var byEmail = {};
+  WA40_ROLES.forEach(function (r) { byEmail[r.email] = r; });
+  var rows = [];
+  var seen = {};
+  people.forEach(function (p) {
+    var em = String(p.email).toLowerCase();
+    seen[em] = 1;
+    rows.push({ email: em, name: p.name, row: byEmail[em] });
+  });
+  WA40_ROLES.forEach(function (r) { if (!seen[r.email]) rows.push({ email: r.email, name: r.note || '', row: r }); });
+  var html = '<table class="wa-tbl" style="width:100%"><thead><tr><th>Person</th><th>Email</th><th>Role</th><th>Tab override</th></tr></thead><tbody>';
+  rows.forEach(function (x, i) {
+    var role = x.row ? x.row.role : 'member';
+    var ov = x.row && Array.isArray(x.row.tabs) && x.row.tabs.length ? x.row.tabs.join(', ') : '';
+    html += '<tr><td><b>' + esc(x.name || '') + '</b></td><td style="font-size:12px">' + esc(x.email) + '</td>'
+      + '<td><select class="w36sel" data-w40r="' + esc(x.email) + '">'
+      + ['admin', 'leader', 'member', 'viewer'].map(function (r) { return '<option value="' + r + '"' + (r === role ? ' selected' : '') + '>' + r + '</option>'; }).join('')
+      + '</select></td>'
+      + '<td><a class="w37edit" data-w40t="' + esc(x.email) + '">' + (ov ? esc(ov.slice(0, 40)) : 'role default') + '</a></td></tr>';
+  });
+  html += '</tbody></table>'
+    + '<p class="m-sub" style="margin-top:10px">People appear here once their email is on their team profile. Roles apply the next time they load the Hub.</p>';
+  body.innerHTML = html;
+}
+
+function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal (grouped access modal); body removed in Phase 0 compaction */ }
+
+(function () {
+  if (typeof showPanel === 'function') {
+    var __sp40 = showPanel;
+    showPanel = function (id) {
+      var allowed = wa40Allowed();
+      if (WA40_MINE && allowed.indexOf(id) < 0 && id !== 'needsme' && id !== 'personpage' && id !== 'projectpage' && id !== 'volunteering' && id !== 'importantinfo') {
+        id = 'overview';
+      }
+      __sp40(id);
+      if (id === 'adminpanel') { try { wa40Render(); } catch (e) { /* non-fatal */ } }
+    };
+  }
+  function wire() {
+    if (document.body.dataset.wa40Wired) return;
+    document.body.dataset.wa40Wired = '1';
+    document.body.addEventListener('change', async function (e) {
+      var r = e.target.closest && e.target.closest('[data-w40r]');
+      if (!r) return;
+      var em = r.getAttribute('data-w40r');
+      var res = await db.from('hub_roles').upsert({
+        email: em, role: r.value,
+        updated_by: (typeof who === 'function') ? who() : 'admin', updated_at: new Date().toISOString()
+      }, { onConflict: 'email' });
+      if (res.error) { toast('Could not change the role'); return; }
+      await wa40Load();
+      toast(em.split('@')[0] + ' is now ' + r.value);
+    });
+    document.body.addEventListener('click', function (e) {
+      var t = e.target.closest && e.target.closest('[data-w40t]');
+      if (t) { wa40TabModal(t.getAttribute('data-w40t')); }
+    });
+  }
+  wire();
+  var __sa40 = startApp;
+  startApp = async function () {
+    await __sa40();
+    try {
+      wire();
+      await wa40Load();
+      wa40Enforce();
+    } catch (e) { /* non-fatal */ }
+  };
+})();

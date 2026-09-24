@@ -1,0 +1,64 @@
+/* =====================================================================
+   WA v76 Phase 1 (U5): Slack channel pull lives with Commitment
+   =====================================================================
+   The header "# Pull Slack" button is gone (base edit). Hours already
+   have their own "Update hours from Slack" button in the Commitment
+   tab (wave56). This wave adds the channel/DM work pull next to it,
+   using the same slack-pull edge function the header button called.
+   The ClickUp pull is removed for good: ClickUp is retired.
+   ===================================================================== */
+(function () {
+  if (window.__wa76) return; window.__wa76 = true;
+
+  function w76Ensure() {
+    var bar = document.getElementById('w56bar');
+    if (!bar || bar.querySelector('[data-w76slack]')) return;
+    var b = document.createElement('button');
+    b.setAttribute('data-w76slack', '1');
+    b.textContent = 'Pull work from Slack channels';
+    b.title = 'Read the mapped Slack channels and DMs since the last pull and fold work items into the board';
+    var note = bar.querySelector('span:last-child');
+    bar.insertBefore(b, note || null);
+  }
+
+  var W76_BUSY = false;
+  document.body.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w76slack]');
+    if (!b || W76_BUSY) return;
+    if (!confirm('Pull from the mapped Slack channels now? New digests process automatically.')) return;
+    W76_BUSY = true;
+    b.disabled = true; b.textContent = 'Pulling from Slack...';
+    var r = null;
+    try { r = await db.functions.invoke('slack-pull', { body: {} }); } catch (e2) { r = null; }
+    if (r && r.data && r.data.accepted) toast('Slack pull started. Results land over the next few minutes.');
+    else if (r && r.data && r.data.error === 'tokens_missing') toast('Slack tokens are not set up yet. See GO-LIVE.md.');
+    else toast('Slack pull failed to start');
+    var n = 0;
+    var t = setInterval(async function () {
+      n++;
+      try {
+        await Promise.all([loadTranscriptsData(), loadAll()]);
+        renderTranscripts(); renderAllSections(); renderDashboard(); renderWhatsNew();
+      } catch (e3) { /* non-fatal */ }
+      if (n >= 10) clearInterval(t);
+    }, 12000);
+    b.disabled = false; b.textContent = 'Pull work from Slack channels';
+    W76_BUSY = false;
+  });
+
+  /* the Commitment view paints on demand; keep the button present */
+  function w76Watch() {
+    var target = document.getElementById('hrcentre');
+    if (!target) return;
+    var mo = new MutationObserver(function () { w76Ensure(); });
+    mo.observe(target, { childList: true, subtree: true });
+    w76Ensure();
+  }
+  if (typeof startApp === 'function') {
+    var __sa76 = startApp;
+    startApp = async function () {
+      await __sa76.apply(this, arguments);
+      try { w76Watch(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

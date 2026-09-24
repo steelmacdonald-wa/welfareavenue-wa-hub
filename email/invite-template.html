@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+<title>You are invited to the Welfare Avenue Hub</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; padding: 0; background: #FFFAF2; }
+  table { border-collapse: collapse; }
+  img { border: 0; line-height: 100%; }
+  a { color: #6F64AB; }
+  @media only screen and (max-width: 620px) {
+    .wa-wrap { width: 100% !important; }
+    .wa-pad { padding-left: 20px !important; padding-right: 20px !important; }
+    .wa-h1 { font-size: 36px !important; line-height: 38px !important; }
+  }
+</style>
+</head>
+<body style="margin:0;padding:0;background-color:#FFFAF2;">
+<!-- preheader (hidden) -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#FFFAF2;font-size:1px;line-height:1px;">Your sign-in link for the Welfare Avenue Hub, the team's shared workspace.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFFAF2;">
+  <tr>
+    <td align="center" style="padding:24px 12px;">
+      <table role="presentation" class="wa-wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">
+
+        <!-- header band -->
+        <tr>
+          <td class="wa-pad" style="background-color:#103F39;border-radius:8px 8px 0 0;padding:28px 36px 24px 36px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:0;"><img src="https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/rally-2026/logo_header_t.png" width="180" height="90" alt="Welfare Avenue" style="display:block;border:0;width:180px;height:auto;" /></td>
+              </tr>
+              <tr>
+                <td style="padding:22px 0 0 0;font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-weight:700;font-size:11px;line-height:14px;letter-spacing:2px;color:#DCA527;text-transform:uppercase;">You are invited</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- body -->
+        <tr>
+          <td class="wa-pad" style="background-color:#FFFAF2;border-left:1px solid rgba(16,63,57,0.2);border-right:1px solid rgba(16,63,57,0.2);padding:36px 36px 8px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td class="wa-h1" style="font-family:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;font-weight:500;font-size:44px;line-height:46px;color:#103F39;text-transform:uppercase;padding:0 0 6px 0;">Welcome to the Hub</td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 22px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:40px;height:3px;line-height:3px;font-size:3px;background-color:#DCA527;">&nbsp;</td></tr></table></td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:26px;color:#1F201E;padding:0 0 14px 0;">{{ if .Data.full_name }}Hi {{ .Data.full_name }},{{ else }}Hi there,{{ end }}</td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:26px;color:#1F201E;padding:0 0 14px 0;">You have been added to the <span style="color:#6F64AB;font-weight:500;">Welfare Avenue Hub</span>, the team's shared workspace. Meetings turn into tasks, goals and decisions, and everyone can see how the work moves.</td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:26px;color:#1F201E;padding:0 0 26px 0;">Tap the button to sign in for the first time. After that, your Welfare Avenue Google account gets you in any time.</td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td align="center" style="padding:0 0 30px 0;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" style="background-color:#DCA527;border-radius:6px;">
+                        <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block;padding:14px 28px;font-family:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:18px;line-height:20px;letter-spacing:1px;color:#103F39;text-transform:uppercase;text-decoration:none;border-radius:6px;">Open the Hub</a>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <!-- what is inside -->
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-weight:400;font-size:22px;line-height:26px;color:#103F39;text-transform:uppercase;padding:0 0 6px 0;">What is inside</td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 16px 0;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="width:40px;height:3px;line-height:3px;font-size:3px;background-color:#DCA527;">&nbsp;</td></tr></table></td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 10px 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="top" style="width:22px;font-family:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:18px;line-height:24px;color:#DCA527;">1</td>
+                      <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:24px;color:#1F201E;"><span style="font-weight:700;color:#103F39;">Home is your queue.</span> What needs you today: tasks, mentions from meetings, your team.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 10px 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="top" style="width:22px;font-family:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:18px;line-height:24px;color:#DCA527;">2</td>
+                      <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:24px;color:#1F201E;"><span style="font-weight:700;color:#103F39;">Your department page holds the work.</span> Workstreams, meeting notes and requests between teams.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:0 0 26px 0;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td valign="top" style="width:22px;font-family:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;font-weight:600;font-size:18px;line-height:24px;color:#DCA527;">3</td>
+                      <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:24px;color:#1F201E;"><span style="font-weight:700;color:#103F39;">The assistant answers from everything in the Hub.</span> Ask what your team is working on this week and it tells you, with sources.</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:26px;color:#1F201E;padding:0 0 22px 0;">A 60 second tour starts on your first visit, and a short getting-started checklist on your home page walks you through the rest. See you in there.</td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:20px;color:#6F64AB;padding:0 0 30px 0;">If the button does not work, copy this link into your browser:<br /><a href="{{ .ConfirmationURL }}" style="color:#6F64AB;word-break:break-all;">{{ .ConfirmationURL }}</a></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- footer band -->
+        <tr>
+          <td class="wa-pad" style="background-color:#103F39;border-radius:0 0 8px 8px;padding:26px 36px 28px 36px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:0 0 18px 0;"><img src="https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/rally-2026/logo_footer_t.png" width="140" height="70" alt="Welfare Avenue, building pathways in our community" style="display:block;border:0;width:140px;height:auto;" /></td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:20px;color:#FFFAF2;padding:0 0 10px 0;">This link signs you in once and expires after a short while. If it has expired, ask the person who invited you for a fresh one. If you were not expecting this invitation, you can ignore this email.</td>
+              </tr>
+              <tr>
+                <td style="font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:13px;line-height:20px;color:#FFFAF2;padding:0;">Sent by the Welfare Avenue Hub &middot; <a href="{{ .SiteURL }}" style="color:#DCA527;text-decoration:none;">wa-exec-dashboard.netlify.app</a> &middot; <a href="https://welfareavenue.com" style="color:#DCA527;text-decoration:none;">welfareavenue.com</a></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

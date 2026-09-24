@@ -1,0 +1,356 @@
+/* =====================================================================
+   WA v111 one home for the org view (20/08/26)
+   =====================================================================
+   Steel: "the task completion dashboard and decisions page should be
+   merged... decisions aging could just be, like, buttons where I can
+   open a folder and see these things. And I should be able to click
+   that these things are done. I don't really care too much for
+   overdue tasks."
+   The Decisions tab becomes the Hub dashboard, one org-wide home:
+   1. The tab is renamed Dashboard (same id, same hash, same gating;
+      nothing else keys on the old label).
+   2. The wave35 stat strip gains the missing fifth number Steel asked
+      for: donations raised this fiscal year (4100 Donation, FY starts
+      Oct 1), shown only to roles that could open the old Dashboard.
+   3. Three folder buttons under the stats: Decisions waiting (the old
+      decision-aging table, now with a check-to-decide box per row
+      running through the canonical decideModal), Overdue tasks (check
+      to close through toggleTask, with a 10 second Undo), and
+      Delivery numbers (the full task-completion dashboard: totals,
+      per-department bars, workload table and ClickUp movement,
+      rendered by the untouched renderDashboard and mirrored here).
+      One folder open at a time; counts on the buttons.
+   4. #dashboard now lands on this merged page with the numbers folder
+      open, so the wave73 "Open the full dashboard" link and every old
+      bookmark keep working. The #dashboard section itself is not
+      touched; roles without the dashboard tab (viewers, board) keep
+      exactly the page they had, folders and all numbers hidden.
+   Nothing is removed: filters, add decision, the decided fold, the
+   plate card, purpose lines and all dashboard tables survive. Team
+   hours stay in the HR centre where wave52 moved them.
+   ===================================================================== */
+(function () {
+  if (window.__wa111) return; window.__wa111 = true;
+
+  var css = document.createElement('style');
+  css.id = 'wa111css';
+  css.textContent = '' +
+    '#w111folds{margin:2px 0 16px;}' +
+    '.w111row{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px;}' +
+    '.w111btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--wa-line,#e3e8e5);background:#fff;border-radius:14px;padding:10px 16px;font-size:13px;font-weight:700;color:#3d4642;cursor:pointer;box-shadow:0 1px 2px rgba(20,40,30,.04);}' +
+    '.w111btn:hover{border-color:#2c7a66;color:#1f5f4f;}' +
+    '.w111btn.on{border-color:#2c7a66;color:#1f5f4f;background:rgba(44,122,102,.07);}' +
+    '.w111btn b{background:#f2f5f3;border-radius:999px;padding:2px 9px;font-size:12px;}' +
+    '.w111btn.on b{background:rgba(44,122,102,.14);}' +
+    '#w111body{margin:0 0 6px;}' +
+    '#w111body .wa-tbl td{vertical-align:middle;}' +
+    '.w111cb{accent-color:#2c7a66;width:16px;height:16px;cursor:pointer;margin:0;}' +
+    'tr.w111done td{opacity:.55;}' +
+    'tr.w111done .w111t{text-decoration:line-through;}' +
+    '.w111undo{font-size:11px;color:#2c7a66;cursor:pointer;margin-left:8px;font-weight:700;}' +
+    '.w111note{font-size:12px;color:var(--wa-muted,#8592a3);margin:8px 0 0;}';
+  document.head.appendChild(css);
+
+  var W111_OPEN = null;   /* null | aging | overdue | numbers */
+  var W111_LOCK = false;  /* re-entrancy guard around renderDashboard */
+
+  function w111Can() {
+    try {
+      if (typeof WA40_MINE === 'undefined' || !WA40_MINE) return false;
+      return typeof wa40Allowed === 'function' && wa40Allowed().indexOf('dashboard') >= 0;
+    } catch (e) { return false; }
+  }
+
+  /* ---------- 1. the tab is renamed Dashboard ---------- */
+  function w111Tab() {
+    try {
+      var b = document.querySelector('#tabBar .tab[data-tab="overview"]');
+      if (!b || b.dataset.w111) return;
+      b.dataset.w111 = '1';
+      Array.prototype.slice.call(b.childNodes).forEach(function (n) {
+        if (n.nodeType === 3) n.textContent = '';
+      });
+      b.appendChild(document.createTextNode('Dashboard'));
+    } catch (e) { /* cosmetic */ }
+  }
+
+  /* ---------- 2. donations tile on the stat strip ---------- */
+  function w111FyStart() {
+    var now = new Date();
+    var y = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+    return y + '-10-01';
+  }
+  async function w111Donations() {
+    try {
+      if (document.getElementById('w111don') || !w111Can()) return;
+      var fy = w111FyStart();
+      var r = await db.from('finance_transactions')
+        .select('amount, category, txn_date, duplicate_of')
+        .eq('category', '4100 Donation').gte('txn_date', fy).limit(1000);
+      if (!r || r.error) return;
+      /* belt and braces for environments where filters are not applied */
+      var sum = (r.data || []).filter(function (x) {
+        return x.category === '4100 Donation' && Number(x.amount || 0) > 0
+          && !x.duplicate_of && String(x.txn_date || '') >= fy;
+      }).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
+      var tries = 0;
+      (function arm() {
+        var strip = document.getElementById('w35stats');
+        if (!strip) { if (++tries < 30) setTimeout(arm, 300); return; }
+        if (document.getElementById('w111don')) return;
+        var div = document.createElement('div');
+        div.className = 'w35stat';
+        div.id = 'w111don';
+        div.innerHTML = '<b>$' + Math.round(sum).toLocaleString('en-CA') + '</b><span>raised in donations this fiscal year</span>';
+        strip.appendChild(div);
+      })();
+    } catch (e) { /* the strip stays at four tiles */ }
+  }
+
+  /* ---------- 3. the folders ---------- */
+  function w111Aging() {
+    return (typeof getDecisions === 'function' ? getDecisions() : [])
+      .filter(function (d) { return !d.done; })
+      .map(function (d) { return { d: d, age: (typeof daysBetween === 'function' ? daysBetween(d.opened, new Date().toISOString()) : null) || 0 }; })
+      .sort(function (a, b) { return b.age - a.age; });
+  }
+  function w111Overdue() {
+    var today = new Date().toISOString().slice(0, 10);
+    return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : [])
+      .filter(function (r) { return !r.done && r.due_date && r.due_date < today; })
+      .map(function (r) { return { r: r, over: Math.round((new Date(today) - new Date(r.due_date)) / 86400000) }; })
+      .sort(function (a, b) { return b.over - a.over; });
+  }
+
+  function w111AgingHtml(rows) {
+    var staff = typeof isStaff === 'function' && isStaff();
+    var body = rows.map(function (x) {
+      return '<tr data-w111dec="' + x.d.ref + '">' +
+        (staff ? '<td style="width:34px"><input type="checkbox" class="w111cb" data-w111decide="' + x.d.ref + '" title="Mark decided" /></td>' : '') +
+        '<td><a class="w111t" href="#decision/' + x.d.ref + '">' + esc(x.d.title) + '</a>' + (typeof catTag === 'function' ? catTag(x.d.cat) : '') + '</td>' +
+        '<td>' + esc(x.d.owner || 'Both') + '</td><td>' + x.age + 'd</td></tr>';
+    }).join('');
+    return '<div class="card dept-card" style="border-top-color:var(--wa-gold,#d4a13c)">' +
+      '<h2 style="color:#a87f2c">Decisions waiting</h2>' +
+      '<p class="read">Every open executive decision, oldest first. ' + (staff ? 'Tick a box to record what was decided, right here. ' : '') + 'Aging decisions also surface in Slack automatically at 14 and 30 days.</p>' +
+      (rows.length
+        ? '<table class="wa-tbl"><thead><tr>' + (staff ? '<th></th>' : '') + '<th>Decision</th><th>Decides</th><th>Open</th></tr></thead><tbody>' + body + '</tbody></table>'
+        : '<p style="color:var(--wa-muted);font-size:13px;">No open decisions. Clean slate.</p>') +
+      '</div>';
+  }
+
+  function w111OverdueHtml(rows) {
+    var staff = typeof isStaff === 'function' && isStaff();
+    var body = rows.map(function (x) {
+      return '<tr data-w111task="' + x.r.id + '">' +
+        (staff ? '<td style="width:34px"><input type="checkbox" class="w111cb" data-w111close="' + x.r.id + '" title="Mark done" /></td>' : '') +
+        '<td><a class="w111t" href="#task/' + x.r.id + '">' + esc(x.r.title) + '</a></td>' +
+        '<td>' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[x.r.department]) || '') + '</td>' +
+        '<td>' + esc(x.r.owner || '') + '</td><td>' + esc(x.r.due_date || '') + '</td>' +
+        '<td><span class="due-badge ' + (x.over > 7 ? 'red' : 'amber') + '">' + x.over + 'd</span></td></tr>';
+    }).join('');
+    return '<div class="card dept-card" style="border-top-color:var(--wa-flag,#b3402f)">' +
+      '<h2 style="color:var(--wa-flag,#b3402f)">Overdue tasks</h2>' +
+      '<p class="read">Open tasks past their expected due date, most overdue first. ' + (staff ? 'Tick a box to close one; you get ten seconds to undo. ' : '') + 'Amber up to a week over, red beyond.</p>' +
+      (rows.length
+        ? '<table class="wa-tbl"><thead><tr>' + (staff ? '<th></th>' : '') + '<th>Task</th><th>Department</th><th>Owner</th><th>Due</th><th>Over</th></tr></thead><tbody>' + body + '</tbody></table>'
+        : '<p style="color:var(--wa-muted);font-size:13px;">Nothing overdue.</p>') +
+      '</div>';
+  }
+
+  function w111NumbersInto(holder) {
+    var dash = document.getElementById('dashboard');
+    if (!dash) return;
+    if (!dash.children.length) {
+      W111_LOCK = true;
+      try { if (typeof renderDashboard === 'function') renderDashboard(); } catch (e) { /* non-fatal */ }
+      W111_LOCK = false;
+    }
+    holder.innerHTML = '';
+    Array.prototype.slice.call(dash.children).forEach(function (child) {
+      var h2 = child.querySelector && child.querySelector('h2');
+      var t = (h2 && h2.textContent) || '';
+      /* aging and overdue live in their own folders; hours moved to the HR centre (wave52) */
+      if (t.indexOf('Decision aging') >= 0 || t.indexOf('Overdue tasks') >= 0 || t === 'Team hours') return;
+      var c = child.cloneNode(true);
+      c.removeAttribute('id');
+      if (c.querySelectorAll) c.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id'); });
+      /* the old Dashboard page carried a help guide; keep it reachable here
+         (clicks are body-delegated by wave43, so a fresh button just works) */
+      if (t.indexOf('Task completion dashboard') >= 0 && h2 && !c.querySelector('[data-w43help]')) {
+        var ch2 = c.querySelector('h2');
+        if (ch2) {
+          var hb = document.createElement('button');
+          hb.className = 'w43help';
+          hb.setAttribute('data-w43help', 'dashboard');
+          hb.innerHTML = '&#63; How this page works';
+          ch2.appendChild(hb);
+        }
+      }
+      holder.appendChild(c);
+    });
+    holder.insertAdjacentHTML('beforeend',
+      '<p class="w111note">Decisions waiting and overdue tasks have their own folders above. Team hours live in the HR centre.</p>');
+  }
+
+  function w111Body() {
+    var bodyEl = document.getElementById('w111body');
+    if (!bodyEl) return;
+    if (!W111_OPEN) { bodyEl.style.display = 'none'; bodyEl.innerHTML = ''; return; }
+    bodyEl.style.display = 'block';
+    if (W111_OPEN === 'aging') bodyEl.innerHTML = w111AgingHtml(w111Aging());
+    else if (W111_OPEN === 'overdue') bodyEl.innerHTML = w111OverdueHtml(w111Overdue());
+    else if (W111_OPEN === 'numbers') w111NumbersInto(bodyEl);
+  }
+
+  function w111Render() {
+    try {
+      if (!w111Can()) return;
+      var panel = document.getElementById('overview');
+      if (!panel) return;
+      var host = document.getElementById('w111folds');
+      if (!host) {
+        host = document.createElement('div');
+        host.id = 'w111folds';
+        panel.insertBefore(host, panel.firstChild);
+      }
+      /* keep the folders directly under the stat strip when it exists */
+      var strip = document.getElementById('w35stats');
+      if (strip && strip.parentElement === panel && host.previousElementSibling !== strip) {
+        strip.insertAdjacentElement('afterend', host);
+      }
+      var nA = w111Aging().length;
+      var nO = w111Overdue().length;
+      host.innerHTML =
+        '<div class="w111row">' +
+          '<button type="button" class="w111btn' + (W111_OPEN === 'aging' ? ' on' : '') + '" data-w111f="aging">&#128193; Decisions waiting <b>' + nA + '</b></button>' +
+          '<button type="button" class="w111btn' + (W111_OPEN === 'overdue' ? ' on' : '') + '" data-w111f="overdue">&#128193; Overdue tasks <b>' + nO + '</b></button>' +
+          '<button type="button" class="w111btn' + (W111_OPEN === 'numbers' ? ' on' : '') + '" data-w111f="numbers">&#128202; Delivery numbers</button>' +
+        '</div><div id="w111body" style="display:none"></div>';
+      w111Body();
+    } catch (e) { /* non-fatal */ }
+  }
+
+  function w111Open(which) {
+    W111_OPEN = which;
+    w111Render();
+    var host = document.getElementById('w111folds');
+    if (host && host.scrollIntoView) setTimeout(function () { host.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+  }
+
+  /* ---------- interactions ---------- */
+  document.addEventListener('click', function (e) {
+    var fb = e.target && e.target.closest && e.target.closest('[data-w111f]');
+    if (fb) {
+      var which = fb.getAttribute('data-w111f');
+      W111_OPEN = (W111_OPEN === which) ? null : which;
+      w111Render();
+      return;
+    }
+    var un = e.target && e.target.closest && e.target.closest('[data-w111undo]');
+    if (un) {
+      var id0 = Number(un.getAttribute('data-w111undo'));
+      var tr0 = un.closest('tr');
+      if (id0 && typeof toggleTask === 'function') {
+        toggleTask(id0, false).then(function (ok) {
+          if (!ok || !tr0) return;
+          tr0.classList.remove('w111done');
+          var cb0 = tr0.querySelector('input[data-w111close]');
+          if (cb0) { cb0.checked = false; cb0.disabled = false; }
+          un.remove();
+          w111Counts();
+        });
+      }
+    }
+  });
+
+  document.addEventListener('change', function (e) {
+    var dc = e.target && e.target.closest && e.target.closest('input[data-w111decide]');
+    if (dc) {
+      var ref = Number(dc.getAttribute('data-w111decide'));
+      var d = (typeof getDecisions === 'function' ? getDecisions() : []).find(function (x) { return x.ref === ref; });
+      if (d && !d.done && dc.checked && typeof decideModal === 'function') decideModal(d, dc);
+      else dc.checked = false;
+      return;
+    }
+    var cb = e.target && e.target.closest && e.target.closest('input[data-w111close]');
+    if (cb) {
+      var id = Number(cb.getAttribute('data-w111close'));
+      var tr = cb.closest('tr');
+      if (!id || typeof toggleTask !== 'function') { cb.checked = false; return; }
+      cb.disabled = true;
+      toggleTask(id, true).then(function (ok) {
+        cb.disabled = false;
+        if (!ok) { cb.checked = false; return; }
+        if (tr) {
+          tr.classList.add('w111done');
+          var old = tr.querySelector('.w111undo');
+          if (old) old.remove();
+          var u = document.createElement('span');
+          u.className = 'w111undo';
+          u.textContent = 'Undo';
+          u.setAttribute('data-w111undo', String(id));
+          var cell = tr.querySelector('.w111t');
+          if (cell && cell.parentElement) cell.parentElement.appendChild(u); else tr.appendChild(u);
+          setTimeout(function () {
+            if (u.isConnected && tr.classList.contains('w111done')) w111Render();
+          }, 10000);
+        }
+        w111Counts();
+      });
+    }
+  }, true);
+
+  function w111Counts() {
+    try {
+      var host = document.getElementById('w111folds');
+      if (!host) return;
+      var bs = host.querySelectorAll('.w111btn b');
+      if (bs.length >= 2) { bs[0].textContent = String(w111Aging().length); bs[1].textContent = String(w111Overdue().length); }
+    } catch (e) { /* cosmetic */ }
+  }
+
+  /* ---------- 4. #dashboard lands on the merged page ---------- */
+  if (typeof showPanel === 'function') {
+    var __sp111 = showPanel;
+    showPanel = function (id) {
+      if (id === 'dashboard' && w111Can()) {
+        __sp111('overview');
+        try { w111Render(); w111Open('numbers'); } catch (e) { /* non-fatal */ }
+        return;
+      }
+      __sp111(id);
+      if (id === 'overview') { try { w111Render(); } catch (e) { /* non-fatal */ } }
+    };
+  }
+
+  /* refresh after the canonical write paths repaint */
+  if (typeof renderDecisions === 'function') {
+    var __rdec111 = renderDecisions;
+    renderDecisions = function () {
+      __rdec111.apply(this, arguments);
+      if (!W111_LOCK) { W111_LOCK = true; try { w111Render(); } catch (e) { /* non-fatal */ } W111_LOCK = false; }
+    };
+  }
+  if (typeof renderDashboard === 'function') {
+    var __rdash111 = renderDashboard;
+    renderDashboard = function () {
+      __rdash111.apply(this, arguments);
+      if (!W111_LOCK) { W111_LOCK = true; try { w111Render(); } catch (e) { /* non-fatal */ } W111_LOCK = false; }
+    };
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa111 = startApp;
+    startApp = async function () {
+      await __sa111.apply(this, arguments);
+      try {
+        w111Tab();
+        w111Render();
+        w111Donations();
+        /* a #dashboard deep link resolves before roles load; re-route it now */
+        if (typeof WA_CUR_PANEL !== 'undefined' && WA_CUR_PANEL === 'dashboard' && w111Can()) showPanel('dashboard');
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

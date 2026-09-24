@@ -1,0 +1,289 @@
+/* =====================================================================
+   WA v36 Training and onboarding
+   (29/07/26)
+   1. A Training tab: the full catalog pulled from your Loom library and
+      the ClickUp training paths, grouped by area (Governance, Keela,
+      Marketing Strategy Package, Operations, Excel, OpenPhone, General).
+      Each item opens the video or resource. Staff can assign a training
+      to a person and mark it done; each person's progress shows on
+      their profile page, so you can see who is trained on what.
+   2. An onboarding block at the top of the tab: the onboarding SOP and
+      the recommended path for a new member, plus who is mid-onboarding.
+   3. Inventory gains a Create purchase order button that files a PO
+      request straight into the requests portal.
+   ===================================================================== */
+
+var WA36_TRAININGS = [];
+var WA36_PROG = [];
+var WA36_LOADED = false;
+
+(function () {
+  if (document.getElementById('wa36css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa36css';
+  st.textContent = '' +
+    '#training .w36cat{margin:18px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#2c7a66;font-weight:700;}' +
+    '.w36grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:8px;}' +
+    '.w36card{background:#fff;border-radius:16px;padding:13px 15px;box-shadow:0 1px 2px rgba(20,40,30,.03),0 14px 34px -26px rgba(20,48,43,.22);display:flex;flex-direction:column;gap:6px;}' +
+    '.w36card h4{margin:0;font-size:14px;color:var(--wa-ink,#14302b);line-height:1.3;}' +
+    '.w36card .w36meta{font-size:11.5px;color:#7b8a86;}' +
+    '.w36card .w36row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:2px;}' +
+    '.w36card a.w36watch{font-size:12.5px;color:#2c7a66;font-weight:600;text-decoration:none;}' +
+    '.w36card a.w36watch:hover{text-decoration:underline;}' +
+    '.w36pill{font-size:10.5px;border:1px solid rgba(44,122,102,.4);color:#2c7a66;border-radius:999px;padding:1px 8px;}' +
+    '.w36pill.done{background:#2c7a66;color:#fff;border-color:#2c7a66;}' +
+    '.w36pill.prog{border-color:#c87a2f;color:#c87a2f;}' +
+    '.w36sel{font-size:11.5px;border:1px solid #e0e4e2;border-radius:8px;padding:2px 6px;background:#f4f6f5;}' +
+    '.w36onb{background:linear-gradient(135deg,rgba(31,95,79,.06),rgba(212,161,60,.06));border-radius:18px;padding:16px 18px;margin-bottom:6px;}' +
+    '.w36onb h3{margin:0 0 4px;font-size:15px;color:#1f5f4f;}' +
+    '.w36prof{border-top:1px solid rgba(127,127,127,.15);margin-top:10px;padding-top:8px;}' +
+    '.w36prog-row{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;flex-wrap:wrap;}';
+  document.head.appendChild(st);
+})();
+
+/* ---------- panel + tab ---------- */
+(function () {
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('training')) {
+    var sec = document.createElement('section');
+    sec.id = 'training';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card"><h2>Training</h2>'
+      + '<p class="read">Your Loom trainings and ClickUp training paths in one catalog. Assign a training to someone and mark it done; each person\'s progress shows on their profile.</p>'
+      + '<div id="w36body">Loading the catalog...</div></div>';
+    main.appendChild(sec);
+  }
+  var bar = document.getElementById('tabBar');
+  if (bar && !bar.querySelector('[data-tab="training"]')) {
+    var btn = document.createElement('button');
+    btn.className = 'tab';
+    btn.setAttribute('data-tab', 'training');
+    btn.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Training';
+    var before = document.getElementById('txTabBtn');
+    if (before) bar.insertBefore(btn, before); else bar.appendChild(btn);
+    btn.addEventListener('click', function () {
+      if (typeof showPanel === 'function') showPanel('training');
+      try { location.hash = 'training'; } catch (e) { }
+    });
+  }
+})();
+
+async function wa36Load(force) {
+  if (WA36_LOADED && !force) return;
+  try {
+    var t = await db.from('trainings').select('*').eq('active', true).order('category').order('sort').order('id');
+    WA36_TRAININGS = (t && t.data) || [];
+    var p = await db.from('training_progress').select('*');
+    WA36_PROG = (p && p.data) || [];
+    WA36_LOADED = true;
+  } catch (e) { /* offline */ }
+}
+
+function wa36Dur(s) {
+  if (!s) return '';
+  var m = Math.round(s / 60);
+  return m >= 60 ? (Math.floor(m / 60) + 'h ' + (m % 60) + 'm') : (m + ' min');
+}
+function wa36ProgFor(tid) {
+  return WA36_PROG.filter(function (p) { return String(p.training_id) === String(tid); });
+}
+
+async function wa36Render() {
+  var body = document.getElementById('w36body');
+  if (!body) return;
+  if (typeof isStaff === 'function' && !isStaff()) { body.innerHTML = '<p class="read">Training is available to staff accounts.</p>'; return; }
+  await wa36Load(false);
+  var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+  var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+
+  var onb = '<div class="w36onb"><h3>New here? Start with onboarding</h3>'
+    + '<p class="read" style="margin:0 0 6px">Follow the '
+    + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a>'
+    + ', then work through the training path for your team below. Mark each item done as you go.</p>'
+    + '<div class="w36row">' + (me ? '<span class="w36pill">You are signed in as ' + esc(me.name) + '</span>' : '') + '</div></div>';
+
+  var cats = {};
+  WA36_TRAININGS.forEach(function (t) { (cats[t.category] = cats[t.category] || []).push(t); });
+  var order = ['General', 'Operations', 'Marketing', 'Keela (donor CRM)', 'Charity governance & accounting', 'Excel', 'OpenPhone'];
+  var keys = Object.keys(cats).sort(function (a, b) {
+    var ia = order.indexOf(a); var ib = order.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+
+  var html = onb;
+  keys.forEach(function (cat) {
+    html += '<div class="w36cat">' + esc(cat) + '</div><div class="w36grid">';
+    cats[cat].forEach(function (t) {
+      var pr = wa36ProgFor(t.id);
+      var doneN = pr.filter(function (x) { return x.status === 'done'; }).length;
+      var mine = me ? pr.filter(function (x) { return x.person_name.toLowerCase() === me.name.toLowerCase(); })[0] : null;
+      html += '<div class="w36card"><h4>' + esc(t.title) + '</h4>'
+        + '<div class="w36meta">' + (t.path_group ? esc(t.path_group) + ' &middot; ' : '') + (t.duration_sec ? wa36Dur(t.duration_sec) + ' &middot; ' : '') + esc(t.source === 'clickup' ? 'ClickUp' : 'Loom') + '</div>'
+        + (t.description ? '<div class="w36meta">' + esc(t.description) + '</div>' : '')
+        + '<div class="w36row">'
+        + (t.resource_url ? '<a class="w36watch" href="' + esc(t.resource_url) + '" target="_blank" rel="noopener">Open the training &raquo;</a>' : '')
+        + (doneN ? '<span class="w36pill done">' + doneN + ' done</span>' : '')
+        + '</div>'
+        + '<div class="w36row">'
+        + (mine ? '<span class="w36pill ' + (mine.status === 'done' ? 'done' : 'prog') + '">You: ' + esc(mine.status) + '</span>' : '')
+        + '<button class="w36sel" data-w36me="' + t.id + '" data-st="' + (mine && mine.status === 'done' ? 'done' : 'todo') + '">' + (mine && mine.status === 'done' ? 'Mark not done' : 'Mark it done for me') + '</button>'
+        + '<select class="w36sel" data-w36assign="' + t.id + '"><option value="">Assign to...</option>'
+        + people.map(function (pp) { return '<option value="' + esc(pp.name) + '">' + esc(pp.name) + '</option>'; }).join('')
+        + '</select>'
+        + '</div></div>';
+    });
+    html += '</div>';
+  });
+  body.innerHTML = html;
+}
+
+/* progress writes */
+async function wa36SetMine(tid, done) {
+  var me = (typeof wa28Me === 'function') ? wa28Me() : null;
+  if (!me) { toast('Sign in to track your training'); return; }
+  await wa36Assign(tid, me.name, done ? 'done' : 'assigned');
+}
+async function wa36Assign(tid, name, status) {
+  var patch = { training_id: Number(tid), person_name: name, status: status, updated_at: new Date().toISOString() };
+  if (status === 'done') patch.done_at = new Date().toISOString();
+  patch.assigned_by = (typeof who === 'function') ? who() : 'dashboard';
+  var r = await db.from('training_progress').upsert(patch, { onConflict: 'training_id,person_name' });
+  if (r.error) { toast('Could not save the training status'); return; }
+  await wa36Load(true);
+  wa36Render();
+  toast(status === 'done' ? 'Marked done' : 'Assigned to ' + name);
+}
+
+/* profile page training block (wraps v33 wa33Person) */
+async function wa36ProfileBlock(mid) {
+  var sec = document.getElementById('personpage');
+  if (!sec) return;
+  try {
+    var r = await db.from('team_members').select('name').eq('id', Number(mid)).maybeSingle();
+    var nm = r && r.data && r.data.name;
+    if (!nm) return;
+    await wa36Load(false);
+    var mine = WA36_PROG.filter(function (p) { return p.person_name.toLowerCase() === String(nm).toLowerCase(); });
+    var byId = {};
+    WA36_TRAININGS.forEach(function (t) { byId[String(t.id)] = t; });
+    var card = sec.querySelector('.card');
+    if (!card || card.querySelector('.w36prof')) return;
+    var done = mine.filter(function (m) { return m.status === 'done'; });
+    var html = '<div class="w36prof"><h3 class="block" style="color:#2c7a66">Training (' + done.length + ' of ' + mine.length + ' done)</h3>';
+    if (!mine.length) html += '<p class="m-sub">No training assigned yet. Assign some from the Training tab.</p>';
+    mine.forEach(function (m) {
+      var t = byId[String(m.training_id)];
+      html += '<div class="w36prog-row"><span class="w36pill ' + (m.status === 'done' ? 'done' : 'prog') + '">' + esc(m.status) + '</span> ' + esc(t ? t.title : 'Training') + (t && t.resource_url ? ' <a href="' + esc(t.resource_url) + '" target="_blank" rel="noopener" style="color:#2c7a66;font-size:12px">open</a>' : '') + '</div>';
+    });
+    html += '</div>';
+    card.insertAdjacentHTML('beforeend', html);
+  } catch (e) { /* non-fatal */ }
+}
+
+if (typeof wa33Person === 'function') {
+  (function () {
+    var __pp36 = wa33Person;
+    wa33Person = async function (mid) {
+      await __pp36(mid);
+      try { await wa36ProfileBlock(mid); } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- inventory: create purchase order ---------- */
+function wa36PoModal() {
+  openModal('<h3>Create a purchase order</h3>' +
+    '<p class="m-sub">This files a purchase order request into the requests portal for fundraising to action.</p>' +
+    '<label>What are you ordering</label><input type="text" id="w36item" placeholder="Item or supplies" />' +
+    '<div class="m-row"><div><label>Estimated amount</label><input type="text" id="w36amt" placeholder="e.g. 120.00$" /></div>' +
+    '<div><label>Vendor</label><input type="text" id="w36vendor" placeholder="Where from" /></div></div>' +
+    '<label>Reason</label><input type="text" id="w36reason" placeholder="What it is for" />' +
+    '<label>Needed by</label><input type="date" id="w36need" />' +
+    '<div class="m-actions"><button class="btn" id="w36posave">File the PO request</button> <button class="btn ghost" id="w36pocancel">Cancel</button></div>');
+  var c = document.getElementById('w36pocancel');
+  if (c) c.addEventListener('click', function () { closeModal(); });
+  var s = document.getElementById('w36posave');
+  if (s) s.addEventListener('click', async function () {
+    var item = (document.getElementById('w36item').value || '').trim();
+    if (!item) { toast('Say what you are ordering'); return; }
+    s.disabled = true;
+    var details = [
+      'Amount: ' + ((document.getElementById('w36amt').value || '').trim() || 'TBD'),
+      'Vendor: ' + ((document.getElementById('w36vendor').value || '').trim() || 'TBD'),
+      'Reason: ' + ((document.getElementById('w36reason').value || '').trim() || ''),
+      'Needed by: ' + ((document.getElementById('w36need').value || '').trim() || 'TBD')
+    ].join('\n');
+    var row = {
+      type_key: 'purchase-order', department: 'fundraising',
+      title: 'PO: ' + item, details: details, status: 'requested', done: false,
+      requested_by: (typeof who === 'function') ? who() : 'dashboard'
+    };
+    var r = await db.from('dept_requests').insert(row);
+    if (r.error) { s.disabled = false; toast('Could not file the PO'); return; }
+    closeModal();
+    toast('Purchase order filed');
+  });
+}
+
+if (typeof waVolRender === 'function') {
+  (function () {
+    var __vr36 = waVolRender;
+    waVolRender = async function () {
+      await __vr36();
+      try {
+        if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'inventory' && typeof isStaff === 'function' && isStaff()) {
+          var sec = document.getElementById('volunteering');
+          if (sec && !sec.querySelector('[data-w36po]')) {
+            var host = sec.querySelector('.vl-empty') || sec.querySelector('.vl-main') || sec;
+            var wrap = document.createElement('div');
+            wrap.className = 'wa24-links';
+            wrap.style.margin = '4px 0 12px';
+            wrap.innerHTML = '<button data-w36po="1">Create a purchase order</button>';
+            if (host && host.parentNode) host.parentNode.insertBefore(wrap, host.nextSibling); else sec.appendChild(wrap);
+          }
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- wiring ---------- */
+(function () {
+  if (typeof showPanel === 'function') {
+    var __sp36 = showPanel;
+    showPanel = function (id) {
+      __sp36(id);
+      if (id === 'training') { try { wa36Render(); } catch (e) { /* non-fatal */ } }
+    };
+  }
+  if (typeof applyHash === 'function') {
+    var __ah36 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h === 'training') { if (typeof showPanel === 'function') showPanel('training'); return; }
+      __ah36();
+    };
+  }
+
+  function wire() {
+    if (document.body.dataset.wa36Wired) return;
+    document.body.dataset.wa36Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var po = e.target.closest && e.target.closest('[data-w36po]');
+      if (po) { try { wa36PoModal(); } catch (x) { /* non-fatal */ } return; }
+      var mb = e.target.closest && e.target.closest('[data-w36me]');
+      if (mb) { wa36SetMine(mb.getAttribute('data-w36me'), mb.getAttribute('data-st') !== 'done'); return; }
+    });
+    document.body.addEventListener('change', function (e) {
+      var as = e.target.closest && e.target.closest('[data-w36assign]');
+      if (as && as.value) { wa36Assign(as.getAttribute('data-w36assign'), as.value, 'assigned'); as.value = ''; return; }
+    });
+  }
+  wire();
+
+  var __sa36 = startApp;
+  startApp = async function () {
+    await __sa36();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

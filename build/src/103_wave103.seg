@@ -1,0 +1,100 @@
+/* =====================================================================
+   WA v103 scope of work from check-ins (07/08/26)
+   =====================================================================
+   Steel (07/08/26): "pulling information from the check-in-out channels
+   for HR to see the scope of everyone's work". The checkin-scope edge fn
+   reads #check-in-out-wa (last 30 days) every Monday and writes one row
+   per person into wa_checkin_scope (staff-readable): check-in counts,
+   days active, first/last seen, and an AI summary of the scope of their
+   work (facts only, no performance judgements). This wave renders that
+   table as a card in the HR centre with a Refresh button. Injection uses
+   the wave93 MutationObserver pattern (wa46Render is IIFE-private).
+   ===================================================================== */
+(function () {
+  if (window.__wa103) return; window.__wa103 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w103scope table{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '#w103scope th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 6px;}' +
+    '#w103scope td{padding:5px 6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:top;}' +
+    '#w103scope .mut{color:var(--wa-muted,#7b8a86);font-size:11px;}' +
+    '#w103scope details{margin:2px 0 0;}' +
+    '#w103scope summary{cursor:pointer;font-size:11.5px;color:#2c7a66;font-weight:600;}' +
+    '#w103scope .sum{font-size:12px;color:var(--wa-text,#697a8d);margin:4px 0 0;line-height:1.5;max-width:640px;}';
+  document.head.appendChild(css);
+
+  async function w103Render() {
+    var body = document.getElementById('w103body');
+    if (!body) return;
+    try {
+      var r = await db.from('wa_checkin_scope').select('*').order('msg_count', { ascending: false });
+      var rows = (r && r.data) || [];
+      if (!rows.length) { body.innerHTML = '<p class="read">No check-in messages found in the window yet. The pull runs every Monday, or press Refresh.</p>'; return; }
+      var stamp = rows[0].updated_at ? new Date(rows[0].updated_at).toLocaleDateString('en-CA') : '';
+      var html = '<table><thead><tr><th>Person</th><th>Days active</th><th>Check-ins</th><th>Last seen</th><th>Where</th><th>Scope of work</th></tr></thead><tbody>';
+      rows.forEach(function (p) {
+        html += '<tr><td><b>' + esc(p.name || '') + '</b></td>'
+          + '<td>' + (p.days_active || 0) + '</td>'
+          + '<td>' + (p.msg_count || 0) + '</td>'
+          + '<td class="mut">' + esc(p.last_seen || '') + '</td>'
+          + '<td class="mut">' + esc(p.channels || '') + '</td>'
+          + '<td>' + (p.summary
+            ? '<details><summary>What they worked on</summary><div class="sum">' + esc(p.summary) + '</div></details>'
+            : '<span class="mut">Too few messages to summarise.</span>') + '</td></tr>';
+      });
+      html += '</tbody></table>';
+      html += '<p class="mut" style="margin-top:8px">Source: the #check-in-out channels (one per department), last ' + (rows[0].window_days || 30) + ' days' + (stamp ? ', refreshed ' + stamp : '') + '. Summaries describe scope only, never performance.</p>';
+      body.innerHTML = html;
+    } catch (e) { body.innerHTML = '<p class="read">Could not load the check-in scope table.</p>'; }
+  }
+
+  async function w103Card() {
+    var panel = document.getElementById('hrcentre');
+    if (!panel || document.getElementById('w103scope')) return;
+    if (typeof isStaff !== 'function' || !isStaff()) return;
+    /* the HR centre has its own access list (wave52): if this person got
+       the denied card, they do not get HR data folds either */
+    if (!panel.children.length || panel.querySelector('#w52denied')) return;
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.id = 'w103scope';
+    card.innerHTML = '<h2>Scope of work from check-ins <button class="btn ghost mini" id="w103ref">Refresh</button></h2>'
+      + '<p class="read">What everyone has been working on, read from the per-department check-in channels. Updates automatically every Monday morning.</p>'
+      + '<div id="w103body">Loading...</div>';
+    panel.appendChild(card);
+    document.getElementById('w103ref').addEventListener('click', async function () {
+      var b = this; b.disabled = true; b.textContent = 'Reading the channel...';
+      try {
+        var res = await db.functions.invoke('checkin-scope', { body: {} });
+        if (res.error || (res.data && res.data.error)) throw (res.error || res.data.error);
+        toast('Check-in scope refreshed');
+        await w103Render();
+      } catch (e) { toast('Refresh failed'); }
+      b.disabled = false; b.textContent = 'Refresh';
+    });
+    w103Render();
+  }
+
+  (function () {
+    var t103 = null;
+    function arm() {
+      var panel = document.getElementById('hrcentre');
+      if (!panel || panel.dataset.w103mo) return;
+      panel.dataset.w103mo = '1';
+      var mo = new MutationObserver(function () {
+        clearTimeout(t103);
+        t103 = setTimeout(function () { try { w103Card(); } catch (e) { /* non-fatal */ } }, 300);
+      });
+      mo.observe(panel, { childList: true });
+      if (panel.children.length) { try { w103Card(); } catch (e) { /* non-fatal */ } }
+    }
+    if (typeof startApp === 'function') {
+      var __sa103 = startApp;
+      startApp = async function () {
+        await __sa103.apply(this, arguments);
+        try { arm(); } catch (e) { /* non-fatal */ }
+      };
+    }
+  })();
+})();

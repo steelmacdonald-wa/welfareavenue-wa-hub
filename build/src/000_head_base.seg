@@ -1,0 +1,2359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Welfare Avenue | Hub</title>
+
+<!-- ============================================================
+     Welfare Avenue Hub (whole-org workspace)
+     Data: Supabase project welfare-avenue-kb (RLS locked).
+     Access: Google sign-in. welfareavenue.com accounts get the
+     full board; invited board viewers get a sanitized read-only
+     view. See GO-LIVE.md for hosting and configuration.
+     ============================================================ -->
+<script>
+  const SUPABASE_URL = "https://zwnmulmnvopclzcvytce.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3bm11bG1udm9wY2x6Y3Z5dGNlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI3NjQxMjUsImV4cCI6MjA5ODM0MDEyNX0.YVeW1e8ffqkp3nOWdEyYXx4Kq-Tms61uReqDgypt3A4";
+  const FUNCTIONS_BASE = SUPABASE_URL + "/functions/v1";
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    /* Welfare Avenue palette (swap these for the official brand hex if different) */
+    --wa-ink: #14302b;
+    --wa-green: #1f5f4f;
+    --wa-green-soft: #2c7a66;
+    --wa-gold: #d4a13c;
+    --wa-gold-soft: #f0d9a8;
+    --wa-paper: #f7f5ef;
+    --wa-card: #ffffff;
+    --wa-line: #e3ded2;
+    --wa-text: #243029;
+    --wa-muted: #6b7670;
+    --wa-flag: #b3402f;
+
+    /* department colour chips */
+    --c-opsmtl: #2c7a66;
+    --c-opsto: #3a6ea5;
+    --c-mkt: #8a5cc4;
+    --c-fund: #c87a2f;
+    --c-grants: #b8902f;
+    --c-hr: #b3402f;
+    --c-board: #4a4f57;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--wa-paper);
+    color: var(--wa-text);
+    line-height: 1.55;
+    font-size: 15px;
+  }
+
+  a { color: var(--wa-green); }
+
+  /* ---------- Header ---------- */
+  header.wa-header {
+    background: linear-gradient(135deg, var(--wa-ink), var(--wa-green));
+    color: #fff;
+    padding: 26px 24px 22px;
+  }
+  .wa-wrap { max-width: 1080px; margin: 0 auto; }
+  .wa-brandrow { display: flex; align-items: center; gap: 14px; }
+  .wa-logo {
+    width: 46px; height: 46px; border-radius: 11px;
+    background: var(--wa-gold);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--wa-ink); font-weight: 800; font-size: 20px; letter-spacing: -1px;
+    flex: 0 0 auto;
+  }
+  .wa-brandrow h1 { font-size: 19px; margin: 0; font-weight: 700; letter-spacing: .2px; }
+  .wa-brandrow .sub { font-size: 13px; opacity: .82; margin-top: 2px; }
+  .wa-meta {
+    margin-top: 16px; display: flex; flex-wrap: wrap; gap: 10px 22px;
+    font-size: 12.5px; opacity: .9;
+  }
+  .wa-meta b { font-weight: 600; }
+  .wa-legend { margin-top: 10px; font-size: 12.5px; opacity: .9; }
+  .flag { color: var(--wa-gold-soft); font-weight: 700; }
+
+  /* identity + status pills */
+  .wa-toolbar {
+    background: var(--wa-ink); color: #e8efe9;
+    font-size: 12.5px; padding: 8px 24px;
+  }
+  .wa-toolbar .wa-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between; }
+  .pill { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #9aa; }
+  .dot.ok { background: #57c98b; }
+  .dot.local { background: var(--wa-gold); }
+  .who-btn {
+    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25);
+    border-radius: 20px; padding: 3px 12px; cursor: pointer; font-size: 12.5px;
+  }
+  .who-btn:hover { background: rgba(255,255,255,.22); }
+
+  /* ---------- Nav ---------- */
+  nav.wa-nav {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--wa-card); border-bottom: 1px solid var(--wa-line);
+    box-shadow: 0 1px 6px rgba(0,0,0,.04);
+  }
+  nav.wa-nav .wa-wrap { display: flex; flex-wrap: wrap; gap: 2px; }
+  .tab {
+    border: none; background: none; cursor: pointer;
+    padding: 13px 14px; font-size: 13.5px; font-weight: 600; color: var(--wa-muted);
+    border-bottom: 3px solid transparent;
+  }
+  .tab:hover { color: var(--wa-text); }
+  .tab.active { color: var(--wa-green); border-bottom-color: var(--wa-green); }
+
+  /* ---------- Main ---------- */
+  main { max-width: 1080px; margin: 0 auto; padding: 26px 24px 80px; }
+  .panel { display: none; }
+  .panel.active { display: block; animation: fade .25s ease; }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px);} to {opacity:1; transform:none;} }
+
+  .setup-banner {
+    background: var(--wa-gold-soft); border: 1px solid var(--wa-gold);
+    color: #6a4d12; border-radius: 10px; padding: 12px 16px; margin-bottom: 22px;
+    font-size: 13.5px;
+  }
+  .setup-banner b { color: #5a3f0a; }
+
+  .card {
+    background: var(--wa-card); border: 1px solid var(--wa-line);
+    border-radius: 14px; padding: 20px 22px; margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(20,40,30,.04);
+  }
+  .card > h2 { margin: 0 0 4px; font-size: 18px; color: var(--wa-ink); }
+  .card .read {
+    font-size: 13.5px; color: var(--wa-muted); margin: 0 0 16px;
+    border-left: 3px solid var(--wa-gold); padding-left: 12px;
+  }
+  h3.block { font-size: 12px; text-transform: uppercase; letter-spacing: .9px; color: var(--wa-muted); margin: 18px 0 8px; }
+
+  .deptchip {
+    display: inline-block; font-size: 11px; font-weight: 700; color: #fff;
+    padding: 2px 9px; border-radius: 20px; vertical-align: middle; margin-left: 8px;
+  }
+
+  /* decision / open-item checklist */
+  ul.checklist { list-style: none; margin: 0; padding: 0; }
+  ul.checklist li {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 11px 4px; border-bottom: 1px solid var(--wa-line);
+  }
+  ul.checklist li:last-child { border-bottom: none; }
+  ul.checklist input[type=checkbox] {
+    width: 19px; height: 19px; margin-top: 2px; accent-color: var(--wa-green); cursor: pointer; flex: 0 0 auto;
+  }
+  .ci-body { flex: 1; }
+  .ci-title { font-weight: 600; }
+  .ci-sub { font-size: 12.5px; color: var(--wa-muted); margin-top: 2px; }
+  li.done .ci-title { text-decoration: line-through; color: var(--wa-muted); }
+  .ci-meta { font-size: 11.5px; color: var(--wa-green-soft); margin-top: 3px; font-style: italic; }
+  .area-tag {
+    font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 12px;
+    background: #eef3f0; color: var(--wa-green); margin-left: 6px; white-space: nowrap;
+  }
+
+  /* department theming + new blocks */
+  .tabdot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .dept-card { border-top: 5px solid var(--wa-green); }
+  .progress-box {
+    background: #faf9f4; border-left: 4px solid var(--wa-gold);
+    border-radius: 8px; padding: 11px 15px; margin: 6px 0 16px;
+  }
+  .progress-box p { margin: 5px 0 0; font-size: 13.5px; }
+  ul.prio { list-style: none; margin: 0 0 6px; padding: 0; }
+  ul.prio li {
+    padding: 9px 13px; margin-bottom: 7px; border-radius: 8px;
+    background: #fdf3ee; border: 1px solid #f0d4c2; font-size: 13.5px; font-weight: 600;
+    display: flex; gap: 9px; align-items: baseline;
+  }
+  ul.prio li::before { content: "\2605"; color: var(--wa-flag); flex: 0 0 auto; }
+  .subsection {
+    border: 1px solid var(--wa-line); border-radius: 11px; padding: 13px 17px; margin: 12px 0;
+    border-left: 5px solid var(--sc, #999); background: #fff;
+  }
+  .subhead { font-size: 14.5px; font-weight: 700; margin: 0 0 3px; color: var(--sc, #333); }
+  .sub-sum { font-size: 13px; color: var(--wa-muted); margin: 0 0 10px; }
+  .subsection ul.checklist li { padding: 9px 2px; }
+  .add-row { margin: 14px 0 4px; }
+  .btn.mini { padding: 6px 12px; font-size: 12.5px; }
+  .reassign-btn { background: none; border: none; color: var(--wa-green); font-size: 11.5px; cursor: pointer; text-decoration: underline; padding: 0 0 0 4px; }
+  .reassign-btn:hover { color: var(--wa-green-soft); }
+  details.completed { margin: 14px 0 4px; border-top: 1px dashed var(--wa-line); padding-top: 10px; }
+  details.completed summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--wa-muted); text-transform: uppercase; letter-spacing: .7px; list-style: revert; }
+  details.completed summary:hover { color: var(--wa-text); }
+  details.completed ul.checklist { margin-top: 8px; }
+  .dash { margin: 8px 0 10px; }
+  .dash-row { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; font-size: 12.5px; }
+  .dash-label { width: 150px; flex: 0 0 auto; }
+  .dash-bar-wrap { flex: 1; background: #eef1ee; border-radius: 6px; min-height: 22px; display: flex; align-items: center; }
+  .dash-bar { min-width: 30px; padding: 3px 9px; color: #fff; font-weight: 700; border-radius: 6px; white-space: nowrap; font-size: 12px; }
+  .dash-none { color: var(--wa-muted); font-size: 11.5px; padding-left: 8px; }
+  .dash-nums { width: 130px; flex: 0 0 auto; color: var(--wa-muted); text-align: right; }
+  @media (max-width: 640px) { .dash-label { width: 96px; } .dash-nums { display: none; } }
+
+  table.wa-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 4px; }
+  table.wa-tbl th, table.wa-tbl td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--wa-line); vertical-align: top; }
+  table.wa-tbl th { font-size: 11.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--wa-muted); }
+  table.wa-tbl tr:last-child td { border-bottom: none; }
+
+  .updates li { margin-bottom: 9px; }
+  .updates .u-date { font-weight: 700; color: var(--wa-green); }
+
+  .team-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+  .team-tag { background: #eef3f0; border: 1px solid var(--wa-line); border-radius: 8px; padding: 5px 10px; font-size: 12.5px; }
+  .team-tag b { color: var(--wa-ink); }
+
+  /* ---------- Transcripts ---------- */
+  .tx-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  select, input[type=text], input[type=date], textarea {
+    font: inherit; padding: 9px 11px; border: 1px solid var(--wa-line); border-radius: 9px; background: #fff; color: var(--wa-text);
+  }
+  textarea { width: 100%; min-height: 150px; resize: vertical; }
+  .btn {
+    background: var(--wa-green); color: #fff; border: none; border-radius: 9px;
+    padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 14px;
+  }
+  .btn:hover { background: var(--wa-green-soft); }
+  .btn.ghost { background: #fff; color: var(--wa-green); border: 1px solid var(--wa-green); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .tx-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .tx-form-grid .full { grid-column: 1 / -1; }
+  @media (max-width: 640px) { .tx-form-grid { grid-template-columns: 1fr; } }
+
+  .tx-item { border: 1px solid var(--wa-line); border-radius: 12px; margin-bottom: 12px; background: #fff; overflow: hidden; }
+  .tx-head { display: flex; gap: 12px; align-items: center; padding: 13px 16px; cursor: pointer; }
+  .tx-head:hover { background: #faf9f4; }
+  .tx-head .tx-title { font-weight: 600; flex: 1; }
+  .tx-head .tx-date { font-size: 12.5px; color: var(--wa-muted); }
+  .tx-body { padding: 0 16px 16px; display: none; white-space: pre-wrap; font-size: 13.5px; color: #333; border-top: 1px solid var(--wa-line); padding-top: 14px; }
+  .tx-item.open .tx-body { display: block; }
+  .tx-empty { color: var(--wa-muted); font-size: 13.5px; padding: 18px 4px; }
+
+  .footer { max-width: 1080px; margin: 0 auto; padding: 20px 24px 50px; font-size: 12px; color: var(--wa-muted); }
+  .toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--wa-ink); color: #fff; padding: 11px 20px; border-radius: 24px;
+    font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50;
+  }
+  .toast.show { opacity: 1; }
+
+  /* access gate */
+  .gate {
+    position: fixed; inset: 0; z-index: 100;
+    background: linear-gradient(135deg, var(--wa-ink), var(--wa-green));
+    display: none; align-items: center; justify-content: center; padding: 24px;
+  }
+  .gate-card {
+    background: var(--wa-card); border-radius: 16px; padding: 34px 30px; width: 100%; max-width: 360px;
+    text-align: center; box-shadow: 0 18px 50px rgba(0,0,0,.3);
+  }
+  .gate-card .wa-logo { margin: 0 auto 14px; }
+  .gate-card h2 { margin: 0 0 4px; color: var(--wa-ink); font-size: 20px; }
+  .gate-card p { margin: 0 0 18px; font-size: 13.5px; color: var(--wa-muted); }
+  .gate-card input { width: 100%; margin-bottom: 12px; text-align: center; font-size: 15px; }
+  .gate-card .btn { width: 100%; }
+  .gate-err { color: var(--wa-flag); font-size: 12.5px; margin-top: 10px; min-height: 16px; }
+
+  /* ================= v2 additions ================= */
+
+  /* sign-in gate */
+  .btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; background: #fff; color: #3c4043; border: 1px solid #dadce0;
+    border-radius: 9px; padding: 11px 16px; font-weight: 600; font-size: 14.5px; cursor: pointer;
+  }
+  .btn-google:hover { background: #f6f8f7; }
+  .gate-foot { font-size: 11.5px; color: var(--wa-muted); margin: 16px 0 0; }
+  .gate-note { font-size: 12px; color: #8a6414; background: #fdf0d4; border-radius: 8px; padding: 8px 10px; margin-top: 12px; display: none; text-align: left; }
+
+  /* board (sanitized) mode */
+  .board-note {
+    background: #fdf3ee; border-bottom: 1px solid #f0d4c2; color: #7a4326;
+    font-size: 12.5px; padding: 8px 24px; text-align: center;
+  }
+
+  /* department banner photos */
+  .dept-banner { position: relative; height: 175px; margin: -20px -22px 18px; border-radius: 13px 13px 0 0; overflow: hidden; background: var(--wa-ink); }
+  .dept-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .dept-banner .shade { position: absolute; inset: 0; background: linear-gradient(165deg, rgba(20,48,43,.78) 0%, rgba(31,95,79,.38) 55%, rgba(20,48,43,.22) 100%); }
+  .dept-banner h2 { position: absolute; left: 22px; right: 22px; bottom: 12px; margin: 0; color: #fff; font-size: 20px; text-shadow: 0 1px 10px rgba(0,0,0,.45); }
+  .dept-banner .deptchip { box-shadow: 0 1px 6px rgba(0,0,0,.3); }
+
+  /* meeting chip band */
+  .meet-band { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+  .info-chip {
+    display: inline-flex; align-items: center; gap: 8px; background: #eef3f0;
+    border: 1px solid var(--wa-line); border-radius: 20px; padding: 5px 13px;
+    font-size: 12.5px; color: var(--wa-ink);
+  }
+  .info-chip b { font-weight: 700; }
+  .info-chip a { font-weight: 600; }
+  .info-chip .ic { color: var(--wa-green); font-size: 13px; }
+
+  /* task metadata */
+  .due-badge { font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 8px; background: #eef1ee; color: var(--wa-muted); white-space: nowrap; margin-left: 6px; }
+  .due-badge.amber { background: #fdf0d4; color: #8a6414; border: 1px solid #ecd9a0; }
+  .due-badge.red { background: #fbe3de; color: #8f2a1c; border: 1px solid #eebbb0; }
+  .as-chip { display: inline-block; font-size: 11px; font-weight: 600; background: #e7efe9; color: var(--wa-green); border-radius: 10px; padding: 1px 8px; margin: 3px 4px 0 0; }
+  .cat-tag { display: inline-block; font-size: 10.5px; font-weight: 700; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
+  .lock-tag { font-size: 10.5px; color: var(--wa-muted); border: 1px dashed var(--wa-line); border-radius: 10px; padding: 0 7px; margin-left: 6px; white-space: nowrap; }
+  .edit-btn { background: none; border: none; color: var(--wa-green); font-size: 11.5px; cursor: pointer; text-decoration: underline; padding: 0 0 0 4px; }
+  .edit-btn:hover { color: var(--wa-green-soft); }
+
+  /* what's new strip */
+  .whatsnew { background: var(--wa-card); border: 1px solid var(--wa-line); border-radius: 12px; padding: 12px 16px 8px; margin-bottom: 22px; }
+  .whatsnew h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--wa-muted); }
+  .wn-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
+  .wn-item { flex: 0 0 auto; width: 265px; background: #faf9f4; border: 1px solid var(--wa-line); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; cursor: pointer; }
+  .wn-item:hover { border-color: var(--wa-green-soft); }
+  .wn-dept { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
+  .wn-text { color: var(--wa-text); max-height: 57px; overflow: hidden; }
+  .wn-when { font-size: 11px; color: var(--wa-muted); margin-top: 4px; }
+  .wn-new { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--wa-gold); margin-right: 6px; }
+
+  /* toolbar search */
+  .search-wrap { position: relative; flex: 1; min-width: 150px; max-width: 340px; }
+  .search-wrap input { width: 100%; padding: 6px 11px; border-radius: 18px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.12); color: #fff; font-size: 12.5px; }
+  .search-wrap input::placeholder { color: #b9c6c0; }
+  .search-pop { position: absolute; top: 115%; left: 0; right: 0; background: #fff; color: var(--wa-text); border: 1px solid var(--wa-line); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.18); max-height: 350px; overflow: auto; z-index: 80; }
+  .search-pop .sr { padding: 9px 13px; border-bottom: 1px solid var(--wa-line); cursor: pointer; font-size: 13px; }
+  .search-pop .sr:last-child { border-bottom: none; }
+  .search-pop .sr:hover { background: #faf9f4; }
+  .sr-type { font-size: 10px; font-weight: 700; color: var(--wa-muted); text-transform: uppercase; letter-spacing: .5px; margin-right: 6px; }
+
+  /* modal */
+  .modal-back { position: fixed; inset: 0; background: rgba(20,48,43,.5); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .modal { background: #fff; border-radius: 14px; max-width: 540px; width: 100%; max-height: 92vh; overflow: auto; padding: 24px; box-shadow: 0 18px 60px rgba(0,0,0,.3); }
+  .modal h3 { margin: 0 0 6px; color: var(--wa-ink); font-size: 18px; }
+  .modal .m-sub { font-size: 12.5px; color: var(--wa-muted); margin: 0 0 14px; }
+  .modal label { font-size: 12px; color: var(--wa-muted); display: block; margin: 12px 0 4px; font-weight: 600; }
+  .modal input[type=text], .modal input[type=date], .modal input[type=url], .modal select, .modal textarea { width: 100%; }
+  .modal textarea { min-height: 70px; }
+  .m-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .m-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .picker-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; min-height: 10px; }
+  .picker-chips .as-chip { cursor: pointer; font-size: 12px; padding: 4px 11px; }
+  .picker-chips .as-chip:hover { background: #f6e3e0; color: var(--wa-flag); }
+
+  /* filters */
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; align-items: center; }
+  .fchip { border: 1px solid var(--wa-line); background: #fff; border-radius: 18px; padding: 5px 13px; font-size: 12px; font-weight: 600; color: var(--wa-muted); cursor: pointer; }
+  .fchip.on { background: var(--wa-green); border-color: var(--wa-green); color: #fff; }
+
+  /* transcript status */
+  .tx-status { font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 9px; white-space: nowrap; }
+  .tx-status.proc { background: #fdf0d4; color: #8a6414; }
+  .tx-status.done { background: #e2f0e7; color: #1f5f4f; }
+  .tx-status.fail { background: #fbe3de; color: #8f2a1c; }
+  .tx-status.none { background: #eef1ee; color: var(--wa-muted); }
+  .tx-sum { font-size: 12px; color: var(--wa-muted); padding: 0 16px 10px; font-style: italic; }
+  .tx-actions { display: flex; gap: 8px; align-items: center; padding: 0 16px 13px; }
+
+  /* deep link highlight */
+  .pulse { animation: pulseHi 2.6s ease; }
+  @keyframes pulseHi { 0% { box-shadow: 0 0 0 4px var(--wa-gold); } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+  /* needs-me and activity */
+  .nm-group { margin-bottom: 6px; }
+  .act-old { color: #8f2a1c; }
+  .act-new { color: #1f5f4f; }
+  .act-cell-what { max-width: 420px; }
+
+  /* mobile pass */
+  @media (max-width: 720px) {
+    nav.wa-nav .wa-wrap { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    nav.wa-nav .wa-wrap::-webkit-scrollbar { display: none; }
+    .tab { padding: 13px 11px; white-space: nowrap; font-size: 13px; }
+    main { padding: 16px 13px 80px; }
+    .card { padding: 15px 15px; }
+    .dept-banner { margin: -15px -15px 14px; height: 130px; }
+    .dept-banner h2 { left: 15px; bottom: 10px; font-size: 17px; }
+    ul.checklist input[type=checkbox] { width: 22px; height: 22px; }
+    .btn.mini { padding: 9px 14px; }
+    .reassign-btn, .edit-btn { padding: 6px 4px; }
+    .modal { padding: 17px; }
+    .m-row { grid-template-columns: 1fr; }
+    .wa-toolbar .wa-wrap { gap: 8px; }
+    .search-wrap { order: 5; flex-basis: 100%; max-width: none; }
+    .wn-item { width: 230px; }
+    header.wa-header { padding: 20px 16px 16px; }
+    .wa-meta { display: none; }
+  }
+</style>
+<style id="wa110veilcss">
+  /* WA v110 boot veil: the static page used to paint before the waves
+     restyled it (Steel saw "the last 5 versions" flash on load). Until
+     the last wave flags html.wa-ready, everything but the veil is
+     hidden; a 9s failsafe in wave110 reveals the page no matter what. */
+  html:not(.wa-ready) body > *:not(#wa110veil) { visibility: hidden !important; }
+  #wa110veil { position: fixed; inset: 0; background: #003F38; display: flex; align-items: center; justify-content: center; z-index: 99999; transition: opacity .35s ease; }
+  #wa110veil .wm { font-family: "Arial Black", Arial, sans-serif; font-weight: 900; font-size: 28px; letter-spacing: 3px; color: #f5f5f3; text-align: center; line-height: 1.15; }
+  #wa110veil .dot { display: block; width: 28px; height: 3px; background: #1baf7a; margin: 14px auto 0; border-radius: 2px; animation: wa110pulse 1.1s ease-in-out infinite; }
+  @keyframes wa110pulse { 0%, 100% { opacity: .35; transform: scaleX(.6); } 50% { opacity: 1; transform: scaleX(1); } }
+  html.wa-ready #wa110veil { opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="wa110veil" aria-hidden="true"><div class="wm">WELFARE<br>AVENUE<span class="dot"></span></div></div>
+
+<div id="gate" class="gate">
+  <div class="gate-card">
+    <div class="wa-logo">WA</div>
+    <h2>Welfare Avenue</h2>
+    <p id="gateMsg">The Welfare Avenue Hub. Sign in with your Welfare Avenue Google account.</p>
+    <button class="btn-google" id="gateGoogleBtn">
+      <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      Sign in with Google
+    </button>
+    <div class="gate-err" id="gateErr"></div>
+    <div id="gateAlt" style="display:none; margin-top:6px;">
+      <button class="btn ghost" id="gateSignOutBtn" style="width:100%;">Sign out and try another account</button>
+    </div>
+    <div class="gate-note" id="gateFileNote">This page is being opened as a local file, so Google sign-in cannot redirect back. Open the hosted link instead (see GO-LIVE.md in the project folder).</div>
+    <p class="gate-foot">Staff sign in with a welfareavenue.com account. Board members: access is by invitation, ask Steel or Suhaib to add your email.</p>
+  </div>
+</div>
+
+<header class="wa-header">
+  <div class="wa-wrap">
+    <div class="wa-brandrow">
+      <div class="wa-logo">WA</div>
+      <div>
+        <h1>Welfare Avenue &middot; Hub</h1>
+        <div class="sub">Living status tracker and transcript archive for Steel &amp; Suhaib, Co-Executive Directors</div>
+      </div>
+    </div>
+    <div class="wa-meta">
+      <span><b>Feed:</b> transcripts are processed automatically and each department page updates itself</span>
+      <span><b>Layout:</b> categorized by department</span>
+    </div>
+    <div class="wa-legend"><span class="flag">&#9873;</span> = needs an executive decision &nbsp;&middot;&nbsp; "Read" = a short morale and energy take</div>
+  </div>
+</header>
+
+<div class="wa-toolbar">
+  <div class="wa-wrap">
+    <span class="pill"><span id="cloudDot" class="dot"></span><span id="cloudStatus">Connecting...</span></span>
+    <span class="search-wrap" id="searchWrap" style="display:none;">
+      <input type="search" id="globalSearch" placeholder="Search everything: tasks, people, goals, meetings..." autocomplete="off" />
+      <div id="searchResults" class="search-pop" style="display:none;"></div>
+    </span>
+    <button id="needsMeBtn" class="who-btn" style="display:none;">&#9873; Needs me</button>
+    <span class="pill">Signed in: <b id="whoName" style="color:#fff;">...</b>
+      <button id="signOutBtn" class="who-btn">Sign out</button>
+    </span>
+  </div>
+</div>
+
+<div id="boardNote" class="board-note" style="display:none;">Board view: read only. Confidential operational items are not shown.</div>
+
+<nav class="wa-nav">
+  <div class="wa-wrap" id="tabBar">
+    <button class="tab active" data-tab="overview"><span class="tabdot" style="background:#d4a13c"></span>Open Decisions</button>
+    <button class="tab" data-tab="dashboard"><span class="tabdot" style="background:#1f5f4f"></span>Dashboard</button>
+    <button class="tab" data-tab="opsmtl"><span class="tabdot" style="background:#2c7a66"></span>Ops &amp; Program Dev &middot; Montreal</button>
+    <button class="tab" data-tab="opsto"><span class="tabdot" style="background:#3a6ea5"></span>Ops &amp; Program Dev &middot; Toronto</button>
+    <button class="tab" data-tab="marketing"><span class="tabdot" style="background:#8a5cc4"></span>Marketing, Branding &amp; Web</button>
+    <button class="tab" data-tab="fundraising"><span class="tabdot" style="background:#c87a2f"></span>Fundraising &amp; Grants</button>
+    <button class="tab" data-tab="hr"><span class="tabdot" style="background:#b3402f"></span>Human Resources</button>
+    <button class="tab" data-tab="board"><span class="tabdot" style="background:#4a4f57"></span>Board &amp; Governance</button>
+    <button class="tab" data-tab="transcripts" id="txTabBtn"><span class="tabdot" style="background:#6b7670"></span>Transcript Archive</button>
+    <button class="tab" data-tab="activity" id="actTabBtn"><span class="tabdot" style="background:#8a8f85"></span>Activity</button>
+  </div>
+</nav>
+
+<main>
+  <div id="whatsNew" class="whatsnew" style="display:none;"></div>
+
+  <!-- ============ OVERVIEW / OPEN DECISIONS ============ -->
+  <section id="overview" class="panel active">
+    <div class="card">
+      <h2>&#9873; Open decisions</h2>
+      <p class="read">The shortlist of calls that need you or Suhaib. Every item carries a reason category and a one line rationale. Check an item when it is decided: you will be asked to record what was decided.</p>
+      <div class="filters" id="decFilters"></div>
+      <ul class="checklist" id="decisionList"></ul>
+      <div class="add-row"><button class="btn ghost mini" id="addDecisionBtn">+ Add decision</button></div>
+      <details class="completed" id="decDoneWrap">
+        <summary id="decDoneSummary">Decided (0)</summary>
+        <ul class="checklist" id="decisionDoneList"></ul>
+      </details>
+    </div>
+  </section>
+
+  <!-- ============ DASHBOARD ============ -->
+  <section id="dashboard" class="panel"></section>
+
+  <!-- ============ DEPARTMENTS ============ -->
+  <section id="opsmtl" class="panel"></section>
+  <section id="opsto" class="panel"></section>
+  <section id="marketing" class="panel"></section>
+  <section id="fundraising" class="panel"></section>
+  <section id="hr" class="panel"></section>
+  <section id="board" class="panel"></section>
+
+  <!-- ============ NEEDS ME (from the toolbar toggle) ============ -->
+  <section id="needsme" class="panel"></section>
+
+  <!-- ============ ACTIVITY / CHANGE LOG ============ -->
+  <section id="activity" class="panel"></section>
+
+  <!-- ============ TRANSCRIPTS ============ -->
+  <section id="transcripts" class="panel">
+    <div class="card">
+      <h2>Add a transcript</h2>
+      <p class="read">Paste a meeting transcript, tag the department, and save. The AI processes it automatically: the department page updates itself within a few minutes and a summary posts to #exec-dashboard in Slack.</p>
+      <div class="tx-form-grid">
+        <div>
+          <label style="font-size:12.5px;color:var(--wa-muted);">Department</label><br/>
+          <select id="txDept" style="width:100%;margin-top:4px;">
+            <option value="opsmtl">Ops &amp; Program Dev - Montreal</option>
+            <option value="opsto">Ops &amp; Program Dev - Toronto</option>
+            <option value="marketing">Marketing, Branding &amp; Web</option>
+            <option value="fundraising">Fundraising &amp; Grants</option>
+            <option value="hr">Human Resources</option>
+            <option value="board">Board &amp; Governance</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12.5px;color:var(--wa-muted);">Meeting date</label><br/>
+          <input type="date" id="txDate" style="width:100%;margin-top:4px;" />
+        </div>
+        <div class="full">
+          <label style="font-size:12.5px;color:var(--wa-muted);">Title</label><br/>
+          <input type="text" id="txTitle" placeholder="e.g. Weekly Fundraising Meeting" style="width:100%;margin-top:4px;" />
+        </div>
+        <div class="full">
+          <label style="font-size:12.5px;color:var(--wa-muted);">Source link (Drive, Loom, or Otter, optional)</label><br/>
+          <input type="url" id="txSource" placeholder="https://..." style="width:100%;margin-top:4px;" />
+        </div>
+        <div class="full">
+          <label style="font-size:12.5px;color:var(--wa-muted);">Transcript or summary</label><br/>
+          <textarea id="txBody" placeholder="Paste the transcript text here..."></textarea>
+        </div>
+      </div>
+      <button class="btn" id="txSave">Save and process</button>
+    </div>
+
+    <div class="card">
+      <h2>Archive</h2>
+      <div class="tx-controls">
+        <select id="txFilter">
+          <option value="">All departments</option>
+          <option value="Ops &amp; Program Dev - Montreal">Ops &amp; Program Dev - Montreal</option>
+          <option value="Ops &amp; Program Dev - Toronto">Ops &amp; Program Dev - Toronto</option>
+          <option value="Marketing, Branding &amp; Web">Marketing, Branding &amp; Web</option>
+          <option value="Fundraising &amp; Grants">Fundraising &amp; Grants</option>
+          <option value="Human Resources">Human Resources</option>
+          <option value="Board &amp; Governance">Board &amp; Governance</option>
+        </select>
+        <input type="text" id="txSearch" placeholder="Search titles..." style="flex:1;min-width:180px;" />
+      </div>
+      <div id="txList"></div>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  The Welfare Avenue Hub, the whole team's workspace. Meetings become tasks, goals and decisions automatically, so everyone can see how the work moves. Sign-in is restricted to Welfare Avenue accounts and invited board viewers.
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="modalBack" class="modal-back" style="display:none;"><div class="modal" id="modalBox"></div></div>
+
+<script>
+/* =====================================================================
+   WELFARE AVENUE HUB - single-file build, compacted 06/08/26 (Phase 0)
+   =====================================================================
+   ARCHITECTURE
+   - One HTML file: head + CSS, static panels, then this script.
+   - Base app (boot, auth gate, loaders, panels) followed by feature
+     waves v2..v75 in load order. Waves wrap or replace earlier
+     functions; LOAD ORDER IS BEHAVIOUR - never reorder sections.
+   - Superseded bodies are stubbed with a 'superseded' comment where
+     a later wave reset the binding without capturing the original.
+   - Source of truth: the segmented source tree + assembler (build.sh)
+     kept alongside the deploy pipeline; the deployed file is
+     assembled from src/*.seg in MANIFEST order.
+   - PROTECTED (never modify): process-transcript edge fn,
+     apply_transcript_result RPC, the transcript insert trigger.
+   SECTION INDEX (wave - one line each)
+   WA v2 UI enhancements (injected 22/07/26)
+   WA v3 UI enhancements (injected 22/07/26)
+   WA v4 UI enhancements (injected 22/07/26)
+   WA v5 UI enhancements (injected 22/07/26)
+   WA v6 UI enhancements (23/07/26)
+   WA v7 UI enhancements (23/07/26)
+   WA v8 UI enhancements (25/07/26)
+   WA v9 UI enhancements (25/07/26)
+   WA v10 UI enhancements (25/07/26)
+   WA v11 UI enhancements (25/07/26)
+   WA v12 UI enhancements (25/07/26)
+   WA v13 UI enhancements (25/07/26)
+   WA v14 UI enhancements (25/07/26)
+   WA v15 UI enhancements (25/07/26)
+   WA v16 UI enhancements (26/07/26)
+   WA v17 UI enhancements (26/07/26)
+   WA v18 UI enhancements (26/07/26)
+   WA v19 UI enhancements (27/07/26)
+   WA v20 UI enhancements (27/07/26)
+   WA v21 department pages (27/07/26)
+   WA v22 finances and budgeting (27/07/26)
+   WA v23 volunteer texting (27/07/26)
+   WA v24 navigation embedding and SOP master editing (27/07/26)
+   WA v25 master SOP structural editing (29/07/26)
+   WA v26 volunteering usability wave (29/07/26)
+   WA v27 projects and goals flow (29/07/26)
+   WA v28 one people table everywhere (29/07/26)
+   WA v29 goals reorganization (29/07/26)
+   WA v30 quarters ahead, suggested goals, organizational tier (29/07/26)
+   WA v31 confirmations, templates, event summary, recipes, requests
+   WA v32 assignee dropdowns on the master SOP
+   WA v33 event plans, driver itineraries, person pages, Quo replies
+   WA v34 goals explainer, cleaner header, dashboard feel
+   WA v35 the soft dashboard look
+   WA v36 Training and onboarding
+   WA v37 onboarding, live from the master
+   WA v38 chat actions you confirm
+   WA v39 department pages, reordered and polished
+   WA v40 roles, permissions, and the admin panel
+   WA v41 the department dropdown returns
+   WA v42 one navigation
+   WA v43 buttons, dedupe, and page help
+   WA v44 the training centre
+   WA v45 the onboarding SOP doc is HR-only
+   WA v46 the HR centre
+   WA v47 HR views, recruitment depth, SOP roles, agenda groups
+   WA v48 visible dropdown buttons
+   WA v49 the recruitment playbook
+   WA v50 requests suggested from meetings
+   WA v51 comments on every task
+   WA v52 projects, due dates, and hours move to HR
+   WA v53 agendas: only yours, and purpose-driven drafting
+   WA v54 hours: editable minimums, board exempt, tasks per week
+   WA v55 the Hours tab becomes Commitment
+   WA v56 gather hours on demand
+   WA v57 bulk training assignment + folded onboarding subtasks
+   WA v58 training page order + quiet completed onboardings
+   WA v59 roles on the steps themselves
+   WA v60 visual page help
+   WA v61 deep page guides
+   WA v62 leadership and confidential meetings
+   WA v63 editable inventory + sharing with volunteer leaders
+   WA v64 tasks route to the owner's department
+   WA v65 leadership meetings, upload preview, goal wins, mentions,
+   WA v66 leadership meetings can be open to everyone
+   WA v67 the training catalog becomes a browsable library
+   WA v68 the Goals page becomes Strategy: four tabs
+   WA v69 the Strategy map learns rollups and focus
+   WA v70 projects show who is working in them
+   WA v71 department tasks split into workstream tabs
+   WA v72 people management from the Admin page + ClickUp cleanup
+   WA v73 the navigation slims down (all six proposals approved)
+   WA v74 My page rebuilt: one clean scan path
+   WA v75 the assistant steps forward (06/08/26)
+   ===================================================================== */
+/* =====================================================================
+   DATA  (mirrored from the Executive Status Tracker, 27 Apr to 22 Jun 2026)
+   ===================================================================== */
+
+const AREA_COLORS = {
+  "Ops MTL": "#2c7a66", "Ops TO": "#3a6ea5", "Marketing": "#8a5cc4",
+  "Fundraising": "#c87a2f", "Grants": "#b8902f", "HR": "#b3402f", "Board": "#4a4f57"
+};
+
+const DECISIONS = [
+  {k:"dec-1", t:"Co-leader for Ahmed (Montreal ops)", area:"Ops MTL", move:"Make it the one exception to the hiring pause; promote from a recent joiner"},
+  {k:"dec-2", t:"Sign Community Closet service-provider agreement", area:"Ops TO", move:"Sign before Gabe is back in June so the clothing arm is live"},
+  {k:"dec-3", t:"Allan Gardens reservation + Food Not Bombs legal protection", area:"Ops TO", move:"Suhaib to decide this week; legal wording likely needs board sign-off"},
+  {k:"dec-4", t:"Pick a Toronto kitchen from Tate's cost list", area:"Ops TO", move:"Choose one; accept a smaller cook crew vs. roughly $150/hr venues"},
+  {k:"dec-5", t:"Finalize Rami's title + job description", area:"Fundraising", move:"Close quickly (Samson to review), only loose end on a strong hire"},
+  {k:"dec-6", t:"Collect roughly $1,000 CASA owes from old contracts", area:"Fundraising", move:"Collect or write off before negotiating new deals"},
+  {k:"dec-7", t:"Supply historical per-program spend (tabular)", area:"Grants", move:"One cost/results sheet unblocks grants AND the donor program"},
+  {k:"dec-8", t:"Deploy the unused $10k/mo Google Ad Grant", area:"Marketing", move:"Scope a small contractor for setup, not a permanent hire"},
+  {k:"dec-9", t:"Formalize delegation of fundraising direction", area:"Fundraising", move:"Define who owns which calls without you (ties to Steel's bandwidth)"},
+  {k:"dec-10", t:"Board-level insurance", area:"Board", move:"Bring one quote to the next board meeting (general liability $2M standard per the 11 May broker call)"},
+  {k:"dec-11", t:"Fundraising at meal-service events (ethics)", area:"Fundraising", move:"Passive QR/lockbox only, never direct asks of recipients; review after pilot"},
+  {k:"dec-12", t:"Stand up board committees and set representation targets", area:"Board", move:"Per Rima Naim (16 Jun): create task committees (e.g. IT strategy), pull in outside experts, set geographic and ethnic representation goals"},
+  {k:"dec-13", t:"McGill tabling: pay the $200 booth fee or skip", area:"Fundraising", move:"Decide vs. requiring student-association status first; Alexis to circulate the campus email"}
+];
+
+const SECTIONS = {
+  opsmtl: {
+    title: "Operations &amp; Program Development - Montreal",
+    color: "var(--c-opsmtl)",
+    read: "Capable and committed but stretched thin at the top, too few leaders for a fast-growing volunteer base. Runs on roughly $250 biweekly servings and a self-sufficient team. New Otter meetings show the program-dev engine running well week to week.",
+    progress: "The program development engine is running steadily week to week. Desta community kitchen is secured long term on Crescent St; AIDS Community Care kits and a community-gardens produce partnership are in motion. Ola is onboarded, the bi-weekly serving process (cooks, Instacart, logistics) is now documented with Mary, and an August beneficiary event plus a volunteer-recognition badge idea are in planning.",
+    priorities: [
+      "Hire a co-leader for Ahmed, the team is over-centralized at the top",
+      "Investigate the roughly $600 grocery double-count and the rising Instacart and gas spend"
+    ],
+    team: [
+      ["Ahmed","Operations lead, Montreal"],["Tuna","Operations / logistics"],
+      ["Shima","Program development (research, data)"],["Brianna","Beneficiary program development coordinator"],
+      ["Terry","Programs / Flag Football league link"],["Mary","Operations team (cook coordination)"],
+      ["Ola","New joiner, program development (TA at Concordia)"],["Amena","Departing (badge vendor / recognition handoff)"],
+      ["Gamze","Prospective, nutritious recipes"]
+    ],
+    updates: [
+      ["Jun 17 (Otter)","Ops tasks walkthrough with Mary: bi-weekly Montreal serving needs cooks, servers, drivers, team leads, debriefers, photographers, dishwashers. Process set for confirming cook availability, Instacart ingredient orders (roughly 40-50 portions, aluminum containers), and pickup/drop-off messaging. Cook list for the Jun 28 event to go out next week; ops meeting moved to about 8:15pm."],
+      ["Jun 15 (Otter)","Program Development meeting: roles confirmed (Brianna beneficiary coordinator, Shima research/data, Ola onboarding). AIDS Community Care kits to be confirmed for the next Sunday event; community-gardens produce partnership and seeds in progress; August beneficiary event (social/sports) being planned; volunteer-recognition idea (QR-code stickers / badges)."],
+      ["Jun 10 (Otter)","Ola onboarding: WA email, Slack channels, and ClickUp spaces set up; week 1 / week 2 / 90-day onboarding tasks assigned; some ClickUp access issues being worked through."],
+      ["Jun 8 (Otter)","Program Development check-in (Ahmed, Amena, Shima, Brianna)."],
+      ["Jun 11 (Loom)","June 14 Montreal serving led by Ahmed/Tuna (about 5 cooks, Instacart via Amena). Desta community kitchen secured, long-term Crescent St., roughly $1,500 rest of year, will co-apply for grants; Desta/CCA pilot June 26."],
+      ["Jun 11 (Loom)","Budget flags: Instacart/grocery/gas over budget; possible roughly $600 double-count on March groceries."]
+    ],
+    items: [
+      {k:"opsmtl-1", t:"Hire a co-leader for Ahmed", owner:"Steel / HR", flag:true, status:"Open, priority hire"},
+      {k:"opsmtl-2", t:"Investigate roughly $600 grocery double-count + rising Instacart/gas", owner:"Steel", flag:true, status:"Open"},
+      {k:"opsmtl-3", t:"Confirm AIDS Community Care kits for Sunday servings", owner:"Brianna", flag:false, status:"Open (Otter, Jun 15)"},
+      {k:"opsmtl-4", t:"Plan August beneficiary event + volunteer recognition", owner:"Shima / Amena", flag:false, status:"In progress (Otter, Jun 15)"},
+      {k:"opsmtl-5", t:"Set 1:1 on Gamze's recipe idea", owner:"Steel + Ahmed/Valex", flag:false, status:"Open"}
+    ],
+    contributed: "Welfare Avenue Toronto Team Meeting (May 11, Loom); Leadership Strategy &amp; Discussion (Jun 11, Loom); Program Development Meeting (Jun 8, Otter); Ola onboarding (Jun 10, Otter); Program Development Meeting (Jun 15, Otter); Operations Team Tasks Discussion, Mary (Jun 17, Otter)."
+  },
+
+  opsto: {
+    title: "Operations &amp; Program Development - Toronto / Ontario",
+    color: "var(--c-opsto)",
+    read: "Energetic and ambitious but fragile, over-centralized on one stretched leader (Tate). Large upside if succession and structure land first. No new Toronto-specific meeting this run.",
+    progress: "The June 14 serving drew about 60 volunteers alongside Ernestine's Women's Shelter and Youth Without Shelter, and the ACT for Food $1,000 grant is tied to a TMU event. Food Not Bombs trust is warming and Gabe is onboarded for the Community Closet. Structure and succession remain the watch items given how much sits on Tate, who is away from Jun 20.",
+    priorities: [
+      "Resolve the Tate succession and continuity plan before the Jun 20 step-back",
+      "Sign the Community Closet agreement and pick a Toronto kitchen from the cost list"
+    ],
+    team: [
+      ["Tate","Regional Director of Ontario (heavy personal load; away from Jun 20)"],["Suhaib","Co-Executive Director, anchors Toronto"],
+      ["Melvina","City Director path / programs"],["Mandeep","Partnerships"],
+      ["Natasha, Sama, Leah Lopez, Bela Hundra","Toronto team"],["Gabe","Volunteer, Student Relations / Community Closet"],
+      ["Karan","Volunteer driver"]
+    ],
+    updates: [
+      ["Jun 11 (Loom)","June 14 Toronto serving about 60 volunteers (Ernestine's Women's Shelter + Youth Without Shelter); ACT for Food $1,000 grant tied to a TMU event."],
+      ["May 11 (Loom)","NLEATS October exhibitor invite (about 1,000 youth); Food Not Bombs trust warming; mobile support hub concept; kitchen planning; Tate flagged heavy personal load and over-centralizing."],
+      ["Apr 27 (Loom)","Onboarded Gabe (Community Closet) as Student Relations Coordinator on a receipt-reimbursement model."]
+    ],
+    items: [
+      {k:"opsto-1", t:"Sign Community Closet service-provider agreement", owner:"Steel + Suhaib", flag:true, status:"Open, before Gabe returns (June)"},
+      {k:"opsto-2", t:"Approve Allan Gardens reservation + FNB legal protection", owner:"Suhaib", flag:true, status:"Open, Melvina waiting"},
+      {k:"opsto-3", t:"Pick a Toronto kitchen from cost list", owner:"Steel + Suhaib", flag:true, status:"Open, list incoming"},
+      {k:"opsto-4", t:"Tate succession / continuity plan", owner:"Steel + Suhaib", flag:true, status:"Melvina/Mandeep, confidential"},
+      {k:"opsto-5", t:"Remove 2022 RBC event from website (FNB concern)", owner:"Marketing", flag:false, status:"Open"}
+    ],
+    contributed: "Community Closet + Alexander Interview (Apr 27, Loom); Welfare Avenue Toronto Team Meeting (May 11, Loom); Leadership Strategy &amp; Discussion (Jun 11, Loom)."
+  },
+
+  marketing: {
+    title: "Marketing, Branding &amp; Web",
+    color: "var(--c-mkt)",
+    read: "Across branding, content and direction: productive and confident, with the core tension being sequencing urgent fundraising collateral against slower brand-guideline and website work. Content has motivated individuals but frayed coordination.",
+    progress: "The brand refresh is near complete and moving into launch. Q2 content goals (Mental Health Awareness Month and Indigenous History Month) were delivered and LinkedIn is near 900 followers. The website rebuild and photographer roster were pushed to Q3 to protect urgent fundraising collateral. The live tension is sequencing that collateral ahead of the slower guideline and website work.",
+    priorities: [
+      "Deploy the unused $10k/mo Google Ad Grant, the biggest untapped growth lever",
+      "Ship the sponsorship package and impact-report rebrand for Rally Paper",
+      "Fix the marketing meeting time, attendance is collapsing"
+    ],
+    team: [
+      ["Ian","Director of Marketing"],["Eduardo","Branding lead"],["Alejandra","Designer (sponsorship package / collateral)"],
+      ["Joy","Content, external collaborations"],["Soraya","Design / newsletters / impact graphics"],
+      ["Robert","Copy / LinkedIn"],["Patricia","Content / filming"],["Edison","Website + photography"]
+    ],
+    updates: [
+      ["Jun 15 (Otter)","Steel + Ian 1:1 (brief, 7 min check-in)."],
+      ["Jun 1 / Jun 11 (Loom)","Q2 review: Mental Health + Indigenous goals complete; brand video, photographer roster, website moved to Q3. Website: Edison to build a ClickUp task list and present before resourcing. Content-manager posting live."],
+      ["May-Jun (Loom, Branding)","Brand refresh near complete; internal launch + external teaser + downtown hype video planned. Pushing assets into Canva for self-serve. Business cards queued (roughly $65-80)."],
+      ["Jun (Loom, Content)","Indigenous History Month push (Project Octone + Open Door): interview to Reel + carousel, site-tour filming, around Jun 21 target. Flag Football promo around 91 clips, first video about 2 weeks out."],
+      ["May (Loom, Content)","Mental Health Awareness Month series; collaborations (Sun Youth, Old Brewery, Reviv). Flag Football newsletter praised by Steel &amp; Suhaib; LinkedIn near 900 followers."]
+    ],
+    subsections: [
+      {
+        title: "Branding project", color: "#8a5cc4",
+        summary: "Refresh is near complete and entering launch (internal reveal, external teaser, downtown hype video). Assets are moving into Canva for self-serve and business cards are queued. The guideline book continues in parallel with Eduardo and Robert.",
+        items: [
+          {k:"mkt-2", t:"Sponsorship package + impact-report rebrand (urgent: Rally Paper)", owner:"Alejandra", flag:true, status:"In progress, proceed without guideline book"},
+          {k:"mkt-5", t:"Finish brand guideline book", owner:"Eduardo + Robert", flag:false, status:"In progress (parallel)"},
+          {k:"mkt-8", t:"Confirm the new font is available in Canva", owner:"Eduardo / Alejandra", flag:false, status:"Open"}
+        ]
+      },
+      {
+        title: "Website progress", color: "#5c7fc4",
+        summary: "Rebuild is scoped for Q3. Edison is to build a ClickUp task list and present it before resourcing is committed. The unused $10k/mo Google Ad Grant is the largest digital-growth lever still sitting idle.",
+        items: [
+          {k:"mkt-1", t:"Deploy unused $10k/mo Google Ad Grant (scope a contractor)", owner:"Steel + Ian", flag:true, status:"Open, prior recruiting failed"},
+          {k:"mkt-6", t:"Website rebuild plan (ClickUp task list, present before resourcing)", owner:"Edison", flag:false, status:"Open"}
+        ]
+      },
+      {
+        title: "Content management", color: "#b06cc4",
+        summary: "Q2 themes delivered (Mental Health, Indigenous History Month with Project Octone and Open Door). Flag Football promo (about 91 clips) is underway. LinkedIn is near 900 followers but impressions are down, so the approach and a workable meeting time both need a rethink.",
+        items: [
+          {k:"mkt-3", t:"Revamp LinkedIn content approach (too essay-like, impressions down)", owner:"Steel + Robert", flag:true, status:"Open"},
+          {k:"mkt-4", t:"Find a workable marketing meeting time", owner:"Ian / Steel", flag:true, status:"Open, attendance collapsing"},
+          {k:"mkt-7", t:"Send Indigenous survey stats to Octone / Open Door", owner:"Steel / Joy", flag:false, status:"In progress"},
+          {k:"mkt-10", t:"Recurring-photographer SOP", owner:"Marketing", flag:false, status:"Pushed to Q3"}
+        ]
+      }
+    ],
+    contributed: "LinkedIn Article Ideas (Apr 28, Loom); Marketing Meetings May 6 / 13 / 20 / 27 / Jun 4 (Loom); Collaborating on Indigenous History Month Content (May 28, Loom); Ian 1on1 (Jun 1, Loom); Ian 1on1 (Jun 15, Otter); Leadership Strategy (Jun 11, Loom)."
+  },
+
+  fundraising: {
+    title: "Fundraising &amp; Grants",
+    color: "var(--c-fund)",
+    read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in and he has signaled he needs to step back. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
+    progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
+    priorities: [
+      "Finalize Rami's title and job description",
+      "Supply historical per-program spend, it blocks both grants and the donor program",
+      "Confirm the delegation of fundraising direction so calls do not keep routing to Steel"
+    ],
+    team: [
+      ["Amanda","Events manager / co-lead"],["Rami","Co-lead, events, student-club network"],["Jemeela","Event coordinator"],
+      ["Alexis","Individual / recurring donors"],["Danielle","Donors + grants crossover"],["Daniela","Finance / board treasurer"],
+      ["Suhaib","Grants lead, co-ED"],["Cindy","Grants experience, PHAC"],["Melvina","Programs / funding"]
+    ],
+    updates: [
+      ["Jun 18 (Otter)","Weekly Fundraising: shared Google Photos team album for event marketing; debrief on the Scattered event flagged communication/planning gaps; Flag Football needs a mid-July logistics meeting with Terry and finished marketing content; McGill tabling weighed against a $200 booth fee; Scotiabank explored as a volunteer/team partner for Flag Football; impact-report visuals ETA to chase with Edward."],
+      ["May-Jun (Loom)","Strategy pivot: dropped iWave (about $7k/mo) for grassroots Kila/QILA CRM + tiered donor packages (about $500/mo). Pipeline: frosh tabling (Aug 26/Sep 9), Flag Football (about $10k goal), Rally Paper (late Sept), winter event brainstorm. Diagnosed event-execution gap; pitch/QR/one-pager/briefing fix."],
+      ["May 28 (Loom)","Steel stepped back (I really need you guys to help); delegated direction to Amanda &amp; Rami."],
+      ["May 6 (Loom)","Rami onboarded as co-lead with Amanda; fundraising structure set."],
+      ["May 27 &amp; Jun 11 (Loom, Grants)","Two kickoffs (Suhaib-led): grant-readiness framework; plan to diversify into fundable programs and scale asks ($500 to $1k to $5k+); split government vs. foundation lists (about 18 opps). ACT for Food $1,000 grant via TMU; Desta will co-apply. Next meeting Jun 29, 6pm."]
+    ],
+    subsections: [
+      {
+        title: "Grants", color: "#b8902f",
+        summary: "Two Suhaib-led kickoffs set a grant-readiness framework and a plan to scale asks ($500 to $1k to $5k+), with government and foundation lists split (about 18 opportunities). ACT for Food $1,000 is secured via TMU and Desta will co-apply. Next meeting Jun 29. The one blocker is missing per-program financial evidence.",
+        items: [
+          {k:"fund-8", t:"Supply historical per-program spend (tabular)", owner:"Steel", flag:true, status:"Blocking grant applications"},
+          {k:"fund-9", t:"Define funding ask / project scope", owner:"Steel + Suhaib", flag:true, status:"Open"},
+          {k:"fund-10", t:"Build &amp; split grant list (gov vs foundation)", owner:"Danielle", flag:false, status:"In progress"},
+          {k:"fund-11", t:"Draft grant-readiness doc", owner:"Suhaib", flag:false, status:"In progress"}
+        ]
+      },
+      {
+        title: "Fundraising events", color: "#c87a2f",
+        summary: "Flag Football (about $10k goal) needs a mid-July logistics meeting with Terry and finished marketing content. McGill tabling is weighed against a $200 booth fee, and Scotiabank is being explored as a partner. The Scattered debrief exposed communication and planning gaps now being closed with a shared event-capture system. Rami's role and the delegation of direction sit here too.",
+        items: [
+          {k:"fund-1", t:"Finalize Rami's title + JD", owner:"Steel (Samson review)", flag:true, status:"Open"},
+          {k:"fund-5", t:"Confirm delegation of direction", owner:"Steel", flag:true, status:"Open"},
+          {k:"fund-6", t:"Help Amanda land Flag Football sponsors", owner:"Team", flag:true, status:"Open"},
+          {k:"fund-3", t:"Decide McGill tabling vs. $200 fee", owner:"Amanda / Steel", flag:true, status:"Open (Otter, Jun 18)"},
+          {k:"fund-4", t:"Provide flyer/print budget", owner:"Steel", flag:true, status:"Open"},
+          {k:"fund-7", t:"Build event-capture system (pitch/QR/briefing)", owner:"Amanda/Rami", flag:false, status:"Agreed, photo album live"}
+        ]
+      },
+      {
+        title: "Donor program", color: "#2c8a6f",
+        summary: "Shifted to a grassroots CRM (Kila/QILA) with tiered donor packages at about $500/mo, replacing the dropped iWave at about $7k/mo. Recurring donors are run by Alexis. Old CASA debt should clear before new deals are negotiated.",
+        items: [
+          {k:"fund-2", t:"Collect roughly $1,000 CASA debt", owner:"Rami / Amanda", flag:true, status:"Open, before new deals"}
+        ]
+      }
+    ],
+    contributed: "Rami / Steel (May 6, Loom); Weekly Fundraising May 21 / May 28 / Jun 4 / Jun 11 (Loom); Weekly Fundraising Meeting (Jun 18, Otter); Grants Initial Meeting (Jun 11, Loom); Marketing Meeting May 27 grants session (Loom); Leadership Strategy (Jun 11, Loom)."
+  },
+
+  hr: {
+    title: "Human Resources",
+    color: "var(--c-hr)",
+    read: "Constructive and building, but capacity-constrained. Consolidate recent hires before adding more; HR itself is down a member (Mariana). The Jun 15 Valex 1:1 turned this into a concrete ClickUp goal cleanup.",
+    progress: "A strong quarter on volume (11 hires, lost 2). Combined HR-and-management interviews, ClickUp-based onboarding, a development program and performance follow-ups are rolling out. HR is itself down a member with Mariana's departure. Valex now joins the Tuesday co-ED 1:1, and the Jun 15 session turned the function into a measured, goal-tracked operation in ClickUp.",
+    priorities: [
+      "Pause heavy recruitment and consolidate the 7 to 9 recent joiners",
+      "Clean up and re-baseline the HR goals in ClickUp before the Monday 1:1"
+    ],
+    team: [
+      ["Valex","HR lead"],["Natasha","HR / virtual social lead"],["Samson","HR / JD review, onboarding"],
+      ["Tuna","HR / operations crossover"],["Mariana","Departed"]
+    ],
+    updates: [
+      ["Jun 15 (Otter)","Steel + Valex 1:1: clean up ClickUp HR goals (move overdue Q2 items to Q4, mark complete/incomplete, drop SOPs that are not goals), start tracking recruitment time-to-fill, move the 90-day onboarding plan to Q4, standardize job descriptions across ops and program dev (loop in Natasha), present the ClickUp goals view in team meetings. Updated view due to Steel by Wednesday."],
+      ["Jun 11 (Loom)","11 hires last quarter, lost 2 (Dave the nutritionist; Mariana). Rolling out combined HR+management interviews, ClickUp onboarding, development program, performance follow-ups, company-wide virtual social (Natasha). Valex joining Steel &amp; Suhaib's Tuesday 1:1."],
+      ["Jun 12 (Loom)","Content-manager interview (French candidate, strong content/analytics, thin people-management; asked about an accounting role + schedule flexibility)."],
+      ["Jun 10 (Otter)","Ola onboarding run by Samson and Valex (access, Slack, ClickUp)."]
+    ],
+    subsections: [
+      {
+        title: "Recruitment", color: "#b3402f",
+        summary: "The hiring wave is being deliberately slowed so recent joiners can settle. Content-manager interviews are underway and Mariana's HR seat needs a backfill. The team is starting to track recruitment time-to-fill.",
+        items: [
+          {k:"hr-1", t:"Pause heavy recruitment; onboard 7-9 recent joiners", owner:"Steel / Valex", flag:true, status:"Open"},
+          {k:"hr-3", t:"Hire content manager", owner:"Valex / Steel", flag:false, status:"Interviews underway"},
+          {k:"hr-4", t:"Backfill Mariana (HR)", owner:"Valex", flag:false, status:"Open"},
+          {k:"hr-5", t:"Start tracking recruitment time-to-fill", owner:"Valex", flag:false, status:"New, per Jun 15 1:1"}
+        ]
+      },
+      {
+        title: "Onboarding", color: "#c4682f",
+        summary: "ClickUp-based onboarding is live (Ola was run by Samson and Valex). The 90-day onboarding plan is moving to Q4 so it is realistic, and job descriptions are being standardized across ops and program development.",
+        items: [
+          {k:"hr-6", t:"Move the 90-day onboarding plan to Q4", owner:"Valex", flag:false, status:"In progress"},
+          {k:"hr-7", t:"Standardize job descriptions across ops and program dev (loop in Natasha)", owner:"Samson / Natasha", flag:false, status:"Open"}
+        ]
+      },
+      {
+        title: "HR strategy", color: "#9c3f5a",
+        summary: "Turning HR into a measured function: clean up ClickUp goals (overdue Q2 items to Q4), drop SOPs that are not goals, present the goals view in team meetings, and run a company-wide virtual social led by Natasha.",
+        items: [
+          {k:"hr-2", t:"Review + comment HR Q2/Q3/Q4 goals in ClickUp before Monday 1:1", owner:"Steel", flag:false, status:"Open (Otter, Jun 15)"},
+          {k:"hr-8", t:"Present the ClickUp HR goals view in team meetings", owner:"Valex", flag:false, status:"Updated view due to Steel"}
+        ]
+      }
+    ],
+    contributed: "Leadership Strategy (Jun 11, Loom); Strategie de creation de contenu, Jun 12 interview (Loom); Marketing Meeting May 13 posting (Loom); Ola onboarding (Jun 10, Otter); Valex 1on1 (Jun 15, Otter)."
+  },
+
+  board: {
+    title: "Board &amp; Governance",
+    color: "var(--c-board)",
+    read: "Governance maturing alongside the org. A treasurer in place, refreshed mission, and now an external board adviser pushing structure. The Jun 16 session with Rima Naim is the most substantive board input this run.",
+    progress: "Governance is maturing. The treasurer is in place tracking finances in Keela, the reworked mission is approved, the eight charitable pillars were reviewed, and the CFO moved to the board. External adviser Rima Naim has pushed concrete structure (task committees, representation goals). Steel is set to present to CASA's board.",
+    priorities: [
+      "Bring a board-level insurance quote to the next board meeting",
+      "Stand up board committees and set geographic and ethnic representation targets, per Rima Naim"
+    ],
+    team: [
+      ["Steel","Founder, ED, Board President"],["Suhaib","Co-ED, Member-at-Large"],["Daniela","Treasurer"],
+      ["Kellian","Chair / facilitator"],["Mohamed","Board member"],["Tamara","Board member"],["Rima Naim","External board adviser"]
+    ],
+    updates: [
+      ["Jun 16 (Otter)","Board Management with Rima Naim: experienced board member advised on strategic planning and operating objectives. Set clear goals (geographic and ethnic representation), adapt as operating needs change, create task committees (e.g. IT strategy) and bring in outside experts, and structure engagement with operational teams and partners. Framed WA's stage as a child outgrowing its clothes and urged evolving fundraising and operating strategy to match."],
+      ["Jun 11 (Loom)","Reworked mission statement approved with the team; 8 charitable pillars reviewed. CFO moved to board; Daniela (treasurer) tracks finances in Keela. Steel presenting to CASA's Board; WA to present to that board about a month out."]
+    ],
+    items: [
+      {k:"board-1", t:"Board-level insurance (org + board)", owner:"Steel to Board", flag:true, status:"Bring a quote (Red Cross/Rima)"},
+      {k:"board-2", t:"Stand up board committees + set representation targets", owner:"Steel + Board", flag:true, status:"New, per Rima Naim (Jun 16)"},
+      {k:"board-3", t:"Present to CASA Board of Directors", owner:"Steel", flag:false, status:"About a month out"}
+    ],
+    contributed: "Leadership Strategy &amp; Discussion (Jun 11, Loom); Board Management with Rima Naim (Jun 16, Otter)."
+  }
+};
+
+/* =====================================================================
+   CLOUD + AUTH  (Google sign-in; staff and sanitized board roles)
+   ===================================================================== */
+let db = null;
+let cloudOn = false;
+let MODE = null;                 // "staff" | "board"
+let USER = { email: "", name: "" };
+let SESSION = null;
+
+const DEPT_ORDER = ["opsmtl", "opsto", "marketing", "fundraising", "hr", "board"];
+const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising & Grants", hr: "Human Resources", board: "Board" };
+const DEPT_COLOR = { opsmtl: "#2c7a66", opsto: "#3a6ea5", marketing: "#8a5cc4", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57" };
+const CATEGORIES = ["Budget or purchase", "Hiring or people", "Legal, risk, or governance", "Strategy or direction", "Partnership or external", "Ethics or policy"];
+const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#1f5f4f", "Partnership or external": "#3a6ea5", "Ethics or policy": "#8a5cc4" };
+
+function isStaff() { return MODE === "staff"; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function catTag(cat) { if (!cat) return ""; return '<span class="cat-tag" style="background:' + (CAT_COLORS[cat] || "#6b7670") + '">' + esc(cat) + "</span>"; }
+
+function initCloud() {
+  const dot = document.getElementById("cloudDot");
+  const txt = document.getElementById("cloudStatus");
+  try {
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { flowType: "pkce" } });
+    cloudOn = true;
+    dot.className = "dot ok";
+    txt.textContent = "Cloud connected";
+  } catch (e) {
+    cloudOn = false;
+    dot.className = "dot local";
+    txt.textContent = "Cloud error, reload to retry";
+  }
+}
+
+async function signInGoogle() {
+  const err = document.getElementById("gateErr");
+  if (location.protocol === "file:") {
+    document.getElementById("gateFileNote").style.display = "block";
+    return;
+  }
+  const { error } = await db.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: location.origin + location.pathname,
+      scopes: "https://www.googleapis.com/auth/calendar.readonly",
+      queryParams: { access_type: "offline", prompt: "select_account" }
+    }
+  });
+  if (error) err.textContent = "Sign-in failed: " + error.message;
+}
+
+async function signOutAll() {
+  try { await db.auth.signOut(); } catch (e) { /* proceed */ }
+  location.hash = "";
+  location.reload();
+}
+
+function showGate(kind, email) {
+  const g = document.getElementById("gate");
+  const msg = document.getElementById("gateMsg");
+  const alt = document.getElementById("gateAlt");
+  g.style.display = "flex";
+  if (kind === "denied") {
+    msg.innerHTML = "The account <b>" + esc(email) + "</b> does not have access to this board. Staff use a welfareavenue.com account; board members need Steel or Suhaib to add their email first.";
+    alt.style.display = "block";
+  } else if (kind === "error") {
+    msg.textContent = "Could not reach the cloud. Check the connection and reload.";
+  }
+  if (location.protocol === "file:") document.getElementById("gateFileNote").style.display = "block";
+  document.getElementById("gateGoogleBtn").addEventListener("click", signInGoogle);
+  const so = document.getElementById("gateSignOutBtn");
+  if (so) so.addEventListener("click", signOutAll);
+}
+function hideGate() { document.getElementById("gate").style.display = "none"; }
+
+function displayName(session) {
+  const m = (session.user && session.user.user_metadata) || {};
+  return m.full_name || m.name || (session.user.email || "").split("@")[0];
+}
+function firstName() { return (USER.name || "").split(" ")[0]; }
+
+/* =====================================================================
+   LIVE DATA LAYER
+   ===================================================================== */
+let DB_DECISIONS = [], DB_META = {}, DB_UPDATES = [], DB_TASKS = [], DB_MEMBERS = [], DB_ASSIGN = [], DB_CHANGES = [];
+let DB_SENTIMENT = [], DB_HOURS = [], DB_CLICKUP = [];
+let MEMBER_BY_ID = {};
+let LAST_SEEN = null;
+let MEETINGS = {};              // dept -> [{title, start, link}]
+
+/* One-time seed if the cloud tables are ever empty (disaster recovery). */
+async function seedIfEmpty() {
+  if (!cloudOn || !isStaff()) return;
+  try {
+    const d = await db.from("decisions").select("id").limit(1);
+    if (d.data && d.data.length === 0) {
+      await db.from("decisions").insert(
+        DECISIONS.map((x, i) => ({ pos: i + 1, title: x.t, area: x.area, suggested_move: x.move }))
+      );
+    }
+    const m = await db.from("dept_meta").select("department").limit(1);
+    if (m.data && m.data.length === 0) {
+      await db.from("dept_meta").insert(
+        DEPT_ORDER.map(id => ({ department: id, read: SECTIONS[id].read, progress: SECTIONS[id].progress || "", priorities: SECTIONS[id].priorities || [] }))
+      );
+    }
+  } catch (e) { /* seeding is best effort */ }
+}
+
+async function loadAll() {
+  const base = [
+    db.from("decisions").select("*").order("pos", { ascending: true }),
+    db.from("dept_meta").select("*"),
+    db.from("dept_updates").select("*"),
+    db.from("dept_tasks").select("*"),
+    db.from("team_members").select("*").order("name", { ascending: true }),
+    db.from("task_assignees").select("*"),
+    db.from("dept_sentiment").select("*").gte("captured_on", new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10)),
+    db.from("slack_hours").select("*").gte("week_start", new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10)),
+    db.from("clickup_weekly").select("*").gte("week_start", new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10))
+  ];
+  if (isStaff()) base.push(db.from("change_log").select("*").order("changed_at", { ascending: false }).limit(300));
+  const res = await Promise.all(base);
+  DB_DECISIONS = res[0].data || [];
+  DB_META = {}; (res[1].data || []).forEach(r => DB_META[r.department] = r);
+  DB_UPDATES = res[2].data || [];
+  DB_TASKS = res[3].data || [];
+  DB_MEMBERS = (res[4].data || []).filter(r => r.active !== false);
+  DB_ASSIGN = res[5].data || [];
+  DB_SENTIMENT = res[6].data || [];
+  DB_HOURS = res[7].data || [];
+  DB_CLICKUP = res[8].data || [];
+  DB_CHANGES = isStaff() ? (res[9].data || []) : [];
+  MEMBER_BY_ID = {}; DB_MEMBERS.forEach(m => MEMBER_BY_ID[m.id] = m);
+}
+
+async function loadLastSeen() {
+  try {
+    const r = await db.from("user_state").select("last_seen_at").eq("email", USER.email).maybeSingle();
+    LAST_SEEN = r.data ? r.data.last_seen_at : null;
+  } catch (e) { LAST_SEEN = null; }
+}
+async function markSeen() {
+  try { await db.from("user_state").upsert({ email: USER.email, last_seen_at: new Date().toISOString(), updated_at: new Date().toISOString() }); } catch (e) { /* best effort */ }
+}
+
+/* keep Slack deep links pointing at wherever the site actually lives */
+async function maybeUpdateSiteUrl() {
+  if (!isStaff() || !location.protocol.startsWith("http")) return;
+  try {
+    const here = location.origin + location.pathname;
+    const r = await db.from("app_config").select("value").eq("key", "site_url").maybeSingle();
+    if (r.data && r.data.value !== here) {
+      await db.from("app_config").update({ value: here, updated_at: new Date().toISOString() }).eq("key", "site_url");
+    }
+  } catch (e) { /* best effort */ }
+}
+
+function taskAssignees(taskId) {
+  return DB_ASSIGN.filter(a => a.task_id === taskId).map(a => MEMBER_BY_ID[a.member_id]).filter(Boolean);
+}
+
+/* accessors */
+function getDecisions() {
+  return DB_DECISIONS.map(r => ({
+    ref: r.id, pos: r.pos, title: r.title, area: r.area, move: r.suggested_move,
+    done: !!r.done, by: r.updated_by, at: r.updated_at,
+    cat: r.reason_category, note: r.reason_note, decidedNote: r.decided_note, decidedAt: r.decided_at,
+    confidential: !!r.confidential, opened: r.opened_at, raisedBy: r.raised_by, owner: r.owner
+  }));
+}
+function getMeta(id) {
+  if (DB_META[id]) return DB_META[id];
+  return { read: SECTIONS[id].read, progress: SECTIONS[id].progress || "", priorities: SECTIONS[id].priorities || [] };
+}
+function getUpdates(id) {
+  return DB_UPDATES.filter(r => r.department === id)
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .map(r => ({ id: r.id, label: r.entry_label, text: r.text, at: r.created_at, confidential: !!r.confidential }));
+}
+function getTasks(id) {
+  return DB_TASKS.filter(r => r.department === id)
+    .sort((a, b) => (a.sort || 0) - (b.sort || 0))
+    .map(r => ({
+      ref: r.id, subsection: r.subsection, title: r.title, owner: r.owner, status: r.status,
+      flag: !!r.flag, priority: !!r.priority, done: !!r.done, by: r.updated_by, at: r.updated_at,
+      opened: r.opened_at, closed: r.closed_at, due: r.due_date,
+      cat: r.reason_category, note: r.reason_note, confidential: !!r.confidential,
+      assignees: taskAssignees(r.id)
+    }));
+}
+
+/* =====================================================================
+   WRITE-BACKS  (all attributed to the signed-in user, all change-logged)
+   ===================================================================== */
+function who() { return USER.name || USER.email || "Unknown"; }
+
+async function logChange(entityType, entityId, field, oldV, newV) {
+  try {
+    await db.from("change_log").insert({
+      entity_type: entityType, entity_id: String(entityId), field: field,
+      old_value: oldV == null ? null : String(oldV), new_value: newV == null ? null : String(newV),
+      changed_by: who()
+    });
+  } catch (e) { /* logging is best effort */ }
+}
+
+async function toggleTask(ref, done) {
+  const patch = { done: done, updated_by: who(), updated_at: new Date().toISOString() };
+  const r = await db.from("dept_tasks").update(patch).eq("id", ref);
+  if (r.error) { toast("Save failed, check connection"); return false; }
+  const row = DB_TASKS.find(x => x.id === ref);
+  if (row) { Object.assign(row, patch); row.closed_at = done ? new Date().toISOString() : null; }
+  logChange("dept_task", ref, "done", done ? "open" : "closed", done ? "closed" : "open");
+  toast(done ? "Marked done, saved" : "Reopened, saved");
+  return true;
+}
+
+function reassignTask(ref, deptId) {
+  const li = document.querySelector('li[data-task="' + ref + '"]');
+  const cur = (DB_TASKS.find(x => x.id == ref) || {}).owner || "";
+  const holder = li ? li.querySelector(".ci-sub") : null;
+  if (!holder || holder.querySelector("select")) return;
+  const sel = document.createElement("select");
+  sel.style.cssText = "margin-left:8px;font-size:12px;padding:4px 8px;max-width:220px;";
+  let opts = '<option value="">Reassign to...</option><option value="__unassigned">Unassigned</option><option value="__custom">Type a name...</option>';
+  DEPT_ORDER.forEach(d => {
+    const ms = DB_MEMBERS.filter(m => m.department === d);
+    if (!ms.length) return;
+    opts += '<optgroup label="' + esc(DEPT_LABEL[d] || d) + '">';
+    ms.forEach(m => opts += '<option value="' + esc(m.name) + '"' + (m.name === cur ? " selected" : "") + ">" + esc(m.name) + "</option>");
+    opts += "</optgroup>";
+  });
+  sel.innerHTML = opts;
+  holder.appendChild(sel);
+  sel.focus();
+  let saving = false;
+  sel.addEventListener("change", async () => {
+    let w = sel.value;
+    if (!w) { sel.remove(); return; }
+    if (w === "__unassigned") w = "";
+    if (w === "__custom") { w = prompt("Owner name:", cur); if (w === null) { sel.remove(); return; } }
+    saving = true;
+    const r = await db.from("dept_tasks").update({ owner: w, updated_by: who(), updated_at: new Date().toISOString() }).eq("id", ref);
+    if (r.error) { toast("Reassign failed, check connection"); sel.remove(); return; }
+    const row = DB_TASKS.find(x => x.id == ref); if (row) row.owner = w;
+    logChange("dept_task", ref, "owner", cur, w);
+    renderSection(deptId); renderNeedsMe();
+    toast("Reassigned to " + (w || "unassigned"));
+  });
+  sel.addEventListener("blur", () => { setTimeout(() => { if (!saving && sel.parentElement) sel.remove(); }, 250); });
+}
+
+async function addUpdate(id) {
+  const label = prompt("Update label (e.g. Jul 2 or Jul 2 (Otter)):", "");
+  if (label === null) return;
+  const text = prompt("Update text:", "");
+  if (!text) return;
+  const confidential = confirm("Hide this update from the board view?\nOK = confidential, Cancel = visible to board viewers");
+  const r = await db.from("dept_updates").insert({ department: id, entry_label: label || "", text: text, added_by: who(), confidential: confidential, created_at: new Date().toISOString() });
+  if (r.error) { toast("Save failed"); return; }
+  logChange("dept_update", id, "added", null, (label || "") + ": " + text);
+  await loadAll(); renderSection(id); renderWhatsNew(); toast("Update added");
+}
+
+/* ---------- modal framework ---------- */
+function openModal(html) {
+  const back = document.getElementById("modalBack");
+  document.getElementById("modalBox").innerHTML = html;
+  back.style.display = "flex";
+}
+function closeModal() { document.getElementById("modalBack").style.display = "none"; }
+document.getElementById("modalBack").addEventListener("click", e => { if (e.target.id === "modalBack") closeModal(); });
+
+function categoryOptions(sel) {
+  let o = '<option value="">No category</option>';
+  CATEGORIES.forEach(c => o += '<option value="' + esc(c) + '"' + (sel === c ? " selected" : "") + ">" + esc(c) + "</option>");
+  const isCustom = sel && CATEGORIES.indexOf(sel) < 0;
+  o += '<option value="__other"' + (isCustom ? " selected" : "") + ">Other (type below)</option>";
+  return o;
+}
+
+async function suggestReason(kind, title, area, move) {
+  try {
+    const { data, error } = await db.functions.invoke("suggest-reason", { body: { kind: kind, title: title, area: area || "", move: move || "" } });
+    if (error || !data || !data.reason_category) return null;
+    return data;
+  } catch (e) { return null; }
+}
+
+/* ---------- task add / edit modal ---------- */
+let PICKER = [];   // selected member ids
+
+function pickerChipHtml() {
+  return PICKER.map(id => {
+    const m = MEMBER_BY_ID[id];
+    return m ? '<span class="as-chip" data-remove="' + id + '" title="Remove">' + esc(m.name) + " &times;</span>" : "";
+  }).join("") || '<span style="font-size:12px;color:var(--wa-muted);">No assignees yet</span>';
+}
+function refreshPickerChips() {
+  const el = document.getElementById("pkChips");
+  if (!el) return;
+  el.innerHTML = pickerChipHtml();
+  el.querySelectorAll("[data-remove]").forEach(ch => ch.addEventListener("click", () => {
+    PICKER = PICKER.filter(x => x !== Number(ch.dataset.remove));
+    refreshPickerChips();
+  }));
+}
+
+function taskModal(deptId, task) {
+  const sec = SECTIONS[deptId];
+  const isEdit = !!task;
+  PICKER = isEdit ? task.assignees.map(a => a.id) : [];
+  const subs = (sec.subsections || []).map(s => s.title);
+  const deptMembers = DB_MEMBERS.filter(m => m.department === deptId);
+  const otherMembers = DB_MEMBERS.filter(m => m.department !== deptId);
+  let memberOpts = '<option value="">+ Add assignee from roster...</option>';
+  if (deptMembers.length) {
+    memberOpts += '<optgroup label="' + esc(DEPT_LABEL[deptId]) + ' team">';
+    deptMembers.forEach(m => memberOpts += '<option value="' + m.id + '">' + esc(m.name) + (m.role ? " (" + esc(m.role) + ")" : "") + "</option>");
+    memberOpts += "</optgroup>";
+  }
+  memberOpts += '<optgroup label="Everyone else">';
+  otherMembers.forEach(m => memberOpts += '<option value="' + m.id + '">' + esc(m.name) + " (" + esc(DEPT_LABEL[m.department] || m.department || "") + ")</option>");
+  memberOpts += "</optgroup>";
+
+  const subOpts = subs.length
+    ? '<label>Workstream</label><select id="tmSub"><option value="">General</option>' +
+      subs.map(s => '<option value="' + esc(s) + '"' + (isEdit && task.subsection === s ? " selected" : "") + ">" + esc(s) + "</option>").join("") + "</select>"
+    : "";
+
+  openModal(
+    "<h3>" + (isEdit ? "Edit task" : "Add task") + '</h3>' +
+    '<p class="m-sub">' + esc(DEPT_LABEL[deptId]) + ". Date added is automatic; set a due date so aging is visible.</p>" +
+    '<label>Task</label><input type="text" id="tmTitle" value="' + (isEdit ? esc(task.title) : "") + '" placeholder="What needs to happen" />' +
+    subOpts +
+    '<div class="m-row"><div><label>Due date</label><input type="date" id="tmDue" value="' + (isEdit && task.due ? task.due : "") + '" /></div>' +
+    '<div><label>Owner (accountable)</label><input type="text" id="tmOwner" value="' + (isEdit ? esc(task.owner || "") : "") + '" placeholder="e.g. Amanda" /></div></div>' +
+    "<label>Assignees</label>" +
+    '<div class="picker-chips" id="pkChips"></div>' +
+    '<select id="pkAdd">' + memberOpts + "</select>" +
+    '<div class="m-row" style="margin-top:12px;"><div><label style="margin-top:0;"><input type="checkbox" id="tmFlag"' + (isEdit && task.flag ? " checked" : "") + " /> Needs an executive decision</label></div>" +
+    '<div><label style="margin-top:0;"><input type="checkbox" id="tmConf"' + (isEdit && task.confidential ? " checked" : "") + " /> Confidential (hidden from board view)</label></div></div>" +
+    '<div id="tmReasonWrap" style="display:' + (isEdit && task.flag ? "block" : "none") + ';">' +
+    "<label>Reason category</label><select id=\"tmCat\">" + categoryOptions(isEdit ? task.cat : "") + "</select>" +
+    '<input type="text" id="tmCatOther" placeholder="Custom category" style="margin-top:6px;display:none;" />' +
+    '<label>Why this needs an executive (one line)</label><input type="text" id="tmNote" placeholder="Leave blank and the AI writes it on save" value="' + (isEdit ? esc(task.note || "") : "") + '" /></div>' +
+    '<div class="m-foot"><button class="btn ghost" id="tmCancel">Cancel</button><button class="btn" id="tmSave">' + (isEdit ? "Save changes" : "Add task") + "</button></div>"
+  );
+
+  refreshPickerChips();
+  document.getElementById("pkAdd").addEventListener("change", e => {
+    const v = Number(e.target.value);
+    if (v && PICKER.indexOf(v) < 0) PICKER.push(v);
+    e.target.value = "";
+    refreshPickerChips();
+  });
+  document.getElementById("tmFlag").addEventListener("change", e => {
+    document.getElementById("tmReasonWrap").style.display = e.target.checked ? "block" : "none";
+  });
+  const catSel = document.getElementById("tmCat");
+  const catOther = document.getElementById("tmCatOther");
+  function syncCatOther() { catOther.style.display = catSel.value === "__other" ? "block" : "none"; }
+  catSel.addEventListener("change", syncCatOther); syncCatOther();
+  if (isEdit && task.cat && CATEGORIES.indexOf(task.cat) < 0) { catOther.value = task.cat; catOther.style.display = "block"; }
+  document.getElementById("tmCancel").addEventListener("click", closeModal);
+  document.getElementById("tmSave").addEventListener("click", () => saveTaskModal(deptId, task));
+}
+
+async function saveTaskModal(deptId, task) {
+  const title = document.getElementById("tmTitle").value.trim();
+  if (!title) { toast("Give the task a title"); return; }
+  const subEl = document.getElementById("tmSub");
+  const flag = document.getElementById("tmFlag").checked;
+  let cat = null, note = null;
+  if (flag) {
+    const catSel = document.getElementById("tmCat").value;
+    cat = catSel === "__other" ? (document.getElementById("tmCatOther").value.trim() || null) : (catSel || null);
+    note = document.getElementById("tmNote").value.trim() || null;
+    if (!cat || !note) {
+      toast("Generating the reason with AI...");
+      const s = await suggestReason("task", title, DEPT_LABEL[deptId] || "", document.getElementById("tmOwner").value.trim());
+      if (s) { cat = cat || s.reason_category; note = note || s.reason_note; }
+      if (!cat) cat = "Strategy or direction";
+      if (!note) note = "Needs an executive call";
+    }
+  }
+  const patch = {
+    title: title,
+    subsection: subEl ? (subEl.value || null) : (task ? task.subsection : null),
+    owner: document.getElementById("tmOwner").value.trim(),
+    due_date: document.getElementById("tmDue").value || null,
+    flag: flag,
+    reason_category: cat,
+    reason_note: note,
+    confidential: document.getElementById("tmConf").checked,
+    updated_by: who(),
+    updated_at: new Date().toISOString()
+  };
+  let taskId;
+  if (task) {
+    const r = await db.from("dept_tasks").update(patch).eq("id", task.ref);
+    if (r.error) { toast("Save failed"); return; }
+    taskId = task.ref;
+    if (task.title !== title) logChange("dept_task", taskId, "title", task.title, title);
+    if ((task.due || null) !== patch.due_date) logChange("dept_task", taskId, "due_date", task.due, patch.due_date);
+    if ((task.owner || "") !== patch.owner) logChange("dept_task", taskId, "owner", task.owner, patch.owner);
+    if (task.flag !== flag) logChange("dept_task", taskId, "flag", String(task.flag), String(flag));
+    if (task.confidential !== patch.confidential) logChange("dept_task", taskId, "confidential", String(task.confidential), String(patch.confidential));
+  } else {
+    patch.department = deptId;
+    patch.status = "Open";
+    patch.sort = 999;
+    const r = await db.from("dept_tasks").insert(patch).select("id").single();
+    if (r.error || !r.data) { toast("Save failed"); return; }
+    taskId = r.data.id;
+    logChange("dept_task", taskId, "added", null, title);
+  }
+  /* sync assignees */
+  const before = task ? task.assignees.map(a => a.id) : [];
+  const toAdd = PICKER.filter(id => before.indexOf(id) < 0);
+  const toDel = before.filter(id => PICKER.indexOf(id) < 0);
+  if (toAdd.length) await db.from("task_assignees").insert(toAdd.map(id => ({ task_id: taskId, member_id: id })));
+  if (toDel.length) await db.from("task_assignees").delete().eq("task_id", taskId).in("member_id", toDel);
+  if (toAdd.length || toDel.length) {
+    const names = ids => ids.map(i => (MEMBER_BY_ID[i] || {}).name).filter(Boolean).join(", ");
+    logChange("dept_task", taskId, "assignees", names(before) || "none", names(PICKER) || "none");
+  }
+  closeModal();
+  await loadAll();
+  renderSection(deptId); renderDashboard(); renderNeedsMe(); renderWhatsNew();
+  toast(task ? "Task updated" : "Task added");
+}
+
+/* ---------- decision add / edit modal ---------- */
+function decisionModal(dec) {
+  const isEdit = !!dec;
+  const areas = Object.keys(AREA_COLORS);
+  openModal(
+    "<h3>" + (isEdit ? "Edit decision" : "Add an executive decision") + "</h3>" +
+    '<p class="m-sub">Every decision carries a reason category and a one line rationale so the list stays triageable. Leave the reason blank and the AI writes it on save.</p>' +
+    '<label>Decision</label><input type="text" id="dmTitle" value="' + (isEdit ? esc(dec.title) : "") + '" placeholder="The call that needs to be made" />' +
+    '<div class="m-row"><div><label>Area</label><select id="dmArea">' +
+    areas.map(a => '<option value="' + esc(a) + '"' + (isEdit && dec.area === a ? " selected" : "") + ">" + esc(a) + "</option>").join("") +
+    '</select></div><div><label>Who decides</label><select id="dmOwner">' +
+    ["Both", "Steel", "Suhaib"].map(o => '<option value="' + o + '"' + (isEdit && dec.owner === o ? " selected" : "") + ">" + o + "</option>").join("") +
+    "</select></div></div>" +
+    "<label>Suggested move</label><input type=\"text\" id=\"dmMove\" value=\"" + (isEdit ? esc(dec.move || "") : "") + '" />' +
+    "<label>Reason category</label><select id=\"dmCat\">" + categoryOptions(isEdit ? dec.cat : "") + "</select>" +
+    '<input type="text" id="dmCatOther" placeholder="Custom category" style="margin-top:6px;display:none;" />' +
+    "<label>Why this needs an executive (one line)</label><input type=\"text\" id=\"dmNote\" value=\"" + (isEdit ? esc(dec.note || "") : "") + '" />' +
+    '<label style="margin-top:14px;"><input type="checkbox" id="dmConf"' + (isEdit && dec.confidential ? " checked" : "") + " /> Confidential (hidden from board view)</label>" +
+    '<div class="m-foot"><button class="btn ghost" id="dmCancel">Cancel</button><button class="btn" id="dmSave">' + (isEdit ? "Save changes" : "Add decision") + "</button></div>"
+  );
+  const catSel = document.getElementById("dmCat");
+  const catOther = document.getElementById("dmCatOther");
+  function syncCatOther() { catOther.style.display = catSel.value === "__other" ? "block" : "none"; }
+  catSel.addEventListener("change", syncCatOther); syncCatOther();
+  if (isEdit && dec.cat && CATEGORIES.indexOf(dec.cat) < 0) { catOther.value = dec.cat; catOther.style.display = "block"; }
+  document.getElementById("dmCancel").addEventListener("click", closeModal);
+  document.getElementById("dmSave").addEventListener("click", () => saveDecisionModal(dec));
+}
+
+async function saveDecisionModal(dec) {
+  const title = document.getElementById("dmTitle").value.trim();
+  if (!title) { toast("Give the decision a title"); return; }
+  const catSel = document.getElementById("dmCat").value;
+  let cat = catSel === "__other" ? (document.getElementById("dmCatOther").value.trim() || null) : (catSel || null);
+  let note = document.getElementById("dmNote").value.trim() || null;
+  if (!cat || !note) {
+    toast("Generating the reason with AI...");
+    const s = await suggestReason("decision", title, document.getElementById("dmArea").value, document.getElementById("dmMove").value.trim());
+    if (s) { cat = cat || s.reason_category; note = note || s.reason_note; }
+    if (!cat) cat = "Strategy or direction";
+    if (!note) note = "Needs an executive call";
+  }
+  const patch = {
+    title: title,
+    area: document.getElementById("dmArea").value,
+    suggested_move: document.getElementById("dmMove").value.trim(),
+    owner: document.getElementById("dmOwner").value,
+    reason_category: cat,
+    reason_note: note,
+    confidential: document.getElementById("dmConf").checked
+  };
+  if (dec) {
+    const r = await db.from("decisions").update(patch).eq("id", dec.ref);
+    if (r.error) { toast("Save failed"); return; }
+    logChange("decision", dec.ref, "edited", dec.title, title);
+  } else {
+    patch.pos = DB_DECISIONS.reduce((m, r) => Math.max(m, r.pos || 0), 0) + 1;
+    patch.done = false;
+    patch.raised_by = who();
+    patch.opened_at = new Date().toISOString();
+    const r = await db.from("decisions").insert(patch).select("id").single();
+    if (r.error) { toast("Save failed"); return; }
+    logChange("decision", r.data ? r.data.id : "", "added", null, title);
+    /* Slack: new executive decision (Budget and Legal get extra emphasis server-side) */
+    try {
+      db.functions.invoke("notify", { body: { type: "decision_raised", decision: {
+        title: title, area: patch.area, reason_category: cat, reason_note: note, owner: patch.owner, raised_by: who()
+      } } });
+    } catch (e) { /* notification is best effort */ }
+  }
+  closeModal();
+  await loadAll();
+  renderDecisions(); renderNeedsMe(); renderWhatsNew();
+  toast(dec ? "Decision updated" : "Decision added");
+}
+
+/* ---------- decided-note capture on check-off ---------- */
+function decideModal(dec, checkbox) {
+  openModal(
+    "<h3>Record the decision</h3>" +
+    '<p class="m-sub">' + esc(dec.title) + "</p>" +
+    "<label>What was decided (kept as the record)</label>" +
+    '<textarea id="ddNote" placeholder="e.g. Approved the $200 booth fee for McGill tabling"></textarea>' +
+    '<div class="m-foot"><button class="btn ghost" id="ddCancel">Cancel</button><button class="btn" id="ddSave">Mark decided</button></div>'
+  );
+  document.getElementById("ddCancel").addEventListener("click", () => { checkbox.checked = false; closeModal(); });
+  document.getElementById("ddSave").addEventListener("click", async () => {
+    const note = document.getElementById("ddNote").value.trim();
+    const r = await db.from("decisions").update({
+      done: true, decided_note: note || null, decided_at: new Date().toISOString(),
+      updated_by: who(), updated_at: new Date().toISOString()
+    }).eq("id", dec.ref);
+    if (r.error) { toast("Save failed"); checkbox.checked = false; closeModal(); return; }
+    logChange("decision", dec.ref, "decided", "open", note || "decided");
+    closeModal();
+    await loadAll();
+    renderDecisions(); renderNeedsMe(); renderDashboard();
+    toast("Decision recorded");
+  });
+}
+
+async function reopenDecision(dec) {
+  if (!confirm("Reopen this decision?")) return false;
+  const r = await db.from("decisions").update({
+    done: false, decided_note: null, decided_at: null,
+    updated_by: who(), updated_at: new Date().toISOString()
+  }).eq("id", dec.ref);
+  if (r.error) { toast("Save failed"); return false; }
+  logChange("decision", dec.ref, "reopened", "decided", "open");
+  await loadAll();
+  renderDecisions(); renderNeedsMe(); renderDashboard();
+  toast("Reopened");
+  return true;
+}
+
+/* =====================================================================
+   RENDER HELPERS
+   ===================================================================== */
+function fmtDay(s) { if (!s) return ""; const d = new Date(s); if (isNaN(d)) return ""; return d.toLocaleDateString(undefined, { month: "short", day: "numeric" }); }
+function daysBetween(a, b) { if (!a || !b) return null; const n = Math.round((new Date(b) - new Date(a)) / 86400000); return isNaN(n) ? null : Math.max(0, n); }
+function metaLine(by, at) {
+  if (!by) return "";
+  const d = at ? new Date(at).toLocaleDateString() : "";
+  return "Done by " + by + (d ? " on " + d : "");
+}
+function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function highlightEl(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.add("pulse");
+  setTimeout(() => el.classList.remove("pulse"), 2800);
+}
+
+function dueBadge(it) {
+  if (it.done || !it.due) return "";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(it.due + "T00:00:00");
+  const over = Math.round((today - due) / 86400000);
+  const label = due.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (over < 0) return '<span class="due-badge">Due ' + label + "</span>";
+  if (over === 0) return '<span class="due-badge amber">Due today</span>';
+  return '<span class="due-badge ' + (over > 7 ? "red" : "amber") + '">' + over + "d overdue</span>";
+}
+
+function itemLi(it) {
+  let dateLine;
+  if (it.done) {
+    const dd = daysBetween(it.opened, it.closed);
+    dateLine = (it.opened ? "Opened " + fmtDay(it.opened) + " &middot; " : "") + "Closed " + (fmtDay(it.closed) || "?") + (dd != null ? " &middot; " + dd + "d to close" : "");
+  } else {
+    const age = daysBetween(it.opened, new Date().toISOString());
+    dateLine = it.opened ? "Opened " + fmtDay(it.opened) + (age != null && age > 0 ? " &middot; " + age + "d open" : "") : "";
+  }
+  const chips = (it.assignees || []).map(a => '<span class="as-chip">' + esc(a.name) + "</span>").join("");
+  const btns = isStaff() && !it.done
+    ? ' <button class="edit-btn" data-edit="' + it.ref + '">edit</button><button class="reassign-btn" data-ref="' + it.ref + '" title="Reassign owner">reassign</button>'
+    : "";
+  return '<li data-task="' + it.ref + '" class="' + (it.done ? "done" : "") + '">' +
+    '<input type="checkbox" data-ref="' + it.ref + '" ' + (it.done ? "checked" : "") + (isStaff() ? "" : " disabled") + " />" +
+    '<div class="ci-body">' +
+      '<div class="ci-title">' + (it.flag ? '<span class="flag">&#9873; </span>' : "") + it.title + catTag(it.cat) + (it.confidential && isStaff() ? '<span class="lock-tag">board hidden</span>' : "") + dueBadge(it) + "</div>" +
+      '<div class="ci-sub">Owner: ' + (it.owner || "unassigned") + (it.status ? " &middot; " + it.status : "") + btns + "</div>" +
+      (chips ? '<div class="ci-sub">' + chips + "</div>" : "") +
+      (it.flag && it.note ? '<div class="ci-sub" style="font-style:italic;">Why: ' + esc(it.note) + "</div>" : "") +
+      '<div class="ci-meta">' + dateLine + (it.done && it.by ? " &middot; by " + it.by : "") + "</div>" +
+    "</div></li>";
+}
+
+function wireTaskEvents(scope) {
+  scope.querySelectorAll("li[data-task]").forEach(li => {
+    const ref = Number(li.dataset.task);
+    const row = DB_TASKS.find(x => x.id === ref);
+    const deptId = row ? row.department : null;
+    const cb = li.querySelector("input[type=checkbox]");
+    if (cb && isStaff()) cb.addEventListener("change", async () => {
+      const ok = await toggleTask(ref, cb.checked);
+      if (ok) { if (deptId) renderSection(deptId); renderDashboard(); renderNeedsMe(); }
+    });
+    const eb = li.querySelector("[data-edit]");
+    if (eb) eb.addEventListener("click", () => { const t = getTasks(deptId).find(x => x.ref === ref); if (t) taskModal(deptId, t); });
+    const rb = li.querySelector(".reassign-btn");
+    if (rb) rb.addEventListener("click", e => { e.preventDefault(); reassignTask(ref, deptId); });
+  });
+}
+
+/* =====================================================================
+   OPEN DECISIONS
+   ===================================================================== */
+let DEC_FILTER = { cat: "", owner: "" };
+
+function decisionMatches(d) {
+  if (DEC_FILTER.cat && (d.cat || "") !== DEC_FILTER.cat) return false;
+  if (DEC_FILTER.owner) {
+    const o = d.owner || "Both";
+    if (DEC_FILTER.owner === "Steel" && !(o === "Steel" || o === "Both")) return false;
+    if (DEC_FILTER.owner === "Suhaib" && !(o === "Suhaib" || o === "Both")) return false;
+    if (DEC_FILTER.owner === "Both" && o !== "Both") return false;
+  }
+  return true;
+}
+
+function decLi(d) {
+  const age = d.done ? null : daysBetween(d.opened, new Date().toISOString());
+  const ageStr = age == null ? "" : (age === 0 ? "opened today" : age + "d open");
+  const metaBits = d.done
+    ? [d.decidedAt ? "Decided " + fmtDay(d.decidedAt) : "", metaLine(d.by, d.at)].filter(Boolean).join(" &middot; ")
+    : [ageStr, d.raisedBy ? "raised by " + esc(d.raisedBy) : "", "decides: " + esc(d.owner || "Both")].filter(Boolean).join(" &middot; ");
+  return '<li data-decision="' + d.ref + '" class="' + (d.done ? "done" : "") + '">' +
+    '<input type="checkbox" ' + (d.done ? "checked" : "") + (isStaff() ? "" : " disabled") + " />" +
+    '<div class="ci-body">' +
+      '<div class="ci-title">' + d.pos + ". " + d.title + '<span class="area-tag">' + (d.area || "") + "</span>" + catTag(d.cat) + (d.confidential && isStaff() ? '<span class="lock-tag">board hidden</span>' : "") + "</div>" +
+      (d.move ? '<div class="ci-sub">Suggested move: ' + d.move + "</div>" : "") +
+      (d.note ? '<div class="ci-sub" style="font-style:italic;">Why: ' + esc(d.note) + "</div>" : "") +
+      (d.done && d.decidedNote ? '<div class="ci-sub" style="color:var(--wa-green);font-weight:600;">Decided: ' + esc(d.decidedNote) + "</div>" : "") +
+      (isStaff() && !d.done ? '<div class="ci-sub"><button class="edit-btn" data-editdec="' + d.ref + '">edit</button></div>' : "") +
+      '<div class="ci-meta">' + metaBits + "</div>" +
+    "</div></li>";
+}
+
+function wireDecisionEvents(scope) {
+  scope.querySelectorAll("li[data-decision]").forEach(li => {
+    const ref = Number(li.dataset.decision);
+    const d = getDecisions().find(x => x.ref === ref);
+    if (!d) return;
+    const cb = li.querySelector("input[type=checkbox]");
+    if (cb && isStaff()) cb.addEventListener("change", async () => {
+      if (cb.checked && !d.done) decideModal(d, cb);
+      else if (!cb.checked && d.done) { const ok = await reopenDecision(d); if (!ok) cb.checked = true; }
+    });
+    const eb = li.querySelector("[data-editdec]");
+    if (eb) eb.addEventListener("click", () => decisionModal(d));
+  });
+}
+
+function renderDecFilters(openDecs) {
+  const wrap = document.getElementById("decFilters");
+  if (!wrap) return;
+  const cats = []; openDecs.forEach(d => { if (d.cat && cats.indexOf(d.cat) < 0) cats.push(d.cat); });
+  let html = '<button class="fchip' + (!DEC_FILTER.cat ? " on" : "") + '" data-fcat="">All categories</button>';
+  cats.forEach(c => html += '<button class="fchip' + (DEC_FILTER.cat === c ? " on" : "") + '" data-fcat="' + esc(c) + '">' + esc(c) + "</button>");
+  html += '<span style="flex:1"></span>';
+  [["", "Anyone"], ["Steel", "Steel"], ["Suhaib", "Suhaib"], ["Both", "Both only"]].forEach(o => {
+    html += '<button class="fchip' + (DEC_FILTER.owner === o[0] ? " on" : "") + '" data-fown="' + o[0] + '">' + o[1] + "</button>";
+  });
+  wrap.innerHTML = html;
+  wrap.querySelectorAll("[data-fcat]").forEach(b => b.addEventListener("click", () => { DEC_FILTER.cat = b.dataset.fcat; renderDecisions(); }));
+  wrap.querySelectorAll("[data-fown]").forEach(b => b.addEventListener("click", () => { DEC_FILTER.owner = b.dataset.fown; renderDecisions(); }));
+}
+
+function renderDecisions() {
+  const all = getDecisions();
+  const open = all.filter(d => !d.done && decisionMatches(d));
+  const done = all.filter(d => d.done).sort((a, b) => new Date(b.decidedAt || b.at || 0) - new Date(a.decidedAt || a.at || 0));
+  const ul = document.getElementById("decisionList");
+  ul.innerHTML = open.length ? open.map(decLi).join("") : '<li style="color:var(--wa-muted);list-style:none;padding:10px 4px;">No open decisions match this filter.</li>';
+  const dul = document.getElementById("decisionDoneList");
+  dul.innerHTML = done.length ? done.map(decLi).join("") : '<li style="color:var(--wa-muted);">Nothing decided yet.</li>';
+  document.getElementById("decDoneSummary").textContent = "Decided (" + done.length + ")";
+  renderDecFilters(all.filter(d => !d.done));
+  wireDecisionEvents(document.getElementById("overview"));
+}
+
+/* =====================================================================
+   WHAT'S NEW STRIP
+   ===================================================================== */
+function renderWhatsNew() { /* superseded: wave2 redeclares this at top level (hoisting makes wave2 the live binding from load); body removed in Phase 0 compaction */ }
+
+/* =====================================================================
+   MEETING TIMES (Google Calendar, with cache and seeded fallback)
+   ===================================================================== */
+function fmtMeet(start) {
+  if (!start) return "";
+  const d = new Date(start);
+  if (isNaN(d)) return "";
+  const hasTime = String(start).length > 10;
+  const opts = hasTime
+    ? { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: "America/Toronto" }
+    : { weekday: "short", month: "short", day: "numeric", timeZone: "America/Toronto" };
+  return new Intl.DateTimeFormat("en-US", opts).format(d).replace(",", "");
+}
+
+function meetChips(id) {
+  const live = MEETINGS[id];
+  const meta = DB_META[id] || {};
+  if (live && live.length) {
+    return '<div class="meet-band">' + live.map(m =>
+      '<span class="info-chip"><span class="ic">&#9200;</span><b>' + esc(m.title) + "</b> " + fmtMeet(m.start) +
+      (m.link ? ' &middot; <a href="' + esc(m.link) + '" target="_blank" rel="noopener">Join</a>' : "") + "</span>"
+    ).join("") + "</div>";
+  }
+  if (meta.meeting_schedule) {
+    return '<div class="meet-band"><span class="info-chip"><span class="ic">&#9200;</span><b>Meetings</b> ' + esc(meta.meeting_schedule) + "</span></div>";
+  }
+  return "";
+}
+
+async function loadMeetings() {
+  MEETINGS = {};
+  let liveOk = false;
+  const token = SESSION && SESSION.provider_token;
+  if (isStaff() && token) {
+    try {
+      const tMin = new Date().toISOString();
+      const tMax = new Date(Date.now() + 14 * 86400000).toISOString();
+      const url = "https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=150&timeMin=" + encodeURIComponent(tMin) + "&timeMax=" + encodeURIComponent(tMax);
+      const res = await fetch(url, { headers: { Authorization: "Bearer " + token } });
+      if (res.ok) {
+        const events = (await res.json()).items || [];
+        DEPT_ORDER.forEach(id => {
+          const meta = DB_META[id] || {};
+          const pats = (meta.calendar_match || []).map(p => String(p).toLowerCase());
+          if (!pats.length) return;
+          const hits = []; const seen = {};
+          for (const ev of events) {
+            const title = ev.summary || "";
+            if (!pats.some(p => title.toLowerCase().indexOf(p) >= 0)) continue;
+            if (seen[title]) continue;
+            seen[title] = true;
+            hits.push({ title: title, start: (ev.start && (ev.start.dateTime || ev.start.date)) || null, link: ev.hangoutLink || "" });
+            if (hits.length >= 2) break;
+          }
+          if (hits.length) MEETINGS[id] = hits;
+        });
+        liveOk = true;
+        const nowIso = new Date().toISOString();
+        DEPT_ORDER.forEach(id => {
+          if (!MEETINGS[id]) return;
+          const meta = DB_META[id] || {};
+          const stale = !meta.meeting_cache_at || (Date.now() - new Date(meta.meeting_cache_at).getTime()) > 20 * 3600000;
+          if (stale) db.from("dept_meta").update({ meeting_cache: MEETINGS[id], meeting_cache_at: nowIso }).eq("department", id).then(() => {});
+        });
+      } else if (res.status === 403 || res.status === 401) {
+        console.warn("Calendar fetch not available (" + res.status + "). If this persists, enable the Google Calendar API for the WA Dashboard Google Cloud project. Falling back to cached or seeded times.");
+      }
+    } catch (e) { console.warn("Calendar fetch skipped:", e); }
+  }
+  if (!liveOk) {
+    DEPT_ORDER.forEach(id => {
+      const meta = DB_META[id] || {};
+      if (meta.meeting_cache && meta.meeting_cache_at && (Date.now() - new Date(meta.meeting_cache_at).getTime()) < 8 * 86400000) {
+        MEETINGS[id] = meta.meeting_cache;
+      }
+    });
+  }
+}
+
+/* =====================================================================
+   PULSE, HOURS, CLICKUP HELPERS
+   ===================================================================== */
+function weekStartOf(d) {
+  const day = (d.getDay() + 6) % 7;
+  const m = new Date(d);
+  m.setDate(d.getDate() - day);
+  return m.toISOString().slice(0, 10);
+}
+
+function pulseChip(id) {
+  const rows = DB_SENTIMENT.filter(s => s.department === id).sort((a, b) => String(b.captured_on).localeCompare(String(a.captured_on)));
+  if (!rows.length) return "";
+  const cur = rows[0], prev = rows[1];
+  const arrow = prev ? (Number(cur.score) > Number(prev.score) ? " &#8599;" : (Number(cur.score) < Number(prev.score) ? " &#8600;" : " &#8594;")) : "";
+  const conf = cur.confidence === "low" ? " (low signal)" : "";
+  return '<div class="meet-band"><span class="info-chip" title="Team pulse from Slack channel tone, scored 1 to 10 by the AI pass against a fixed rubric. The arrow compares the previous reading. Channels only, DMs are never scored."><span class="ic">&#9825;</span><b>Team pulse</b> ' + esc(String(cur.score)) + "/10" + arrow + (cur.note ? " &middot; " + esc(cur.note) : "") + conf + "</span></div>";
+}
+
+function clickupChip(id) {
+  const rows = DB_CLICKUP.filter(c => c.department === id).sort((a, b) => String(b.week_start).localeCompare(String(a.week_start)));
+  if (!rows.length) return "";
+  const cur = rows[0];
+  const counts = cur.status_counts || {};
+  let inprog = 0;
+  Object.keys(counts).forEach(k => { if (/progress|doing|active|review/.test(k)) inprog += Number(counts[k] || 0); });
+  return '<div class="meet-band"><span class="info-chip" title="From the ClickUp weekly snapshot"><span class="ic">&#10003;</span><b>ClickUp this week</b> ' + Number(cur.closed_n || 0) + " closed &middot; " + Number(cur.created_n || 0) + " created" + (inprog ? " &middot; " + inprog + " in progress" : "") + "</span></div>";
+}
+
+function hoursByName(id) {
+  const rows = DB_HOURS.filter(h => h.department === id);
+  if (!rows.length) return null;
+  const thisWeek = weekStartOf(new Date());
+  const byName = {};
+  rows.forEach(h => {
+    const n = h.member_name || h.slack_name;
+    if (!byName[n]) byName[n] = { cur: 0, hist: [] };
+    if (h.week_start === thisWeek) byName[n].cur += Number(h.hours || 0);
+    else byName[n].hist.push(Number(h.hours || 0));
+  });
+  return byName;
+}
+
+function hoursBlock(id) {
+  const byName = hoursByName(id);
+  if (!byName) return "";
+  const tags = Object.keys(byName).sort((a, b) => byName[b].cur - byName[a].cur).map(n => {
+    const v = byName[n];
+    const avg = v.hist.length ? v.hist.reduce((s, x) => s + x, 0) / v.hist.length : null;
+    return '<span class="team-tag"><b>' + esc(n) + "</b> &middot; " + v.cur.toFixed(1) + "h this week" + (avg != null ? " &middot; avg " + avg.toFixed(1) + "h/wk" : "") + "</span>";
+  }).join("");
+  return '<h3 class="block">Hours in (from the check-in channels)</h3><div class="team-tags">' + tags + "</div>";
+}
+
+function hoursCardHtml() {
+  if (!DB_HOURS.length) return "";
+  const thisWeek = weekStartOf(new Date());
+  const rows = [];
+  DB_HOURS.forEach(h => {
+    const key = (h.member_name || h.slack_name) + "|" + (h.department || "");
+    let r = rows.find(x => x.key === key);
+    if (!r) { r = { key: key, name: h.member_name || h.slack_name, dept: h.department, cur: 0, hist: [] }; rows.push(r); }
+    if (h.week_start === thisWeek) r.cur += Number(h.hours || 0);
+    else r.hist.push(Number(h.hours || 0));
+  });
+  rows.sort((a, b) => b.cur - a.cur);
+  const tr = rows.map(r => {
+    const avg = r.hist.length ? r.hist.reduce((s, x) => s + x, 0) / r.hist.length : null;
+    return "<tr><td>" + esc(r.name) + "</td><td>" + (r.dept ? (DEPT_LABEL[r.dept] || r.dept) : '<span style="color:var(--wa-muted);">unmatched</span>') + "</td><td>" + r.cur.toFixed(1) + "h</td><td>" + (avg != null ? avg.toFixed(1) + "h" : "-") + "</td></tr>";
+  }).join("");
+  return '<div class="card dept-card" style="border-top-color:#3a6ea5">' +
+    '<h2 style="color:#3a6ea5">Team hours</h2>' +
+    '<p class="read">Weekly hours parsed from the check-in-out channels. A check in or out counts at its message time unless the message states an explicit time like "in @ 5:15pm", which wins. Sessions missing a check out are not counted.</p>' +
+    '<table class="wa-tbl"><thead><tr><th>Member</th><th>Department</th><th>This week</th><th>Avg per week</th></tr></thead><tbody>' + tr + "</tbody></table></div>";
+}
+
+function clickupCardHtml() {
+  if (!DB_CLICKUP.length) return "";
+  const weeks = [];
+  DB_CLICKUP.forEach(c => { if (weeks.indexOf(c.week_start) < 0) weeks.push(c.week_start); });
+  weeks.sort().reverse();
+  const cur = weeks[0], prev = weeks[1];
+  const tr = DEPT_ORDER.map(id => {
+    const c = DB_CLICKUP.find(x => x.department === id && x.week_start === cur);
+    if (!c) return "";
+    const p = prev ? DB_CLICKUP.find(x => x.department === id && x.week_start === prev) : null;
+    const openN = Object.keys(c.status_counts || {}).reduce((s, k) => s + Number((c.status_counts || {})[k] || 0), 0);
+    const pOpen = p ? Object.keys(p.status_counts || {}).reduce((s, k) => s + Number((p.status_counts || {})[k] || 0), 0) : null;
+    const delta = pOpen != null ? openN - pOpen : null;
+    return "<tr><td>" + (DEPT_LABEL[id] || id) + "</td><td>" + Number(c.closed_n || 0) + "</td><td>" + Number(c.created_n || 0) + "</td><td>" + openN + (delta != null ? " (" + (delta >= 0 ? "+" : "") + delta + " vs last wk)" : "") + "</td></tr>";
+  }).join("");
+  if (!tr) return "";
+  return '<div class="card dept-card" style="border-top-color:#8a5cc4">' +
+    '<h2 style="color:#8a5cc4">ClickUp movement</h2>' +
+    '<p class="read">Task status movement per department from the weekly ClickUp snapshot: closed and created this week, plus how the open pile is trending.</p>' +
+    '<table class="wa-tbl"><thead><tr><th>Department</th><th>Closed this wk</th><th>Created</th><th>Open tasks</th></tr></thead><tbody>' + tr + "</tbody></table></div>";
+}
+
+/* =====================================================================
+   DEPARTMENT SECTIONS
+   ===================================================================== */
+function renderSection(id) {
+  const sec = SECTIONS[id];
+  const el = document.getElementById(id);
+  if (!sec || !el) return;
+  const col = sec.color;
+  const meta = getMeta(id);
+  const updates = getUpdates(id);
+  const tasks = getTasks(id);
+  const members = DB_MEMBERS.filter(m => m.department === id);
+
+  const chipTitle = sec.title + '<span class="deptchip" style="background:' + col + '">Department</span>';
+  const banner = meta.header_image_url
+    ? '<div class="dept-banner"><img src="' + esc(meta.header_image_url) + '" alt="' + esc(DEPT_LABEL[id] || id) + ' in action" loading="lazy" /><div class="shade"></div><h2>' + chipTitle + "</h2></div>"
+    : '<h2 style="color:' + col + '">' + chipTitle + "</h2>";
+
+  const teamHtml = members.length
+    ? members.map(m => '<span class="team-tag"><b>' + esc(m.name) + "</b>" + (m.role ? " &middot; " + esc(m.role) : "") + "</span>").join("")
+    : (sec.team || []).map(t => '<span class="team-tag"><b>' + t[0] + "</b> &middot; " + t[1] + "</span>").join("");
+
+  const updHtml = updates.length
+    ? updates.map(u => "<li>" + (u.confidential && isStaff() ? '<span class="lock-tag">board hidden</span> ' : "") + '<span class="u-date">' + (u.label || "") + "</span> - " + u.text + "</li>").join("")
+    : '<li style="color:var(--wa-muted);list-style:none;">No updates yet.</li>';
+  const prioHtml = (meta.priorities || []).map(p => "<li>" + p + "</li>").join("");
+
+  const openTasks = tasks.filter(t => !t.done);
+  const doneTasks = tasks.filter(t => t.done);
+
+  let itemsBlock;
+  if (sec.subsections) {
+    const known = sec.subsections.map(s => s.title);
+    itemsBlock = '<h3 class="block" style="color:' + col + '">Workstreams</h3>' + sec.subsections.map(sub => {
+      const rows = openTasks.filter(t => t.subsection === sub.title);
+      return '<div class="subsection" style="--sc:' + sub.color + '">' +
+        '<h3 class="subhead">' + sub.title + "</h3>" +
+        '<p class="sub-sum">' + sub.summary + "</p>" +
+        '<ul class="checklist">' + (rows.length ? rows.map(itemLi).join("") : '<li style="color:var(--wa-muted);">No open tasks.</li>') + "</ul>" +
+      "</div>";
+    }).join("");
+    const leftovers = openTasks.filter(t => known.indexOf(t.subsection) < 0);
+    if (leftovers.length) {
+      itemsBlock += '<div class="subsection" style="--sc:' + col + '"><h3 class="subhead">General and new items</h3><p class="sub-sum">Added by the AI transcript pass or by hand, not yet filed under a workstream.</p><ul class="checklist">' + leftovers.map(itemLi).join("") + "</ul></div>";
+    }
+  } else {
+    itemsBlock = '<h3 class="block" style="color:' + col + '">Open items (check to mark actioned)</h3>' +
+      '<ul class="checklist">' + (openTasks.length ? openTasks.map(itemLi).join("") : '<li style="color:var(--wa-muted);">No open items.</li>') + "</ul>";
+  }
+
+  const completedBlock =
+    '<details class="completed"><summary>Completed (' + doneTasks.length + ")</summary>" +
+    '<ul class="checklist">' + (doneTasks.length ? doneTasks.map(itemLi).join("") : '<li style="color:var(--wa-muted);">Nothing completed yet.</li>') + "</ul></details>";
+
+  const addRow = isStaff()
+    ? '<div class="add-row"><button class="btn ghost mini" data-add="update">+ Add update</button> <button class="btn ghost mini" data-add="task">+ Add task</button> <button class="btn ghost mini" data-add="rerun" title="Process any unprocessed transcripts for this department">&#8635; Re-run from transcripts</button></div>'
+    : "";
+
+  el.innerHTML =
+    '<div class="card dept-card" style="border-top-color:' + col + '">' +
+      banner +
+      meetChips(id) +
+      pulseChip(id) +
+      clickupChip(id) +
+      '<p class="read">' + (meta.read || "") + "</p>" +
+      '<div class="progress-box"><h3 class="block" style="color:' + col + ';margin-top:0">Progress this period</h3><p>' + (meta.progress || "") + "</p></div>" +
+      (prioHtml ? '<h3 class="block" style="color:' + col + '">High priority</h3><ul class="prio">' + prioHtml + "</ul>" : "") +
+      '<h3 class="block">Team</h3><div class="team-tags">' + teamHtml + "</div>" +
+      hoursBlock(id) +
+      '<h3 class="block">Most recent updates</h3><ul class="updates">' + updHtml + "</ul>" +
+      itemsBlock + addRow + completedBlock +
+      '<h3 class="block">Transcripts that contributed</h3>' +
+      '<p style="font-size:12.5px;color:var(--wa-muted);margin:0;">' + sec.contributed + "</p>" +
+    "</div>";
+
+  wireTaskEvents(el);
+  const addU = el.querySelector('[data-add="update"]');
+  const addT = el.querySelector('[data-add="task"]');
+  const addR = el.querySelector('[data-add="rerun"]');
+  if (addU) addU.addEventListener("click", () => addUpdate(id));
+  if (addT) addT.addEventListener("click", () => taskModal(id, null));
+  if (addR) addR.addEventListener("click", () => rerunDept(id));
+}
+
+function renderAllSections() { DEPT_ORDER.forEach(renderSection); }
+
+/* =====================================================================
+   DASHBOARD (cycle time + aging + overdue)
+   ===================================================================== */
+function renderDashboard() {
+  const el = document.getElementById("dashboard");
+  if (!el) return;
+  if (!DB_TASKS.length) {
+    el.innerHTML = '<div class="card"><h2>Task completion dashboard</h2><p class="read">No task data loaded yet.</p></div>';
+    return;
+  }
+  const days = (a, b) => (new Date(b) - new Date(a)) / 86400000;
+  const rows = DEPT_ORDER.map(id => {
+    const t = DB_TASKS.filter(r => r.department === id);
+    const open = t.filter(r => !r.done);
+    const closed = t.filter(r => r.done && r.opened_at && r.closed_at);
+    const avg = closed.length ? closed.reduce((s, r) => s + days(r.opened_at, r.closed_at), 0) / closed.length : null;
+    const avgAge = open.length ? open.reduce((s, r) => s + days(r.opened_at || new Date().toISOString(), new Date().toISOString()), 0) / open.length : null;
+    return { id, label: DEPT_LABEL[id], color: DEPT_COLOR[id], open: open.length, doneN: t.filter(r => r.done).length, avg, avgAge };
+  });
+  const maxAvg = Math.max(1, ...rows.map(r => r.avg || 0));
+  const allClosed = DB_TASKS.filter(r => r.done && r.opened_at && r.closed_at);
+  const overall = allClosed.length ? allClosed.reduce((s, r) => s + days(r.opened_at, r.closed_at), 0) / allClosed.length : null;
+  const totalOpen = DB_TASKS.filter(r => !r.done).length;
+  const totalDone = DB_TASKS.filter(r => r.done).length;
+
+  const bars = rows.map(r => {
+    const w = r.avg != null ? Math.max(6, Math.round((r.avg / maxAvg) * 100)) : 0;
+    return '<div class="dash-row">' +
+      '<div class="dash-label">' + r.label + "</div>" +
+      '<div class="dash-bar-wrap">' + (r.avg != null
+        ? '<div class="dash-bar" style="width:' + w + "%;background:" + r.color + '">' + r.avg.toFixed(1) + "d</div>"
+        : '<span class="dash-none">no completed tasks yet</span>') + "</div>" +
+      '<div class="dash-nums">' + r.open + " open &middot; " + r.doneN + " done</div>" +
+    "</div>";
+  }).join("");
+
+  /* decision aging */
+  const openDecs = getDecisions().filter(d => !d.done)
+    .map(d => ({ d: d, age: daysBetween(d.opened, new Date().toISOString()) || 0 }))
+    .sort((a, b) => b.age - a.age);
+  const agingRows = openDecs.map(x =>
+    '<tr><td><a href="#decision/' + x.d.ref + '">' + x.d.title + "</a>" + catTag(x.d.cat) + "</td><td>" + esc(x.d.owner || "Both") + "</td><td>" + x.age + "d</td></tr>"
+  ).join("");
+
+  /* overdue tasks */
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const overdue = DB_TASKS.filter(r => !r.done && r.due_date && r.due_date < todayStr)
+    .map(r => ({ r: r, over: Math.round((new Date(todayStr) - new Date(r.due_date)) / 86400000) }))
+    .sort((a, b) => b.over - a.over);
+  const overdueRows = overdue.map(x =>
+    '<tr><td><a href="#task/' + x.r.id + '">' + x.r.title + "</a></td><td>" + (DEPT_LABEL[x.r.department] || "") + "</td><td>" + (x.r.owner || "") + "</td><td>" + x.r.due_date + '</td><td><span class="due-badge ' + (x.over > 7 ? "red" : "amber") + '">' + x.over + "d</span></td></tr>"
+  ).join("");
+
+  el.innerHTML =
+    '<div class="card dept-card" style="border-top-color:var(--wa-green)">' +
+      '<h2 style="color:var(--wa-green)">Task completion dashboard</h2>' +
+      '<p class="read">Average time from when a task was first raised to when it was closed, by department. New tasks track exact open and close dates; items seeded before tracking began use an approximate open date, so early figures are rough and sharpen over time.</p>' +
+      '<div class="progress-box"><b>' + totalOpen + "</b> open &middot; <b>" + totalDone + "</b> completed" + (overall != null ? " &middot; overall avg <b>" + overall.toFixed(1) + " days</b> to close" : "") + "</div>" +
+      '<h3 class="block" style="color:var(--wa-green)">Average days to close, by department</h3>' +
+      '<div class="dash">' + bars + "</div>" +
+      '<h3 class="block">Open workload and aging</h3>' +
+      '<table class="wa-tbl"><thead><tr><th>Department</th><th>Open</th><th>Avg age of open</th><th>Completed</th><th>Avg days to close</th></tr></thead><tbody>' +
+      rows.map(r => "<tr><td>" + r.label + "</td><td>" + r.open + "</td><td>" + (r.avgAge != null ? r.avgAge.toFixed(1) + "d" : "-") + "</td><td>" + r.doneN + "</td><td>" + (r.avg != null ? r.avg.toFixed(1) + "d" : "-") + "</td></tr>").join("") +
+      "</tbody></table>" +
+    "</div>" +
+    '<div class="card dept-card" style="border-top-color:var(--wa-gold)">' +
+      '<h2 style="color:#a87f2c">Decision aging</h2>' +
+      '<p class="read">Every open executive decision and how long it has waited. Aging decisions also surface in Slack automatically at 14 and 30 days.</p>' +
+      (agingRows ? '<table class="wa-tbl"><thead><tr><th>Decision</th><th>Decides</th><th>Open</th></tr></thead><tbody>' + agingRows + "</tbody></table>" : '<p style="color:var(--wa-muted);font-size:13px;">No open decisions. Clean slate.</p>') +
+    "</div>" +
+    '<div class="card dept-card" style="border-top-color:var(--wa-flag)">' +
+      '<h2 style="color:var(--wa-flag)">Overdue tasks</h2>' +
+      '<p class="read">Open tasks past their expected due date. Amber up to a week over, red beyond.</p>' +
+      (overdueRows ? '<table class="wa-tbl"><thead><tr><th>Task</th><th>Department</th><th>Owner</th><th>Due</th><th>Over</th></tr></thead><tbody>' + overdueRows + "</tbody></table>" : '<p style="color:var(--wa-muted);font-size:13px;">Nothing overdue.</p>') +
+    "</div>" + hoursCardHtml() + clickupCardHtml();
+}
+
+/* =====================================================================
+   NEEDS ME + HANDOFF
+   ===================================================================== */
+let NM = { person: null, handoff: false };
+
+function renderNeedsMe() {
+  if (!isStaff()) return;
+  const el = document.getElementById("needsme");
+  if (!el) return;
+  if (NM.person === null) {
+    const fn = firstName().toLowerCase();
+    NM.person = fn === "steel" ? "Steel" : (fn === "suhaib" ? "Suhaib" : "");
+  }
+  const p = NM.person.toLowerCase();
+  const decs = getDecisions().filter(d => !d.done).filter(d => {
+    if (!NM.person) return true;
+    const o = d.owner || "Both";
+    return o === NM.person || o === "Both";
+  });
+  const matchTask = t => {
+    const mine = !NM.person
+      || (t.owner || "").toLowerCase().indexOf(p) >= 0
+      || t.assignees.some(a => a.name.toLowerCase().indexOf(p) === 0);
+    if (NM.handoff) return mine;
+    return t.flag && (mine || !(t.owner || "").trim());
+  };
+  const groups = DEPT_ORDER.map(id => ({ id: id, rows: getTasks(id).filter(t => !t.done).filter(matchTask) })).filter(g => g.rows.length);
+
+  let html = '<div class="card dept-card" style="border-top-color:var(--wa-gold)">' +
+    "<h2>&#9873; " + (NM.handoff ? "Handoff checklist" + (NM.person ? ": " + NM.person : "") : "Needs me") + "</h2>" +
+    '<p class="read">' + (NM.handoff
+      ? "Every open item this person owns or is assigned to, grouped by department. The working list for handing each workstream to one accountable owner."
+      : "The whole board collapsed to what needs an executive: open decisions plus flagged tasks.") + "</p>" +
+    '<div class="filters">' +
+    [["", "Anyone"], ["Steel", "Steel"], ["Suhaib", "Suhaib"]].map(o => '<button class="fchip' + (NM.person === o[0] ? " on" : "") + '" data-nmp="' + o[0] + '">' + o[1] + "</button>").join("") +
+    '<span style="flex:1"></span>' +
+    '<button class="fchip' + (!NM.handoff ? " on" : "") + '" data-nmh="0">Needs a decision</button>' +
+    '<button class="fchip' + (NM.handoff ? " on" : "") + '" data-nmh="1">Handoff view</button>' +
+    "</div>";
+
+  if (!NM.handoff) {
+    html += '<h3 class="block" style="color:#a87f2c">Open executive decisions (' + decs.length + ')</h3><ul class="checklist">' +
+      (decs.length ? decs.map(decLi).join("") : '<li style="color:var(--wa-muted);">None for this filter.</li>') + "</ul>";
+  }
+  groups.forEach(g => {
+    html += '<div class="nm-group"><h3 class="block" style="color:' + DEPT_COLOR[g.id] + '">' + DEPT_LABEL[g.id] + " (" + g.rows.length + ')</h3><ul class="checklist">' + g.rows.map(itemLi).join("") + "</ul></div>";
+  });
+  if (!groups.length && (NM.handoff || !decs.length)) html += '<p style="color:var(--wa-muted);font-size:13px;">Nothing matches this filter.</p>';
+  html += "</div>";
+  el.innerHTML = html;
+  el.querySelectorAll("[data-nmp]").forEach(b => b.addEventListener("click", () => { NM.person = b.dataset.nmp; renderNeedsMe(); }));
+  el.querySelectorAll("[data-nmh]").forEach(b => b.addEventListener("click", () => { NM.handoff = b.dataset.nmh === "1"; renderNeedsMe(); }));
+  wireTaskEvents(el);
+  wireDecisionEvents(el);
+}
+
+/* =====================================================================
+   ACTIVITY (change log)
+   ===================================================================== */
+let AF = { type: "", person: "", days: 30 };
+
+function renderActivity() {
+  if (!isStaff()) return;
+  const el = document.getElementById("activity");
+  if (!el) return;
+  const people = []; DB_CHANGES.forEach(c => { if (c.changed_by && people.indexOf(c.changed_by) < 0) people.push(c.changed_by); });
+  const cutoff = AF.days ? Date.now() - AF.days * 86400000 : 0;
+  const rows = DB_CHANGES.filter(c =>
+    (!AF.type || c.entity_type === AF.type) &&
+    (!AF.person || c.changed_by === AF.person) &&
+    (!cutoff || new Date(c.changed_at).getTime() > cutoff)
+  );
+  const label = c => {
+    if (c.entity_type === "dept_task") { const t = DB_TASKS.find(x => String(x.id) === String(c.entity_id)); return t ? t.title : "Task " + c.entity_id; }
+    if (c.entity_type === "decision") { const d = DB_DECISIONS.find(x => String(x.id) === String(c.entity_id)); return d ? d.title : "Decision " + c.entity_id; }
+    if (c.entity_type === "dept_meta" || c.entity_type === "dept_update") return DEPT_LABEL[c.entity_id] || c.entity_id;
+    if (c.entity_type === "transcript") { const t = txCache.find(x => String(x.id) === String(c.entity_id)); return t ? "Transcript: " + (t.title || c.entity_id) : "Transcript " + c.entity_id; }
+    return c.entity_id;
+  };
+  const typeOpts = [["", "All types"], ["dept_task", "Tasks"], ["decision", "Decisions"], ["dept_update", "Updates"], ["dept_meta", "Overviews"], ["transcript", "Transcripts"]];
+  el.innerHTML =
+    '<div class="card dept-card" style="border-top-color:#8a8f85">' +
+    "<h2>Activity</h2>" +
+    '<p class="read">Every change to the board, human or AI, newest first: the audit trail and the undo reference. Prior text is preserved in the old value column.</p>' +
+    '<div class="filters">' +
+    '<select id="afType">' + typeOpts.map(t => '<option value="' + t[0] + '"' + (AF.type === t[0] ? " selected" : "") + ">" + t[1] + "</option>").join("") + "</select>" +
+    '<select id="afPerson"><option value="">Everyone</option>' + people.map(pp => "<option" + (AF.person === pp ? " selected" : "") + ">" + esc(pp) + "</option>").join("") + "</select>" +
+    '<select id="afDays">' + [[7, "Last 7 days"], [30, "Last 30 days"], [0, "All loaded"]].map(dd => '<option value="' + dd[0] + '"' + (AF.days === dd[0] ? " selected" : "") + ">" + dd[1] + "</option>").join("") + "</select>" +
+    "</div>" +
+    '<table class="wa-tbl"><thead><tr><th>When</th><th>Who</th><th>What</th><th>Change</th></tr></thead><tbody>' +
+    (rows.length ? rows.map(c =>
+      "<tr><td style=\"white-space:nowrap;\">" + new Date(c.changed_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + "</td>" +
+      "<td>" + esc(c.changed_by || "") + "</td>" +
+      '<td class="act-cell-what">' + esc(label(c)) + ' <span style="color:var(--wa-muted);">(' + esc(c.field || "") + ")</span></td>" +
+      "<td>" +
+        (c.old_value ? '<div class="act-old" title="' + esc(c.old_value) + '">was: ' + esc(String(c.old_value).slice(0, 140)) + (String(c.old_value).length > 140 ? "..." : "") + "</div>" : "") +
+        (c.new_value ? '<div class="act-new" title="' + esc(c.new_value) + '">now: ' + esc(String(c.new_value).slice(0, 140)) + (String(c.new_value).length > 140 ? "..." : "") + "</div>" : "") +
+      "</td></tr>"
+    ).join("") : '<tr><td colspan="4" style="color:var(--wa-muted);">No activity for this filter.</td></tr>') +
+    "</tbody></table></div>";
+  document.getElementById("afType").addEventListener("change", e => { AF.type = e.target.value; renderActivity(); });
+  document.getElementById("afPerson").addEventListener("change", e => { AF.person = e.target.value; renderActivity(); });
+  document.getElementById("afDays").addEventListener("change", e => { AF.days = Number(e.target.value); renderActivity(); });
+}
+
+/* =====================================================================
+   GLOBAL SEARCH
+   ===================================================================== */
+let searchTimer = null, txSearchResults = [];
+
+function setupSearch() {
+  const wrap = document.getElementById("searchWrap");
+  wrap.style.display = "inline-block";
+  const inp = document.getElementById("globalSearch");
+  const pop = document.getElementById("searchResults");
+  inp.addEventListener("input", () => {
+    const q = inp.value.trim();
+    if (q.length < 2) { pop.style.display = "none"; txSearchResults = []; return; }
+    renderSearch(q);
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(async () => {
+      try {
+        const { data } = await db.rpc("search_transcripts", { q: q });
+        txSearchResults = data || [];
+      } catch (e) { txSearchResults = []; }
+      if (inp.value.trim().length >= 2) renderSearch(inp.value.trim());
+    }, 350);
+  });
+  document.addEventListener("click", e => { if (!wrap.contains(e.target)) pop.style.display = "none"; });
+}
+
+function renderSearch(q) {
+  const ql = q.toLowerCase();
+  const out = [];
+  DB_DECISIONS.filter(d => (d.title || "").toLowerCase().indexOf(ql) >= 0).slice(0, 4)
+    .forEach(d => out.push({ t: "Decision", label: d.title, hash: "#decision/" + d.id }));
+  DB_TASKS.filter(t => ((t.title || "") + " " + (t.owner || "")).toLowerCase().indexOf(ql) >= 0).slice(0, 5)
+    .forEach(t => out.push({ t: (DEPT_LABEL[t.department] || "Task") + (t.done ? ", done" : ""), label: t.title, hash: "#task/" + t.id }));
+  DB_UPDATES.filter(u => (u.text || "").toLowerCase().indexOf(ql) >= 0).slice(0, 3)
+    .forEach(u => out.push({ t: (DEPT_LABEL[u.department] || "") + " update", label: (u.entry_label ? u.entry_label + ": " : "") + (u.text || "").slice(0, 90), hash: "#dept/" + u.department }));
+  txSearchResults.slice(0, 4)
+    .forEach(r => out.push({ t: "Transcript", label: (r.title || "Untitled") + (r.snippet ? ": " + r.snippet.slice(0, 70) : ""), hash: "#tx/" + r.id }));
+  const pop = document.getElementById("searchResults");
+  pop.innerHTML = out.length
+    ? out.map(o => '<div class="sr" data-hash="' + o.hash + '"><span class="sr-type">' + esc(o.t) + "</span>" + esc(o.label) + "</div>").join("")
+    : '<div class="sr" style="color:var(--wa-muted);">No matches</div>';
+  pop.style.display = "block";
+  pop.querySelectorAll(".sr[data-hash]").forEach(s => s.addEventListener("click", () => {
+    pop.style.display = "none";
+    document.getElementById("globalSearch").value = "";
+    location.hash = s.dataset.hash;
+  }));
+}
+
+/* =====================================================================
+   TRANSCRIPTS (auto-processing archive)
+   ===================================================================== */
+let txCache = [];
+const PENDING = new Set();
+let pollTimer = null;
+
+function txDeptKey(label) {
+  const s = (label || "").toLowerCase();
+  if (s === "opsmtl" || s.indexOf("montreal") >= 0) return "opsmtl";
+  if (s === "opsto" || s.indexOf("toronto") >= 0) return "opsto";
+  if (s.indexOf("marketing") >= 0) return "marketing";
+  if (s.indexOf("fundrais") >= 0 || s.indexOf("grant") >= 0) return "fundraising";
+  if (s === "hr" || s.indexOf("human") >= 0) return "hr";
+  if (s.indexOf("board") >= 0) return "board";
+  return null;
+}
+function txFailed(r) { return !r.processed && r.ai_summary && r.ai_summary.indexOf("Processing failed") === 0 && !PENDING.has(r.id); }
+function txRecent(r) { return (Date.now() - new Date(r.created_at).getTime()) < 15 * 60000; }
+function txProcessing(r) { return !r.processed && !txFailed(r) && (PENDING.has(r.id) || txRecent(r)); }
+
+async function loadTranscriptsData() {
+  const { data, error } = await db.from("transcripts").select("*").order("created_at", { ascending: false });
+  txCache = (!error && data) ? data : [];
+}
+async function loadTranscripts() { await loadTranscriptsData(); renderTranscripts(); maybeStartPolling(); }
+
+async function saveTranscript() { /* superseded: wave8 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+async function reprocessTx(id) {
+  PENDING.add(id);
+  renderTranscripts();
+  try {
+    const { error } = await db.functions.invoke("process-transcript", { body: { transcript_id: id } });
+    if (error) throw error;
+    toast("Reprocessing started");
+  } catch (e) { PENDING.delete(id); renderTranscripts(); toast("Could not start reprocessing"); }
+  maybeStartPolling();
+}
+
+async function rerunDept(deptId) {
+  await loadTranscriptsData();
+  const rows = txCache.filter(r => txDeptKey(r.department) === deptId && !r.processed);
+  if (!rows.length) { toast("All " + (DEPT_LABEL[deptId] || "") + " transcripts are processed. Use Reprocess on a specific one in the archive."); return; }
+  if (!confirm("Process " + rows.length + " unprocessed transcript(s) for " + (DEPT_LABEL[deptId] || deptId) + "?")) return;
+  for (const r of rows) { await reprocessTx(r.id); }
+}
+
+function maybeStartPolling() {
+  if (txCache.some(txProcessing) && !pollTimer) pollTimer = setInterval(pollTick, 6000);
+}
+async function pollTick() {
+  const beforeOpen = txCache.filter(r => !r.processed).map(r => r.id);
+  await loadTranscriptsData();
+  const flipped = txCache.filter(r => r.processed && beforeOpen.indexOf(r.id) >= 0);
+  if (flipped.length) {
+    flipped.forEach(r => PENDING.delete(r.id));
+    await loadAll();
+    renderAllSections(); renderDecisions(); renderDashboard(); renderWhatsNew(); renderNeedsMe(); renderActivity();
+    flipped.forEach(r => {
+      const k = txDeptKey(r.department);
+      toast((DEPT_LABEL[k] || r.department) + ' updated from "' + (r.title || "transcript") + '"');
+    });
+  }
+  txCache.forEach(r => { if (txFailed(r)) PENDING.delete(r.id); });
+  renderTranscripts();
+  if (!txCache.some(txProcessing)) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+function txStatusChip(r) {
+  if (r.processed) {
+    const k = txDeptKey(r.department);
+    const when = r.processed_at ? " " + fmtDay(r.processed_at) : "";
+    return '<span class="tx-status done" data-goto="#dept/' + k + '" title="Open the updated page">Updated ' + (DEPT_LABEL[k] || "") + when + "</span>";
+  }
+  if (txProcessing(r)) return '<span class="tx-status proc">Processing...</span>';
+  if (txFailed(r)) return '<span class="tx-status fail" title="' + esc(r.ai_summary || "") + '">Failed, retry</span>';
+  return '<span class="tx-status none">Not processed</span>';
+}
+
+function renderTranscripts() { /* superseded: wave2 redeclares this at top level (hoisting makes wave2 the live binding from load); body removed in Phase 0 compaction */ }
+
+/* =====================================================================
+   TABS, ROUTING, CHROME
+   ===================================================================== */
+function setupTabs() {
+  document.getElementById("tabBar").addEventListener("click", e => {
+    const b = e.target.closest(".tab");
+    if (!b) return;
+    const id = b.dataset.tab;
+    location.hash = id === "overview" ? "#decisions" : (DEPT_ORDER.indexOf(id) >= 0 ? "#dept/" + id : "#" + id);
+  });
+}
+
+function showPanel(id) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === id || (id === "overview" && t.dataset.tab === "overview")));
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  const el = document.getElementById(id);
+  if (el) el.classList.add("active");
+  if (id === "dashboard") renderDashboard();
+  if (id === "activity") renderActivity();
+  if (id === "needsme") renderNeedsMe();
+  window.scrollTo({ top: 0 });
+}
+
+function applyHash() {
+  const h = decodeURIComponent(location.hash || "").replace(/^#/, "");
+  if (!h || h.indexOf("access_token=") >= 0 || h.indexOf("error=") >= 0) { showPanel("overview"); return; }
+  const parts = h.split("/");
+  const a = parts[0], b = parts[1];
+  if (a === "dept" && DEPT_ORDER.indexOf(b) >= 0) showPanel(b);
+  else if (a === "decisions" || a === "overview") showPanel("overview");
+  else if (a === "needs-me" || a === "needsme") { if (isStaff()) showPanel("needsme"); else showPanel("overview"); }
+  else if (a === "task" && b) {
+    const t = DB_TASKS.find(x => String(x.id) === b);
+    if (t) { showPanel(t.department); setTimeout(() => highlightEl('[data-task="' + b + '"]'), 250); }
+    else showPanel("overview");
+  }
+  else if (a === "decision" && b) {
+    showPanel("overview");
+    setTimeout(() => {
+      const wrap = document.getElementById("decDoneWrap");
+      if (wrap && document.querySelector('#decisionDoneList [data-decision="' + b + '"]')) wrap.open = true;
+      highlightEl('[data-decision="' + b + '"]');
+    }, 250);
+  }
+  else if (a === "tx" && b) {
+    if (!isStaff()) { showPanel("overview"); return; }
+    showPanel("transcripts");
+    setTimeout(() => {
+      const el = document.querySelector('[data-tx="' + b + '"]');
+      if (el) el.classList.add("open");
+      highlightEl('[data-tx="' + b + '"]');
+    }, 250);
+  }
+  else if (a === "dashboard") showPanel("dashboard");
+  else if (a === "transcripts" || a === "activity") { if (isStaff()) showPanel(a); else showPanel("overview"); }
+  else showPanel("overview");
+}
+
+function renderIdentity() {
+  document.getElementById("whoName").textContent = USER.name + (MODE === "board" ? " (board viewer)" : "");
+  document.getElementById("signOutBtn").addEventListener("click", signOutAll);
+}
+
+function applyBoardChrome() {
+  document.getElementById("boardNote").style.display = "block";
+  const tx = document.getElementById("txTabBtn"); if (tx) tx.style.display = "none";
+  const ac = document.getElementById("actTabBtn"); if (ac) ac.style.display = "none";
+  const ad = document.getElementById("addDecisionBtn"); if (ad) ad.style.display = "none";
+}
+
+function bindChrome() {
+  setupTabs();
+  if (isStaff()) {
+    const nb = document.getElementById("needsMeBtn");
+    nb.style.display = "inline-flex";
+    nb.addEventListener("click", () => { location.hash = "#mypage"; });
+    /* Phase 1 (U5): header Pull Slack moved to the HR Commitment tab (wave 76); ClickUp pull removed for good (ClickUp is retired). */
+    document.getElementById("txSave").addEventListener("click", saveTranscript);
+    document.getElementById("txFilter").addEventListener("change", renderTranscripts);
+    document.getElementById("txSearch").addEventListener("input", renderTranscripts);
+    document.getElementById("addDecisionBtn").addEventListener("click", () => decisionModal(null));
+  }
+}
+
+/* =====================================================================
+   BOOT
+   ===================================================================== */
+async function startApp() {
+  renderIdentity();
+  if (MODE === "board") applyBoardChrome();
+  bindChrome();
+  await seedIfEmpty();
+  await Promise.all([loadAll(), loadLastSeen()]);
+  renderWhatsNew();
+  renderDecisions();
+  renderAllSections();
+  renderDashboard();
+  if (isStaff()) {
+    await loadTranscripts();
+    renderActivity();
+    renderNeedsMe();
+    setupSearch();
+    maybeUpdateSiteUrl();
+  }
+  loadMeetings().then(() => renderAllSections()).catch(() => {});
+  applyHash();
+  window.addEventListener("hashchange", applyHash);
+  markSeen();
+}
+
+(async function boot() {
+  initCloud();
+  if (!cloudOn) { showGate("error"); return; }
+  db.auth.onAuthStateChange(evt => { if (evt === "SIGNED_OUT") location.reload(); });
+  const { data } = await db.auth.getSession();
+  const session = data ? data.session : null;
+  if (!session) { showGate("signin"); return; }
+  if (location.search.indexOf("code=") >= 0) history.replaceState({}, "", location.pathname + location.hash);
+  SESSION = session;
+  USER = { email: (session.user.email || "").toLowerCase(), name: displayName(session) };
+  const roleRes = await db.rpc("get_my_role");
+  const role = roleRes.data;
+  if (roleRes.error || !role || role === "none") { showGate("denied", USER.email); return; }
+  MODE = role;
+  hideGate();
+  document.getElementById("cloudStatus").textContent = "Cloud connected (saved for everyone)";
+  await startApp();
+})();
+
+

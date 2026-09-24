@@ -1,0 +1,198 @@
+/* =====================================================================
+   WA v16 UI enhancements (26/07/26)
+   Interactive goals: editable status, comments (add, edit, delete),
+   and task linking. Linked tasks render under each goal with live
+   checkboxes (checking completes the real task) and roll up into an
+   automatic "X of N tasks done" progress bar, so the work visibly
+   flows up to the goal. Overrides the v15 renderers via assignment;
+   all controls use delegated listeners so both the Goals page and the
+   department cards get the behavior.
+   ===================================================================== */
+(function () {
+  var st = document.createElement('style');
+  st.textContent = ''
+    + '.gl-ctl{margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}'
+    + '.gl-ctl button{background:none;border:none;color:var(--wa-muted);cursor:pointer;font-size:11.5px;text-decoration:underline;padding:0;}'
+    + '.gl-ctl select{font-size:11.5px;border:1px solid var(--wa-line);border-radius:6px;padding:2px 5px;}'
+    + '.gl-sub{display:none;background:var(--wa-paper);border-radius:8px;padding:8px 10px;margin-top:6px;font-size:12px;}'
+    + '.gl-sub.open{display:block;}'
+    + '.gl-cmt{padding:5px 0;border-top:1px dashed var(--wa-line);}'
+    + '.gl-cmt:first-of-type{border-top:none;}'
+    + '.gl-cmt .who{font-weight:700;font-size:11px;}'
+    + '.gl-cmt .when{color:var(--wa-muted);font-size:10.5px;margin-left:6px;}'
+    + '.gl-cmt .ops{float:right;}'
+    + '.gl-cmt .ops button{background:none;border:none;color:var(--wa-muted);cursor:pointer;font-size:10.5px;text-decoration:underline;padding:0 3px;}'
+    + '.gl-addc{display:flex;gap:6px;margin-top:7px;}'
+    + '.gl-addc input{flex:1;padding:6px 9px;border:1px solid var(--wa-line);border-radius:7px;font-size:12px;}'
+    + '.gl-addc button{background:var(--wa-green);color:#fff;border:none;border-radius:7px;padding:6px 12px;cursor:pointer;font-weight:700;font-size:11.5px;}'
+    + '.gl-pick label{display:flex;gap:7px;align-items:baseline;padding:3px 0;cursor:pointer;}'
+    + '.gl-pick .done-t{color:var(--wa-muted);text-decoration:line-through;}';
+  document.head.appendChild(st);
+})();
+
+var GL_COMMENTS = [], WA_GL_OPEN = {};
+var GL_STATUSES = ['not started', 'in progress', 'in review', 'on track', 'at risk', 'delayed', 'incomplete', 'done'];
+
+var __wlg16 = waLoadGoals;
+waLoadGoals = async function () {
+  await __wlg16();
+  try {
+    var ids = GOALS_CACHE.map(function (g) { return g.id; });
+    if (ids.length) {
+      var c = await db.from('goal_comments').select('*').in('goal_id', ids).order('created_at');
+      if (!c.error) GL_COMMENTS = c.data || [];
+    } else GL_COMMENTS = [];
+  } catch (e) { /* offline */ }
+};
+
+waGoalRow = function (g) {
+  var linked = (g.task_ids || []).map(waTaskById).filter(Boolean);
+  var doneN = linked.filter(function (t) { return t.done; }).length;
+  var pct = linked.length ? Math.round(doneN / linked.length * 100)
+    : ((g.progress != null && !isNaN(Number(g.progress))) ? Math.max(0, Math.min(100, Number(g.progress))) : null);
+  var cmts = GL_COMMENTS.filter(function (c) { return c.goal_id === g.id; });
+  var opts = GL_STATUSES.slice();
+  if (g.status && opts.indexOf(g.status) < 0) opts.unshift(g.status);
+  var open = WA_GL_OPEN[g.id] || {};
+  return '<div class="gl-row" data-gl="' + g.id + '">'
+    + '<span class="t">' + esc(g.title) + '</span>'
+    + (isStaff()
+        ? ' <select data-glst="' + g.id + '">' + opts.map(function (s) { return '<option' + (s === g.status ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>'
+        : (g.status ? '<span class="gl-st">' + esc(g.status) + '</span>' : ''))
+    + (g.measure || g.due_date ? '<div class="m">' + esc(g.measure || '') + (g.due_date ? (g.measure ? ' &middot; ' : '') + 'due ' + esc(g.due_date) : '') + '</div>' : '')
+    + (g.detail ? '<div class="m">' + esc(g.detail) + '</div>' : '')
+    + linked.map(function (t) {
+        return '<div class="ag-task' + (t.done ? ' done' : '') + '"><input type="checkbox" data-gltgl="' + t.id + '" data-gldept="' + esc(t.department || '') + '"' + (t.done ? ' checked' : '') + (isStaff() ? '' : ' disabled') + ' /><span>' + esc(t.title) + '</span><span style="color:var(--wa-muted);font-size:11px;">' + esc(t.owner || '') + '</span></div>';
+      }).join('')
+    + (linked.length ? '<div class="m">' + doneN + ' of ' + linked.length + ' linked tasks done</div>' : '')
+    + (pct != null ? '<div class="gl-bar"><i style="width:' + pct + '%"></i></div>' : '')
+    + '<div class="gl-ctl">'
+    + '<button data-glcmt="' + g.id + '">&#128172; Comments (' + cmts.length + ')</button>'
+    + (isStaff() ? '<button data-gllink="' + g.id + '">&#128279; Link tasks</button>' : '')
+    + '</div>'
+    + '<div class="gl-sub gl-cmts' + (open.c ? ' open' : '') + '" data-glcbox="' + g.id + '">'
+    + (cmts.length ? cmts.map(function (c) {
+        var mine = isStaff() && waFirstTok(c.author || '') === waFirstTok(who() || '');
+        return '<div class="gl-cmt" data-glc="' + c.id + '">'
+          + (mine ? '<span class="ops"><button data-glce="' + c.id + '">edit</button><button data-glcx="' + c.id + '">delete</button></span>' : '')
+          + '<span class="who">' + esc(c.author || 'someone') + '</span><span class="when">' + fmtDay(c.created_at) + (c.updated_at ? ' (edited)' : '') + '</span>'
+          + '<div data-glcb="' + c.id + '">' + esc(c.body) + '</div></div>';
+      }).join('') : '<div class="mp-empty">No comments yet.</div>')
+    + (isStaff() ? '<div class="gl-addc"><input data-glci="' + g.id + '" placeholder="Add a comment" /><button data-glca="' + g.id + '">Post</button></div>' : '')
+    + '</div>'
+    + '<div class="gl-sub gl-pick' + (open.l ? ' open' : '') + '" data-gllbox="' + g.id + '">'
+    + (function () {
+        if (!isStaff()) return '';
+        var cands = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return t.department === g.department; })
+          .sort(function (a, b) { return (a.done === b.done) ? 0 : (a.done ? 1 : -1); }).slice(0, 30);
+        if (!cands.length) return '<div class="mp-empty">No tasks in this department to link.</div>';
+        return cands.map(function (t) {
+          var on = (g.task_ids || []).indexOf(t.id) >= 0;
+          return '<label><input type="checkbox" data-glpick="' + g.id + ':' + t.id + '"' + (on ? ' checked' : '') + ' /><span class="' + (t.done ? 'done-t' : '') + '">' + esc(t.title) + '</span></label>';
+        }).join('');
+      })()
+    + '</div></div>';
+};
+
+function waGlRerender() {
+  try { renderGoalsPage(); } catch (e) { /* not open */ }
+  try { renderDeptGoalsCards(); } catch (e) { /* non-fatal */ }
+}
+function waGlFind(id) { return GOALS_CACHE.find(function (g) { return g.id === id; }); }
+
+document.addEventListener('change', async function (e) {
+  var st = e.target.closest('[data-glst]');
+  if (st) {
+    var gid = Number(st.dataset.glst), g = waGlFind(gid);
+    var r = await db.from('goals').update({ status: st.value, updated_at: new Date().toISOString(), updated_by: who() }).eq('id', gid);
+    if (r.error) { toast('Could not update status'); return; }
+    if (g) g.status = st.value;
+    try { await db.from('change_log').insert({ entity_type: 'goal', entity_id: String(gid), field: 'status', old_value: null, new_value: st.value, changed_by: who() }); } catch (x) { /* audit */ }
+    try {
+      db.functions.invoke('goal-sync', { body: { action: 'status', goal_id: gid, status: st.value } }).then(function (s) {
+        if (s.error || !(s.data && s.data.ok)) toast('Saved here, but the ClickUp sync did not go through');
+      });
+    } catch (x) { /* sync best effort */ }
+    toast('Goal status: ' + st.value + ', syncing to ClickUp');
+    waGlRerender();
+    return;
+  }
+  var tgl = e.target.closest('[data-gltgl]');
+  if (tgl) {
+    var tid = Number(tgl.dataset.gltgl);
+    var ok = await toggleTask(tid, tgl.checked);
+    if (!ok) { tgl.checked = !tgl.checked; toast('Could not update the task'); return; }
+    var row = waTaskById(tid);
+    if (row) row.done = tgl.checked;
+    if (tgl.dataset.gldept) { try { renderSection(tgl.dataset.gldept); renderDashboard(); renderNeedsMe(); } catch (x) { /* non-fatal */ } }
+    waGlRerender();
+    return;
+  }
+  var pk = e.target.closest('[data-glpick]');
+  if (pk) {
+    var parts = pk.dataset.glpick.split(':');
+    var gid2 = Number(parts[0]), tid2 = Number(parts[1]);
+    var g2 = waGlFind(gid2);
+    if (!g2) return;
+    var arr = (g2.task_ids || []).slice();
+    if (pk.checked && arr.indexOf(tid2) < 0) arr.push(tid2);
+    if (!pk.checked) arr = arr.filter(function (x) { return x !== tid2; });
+    var r2 = await db.from('goals').update({ task_ids: arr, updated_at: new Date().toISOString(), updated_by: who() }).eq('id', gid2);
+    if (r2.error) { toast('Could not update links'); pk.checked = !pk.checked; return; }
+    g2.task_ids = arr;
+    waGlRerender();
+  }
+});
+
+document.addEventListener('click', async function (e) {
+  var b;
+  if ((b = e.target.closest('[data-glcmt]'))) {
+    var id = Number(b.dataset.glcmt);
+    WA_GL_OPEN[id] = WA_GL_OPEN[id] || {};
+    WA_GL_OPEN[id].c = !WA_GL_OPEN[id].c;
+    document.querySelectorAll('[data-glcbox="' + id + '"]').forEach(function (x) { x.classList.toggle('open', WA_GL_OPEN[id].c); });
+    return;
+  }
+  if ((b = e.target.closest('[data-gllink]'))) {
+    var id2 = Number(b.dataset.gllink);
+    WA_GL_OPEN[id2] = WA_GL_OPEN[id2] || {};
+    WA_GL_OPEN[id2].l = !WA_GL_OPEN[id2].l;
+    document.querySelectorAll('[data-gllbox="' + id2 + '"]').forEach(function (x) { x.classList.toggle('open', WA_GL_OPEN[id2].l); });
+    return;
+  }
+  if ((b = e.target.closest('[data-glca]'))) {
+    var gid = Number(b.dataset.glca);
+    var inp = b.parentElement.querySelector('[data-glci]');
+    var body = (inp.value || '').trim();
+    if (!body) { toast('Write a comment first'); return; }
+    var r = await db.from('goal_comments').insert({ goal_id: gid, body: body, author: who() }).select('id').single();
+    if (r.error) { toast('Could not post'); return; }
+    try { db.functions.invoke('goal-sync', { body: { action: 'comment', goal_id: gid, comment_id: r.data ? r.data.id : null, body: body, author: who() } }); } catch (x) { /* sync best effort */ }
+    await waLoadGoals();
+    waGlRerender();
+    return;
+  }
+  if ((b = e.target.closest('[data-glce]'))) {
+    var cid = Number(b.dataset.glce);
+    var c = GL_COMMENTS.find(function (x) { return x.id === cid; });
+    var now = prompt('Edit your comment:', c ? c.body : '');
+    if (now === null || !now.trim()) return;
+    var r2 = await db.from('goal_comments').update({ body: now.trim(), updated_at: new Date().toISOString() }).eq('id', cid);
+    if (r2.error) { toast('Could not update'); return; }
+    try { db.functions.invoke('goal-sync', { body: { action: 'comment_edit', comment_id: cid, body: now.trim() } }); } catch (x) { /* sync best effort */ }
+    await waLoadGoals();
+    waGlRerender();
+    return;
+  }
+  if ((b = e.target.closest('[data-glcx]'))) {
+    if (!confirm('Delete this comment?')) return;
+    var cdid = Number(b.dataset.glcx);
+    var crow = GL_COMMENTS.find(function (x) { return x.id === cdid; });
+    await db.from('goal_comments').delete().eq('id', cdid);
+    try { db.functions.invoke('goal-sync', { body: { action: 'comment_delete', comment_id: cdid, clickup_comment_id: crow ? crow.clickup_comment_id : null } }); } catch (x) { /* sync best effort */ }
+    await waLoadGoals();
+    waGlRerender();
+  }
+});
+
+

@@ -1,0 +1,197 @@
+/* =====================================================================
+   WA v7 UI enhancements (23/07/26)
+   1. What's new strip shows ONLY on the home (overview) page.
+   2. Agendas get their own page: browse and filter every agenda
+      (department, executive, drafts, finals, archived) and create new
+      ones (department meeting, leaders meeting, 1on1 or group with a
+      people picker). Agenda cards are removed from department pages
+      and the Overview; the dept dropdown Agendas entry now opens the
+      page pre-filtered. All overrides use runtime assignments so they
+      deterministically supersede earlier waves.
+   ===================================================================== */
+(function () {
+  var css = ''
+    + '.ag-new,.ag-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;}'
+    + '.ag-new select,.ag-new input,.ag-filters select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:8px;font-size:12.5px;background:#fff;}'
+    + '.ag-new .go{background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:8px 15px;cursor:pointer;font-weight:700;font-size:12.5px;}'
+    + '.ag-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;}'
+    + '.ag-count{font-size:12px;color:var(--wa-muted);margin-left:auto;}';
+  var st = document.createElement('style');
+  st.textContent = css;
+  document.head.appendChild(st);
+
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('agendas')) {
+    var sec = document.createElement('section');
+    sec.id = 'agendas';
+    sec.className = 'panel';
+    sec.innerHTML = '<div class="card agenda-card ag-page-card">'
+      + '<h2 style="color:#8455ff;">&#128203; Agendas</h2>'
+      + '<p class="read" style="margin-top:2px;">Every meeting agenda in one place, drafted by AI from transcripts, projects and open work. Checking a task off inside an agenda completes the real task on its department page.</p>'
+      + '<div class="ag-new">'
+      + '<select id="agNewType"><option value="department">Department meeting</option><option value="leaders">Leaders team meeting</option><option value="people">1on1 or group (pick attendees)</option></select>'
+      + '<select id="agNewDept"></select>'
+      + '<select id="agNewWho" multiple size="6" style="display:none;min-width:200px;"></select>'
+      + '<input type="date" id="agNewDate" title="Meeting date (optional)" />'
+      + '<button class="go" id="agNewGen">&#10024; Generate agenda</button>'
+      + '</div>'
+      + '<div class="ag-filters">'
+      + '<select id="agFilterDept"><option value="all">All departments</option><option value="exec">Executive (1on1s, groups, leaders)</option></select>'
+      + '<select id="agFilterStatus"><option value="active">Active (drafts and finals)</option><option value="draft">Drafts</option><option value="final">Finals</option><option value="done">Archived</option><option value="all">Everything</option></select>'
+      + '<span class="ag-count" id="agCount"></span>'
+      + '</div>'
+      + '<div id="agPageBody"><p class="read">Loading...</p></div>'
+      + '</div>';
+    main.appendChild(sec);
+  }
+})();
+
+var WA_CUR_PANEL = 'overview';
+var __sp7 = showPanel;
+showPanel = function (id) {
+  __sp7(id);
+  try {
+    WA_CUR_PANEL = id;
+    var wn = document.getElementById('whatsNew');
+    if (wn) wn.style.display = (id === 'overview' && wn.dataset.has === '1') ? 'block' : 'none';
+  } catch (e) { /* non-fatal */ }
+};
+var __rwn7 = renderWhatsNew;
+renderWhatsNew = function () {
+  __rwn7();
+  try {
+    var wn = document.getElementById('whatsNew');
+    if (!wn) return;
+    wn.dataset.has = wn.style.display !== 'none' ? '1' : '0';
+    if (WA_CUR_PANEL !== 'overview') wn.style.display = 'none';
+  } catch (e) { /* non-fatal */ }
+};
+
+var __wla7 = null;
+waLoadAgendas = async function () {
+  try {
+    var a = await db.from('agendas').select('*').order('created_at', { ascending: false });
+    if (!a.error) AGENDAS_CACHE = a.data || [];
+    var ids = AGENDAS_CACHE.map(function (x) { return x.id; });
+    if (ids.length) {
+      var b = await db.from('agenda_items').select('*').in('agenda_id', ids).order('sort');
+      if (!b.error) AG_ITEMS_CACHE = b.data || [];
+    } else AG_ITEMS_CACHE = [];
+  } catch (e) { /* offline */ }
+};
+
+renderExecAgendaCard = function () { /* moved to the Agendas page */ };
+renderDeptAgendaCards = function () {
+  DEPT_ORDER.forEach(function (d) {
+    var p = document.getElementById(d);
+    if (p) { var c = p.querySelector('.agenda-card'); if (c) c.remove(); }
+  });
+  var ov = document.getElementById('overview');
+  if (ov) { var e = ov.querySelector('.exec-ag-card'); if (e) e.remove(); }
+  try { waRenderAgendasPage(); } catch (e) { /* boot */ }
+};
+
+var WA_AGP_INIT = false;
+function waAgendaRowHtml(a) { /* superseded: wave19 reset without capture; superseded; body removed in Phase 0 compaction */ }
+
+function waInitAgendasPage() {
+  if (WA_AGP_INIT) return;
+  var dsel = document.getElementById('agNewDept');
+  var fsel = document.getElementById('agFilterDept');
+  if (!dsel || !fsel) return;
+  WA_AGP_INIT = true;
+  dsel.innerHTML = DEPT_ORDER.map(function (d) { return '<option value="' + d + '">' + DEPT_LABEL[d] + '</option>'; }).join('');
+  DEPT_ORDER.forEach(function (d) {
+    var o = document.createElement('option'); o.value = d; o.textContent = DEPT_LABEL[d]; fsel.appendChild(o);
+  });
+  var tsel = document.getElementById('agNewType');
+  var wsel = document.getElementById('agNewWho');
+  tsel.addEventListener('change', function () {
+    dsel.style.display = tsel.value === 'department' ? '' : 'none';
+    wsel.style.display = tsel.value === 'people' ? '' : 'none';
+  });
+  fsel.addEventListener('change', function () { waRenderAgendasPage(); });
+  document.getElementById('agFilterStatus').addEventListener('change', function () { waRenderAgendasPage(); });
+  document.getElementById('agNewGen').addEventListener('click', async function () {
+    var b = this;
+    var payload = null;
+    if (tsel.value === 'department') payload = { department: dsel.value };
+    if (tsel.value === 'leaders') payload = { scope: 'leaders' };
+    if (tsel.value === 'people') {
+      var picked = Array.prototype.slice.call(wsel.selectedOptions || []).map(function (o) { return o.value; });
+      if (picked.length < 2) { toast('Pick at least 2 attendees (Ctrl or Cmd click to select several)'); return; }
+      payload = { scope: picked.length === 2 ? 'oneonone' : 'group', attendees: picked };
+    }
+    if (!payload) return;
+    var dt = document.getElementById('agNewDate').value;
+    if (dt) payload.meeting_date = dt;
+    b.disabled = true; b.textContent = 'Drafting from transcripts...';
+    try {
+      const { data, error } = await db.functions.invoke('build-agenda', { body: payload });
+      if (error || !(data && data.ok)) throw (error || new Error((data && data.error) || 'failed'));
+      toast('Agenda drafted: ' + (data.items || 0) + ' items');
+      await waLoadAgendas();
+      if (data.agenda_id) WA_AG_OPEN[data.agenda_id] = true;
+      waRenderAgendasPage();
+    } catch (e) { toast('Could not draft the agenda, try again'); }
+    b.disabled = false; b.innerHTML = '&#10024; Generate agenda';
+  });
+}
+
+var waRenderAgendasPage = async function () {
+  var body = document.getElementById('agPageBody');
+  if (!body) return;
+  if (!isStaff()) { body.innerHTML = '<p class="read">Agendas are available to staff accounts only.</p>'; return; }
+  waInitAgendasPage();
+  await waLoadLeaders();
+  var wsel = document.getElementById('agNewWho');
+  if (wsel && !wsel.options.length) {
+    wsel.innerHTML = WA_LEADERS.map(function (m) { return '<option value="' + esc(m.name) + '">' + esc(m.name) + ' (' + (DEPT_LABEL[m.department] || m.department || '') + ')</option>'; }).join('');
+  }
+  var fd = (document.getElementById('agFilterDept') || {}).value || 'all';
+  var fs = (document.getElementById('agFilterStatus') || {}).value || 'active';
+  var rows = AGENDAS_CACHE.filter(function (a) {
+    var scopeOk = fd === 'all' ? true : fd === 'exec' ? (a.scope || 'department') !== 'department' : (a.department === fd && (a.scope || 'department') === 'department');
+    var stOk = fs === 'all' ? true : fs === 'active' ? (a.status === 'draft' || a.status === 'final') : a.status === fs;
+    return scopeOk && stOk;
+  });
+  var cnt = document.getElementById('agCount');
+  if (cnt) cnt.textContent = rows.length + ' agenda' + (rows.length === 1 ? '' : 's');
+  body.innerHTML = rows.length ? rows.map(waAgendaRowHtml).join('') : '<p class="read">No agendas match this view. Generate one above.</p>';
+  waWireAgendaCard(body, null);
+};
+
+(function () {
+  var __ah7 = applyHash;
+  applyHash = function () {
+    var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+    if (h === 'agendas') { showPanel('agendas'); waRenderAgendasPage(); return; }
+    __ah7();
+  };
+  window.addEventListener('hashchange', function () {
+    if ((location.hash || '') === '#agendas') {
+      try { showPanel('agendas'); waRenderAgendasPage(); } catch (e) { /* boot */ }
+    }
+  });
+  var __sa7 = startApp;
+  startApp = async function () {
+    await __sa7();
+    try {
+      if (isStaff()) {
+        var bar = document.getElementById('tabBar');
+        if (bar && !bar.querySelector('[data-tab="agendas"]')) {
+          var b = document.createElement('button');
+          b.className = 'tab';
+          b.dataset.tab = 'agendas';
+          b.innerHTML = '<span class="tabdot" style="background:#8455ff"></span>Agendas';
+          var req = bar.querySelector('[data-tab="requests"]');
+          var info = bar.querySelector('[data-tab="importantinfo"]');
+          bar.insertBefore(b, req || info || document.getElementById('actTabBtn') || null);
+        }
+        renderDeptAgendaCards();
+      }
+    } catch (e) { /* non-fatal */ }
+  };
+})();
+
+

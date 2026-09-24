@@ -1,0 +1,273 @@
+/* =====================================================================
+   WA v42 one navigation
+   (30/07/26)
+   The Hub gets one organized menu and a nav registry.
+   - Restores the pages v40's gate was bouncing to the overview
+     (My page, Goals, Agendas, Requests, Create, Finances, Org chart)
+     and makes the Admin panel deep-linkable at #adminpanel.
+   - Rebuilds the bar: Home, Decisions, Requests, Agendas, Important
+     info, Departments, Work, People, Volunteering, Archive, Admin.
+     Existing buttons are MOVED, never recreated, so all delegated
+     routing keeps working. Volunteering, Create and Finances get
+     their nav entries back (v24 had buried them in department cards;
+     those quick links stay too).
+   - Rebuilds the per-department flyout (Overview, Executive
+     decisions, Agendas, Transcripts) inside the Departments menu;
+     the old v4 hover menu had been dead CSS since v13.
+   - WA_NAV registry: from now on waves call WA_NAV.register() to add
+     a page (tab placement, route, role gating in one declaration)
+     instead of touching the tab bar or wrapping applyHash.
+   Role semantics preserved per v40's banner: admins and leaders see
+   everything (leaders minus Admin); members lose Board, Activity and
+   Finances; viewers see the overview only; per-person tab overrides
+   still win. The always-reachable exemptions are untouched.
+   ===================================================================== */
+(function () {
+  if (window.WA_NAV) return;
+
+  /* ---- permissions: enrol every real page in the v40 role system ---- */
+  var WA42_EXTRA = ['mypage', 'goals', 'agendas', 'requests', 'importantinfo', 'create', 'finances', 'orgchart', 'volunteering'];
+  try {
+    if (typeof WA40_TABS !== 'undefined' && typeof WA40_DEFAULTS !== 'undefined') {
+      WA42_EXTRA.forEach(function (id) { if (WA40_TABS.indexOf(id) < 0) WA40_TABS.push(id); });
+      WA40_DEFAULTS.admin = WA40_TABS.concat(['adminpanel']);
+      WA40_DEFAULTS.leader = WA40_TABS.slice();
+      WA40_DEFAULTS.member = WA40_TABS.filter(function (id) { return id !== 'board' && id !== 'activity' && id !== 'finances'; });
+    }
+  } catch (e) { /* role system absent; nav still works */ }
+
+  function wa42Enrol(id, gate) {
+    try {
+      if (typeof WA40_TABS === 'undefined' || typeof WA40_DEFAULTS === 'undefined') return;
+      if (WA40_TABS.indexOf(id) < 0) WA40_TABS.push(id);
+      var g = gate || 'member';
+      if (g === 'viewer' && WA40_DEFAULTS.viewer.indexOf(id) < 0) WA40_DEFAULTS.viewer.push(id);
+      if ((g === 'viewer' || g === 'member') && WA40_DEFAULTS.member.indexOf(id) < 0) WA40_DEFAULTS.member.push(id);
+      if (g !== 'admin' && WA40_DEFAULTS.leader.indexOf(id) < 0) WA40_DEFAULTS.leader.push(id);
+      if (WA40_DEFAULTS.admin.indexOf(id) < 0) WA40_DEFAULTS.admin.push(id);
+    } catch (e) { /* non-fatal */ }
+  }
+
+  /* ---- styles ---- */
+  if (!document.getElementById('wa42css')) {
+    var st = document.createElement('style');
+    st.id = 'wa42css';
+    st.textContent = '' +
+      '.tab-group-h{border-radius:999px;padding:10px 14px;}' +
+      '.w42d{position:relative;display:block;}' +
+      '.w42d > .tab{display:block;width:100%;text-align:left;}' +
+      '.w42sub{display:none;position:absolute;left:100%;top:0;background:#fff;border-radius:12px;' +
+      'box-shadow:0 18px 50px -12px rgba(20,48,43,.3);min-width:200px;padding:5px;z-index:230;}' +
+      '.w42d:hover > .w42sub{display:block;}' +
+      '.w42sub a{display:block;padding:8px 12px;border-radius:9px;font-size:12.8px;font-weight:600;' +
+      'color:var(--wa-text);cursor:pointer;text-decoration:none;}' +
+      '.w42sub a:hover{background:rgba(31,95,79,.08);color:#1f5f4f;}' +
+      '@media (max-width:740px){.w42sub{display:none !important;}.w42d > .tab{padding:12px 14px;}}';
+    document.head.appendChild(st);
+  }
+
+  /* ---- small helpers ---- */
+  function wa42Tab(id, label, dot) {
+    var b = document.createElement('button');
+    b.className = 'tab';
+    b.setAttribute('data-tab', id);
+    b.innerHTML = '<span class="tabdot" style="background:' + (dot || '#1f5f4f') + '"></span>' + label;
+    return b;
+  }
+  function wa42Label(btn, label) {
+    if (!btn) return;
+    var dot = btn.querySelector('.tabdot');
+    btn.innerHTML = (dot ? dot.outerHTML : '') + label;
+  }
+  function wa42Group(key, label, items) {
+    var g = document.createElement('span');
+    g.className = 'tab-group';
+    g.setAttribute('data-w42g', key);
+    var h = document.createElement('button');
+    h.className = 'tab-group-h';
+    h.innerHTML = label + ' <span class="caret">&#9660;</span>';
+    var p = document.createElement('div');
+    p.className = 'tab-group-p';
+    items.forEach(function (el) { if (el) p.appendChild(el); });
+    g.appendChild(h);
+    g.appendChild(p);
+    h.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      var was = g.classList.contains('open');
+      document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      if (!was) g.classList.add('open');
+    });
+    return g;
+  }
+  function wa42DeptRow(btn, d) {
+    var row = document.createElement('div');
+    row.className = 'w42d';
+    row.appendChild(btn);
+    var sub = document.createElement('div');
+    sub.className = 'w42sub';
+    sub.innerHTML = '<a data-w42a="overview" data-w42d="' + d + '">Overview</a>' +
+      '<a data-w42a="exec" data-w42d="' + d + '">Executive decisions</a>' +
+      '<a data-w42a="agenda" data-w42d="' + d + '">Agendas</a>' +
+      '<a data-w42a="tx" data-w42d="' + d + '">Transcripts</a>';
+    row.appendChild(sub);
+    return row;
+  }
+
+  /* ---- the registry ---- */
+  window.WA_NAV = {
+    pages: [],
+    groups: ['departments', 'work', 'people', 'archive'],
+    /* def: {id, label, group, dot, gate: viewer|member|leader|admin, onShow, panel:false, noRoute:true} */
+    register: function (def) {
+      if (!def || !def.id) return;
+      wa42Enrol(def.id, def.gate);
+      if (!def.noRoute) this.pages.push(def);
+      if (def.panel !== false && !document.getElementById(def.id)) {
+        var main = document.querySelector('main');
+        if (main) {
+          var s = document.createElement('section');
+          s.id = def.id;
+          s.className = 'panel';
+          main.appendChild(s);
+        }
+      }
+      var bar = document.getElementById('tabBar');
+      if (bar && def.label && !bar.querySelector('.tab[data-tab="' + def.id + '"]')) {
+        var b = wa42Tab(def.id, def.label, def.dot);
+        var host = null;
+        if (def.group) {
+          var g = bar.querySelector('.tab-group[data-w42g="' + def.group + '"]');
+          if (g) host = g.querySelector('.tab-group-p');
+        }
+        if (host) host.appendChild(b);
+        else bar.insertBefore(b, bar.querySelector('.tab[data-tab="adminpanel"]') || null);
+      }
+      if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
+    },
+    rebuild: function () { try { wa42Nav(); } catch (e) { /* non-fatal */ } }
+  };
+
+  /* ---- one route dispatcher for registry pages ---- */
+  if (typeof applyHash === 'function') {
+    var __ah42 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      var root = h.split('/')[0];
+      var pg = null;
+      for (var i = 0; i < WA_NAV.pages.length; i++) { if (WA_NAV.pages[i].id === root) { pg = WA_NAV.pages[i]; break; } }
+      if (pg) {
+        showPanel(pg.id);
+        if (pg.onShow) { try { pg.onShow(h); } catch (e) { /* non-fatal */ } }
+        return;
+      }
+      __ah42();
+    };
+  }
+  /* the admin panel becomes deep-linkable; its tab and panel already exist */
+  WA_NAV.pages.push({ id: 'adminpanel' });
+
+  /* ---- hide group headers whose every tab is role-hidden ---- */
+  function wa42Groups() {
+    document.querySelectorAll('#tabBar .tab-group').forEach(function (g) {
+      var any = false;
+      g.querySelectorAll('.tab').forEach(function (t) { if (t.style.display !== 'none') any = true; });
+      var h = g.querySelector('.tab-group-h');
+      if (h) h.style.display = any ? '' : 'none';
+    });
+  }
+  if (typeof wa40Enforce === 'function') {
+    var __en42 = wa40Enforce;
+    wa40Enforce = function () {
+      __en42();
+      try { wa42Groups(); } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  /* ---- the rebuild ---- */
+  function wa42Nav() {
+    var bar = document.getElementById('tabBar');
+    if (!bar || bar.dataset.wa42) return;
+    bar.dataset.wa42 = '1';
+    /* dissolve prior groups; buttons move back to the bar with their wiring intact */
+    Array.prototype.slice.call(bar.querySelectorAll('.tab-group')).forEach(function (g) {
+      Array.prototype.slice.call(g.querySelectorAll('.tab')).forEach(function (t) { bar.appendChild(t); });
+      if (g.parentNode) g.parentNode.removeChild(g);
+    });
+    function grab(id) { return bar.querySelector('.tab[data-tab="' + id + '"]'); }
+    function need(id, label, dot) { return grab(id) || wa42Tab(id, label, dot); }
+    wa42Label(grab('mypage'), 'Home');
+    wa42Label(grab('overview'), 'Decisions');
+    var order = [];
+    ['mypage', 'overview', 'requests', 'agendas', 'importantinfo'].forEach(function (id) {
+      var b = grab(id);
+      if (b) order.push(b);
+    });
+    var depts = (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).map(function (d) {
+      var b = grab(d);
+      return b ? wa42DeptRow(b, d) : null;
+    });
+    order.push(wa42Group('departments', 'Departments', depts));
+    order.push(wa42Group('work', 'Work', [grab('dashboard'), grab('goals'),
+      need('create', 'Create studio', '#8455ff'), need('finances', 'Finances', '#c87a2f')]));
+    order.push(wa42Group('people', 'People', [grab('orgchart'), grab('training')]));
+    order.push(need('volunteering', 'Volunteering', '#2c7a66'));
+    order.push(wa42Group('archive', 'Archive', [grab('transcripts'), grab('activity')]));
+    var adm = grab('adminpanel');
+    if (adm) order.push(adm);
+    order.forEach(function (el) { if (el) bar.appendChild(el); });
+    if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
+  }
+
+  /* ---- department flyout actions (same destinations as the old v4 menu) ---- */
+  if (!document.body.dataset.wa42Wired) {
+    document.body.dataset.wa42Wired = '1';
+    document.body.addEventListener('click', function (e) {
+      var a = e.target.closest && e.target.closest('.w42sub a');
+      if (!a) return;
+      var d = a.getAttribute('data-w42d');
+      var act = a.getAttribute('data-w42a');
+      document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+      document.body.classList.remove('wa-mob-open');
+      if (act === 'overview') { location.hash = '#dept/' + d; }
+      if (act === 'exec') {
+        location.hash = '#dept/' + d;
+        setTimeout(function () {
+          var c = document.querySelector('#' + d + ' .exec-card');
+          if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 380);
+      }
+      if (act === 'agenda') {
+        location.hash = '#agendas';
+        setTimeout(function () {
+          try {
+            var f = document.getElementById('agFilterDept');
+            if (f) { f.value = d; waRenderAgendasPage(); }
+          } catch (e2) { /* non-fatal */ }
+        }, 300);
+      }
+      if (act === 'tx') {
+        location.hash = '#transcripts';
+        setTimeout(function () {
+          try {
+            var f = document.getElementById('txFilter');
+            if (f) {
+              var opt = Array.prototype.slice.call(f.options).find(function (o) {
+                return txDeptKey(o.value) === d || txDeptKey(o.text) === d;
+              });
+              if (opt) { f.value = opt.value; renderTranscripts(); }
+            }
+          } catch (e3) { /* non-fatal */ }
+        }, 380);
+      }
+    });
+  }
+
+  /* ---- run after boot, once everything else has assembled the bar ---- */
+  if (typeof startApp === 'function') {
+    var __sa42 = startApp;
+    startApp = async function () {
+      await __sa42();
+      try { wa42Nav(); } catch (e) { /* non-fatal */ }
+    };
+  }
+})();

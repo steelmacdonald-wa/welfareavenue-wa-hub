@@ -1,0 +1,78 @@
+/* =====================================================================
+   WA v116d the Strategy section (24/09/26): Goal alignment + Executive dashboard
+   =====================================================================
+   Steel: "Executive Decisions should be its own page in a new section
+   called Strategy... rename the strategy page to Goal Alignment...
+   since the Dashboard page is executive decisions, just move it to the
+   new Strategy section and call it Executive Dashboard."
+   - A Strategy group in the menu holds Goal alignment (the goals page,
+     renamed at build time by teams_remap) and Executive dashboard (the
+     overview page: stat strip, folders and the open decisions, same id,
+     same hash, same gating).
+   - Later waves rebuild the menu on timers (wave73 at 250ms, wave95 at
+     800ms and 2.5s), so the group is re-applied after each of them; the
+     routine is idempotent.
+   ===================================================================== */
+(function () {
+  if (window.__wa116d) return; window.__wa116d = true;
+  var FLAG = '#B3402F';
+
+  function relabel(btn, text) {
+    if (!btn) return;
+    var dot = btn.querySelector('.tabdot');
+    btn.innerHTML = (dot ? dot.outerHTML : '') + text;
+  }
+  function strategyGroup() {
+    var bar = document.getElementById('tabBar'); if (!bar) return;
+    var goals = bar.querySelector('.tab[data-tab="goals"]');
+    var over = bar.querySelector('.tab[data-tab="overview"]');
+    if (!goals && !over) return;
+    var g = bar.querySelector('.tab-group[data-w42g="strategy"]');
+    if (!g) {
+      g = document.createElement('span'); g.className = 'tab-group'; g.setAttribute('data-w42g', 'strategy');
+      var hd = document.createElement('button'); hd.className = 'tab-group-h'; hd.innerHTML = 'Strategy <span class="caret">&#9660;</span>';
+      var p = document.createElement('div'); p.className = 'tab-group-p';
+      g.appendChild(hd); g.appendChild(p);
+      hd.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var was = g.classList.contains('open');
+        document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); });
+        if (!was) g.classList.add('open');
+      });
+      /* sits where the goals tab was; after Departments when goals is elsewhere */
+      var anchorEl = goals ? (goals.closest('.tab-group') || goals) : null;
+      if (anchorEl && anchorEl.parentNode === bar) bar.insertBefore(g, anchorEl);
+      else {
+        var depts = bar.querySelector('.tab-group[data-w42g="departments"]');
+        if (depts && depts.nextSibling) bar.insertBefore(g, depts.nextSibling); else bar.appendChild(g);
+      }
+    }
+    var host = g.querySelector('.tab-group-p');
+    if (over && over.parentNode !== host) { relabel(over, 'Executive dashboard'); host.appendChild(over); }
+    else if (over && (over.textContent || '').indexOf('Executive dashboard') < 0) relabel(over, 'Executive dashboard');
+    if (goals && goals.parentNode !== host) { relabel(goals, 'Goal alignment'); host.appendChild(goals); }
+    else if (goals && (goals.textContent || '').indexOf('Goal alignment') < 0) relabel(goals, 'Goal alignment');
+    /* order inside the section: Executive dashboard first */
+    if (over && goals && over.nextSibling !== goals) host.insertBefore(over, goals);
+    var hd2 = g.querySelector('.tab-group-h');
+    if (hd2) hd2.style.display = (over && over.style.display !== 'none') || (goals && goals.style.display !== 'none') ? '' : 'none';
+  }
+  window.w116Strategy = strategyGroup;
+  window.w116StrategyOk = function () {
+    var bar = document.getElementById('tabBar'); if (!bar) return true;
+    var g = bar.querySelector('.tab-group[data-w42g="strategy"] .tab-group-p'); if (!g) return false;
+    var over = bar.querySelector('.tab[data-tab="overview"]'), goals = bar.querySelector('.tab[data-tab="goals"]');
+    return (!over || over.parentNode === g) && (!goals || goals.parentNode === g);
+  };
+
+  if (typeof startApp === 'function') {
+    var __sa116d = startApp;
+    startApp = async function () {
+      var r = await __sa116d.apply(this, arguments);
+      try {
+        strategyGroup();
+      } catch (e) { console.warn('wave116d boot', e); }
+      return r;
+    };
+  }
+})();

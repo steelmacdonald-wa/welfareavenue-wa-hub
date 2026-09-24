@@ -1,0 +1,342 @@
+/* =====================================================================
+   WA v87 Phase 3 (B1): The Brain
+   =====================================================================
+   An interactive graph of how work flows through Welfare Avenue:
+   people, meetings, tasks, projects, goals and decisions, drawn from
+   the tables the Hub already has (no new pipeline). Edges:
+     meeting -> task        task_comments where source='transcript'
+     meeting -> person      transcripts.speakers + mentions
+     person  -> task        dept_tasks.owner + task_assignees
+     task    -> project     dept_tasks.project_id
+     project -> goal        projects.goal_id (+ project parent_id)
+     goal    -> goal        goals.parent_goal_id (+ goals.task_ids)
+     meeting -> decision    decisions.raised_by ('AI: <title> - <date>')
+   Views: Everything / This month / a week-by-week time-lapse, plus
+   per-person and per-goal focus. Click any node to pull its chain
+   forward and open the underlying page.
+   cytoscape.js loads lazily from cdn.jsdelivr.net (CSP-allowlisted)
+   the first time the page opens. Reads go through RLS, so each person
+   sees exactly the graph their permissions allow.
+   ===================================================================== */
+(function () {
+  if (window.__wa87) return; window.__wa87 = true;
+
+  var css = document.createElement('style');
+  css.textContent =
+    '#w87cy{height:66vh;min-height:420px;background:#fbfcfc;border:1px solid var(--wa-line);border-radius:14px;}' +
+    '.w87bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}' +
+    '.w87bar select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:9px;font-size:12.5px;background:#fff;}' +
+    '.w87m{background:#eef4f1;border:1px solid #cfe0d8;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;color:#14302b;cursor:pointer;}' +
+    '.w87m.on{background:#2c7a66;border-color:#2c7a66;color:#fff;}' +
+    '.w87leg{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#5b6b66;margin:8px 0 0;}' +
+    '.w87leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}' +
+    '#w87info{position:absolute;right:14px;top:14px;width:250px;background:#fff;border:1px solid var(--wa-line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:12px 14px;font-size:12.5px;display:none;z-index:5;}' +
+    '#w87info b{display:block;font-size:13px;color:#14302b;margin-bottom:4px;}' +
+    '#w87info .k{color:#7b8a86;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}' +
+    '#w87info a{color:#2c7a66;text-decoration:underline;cursor:pointer;}' +
+    '.w87wrap{position:relative;}' +
+    '#w87lapse{font-size:12.5px;color:#5b6b66;font-weight:700;display:none;}' +
+    '@media (max-width:760px){#w87cy{height:56vh;}#w87info{width:82vw;left:9vw;right:auto;}}';
+  document.head.appendChild(css);
+
+  var W87 = { cy: null, lib: false, built: false, mode: 'month', mentions: [], txcom: [], timer: null };
+  var COLORS = { person: '#2c7a66', meeting: '#8455ff', task: '#5c7fc4', project: '#c87a2f', goal: '#a87f2c', decision: '#b3402f' };
+  var SHAPES = { person: 'ellipse', meeting: 'diamond', task: 'round-rectangle', project: 'hexagon', goal: 'star', decision: 'triangle' };
+
+  function w87Panel() {
+    var sec = document.getElementById('brain');
+    if (!sec || sec.dataset.w87) return;
+    sec.dataset.w87 = '1';
+    sec.innerHTML =
+      '<div class="card"><h2 style="color:#8455ff">The Brain</h2>' +
+      '<p class="w85p">How work flows through Welfare Avenue: from a conversation to a task to a project to a goal. Click anything to pull its chain forward.</p>' +
+      '<div class="w87bar">' +
+      '<button class="w87m" data-w87mode="month">This month</button>' +
+      '<button class="w87m" data-w87mode="all">Everything</button>' +
+      '<button class="w87m" data-w87mode="lapse">&#9654; Time-lapse</button>' +
+      '<span id="w87lapse"></span>' +
+      '<select id="w87person"><option value="">Focus a person...</option></select>' +
+      '<select id="w87goal"><option value="">Focus a goal...</option></select>' +
+      '<button class="w87m" id="w87clear" style="display:none">Clear focus</button>' +
+      '<button class="w87m" data-w88open style="margin-left:auto">How work happens</button>' +
+      '</div>' +
+      '<div class="w87wrap"><div id="w87cy"></div><div id="w87info"></div></div>' +
+      '<div class="w87leg">' +
+      Object.keys(COLORS).map(function (k) { return '<span><i style="background:' + COLORS[k] + '"></i>' + k.charAt(0).toUpperCase() + k.slice(1) + (k === 'person' ? 's' : 's') + '</span>'; }).join('') +
+      '</div></div>';
+    sec.querySelectorAll('[data-w87mode]').forEach(function (b) {
+      b.addEventListener('click', function () { w87Mode(b.getAttribute('data-w87mode')); });
+    });
+    document.getElementById('w87person').addEventListener('change', function () { w87Focus('p:' + this.value, 1); });
+    document.getElementById('w87goal').addEventListener('change', function () { w87Focus('g:' + this.value, 2); });
+    document.getElementById('w87clear').addEventListener('click', w87Unfocus);
+  }
+
+  function w87Lib(cb) {
+    if (window.cytoscape) { cb(); return; }
+    if (W87.lib) { setTimeout(function () { w87Lib(cb); }, 300); return; }
+    W87.lib = true;
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js';
+    s.onload = cb;
+    s.onerror = function () {
+      var cyel = document.getElementById('w87cy');
+      if (cyel) cyel.innerHTML = '<p class="read" style="padding:20px">The graph library could not load. Check the connection and reopen this page.</p>';
+    };
+    document.head.appendChild(s);
+  }
+
+  async function w87Extra() {
+    try {
+      var m = await db.from('mentions').select('person, transcript_id').limit(500);
+      W87.mentions = (m && m.data) || [];
+    } catch (e) { W87.mentions = []; }
+    try {
+      var c = await db.from('task_comments').select('task_id, source, source_ref').eq('source', 'transcript').limit(1000);
+      W87.txcom = (c && c.data) || [];
+    } catch (e) { W87.txcom = []; }
+  }
+
+  function w87Date(s) { return s ? new Date(String(s).slice(0, 10) + 'T12:00:00') : null; }
+
+  function w87Elements(windowStart, windowEnd) {
+    var els = [];
+    var seen = {};
+    function node(id, type, label, extra) {
+      if (seen[id]) return true;
+      seen[id] = 1;
+      els.push({ data: Object.assign({ id: id, type: type, label: (label || '').slice(0, 34) }, extra || {}) });
+      return true;
+    }
+    function edge(a, b) {
+      if (!seen[a] || !seen[b]) return;
+      var id = 'e:' + a + '>' + b;
+      if (seen[id]) return;
+      seen[id] = 1;
+      els.push({ data: { id: id, source: a, target: b } });
+    }
+    function inWin(d) {
+      if (!windowStart) return true;
+      var t = w87Date(d);
+      return t && t >= windowStart && t <= windowEnd;
+    }
+    var members = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; });
+    var byName = {};
+    members.forEach(function (m) {
+      node('p:' + m.id, 'person', m.name, { open: '#person/' + m.id });
+      byName[(m.name || '').toLowerCase()] = m.id;
+      byName[(m.name || '').toLowerCase().split(' ')[0]] = byName[(m.name || '').toLowerCase().split(' ')[0]] || m.id;
+    });
+    (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) {
+      node('g:' + g.id, 'goal', (g.quarter ? g.quarter + ': ' : '') + g.title, { open: '#goals' });
+    });
+    (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) {
+      if (g.parent_goal_id) edge('g:' + g.id, 'g:' + g.parent_goal_id);
+    });
+    (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (p) {
+      node('pr:' + p.id, 'project', p.name, { open: '#project/' + p.id });
+      if (p.goal_id) edge('pr:' + p.id, 'g:' + p.goal_id);
+      if (p.parent_id) edge('pr:' + p.id, 'pr:' + p.parent_id);
+    });
+    var txs = (typeof txCache !== 'undefined' ? txCache : []).filter(function (t) { return inWin(t.meeting_date || t.created_at); });
+    txs.forEach(function (t) {
+      node('m:' + t.id, 'meeting', t.title || 'Meeting', { open: '#tx/' + t.id });
+      (t.speakers || []).forEach(function (sp) {
+        var mid = byName[(sp || '').toLowerCase()] || byName[(sp || '').toLowerCase().split(' ')[0]];
+        if (mid) edge('m:' + t.id, 'p:' + mid);
+      });
+    });
+    W87.mentions.forEach(function (mn) {
+      var mid = byName[(mn.person || '').toLowerCase()] || byName[(mn.person || '').toLowerCase().split(' ')[0]];
+      if (mid && seen['m:' + mn.transcript_id]) edge('m:' + mn.transcript_id, 'p:' + mid);
+    });
+    var tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) {
+      if (!windowStart) return true;
+      return inWin(t.opened_at || t.updated_at) || (!t.done && inWin(t.due_date));
+    });
+    var taskSeen = {};
+    tasks.forEach(function (t) {
+      node('t:' + t.id, 'task', t.title, { open: '#task/' + t.id });
+      taskSeen[t.id] = 1;
+      if (t.project_id) edge('t:' + t.id, 'pr:' + t.project_id);
+      var mid = byName[(t.owner || '').toLowerCase()] || byName[(t.owner || '').toLowerCase().split(' ')[0]];
+      if (mid) edge('p:' + mid, 't:' + t.id);
+    });
+    (typeof DB_ASSIGN !== 'undefined' ? DB_ASSIGN : []).forEach(function (a) {
+      if (taskSeen[a.task_id]) edge('p:' + a.member_id, 't:' + a.task_id);
+    });
+    W87.txcom.forEach(function (c) {
+      var txid = Number(c.source_ref);
+      if (taskSeen[c.task_id] && seen['m:' + txid]) edge('m:' + txid, 't:' + c.task_id);
+    });
+    (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) {
+      (g.task_ids || []).forEach(function (tid) { if (taskSeen[tid]) edge('t:' + tid, 'g:' + g.id); });
+    });
+    var decs = (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []).filter(function (d) { return !windowStart || inWin(d.opened_at || d.updated_at); });
+    decs.forEach(function (d) {
+      node('d:' + d.id, 'decision', d.title, { open: '#decision/' + d.id });
+      var rb = String(d.raised_by || '');
+      if (rb.indexOf('AI: ') === 0) {
+        var mt = rb.slice(4).split(' - ')[0].toLowerCase();
+        txs.forEach(function (t) {
+          if ((t.title || '').toLowerCase().indexOf(mt) >= 0) edge('m:' + t.id, 'd:' + d.id);
+        });
+      }
+      var mid = byName[(d.owner || '').toLowerCase()] || byName[(d.owner || '').toLowerCase().split(' ')[0]];
+      if (mid) edge('p:' + mid, 'd:' + d.id);
+    });
+    /* hide fully disconnected nodes; a graph is about connections */
+    var deg = {};
+    els.forEach(function (e) {
+      if (e.data.source) { deg[e.data.source] = (deg[e.data.source] || 0) + 1; deg[e.data.target] = (deg[e.data.target] || 0) + 1; }
+    });
+    var kept = els.filter(function (e) { return e.data.source || deg[e.data.id]; });
+    W87.hidden = els.length - kept.length - els.filter(function (e) { return e.data.source; }).length
+      + kept.filter(function (e) { return e.data.source; }).length - kept.filter(function (e) { return e.data.source; }).length;
+    W87.hidden = els.filter(function (e) { return !e.data.source && !deg[e.data.id]; }).length;
+    return kept;
+  }
+
+  function w87Draw(els) {
+    var container = document.getElementById('w87cy');
+    if (!container) return;
+    if (W87.cy) { W87.cy.destroy(); W87.cy = null; }
+    W87.cy = cytoscape({
+      container: container,
+      elements: els,
+      wheelSensitivity: 0.2,
+      style: [
+        { selector: 'node', style: {
+          'label': 'data(label)', 'font-size': 8, 'color': '#3d4642',
+          'text-valign': 'bottom', 'text-margin-y': 3, 'text-wrap': 'ellipsis', 'text-max-width': 90,
+          'width': 16, 'height': 16, 'border-width': 1, 'border-color': '#ffffff'
+        } },
+        { selector: 'node[type="person"]', style: { 'background-color': COLORS.person, 'shape': SHAPES.person, 'width': 22, 'height': 22, 'font-size': 9 } },
+        { selector: 'node[type="meeting"]', style: { 'background-color': COLORS.meeting, 'shape': SHAPES.meeting } },
+        { selector: 'node[type="task"]', style: { 'background-color': COLORS.task, 'shape': SHAPES.task, 'width': 13, 'height': 13 } },
+        { selector: 'node[type="project"]', style: { 'background-color': COLORS.project, 'shape': SHAPES.project, 'width': 24, 'height': 24, 'font-size': 9 } },
+        { selector: 'node[type="goal"]', style: { 'background-color': COLORS.goal, 'shape': SHAPES.goal, 'width': 26, 'height': 26, 'font-size': 9 } },
+        { selector: 'node[type="decision"]', style: { 'background-color': COLORS.decision, 'shape': SHAPES.decision } },
+        { selector: 'edge', style: { 'width': 1, 'line-color': '#cdd9d4', 'curve-style': 'haystack', 'haystack-radius': 0.4 } },
+        { selector: '.w87dim', style: { 'opacity': 0.12 } },
+        { selector: '.w87hot', style: { 'border-color': '#14302b', 'border-width': 2 } }
+      ],
+      layout: { name: 'cose', animate: false, nodeOverlap: 8, idealEdgeLength: 60, padding: 20 }
+    });
+    try {
+      var leg = document.querySelector('.w87leg');
+      if (leg) {
+        var old = leg.querySelector('[data-w87hid]');
+        if (old) old.remove();
+        if (W87.hidden > 0) leg.insertAdjacentHTML('beforeend', '<span data-w87hid style="color:#9aa8a2">' + W87.hidden + ' quiet item' + (W87.hidden === 1 ? '' : 's') + ' hidden (no connections yet)</span>');
+      }
+    } catch (e) { /* non-fatal */ }
+    W87.cy.on('tap', 'node', function (ev) { w87Focus(ev.target.id(), 1, true); });
+    W87.cy.on('tap', function (ev) { if (ev.target === W87.cy) w87Unfocus(); });
+  }
+
+  function w87Info(node) {
+    var el = document.getElementById('w87info');
+    if (!el) return;
+    if (!node) { el.style.display = 'none'; return; }
+    var d = node.data();
+    var deg = node.degree();
+    el.innerHTML = '<span class="k">' + esc(d.type) + '</span><b>' + esc(node.data('label')) + '</b>' +
+      '<span style="color:#7b8a86">' + deg + ' connection' + (deg === 1 ? '' : 's') + '</span><br/>' +
+      (d.open ? '<a data-w87go="' + esc(d.open) + '">Open</a>' : '');
+    el.style.display = 'block';
+    var a = el.querySelector('[data-w87go]');
+    if (a) a.addEventListener('click', function () { location.hash = a.getAttribute('data-w87go'); });
+  }
+
+  function w87Focus(id, hops, fromTap) {
+    if (!W87.cy) return;
+    var node = W87.cy.getElementById(id);
+    if (!node || !node.length) return;
+    var hood = node.closedNeighborhood();
+    for (var i = 1; i < (hops || 1); i++) hood = hood.closedNeighborhood();
+    W87.cy.elements().addClass('w87dim');
+    hood.removeClass('w87dim');
+    W87.cy.elements().removeClass('w87hot');
+    node.addClass('w87hot');
+    document.getElementById('w87clear').style.display = 'inline-flex';
+    w87Info(node);
+    if (!fromTap) W87.cy.animate({ fit: { eles: hood, padding: 40 }, duration: 350 });
+  }
+  function w87Unfocus() {
+    if (!W87.cy) return;
+    W87.cy.elements().removeClass('w87dim').removeClass('w87hot');
+    document.getElementById('w87clear').style.display = 'none';
+    var p = document.getElementById('w87person'); if (p) p.value = '';
+    var g = document.getElementById('w87goal'); if (g) g.value = '';
+    w87Info(null);
+  }
+
+  function w87Fills() {
+    var ps = document.getElementById('w87person');
+    var gs = document.getElementById('w87goal');
+    if (ps && ps.options.length <= 1) {
+      (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; })
+        .sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); })
+        .forEach(function (m) { ps.insertAdjacentHTML('beforeend', '<option value="' + m.id + '">' + esc(m.name) + '</option>'); });
+    }
+    if (gs && gs.options.length <= 1) {
+      (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).forEach(function (g) {
+        gs.insertAdjacentHTML('beforeend', '<option value="' + g.id + '">' + esc((g.quarter ? g.quarter + ': ' : '') + g.title).slice(0, 60) + '</option>');
+      });
+    }
+  }
+
+  function w87Mode(mode) {
+    W87.mode = mode;
+    clearInterval(W87.timer);
+    document.getElementById('w87lapse').style.display = 'none';
+    document.querySelectorAll('[data-w87mode]').forEach(function (b) {
+      b.classList.toggle('on', b.getAttribute('data-w87mode') === mode);
+    });
+    var now = new Date();
+    if (mode === 'all') { w87Draw(w87Elements(null, null)); return; }
+    var start = new Date(now.getFullYear(), now.getMonth(), 1);
+    if (mode === 'month') { w87Draw(w87Elements(start, now)); return; }
+    /* time-lapse: replay this month week by week */
+    var lab = document.getElementById('w87lapse');
+    lab.style.display = 'inline';
+    var step = 0;
+    function tick() {
+      step++;
+      var end = new Date(start.getTime() + step * 7 * 86400000);
+      if (end > now) end = now;
+      lab.textContent = 'Up to ' + end.toISOString().slice(0, 10);
+      w87Draw(w87Elements(start, end));
+      if (end >= now) { clearInterval(W87.timer); lab.textContent += ' (done)'; }
+    }
+    tick();
+    W87.timer = setInterval(tick, 2600);
+  }
+
+  function w87Show() {
+    w87Panel();
+    w87Lib(function () {
+      if (W87.built) return;
+      W87.built = true;
+      w87Extra().then(function () {
+        w87Fills();
+        w87Mode('month');
+      });
+    });
+  }
+
+  function w87Register() {
+    if (window.WA_NAV && typeof WA_NAV.register === 'function') {
+      WA_NAV.register({ id: 'brain', label: 'The Brain', group: 'more', dot: '#8455ff', gate: 'member', onShow: function () { w87Show(); } });
+    }
+  }
+  if (typeof startApp === 'function') {
+    var __sa87 = startApp;
+    startApp = async function () {
+      await __sa87.apply(this, arguments);
+      try { w87Register(); } catch (e) { /* non-fatal */ }
+    };
+  }
+  w87Register();
+})();

@@ -1,0 +1,383 @@
+/* =====================================================================
+   WA v33 event plans, driver itineraries, person pages, Quo replies
+   (29/07/26)
+   1. Every event summary opens with the plan: how many meals we are
+      planning to serve, where, and what (editable in place; revisions
+      show up for everyone).
+   2. Build the team leader and driver itinerary from live data: leader
+      and driver phones, meeting time at the storage unit, pickup start,
+      home cook stops with addresses and phones, the Google Maps route,
+      and the instructions link. Copy it or open it in an email.
+   3. Click anyone on the org chart (or their profile card) to open a
+      full person page: an AI job description grounded in their actual
+      Hub work, fiscal year stats, open tasks, and what they finished.
+   4. Check Quo replies on any event: the latest inbound text from each
+      rostered volunteer, pulled straight from the Welfare Phone.
+   ===================================================================== */
+
+var WA33_STORAGE = '888 Rue Saint-Antoine W, Montreal, QC H3C 4G3';
+
+(function () {
+  if (document.getElementById('wa33css')) return;
+  var st = document.createElement('style');
+  st.id = 'wa33css';
+  st.textContent = '' +
+    '.w33plan{border-bottom:1px solid rgba(44,122,102,.25);padding:2px 0 8px;margin:0 0 6px;font-size:13px;}' +
+    '.w33plan input{margin:0 4px;}' +
+    '.w33qr-r{border-top:1px solid rgba(127,127,127,.15);padding:5px 0;font-size:12.5px;}' +
+    '.w33qr-r b{color:#2c7a66;}' +
+    '.w33head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
+    '.w33dot{display:inline-block;width:14px;height:14px;border-radius:50%;}' +
+    '.w33chip{display:inline-block;border:1px solid rgba(44,122,102,.45);color:#2c7a66;border-radius:9px;padding:2px 10px;font-size:12px;margin:2px 6px 2px 0;}' +
+    '.w33bio{background:rgba(44,122,102,.06);border-radius:10px;padding:10px 13px;font-size:13.5px;line-height:1.5;}' +
+    '.w33task{border-bottom:1px solid rgba(127,127,127,.15);padding:5px 0;font-size:13px;}';
+  document.head.appendChild(st);
+})();
+
+/* ---------- 1. the plan, on the event summary ---------- */
+function wa33Ev() {
+  var ev = null;
+  if (typeof WA_VOL_EVENTS !== 'undefined') {
+    WA_VOL_EVENTS.forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; });
+  }
+  return ev;
+}
+
+function wa33Augment() {
+  var sec = document.getElementById('volunteering');
+  if (!sec) return;
+  var sum = sec.querySelector('.w31sum');
+  if (!sum || sum.querySelector('.w33plan')) return;
+  var ev = wa33Ev();
+  if (!ev) return;
+  var staff = typeof isStaff === 'function' && isStaff();
+  var plan = document.createElement('div');
+  plan.className = 'w33plan';
+  if (staff) {
+    plan.innerHTML = '<b>The plan:</b> serving'
+      + ' <input type="number" min="0" class="vl-in" style="width:70px" value="' + (ev.planned_meals == null ? '' : esc(String(ev.planned_meals))) + '" placeholder="how many" data-w33pm="' + ev.id + '" /> meals at'
+      + ' <input type="text" class="vl-in" style="width:210px" value="' + esc(ev.location || '') + '" placeholder="location" data-w33loc="' + ev.id + '" />'
+      + ' <input type="text" class="vl-in" style="width:250px" value="' + esc(ev.plan_note || '') + '" placeholder="what we plan to serve (menu, notes)" data-w33pn="' + ev.id + '" />';
+  } else {
+    plan.innerHTML = '<b>The plan:</b> ' + (ev.planned_meals ? 'serving ' + esc(String(ev.planned_meals)) + ' meals' : 'meal count TBD')
+      + (ev.location ? ' at ' + esc(ev.location) : '')
+      + (ev.plan_note ? ' &middot; ' + esc(ev.plan_note) : '');
+  }
+  var h4 = sum.querySelector('h4');
+  if (h4) h4.insertAdjacentElement('afterend', plan);
+  else sum.insertBefore(plan, sum.firstChild);
+  if (staff && !sum.querySelector('[data-w33it]')) {
+    var row = document.createElement('div');
+    row.className = 'row';
+    row.style.marginTop = '7px';
+    row.innerHTML = '<button class="btn ghost" style="font-size:12px" data-w33it="' + ev.id + '">Build the driver and team leader itinerary</button> '
+      + '<button class="btn ghost" style="font-size:12px" data-w33qr="' + ev.id + '">Check Quo replies</button>'
+      + '<div id="w33qr"></div>';
+    sum.appendChild(row);
+  }
+}
+
+if (typeof wa31Summary === 'function') {
+  (function () {
+    var __sum33 = wa31Summary;
+    wa31Summary = async function () {
+      await __sum33();
+      try { wa33Augment(); } catch (e) { /* non-fatal */ }
+    };
+  })();
+}
+
+/* ---------- 2. driver and team leader itinerary ---------- */
+function wa33People() {
+  var by = {};
+  (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []).forEach(function (p) { by[String(p.id)] = p; });
+  return by;
+}
+
+function wa33Compose(ev) {
+  var by = wa33People();
+  var roster = (WA_VOL_DETAIL && WA_VOL_DETAIL.roster) || [];
+  var pick = function (id) { return (document.getElementById(id) || {}).value || ''; };
+  var d = new Date(String(ev.event_date) + 'T12:00:00');
+  var dateStr = isNaN(d) ? String(ev.event_date) : d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  var phone = function (r) {
+    var p = r.person_id ? by[String(r.person_id)] : null;
+    return p && p.phones && p.phones.length ? ' ' + p.phones[0] : '';
+  };
+  var leads = roster.filter(function (r) { return String(r.role || '').toLowerCase().indexOf('team') === 0; });
+  var drivers = roster.filter(function (r) { return String(r.role || '').toLowerCase().indexOf('driver') === 0; });
+  var homeCooks = roster.filter(function (r) {
+    return String(r.role || '').toLowerCase().indexOf('cook') === 0 && r.confirm && r.confirm.cook_location === 'home';
+  });
+  var lines = [];
+  lines.push('TEAM LEADER & DRIVER ITINERARY');
+  lines.push(dateStr);
+  lines.push('');
+  leads.forEach(function (r) { lines.push('Team leader: ' + r.person_name + phone(r)); });
+  if (!leads.length) lines.push('Team leader: TBD');
+  drivers.forEach(function (r) {
+    var c = r.confirm || {};
+    lines.push('Driver: ' + r.person_name + phone(r) + (c.vehicle ? ' - ' + c.vehicle + (c.model ? ' (' + c.model + ')' : '') : ''));
+  });
+  if (!drivers.length) lines.push('Driver: TBD');
+  lines.push('');
+  lines.push('Pickup driver start time: ' + pick('w33t1'));
+  lines.push('Meeting time with the team leader: ' + pick('w33t2') + ' at the storage unit: ' + pick('w33mp'));
+  lines.push('');
+  if (homeCooks.length) {
+    lines.push('Cook pickups (cooking from home):');
+    var addrs = [];
+    homeCooks.forEach(function (r) {
+      var p = r.person_id ? by[String(r.person_id)] : null;
+      var addr = (p && p.address) || 'address TBD';
+      if (p && p.address) addrs.push(p.address);
+      lines.push('  - ' + r.person_name + phone(r) + ': ' + addr + (r.confirm && r.confirm.containers === 'needs containers' ? ' (bring containers)' : ''));
+    });
+    if (addrs.length) {
+      var stops = [pick('w33mp')].concat(addrs);
+      if (ev.location) stops.push(ev.location);
+      lines.push('');
+      lines.push('Google Maps route: https://www.google.com/maps/dir/' + stops.map(function (a) { return encodeURIComponent(a); }).join('/'));
+    }
+  } else {
+    lines.push('No home cook pickups confirmed yet. Check back after cooks confirm.');
+  }
+  lines.push('');
+  lines.push('The event starts at ' + (ev.location || 'the serving location') + ' at ' + pick('w33t3') + '.');
+  if (ev.planned_meals) lines.push('We are planning to serve ' + ev.planned_meals + ' meals.');
+  var il = pick('w33il');
+  if (il) { lines.push(''); lines.push('Full event instructions for the team leader and driver: ' + il); }
+  lines.push('');
+  lines.push('THANK YOU FOR BEING A CRUCIAL PART OF THIS EVENT!');
+  lines.push('Questions? Text the Welfare Phone: 438 808 7754.');
+  return lines.join('\n');
+}
+
+function wa33Itin(evId) {
+  var ev = wa33Ev();
+  if (!ev || String(ev.id) !== String(evId)) return;
+  openModal('<h3>Team leader and driver itinerary</h3>' +
+    '<p class="m-sub">Built from the live roster and confirmations. Adjust the times, rebuild, then copy it into a text or email.</p>' +
+    '<div class="m-row"><div><label>Pickup driver starts</label><input type="text" id="w33t1" value="10:00 AM" /></div>' +
+    '<div><label>Meet the team leader</label><input type="text" id="w33t2" value="11:00 AM" /></div>' +
+    '<div><label>Event starts</label><input type="text" id="w33t3" value="12:00 PM" /></div></div>' +
+    '<label>Meeting place</label><input type="text" id="w33mp" value="' + esc(WA33_STORAGE) + '" />' +
+    '<label>Instructions link (Canva)</label><input type="text" id="w33il" value="' + esc(ev.itinerary_url || '') + '" placeholder="https://..." />' +
+    '<label>The itinerary</label><textarea id="w33txt" rows="13" style="font-size:12px"></textarea>' +
+    '<div class="m-actions"><button class="btn" id="w33cp">Copy it</button> <button class="btn ghost" id="w33rb">Rebuild</button> <a class="btn ghost" id="w33em" style="text-decoration:none">Open in email</a> <button class="btn ghost" id="w33cl">Close</button></div>');
+  var fill = function () {
+    var txt = wa33Compose(ev);
+    var ta = document.getElementById('w33txt');
+    if (ta) ta.value = txt;
+    var em = document.getElementById('w33em');
+    if (em) {
+      var dd = new Date(String(ev.event_date) + 'T12:00:00');
+      var ds = isNaN(dd) ? String(ev.event_date) : dd.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+      em.href = 'mailto:?subject=' + encodeURIComponent('Welfare Avenue: Team Leader & Driver Itinerary - ' + ds) + '&body=' + encodeURIComponent(txt);
+    }
+  };
+  fill();
+  var rb = document.getElementById('w33rb');
+  if (rb) rb.addEventListener('click', fill);
+  var cp = document.getElementById('w33cp');
+  if (cp) cp.addEventListener('click', function () {
+    var ta = document.getElementById('w33txt');
+    if (!ta) return;
+    ta.select();
+    try { navigator.clipboard.writeText(ta.value); toast('Copied'); } catch (e) { document.execCommand('copy'); toast('Copied'); }
+  });
+  var cl = document.getElementById('w33cl');
+  if (cl) cl.addEventListener('click', function () { closeModal(); });
+}
+
+/* ---------- 3. person pages ---------- */
+function wa33Section() {
+  var main = document.querySelector('main');
+  if (main && !document.getElementById('personpage')) {
+    var sec = document.createElement('section');
+    sec.id = 'personpage';
+    sec.className = 'panel';
+    main.appendChild(sec);
+  }
+}
+
+function wa33FyStart() {
+  var now = new Date();
+  var y = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1;
+  return y + '-10-01';
+}
+
+async function wa33Person(mid) {
+  wa33Section();
+  var sec = document.getElementById('personpage');
+  if (!sec) return;
+  sec.innerHTML = '<div class="card"><p class="read">Opening the profile...</p></div>';
+  var r = await db.from('team_members').select('*').eq('id', Number(mid)).maybeSingle();
+  var m = r && r.data;
+  if (!m) { sec.innerHTML = '<div class="card"><p class="read">Person not found.</p></div>'; return; }
+  var label = function (d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; };
+  var open = (typeof WA28_TASKS !== 'undefined' ? WA28_TASKS : []).filter(function (t) {
+    return !t.done && String(t.owner || '').toLowerCase().indexOf(String(m.name).toLowerCase()) >= 0;
+  });
+  var fy = wa33FyStart();
+  var doneQ = await db.from('dept_tasks').select('id, title, department, closed_at').eq('done', true)
+    .gte('closed_at', fy).ilike('owner', '%' + m.name + '%').order('closed_at', { ascending: false }).limit(100);
+  var doneRows = (doneQ && doneQ.data) || [];
+  var fyLabel = 'FY' + (Number(fy.slice(0, 4)) + 1);
+  var html = '<div class="card">'
+    + '<p class="read" style="margin:0 0 8px"><a href="#orgchart" style="color:#2c7a66">&larr; Back to the org chart</a></p>'
+    + '<div class="w33head"><span class="w33dot" style="background:' + esc(m.color || '#8a8f85') + '"></span>'
+    + '<h2 style="margin:0">' + esc(m.name) + '</h2>'
+    + '<span class="read" style="margin:0">' + esc(m.role || 'Team member') + ' &middot; ' + esc(label(m.department)) + (m.email ? ' &middot; ' + esc(m.email) : '') + '</span></div>'
+    + '<div id="w33stats" style="margin:6px 0 10px"><span class="w33chip">' + open.length + ' open now</span><span class="w33chip">' + doneRows.length + ' finished in ' + esc(fyLabel) + '</span></div>'
+    + '<h3 class="block" style="color:#2c7a66">What they do here</h3>'
+    + '<div class="w33bio" id="w33bio">' + (m.ai_bio ? esc(m.ai_bio) : 'Writing the job description from their actual work...') + '</div>'
+    + '<p class="m-sub" style="margin:4px 0 0"><a data-w33bref="' + m.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">Rewrite it from the latest work</a></p>'
+    + '<h3 class="block" style="color:#2c7a66;margin-top:14px">On their plate (' + open.length + ')</h3>'
+    + (open.slice(0, 15).map(function (t) {
+      return '<div class="w33task">' + esc(t.title) + ' <span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;color:#7b8a86">' + esc(label(t.department)) + '</span></div>';
+    }).join('') || '<p class="m-sub">Nothing assigned right now.</p>')
+    + (open.length > 15 ? '<p class="m-sub">plus ' + (open.length - 15) + ' more.</p>' : '')
+    + '<h3 class="block" style="color:#2c7a66;margin-top:14px">Finished this fiscal year (' + doneRows.length + ')</h3>'
+    + (doneRows.slice(0, 15).map(function (t) {
+      return '<div class="w33task">' + esc(t.title) + (t.closed_at ? ' <span style="font-size:11px;color:#7b8a86">' + esc(String(t.closed_at).slice(0, 10)) + '</span>' : '') + '</div>';
+    }).join('') || '<p class="m-sub">Nothing closed out yet this fiscal year.</p>')
+    + (doneRows.length > 15 ? '<p class="m-sub">plus ' + (doneRows.length - 15) + ' more.</p>' : '')
+    + '</div>';
+  sec.innerHTML = html;
+  try {
+    var pr = await db.functions.invoke('person-profile', { body: { member_id: m.id } });
+    if (!pr.error && pr.data) {
+      var bio = document.getElementById('w33bio');
+      if (bio && pr.data.bio) bio.textContent = pr.data.bio;
+      var stx = document.getElementById('w33stats');
+      if (stx && pr.data.stats && pr.data.stats.sop_steps_upcoming) {
+        stx.innerHTML += '<span class="w33chip">' + pr.data.stats.sop_steps_upcoming + ' checklist steps across ' + pr.data.stats.sop_events + ' upcoming events</span>';
+      }
+    } else if (!m.ai_bio) {
+      var b2 = document.getElementById('w33bio');
+      if (b2) b2.textContent = (m.role || 'Team member') + ', ' + label(m.department) + '.';
+    }
+  } catch (e) { /* non-fatal */ }
+}
+
+/* ---------- 4. wiring ---------- */
+(function () {
+  if (typeof applyHash === 'function') {
+    var __ah33 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      if (h.indexOf('person/') === 0 && typeof isStaff === 'function' && isStaff()) {
+        wa33Section();
+        try { wa33Person(h.slice(7)); } catch (e) { /* non-fatal */ }
+        showPanel('personpage');
+        return;
+      }
+      __ah33();
+    };
+  }
+
+  function memberIdByName(name) {
+    var list = typeof WA_ROSTER !== 'undefined' && WA_ROSTER.length ? WA_ROSTER
+      : (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
+    var hit = null;
+    list.forEach(function (m) { if (String(m.name).toLowerCase() === String(name).toLowerCase()) hit = m; });
+    return hit && hit.id ? hit.id : null;
+  }
+
+  function wire() {
+    if (document.body.dataset.wa33Wired) return;
+    document.body.dataset.wa33Wired = '1';
+    /* org chart people open the full page */
+    document.body.addEventListener('click', function (e) {
+      var oc = e.target.closest && e.target.closest('[data-ocp]');
+      if (oc) {
+        var id = memberIdByName(oc.getAttribute('data-ocp'));
+        if (id) {
+          e.preventDefault();
+          e.stopPropagation();
+          location.hash = '#person/' + id;
+        }
+        return;
+      }
+      var pp = e.target.closest && e.target.closest('[data-w33pp]');
+      if (pp) {
+        var id2 = memberIdByName(pp.getAttribute('data-w33pp'));
+        if (id2) { try { closeModal(); } catch (x) { } location.hash = '#person/' + id2; }
+        return;
+      }
+      var it = e.target.closest && e.target.closest('[data-w33it]');
+      if (it) { try { wa33Itin(it.getAttribute('data-w33it')); } catch (x) { /* non-fatal */ } return; }
+      var qr = e.target.closest && e.target.closest('[data-w33qr]');
+      if (qr) {
+        var box = document.getElementById('w33qr');
+        if (box) box.innerHTML = '<p class="m-sub">Reading the Welfare Phone... about ten seconds.</p>';
+        qr.disabled = true;
+        db.functions.invoke('quo-pull', { body: { event_id: Number(qr.getAttribute('data-w33qr')) } }).then(function (r) {
+          qr.disabled = false;
+          if (!box) return;
+          if (r.error || !r.data) { box.innerHTML = '<p class="m-sub">Could not reach Quo. Try again.</p>'; return; }
+          var reps = r.data.replies || [];
+          if (!reps.length) { box.innerHTML = '<p class="m-sub">No replies in the last month from the ' + (r.data.checked || 0) + ' rostered people checked.</p>'; return; }
+          box.innerHTML = reps.map(function (x) {
+            var days = Math.round((Date.now() - new Date(x.at).getTime()) / 86400000);
+            return '<div class="w33qr-r"><b>' + esc(x.name || x.phone) + ':</b> ' + esc(x.text)
+              + ' <span style="opacity:.55">' + (days <= 0 ? 'today' : days + (days === 1 ? ' day ago' : ' days ago')) + (x.more ? ', ' + x.more + ' more' : '') + '</span></div>';
+          }).join('') + '<p class="m-sub">Checked ' + (r.data.checked || 0) + ' people with phones on the roster.</p>';
+        });
+        return;
+      }
+      var br = e.target.closest && e.target.closest('[data-w33bref]');
+      if (br) {
+        var bio = document.getElementById('w33bio');
+        if (bio) bio.textContent = 'Rereading their tasks and events... about fifteen seconds.';
+        db.functions.invoke('person-profile', { body: { member_id: Number(br.getAttribute('data-w33bref')), refresh: true } }).then(function (r) {
+          if (bio) bio.textContent = (r.data && r.data.bio) || 'Could not write it just now. Try again in a minute.';
+        });
+        return;
+      }
+    }, true);
+
+    /* the plan saves as you type it */
+    document.body.addEventListener('change', async function (e) {
+      if (typeof isStaff === 'function' && !isStaff()) return;
+      var pm = e.target.closest && e.target.closest('[data-w33pm]');
+      var lo = e.target.closest && e.target.closest('[data-w33loc]');
+      var pn = e.target.closest && e.target.closest('[data-w33pn]');
+      var el = pm || lo || pn;
+      if (!el) return;
+      var evId = Number(el.getAttribute(pm ? 'data-w33pm' : (lo ? 'data-w33loc' : 'data-w33pn')));
+      var patch = {};
+      if (pm) patch.planned_meals = el.value === '' ? null : Number(el.value);
+      if (lo) patch.location = el.value.trim() || null;
+      if (pn) patch.plan_note = el.value.trim() || null;
+      var r = await db.from('volunteer_events').update(patch).eq('id', evId);
+      if (r.error) { toast('Could not save the plan'); return; }
+      (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []).forEach(function (x) {
+        if (String(x.id) === String(evId)) { Object.keys(patch).forEach(function (k) { x[k] = patch[k]; }); }
+      });
+      toast('Plan updated');
+    });
+  }
+  wire();
+
+  /* profile modal gains a full page button */
+  if (typeof wa28Profile === 'function') {
+    var __pf33 = wa28Profile;
+    wa28Profile = function (name) {
+      __pf33(name);
+      try {
+        var c = document.getElementById('w28pc');
+        if (c && !document.querySelector('[data-w33pp]')) {
+          c.insertAdjacentHTML('beforebegin', '<button class="btn" data-w33pp="' + esc(name) + '">Open their full page</button> ');
+        }
+      } catch (e) { /* non-fatal */ }
+    };
+  }
+
+  var __sa33 = startApp;
+  startApp = async function () {
+    await __sa33();
+    try { wire(); } catch (e) { /* non-fatal */ }
+  };
+})();

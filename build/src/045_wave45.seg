@@ -1,0 +1,75 @@
+/* =====================================================================
+   WA v45 the onboarding SOP doc is HR-only
+   (02/08/26)
+   The Google Doc "Onboarding SOP" linked from the Training page is an
+   HR document, not something regular members should be sent to. The
+   link disappears from the member-facing onboarding intro (the
+   sentences are reworded, not left broken) and moves into the HR
+   dashboard next to the master editor, admins and leaders only.
+   ===================================================================== */
+(function () {
+  if (window.__wa45) return;
+  window.__wa45 = 1;
+  var DOC = '1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg';
+  var DOC_URL = 'https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit';
+
+  function wa45IsHr() {
+    try {
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) {
+        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader';
+      }
+    } catch (e) { /* fall through */ }
+    return false;
+  }
+
+  function wa45Scrub() {
+    try {
+      var panel = document.getElementById('training');
+      if (!panel) return;
+      /* reword the intro sentences that carried the link */
+      panel.querySelectorAll('.w36onb p').forEach(function (p) {
+        if (p.innerHTML.indexOf(DOC) < 0) return;
+        var h = p.innerHTML;
+        h = h.replace(/\s*The <a[^>]*>Onboarding SOP<\/a> is the companion doc\./, '');
+        h = h.replace(/Follow the <a[^>]*>Onboarding SOP<\/a>, then work/, 'Work');
+        p.innerHTML = h;
+      });
+      /* remove any leftover anchors to the doc outside the HR dashboard */
+      panel.querySelectorAll('a[href*="' + DOC + '"]').forEach(function (a) {
+        if (a.closest && a.closest('.w44hr')) return;
+        if (a.classList.contains('w45sop')) return;
+        a.remove();
+      });
+      /* give HR the link where their tools live */
+      if (wa45IsHr()) {
+        var hr = panel.querySelector('.w44hr');
+        if (hr && !hr.querySelector('.w45sop')) {
+          var master = hr.querySelector('[data-w37master]');
+          var a = document.createElement('a');
+          a.className = 'w37edit w45sop';
+          a.href = DOC_URL;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = 'Open the HR onboarding SOP (doc)';
+          if (master && master.parentElement) master.parentElement.appendChild(a);
+          else hr.querySelector('.w44hrblock').appendChild(a);
+        }
+      }
+    } catch (e) { /* non-fatal */ }
+  }
+
+  if (typeof wa36Render === 'function') {
+    var __r45 = wa36Render;
+    wa36Render = async function () {
+      await __r45.apply(this, arguments);
+      wa45Scrub();
+    };
+  }
+  if (typeof wa37Mount === 'function') {
+    var __m45 = wa37Mount;
+    wa37Mount = async function () {
+      await __m45.apply(this, arguments);
+      wa45Scrub();
+    };
+  }
+})();
