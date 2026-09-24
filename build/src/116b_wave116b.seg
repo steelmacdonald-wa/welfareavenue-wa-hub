@@ -750,6 +750,7 @@
       if (q === 'overdue') B.preset = { due: 'overdue', done: false, status: '' };
       else if (q === 'done') B.preset = { done: true, status: 'Done', due: '' };
       else if (q === 'projects') B.preset = { group: 'project', view: 'list' };
+      else if (String(q).indexOf('project:') === 0) B.preset = { project: String(q).slice(8), group: 'workstream', view: 'list', done: false, status: '', due: '', mine: false };
       else B.preset = null;
     },
     refresh: render,

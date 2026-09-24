@@ -187,8 +187,25 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   await go("#decisions", 1200);
   out.dashboard = await page.evaluate(() => ({ panel: (document.querySelector('.panel.active') || {}).id, folders: !!document.getElementById('w111folds'), stats: !!document.getElementById('w35stats'), decisions: document.querySelectorAll('#overview #decisionList li[data-decision]').length, activeTab: (document.querySelector('#tabBar .tab.active') || {}).dataset && document.querySelector('#tabBar .tab.active').dataset.tab, topTabs: Array.from(document.querySelectorAll('#tabBar > .tab')).map(t => t.dataset.tab + (t.style.display === 'none' ? '(hidden)' : '')) }));
   await shot("17_exec_dashboard");
+  await go("#goals", 1500);
+  out.goals = await page.evaluate(() => ({ heading: (document.querySelector('#goals .card h2') || {}).textContent, tab: (document.querySelector('#tabBar .tab[data-tab="goals"]') || {}).textContent, tabs: Array.from(document.querySelectorAll('#w68tabs .w68tab')).map(t => t.textContent + (getComputedStyle(t).display === 'none' ? '(hidden)' : '') + (t.classList.contains('on') ? '*' : '')), projInGoals: !!document.querySelector('#goals #w68projview') }));
+  await go("#projects", 1800);
+  out.projects = await page.evaluate(() => ({ panel: (document.querySelector('.panel.active') || {}).id, groups: Array.from(document.querySelectorAll('#projects .w116pg .gh b')).map(x => x.textContent), cards: document.querySelectorAll('#projects .w116pc').length, sums: Array.from(document.querySelectorAll('#projects .sum .k')).map(k => k.textContent.replace(/\s+/g, ' ').trim()), noLead: document.querySelectorAll('#projects .w116pc .f.none').length, subs: document.querySelectorAll('#projects .w116pc .subs a').length, activeTab: (document.querySelector('#tabBar .tab.active') || {}).dataset && document.querySelector('#tabBar .tab.active').dataset.tab }));
+  await shot("18_projects");
+  /* set a lead inline on the first card */
+  const leadF = await page.$('#projects .w116pc .f[data-pact="lead"]');
+  if (leadF) {
+    await leadF.click(); await page.waitForTimeout(300);
+    await page.evaluate(() => { const s = document.querySelector('#projects .w116pc select.inl'); if (s) { s.selectedIndex = 1; s.dispatchEvent(new Event('change', { bubbles: true })); } });
+    await page.waitForTimeout(700);
+    out.leadSet = await page.evaluate(() => ({ toast: (document.getElementById('toast') || {}).textContent, firstLead: (document.querySelector('#projects .w116pc .f[data-pact="lead"] .t span') || {}).textContent }));
+  }
+  await page.click('#projects .w116seg a[data-v="list"]'); await page.waitForTimeout(500);
+  out.projectsList = await page.evaluate(() => ({ rows: document.querySelectorAll('#projects .w116pl tbody tr').length }));
+  await shot("19_projects_list");
+  await page.click('#projects .w116seg a[data-v="cards"]'); await page.waitForTimeout(400);
   await go("#goals", 1200);
-  out.goals = await page.evaluate(() => ({ heading: (document.querySelector('#goals .card h2') || {}).textContent, tab: (document.querySelector('#tabBar .tab[data-tab="goals"]') || {}).textContent }));
+  out.goalsAgain = await page.evaluate(() => ({ deptViewShown: getComputedStyle(document.getElementById('w68deptview')).display !== 'none', projTabHidden: getComputedStyle(document.querySelector('#w68tabs [data-w68v="proj"]')).display === 'none' }));
 
   /* classic page still works, volunteering redirect */
   await go("#dept/progdev", 1000);

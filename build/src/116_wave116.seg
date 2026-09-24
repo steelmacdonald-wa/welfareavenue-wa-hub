@@ -166,8 +166,7 @@
     'body nav.wa-nav #tabBar .w42sub .tab.w116tool .tabdot{display:none;}' +
     'body nav.wa-nav #tabBar .w42sub .tab.w116tool:hover{color:' + GREEN + ';background:none;}' +
     'body nav.wa-nav #tabBar .w42sub .tab.w116tool.active{color:' + GREEN + ';font-weight:700;background:none;box-shadow:none;}' +
-    'body nav.wa-nav #tabBar .w42d:hover > .w42sub{display:none !important;}' +
-    'body nav.wa-nav #tabBar .w42d .tab.active ~ .w42sub{display:none !important;}' +
+    'body nav.wa-nav #tabBar .w42d > .w42sub{display:none !important;}' +
     'body nav.wa-nav #tabBar .w42d.w116open > .w42sub{display:flex !important;}' +
     'body nav.wa-nav #tabBar .w42d.w116open > .tab{color:' + GREEN + ';}' +
     /* team rows: label, chevron, then the pages on their own line */
@@ -720,7 +719,7 @@
       if (s) {
         /* park any adopted tool buttons before the links are rebuilt, so they survive */
         Array.prototype.slice.call(s.querySelectorAll('.tab')).forEach(function (b) { bar.appendChild(b); });
-        s.innerHTML = flyout(d); s.dataset.w116 = '1';
+        s.innerHTML = flyout(d); s.dataset.w116sub = '1';
       }
       adopt(bar, d, row);
       if (!row.querySelector('.w116chev')) {
@@ -749,7 +748,7 @@
         if (btn && !row.contains(btn)) return false;
       }
       var sub = row.querySelector('.w42sub');
-      if (!sub || !sub.dataset.w116) return false;
+      if (!sub || !sub.dataset.w116sub) return false;
     }
     if (window.w116StrategyOk && !window.w116StrategyOk()) return false;
     return true;

@@ -12,10 +12,70 @@
    - Later waves rebuild the menu on timers (wave73 at 250ms, wave95 at
      800ms and 2.5s), so the group is re-applied after each of them; the
      routine is idempotent.
+   - Projects (Steel, second ask): the Projects tab leaves Goal alignment
+     and becomes its own page in the Strategy section (#projects),
+     rendered by wave116e (the master projects page).
    ===================================================================== */
 (function () {
   if (window.__wa116d) return; window.__wa116d = true;
-  var FLAG = '#B3402F';
+  var FLAG = '#B3402F', GREEN = '#103F39';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var css = document.createElement('style');
+  css.id = 'wa116dcss';
+  css.textContent = '' +
+    '#w68tabs [data-w68v="proj"]{display:none !important;}' +
+    '#projects{max-width:1240px;}' +
+    '#projects .w116ptop{margin:0 0 14px;}' +
+    '#projects .w116ptop .crumb{font-family:' + BODY + ';font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:var(--wa-muted);margin:2px 0 6px;}' +
+    '#projects .w116ptop h2{font-family:' + HEAD + ';font-weight:500;font-size:38px;line-height:1.05;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';margin:0;}' +
+    '#projects .w116ptop p{font-family:' + BODY + ';font-size:13px;color:var(--wa-muted);margin:4px 0 0;max-width:640px;}' +
+    '#projects .card{padding:20px 22px;}';
+  document.head.appendChild(css);
+
+  /* ---------- Projects: its own page ---------- */
+  function projectsPanel() {
+    var main = document.querySelector('main'); if (!main) return null;
+    var sec = document.getElementById('projects');
+    if (!sec) {
+      sec = document.createElement('section'); sec.id = 'projects'; sec.className = 'panel';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Strategy</div><h2>Projects</h2><p>Every active project by team, with its status, the goal it serves and its open work. Open a project for the full picture.</p></div><div class="card" id="w116projhost"><p class="read">Loading projects...</p></div>';
+      var goals = document.getElementById('goals');
+      if (goals && goals.parentNode === main) goals.insertAdjacentElement('afterend', sec); else main.appendChild(sec);
+    }
+    return sec;
+  }
+  /* the goals page must not sit on the now-hidden Projects tab */
+  function offProjTab() {
+    try { var on = document.querySelector('#w68tabs .w68tab.on'); if (!on || on.getAttribute('data-w68v') === 'proj') { var d = document.querySelector('#w68tabs [data-w68v="dept"]'); if (d) d.click(); } } catch (e) { /* fine */ }
+  }
+  async function showProjects() {
+    var sec = projectsPanel(); if (!sec) return;
+    var host = document.getElementById('w116projhost'); if (!host) return;
+    if (window.w116ProjectsPage && window.w116ProjectsPage.render) { try { await window.w116ProjectsPage.render(host); } catch (e) { host.innerHTML = '<p class="read">Could not load the projects.</p>'; } }
+    else host.innerHTML = '<p class="read">The projects page is not available in this build.</p>';
+  }
+  if (typeof renderGoalsPage === 'function') {
+    var __rg116d = renderGoalsPage;
+    renderGoalsPage = async function () {
+      var r = await __rg116d.apply(this, arguments);
+      try { offProjTab(); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  function enrolProjects() {
+    try {
+      if (typeof WA40_TABS === 'undefined' || typeof WA40_DEFAULTS === 'undefined') return;
+      if (WA40_TABS.indexOf('projects') < 0) WA40_TABS.push('projects');
+      ['admin', 'leader', 'member'].forEach(function (r) { if (WA40_DEFAULTS[r] && WA40_DEFAULTS[r].indexOf('projects') < 0) WA40_DEFAULTS[r].push('projects'); });
+      if (typeof WA40_MINE !== 'undefined' && WA40_MINE && Array.isArray(WA40_MINE.tabs) && WA40_MINE.tabs.length && WA40_MINE.tabs.indexOf('goals') >= 0 && WA40_MINE.tabs.indexOf('projects') < 0) WA40_MINE.tabs.push('projects');
+    } catch (e) { /* non-fatal */ }
+  }
+  enrolProjects();
+  projectsPanel();
+  if (window.WA_NAV && WA_NAV.register) {
+    WA_NAV.register({ id: 'projects', gate: 'member', panel: false, onShow: function () { showProjects(); } });
+  }
 
   function relabel(btn, text) {
     if (!btn) return;
@@ -52,8 +112,11 @@
     else if (over && (over.textContent || '').indexOf('Executive dashboard') < 0) relabel(over, 'Executive dashboard');
     if (goals && goals.parentNode !== host) { relabel(goals, 'Goal alignment'); host.appendChild(goals); }
     else if (goals && (goals.textContent || '').indexOf('Goal alignment') < 0) relabel(goals, 'Goal alignment');
-    /* order inside the section: Executive dashboard first */
+    /* order inside the section: Executive dashboard, Goal alignment, Projects */
     if (over && goals && over.nextSibling !== goals) host.insertBefore(over, goals);
+    var pj = bar.querySelector('.tab[data-tab="projects"]');
+    if (!pj) { pj = document.createElement('button'); pj.className = 'tab'; pj.setAttribute('data-tab', 'projects'); pj.innerHTML = '<span class="tabdot" style="background:#6F64AB"></span>Projects'; }
+    if (pj.parentNode !== host || (goals && goals.nextSibling !== pj)) host.appendChild(pj);
     var hd2 = g.querySelector('.tab-group-h');
     if (hd2) hd2.style.display = (over && over.style.display !== 'none') || (goals && goals.style.display !== 'none') ? '' : 'none';
   }
@@ -62,7 +125,8 @@
     var bar = document.getElementById('tabBar'); if (!bar) return true;
     var g = bar.querySelector('.tab-group[data-w42g="strategy"] .tab-group-p'); if (!g) return false;
     var over = bar.querySelector('.tab[data-tab="overview"]'), goals = bar.querySelector('.tab[data-tab="goals"]');
-    return (!over || over.parentNode === g) && (!goals || goals.parentNode === g);
+    var pj = bar.querySelector('.tab[data-tab="projects"]');
+    return (!over || over.parentNode === g) && (!goals || goals.parentNode === g) && (!pj || pj.parentNode === g);
   };
 
   if (typeof startApp === 'function') {
@@ -70,7 +134,11 @@
     startApp = async function () {
       var r = await __sa116d.apply(this, arguments);
       try {
+        enrolProjects();
+        projectsPanel();
         strategyGroup();
+        if (typeof wa40Enforce === 'function') wa40Enforce();
+        if (String(location.hash || '') === '#projects') { try { applyHash(); } catch (e) { /* fine */ } }
       } catch (e) { console.warn('wave116d boot', e); }
       return r;
     };

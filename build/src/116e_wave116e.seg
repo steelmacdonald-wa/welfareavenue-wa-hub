@@ -1,0 +1,369 @@
+/* =====================================================================
+   WA v116e the master Projects page (24/09/26)
+   =====================================================================
+   Steel: "That'll be the master projects page: revamp the look of it so
+   that all projects are presented in a not overwhelming way, the Apple
+   and ClickUp combination, clean and robust. Each project should have a
+   project lead and department owner."
+   #projects (Strategy section) renders w116ProjectsPage:
+   - Summary tiles (active projects, open work, projects without a lead).
+   - One collapsible group per team, sub-projects nested under their
+     parent, cards with lead, owner team, status, goal, progress and
+     open work; or a compact list view. Search, team, status and lead
+     filters remember themselves.
+   - Lead, owner team and status change inline (projects.leads, the
+     jsonb roster list wave104 uses; projects.department; projects.status)
+     with change_log entries; "+ New project" adds one to a team.
+   Project pages (#project/<id>) and the wave68 map are untouched.
+   ===================================================================== */
+(function () {
+  if (window.__wa116e) return; window.__wa116e = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var P = { host: null, rows: [], goals: [], st: null, loaded: 0 };
+
+  var css = document.createElement('style');
+  css.id = 'wa116ecss';
+  css.textContent = '' +
+    '.w116p .tb{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 14px;}' +
+    '.w116p .tb .sp{flex:1 1 auto;}' +
+    '.w116p .tb select,.w116p .tb input[type=search]{font-family:' + BODY + ';font-size:12.5px;color:var(--wa-text);background:var(--wa-card);border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:7px 10px;}' +
+    '.w116p .tb input[type=search]{min-width:200px;}' +
+    '.w116p .tb .new{font-family:' + HEAD + ';font-weight:600;font-size:15px;letter-spacing:1px;text-transform:uppercase;background:' + GOLD + ';color:' + GREEN + ';border:none;border-radius:10px;padding:8px 16px;cursor:pointer;}' +
+    '.w116p .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px;}' +
+    '.w116p .sum .k{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;}' +
+    '.w116p .sum .k b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:30px;line-height:1;color:' + GREEN + ';margin:0 0 6px;}' +
+    '.w116p .sum .k.warn b{color:' + FLAG + ';}' +
+    '.w116p .sum .k.on{outline:2px solid ' + GOLD + ';}' +
+    '.w116pg{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);margin:0 0 14px;overflow:hidden;}' +
+    '.w116pg .gh{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none;}' +
+    '.w116pg .gh .dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto;}' +
+    '.w116pg .gh b{font-family:' + HEAD + ';font-size:19px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';}' +
+    '.w116pg .gh .n{font-size:11px;font-weight:700;color:var(--wa-muted);background:rgba(16,63,57,.08);border-radius:999px;padding:1px 8px;}' +
+    '.w116pg .gh .sp{flex:1 1 auto;}' +
+    '.w116pg .gh .add{font-size:12px;font-weight:700;color:' + GREEN + ';opacity:.75;}' +
+    '.w116pg .gh .add:hover{opacity:1;}' +
+    '.w116pg .gh .chev{width:18px;height:18px;border-radius:5px;background:rgba(16,63,57,.08);display:inline-flex;align-items:center;justify-content:center;font-size:9px;color:' + GREEN + ';transition:transform .15s;}' +
+    '.w116pg.closed .gh .chev{transform:rotate(-90deg);}' +
+    '.w116pg.closed .gb{display:none;}' +
+    '.w116pg .gb{padding:0 16px 16px;}' +
+    '.w116pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px;align-items:start;}' +
+    '.w116pc{background:rgba(16,63,57,.035);border:1px solid rgba(16,63,57,.06);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:9px;min-width:0;}' +
+    '.w116pc:hover{border-color:rgba(16,63,57,.22);}' +
+    '.w116pc .top{display:flex;align-items:flex-start;gap:8px;}' +
+    '.w116pc .nm{font-size:15px;font-weight:700;color:var(--wa-text);line-height:1.25;flex:1 1 auto;min-width:0;cursor:pointer;}' +
+    '.w116pc .nm:hover{color:' + GREEN + ';}' +
+    '.w116pc .nm small{display:block;font-size:11px;font-weight:600;color:var(--wa-muted);margin-bottom:2px;}' +
+    '.w116pc .ds{font-size:12.5px;color:var(--wa-muted);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+    '.w116st2{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:3px 9px;white-space:nowrap;cursor:pointer;flex:0 0 auto;}' +
+    '.w116st2.active{background:rgba(16,63,57,.12);color:' + GREEN + ';}' +
+    '.w116st2.paused{background:rgba(220,165,39,.22);color:#7a5a0f;}' +
+    '.w116st2.done{background:rgba(121,119,115,.16);color:#5c5a56;}' +
+    '.w116pc .who{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
+    '.w116pc .who .f{display:flex;align-items:center;gap:7px;min-width:0;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:10px;padding:6px 8px;cursor:pointer;}' +
+    '.w116pc .who .f:hover{border-color:rgba(16,63,57,.3);}' +
+    '.w116pc .who .f .t{min-width:0;}' +
+    '.w116pc .who .f .t small{display:block;font-size:9.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);}' +
+    '.w116pc .who .f .t span{display:block;font-size:12.5px;font-weight:600;color:var(--wa-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w116pc .who .f.none .t span{color:' + FLAG + ';}' +
+    '.w116pc .who .f .w116av{flex:0 0 auto;}' +
+    '.w116pc .who .f .tdot{width:22px;height:22px;border-radius:7px;flex:0 0 auto;}' +
+    '.w116pc .who .f .nolead{width:22px;height:22px;border-radius:50%;border:1.5px dashed rgba(179,64,47,.5);display:inline-flex;align-items:center;justify-content:center;color:' + FLAG + ';font-size:12px;flex:0 0 auto;}' +
+    '.w116pc .goal{font-size:11.5px;color:var(--wa-muted);display:flex;align-items:center;gap:6px;min-width:0;}' +
+    '.w116pc .goal span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w116pc .goal i{font-style:normal;font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;background:rgba(220,165,39,.2);color:#7a5a0f;border-radius:999px;padding:1px 7px;flex:0 0 auto;}' +
+    '.w116pc .pr{display:flex;align-items:center;gap:10px;font-size:11.5px;color:var(--wa-muted);}' +
+    '.w116pc .pr .bar{flex:1 1 auto;height:6px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;}' +
+    '.w116pc .pr .bar i{display:block;height:100%;background:' + GREEN + ';border-radius:3px;}' +
+    '.w116pc .pr b{color:var(--wa-text);font-weight:700;}' +
+    '.w116pc .subs{display:flex;flex-wrap:wrap;gap:6px;}' +
+    '.w116pc .subs a{font-size:11.5px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.08);border-radius:999px;padding:3px 9px;cursor:pointer;white-space:nowrap;}' +
+    '.w116pc .subs a:hover{background:rgba(16,63,57,.14);}' +
+    '.w116pc .ft{display:flex;align-items:center;gap:12px;font-size:12px;margin-top:2px;}' +
+    '.w116pc .ft a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}' +
+    '.w116pc .ft a:hover{text-decoration:underline;}' +
+    '.w116pc .ft .sp{flex:1 1 auto;}' +
+    '.w116pc select.inl{font-family:' + BODY + ';font-size:12px;padding:3px 6px;border-radius:8px;border:1px solid rgba(16,63,57,.3);max-width:100%;}' +
+    /* list view */
+    '.w116pl{width:100%;border-collapse:collapse;font-size:13px;}' +
+    '.w116pl th{text-align:left;font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);padding:6px 8px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '.w116pl td{padding:8px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:middle;}' +
+    '.w116pl tr:hover td{background:rgba(16,63,57,.04);}' +
+    '.w116pl .nm{font-weight:700;color:var(--wa-text);cursor:pointer;}' +
+    '.w116pl .nm small{display:block;font-size:11px;font-weight:600;color:var(--wa-muted);}' +
+    '.w116pl .lead{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}' +
+    '.w116pl .lead.none{color:' + FLAG + ';font-weight:600;}' +
+    '.w116pl .bar{width:90px;height:6px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;margin-right:6px;}' +
+    '.w116pl .bar i{display:block;height:100%;background:' + GREEN + ';}' +
+    '.w116p .empty{font-size:13px;color:var(--wa-muted);margin:0;padding:6px 0 4px;}' +
+    '.w116p .note{font-size:12px;color:var(--wa-muted);margin:6px 0 0;}' +
+    '.w116pm label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:10px 0 4px;}' +
+    '.w116pm input,.w116pm select,.w116pm textarea{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13px;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:var(--wa-card);}' +
+    '.w116pm textarea{min-height:70px;}' +
+    '@media (max-width:740px){.w116pc .who{grid-template-columns:1fr;}.w116p .tb input[type=search]{min-width:120px;flex:1 1 auto;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function who0() { try { return who(); } catch (e) { return 'staff'; } }
+  function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || T.labels[d] || d || 'Other'; }
+  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function av(p, size) { return window.w116Avatar ? window.w116Avatar(p, size) : ''; }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.active !== false; }); }
+  function memberByName(n) { n = lower(n); return members().filter(function (m) { return lower(m.name) === n; })[0] || members().filter(function (m) { return lower(m.name).split(' ')[0] === n.split(' ')[0]; })[0] || null; }
+  function leads(p) { var v = p && p.leads; if (Array.isArray(v)) return v.filter(Boolean).map(String); if (typeof v === 'string' && v.trim()) { try { var a = JSON.parse(v); return Array.isArray(a) ? a.filter(Boolean).map(String) : []; } catch (e) { return []; } } return []; }
+  function status(p) { var s = lower(p.status || 'active'); if (s.indexOf('pause') >= 0 || s.indexOf('hold') >= 0) return 'paused'; if (s.indexOf('done') >= 0 || s.indexOf('complete') >= 0 || s.indexOf('closed') >= 0 || s.indexOf('archiv') >= 0) return 'done'; return 'active'; }
+  function counts(p) {
+    var ts = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return Number(t.project_id) === Number(p.id); });
+    var done = ts.filter(function (t) { return t.done; }).length;
+    return { total: ts.length, done: done, open: ts.length - done, pct: ts.length ? Math.round(done / ts.length * 100) : 0 };
+  }
+  function goalOf(p) { return p.goal_id ? (P.goals.filter(function (g) { return Number(g.id) === Number(p.goal_id); })[0] || null) : null; }
+  function byId(id) { return P.rows.filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
+  function key() { return 'wa116.projects'; }
+  function loadState() {
+    var def = { view: 'cards', team: '', status: 'active', lead: '', q: '', closed: {} };
+    try { var s = JSON.parse(localStorage.getItem(key()) || 'null'); if (s) Object.keys(def).forEach(function (k) { if (s[k] !== undefined) def[k] = s[k]; }); } catch (e) { /* fine */ }
+    def.q = '';
+    return def;
+  }
+  function saveState() { try { var s = Object.assign({}, P.st); s.q = ''; localStorage.setItem(key(), JSON.stringify(s)); } catch (e) { /* fine */ } }
+
+  async function load(force) {
+    if (!force && P.loaded && Date.now() - P.loaded < 60000) return;
+    try {
+      var r = await db.from('projects').select('*').order('sort', { ascending: true });
+      P.rows = (r && r.data) || [];
+      var g = await db.from('goals').select('id, title, department, quarter, status').limit(500);
+      P.goals = (g && g.data) || [];
+      P.loaded = Date.now();
+      try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS = P.rows.slice(); } catch (e) { /* fine */ }
+    } catch (e) { /* offline */ }
+  }
+
+  /* ---------- writes ---------- */
+  async function patch(p, fields, field, oldV, newV) {
+    var r = await db.from('projects').update(Object.assign({}, fields, { updated_at: new Date().toISOString() })).eq('id', p.id);
+    if (r && r.error) { toast('Could not save'); return false; }
+    Object.assign(p, fields);
+    try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(p.id), field: field, old_value: oldV == null ? null : String(oldV), new_value: newV == null ? null : String(newV), changed_by: who0() }); } catch (e) { /* audit */ }
+    try { (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (x) { if (Number(x.id) === Number(p.id)) Object.assign(x, fields); }); } catch (e) { /* fine */ }
+    return true;
+  }
+  async function setLead(p, name) {
+    var cur = leads(p); var next = name ? [name] : [];
+    if (cur.join('|') === next.join('|')) return;
+    if (await patch(p, { leads: next }, 'leads', cur.join(', ') || null, next.join(', ') || null)) { toast(name ? 'Lead: ' + name : 'Lead cleared'); render(); }
+  }
+  async function setOwner(p, d) {
+    if (!d || d === p.department) return;
+    if (await patch(p, { department: d }, 'department', p.department, d)) { toast('Owner: ' + label(d)); render(); }
+  }
+  async function setStatus(p, s) {
+    if (!s || s === (p.status || 'active')) return;
+    if (await patch(p, { status: s }, 'status', p.status || 'active', s)) { toast('Status: ' + s); render(); }
+  }
+  function newProject(dept) {
+    var ms = members();
+    var parents = P.rows.filter(function (p) { return !p.parent_id && (!dept || p.department === dept); });
+    openModal('<div class="w116pm"><h3>New project</h3><p class="m-sub">A named piece of work with a lead and an owning team. Tasks from meetings route into it automatically once it exists.</p>' +
+      '<label>Name</label><input type="text" id="w116pn" placeholder="Community Kitchen Pilot" />' +
+      '<label>What it is</label><textarea id="w116pd" placeholder="One or two lines: what the project delivers and when."></textarea>' +
+      '<label>Owner team</label><select id="w116pt">' + T.order.map(function (d) { return '<option value="' + d + '"' + (d === dept ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
+      '<label>Project lead</label><select id="w116pl"><option value="">Choose later</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '">' + E(m.name) + ' (' + E(T.short[m.department] || m.department || '') + ')</option>'; }).join('') + '</select>' +
+      '<label>Part of (optional)</label><select id="w116pp"><option value="">Stands on its own</option>' + parents.map(function (p) { return '<option value="' + p.id + '">' + E(p.name) + '</option>'; }).join('') + '</select>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116pc">Cancel</button><button class="btn" id="w116ps">Create project</button></div></div>');
+    document.getElementById('w116pc').addEventListener('click', closeModal);
+    document.getElementById('w116ps').addEventListener('click', async function () {
+      var name = document.getElementById('w116pn').value.trim(); if (!name) { toast('Give the project a name'); return; }
+      var lead = document.getElementById('w116pl').value; var pid = document.getElementById('w116pp').value;
+      var row = { name: name, description: document.getElementById('w116pd').value.trim() || null, department: document.getElementById('w116pt').value, status: 'active', leads: lead ? [lead] : [], parent_id: pid ? Number(pid) : null, sort: 999, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      var r = await db.from('projects').insert(row).select('*').single();
+      if (r && r.error) { toast('Could not create the project'); return; }
+      var saved = (r && r.data) || row; if (!saved.id) saved.id = -Date.now();
+      P.rows.push(saved);
+      try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(saved.id), field: 'added', old_value: null, new_value: name, changed_by: who0() }); } catch (e) { /* audit */ }
+      try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS.push(saved); } catch (e) { /* fine */ }
+      closeModal(); toast('Project created'); render();
+    });
+  }
+
+  /* ---------- rendering ---------- */
+  function visible() {
+    var st = P.st, q = lower(st.q);
+    return P.rows.filter(function (p) {
+      if (st.status !== 'all' && status(p) !== st.status) return false;
+      if (st.team && p.department !== st.team) return false;
+      if (st.lead === '__none' && leads(p).length) return false;
+      if (st.lead && st.lead !== '__none' && leads(p).map(lower).indexOf(lower(st.lead)) < 0) return false;
+      if (q && lower(p.name).indexOf(q) < 0 && lower(p.description).indexOf(q) < 0 && leads(p).map(lower).join(' ').indexOf(q) < 0) return false;
+      return true;
+    });
+  }
+  function leadField(p) {
+    var l = leads(p); var m = l.length ? memberByName(l[0]) : null;
+    if (!l.length) return '<div class="f none" data-pact="lead" data-pid="' + E(p.id) + '" title="Set a project lead"><span class="nolead">+</span><div class="t"><small>Lead</small><span>No lead yet</span></div></div>';
+    return '<div class="f" data-pact="lead" data-pid="' + E(p.id) + '" title="Change the lead">' + av(m || { name: l[0] }, 22) + '<div class="t"><small>Lead</small><span>' + E(l[0]) + (l.length > 1 ? ' +' + (l.length - 1) : '') + '</span></div></div>';
+  }
+  function ownerField(p) {
+    return '<div class="f" data-pact="owner" data-pid="' + E(p.id) + '" title="Change the owner team"><span class="tdot" style="background:' + color(p.department) + '"></span><div class="t"><small>Owner</small><span>' + E(T.short[p.department] || label(p.department)) + '</span></div></div>';
+  }
+  function card(p, children) {
+    var c = counts(p); var g = goalOf(p); var st = status(p); var par = p.parent_id ? byId(p.parent_id) : null;
+    return '<div class="w116pc" data-pid="' + E(p.id) + '">' +
+      '<div class="top"><div class="nm" data-pact="open" data-pid="' + E(p.id) + '">' + (par ? '<small>' + E(par.name) + ' \u203a</small>' : '') + E(p.name) + '</div><span class="w116st2 ' + st + '" data-pact="status" data-pid="' + E(p.id) + '" title="Change status">' + st + '</span></div>' +
+      (p.description ? '<div class="ds">' + E(p.description) + '</div>' : '') +
+      '<div class="who">' + leadField(p) + ownerField(p) + '</div>' +
+      (g ? '<div class="goal"><i>Goal</i><span title="' + E(g.title) + '">' + E(g.title) + '</span></div>' : '<div class="goal"><i style="background:rgba(121,119,115,.14);color:var(--wa-muted)">Goal</i><span>Not linked to a goal yet</span></div>') +
+      '<div class="pr"><div class="bar"><i style="width:' + c.pct + '%"></i></div><span><b>' + c.open + '</b> open \u00b7 ' + c.done + ' done</span></div>' +
+      (children && children.length ? '<div class="subs">' + children.map(function (ch) { var cc = counts(ch); return '<a data-pact="open" data-pid="' + E(ch.id) + '">\u203a ' + E(ch.name) + (cc.open ? ' \u00b7 ' + cc.open : '') + '</a>'; }).join('') + '</div>' : '') +
+      '<div class="ft"><a data-pact="open" data-pid="' + E(p.id) + '">Open project \u2192</a><a data-pact="tasks" data-pid="' + E(p.id) + '">Tasks</a><span class="sp"></span>' + (!staff() ? '' : '<a data-pact="menu" data-pid="' + E(p.id) + '" style="color:var(--wa-muted);font-weight:600">Edit</a>') + '</div>' +
+      '</div>';
+  }
+  function groupHtml(d, rows, all) {
+    var tops = rows.filter(function (p) { return !p.parent_id || !byId(p.parent_id) || byId(p.parent_id).department !== d; });
+    var open = rows.reduce(function (n, p) { return n + counts(p).open; }, 0);
+    var closed = P.st.closed && P.st.closed[d];
+    var body;
+    if (P.st.view === 'list') {
+      body = '<table class="w116pl"><thead><tr><th>Project</th><th>Lead</th><th>Status</th><th>Progress</th><th>Goal</th><th></th></tr></thead><tbody>' + rows.map(function (p) {
+        var c = counts(p); var g = goalOf(p); var l = leads(p); var m = l.length ? memberByName(l[0]) : null; var par = p.parent_id ? byId(p.parent_id) : null;
+        return '<tr><td><span class="nm" data-pact="open" data-pid="' + E(p.id) + '">' + E(p.name) + (par ? '<small>' + E(par.name) + '</small>' : '') + '</span></td>' +
+          '<td><span class="lead' + (l.length ? '' : ' none') + '" data-pact="lead" data-pid="' + E(p.id) + '">' + (l.length ? av(m || { name: l[0] }, 20) + E(l[0]) : '+ Set lead') + '</span></td>' +
+          '<td><span class="w116st2 ' + status(p) + '" data-pact="status" data-pid="' + E(p.id) + '">' + status(p) + '</span></td>' +
+          '<td><span class="bar"><i style="width:' + c.pct + '%"></i></span>' + c.open + ' open \u00b7 ' + c.done + ' done</td>' +
+          '<td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--wa-muted)">' + (g ? E(g.title) : '\u2014') + '</td>' +
+          '<td><a data-pact="open" data-pid="' + E(p.id) + '" style="color:' + GREEN + ';font-weight:700;cursor:pointer">Open</a></td></tr>';
+      }).join('') + '</tbody></table>';
+    } else {
+      body = '<div class="w116pgrid">' + tops.map(function (p) { return card(p, all.filter(function (ch) { return Number(ch.parent_id) === Number(p.id); })); }).join('') + '</div>';
+    }
+    return '<div class="w116pg' + (closed ? ' closed' : '') + '" data-pg="' + E(d) + '"><div class="gh" data-pact="fold" data-pg="' + E(d) + '"><span class="chev">&#9660;</span><span class="dot" style="background:' + color(d) + '"></span><b>' + E(label(d)) + '</b><span class="n">' + rows.length + '</span><span style="font-size:12px;color:var(--wa-muted)">' + open + ' open task' + (open === 1 ? '' : 's') + '</span><span class="sp"></span>' + (staff() ? '<span class="add" data-pact="new" data-pg="' + E(d) + '">+ Add project</span>' : '') + '</div>' +
+      '<div class="gb">' + (rows.length ? body : '<p class="empty">No projects here' + (P.st.q || P.st.lead || P.st.status !== 'active' ? ' with these filters' : '') + '.</p>') + '</div></div>';
+  }
+  function render() {
+    var host = P.host; if (!host || !document.body.contains(host)) return;
+    var st = P.st; var rows = visible();
+    var active = P.rows.filter(function (p) { return status(p) === 'active'; });
+    var noLead = active.filter(function (p) { return !leads(p).length; });
+    var openAll = active.reduce(function (n, p) { return n + counts(p).open; }, 0);
+    var leadNames = []; P.rows.forEach(function (p) { leads(p).forEach(function (n) { if (leadNames.indexOf(n) < 0) leadNames.push(n); }); }); leadNames.sort();
+    var teams = T.order.slice(); P.rows.forEach(function (p) { if (p.department && teams.indexOf(p.department) < 0) teams.push(p.department); });
+    var html = '<div class="w116p">' +
+      '<div class="sum">' +
+      '<div class="k' + (st.status === 'active' && !st.lead && !st.team ? '' : '') + '" data-pact="sum" data-v="active"><b>' + active.length + '</b>active projects</div>' +
+      '<div class="k" data-pact="sum" data-v="open"><b>' + openAll + '</b>open tasks in projects</div>' +
+      '<div class="k' + (noLead.length ? ' warn' : '') + (st.lead === '__none' ? ' on' : '') + '" data-pact="sum" data-v="nolead"><b>' + noLead.length + '</b>without a lead</div>' +
+      '<div class="k" data-pact="sum" data-v="teams"><b>' + teams.filter(function (d) { return active.some(function (p) { return p.department === d; }); }).length + '</b>teams with projects</div>' +
+      '</div>' +
+      '<div class="tb"><span class="w116seg"><a data-pact="view" data-v="cards" class="' + (st.view === 'cards' ? 'on' : '') + '">Cards</a><a data-pact="view" data-v="list" class="' + (st.view === 'list' ? 'on' : '') + '">List</a></span>' +
+      '<select data-pact="team"><option value="">All teams</option>' + teams.map(function (d) { return '<option value="' + E(d) + '"' + (st.team === d ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
+      '<select data-pact="statusf">' + [['active', 'Active'], ['paused', 'Paused'], ['done', 'Done'], ['all', 'Everything']].map(function (o) { return '<option value="' + o[0] + '"' + (st.status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<select data-pact="leadf"><option value="">Any lead</option><option value="__none"' + (st.lead === '__none' ? ' selected' : '') + '>No lead yet</option>' + leadNames.map(function (n) { return '<option value="' + E(n) + '"' + (st.lead === n ? ' selected' : '') + '>' + E(n) + '</option>'; }).join('') + '</select>' +
+      '<span class="sp"></span><input type="search" data-pact="q" placeholder="Search projects" value="' + E(st.q) + '" />' +
+      (staff() ? '<button class="new" data-pact="new" data-pg="' + E(st.team || '') + '">+ New project</button>' : '') + '</div>';
+    var shownTeams = teams.filter(function (d) { return !st.team || st.team === d; });
+    html += shownTeams.map(function (d) { return groupHtml(d, rows.filter(function (p) { return p.department === d; }), P.rows); }).join('');
+    if (!P.rows.length) html += '<p class="empty">No projects yet.</p>';
+    html += '<p class="note">' + rows.length + ' of ' + P.rows.length + ' projects shown. A project has one lead (the person accountable) and one owner team; tasks from meetings route into projects automatically.</p></div>';
+    host.innerHTML = html;
+    var q = host.querySelector('input[data-pact="q"]'); if (q && P.qFocus) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); P.qFocus = false; }
+  }
+
+  /* ---------- inline pickers ---------- */
+  function pickLead(el, p) {
+    if (el.querySelector('select')) return;
+    var ms = members().sort(function (a, b) { return (a.department === p.department ? 0 : 1) - (b.department === p.department ? 0 : 1) || String(a.name).localeCompare(String(b.name)); });
+    var cur = leads(p)[0] || '';
+    var sel = document.createElement('select'); sel.className = 'inl';
+    sel.innerHTML = '<option value="">No lead</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '"' + (m.name === cur ? ' selected' : '') + '>' + E(m.name) + (m.department !== p.department ? ' (' + E(T.short[m.department] || m.department || '') + ')' : '') + '</option>'; }).join('');
+    el.innerHTML = ''; el.appendChild(sel); sel.focus();
+    var done = false;
+    sel.addEventListener('change', function () { done = true; setLead(p, sel.value); });
+    sel.addEventListener('blur', function () { setTimeout(function () { if (!done) render(); }, 150); });
+    sel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  }
+  function pickOwner(el, p) {
+    if (el.querySelector('select')) return;
+    var sel = document.createElement('select'); sel.className = 'inl';
+    sel.innerHTML = T.order.map(function (d) { return '<option value="' + d + '"' + (d === p.department ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('');
+    el.innerHTML = ''; el.appendChild(sel); sel.focus();
+    var done = false;
+    sel.addEventListener('change', function () { done = true; setOwner(p, sel.value); });
+    sel.addEventListener('blur', function () { setTimeout(function () { if (!done) render(); }, 150); });
+    sel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  }
+  function pickStatus(el, p) {
+    if (el.querySelector('select')) return;
+    var sel = document.createElement('select'); sel.className = 'inl';
+    sel.innerHTML = ['active', 'paused', 'done'].map(function (s) { return '<option value="' + s + '"' + (status(p) === s ? ' selected' : '') + '>' + s + '</option>'; }).join('');
+    el.innerHTML = ''; el.appendChild(sel); sel.focus();
+    var done = false;
+    sel.addEventListener('change', function () { done = true; setStatus(p, sel.value); });
+    sel.addEventListener('blur', function () { setTimeout(function () { if (!done) render(); }, 150); });
+    sel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+  }
+  function editMenu(p) {
+    openModal('<div class="w116pm"><h3>' + E(p.name) + '</h3>' +
+      '<label>Name</label><input type="text" id="w116en" value="' + E(p.name) + '" />' +
+      '<label>What it is</label><textarea id="w116ed">' + E(p.description || '') + '</textarea>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116ec">Cancel</button><button class="btn" id="w116es">Save</button></div></div>');
+    document.getElementById('w116ec').addEventListener('click', closeModal);
+    document.getElementById('w116es').addEventListener('click', async function () {
+      var name = document.getElementById('w116en').value.trim(); var desc = document.getElementById('w116ed').value.trim() || null;
+      if (!name) { toast('The project needs a name'); return; }
+      var ok = true;
+      if (name !== p.name) ok = await patch(p, { name: name }, 'name', p.name, name);
+      if (ok && desc !== (p.description || null)) ok = await patch(p, { description: desc }, 'description', (p.description || '').slice(0, 80), (desc || '').slice(0, 80));
+      if (ok) { closeModal(); toast('Project saved'); render(); }
+    });
+  }
+
+  var qTimer = null;
+  if (!document.body.dataset.wa116eWired) {
+    document.body.dataset.wa116eWired = '1';
+    document.body.addEventListener('click', function (e) {
+      if (!P.host || !P.host.contains(e.target)) return;
+      var a = e.target.closest('[data-pact]'); if (!a) return;
+      var act = a.getAttribute('data-pact'); var p = a.getAttribute('data-pid') ? byId(a.getAttribute('data-pid')) : null;
+      if (act === 'view') { P.st.view = a.getAttribute('data-v'); saveState(); render(); return; }
+      if (act === 'fold') { var k = a.getAttribute('data-pg'); P.st.closed = P.st.closed || {}; if (P.st.closed[k]) delete P.st.closed[k]; else P.st.closed[k] = 1; saveState(); a.closest('.w116pg').classList.toggle('closed'); return; }
+      if (act === 'sum') { var v = a.getAttribute('data-v'); if (v === 'nolead') { P.st.lead = P.st.lead === '__none' ? '' : '__none'; P.st.status = 'active'; } else if (v === 'active') { P.st.status = 'active'; P.st.lead = ''; P.st.team = ''; } else if (v === 'open') { P.st.view = 'list'; } saveState(); render(); return; }
+      if (act === 'new') { if (!staff()) return; e.stopPropagation(); newProject(a.getAttribute('data-pg') || P.st.team || T.order[0]); return; }
+      if (!p) return;
+      if (act === 'open') { location.hash = '#project/' + p.id; return; }
+      if (act === 'tasks') { try { if (window.w116Board) window.w116Board.preset('project:' + p.id); } catch (x) { /* fine */ } location.hash = '#team/' + (T.order.indexOf(p.department) >= 0 ? p.department : T.order[0]) + '/tasks'; return; }
+      if (!staff()) return;
+      if (act === 'lead') { e.stopPropagation(); pickLead(a, p); return; }
+      if (act === 'owner') { e.stopPropagation(); pickOwner(a, p); return; }
+      if (act === 'status') { e.stopPropagation(); pickStatus(a, p); return; }
+      if (act === 'menu') { editMenu(p); return; }
+    });
+    document.body.addEventListener('change', function (e) {
+      if (!P.host || !P.host.contains(e.target)) return;
+      var a = e.target.closest('[data-pact]'); if (!a || a.tagName !== 'SELECT') return;
+      var act = a.getAttribute('data-pact');
+      if (act === 'team') P.st.team = a.value; else if (act === 'statusf') P.st.status = a.value; else if (act === 'leadf') P.st.lead = a.value; else return;
+      saveState(); render();
+    });
+    document.body.addEventListener('input', function (e) {
+      if (!P.host || !P.host.contains(e.target) || e.target.getAttribute('data-pact') !== 'q') return;
+      clearTimeout(qTimer); var v = e.target.value;
+      qTimer = setTimeout(function () { P.st.q = v; P.qFocus = true; render(); }, 220);
+    });
+  }
+
+  window.w116ProjectsPage = {
+    render: async function (host) {
+      P.host = host; P.st = P.st || loadState();
+      host.innerHTML = '<p class="read">Loading projects...</p>';
+      await load(true);
+      render();
+    },
+    refresh: function () { load(true).then(render); }
+  };
+})();
