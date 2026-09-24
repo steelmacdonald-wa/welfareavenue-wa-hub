@@ -45,12 +45,17 @@ REPLACE = [
     # wave93 finance meeting tag
     ("Finance (Fundraising & Grants)", "Finance (Fundraising & Finances)"),
     ("Finance (Fundraising &amp; Grants)", "Finance (Fundraising &amp; Finances)"),
-    # wave116d: the Strategy page is Goal alignment
-    ("if (head) head.textContent = 'Strategy';", "if (head) head.textContent = 'Goal alignment';"),
-    ("el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');", "el.innerHTML = el.innerHTML.replace('Goals', 'Goal alignment');"),
-    ("goals: 'Strategy',", "goals: 'Goal alignment',"),
-    ("<h2>How Strategy works</h2>", "<h2>How Goal alignment works</h2>"),
-    ("Set one on the Strategy page", "Set one on the Goal alignment page"),
+    # wave116d/f: the old Strategy page is the Department goals page (Organizational goals and Goal alignment are their own pages)
+    ("if (head) head.textContent = 'Strategy';", "if (head) head.textContent = 'Department goals';"),
+    ("el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');", "el.innerHTML = el.innerHTML.replace('Goals', 'Department goals');"),
+    ("goals: 'Strategy',", "goals: 'Department goals',"),
+    ("<h2>How Strategy works</h2>", "<h2>How Department goals work</h2>"),
+    ("Set one on the Strategy page", "Set one on the Department goals page"),
+    ("goals: 'Projects, quarterly goals and the map of how they connect.',", "goals: 'Every team\\'s quarterly goals, SMART, with tasks and comments.',"),
+    # wave116g: ClickUp is gone from the executive dashboard
+    ("overdue tasks, Slack check-in hours and ClickUp movement per department.", "overdue tasks and the workload per department."),
+    ("overview: 'Decisions across Welfare Avenue: what is open, what was decided, and your part in it.',", "overview: 'The executive view: the numbers, major announcements, and the decisions that sit with Ian, Shima, Suhaib and Steel.',"),
+    ("<p>The organization at a glance: stat tiles, your plate, requests waiting on you or your department, and the open executive decisions list.</p>", "<p>The organization at a glance: stat tiles, major announcements, your plate, requests waiting on you or your department, and the executive decisions list.</p>"),
     # wave71 canonical workstreams
     (
         "      ['Inventory', 'Supplies, storage, and reordering.'],\n"

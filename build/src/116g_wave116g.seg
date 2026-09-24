@@ -1,0 +1,347 @@
+/* =====================================================================
+   WA v116g the Executive dashboard (24/09/26)
+   =====================================================================
+   Steel: "Executive dashboard needs to change: remove the ClickUp
+   section; Open Decisions become Executive decisions (Ian: Marketing
+   and Fundraising Events; Shima: Montreal Operations and Program
+   Development; Suhaib: Grants, Toronto Ops, Human Resources, Finance;
+   Steel: Board, financial decisions); reformat 'What's new since you
+   last looked' under the KPI section: only major announcements like
+   someone leaving, big spending, a large donation, a cancelled event."
+   - ClickUp: the weekly-snapshot card and chip render nothing (the
+     table keeps filling in the background; nothing else reads it).
+   - Executive decisions: the card is renamed, each decision carries the
+     executive who decides it (owner column; legacy Both = Steel and
+     Suhaib), the area sets the default (Marketing, Events, Fundraising
+     -> Ian; Ops MTL, Program Development -> Shima; Grants, Ops TO, HR,
+     Finance -> Suhaib; Board -> Steel), the filter chips and the
+     add/edit modal use the four names, and wave111's Decisions waiting
+     folder shows the same names.
+   - Announcements (#w116news) sit right under the KPI strip: manual
+     posts (hub_announcements: admins and leaders post, pin, expire)
+     plus rule-based items from the data: departures and invitations
+     (change_log), transactions of $1,000 or more and donations of
+     $1,000 or more in the last 60 days (finance_transactions, only for
+     people who can see Finances), cancelled serving events
+     (volunteer_events). "New since you last looked" uses LAST_SEEN.
+     The old what's-new strip is hidden.
+   ===================================================================== */
+(function () {
+  if (window.__wa116g) return; window.__wa116g = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var BIG = 1000, DAYS = 60;
+  var EXECS = [
+    ['Ian', 'Marketing, fundraising events'],
+    ['Shima', 'Montreal operations, program development'],
+    ['Suhaib', 'Grants, Toronto operations, HR, finance'],
+    ['Steel', 'Board, financial decisions']
+  ];
+  var EXEC_NAMES = EXECS.map(function (e) { return e[0]; });
+  var AREA_EXEC = { 'Marketing': 'Ian', 'Events': 'Ian', 'Fundraising': 'Ian', 'Ops MTL': 'Shima', 'Program Development': 'Shima', 'Grants': 'Suhaib', 'Ops TO': 'Suhaib', 'HR': 'Suhaib', 'Finance': 'Suhaib', 'Board': 'Steel' };
+  var KINDS = {
+    departure: ['Departure', FLAG], arrival: ['New member', GREEN], spend: ['Big spend', GOLD], donation: ['Large donation', '#2A8C7A'],
+    event: ['Cancelled event', PURPLE], general: ['Announcement', '#5c5a56']
+  };
+
+  var css = document.createElement('style');
+  css.id = 'wa116gcss';
+  css.textContent = '' +
+    '#whatsNew{display:none !important;}' +
+    '#w116kpi{margin:0 0 18px;}' +
+    '#w116kpi #w35stats{margin-bottom:12px;}' +
+    '#w116news{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);padding:14px 18px 12px;}' +
+    '#w116news .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px;}' +
+    '#w116news .hd h3{font-family:' + HEAD + ';font-weight:600;font-size:20px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';margin:0;}' +
+    '#w116news .hd .badge{font-size:11px;font-weight:800;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:2px 9px;}' +
+    '#w116news .hd .sub{font-size:12px;color:var(--wa-muted);}' +
+    '#w116news .hd .sp{flex:1 1 auto;}' +
+    '#w116news .hd a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    '#w116news .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;}' +
+    '.w116an{display:flex;gap:10px;align-items:flex-start;background:rgba(16,63,57,.035);border:1px solid rgba(16,63,57,.06);border-radius:12px;padding:10px 12px;min-width:0;position:relative;}' +
+    '.w116an.pin{border-color:rgba(220,165,39,.6);background:rgba(220,165,39,.08);}' +
+    '.w116an.go{cursor:pointer;}' +
+    '.w116an.go:hover{border-color:rgba(16,63,57,.25);}' +
+    '.w116an .k{flex:0 0 auto;width:34px;height:34px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-weight:600;font-size:15px;color:' + CREAM + ';}' +
+    '.w116an .b{min-width:0;flex:1 1 auto;}' +
+    '.w116an .b small{display:block;font-size:9.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:0 0 2px;}' +
+    '.w116an .b .t{font-size:13px;font-weight:700;color:var(--wa-text);line-height:1.3;}' +
+    '.w116an .b .d{font-size:12px;color:var(--wa-muted);line-height:1.4;margin:2px 0 0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+    '.w116an .b .w{font-size:11px;color:var(--wa-muted);margin:4px 0 0;display:flex;gap:8px;align-items:center;}' +
+    '.w116an .b .w .new{display:inline-block;width:7px;height:7px;border-radius:50%;background:' + FLAG + ';}' +
+    '.w116an .x{position:absolute;right:8px;top:6px;font-size:11px;color:var(--wa-muted);cursor:pointer;opacity:.6;}' +
+    '.w116an .x:hover{opacity:1;color:' + FLAG + ';}' +
+    '#w116news .empty{font-size:13px;color:var(--wa-muted);margin:0;padding:2px 0 4px;}' +
+    '#w116news .more{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;margin:8px 0 0;display:inline-block;}' +
+    '.w116exl{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '.w116exl span{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--wa-muted);background:rgba(16,63,57,.05);border-radius:999px;padding:4px 10px;}' +
+    '.w116exl span b{color:' + GREEN + ';}' +
+    '.w116am label{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:10px 0 4px;}' +
+    '.w116am input,.w116am select,.w116am textarea{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13px;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:var(--wa-card);}' +
+    '.w116am textarea{min-height:64px;}' +
+    '.w116am .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+    '.w116am .chk{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--wa-text);}' +
+    '.w116am .chk input{width:15px;height:15px;accent-color:' + GREEN + ';margin:0;}' +
+    '@media (max-width:740px){.w116am .row{grid-template-columns:1fr;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function who0() { try { return who(); } catch (e) { return 'staff'; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || (staff() ? 'member' : 'viewer'); } catch (e) { return 'viewer'; } }
+  function canPost() { var r = role(); return r === 'admin' || r === 'leader'; }
+  function canSee(tab) { try { return typeof wa40Allowed === 'function' && wa40Allowed().indexOf(tab) >= 0; } catch (e) { return false; } }
+  function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+  function money(n) { n = Number(n || 0); return '$' + Math.round(Math.abs(n)).toLocaleString('en-CA'); }
+  function fmtDate(d) { if (!d) return ''; try { var x = new Date(String(d).length <= 10 ? String(d) + 'T12:00:00' : d); if (isNaN(x)) return String(d); return x.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(d); } }
+  function isNew(when) { try { return typeof LAST_SEEN !== 'undefined' && LAST_SEEN && when ? new Date(when) > new Date(LAST_SEEN) : false; } catch (e) { return false; } }
+
+  /* ---------- 1. ClickUp leaves the dashboard ---------- */
+  try { if (typeof clickupCardHtml === 'function') clickupCardHtml = function () { return ''; }; } catch (e) { /* fine */ }
+  try { if (typeof clickupChip === 'function') clickupChip = function () { return ''; }; } catch (e) { /* fine */ }
+
+  /* ---------- 2. Executive decisions ---------- */
+  function execOf(d) {
+    var o = String((d && d.owner) || '').trim();
+    if (EXEC_NAMES.indexOf(o) >= 0) return o;
+    if (o === 'Both') return 'Steel & Suhaib';
+    return AREA_EXEC[d && d.area] || 'Steel';
+  }
+  window.w116ExecOf = execOf;
+  if (typeof decisionMatches === 'function') {
+    decisionMatches = function (d) {
+      if (DEC_FILTER.cat && (d.cat || '') !== DEC_FILTER.cat) return false;
+      if (DEC_FILTER.owner) {
+        var ex = execOf(d);
+        if (ex === 'Steel & Suhaib') return DEC_FILTER.owner === 'Steel' || DEC_FILTER.owner === 'Suhaib';
+        if (ex !== DEC_FILTER.owner) return false;
+      }
+      return true;
+    };
+  }
+  if (typeof renderDecFilters === 'function') {
+    renderDecFilters = function (openDecs) {
+      var wrap = document.getElementById('decFilters');
+      if (!wrap) return;
+      var cats = []; openDecs.forEach(function (d) { if (d.cat && cats.indexOf(d.cat) < 0) cats.push(d.cat); });
+      var html = '<button class="fchip' + (!DEC_FILTER.cat ? ' on' : '') + '" data-fcat="">All categories</button>';
+      cats.forEach(function (c) { html += '<button class="fchip' + (DEC_FILTER.cat === c ? ' on' : '') + '" data-fcat="' + E(c) + '">' + E(c) + '</button>'; });
+      html += '<span style="flex:1"></span>';
+      [['', 'Anyone']].concat(EXEC_NAMES.map(function (n) { var k = openDecs.filter(function (d) { var ex = execOf(d); return ex === n || (ex === 'Steel & Suhaib' && (n === 'Steel' || n === 'Suhaib')); }).length; return [n, n + (k ? ' (' + k + ')' : '')]; })).forEach(function (o) {
+        html += '<button class="fchip' + (DEC_FILTER.owner === o[0] ? ' on' : '') + '" data-fown="' + o[0] + '">' + E(o[1]) + '</button>';
+      });
+      wrap.innerHTML = html;
+      wrap.querySelectorAll('[data-fcat]').forEach(function (b) { b.addEventListener('click', function () { DEC_FILTER.cat = b.dataset.fcat; renderDecisions(); }); });
+      wrap.querySelectorAll('[data-fown]').forEach(function (b) { b.addEventListener('click', function () { DEC_FILTER.owner = b.dataset.fown; renderDecisions(); }); });
+    };
+  }
+  if (typeof decLi === 'function') {
+    var __decLi116 = decLi;
+    decLi = function (d) {
+      var h = __decLi116.apply(this, arguments);
+      try { h = h.replace(/decides: [^<]*/, 'decides: <b>' + E(execOf(d)) + '</b>'); } catch (e) { /* cosmetic */ }
+      return h;
+    };
+  }
+  if (typeof decisionModal === 'function') {
+    var __dm116 = decisionModal;
+    decisionModal = function (dec) {
+      var r = __dm116.apply(this, arguments);
+      try {
+        var own = document.getElementById('dmOwner'), area = document.getElementById('dmArea');
+        if (own) {
+          var cur = dec ? execOf(dec) : (AREA_EXEC[area ? area.value : ''] || 'Steel');
+          var opts = EXEC_NAMES.slice();
+          if (dec && String(dec.owner || '') === 'Both') opts.push('Both');
+          own.innerHTML = opts.map(function (n) { var lab = n === 'Both' ? 'Steel and Suhaib (legacy)' : n + ': ' + (EXECS.filter(function (e) { return e[0] === n; })[0] || ['', ''])[1]; var sel = (n === 'Both' && cur === 'Steel & Suhaib') || n === cur; return '<option value="' + n + '"' + (sel ? ' selected' : '') + '>' + E(lab) + '</option>'; }).join('');
+          var touched = false;
+          own.addEventListener('change', function () { touched = true; });
+          if (area) area.addEventListener('change', function () { if (touched) return; var n = AREA_EXEC[area.value]; if (n) own.value = n; });
+          var lab2 = own.previousElementSibling; if (lab2 && lab2.tagName === 'LABEL') lab2.textContent = 'Executive who decides';
+        }
+      } catch (e) { /* cosmetic */ }
+      return r;
+    };
+  }
+  function decisionsCard() {
+    try {
+      var panel = document.getElementById('overview'); if (!panel) return;
+      panel.querySelectorAll('h2').forEach(function (h) {
+        if (h.dataset.w116g) return;
+        if ((h.textContent || '').indexOf('Open decisions') >= 0) {
+          h.dataset.w116g = '1';
+          Array.prototype.slice.call(h.childNodes).forEach(function (n) { if (n.nodeType === 3 && n.textContent.indexOf('Open decisions') >= 0) n.textContent = n.textContent.replace('Open decisions', 'Executive decisions'); });
+          var p = h.nextElementSibling;
+          while (p && p.tagName === 'P' && !p.classList.contains('read')) p = p.nextElementSibling;
+          if (p && p.classList.contains('read') && !p.dataset.w116g) {
+            p.dataset.w116g = '1';
+            p.textContent = 'The calls that need an executive. Each one names who decides (the area sets the default), a reason category and a one line rationale. Tick an item when it is decided and record what was decided.';
+            var leg = document.createElement('div'); leg.className = 'w116exl';
+            leg.innerHTML = EXECS.map(function (e) { return '<span><b>' + E(e[0]) + '</b>' + E(e[1]) + '</span>'; }).join('');
+            p.insertAdjacentElement('afterend', leg);
+          }
+        }
+      });
+      /* the wave85 purpose line belongs under the decisions heading, not under Your plate */
+      var pl = panel.querySelector('.w85p'), h2 = panel.querySelector('h2[data-w116g]');
+      if (pl && h2 && pl.previousElementSibling !== h2) h2.insertAdjacentElement('afterend', pl);
+    } catch (e) { /* cosmetic */ }
+  }
+  /* wave111's Decisions waiting folder: same names in the Decides column */
+  function fixAging() {
+    try {
+      var rows = document.querySelectorAll('#w111body tr[data-w111dec]');
+      if (!rows.length) return;
+      var decs = typeof getDecisions === 'function' ? getDecisions() : [];
+      rows.forEach(function (tr) {
+        if (tr.dataset.w116g) return;
+        var ref = Number(tr.getAttribute('data-w111dec'));
+        var d = decs.filter(function (x) { return x.ref === ref; })[0]; if (!d) return;
+        var tds = tr.querySelectorAll('td'); var cell = tds[tds.length - 2]; if (!cell) return;
+        cell.textContent = execOf(d); tr.dataset.w116g = '1';
+      });
+    } catch (e) { /* cosmetic */ }
+  }
+  if (typeof renderDecisions === 'function') {
+    var __rd116g = renderDecisions;
+    renderDecisions = function () { var r = __rd116g.apply(this, arguments); try { decisionsCard(); fixAging(); } catch (e) { /* fine */ } return r; };
+  }
+
+  /* ---------- 3. announcements under the KPI strip ---------- */
+  var N = { items: [], manual: [], loaded: 0, all: false, tries: 0 };
+  async function loadNews() {
+    var since = new Date(Date.now() - DAYS * 86400000).toISOString().slice(0, 10);
+    var items = [];
+    try {
+      var a = await db.from('hub_announcements').select('*').order('created_at', { ascending: false }).limit(60);
+      N.manual = ((a && a.data) || []).filter(function (x) { return !x.expires_at || new Date(x.expires_at) > new Date(); });
+      N.manual.forEach(function (x) { items.push({ id: 'a' + x.id, kind: KINDS[x.kind] ? x.kind : 'general', title: x.title, body: x.body || '', when: x.happened_at || x.created_at, dept: x.department, link: x.link, pinned: !!x.pinned, manual: x, by: x.created_by }); });
+    } catch (e) { /* none */ }
+    try {
+      var ch = (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.changed_at && c.changed_at.slice(0, 10) >= since; });
+      var left = ch.filter(function (c) { return c.entity_type === 'team_member' && c.field === 'active' && /false/.test(String(c.new_value || '')); });
+      var names = {};
+      if (left.length) {
+        var ids = left.map(function (c) { return Number(c.entity_id); }).filter(Boolean);
+        try { var tm = await db.from('team_members').select('id, name, department').in('id', ids); ((tm && tm.data) || []).forEach(function (m) { names[String(m.id)] = m; }); } catch (e) { /* fine */ }
+      }
+      left.forEach(function (c) { var m = names[String(c.entity_id)]; items.push({ id: 'l' + c.id, kind: 'departure', title: (m ? m.name : 'A team member') + ' has left', body: m && m.department ? label(m.department) : '', when: c.changed_at, dept: m ? m.department : null, link: m ? '#person/' + m.id : '#orgchart' }); });
+      ch.filter(function (c) { return c.entity_type === 'member' && c.field === 'invited' && /sent|admin|leader|member/.test(String(c.new_value || '')); }).forEach(function (c) {
+        var em = String(c.entity_id || ''); var nm = em.split('@')[0].split('.').map(function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }).join(' ');
+        items.push({ id: 'i' + c.id, kind: 'arrival', title: nm + ' joins the hub', body: 'Invited as ' + String(c.new_value || '').split(' ')[0] + ' by ' + String(c.changed_by || '').split('@')[0].replace('.', ' '), when: c.changed_at, link: '#orgchart' });
+      });
+    } catch (e) { /* fine */ }
+    if (canSee('finances')) {
+      try {
+        var f = await db.from('finance_transactions').select('id, txn_date, description, amount, department, category, duplicate_of').gte('txn_date', since).order('txn_date', { ascending: false }).limit(400);
+        ((f && f.data) || []).filter(function (t) { return !t.duplicate_of && String(t.txn_date || '') >= since && Math.abs(Number(t.amount || 0)) >= BIG; }).forEach(function (t) {
+          var isDon = /donation/i.test(String(t.category || '')) && Number(t.amount) > 0;
+          items.push({ id: 'f' + t.id, kind: isDon ? 'donation' : 'spend', title: (isDon ? 'Donation of ' : (Number(t.amount) < 0 ? 'Spent ' : 'Received ')) + money(t.amount), body: [t.description, t.category, t.department ? label(t.department) : ''].filter(Boolean).join(' \u00b7 '), when: t.txn_date, dept: t.department, link: '#finances' });
+        });
+      } catch (e) { /* fine */ }
+    }
+    try {
+      var v = await db.from('volunteer_events').select('id, title, code, event_date, status, location, notes').eq('status', 'cancelled').gte('event_date', since).order('event_date', { ascending: false }).limit(40);
+      var reasons = {};
+      (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.entity_type === 'volunteer_event' && c.field === 'status' && /^cancelled/.test(String(c.new_value || '')); }).forEach(function (c) { reasons[String(c.entity_id)] = { why: String(c.new_value).replace(/^cancelled:?\s*/, ''), when: c.changed_at }; });
+      ((v && v.data) || []).filter(function (ev) { return ev.status === 'cancelled' && String(ev.event_date || '') >= since; }).forEach(function (ev) {
+        var r = reasons[String(ev.id)] || {};
+        items.push({ id: 'v' + ev.id, kind: 'event', title: (ev.title || ev.code || 'Serving event') + ' cancelled', body: [ev.event_date ? 'Was planned for ' + fmtDate(ev.event_date) : '', ev.location, r.why].filter(Boolean).join(' \u00b7 '), when: r.when || ev.event_date, link: '#volunteering' });
+      });
+    } catch (e) { /* fine */ }
+    items.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.when || 0) - new Date(a.when || 0); });
+    N.items = items; N.loaded = Date.now();
+  }
+  function itemHtml(it) {
+    var k = KINDS[it.kind] || KINDS.general;
+    var mine = it.manual && (role() === 'admin' || String(it.manual.created_by || '').toLowerCase() === String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase());
+    return '<div class="w116an' + (it.pinned ? ' pin' : '') + (it.link ? ' go' : '') + '" data-anlink="' + E(it.link || '') + '">' +
+      '<span class="k" style="background:' + k[1] + '">' + E(k[0].charAt(0)) + '</span>' +
+      '<div class="b"><small>' + E(k[0]) + (it.pinned ? ' \u00b7 pinned' : '') + '</small><div class="t">' + E(it.title) + '</div>' + (it.body ? '<div class="d">' + E(it.body) + '</div>' : '') +
+      '<div class="w">' + (isNew(it.when) ? '<span class="new" title="New since you last looked"></span>' : '') + '<span>' + E(fmtDate(it.when)) + '</span>' + (it.by ? '<span>' + E(String(it.by).split('@')[0].replace('.', ' ')) + '</span>' : '') + '</div></div>' +
+      (mine && canPost() ? '<span class="x" data-anx="' + E(it.manual.id) + '" title="Take this down">&times;</span>' : '') + '</div>';
+  }
+  function renderNews() {
+    var box = document.getElementById('w116news'); if (!box) return;
+    var items = N.items; var newN = items.filter(function (i) { return isNew(i.when); }).length;
+    var shown = N.all ? items : items.slice(0, 6);
+    box.innerHTML = '<div class="hd"><h3>What\'s new</h3>' + (newN ? '<span class="badge">' + newN + ' new since you last looked</span>' : '<span class="sub">nothing new since you last looked</span>') + '<span class="sub">major announcements only: departures, big spending, large donations, cancelled events</span><span class="sp"></span>' + (canPost() ? '<a data-anpost="1">+ Post an announcement</a>' : '') + '</div>' +
+      (shown.length ? '<div class="grid">' + shown.map(itemHtml).join('') + '</div>' + (items.length > shown.length ? '<span class="more" data-anmore="1">Show all ' + items.length + '</span>' : (N.all && items.length > 6 ? '<span class="more" data-anmore="1">Show fewer</span>' : '')) : '<p class="empty">Nothing major in the last ' + DAYS + ' days.' + (canPost() ? ' Post one when something big happens: a departure, a large gift, a cancelled event.' : '') + '</p>');
+  }
+  function mount() {
+    var panel = document.getElementById('overview'); if (!panel) return false;
+    if (document.getElementById('w116news')) return true;
+    var strip = document.getElementById('w35stats');
+    if (!strip && N.tries < 40) return false;
+    var wrap = document.createElement('div'); wrap.id = 'w116kpi';
+    var news = document.createElement('div'); news.id = 'w116news';
+    news.innerHTML = '<div class="hd"><h3>What\'s new</h3><span class="sub">looking for major announcements...</span></div>';
+    if (strip && strip.parentElement === panel) { panel.insertBefore(wrap, strip); wrap.appendChild(strip); wrap.appendChild(news); }
+    else if (strip && strip.parentElement) { strip.insertAdjacentElement('afterend', news); wrap = null; }
+    else { panel.insertBefore(wrap, panel.firstChild); wrap.appendChild(news); }
+    return true;
+  }
+  async function newsBoot() {
+    N.tries++;
+    if (!mount()) { if (N.tries < 40) setTimeout(newsBoot, 300); return; }
+    try { await loadNews(); } catch (e) { /* fine */ }
+    renderNews();
+  }
+  async function refreshNews() { try { await loadNews(); renderNews(); } catch (e) { /* fine */ } }
+  window.w116News = { refresh: refreshNews };
+
+  function postModal() {
+    var depts = (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).slice();
+    openModal('<div class="w116am"><h3>Post an announcement</h3><p class="m-sub">For the whole hub, on the Executive dashboard. Keep it to what everyone should know: a departure, a large gift, a big spend, a cancelled event, a change of plan.</p>' +
+      '<label>Kind</label><select id="w116ak">' + Object.keys(KINDS).map(function (k) { return '<option value="' + k + '"' + (k === 'general' ? ' selected' : '') + '>' + E(KINDS[k][0]) + '</option>'; }).join('') + '</select>' +
+      '<label>Headline</label><input type="text" id="w116at" placeholder="Rally Paper moves to October 18" />' +
+      '<label>Detail (optional)</label><textarea id="w116ab" placeholder="One or two lines of context."></textarea>' +
+      '<div class="row"><div><label>Team (optional)</label><select id="w116ad"><option value="">Whole organization</option>' + depts.map(function (d) { return '<option value="' + d + '">' + E(label(d)) + '</option>'; }).join('') + '</select></div>' +
+      '<div><label>Link (optional)</label><input type="text" id="w116al" placeholder="#team/fundraising or https://..." /></div></div>' +
+      '<div class="row"><div><label>Happened on</label><input type="date" id="w116ah" value="' + new Date().toISOString().slice(0, 10) + '" /></div>' +
+      '<div><label>Comes down on</label><input type="date" id="w116ae" /></div></div>' +
+      '<label class="chk" style="margin-top:12px"><input type="checkbox" id="w116ap" /> Pin it to the top</label>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116ac">Cancel</button><button class="btn" id="w116as">Post</button></div></div>');
+    document.getElementById('w116ac').addEventListener('click', closeModal);
+    document.getElementById('w116as').addEventListener('click', async function () {
+      var title = document.getElementById('w116at').value.trim(); if (!title) { toast('Give it a headline'); return; }
+      var row = { kind: document.getElementById('w116ak').value, title: title, body: document.getElementById('w116ab').value.trim() || null, department: document.getElementById('w116ad').value || null, link: document.getElementById('w116al').value.trim() || null, pinned: document.getElementById('w116ap').checked, happened_at: document.getElementById('w116ah').value || new Date().toISOString().slice(0, 10), expires_at: document.getElementById('w116ae').value ? document.getElementById('w116ae').value + 'T23:59:59' : null, created_by: (typeof USER !== 'undefined' && USER && USER.email) || who0() };
+      var r = await db.from('hub_announcements').insert(row);
+      if (r && r.error) { toast('Could not post'); return; }
+      try { await db.from('change_log').insert({ entity_type: 'announcement', entity_id: row.kind, field: 'posted', old_value: null, new_value: title, changed_by: who0() }); } catch (e) { /* audit */ }
+      closeModal(); toast('Posted'); refreshNews();
+    });
+  }
+  if (!document.body.dataset.wa116gWired) {
+    document.body.dataset.wa116gWired = '1';
+    document.body.addEventListener('click', async function (e) {
+      var box = document.getElementById('w116news'); if (!box || !box.contains(e.target)) return;
+      if (e.target.closest('[data-anpost]')) { if (canPost()) postModal(); return; }
+      if (e.target.closest('[data-anmore]')) { N.all = !N.all; renderNews(); return; }
+      var x = e.target.closest('[data-anx]');
+      if (x) {
+        e.stopPropagation();
+        if (!confirm('Take this announcement down?')) return;
+        var r = await db.from('hub_announcements').update({ expires_at: new Date().toISOString() }).eq('id', Number(x.getAttribute('data-anx')));
+        if (r && r.error) { toast('Could not take it down'); return; }
+        toast('Taken down'); refreshNews(); return;
+      }
+      var card = e.target.closest('.w116an.go');
+      if (card) { var l = card.getAttribute('data-anlink'); if (!l) return; if (/^https?:/i.test(l)) window.open(l, '_blank', 'noopener'); else location.hash = l; }
+    });
+    var t116g = null;
+    try {
+      new MutationObserver(function () { clearTimeout(t116g); t116g = setTimeout(function () { decisionsCard(); fixAging(); }, 150); }).observe(document.body, { childList: true, subtree: true });
+    } catch (e) { /* fine */ }
+  }
+
+  if (typeof startApp === 'function') {
+    var __sa116g = startApp;
+    startApp = async function () {
+      var r = await __sa116g.apply(this, arguments);
+      try { decisionsCard(); fixAging(); setTimeout(newsBoot, 250); } catch (e) { console.warn('wave116g boot', e); }
+      return r;
+    };
+  }
+})();

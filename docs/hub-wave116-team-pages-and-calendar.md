@@ -1,6 +1,6 @@
 # 24/09/26 - Hub wave116: team pages, task boards, scoped agendas, calendar sync
 
-Live build: `4e1e68fdfd7b919eaa5fbbad5929feb4` (1,718,240 bytes), deployed 24/09/26 21:45 UTC via site_files parts + host-sync (third cut: menu polish; second cut `c4013f71…` at 21:00, first cut `e95e28eb…` at 20:19). Previous: wave115 `fbb59f49…` (1,561,454).
+Live build: `c2df2e542e7507012b0538f1bc6dcc67` (1,869,480 bytes), deployed 24/09/26 23:15 UTC via site_files parts + host-sync (fifth cut: Strategy goal pages + Executive dashboard). Earlier cuts the same day: `e29e8974…` (Projects page, menu fix), `4e1e68fd…` (menu polish), `c4013f71…`, `e95e28eb…`. Previous: wave115 `fbb59f49…` (1,561,454).
 
 ## What Steel asked for
 
@@ -41,6 +41,27 @@ Live build: `4e1e68fdfd7b919eaa5fbbad5929feb4` (1,718,240 bytes), deployed 24/09
 - Git: `/root/wa-hub` is a git repository (branch `main`). `.gitignore` keeps harness outputs, screenshots, keys and `.pushed.json` out.
 - GitHub: **https://github.com/steelmacdonald-wa/welfareavenue-wa-hub** (private). The build sandbox cannot push directly (its egress proxy swaps in the session's own GitHub identity), so pushes go through the `repo-sync` edge function: `build/repo_push.py "<message>"` sends changed files as blobs and makes one commit via the Git Data API with the vault `GITHUB_TOKEN` (fine-grained PAT of steelmacdonald-wa, Contents read/write). The script needs `/tmp/wa.secret` (WA_TRIGGER_SECRET) in the session; `app_config.github_repo` records the repo. First push: commit `123efe54`, 195 files.
 - Standing rule from here: every deploy ends with `git commit` (message names the wave and the live md5) and `python3 build/repo_push.py "<same message>"`, so GitHub always matches the site.
+
+## Strategy section (fourth and fifth cuts)
+
+- Menu order: Executive dashboard, Organizational goals, Department goals, Projects, Goal alignment (116d builds the group; the three new buttons are created there and gated like the goals page: members and up, not the board).
+- **Projects** (`116e_wave116e`, `#projects`): the master page. Summary tiles, Cards or List, filters by team, status and lead, search, collapsible team groups with sub-projects nested, each card with its lead (`projects.leads`), owner team, status, goal, progress and open work; inline lead, owner and status changes; "+ New project"; edits logged to change_log. The Goal alignment page lost its Projects tab.
+- **Organizational goals** (`116f_wave116f`, `#orggoals`): one card per org goal with the SMART grid (Specific = `goals.detail`, Measurable = `measure`, Achievable = `approach`, Relevant = `why`, Time-bound = quarter/horizon + `due_date`), "What achieved looks like" (`success`), owner, status (inline), progress (manual `progress`, else linked tasks done, else the average of its department goals), and the teams, department goals (`parent_goal_id`), projects (`projects.goal_id`, of the goal or its children) and tasks (task_ids + project tasks) that carry it. Missing SMART parts read "Not written yet. Click to add it." Comments reuse the wave16 thread.
+- **Department goals** (`#goals`, relabelled): the page body is rebuilt after the older waves run: tiles, team chips, quarter segments (This quarter, next, All), status filter (In play, Needs attention, Achieved or closed, Everything), search, one collapsible group per team with goal cards (status inline, quarter, due, roll-up chip, projects, open tasks, owner), "Open" expands the SMART detail, tasks with tick boxes (wave16 handler) and comments; the wave30 AI suggestions stay per team. Status changes still push to ClickUp when the goal is mapped there.
+- **Goal alignment** (`#goalmap`): a fresh map, projects -> department goals -> organizational goals, SVG connectors, hover and click focus, team filter and search, rollup counts, dashed nodes for anything unlinked with a one-click "Link to a goal" / "Roll up to an org goal".
+- One editor for every tier (`w116GoalModal`): title, team, horizon/quarter, status, owner, due date, progress, the four SMART texts, what achieved looks like, rolls-up-to, and the projects that serve the goal (tick boxes write `projects.goal_id`). Archive from the editor.
+- Migration `wa116f_goals_smart_and_announcements`: `goals.why`, `approach`, `success`, `owner`; table `public.hub_announcements`.
+- Goal data: the goal-sync run of 13/09 read zero goals (transient) and re-inserted 20 ClickUp tasks as duplicates (ids 46-65). Removed (`wa116g_remove_goal_sync_duplicates`, logged per goal). `goal-sync` v3 aborts when the read fails and treats every goal with a ClickUp id as known, whatever its quarter; archived goals are not refreshed; the Q4 OP GOALS list now maps to Program Development.
+
+## Executive dashboard (`116g_wave116g`)
+
+- The ClickUp movement card and chip render nothing (the weekly snapshot table keeps filling; nothing else reads it). Help text patched at build time.
+- "Open decisions" is "Executive decisions". Each decision names the executive who decides: Ian (Marketing, fundraising events), Shima (Montreal operations, program development), Suhaib (Grants, Toronto operations, HR, finance), Steel (Board, financial decisions). The area sets the default (Marketing, Events, Fundraising -> Ian; Ops MTL, Program Development -> Shima; Grants, Ops TO, HR, Finance -> Suhaib; Board -> Steel); legacy "Both" reads Steel & Suhaib. Filter chips, the add/edit modal (areas gained Program Development, Events, Finance) and the wave111 Decisions waiting folder use the names.
+- "What's new" sits under the KPI strip and shows only major announcements: manual posts (`hub_announcements`; admins and leaders post, pin, set an expiry, take down), departures and hub invitations (change_log), transactions and donations of $1,000 or more in the last 60 days (finance_transactions, only for people who can open Finances), cancelled serving events. "N new since you last looked" uses the last visit. The old what's-new strip is hidden.
+
+## hub@ inbox
+
+- Steel enabled domain-wide delegation for the service account (client id 107460787452614031265, gmail.readonly + calendar.readonly). `mail-pull` v1 (probe) reads hub@welfareavenue.com as itself: profile, labels, newest messages. Ingestion (invoices -> Finances, Loom/Otter summaries -> transcripts, cc'd threads -> updates with confirmation) is next.
 
 ## Backend
 

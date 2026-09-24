@@ -108,25 +108,34 @@
       }
     }
     var host = g.querySelector('.tab-group-p');
-    if (over && over.parentNode !== host) { relabel(over, 'Executive dashboard'); host.appendChild(over); }
-    else if (over && (over.textContent || '').indexOf('Executive dashboard') < 0) relabel(over, 'Executive dashboard');
-    if (goals && goals.parentNode !== host) { relabel(goals, 'Goal alignment'); host.appendChild(goals); }
-    else if (goals && (goals.textContent || '').indexOf('Goal alignment') < 0) relabel(goals, 'Goal alignment');
-    /* order inside the section: Executive dashboard, Goal alignment, Projects */
-    if (over && goals && over.nextSibling !== goals) host.insertBefore(over, goals);
-    var pj = bar.querySelector('.tab[data-tab="projects"]');
-    if (!pj) { pj = document.createElement('button'); pj.className = 'tab'; pj.setAttribute('data-tab', 'projects'); pj.innerHTML = '<span class="tabdot" style="background:#6F64AB"></span>Projects'; }
-    if (pj.parentNode !== host || (goals && goals.nextSibling !== pj)) host.appendChild(pj);
+    /* wave116f: the section holds five pages in this order; buttons that do not
+       exist yet (Organizational goals, Projects, Goal alignment) are created here */
+    var ORDER = [
+      ['overview', 'Executive dashboard', null],
+      ['orggoals', 'Organizational goals', '#DCA527'],
+      ['goals', 'Department goals', null],
+      ['projects', 'Projects', '#6F64AB'],
+      ['goalmap', 'Goal alignment', '#2A8C7A']
+    ];
+    var prev = null;
+    ORDER.forEach(function (o) {
+      var b = bar.querySelector('.tab[data-tab="' + o[0] + '"]');
+      if (!b && o[2]) { b = document.createElement('button'); b.className = 'tab'; b.setAttribute('data-tab', o[0]); b.innerHTML = '<span class="tabdot" style="background:' + o[2] + '"></span>' + o[1]; }
+      if (!b) return;
+      if ((b.textContent || '').trim() !== o[1]) relabel(b, o[1]);
+      if (b.parentNode !== host || (prev ? prev.nextSibling !== b : host.firstChild !== b)) {
+        if (prev) prev.insertAdjacentElement('afterend', b); else host.insertBefore(b, host.firstChild);
+      }
+      prev = b;
+    });
     var hd2 = g.querySelector('.tab-group-h');
-    if (hd2) hd2.style.display = (over && over.style.display !== 'none') || (goals && goals.style.display !== 'none') ? '' : 'none';
+    if (hd2) hd2.style.display = Array.prototype.some.call(host.querySelectorAll('.tab'), function (t) { return t.style.display !== 'none'; }) ? '' : 'none';
   }
   window.w116Strategy = strategyGroup;
   window.w116StrategyOk = function () {
     var bar = document.getElementById('tabBar'); if (!bar) return true;
     var g = bar.querySelector('.tab-group[data-w42g="strategy"] .tab-group-p'); if (!g) return false;
-    var over = bar.querySelector('.tab[data-tab="overview"]'), goals = bar.querySelector('.tab[data-tab="goals"]');
-    var pj = bar.querySelector('.tab[data-tab="projects"]');
-    return (!over || over.parentNode === g) && (!goals || goals.parentNode === g) && (!pj || pj.parentNode === g);
+    return ['overview', 'orggoals', 'goals', 'projects', 'goalmap'].every(function (id) { var b = bar.querySelector('.tab[data-tab="' + id + '"]'); return !b || b.parentNode === g; });
   };
 
   if (typeof startApp === 'function') {

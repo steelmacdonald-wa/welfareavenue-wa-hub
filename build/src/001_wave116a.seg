@@ -146,4 +146,12 @@
   }
   ensure();
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensure);
+  /* wave116g: executive decision areas the split teams need (the base map is a const object, so keys are added, never reassigned) */
+  try {
+    if (typeof AREA_COLORS === 'object' && AREA_COLORS) {
+      if (!AREA_COLORS['Program Development']) AREA_COLORS['Program Development'] = PD_COLOR;
+      if (!AREA_COLORS['Events']) AREA_COLORS['Events'] = '#c87a2f';
+      if (!AREA_COLORS['Finance']) AREA_COLORS['Finance'] = '#7a5a0f';
+    }
+  } catch (e) { /* non-fatal */ }
 })();
