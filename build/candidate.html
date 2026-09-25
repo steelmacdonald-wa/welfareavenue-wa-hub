@@ -35974,7 +35974,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     new MutationObserver(function (muts) {
       var outside = false;
       for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && t.closest('#w119,#w119cal')) continue; if (own(muts[i])) continue; outside = true; break; }
-      clearTimeout(V.pend); V.pend = setTimeout(function () { adopt(); if (outside) { layout(); decorateCalendar(); adopt(); } }, 160);
+      if (outside) V.outside = true;
+      if (V.pend) return;
+      V.pend = setTimeout(function () { V.pend = null; var o = V.outside; V.outside = false; try { adopt(); if (o) { layout(); decorateCalendar(); adopt(); } } catch (e) { /* fine */ } }, 160);
     }).observe(document.body, { childList: true, subtree: true });
   } catch (e) { /* fine */ }
 
@@ -35997,6 +35999,380 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   document.addEventListener('dragleave', function (e) { var col = e.target && e.target.closest && e.target.closest('#w119 .rc'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
   document.addEventListener('drop', async function (e) { if (!V.drag) return; var col = e.target && e.target.closest && e.target.closest('#w119 .rc'); if (!col) return; e.preventDefault(); e.stopPropagation(); col.classList.remove('over'); var role = col.getAttribute('data-w119role'); var d = V.drag; V.drag = null; if (d.kind === 'card') await moveCard(d.id, role); else await addPerson(d.id, role); }, true);
   window.w119Debug = function () { return { view: typeof WA_VOL_VIEW !== 'undefined' ? WA_VOL_VIEW : null, event: typeof WA_VOL_EVENT !== 'undefined' ? WA_VOL_EVENT : null, laid: !!document.getElementById('w119'), bench: V.benchRole }; };
+})();
+/* =====================================================================
+   WA v119b MTL Volunteering, cut 2: the Volunteers page, planning the
+   roster, the recap (25/09/26)
+   =====================================================================
+   - Volunteers: cards instead of the table. Initials, roles, tags,
+     tap-to-call and text, email, the reliability line from the roster
+     history (volunteer_history()), badges (reliable, new, quiet),
+     sort by reliability, recency or name, the review flags, and
+     duplicates (same phone, email or name) with a one-click merge
+     (volunteer_merge(), moves the roster rows, unions the contact
+     details, deletes the copy). Search and the role chips stay.
+   - Event page: "Plan the roster" ranks who to ask for every role that
+     is short (history score, then Jev's odds that each person confirms,
+     through the router task decide) and adds the ticked ones as Waiting
+     For Response. "Recap" drafts the event recap with the router (task
+     draft) and posts it to a Slack channel through checkin-post v2
+     (channels, say); #operations-mtl by default.
+   ===================================================================== */
+(function () {
+  if (window.__wa119b) return; window.__wa119b = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_talker: 2, community_debrief: 1 };
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var S = { hist: null, histAt: 0, sort: 'reliable', dupOnly: false, q: '', plan: null, recap: null, channels: null };
+
+  var css = document.createElement('style'); css.id = 'wa119bcss';
+  css.textContent = '' +
+    '#w119b{font-family:' + BODY + ';}' +
+    '#w119b .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;}' +
+    '#w119b .bar input[type=search]{flex:1;min-width:200px;padding:9px 14px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:13px;font-family:' + BODY + ';}' +
+    '#w119b .bar select{padding:8px 12px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';background:#FFFAF2;}' +
+    '#w119b .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 14px;}' +
+    '#w119b .stats div{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:10px 14px;}' +
+    '#w119b .stats b{display:block;font-family:' + HEAD + ';font-size:26px;line-height:1;color:' + GREEN + ';}' +
+    '#w119b .stats span{font-size:11px;color:var(--wa-muted);letter-spacing:.5px;text-transform:uppercase;font-weight:700;}' +
+    '#w119b .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}' +
+    '#w119b .pc{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:12px 14px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;gap:7px;position:relative;}' +
+    '#w119b .pc.dup{border-color:rgba(220,165,39,.7);}' +
+    '#w119b .pc .hd{display:flex;align-items:center;gap:10px;}' +
+    '#w119b .av{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:15px;font-weight:700;color:' + CREAM + ';flex:none;letter-spacing:.5px;}' +
+    '#w119b .pc .nm{min-width:0;}' +
+    '#w119b .pc .nm b{display:block;font-size:14.5px;line-height:1.2;color:var(--wa-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w119b .pc .nm span{display:block;font-size:11px;color:var(--wa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w119b .pc .ed{position:absolute;top:10px;right:12px;font-size:11px;color:var(--wa-muted);cursor:pointer;text-decoration:underline;}' +
+    '#w119b .chips{display:flex;gap:4px;flex-wrap:wrap;}' +
+    '#w119b .chips span{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '#w119b .chips span.t{background:rgba(111,100,171,.12);color:' + PURPLE + ';}' +
+    '#w119b .ct{display:flex;gap:6px;flex-wrap:wrap;font-size:12px;}' +
+    '#w119b .ct a{color:' + GREEN + ';text-decoration:none;background:rgba(16,63,57,.06);border-radius:8px;padding:3px 8px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w119b .ct a:hover{background:rgba(16,63,57,.12);}' +
+    '#w119b .rl{font-size:11.5px;color:var(--wa-muted);line-height:1.4;}' +
+    '#w119b .rl .b{height:5px;border-radius:999px;background:rgba(16,63,57,.08);margin:4px 0 3px;overflow:hidden;}' +
+    '#w119b .rl .b i{display:block;height:100%;background:' + TEAL + ';border-radius:999px;}' +
+    '#w119b .rl .b i.mid{background:' + GOLD + ';}#w119b .rl .b i.low{background:' + FLAG + ';}' +
+    '#w119b .bd{display:inline-block;font-size:10px;letter-spacing:.5px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:2px 7px;margin-right:4px;}' +
+    '#w119b .bd.ok{background:rgba(42,140,122,.14);color:#1c6b5d;}#w119b .bd.new{background:rgba(111,100,171,.14);color:' + PURPLE + ';}#w119b .bd.quiet{background:rgba(16,63,57,.08);color:var(--wa-muted);}#w119b .bd.warn{background:rgba(220,165,39,.22);color:#6b4d05;}#w119b .bd.flag{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '#w119b .dupbox{font-size:11.5px;background:#fdf6e3;border-radius:10px;padding:7px 9px;color:#6b4d05;}' +
+    '#w119b .dupbox button{font-size:11px;padding:3px 9px;margin:4px 4px 0 0;}' +
+    '#w119b .note{font-size:11.5px;color:var(--wa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w119b .empty{font-size:13px;color:var(--wa-muted);padding:30px 0;text-align:center;}' +
+    /* plan modal */
+    '.w119bplan{max-height:62vh;overflow:auto;margin:6px 0 10px;}' +
+    '.w119bplan h4{font-family:' + HEAD + ';font-size:18px;margin:12px 0 6px;color:' + GREEN + ';display:flex;gap:8px;align-items:center;}' +
+    '.w119bplan h4 small{font-family:' + BODY + ';font-size:11.5px;color:var(--wa-muted);font-weight:500;}' +
+    '.w119bplan .cand{display:grid;grid-template-columns:20px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;background:rgba(16,63,57,.04);margin:0 0 4px;font-size:12.5px;}' +
+    '.w119bplan .cand b{display:block;font-size:13px;}' +
+    '.w119bplan .cand span{display:block;font-size:11px;color:var(--wa-muted);}' +
+    '.w119bplan .cand .sc{font-family:' + HEAD + ';font-size:16px;color:' + GREEN + ';text-align:right;white-space:nowrap;}' +
+    '.w119bplan .cand .sc small{display:block;font-family:' + BODY + ';font-size:10px;color:var(--wa-muted);}' +
+    '.w119bplan .cand .sc .jev{color:' + PURPLE + ';}' +
+    '.w119bplan input[type=checkbox]{width:16px;height:16px;}' +
+    '.w119brecap textarea{width:100%;min-height:200px;font-family:' + BODY + ';font-size:13px;line-height:1.5;padding:10px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;box-sizing:border-box;}' +
+    '.w119brecap select{padding:7px 10px;border:1px solid rgba(16,63,57,.2);border-radius:10px;font-size:12.5px;font-family:' + BODY + ';}' +
+    '@media (max-width:640px){#w119b .grid{grid-template-columns:1fr;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function roleLabel(r) { try { return waVolRoleLabel(r); } catch (e) { return r; } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function today() { return new Date().toISOString().slice(0, 10); }
+  function daysSince(iso) { if (!iso) return 9999; return Math.round((Date.now() - new Date(String(iso).slice(0, 10) + 'T12:00:00').getTime()) / 86400000); }
+  function nice(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: daysSince(iso) > 300 ? 'numeric' : undefined }); } catch (e) { return iso; } }
+  function initials(n) { var p = String(n || '?').trim().split(/\s+/); return ((p[0] || '')[0] || '') + ((p[1] || '')[0] || ''); }
+  function hue(n) { var h = 0; for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360; return h; }
+  function avatar(p) { var n = String(p.full_name || '?'); var h = hue(n); return '<span class="av" style="background:hsl(' + h + ',38%,38%)">' + E(initials(n).toUpperCase()) + '</span>'; }
+  function digits(s) { return String(s || '').replace(/\D/g, '').slice(-10); }
+  function normName(s) { return lower(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim(); }
+  function people() { return (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []; }
+
+  /* ---------- history ---------- */
+  async function loadHist(force) {
+    if (!force && S.hist && Date.now() - S.histAt < 300000) return S.hist;
+    try { var r = await db.rpc('volunteer_history'); var m = {}; ((r && r.data) || []).forEach(function (h) { m[h.person_id] = h; }); S.hist = m; S.histAt = Date.now(); }
+    catch (e) { S.hist = S.hist || {}; }
+    return S.hist;
+  }
+  function hist(p) { return (S.hist && S.hist[p.id]) || { events: 0, confirmed: 0, unavailable: 0, waiting: 0, last_event: null, last_confirmed: null, roles: [] }; }
+  function rate(h) { return (h.confirmed + 1) / (h.events + 2); }
+  function badges(p) {
+    var h = hist(p); var out = [];
+    if (!h.events) out.push('<span class="bd new">New</span>');
+    else if (h.events >= 3 && h.confirmed / h.events >= 0.8) out.push('<span class="bd ok">Reliable</span>');
+    if (h.events && daysSince(h.last_event) > 120) out.push('<span class="bd quiet">Quiet ' + Math.round(daysSince(h.last_event) / 30) + ' mo</span>');
+    if (h.events >= 2 && h.unavailable / h.events >= 0.5) out.push('<span class="bd warn">Often unavailable</span>');
+    if (p.needs_review) out.push('<span class="bd flag" title="' + E(p.review_note || 'needs review') + '">Review</span>');
+    return out.join('');
+  }
+  function reliability(p) {
+    var h = hist(p); if (!h.events) return '<div class="rl">No events yet' + (p.last_applied ? ' \u00b7 applied ' + E(nice(p.last_applied)) : '') + '</div>';
+    var pct = Math.round(h.confirmed / h.events * 100); var cls = pct >= 75 ? '' : pct >= 40 ? 'mid' : 'low';
+    return '<div class="rl">' + h.confirmed + ' of ' + h.events + ' events confirmed' + (h.last_confirmed ? ' \u00b7 last ' + E(nice(h.last_confirmed)) : h.last_event ? ' \u00b7 last asked ' + E(nice(h.last_event)) : '') + '<div class="b"><i class="' + cls + '" style="width:' + pct + '%"></i></div></div>';
+  }
+  /* ---------- duplicates ---------- */
+  function dupGroups() {
+    var ps = people(); var parent = {}; function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; } function union(a, b) { a = find(a); b = find(b); if (a !== b) parent[b] = a; }
+    ps.forEach(function (p) { parent[p.id] = p.id; });
+    var byPhone = {}, byEmail = {}, byName = {};
+    ps.forEach(function (p) {
+      (p.phones || []).forEach(function (ph) { var d = digits(ph); if (d.length >= 10) { if (byPhone[d]) union(byPhone[d], p.id); else byPhone[d] = p.id; } });
+      (p.emails || []).forEach(function (em) { var e = lower(em); if (e && e.indexOf('@') > 0) { if (byEmail[e]) union(byEmail[e], p.id); else byEmail[e] = p.id; } });
+      var n = normName(p.full_name); if (n && n.indexOf(' ') > 0) { if (byName[n]) union(byName[n], p.id); else byName[n] = p.id; }
+    });
+    var groups = {}; ps.forEach(function (p) { var r = find(p.id); (groups[r] = groups[r] || []).push(p); });
+    var out = {}; Object.keys(groups).forEach(function (k) { if (groups[k].length > 1) groups[k].forEach(function (p) { out[p.id] = groups[k].filter(function (x) { return x.id !== p.id; }); }); });
+    return out;
+  }
+  function why(a, b) {
+    var r = [];
+    var pa = (a.phones || []).map(digits).filter(function (d) { return d.length >= 10; }), pb = (b.phones || []).map(digits);
+    if (pa.some(function (d) { return pb.indexOf(d) >= 0; })) r.push('same phone');
+    var ea = (a.emails || []).map(lower), eb = (b.emails || []).map(lower);
+    if (ea.some(function (e) { return e && eb.indexOf(e) >= 0; })) r.push('same email');
+    if (normName(a.full_name) && normName(a.full_name) === normName(b.full_name)) r.push('same name');
+    return r.join(', ') || 'looks alike';
+  }
+
+  /* ---------- the Volunteers page ---------- */
+  function searchText(p) { return lower([p.full_name, (p.phones || []).join(' '), (p.emails || []).join(' '), (p.roles || []).join(' '), (p.tags || []).join(' '), p.organization, p.notes].join(' ')); }
+  function card(p, dups) {
+    var h = hist(p); var roles = (p.roles || []); var tags = (p.tags || []).filter(function (t) { return roles.indexOf(t) < 0; });
+    var ph = (p.phones || [])[0] || ''; var em = (p.emails || [])[0] || '';
+    var d = dups[p.id] || [];
+    return '<div class="pc' + (d.length ? ' dup' : '') + '" data-p26="' + p.id + '" data-search="' + E(searchText(p)) + '">' +
+      '<div class="hd">' + avatar(p) + '<div class="nm"><b>' + E(p.full_name || 'Unnamed') + '</b><span>' + E([p.organization, p.car_type ? 'car: ' + p.car_type : '', h.roles && h.roles.length ? 'served as ' + h.roles.map(roleLabel).join(', ').toLowerCase() : ''].filter(Boolean).join(' \u00b7 ') || (roles.length ? roles.map(roleLabel).join(', ') : 'no role yet')) + '</span></div>' + (staff() ? '<a class="ed" data-w26e="' + p.id + '">edit</a>' : '') + '</div>' +
+      '<div>' + badges(p) + '</div>' +
+      ((roles.length || tags.length) ? '<div class="chips">' + roles.map(function (r) { return '<span>' + E(roleLabel(r)) + '</span>'; }).join('') + tags.slice(0, 4).map(function (t) { return '<span class="t">' + E(t) + '</span>'; }).join('') + '</div>' : '') +
+      '<div class="ct">' + (ph ? '<a href="tel:' + E(ph.replace(/[^\d+]/g, '')) + '" title="Call">' + E(ph) + '</a><a href="sms:' + E(ph.replace(/[^\d+]/g, '')) + '" title="Text">Text</a>' : '') + (em ? '<a href="mailto:' + E(em) + '" title="Email">' + E(em) + '</a>' : '') + (!ph && !em ? '<span style="color:var(--wa-muted);font-size:11.5px">no contact details</span>' : '') + '</div>' +
+      reliability(p) +
+      (p.notes ? '<div class="note" title="' + E(p.notes) + '">' + E(p.notes) + '</div>' : '') +
+      (d.length ? '<div class="dupbox">Looks like the same person as ' + d.map(function (x) { return '<b>' + E(x.full_name) + '</b> (' + E(why(p, x)) + ')'; }).join(', ') + (staff() ? '<br>' + d.map(function (x) { return '<button class="btn mini" data-w119bmerge="' + p.id + '" data-drop="' + x.id + '">Merge ' + E((x.full_name || '').split(' ')[0]) + ' into this</button>'; }).join('') : '') + '</div>' : '') +
+      '</div>';
+  }
+  function render() {
+    var ps = people(); var dups = dupGroups();
+    var counts = {}; ps.forEach(function (p) { var set = {}; (p.roles || []).forEach(function (r) { set[r] = 1; }); (p.tags || []).forEach(function (r) { set[r] = 1; }); Object.keys(set).forEach(function (r) { counts[r] = (counts[r] || 0) + 1; }); });
+    var filter = typeof WA_VOL_ROLEFILTER !== 'undefined' ? WA_VOL_ROLEFILTER : '';
+    var chips = '<span class="fchip' + (filter ? '' : ' on') + '" data-vlrole="">Everyone (' + ps.length + ')</span>' + Object.keys(counts).sort().map(function (r) { return '<span class="fchip' + (filter === r ? ' on' : '') + '" data-vlrole="' + E(r) + '">' + E(roleLabel(r)) + ' (' + counts[r] + ')</span>'; }).join('');
+    var list = ps.filter(function (p) { if (S.dupOnly && !dups[p.id]) return false; if (!filter) return true; return (p.roles || []).indexOf(filter) >= 0 || (p.tags || []).indexOf(filter) >= 0; });
+    list.sort(function (a, b) {
+      if (S.sort === 'name') return String(a.full_name || '').localeCompare(String(b.full_name || ''));
+      var ha = hist(a), hb = hist(b);
+      if (S.sort === 'recent') return String(hb.last_event || '').localeCompare(String(ha.last_event || '')) || String(a.full_name || '').localeCompare(String(b.full_name || ''));
+      var sa = rate(ha) + Math.min(ha.events, 8) * 0.02, sb = rate(hb) + Math.min(hb.events, 8) * 0.02;
+      return sb - sa || String(a.full_name || '').localeCompare(String(b.full_name || ''));
+    });
+    var active90 = ps.filter(function (p) { return daysSince(hist(p).last_event) <= 90; }).length;
+    var withH = ps.filter(function (p) { return hist(p).events > 0; }); var ev = 0, cf = 0; withH.forEach(function (p) { ev += hist(p).events; cf += hist(p).confirmed; });
+    var dupN = Object.keys(dups).length; var flagged = ps.filter(function (p) { return p.needs_review; }).length;
+    var html = '<div id="w119b">' +
+      '<div class="bar"><input type="search" id="w26q" placeholder="Search name, phone, email, role or tag" value="' + E(S.q) + '"><select data-w119bsort="1"><option value="reliable"' + (S.sort === 'reliable' ? ' selected' : '') + '>Most reliable first</option><option value="recent"' + (S.sort === 'recent' ? ' selected' : '') + '>Most recent first</option><option value="name"' + (S.sort === 'name' ? ' selected' : '') + '>By name</option></select>' +
+      (dupN ? '<span class="fchip' + (S.dupOnly ? ' on' : '') + '" data-w119bdup="1">Possible duplicates (' + dupN + ')</span>' : '') + '</div>' +
+      '<div class="filters" style="margin-bottom:12px">' + chips + '</div>' +
+      '<div class="stats"><div><b>' + ps.length + '</b><span>volunteers</span></div><div><b>' + active90 + '</b><span>active, 90 days</span></div><div><b>' + (ev ? Math.round(cf / ev * 100) : 0) + '%</b><span>confirm rate</span></div><div><b>' + withH.length + '</b><span>have served</span></div>' + (flagged ? '<div><b style="color:' + FLAG + '">' + flagged + '</b><span>need a review</span></div>' : '') + '</div>' +
+      (list.length ? '<div class="grid">' + list.map(function (p) { return card(p, dups); }).join('') + '</div>' : '<div class="empty">Nobody matches.</div>') + '</div>';
+    try { waVolPaint(html); } catch (e) { return; }
+    applySearch();
+    var q = document.getElementById('w26q'); if (q) q.addEventListener('input', function () { S.q = this.value; try { WA26_Q = this.value; } catch (e) { /* fine */ } applySearch(); });
+  }
+  function applySearch() {
+    var q = lower(S.q); var qd = q.replace(/\D/g, '');
+    document.querySelectorAll('#w119b .pc[data-search]').forEach(function (c) { var hay = c.getAttribute('data-search') || ''; c.style.display = (!q || hay.indexOf(q) >= 0 || (qd.length >= 3 && hay.replace(/\D/g, '').indexOf(qd) >= 0)) ? '' : 'none'; });
+  }
+  var __people26 = typeof waVolRenderPeople === 'function' ? waVolRenderPeople : null;
+  waVolRenderPeople = function () {
+    try { S.q = typeof WA26_Q !== 'undefined' ? (WA26_Q || '') : S.q; } catch (e) { /* fine */ }
+    if (!S.hist) { render(); loadHist(false).then(render); }
+    else render();
+  };
+  async function merge(keep, drop) {
+    var ps = people(); var k = ps.filter(function (p) { return String(p.id) === String(keep); })[0], d = ps.filter(function (p) { return String(p.id) === String(drop); })[0];
+    if (!k || !d) return;
+    if (!confirm('Merge ' + (d.full_name || 'this record') + ' into ' + (k.full_name || 'this one') + '? Their event history and contact details move over and the copy is deleted.')) return;
+    var r = await db.rpc('volunteer_merge', { p_keep: Number(keep), p_drop: Number(drop) });
+    if (r && r.error) { toastS('Could not merge: ' + r.error.message); return; }
+    toastS('Merged ' + (d.full_name || '') + ' into ' + (k.full_name || '') + ((r.data && r.data.moved) ? ' (' + r.data.moved + ' roster rows moved)' : ''));
+    try { WA_VOL_PEOPLE = []; await waVolLoadPeople(); } catch (e) { /* fine */ }
+    await loadHist(true); render();
+  }
+
+  /* ---------- plan the roster ---------- */
+  function ev() { var e = null; try { (WA_VOL_EVENTS || []).forEach(function (x) { if (x.id === WA_VOL_EVENT) e = x; }); } catch (x) { /* fine */ } return e; }
+  function det() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+  function score(p, role) {
+    var h = hist(p); var r = rate(h);
+    var rec = h.last_confirmed ? Math.max(0, 1 - daysSince(h.last_confirmed) / 365) : (h.last_event ? Math.max(0, 0.5 - daysSince(h.last_event) / 365) : 0);
+    var fit = (p.roles || []).indexOf(role) >= 0 || (h.roles || []).indexOf(role) >= 0 ? 1 : (p.tags || []).indexOf(role) >= 0 ? 0.7 : 0.2;
+    var s = 0.55 * r + 0.25 * rec + 0.2 * fit;
+    if (h.events >= 2 && h.unavailable / h.events >= 0.5) s -= 0.15;
+    var why = [];
+    if (h.events) why.push(h.confirmed + ' of ' + h.events + ' confirmed'); else why.push('never asked');
+    if (h.last_confirmed) why.push('last served ' + nice(h.last_confirmed));
+    if (fit === 1) why.push(roleLabel(role).toLowerCase() + ' on file'); else if (fit === 0.7) why.push('tagged ' + role);
+    if (p.needs_review) why.push('record needs a review');
+    return { s: Math.max(0, Math.min(1, s)), why: why.join(' \u00b7 ') };
+  }
+  function planRows() {
+    var D = det(); if (!D) return [];
+    var on = {}; (D.roster || []).forEach(function (r) { if (r.person_id) on[r.person_id] = 1; });
+    var out = []; var taken = {};
+    ROLE_ORDER.forEach(function (role) {
+      var have = (D.roster || []).filter(function (r) { return (r.role || '') === role && lower(r.status).indexOf('unavailable') < 0 && lower(r.status).indexOf('cancel') < 0; }).length;
+      var need = (TARGET[role] || 0) - have; if (need <= 0) return;
+      var cands = people().filter(function (p) { return !on[p.id]; }).map(function (p) { var sc = score(p, role); return { p: p, s: sc.s, why: sc.why, jev: null, pick: false }; });
+      cands.sort(function (a, b) { return b.s - a.s; });
+      var fit = cands.filter(function (c) { return c.s >= 0.35; }).slice(0, 8);
+      out.push({ role: role, need: need, have: have, cands: fit });
+    });
+    assignPicks(out);
+    return out;
+  }
+  /* a person is pre-ticked for one role only: the first short role they top */
+  function assignPicks(rows) {
+    var taken = {};
+    rows.forEach(function (r) { r.cands.forEach(function (c) { c.pick = false; }); });
+    rows.forEach(function (r) { var n = 0; r.cands.forEach(function (c) { if (n < r.need && !taken[c.p.id]) { c.pick = true; taken[c.p.id] = r.role; n++; } }); });
+  }
+  function planHtml() {
+    var rows = S.plan || [];
+    if (!rows.length) return '<p class="read">Every role has enough people (counting those still to confirm). Nothing to plan.</p>';
+    return '<div class="w119bplan">' + rows.map(function (r) {
+      return '<h4>' + E(roleLabel(r.role)) + ' <small>' + r.have + ' on the list, need ' + r.need + ' more</small></h4>' + (r.cands.length ? r.cands.map(function (c, i) {
+        var final = c.jev != null ? 0.5 * c.s + 0.5 * c.jev : c.s;
+        return '<label class="cand"><input type="checkbox" data-w119bpick="' + c.p.id + '" data-role="' + E(r.role) + '"' + (c.pick ? ' checked' : '') + '><div><b>' + E(c.p.full_name) + '</b><span>' + E(c.why) + '</span></div><div class="sc">' + Math.round(final * 100) + '<small>' + (c.jev != null ? '<span class="jev">Jev ' + Math.round(c.jev * 100) + '%</span>' : (S.jevBusy ? 'asking Jev\u2026' : 'history')) + '</small></div></label>';
+      }).join('') : '<p class="read" style="font-size:12.5px">Nobody on file fits; add people on the Volunteers page or drop someone from another role.</p>');
+    }).join('') + '</div>';
+  }
+  async function jevOdds(rows) {
+    var e = ev(); if (!e) return;
+    var jobs = []; rows.forEach(function (r) { r.cands.forEach(function (c) { jobs.push({ r: r, c: c }); }); });
+    jobs = jobs.slice(0, 24); if (!jobs.length) return;
+    S.jevBusy = true; repaintPlan();
+    var i = 0;
+    async function worker() {
+      while (i < jobs.length) {
+        var j = jobs[i++]; var h = hist(j.c.p);
+        try {
+          var res = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'decide', 'x-wa-caller': 'volunteering' }, body: {
+            state: { event: { date: e.event_date, code: e.code, venue: e.location, days_away: daysSince(e.event_date) * -1 }, role: roleLabel(j.r.role), volunteer: { name: j.c.p.full_name, events_asked: h.events, events_confirmed: h.confirmed, unavailable: h.unavailable, last_event: h.last_event, last_confirmed: h.last_confirmed, roles_on_file: (j.c.p.roles || []), roles_served: h.roles || [], notes: String(j.c.p.notes || '').slice(0, 200) }, guidance: 'A charity in Montreal asks volunteers to serve meals on a Sunday. People who confirmed most of the time and served recently tend to say yes again; people who were often unavailable or have gone quiet for months tend not to.' },
+            questions: { confirm: { type: 'choice', instructions: 'If asked today for this role on this date, will this volunteer confirm and show up?', criteria: { yes: 'Confirms and shows up', no: 'Declines, goes quiet or drops out' } } } } });
+          var a = res && res.data && res.data.answers && res.data.answers.confirm; var p = a && a.probabilities ? Number(a.probabilities.yes) : NaN;
+          if (isFinite(p)) j.c.jev = p;
+        } catch (e2) { /* history only */ }
+      }
+    }
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    S.jevBusy = false;
+    rows.forEach(function (r) { r.cands.sort(function (a, b) { var fa = a.jev != null ? 0.5 * a.s + 0.5 * a.jev : a.s, fb = b.jev != null ? 0.5 * b.s + 0.5 * b.jev : b.s; return fb - fa; }); });
+    if (!S.planTouched) assignPicks(rows);
+    repaintPlan(!S.planTouched);
+  }
+  function repaintPlan(fresh) { var box = document.querySelector('#w119bplanbox'); if (!box) return; var picked = {}; if (!fresh) box.querySelectorAll('[data-w119bpick]').forEach(function (c) { picked[c.getAttribute('data-w119bpick') + '|' + c.getAttribute('data-role')] = c.checked; }); box.innerHTML = planHtml(); if (!fresh) box.querySelectorAll('[data-w119bpick]').forEach(function (c) { var k = c.getAttribute('data-w119bpick') + '|' + c.getAttribute('data-role'); if (picked.hasOwnProperty(k)) c.checked = picked[k]; }); }
+  async function openPlan() {
+    await loadHist(false);
+    try { await waVolLoadPeople(); } catch (e) { /* fine */ }
+    S.plan = planRows(); S.planTouched = false;
+    openModal('<h3>Plan the roster</h3><p class="read" style="margin:4px 0 6px">Who to ask for the roles that are short, ranked by how often they confirmed, how recently they served and whether the role is on file. Jev adds its odds that each person says yes. Tick who to add; they go on as Waiting For Response.</p><div id="w119bplanbox">' + planHtml() + '</div>' +
+      '<div class="m-actions"><button class="btn" id="w119bplango">Add the ticked people</button> <button class="btn ghost" id="w119bplanx">Close</button></div>');
+    document.getElementById('w119bplanx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w119bplango').addEventListener('click', async function () {
+      var seen = {}; var picks = Array.prototype.slice.call(document.querySelectorAll('#w119bplanbox [data-w119bpick]:checked')).map(function (c) { return { pid: c.getAttribute('data-w119bpick'), role: c.getAttribute('data-role') }; }).filter(function (x) { if (seen[x.pid]) return false; seen[x.pid] = 1; return true; });
+      if (!picks.length) { toastS('Tick someone first'); return; }
+      this.disabled = true; var e = ev(), D = det(); var n = 0;
+      for (var i = 0; i < picks.length; i++) {
+        var p = people().filter(function (x) { return String(x.id) === picks[i].pid; })[0]; if (!p || !e || !D) continue;
+        var row = { event_id: e.id, person_id: p.id, person_name: p.full_name, role: picks[i].role, status: 'Waiting For Response', notes: null, detail: { phone: (p.phones || [])[0] || null, email: (p.emails || [])[0] || null }, sort: 999 };
+        var r = await db.from('event_roster').insert(row).select('*').single();
+        if (r && r.error) { toastS('Could not add ' + p.full_name + ': ' + r.error.message); continue; }
+        D.roster.push(r.data || row); n++;
+        try { logChange('event_roster', (r.data || {}).id || 'new', 'added', null, p.full_name + ' as ' + picks[i].role + ' (planned)'); } catch (e3) { /* fine */ }
+      }
+      try { WA_VOL_LOADED = false; } catch (e4) { /* fine */ }
+      closeModal(); toastS('Added ' + n + ' ' + (n === 1 ? 'person' : 'people') + ' to ask');
+      try { waVolRenderEvent(); } catch (e5) { /* fine */ }
+    });
+    jevOdds(S.plan);
+  }
+
+  /* ---------- the recap ---------- */
+  function facts() {
+    var e = ev(), D = det(); if (!e || !D) return null;
+    var roster = D.roster || []; var byRole = {};
+    roster.forEach(function (r) { var k = r.role || 'other'; byRole[k] = byRole[k] || { c: 0, n: 0, names: [] }; byRole[k].n++; if (lower(r.status).indexOf('confirm') === 0) { byRole[k].c++; byRole[k].names.push(r.person_name); } });
+    var steps = D.steps || []; var done = steps.filter(function (s) { return s.done; }).length;
+    var extras = (D.extras || []).map(function (x) { return (x.done ? '[done] ' : '[open] ') + x.title; });
+    return { code: e.code, date: e.event_date, title: e.title, venue: e.location, season: e.season, status: e.status, meals: e.planned_meals, notes: e.notes, roster: Object.keys(byRole).map(function (k) { return roleLabel(k) + ': ' + byRole[k].c + ' confirmed of ' + byRole[k].n + (byRole[k].names.length ? ' (' + byRole[k].names.join(', ') + ')' : ''); }), steps: done + ' of ' + steps.length + ' checklist steps done', extras: extras };
+  }
+  async function draftRecap() {
+    var f = facts(); if (!f) return '';
+    var res = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'draft', 'x-wa-caller': 'volunteering' }, body: {
+      max_tokens: 700, temperature: 0.4,
+      system: 'You write short Slack recaps for the Montreal serving events of Welfare Avenue, a charity. Plain, warm, specific, first names only, no em dashes, no hashtags, no exclamation marks. Slack formatting only: *bold* for the first line, then 4 to 7 lines starting with \u2022. Say the date and venue, meals, who served by role (names), what got done, what is still open, and one thank-you line. Never invent numbers or names beyond the facts.',
+      messages: [{ role: 'user', content: 'FACTS\n' + JSON.stringify(f, null, 1) }],
+      tools: [{ name: 'recap', description: 'The recap text for Slack.', input_schema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] } }], tool_choice: { type: 'tool', name: 'recap' } } });
+    if (res && res.error) throw res.error;
+    var tu = ((res && res.data && res.data.content) || []).filter(function (c) { return c.type === 'tool_use'; })[0];
+    var t = tu && tu.input && tu.input.text ? String(tu.input.text) : '';
+    if (!t) throw new Error('the model gave nothing back');
+    return t.replace(/\u2014/g, ',');
+  }
+  function fallbackRecap() {
+    var f = facts(); if (!f) return '';
+    return '*' + (f.title || 'Serving event') + ' \u00b7 ' + f.date + (f.venue ? ' \u00b7 ' + f.venue : '') + '*\n' + (f.meals ? '\u2022 ' + f.meals + ' meals planned\n' : '') + f.roster.map(function (r) { return '\u2022 ' + r; }).join('\n') + '\n\u2022 ' + f.steps + (f.extras.length ? '\n\u2022 From the meetings: ' + f.extras.join('; ') : '') + '\n\u2022 Thank you to everyone who showed up.';
+  }
+  async function openRecap() {
+    var e = ev(); if (!e) return;
+    var chan = ''; try { chan = localStorage.getItem('wa119ch') || 'operations-mtl'; } catch (x) { chan = 'operations-mtl'; }
+    openModal('<div class="w119brecap"><h3>Event recap</h3><p class="read" style="margin:4px 0 8px">Drafted from the roster and the checklist. Edit it, then post it to Slack or copy it.</p><textarea id="w119brt" placeholder="Drafting\u2026"></textarea>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 0"><label style="font-size:12px;color:var(--wa-muted)">Channel</label><select id="w119bch"><option value="' + E(chan) + '">#' + E(chan) + '</option></select><button class="btn ghost mini" id="w119bredo">Draft again</button></div>' +
+      '<div class="m-actions"><button class="btn" id="w119bpost" disabled>Post to Slack</button> <button class="btn ghost" id="w119bcopy">Copy</button> <button class="btn ghost" id="w119bx">Close</button></div></div>');
+    document.getElementById('w119bx').addEventListener('click', function () { closeModal(); });
+    var ta = document.getElementById('w119brt');
+    async function fill() { ta.value = ''; ta.placeholder = 'Drafting\u2026'; try { ta.value = await draftRecap(); } catch (err) { ta.value = fallbackRecap(); toastS('Used the plain version: ' + (err.message || err)); } var b = document.getElementById('w119bpost'); if (b) b.disabled = false; }
+    fill();
+    document.getElementById('w119bredo').addEventListener('click', fill);
+    document.getElementById('w119bcopy').addEventListener('click', function () { try { navigator.clipboard.writeText(ta.value); toastS('Copied'); } catch (x) { ta.select(); toastS('Select and copy'); } });
+    document.getElementById('w119bpost').addEventListener('click', async function () {
+      var text = ta.value.trim(); if (!text) return; this.disabled = true;
+      var ch = (document.getElementById('w119bch') || {}).value || chan;
+      try { localStorage.setItem('wa119ch', ch); } catch (x) { /* fine */ }
+      try { var r = await db.functions.invoke('checkin-post', { body: { action: 'say', channel: ch, text: text } }); if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); toastS('Posted to #' + ch); closeModal(); }
+      catch (err) { this.disabled = false; toastS('Could not post: ' + (err.message || err)); }
+    });
+    /* the channel list, lazily */
+    (async function () { try { if (!S.channels) { var r = await db.functions.invoke('checkin-post', { body: { action: 'channels' } }); S.channels = (r.data && r.data.channels) || []; } var sel = document.getElementById('w119bch'); if (sel && S.channels.length) { sel.innerHTML = S.channels.map(function (c) { return '<option value="' + E(c.name) + '"' + (c.name === chan ? ' selected' : '') + '>#' + E(c.name) + (c.member ? '' : ' (bot not in it yet)') + '</option>'; }).join(''); } } catch (x) { /* keep the default */ } })();
+  }
+  /* buttons in the masthead of wave119 */
+  function decorate() {
+    if (!staff()) return;
+    var acts = document.getElementById('w119acts'); if (!acts || acts.querySelector('[data-w119bplan]')) return;
+    var e = ev(); if (!e) return;
+    var b1 = document.createElement('button'); b1.className = 'btn'; b1.setAttribute('data-w119bplan', '1'); b1.textContent = 'Plan the roster';
+    var b2 = document.createElement('button'); b2.className = 'btn'; b2.setAttribute('data-w119brecap', '1'); b2.textContent = 'Recap';
+    var spacer = acts.querySelector('span[style*="flex:1"]');
+    if (spacer && spacer.nextSibling) { acts.insertBefore(b2, spacer.nextSibling); acts.insertBefore(b1, spacer.nextSibling); } else { acts.appendChild(b1); acts.appendChild(b2); }
+  }
+  /* a throttle, not a debounce: the hub repaints small things constantly, so a reset timer would never fire */
+  try { new MutationObserver(function () { if (S.pend) return; S.pend = setTimeout(function () { S.pend = null; try { decorate(); } catch (e) { /* fine */ } }, 220); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w119bmerge]'))) { e.preventDefault(); e.stopPropagation(); await merge(el.getAttribute('data-w119bmerge'), el.getAttribute('data-drop')); return; }
+    if ((el = t.closest('#w119b [data-w119bdup]'))) { e.preventDefault(); e.stopPropagation(); S.dupOnly = !S.dupOnly; render(); return; }
+    if ((el = t.closest('[data-w119bplan]'))) { e.preventDefault(); e.stopPropagation(); await openPlan(); return; }
+    if ((el = t.closest('[data-w119brecap]'))) { e.preventDefault(); e.stopPropagation(); await openRecap(); return; }
+  }, true);
+  document.addEventListener('change', function (e) { var t = e.target; if (!t || !t.getAttribute) return; if (t.getAttribute('data-w119bsort')) { S.sort = t.value; render(); return; } if (t.getAttribute('data-w119bpick')) S.planTouched = true; });
+  window.w119bDecorate = decorate;
+  window.w119bDebug = function () { return { hist: S.hist ? Object.keys(S.hist).length : null, sort: S.sort, plan: S.plan ? S.plan.map(function (r) { return r.role + ':' + r.need + ':' + r.cands.length; }) : null }; };
 })();
 /* =====================================================================
    WA v120 Marketing analytics (25/09/26)

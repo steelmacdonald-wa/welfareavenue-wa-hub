@@ -1,0 +1,3 @@
+-- applied 25/09/26 as migration wa119b_volunteer_merge_history (see the Supabase migration for the full text):
+-- volunteer_history(): per person events, confirmed, unavailable, waiting, last_event, last_confirmed, roles (staff and board)
+-- volunteer_merge(p_keep, p_drop): moves event_roster and quo_messages rows, unions phones/emails/roles/tags, keeps address/car/org/notes, deletes the copy, logs to change_log (staff)

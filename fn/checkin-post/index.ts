@@ -1,4 +1,4 @@
-// Welfare Avenue: checkin-post (v1, 25/09/26)
+// Welfare Avenue: checkin-post (v2, 25/09/26: channels + say, for the volunteering recap; v1 25/09/26)
 // Steel: "Check in should send a message in Slack channel
 // #check-in-out-wa and checking out should do the same with bullet points
 // about what one has done. Allow voice to text to summarise what they've
@@ -8,6 +8,8 @@
 //   summarise {text}                        -> bullets + tasks worth closing, from the person's own words
 //   out       {checkin_id, bullets[], close_task_ids[], skipped?}
 //             -> closes the ticked tasks, saves the summary, posts the check-out line
+//   channels  {}                            -> the channels the bot can see (name, id, member)
+//   say       {channel, text}               -> post text to a named channel as the bot (joins a public one)
 // The model call goes through the Hub router (task 'checkin'); Slack goes
 // through the bot (chat.postMessage) into #check-in-out-wa.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -188,6 +190,41 @@ Deno.serve(async (req: Request) => {
       const r = await post(text, me.email);
       await svc.from('hub_checkins').update({ slack_out_ts: r.ts, summary: bullets.length ? { bullets, closed: closeIds, skipped: body.skipped === true } : null, closed_task_ids: closeIds.length ? closeIds : null }).eq('id', id);
       return json({ ok: true, posted: !!r.ts, error: r.error, closed, minutes: mins });
+    }
+    if (action === 'channels') {
+      const tok = await getSecret('SLACK_BOT_TOKEN');
+      const out: Array<{ id: string; name: string; member: boolean; private: boolean }> = [];
+      let cursor = '';
+      for (let i = 0; i < 10; i++) {
+        const res = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true&limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { headers: { Authorization: 'Bearer ' + tok } });
+        const b = await res.json();
+        // deno-lint-ignore no-explicit-any
+        for (const c of ((b.channels || []) as any[])) out.push({ id: String(c.id), name: String(c.name), member: !!c.is_member, private: !!c.is_private });
+        cursor = b.response_metadata?.next_cursor || ''; if (!cursor) break;
+      }
+      out.sort((a, b) => a.name.localeCompare(b.name));
+      return json({ ok: true, channels: out });
+    }
+    if (action === 'say') {
+      const want = String(body.channel || '').replace(/^#/, '').trim();
+      const text = String(body.text || '').trim().slice(0, 3000);
+      if (!want || !text) return json({ error: 'channel and text' }, 400);
+      const tok = await getSecret('SLACK_BOT_TOKEN');
+      let chId: string | null = null; let isMember = false;
+      let cursor = '';
+      for (let i = 0; i < 10 && !chId; i++) {
+        const res = await fetch('https://slack.com/api/conversations.list?types=public_channel,private_channel&exclude_archived=true&limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { headers: { Authorization: 'Bearer ' + tok } });
+        const b = await res.json();
+        // deno-lint-ignore no-explicit-any
+        const hit = ((b.channels || []) as any[]).find(c => c.name === want || c.id === want);
+        if (hit) { chId = String(hit.id); isMember = !!hit.is_member; }
+        cursor = b.response_metadata?.next_cursor || ''; if (!cursor) break;
+      }
+      if (!chId) return json({ error: 'channel #' + want + ' not found (the bot can only see channels it is allowed to see)' }, 404);
+      if (!isMember) { const j = await slack(tok, 'conversations.join', { channel: chId }); if (!j.ok) return json({ error: 'the bot is not in #' + want + ' (' + String(j.error || 'join failed') + '); add it from the channel' }, 400); }
+      const out = await slack(tok, 'chat.postMessage', { channel: chId, text: text + '\n_posted from the hub by ' + name + '_', unfurl_links: false, unfurl_media: false });
+      if (!out.ok) return json({ error: String(out.error || 'slack refused') }, 400);
+      return json({ ok: true, ts: String(out.ts || ''), channel: chId });
     }
     return json({ error: 'unknown action' }, 400);
   } catch (e) { return json({ error: String((e as Error).message || e).slice(0, 300) }, 500); }

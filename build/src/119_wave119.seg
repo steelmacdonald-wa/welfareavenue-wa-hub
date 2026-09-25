@@ -359,7 +359,9 @@
     new MutationObserver(function (muts) {
       var outside = false;
       for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && t.closest('#w119,#w119cal')) continue; if (own(muts[i])) continue; outside = true; break; }
-      clearTimeout(V.pend); V.pend = setTimeout(function () { adopt(); if (outside) { layout(); decorateCalendar(); adopt(); } }, 160);
+      if (outside) V.outside = true;
+      if (V.pend) return;
+      V.pend = setTimeout(function () { V.pend = null; var o = V.outside; V.outside = false; try { adopt(); if (o) { layout(); decorateCalendar(); adopt(); } } catch (e) { /* fine */ } }, 160);
     }).observe(document.body, { childList: true, subtree: true });
   } catch (e) { /* fine */ }
 
