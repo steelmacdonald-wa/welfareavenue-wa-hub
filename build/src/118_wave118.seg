@@ -78,7 +78,7 @@
   };
   var GLYPH_RE = new RegExp('[' + Object.keys(GLYPHS).map(function (g) { return g.length === 2 ? '\\u{' + g.codePointAt(0).toString(16) + '}' : '\\u' + ('0000' + g.charCodeAt(0).toString(16)).slice(-4); }).join('') + ']', 'u');
   var MAST = {
-    "overview": ["Strategy", "Executive dashboard", "The numbers, what is new, and the decisions that sit with the executives.", false, "Executive dashboard"],
+    "overview": ["Strategy", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
     "dashboard": ["Strategy", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
     "goals": ["Strategy", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
     "requests": ["Strategy", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],

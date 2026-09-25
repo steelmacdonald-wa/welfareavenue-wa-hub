@@ -1,0 +1,580 @@
+/* =====================================================================
+   WA v128 the Executive dashboard, rebuilt around executive decisions (25/09/26)
+   =====================================================================
+   Steel: "the executive dashboard really needs some work... a lot of buttons that click to random
+   places... think about executive decision making, highlights and stuff like that. Make it better."
+
+   A new top of the page (#w128), in the order an executive reads it:
+   - The brief: two or three plain sentences built from the data (decisions waiting and how long,
+     the fiscal year, event results still missing, quiet teams, the next board meeting), and what is
+     next (board meeting, fundraising event, serving).
+   - The numbers, each a door to the page that explains it: decisions waiting, raised by the events,
+     the organizational goals, open and overdue work (opens the folder in place), servings ahead,
+     the team, and donations for people who can see the ledger.
+   - Needs a decision: the oldest executive calls with who decides, the suggested move and the AI
+     recommendation, and Record the decision (the same record as the list below).
+   - To watch: decisions waiting over 60 days, past events with no result, overdue work by team,
+     teams with no meeting update in three weeks, delayed goals, board items at risk, the year-end.
+   - Highlights: event results, shout-outs, goals closed, work closed, new people, servings held.
+   - Coming up: the year-end, board meetings and the committee deadline, events and servings.
+   - Teams at a glance: each team's lead, open and overdue work, work closed, last update, goals.
+   Cleaned up: the "Your plate" card (it pointed to Home) and its "Open the full dashboard" link (it
+   pointed back to this page) are gone, the "Decisions waiting" folder is replaced by Needs a decision,
+   the old stat strip gives way to the new numbers, and the page help moves to the masthead.
+   The full decision list, What's new, and the Overdue tasks and Delivery numbers folders stay.
+   ===================================================================== */
+(function () {
+  if (window.__wa128) return; window.__wa128 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', PURPLE = '#6F64AB', TEAL = '#2A8C7A', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var TEAMS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr'];
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  var P = {
+    x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', chev: '<path d="m9 5 7 7-7 7"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', alert: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>', cal: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', money: '<rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/>',
+    list: '<path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.5" cy="6.5" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17.5" r="1"/>',
+    heart: '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10C19.5 15.4 12 20 12 20z"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v16"/>', mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3"/>',
+    hand: '<path d="M7 11V6.5a1.5 1.5 0 0 1 3 0V11M10 10V5a1.5 1.5 0 0 1 3 0v5M13 10V6a1.5 1.5 0 0 1 3 0v6M16 12v-2a1.5 1.5 0 0 1 3 0v4c0 4-3 7-7 7s-5.5-2-7-4.5L3.5 12a1.5 1.5 0 0 1 2.5-1.5L7 12"/>'
+  };
+  function I(n, cls) { return '<svg class="w128i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  /* dates field by field (the offline harness shims Date) */
+  function mk(y, m, d, h) { var x = new Date(0); x.setFullYear(Number(y), Number(m), Number(d)); x.setHours(h == null ? 12 : Number(h), 0, 0, 0); return x; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseDay(s) { if (!s) return null; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? mk(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) : null; }
+  function today() { var d = new Date(); return mk(d.getFullYear(), d.getMonth(), d.getDate(), 12); }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function daysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+  function dayOfIso(iso) { if (!iso) return null; var d = new Date(iso); if (isNaN(d.getTime())) return null; return parseDay(d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' })); }
+  function fmtDay(d, withYear) { if (!d) return ''; return MONTHS[d.getMonth()] + ' ' + d.getDate() + (withYear ? ', ' + d.getFullYear() : ''); }
+  function fmtShort(d) { if (!d) return ''; return DAYS[d.getDay()].slice(0, 3) + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' + d.getDate(); }
+  function money(n) { var v = Math.round(Number(n || 0)); return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-CA'); }
+  function listJoin(a) { a = a.filter(Boolean); if (a.length < 2) return a.join(''); return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function words(n) { return ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n); }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function tabOk(t) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(t) >= 0; } catch (e) { return true; } }
+  function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function deptColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }
+  function myFirst() { try { return String((USER && USER.name) || '').split(' ')[0]; } catch (e) { return ''; } }
+  function onOverview() { var a = document.querySelector('.panel.active'); return !!(a && a.id === 'overview'); }
+
+  var css = document.createElement('style');
+  css.id = 'wa128css';
+  css.textContent = ''
+    /* what the new top replaces */
+    + '#overview.w128on #w35stats,#overview.w128on > .card.w28my,#overview.w128on #w111folds [data-w111f="aging"]{display:none !important;}'
+    + '#overview.w128on #w116kpi{margin-top:22px;}'
+    + '#overview.w128on #w128all p.w85p{display:none;}'
+    + '#w128{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');margin:0 0 6px;clear:both;}'
+    + '#overview > .w118mast .w43help{float:none;}'
+    + '#overview > .w118mast::after{content:"";display:block;clear:both;}'
+    + '.w128i{width:17px;height:17px;flex:0 0 auto;display:inline-block;vertical-align:middle;}'
+    + '.w128btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:' + BODY + ';font-size:12.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:9px;padding:7px 11px;cursor:pointer;text-decoration:none !important;line-height:1.1;white-space:nowrap;}'
+    + '.w128btn:hover{box-shadow:0 6px 16px rgba(16,63,57,.2);}'
+    + '.w128btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w128btn.ghost:hover{background:rgba(16,63,57,.06);box-shadow:none;}'
+    + '.w128btn .w128i{width:15px;height:15px;}'
+    + '.w128lnk{display:inline-flex;align-items:center;gap:3px;font-size:12.5px;font-weight:700;color:' + GREEN + ';cursor:pointer;text-decoration:none;white-space:nowrap;}'
+    + '.w128lnk .w128i{width:14px;height:14px;}'
+    + '.w128lnk:hover{text-decoration:underline;}'
+    + '.w128box{background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';padding:16px 18px;min-width:0;}'
+    + '.w128box .hd{display:flex;align-items:center;gap:10px;margin:0 0 10px;}'
+    + '.w128box .hd h3{display:flex;align-items:center;gap:8px;font-family:' + HEAD + ';font-size:21px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';margin:0;line-height:1;}'
+    + '.w128box .hd h3::after{display:none;}'
+    + '.w128box .hd .sp{flex:1;}'
+    + '.w128box .hd .sub{font-size:12px;color:var(--wa-muted);}'
+    + '.w128empty{font-size:13px;color:var(--wa-muted);line-height:1.5;margin:0;}'
+    + '.w128more{font-size:12.5px;color:var(--wa-muted);margin:8px 0 0;}'
+    + '.w128sec{display:flex;align-items:flex-end;gap:12px;margin:26px 0 12px;flex-wrap:wrap;}'
+    + '#w128 .w128sec h2{font-family:' + HEAD + ';font-size:25px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1;}'
+    + '#w128 .w128sec h2::after{display:none;}'
+    + '.w128sec span{font-size:13px;color:var(--wa-muted);}'
+    /* the brief */
+    + '.w128brief{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:0;background:' + GREEN + ';color:' + CREAM + ';border-radius:20px;overflow:hidden;box-shadow:0 14px 34px -18px rgba(16,63,57,.55);}'
+    + '.w128brief .tx{padding:20px 24px 18px;}'
+    + '.w128brief .kk{font-size:10.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';margin:0 0 10px;}'
+    + '.w128brief p{font-size:17px;line-height:1.55;margin:0;color:rgba(255,250,242,.92);}'
+    + '.w128brief p b{color:' + CREAM + ';font-weight:700;}'
+    + '.w128brief .lk{display:inline-flex;align-items:center;gap:7px;margin-top:14px;font-size:12.5px;font-weight:600;color:rgba(255,250,242,.8);cursor:pointer;text-decoration:none;}'
+    + '.w128brief .lk:hover{color:' + CREAM + ';text-decoration:underline;}'
+    + '.w128brief .nx{background:rgba(255,250,242,.07);padding:18px 18px 12px;border-left:1px solid rgba(255,250,242,.1);}'
+    + '.w128brief .nx .it{display:flex;align-items:center;gap:12px;padding:8px;border-radius:12px;color:' + CREAM + ';cursor:pointer;text-decoration:none;}'
+    + '.w128brief .nx .it:hover{background:rgba(255,250,242,.08);}'
+    + '.w128brief .nx .dt{flex:none;width:46px;height:46px;border-radius:12px;background:' + CREAM + ';color:' + GREEN + ';display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;}'
+    + '.w128brief .nx .dt b{font-family:' + HEAD + ';font-size:21px;font-weight:700;}'
+    + '.w128brief .nx .dt small{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:2px;}'
+    + '.w128brief .nx .w{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.3;}'
+    + '.w128brief .nx .w small{display:block;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + GOLD + ';margin-bottom:2px;}'
+    + '.w128brief .nx .w128i{opacity:.6;}'
+    /* the numbers */
+    + '.w128kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0 0;}'
+    + '.w128k{position:relative;display:flex;flex-direction:column;gap:3px;background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.08);border-radius:16px;box-shadow:' + SH1 + ';padding:14px 16px 14px;cursor:pointer;text-decoration:none;color:inherit;min-width:0;transition:transform .12s ease,box-shadow .12s ease;}'
+    + '.w128k:hover{transform:translateY(-1px);box-shadow:0 2px 4px rgba(16,63,57,.06),0 14px 30px rgba(16,63,57,.1);}'
+    + '.w128k .ic{position:absolute;right:12px;top:12px;color:rgba(16,63,57,.35);}'
+    + '.w128k b{font-family:' + HEAD + ';font-size:34px;font-weight:700;color:' + GREEN + ';line-height:1;}'
+    + '.w128k .l{font-size:13px;font-weight:700;color:' + INK + ';}'
+    + '.w128k .s{font-size:12px;color:var(--wa-muted);line-height:1.4;}'
+    + '.w128k .bar{display:block;height:6px;border-radius:3px;background:rgba(16,63,57,.1);overflow:hidden;margin-top:6px;}'
+    + '.w128k .bar i{display:block;height:100%;background:' + GOLD + ';border-radius:3px;}'
+    + '.w128k.acc{background:' + GOLD + ';border-color:' + GOLD + ';}'
+    + '.w128k.acc b,.w128k.acc .l{color:' + INK + ';}'
+    + '.w128k.acc .s{color:rgba(31,32,30,.75);}'
+    + '.w128k.acc .ic{color:rgba(31,32,30,.45);}'
+    + '.w128k.warn .s{color:' + FLAG + ';font-weight:600;}'
+    /* two columns */
+    + '.w128row{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:14px;margin-top:14px;align-items:start;}'
+    /* decisions */
+    + '.w128d{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w128d:first-of-type{border-top:none;padding-top:4px;}'
+    + '.w128d .age{flex:none;min-width:62px;text-align:center;font-size:11.5px;font-weight:700;border-radius:999px;padding:4px 8px;background:rgba(16,63,57,.08);color:' + GREEN + ';margin-top:1px;}'
+    + '.w128d .age.warm{background:rgba(220,165,39,.22);color:#6b4d05;}'
+    + '.w128d .age.hot{background:rgba(179,64,47,.14);color:' + FLAG + ';}'
+    + '.w128d .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;}'
+    + '.w128d .tx b{font-size:14.5px;font-weight:700;line-height:1.35;}'
+    + '.w128d .tx span{font-size:12.8px;color:#4d4b47;line-height:1.45;}'
+    + '.w128d .tx .rec{display:flex;gap:6px;align-items:flex-start;color:#3c3780;}'
+    + '.w128d .tx .rec .w128i{width:14px;height:14px;margin-top:2px;color:' + PURPLE + ';}'
+    + '.w128d .tx em{font-style:normal;font-size:12px;color:var(--wa-muted);}'
+    + '.w128d .tx em b{font-size:12px;color:' + INK + ';}'
+    + '.w128d .ac{flex:none;display:flex;flex-direction:column;gap:6px;align-items:stretch;}'
+    /* watch */
+    + '.w128w{display:flex;align-items:flex-start;gap:10px;padding:10px 8px;border-radius:12px;cursor:pointer;text-decoration:none;color:inherit;font-size:13px;line-height:1.5;}'
+    + '.w128w:hover{background:rgba(16,63,57,.045);}'
+    + '.w128w > i{flex:none;width:9px;height:9px;border-radius:50%;margin-top:6px;background:' + GOLD + ';}'
+    + '.w128w.hot > i{background:' + FLAG + ';}'
+    + '.w128w.info > i{background:' + TEAL + ';}'
+    + '.w128w span{flex:1;min-width:0;}'
+    + '.w128w .w128i{color:rgba(16,63,57,.4);margin-top:2px;}'
+    /* highlights */
+    + '.w128h{display:flex;gap:11px;align-items:flex-start;padding:9px 8px;border-radius:12px;cursor:pointer;text-decoration:none;color:inherit;}'
+    + '.w128h:hover{background:rgba(16,63,57,.045);}'
+    + '.w128h .ic{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(220,165,39,.2);color:#8a5a0b;display:flex;align-items:center;justify-content:center;}'
+    + '.w128h .ic .w128i{width:15px;height:15px;}'
+    + '.w128h .tx{flex:1;min-width:0;font-size:13px;line-height:1.5;}'
+    + '.w128h .tx small{display:block;font-size:11.5px;color:var(--wa-muted);margin-top:1px;}'
+    /* coming up */
+    + '.w128n{display:flex;gap:12px;align-items:center;padding:7px 8px;border-radius:12px;cursor:pointer;text-decoration:none;color:inherit;}'
+    + '.w128n:hover{background:rgba(16,63,57,.045);}'
+    + '.w128n .dt{flex:none;width:44px;height:44px;border-radius:12px;background:rgba(16,63,57,.07);color:' + GREEN + ';display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;}'
+    + '.w128n .dt b{font-family:' + HEAD + ';font-size:20px;font-weight:700;}'
+    + '.w128n .dt small{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;margin-top:2px;}'
+    + '.w128n .tx{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.35;}'
+    + '.w128n .tx small{display:block;font-size:11px;font-weight:600;color:var(--wa-muted);margin-bottom:1px;}'
+    + '.w128n .w128i{color:rgba(16,63,57,.35);}'
+    /* teams */
+    + '.w128teams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}'
+    + '.w128t{display:flex;flex-direction:column;gap:8px;background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.08);border-top:4px solid var(--c);border-radius:16px;box-shadow:' + SH1 + ';padding:14px 16px;cursor:pointer;text-decoration:none;color:inherit;min-width:0;transition:transform .12s ease;}'
+    + '.w128t:hover{transform:translateY(-1px);}'
+    + '.w128t .nm{display:flex;align-items:center;gap:8px;}'
+    + '.w128t .nm i{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;}'
+    + '.w128t .nm b{font-family:' + HEAD + ';font-size:20px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;color:' + INK + ';line-height:1.05;}'
+    + '.w128t .ld{font-size:12.5px;color:var(--wa-muted);}'
+    + '.w128t .st{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '.w128t .st span{font-size:12px;background:rgba(16,63,57,.06);border-radius:8px;padding:4px 8px;color:' + GREEN + ';}'
+    + '.w128t .st span.od{background:rgba(179,64,47,.1);color:' + FLAG + ';}'
+    + '.w128t .st b{font-weight:700;}'
+    + '.w128t .ft{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#5c5a56;border-top:1px dashed rgba(16,63,57,.14);padding-top:8px;}'
+    + '.w128t .ft span{display:inline-flex;align-items:center;gap:5px;}'
+    + '.w128t .ft .w128i{width:14px;height:14px;color:rgba(16,63,57,.45);}'
+    + '.w128t .ft .stale{color:' + FLAG + ';font-weight:600;}'
+    + '.w128t .ft .stale .w128i{color:' + FLAG + ';}'
+    + 'li.w128flash{animation:w128flash 1.8s ease 1;border-radius:12px;}'
+    + '@keyframes w128flash{0%,40%{background:rgba(220,165,39,.28);}100%{background:transparent;}}'
+    + '@media (max-width:1100px){.w128teams{grid-template-columns:repeat(2,minmax(0,1fr));}}'
+    + '@media (max-width:900px){.w128brief,.w128row{grid-template-columns:1fr;}.w128brief .nx{border-left:none;border-top:1px solid rgba(255,250,242,.1);}}'
+    + '@media (max-width:640px){.w128teams{grid-template-columns:1fr;}.w128kpis{grid-template-columns:repeat(2,minmax(0,1fr));}.w128k b{font-size:28px;}.w128brief p{font-size:15.5px;}.w128d{flex-wrap:wrap;}.w128d .ac{flex-direction:row;width:100%;padding-left:74px;}.w128brief .tx{padding:18px;}}'
+    + '@media (prefers-reduced-motion:reduce){.w128k,.w128t{transition:none;}li.w128flash{animation:none;background:rgba(220,165,39,.2);}}';
+  document.head.appendChild(css);
+
+  /* ---------- data: what the core already loaded, plus a few reads of our own ---------- */
+  var X = { loaded: 0, loading: null, fund: [], goals: [], shout: [], wins: [], vol: [], fundGoals: null, donations: null, board: null };
+  async function q(p) { try { var r = await p; return (r && !r.error && r.data) || []; } catch (e) { return []; } }
+  function fyStart(d) { d = d || today(); return mk(d.getMonth() >= 9 ? d.getFullYear() : d.getFullYear() - 1, 9, 1, 12); }
+  function fyEnd(d) { var s = fyStart(d); return mk(s.getFullYear() + 1, 8, 30, 12); }
+  async function load(force) {
+    if (X.loading) return X.loading;
+    if (X.loaded && !force && Date.now() - X.loaded < 60000) return;
+    X.loading = (async function () {
+      var t = today(), from = ymd(addDays(t, -45)), to = ymd(addDays(t, 60));
+      var jobs = [
+        q(db.from('fund_events').select('id,title,start_date,end_date,status,raised,target_min,target_max,lead,season,precision').order('start_date')),
+        q(db.from('goals').select('id,department,title,status,quarter,due_date,updated_at,parent_goal_id')),
+        q(db.from('hub_shoutouts').select('id,created_at,kind,person,member_id,team,text,active').eq('active', true).order('created_at', { ascending: false }).limit(20)),
+        q(db.from('goal_wins').select('id,department,win,meeting_date,created_at').order('created_at', { ascending: false }).limit(20)),
+        staffOk() ? q(db.from('volunteer_events').select('id,title,code,event_date,status,location,kind').gte('event_date', from).lte('event_date', to).order('event_date')) : Promise.resolve([]),
+        staffOk() ? q(db.from('hub_settings').select('value').eq('key', 'fund_goals')) : Promise.resolve([])
+      ];
+      if (tabOk('finances')) jobs.push(q(db.from('finance_transactions').select('amount,category,txn_date,duplicate_of').eq('category', '4100 Donation').gte('txn_date', ymd(fyStart())).limit(2000)));
+      var r = await Promise.all(jobs);
+      X.fund = r[0]; X.goals = r[1]; X.shout = r[2]; X.wins = r[3]; X.vol = r[4];
+      X.fundGoals = (r[5][0] && r[5][0].value) || X.fundGoals || null;
+      X.donations = r[6] ? r[6].filter(function (x) { return !x.duplicate_of && Number(x.amount || 0) > 0 && x.category === '4100 Donation'; }).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0) : null;
+      /* the board: only for people who can see it (wave126 answers from board_home) */
+      X.board = null;
+      try {
+        if (window.w126 && (tabOk('governance') || tabOk('committees'))) {
+          await window.w126.me(); await window.w126.load();
+          var st = window.w126.state();
+          if (st && st.data) X.board = { data: st.data, cycle: window.w126.cycle ? window.w126.cycle() : null };
+        }
+      } catch (e) { X.board = null; }
+      X.loaded = Date.now(); X.loading = null;
+    })();
+    return X.loading;
+  }
+
+  /* ---------- the facts ---------- */
+  function decisions() {
+    var all = []; try { all = (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []) || []; } catch (e) { all = []; }
+    var t = today();
+    return all.filter(function (d) { return !d.done; }).map(function (d) {
+      var o = dayOfIso(d.opened_at) || dayOfIso(d.updated_at) || t;
+      return { d: d, ref: d.id, title: d.title, area: d.area, cat: d.reason_category, move: d.suggested_move, why: d.reason_note, rec: d.recommendation, owner: decider(d), age: Math.max(0, daysBetween(o, t)), conf: !!d.confidential };
+    }).sort(function (a, b) { return b.age - a.age; });
+  }
+  function decider(d) {
+    var o = String((d && d.owner) || '').trim();
+    if (o === 'Both' || !o) { try { if (typeof window.w116ExecOf === 'function') o = String(window.w116ExecOf(d) || ''); } catch (e) { /* fine */ } if (!o || o === 'Both') o = 'Steel and Suhaib'; }
+    return o.replace(/\s*&\s*/g, ' and ');
+  }
+  function doneGoal(g) { return /\b(closed|done|completed?|achieved|met)\b/i.test(String(g.status || '')) && !/\bincomplete\b/i.test(String(g.status || '')); }
+  function onTrackGoal(g) { return doneGoal(g) || /on track/i.test(String(g.status || '')); }
+  function sentence(s) { s = String(s || '').trim(); return /[.!?\u2026]$/.test(s) ? s : s + '.'; }
+  function tasks() { try { return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []) || []; } catch (e) { return []; } }
+  function updates() { try { return (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []) || []; } catch (e) { return []; } }
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []) || []; } catch (e) { return []; } }
+  function changes() { try { return (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []) || []; } catch (e) { return []; } }
+  function openTask(t) { return !t.done; }
+  function overdue(t) { var d = parseDay(t.due_date); return !t.done && d && d < today(); }
+  function closedWithin(t, days) { if (!t.done) return false; var d = dayOfIso(t.closed_at); return !!d && daysBetween(d, today()) <= days; }
+  function teamStats(dept) {
+    var ts = tasks().filter(function (t) { return t.department === dept; });
+    var ups = updates().filter(function (u) { return u.department === dept; }).map(function (u) { return dayOfIso(u.created_at); }).filter(Boolean).sort(function (a, b) { return b - a; });
+    var gs = (X.goals || []).filter(function (g) { return g.department === dept; });
+    var leads = members().filter(function (m) { return m.department === dept && /\b(lead|co-lead|director|co-director|head|manager)\b/i.test(m.role || ''); }).map(function (m) { return String(m.name || '').split(' ')[0]; });
+    return { dept: dept, open: ts.filter(openTask).length, overdue: ts.filter(overdue).length, closed30: ts.filter(function (t) { return closedWithin(t, 30); }).length, last: ups[0] || null, goals: gs, leads: leads, people: members().filter(function (m) { return m.department === dept; }).length };
+  }
+  /* the fundraising year: the events' results inside the fiscal year that contains today */
+  function fundYear() {
+    var s = fyStart(), e = fyEnd(), t = today();
+    var inYear = function (f) { var d = parseDay(f.start_date); return d && d >= s && d <= e; };
+    var raised = (X.fund || []).filter(inYear).reduce(function (a, f) { return a + Number(f.raised || 0); }, 0);
+    /* the plan year comes from the fundraising settings (staff); the board cannot read them, so it falls back to the seeded plan */
+    var g = X.fundGoals || {}, planLabel = String(g.plan || '2026-27');
+    var fyLabel = s.getFullYear() + '-' + String(s.getFullYear() + 1).slice(2);
+    var target = Number(g.target || 20000);
+    var planYear = !planLabel || planLabel === fyLabel;
+    var missing = (X.fund || []).filter(function (f) { var d = parseDay(f.end_date) || parseDay(f.start_date); return d && d < t && f.precision !== 'season' && ['planned', 'confirmed', 'tentative', 'in progress', 'to confirm'].indexOf(String(f.status || '').toLowerCase()) >= 0 && (f.raised == null || f.raised === ''); });
+    return { start: s, end: e, raised: raised, target: target, planYear: planYear, fyLabel: fyLabel, planLabel: planLabel, missing: missing, daysLeft: daysBetween(t, e) };
+  }
+  function orgGoals() { return (X.goals || []).filter(function (g) { return g.department === 'org'; }); }
+  function atRiskGoal(g) { return /delayed|incomplete|at risk|off track|blocked|stuck/i.test(String(g.status || '')); }
+  function boardMeetings() { var b = X.board && X.board.data; return b ? (b.meetings || []).filter(function (m) { return m.kind === 'board' && m.meets_at && m.status !== 'held' && m.status !== 'cancelled'; }).map(function (m) { return { m: m, d: dayOfIso(m.meets_at) }; }).filter(function (x) { return x.d && x.d >= today(); }).sort(function (a, b) { return a.d - b.d; }) : []; }
+  function boardAtRisk() { var b = X.board && X.board.data; return b ? (b.items || []).filter(function (i) { return i.status === 'at_risk'; }) : []; }
+
+  /* ---------- the brief ---------- */
+  function briefText() {
+    var ds = decisions(), fy = fundYear(), t = today(), s = [];
+    var old = ds.filter(function (d) { return d.age > 60; });
+    if (ds.length) s.push('<b>' + words(ds.length) + (ds.length === 1 ? ' decision is' : ' decisions are') + ' waiting on the executives</b>' + (old.length ? (old.length === ds.length ? (ds.length === 1 ? ', for ' + old[0].age + ' days.' : ', every one of them for more than 60 days.') : ', ' + words(old.length).toLowerCase() + ' of them for more than 60 days.') : '.'));
+    else s.push('<b>No decisions are waiting on the executives.</b>');
+    if (fy.daysLeft >= 0 && fy.daysLeft <= 14) s.push('The fiscal year closes on ' + DAYS[fy.end.getDay()] + ' (' + fmtDay(fy.end) + ')' + (fy.raised ? ', with <b>' + money(fy.raised) + '</b> raised by the events this year.' : '.'));
+    else if (fy.planYear) s.push('The events have raised <b>' + money(fy.raised) + '</b> of the ' + money(fy.target) + ' target this fiscal year.');
+    else if (fy.raised) s.push('The events have raised <b>' + money(fy.raised) + '</b> this fiscal year.');
+    if (fy.missing.length) s.push(words(fy.missing.length) + ' past ' + (fy.missing.length === 1 ? 'event still needs its result' : 'events still need their results') + ' (' + listJoin(fy.missing.slice(0, 3).map(function (f) { return f.title; })) + ').');
+    var quiet = TEAMS.filter(function (d) { var st = teamStats(d); return !st.last || daysBetween(st.last, t) > 21; });
+    if (quiet.length >= 2) s.push(words(quiet.length) + ' teams have had no meeting update in three weeks.');
+    var bm = boardMeetings()[0];
+    if (bm) s.push('The ' + (bm.m.title || 'board meeting').replace(/^Q(\d) board meeting$/i, 'Q$1 board meeting') + ' is ' + DAYS[bm.d.getDay()] + ', ' + fmtDay(bm.d) + '.');
+    return s.join(' ');
+  }
+  function nextItems() {
+    var t = today(), out = [];
+    var bm = boardMeetings()[0];
+    if (bm) out.push({ k: 'Board', d: bm.d, t: bm.m.title || 'Board meeting', go: '#governance' });
+    var fe = (X.fund || []).filter(function (f) { var d = parseDay(f.start_date); return d && d >= t && f.status !== 'idea' && f.status !== 'cancelled' && f.status !== 'done'; })[0];
+    if (fe) out.push({ k: 'Fundraising', d: parseDay(fe.start_date), t: fe.title, go: '#fundevents', month: fe.precision === 'month' });
+    var ve = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d >= t && v.status !== 'cancelled'; })[0];
+    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: ve.title || ve.code || 'Serving', go: '#volunteering' });
+    return out;
+  }
+  function briefHtml() {
+    var t = today(), fy = fundYear();
+    var kick = DAYS[t.getDay()] + ', ' + fmtDay(t) + (fy.daysLeft >= 0 && fy.daysLeft <= 30 ? ' \u00b7 fiscal year ends in ' + plural(fy.daysLeft, 'day') : '');
+    var nx = nextItems();
+    return '<div class="w128brief"><div class="tx"><div class="kk">' + E(kick) + '</div><p>' + briefText() + '</p>'
+      + (staffOk() ? '<a class="lk" data-w128go="#mypage">' + I('list') + 'Your own tasks and requests are on Home</a>' : '') + '</div>'
+      + (nx.length ? '<div class="nx"><div class="kk">Next up</div>' + nx.map(function (x) { return '<a class="it" data-w128go="' + E(x.go) + '"><span class="dt"><b>' + (x.month ? E(MONTHS[x.d.getMonth()].slice(0, 3)) : E(String(x.d.getDate()))) + '</b><small>' + (x.month ? 'month' : E(MONTHS[x.d.getMonth()].slice(0, 3))) + '</small></span><span class="w"><small>' + E(x.k) + '</small>' + E(clip(x.t, 48)) + '</span>' + I('chev') + '</a>'; }).join('') + '</div>' : '')
+      + '</div>';
+  }
+
+  /* ---------- the numbers: each one opens the page that explains it ---------- */
+  function tilesHtml() {
+    var ds = decisions(), fy = fundYear(), og = orgGoals(), t = today();
+    var ts = tasks(), open = ts.filter(openTask).length, od = ts.filter(overdue).length, c30 = ts.filter(function (x) { return closedWithin(x, 30); }).length;
+    var tiles = [];
+    tiles.push({ acc: true, n: ds.length, l: ds.length === 1 ? 'decision waiting' : 'decisions waiting', s: ds.length ? 'oldest ' + ds[0].age + ' days' : 'nothing waiting', go: '#overview/decisions', ic: 'flag' });
+    var pct = fy.planYear && fy.target ? Math.min(100, fy.raised / fy.target * 100) : null;
+    tiles.push({ n: money(fy.raised), l: 'raised by the events', s: fy.planYear ? 'of the ' + money(fy.target) + ' target, fiscal ' + fy.fyLabel : 'fiscal ' + fy.fyLabel + (fy.planLabel ? '; the ' + money(fy.target) + ' target starts with ' + fy.planLabel : ''), bar: pct, go: '#fundevents', ic: 'target' });
+    if (og.length) { var on = og.filter(onTrackGoal).length, rk = og.filter(atRiskGoal).length; tiles.push({ n: og.length, l: og.length === 1 ? 'organizational goal' : 'organizational goals', s: [on ? on + ' on track or done' : '', og.length - on - rk ? (og.length - on - rk) + ' in progress' : '', rk ? rk + ' at risk' : ''].filter(Boolean).join(', '), go: '#orggoals', ic: 'spark' }); }
+    tiles.push({ n: open, l: 'open tasks', s: (od ? od + ' overdue' : 'none overdue') + (c30 ? ', ' + c30 + ' closed in 30 days' : ''), fold: 'overdue', ic: 'list', warn: od > 0 });
+    if (staffOk()) { var next30 = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d >= t && daysBetween(t, d) <= 30 && v.status !== 'cancelled'; }); var nv = next30[0]; tiles.push({ n: next30.length, l: next30.length === 1 ? 'serving in the next 30 days' : 'servings in the next 30 days', s: nv ? 'next ' + fmtShort(parseDay(nv.event_date)) : 'none planned yet', go: '#volunteering', ic: 'heart' }); }
+    if (X.donations != null) tiles.splice(2, 0, { n: money(X.donations), l: 'donations this fiscal year', s: 'from the ledger, since ' + fmtDay(fyStart()), go: '#finances', ic: 'money' });
+    var ppl = members().length, joined = changes().filter(function (c) { return c.entity_type === 'member' && c.field === 'invited' && /sent|admin|leader|member/.test(String(c.new_value || '')) && dayOfIso(c.changed_at) && daysBetween(dayOfIso(c.changed_at), t) <= 30; }).length;
+    if (ppl && tiles.length < 6) tiles.push({ n: ppl, l: 'people on the team', s: joined ? joined + ' joined the Hub in 30 days' : 'across ' + TEAMS.length + ' teams and the board', go: '#orgchart', ic: 'people' });
+    return '<div class="w128kpis">' + tiles.map(function (x) {
+      return '<a class="w128k' + (x.acc ? ' acc' : '') + (x.warn ? ' warn' : '') + '" role="button" tabindex="0" ' + (x.fold ? 'data-w128fold="' + x.fold + '"' : 'data-w128go="' + E(x.go) + '"') + '><span class="ic">' + I(x.ic) + '</span><b>' + E(x.n) + '</b><span class="l">' + E(x.l) + '</span><span class="s">' + E(x.s) + '</span>' + (x.bar != null ? '<span class="bar"><i style="width:' + x.bar.toFixed(1) + '%"></i></span>' : '') + '</a>';
+    }).join('') + '</div>';
+  }
+
+  /* ---------- needs a decision ---------- */
+  function decHtml() {
+    var ds = decisions(), show = ds.slice(0, 4);
+    var h = '<section class="w128box w128dec" id="w128dec"><div class="hd"><h3>' + I('flag') + 'Needs a decision</h3><span class="sp"></span>' + (ds.length ? '<a class="w128lnk" data-w128all="1">All ' + ds.length + ' in the list ' + I('chev') + '</a>' : '') + '</div>';
+    if (!ds.length) return h + '<p class="w128empty">Nothing is waiting on the executives. New calls from meetings land here.</p></section>';
+    h += show.map(function (x) {
+      var hot = x.age > 60 ? ' hot' : x.age > 30 ? ' warm' : '';
+      return '<div class="w128d"><span class="age' + hot + '">' + (x.age === 0 ? 'today' : x.age + (x.age === 1 ? ' day' : ' days')) + '</span><div class="tx"><b>' + E(x.title) + '</b>'
+        + (x.move ? '<span>Suggested: ' + E(clip(x.move, 170)) + '</span>' : '')
+        + (x.rec ? '<span class="rec">' + I('spark') + 'Recommendation: ' + E(clip(x.rec, 170)) + '</span>' : '')
+        + '<em>Decides: <b>' + E(x.owner) + '</b>' + (x.area ? ' \u00b7 ' + E(x.area) : '') + (x.cat ? ' \u00b7 ' + E(x.cat) : '') + '</em></div>'
+        + '<div class="ac">' + (staffOk() ? '<a class="w128btn sm" data-w128decide="' + E(x.ref) + '">' + I('check') + 'Record the decision</a>' : '') + '<a class="w128btn ghost sm" data-w128see="' + E(x.ref) + '">In the list</a></div></div>';
+    }).join('');
+    if (ds.length > show.length) h += '<p class="w128more">' + plural(ds.length - show.length, 'more decision', 'more decisions') + ' in the list below.</p>';
+    return h + '</section>';
+  }
+
+  /* ---------- to watch ---------- */
+  function watchRows() {
+    var t = today(), rows = [], ds = decisions(), fy = fundYear();
+    var old = ds.filter(function (d) { return d.age > 60; });
+    if (old.length) rows.push({ sev: 'hot', t: '<b>' + plural(old.length, 'decision has', 'decisions have') + ' waited more than 60 days</b>, the oldest ' + old[0].age + ' days: ' + E(sentence(clip(old[0].title, 70))), go: '#overview/decisions' });
+    if (fy.missing.length) rows.push({ sev: 'warm', t: '<b>No result recorded</b> for ' + E(listJoin(fy.missing.map(function (f) { return f.title + ' (' + fmtDay(parseDay(f.end_date) || parseDay(f.start_date)) + ')'; }))) + '.', go: '#fundevents' });
+    var over = TEAMS.map(teamStats).filter(function (s) { return s.overdue >= 5; }).sort(function (a, b) { return b.overdue - a.overdue; });
+    if (over.length) rows.push({ sev: over[0].overdue >= 20 ? 'hot' : 'warm', t: '<b>Overdue work:</b> ' + E(listJoin(over.map(function (s) { return deptLabel(s.dept) + ' ' + s.overdue; }))) + ' tasks past their due date.', go: '#team/' + over[0].dept + '/tasks' });
+    var quiet = TEAMS.map(teamStats).filter(function (s) { return !s.last || daysBetween(s.last, t) > 21; });
+    if (quiet.length) { var lastAny = quiet.map(function (s) { return s.last; }).filter(Boolean).sort(function (a, b) { return b - a; })[0]; rows.push({ sev: 'warm', t: '<b>No meeting update in three weeks</b> from ' + E(listJoin(quiet.map(function (s) { return deptLabel(s.dept); }))) + (lastAny ? ' (latest ' + fmtDay(lastAny) + ')' : '') + '. Upload their meeting transcripts to keep their pages current.', go: '#transcripts' }); }
+    var rg = (X.goals || []).filter(atRiskGoal);
+    if (rg.length) rows.push({ sev: 'warm', t: '<b>' + plural(rg.length, 'goal needs', 'goals need') + ' attention:</b> ' + E(listJoin(rg.slice(0, 3).map(function (g) { return clip(g.title, 60) + ' (' + [g.department && g.department !== 'org' ? deptLabel(g.department) : 'organization', String(g.status || '').toLowerCase()].filter(Boolean).join(', ') + ')'; }))) + '.', go: rg.some(function (g) { return g.department === 'org'; }) ? '#orggoals' : '#goals' });
+    var br = boardAtRisk();
+    if (br.length) rows.push({ sev: 'hot', t: '<b>' + plural(br.length, 'board item is', 'board items are') + ' at risk:</b> ' + E(sentence(listJoin(br.slice(0, 3).map(function (i) { return clip(i.title, 70); })))), go: '#governance' });
+    var soon = (X.fund || []).filter(function (f) { var d = parseDay(f.start_date); return d && d >= t && daysBetween(t, d) <= 21 && !f.lead && f.status !== 'idea' && f.status !== 'cancelled'; });
+    if (soon.length) rows.push({ sev: 'warm', t: '<b>No lead yet</b> for ' + E(listJoin(soon.map(function (f) { return f.title + ' (' + fmtDay(parseDay(f.start_date)) + ')'; }))) + '.', go: '#fundevents' });
+    if (fy.daysLeft >= 0 && fy.daysLeft <= 14) rows.push({ sev: 'info', t: '<b>Year-end ' + fmtDay(fy.end) + ':</b> close the books, record the last event results and set up the ' + (fy.end.getFullYear()) + '-' + String(fy.end.getFullYear() + 1).slice(2) + ' goals.', go: tabOk('finances') ? '#finances' : '#fundevents' });
+    return rows;
+  }
+  function watchHtml() {
+    var rows = watchRows();
+    return '<section class="w128box w128watch"><div class="hd"><h3>' + I('alert') + 'To watch</h3></div>'
+      + (rows.length ? rows.map(function (r) { return '<a class="w128w ' + r.sev + '" data-w128go="' + E(r.go) + '"><i></i><span>' + r.t + '</span>' + I('chev') + '</a>'; }).join('') : '<p class="w128empty">Nothing needs watching right now.</p>')
+      + '</section>';
+  }
+
+  /* ---------- highlights ---------- */
+  function winsRows() {
+    var t = today(), rows = [];
+    (X.fund || []).filter(function (f) { var d = parseDay(f.end_date) || parseDay(f.start_date); return f.status === 'done' && Number(f.raised || 0) > 0 && d && daysBetween(d, t) <= 75 && d <= t; }).forEach(function (f) {
+      var tg = Number(f.target_min || 0); rows.push({ d: parseDay(f.end_date) || parseDay(f.start_date), ic: 'target', t: '<b>' + E(f.title) + ' raised ' + money(f.raised) + '</b>' + (tg ? ' against a ' + money(tg) + ' target' : '') + '.', go: '#fundevents' });
+    });
+    (X.shout || []).filter(function (s) { var d = dayOfIso(s.created_at); return d && daysBetween(d, t) <= 30; }).slice(0, 3).forEach(function (s) {
+      rows.push({ d: dayOfIso(s.created_at), ic: 'hand', t: E(sentence(clip(s.text, 150))), go: s.member_id ? '#person/' + s.member_id : '#orgchart' });
+    });
+    (X.goals || []).filter(function (g) { var d = dayOfIso(g.updated_at); return doneGoal(g) && d && daysBetween(d, t) <= 45; }).slice(0, 3).forEach(function (g) {
+      rows.push({ d: dayOfIso(g.updated_at), ic: 'spark', t: '<b>Goal closed</b>' + (g.department && g.department !== 'org' ? ' by ' + E(deptLabel(g.department)) : '') + ': ' + E(sentence(clip(g.title, 90))), go: g.department === 'org' ? '#orggoals' : '#goals' });
+    });
+    (X.wins || []).filter(function (w) { var d = parseDay(w.meeting_date) || dayOfIso(w.created_at); return d && daysBetween(d, t) <= 45; }).slice(0, 3).forEach(function (w) {
+      rows.push({ d: parseDay(w.meeting_date) || dayOfIso(w.created_at), ic: 'spark', t: '<b>A win' + (w.department ? ' for ' + E(deptLabel(w.department)) : '') + ':</b> ' + E(sentence(clip(w.win, 120))), go: '#goals' });
+    });
+    var c30 = TEAMS.map(teamStats).filter(function (s) { return s.closed30 > 0; }).sort(function (a, b) { return b.closed30 - a.closed30; });
+    var tot = c30.reduce(function (a, s) { return a + s.closed30; }, 0);
+    if (tot) rows.push({ d: t, ic: 'check', t: '<b>' + plural(tot, 'task', 'tasks') + ' closed in the last 30 days</b>, most by ' + E(listJoin(c30.slice(0, 2).map(function (s) { return deptLabel(s.dept) + ' (' + s.closed30 + ')'; }))) + '.', go: '#dashboard', fold: 'numbers' });
+    var held = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d < t && daysBetween(d, t) <= 30 && v.status !== 'cancelled' && v.status !== 'planned'; });
+    if (held.length) rows.push({ d: parseDay(held[held.length - 1].event_date), ic: 'heart', t: '<b>' + plural(held.length, 'serving', 'servings') + ' held in the last 30 days.</b>', go: '#volunteering' });
+    var joined = changes().filter(function (c) { return c.entity_type === 'member' && c.field === 'invited' && /sent|admin|leader|member/.test(String(c.new_value || '')) && dayOfIso(c.changed_at) && daysBetween(dayOfIso(c.changed_at), t) <= 30; });
+    if (joined.length) rows.push({ d: dayOfIso(joined[0].changed_at), ic: 'people', t: '<b>' + plural(joined.length, 'person', 'people') + ' joined the Hub</b> in the last 30 days.', go: '#orgchart' });
+    return rows.sort(function (a, b) { return (b.d ? b.d.getTime() : 0) - (a.d ? a.d.getTime() : 0); }).slice(0, 7);
+  }
+  function winsHtml() {
+    var rows = winsRows();
+    return '<section class="w128box w128wins"><div class="hd"><h3>' + I('spark') + 'Highlights</h3><span class="sub">the last 30 days or so</span></div>'
+      + (rows.length ? rows.map(function (r) { return '<a class="w128h" ' + (r.fold ? 'data-w128fold="' + r.fold + '"' : 'data-w128go="' + E(r.go) + '"') + '><span class="ic">' + I(r.ic) + '</span><span class="tx">' + r.t + (r.d ? '<small>' + E(fmtDay(r.d)) + '</small>' : '') + '</span></a>'; }).join('') : '<p class="w128empty">Wins from meetings, event results and shout-outs show up here.</p>')
+      + '</section>';
+  }
+
+  /* ---------- coming up ---------- */
+  function nextRows() {
+    var t = today(), end = addDays(t, 45), rows = [], fy = fundYear();
+    var inWin = function (d) { return d && d >= t && d <= end; };
+    if (inWin(fy.end)) rows.push({ d: fy.end, k: 'Year-end', t: 'The fiscal year ends', go: tabOk('finances') ? '#finances' : '#fundevents' });
+    boardMeetings().filter(function (x) { return inWin(x.d); }).forEach(function (x) { rows.push({ d: x.d, k: 'Board', t: x.m.title || 'Board meeting', go: '#governance' }); });
+    try { var cy = X.board && X.board.cycle; if (cy && cy.next) { var due = addDays(dayOfIso(cy.next.meets_at) || t, -7); if (inWin(due)) rows.push({ d: due, k: 'Committees', t: 'Committees meet by this date', go: '#committees' }); } } catch (e) { /* fine */ }
+    (X.fund || []).filter(function (f) { return inWin(parseDay(f.start_date)) && f.status !== 'idea' && f.status !== 'cancelled'; }).forEach(function (f) { rows.push({ d: parseDay(f.start_date), k: 'Fundraising', t: f.title + (f.precision === 'month' ? ' (all month)' : ''), go: '#fundevents' }); });
+    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: v.title || v.code || 'Serving', go: '#volunteering' }); });
+    return rows.sort(function (a, b) { return a.d - b.d; }).slice(0, 8);
+  }
+  function nextHtml() {
+    var rows = nextRows();
+    return '<section class="w128box w128next"><div class="hd"><h3>' + I('cal') + 'Coming up</h3><span class="sp"></span><a class="w128lnk" data-w128go="#calendar">Calendar ' + I('chev') + '</a></div>'
+      + (rows.length ? rows.map(function (r) { return '<a class="w128n" data-w128go="' + E(r.go) + '"><span class="dt"><b>' + r.d.getDate() + '</b><small>' + E(MONTHS[r.d.getMonth()].slice(0, 3)) + '</small></span><span class="tx"><small>' + E(r.k) + ' \u00b7 ' + E(DAYS[r.d.getDay()]) + '</small>' + E(clip(r.t, 70)) + '</span>' + I('chev') + '</a>'; }).join('') : '<p class="w128empty">Nothing dated in the next six weeks yet.</p>')
+      + '</section>';
+  }
+
+  /* ---------- teams at a glance ---------- */
+  function teamsHtml() {
+    var t = today();
+    var cards = TEAMS.filter(function (d) { return tabOk(d); }).map(function (d) {
+      var s = teamStats(d), last = s.last ? daysBetween(s.last, t) : null;
+      var gOn = s.goals.filter(onTrackGoal).length, gRisk = s.goals.filter(atRiskGoal).length, gAll = s.goals.length;
+      return '<a class="w128t" data-w128go="#team/' + E(d) + '" style="--c:' + E(deptColor(d)) + '"><div class="nm"><i></i><b>' + E(deptLabel(d)) + '</b></div>'
+        + '<div class="ld">' + (s.leads.length ? 'Led by ' + E(listJoin(s.leads.slice(0, 2))) : plural(s.people, 'person', 'people') + ' on the roster') + '</div>'
+        + '<div class="st"><span><b>' + s.open + '</b> open</span><span class="' + (s.overdue ? 'od' : '') + '"><b>' + s.overdue + '</b> overdue</span><span><b>' + s.closed30 + '</b> closed in 30 days</span></div>'
+        + '<div class="ft"><span class="' + (last == null || last > 21 ? 'stale' : '') + '">' + I('mic') + (last == null ? 'No meeting update yet' : last === 0 ? 'Updated today' : 'Updated ' + (last === 1 ? 'yesterday' : last + ' days ago')) + '</span>'
+        + (gAll ? '<span>' + I('target') + plural(gAll, 'goal') + (gRisk ? ', ' + gRisk + ' at risk' : gOn ? ', ' + gOn + ' on track' : '') + '</span>' : '') + '</div></a>';
+    }).join('');
+    if (!cards) return '';
+    return '<div class="w128sec"><h2>Teams at a glance</h2><span>Open and overdue work, what closed lately, and when each team last had a meeting on the Hub.</span></div><div class="w128teams">' + cards + '</div>';
+  }
+
+  /* ---------- paint ---------- */
+  function hostEl() {
+    var panel = document.getElementById('overview'); if (!panel) return null;
+    var h = document.getElementById('w128');
+    if (!h) { h = document.createElement('div'); h.id = 'w128'; }
+    var mast = panel.querySelector(':scope > .w118mast');
+    var want = mast ? mast.nextSibling : panel.firstChild;
+    if (h.parentNode !== panel || (mast && mast.nextElementSibling !== h)) panel.insertBefore(h, want);
+    panel.classList.add('w128on');
+    tidy(panel);
+    return h;
+  }
+  /* the help button leaves the old "Your plate" card for the masthead */
+  function tidy(panel) {
+    try {
+      var help = panel.querySelector('.card.w28my .w43help, .card.w28my [data-w43help]');
+      var mast = panel.querySelector(':scope > .w118mast');
+      if (help && mast && !mast.querySelector('.w43help')) mast.appendChild(help);
+      var all = document.getElementById('decisionList'); var card = all && all.closest ? all.closest('.card') : null;
+      if (card && !card.id) card.id = 'w128all';
+    } catch (e) { /* cosmetic */ }
+  }
+  function paint() {
+    var h = hostEl(); if (!h) return;
+    var html = briefHtml() + tilesHtml()
+      + '<div class="w128row">' + decHtml() + watchHtml() + '</div>'
+      + '<div class="w128row">' + winsHtml() + nextHtml() + '</div>'
+      + teamsHtml();
+    if (h.__h !== html) { h.innerHTML = html; h.__h = html; }
+  }
+  async function show() {
+    paint();
+    await load();
+    if (onOverview()) paint();
+  }
+
+  /* ---------- the doors ---------- */
+  function scrollTo(el) { if (el && el.scrollIntoView) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { el.scrollIntoView(); } } }
+  function openFold(k) {
+    var b = document.querySelector('#w111folds [data-w111f="' + k + '"]');
+    if (!b) { location.hash = k === 'numbers' ? '#dashboard' : '#overview'; return; }
+    if (!b.classList.contains('on')) b.click();
+    setTimeout(function () { scrollTo(document.getElementById('w111folds')); }, 60);
+  }
+  function seeDecision(ref) {
+    var li = document.querySelector('#decisionList li[data-decision="' + ref + '"]');
+    if (!li) { scrollTo(document.getElementById('w128all') || document.getElementById('decisionList')); return; }
+    scrollTo(li); li.classList.remove('w128flash'); void li.offsetWidth; li.classList.add('w128flash');
+  }
+  function decide(ref) {
+    var dec = null; try { dec = (typeof getDecisions === 'function' ? getDecisions() : []).filter(function (d) { return String(d.ref) === String(ref); })[0]; } catch (e) { dec = null; }
+    if (!dec || typeof decideModal !== 'function') { seeDecision(ref); return; }
+    decideModal(dec, { checked: false });
+  }
+  function go(h) {
+    if (!h) return;
+    if (h.indexOf('#team/') === 0) { var d = h.split('/')[1]; if (!tabOk(d)) return; }
+    else { var root = h.replace(/^#/, '').split('/')[0]; if (root && root !== 'person' && root !== 'project' && !tabOk(root) && ['volunteering', 'importantinfo'].indexOf(root) < 0) { try { toast('That page is not in your access profile'); } catch (e) { /* fine */ } return; } }
+    location.hash = h;
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w128')) return;
+    var el;
+    if ((el = t.closest('[data-w128decide]'))) { e.preventDefault(); decide(el.getAttribute('data-w128decide')); return; }
+    if ((el = t.closest('[data-w128see]'))) { e.preventDefault(); seeDecision(el.getAttribute('data-w128see')); return; }
+    if ((el = t.closest('[data-w128all]'))) { e.preventDefault(); scrollTo(document.getElementById('w128all') || document.getElementById('decisionList')); return; }
+    if ((el = t.closest('[data-w128fold]'))) { e.preventDefault(); openFold(el.getAttribute('data-w128fold')); return; }
+    if ((el = t.closest('[data-w128go]'))) {
+      e.preventDefault();
+      var h = el.getAttribute('data-w128go');
+      if (h === '#overview/decisions') { scrollTo(document.getElementById('w128all') || document.getElementById('decisionList')); return; }
+      go(h); return;
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#w128 [role=button]')) { e.preventDefault(); e.target.click(); }
+  });
+
+  /* ---------- the tour follows the new page ---------- */
+  function tour() {
+    try {
+      var W = window.w122; if (!W || !W.tours || !W.tours.overview || W.tours.overview.__w128) return;
+      var OPT = { opt: 1 };
+      var S = function (sel, tt, p, o) { var x = { s: sel, t: tt, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.overview.steps = [
+        S('#overview > .w118mast', 'The executive view', 'Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.'),
+        S('#w128 .w128brief', 'The brief', 'Two or three sentences built from the Hub\u2019s data, and what is next: the board meeting, the next fundraising event and the next serving.', OPT),
+        S('#w128 .w128kpis', 'The numbers', 'Each number opens the page that explains it. Open tasks opens the overdue folder right here. Our fiscal year runs October 1 to September 30.', OPT),
+        S('#w128dec', 'Needs a decision', 'The oldest calls first, with who decides, the suggested move and the recommendation. Record the decision here or find it in the full list.', OPT),
+        S('#w128 .w128watch', 'To watch', 'What could slip: old decisions, events without a result, overdue work, quiet teams, delayed goals and board items at risk.', OPT),
+        S('#w128 .w128wins', 'Highlights', 'Event results, shout-outs, goals closed and work finished lately.', OPT),
+        S('#w128 .w128next', 'Coming up', 'The next six weeks: the year-end, board meetings, the committee deadline, events and servings.', OPT),
+        S('#w128 .w128teams', 'Teams at a glance', 'Each team\u2019s open and overdue work, what closed lately and when it last had a meeting on the Hub. Open a card for the team page.', OPT),
+        S('#w116news', 'What\u2019s new', 'Major announcements and changes since you last looked.', OPT),
+        S('#w111folds', 'Folders', 'Overdue tasks and the delivery numbers, folded away until you open them.', OPT),
+        S('#decisionList', 'Every executive decision', 'The full list with filters by category and by who decides. Tick one to record what was decided.', OPT),
+        S('#overview .add-row', 'Add a decision', 'Anyone can raise a call that needs an executive.', OPT),
+        S('#decDoneWrap', 'Decided', 'Every decision made, with its note, stays here for the record.', OPT)
+      ];
+      W.tours.overview.__w128 = true;
+    } catch (e) { /* fine */ }
+  }
+  tour();
+
+  /* ---------- wiring ---------- */
+  if (typeof showPanel === 'function') {
+    var __sp128 = showPanel;
+    showPanel = function (id) {
+      var out = __sp128.apply(this, arguments);
+      try { if (id === 'overview') setTimeout(show, 20); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  function wrapDecisions() {
+    try {
+      if (typeof renderDecisions !== 'function' || renderDecisions.__w128) return;
+      var inner = renderDecisions;
+      renderDecisions = function () { var out = inner.apply(this, arguments); try { if (onOverview()) { X.loaded = 0; setTimeout(show, 30); } } catch (e) { /* fine */ } return out; };
+      Object.keys(inner).forEach(function (k) { try { renderDecisions[k] = inner[k]; } catch (e) { /* fine */ } });
+      renderDecisions.__w128 = true;
+    } catch (e) { /* fine */ }
+  }
+  window.w128 = { state: function () { return X; }, paint: paint, load: load, show: show, brief: briefText, watch: watchRows, wins: winsRows, next: nextRows, team: teamStats };
+  if (typeof startApp === 'function') {
+    var __sa128 = startApp;
+    startApp = async function () {
+      var out = await __sa128.apply(this, arguments);
+      try { wrapDecisions(); tour(); if (onOverview()) show(); } catch (e) { console.warn('wave128 boot', e); }
+      return out;
+    };
+  }
+})();
