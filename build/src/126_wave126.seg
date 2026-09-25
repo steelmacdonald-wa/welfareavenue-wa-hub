@@ -1,0 +1,1011 @@
+/* =====================================================================
+   WA v126 the board: the three jobs of a board, the committees, and each director's progress (25/09/26)
+   =====================================================================
+   Steel, with the July 22 board deck (slides 16 to 27): "the board section should form itself around
+   the 3 board responsibilities, Committees should be it's own section divided by the 4 pillars to
+   strategic direction. I want to see how each board member is making progress in that area."
+   Board members log their own committee touchpoints; everything else stays read-only for them.
+
+   - Board overview (#governance): the next board meeting and the cycle, the three jobs (steward
+     leadership, fiduciary oversight, direction and strategy) with where each item stands, the
+     renewals, the finances and the strategy steps, and every director's progress.
+   - Committees (#committees): Fundraising, HR & People, Operations and Fiduciary, each with its chair,
+     directors, internal leads and the outside professional to recruit, the cycle (chair, internal
+     touchpoint, external touchpoint, bring it to the board) for the next board meeting, each director's
+     part, and the log. Strategy stays with the whole board.
+   Data: wa126_board (board_members, board_committees, board_meetings, board_items, board_touchpoints,
+   board_home(), board_me(), can_see_board()). Seen by directors, advisers, board viewers, leaders and admins.
+   ===================================================================== */
+(function () {
+  if (window.__wa126) return; window.__wa126 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var JOBS = [
+    { k: 'steward', n: 1, t: 'Steward leadership', d: 'Appoint and support the executive directors, and own succession so there is never a gap.', c: GREEN },
+    { k: 'fiduciary', n: 2, t: 'Fiduciary oversight', d: 'Watch the finances, risk and compliance, including board (D&O) insurance.', c: PURPLE },
+    { k: 'strategy', n: 3, t: 'Direction and strategy', d: 'Decide where we are going in the next three years, and hold the organization to it.', c: '#2A6F55' }
+  ];
+  var JOB = {}; JOBS.forEach(function (j) { JOB[j.k] = j; });
+  var ORDER = ['fundraising', 'people', 'operations', 'fiduciary'];
+  var ST = {
+    done: ['Done', 'rgba(16,63,57,.1)', GREEN], in_progress: ['In progress', 'rgba(42,140,122,.15)', '#1d6b5d'], todo: ['To do', 'rgba(121,119,115,.14)', '#5c5a56'],
+    at_risk: ['At risk', 'rgba(179,64,47,.13)', FLAG], watch: ['Watch', 'rgba(220,165,39,.2)', '#6b4d05'], standing: ['Every meeting', 'rgba(111,100,171,.14)', '#4a4180']
+  };
+  var KINDS = [
+    ['internal', 'Internal touchpoint', 'Met the team lead to get the real picture from the ground'],
+    ['external', 'External working session', 'A 30 to 60 minute session with a professional from our networks'],
+    ['meeting', 'Committee meeting', 'The committee met'],
+    ['recommendation', 'Recommendation for the board', 'An informed view to bring to the board meeting'],
+    ['note', 'Note', 'Anything else worth keeping']
+  ];
+  var KIND = {}; KINDS.forEach(function (k) { KIND[k[0]] = k; });
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  var P = {
+    x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    chev: '<path d="m9 5 7 7-7 7"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    shield: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    compass: '<circle cx="12" cy="12" r="8.5"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+    crown: '<path d="M4 17.5h16M5 17.5 4 7.5l4.5 4L12 5l3.5 6.5L20 7.5l-1 10"/>',
+    handshake: '<path d="m3 12 3.5-3.5L10 10l2-2 4 1 5 3.5"/><path d="M8.5 14.5 11 17c.6.6 1.5.6 2.1 0l4.4-4.4M6.5 12.5l2 2M3 12l3.5 3.5"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>',
+    cal: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>', money: '<rect x="3" y="6.5" width="18" height="11" rx="2"/><circle cx="12" cy="12" r="2.6"/><path d="M6.5 9.5v5M17.5 9.5v5"/>'
+  };
+  function I(n, cls) { return '<svg class="w126i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  /* dates built field by field (the offline harness swaps Date for a shim that mishandles 3 to 6 arguments) */
+  function mk(y, m, d, h) { var x = new Date(0); x.setFullYear(Number(y), Number(m), Number(d)); x.setHours(h == null ? 12 : Number(h), 0, 0, 0); return x; }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseDay(s) { if (!s) return null; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? mk(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) : null; }
+  function today() { var d = new Date(); return mk(d.getFullYear(), d.getMonth(), d.getDate(), 12); }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function daysBetween(a, b) { return Math.round((b.getTime() - a.getTime()) / 86400000); }
+  function fmtDay(d, withYear) { if (!d) return ''; return MONTHS[d.getMonth()] + ' ' + d.getDate() + (withYear ? ', ' + d.getFullYear() : ''); }
+  function fmtWhen(iso) { if (!iso) return ''; var d = new Date(iso); if (isNaN(d.getTime())) return ''; var t = d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(':00', '').replace(/\s?([ap])\.?m\.?/i, function (x, p) { return p.toLowerCase() + 'm'; }); var w = d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Toronto' }); return w + ', ' + t; }
+  function dayOfIso(iso) { if (!iso) return null; var d = new Date(iso); if (isNaN(d.getTime())) return null; var s = d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); return parseDay(s); }
+  function money(n) { var v = Math.round(Number(n || 0)); return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-CA'); }
+  function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+
+  var css = document.createElement('style');
+  css.id = 'wa126css';
+  css.textContent = ''
+    + '#governance,#committees{max-width:1320px;}'
+    + '#w126gov,#w126com,#w126sheet{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '.w126i{width:18px;height:18px;flex:0 0 auto;display:inline-block;vertical-align:middle;}'
+    + '.w126btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:' + BODY + ';font-size:13.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:11px;padding:9px 15px;cursor:pointer;text-decoration:none !important;line-height:1.1;}'
+    + '.w126btn:hover{box-shadow:0 6px 16px rgba(16,63,57,.2);}'
+    + '.w126btn[disabled]{opacity:.55;cursor:default;box-shadow:none;}'
+    + '.w126btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w126btn.ghost:hover{background:rgba(16,63,57,.06);box-shadow:none;}'
+    + '.w126btn.sm{font-size:12.5px;padding:7px 11px;border-radius:9px;}'
+    + '.w126btn.danger{background:transparent;color:' + FLAG + ' !important;border-color:rgba(179,64,47,.35);}'
+    + '.w126lnk{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}'
+    + '.w126lnk:hover{text-decoration:underline;}'
+    + '.w126card{background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';padding:18px 20px;min-width:0;}'
+    + '.w126card > h3{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 12px;display:flex;align-items:center;gap:8px;justify-content:space-between;}'
+    + '.w126card > h3 .lnk{font-size:11.5px;letter-spacing:.3px;text-transform:none;font-weight:600;color:var(--wa-muted);cursor:pointer;}'
+    + '.w126card > h3 .lnk:hover{color:' + GREEN + ';}'
+    + '.w126empty{font-size:13px;color:var(--wa-muted);line-height:1.5;margin:0;}'
+    + '.w126seg{display:inline-flex;background:rgba(16,63,57,.08);border-radius:12px;padding:3px;gap:2px;flex-wrap:wrap;margin:0 0 16px;}'
+    + '.w126seg a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:' + GREEN + ';padding:7px 13px;border-radius:9px;cursor:pointer;white-space:nowrap;text-decoration:none;}'
+    + '.w126seg a.on{background:var(--wa-card,#fff);box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '.w126st{display:inline-flex;align-items:center;font-size:11px;font-weight:700;letter-spacing:.3px;border-radius:999px;padding:3px 9px;white-space:nowrap;}'
+    + '.w126sec{display:flex;align-items:flex-end;gap:12px;margin:26px 0 12px;flex-wrap:wrap;}'
+    + '.w126sec h2{font-family:' + HEAD + ';font-size:25px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1;}'
+    + '.w126sec h2::after{display:none;}'
+    + '.w126sec span{font-size:13px;color:var(--wa-muted);}'
+    + '.w126sec .sp{flex:1;}'
+    /* the next meeting */
+    + '.w126meet{display:grid;grid-template-columns:minmax(0,1.4fr) repeat(3,minmax(0,1fr));gap:0;padding:0;overflow:hidden;}'
+    + '.w126meet > div{padding:16px 18px;border-left:1px solid rgba(16,63,57,.07);min-width:0;}'
+    + '.w126meet > div:first-child{border-left:none;background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w126meet .lb{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;opacity:.75;margin-bottom:6px;}'
+    + '.w126meet > div:first-child .lb{color:' + GOLD + ';opacity:1;}'
+    + '.w126meet b{display:block;font-size:17px;font-weight:700;letter-spacing:-.2px;line-height:1.25;}'
+    + '.w126meet > div:first-child b{font-size:20px;}'
+    + '.w126meet span{display:block;font-size:12.5px;color:var(--wa-muted);margin-top:4px;line-height:1.4;}'
+    + '.w126meet > div:first-child span{color:rgba(255,250,242,.8);}'
+    + '.w126meet .cd{display:inline-block;margin-top:8px;font-size:12px;font-weight:700;background:rgba(220,165,39,.22);color:' + GOLD + ';border-radius:999px;padding:3px 10px;}'
+    + '.w126meet a{color:inherit;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px;}'
+    + '.w126meet .ed{float:right;font-size:11.5px;font-weight:600;opacity:.8;cursor:pointer;text-decoration:none;}'
+    /* the three jobs */
+    + '.w126jobs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start;}'
+    + '.w126job{padding:0;overflow:hidden;}'
+    + '.w126job .jh{padding:18px 20px 14px;border-bottom:1px solid rgba(16,63,57,.07);}'
+    + '.w126job .jn{display:flex;align-items:center;gap:12px;}'
+    + '.w126job .jn i{flex:none;width:38px;height:38px;border-radius:50%;background:var(--c);color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-style:normal;font-family:' + HEAD + ';font-size:22px;font-weight:700;}'
+    + '.w126job h3{font-family:' + HEAD + ';font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + INK + ';line-height:1.05;}'
+    + '.w126job .jd{font-size:13px;color:#5c5a56;line-height:1.5;margin:10px 0 0;}'
+    + '.w126job .jp{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--wa-muted);font-weight:600;}'
+    + '.w126job .jp .bar{flex:1;height:6px;border-radius:3px;background:rgba(16,63,57,.08);overflow:hidden;}'
+    + '.w126job .jp .bar i{display:block;height:100%;background:var(--c);border-radius:3px;}'
+    + '.w126job .jb{padding:8px 12px 14px;}'
+    + '.w126it{display:flex;gap:10px;align-items:flex-start;padding:9px 8px;border-radius:12px;cursor:pointer;}'
+    + '.w126it:hover,.w126it:focus-visible{background:rgba(16,63,57,.045);}'
+    + '.w126it .w126st{margin-top:1px;}'
+    + '.w126it > div{min-width:0;flex:1;}'
+    + '.w126it b{display:block;font-size:13.5px;font-weight:700;line-height:1.35;}'
+    + '.w126it span.d{display:block;font-size:12.5px;color:#5c5a56;line-height:1.45;margin-top:2px;}'
+    + '.w126it em{display:block;font-style:normal;font-size:11.5px;color:var(--wa-muted);margin-top:3px;}'
+    + '.w126it.done b{color:#6d6b66;font-weight:600;}'
+    + '.w126tog{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--wa-muted);cursor:pointer;padding:6px 8px;border-radius:9px;}'
+    + '.w126tog:hover{color:' + GREEN + ';}'
+    + '.w126x{margin:6px 8px 4px;padding:12px 14px;border-radius:14px;background:rgba(16,63,57,.04);}'
+    + '.w126x h4{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:0 0 8px;}'
+    + '.w126fin{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}'
+    + '.w126fin div b{display:block;font-size:17px;font-weight:700;letter-spacing:-.3px;}'
+    + '.w126fin div span{font-size:11.5px;color:var(--wa-muted);}'
+    + '.w126fin .pos b{color:#1d6b5d;}.w126fin .neg b{color:' + FLAG + ';}'
+    + '.w126x p{font-size:12.5px;color:#5c5a56;margin:8px 0 0;line-height:1.45;}'
+    + '.w126x p.warn{color:' + FLAG + ';font-weight:600;}'
+    + '.w126ren{display:flex;flex-direction:column;gap:6px;}'
+    + '.w126ren div{display:flex;align-items:center;gap:8px;font-size:12.5px;}'
+    + '.w126ren div b{flex:1;font-weight:600;}'
+    + '.w126ren .w126st.soon{background:rgba(220,165,39,.22);color:#6b4d05;}'
+    + '.w126ren .w126st.past{background:rgba(179,64,47,.13);color:' + FLAG + ';}'
+    + '.w126ren .w126st.ok{background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    + '.w126steps3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}'
+    + '.w126steps3 div{background:var(--wa-card,#fff);border-radius:11px;padding:9px 10px;cursor:pointer;border:1px solid rgba(16,63,57,.06);}'
+    + '.w126steps3 div small{display:block;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);}'
+    + '.w126steps3 div b{display:block;font-size:12.5px;line-height:1.3;margin-top:3px;}'
+    + '.w126steps3 div.done{background:rgba(16,63,57,.07);}'
+    + '.w126goal{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;}'
+    + '.w126goal b{flex:1;font-weight:600;line-height:1.35;}'
+    /* the directors */
+    + '.w126dirs{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}'
+    + '.w126dir{cursor:pointer;display:flex;flex-direction:column;gap:12px;transition:transform .2s,box-shadow .2s;}'
+    + '.w126dir:hover,.w126dir:focus-visible{transform:translateY(-2px);box-shadow:0 2px 6px rgba(16,63,57,.08),0 18px 36px -16px rgba(16,63,57,.3);}'
+    + '.w126dir .dh{display:flex;align-items:center;gap:12px;}'
+    + '.w126av{flex:none;width:44px;height:44px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;letter-spacing:.5px;}'
+    + '.w126dir .dh > div{min-width:0;}'
+    + '.w126dir .dh > div > b{display:block;font-size:16px;font-weight:700;letter-spacing:-.2px;}'
+    + '.w126dir .dh > div > span{display:block;font-size:12.5px;color:var(--wa-muted);margin-top:1px;}'
+    + '.w126dir .me{font-size:10.5px;font-weight:700;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:2px 8px;margin-left:auto;align-self:flex-start;}'
+    + '.w126cm{display:flex;flex-direction:column;gap:7px;}'
+    + '.w126cm .row{display:flex;align-items:center;gap:8px;font-size:12.5px;}'
+    + '.w126cm .row b{font-weight:700;min-width:0;flex:1;display:flex;align-items:center;gap:6px;}'
+    + '.w126cm .row b i{width:9px;height:9px;border-radius:50%;background:var(--c);display:inline-block;flex:none;}'
+    + '.w126cm .row .ch{font-size:10.5px;font-weight:700;color:#6b4d05;background:rgba(220,165,39,.2);border-radius:999px;padding:1px 7px;}'
+    + '.w126dots{display:inline-flex;gap:3px;}'
+    + '.w126dots i{width:16px;height:6px;border-radius:3px;background:rgba(16,63,57,.12);display:inline-block;}'
+    + '.w126dots i.on{background:var(--c,' + GREEN + ');}'
+    + '.w126dots + small{font-size:11.5px;color:var(--wa-muted);white-space:nowrap;}'
+    + '.w126dir .ft{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid rgba(16,63,57,.07);padding-top:10px;}'
+    + '.w126dir .ft span{font-size:11.5px;font-weight:600;color:#5c5a56;background:rgba(16,63,57,.05);border-radius:999px;padding:3px 9px;}'
+    + '.w126dir .ft span.hl{background:rgba(42,140,122,.14);color:#1d6b5d;}'
+    + '.w126others{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;}'
+    + '.w126others span{font-size:12.5px;color:var(--wa-muted);background:rgba(16,63,57,.05);border-radius:999px;padding:5px 12px;}'
+    /* committees */
+    + '.w126how{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;counter-reset:w126how;}'
+    + '.w126how div{position:relative;background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.07);border-radius:16px;padding:14px 16px;box-shadow:' + SH1 + ';}'
+    + '.w126how div i{display:flex;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-style:normal;font-weight:700;color:' + CREAM + ';background:var(--c);margin-bottom:8px;}'
+    + '.w126how div b{display:block;font-size:14px;font-weight:700;}'
+    + '.w126how div span{display:block;font-size:12.5px;color:#5c5a56;line-height:1.45;margin-top:4px;}'
+    + '.w126cyc{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 0;padding:11px 14px;border-radius:14px;background:rgba(220,165,39,.1);font-size:13px;color:#5a4104;}'
+    + '.w126cyc b{font-weight:700;}'
+    + '.w126coms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}'
+    + '.w126com{padding:0;overflow:hidden;border-top:4px solid var(--c);}'
+    + '.w126com .ch{padding:16px 20px 12px;}'
+    + '.w126com .ch .tt{display:flex;align-items:center;gap:10px;}'
+    + '.w126com .ch h3{font-family:' + HEAD + ';font-size:26px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + INK + ';line-height:1;}'
+    + '.w126com .ch .sp{flex:1;}'
+    + '.w126com .ch p{font-size:13px;color:#5c5a56;line-height:1.5;margin:8px 0 0;}'
+    + '.w126ros{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px;padding:0 20px 14px;}'
+    + '.w126ros div small{display:block;font-size:10.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);}'
+    + '.w126ros div b{display:block;font-size:13.5px;font-weight:600;margin-top:2px;line-height:1.35;}'
+    + '.w126ros div b em{font-style:normal;font-size:11px;font-weight:700;color:#6b4d05;background:rgba(220,165,39,.2);border-radius:999px;padding:1px 7px;margin-left:4px;}'
+    + '.w126stp{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin:0 20px 14px;border-radius:14px;overflow:hidden;border:1px solid rgba(16,63,57,.08);}'
+    + '.w126stp div{padding:10px 11px;border-left:1px solid rgba(16,63,57,.08);min-width:0;}'
+    + '.w126stp div:first-child{border-left:none;}'
+    + '.w126stp div.done{background:rgba(42,140,122,.1);}'
+    + '.w126stp div small{display:flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--wa-muted);}'
+    + '.w126stp div.done small{color:#1d6b5d;}'
+    + '.w126stp div small .w126i{width:13px;height:13px;stroke-width:2.6;}'
+    + '.w126stp div b{display:block;font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.35;overflow-wrap:break-word;hyphens:auto;}'
+    + '.w126stp div:not(.done) b{color:#8a877f;font-weight:500;}'
+    + '.w126part{padding:0 20px 12px;}'
+    + '.w126part h4,.w126log h4{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:0 0 6px;}'
+    + '.w126part .row{display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid rgba(16,63,57,.06);font-size:13px;}'
+    + '.w126part .row:first-of-type{border-top:none;}'
+    + '.w126part .row .w126av{width:28px;height:28px;font-size:11px;}'
+    + '.w126part .row b{font-weight:700;min-width:84px;}'
+    + '.w126part .row .tx{flex:1;color:#5c5a56;font-size:12.5px;min-width:0;}'
+    + '.w126part .row .tx.none{color:#9a978f;}'
+    + '.w126log{padding:0 20px 12px;}'
+    + '.w126lg{display:flex;gap:10px;padding:8px 0;border-top:1px solid rgba(16,63,57,.06);cursor:pointer;}'
+    + '.w126lg:first-of-type{border-top:none;}'
+    + '.w126lg .k{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 8px;height:fit-content;margin-top:1px;background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    + '.w126lg .k.internal{background:rgba(42,140,122,.14);color:#1d6b5d;}.w126lg .k.external{background:rgba(111,100,171,.14);color:#4a4180;}.w126lg .k.recommendation{background:rgba(220,165,39,.2);color:#6b4d05;}'
+    + '.w126lg div{min-width:0;flex:1;}'
+    + '.w126lg b{display:block;font-size:13px;font-weight:600;line-height:1.35;}'
+    + '.w126lg span{display:block;font-size:11.5px;color:var(--wa-muted);margin-top:2px;}'
+    + '.w126com .cf{display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px 16px;border-top:1px solid rgba(16,63,57,.07);background:rgba(16,63,57,.02);}'
+    + '.w126com .cf .sp{flex:1;}'
+    + '.w126strat{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start;}'
+    + '.w126strat .dark{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '.w126strat .dark h3{color:' + GOLD + ';}'
+    + '.w126strat .dark p{color:rgba(255,250,242,.85);font-size:14px;line-height:1.55;margin:0 0 10px;}'
+    + '.w126strat .dark a{color:' + GOLD + ';}'
+    + '.w126strat ul{margin:0;padding:0 0 0 18px;font-size:13px;line-height:1.55;color:#4a4945;}'
+    + '.w126strat ul li{margin:3px 0;}'
+    /* the sheet */
+    + '#w126sheet{position:fixed;inset:0;z-index:2147483000;display:none;}'
+    + '#w126sheet.on{display:flex;align-items:center;justify-content:center;}'
+    + '#w126sheet .bk{position:absolute;inset:0;background:rgba(16,32,30,.46);animation:w126fade .18s ease both;}'
+    + '#w126sheet .pane{position:relative;background:' + CREAM + ';width:min(640px,calc(100vw - 32px));max-height:min(88vh,860px);overflow:auto;border-radius:22px;box-shadow:0 30px 90px -20px rgba(0,0,0,.45);animation:w126up .22s cubic-bezier(.2,.8,.2,1) both;}'
+    + '#w126sheet .ph{position:sticky;top:0;background:' + CREAM + ';padding:18px 22px 12px;border-bottom:1px solid rgba(16,63,57,.08);display:flex;gap:12px;align-items:flex-start;z-index:1;}'
+    + '#w126sheet .ph .kk{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);}'
+    + '#w126sheet .ph h2{font-family:' + HEAD + ';font-size:26px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;margin:3px 0 0;color:' + INK + ';line-height:1.05;}'
+    + '#w126sheet .ph h2::after{display:none;}'
+    + '#w126sheet .ph .sp{flex:1;}'
+    + '#w126sheet .xb{border:none;background:rgba(16,63,57,.07);width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:' + GREEN + ';flex:none;}'
+    + '#w126sheet .pb{padding:16px 22px 20px;display:flex;flex-direction:column;gap:12px;}'
+    + '#w126sheet .pf{position:sticky;bottom:0;background:' + CREAM + ';padding:12px 22px 16px;border-top:1px solid rgba(16,63,57,.08);display:flex;gap:8px;align-items:center;}'
+    + '#w126sheet .pf .sp{flex:1;}'
+    + '#w126sheet label{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:700;color:#4a4945;}'
+    + '#w126sheet label small{font-weight:400;color:var(--wa-muted);}'
+    + '#w126sheet input[type=text],#w126sheet input[type=date],#w126sheet input[type=time],#w126sheet input[type=url],#w126sheet select,#w126sheet textarea{font:inherit;font-size:14px;font-weight:400;padding:10px 12px;border-radius:11px;border:1px solid rgba(16,63,57,.18);background:#fff;color:' + INK + ';width:100%;box-sizing:border-box;}'
+    + '#w126sheet textarea{min-height:84px;resize:vertical;line-height:1.5;}'
+    + '#w126sheet .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}'
+    + '#w126sheet .kinds{display:flex;flex-direction:column;gap:6px;}'
+    + '#w126sheet .kinds label{flex-direction:row;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(16,63,57,.12);background:#fff;cursor:pointer;font-weight:600;}'
+    + '#w126sheet .kinds label input{margin-top:3px;}'
+    + '#w126sheet .kinds label span{display:block;font-weight:400;font-size:12px;color:var(--wa-muted);margin-top:2px;}'
+    + '#w126sheet .kinds label:has(input:checked){border-color:' + GREEN + ';box-shadow:0 0 0 1px ' + GREEN + ' inset;}'
+    + '#w126sheet .sts{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '#w126sheet .sts button{border:1px solid rgba(16,63,57,.15);background:#fff;border-radius:999px;padding:6px 12px;font:600 12.5px ' + BODY + ';cursor:pointer;color:' + INK + ';}'
+    + '#w126sheet .sts button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '#w126sheet .kv{display:grid;grid-template-columns:120px minmax(0,1fr);gap:8px 14px;font-size:13.5px;}'
+    + '#w126sheet .kv dt{font-weight:700;color:var(--wa-muted);font-size:12px;letter-spacing:.3px;}'
+    + '#w126sheet .kv dd{margin:0;line-height:1.45;}'
+    + '#w126sheet .err{font-size:12.5px;color:' + FLAG + ';font-weight:600;min-height:1em;}'
+    + '#w126sheet .chk{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '#w126sheet .chk label{flex-direction:row;align-items:center;gap:6px;background:#fff;border:1px solid rgba(16,63,57,.14);border-radius:999px;padding:6px 11px;font-weight:600;cursor:pointer;}'
+    + '#w126sheet .quote{background:rgba(220,165,39,.12);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.55;}'
+    + '@keyframes w126fade{from{opacity:0}to{opacity:1}}@keyframes w126up{from{opacity:0;transform:translateY(10px) scale(.99)}to{opacity:1;transform:none}}'
+    + '@media (max-width:1100px){.w126jobs{grid-template-columns:1fr;}.w126meet{grid-template-columns:1fr 1fr;}.w126meet > div:first-child{grid-column:1 / -1;}.w126strat{grid-template-columns:1fr;}}'
+    + '@media (max-width:860px){.w126coms{grid-template-columns:1fr;}.w126how{grid-template-columns:1fr 1fr;}}'
+    + '@media (max-width:640px){.w126meet{grid-template-columns:1fr;}.w126meet > div{border-left:none;border-top:1px solid rgba(16,63,57,.07);}.w126stp{grid-template-columns:1fr 1fr;}.w126stp div:nth-child(3){border-left:none;}.w126stp div:nth-child(n+3){border-top:1px solid rgba(16,63,57,.08);}.w126ros{grid-template-columns:1fr;}.w126how{grid-template-columns:1fr;}#w126sheet.on{align-items:flex-end;}#w126sheet .pane{width:100vw;border-radius:20px 20px 0 0;max-height:90vh;}#w126sheet .two{grid-template-columns:1fr;}.w126fin{grid-template-columns:1fr 1fr;}}'
+    + '@media (prefers-reduced-motion: reduce){#w126sheet .bk,#w126sheet .pane{animation:none !important;}.w126dir{transition:none;}}';
+  document.head.appendChild(css);
+
+  /* ---------- state ---------- */
+  var B = { data: null, loaded: 0, loading: null, me: null, meLoading: null, sheet: null, err: null, openDone: {} };
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function wRole() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function myEmail() { try { return lower((typeof USER !== 'undefined' && USER && USER.email) || ''); } catch (e) { return ''; } }
+  function myName() { var n = ''; try { n = typeof who === 'function' ? String(who() || '') : ''; } catch (e) { n = ''; } return n || myEmail().split('@')[0]; }
+  function isLeaderUI() { var r = wRole(); return r === 'admin' || r === 'leader'; }
+  function isAdminUI() { return wRole() === 'admin'; }
+
+  /* who am I on the board (board_me: director id, board person, leader, admin) */
+  function fallbackMe() { return { member_id: null, board: boardMode(), leader: isLeaderUI(), admin: isAdminUI(), fallback: true }; }
+  function loadMe(force) {
+    if (B.me && !force) return Promise.resolve(B.me);
+    if (B.meLoading) return B.meLoading;
+    B.meLoading = Promise.resolve(db.rpc('board_me')).then(function (r) {
+      var d = r && !r.error ? r.data : null;
+      B.me = d && typeof d === 'object' ? d : fallbackMe(); B.meLoading = null; return B.me;
+    }, function () { B.me = fallbackMe(); B.meLoading = null; return B.me; });
+    return B.meLoading;
+  }
+  function canSee() { var m = B.me || fallbackMe(); return !!(m.board || m.leader || m.admin); }
+  function meId() { var d = B.data; return d && d.me && d.me.member_id != null ? d.me.member_id : (B.me && B.me.member_id != null ? B.me.member_id : null); }
+  function amLeader() { var d = B.data; return !!((d && d.me && (d.me.leader || d.me.admin)) || (B.me && (B.me.leader || B.me.admin)) || isLeaderUI()); }
+  function amAdmin() { var d = B.data; return !!((d && d.me && d.me.admin) || (B.me && B.me.admin) || isAdminUI()); }
+  function canEditItems() { return amLeader() || meId() != null; }
+  function canLog() { return amAdmin() || meId() != null; }
+  /* each director's progress is for the board itself and the admins, not for every leader */
+  function seeDirectors() { return amAdmin() || meId() != null || !!(B.me && B.me.board) || boardMode(); }
+  function canEditCommittee(c) { return amLeader() || (meId() != null && c && String(c.chair_id) === String(meId())); }
+
+  /* ---------- loading: board_home(), or the tables when the function is not there (the offline harness) ---------- */
+  function load(force) {
+    if (B.loading) return B.loading;
+    if (B.loaded && !force && Date.now() - B.loaded < 60000) return Promise.resolve(B.data);
+    B.loading = (async function () {
+      try {
+        var r = null; try { r = await db.rpc('board_home'); } catch (e) { r = null; }
+        var d = r && !r.error ? r.data : null;
+        if (!d || typeof d !== 'object' || !Array.isArray(d.members)) d = await fallbackHome();
+        B.data = normalize(d); B.loaded = Date.now(); B.err = null;
+      } catch (e) { B.err = String((e && e.message) || e); if (!B.data) B.data = normalize({}); }
+      finally { B.loading = null; }
+      return B.data;
+    })();
+    return B.loading;
+  }
+  function fyStartOf(d) { return d.getMonth() >= 9 ? mk(d.getFullYear(), 9, 1, 12) : mk(d.getFullYear() - 1, 9, 1, 12); }
+  async function fallbackHome() {
+    var q = function (p) { return Promise.resolve(p).then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; }); };
+    var res = await Promise.all([
+      q(db.from('board_members').select('*').order('sort')), q(db.from('board_committees').select('*').order('sort')), q(db.from('board_meetings').select('*')),
+      q(db.from('board_items').select('*').order('sort')), q(db.from('board_touchpoints').select('*').order('happened_on', { ascending: false }).limit(400)),
+      q(db.from('dept_tasks').select('id, title, owner, status, done, due_date, closed_at, opened_at, confidential').eq('department', 'board')),
+      q(db.from('goals').select('id, title, status, progress, quarter, sort').eq('department', 'org')),
+      q(db.from('fund_events').select('id, title, start_date, end_date, timing, status, raised')),
+      q(db.from('hub_settings').select('key, value').eq('key', 'fund_goals')),
+      q(db.from('finance_transactions').select('txn_date, amount, duplicate_of')),
+      q(db.from('finance_statements').select('period_end'))
+    ]);
+    var em = myEmail(), mine = res[0].filter(function (m) { return (m.status === 'active' || m.status === 'adviser') && (m.emails || []).map(lower).indexOf(em) >= 0; })[0];
+    var fs = fyStartOf(today()), fe = mk(fs.getFullYear() + 1, 9, 1, 12), ps = mk(fs.getFullYear() - 1, 9, 1, 12);
+    var inc = 0, exp = 0, pinc = 0, pexp = 0, last = '';
+    res[9].forEach(function (t) { if (t.duplicate_of) return; var d = parseDay(t.txn_date); if (!d) return; var a = Number(t.amount || 0); if (t.txn_date > last) last = t.txn_date; if (d >= fs && d < fe) { if (a > 0) inc += a; else exp -= a; } else if (d >= ps && d < fs) { if (a > 0) pinc += a; else pexp -= a; } });
+    var lastSt = res[10].map(function (s) { return s.period_end || ''; }).sort().pop() || null;
+    var t0 = today();
+    var raised = res[7].filter(function (f) { var s = parseDay(f.start_date); return s && s >= fs && s < fe; }).reduce(function (a, f) { return a + Number(f.raised || 0); }, 0);
+    var next = res[7].filter(function (f) { var e = parseDay(f.end_date) || parseDay(f.start_date); return (f.status === 'planned' || f.status === 'confirmed') && e && e >= t0; }).sort(function (a, b) { return String(a.start_date).localeCompare(String(b.start_date)); }).slice(0, 4);
+    return {
+      me: { member_id: mine ? mine.id : null, leader: isLeaderUI(), admin: isAdminUI(), email: em, fallback: true },
+      members: res[0], committees: res[1], meetings: res[2], items: res[3], touchpoints: res[4],
+      tasks: res[5].filter(function (t) { return !t.confidential; }), goals: res[6],
+      finance: { fy_start: ymd(fs), income: Math.round(inc * 100) / 100, expenses: Math.round(exp * 100) / 100, prev_income: Math.round(pinc * 100) / 100, prev_expenses: Math.round(pexp * 100) / 100, last_txn: last || null, last_statement: lastSt },
+      fund: { goals: (res[8][0] || {}).value || null, raised: raised, next: next }
+    };
+  }
+  function normalize(d) {
+    d = d || {};
+    ['members', 'committees', 'meetings', 'items', 'touchpoints', 'tasks', 'goals'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+    d.committees.sort(function (a, b) { return ORDER.indexOf(a.key) - ORDER.indexOf(b.key); });
+    d.meetings.sort(function (a, b) { return String(a.meets_at || '9999').localeCompare(String(b.meets_at || '9999')); });
+    d.touchpoints.sort(function (a, b) { return String(b.happened_on || '').localeCompare(String(a.happened_on || '')) || (b.id || 0) - (a.id || 0); });
+    d.finance = d.finance || {}; d.fund = d.fund || {}; d.me = d.me || {};
+    return d;
+  }
+
+  /* ---------- lookups ---------- */
+  function D() { return B.data || normalize({}); }
+  function members() { return D().members; }
+  function directors() { return members().filter(function (m) { return m.status === 'active'; }); }
+  function memberById(id) { return members().filter(function (m) { return String(m.id) === String(id); })[0] || null; }
+  function memberName(id) { var m = memberById(id); return m ? m.name : ''; }
+  function comms() { return D().committees; }
+  function commByKey(k) { return comms().filter(function (c) { return c.key === k; })[0] || null; }
+  function inCommittee(c, id) { return !!c && id != null && ((c.member_ids || []).map(String).indexOf(String(id)) >= 0 || String(c.chair_id) === String(id)); }
+  function committeesOf(id) { return comms().filter(function (c) { return inCommittee(c, id); }); }
+  function tps() { return D().touchpoints; }
+
+  /* ---------- the cycle: from the last board meeting held to the next one ---------- */
+  function boardMeetings() { return D().meetings.filter(function (m) { return m.kind === 'board' || m.kind === 'special' || m.kind === 'agm'; }); }
+  function nextMeeting() { var now = Date.now(); return boardMeetings().filter(function (m) { return m.meets_at && new Date(m.meets_at).getTime() >= now - 3 * 3600000 && m.status !== 'cancelled' && m.status !== 'held'; })[0] || null; }
+  function lastMeeting() { var now = Date.now(); var held = boardMeetings().filter(function (m) { return m.meets_at && (m.status === 'held' || new Date(m.meets_at).getTime() < now - 3 * 3600000) && m.status !== 'cancelled'; }); return held[held.length - 1] || null; }
+  function strategySession() { return D().meetings.filter(function (m) { return m.kind === 'strategy' && m.status !== 'cancelled' && m.status !== 'held'; })[0] || null; }
+  function cycleStart() { var l = lastMeeting(); return l ? dayOfIso(l.meets_at) : addDays(today(), -91); }
+  function cycleEnd() { var n = nextMeeting(); return n ? dayOfIso(n.meets_at) : null; }
+  function committeeDue() { var e = cycleEnd(); return e ? addDays(e, -7) : null; }
+  function inCycle(t) { var s = cycleStart(), d = parseDay(t.happened_on); return !!d && (!s || d > s || (t.meeting_id != null && nextMeeting() && String(t.meeting_id) === String(nextMeeting().id))); }
+  function cycleTps(c) { return tps().filter(function (t) { return t.committee === c.key && inCycle(t); }); }
+  function isRec(t) { return t.kind === 'recommendation' || !!String(t.recommendation || '').trim(); }
+  function steps(c) {
+    var tp = cycleTps(c);
+    var first = function (f) { return tp.filter(f).sort(function (a, b) { return String(a.happened_on).localeCompare(String(b.happened_on)); })[0] || null; };
+    var i = first(function (t) { return t.kind === 'internal'; }), x = first(function (t) { return t.kind === 'external'; }), r = first(isRec);
+    return [
+      { k: 'chair', t: 'Chair', done: !!c.chair_id, note: c.chair_id ? memberName(c.chair_id) + (c.chair_confirmed ? '' : ' (proposed)') : 'No chair yet' },
+      { k: 'internal', t: 'Internal touchpoint', done: !!i, note: i ? fmtDay(parseDay(i.happened_on)) + (i.with_whom ? ', with ' + i.with_whom : '') : 'Meet the team lead' },
+      { k: 'external', t: 'External touchpoint', done: !!x, note: x ? fmtDay(parseDay(x.happened_on)) + (x.with_whom ? ', with ' + x.with_whom : '') : 'A session with an outside professional' },
+      { k: 'board', t: 'Bring it to the board', done: !!r, note: r ? 'Ready for the board' : 'A recommendation for the meeting' }
+    ];
+  }
+  function stepsDone(c) { return steps(c).filter(function (s) { return s.done; }).length; }
+  function myCycleTps(id, c) { return tps().filter(function (t) { return String(t.member_id) === String(id) && inCycle(t) && (!c || t.committee === c.key); }); }
+  function tasksOf(m) {
+    if (!m) return [];
+    var re; try { re = new RegExp('(^|[^a-z])' + String(m.name || '').toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z]|$)', 'i'); } catch (e) { return []; }
+    return D().tasks.filter(function (t) { return re.test(String(t.owner || '')); });
+  }
+  function renewalState(m) {
+    var d = parseDay(m.renewal_due); if (!d) return null;
+    var n = daysBetween(today(), d);
+    if (n < 0) return { k: 'past', t: 'Renewal was due ' + (m.renewal || fmtDay(d, true)) };
+    if (n <= 60) return { k: 'soon', t: 'Renewal due ' + (m.renewal || fmtDay(d, true)) };
+    return { k: 'ok', t: 'Term to ' + (m.renewal || fmtDay(d, true)) };
+  }
+
+  /* ---------- the masthead and the section nav ---------- */
+  function mast(id, crumb, title, blurb) {
+    var sec = document.getElementById(id); if (!sec) return;
+    var m = sec.querySelector(':scope > .w118mast');
+    if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w126', id); sec.insertBefore(m, sec.firstChild); }
+    var html = '<div class="crumb">' + E(crumb) + '</div><h1>' + E(title) + '</h1><p>' + E(blurb) + '</p>';
+    if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
+  }
+  function host(id, hid) {
+    var sec = document.getElementById(id); if (!sec) return null;
+    var h = document.getElementById(hid);
+    if (!h) { h = document.createElement('div'); h.id = hid; sec.appendChild(h); }
+    return h;
+  }
+  function segHtml(on) {
+    var a = [['#governance', 'Overview', 'gov'], ['#committees', 'Committees', 'com']];
+    if (seeDirectors()) a.push(['#governance/directors', 'Directors', 'dir']);
+    if (staffOk() && isTabAllowed('board')) a.push(['#team/board', 'Team page', 'tp']);
+    if (staffOk() && isTabAllowed('board')) { a.push(['#team/board/agenda', 'Agendas', 'ag']); a.push(['#team/board/tasks', 'Board tasks', 'tk']); }
+    return '<nav class="w126seg" aria-label="Board">' + a.map(function (x) { return '<a data-w126go="' + x[0] + '" class="' + (x[2] === on ? 'on' : '') + '">' + E(x[1]) + '</a>'; }).join('') + '</nav>';
+  }
+  function isTabAllowed(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return false; } }
+  function stTag(s) { var x = ST[s] || ST.todo; return '<span class="w126st" style="background:' + x[1] + ';color:' + x[2] + '">' + E(x[0]) + '</span>'; }
+
+  /* ---------- the next board meeting and the cycle ---------- */
+  function meetHtml() {
+    var n = nextMeeting(), l = lastMeeting(), s = strategySession(), due = committeeDue(), t = today();
+    var nd = n ? dayOfIso(n.meets_at) : null, left = nd ? daysBetween(t, nd) : null;
+    var edit = amLeader();
+    return '<div class="w126card w126meet">'
+      + '<div><div class="lb">Next board meeting' + (edit && n ? '<a class="ed" data-w126meet="' + n.id + '">Edit</a>' : '') + '</div>'
+      + (n ? '<b>' + E(n.title) + '</b><span>' + E(fmtWhen(n.meets_at)) + (n.status === 'tentative' ? ' (tentative)' : '') + '</span>' + (left != null ? '<span class="cd">' + (left === 0 ? 'Today' : left === 1 ? 'Tomorrow' : 'In ' + left + ' days') + '</span>' : '')
+        : '<b>Not scheduled yet</b><span>Four board meetings a year, plus an AGM.</span>' + (edit ? '<span><a data-w126meet="new">Schedule it</a></span>' : ''))
+      + '</div>'
+      + '<div><div class="lb">Committees meet by</div>' + (due ? '<b>' + E(fmtDay(due)) + '</b><span>A week before the board meeting, so everyone arrives informed.</span>' : '<b>A week before</b><span>each board meeting.</span>') + '</div>'
+      + '<div><div class="lb">Last meeting</div>' + (l ? '<b>' + E(fmtDay(dayOfIso(l.meets_at), true)) + '</b><span>' + E(l.title) + (l.notes_url ? ' \u00b7 <a href="' + E(l.notes_url) + '" target="_blank" rel="noopener">minutes</a>' : '') + '</span>' : '<b>None yet</b>') + '</div>'
+      + '<div><div class="lb">Strategy session' + (edit && s ? '<a class="ed" data-w126meet="' + s.id + '">Edit</a>' : '') + '</div>' + (s ? '<b>' + (s.meets_at ? E(fmtDay(dayOfIso(s.meets_at))) : 'To schedule') + '</b><span>Board and operations: assumptions, who we serve, the plan.</span>' : '<b>Every October</b><span>The fiscal year-end deep dive.</span>') + '</div>'
+      + '</div>';
+  }
+
+  /* ---------- the three jobs ---------- */
+  function itemHtml(it) {
+    var task = it.task_id ? D().tasks.filter(function (t) { return String(t.id) === String(it.task_id); })[0] : null;
+    var meta = [it.owner, it.due ? 'Due ' + it.due : '', task ? 'Board task: ' + (task.done ? 'done' : (task.status || 'open')) : ''].filter(Boolean).join(' \u00b7 ');
+    return '<div class="w126it' + (it.status === 'done' ? ' done' : '') + '" data-w126item="' + it.id + '" tabindex="0" role="button">' + stTag(it.status) + '<div><b>' + E(it.title) + '</b>' + (it.detail && it.status !== 'done' ? '<span class="d">' + E(clip(it.detail, 150)) + '</span>' : '') + (meta ? '<em>' + E(meta) + '</em>' : '') + '</div></div>';
+  }
+  function jobItems(k) {
+    var rank = { at_risk: 0, in_progress: 1, todo: 2, watch: 3, standing: 4, done: 5 };
+    return D().items.filter(function (i) { return i.job === k; }).sort(function (a, b) { return (rank[a.status] - rank[b.status]) || (a.sort || 0) - (b.sort || 0); });
+  }
+  function stewardExtra() {
+    var ds = directors().filter(function (m) { return m.renewal_due || m.renewal; });
+    var rows = ds.map(function (m) { var r = renewalState(m); return '<div><b>' + E(m.name) + '</b>' + (r ? '<span class="w126st ' + r.k + '">' + E(r.t) + '</span>' : '<span class="w126st ok">' + E(m.renewal || 'No renewal set') + '</span>') + '</div>'; }).join('');
+    var open = members().filter(function (m) { return m.status === 'resigned'; });
+    return '<div class="w126x"><h4>Terms and renewals</h4><div class="w126ren">' + (rows || '<p class="w126empty">No terms recorded yet.</p>') + '</div>'
+      + (open.length ? '<p>' + E(open.length === 1 ? 'One seat is open' : open.length + ' seats are open') + ' (HR & People).</p>' : '') + '</div>';
+  }
+  function fiduciaryExtra() {
+    var f = D().finance || {}, fs = parseDay(f.fy_start), net = Number(f.income || 0) - Number(f.expenses || 0), pnet = Number(f.prev_income || 0) - Number(f.prev_expenses || 0);
+    var ls = parseDay(f.last_statement || f.last_txn), stale = ls ? daysBetween(ls, today()) > 45 : true;
+    var fyl = fs ? 'Fiscal ' + fs.getFullYear() + '-' + String(fs.getFullYear() + 1).slice(2) : 'This fiscal year';
+    var fund = D().fund || {}, g = fund.goals || {};
+    return '<div class="w126x"><h4>' + E(fyl) + (ls ? ', to ' + E(fmtDay(ls)) : '') + '</h4><div class="w126fin">'
+      + '<div><b>' + E(money(f.income)) + '</b><span>came in</span></div><div><b>' + E(money(f.expenses)) + '</b><span>went out</span></div><div class="' + (net >= 0 ? 'pos' : 'neg') + '"><b>' + (net >= 0 ? '+' : '') + E(money(net)) + '</b><span>net</span></div></div>'
+      + (f.prev_income || f.prev_expenses ? '<p>Last fiscal year: ' + E(money(f.prev_income)) + ' in, ' + E(money(f.prev_expenses)) + ' out (' + (pnet >= 0 ? '+' : '') + E(money(pnet)) + ').</p>' : '')
+      + (stale ? '<p class="warn">The statements stop at ' + (ls ? E(fmtDay(ls, true)) : 'no date yet') + ': the newer months are not in the Hub yet.</p>' : '')
+      + '<p>Fundraising events raised ' + E(money(fund.raised || 0)) + ' this fiscal year' + (g.target ? '; the 2026-27 goal is ' + E(money(g.minimum || 0)) + ' minimum, ' + E(money(g.target)) + ' target' : '') + '. <a class="w126lnk" data-w126go="#fundevents">Events calendar</a></p></div>';
+  }
+  function strategyExtra() {
+    var steps3 = D().items.filter(function (i) { return i.job === 'strategy' && /^Step \d/i.test(i.title || ''); }).sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); });
+    var goals = D().goals || [];
+    var gst = function (s) { s = lower(s); return s === 'on track' || s === 'done' || s === 'complete' ? 'in_progress' : s === 'at risk' || s === 'off track' ? 'at_risk' : s === 'not started' ? 'todo' : 'in_progress'; };
+    return '<div class="w126x"><h4>Strategy starts with shared assumptions</h4>'
+      + (steps3.length ? '<div class="w126steps3">' + steps3.map(function (s) { var m = /^Step (\d)[:.]?\s*(.*)$/i.exec(s.title) || [0, '', s.title]; return '<div class="' + (s.status === 'done' ? 'done' : '') + '" data-w126item="' + s.id + '"><small>Step ' + E(m[1]) + (s.status === 'done' ? ' \u00b7 done' : '') + '</small><b>' + E(m[2].replace(/^./, function (c) { return c.toUpperCase(); })) + '</b></div>'; }).join('') + '</div>' : '')
+      + '</div>'
+      + (goals.length ? '<div class="w126x"><h4>Organizational goals</h4>' + goals.map(function (gl) { return '<div class="w126goal"><b>' + E(gl.title) + '</b>' + stTag(gst(gl.status)).replace(/>[^<]*<\/span>$/, '>' + E(gl.status || '') + '</span>') + '</div>'; }).join('') + '<p><a class="w126lnk" data-w126go="#orggoals">Organizational goals</a></p></div>' : '');
+  }
+  function jobHtml(j) {
+    var list = jobItems(j.k), visible = list.filter(function (i) { return i.status !== 'done' && !(j.k === 'strategy' && /^Step \d/i.test(i.title || '')); }), done = list.filter(function (i) { return i.status === 'done'; });
+    var total = list.filter(function (i) { return i.status !== 'standing' && i.status !== 'watch'; }).length, nd = done.length, pct = total ? Math.round(nd / total * 100) : 0;
+    var extra = j.k === 'steward' ? stewardExtra() : j.k === 'fiduciary' ? fiduciaryExtra() : strategyExtra();
+    var showDone = !!B.openDone[j.k];
+    return '<div class="w126card w126job" id="w126job-' + j.k + '" style="--c:' + j.c + '"><div class="jh"><div class="jn"><i>' + j.n + '</i><h3>' + E(j.t) + '</h3></div><p class="jd">' + E(j.d) + '</p>'
+      + '<div class="jp"><span>' + nd + ' of ' + total + ' done</span><span class="bar"><i style="width:' + pct + '%"></i></span></div></div>'
+      + '<div class="jb">' + (visible.length ? visible.map(itemHtml).join('') : '<p class="w126empty" style="padding:8px">Nothing open.</p>')
+      + (done.length ? '<a class="w126tog" data-w126done="' + j.k + '">' + I(showDone ? 'x' : 'check') + (showDone ? 'Hide what is done' : done.length + ' done') + '</a>' + (showDone ? done.map(itemHtml).join('') : '') : '')
+      + (canEditItems() ? '<a class="w126tog" data-w126newitem="' + j.k + '">' + I('plus') + 'Add an item</a>' : '')
+      + extra + '</div></div>';
+  }
+
+  /* ---------- each director's progress ---------- */
+  function dirCardHtml(m) {
+    var cs = committeesOf(m.id), mine = String(m.id) === String(meId());
+    var r = renewalState(m), my = myCycleTps(m.id), recs = my.filter(isRec).length, ts = tasksOf(m), open = ts.filter(function (t) { return !t.done; }).length, dn = ts.filter(function (t) { return t.done; }).length;
+    var rows = cs.map(function (c) {
+      var n = stepsDone(c);
+      return '<div class="row" style="--c:' + E(c.color || GREEN) + '"><b><i></i>' + E(c.name) + (String(c.chair_id) === String(m.id) ? ' <span class="ch">Chair</span>' : '') + '</b><span class="w126dots">' + [0, 1, 2, 3].map(function (i) { return '<i class="' + (i < n ? 'on' : '') + '"></i>'; }).join('') + '</span><small>' + n + ' of 4</small></div>';
+    }).join('');
+    return '<div class="w126card w126dir" data-w126dir="' + m.id + '" tabindex="0" role="button"><div class="dh"><span class="w126av" style="background:' + (cs[0] ? E(cs[0].color || GREEN) : GREEN) + '">' + E(initials(m.full_name || m.name)) + '</span><div><b>' + E(m.full_name || m.name) + '</b><span>' + E(m.seat || 'Director') + '</span></div>' + (mine ? '<span class="me">You</span>' : '') + '</div>'
+      + '<div class="w126cm">' + (rows || '<p class="w126empty">Not on a committee yet.</p>') + '</div>'
+      + '<div class="ft">' + (my.length ? '<span class="hl">' + my.length + ' logged this cycle' + (recs ? ', ' + recs + ' recommendation' + (recs === 1 ? '' : 's') : '') + '</span>' : '<span>Nothing logged this cycle</span>')
+      + (ts.length ? '<span>' + open + ' open, ' + dn + ' done board tasks</span>' : '') + (r ? '<span>' + E(r.t) + '</span>' : '') + '</div></div>';
+  }
+  function dirsHtml() {
+    var ds = directors(), others = members().filter(function (m) { return m.status !== 'active'; });
+    var cs = cycleStart(), ce = cycleEnd();
+    return '<div class="w126sec" id="w126dirs"><h2>The directors</h2><span>' + (cs && ce ? 'This cycle: ' + E(fmtDay(cs)) + ' to ' + E(fmtDay(ce)) + '. ' : '') + 'Each committee\u2019s steps, what each director logged, their board tasks and their term.</span></div>'
+      + (ds.length ? '<div class="w126dirs">' + ds.map(dirCardHtml).join('') + '</div>' : '<p class="w126empty">No directors recorded yet.</p>')
+      + (others.length ? '<div class="w126others">' + others.map(function (m) { return '<span>' + E(m.full_name || m.name) + ': ' + E(m.status === 'adviser' ? m.seat || 'Adviser' : m.status === 'resigned' ? 'resigned' + (m.note ? ' (' + clip(m.note.replace(/;.*$/, ''), 40) + ')' : '') : m.status) + '</span>'; }).join('') + '</div>' : '');
+  }
+
+  /* ---------- the page ---------- */
+  function govPaint() {
+    var h = host('governance', 'w126gov'); if (!h) return;
+    mast('governance', 'Board & Governance', 'Board overview', 'Everything the board does ladders up to one of three jobs. Where each one stands, and how each director is progressing on their committees.');
+    if (!canSee()) { h.innerHTML = '<div class="w126card"><p class="w126empty">The board pages are for directors, board advisers and leaders.</p></div>'; return; }
+    if (!B.data) { h.innerHTML = segHtml('gov') + '<div class="w126card"><p class="w126empty">Loading the board\u2026</p></div>'; return; }
+    var html = segHtml(B.dirFocus ? 'dir' : 'gov') + meetHtml()
+      + '<div class="w126sec"><h2>The three jobs of a board</h2><span>Everything the board does should ladder up to one of these three.</span></div>'
+      + '<div class="w126jobs">' + JOBS.map(jobHtml).join('') + '</div>'
+      + (seeDirectors() ? dirsHtml() : '');
+    if (h.__h !== html) { h.innerHTML = html; h.__h = html; }
+  }
+  async function govShow(sub) {
+    var h = host('governance', 'w126gov'); if (!h) return;
+    B.dirFocus = sub === 'directors';
+    await loadMe();
+    govPaint();
+    if (!canSee()) return;
+    await load();
+    if (onPage('governance')) {
+      govPaint();
+      if (sub === 'directors') { var el = document.getElementById('w126dirs'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); }
+      else if (sub && /^director\/\d+$/.test(sub)) openDirector(sub.split('/')[1]);
+      else if (sub && JOB[sub]) { var j = document.getElementById('w126job-' + sub); if (j && j.scrollIntoView) j.scrollIntoView({ block: 'start' }); }
+    }
+  }
+  function onPage(id) { var a = document.querySelector('.panel.active'); return !!(a && a.id === id); }
+
+  /* ---------- the committees ---------- */
+  function namesOf(ids) { return (ids || []).map(memberName).filter(Boolean); }
+  function stepHtml(s) { return '<div class="' + (s.done ? 'done' : '') + '"><small>' + (s.done ? I('check') : '') + E(s.t) + '</small><b>' + E(s.note) + '</b></div>'; }
+  function logRowHtml(t) {
+    var k = KIND[t.kind] || KIND.note, who = memberName(t.member_id) || t.logged_by_name || '';
+    var line = t.kind === 'recommendation' ? (t.recommendation || t.summary) : (t.summary || t.recommendation || '');
+    return '<div class="w126lg" data-w126tp="' + t.id + '" tabindex="0" role="button"><span class="k ' + E(t.kind) + '">' + E(k[1].replace(/ (touchpoint|working session|for the board)$/, '')) + '</span><div><b>' + E(clip(line || (t.with_whom ? 'With ' + t.with_whom : k[1]), 120)) + '</b><span>' + E(fmtDay(parseDay(t.happened_on), true)) + (who ? ' \u00b7 ' + E(who) : '') + (t.with_whom && line ? ' \u00b7 with ' + E(t.with_whom) : '') + '</span></div></div>';
+  }
+  function comHtml(c) {
+    var st = steps(c), n = st.filter(function (s) { return s.done; }).length, dirs = (c.member_ids || []).map(memberById).filter(Boolean);
+    var parts = dirs.map(function (m) {
+      var mine = myCycleTps(m.id, c), kinds = {};
+      mine.forEach(function (t) { kinds[t.kind] = (kinds[t.kind] || 0) + 1; });
+      var txt = mine.length ? Object.keys(kinds).map(function (k) { return kinds[k] + ' ' + (KIND[k] ? KIND[k][1].toLowerCase() : k) + (kinds[k] > 1 ? 's' : ''); }).join(', ') : '';
+      return '<div class="row"><span class="w126av" style="background:' + E(c.color || GREEN) + '">' + E(initials(m.full_name || m.name)) + '</span><b>' + E(m.name) + (String(c.chair_id) === String(m.id) ? ' (chair)' : '') + '</b><span class="tx' + (txt ? '' : ' none') + '">' + E(txt || 'Nothing logged this cycle') + '</span></div>';
+    }).join('');
+    var log = tps().filter(function (t) { return t.committee === c.key; });
+    var chair = c.chair_id ? memberName(c.chair_id) : '';
+    return '<div class="w126card w126com" id="w126com-' + c.key + '" style="--c:' + E(c.color || GREEN) + '">'
+      + '<div class="ch"><div class="tt"><h3>' + E(c.name) + '</h3><span class="sp"></span><span class="w126st" style="background:rgba(16,63,57,.07);color:' + GREEN + '">' + n + ' of 4 this cycle</span></div>' + (c.purpose ? '<p>' + E(c.purpose) + '</p>' : '') + '</div>'
+      + '<div class="w126ros"><div><small>Chair</small><b>' + E(chair || 'To name') + (chair && !c.chair_confirmed ? '<em>proposed</em>' : '') + '</b></div>'
+      + '<div><small>Directors</small><b>' + E(namesOf(c.member_ids).join(', ') || 'None yet') + '</b></div>'
+      + '<div><small>Internal leads</small><b>' + E((c.internal_leads || []).join(', ') || 'To name') + '</b></div>'
+      + '<div><small>To recruit</small><b>' + E(c.external_recruit || 'An outside professional') + '</b></div></div>'
+      + '<div class="w126stp">' + st.map(stepHtml).join('') + '</div>'
+      + (seeDirectors() ? '<div class="w126part"><h4>Each director this cycle</h4>' + (parts || '<p class="w126empty">No directors on this committee yet.</p>') + '</div>' : '')
+      + '<div class="w126log"><h4>The log</h4>' + (log.length ? log.slice(0, 4).map(logRowHtml).join('') + (log.length > 4 ? '<a class="w126tog" data-w126all="' + c.key + '">' + I('chev') + 'All ' + log.length + ' entries</a>' : '') : '<p class="w126empty">Nothing logged yet. Start with a touchpoint with the team lead.</p>') + '</div>'
+      + '<div class="cf">' + (canLog(c) ? '<a class="w126btn sm" data-w126log="' + c.key + '">' + I('plus') + 'Log a touchpoint</a>' : '') + '<span class="sp"></span>'
+      + (c.depts && c.depts.length && staffOk() ? '<a class="w126btn ghost sm" data-w126go="#team/' + E(c.depts[0]) + '">' + I('people') + 'The team</a>' : '')
+      + (canEditCommittee(c) ? '<a class="w126btn ghost sm" data-w126cedit="' + c.key + '">' + I('pen') + 'Edit</a>' : '') + '</div></div>';
+  }
+  function howHtml() {
+    var how = [['1', 'Chair', 'Coordinates the meetings and owns the follow-through.', GREEN], ['2', 'Touchpoint 1: internal', 'Meet the team lead to get the real picture from the ground.', '#2A6F55'], ['3', 'Touchpoint 2: external', 'A 30 to 60 minute working session with a professional from your network.', PURPLE], ['4', 'Bring it to the board', 'Arrive with informed views and a recommendation: fuel for real debate.', '#C8961F']];
+    var cs = cycleStart(), ce = cycleEnd(), due = committeeDue();
+    return '<div class="w126how">' + how.map(function (h) { return '<div style="--c:' + h[3] + '"><i>' + h[0] + '</i><b>' + E(h[1]) + '</b><span>' + E(h[2]) + '</span></div>'; }).join('') + '</div>'
+      + '<div class="w126cyc">' + I('clock') + '<span>' + (ce ? 'This cycle runs from the <b>' + E(fmtDay(cs)) + '</b> meeting to the <b>' + E(fmtDay(ce)) + '</b> meeting. Committees meet by <b>' + E(fmtDay(due)) + '</b>: once with the team, once with an outside professional.' : 'Committees meet twice between board meetings: once with the team, once with an outside professional.') + '</span></div>';
+  }
+  function stratHtml() {
+    var s = strategySession(), chair = directors().filter(function (m) { return /incoming chair/i.test(m.seat || ''); })[0];
+    return '<div class="w126strat"><div class="w126card dark"><h3>Strategy: the whole board</h3><p>Strategy stays with the full board, everyone\u2019s job, run as a dedicated block at every meeting' + (chair ? ', chaired by the incoming board chair (' + E(chair.name) + ')' : '') + '.</p><p>' + (s ? 'Next: ' + E(s.title) + (s.meets_at ? ', ' + E(fmtDay(dayOfIso(s.meets_at), true)) : ' (to schedule)') + '. ' : '') + '<a class="w126lnk" data-w126go="#governance/strategy">Where strategy stands</a></p></div>'
+      + '<div class="w126card"><h3>Cadence</h3><ul><li>4 board meetings a year, plus an AGM</li><li>Each committee meets twice between board meetings: once with the team, once with an outside professional</li><li>Monthly for committees chasing a target</li><li>An October fiscal year-end strategy session</li></ul></div>'
+      + '<div class="w126card"><h3>Recruiting beyond the board</h3><ul><li>Our networks: the fastest yes</li><li>Donors, past and standout volunteers</li><li>Professors: public policy, Indigenous studies, IT</li><li>Director networks (ICD) and working groups as on-ramps</li></ul></div></div>';
+  }
+  function comPaint() {
+    var h = host('committees', 'w126com'); if (!h) return;
+    mast('committees', 'Board & Governance', 'Committees', 'Four working committees, each chaired by a director: meet the team, bring in an outside professional, and arrive at the board with a recommendation.');
+    if (!canSee()) { h.innerHTML = '<div class="w126card"><p class="w126empty">The board pages are for directors, board advisers and leaders.</p></div>'; return; }
+    if (!B.data) { h.innerHTML = segHtml('com') + '<div class="w126card"><p class="w126empty">Loading the committees\u2026</p></div>'; return; }
+    var cs = comms();
+    var html = segHtml('com') + howHtml()
+      + '<div class="w126sec"><h2>The four committees</h2><span>From reporting to engaging: each committee owns an area, gathers context and brings an informed view.</span></div>'
+      + (cs.length ? '<div class="w126coms">' + cs.map(comHtml).join('') + '</div>' : '<p class="w126empty">No committees yet.</p>')
+      + stratHtml();
+    if (h.__h !== html) { h.innerHTML = html; h.__h = html; }
+  }
+  async function comShow(sub) {
+    var h = host('committees', 'w126com'); if (!h) return;
+    await loadMe();
+    comPaint();
+    if (!canSee()) return;
+    await load();
+    if (onPage('committees')) {
+      comPaint();
+      if (sub && commByKey(sub)) { var el = document.getElementById('w126com-' + sub); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); }
+    }
+  }
+
+  /* ---------- the sheet ---------- */
+  function sheetEl() {
+    var el = document.getElementById('w126sheet');
+    if (!el) { el = document.createElement('div'); el.id = 'w126sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); }
+    return el;
+  }
+  function openSheet(kind, kicker, title, body, foot) {
+    var el = sheetEl();
+    el.innerHTML = '<div class="bk" data-w126close="1"></div><div class="pane"><div class="ph"><div><div class="kk">' + E(kicker) + '</div><h2>' + E(title) + '</h2></div><span class="sp"></span><button type="button" class="xb" data-w126close="1" aria-label="Close">' + I('x') + '</button></div><div class="pb">' + body + '</div>' + (foot ? '<div class="pf">' + foot + '</div>' : '') + '</div>';
+    el.classList.add('on'); B.sheet = kind;
+    var f = el.querySelector('input:not([type=hidden]):not([type=radio]):not([type=checkbox]),textarea,select'); if (f && kind.indexOf('form') >= 0) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  function closeSheet() { var el = document.getElementById('w126sheet'); if (el) { el.classList.remove('on'); el.innerHTML = ''; } B.sheet = null; }
+  function sheetErr(m) { var e = document.querySelector('#w126sheet .err'); if (e) e.textContent = m || ''; }
+  function afterSave(msg) {
+    toastS(msg); closeSheet(); repaint();
+    /* refresh from the database; the offline copy (no board_home) keeps what was just saved */
+    if (B.data && B.data.me && B.data.me.fallback) return Promise.resolve();
+    B.loaded = 0; return load(true).then(repaint);
+  }
+  function repaint() { if (onPage('governance')) govPaint(); if (onPage('committees')) comPaint(); }
+  function nowIso() { return new Date().toISOString(); }
+  async function run(p) { var r = await p; if (r && r.error) throw r.error; return r; }
+
+  /* log a touchpoint (or change your own) */
+  function openLog(key, tp) {
+    var c = commByKey(key) || comms()[0]; if (!c) return;
+    var t = tp || null, kind = t ? t.kind : 'internal';
+    var n = nextMeeting(), meets = boardMeetings().filter(function (m) { return m.status !== 'held' && m.status !== 'cancelled'; });
+    var admin = amAdmin(), me0 = meId();
+    var who = admin ? '<label>On behalf of<select name="member_id">' + '<option value="">Nobody in particular</option>' + directors().map(function (m) { return '<option value="' + m.id + '"' + (String((t ? t.member_id : me0)) === String(m.id) ? ' selected' : '') + '>' + E(m.full_name || m.name) + (inCommittee(c, m.id) ? '' : ' (not on this committee)') + '</option>'; }).join('') + '</select></label>' : '';
+    var body = '<form data-w126logform="' + E(c.key) + '"' + (t ? ' data-id="' + t.id + '"' : '') + '>'
+      + '<div class="kinds">' + KINDS.map(function (k) { return '<label><input type="radio" name="kind" value="' + k[0] + '"' + (k[0] === kind ? ' checked' : '') + '><div>' + E(k[1]) + '<span>' + E(k[2]) + '</span></div></label>'; }).join('') + '</div>'
+      + '<div class="two"><label>When<input type="date" name="happened_on" value="' + E(t ? t.happened_on : ymd(today())) + '"></label><label>With whom<input type="text" name="with_whom" value="' + E(t ? t.with_whom || '' : '') + '" placeholder="For example: Amanda, the fundraising lead"></label></div>'
+      + '<label>What we learned<textarea name="summary" placeholder="The real picture: what is working, what is stuck, what they need">' + E(t ? t.summary || '' : '') + '</textarea></label>'
+      + '<label>Recommendation for the board <small>optional unless this is the recommendation</small><textarea name="recommendation" placeholder="What the committee recommends, and why">' + E(t ? t.recommendation || '' : '') + '</textarea></label>'
+      + (meets.length ? '<label>For the board meeting<select name="meeting_id"><option value="">None in particular</option>' + meets.map(function (m) { return '<option value="' + m.id + '"' + (String(t ? t.meeting_id : (n && n.id)) === String(m.id) ? ' selected' : '') + '>' + E(m.title) + (m.meets_at ? ', ' + E(fmtDay(dayOfIso(m.meets_at), true)) : '') + '</option>'; }).join('') + '</select></label>' : '')
+      + who + '<div class="err" data-w126err="1"></div></form>';
+    openSheet('logform', c.name + ' committee', t ? 'Change the entry' : 'Log a touchpoint', body,
+      (t ? '<button type="button" class="w126btn danger sm" data-w126tpdel="' + t.id + '">Delete</button>' : '') + '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126close="1">Cancel</button><button type="button" class="w126btn" data-w126logsave="1">' + I('check') + (t ? 'Save' : 'Log it') + '</button>');
+  }
+  var saving = false;
+  async function saveLog() {
+    var f = document.querySelector('#w126sheet form[data-w126logform]'); if (!f || saving) return;
+    var key = f.getAttribute('data-w126logform'), id = f.getAttribute('data-id');
+    var g = function (n) { var el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+    var kind = (f.querySelector('input[name=kind]:checked') || {}).value || 'note';
+    var row = { committee: key, kind: kind, happened_on: g('happened_on') || ymd(today()), with_whom: g('with_whom') || null, summary: g('summary') || null, recommendation: g('recommendation') || null, meeting_id: g('meeting_id') ? Number(g('meeting_id')) : null, updated_at: nowIso() };
+    if (!row.summary && !row.recommendation) { sheetErr('Write what you learned, or the recommendation.'); return; }
+    if (kind === 'recommendation' && !row.recommendation) { row.recommendation = row.summary; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.happened_on)) { sheetErr('Pick the date.'); return; }
+    var sel = f.querySelector('[name=member_id]');
+    if (sel) row.member_id = sel.value ? Number(sel.value) : null; else if (!id) row.member_id = meId();
+    saving = true;
+    try {
+      if (id) { await run(db.from('board_touchpoints').update(row).eq('id', Number(id))); var tpl = tps().filter(function (x) { return String(x.id) === String(id); })[0]; if (tpl) Object.assign(tpl, row); }
+      else { row.logged_by_name = myName(); await run(db.from('board_touchpoints').insert(row)); }
+      if (!id) { /* show it right away, also where the database copy is slow to come back */ D().touchpoints.unshift(Object.assign({ id: -Date.now(), logged_by_email: myEmail(), created_at: nowIso() }, row)); }
+      await afterSave(id ? 'Saved' : 'Logged. It counts toward the ' + (commByKey(key) || {}).name + ' committee\u2019s cycle.');
+    } catch (e) { sheetErr('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    finally { saving = false; }
+  }
+  async function deleteTp(id) {
+    if (!window.confirm('Delete this entry?')) return;
+    try { await run(db.from('board_touchpoints').delete().eq('id', Number(id))); B.data.touchpoints = B.data.touchpoints.filter(function (t) { return String(t.id) !== String(id); }); await afterSave('Deleted'); }
+    catch (e) { sheetErr('Could not delete it: ' + String((e && e.message) || e).slice(0, 100)); }
+  }
+  function openTp(id) {
+    var t = tps().filter(function (x) { return String(x.id) === String(id); })[0]; if (!t) return;
+    var c = commByKey(t.committee) || {}, k = KIND[t.kind] || KIND.note, own = lower(t.logged_by_email) === myEmail() || amAdmin();
+    var body = '<dl class="kv"><dt>Committee</dt><dd>' + E(c.name || t.committee) + '</dd><dt>When</dt><dd>' + E(fmtDay(parseDay(t.happened_on), true)) + '</dd>'
+      + (t.with_whom ? '<dt>With</dt><dd>' + E(t.with_whom) + '</dd>' : '') + '<dt>Logged by</dt><dd>' + E(memberName(t.member_id) || t.logged_by_name || t.logged_by_email || '') + '</dd></dl>'
+      + (t.summary ? '<div>' + E(t.summary).replace(/\n/g, '<br>') + '</div>' : '')
+      + (t.recommendation ? '<div class="quote"><b>Recommendation:</b> ' + E(t.recommendation).replace(/\n/g, '<br>') + '</div>' : '');
+    openSheet('tp', c.name ? c.name + ' committee' : 'Committee', k[1], body, own ? '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126tpedit="' + t.id + '">' + I('pen') + 'Change it</button>' : '');
+  }
+
+  /* a director */
+  function openDirector(id) {
+    var m = memberById(id); if (!m) return;
+    var cs = committeesOf(m.id), my = tps().filter(function (t) { return String(t.member_id) === String(m.id); }), ts = tasksOf(m), r = renewalState(m);
+    var body = '<dl class="kv"><dt>Seat</dt><dd>' + E(m.seat || 'Director') + '</dd>' + (m.renewal || r ? '<dt>Term</dt><dd>' + E(r ? r.t : m.renewal) + '</dd>' : '') + (m.note ? '<dt>Note</dt><dd>' + E(m.note) + '</dd>' : '') + '</dl>'
+      + '<div><div class="kk" style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin-bottom:6px">Committees</div>' + (cs.length ? cs.map(function (c) { var st = steps(c); return '<div class="w126cm"><div class="row" style="--c:' + E(c.color || GREEN) + '"><b><i></i>' + E(c.name) + (String(c.chair_id) === String(m.id) ? ' <span class="ch">Chair</span>' : '') + '</b><span class="w126dots">' + st.map(function (s) { return '<i class="' + (s.done ? 'on' : '') + '" title="' + E(s.t) + '"></i>'; }).join('') + '</span><small>' + stepsDone(c) + ' of 4</small></div></div>'; }).join('') : '<p class="w126empty">Not on a committee yet.</p>') + '</div>'
+      + '<div><div class="kk" style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin-bottom:6px">What ' + E(m.name) + ' logged</div>' + (my.length ? my.slice(0, 8).map(logRowHtml).join('') : '<p class="w126empty">Nothing logged yet.</p>') + '</div>'
+      + (ts.length ? '<div><div class="kk" style="font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin-bottom:6px">Board tasks</div>' + ts.map(function (t) { return '<div class="w126goal"><b>' + E(t.title) + '</b>' + stTag(t.done ? 'done' : 'todo').replace(/>[^<]*<\/span>$/, '>' + E(t.done ? 'Done' : (t.status || 'Open')) + '</span>') + '</div>'; }).join('') + '</div>' : '');
+    openSheet('director', m.status === 'active' ? 'Director' : 'Board', m.full_name || m.name, body, amAdmin() ? '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126medit="' + m.id + '">' + I('pen') + 'Edit the seat and term</button>' : '');
+  }
+  function openMemberEdit(id) {
+    var m = memberById(id); if (!m) return;
+    var body = '<form data-w126mform="' + m.id + '"><div class="two"><label>Seat<input type="text" name="seat" value="' + E(m.seat || '') + '"></label><label>Status<select name="status">' + ['active', 'adviser', 'resigned', 'former'].map(function (s) { return '<option' + (m.status === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></label></div>'
+      + '<div class="two"><label>Term runs to <small>as said, for example Q3 2026</small><input type="text" name="renewal" value="' + E(m.renewal || '') + '"></label><label>Renewal date<input type="date" name="renewal_due" value="' + E(m.renewal_due || '') + '"></label></div>'
+      + '<label>Emails they sign in with <small>comma separated</small><input type="text" name="emails" value="' + E((m.emails || []).join(', ')) + '"></label>'
+      + '<label>Note<textarea name="note">' + E(m.note || '') + '</textarea></label><div class="err"></div></form>';
+    openSheet('mform', 'Director', m.full_name || m.name, body, '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126close="1">Cancel</button><button type="button" class="w126btn" data-w126msave="1">' + I('check') + 'Save</button>');
+  }
+  async function saveMember() {
+    var f = document.querySelector('#w126sheet form[data-w126mform]'); if (!f || saving) return;
+    var g = function (n) { var el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+    var row = { seat: g('seat') || null, status: g('status') || 'active', renewal: g('renewal') || null, renewal_due: g('renewal_due') || null, emails: g('emails').split(/[,\s]+/).map(lower).filter(function (x) { return /@/.test(x); }), note: g('note') || null, updated_at: nowIso(), updated_by: myName() };
+    saving = true;
+    try { await run(db.from('board_members').update(row).eq('id', Number(f.getAttribute('data-w126mform')))); var m = memberById(f.getAttribute('data-w126mform')); if (m) Object.assign(m, row); await afterSave('Saved'); }
+    catch (e) { sheetErr('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    finally { saving = false; }
+  }
+
+  /* an item under one of the three jobs */
+  function openItem(id, job) {
+    var it = id ? D().items.filter(function (i) { return String(i.id) === String(id); })[0] : null;
+    if (id && !it) return;
+    var j = JOB[(it && it.job) || job] || JOBS[0], edit = canEditItems();
+    if (!edit && it) {
+      var body = '<div>' + stTag(it.status) + '</div>' + (it.detail ? '<div>' + E(it.detail) + '</div>' : '') + '<dl class="kv">' + (it.owner ? '<dt>Owner</dt><dd>' + E(it.owner) + '</dd>' : '') + (it.due ? '<dt>Due</dt><dd>' + E(it.due) + '</dd>' : '') + (it.source ? '<dt>From</dt><dd>' + E(it.source) + '</dd>' : '') + '</dl>';
+      openSheet('item', j.t, it.title, body, ''); return;
+    }
+    var st = (it && it.status) || 'todo';
+    var body2 = '<form data-w126iform="' + (it ? it.id : '') + '" data-job="' + j.k + '">'
+      + '<label>Title<input type="text" name="title" value="' + E(it ? it.title : '') + '"></label>'
+      + '<div><div style="font-size:12.5px;font-weight:700;color:#4a4945;margin-bottom:6px">Where it stands</div><div class="sts">' + Object.keys(ST).map(function (k) { return '<button type="button" data-w126st="' + k + '" class="' + (k === st ? 'on' : '') + '">' + E(ST[k][0]) + '</button>'; }).join('') + '</div><input type="hidden" name="status" value="' + st + '"></div>'
+      + '<label>Detail<textarea name="detail">' + E(it ? it.detail || '' : '') + '</textarea></label>'
+      + '<div class="two"><label>Owner<input type="text" name="owner" value="' + E(it ? it.owner || '' : '') + '"></label><label>Due<input type="text" name="due" value="' + E(it ? it.due || '' : '') + '" placeholder="For example: Q3 board meeting"></label></div>'
+      + (it && it.source ? '<p class="w126empty">From ' + E(it.source) + '.</p>' : '') + '<div class="err"></div></form>';
+    openSheet('iform', j.t, it ? 'Update the item' : 'Add an item', body2, (it && amAdmin() ? '<button type="button" class="w126btn danger sm" data-w126idel="' + it.id + '">Delete</button>' : '') + '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126close="1">Cancel</button><button type="button" class="w126btn" data-w126isave="1">' + I('check') + 'Save</button>');
+  }
+  async function saveItem() {
+    var f = document.querySelector('#w126sheet form[data-w126iform]'); if (!f || saving) return;
+    var g = function (n) { var el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+    var id = f.getAttribute('data-w126iform');
+    var row = { title: g('title'), status: g('status') || 'todo', detail: g('detail') || null, owner: g('owner') || null, due: g('due') || null, updated_at: nowIso(), updated_by: myName() };
+    if (!row.title) { sheetErr('Give it a title.'); return; }
+    saving = true;
+    try {
+      if (id) { await run(db.from('board_items').update(row).eq('id', Number(id))); var it = D().items.filter(function (i) { return String(i.id) === String(id); })[0]; if (it) Object.assign(it, row); }
+      else { row.job = f.getAttribute('data-job'); row.sort = 900; row.source = 'Added in the Hub by ' + myName(); await run(db.from('board_items').insert(row)); D().items.push(Object.assign({ id: -Date.now() }, row)); }
+      await afterSave('Saved');
+    } catch (e) { sheetErr('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    finally { saving = false; }
+  }
+  async function deleteItem(id) {
+    if (!window.confirm('Delete this item?')) return;
+    try { await run(db.from('board_items').delete().eq('id', Number(id))); B.data.items = B.data.items.filter(function (i) { return String(i.id) !== String(id); }); await afterSave('Deleted'); }
+    catch (e) { sheetErr('Could not delete it'); }
+  }
+
+  /* a committee's roster */
+  function openCommitteeEdit(key) {
+    var c = commByKey(key); if (!c) return;
+    var ds = directors();
+    var body = '<form data-w126cform="' + c.key + '"><label>Chair<select name="chair_id"><option value="">To name</option>' + ds.map(function (m) { return '<option value="' + m.id + '"' + (String(c.chair_id) === String(m.id) ? ' selected' : '') + '>' + E(m.full_name || m.name) + '</option>'; }).join('') + '</select></label>'
+      + '<div class="chk"><label><input type="checkbox" name="chair_confirmed"' + (c.chair_confirmed ? ' checked' : '') + '> The board confirmed the chair</label></div>'
+      + '<div><div style="font-size:12.5px;font-weight:700;color:#4a4945;margin-bottom:6px">Directors on the committee</div><div class="chk">' + ds.map(function (m) { return '<label><input type="checkbox" name="member" value="' + m.id + '"' + ((c.member_ids || []).map(String).indexOf(String(m.id)) >= 0 ? ' checked' : '') + '>' + E(m.name) + '</label>'; }).join('') + '</div></div>'
+      + '<label>Internal leads <small>the team leads the committee meets, comma separated</small><input type="text" name="internal_leads" value="' + E((c.internal_leads || []).join(', ')) + '"></label>'
+      + '<label>To recruit <small>the outside professional the committee brings in</small><input type="text" name="external_recruit" value="' + E(c.external_recruit || '') + '"></label>'
+      + '<label>What the committee covers<textarea name="purpose">' + E(c.purpose || '') + '</textarea></label><div class="err"></div></form>';
+    openSheet('cform', 'Committee', c.name, body, '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126close="1">Cancel</button><button type="button" class="w126btn" data-w126csave="1">' + I('check') + 'Save</button>');
+  }
+  async function saveCommittee() {
+    var f = document.querySelector('#w126sheet form[data-w126cform]'); if (!f || saving) return;
+    var key = f.getAttribute('data-w126cform');
+    var g = function (n) { var el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+    var ids = Array.prototype.map.call(f.querySelectorAll('input[name=member]:checked'), function (x) { return Number(x.value); });
+    var chair = g('chair_id') ? Number(g('chair_id')) : null;
+    if (chair && ids.indexOf(chair) < 0) ids.unshift(chair);
+    var row = { chair_id: chair, chair_confirmed: !!(f.querySelector('input[name=chair_confirmed]') || {}).checked, member_ids: ids, internal_leads: g('internal_leads').split(',').map(function (x) { return x.trim(); }).filter(Boolean), external_recruit: g('external_recruit') || null, purpose: g('purpose') || null, updated_at: nowIso(), updated_by: myName() };
+    saving = true;
+    try { await run(db.from('board_committees').update(row).eq('key', key)); var c = commByKey(key); if (c) Object.assign(c, row); await afterSave('Saved'); }
+    catch (e) { sheetErr('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    finally { saving = false; }
+  }
+
+  /* a board meeting */
+  function openMeeting(id) {
+    var m = id && id !== 'new' ? D().meetings.filter(function (x) { return String(x.id) === String(id); })[0] : null;
+    var d = m && m.meets_at ? new Date(m.meets_at) : null;
+    var dv = d ? d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) : '', tv = d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '18:00';
+    var body = '<form data-w126meetform="' + (m ? m.id : '') + '"><label>Title<input type="text" name="title" value="' + E(m ? m.title : 'Board meeting') + '"></label>'
+      + '<div class="two"><label>Date<input type="date" name="date" value="' + E(dv) + '"></label><label>Time (Toronto)<input type="time" name="time" value="' + E(tv) + '"></label></div>'
+      + '<div class="two"><label>Kind<select name="kind">' + [['board', 'Board meeting'], ['special', 'Special meeting'], ['agm', 'AGM'], ['strategy', 'Strategy session']].map(function (k) { return '<option value="' + k[0] + '"' + ((m ? m.kind : 'board') === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select></label>'
+      + '<label>Status<select name="status">' + ['scheduled', 'tentative', 'to schedule', 'held', 'cancelled'].map(function (s) { return '<option' + ((m ? m.status : 'scheduled') === s ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></label></div>'
+      + '<div class="two"><label>Agenda link<input type="url" name="agenda_url" value="' + E(m ? m.agenda_url || '' : '') + '"></label><label>Minutes link<input type="url" name="notes_url" value="' + E(m ? m.notes_url || '' : '') + '"></label></div>'
+      + '<label>Note<textarea name="note">' + E(m ? m.note || '' : '') + '</textarea></label><div class="err"></div></form>';
+    openSheet('meetform', 'Board meetings', m ? 'Change the meeting' : 'Schedule a meeting', body, '<span class="sp"></span><button type="button" class="w126btn ghost" data-w126close="1">Cancel</button><button type="button" class="w126btn" data-w126meetsave="1">' + I('check') + 'Save</button>');
+  }
+  function torontoIso(date, time) {
+    /* the offset for America/Toronto on that date (EDT or EST), without a timezone library */
+    var p = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date); if (!p) return null;
+    var t = /^(\d{2}):(\d{2})$/.exec(time || '18:00') || [0, '18', '00'];
+    var probe = new Date(Date.UTC(Number(p[1]), Number(p[2]) - 1, Number(p[3]), 12, 0, 0));
+    var tzHour = Number(probe.toLocaleString('en-US', { timeZone: 'America/Toronto', hour: '2-digit', hour12: false }));
+    var off = 12 - tzHour; /* 4 in summer, 5 in winter */
+    return p[1] + '-' + p[2] + '-' + p[3] + 'T' + t[1] + ':' + t[2] + ':00-' + pad(off) + ':00';
+  }
+  async function saveMeeting() {
+    var f = document.querySelector('#w126sheet form[data-w126meetform]'); if (!f || saving) return;
+    var g = function (n) { var el = f.querySelector('[name="' + n + '"]'); return el ? String(el.value || '').trim() : ''; };
+    var id = f.getAttribute('data-w126meetform');
+    var row = { title: g('title') || 'Board meeting', kind: g('kind') || 'board', status: g('status') || 'scheduled', meets_at: g('date') ? torontoIso(g('date'), g('time')) : null, agenda_url: g('agenda_url') || null, notes_url: g('notes_url') || null, note: g('note') || null, updated_at: nowIso(), updated_by: myName() };
+    if (!row.meets_at && row.status !== 'to schedule') { sheetErr('Pick the date, or set the status to "to schedule".'); return; }
+    saving = true;
+    try {
+      if (id) { await run(db.from('board_meetings').update(row).eq('id', Number(id))); var m = D().meetings.filter(function (x) { return String(x.id) === String(id); })[0]; if (m) Object.assign(m, row); }
+      else { await run(db.from('board_meetings').insert(row)); D().meetings.push(Object.assign({ id: -Date.now() }, row)); }
+      normalize(B.data); await afterSave('Saved');
+    } catch (e) { sheetErr('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+    finally { saving = false; }
+  }
+
+  /* ---------- access: leaders and admins by role; directors, advisers and board viewers once board_me() answers ---------- */
+  function tabOk(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return true; } }
+  function enrolAllowed() {
+    try {
+      if (typeof wa40Allowed !== 'function' || wa40Allowed.__w126) return;
+      var __al = wa40Allowed;
+      wa40Allowed = function () {
+        var a = __al.apply(this, arguments) || [];
+        if (wRole() === 'blocked') return a;
+        var see = isLeaderUI() || (B.me && (B.me.board || B.me.leader || B.me.admin)) || boardMode();
+        if (!see) return a.filter(function (x) { return x !== 'governance' && x !== 'committees'; });
+        var add = []; if (a.indexOf('governance') < 0) add.push('governance'); if (a.indexOf('committees') < 0) add.push('committees');
+        return add.length ? a.concat(add) : a;
+      };
+      Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+      wa40Allowed.__w126 = true;
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- the menu: inside Board & Governance, or (for the board, who has no team row) after the Executive dashboard ---------- */
+  function placeTabs() {
+    try {
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      var gv = bar.querySelector('.tab[data-tab="governance"]'), cm = bar.querySelector('.tab[data-tab="committees"]');
+      if (!gv || !cm) return;
+      var br = bar.querySelector('.tab[data-tab="board"]'), row = br && br.closest ? br.closest('.w42d') : null, sub = row ? row.querySelector('.w42sub') : null;
+      if (sub && tabOk('board') && br.style.display !== 'none') {
+        if (gv.parentNode !== sub || sub.firstElementChild !== gv) sub.insertBefore(gv, sub.firstElementChild);
+        if (gv.nextElementSibling !== cm) sub.insertBefore(cm, gv.nextElementSibling);
+        gv.classList.add('w116tool'); cm.classList.add('w116tool');
+        var ov = sub.querySelector('[data-w116="#team/board"],[data-w116go="#team/board"],a[data-w42a="overview"]'); if (ov && !ov.__w126) { ov.__w126 = true; ov.textContent = 'Team page'; ov.setAttribute('data-w126go', '#team/board'); }
+      } else {
+        var anchor = bar.querySelector('.tab[data-tab="overview"]');
+        if (anchor && anchor.parentNode && anchor.nextElementSibling !== gv) anchor.parentNode.insertBefore(gv, anchor.nextElementSibling);
+        if (gv.parentNode && gv.nextElementSibling !== cm) gv.parentNode.insertBefore(cm, gv.nextElementSibling);
+        gv.classList.remove('w116tool'); cm.classList.remove('w116tool');
+      }
+      gv.style.display = tabOk('governance') ? '' : 'none';
+      cm.style.display = tabOk('committees') ? '' : 'none';
+    } catch (e) { /* fine */ }
+  }
+  var navT = null;
+  function watchNav() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.__w126obs) return;
+    bar.__w126obs = true;
+    try { new MutationObserver(function () { if (navT) return; navT = setTimeout(function () { navT = null; placeTabs(); }, 150); }).observe(bar, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  /* the Board & Governance team page gets the two pages in its switcher */
+  function teamPills() {
+    try {
+      var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#team/board') !== 0) return;
+      var seg = document.querySelector('#team .w116seg'); if (!seg || seg.querySelector('[data-w126go="#committees"]')) return;
+      if (!(isLeaderUI() || (B.me && (B.me.board || B.me.leader)))) return;
+      seg.insertAdjacentHTML('afterbegin', '<a data-w126go="#governance">Board overview</a><a data-w126go="#committees">Committees</a>');
+    } catch (e) { /* fine */ }
+  }
+  var tpT = null;
+  function watchTeam() {
+    var sec = document.getElementById('team'); if (!sec || sec.__w126obs) return;
+    sec.__w126obs = true;
+    try { new MutationObserver(function () { clearTimeout(tpT); tpT = setTimeout(teamPills, 60); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  function register() {
+    enrolAllowed();
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'governance'; })) WA_NAV.register({ id: 'governance', label: 'Board overview', dot: GREEN, gate: 'leader', onShow: function (h) { routeGov(h); } });
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'committees'; })) WA_NAV.register({ id: 'committees', label: 'Committees', dot: PURPLE, gate: 'leader', onShow: function (h) { routeCom(h); } });
+    placeTabs(); watchNav();
+  }
+
+  /* ---------- routes ---------- */
+  function routeGov(h) { var p = String(h || '').split('/'); try { document.title = 'Board overview \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ } govShow(p.slice(1).join('/')); }
+  function routeCom(h) { var p = String(h || '').split('/'); try { document.title = 'Committees \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ } comShow(p[1] || ''); }
+  function go(h) { closeSheet(); if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
+
+  /* the Board & Governance row, and links to its old overview, open the board overview (window capture runs before wave116's) */
+  window.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (!(isLeaderUI() || (B.me && (B.me.board || B.me.leader)))) return;
+    var b = t.closest('#tabBar .tab[data-tab="board"]');
+    var a = !b && t.closest('[data-w116="#team/board"],[data-w116go="#team/board"]');
+    if (a && a.hasAttribute('data-w126go')) return;
+    if (!b && !a) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    document.body.classList.remove('wa-mob-open');
+    try { document.querySelectorAll('#tabBar .tab-group.open').forEach(function (x) { x.classList.remove('open'); }); } catch (x) { /* fine */ }
+    go('#governance');
+  }, true);
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w126go]'))) { if (el.hasAttribute('data-w116') || el.hasAttribute('data-w116go')) return; e.preventDefault(); go(el.getAttribute('data-w126go')); return; }
+    var inPage = !!t.closest('#w126gov') || !!t.closest('#w126com'), inSheet = !!t.closest('#w126sheet');
+    if (!inPage && !inSheet) return;
+    if ((el = t.closest('[data-w126close]'))) { closeSheet(); return; }
+    if ((el = t.closest('[data-w126st]'))) { var f = el.closest('form'); if (f) { f.querySelectorAll('[data-w126st]').forEach(function (x) { x.classList.toggle('on', x === el); }); var inp = f.querySelector('input[name=status]'); if (inp) inp.value = el.getAttribute('data-w126st'); } return; }
+    if ((el = t.closest('[data-w126logsave]'))) { saveLog(); return; }
+    if ((el = t.closest('[data-w126tpdel]'))) { deleteTp(el.getAttribute('data-w126tpdel')); return; }
+    if ((el = t.closest('[data-w126tpedit]'))) { var tp = tps().filter(function (x) { return String(x.id) === String(el.getAttribute('data-w126tpedit')); })[0]; if (tp) openLog(tp.committee, tp); return; }
+    if ((el = t.closest('[data-w126msave]'))) { saveMember(); return; }
+    if ((el = t.closest('[data-w126medit]'))) { openMemberEdit(el.getAttribute('data-w126medit')); return; }
+    if ((el = t.closest('[data-w126isave]'))) { saveItem(); return; }
+    if ((el = t.closest('[data-w126idel]'))) { deleteItem(el.getAttribute('data-w126idel')); return; }
+    if ((el = t.closest('[data-w126csave]'))) { saveCommittee(); return; }
+    if ((el = t.closest('[data-w126meetsave]'))) { saveMeeting(); return; }
+    if ((el = t.closest('[data-w126tp]'))) { openTp(el.getAttribute('data-w126tp')); return; }
+    if ((el = t.closest('[data-w126dir]'))) { openDirector(el.getAttribute('data-w126dir')); return; }
+    if (inSheet) return;
+    if ((el = t.closest('[data-w126log]'))) { openLog(el.getAttribute('data-w126log')); return; }
+    if ((el = t.closest('[data-w126cedit]'))) { openCommitteeEdit(el.getAttribute('data-w126cedit')); return; }
+    if ((el = t.closest('[data-w126meet]'))) { e.preventDefault(); openMeeting(el.getAttribute('data-w126meet')); return; }
+    if ((el = t.closest('[data-w126item]'))) { openItem(el.getAttribute('data-w126item')); return; }
+    if ((el = t.closest('[data-w126newitem]'))) { openItem(null, el.getAttribute('data-w126newitem')); return; }
+    if ((el = t.closest('[data-w126done]'))) { var k = el.getAttribute('data-w126done'); B.openDone[k] = !B.openDone[k]; govPaint(); return; }
+    if ((el = t.closest('[data-w126all]'))) { var c = commByKey(el.getAttribute('data-w126all')); if (c) openSheet('log', c.name + ' committee', 'The log', tps().filter(function (x) { return x.committee === c.key; }).map(logRowHtml).join('') || '<p class="w126empty">Nothing logged yet.</p>', ''); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && B.sheet) { e.preventDefault(); closeSheet(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#w126gov [role=button], #w126com [role=button], #w126sheet .w126lg[role=button]')) { e.preventDefault(); e.target.click(); }
+  });
+  window.addEventListener('hashchange', function () {
+    if (B.sheet) closeSheet();
+    try { if ((location.hash || '').indexOf('#team/board') === 0) { watchTeam(); setTimeout(teamPills, 150); } } catch (e) { /* fine */ }
+  });
+  if (typeof showPanel === 'function') {
+    var __sp126 = showPanel;
+    showPanel = function (id) {
+      var out = __sp126.apply(this, arguments);
+      try { if (id !== 'governance' && id !== 'committees' && B.sheet) closeSheet(); if (id === 'team') { watchTeam(); setTimeout(teamPills, 150); } } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa126 = startApp;
+    startApp = async function () {
+      var out = await __sa126.apply(this, arguments);
+      try {
+        register(); watchTeam();
+        [400, 1500, 3500].forEach(function (ms) { setTimeout(placeTabs, ms); });
+        loadMe().then(function () { try { if (typeof wa40Enforce === 'function') wa40Enforce(); } catch (e) { /* fine */ } placeTabs(); teamPills(); });
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, ''), root = h.split('/')[0];
+        if (root === 'governance') { loadMe().then(function () { showPanel('governance'); routeGov(h); }); }
+        else if (root === 'committees') { loadMe().then(function () { showPanel('committees'); routeCom(h); }); }
+      } catch (e) { console.warn('wave126 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- page tours (wave122's engine; trainings rows tour:governance and tour:committees) ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return;
+      var OPT = { opt: 1 };
+      var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      if (!W.tours.governance) W.tours.governance = { tab: 'governance', icon: 'shield', hash: '#governance', steps: [
+        S('#governance > .w118mast', 'The board', 'Everything the board does ladders up to one of three jobs: steward leadership, fiduciary oversight, and direction and strategy.'),
+        S('#w126gov .w126seg', 'The board pages', 'The overview, the committees and the directors; leaders also get the board\u2019s agendas and tasks.', OPT),
+        S('#w126gov .w126meet', 'The next board meeting', 'When it is, when the committees should have met (a week before), the last meeting\u2019s minutes and the strategy session.', OPT),
+        S('#w126job-steward', 'Steward leadership', 'The executive directors, succession, the seats and every director\u2019s term and renewal.', OPT),
+        S('#w126job-fiduciary', 'Fiduciary oversight', 'The finances for the fiscal year, insurance, by-laws, filings and disclosures. Open an item to see or change where it stands.', OPT),
+        S('#w126job-strategy', 'Direction and strategy', 'The three steps to a strategy (assumptions, who we serve, the plan) and the organizational goals.', OPT),
+        S('#w126dirs', 'The directors', 'Each director\u2019s committees, how far each committee is this cycle, what they logged, their board tasks and their term. Open a director for the detail.', OPT)
+      ] };
+      if (!W.tours.committees) W.tours.committees = { tab: 'committees', icon: 'people', hash: '#committees', steps: [
+        S('#committees > .w118mast', 'Committees', 'Four working committees, each chaired by a director. Strategy stays with the whole board.'),
+        S('#w126com .w126how', 'How a committee works', 'The chair, a touchpoint with the team lead, a working session with an outside professional, then a recommendation for the board.', OPT),
+        S('#w126com .w126cyc', 'This cycle', 'From the last board meeting to the next. Committees meet a week before the board does.', OPT),
+        S('#w126com .w126com', 'A committee', 'Its chair, directors, internal leads and the professional to recruit, and where it is in the four steps this cycle.', OPT),
+        S('#w126com .w126part', 'Each director', 'What each director on the committee logged this cycle.', OPT),
+        S('#w126com [data-w126log]', 'Log a touchpoint', 'Directors log their own touchpoints and recommendations here; they count toward the committee\u2019s cycle.', OPT),
+        S('#w126com .w126strat', 'Strategy and cadence', 'The strategy block, the rhythm of meetings, and where to recruit beyond the board.', OPT)
+      ] };
+    } catch (e) { /* fine */ }
+  }
+  addTours();
+
+  /* ---------- test hook ---------- */
+  window.w126 = { state: function () { return B; }, load: load, me: loadMe, gov: govPaint, com: comPaint, steps: steps, cycle: function () { return { start: cycleStart(), end: cycleEnd(), next: nextMeeting(), last: lastMeeting() }; }, log: openLog, close: closeSheet };
+})();

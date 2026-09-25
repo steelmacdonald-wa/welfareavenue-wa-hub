@@ -31,7 +31,9 @@
       var bar = document.getElementById('tabBar'); if (!bar) return;
       /* after Home; the board has no Home, so after Overview */
       var cal = bar.querySelector('.tab[data-tab="calendar"]'), home = bar.querySelector('.tab[data-tab="mypage"]');
-      var anchor = home && home.style.display !== 'none' ? home : (bar.querySelector('.tab[data-tab="overview"]') || home);
+      /* for the board (no Home): after the board pages (wave126 puts them right after Overview), else after Overview */
+      var ov0 = bar.querySelector('.tab[data-tab="overview"]'), cm0 = bar.querySelector('.tab[data-tab="committees"]');
+      var anchor = home && home.style.display !== 'none' ? home : (cm0 && ov0 && cm0.parentNode === ov0.parentNode && cm0.style.display !== 'none' ? cm0 : (ov0 || home));
       if (cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
       var fe = bar.querySelector('.tab[data-tab="fundevents"]');
       if (fe) {

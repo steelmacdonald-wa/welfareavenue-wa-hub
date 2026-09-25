@@ -1,0 +1,7 @@
+-- wave126: academy page tours for the Board overview and the Committees (run after the wave126 deploy)
+insert into public.trainings (category, title, description, source, path_group, sort, active, kind, key, body, minutes, xp)
+  values ('Hub tours', 'Page tour: Board overview', 'The three jobs of a board, the next meeting and each director''s progress.', 'hub', 'Hub page tours', 32, true, 'tour', 'tour:governance', $j${"tour": "governance", "tab": "governance"}$j$::jsonb, 2, 20)
+  on conflict (key) where key is not null do update set title = excluded.title, description = excluded.description, body = excluded.body, minutes = excluded.minutes, path_group = excluded.path_group, sort = excluded.sort, category = excluded.category, kind = excluded.kind, active = true, updated_at = now();
+insert into public.trainings (category, title, description, source, path_group, sort, active, kind, key, body, minutes, xp)
+  values ('Hub tours', 'Page tour: Committees', 'How the four committees work, and how directors log their touchpoints.', 'hub', 'Hub page tours', 33, true, 'tour', 'tour:committees', $j${"tour": "committees", "tab": "committees"}$j$::jsonb, 2, 20)
+  on conflict (key) where key is not null do update set title = excluded.title, description = excluded.description, body = excluded.body, minutes = excluded.minutes, path_group = excluded.path_group, sort = excluded.sort, category = excluded.category, kind = excluded.kind, active = true, updated_at = now();
