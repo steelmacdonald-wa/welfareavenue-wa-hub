@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.3, 25/09/26: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.4, 25/09/26: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -10,6 +10,7 @@
 //   {action:'status'}                          accounts, last sync, errors      (staff)
 //   {action:'probe'}                           what the tokens can see          (staff)
 //   {action:'connect_meta', page_id?}          add the Page and its Instagram   (staff)
+//   {action:'ga4_list'}                          GA4 properties the service account can read (staff)
 //   {action:'connect_ga4', property_id}        add a GA4 property               (staff)
 //   {action:'disconnect', account_id}          remove an account and its rows   (staff)
 //   {action:'sync', account_id?, days?}        pull the numbers                 (staff or x-wa-secret, cron wa-social-pull)
@@ -419,6 +420,21 @@ Deno.serve(async (req: Request) => {
       const results: Any[] = [];
       for (const a of added) results.push(await syncAccount(a as Account, Number(body.days) || 30));
       return json({ ok: true, added, results });
+    }
+    if (action === 'ga4_list') {
+      // v1.4: the GA4 properties the hub's service account can read (Admin API account summaries)
+      const { token, email } = await saToken('https://www.googleapis.com/auth/analytics.readonly');
+      const res = await fetch('https://analyticsadmin.googleapis.com/v1beta/accountSummaries?pageSize=200', { headers: { Authorization: 'Bearer ' + token } });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // is the Data API (the one the daily sync uses) switched on? a report on property 0 tells us without touching anything
+        let dataApi = 'unknown';
+        try { const t = await fetch('https://analyticsdata.googleapis.com/v1beta/properties/0:runReport', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ dateRanges: [{ startDate: '7daysAgo', endDate: 'today' }], metrics: [{ name: 'sessions' }] }) }); const tb = await t.json().catch(() => ({})); const m = String((tb.error && tb.error.message) || ''); dataApi = /has not been used|is disabled|SERVICE_DISABLED/i.test(m) ? 'disabled' : 'enabled'; } catch (_) { /* unknown */ }
+        return json({ ok: false, sa_email: email, admin_api: 'disabled or failing', data_api: dataApi, error: (b.error && b.error.message) || ('HTTP ' + res.status) });
+      }
+      const properties: Any[] = [];
+      for (const acc of (b.accountSummaries || [])) for (const pr of (acc.propertySummaries || [])) properties.push({ account: acc.displayName || null, property_id: String(pr.property || '').replace('properties/', ''), name: pr.displayName || null, type: pr.propertyType || null });
+      return json({ ok: true, sa_email: email, properties });
     }
     if (action === 'connect_ga4') {
       const pid = String(body.property_id || '').replace(/\D/g, '');
