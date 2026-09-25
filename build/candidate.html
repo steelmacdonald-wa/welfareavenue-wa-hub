@@ -38846,6 +38846,1395 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K };
 })();
 /* =====================================================================
+   WA v118c Photo library (25/09/26)
+   =====================================================================
+   Steel: "Okay I want to label all of these photos and host them in the
+   Supabase storage. Can you set it up for successful use."
+   - Storage and labels: every photo is three JPEGs in the public
+     content-images bucket, photos/full (2400 px), photos/web (1600 px)
+     and photos/thumb (640 px), sRGB, no location or camera data, cached
+     a week (?v=<version> busts the cache). One row per photo in
+     public.wa_photos: title, alt text, caption, description, date,
+     season, place, event, scene, tags, what it is cleared for and why,
+     people by role, partners, branding era, focal point, colour, best
+     uses, sizes, credit and source. The view wa_photos_list adds the
+     public URLs. Staff read and write, board viewers read, admins delete.
+   - The page (#photos, under More): search, usage chips (Ready, Crop
+     first, Consent needed), seasons, scenes, sets and picks; a grid
+     cropped on each photo's focal point, grouped by year; a side panel
+     with the photo, what it is cleared for, the alt text and caption to
+     copy, three download sizes and the details. Deep links:
+     #photos/<key>, #photos/new (add photos), #photos/review.
+   - Staff edit the labels (focal point with crop previews included),
+     add photos (the browser makes the three sizes, reads the date from
+     the file, uploads with the person's session, and asks the llm route
+     photo_label for first labels that a person confirms), and archive.
+     Admins can delete an archived photo for good.
+   - Hand-offs: Use in the Create studio (the photo sits behind a social
+     graphic) and Use in a post (the content calendar composer opens with
+     the photo attached); both screens get a "Pick from the photo library"
+     link. Photos show in Search everything, and the Marketing and
+     Fundraising team pages list the library in their tools.
+   window.__wa118c: pick(opts), url(p, size), rows(), clean(el),
+   cleanNode(el) (the harness strips every [data-w118c] node).
+   ===================================================================== */
+(function () {
+  if (window.__wa118c) return;
+  var W = window.__wa118c = { version: 1 };
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BUCKET = 'content-images';
+  var BASE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
+  var SIZES = [['full', 2400, 0.85, 'Full size', 'Print, big screens and anything cropped hard'], ['web', 1600, 0.8, 'Web', 'Posts, the website, decks and reports'], ['thumb', 640, 0.76, 'Thumbnail', 'Emails, documents and previews']];
+  var USAGE = {
+    ready: { label: 'Ready', long: 'Ready for public use', tip: 'Fine for posts, the website, decks and reports.' },
+    crop: { label: 'Crop first', long: 'Crop before public use', tip: 'Crop the edge named in the note before it goes public.' },
+    consent: { label: 'Consent needed', long: 'Internal, or public with consent', tip: 'Someone we serve or a child is recognizable: use it inside the team, or publicly only with their consent.' },
+    internal: { label: 'Internal only', long: 'Internal use only', tip: 'Keep it inside the team.' },
+    check: { label: 'Not checked', long: 'Not checked yet', tip: 'Nobody has looked at who is in it yet.' }
+  };
+  var USAGE_ORDER = ['ready', 'crop', 'consent', 'internal', 'check'];
+  var SEASONS = [['winter', 'Winter'], ['spring', 'Spring'], ['summer', 'Summer'], ['autumn', 'Autumn']];
+  var SCENES = [['serving', 'Serving'], ['volunteers', 'Volunteers'], ['food', 'Food'], ['media', 'Media'], ['portrait', 'Portraits'], ['setup', 'Setup'], ['other', 'Other']];
+  var BEST = [['report', 'Reports'], ['deck', 'Decks'], ['hero', 'Web banner'], ['card', 'Cards'], ['social_square', 'Social, square'], ['social_portrait', 'Social, portrait'], ['story', 'Stories'], ['email_header', 'Email header']];
+  var BRANDING = [['legacy', 'Older branding'], ['current', 'Current branding'], ['none', 'No branding in view']];
+  var CROPS = [['Square', 1], ['Portrait 4:5', 0.8], ['Wide 16:9', 16 / 9], ['Banner 1.91:1', 1.91]];
+  /* the photo_label route: what the model is told, and the form it fills (tested 25/09/26 on Sonnet 5) */
+  var SPEC = {"system":"You label photos for the Welfare Avenue photo library. Welfare Avenue is a youth-powered charity in Montreal (and Toronto): Sunday servings of free hot meals from a tent downtown, holiday gifts, and volunteer programs. Look at the photo and fill in the photo_labels tool.\nRules:\n- Describe only what you can see.\n- People: describe them by role (volunteer, community member, child) and by what they wear for the work (a green vest, gloves, a name tag). Do not describe faces, bodies, hair, skin or religious dress. Never guess names, ages beyond adult or child, health, housing or any other circumstance.\n- Guests are community members or the people we serve; never write homeless, the needy or beneficiaries.\n- usage: ready = fine for public use: volunteers at work or posing, food, and anyone seen from behind or far away; crop = someone identifiable or clutter sits at one edge and a crop fixes it (name the edge in usage_note); consent = a community member or a child is identifiable (volunteers do not count), so internal use, or public with their consent; internal = not for public use; check = you cannot tell.\n- branding: legacy = older Welfare Avenue logos, banners, tents or vests; current = the current brand (the WEL / FAR / E mark, Community green with gold); none = no Welfare Avenue branding visible.\n- focal_x and focal_y: the centre of the main subject as fractions of the width and the height from the top left, so crops keep it.\n- tags and best_for are lists (arrays) of short strings, not one comma-separated string.\n- Plain Canadian English. No em dashes, no emoji, no hashtags.\n- The caption is one warm line in Welfare Avenue's voice about the moment, not about the photo.","tool":{"name":"photo_labels","description":"Labels for one photo in the Welfare Avenue photo library.","input_schema":{"type":"object","properties":{"title":{"type":"string","description":"3 to 8 words, sentence case, no date."},"alt_text":{"type":"string","description":"One sentence of at most 250 characters for screen readers: who (by role) and what is visible, and where. Do not start with Image of or Photo of. No faces, hair, skin, bodies or religious dress."},"caption":{"type":"string","description":"One warm line for a post or a report."},"description":{"type":"string","description":"Two or three sentences describing the scene for the library, people by role only."},"season":{"type":"string","enum":["winter","spring","summer","autumn","unknown"]},"scene":{"type":"string","enum":["serving","volunteers","food","media","portrait","setup","other"]},"tags":{"type":"array","items":{"type":"string"},"description":"5 to 10 short lower-case tags."},"usage":{"type":"string","enum":["ready","crop","consent","internal","check"],"description":"ready: volunteers (people serving, plating, posing, in vests or name tags) even when their faces show, food, and people seen from behind or far away. crop: one edge holds an identifiable community member or clutter. consent: a community member or a child is identifiable. internal: not for public use. check: cannot tell."},"usage_note":{"type":"string","description":"One sentence: why this usage, and which edge to crop when usage is crop."},"people":{"type":"string","description":"Who is visible, by role and work clothing only (a green vest, gloves, a name tag). No faces, hair, skin, bodies or religious dress. Empty when nobody is visible."},"branding":{"type":"string","enum":["legacy","current","none"]},"focal_x":{"type":"number","minimum":0,"maximum":1},"focal_y":{"type":"number","minimum":0,"maximum":1},"best_for":{"type":"array","items":{"type":"string","enum":["report","deck","hero","card","social_portrait","social_square","email_header","story"]}}},"required":["title","alt_text","caption","description","season","scene","tags","usage","usage_note","people","branding","focal_x","focal_y","best_for"]}}};
+  var P = { rows: [], loaded: false, loading: null, err: null, at: 0, f: blankF(), sort: 'taken', limit: 120, open: null, mode: null, edit: null, up: null, pick: null, busy: false, ai: 0 };
+  function blankF() { return { q: '', usage: '', season: '', scene: '', picks: false, status: '', series: '', tag: '' }; }
+
+  var ICONS = {
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/>',
+    upload: '<path d="M12 15V4M7.5 8.5L12 4l4.5 4.5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>',
+    download: '<path d="M12 4v11M7.5 10.5L12 15l4.5-4.5"/><path d="M4 15v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h8"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.6 0l3-3a4 4 0 0 0-5.6-5.6l-1.5 1.5"/><path d="M14 10a4 4 0 0 0-5.6 0l-3 3a4 4 0 0 0 5.6 5.6l1.5-1.5"/>',
+    close: '<path d="M6 6l12 12M18 6L6 18"/>',
+    left: '<path d="M15 5l-7 7 7 7"/>',
+    right: '<path d="M9 5l7 7-7 7"/>',
+    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1.1 5.9L12 16.9l-5.3 2.8 1.1-5.9-4.3-4.1 5.9-.8z"/>',
+    sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',
+    pen: '<path d="M4 20l4-1 10-10-3-3L5 16z"/><path d="M13 7l3 3"/>',
+    archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4"/>',
+    restore: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>',
+    image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 16l-5-5-9 9"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+    brush: '<path d="M14.5 4.5l5 5-8 8-5-5z"/><path d="M6.5 12.5L4 20l7.5-2.5"/>',
+    target: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/>',
+    check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+    trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>'
+  };
+  function ic(name, cls) { return '<svg class="w118ci' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || '') + '</svg>'; }
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'wa118ccss';
+  css.textContent = '' +
+    '#toast.toast{z-index:140;}' +
+    '.w118ci{display:inline-block;width:1em;height:1em;vertical-align:-.15em;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex:none;}' +
+    '#photos{font-family:' + BODY + ';}' +
+    '#photos .w116ptop{position:relative;padding-right:220px;}' +
+    '#photos .w116ptop .w43help{position:absolute;right:0;top:4px;float:none;margin:0;}' +
+    '#photos .pbar{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:12px 14px;margin:0 0 6px;box-shadow:0 10px 24px -22px rgba(16,63,57,.6);}' +
+    '#photos .pr1{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
+    '#photos .srch{position:relative;flex:1 1 260px;max-width:460px;}' +
+    '#photos .srch .w118ci{position:absolute;left:13px;top:50%;margin-top:-8px;width:16px;height:16px;color:var(--wa-muted);}' +
+    '#photos .srch input{width:100%;box-sizing:border-box;padding:9px 14px 9px 37px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:13px;font-family:' + BODY + ';background:#FFFAF2;color:var(--wa-text);}' +
+    '#photos select.sl{width:auto;padding:8px 30px 8px 13px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';background-color:#FFFAF2;color:' + GREEN + ';font-weight:600;}' +
+    '#photos .sp{flex:1;}' +
+    '#photos .add{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:999px;background:' + GOLD + ';color:' + GREEN + ';font-family:' + HEAD + ';font-size:15px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;padding:9px 17px 8px;cursor:pointer;box-shadow:0 8px 18px -12px rgba(16,63,57,.7);}' +
+    '#photos .add:hover{filter:brightness(1.04);}' +
+    '#photos .add .w118ci{width:16px;height:16px;}' +
+    '#photos .chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:11px 0 0;}' +
+    '#photos .chips span{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;user-select:none;white-space:nowrap;}' +
+    '#photos .chips span:hover{background:rgba(16,63,57,.12);}' +
+    '#photos .chips span.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#photos .chips span.off{opacity:.4;cursor:default;}' +
+    '#photos .chips span i{width:8px;height:8px;border-radius:50%;flex:none;}' +
+    '#photos .chips span em{font-style:normal;font-weight:600;opacity:.7;}' +
+    '#photos .chips span .w118ci{width:13px;height:13px;}' +
+    '#photos .chips span.pk.on .w118ci{fill:' + GOLD + ';stroke:' + GOLD + ';}' +
+    '#photos .chips b.dv{width:1px;height:18px;background:rgba(16,63,57,.15);margin:0 3px;}' +
+    '#photos .chips span.x{background:rgba(220,165,39,.2);color:#6b4d05;}' +
+    '#photos .legend{font-size:11.5px;color:var(--wa-muted);margin:10px 0 0;line-height:1.55;}' +
+    '#photos .legend b{color:var(--wa-text);font-weight:700;}' +
+    '#photos .legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 5px 1px 0;}' +
+    '#photos .sum{font-size:12px;color:var(--wa-muted);margin:12px 2px 0;}' +
+    '#photos .grp{display:flex;align-items:baseline;gap:10px;margin:18px 0 10px;}' +
+    '#photos .grp h3{font-family:' + HEAD + ';font-weight:500;font-size:24px;letter-spacing:.4px;color:' + GREEN + ';margin:0;}' +
+    '#photos .grp span{font-size:12px;color:var(--wa-muted);white-space:nowrap;}' +
+    '#photos .grp::after{content:"";flex:1;height:1px;background:rgba(16,63,57,.12);}' +
+    '#photos .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}' +
+    '#photos .ph{position:relative;display:flex;flex-direction:column;text-align:left;border:1px solid rgba(16,63,57,.10);border-radius:18px;background:#FFFAF2;padding:0;margin:0;overflow:hidden;cursor:pointer;box-shadow:0 10px 24px -22px rgba(16,63,57,.6);transition:transform .14s ease,box-shadow .14s ease;font-family:' + BODY + ';color:var(--wa-text);width:100%;}' +
+    '#photos .ph:hover{transform:translateY(-2px);box-shadow:0 18px 32px -20px rgba(16,63,57,.55);}' +
+    '#photos .ph:focus-visible{outline:3px solid ' + GOLD + ';outline-offset:2px;}' +
+    '#photos .ph .im{position:relative;display:block;aspect-ratio:4/3;overflow:hidden;}' +
+    '#photos .ph .im img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s ease;color:transparent;}' +
+    '#photos .ph:hover .im img{transform:scale(1.035);}' +
+    '#photos .ph .tx{display:block;padding:10px 12px 12px;}' +
+    '#photos .ph .tx b{display:block;font-size:13.5px;line-height:1.3;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#photos .ph .tx em{display:block;font-style:normal;font-size:11.5px;color:var(--wa-muted);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#photos .ph.arch .im img{filter:grayscale(.7);opacity:.75;}' +
+    '#photos .more{display:block;margin:16px auto 0;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;color:' + GREEN + ';border-radius:999px;padding:8px 18px;font-weight:700;font-size:12.5px;cursor:pointer;font-family:' + BODY + ';}' +
+    '#photos .foot{font-size:11.5px;color:var(--wa-muted);margin:22px 2px 4px;line-height:1.5;}' +
+    '#photos .foot code{font-size:11px;background:rgba(16,63,57,.06);border-radius:5px;padding:1px 5px;}' +
+    '.w118cub{position:absolute;left:8px;top:8px;display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:800;letter-spacing:.3px;border-radius:999px;padding:3px 9px 3px 7px;background:rgba(255,250,242,.95);color:' + GREEN + ';box-shadow:0 2px 8px -3px rgba(0,0,0,.35);font-family:' + BODY + ';line-height:1.3;}' +
+    '.w118cub i,.w118cdot{display:inline-block;width:7px;height:7px;border-radius:50%;background:' + TEAL + ';flex:none;}' +
+    '.w118cub.u-crop i,.w118cdot.u-crop{background:' + GOLD + ';}.w118cub.u-consent i,.w118cdot.u-consent{background:' + FLAG + ';}.w118cub.u-internal i,.w118cdot.u-internal{background:#797773;}.w118cub.u-check i,.w118cdot.u-check,.w118cub.u-needs i,.w118cdot.u-needs{background:' + PURPLE + ';}.w118cub.u-arch i{background:#797773;}' +
+    '.w118cstar{position:absolute;right:8px;top:8px;width:26px;height:26px;border-radius:50%;background:rgba(255,250,242,.95);color:' + GOLD + ';display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px -3px rgba(0,0,0,.35);}' +
+    '.w118cstar .w118ci{width:15px;height:15px;fill:' + GOLD + ';}' +
+    /* the side panel */
+    '#w118cdr{position:fixed;inset:0;z-index:96;display:flex;justify-content:flex-end;font-family:' + BODY + ';}' +
+    '#w118cdr .bk{position:absolute;inset:0;background:rgba(16,32,30,.42);animation:w118cfade .18s ease-out;}' +
+    '#w118cdr .pn{position:relative;width:min(760px,100vw);height:100%;background:' + CREAM + ';box-shadow:-20px 0 50px -20px rgba(0,0,0,.35);display:flex;flex-direction:column;animation:w118cin .2s ease-out;}' +
+    '@keyframes w118cin{from{transform:translateX(28px);opacity:.6;}to{transform:none;opacity:1;}}' +
+    '@keyframes w118cfade{from{opacity:0;}to{opacity:1;}}' +
+    '#w118cdr header{display:flex;align-items:center;gap:8px;padding:14px 18px 12px 20px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '#w118cdr header h3{flex:1;min-width:0;margin:0;font-family:' + HEAD + ';font-weight:500;font-size:25px;letter-spacing:.3px;color:' + GREEN + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w118cdr header .ct{font-size:12px;color:var(--wa-muted);white-space:nowrap;margin-right:4px;}' +
+    '#w118cdr .ib{width:34px;height:34px;border-radius:50%;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:none;padding:0;}' +
+    '#w118cdr .ib:hover{background:rgba(16,63,57,.13);}' +
+    '#w118cdr .ib:disabled{opacity:.3;cursor:default;}' +
+    '#w118cdr .ib .w118ci{width:17px;height:17px;}' +
+    '#w118cdr .bd{flex:1;overflow:auto;padding:16px 20px 26px;}' +
+    '#w118cdr .hero{position:relative;margin:0 0 14px;border-radius:16px;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:120px;}' +
+    '#w118cdr .hero img{display:block;max-width:100%;max-height:56vh;object-fit:contain;}' +
+    '#w118cdr .hero .fw{position:relative;display:inline-block;line-height:0;}' +
+    '#w118cdr .hero.pickable .fw{cursor:crosshair;}' +
+    '#w118cdr .fm{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border-radius:50%;border:3px solid ' + GOLD + ';box-shadow:0 0 0 2px rgba(16,32,30,.55),inset 0 0 0 2px rgba(16,32,30,.35);pointer-events:none;}' +
+    '#w118cdr .fm::after{content:"";position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:' + GOLD + ';}' +
+    '#w118cdr .use{border-radius:14px;padding:11px 14px;margin:0 0 14px;font-size:13px;line-height:1.5;background:rgba(42,140,122,.12);color:#155a4d;}' +
+    '#w118cdr .use.u-crop{background:rgba(220,165,39,.16);color:#5a430c;}#w118cdr .use.u-consent{background:rgba(179,64,47,.10);color:#8f2f22;}#w118cdr .use.u-internal{background:rgba(16,63,57,.07);color:' + GREEN + ';}#w118cdr .use.u-check,#w118cdr .use.u-needs{background:rgba(111,100,171,.12);color:#4f4690;}#w118cdr .use.u-arch{background:rgba(16,63,57,.07);color:var(--wa-muted);}' +
+    '#w118cdr .use b{display:block;font-size:13.5px;margin-bottom:1px;}' +
+    '#w118cdr .use p{margin:4px 0 0;}' +
+    '#w118cdr .acts{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}' +
+    '#w118cdr .acts button,#w118cdr .acts a,#w118cdr .dl a{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(16,63,57,.18);background:#FFFAF2;color:' + GREEN + ';border-radius:999px;padding:7px 13px;font-size:12.5px;font-weight:700;cursor:pointer;text-decoration:none;font-family:' + BODY + ';line-height:1.2;}' +
+    '#w118cdr .acts button:hover,#w118cdr .acts a:hover,#w118cdr .dl a:hover{background:rgba(16,63,57,.07);}' +
+    '#w118cdr .acts .pri{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
+    '#w118cdr .acts .pri:hover{background:#0b302b;}' +
+    '#w118cdr .acts .w118ci,#w118cdr .dl .w118ci{width:15px;height:15px;}' +
+    '#w118cdr .sec{margin:0 0 18px;}' +
+    '#w118cdr .lbl{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;margin:0 0 7px;}' +
+    '#w118cdr .lbl small{text-transform:none;letter-spacing:0;font-weight:600;font-size:11.5px;}' +
+    '#w118cdr .copy{display:flex;gap:10px;align-items:flex-start;background:#FFFAF2;border:1px solid rgba(16,63,57,.12);border-radius:12px;padding:10px 12px;}' +
+    '#w118cdr .copy p{flex:1;margin:0;font-size:13.5px;line-height:1.5;color:var(--wa-text);}' +
+    '#w118cdr .copy p.none{color:var(--wa-muted);font-style:italic;}' +
+    '#w118cdr .copy button{flex:none;display:inline-flex;align-items:center;gap:5px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';border-radius:999px;padding:5px 11px;font-size:11.5px;font-weight:800;cursor:pointer;font-family:' + BODY + ';}' +
+    '#w118cdr .copy button.done{background:' + TEAL + ';color:' + CREAM + ';}' +
+    '#w118cdr .copy button .w118ci{width:13px;height:13px;}' +
+    '#w118cdr .desc{font-size:13.5px;line-height:1.6;color:var(--wa-text);margin:0;}' +
+    '#w118cdr .dl{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '#w118cdr .dl a span{font-weight:600;color:var(--wa-muted);}' +
+    '#w118cdr .dlh{font-size:11.5px;color:var(--wa-muted);margin:7px 0 0;}' +
+    '#w118cdr dl.facts{display:grid;grid-template-columns:132px minmax(0,1fr);gap:7px 14px;font-size:13px;margin:0;}' +
+    '#w118cdr dl.facts dt{color:var(--wa-muted);font-weight:700;font-size:12px;padding-top:1px;}' +
+    '#w118cdr dl.facts dd{margin:0;color:var(--wa-text);line-height:1.45;overflow-wrap:anywhere;}' +
+    '#w118cdr dl.facts dd small{display:block;color:var(--wa-muted);font-size:11.5px;}' +
+    '#w118cdr dl.facts dd a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:underline;}' +
+    '#w118cdr dl.facts code{font-size:11.5px;background:rgba(16,63,57,.06);border-radius:5px;padding:1px 5px;}' +
+    '#w118cdr .tags{display:flex;gap:6px;flex-wrap:wrap;}' +
+    '#w118cdr .tags span{font-size:12px;font-weight:700;border-radius:999px;padding:4px 11px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;}' +
+    '#w118cdr .tags span:hover{background:rgba(16,63,57,.14);}' +
+    '#w118cdr .tags span.bf{background:rgba(220,165,39,.18);color:#6b4d05;cursor:default;}' +
+    '#w118cdr footer{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px 16px;border-top:1px solid rgba(16,63,57,.10);background:#FFFAF2;}' +
+    '#w118cdr footer .sp{flex:1;}' +
+    '#w118cdr footer .b{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;color:' + GREEN + ';border-radius:999px;padding:8px 15px;font-size:13px;font-weight:700;cursor:pointer;font-family:' + BODY + ';}' +
+    '#w118cdr footer .b:disabled{opacity:.5;cursor:default;}' +
+    '#w118cdr footer .b .w118ci{width:15px;height:15px;}' +
+    '#w118cdr footer .b.go{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
+    '#w118cdr footer .b.ai{border-color:rgba(111,100,171,.35);background:rgba(111,100,171,.08);color:' + PURPLE + ';}' +
+    '#w118cdr footer .lnk{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--wa-muted);cursor:pointer;text-decoration:underline;background:none;border:none;padding:4px;font-family:' + BODY + ';}' +
+    '#w118cdr footer .lnk.del{color:' + FLAG + ';}' +
+    '#w118cdr footer .lnk .w118ci{width:14px;height:14px;}' +
+    '#w118cdr .note{font-size:12px;color:var(--wa-muted);line-height:1.5;margin:6px 0 0;}' +
+    /* the label form */
+    '#w118cdr .fs{margin:0 0 20px;padding:0 0 4px;}' +
+    '#w118cdr .fs h4{font-family:' + HEAD + ';font-weight:500;font-size:19px;letter-spacing:.4px;color:' + GREEN + ';margin:0 0 10px;text-transform:uppercase;}' +
+    '#w118cdr .fg{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;}' +
+    '#w118cdr .fg .full{grid-column:1 / -1;}' +
+    '#w118cdr .fg label.fl{display:block;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;margin:0 0 5px;}' +
+    '#w118cdr .fg input[type=text],#w118cdr .fg input[type=date],#w118cdr .fg select,#w118cdr .fg textarea{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;font-size:13.5px;font-family:' + BODY + ';background-color:#FFFAF2;color:var(--wa-text);}' +
+    '#w118cdr .fg textarea{min-height:64px;line-height:1.5;resize:vertical;}' +
+    '#w118cdr .fg .hint{font-size:11.5px;color:var(--wa-muted);margin:4px 0 0;line-height:1.4;}' +
+    '#w118cdr .fg .cnt{float:right;font-size:11px;color:var(--wa-muted);font-weight:600;text-transform:none;letter-spacing:0;}' +
+    '#w118cdr .fg .cnt.bad{color:' + FLAG + ';}' +
+    '#w118cdr .aih{display:flex;gap:8px;align-items:flex-start;margin:6px 0 0;font-size:12px;line-height:1.45;background:rgba(111,100,171,.08);border:1px dashed rgba(111,100,171,.4);border-radius:10px;padding:6px 10px;color:#4f4690;}' +
+    '#w118cdr .aih span{flex:1;}' +
+    '#w118cdr .aih a{font-weight:800;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    '#w118cdr .aiflag{border-color:rgba(111,100,171,.55) !important;box-shadow:0 0 0 3px rgba(111,100,171,.12);}' +
+    '#w118cdr .opts{display:flex;gap:6px;flex-wrap:wrap;}' +
+    '#w118cdr .opts span{font-size:12px;font-weight:700;border-radius:999px;padding:5px 11px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;user-select:none;}' +
+    '#w118cdr .opts span.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w118cdr .ck{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--wa-text);cursor:pointer;}' +
+    '#w118cdr .ck input{width:16px;height:16px;accent-color:' + GREEN + ';}' +
+    '#w118cdr .crops{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin:10px 0 0;}' +
+    '#w118cdr .crops div{text-align:center;font-size:11px;color:var(--wa-muted);font-weight:600;}' +
+    '#w118cdr .crops .cv{overflow:hidden;border-radius:10px;margin:0 0 4px;box-shadow:0 0 0 1px rgba(16,63,57,.12);}' +
+    '#w118cdr .crops .cv img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#w118cdr .busy{display:flex;gap:10px;align-items:center;font-size:12.5px;color:' + PURPLE + ';font-weight:700;background:rgba(111,100,171,.08);border-radius:12px;padding:9px 12px;margin:0 0 14px;}' +
+    '#w118cdr .busy i{width:14px;height:14px;border-radius:50%;border:2px solid rgba(111,100,171,.3);border-top-color:' + PURPLE + ';animation:w118cspin .8s linear infinite;flex:none;}' +
+    '@keyframes w118cspin{to{transform:rotate(360deg);}}' +
+    /* adding photos */
+    '#w118cdr .drop{border:1.5px dashed rgba(16,63,57,.28);border-radius:16px;padding:26px 16px;text-align:center;font-size:13px;color:var(--wa-muted);background:#FFFAF2;transition:background .12s,border-color .12s;line-height:1.5;}' +
+    '#w118cdr .drop.over{background:rgba(220,165,39,.12);border-color:' + GOLD + ';}' +
+    '#w118cdr .drop b{display:block;font-family:' + HEAD + ';font-size:21px;color:' + GREEN + ';font-weight:500;letter-spacing:.4px;margin:6px 0 4px;text-transform:uppercase;}' +
+    '#w118cdr .drop a{color:' + GREEN + ';font-weight:700;text-decoration:underline;cursor:pointer;}' +
+    '#w118cdr .drop .w118ci{width:30px;height:30px;color:' + GOLD + ';}' +
+    '#w118cdr .ups{margin:14px 0 0;}' +
+    '#w118cdr .it{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-bottom:1px solid rgba(16,63,57,.08);}' +
+    '#w118cdr .it img,#w118cdr .it .ph0{width:56px;height:56px;object-fit:cover;border-radius:10px;background:rgba(16,63,57,.08);display:block;}' +
+    '#w118cdr .it b{display:block;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#w118cdr .it em{display:block;font-style:normal;font-size:11.5px;color:var(--wa-muted);margin-top:2px;}' +
+    '#w118cdr .it.err em{color:' + FLAG + ';}' +
+    '#w118cdr .it.ok em{color:#1c6b5d;}' +
+    '#w118cdr .it .bar{height:4px;background:rgba(16,63,57,.08);border-radius:3px;overflow:hidden;margin-top:6px;}' +
+    '#w118cdr .it .bar i{display:block;height:100%;background:' + TEAL + ';transition:width .3s;}' +
+    '#w118cdr .it a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    /* the picker */
+    '#w118cpk{position:fixed;inset:0;z-index:130;display:flex;align-items:center;justify-content:center;font-family:' + BODY + ';}' +
+    '#w118cpk .bk{position:absolute;inset:0;background:rgba(16,32,30,.5);animation:w118cfade .15s ease-out;}' +
+    '#w118cpk .box{position:relative;width:min(940px,94vw);max-height:88vh;background:' + CREAM + ';border-radius:22px;display:flex;flex-direction:column;box-shadow:0 30px 80px -30px rgba(0,0,0,.5);overflow:hidden;}' +
+    '#w118cpk header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:16px 18px 12px 20px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '#w118cpk header h3{margin:0;font-family:' + HEAD + ';font-weight:500;font-size:24px;letter-spacing:.3px;color:' + GREEN + ';text-transform:uppercase;flex:1 1 auto;}' +
+    '#w118cpk header input{flex:1 1 200px;max-width:320px;box-sizing:border-box;padding:8px 14px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:13px;font-family:' + BODY + ';background:#FFFAF2;}' +
+    '#w118cpk .tg{font-size:12px;font-weight:700;border-radius:999px;padding:6px 12px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;user-select:none;white-space:nowrap;}' +
+    '#w118cpk .tg.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w118cpk .x{width:34px;height:34px;border-radius:50%;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;}' +
+    '#w118cpk .x .w118ci{width:17px;height:17px;}' +
+    '#w118cpk .pg{flex:1;overflow:auto;padding:14px 18px 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start;grid-auto-rows:max-content;}' +
+    '#w118cpk .pi{position:relative;border:1px solid rgba(16,63,57,.12);border-radius:14px;background:#FFFAF2;padding:0;overflow:hidden;cursor:pointer;text-align:left;font-family:' + BODY + ';}' +
+    '#w118cpk .pi:hover{box-shadow:0 0 0 3px ' + GOLD + ';}' +
+    '#w118cpk .pi .im{display:block;aspect-ratio:1/1;overflow:hidden;}' +
+    '#w118cpk .pi img{width:100%;height:100%;object-fit:cover;display:block;color:transparent;}' +
+    '#w118cpk .pi b{display:block;font-size:12px;line-height:1.3;padding:7px 9px 9px;color:var(--wa-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#w118cpk .pi .w118cub{font-size:9.5px;left:6px;top:6px;}' +
+    '#w118cpk .ft{padding:10px 20px 14px;border-top:1px solid rgba(16,63,57,.10);font-size:12px;color:var(--wa-muted);}' +
+    '#w118cpk .none{grid-column:1 / -1;text-align:center;color:var(--wa-muted);font-size:13px;padding:30px 0;}' +
+    /* hand-offs */
+    '.w118ccd{margin:7px 0 0;font-size:12px;color:var(--wa-muted);line-height:1.45;}' +
+    '.w118ccd a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:underline;}' +
+    '.w118ccd .sel{display:flex;gap:9px;align-items:center;margin:7px 0 0;padding:6px;border:1px solid rgba(16,63,57,.14);border-radius:12px;background:#FFFAF2;}' +
+    '.w118ccd .sel img{width:46px;height:46px;border-radius:8px;object-fit:cover;flex:none;}' +
+    '.w118ccd .sel span{flex:1;min-width:0;font-size:12px;color:var(--wa-text);}' +
+    '.w118ccd .sel span small{display:block;color:var(--wa-muted);}' +
+    '.w118ccd .sel button{border:none;background:none;color:var(--wa-muted);cursor:pointer;font-size:12px;text-decoration:underline;font-family:' + BODY + ';}' +
+    '#w121dr .drop a[data-w118cpick]{white-space:nowrap;}' +
+    '.sr .sr-type.w118cst{background:rgba(220,165,39,.2);color:#6b4d05;}' +
+    '.sr[data-w118cs] img{width:26px;height:26px;border-radius:6px;object-fit:cover;vertical-align:middle;margin-right:8px;}' +
+    '@media (max-width:900px){#photos .w116ptop{padding-right:0;}#photos .w116ptop .w43help{position:static;display:inline-block;margin-top:10px;}}' +
+    '@media (max-width:640px){#photos .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}#photos .ph{border-radius:14px;}#photos .ph .tx{padding:8px 10px 10px;}#photos .ph .tx b{font-size:12.5px;}#photos .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}#photos .chips span{flex:none;}#photos .srch{flex-basis:100%;max-width:none;}#photos .add{padding:8px 14px 7px;}#w118cdr .pn{width:100vw;}#w118cdr .fg{grid-template-columns:1fr;}#w118cdr dl.facts{grid-template-columns:1fr;gap:2px;}#w118cdr dl.facts dt{margin-top:8px;}#w118cdr .bd{padding:14px 16px 22px;}#w118cdr footer{padding:10px 16px 14px;}#w118cpk .box{width:100vw;max-height:100vh;height:100%;border-radius:0;}#w118cpk .pg{grid-template-columns:repeat(2,minmax(0,1fr));}}' +
+    '@media (prefers-reduced-motion:reduce){#photos .ph,#photos .ph .im img,#w118cdr .pn,#w118cdr .bk,#w118cpk .bk{transition:none !important;animation:none !important;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function allowed() { return staff() || board(); }
+  function myEmail() { try { return String((USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
+  function admin() {
+    if (['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'].indexOf(myEmail()) >= 0) return true;
+    try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; }
+  }
+  /* a page this person may open (per-person tab lists win) */
+  function tabOk(id) { try { if (typeof wa40Allowed === 'function') return (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { /* fine */ } return true; }
+  function me() { try { return (typeof who === 'function' && who()) || (USER && (USER.name || USER.email)) || 'Someone'; } catch (e) { return 'Someone'; } }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function ddmmyy(d) { d = d || new Date(); return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + String(d.getFullYear()).slice(2); }
+  function dateOf(ds) { return ds ? new Date(String(ds).slice(0, 10) + 'T12:00:00') : null; }
+  function niceDate(ds) { var d = dateOf(ds); if (!d || isNaN(d)) return ''; try { return d.toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return String(ds); } }
+  function monthYear(ds) { var d = dateOf(ds); if (!d || isNaN(d)) return ''; try { return d.toLocaleDateString('en-CA', { month: 'short', year: 'numeric' }); } catch (e) { return String(ds).slice(0, 7); } }
+  function seasonOf(ds) { var m = Number(String(ds || '').slice(5, 7)); if (!m) return null; return m === 12 || m <= 2 ? 'winter' : m <= 5 ? 'spring' : m <= 8 ? 'summer' : 'autumn'; }
+  function label(list, v) { for (var i = 0; i < list.length; i++) if (list[i][0] === v) return list[i][1]; return v || ''; }
+  function bytes(n) { n = Number(n); if (!n) return ''; if (n >= 1048576) return (n / 1048576).toFixed(1).replace(/\.0$/, '') + ' MB'; return Math.max(1, Math.round(n / 1024)) + ' KB'; }
+  function arr(v) {
+    if (Array.isArray(v)) return v.map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean);
+    if (typeof v === 'string') return v.split(/[,;\n]/).map(function (x) { return x.trim(); }).filter(Boolean);
+    return [];
+  }
+  function clean(s, max) { s = String(s == null ? '' : s).replace(/\s*[\u2014\u2013]\s*/g, ', ').replace(/,\s*,/g, ',').replace(/\s+/g, ' ').trim(); return max ? s.slice(0, max) : s; }
+  function slug(s) {
+    s = String(s || '').toLowerCase();
+    try { s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { /* old browsers */ }
+    return s.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+  function uclass(p) { return p.status === 'archived' ? 'u-arch' : p.status === 'needs_labels' ? 'u-needs' : 'u-' + (USAGE[p.usage] ? p.usage : 'check'); }
+  function ulabel(p) { return p.status === 'archived' ? 'Archived' : p.status === 'needs_labels' ? 'Needs a look' : (USAGE[p.usage] || USAGE.check).label; }
+  function badge(p) { return '<span class="w118cub ' + uclass(p) + '"><i></i>' + E(ulabel(p)) + '</span>'; }
+  function focalCss(p) { return 'object-position:' + Math.round((p.focal_x == null ? 0.5 : p.focal_x) * 100) + '% ' + Math.round((p.focal_y == null ? 0.5 : p.focal_y) * 100) + '%;'; }
+  function url(p, size) {
+    if (!p) return '';
+    var k = size === 'full' ? 'url_full' : size === 'thumb' ? 'url_thumb' : 'url_web';
+    if (p[k]) return p[k];
+    var path = p['path_' + (size || 'web')];
+    return path ? BASE + path + '?v=' + (p.version || 1) : '';
+  }
+  function dlUrl(p, size) { var u = url(p, size); if (!u) return ''; return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'download=' + encodeURIComponent(p.key + (size === 'full' ? '' : '-' + size) + '.jpg'); }
+  function hay(p) { return [p.title, p.alt_text, p.caption, p.description, p.place, p.event, p.people, p.series, p.notes, p.credit, p.key, label(SCENES, p.scene), label(SEASONS, p.season), arr(p.tags).join(' '), arr(p.partner).join(' '), String(p.taken_on || '').slice(0, 4)].join(' ').toLowerCase(); }
+  function byKey(k) { for (var i = 0; i < P.rows.length; i++) if (P.rows[i].key === k) return P.rows[i]; return null; }
+  function norm(r) {
+    r = Object.assign({}, r);
+    r.tags = arr(r.tags); r.partner = arr(r.partner); r.best_for = arr(r.best_for);
+    if (r.focal_x == null) r.focal_x = 0.5; if (r.focal_y == null) r.focal_y = 0.5;
+    r.status = r.status || 'ready'; r.usage = r.usage || 'check';
+    ['full', 'web', 'thumb'].forEach(function (s) { if (!r['url_' + s] && r['path_' + s]) r['url_' + s] = BASE + r['path_' + s] + '?v=' + (r.version || 1); });
+    return r;
+  }
+  /* on the same day: confirmed before new, ready before crop before consent, picks first */
+  function rank(p) { var u = p.status === 'needs_labels' ? 8 : USAGE_ORDER.indexOf(p.usage); if (u < 0) u = 9; return u * 2 + (p.is_pick ? 0 : 1); }
+  function sortRows(list) {
+    var s = P.sort;
+    return list.slice().sort(function (a, b) {
+      if (s === 'added') return String(b.created_at || '').localeCompare(String(a.created_at || '')) || a.key.localeCompare(b.key);
+      if (s === 'title') return String(a.title || '').localeCompare(String(b.title || ''));
+      var x = a.taken_on || '', y = b.taken_on || '';
+      if (x === y) return rank(a) - rank(b) || a.key.localeCompare(b.key);
+      if (!x) return 1; if (!y) return -1;
+      return s === 'taken_asc' ? x.localeCompare(y) : y.localeCompare(x);
+    });
+  }
+
+  /* ---------- data ---------- */
+  async function load(force) {
+    if (P.loading) return P.loading;
+    if (P.loaded && !force && Date.now() - P.at < 120000) return;
+    P.loading = (async function () {
+      try {
+        var r = await db.from('wa_photos_list').select('*').order('taken_on', { ascending: false, nullsFirst: false }).limit(2000);
+        if (r.error) throw r.error;
+        P.rows = (r.data || []).map(norm); P.loaded = true; P.err = null; P.at = Date.now();
+      } catch (e) { P.err = (e && e.message) || String(e); }
+      P.loading = null;
+    })();
+    return P.loading;
+  }
+  function put(row) { row = norm(row); var i = P.rows.findIndex(function (x) { return x.key === row.key; }); if (i >= 0) P.rows[i] = Object.assign({}, P.rows[i], row); else P.rows.unshift(row); return byKey(row.key); }
+  async function update(key, patch, what) {
+    var old = byKey(key); patch = Object.assign({}, patch, { updated_by: me() });
+    var r = await db.from('wa_photos').update(patch).eq('key', key).select().maybeSingle();
+    if (r.error) throw r.error;
+    var row = put(Object.assign({}, old || {}, r.data && r.data.key ? r.data : patch, { key: key }));
+    if (what) { try { if (typeof logChange === 'function') logChange('photo', key, what.field, what.from, what.to); } catch (e) { /* audit is best effort */ } }
+    return row;
+  }
+  function diffText(a, b, keys) {
+    var from = [], to = [];
+    var fmt = function (x) { if (Array.isArray(x)) return x.join(', '); if (typeof x === 'number') return String(Math.round(x * 1000) / 1000); return x == null ? '' : String(x); };
+    keys.forEach(function (k) {
+      var x = fmt(a[k]), y = fmt(b[k]);
+      if (x !== y) { from.push(k + ': ' + x.slice(0, 80)); to.push(k + ': ' + y.slice(0, 80)); }
+    });
+    return { from: from.join('; ').slice(0, 900), to: to.join('; ').slice(0, 900), n: to.length };
+  }
+
+  /* ---------- images in the browser ---------- */
+  function loadImg(src, cors) {
+    return new Promise(function (res, rej) {
+      var im = new Image(); if (cors) im.crossOrigin = 'anonymous'; im.decoding = 'async';
+      im.onload = function () { res(im); }; im.onerror = function () { rej(new Error('Could not read this image')); };
+      im.src = src;
+    });
+  }
+  function drawTo(src, max) {
+    var w = src.naturalWidth || src.width, h = src.naturalHeight || src.height;
+    var s = Math.min(1, max / Math.max(w, h)); var cw = Math.max(1, Math.round(w * s)), ch = Math.max(1, Math.round(h * s));
+    var c = document.createElement('canvas'); c.width = cw; c.height = ch;
+    var x = c.getContext('2d'); x.imageSmoothingEnabled = true; x.imageSmoothingQuality = 'high';
+    x.fillStyle = '#FFFAF2'; x.fillRect(0, 0, cw, ch); x.drawImage(src, 0, 0, cw, ch);
+    return c;
+  }
+  function blobOf(c, q) { return new Promise(function (res, rej) { c.toBlob(function (b) { if (b) res(b); else rej(new Error('Could not make the JPEG')); }, 'image/jpeg', q); }); }
+  function avgColor(c) {
+    try {
+      var t = document.createElement('canvas'); t.width = 12; t.height = 12; var x = t.getContext('2d'); x.drawImage(c, 0, 0, 12, 12);
+      var d = x.getImageData(0, 0, 12, 12).data, r = 0, g = 0, b = 0, n = 0;
+      for (var i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; n++; }
+      var hx = function (v) { return ('0' + Math.round(v / n).toString(16)).slice(-2); };
+      return ('#' + hx(r) + hx(g) + hx(b)).toUpperCase();
+    } catch (e) { return null; }
+  }
+  /* the date (and camera) from a JPEG's EXIF block; nothing else is read or kept */
+  function exif(buf) {
+    var out = {};
+    try {
+      var v = new DataView(buf), len = v.byteLength;
+      if (len < 12 || v.getUint16(0) !== 0xFFD8) return out;
+      var off = 2;
+      while (off + 10 < len) {
+        var mk = v.getUint16(off), size = v.getUint16(off + 2);
+        if (mk === 0xFFE1 && v.getUint32(off + 4) === 0x45786966) {
+          var t = off + 10, le = v.getUint16(t) === 0x4949;
+          var g16 = function (o) { return v.getUint16(o, le); }, g32 = function (o) { return v.getUint32(o, le); };
+          var str = function (o, n) { var s = ''; for (var i = 0; i < n && o + i < len; i++) { var ch = v.getUint8(o + i); if (!ch) break; s += String.fromCharCode(ch); } return s.trim(); };
+          var ifd = function (at, want) {
+            var res = {}; if (t + at + 2 > len) return res; var n = g16(t + at);
+            for (var i = 0; i < n && i < 400; i++) {
+              var e = t + at + 2 + i * 12; if (e + 12 > len) break;
+              var tag = g16(e), type = g16(e + 2), cnt = g32(e + 4);
+              if (want.indexOf(tag) < 0) continue;
+              if (type === 2) res[tag] = str(cnt > 4 ? t + g32(e + 8) : e + 8, Math.min(cnt, 64));
+              else if (type === 3) res[tag] = g16(e + 8);
+              else if (type === 4) res[tag] = g32(e + 8);
+            }
+            return res;
+          };
+          var i0 = ifd(g32(t + 4), [0x010F, 0x0110, 0x0132, 0x8769]);
+          var dt = i0[0x0132];
+          if (i0[0x8769]) { var ex = ifd(i0[0x8769], [0x9003, 0x9004]); dt = ex[0x9003] || ex[0x9004] || dt; }
+          if (dt && /^(19[89]\d|20\d\d):[01]\d:[0-3]\d/.test(dt) && dt.slice(0, 10) !== '0000:00:00') { out.date = dt.slice(0, 10).replace(/:/g, '-'); out.time = dt.slice(11, 16); }
+          var make = clean(i0[0x010F] || '', 40), model = clean(i0[0x0110] || '', 40);
+          if (model) out.camera = model.toLowerCase().indexOf(make.toLowerCase().split(' ')[0]) === 0 || !make ? model : make + ' ' + model;
+          return out;
+        }
+        if (mk === 0xFFDA || (mk & 0xFF00) !== 0xFF00) break;
+        off += 2 + size;
+      }
+    } catch (e) { /* no date then */ }
+    return out;
+  }
+  async function b64For(p, canvas) {
+    var c = canvas;
+    if (!c) { var im = await loadImg(url(p, 'web'), true); c = im; }
+    var s = drawTo(c, 1024);
+    var d = s.toDataURL('image/jpeg', 0.8);
+    return d.slice(d.indexOf(',') + 1);
+  }
+
+  /* ---------- AI: first labels from the photo_label route ---------- */
+  function normSuggestion(inp) {
+    inp = inp || {}; var o = {};
+    ['title', 'alt_text', 'caption', 'description', 'usage_note', 'people'].forEach(function (k) { if (inp[k] != null && String(inp[k]).trim()) o[k] = clean(inp[k], k === 'title' ? 160 : k === 'alt_text' ? 400 : 1200); });
+    if (o.title) o.title = o.title.replace(/[.]+$/, '');
+    if (SEASONS.some(function (s) { return s[0] === inp.season; })) o.season = inp.season;
+    if (SCENES.some(function (s) { return s[0] === inp.scene; })) o.scene = inp.scene;
+    if (USAGE[inp.usage]) o.usage = inp.usage;
+    if (BRANDING.some(function (s) { return s[0] === inp.branding; })) o.branding = inp.branding;
+    var tags = arr(inp.tags).map(function (x) { return x.toLowerCase().replace(/^#/, ''); }).filter(function (x, i, a) { return x && a.indexOf(x) === i; }).slice(0, 12);
+    if (tags.length) o.tags = tags;
+    var bf = arr(inp.best_for).map(function (x) { return x.toLowerCase().replace(/[\s-]+/g, '_'); }).filter(function (x, i, a) { return BEST.some(function (b) { return b[0] === x; }) && a.indexOf(x) === i; });
+    if (bf.length) o.best_for = bf;
+    var fx = Number(inp.focal_x), fy = Number(inp.focal_y);
+    if (isFinite(fx) && isFinite(fy)) { o.focal_x = Math.min(1, Math.max(0, fx)); o.focal_y = Math.min(1, Math.max(0, fy)); }
+    return o;
+  }
+  async function suggest(p, canvas, hints) {
+    var data = await b64For(p, canvas);
+    var known = [];
+    if (hints && hints.file) known.push('file name ' + hints.file);
+    if (p.taken_on) known.push('taken ' + niceDate(p.taken_on));
+    if (p.place) known.push('place: ' + p.place);
+    if (p.event) known.push('event: ' + p.event);
+    if (p.series) known.push('part of the set ' + p.series);
+    var body = { max_tokens: 1200, system: SPEC.system, tools: [SPEC.tool], tool_choice: { type: 'tool', name: SPEC.tool.name },
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: data } }, { type: 'text', text: 'Label this photo.' + (known.length ? ' What we know: ' + known.join('; ') + '.' : '') }] }] };
+    var r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'photo_label', 'x-wa-caller': 'photos' }, body: body });
+    if (r.error) { var m = (r.error && r.error.message) || String(r.error); if (/401|unauthor/i.test(m)) m = 'AI labels are not open to this account'; throw new Error(m); }
+    var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use'; })[0];
+    if (!tu || !tu.input) throw new Error((r.data && r.data.error && r.data.error.message) || 'nothing came back');
+    var o = normSuggestion(tu.input);
+    if (!o.title && !o.alt_text) throw new Error('nothing usable came back');
+    return { fields: o, model: (r.data._wa && r.data._wa.model) || r.data.model || null, at: new Date().toISOString() };
+  }
+
+  /* ---------- the page ---------- */
+  var INTRO = 'Our photos, labelled and cleared for use. Copy the alt text and caption, download the size you need, or send a photo straight to the Create studio or a post.';
+  var INTRO_RO = 'Our photos, labelled and cleared for use. Copy the alt text and caption, or download the size you need.';
+  function panel() {
+    var main = document.querySelector('main'); if (!main) return null;
+    var sec = document.getElementById('photos');
+    if (!sec) { sec = document.createElement('section'); sec.id = 'photos'; sec.className = 'panel'; main.appendChild(sec); }
+    sec.setAttribute('data-w118c', '1');
+    if (!sec.querySelector('.w118chost')) {
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">More</div><h2>Photo library</h2><p>' + E(INTRO) + '</p><button class="w43help" data-w118chelp="1" type="button">&#63; How this page works</button></div><div class="w118chost"><p class="read">Loading the photo library...</p></div>';
+    }
+    return sec;
+  }
+  function live() { return P.rows.filter(function (p) { return p.status !== 'archived'; }); }
+  function base(except) {
+    /* every filter except one, so each chip shows what it would add */
+    var f = P.f;
+    return P.rows.filter(function (p) {
+      if (f.status === 'archived') { if (p.status !== 'archived') return false; }
+      else { if (p.status === 'archived') return false; if (except !== 'status' && f.status === 'needs_labels' && p.status !== 'needs_labels') return false; }
+      if (except !== 'usage' && f.usage && (p.usage !== f.usage || p.status === 'needs_labels')) return false;
+      if (except !== 'season' && f.season && p.season !== f.season) return false;
+      if (except !== 'scene' && f.scene && p.scene !== f.scene) return false;
+      if (except !== 'picks' && f.picks && !p.is_pick) return false;
+      if (f.series && p.series !== f.series) return false;
+      if (f.tag && arr(p.tags).indexOf(f.tag) < 0) return false;
+      if (f.q) { var h = hay(p); var terms = f.q.toLowerCase().split(/\s+/).filter(Boolean); for (var i = 0; i < terms.length; i++) if (h.indexOf(terms[i]) < 0) return false; }
+      return true;
+    });
+  }
+  function shown() { return sortRows(base(null)); }
+  function chip(attr, val, text, on, count, dot, extra) {
+    var off = count === 0 && !on;
+    return '<span data-' + attr + '="' + E(val) + '" class="' + (on ? 'on' : '') + (off ? ' off' : '') + (extra ? ' ' + extra : '') + '" role="button" tabindex="0" aria-pressed="' + (on ? 'true' : 'false') + '">' + (dot || '') + E(text) + (count != null ? ' <em>' + count + '</em>' : '') + '</span>';
+  }
+  function toolbar() {
+    var f = P.f, st = staff();
+    var bu = base('usage'), bs = base('season'), bp = base('picks');
+    var cu = function (u) { return bu.filter(function (p) { return p.usage === u && p.status !== 'needs_labels'; }).length; };
+    var h = '<div class="pbar"><div class="pr1">' +
+      '<label class="srch">' + ic('search') + '<input type="search" id="w118cq" placeholder="Search titles, tags, places, people..." value="' + E(f.q) + '" aria-label="Search the photos"></label>' +
+      '<select class="sl" id="w118cscene" aria-label="Scene"><option value="">Any scene</option>' + SCENES.map(function (s) { return '<option value="' + s[0] + '"' + (f.scene === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select>' +
+      '<select class="sl" id="w118csort" aria-label="Order"><option value="taken"' + (P.sort === 'taken' ? ' selected' : '') + '>Newest first</option><option value="taken_asc"' + (P.sort === 'taken_asc' ? ' selected' : '') + '>Oldest first</option><option value="added"' + (P.sort === 'added' ? ' selected' : '') + '>Recently added</option><option value="title"' + (P.sort === 'title' ? ' selected' : '') + '>By title</option></select>' +
+      '<span class="sp"></span>' +
+      (st ? '<button class="add" data-w118cgo="new" type="button">' + ic('upload') + 'Add photos</button>' : '') +
+      '</div><div class="chips">' +
+      chip('w118cu', '', 'All', !f.usage, bu.length) +
+      USAGE_ORDER.filter(function (u) { return u === 'ready' || u === 'crop' || u === 'consent' || cu(u) > 0 || f.usage === u; }).map(function (u) { return chip('w118cu', u, USAGE[u].label, f.usage === u, cu(u), '<i class="w118cdot u-' + u + '"></i>'); }).join('') +
+      '<b class="dv"></b>' +
+      SEASONS.map(function (s) { return chip('w118cs', s[0], s[1], f.season === s[0], bs.filter(function (p) { return p.season === s[0]; }).length); }).join('') +
+      '<b class="dv"></b>' +
+      chip('w118cpk', '1', 'Picks', f.picks, bp.filter(function (p) { return p.is_pick; }).length, ic('star'), 'pk');
+    if (st) {
+      var nl = P.rows.filter(function (p) { return p.status === 'needs_labels'; }).length, ar = P.rows.filter(function (p) { return p.status === 'archived'; }).length;
+      if (nl || f.status === 'needs_labels') h += '<b class="dv"></b>' + chip('w118cst', 'needs_labels', 'Needs a look', f.status === 'needs_labels', nl, '<i class="w118cdot u-needs"></i>');
+      if (ar || f.status === 'archived') h += (nl ? '' : '<b class="dv"></b>') + chip('w118cst', 'archived', 'Archived', f.status === 'archived', ar);
+    }
+    if (f.series) h += '<b class="dv"></b><span class="x on" data-w118cclr="series" role="button" tabindex="0">Set: ' + E(f.series) + ' &nbsp;&#215;</span>';
+    if (f.tag) h += (f.series ? '' : '<b class="dv"></b>') + '<span class="x on" data-w118cclr="tag" role="button" tabindex="0">Tag: ' + E(f.tag) + ' &nbsp;&#215;</span>';
+    h += '</div><div class="legend"><i class="w118cdot u-ready"></i><b>Ready</b> for posts, the website, decks and reports. &nbsp; <i class="w118cdot u-crop"></i><b>Crop first:</b> crop the edge in the note before it goes public. &nbsp; <i class="w118cdot u-consent"></i><b>Consent needed:</b> someone we serve or a child is recognizable, so inside the team, or public with their consent.</div></div>';
+    return h;
+  }
+  function card(p) {
+    var meta = [monthYear(p.taken_on) || 'Date unknown', label(SEASONS, p.season), label(SCENES, p.scene)].filter(Boolean).join(' \u00b7 ');
+    return '<button type="button" class="ph' + (p.status === 'archived' ? ' arch' : '') + '" data-w118cop="' + E(p.key) + '" aria-label="' + E(p.title + ', ' + ulabel(p)) + '">' +
+      '<span class="im" style="background:' + E(p.color || '#d9d6cc') + '"><img loading="lazy" decoding="async" src="' + E(url(p, 'thumb')) + '" alt="' + E(p.alt_text || p.title) + '" style="' + focalCss(p) + '">' + badge(p) + (p.is_pick ? '<span class="w118cstar" title="One of our picks">' + ic('star') + '</span>' : '') + '</span>' +
+      '<span class="tx"><b>' + E(p.title) + '</b><em>' + E(meta) + '</em></span></button>';
+  }
+  function paint() {
+    var sec = panel(); if (!sec) return;
+    var host = sec.querySelector('.w118chost'); if (!host) return;
+    var intro = sec.querySelector('.w116ptop p'); if (intro) { var want = staff() ? INTRO : INTRO_RO; if (intro.textContent !== want) intro.textContent = want; }
+    if (!allowed()) { host.innerHTML = '<div class="w116empty">The photo library is open to staff and board accounts.</div>'; return; }
+    if (!P.loaded) { host.innerHTML = P.err ? '<div class="w116empty">Could not load the photos: ' + E(P.err) + '</div>' : '<p class="read">Loading the photo library...</p>'; return; }
+    var qEl = document.getElementById('w118cq'), hadFocus = qEl && document.activeElement === qEl, caret = hadFocus ? qEl.selectionStart : null;
+    var list = shown(), html = toolbar();
+    var nLive = live().length;
+    if (!P.rows.length) {
+      html += '<div class="w116empty" style="margin-top:14px">No photos yet.' + (staff() ? ' Add the first ones with Add photos: the hub makes the sizes and suggests the labels.' : '') + '</div>';
+    } else if (!list.length) {
+      html += '<div class="w116empty" style="margin-top:14px">No photo matches that. <a data-w118cclr="all" style="cursor:pointer;text-decoration:underline;font-weight:700">Clear the filters</a></div>';
+    } else {
+      var picked = list.slice(0, P.limit);
+      html += '<div class="sum">' + (list.length === nLive && P.f.status !== 'archived' ? nLive + ' photo' + (nLive === 1 ? '' : 's') : list.length + ' of ' + nLive + ' photo' + (nLive === 1 ? '' : 's')) + (P.f.status === 'archived' ? ' (archived)' : '') + '</div>';
+      if (P.sort === 'taken' || P.sort === 'taken_asc') {
+        var groups = [], cur = null;
+        picked.forEach(function (p) { var y = p.taken_on ? String(p.taken_on).slice(0, 4) : 'Date unknown'; if (!cur || cur.y !== y) { cur = { y: y, list: [] }; groups.push(cur); } cur.list.push(p); });
+        groups.forEach(function (g) {
+          var all = list.filter(function (p) { return (p.taken_on ? String(p.taken_on).slice(0, 4) : 'Date unknown') === g.y; }).length;
+          html += '<div class="grp"><h3>' + E(g.y) + '</h3><span>' + all + ' photo' + (all === 1 ? '' : 's') + '</span></div><div class="grid">' + g.list.map(card).join('') + '</div>';
+        });
+      } else {
+        html += '<div class="grid" style="margin-top:14px">' + picked.map(card).join('') + '</div>';
+      }
+      if (list.length > picked.length) html += '<button class="more" data-w118cmore="1" type="button">Show ' + Math.min(120, list.length - picked.length) + ' more</button>';
+    }
+    html += '<div class="foot">Files live in Supabase storage, <code>content-images/photos/</code> (full, web and thumb), and the labels in the <code>wa_photos</code> table.' + (staff() ? ' Every change is in the Activity log.' : '') + '</div>';
+    host.innerHTML = html;
+    if (hadFocus) { var q2 = document.getElementById('w118cq'); if (q2) { q2.focus(); try { q2.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
+  }
+
+  /* ---------- the side panel: one photo ---------- */
+  function drawerEl() { var d = document.getElementById('w118cdr'); if (!d) { d = document.createElement('div'); d.id = 'w118cdr'; d.setAttribute('data-w118c', '1'); document.body.appendChild(d); } return d; }
+  function neighbours() { var list = shown(); var i = list.findIndex(function (x) { return x.key === P.open; }); return { list: list, i: i }; }
+  function openPhoto(key, fromRoute) {
+    var p = byKey(key); if (!p) { toastS('That photo is not in the library'); return; }
+    P.open = key; P.mode = 'view'; P.edit = null; paintDrawer();
+    if (!fromRoute) { try { history.replaceState(null, '', '#photos/' + encodeURIComponent(key)); } catch (e) { /* fine */ } }
+  }
+  function closeDrawer(force) {
+    if (!P.mode) return;
+    if (!force && P.mode === 'edit' && P.edit && P.edit.dirty && !confirm('Close without saving the label changes?')) return;
+    if (!force && P.mode === 'upload' && P.up && P.up.running) toastS('Still adding photos in the background');
+    P.open = null; P.mode = null; P.edit = null;
+    var d = document.getElementById('w118cdr'); if (d) d.remove();
+    try { if (/^#photos\/./.test(location.hash)) history.replaceState(null, '', '#photos'); } catch (e) { /* fine */ }
+  }
+  function step(dir) {
+    if (P.mode !== 'view') return;
+    var n = neighbours(); if (n.i < 0) return;
+    var nx = n.list[n.i + dir]; if (nx) openPhoto(nx.key);
+  }
+  function copyBox(lbl, text, key, sub) {
+    return '<div class="sec"><div class="lbl">' + E(lbl) + (sub ? ' <small>' + E(sub) + '</small>' : '') + '</div><div class="copy"><p' + (text ? '' : ' class="none"') + '>' + (text ? E(text) : 'Not written yet.') + '</p>' + (text ? '<button type="button" data-w118ccopy="' + key + '">' + ic('copy') + 'Copy</button>' : '') + '</div></div>';
+  }
+  function fact(dt, dd) { return dd ? '<dt>' + E(dt) + '</dt><dd>' + dd + '</dd>' : ''; }
+  function viewHtml(p) {
+    var st = staff(), n = neighbours(), u = USAGE[p.usage] || USAGE.check;
+    var useTitle = p.status === 'archived' ? 'Archived' : p.status === 'needs_labels' ? 'Needs a look' : u.long;
+    var useText = p.status === 'archived' ? 'Hidden from the library. ' + (st ? 'Restore it to use it again.' : '') : p.status === 'needs_labels' ? 'New, with first labels from the AI that nobody has confirmed yet. ' + (p.usage && p.usage !== 'check' ? 'The AI thinks: ' + u.long.toLowerCase() + '.' : '') : u.tip;
+    var h = '<div class="bk" data-w118cx="1"></div><aside class="pn" role="dialog" aria-modal="true" aria-label="' + E(p.title) + '">' +
+      '<header><h3 title="' + E(p.title) + '">' + E(p.title) + '</h3>' + (n.i >= 0 ? '<span class="ct">' + (n.i + 1) + ' of ' + n.list.length + '</span>' : '') +
+      '<button class="ib" data-w118cstep="-1" title="Previous (left arrow)" aria-label="Previous photo"' + (n.i > 0 ? '' : ' disabled') + '>' + ic('left') + '</button>' +
+      '<button class="ib" data-w118cstep="1" title="Next (right arrow)" aria-label="Next photo"' + (n.i >= 0 && n.i < n.list.length - 1 ? '' : ' disabled') + '>' + ic('right') + '</button>' +
+      '<button class="ib" data-w118cx="1" title="Close (Esc)" aria-label="Close">' + ic('close') + '</button></header>' +
+      '<div class="bd">' +
+      '<figure class="hero" style="margin:0 0 14px;background:' + E(p.color || '#d9d6cc') + '"><span class="fw"><img src="' + E(url(p, 'web')) + '" alt="' + E(p.alt_text || p.title) + '"></span></figure>' +
+      '<div class="use ' + uclass(p) + '"><b>' + E(useTitle) + '</b>' + E(useText) + (p.usage_note ? '<p>' + E(p.usage_note) + '</p>' : '') + '</div>' +
+      '<div class="acts">' +
+      (st && p.status !== 'archived' && tabOk('create') ? '<button type="button" class="pri" data-w118cuse="create">' + ic('brush') + 'Use in the Create studio</button>' : '') +
+      (st && p.status !== 'archived' && typeof window.w121Compose === 'function' && tabOk('contentcal') ? '<button type="button" class="pri" data-w118cuse="post">' + ic('calendar') + 'Use in a post</button>' : '') +
+      '<button type="button" data-w118ccopy="link">' + ic('link') + 'Copy the link</button>' +
+      '<a href="' + E(dlUrl(p, 'web')) + '" download>' + ic('download') + 'Download</a>' +
+      '</div>' +
+      copyBox('Alt text', p.alt_text, 'alt', 'for screen readers, paste it in the alt text field') +
+      copyBox('Caption', p.caption, 'caption', 'a starting line for a post or a report') +
+      (p.description ? '<div class="sec"><div class="lbl">About this photo</div><p class="desc">' + E(p.description) + '</p></div>' : '') +
+      '<div class="sec"><div class="lbl">Download</div><div class="dl">' + SIZES.map(function (s) {
+        var w = p.width, hh = p.height, big = Math.max(w || 0, hh || 0), sc = big ? Math.min(1, s[1] / big) : 0;
+        var dims = s[0] === 'full' && w ? w + ' x ' + hh : sc ? Math.round(w * sc) + ' x ' + Math.round(hh * sc) : '';
+        return '<a href="' + E(dlUrl(p, s[0])) + '" download title="' + E(s[4]) + '">' + ic('download') + E(s[3]) + ' <span>' + E([dims, bytes(p['bytes_' + s[0]])].filter(Boolean).join(', ')) + '</span></a>';
+      }).join('') + '</div><div class="dlh">Full for print and big screens, Web for posts, the website and decks, Thumbnail for emails. No location or camera data in any of them.</div></div>' +
+      (arr(p.tags).length ? '<div class="sec"><div class="lbl">Tags</div><div class="tags">' + arr(p.tags).map(function (t) { return '<span data-w118ctag="' + E(t) + '" title="Show every photo tagged ' + E(t) + '">' + E(t) + '</span>'; }).join('') + '</div></div>' : '') +
+      '<div class="sec"><div class="lbl">Details</div><dl class="facts">' +
+      fact('Taken', p.taken_on ? E(niceDate(p.taken_on)) + (p.date_note ? '<small>' + E(p.date_note) + '</small>' : '') : (p.date_note ? E(p.date_note) : 'Date unknown')) +
+      fact('Season', E(label(SEASONS, p.season))) +
+      fact('Place', E(p.place || '')) +
+      fact('Event', E(p.event || '')) +
+      fact('Scene', E(label(SCENES, p.scene))) +
+      fact('People', E(p.people || '')) +
+      fact('Partners', E(arr(p.partner).join(', '))) +
+      fact('Branding', E(label(BRANDING, p.branding))) +
+      fact('Set', p.series ? '<a data-w118cseries="' + E(p.series) + '">' + E(p.series) + '</a> <small>' + P.rows.filter(function (x) { return x.series === p.series && x.status !== 'archived'; }).length + ' photos in this set</small>' : '') +
+      fact('Best for', arr(p.best_for).length ? '<span class="tags">' + arr(p.best_for).map(function (b) { return '<span class="bf">' + E(label(BEST, b)) + '</span>'; }).join('') + '</span>' : '') +
+      fact('Size', p.width ? E(p.width + ' x ' + p.height + ' px') + (p.orientation ? ', ' + E(p.orientation) : '') : '') +
+      fact('Credit', E(p.credit || '')) +
+      fact('Notes', E(p.notes || '')) +
+      fact('Source', E(p.source || '')) +
+      fact('Labels', E(p.labelled_by || '') + (p.updated_by && p.updated_by !== p.labelled_by ? '<small>Last change by ' + E(p.updated_by) + '</small>' : '')) +
+      fact('File name', '<code>' + E(p.key) + '.jpg</code>') +
+      '</dl></div>' +
+      '</div>';
+    var foot = '';
+    if (st) {
+      foot = '<footer>' +
+        (p.status === 'archived' ? '<button type="button" class="b" data-w118cact="restore">' + ic('restore') + 'Restore</button>' : '<button type="button" class="b go" data-w118cact="edit">' + ic('pen') + (p.status === 'needs_labels' ? 'Check the labels' : 'Edit the labels') + '</button>') +
+        '<span class="sp"></span>' +
+        (p.status === 'archived' ? (admin() ? '<button type="button" class="lnk del" data-w118cact="delete">' + ic('trash') + 'Delete for good</button>' : '') : '<button type="button" class="lnk" data-w118cact="archive">' + ic('archive') + 'Archive</button>') +
+        '</footer>';
+    }
+    return h + foot + '</aside>';
+  }
+
+  /* ---------- editing the labels ---------- */
+  var FIELDS = ['title', 'alt_text', 'caption', 'description', 'usage', 'usage_note', 'people', 'taken_on', 'date_note', 'season', 'place', 'event', 'scene', 'series', 'tags', 'partner', 'branding', 'best_for', 'is_pick', 'focal_x', 'focal_y', 'credit', 'notes'];
+  function startEdit(p) {
+    var v = {}; FIELDS.forEach(function (k) { v[k] = Array.isArray(p[k]) ? p[k].slice() : p[k]; });
+    P.mode = 'edit'; P.edit = { key: p.key, v: v, dirty: false, ai: null, aiBusy: false, aiErr: null, flag: {} };
+    if (p.status === 'needs_labels' && p.ai_suggestion && p.ai_suggestion.fields) { P.edit.ai = p.ai_suggestion; }
+    paintDrawer();
+  }
+  function val(k) { var v = P.edit.v[k]; return v == null ? '' : v; }
+  function aiHint(k) {
+    var e = P.edit; if (!e || !e.ai || !e.ai.fields || e.ai.fields[k] == null) return '';
+    if (k === 'focal_x') {
+      var ax = Number(e.ai.fields.focal_x), ay = Number(e.ai.fields.focal_y);
+      if (Math.abs(Number(e.v.focal_x) - ax) < 0.01 && Math.abs(Number(e.v.focal_y) - ay) < 0.01) return '';
+      return '<div class="aih">' + ic('sparkle') + '<span>AI: the main subject sits ' + Math.round(ax * 100) + '% across and ' + Math.round(ay * 100) + '% down</span><a data-w118cai="focal_x">Use this</a></div>';
+    }
+    var s = e.ai.fields[k], cur = e.v[k];
+    var same = Array.isArray(s) ? arr(cur).join('|') === s.join('|') : String(cur == null ? '' : cur) === String(s);
+    if (same) return '';
+    var shownV = Array.isArray(s) ? s.map(function (x) { return k === 'best_for' ? label(BEST, x) : x; }).join(' \u00b7 ') : k === 'usage' ? USAGE[s].label : k === 'season' ? label(SEASONS, s) : k === 'scene' ? label(SCENES, s) : k === 'branding' ? label(BRANDING, s) : String(s);
+    return '<div class="aih">' + ic('sparkle') + '<span>AI: ' + E(shownV) + '</span><a data-w118cai="' + k + '">Use this</a></div>';
+  }
+  function inp(k, lab, opts) {
+    opts = opts || {};
+    var id = 'w118cf-' + k, v = val(k), fl = P.edit.flag[k] ? ' aiflag' : '';
+    var cnt = opts.max ? '<span class="cnt' + (String(v).length > opts.max ? ' bad' : '') + '" data-w118ccnt="' + k + '">' + String(v).length + ' / ' + opts.max + '</span>' : '';
+    var field;
+    if (opts.area) field = '<textarea id="' + id + '" data-w118cf="' + k + '" class="' + fl + '" rows="' + (opts.rows || 2) + '" placeholder="' + E(opts.ph || '') + '">' + E(v) + '</textarea>';
+    else if (opts.select) field = '<select id="' + id + '" data-w118cf="' + k + '" class="' + fl + '">' + (opts.blank ? '<option value="">' + E(opts.blank) + '</option>' : '') + opts.select.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(v) === String(o[0]) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('') + '</select>';
+    else field = '<input type="' + (opts.date ? 'date' : 'text') + '" id="' + id + '" data-w118cf="' + k + '" class="' + fl + '" value="' + E(Array.isArray(v) ? v.join(', ') : v) + '" placeholder="' + E(opts.ph || '') + '">';
+    return '<div class="' + (opts.full ? 'full' : '') + '"><label class="fl" for="' + id + '">' + E(lab) + cnt + '</label>' + field + (opts.hint ? '<div class="hint">' + E(opts.hint) + '</div>' : '') + aiHint(k) + '</div>';
+  }
+  function cropsHtml(p) {
+    var fx = Number(val('focal_x') || 0.5), fy = Number(val('focal_y') || 0.5), pos = 'object-position:' + Math.round(fx * 100) + '% ' + Math.round(fy * 100) + '%;';
+    return '<div class="crops">' + CROPS.map(function (c) { var hgt = 86, wd = Math.round(hgt * c[1]); return '<div><div class="cv" style="width:' + wd + 'px;height:' + hgt + 'px;background:' + E(p.color || '#ddd') + '"><img src="' + E(url(p, 'thumb')) + '" alt="" style="' + pos + '"></div>' + E(c[0]) + '</div>'; }).join('') + '</div>';
+  }
+  function editHtml(p) {
+    var e = P.edit, fx = Number(val('focal_x') || 0.5), fy = Number(val('focal_y') || 0.5);
+    var h = '<div class="bk" data-w118cx="1"></div><aside class="pn" role="dialog" aria-modal="true" aria-label="Edit the labels">' +
+      '<header><h3>' + (p.status === 'needs_labels' ? 'Check the labels' : 'Edit the labels') + '</h3><button class="ib" data-w118cx="1" title="Close (Esc)" aria-label="Close">' + ic('close') + '</button></header><div class="bd">' +
+      '<figure class="hero pickable" style="margin:0 0 8px;background:' + E(p.color || '#d9d6cc') + '"><span class="fw" data-w118cfocal="1"><img src="' + E(url(p, 'web')) + '" alt="' + E(p.alt_text || p.title) + '" draggable="false"><span class="fm" style="left:' + (fx * 100) + '%;top:' + (fy * 100) + '%"></span></span></figure>' +
+      '<p class="note" style="margin:0 0 6px">' + ic('target') + ' Click the photo on the main subject: every crop keeps that point in view.</p>' + cropsHtml(p) + aiHint('focal_x') +
+      '<div style="height:16px"></div>' +
+      (e.aiBusy ? '<div class="busy"><i></i>Looking at the photo...</div>' : '') +
+      (e.aiErr ? '<div class="use u-consent" style="margin:0 0 14px"><b>No AI suggestion</b>' + E(e.aiErr) + '</div>' : '') +
+      (e.ai && e.ai.fields && !e.aiBusy ? '<div class="use u-check" style="margin:0 0 14px"><b>AI suggestion' + (e.ai.model ? ' (' + E(String(e.ai.model).replace(/^[a-z-]+\//, '')) + ')' : '') + '</b>Fields the AI would change show a purple note: Use this takes it. <a data-w118cai="*" style="font-weight:800;cursor:pointer;text-decoration:underline">Use every suggestion</a></div>' : '') +
+      '<div class="fs"><h4>What it shows</h4><div class="fg">' +
+      inp('title', 'Title', { full: true, ph: 'A few words, no date' }) +
+      inp('alt_text', 'Alt text', { full: true, area: true, max: 250, ph: 'Who (by role) and what is visible, and where', hint: 'Read aloud by screen readers. One sentence; describe people by role, not by name.' }) +
+      inp('caption', 'Caption', { full: true, area: true, ph: 'One warm line about the moment' }) +
+      inp('description', 'Description', { full: true, area: true, rows: 3, ph: 'Two or three sentences for the library' }) +
+      '</div></div>' +
+      '<div class="fs"><h4>Can we use it</h4><div class="fg">' +
+      inp('usage', 'Cleared for', { select: USAGE_ORDER.map(function (u) { return [u, USAGE[u].label + ': ' + USAGE[u].long.toLowerCase()]; }) }) +
+      inp('people', 'People in it', { ph: 'Three volunteers in green vests' }) +
+      inp('usage_note', 'Why', { full: true, area: true, ph: 'Who is recognizable, what to crop, whose consent we have', hint: 'When someone gives consent, set it to Ready and note who agreed and when.' }) +
+      '</div></div>' +
+      '<div class="fs"><h4>When and where</h4><div class="fg">' +
+      inp('taken_on', 'Taken on', { date: true }) +
+      inp('season', 'Season', { select: SEASONS, blank: 'Not set' }) +
+      inp('date_note', 'About the date', { full: true, ph: 'From the camera; or roughly, from the event' }) +
+      inp('place', 'Place', { ph: 'Montreal' }) +
+      inp('event', 'Event', { ph: 'Sunday serving' }) +
+      inp('scene', 'Scene', { select: SCENES, blank: 'Not set' }) +
+      inp('series', 'Set', { ph: 'serving-2024-10', hint: 'Photos from the same moment share a set name.' }) +
+      '</div></div>' +
+      '<div class="fs"><h4>Finding it</h4><div class="fg">' +
+      inp('tags', 'Tags', { full: true, ph: 'volunteers, tent, summer', hint: 'Separate with commas.' }) +
+      inp('partner', 'Partners in view', { ph: 'VCSA' }) +
+      inp('branding', 'Branding', { select: BRANDING, blank: 'Not set' }) +
+      '<div class="full"><label class="fl">Best for</label><div class="opts">' + BEST.map(function (b) { return '<span data-w118cbest="' + b[0] + '" class="' + (arr(val('best_for')).indexOf(b[0]) >= 0 ? 'on' : '') + '" role="button" tabindex="0">' + E(b[1]) + '</span>'; }).join('') + '</div>' + aiHint('best_for') + '</div>' +
+      '<div class="full"><label class="ck"><input type="checkbox" data-w118cf="is_pick"' + (val('is_pick') ? ' checked' : '') + '> One of our picks (the best of a set, first choice for decks and posts)</label></div>' +
+      '</div></div>' +
+      '<div class="fs"><h4>Credit and notes</h4><div class="fg">' +
+      inp('credit', 'Credit', { ph: 'Photographer, if we should credit one' }) +
+      inp('notes', 'Notes', { area: true, ph: 'Anything the next person should know' }) +
+      '</div></div>' +
+      '</div><footer>' +
+      '<button type="button" class="b" data-w118cact="cancel">Cancel</button>' +
+      '<button type="button" class="b ai" data-w118cact="suggest"' + (e.aiBusy ? ' disabled' : '') + '>' + ic('sparkle') + (e.ai ? 'Ask the AI again' : 'Suggest with AI') + '</button>' +
+      '<span class="sp"></span>' +
+      '<button type="button" class="b go" data-w118cact="save">' + ic('check') + (p.status === 'needs_labels' ? (P.rows.filter(function (x) { return x.status === 'needs_labels' && x.key !== p.key; }).length ? 'Save and next' : 'Save and confirm') : 'Save') + '</button>' +
+      '</footer></aside>';
+    return h;
+  }
+  function readForm() {
+    var e = P.edit; if (!e) return;
+    document.querySelectorAll('#w118cdr [data-w118cf]').forEach(function (el) {
+      var k = el.getAttribute('data-w118cf');
+      if (k === 'is_pick') { e.v[k] = !!el.checked; return; }
+      var v = el.value;
+      if (k === 'tags') e.v[k] = arr(v).map(function (x) { return x.toLowerCase(); });
+      else if (k === 'partner') e.v[k] = arr(v);
+      else e.v[k] = v;
+    });
+  }
+  function paintDrawer() {
+    if (!P.mode) return;
+    var d = drawerEl(), bd = d.querySelector('.bd'), scroll = bd ? bd.scrollTop : 0, prevMode = d.getAttribute('data-mode'), prevKey = d.getAttribute('data-key');
+    if (P.mode === 'upload') { d.innerHTML = uploadHtml(); }
+    else {
+      var p = byKey(P.open); if (!p) { closeDrawer(true); return; }
+      d.innerHTML = P.mode === 'edit' ? editHtml(p) : viewHtml(p);
+    }
+    var same = prevMode === P.mode && prevKey === String(P.open);
+    d.setAttribute('data-mode', P.mode); d.setAttribute('data-key', String(P.open));
+    var nb = d.querySelector('.bd'); if (nb && same) nb.scrollTop = scroll;
+    if (!same) { var f = d.querySelector(P.mode === 'edit' ? '#w118cf-title' : '.ib[data-w118cx]'); if (f) try { f.focus({ preventScroll: true }); } catch (x) { /* fine */ } }
+  }
+  async function saveEdit() {
+    readForm();
+    var e = P.edit, p = byKey(e && e.key); if (!e || !p) return;
+    var v = e.v, title = clean(v.title, 160);
+    if (!title) { toastS('Give the photo a title'); return; }
+    if (String(v.alt_text || '').length > 400) { toastS('Alt text stops at 400 characters'); return; }
+    var patch = {
+      title: title, alt_text: clean(v.alt_text, 400) || null, caption: clean(v.caption) || null, description: clean(v.description) || null,
+      usage: USAGE[v.usage] ? v.usage : 'check', usage_note: clean(v.usage_note) || null, people: clean(v.people) || null,
+      taken_on: /^\d{4}-\d{2}-\d{2}$/.test(String(v.taken_on || '')) ? v.taken_on : null, date_note: clean(v.date_note) || null,
+      season: v.season || null, place: clean(v.place) || null, event: clean(v.event) || null, scene: v.scene || null,
+      series: slug(v.series) || null, tags: arr(v.tags), partner: arr(v.partner), branding: v.branding || null, best_for: arr(v.best_for),
+      is_pick: !!v.is_pick, focal_x: Math.round(Number(v.focal_x || 0.5) * 1000) / 1000, focal_y: Math.round(Number(v.focal_y || 0.5) * 1000) / 1000,
+      credit: clean(v.credit) || null, notes: clean(v.notes) || null
+    };
+    if (!patch.season && patch.taken_on) patch.season = seasonOf(patch.taken_on);
+    var wasNew = p.status === 'needs_labels';
+    if (wasNew && patch.usage === 'check' && !confirm('It is still marked Not checked. Save it that way?')) return;
+    var d = diffText(p, patch, FIELDS);
+    if (!d.n && !wasNew) { P.mode = 'view'; P.edit = null; paintDrawer(); toastS('No changes'); return; }
+    patch.labelled_by = me() + ', ' + ddmmyy();
+    if (wasNew) patch.status = 'ready';
+    var btn = document.querySelector('#w118cdr [data-w118cact="save"]'); if (btn) btn.disabled = true;
+    try {
+      await update(p.key, patch, { field: wasNew ? 'labels confirmed' : 'labels', from: d.from, to: d.to });
+      toastS(wasNew ? 'Labels confirmed' : 'Labels saved');
+      paint();
+      if (wasNew) {
+        var nx = sortRows(P.rows.filter(function (x) { return x.status === 'needs_labels'; }))[0];
+        if (nx) { openPhoto(nx.key); startEdit(nx); return; }
+        if (P.f.status === 'needs_labels') { P.f.status = ''; paint(); }
+      }
+      P.mode = 'view'; P.edit = null; paintDrawer();
+    } catch (x) { if (btn) btn.disabled = false; toastS('Could not save: ' + ((x && x.message) || x)); }
+  }
+  async function aiEdit() {
+    readForm();
+    var e = P.edit, p = byKey(e && e.key); if (!e || !p || e.aiBusy) return;
+    e.aiBusy = true; e.aiErr = null; paintDrawer();
+    try {
+      var s = await suggest(Object.assign({}, p, { taken_on: e.v.taken_on || p.taken_on, place: e.v.place, event: e.v.event, series: e.v.series }), null, null);
+      if (P.edit !== e) return;
+      e.ai = s;
+      /* fill what is empty or still the upload default; everything else waits for Use this */
+      var f = s.fields, filled = [];
+      Object.keys(f).forEach(function (k) {
+        if (k === 'focal_x' || k === 'focal_y') return;
+        var cur = e.v[k], empty = cur == null || cur === '' || (Array.isArray(cur) && !cur.length) || (k === 'usage' && cur === 'check') || (k === 'title' && /^New photo\b/.test(String(cur)));
+        if (empty) { e.v[k] = Array.isArray(f[k]) ? f[k].slice() : f[k]; e.flag[k] = true; filled.push(k); }
+      });
+      if (f.focal_x != null && Number(e.v.focal_x) === 0.5 && Number(e.v.focal_y) === 0.5) { e.v.focal_x = f.focal_x; e.v.focal_y = f.focal_y; }
+      e.dirty = e.dirty || filled.length > 0;
+      try { await db.from('wa_photos').update({ ai_suggestion: s }).eq('key', p.key); p.ai_suggestion = s; } catch (x) { /* the form still has it */ }
+    } catch (x) { if (P.edit === e) e.aiErr = String((x && x.message) || x).slice(0, 200); }
+    if (P.edit === e) { e.aiBusy = false; paintDrawer(); }
+  }
+  function useAi(k) {
+    var e = P.edit; if (!e || !e.ai || !e.ai.fields) return;
+    readForm();
+    var f = e.ai.fields, keys = k === '*' ? Object.keys(f) : k === 'focal_x' ? ['focal_x', 'focal_y'] : [k];
+    keys.forEach(function (x) { if (f[x] == null) return; e.v[x] = Array.isArray(f[x]) ? f[x].slice() : f[x]; e.flag[x] = true; });
+    e.dirty = true; paintDrawer();
+  }
+
+  /* ---------- adding photos ---------- */
+  function openUpload() {
+    if (!staff()) return;
+    if (!P.up) P.up = { items: [], running: false };
+    P.open = null; P.mode = 'upload'; P.edit = null; paintDrawer();
+    try { if (location.hash !== '#photos/new') history.replaceState(null, '', '#photos/new'); } catch (e) { /* fine */ }
+  }
+  function uploadHtml() {
+    var u = P.up || { items: [] }, items = u.items;
+    var done = items.filter(function (i) { return i.state === 'done'; }).length, bad = items.filter(function (i) { return i.state === 'error'; }).length, left = items.length - done - bad;
+    var review = P.rows.filter(function (p) { return p.status === 'needs_labels'; }).length;
+    var h = '<div class="bk" data-w118cx="1"></div><aside class="pn" role="dialog" aria-modal="true" aria-label="Add photos">' +
+      '<header><h3>Add photos</h3><button class="ib" data-w118cx="1" title="Close (Esc)" aria-label="Close">' + ic('close') + '</button></header><div class="bd">' +
+      '<div class="drop" id="w118cdrop">' + ic('camera') + '<b>Drop photos here</b>or <a data-w118cchoose="1">choose files</a> (JPEG or PNG, up to 25 at a time).<br>The hub makes the three sizes, keeps the date, drops the location and camera data, and asks the AI for first labels.<input type="file" id="w118cfile" multiple accept="image/jpeg,image/png,image/webp,image/heic,image/heif" style="display:none"></div>' +
+      '<p class="note">Photos arrive marked <b>Needs a look</b>: open each one, fix what the AI got wrong (above all who is recognizable), set the focal point, and save. Describe people by role, not by name.</p>';
+    if (items.length) {
+      h += '<div class="ups">' + items.map(function (it, n) {
+        var pct = it.state === 'done' || it.state === 'error' ? 100 : Math.round((it.pct || 0) * 100);
+        return '<div class="it' + (it.state === 'error' ? ' err' : it.state === 'done' ? ' ok' : '') + '">' + (it.thumb ? '<img src="' + E(it.thumb) + '" alt="">' : '<span class="ph0"></span>') +
+          '<div><b title="' + E(it.name) + '">' + E(it.name) + '</b><em>' + E(it.msg || '') + '</em>' + (it.state !== 'done' && it.state !== 'error' ? '<div class="bar"><i style="width:' + pct + '%"></i></div>' : '') + '</div>' +
+          (it.state === 'done' && it.key ? '<a data-w118copen="' + E(it.key) + '">Check it</a>' : '') + '</div>';
+      }).join('') + '</div>';
+    }
+    h += '</div><footer>' + (items.length ? '<span class="note" style="margin:0">' + (left ? 'Working: ' + left + ' to go' : done + ' added' + (bad ? ', ' + bad + ' could not be added' : '')) + '</span>' : '') +
+      '<span class="sp"></span>' +
+      (items.length && !left ? '<button type="button" class="b" data-w118cact="clearup">Clear the list</button>' : '') +
+      (review ? '<button type="button" class="b go" data-w118cact="review">' + ic('check') + 'Check the labels (' + review + ')</button>' : '') +
+      '</footer></aside>';
+    return h;
+  }
+  function paintUp() { if (P.mode === 'upload') paintDrawer(); }
+  function keyFor(date, season, name) {
+    var b = slug(String(name || '').replace(/\.[a-z0-9]{2,5}$/i, ''));
+    var digits = (b.match(/\d{3,}/g) || []).pop();
+    if (!b || /^(img|dsc|dscn|dscf|pxl|mvimg|image|photo|picture|screenshot|screen-shot|whatsapp|signal|fullsizerender|p\d{6,}|\d{6,})/.test(b)) b = 'photo' + (digits ? '-' + digits.slice(-6) : '');
+    var k = ((date ? date.slice(0, 7) + '-' + (season || '') : 'undated') + '-' + b).replace(/-+/g, '-').slice(0, 72).replace(/-+$/, '');
+    if (!/^[a-z0-9]/.test(k)) k = 'p' + k;
+    var taken = {}; P.rows.forEach(function (r) { taken[r.key] = 1; }); ((P.up && P.up.items) || []).forEach(function (i) { if (i.key) taken[i.key] = 1; });
+    var out = k, n = 2; while (taken[out]) out = k + '-' + (n++);
+    return out;
+  }
+  function addFiles(files) {
+    if (!staff()) return;
+    var list = Array.prototype.slice.call(files || []);
+    if (!P.up) P.up = { items: [], running: false };
+    var isPhoto = function (f) { return /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name || ''); };
+    var ok = list.filter(isPhoto);
+    if (list.length && !ok.length) { toastS('Those are not photos: JPEG or PNG please'); return; }
+    list.filter(function (f) { return !isPhoto(f); }).forEach(function (f) { P.up.items.push({ name: f.name || 'file', state: 'error', msg: 'Not a photo: JPEG or PNG please' }); });
+    if (ok.length > 25) { toastS('25 at a time: the first 25 are on their way'); ok = ok.slice(0, 25); }
+    ok.forEach(function (f) {
+      if (f.size > 40 * 1024 * 1024) { P.up.items.push({ name: f.name, state: 'error', msg: 'Over 40 MB: export a smaller copy first' }); return; }
+      P.up.items.push({ file: f, name: f.name || 'photo.jpg', state: 'wait', msg: 'Waiting', pct: 0 });
+    });
+    paintUp();
+    run();
+  }
+  async function run() {
+    var u = P.up; if (!u || u.running) return;
+    u.running = true;
+    try {
+      for (var i = 0; i < u.items.length; i++) {
+        var it = u.items[i]; if (it.state !== 'wait') continue;
+        try { await addOne(it); } catch (x) { it.state = 'error'; it.msg = String((x && x.message) || x).slice(0, 160); it.file = null; paintUp(); }
+      }
+    } finally { u.running = false; paintUp(); paint(); }
+  }
+  async function addOne(it) {
+    var f = it.file;
+    it.state = 'read'; it.msg = 'Reading'; it.pct = 0.05; paintUp();
+    var ex = {}; try { ex = exif(await f.slice(0, 262144).arrayBuffer()); } catch (e) { ex = {}; }
+    var src = URL.createObjectURL(f), img;
+    try { img = await loadImg(src, false); } catch (e) { URL.revokeObjectURL(src); throw new Error(/heic|heif/i.test(f.name + f.type) ? 'This browser cannot open HEIC: export it as a JPEG (or use Safari)' : 'Could not read this image'); }
+    var w0 = img.naturalWidth, h0 = img.naturalHeight;
+    if (!w0 || !h0) { URL.revokeObjectURL(src); throw new Error('Could not read this image'); }
+    it.msg = 'Making the sizes'; it.pct = 0.2; paintUp();
+    var cFull = drawTo(img, SIZES[0][1]); URL.revokeObjectURL(src); img = null;
+    var cWeb = drawTo(cFull, SIZES[1][1]), cThumb = drawTo(cWeb, SIZES[2][1]);
+    var bFull = await blobOf(cFull, SIZES[0][2]), bWeb = await blobOf(cWeb, SIZES[1][2]), bThumb = await blobOf(cThumb, SIZES[2][2]);
+    it.thumb = URL.createObjectURL(bThumb);
+    var date = ex.date || null, season = date ? seasonOf(date) : null;
+    var key = keyFor(date, season, f.name); it.key = key;
+    var wf = cFull.width, hf = cFull.height;
+    it.msg = 'Uploading'; it.pct = 0.4; paintUp();
+    var files = [['full', bFull], ['web', bWeb], ['thumb', bThumb]], done = [];
+    try {
+      for (var j = 0; j < files.length; j++) {
+        var path = 'photos/' + files[j][0] + '/' + key + '.jpg';
+        var r = await db.storage.from(BUCKET).upload(path, files[j][1], { contentType: 'image/jpeg', cacheControl: '604800', upsert: false });
+        if (r && r.error) throw new Error('Upload failed: ' + (r.error.message || r.error));
+        done.push(path); it.pct = 0.4 + 0.15 * (j + 1); paintUp();
+      }
+      var row = {
+        key: key, title: 'New photo' + (date ? ', ' + (dateOf(date).toLocaleDateString('en-CA', { month: 'long', year: 'numeric' })) : ''),
+        taken_on: date, date_note: date ? 'From the camera' + (ex.time ? ', ' + ex.time : '') + '.' : 'No date in the file; add it if you know it.', season: season,
+        usage: 'check', status: 'needs_labels', tags: [], partner: [], best_for: [], is_pick: false, focal_x: 0.5, focal_y: 0.5,
+        orientation: wf / hf > 1.05 ? 'landscape' : wf / hf < 0.95 ? 'portrait' : 'square', width: wf, height: hf, color: avgColor(cThumb),
+        path_full: done[0], path_web: done[1], path_thumb: done[2], bytes_full: bFull.size, bytes_web: bWeb.size, bytes_thumb: bThumb.size, version: 1,
+        source: 'Uploaded by ' + me() + ', ' + ddmmyy() + ' (original ' + w0 + ' x ' + h0 + (ex.camera ? ', ' + ex.camera : '') + ')',
+        created_by: me(), updated_by: me()
+      };
+      var ins = await db.from('wa_photos').insert(row).select().maybeSingle();
+      if (ins.error) throw new Error(ins.error.message || String(ins.error));
+      put(Object.assign({}, row, ins.data && ins.data.key ? ins.data : {}, { created_at: (ins.data && ins.data.created_at) || new Date().toISOString() }));
+    } catch (x) {
+      if (done.length) { try { await db.storage.from(BUCKET).remove(done); } catch (e) { /* leave it */ } }
+      throw x;
+    }
+    try { if (typeof logChange === 'function') logChange('photo', key, 'added', null, f.name); } catch (e) { /* audit */ }
+    it.file = null; it.pct = 0.85; it.msg = 'Asking the AI for first labels'; paintUp(); paint();
+    try {
+      var s = await suggest(byKey(key), cWeb, { file: f.name });
+      var fl = s.fields, patch = { ai_suggestion: s };
+      ['title', 'alt_text', 'caption', 'description', 'usage', 'usage_note', 'people', 'scene', 'branding', 'tags', 'best_for', 'focal_x', 'focal_y'].forEach(function (k) { if (fl[k] != null) patch[k] = fl[k]; });
+      if (!season && fl.season && fl.season !== 'unknown') patch.season = fl.season;
+      await update(key, patch, null);
+      it.state = 'done'; it.msg = 'Added, with AI labels to check';
+    } catch (x) {
+      it.state = 'done'; it.msg = 'Added; no AI labels (' + String((x && x.message) || x).slice(0, 80) + '), label it by hand';
+    }
+    it.pct = 1; paintUp(); paint();
+  }
+
+  /* ---------- the picker: choose a library photo from another screen ---------- */
+  function pick(opts) {
+    opts = opts || {};
+    if (!allowed()) return;
+    P.pick = { onPick: opts.onPick, title: opts.title || 'Pick a photo', ready: opts.readyOnly !== false, q: '', why: opts.why || '' };
+    var el = document.getElementById('w118cpk');
+    if (!el) { el = document.createElement('div'); el.id = 'w118cpk'; el.setAttribute('data-w118c', '1'); document.body.appendChild(el); }
+    paintPick();
+    load(false).then(paintPick);
+    setTimeout(function () { var q = document.getElementById('w118cpq'); if (q) try { q.focus(); } catch (e) { /* fine */ } }, 40);
+  }
+  function pickList() {
+    var k = P.pick; if (!k) return [];
+    var terms = k.q.toLowerCase().split(/\s+/).filter(Boolean);
+    return sortRows(P.rows.filter(function (p) {
+      if (p.status === 'archived') return false;
+      if (k.ready && (p.usage !== 'ready' || p.status !== 'ready')) return false;
+      var h = hay(p); for (var i = 0; i < terms.length; i++) if (h.indexOf(terms[i]) < 0) return false;
+      return true;
+    }));
+  }
+  function paintPick() {
+    var el = document.getElementById('w118cpk'), k = P.pick; if (!el || !k) return;
+    var list = pickList(), keepQ = document.activeElement && document.activeElement.id === 'w118cpq';
+    el.innerHTML = '<div class="bk" data-w118cpx="1"></div><div class="box" role="dialog" aria-modal="true" aria-label="' + E(k.title) + '">' +
+      '<header><h3>' + E(k.title) + '</h3><input type="search" id="w118cpq" placeholder="Search the photos" value="' + E(k.q) + '" aria-label="Search the photos">' +
+      '<span class="tg' + (k.ready ? ' on' : '') + '" data-w118cpr="1" role="button" tabindex="0">Ready for public use only</span>' +
+      '<button class="x" data-w118cpx="1" aria-label="Close">' + ic('close') + '</button></header>' +
+      '<div class="pg">' + (!P.loaded ? '<div class="none">Loading the photos...</div>' : list.length ? list.map(function (p) {
+        return '<button type="button" class="pi" data-w118cpp="' + E(p.key) + '" title="' + E(p.title + (p.usage_note && p.usage !== 'ready' ? ': ' + p.usage_note : '')) + '"><span class="im" style="background:' + E(p.color || '#d9d6cc') + '"><img loading="lazy" src="' + E(url(p, 'thumb')) + '" alt="' + E(p.alt_text || p.title) + '" style="' + focalCss(p) + '"></span>' + badge(p) + '<b>' + E(p.title) + '</b></button>';
+      }).join('') : '<div class="none">' + (k.ready ? 'No ready photo matches. Turn off Ready for public use only to see the rest.' : 'No photo matches.') + '</div>') + '</div>' +
+      '<div class="ft">' + (k.why ? E(k.why) + ' ' : '') + (k.ready ? 'Showing the photos cleared for public use.' : 'Showing every photo: check the badge before anything goes public.') + ' <a href="#photos" data-w118cpx="1" style="color:' + GREEN + ';font-weight:700">Open the photo library</a></div></div>';
+    if (keepQ) { var q = document.getElementById('w118cpq'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e) { /* fine */ } } }
+  }
+  function closePick() { P.pick = null; var el = document.getElementById('w118cpk'); if (el) el.remove(); }
+  function choose(key) {
+    var k = P.pick, p = byKey(key); if (!k || !p) return;
+    if ((p.usage !== 'ready' || p.status !== 'ready') && !confirm((USAGE[p.usage] || USAGE.check).label + ': ' + (p.usage_note || (USAGE[p.usage] || USAGE.check).tip) + '\n\nUse it anyway?')) return;
+    var cb = k.onPick; closePick();
+    try { if (cb) cb(p); } catch (e) { toastS('Could not use that photo: ' + ((e && e.message) || e)); }
+  }
+
+  /* ---------- hand-off 1: the Create studio (a photo behind a social graphic) ---------- */
+  var CD_HINT = 'A photo sits behind the text with a dark overlay so the words stay readable.';
+  function cdEnsure() {
+    var hint = document.getElementById('cdImgHint'); if (!hint || !staff()) return null;
+    var box = document.getElementById('w118ccd');
+    if (!box) { box = document.createElement('div'); box.id = 'w118ccd'; box.className = 'w118ccd'; box.setAttribute('data-w118c', '1'); box.innerHTML = 'Or <a data-w118cpick="cd">pick one from the photo library</a>, labelled and cleared for use.<div class="sel" style="display:none"></div>'; hint.parentNode.insertBefore(box, hint.nextSibling); }
+    return box;
+  }
+  function cdShow(p) {
+    var box = cdEnsure(); if (!box) return;
+    var sel = box.querySelector('.sel');
+    if (!p) { sel.style.display = 'none'; sel.innerHTML = ''; box.removeAttribute('data-key'); return; }
+    box.setAttribute('data-key', p.key);
+    sel.innerHTML = '<img src="' + E(url(p, 'thumb')) + '" alt="" style="' + focalCss(p) + '"><span>' + E(p.title) + '<small>' + E(p.status === 'ready' && p.usage === 'ready' ? 'From the photo library, ready for public use' : ulabel(p) + (p.usage_note ? ': ' + p.usage_note : '')) + '</small></span><button type="button" data-w118ccdx="1">Remove</button>';
+    sel.style.display = 'flex';
+  }
+  function cdApply(p) {
+    var t = document.getElementById('cdType'), hint = document.getElementById('cdImgHint');
+    if (!t || !hint) return false;
+    try { WA_CD_IMG = url(p, 'web'); } catch (e) { return false; }
+    if (t.value !== 'graphic') { t.value = 'graphic'; try { if (typeof waCdSyncGfx === 'function') waCdSyncGfx(); } catch (e) { /* fine */ } }
+    var fi = document.getElementById('cdImg'); if (fi) fi.value = '';
+    hint.textContent = 'Photo attached from the library. It will sit behind the words on the tile.';
+    cdShow(p);
+    var brief = document.getElementById('cdBrief') || document.querySelector('#create textarea');
+    try { var o = document.getElementById('cdGfxOpts'); if (o && o.scrollIntoView) o.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ }
+    if (brief && !brief.value) { try { brief.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    return true;
+  }
+  function toCreate(p) {
+    W.pendingCd = p; location.hash = '#create';
+    var n = 0, t = setInterval(function () {
+      n++;
+      if (W.pendingCd && cdApply(W.pendingCd)) { W.pendingCd = null; clearInterval(t); toastS('Photo attached in the Create studio: write the brief and Write it'); return; }
+      if (n > 40) { clearInterval(t); W.pendingCd = null; toastS('Open the Create studio and use Pick one from the photo library'); }
+    }, 150);
+  }
+  /* when the studio resets or takes an uploaded file, the library chip goes */
+  function cdWatch() {
+    var hint = document.getElementById('cdImgHint'); if (!hint || hint.__w118c) return;
+    hint.__w118c = true;
+    new MutationObserver(function () {
+      var box = document.getElementById('w118ccd'); if (!box || !box.getAttribute('data-key')) return;
+      var p = byKey(box.getAttribute('data-key')); var cur = null; try { cur = WA_CD_IMG; } catch (e) { cur = null; }
+      if (!p || cur !== url(p, 'web')) cdShow(null);
+    }).observe(hint, { childList: true, characterData: true, subtree: true });
+  }
+
+  /* ---------- hand-off 2: the content calendar composer (wave121) ---------- */
+  async function fileOf(p) {
+    var r = await fetch(url(p, 'web'), { mode: 'cors' }); if (!r.ok) throw new Error('could not fetch the photo (' + r.status + ')');
+    var b = await r.blob();
+    return new File([b], p.key + '.jpg', { type: 'image/jpeg' });
+  }
+  async function intoComposer(p) {
+    var input = document.querySelector('#w121dr #w121file');
+    if (!input) throw new Error('the post composer is not open');
+    var file = await fileOf(p);
+    var dt = new DataTransfer(); dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function toPost(p) {
+    if (typeof window.w121Compose !== 'function') { toastS('The content calendar is not available'); return; }
+    closeDrawer(true);
+    var note = 'Photo from the library: ' + p.title + '.' + (p.alt_text ? ' Alt text: ' + p.alt_text : '') + (p.usage !== 'ready' || p.status !== 'ready' ? ' Usage: ' + ulabel(p) + (p.usage_note ? ', ' + p.usage_note : '') : '');
+    window.w121Compose({ title: p.title, notes: note });
+    var n = 0, t = setInterval(function () {
+      n++;
+      if (document.querySelector('#w121dr #w121file')) { clearInterval(t); intoComposer(p).then(function () { toastS('Photo added to the post'); }).catch(function (x) { toastS('Could not attach the photo: ' + ((x && x.message) || x)); }); return; }
+      if (n > 60) { clearInterval(t); toastS('Open a post and use From the photo library'); }
+    }, 150);
+  }
+  function calLink() {
+    var drop = document.querySelector('#w121dr #w121drop'); if (!drop || drop.querySelector('[data-w118cpick]') || !staff()) return;
+    var a = document.createElement('a'); a.setAttribute('data-w118cpick', 'cal'); a.setAttribute('data-w118c', '1'); a.textContent = 'pick from the photo library';
+    var span = document.createElement('span'); span.setAttribute('data-w118c', '1'); span.appendChild(document.createTextNode(' Or ')); span.appendChild(a); span.appendChild(document.createTextNode('.'));
+    var input = drop.querySelector('#w121file'); drop.insertBefore(span, input || null);
+  }
+  var calMo = null;
+  function calWatch() {
+    var dr = document.getElementById('w121dr');
+    if (!dr) { if (calMo) { calMo.disconnect(); calMo = null; } return; }
+    if (calMo && calMo.__el === dr) { calLink(); return; }
+    if (calMo) calMo.disconnect();
+    calMo = new MutationObserver(function () { calLink(); }); calMo.__el = dr;
+    calMo.observe(dr, { childList: true, subtree: true });
+    calLink();
+  }
+
+  /* ---------- hand-off 3: team tools and Search everything ---------- */
+  function teamTools() {
+    try {
+      var tools = document.querySelector('#team .w116tools'); if (!tools || tools.querySelector('[data-w116go="#photos"]') || !allowed()) return;
+      var h = decodeURIComponent(location.hash || ''); if (!/^#team\/(marketing|fundraising)\b/.test(h)) return;
+      var a = document.createElement('a'); a.setAttribute('data-w116go', '#photos'); a.setAttribute('data-w118c', '1'); a.innerHTML = ic('image') + ' Photo library';
+      var after = tools.querySelector('[data-w116go="#create"]');
+      if (after && after.nextSibling) tools.insertBefore(a, after.nextSibling); else tools.insertBefore(a, tools.firstChild);
+    } catch (e) { /* cosmetic */ }
+  }
+  var searchSeq = 0;
+  async function searchPhotos(q) {
+    var seq = ++searchSeq;
+    try {
+      q = String(q || '').trim().toLowerCase();
+      if (!allowed() || q.length < 3) return;
+      await load(false);
+      if (seq !== searchSeq) return;
+      var terms = q.split(/\s+/).filter(Boolean);
+      var hits = P.rows.filter(function (p) { if (p.status === 'archived') return false; var h = hay(p); return terms.every(function (t) { return h.indexOf(t) >= 0; }); }).slice(0, 4);
+      var pop = document.getElementById('searchResults');
+      if (!hits.length || !pop || pop.style.display === 'none' || pop.querySelector('[data-w118cs]')) return;
+      var empty = !pop.querySelector('.sr[data-hash], .sr[data-w107]') ? pop.querySelector('.sr') : null;
+      if (empty && (empty.textContent || '').indexOf('No matches') >= 0) empty.remove();
+      hits.forEach(function (p) {
+        var div = document.createElement('div'); div.className = 'sr'; div.setAttribute('data-w118cs', p.key);
+        div.innerHTML = '<span class="sr-type w118cst">Photo</span><img src="' + E(url(p, 'thumb')) + '" alt="">' + E(p.title);
+        div.addEventListener('click', function () { pop.style.display = 'none'; var gs = document.getElementById('globalSearch'); if (gs) gs.value = ''; location.hash = '#photos/' + encodeURIComponent(p.key); });
+        pop.appendChild(div);
+      });
+    } catch (e) { /* search stays as it was */ }
+  }
+  if (typeof renderSearch === 'function') {
+    var __rs118c = renderSearch, tS = null;
+    renderSearch = function (q) { var r = __rs118c.apply(this, arguments); clearTimeout(tS); tS = setTimeout(function () { searchPhotos(q); }, 280); return r; };
+  }
+
+  /* ---------- the guide ---------- */
+  function help() {
+    if (typeof openModal !== 'function') return;
+    openModal('<h3>Photo library</h3><div class="w43hm">' +
+      '<p>Every photo we can use, with the words that go with it. Search or filter, open a photo, and copy what you need.</p>' +
+      '<p><b>The badges.</b> Ready: fine for posts, the website, decks and reports. Crop first: crop the edge named in the note before it goes public. Consent needed: someone we serve or a child is recognizable, so use it inside the team, or publicly only with their consent. Internal only: keep it inside the team. Needs a look: new, with first labels from the AI that a person has not confirmed yet.</p>' +
+      '<p><b>Sizes.</b> Full (2400 px) for print and big screens, Web (1600 px) for posts, the website and decks, Thumbnail (640 px) for emails and documents. None of them carry location or camera data.</p>' +
+      '<p><b>Using a photo.</b> Use in the Create studio puts it behind a social graphic. Use in a post opens the content calendar with the photo attached. Paste the alt text into the alt text field wherever the photo goes. Both screens also have a Pick from the photo library link.</p>' +
+      '<p><b>Adding photos</b> (staff). Add photos, drop the files, and the hub makes the three sizes, keeps the date, uploads them and asks the AI for first labels. Open each one marked Needs a look, fix what is off (above all who is recognizable), click the photo on its main subject, and save. Describe people by role, not by name. When someone gives consent, set the photo to Ready and note who agreed and when.</p>' +
+      '<p><b>Where it lives.</b> Files: Supabase storage, content-images/photos (full, web and thumb). Labels: the wa_photos table. Archive hides a photo; an admin can delete an archived photo for good. Every change goes to the Activity log.</p>' +
+      '</div><div class="m-actions"><button class="btn" id="w118chc">Got it</button></div>');
+    var c = document.getElementById('w118chc'); if (c) c.addEventListener('click', function () { closeModal(); });
+  }
+
+  /* ---------- events ---------- */
+  function copyText(t, btn) {
+    var ok = function () { if (btn) { var o = btn.innerHTML; btn.classList.add('done'); btn.innerHTML = ic('check') + 'Copied'; setTimeout(function () { btn.classList.remove('done'); btn.innerHTML = o; }, 1600); } else toastS('Copied'); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(t).then(ok, function () { legacy(); }); return; } } catch (e) { /* below */ }
+    legacy();
+    function legacy() { try { var ta = document.createElement('textarea'); ta.value = t; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); ok(); } catch (e) { toastS('Could not copy: select the text instead'); } }
+  }
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w118chelp]'))) { e.preventDefault(); help(); return; }
+    if ((el = t.closest('[data-w118cpick]'))) {
+      e.preventDefault(); e.stopPropagation();
+      var where = el.getAttribute('data-w118cpick');
+      if (where === 'cd') pick({ title: 'Pick a photo for the graphic', why: 'It sits behind the words on the tile.', onPick: function (p) { cdApply(p); } });
+      else if (where === 'cal') pick({ title: 'Add a photo to the post', why: 'It is added to this post like an upload.', onPick: function (p) { intoComposer(p).then(function () { toastS('Photo added to the post'); }).catch(function (x) { toastS('Could not attach the photo: ' + ((x && x.message) || x)); }); } });
+      return;
+    }
+    if ((el = t.closest('[data-w118ccdx]'))) { e.preventDefault(); try { WA_CD_IMG = null; } catch (x) { /* fine */ } var hint = document.getElementById('cdImgHint'); if (hint) hint.textContent = CD_HINT; cdShow(null); return; }
+    var pk = t.closest('#w118cpk');
+    if (pk) {
+      if ((el = t.closest('[data-w118cpx]'))) { if (el.tagName !== 'A') e.preventDefault(); closePick(); return; }
+      if ((el = t.closest('[data-w118cpr]'))) { P.pick.ready = !P.pick.ready; paintPick(); return; }
+      if ((el = t.closest('[data-w118cpp]'))) { choose(el.getAttribute('data-w118cpp')); return; }
+      return;
+    }
+    var inPage = t.closest('#photos'), inDr = t.closest('#w118cdr');
+    if (!inPage && !inDr) return;
+    if (inPage) {
+      if ((el = t.closest('[data-w118cop]'))) { openPhoto(el.getAttribute('data-w118cop')); return; }
+      if ((el = t.closest('[data-w118cgo]'))) { openUpload(); return; }
+      if ((el = t.closest('[data-w118cu]'))) { if (el.classList.contains('off')) return; P.f.usage = el.getAttribute('data-w118cu'); P.limit = 120; paint(); return; }
+      if ((el = t.closest('[data-w118cs]'))) { if (el.classList.contains('off')) return; var s = el.getAttribute('data-w118cs'); P.f.season = P.f.season === s ? '' : s; P.limit = 120; paint(); return; }
+      if ((el = t.closest('[data-w118cpk]'))) { if (el.classList.contains('off')) return; P.f.picks = !P.f.picks; P.limit = 120; paint(); return; }
+      if ((el = t.closest('[data-w118cst]'))) { var v = el.getAttribute('data-w118cst'); P.f.status = P.f.status === v ? '' : v; if (P.f.status) P.f.usage = ''; P.limit = 120; paint(); return; }
+      if ((el = t.closest('[data-w118cclr]'))) { var c = el.getAttribute('data-w118cclr'); if (c === 'all') { P.f = blankF(); } else P.f[c] = ''; paint(); return; }
+      if ((el = t.closest('[data-w118cmore]'))) { P.limit += 120; paint(); return; }
+      return;
+    }
+    /* the side panel */
+    if ((el = t.closest('[data-w118cx]'))) { e.preventDefault(); if (P.mode === 'edit') { if (P.edit && P.edit.dirty && !confirm('Close without saving the label changes?')) return; closeDrawer(true); return; } closeDrawer(false); return; }
+    if ((el = t.closest('[data-w118cstep]'))) { step(Number(el.getAttribute('data-w118cstep'))); return; }
+    var p = byKey(P.open);
+    if ((el = t.closest('[data-w118ccopy]')) && p) {
+      var what = el.getAttribute('data-w118ccopy');
+      copyText(what === 'alt' ? p.alt_text : what === 'caption' ? p.caption : url(p, 'web'), what === 'link' ? null : el);
+      if (what === 'link') toastS('Link copied (the web size)');
+      return;
+    }
+    if ((el = t.closest('[data-w118cuse]')) && p) { var u = el.getAttribute('data-w118cuse'); if (u === 'create') { closeDrawer(true); toCreate(p); } else toPost(p); return; }
+    if ((el = t.closest('[data-w118ctag]'))) { P.f = blankF(); P.f.tag = el.getAttribute('data-w118ctag'); closeDrawer(true); paint(); return; }
+    if ((el = t.closest('[data-w118cseries]'))) { P.f = blankF(); P.f.series = el.getAttribute('data-w118cseries'); P.sort = 'taken_asc'; closeDrawer(true); paint(); return; }
+    if ((el = t.closest('[data-w118copen]'))) { var k = el.getAttribute('data-w118copen'), q = byKey(k); if (q) { openPhoto(k); if (q.status === 'needs_labels') startEdit(q); } return; }
+    if ((el = t.closest('[data-w118cchoose]'))) { e.preventDefault(); var fi = document.getElementById('w118cfile'); if (fi) fi.click(); return; }
+    if ((el = t.closest('[data-w118cbest]')) && P.edit) { readForm(); var b = el.getAttribute('data-w118cbest'), list = arr(P.edit.v.best_for); var ix = list.indexOf(b); if (ix >= 0) list.splice(ix, 1); else list.push(b); P.edit.v.best_for = list; P.edit.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w118cai]'))) { e.preventDefault(); useAi(el.getAttribute('data-w118cai')); return; }
+    if ((el = t.closest('[data-w118cfocal]')) && P.edit) {
+      var img = el.querySelector('img'); if (!img) return;
+      var r = img.getBoundingClientRect(); if (!r.width || !r.height) return;
+      readForm();
+      P.edit.v.focal_x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      P.edit.v.focal_y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      P.edit.dirty = true; paintDrawer(); return;
+    }
+    if ((el = t.closest('[data-w118cact]'))) {
+      var act = el.getAttribute('data-w118cact');
+      if (act === 'edit' && p) { startEdit(p); return; }
+      if (act === 'cancel') { if (P.edit && P.edit.dirty && !confirm('Drop the label changes?')) return; P.mode = 'view'; P.edit = null; paintDrawer(); return; }
+      if (act === 'save') { await saveEdit(); return; }
+      if (act === 'suggest') { await aiEdit(); return; }
+      if (act === 'clearup') { if (P.up && !P.up.running) P.up.items = []; paintDrawer(); return; }
+      if (act === 'review') { P.f = blankF(); P.f.status = 'needs_labels'; P.sort = 'added'; paint(); var first = sortRows(P.rows.filter(function (x) { return x.status === 'needs_labels'; }))[0]; if (first) { openPhoto(first.key); startEdit(first); } else closeDrawer(true); return; }
+      if (act === 'archive' && p) {
+        if (!confirm('Archive "' + p.title + '"? It leaves the library and the pickers; you can restore it from Archived.')) return;
+        try { await update(p.key, { status: 'archived' }, { field: 'status', from: p.status, to: 'archived' }); toastS('Archived'); closeDrawer(true); paint(); } catch (x) { toastS('Could not archive: ' + ((x && x.message) || x)); }
+        return;
+      }
+      if (act === 'restore' && p) {
+        var to = p.labelled_by && p.usage !== 'check' ? 'ready' : 'needs_labels';
+        try { await update(p.key, { status: to }, { field: 'status', from: 'archived', to: to }); toastS('Restored'); paint(); paintDrawer(); } catch (x) { toastS('Could not restore: ' + ((x && x.message) || x)); }
+        return;
+      }
+      if (act === 'delete' && p) {
+        if (!admin()) return;
+        if (!confirm('Delete "' + p.title + '" for good? The three files and the labels go, and this cannot be undone.')) return;
+        try {
+          var d = await db.from('wa_photos').delete().eq('key', p.key).select();
+          if (d.error) throw d.error;
+          if (Array.isArray(d.data) && !d.data.length) throw new Error('only a hub admin can delete');
+          var paths = [p.path_full, p.path_web, p.path_thumb].filter(Boolean);
+          if (paths.length) { try { await db.storage.from(BUCKET).remove(paths); } catch (x) { /* the row is gone; files can be swept later */ } }
+          try { if (typeof logChange === 'function') logChange('photo', p.key, 'deleted', p.title, null); } catch (x) { /* audit */ }
+          P.rows = P.rows.filter(function (x) { return x.key !== p.key; });
+          closeDrawer(true); paint(); toastS('Deleted');
+        } catch (x) { toastS('Could not delete: ' + ((x && x.message) || x)); }
+        return;
+      }
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.target && e.target.closest && e.target.closest('#photos [role="button"]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); return; }
+    if (e.target && e.target.closest && e.target.closest('#w118cdr .opts [role="button"], #w118cpk [role="button"]') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); e.target.click(); return; }
+    if (P.pick) { if (e.key === 'Escape') { e.preventDefault(); closePick(); } return; }
+    if (!P.mode) return;
+    var typing = e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+    if (e.key === 'Escape') { e.preventDefault(); if (P.mode === 'edit') { if (P.edit && P.edit.dirty && !confirm('Close without saving the label changes?')) return; P.mode = 'view'; P.edit = null; paintDrawer(); return; } closeDrawer(false); return; }
+    if (typing) { if (P.mode === 'edit' && (e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(); } return; }
+    if (P.mode === 'view' && e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    if (P.mode === 'view' && e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w118cq') { P.f.q = t.value; P.limit = 120; clearTimeout(P.qT); P.qT = setTimeout(paint, 160); return; }
+    if (t.id === 'w118cpq' && P.pick) { P.pick.q = t.value; clearTimeout(P.pqT); P.pqT = setTimeout(paintPick, 140); return; }
+    if (P.edit && t.closest && t.closest('#w118cdr') && t.hasAttribute('data-w118cf')) {
+      P.edit.dirty = true; var k = t.getAttribute('data-w118cf'); if (P.edit.flag[k]) { P.edit.flag[k] = false; t.classList.remove('aiflag'); }
+      var cnt = document.querySelector('#w118cdr [data-w118ccnt="' + k + '"]'); if (cnt) { var max = Number((cnt.textContent.split('/')[1] || '0').trim()); cnt.textContent = t.value.length + ' / ' + max; cnt.classList.toggle('bad', t.value.length > max); }
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w118cscene') { P.f.scene = t.value; P.limit = 120; paint(); return; }
+    if (t.id === 'w118csort') { P.sort = t.value; P.limit = 120; paint(); return; }
+    if (t.id === 'w118cfile') { addFiles(t.files); t.value = ''; return; }
+    if (P.edit && t.closest && t.closest('#w118cdr') && t.hasAttribute('data-w118cf')) {
+      P.edit.dirty = true;
+      if (t.getAttribute('data-w118cf') === 'taken_on') { readForm(); if (!P.edit.v.season && P.edit.v.taken_on) { P.edit.v.season = seasonOf(P.edit.v.taken_on); paintDrawer(); } }
+    }
+  });
+  /* drop files on the Add photos panel */
+  document.addEventListener('dragover', function (e) { if (P.mode !== 'upload' || !e.target.closest || !e.target.closest('#w118cdr')) return; e.preventDefault(); var d = document.getElementById('w118cdrop'); if (d) d.classList.add('over'); });
+  document.addEventListener('dragleave', function (e) { var d = document.getElementById('w118cdrop'); if (d && e.target === d) d.classList.remove('over'); });
+  document.addEventListener('drop', function (e) {
+    if (P.mode !== 'upload' || !e.target.closest || !e.target.closest('#w118cdr')) return;
+    e.preventDefault(); var d = document.getElementById('w118cdrop'); if (d) d.classList.remove('over');
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+
+  /* ---------- the page in the hub: route, menu, permissions ---------- */
+  async function show(h) {
+    var sec = panel(); if (!sec) return;
+    try { document.title = 'Photo library \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    var sub = decodeURIComponent(String(h || '').split('/').slice(1).join('/'));
+    if (!P.loaded) paint();
+    await load(false);
+    paint();
+    if (!allowed()) return;
+    if (sub === 'new') { if (staff()) openUpload(); return; }
+    if (sub === 'review') { P.f = blankF(); P.f.status = 'needs_labels'; P.sort = 'added'; paint(); return; }
+    if (sub) { if (byKey(sub)) { if (P.open !== sub || P.mode !== 'view') openPhoto(sub, true); } else toastS('That photo is not in the library'); return; }
+    if (P.mode && P.mode !== 'upload') closeDrawer(true);
+  }
+  function register() {
+    if (!window.WA_NAV || !WA_NAV.register) return;
+    var known = (WA_NAV.pages || []).some(function (p) { return p && p.id === 'photos'; });
+    var bar = document.getElementById('tabBar'), has = bar && bar.querySelector('.tab[data-tab="photos"]');
+    if (known && has) return;
+    WA_NAV.register({ id: 'photos', label: 'Photo library', group: 'more', dot: GOLD, gate: 'member', noRoute: known, onShow: function (h) { show(h); } });
+  }
+  function place() {
+    try {
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      var b = bar.querySelector('.tab[data-tab="photos"]'); if (!b) return;
+      b.setAttribute('data-w118c', '1');
+      var host = bar.querySelector('.tab-group[data-w42g="more"] .tab-group-p'); if (!host) return;
+      var br = host.querySelector('.tab[data-tab="brain"]');
+      if (br) { if (br.nextSibling !== b) host.insertBefore(b, br.nextSibling); }
+      else if (b.parentNode !== host) host.appendChild(b);
+      /* remember when the group shows only because of this tab (board accounts), for the harness */
+      var others = false; host.querySelectorAll('.tab').forEach(function (x) { if (x !== b && x.style.display !== 'none') others = true; });
+      var grp = host.closest('.tab-group'); if (grp) { if (!others) { if (grp.getAttribute('data-w118cg') !== '1') grp.setAttribute('data-w118cg', '1'); } else if (grp.hasAttribute('data-w118cg')) grp.removeAttribute('data-w118cg'); }
+      /* the group header was hidden before this tab moved in (wave42 hides empty groups): show it, as wave42 would */
+      var hd = grp && grp.querySelector('.tab-group-h');
+      if (hd && hd.style.display === 'none' && b.style.display !== 'none') hd.style.display = '';
+    } catch (e) { /* cosmetic */ }
+  }
+  function enrol() {
+    try {
+      if (typeof wa40Allowed === 'function' && !wa40Allowed.__w118c) {
+        var __al = wa40Allowed;
+        wa40Allowed = function () { var a = __al.apply(this, arguments) || []; if ((board() || staff()) && a.indexOf('photos') < 0) a = a.concat(['photos']); return a; };
+        Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+        wa40Allowed.__w118c = true;
+      }
+    } catch (e) { /* fine */ }
+  }
+  var tick = null;
+  function later() { if (tick) return; tick = setTimeout(function () { tick = null; place(); cdEnsure(); cdWatch(); calWatch(); teamTools(); }, 150); }
+  panel();
+  register();
+  if (typeof startApp === 'function') {
+    var __sa118c = startApp;
+    startApp = async function () {
+      var r = await __sa118c.apply(this, arguments);
+      try {
+        enrol(); panel(); register(); place();
+        if (typeof wa40Enforce === 'function') wa40Enforce();
+        [400, 1500, 3500].forEach(function (ms) { setTimeout(function () { register(); place(); }, ms); });
+        new MutationObserver(function (muts) { for (var i = 0; i < muts.length; i++) { if (muts[i].addedNodes && muts[i].addedNodes.length) { later(); return; } } }).observe(document.body, { childList: true, subtree: true });
+        var h = decodeURIComponent(location.hash || '');
+        if (h === '#photos' || h.indexOf('#photos/') === 0) { try { applyHash(); } catch (e) { show(h.slice(1)); } }
+      } catch (e) { console.warn('wave118c boot', e); }
+      return r;
+    };
+  }
+  window.addEventListener('hashchange', function () {
+    var h = decodeURIComponent(location.hash || '');
+    if (h.indexOf('#photos') !== 0 && P.mode) closeDrawer(true);
+    if (h.indexOf('#photos') !== 0 && P.pick && h.indexOf('#create') !== 0 && h.indexOf('#contentcal') !== 0) closePick();
+  });
+
+  /* ---------- the public face (other waves, the harness) ---------- */
+  W.pick = pick;
+  W.url = url;
+  W.rows = function () { return P.rows.slice(); };
+  W.load = load;
+  W.cleanNode = function (el) {
+    var c = el.cloneNode(true);
+    if (c.matches && c.matches('[data-w118c]')) return document.createElement('div');
+    c.querySelectorAll('[data-w118c]').forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+    /* a menu group that only showed because of the library tab hides again, as wave42 would */
+    c.querySelectorAll('.tab-group').forEach(function (g) {
+      var mark = g.getAttribute('data-w118cg') === '1'; g.removeAttribute('data-w118cg');
+      var hd = g.querySelector('.tab-group-h'); if (!hd || hd.style.display === 'none' || !mark) return;
+      var any = false; g.querySelectorAll('.tab').forEach(function (t) { if (t.style.display !== 'none') any = true; });
+      if (!any) hd.style.display = 'none';
+    });
+    c.normalize();
+    return c;
+  };
+  W.clean = function (el) { return W.cleanNode(el).outerHTML; };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is

@@ -68,6 +68,7 @@ async function main() {
   `);
   await page.addInitScript("window.__WAFIX = " + fixture + ";");
   if (process.env.W118_STRIP === "1") await page.addInitScript("window.__WA_STRIP118 = true;");
+  if (process.env.W118C_STRIP === "1") await page.addInitScript("window.__WA_STRIP118C = true;");
 
   // Serve the candidate; stub the supabase CDN; kill all other network.
   await page.route("**/*", route => {
@@ -99,7 +100,7 @@ async function main() {
   };
 
   const ids = await page.evaluate(() =>
-    Array.from(document.querySelectorAll(".panel[id]")).map(e => e.id));
+    Array.from(document.querySelectorAll(".panel[id]")).filter(e => !(window.__WA_STRIP118C && e.hasAttribute("data-w118c"))).map(e => e.id));
 
   const report = { candidate: path.resolve(candidate), role, email, ids, pages: {}, errors: [] };
 
@@ -109,7 +110,10 @@ async function main() {
     const snap = await page.evaluate(pid => {
       const el = document.getElementById(pid);
       if (!el) return "<missing/>";
-      return (window.__WA_STRIP118 && window.__wa118 && window.__wa118.clean) ? window.__wa118.clean(el) : el.outerHTML;
+      let n = el;
+      if (window.__WA_STRIP118 && window.__wa118 && window.__wa118.cleanNode) n = window.__wa118.cleanNode(n);
+      if (window.__WA_STRIP118C && window.__wa118c && window.__wa118c.cleanNode) n = window.__wa118c.cleanNode(n);
+      return n.outerHTML;
     }, id);
     fs.writeFileSync(path.join(outdir, "pages", id + ".html"), snap);
     report.pages[id] = { bytes: Buffer.byteLength(snap) };
@@ -129,7 +133,10 @@ async function main() {
     const snap = await page.evaluate(p => {
       const el = p ? document.getElementById(p) : document.querySelector(".panel.active");
       if (!el) return "<missing/>";
-      return (window.__WA_STRIP118 && window.__wa118 && window.__wa118.clean) ? window.__wa118.clean(el) : el.outerHTML;
+      let n = el;
+      if (window.__WA_STRIP118 && window.__wa118 && window.__wa118.cleanNode) n = window.__wa118.cleanNode(n);
+      if (window.__WA_STRIP118C && window.__wa118c && window.__wa118c.cleanNode) n = window.__wa118c.cleanNode(n);
+      return n.outerHTML;
     }, pid);
     fs.writeFileSync(path.join(outdir, "pages", label + ".html"), snap);
     report.pages[label] = { bytes: Buffer.byteLength(snap) };
@@ -137,7 +144,8 @@ async function main() {
 
   // Chrome snapshot: body with page interiors stripped (nav, header, chat, footer).
   const chrome = await page.evaluate(() => {
-    const b = (window.__WA_STRIP118 && window.__wa118 && window.__wa118.cleanNode) ? window.__wa118.cleanNode(document.body) : document.body.cloneNode(true);
+    let b = (window.__WA_STRIP118 && window.__wa118 && window.__wa118.cleanNode) ? window.__wa118.cleanNode(document.body) : document.body.cloneNode(true);
+    if (window.__WA_STRIP118C && window.__wa118c && window.__wa118c.cleanNode) b = window.__wa118c.cleanNode(b);
     b.querySelectorAll(".panel[id]").forEach(e => { e.innerHTML = ""; });
     b.querySelectorAll("script").forEach(e => e.remove());
     return b.outerHTML;

@@ -1,0 +1,102 @@
+// Welfare Avenue: photo-library (v1, 25/09/26)
+// Puts photo files into the public content-images bucket under photos/ for
+// the hub's Photo library (wa_photos). The hub itself uploads straight to
+// storage with the signed-in person's session (staff can write to
+// content-images); this function exists for build sessions and tools that
+// hold the trigger secret instead of a sign-in.
+// Auth: x-wa-secret (WA_TRIGGER_SECRET) or a staff sign-in.
+// Actions:
+//   {action:'put', files:[{path, content_b64, content_type?}]}
+//        upload (upsert) each file; returns [{path, bytes, ok, error?}]
+//   {action:'remove', paths:[...]}          trigger secret or hub admin only
+//   {action:'check', paths:[...]}           which paths exist, with sizes
+// Every path must start with photos/ and end in .jpg, .jpeg, .png or .webp.
+import { createClient } from 'jsr:@supabase/supabase-js@2';
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
+const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const BUCKET = 'content-images';
+const CORS: Record<string, string> = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
+const PATH = /^photos\/[a-z0-9][a-z0-9\/_-]{0,120}\.(jpe?g|png|webp)$/;
+const TYPES: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+
+async function getSecret(name: string): Promise<string> {
+  const { data, error } = await svc.rpc('get_secret', { secret_name: name });
+  if (error || !data) throw new Error('secret ' + name + ' unavailable');
+  return data as string;
+}
+type Who = { kind: 'secret' | 'staff'; email: string | null; admin: boolean };
+async function who(req: Request): Promise<Who | null> {
+  const given = req.headers.get('x-wa-secret');
+  if (given) { try { if (given === (await getSecret('WA_TRIGGER_SECRET'))) return { kind: 'secret', email: null, admin: true }; } catch (_) { /* fall through */ } }
+  const auth = req.headers.get('Authorization') || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
+  const { data } = await asUser.auth.getUser();
+  const email = (data?.user?.email || '').toLowerCase();
+  if (!email) return null;
+  let staff = false, admin = false;
+  try { const r = await asUser.rpc('is_wa_staff'); staff = r.data === true; } catch (_) { staff = false; }
+  if (!staff) return null;
+  try { const r = await asUser.rpc('is_hub_admin'); admin = r.data === true; } catch (_) { admin = false; }
+  return { kind: 'staff', email, admin };
+}
+function b64bytes(s: string): Uint8Array {
+  const bin = atob(s.replace(/\s+/g, ''));
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
+  if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
+  const me = await who(req);
+  if (!me) return json({ error: 'unauthorized' }, 401);
+  const body = await req.json().catch(() => ({}));
+  const action = String(body.action || '');
+  try {
+    if (action === 'put') {
+      const files = Array.isArray(body.files) ? body.files.slice(0, 12) : [];
+      const out: Array<Record<string, unknown>> = [];
+      for (const f of files) {
+        const path = String(f && f.path || '');
+        if (!PATH.test(path)) { out.push({ path, ok: false, error: 'path must be photos/<name>.jpg|png|webp' }); continue; }
+        const ext = path.split('.').pop()!.toLowerCase();
+        let bytes: Uint8Array;
+        try { bytes = b64bytes(String(f.content_b64 || '')); } catch (_) { out.push({ path, ok: false, error: 'content_b64 is not base64' }); continue; }
+        if (bytes.byteLength < 200 || bytes.byteLength > 12 * 1024 * 1024) { out.push({ path, ok: false, error: 'size ' + bytes.byteLength }); continue; }
+        const up = await svc.storage.from(BUCKET).upload(path, bytes, { contentType: String(f.content_type || TYPES[ext]), upsert: true, cacheControl: '604800' });
+        out.push(up.error ? { path, ok: false, error: up.error.message } : { path, ok: true, bytes: bytes.byteLength });
+      }
+      return json({ ok: out.every(r => r.ok), files: out });
+    }
+    if (action === 'check') {
+      const paths = (Array.isArray(body.paths) ? body.paths : []).map(String).filter(p => PATH.test(p)).slice(0, 200);
+      const folders = [...new Set(paths.map(p => p.slice(0, p.lastIndexOf('/'))))];
+      const found: Record<string, number> = {};
+      for (const folder of folders) {
+        const { data } = await svc.storage.from(BUCKET).list(folder, { limit: 1000 });
+        (data || []).forEach(o => { found[folder + '/' + o.name] = Number((o.metadata as { size?: number } | null)?.size || 0); });
+      }
+      return json({ ok: true, files: paths.map(p => ({ path: p, exists: p in found, bytes: found[p] ?? null })) });
+    }
+    if (action === 'remove') {
+      if (!me.admin) return json({ error: 'Only the trigger secret or a hub admin can remove files.' }, 403);
+      const paths = (Array.isArray(body.paths) ? body.paths : []).map(String).filter(p => PATH.test(p)).slice(0, 100);
+      const { data, error } = await svc.storage.from(BUCKET).remove(paths);
+      if (error) return json({ error: error.message }, 500);
+      return json({ ok: true, removed: (data || []).map(o => o.name) });
+    }
+    return json({ error: 'unknown action' }, 400);
+  } catch (e) {
+    return json({ error: String((e as Error).message || e).slice(0, 300) }, 500);
+  }
+});
