@@ -41784,6 +41784,997 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   };
 })();
 /* =====================================================================
+   WA v124 the calendar, the fundraising events calendar and birthdays (25/09/26)
+   =====================================================================
+   Steel: "set up fundraising events calendar under fundraising and
+   finance tab", "a master calendar with all fundraising events, meetings
+   (limited to each user and where they are invited), marketing posts
+   past and future, volunteering events, etc", and "allow individuals to
+   add birthdays to their profile".
+
+   - Calendar (#calendar, under Home in the menu): month and agenda views
+     with five layers you switch on and off: fundraising events, your
+     meetings (only the ones you are invited to: calendar_my_meetings()
+     matches your email, its Workspace aliases and its dotless spelling),
+     marketing posts (published on Instagram, Facebook and LinkedIn, and
+     planned or scheduled in the content calendar), volunteering events
+     and birthdays. Month-long and season-long fundraising events sit in a
+     band above the grid. Up next, the month's birthdays, and a sheet for
+     every item with its links (join the meeting, the event's board, the
+     post, the serving, the person).
+   - Events calendar (#fundevents, Fundraising & Finances): the 2026-27
+     plan season by season (fund_events, seeded from "Fundraising Events
+     Calendar 2026-27"), the goals ($10K minimum, $15K healthy, $20K
+     target) with what the events raised, a year strip, the ideas
+     backlog, the planning notes, and add, edit and record results.
+   - Birthdays (hub_birthdays): month and day only, entered by the person
+     on their own profile page, shown on the calendar to everyone, their
+     team or only them, as they choose.
+   Data: wa124_calendar (fund_events, hub_settings fund_goals,
+   hub_birthdays, hub_directory.aliases, my_emails(),
+   calendar_my_meetings()); directory-sync v1.4 keeps the aliases.
+   ===================================================================== */
+(function () {
+  if (window.__wa124) return; window.__wa124 = true;
+  var T = window.WA_TEAMS || { order: ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'], labels: {}, short: {} };
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var LAYERS = [
+    { k: 'fund', l: 'Fundraising events', c: '#C8961F', bg: 'rgba(220,165,39,.18)', ink: '#6b4d05', icon: 'heart' },
+    { k: 'meet', l: 'My meetings', c: GREEN, bg: 'rgba(16,63,57,.10)', ink: GREEN, icon: 'people' },
+    { k: 'post', l: 'Marketing posts', c: PURPLE, bg: 'rgba(111,100,171,.14)', ink: '#4a4180', icon: 'megaphone' },
+    { k: 'vol', l: 'Volunteering', c: TEAL, bg: 'rgba(42,140,122,.14)', ink: '#1d6b5d', icon: 'pot' },
+    { k: 'bday', l: 'Birthdays', c: FLAG, bg: 'rgba(179,64,47,.11)', ink: FLAG, icon: 'cake' }
+  ];
+  var LAYER = {}; LAYERS.forEach(function (x) { LAYER[x.k] = x; });
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var SEASONS = [
+    ['summer-2026', 'Summer 2026', 'Season kickoff'],
+    ['fall-2026', 'Fall 2026', 'October to December'],
+    ['winter-2027', 'Winter 2027', 'January to March'],
+    ['spring-2027', 'Spring and summer 2027', 'April to July, the next cycle starts'],
+    ['backlog', 'Ideas and backlog', 'Not yet scheduled']
+  ];
+  var STATUS = { idea: ['Idea', 'rgba(121,119,115,.14)', '#5c5a56'], planned: ['Planned', 'rgba(220,165,39,.2)', '#6b4d05'], confirmed: ['Confirmed', 'rgba(42,140,122,.16)', '#1d6b5d'], done: ['Done', 'rgba(16,63,57,.1)', GREEN], cancelled: ['Cancelled', 'rgba(179,64,47,.12)', FLAG] };
+  var PLATFORM = { instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn', tiktok: 'TikTok' };
+
+  var P = {
+    chevl: '<path d="m15 5-7 7 7 7"/>', chevr: '<path d="m9 5 7 7-7 7"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.2a4.3 4.3 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    megaphone: '<path d="M4 10v4a1 1 0 0 0 1 1h2l5 4V5L7 9H5a1 1 0 0 0-1 1z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/>',
+    pot: '<path d="M4 10h16v5.5A4.5 4.5 0 0 1 15.5 20h-7A4.5 4.5 0 0 1 4 15.5z"/><path d="M2.5 10h19M9 6.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.5"/>',
+    cake: '<path d="M4 20.5h16M5 20.5v-7.5a1.5 1.5 0 0 1 1.5-1.5h11a1.5 1.5 0 0 1 1.5 1.5v7.5"/><path d="M5 15.5c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0 2.3 1 3.5 0 2.3-1 3.5 0M12 11.5v-3M12 4.5c-.9.9-.9 2 0 2.5.9-.5.9-1.6 0-2.5z"/>',
+    clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    pin: '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    video: '<rect x="3" y="6.5" width="12.5" height="11" rx="2.5"/><path d="m15.5 10.5 5-3v9l-5-3"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
+    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+  };
+  function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  /* dates built field by field (the offline harness swaps Date for a shim that mishandles 3 to 6 arguments) */
+  function mk(y, m, d, h) { var x = new Date(0); x.setFullYear(Number(y), Number(m), Number(d)); x.setHours(h == null ? 12 : Number(h), 0, 0, 0); return x; }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function parseDay(s) { if (!s) return null; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s)); return m ? mk(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12) : null; }
+  function today() { var d = new Date(); return mk(d.getFullYear(), d.getMonth(), d.getDate(), 12); }
+  function addDays(d, n) { var x = new Date(d.getTime()); x.setDate(x.getDate() + n); return x; }
+  function monthStart(d) { return mk(d.getFullYear(), d.getMonth(), 1, 12); }
+  function addMonths(d, n) { return mk(d.getFullYear(), d.getMonth() + n, 1, 12); }
+  function sameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+  function fmtTime(d) { return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' }).replace(':00', '').replace(/\s?([ap])\.?m\.?/i, function (x, p) { return p.toLowerCase() + 'm'; }); }
+  function fmtDate(d, opt) { return d.toLocaleDateString('en-CA', opt || { weekday: 'short', month: 'short', day: 'numeric' }); }
+  function money(n) { return '$' + Number(n || 0).toLocaleString('en-CA', { maximumFractionDigits: 0 }); }
+  function kMoney(n) { n = Number(n || 0); return n >= 1000 ? '$' + (Math.round(n / 100) / 10).toString().replace(/\.0$/, '') + 'K' : money(n); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+
+  var css = document.createElement('style');
+  css.id = 'wa124css';
+  css.textContent = ''
+    + '#calendar,#fundevents{max-width:1320px;}'
+    + '#w124cal,#w124fund,#w124sheet{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '.w124i{width:18px;height:18px;flex:0 0 auto;display:inline-block;vertical-align:middle;}'
+    + '.w124btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:' + BODY + ';font-size:13.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:11px;padding:9px 15px;cursor:pointer;text-decoration:none !important;line-height:1.1;}'
+    + '.w124btn:hover{box-shadow:0 6px 16px rgba(16,63,57,.2);}'
+    + '.w124btn[disabled]{opacity:.55;cursor:default;box-shadow:none;}'
+    + '.w124btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w124btn.ghost:hover{background:rgba(16,63,57,.06);box-shadow:none;}'
+    + '.w124btn.sm{font-size:12.5px;padding:7px 11px;border-radius:9px;}'
+    + '.w124btn.icon{padding:8px;border-radius:10px;}'
+    + '.w124lnk{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}'
+    + '.w124lnk:hover{text-decoration:underline;}'
+    + '.w124card{background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';padding:18px 20px;}'
+    + '.w124card h3{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 12px;display:flex;align-items:center;gap:8px;justify-content:space-between;}'
+    + '.w124card h3 .lnk{font-size:11.5px;letter-spacing:.3px;text-transform:none;font-weight:600;color:var(--wa-muted);cursor:pointer;}'
+    + '.w124card h3 .lnk:hover{color:' + GREEN + ';}'
+    + '.w124empty{font-size:13px;color:var(--wa-muted);line-height:1.5;margin:0;}'
+    + '.w124seg{display:inline-flex;background:rgba(16,63,57,.08);border-radius:12px;padding:3px;gap:2px;}'
+    + '.w124seg a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:' + GREEN + ';padding:7px 13px;border-radius:9px;cursor:pointer;white-space:nowrap;}'
+    + '.w124seg a.on{background:var(--wa-card,#FFFAF2);box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '.w124seg a .w124i{width:15px;height:15px;}'
+    + '.w124chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--bg);border:1px solid transparent;border-radius:999px;padding:6px 12px 6px 10px;cursor:pointer;white-space:nowrap;user-select:none;transition:opacity .12s;}'
+    + '.w124chip i{width:9px;height:9px;border-radius:50%;background:var(--c);display:inline-block;}'
+    + '.w124chip .n{font-size:11px;opacity:.7;}'
+    + '.w124chip.off{background:transparent;border-color:rgba(16,63,57,.16);color:var(--wa-muted);}'
+    + '.w124chip.off i{background:transparent;box-shadow:inset 0 0 0 2px var(--c);}'
+    /* the calendar */
+    + '.w124bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 12px;}'
+    + '.w124bar .sp{flex:1 1 auto;}'
+    + '.w124bar h2{font-size:26px;font-weight:700;letter-spacing:-.4px;margin:0 6px;color:var(--wa-text,' + INK + ');text-transform:none;min-width:190px;}'
+    + '.w124layers{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px;}'
+    + '.w124wrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:18px;align-items:start;}'
+    + '.w124band{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:10px 12px;border-radius:14px;background:rgba(220,165,39,.09);}'
+    + '.w124band .lb{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#6b4d05;margin-right:4px;}'
+    + '.w124band a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#5a4104;background:var(--wa-card,#FFFAF2);border-radius:999px;padding:5px 11px;cursor:pointer;border:1px solid rgba(220,165,39,.35);}'
+    + '.w124band a small{font-weight:500;color:#8a6c1c;}'
+    + '.w124grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}'
+    + '.w124dow{font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--wa-muted);font-weight:700;text-align:center;padding:0 0 2px;}'
+    + '.w124cell{min-height:112px;border-radius:12px;background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.07);padding:6px 6px 7px;display:flex;flex-direction:column;gap:3px;min-width:0;}'
+    + '.w124cell.out{background:transparent;border-color:rgba(16,63,57,.05);}'
+    + '.w124cell.out .dn{opacity:.4;}'
+    + '.w124cell .dn{font-size:12.5px;font-weight:700;color:var(--wa-text,' + INK + ');width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin:0 0 1px;}'
+    + '.w124cell.today .dn{background:' + GOLD + ';color:' + GREEN + ';}'
+    + '.w124cell.wk{background:rgba(255,250,242,.55);}'
+    + '.w124ev{display:flex;align-items:center;gap:5px;font-size:11.5px;line-height:1.25;padding:3px 6px;border-radius:7px;background:var(--bg);color:var(--ink);cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;border-left:3px solid var(--c);}'
+    + '.w124ev:hover{filter:brightness(.96);}'
+    + '.w124ev b{font-weight:700;flex:0 0 auto;}'
+    + '.w124ev span{overflow:hidden;text-overflow:ellipsis;}'
+    + '.w124ev.past{opacity:.62;}'
+    + '.w124ev.x{text-decoration:line-through;opacity:.5;}'
+    + '.w124ev .w124i{width:12px;height:12px;flex:0 0 auto;}'
+    + '.w124more{font-size:11px;font-weight:700;color:var(--wa-muted);cursor:pointer;padding:1px 6px;}'
+    + '.w124more:hover{color:' + GREEN + ';}'
+    /* agenda */
+    + '.w124ag{background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';overflow:hidden;}'
+    + '.w124agd{display:grid;grid-template-columns:92px minmax(0,1fr);gap:12px;padding:12px 18px;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w124agd:first-child{border-top:0;}'
+    + '.w124agd.today{background:rgba(220,165,39,.07);}'
+    + '.w124agd .dd b{display:block;font-family:' + HEAD + ';font-size:26px;font-weight:600;line-height:1;color:' + GREEN + ';}'
+    + '.w124agd .dd span{font-size:11.5px;color:var(--wa-muted);text-transform:uppercase;letter-spacing:.8px;font-weight:700;}'
+    + '.w124row{display:grid;grid-template-columns:74px minmax(0,1fr);gap:10px;align-items:start;padding:6px 8px;border-radius:10px;cursor:pointer;}'
+    + '.w124row:hover{background:rgba(16,63,57,.04);}'
+    + '.w124row .tm{font-size:12px;color:var(--wa-muted);font-weight:600;padding-top:2px;}'
+    + '.w124row .tt{font-size:14px;font-weight:700;line-height:1.3;display:flex;align-items:center;gap:7px;}'
+    + '.w124row .tt i{width:9px;height:9px;border-radius:50%;background:var(--c);flex:0 0 auto;}'
+    + '.w124row .mm{font-size:12px;color:var(--wa-muted);margin-top:2px;line-height:1.4;}'
+    /* side */
+    + '.w124side{display:flex;flex-direction:column;gap:14px;position:sticky;top:12px;}'
+    + '.w124up{display:flex;flex-direction:column;gap:4px;}'
+    + '.w124up .w124row{grid-template-columns:62px minmax(0,1fr);}'
+    + '.w124bd{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13.5px;}'
+    + '.w124bd .av{width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:rgba(179,64,47,.12);color:' + FLAG + ';flex:0 0 auto;font-size:11px;font-weight:700;}'
+    + '.w124bd b{font-weight:700;}'
+    + '.w124bd > span:last-child{margin-left:auto;font-size:12px;color:var(--wa-muted);white-space:nowrap;}'
+    + '.w124bd.me > span:last-child{color:' + FLAG + ';font-weight:700;}'
+    /* sheet */
+    + '#w124sheet{position:fixed;inset:0;z-index:2147482100;display:none;}'
+    + '#w124sheet.on{display:flex;align-items:center;justify-content:center;}'
+    + '#w124sheet .bk{position:absolute;inset:0;background:rgba(16,32,30,.34);animation:w124fade .18s ease both;}'
+    + '#w124sheet .pane{position:relative;width:min(560px,calc(100vw - 24px));max-height:calc(100vh - 40px);overflow-y:auto;background:var(--wa-card,#FFFAF2);border-radius:20px;box-shadow:0 30px 80px rgba(16,32,30,.28);padding:22px 24px 24px;animation:w124pop .22s cubic-bezier(.2,.9,.3,1) both;}'
+    + '#w124sheet .top{display:flex;align-items:center;gap:8px;margin:0 0 6px;}'
+    + '#w124sheet .top .sp{flex:1 1 auto;}'
+    + '#w124sheet .x{width:34px;height:34px;border-radius:50%;border:0;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;display:inline-flex;align-items:center;justify-content:center;}'
+    + '#w124sheet h2{font-size:22px;font-weight:700;letter-spacing:-.3px;line-height:1.2;margin:4px 0 8px;color:var(--wa-text,' + INK + ');text-transform:none;}'
+    + '#w124sheet .kv{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px 10px;align-items:start;font-size:14px;line-height:1.5;margin:12px 0 0;}'
+    + '#w124sheet .kv .w124i{color:var(--wa-muted);margin-top:2px;}'
+    + '#w124sheet .note{font-size:13.5px;line-height:1.55;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;margin:12px 0 0;white-space:pre-wrap;}'
+    + '#w124sheet .acts{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0;}'
+    + '#w124sheet .tag{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:3px 10px;background:var(--bg);color:var(--ink);}'
+    + '#w124sheet label.f{display:block;font-size:12.5px;font-weight:600;margin:14px 0 5px;}'
+    + '#w124sheet label.f .op{font-weight:500;color:var(--wa-muted);margin-left:4px;}'
+    + '#w124sheet input[type=text],#w124sheet input[type=date],#w124sheet input[type=number],#w124sheet select,#w124sheet textarea{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:14px;padding:9px 11px;border:1px solid rgba(16,63,57,.18);border-radius:10px;background:var(--wa-card,#FFFAF2);outline:none;}'
+    + '#w124sheet textarea{min-height:80px;resize:vertical;line-height:1.5;}'
+    + '#w124sheet input:focus,#w124sheet select:focus,#w124sheet textarea:focus{border-color:' + GOLD + ';box-shadow:0 0 0 4px rgba(220,165,39,.18);}'
+    + '#w124sheet .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}'
+    + '#w124sheet .radios{display:flex;flex-direction:column;gap:6px;}'
+    + '#w124sheet .radios label{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;padding:9px 11px;border:1px solid rgba(16,63,57,.12);border-radius:10px;cursor:pointer;}'
+    + '#w124sheet .radios label span{display:block;font-size:12px;color:var(--wa-muted);}'
+    + '#w124sheet .radios input{margin-top:3px;accent-color:' + GREEN + ';}'
+    + '#w124sheet .err{color:' + FLAG + ';font-size:13px;margin:10px 0 0;}'
+    + '@keyframes w124fade{from{opacity:0;}to{opacity:1;}}'
+    + '@keyframes w124pop{from{opacity:0;transform:translateY(10px) scale(.98);}to{opacity:1;transform:none;}}'
+    /* fundraising events */
+    + '.w124goals{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:center;}'
+    + '.w124goals .big{font-family:' + HEAD + ';font-size:40px;font-weight:600;line-height:1;color:' + GREEN + ';}'
+    + '.w124goals .big small{font-family:' + BODY + ';font-size:13px;font-weight:600;color:var(--wa-muted);margin-left:8px;}'
+    + '.w124meter{position:relative;height:14px;border-radius:7px;background:rgba(16,63,57,.08);margin:14px 0 22px;}'
+    + '.w124meter .fill{position:absolute;left:0;top:0;bottom:0;border-radius:7px;background:linear-gradient(90deg,' + GOLD + ',#E9C35E);}'
+    + '.w124meter .tick{position:absolute;top:-4px;bottom:-4px;width:2px;background:rgba(16,63,57,.35);}'
+    + '.w124meter .tick span{position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--wa-muted);white-space:nowrap;}'
+    + '.w124meter .tick span em{font-style:normal;}'
+    + '.w124gnotes{font-size:13px;line-height:1.55;color:var(--wa-text,' + INK + ');margin:0;padding:0;list-style:none;}'
+    + '.w124gnotes li{position:relative;padding:0 0 8px 16px;}'
+    + '.w124gnotes li::before{content:"";position:absolute;left:2px;top:8px;width:6px;height:6px;border-radius:50%;background:' + GOLD + ';}'
+    + '.w124sw{overflow-x:auto;padding-bottom:4px;}.w124sw > div{min-width:760px;}'
+    + '.w124strip{position:relative;display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:2px;margin:6px 0 0;}'
+    + '.w124strip .m{font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--wa-muted);text-align:center;padding:4px 0;border-radius:6px;background:rgba(16,63,57,.04);}'
+    + '.w124strip .m.fy{box-shadow:inset 2px 0 0 ' + GREEN + ';}'
+    + '.w124strip .m.now{background:rgba(220,165,39,.22);color:#6b4d05;}'
+    + '.w124lane{grid-column:1/-1;display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:2px;}'
+    + '.w124lane a{display:block;font-size:11px;font-weight:700;line-height:1.2;padding:4px 7px;border-radius:7px;color:#5a4104;background:rgba(220,165,39,.22);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;border:1px solid rgba(220,165,39,.4);}'
+    + '.w124lane a.done{background:rgba(16,63,57,.08);color:' + GREEN + ';border-color:rgba(16,63,57,.15);}'
+    + '.w124lane a.idea{background:transparent;border-style:dashed;color:var(--wa-muted);}'
+    + '.w124season{margin:26px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}'
+    + '.w124season h3{font-size:20px;font-weight:700;letter-spacing:-.2px;margin:0;color:var(--wa-text,' + INK + ');text-transform:none;}'
+    + '.w124season span{font-size:13px;color:#8a6c1c;font-weight:600;}'
+    + '.w124season .sp{flex:1 1 auto;}'
+    + '.w124evs{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;}'
+    + '.w124fe{background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.08);border-radius:18px;box-shadow:' + SH1 + ';padding:16px 18px;display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:transform .15s,box-shadow .15s;min-width:0;}'
+    + '.w124fe:hover{transform:translateY(-2px);box-shadow:0 2px 6px rgba(16,63,57,.08),0 18px 44px rgba(16,63,57,.12);}'
+    + '.w124fe .hd{display:flex;align-items:center;gap:8px;}'
+    + '.w124fe .hd .sp{flex:1 1 auto;}'
+    + '.w124fe .st{font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:3px 9px;}'
+    + '.w124fe .when{font-size:12px;font-weight:700;color:#8a6c1c;display:inline-flex;align-items:center;gap:5px;}'
+    + '.w124fe .when .w124i{width:14px;height:14px;}'
+    + '.w124fe h4{font-size:17px;font-weight:700;letter-spacing:-.2px;margin:0;line-height:1.25;color:var(--wa-text,' + INK + ');}'
+    + '.w124fe .pt{font-size:12.5px;color:var(--wa-muted);line-height:1.45;}'
+    + '.w124fe .pt b{font-weight:600;color:var(--wa-text);}'
+    + '.w124fe .tg{font-size:13px;font-weight:700;color:' + GREEN + ';display:flex;gap:6px;align-items:center;flex-wrap:wrap;}'
+    + '.w124fe .tg .raised{color:#1d6b5d;}'
+    + '.w124fe .nt{font-size:12.5px;line-height:1.5;color:var(--wa-text,' + INK + ');opacity:.85;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;}'
+    + '.w124fe .ft{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;padding-top:4px;font-size:12px;}'
+    + '.w124fe .warn{font-size:12px;font-weight:700;color:' + FLAG + ';}'
+    + '.w124ideas{display:flex;gap:8px;flex-wrap:wrap;}'
+    + '.w124ideas a{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--wa-text,' + INK + ');background:var(--wa-card,#FFFAF2);border:1px dashed rgba(16,63,57,.25);border-radius:999px;padding:7px 13px;cursor:pointer;}'
+    + '.w124ideas a:hover{border-color:' + GOLD + ';}'
+    + '.w124bpill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:rgba(179,64,47,.1);color:' + FLAG + ';cursor:pointer;border:0;font-family:' + BODY + ';}'
+    + '.w124bpill .w124i{width:13px;height:13px;}'
+    + '.w124bpill.add{background:transparent;border:1px dashed rgba(179,64,47,.45);}'
+    + '@media (max-width:1100px){.w124wrap{grid-template-columns:1fr;}.w124side{position:static;}}'
+    + '@media (max-width:760px){.w124cell{min-height:64px;padding:4px;}.w124ev{font-size:0;padding:0;height:7px;border-left:0;border-radius:4px;background:var(--c);}.w124ev *{display:none;}.w124more{font-size:10px;padding:0 2px;}.w124bar h2{font-size:21px;min-width:0;}.w124goals{grid-template-columns:1fr;}.w124meter .tick span em{display:none;}.w124agd{grid-template-columns:64px minmax(0,1fr);padding:10px 12px;}.w124row{grid-template-columns:60px minmax(0,1fr);}#w124sheet.on{align-items:flex-end;}#w124sheet .pane{width:100vw;border-radius:20px 20px 0 0;max-height:88vh;}#w124sheet .two{grid-template-columns:1fr;}}'
+    + '@media (prefers-reduced-motion: reduce){#w124sheet .bk,#w124sheet .pane{animation:none !important;}.w124fe{transition:none;}}';
+  document.head.appendChild(css);
+
+  /* ---------- state ---------- */
+  var C = {
+    view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
+    layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
+    fund: [], goals: null, bdays: [], projects: [], loadedBase: 0, loadingBase: null,
+    range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
+    sheet: null, mine: null, idx: {}, scrollOnce: true
+  };
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
+  function me() {
+    var email = ''; try { email = lower((typeof USER !== 'undefined' && USER && USER.email) || ''); } catch (e) { email = ''; }
+    var name = ''; try { name = (typeof who === 'function') ? String(who() || '') : ''; } catch (e) { name = ''; }
+    var m = members().filter(function (x) { return email && lower(x.email) === email; })[0] || null;
+    return { email: email, name: name || (m && m.name) || (email ? email.split('@')[0] : ''), dept: m ? m.department : null, id: m ? m.id : null };
+  }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function boardOk() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
+  function canEditFund() { if (!staffOk()) return false; if (isLeader()) return true; return me().dept === 'fundraising'; }
+  function memberByEmail(em) { em = lower(em); return members().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+
+  /* ---------- the always-there data: fundraising events, goals, birthdays ---------- */
+  async function loadBase(force) {
+    if (C.loadingBase) return C.loadingBase;
+    if (C.loadedBase && !force && Date.now() - C.loadedBase < 60000) return;
+    C.loadingBase = (async function () {
+      var a = await Promise.all([
+        q(db.from('fund_events').select('*').order('sort').order('start_date')),
+        q(db.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle()),
+        staffOk() ? q(db.from('hub_birthdays').select('*')) : Promise.resolve({ data: [] }),
+        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] })
+      ]);
+      if (a[0].data) C.fund = a[0].data;
+      C.goals = (a[1].data && a[1].data.value) || C.goals || { minimum: 10000, healthy: 15000, target: 20000, notes: [], planning: [] };
+      if (a[2].data) C.bdays = a[2].data;
+      if (a[3].data) C.projects = a[3].data;
+      C.loadedBase = Date.now();
+    })();
+    try { await C.loadingBase; } finally { C.loadingBase = null; }
+  }
+  function myBirthday() { var em = me().email; return C.bdays.filter(function (b) { return lower(b.email) === em; })[0] || null; }
+
+  /* ---------- the range data: meetings, posts, servings ---------- */
+  function rangeFor() {
+    var from, to;
+    if (C.view === 'month') { var s = monthStart(C.anchor); var dow = (s.getDay() + 6) % 7; from = addDays(s, -dow); to = addDays(from, 42); }
+    else { from = monthStart(C.anchor); to = addMonths(C.anchor, 1); }
+    var t = today(); var sideTo = addDays(t, 35);
+    var f = from < t ? from : t, e = to > sideTo ? to : sideTo;
+    return { from: from, to: to, qFrom: mk(f.getFullYear(), f.getMonth(), f.getDate(), 0), qTo: mk(e.getFullYear(), e.getMonth(), e.getDate() + 1, 0) };
+  }
+  async function loadRange() {
+    var r = rangeFor(); var key = ymd(r.qFrom) + '/' + ymd(r.qTo);
+    if (C.rangeKey === key) return;
+    if (C.loadingRange && C.loadingKey === key) return C.loadingRange;
+    C.loadingKey = key;
+    C.loadingRange = (async function () {
+      var fromIso = r.qFrom.toISOString(), toIso = r.qTo.toISOString();
+      var a = await Promise.all([
+        q(db.rpc('calendar_my_meetings', { p_from: fromIso, p_to: toIso })),
+        staffOk() || boardOk() ? q(db.from('social_posts').select('id, platform, url, kind, caption, published_at, views, likes, comments').gte('published_at', fromIso).lt('published_at', toIso).in('platform', ['instagram', 'facebook', 'linkedin', 'tiktok']).order('published_at').limit(400)) : Promise.resolve({ data: [] }),
+        staffOk() || boardOk() ? q(db.from('content_posts').select('id, title, platforms, format, scheduled_at, status, published_at, campaign, owner').gte('scheduled_at', fromIso).lt('scheduled_at', toIso).order('scheduled_at').limit(300)) : Promise.resolve({ data: [] }),
+        staffOk() ? q(db.from('volunteer_events').select('id, code, event_date, title, kind, location, status, planned_meals').gte('event_date', ymd(r.qFrom)).lt('event_date', ymd(r.qTo)).order('event_date').limit(200)) : Promise.resolve({ data: [] })
+      ]);
+      var meet = a[0].data;
+      if (!Array.isArray(meet) || a[0].error) meet = await myMeetingsFallback(fromIso, toIso);
+      C.meetings = meet || [];
+      C.posts = (a[1].data || []).filter(function (p) { return p.published_at && p.published_at >= fromIso && p.published_at < toIso; });
+      C.planned = (a[2].data || []).filter(function (p) { return p.scheduled_at && ['published', 'live', 'cancelled', 'deleted'].indexOf(lower(p.status)) < 0; });
+      C.vol = (a[3].data || []).filter(function (v) { return v.event_date && v.event_date >= ymd(r.qFrom) && v.event_date < ymd(r.qTo); });
+      C.rangeKey = key;
+    })();
+    try { await C.loadingRange; } finally { C.loadingRange = null; }
+  }
+  /* before calendar_my_meetings exists (or in the offline harness): the same filter on this side */
+  async function myMeetingsFallback(fromIso, toIso) {
+    var res = await q(db.from('hub_events').select('*').gte('start_at', fromIso).lt('start_at', toIso).order('start_at').limit(500));
+    var em = me().email; if (!em) return [];
+    var keys = [em, em.split('@')[0].replace(/\./g, '') + '@' + em.split('@')[1]];
+    return (res.data || []).filter(function (e) {
+      var st = new Date(e.start_at).getTime(); if (!(st >= new Date(fromIso).getTime() && st < new Date(toIso).getTime())) return false;
+      if (lower(e.status) === 'cancelled') return false;
+      var att = (e.attendee_emails || []).map(lower);
+      return keys.indexOf(lower(e.organizer)) >= 0 || att.some(function (x) { return keys.indexOf(x) >= 0; });
+    });
+  }
+
+  /* ---------- items ---------- */
+  function fundWhen(f) {
+    var s = parseDay(f.start_date), e = parseDay(f.end_date);
+    if (f.precision === 'day' && s) return e && !sameDay(s, e) ? fmtDate(s, { month: 'short', day: 'numeric' }) + ' to ' + fmtDate(e, { month: 'short', day: 'numeric', year: 'numeric' }) : fmtDate(s, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (f.precision === 'month' && s) return MONTHS[s.getMonth()] + ' ' + s.getFullYear();
+    if (f.precision === 'season' && s) return (f.timing ? f.timing.replace(/\s*\(([^)]*)\)$/, '') : 'Season') + ' ' + s.getFullYear() + (/\(([^)]*)\)$/.test(f.timing || '') ? ' (' + /\(([^)]*)\)$/.exec(f.timing)[1] + ')' : '');
+    if (f.precision === 'range' && s && e) { var yrs = s.getFullYear() === e.getFullYear() ? ' ' + e.getFullYear() : ''; return (f.timing ? f.timing + yrs : MONTHS[s.getMonth()].slice(0, 3) + ' ' + (yrs ? '' : s.getFullYear() + ' ') + 'to ' + MONTHS[e.getMonth()].slice(0, 3) + ' ' + e.getFullYear()); }
+    return f.timing || (f.precision === 'flexible' ? 'Flexible' : 'Not yet scheduled');
+  }
+  function items(from, to) {
+    var out = [], L = C.layers, t0 = today();
+    if (L.fund) C.fund.forEach(function (f) {
+      if (f.precision !== 'day' || f.status === 'cancelled') return;
+      var s = parseDay(f.start_date); if (!s) return; var e = parseDay(f.end_date) || s;
+      for (var d = new Date(s.getTime()); d <= e; d = addDays(d, 1)) if (d >= from && d < to) out.push({ k: 'fund', id: 'f' + f.id, ref: f, day: ymd(d), allDay: true, title: f.title, sub: f.partners || '', past: d < t0 });
+    });
+    if (L.meet) C.meetings.forEach(function (m) {
+      var s = new Date(m.start_at); if (isNaN(s.getTime())) return;
+      var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12);
+      if (local < from || local >= to) return;
+      out.push({ k: 'meet', id: 'm' + m.id, ref: m, day: ymd(local), at: s, allDay: !!m.all_day, time: m.all_day ? '' : fmtTime(s), title: m.summary || 'Meeting', sub: m.location || '', past: new Date(m.end_at || m.start_at) < new Date() });
+    });
+    if (L.post) {
+      C.posts.forEach(function (p) { var s = new Date(p.published_at); var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12); if (local < from || local >= to) return; out.push({ k: 'post', id: 'p' + p.id, ref: p, day: ymd(local), at: s, time: fmtTime(s), title: (PLATFORM[p.platform] || p.platform) + ': ' + clip(p.caption || 'Post', 60), sub: 'Published', past: true }); });
+      C.planned.forEach(function (p) { var s = new Date(p.scheduled_at); var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12); if (local < from || local >= to) return; out.push({ k: 'post', id: 'c' + p.id, ref: p, planned: true, day: ymd(local), at: s, time: fmtTime(s), title: p.title || 'Planned post', sub: (p.status ? p.status.charAt(0).toUpperCase() + p.status.slice(1) : 'Planned') + ((p.platforms || []).length ? ' for ' + p.platforms.map(function (x) { return PLATFORM[x] || x; }).join(', ') : ''), past: s < new Date() }); });
+    }
+    if (L.vol) C.vol.forEach(function (v) {
+      var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
+      var kind = lower(v.kind || 'service');
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? 'Serving' : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+    });
+    if (L.bday) C.bdays.forEach(function (b) {
+      for (var y = from.getFullYear(); y <= to.getFullYear(); y++) {
+        var d = mk(y, b.month - 1, b.day, 12); if (d.getMonth() !== b.month - 1) continue;
+        if (d < from || d >= to) continue;
+        var m = memberByEmail(b.email); var nm = m ? m.name : b.email.split('@')[0];
+        out.push({ k: 'bday', id: 'b' + b.email + y, ref: b, person: m, day: ymd(d), allDay: true, title: nm + '\u2019s birthday', sub: '', past: d < t0, mine: lower(b.email) === me().email });
+      }
+    });
+    out.sort(function (a, b) { if (a.day !== b.day) return a.day < b.day ? -1 : 1; var ra = a.allDay ? 0 : 1, rb = b.allDay ? 0 : 1; if (ra !== rb) return ra - rb; return (a.at ? a.at.getTime() : 0) - (b.at ? b.at.getTime() : 0); });
+    return out;
+  }
+  /* month-long, range and season fundraising events that overlap a window: the band over the grid */
+  function bands(from, to) {
+    if (!C.layers.fund) return [];
+    return C.fund.filter(function (f) {
+      if (['month', 'range', 'season'].indexOf(f.precision) < 0 || f.status === 'cancelled') return false;
+      var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; if (!s) return false;
+      return s < to && e >= from;
+    });
+  }
+
+  /* ---------- the master calendar (#calendar) ---------- */
+  function mast(id, crumb, title, blurb) {
+    var sec = document.getElementById(id); if (!sec) return;
+    var m = sec.querySelector(':scope > .w118mast');
+    if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w124', id); sec.insertBefore(m, sec.firstChild); }
+    var html = '<div class="crumb">' + E(crumb) + '</div><h1>' + E(title) + '</h1><p>' + E(blurb) + '</p>';
+    if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
+  }
+  function calHost() {
+    var sec = document.getElementById('calendar'); if (!sec) return null;
+    /* the board has no Home: the calendar sits in Strategy, without the volunteering and birthday layers */
+    var bv = boardOk() && !staffOk();
+    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? 'Fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings, marketing posts, volunteering and birthdays, in one place.');
+    var h = document.getElementById('w124cal');
+    if (!h) { h = document.createElement('div'); h.id = 'w124cal'; sec.appendChild(h); }
+    return h;
+  }
+  function chipCounts(list) { var c = {}; list.forEach(function (x) { c[x.k] = (c[x.k] || 0) + 1; }); return c; }
+  function evPill(it, compact) {
+    var L = LAYER[it.k];
+    return '<div class="w124ev' + (it.past ? ' past' : '') + (it.cancelled ? ' x' : '') + '" data-w124it="' + E(it.id) + '" style="--c:' + L.c + ';--bg:' + L.bg + ';--ink:' + L.ink + '" title="' + E(it.title + (it.time ? ', ' + it.time : '')) + '" tabindex="0" role="button">'
+      + (it.k === 'bday' ? I('cake') : '') + (it.time && !compact ? '<b>' + E(it.time) + '</b>' : '') + '<span>' + E(it.title) + '</span></div>';
+  }
+  function monthHtml(list) {
+    var s = monthStart(C.anchor), dow = (s.getDay() + 6) % 7, start = addDays(s, -dow), t = today();
+    var byDay = {}; list.forEach(function (it) { (byDay[it.day] = byDay[it.day] || []).push(it); });
+    var html = '<div class="w124grid">' + WD.map(function (d) { return '<div class="w124dow">' + d + '</div>'; }).join('');
+    for (var i = 0; i < 42; i++) {
+      var d = addDays(start, i), key = ymd(d), evs = byDay[key] || [];
+      var out = d.getMonth() !== s.getMonth();
+      if (i === 35 && out) break;
+      var shown = evs.slice(0, 3);
+      html += '<div class="w124cell' + (out ? ' out' : '') + (sameDay(d, t) ? ' today' : '') + (((i % 7) >= 5) ? ' wk' : '') + '" data-day="' + key + '"><span class="dn">' + d.getDate() + '</span>'
+        + shown.map(function (it) { return evPill(it, false); }).join('')
+        + (evs.length > 3 ? '<a class="w124more" data-w124day="' + key + '">+' + (evs.length - 3) + ' more</a>' : '') + '</div>';
+    }
+    return html + '</div>';
+  }
+  function rowHtml(it) {
+    var L = LAYER[it.k];
+    return '<div class="w124row" data-w124it="' + E(it.id) + '" style="--c:' + L.c + '" tabindex="0" role="button"><span class="tm">' + (it.allDay ? (it.k === 'bday' ? 'Birthday' : 'All day') : E(it.time || '')) + '</span><div style="min-width:0"><div class="tt"><i></i>' + E(it.title) + '</div>' + (it.sub ? '<div class="mm">' + E(clip(it.sub, 120)) + '</div>' : '') + '</div></div>';
+  }
+  function agendaHtml(list) {
+    var t = today(), tk = ymd(t), byDay = {}, days = [];
+    list.forEach(function (it) { if (!byDay[it.day]) { byDay[it.day] = []; days.push(it.day); } byDay[it.day].push(it); });
+    if (!days.length) return '<div class="w124ag"><p class="w124empty" style="padding:18px 20px">Nothing in ' + E(MONTHS[C.anchor.getMonth()]) + ' with these layers on.</p></div>';
+    /* this month's agenda always has a today row, so you can see where you are */
+    if (!byDay[tk] && C.anchor.getMonth() === t.getMonth() && C.anchor.getFullYear() === t.getFullYear()) { byDay[tk] = []; days.push(tk); days.sort(); }
+    return '<div class="w124ag">' + days.map(function (k) {
+      var d = parseDay(k);
+      return '<div class="w124agd' + (sameDay(d, t) ? ' today' : '') + '" id="w124d' + k + '"><div class="dd"><b>' + d.getDate() + '</b><span>' + E(fmtDate(d, { weekday: 'short' })) + (sameDay(d, t) ? ', today' : '') + '</span></div><div>' + (byDay[k].length ? byDay[k].map(rowHtml).join('') : '<p class="w124empty" style="padding:9px 0">Nothing on today.</p>') + '</div></div>';
+    }).join('') + '</div>';
+  }
+  function bandHtml(from, to) {
+    var bs = bands(from, to); if (!bs.length) return '';
+    return '<div class="w124band"><span class="lb">' + (C.view === 'month' ? 'This month' : 'Also this month') + '</span>' + bs.map(function (f) { return '<a data-w124fund="' + f.id + '">' + I('heart') + E(f.title) + ' <small>' + E(f.precision === 'month' ? 'all ' + MONTHS[parseDay(f.start_date).getMonth()] : (f.timing || '')) + '</small></a>'; }).join('') + '</div>';
+  }
+  function upNext() {
+    var now = new Date(), t = today();
+    var list = items(t, addDays(t, 35)).filter(function (it) { if (it.at) return it.at >= now || (it.day === ymd(t) && !it.past); return it.day >= ymd(t); }).slice(0, 7);
+    list.forEach(function (it) { C.idx[it.id] = it; });
+    if (!list.length) return '<p class="w124empty">Nothing coming up in the next five weeks with these layers on.</p>';
+    return '<div class="w124up">' + list.map(function (it) { var d = parseDay(it.day); var copy = Object.assign({}, it); copy.time = (sameDay(d, t) ? 'Today' : sameDay(d, addDays(t, 1)) ? 'Tomorrow' : fmtDate(d, { month: 'short', day: 'numeric' })) + (it.time ? ' ' + it.time : ''); copy.allDay = false; return rowHtml(copy); }).join('') + '</div>';
+  }
+  function bdaysHtml() {
+    var mo = C.anchor.getMonth(), m0 = me();
+    var list = C.bdays.filter(function (b) { return b.month - 1 === mo; }).sort(function (a, b) { return a.day - b.day; });
+    var mine = myBirthday();
+    var rows = list.map(function (b) { var m = memberByEmail(b.email); var nm = m ? m.name : b.email.split('@')[0]; var isMe = lower(b.email) === m0.email; return '<div class="w124bd' + (isMe ? ' me' : '') + '"' + (m ? ' data-w124person="' + m.id + '" style="cursor:pointer"' : '') + '><span class="av">' + E(initials(nm)) + '</span><b>' + E(nm) + '</b><span>' + E(MONTHS[b.month - 1].slice(0, 3) + ' ' + b.day) + (isMe ? ', you' : '') + '</span></div>'; }).join('');
+    return '<div class="w124card"><h3>Birthdays in ' + E(MONTHS[mo]) + '</h3>' + (rows || '<p class="w124empty">No birthdays this month yet.</p>')
+      + (staffOk() ? '<p class="w124empty" style="margin-top:10px">' + (mine ? 'Yours is on ' + E(MONTHS[mine.month - 1] + ' ' + mine.day) + '. <a class="w124lnk" data-w124bday="1">Change it</a>' : '<a class="w124lnk" data-w124bday="1">+ Add your birthday</a> (month and day only; you choose who sees it).') + '</p>' : '') + '</div>';
+  }
+  function fundSideHtml() {
+    var t = today();
+    var next = C.fund.filter(function (f) { var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; return s && e >= t && f.status !== 'cancelled' && f.status !== 'idea' && f.precision !== 'none'; }).sort(function (a, b) { return String(a.start_date).localeCompare(String(b.start_date)); }).slice(0, 4);
+    return '<div class="w124card"><h3>Fundraising next<span class="lnk" data-w124go="#fundevents">events calendar</span></h3>' + (next.length ? next.map(function (f) { return '<div class="w124row" data-w124fund="' + f.id + '" style="--c:' + LAYER.fund.c + ';grid-template-columns:1fr"><div><div class="tt"><i></i>' + E(f.title) + '</div><div class="mm">' + E(fundWhen(f)) + (f.target_min ? ' \u00b7 target ' + E(kMoney(f.target_min)) + (f.target_max ? ' to ' + E(kMoney(f.target_max)) : '') : '') + '</div></div></div>'; }).join('') : '<p class="w124empty">No fundraising events ahead.</p>') + '</div>';
+  }
+  function calPaint() {
+    var h = calHost(); if (!h) return;
+    var r = rangeFor(), grid = C.view === 'month';
+    var from = grid ? r.from : monthStart(C.anchor), to = grid ? r.to : addMonths(C.anchor, 1);
+    var list = items(from, to);
+    C.idx = {}; list.forEach(function (it) { C.idx[it.id] = it; });
+    var monthOnly = list.filter(function (it) { var d = parseDay(it.day); return d.getMonth() === C.anchor.getMonth(); });
+    var cnt = chipCounts(monthOnly);
+    var chips = LAYERS.filter(function (x) { return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
+    var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
+    var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
+      + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
+      + '<div class="w124layers" role="group" aria-label="Layers">' + chips + '</div>'
+      + '<div class="w124wrap"><div style="min-width:0">' + bandHtml(monthStart(C.anchor), addMonths(C.anchor, 1)) + (grid ? monthHtml(list) : agendaHtml(monthOnly)) + '</div>'
+      + '<div class="w124side"><div class="w124card"><h3>Up next</h3>' + upNext() + '</div>' + fundSideHtml() + (staffOk() ? bdaysHtml() : '') + '</div></div>';
+    h.innerHTML = html;
+    if (!grid && sameDay(monthStart(today()), monthStart(C.anchor))) { var el = document.getElementById('w124d' + ymd(today())); if (el && el.scrollIntoView && C.scrollOnce) { C.scrollOnce = false; el.scrollIntoView({ block: 'center' }); } }
+  }
+  async function calShow() {
+    var h = calHost(); if (!h) return;
+    if (!C.loadedBase) h.innerHTML = '<div class="w124card"><p class="w124empty">Loading the calendar\u2026</p></div>';
+    await loadBase();
+    calPaint();
+    await loadRange();
+    if (onCal()) calPaint();
+  }
+  function onCal() { var a = document.querySelector('.panel.active'); return !!(a && a.id === 'calendar'); }
+  function calItemById(id) { return (C.idx && C.idx[id]) || null; }
+
+  /* ---------- the fundraising events calendar (#fundevents) ---------- */
+  var PLAN_START = mk(2026, 9, 1, 12), PLAN_END = mk(2027, 9, 1, 12);
+  function fundHost() {
+    var sec = document.getElementById('fundevents'); if (!sec) return null;
+    mast('fundevents', tabOk('fundraising') ? 'Fundraising & Finances' : 'Strategy', 'Events calendar', 'The year\u2019s fundraising events, season by season: partners, targets, and where each one stands.');
+    var h = document.getElementById('w124fund');
+    if (!h) { h = document.createElement('div'); h.id = 'w124fund'; sec.appendChild(h); }
+    return h;
+  }
+  function stTag(s) { var x = STATUS[s] || STATUS.planned; return '<span class="st" style="background:' + x[1] + ';color:' + x[2] + '">' + E(x[0]) + '</span>'; }
+  function targetText(f) {
+    if (f.target_min && f.target_max) return 'Target ' + kMoney(f.target_min) + ' to ' + kMoney(f.target_max);
+    if (f.target_min) return 'Target about ' + kMoney(f.target_min);
+    return '';
+  }
+  function pastDue(f) { var e = parseDay(f.end_date) || parseDay(f.start_date); return !!e && e < today() && (f.status === 'planned' || f.status === 'confirmed'); }
+  function feCard(f) {
+    var proj = f.project_id ? C.projects.filter(function (p) { return String(p.id) === String(f.project_id); })[0] : null;
+    var tg = targetText(f);
+    return '<div class="w124fe" data-w124fund="' + f.id + '" tabindex="0" role="button"><div class="hd">' + stTag(f.status) + '<span class="sp"></span><span class="when">' + I('clock') + E(fundWhen(f)) + '</span></div>'
+      + '<h4>' + E(f.title) + '</h4>'
+      + (f.partners ? '<div class="pt"><b>Partners:</b> ' + E(f.partners) + '</div>' : '')
+      + (tg || f.raised != null ? '<div class="tg">' + (tg ? '<span>' + E(tg) + '</span>' : '') + (f.raised != null ? '<span class="raised">' + (tg ? '\u00b7 ' : '') + 'raised ' + E(money(f.raised)) + '</span>' : '') + '</div>' : '')
+      + (f.result_note ? '<div class="nt"><b>Result:</b> ' + E(f.result_note) + '</div>' : (f.notes ? '<div class="nt">' + E(f.notes) + '</div>' : ''))
+      + (pastDue(f) ? '<div class="warn">The date has passed: record how it went.</div>' : '')
+      + '<div class="ft">' + (proj ? '<a class="w124lnk" data-w124go="#project/' + proj.id + '">' + I('board') + ' Project board</a>' : '') + (f.sop_training_id ? '<a class="w124lnk" data-w124go="#training/t/' + f.sop_training_id + '">' + I('doc') + ' SOP</a>' : '') + '</div></div>';
+  }
+  function goalsHtml() {
+    var g = C.goals || {}, target = Number(g.target || 20000), min = Number(g.minimum || 10000), healthy = Number(g.healthy || 15000);
+    var inPlan = function (f) { var s = parseDay(f.start_date); return s && s >= PLAN_START && s < PLAN_END; };
+    var raised = C.fund.filter(inPlan).reduce(function (a, f) { return a + Number(f.raised || 0); }, 0);
+    var kick = C.fund.filter(function (f) { return f.season === 'summer-2026'; }).reduce(function (a, f) { return a + Number(f.raised || 0); }, 0);
+    var planned = C.fund.filter(function (f) { return inPlan(f) && f.status !== 'cancelled' && f.status !== 'idea'; });
+    var lo = planned.reduce(function (a, f) { return a + Number(f.target_min || 0); }, 0), hi = planned.reduce(function (a, f) { return a + Number(f.target_max || f.target_min || 0); }, 0);
+    var pct = function (v) { return Math.max(0, Math.min(100, v / target * 100)); };
+    var notes = (g.notes || []).map(function (n) { return '<li>' + E(n) + '</li>'; }).join('');
+    return '<div class="w124card"><div class="w124goals"><div><h3 style="margin-bottom:6px">Fiscal 2026-27, from October 1</h3>'
+      + '<div class="big">' + E(money(raised)) + '<small>raised of the ' + E(money(target)) + ' target</small></div>'
+      + '<div class="w124meter" title="Raised by the events this fiscal year"><div class="fill" style="width:' + pct(raised).toFixed(1) + '%"></div>'
+      + '<div class="tick" style="left:' + pct(min) + '%"><span>' + E(kMoney(min)) + '<em> minimum</em></span></div><div class="tick" style="left:' + pct(healthy) + '%"><span>' + E(kMoney(healthy)) + '<em> healthy</em></span></div><div class="tick" style="left:calc(100% - 2px)"><span style="left:auto;right:0;transform:none">' + E(kMoney(target)) + '+<em> target</em></span></div></div>'
+      + '<p class="w124empty">' + (lo ? 'The events with a target this year aim at ' + E(kMoney(lo)) + (hi > lo ? ' to ' + E(kMoney(hi)) : '') + '. ' : '') + (kick ? 'The summer 2026 kickoff raised ' + E(money(kick)) + ' (fiscal 2025-26).' : '') + '</p></div>'
+      + '<div><ul class="w124gnotes">' + notes + '</ul></div></div></div>';
+  }
+  function stripHtml() {
+    var months = []; for (var i = 0; i < 14; i++) months.push(mk(2026, 7 + i, 1, 12));
+    var t = today();
+    var head = months.map(function (m, i) { return '<div class="m' + (m.getMonth() === 9 ? ' fy' : '') + (m.getMonth() === t.getMonth() && m.getFullYear() === t.getFullYear() ? ' now' : '') + '" title="' + E(MONTHS[m.getMonth()] + ' ' + m.getFullYear()) + '">' + E(MONTHS[m.getMonth()].slice(0, 3)) + (m.getMonth() === 0 || i === 0 ? ' \u2019' + String(m.getFullYear()).slice(2) : '') + '</div>'; }).join('');
+    var idx = function (d) { return (d.getFullYear() - 2026) * 12 + d.getMonth() - 7; };
+    var evs = C.fund.filter(function (f) { return f.start_date && f.precision !== 'none' && f.precision !== 'flexible' && f.status !== 'cancelled'; }).map(function (f) {
+      var s = parseDay(f.start_date), e = parseDay(f.end_date) || s; return { f: f, a: Math.max(0, idx(s)), b: Math.min(13, idx(e)) };
+    }).filter(function (x) { return x.b >= 0 && x.a <= 13; }).sort(function (x, y) { return x.a - y.a || (y.b - y.a) - (x.b - x.a); });
+    var lanes = [];
+    evs.forEach(function (x) { for (var l = 0; l < lanes.length; l++) { if (lanes[l].every(function (o) { return o.b < x.a || o.a > x.b; })) { lanes[l].push(x); return; } } lanes.push([x]); });
+    var body = lanes.map(function (ln) { return '<div class="w124lane">' + ln.map(function (x) { return '<a data-w124fund="' + x.f.id + '" class="' + (x.f.status === 'done' ? 'done' : x.f.status === 'idea' ? 'idea' : '') + '" style="grid-column:' + (x.a + 1) + ' / ' + (x.b + 2) + '" title="' + E(x.f.title + ', ' + fundWhen(x.f)) + '">' + E(x.f.title) + '</a>'; }).join('') + '</div>'; }).join('');
+    return '<div class="w124card" style="margin-top:14px"><h3>The year at a glance<span class="lnk" data-w124go="#calendar">master calendar</span></h3><div class="w124sw"><div><div class="w124strip">' + head + '</div><div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' + body + '</div></div></div></div>';
+  }
+  function fundPaint() {
+    var h = fundHost(); if (!h) return;
+    var edit = canEditFund();
+    var html = goalsHtml() + stripHtml();
+    SEASONS.forEach(function (s) {
+      var list = C.fund.filter(function (f) { return (f.season || 'backlog') === s[0]; }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+      if (s[0] === 'backlog') {
+        html += '<div class="w124season"><h3>' + E(s[1]) + '</h3><span>' + E(s[2]) + '</span><span class="sp"></span>' + (edit ? '<a class="w124btn ghost sm" data-w124fadd="backlog">' + I('plus') + 'Add an idea</a>' : '') + '</div>'
+          + '<div class="w124ideas">' + (list.length ? list.map(function (f) { return '<a data-w124fund="' + f.id + '" title="' + E(f.notes || '') + '">' + I('spark') + E(f.title) + '</a>'; }).join('') : '<p class="w124empty">No ideas parked yet.</p>') + '</div>';
+        return;
+      }
+      html += '<div class="w124season"><h3>' + E(s[1]) + '</h3><span>' + E(s[2]) + '</span><span class="sp"></span>' + (edit ? '<a class="w124btn ghost sm" data-w124fadd="' + s[0] + '">' + I('plus') + 'Add an event</a>' : '') + '</div>'
+        + (list.length ? '<div class="w124evs">' + list.map(feCard).join('') + '</div>' : '<p class="w124empty">Nothing planned for this season yet.</p>');
+    });
+    var other = C.fund.filter(function (f) { return f.season && !SEASONS.some(function (s) { return s[0] === f.season; }); });
+    if (other.length) html += '<div class="w124season"><h3>Other events</h3></div><div class="w124evs">' + other.map(feCard).join('') + '</div>';
+    var g = C.goals || {};
+    if ((g.planning || []).length) html += '<div class="w124card" style="margin-top:22px"><h3>Planning notes</h3><ul class="w124gnotes">' + g.planning.map(function (n) { return '<li>' + E(n) + '</li>'; }).join('') + '</ul>' + (g.source ? '<p class="w124empty" style="margin-top:6px">From ' + E(g.source) + '.</p>' : '') + '</div>';
+    h.innerHTML = html;
+  }
+  async function fundShow(sub) {
+    var h = fundHost(); if (!h) return;
+    if (!C.loadedBase) h.innerHTML = '<div class="w124card"><p class="w124empty">Loading the events\u2026</p></div>';
+    await loadBase();
+    fundPaint();
+    if (sub && /^\d+$/.test(sub)) { var f = fundById(sub); if (f) openFund(f); }
+  }
+  function onFund() { var a = document.querySelector('.panel.active'); return !!(a && a.id === 'fundevents'); }
+  function fundById(id) { return C.fund.filter(function (f) { return String(f.id) === String(id); })[0] || null; }
+
+  /* ---------- the sheet: details and the two forms ---------- */
+  var lastFocus = null;
+  function sheetEl() {
+    var s = document.getElementById('w124sheet');
+    if (!s) { s = document.createElement('div'); s.id = 'w124sheet'; s.innerHTML = '<div class="bk" data-w124close></div><div class="pane" role="dialog" aria-modal="true" aria-label="Details"></div>'; document.body.appendChild(s); }
+    return s;
+  }
+  function openSheet(html, kind) {
+    if (!C.sheet) lastFocus = document.activeElement;
+    C.sheet = { kind: kind || 'view' };
+    var s = sheetEl(); s.querySelector('.pane').innerHTML = html; s.classList.add('on');
+    setTimeout(function () { var f = s.querySelector('.pane input, .pane select, .pane .x'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }, 30);
+  }
+  function closeSheet() {
+    var s = document.getElementById('w124sheet'); if (s) { s.classList.remove('on'); s.querySelector('.pane').innerHTML = ''; }
+    C.sheet = null;
+    if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } } lastFocus = null;
+  }
+  function top(tag) { return '<div class="top">' + (tag || '') + '<span class="sp"></span><button type="button" class="x" data-w124close aria-label="Close">' + I('x') + '</button></div>'; }
+  function layerTag(k) { var L = LAYER[k]; return '<span class="tag" style="--bg:' + L.bg + ';--ink:' + L.ink + '">' + I(L.icon) + E(L.l.replace(/^My /, '')) + '</span>'; }
+  function kv(icon, html) { return '<span>' + I(icon) + '</span><div>' + html + '</div>'; }
+  function openItem(it) {
+    if (!it) return;
+    if (it.k === 'fund') { openFund(it.ref); return; }
+    var r = it.ref, html = top(layerTag(it.k)) + '<h2>' + E(it.title) + '</h2>', rows = [], acts = [];
+    var d = parseDay(it.day);
+    if (it.k === 'meet') {
+      var s = new Date(r.start_at), e = r.end_at ? new Date(r.end_at) : null;
+      rows.push(kv('clock', E(fmtDate(s, { weekday: 'long', month: 'long', day: 'numeric' })) + (r.all_day ? ', all day' : ', ' + E(fmtTime(s)) + (e ? ' to ' + E(fmtTime(e)) : ''))));
+      if (r.location) rows.push(kv('pin', E(r.location)));
+      var att = (r.attendee_emails || []).filter(function (x) { return !/hub@|loom@|admin@|gserviceaccount|\.test-google-a\.com$/i.test(x); });
+      var names = att.map(function (x) { var m = memberByEmail(x); return m ? m.name : x.split('@')[0]; });
+      if (names.length) rows.push(kv('people', E(names.slice(0, 10).join(', ')) + (names.length > 10 ? ' and ' + (names.length - 10) + ' more' : '')));
+      if (r.organizer) { var om = memberByEmail(r.organizer); rows.push(kv('spark', 'Organized by ' + E(om ? om.name : r.organizer))); }
+      if (r.meet_link) acts.push('<a class="w124btn" href="' + E(r.meet_link) + '" target="_blank" rel="noopener">' + I('video') + 'Join</a>');
+      if (r.html_link) acts.push('<a class="w124btn ghost" href="' + E(r.html_link) + '" target="_blank" rel="noopener">Open in Google Calendar</a>');
+      if (r.department) acts.push('<a class="w124btn ghost" data-w124go="#team/' + E(r.department) + '/agenda">Agenda</a>');
+      if (r.description) html += '<div class="note">' + E(clip(String(r.description).replace(/<[^>]+>/g, ' '), 600)) + '</div>';
+    } else if (it.k === 'post') {
+      if (it.planned) {
+        rows.push(kv('clock', E(fmtDate(it.at, { weekday: 'long', month: 'long', day: 'numeric' })) + ', ' + E(fmtTime(it.at))));
+        rows.push(kv('megaphone', E(it.sub)));
+        if (r.campaign) rows.push(kv('target', 'Campaign: ' + E(r.campaign)));
+        if (r.owner) rows.push(kv('people', 'Owner: ' + E(r.owner)));
+        acts.push('<a class="w124btn" data-w124go="#contentcal/' + E(r.id) + '">Open in the content calendar</a>');
+      } else {
+        rows.push(kv('clock', 'Published ' + E(fmtDate(it.at, { weekday: 'long', month: 'long', day: 'numeric' })) + ', ' + E(fmtTime(it.at))));
+        var stats = [['views', 'views'], ['likes', 'likes'], ['comments', 'comments']].filter(function (x) { return r[x[0]] != null; }).map(function (x) { return Number(r[x[0]]).toLocaleString('en-CA') + ' ' + x[1]; });
+        if (stats.length) rows.push(kv('spark', E(stats.join(' \u00b7 '))));
+        if (r.caption) html += '<div class="note">' + E(clip(r.caption, 500)) + '</div>';
+        if (r.url) acts.push('<a class="w124btn" href="' + E(r.url) + '" target="_blank" rel="noopener">' + I('link') + 'Open the post</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#socialstats">Analytics</a>');
+      }
+    } else if (it.k === 'vol') {
+      rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' })) + (it.cancelled ? ' (cancelled)' : '')));
+      if (r.location) rows.push(kv('pin', E(r.location)));
+      if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
+      acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+    } else if (it.k === 'bday') {
+      rows.push(kv('cake', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
+      if (it.person) acts.push('<a class="w124btn ghost" data-w124go="#person/' + E(it.person.id) + '">Open their profile</a>');
+      if (it.mine) acts.push('<a class="w124btn ghost" data-w124bday="1">Change your birthday</a>');
+    }
+    html += '<div class="kv">' + rows.join('') + '</div>' + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '');
+    openSheet(html, 'view');
+  }
+  function openFund(f) {
+    if (!f) return;
+    var proj = f.project_id ? C.projects.filter(function (p) { return String(p.id) === String(f.project_id); })[0] : null;
+    var rows = [kv('clock', E(fundWhen(f)))];
+    if (f.partners) rows.push(kv('people', '<b>Partners:</b> ' + E(f.partners)));
+    var tg = targetText(f); if (tg || f.target_note) rows.push(kv('target', E(tg) + (f.target_note ? (tg ? '. ' : '') + E(f.target_note) : '')));
+    if (f.raised != null) rows.push(kv('check', 'Raised <b>' + E(money(f.raised)) + '</b>'));
+    if (f.lead) rows.push(kv('spark', 'Lead: ' + E(f.lead)));
+    var acts = [];
+    if (canEditFund()) { acts.push('<a class="w124btn" data-w124fedit="' + f.id + '">' + I('pen') + 'Edit</a>'); if (f.status !== 'done' && f.status !== 'idea' && f.precision !== 'none') acts.push('<a class="w124btn ghost" data-w124fdone="' + f.id + '">' + I('check') + 'Record the result</a>'); }
+    if (proj) acts.push('<a class="w124btn ghost" data-w124go="#project/' + proj.id + '">' + I('board') + 'Project board</a>');
+    if (f.sop_training_id) acts.push('<a class="w124btn ghost" data-w124go="#training/t/' + f.sop_training_id + '">' + I('doc') + 'SOP</a>');
+    if (!onFund()) acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
+    var html = top('<span class="tag" style="--bg:' + STATUS[f.status][1] + ';--ink:' + STATUS[f.status][2] + '">' + E(STATUS[f.status][0]) + '</span>' + layerTag('fund')) + '<h2>' + E(f.title) + '</h2>'
+      + '<div class="kv">' + rows.join('') + '</div>'
+      + (f.result_note ? '<div class="note"><b>Result:</b> ' + E(f.result_note) + '</div>' : '')
+      + (f.notes ? '<div class="note">' + E(f.notes) + '</div>' : '')
+      + (pastDue(f) ? '<p class="err">The date has passed: record how it went, so the year\u2019s total stays right.</p>' : '')
+      + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '');
+    openSheet(html, 'view');
+  }
+  function monthVal(d) { return d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) : ''; }
+  function openFundForm(f, season, doneMode) {
+    var isNew = !f; f = f || { title: '', season: season || 'fall-2026', precision: season === 'backlog' ? 'none' : 'month', status: season === 'backlog' ? 'idea' : 'planned' };
+    var s = parseDay(f.start_date), e = parseDay(f.end_date);
+    var projOpts = '<option value="">None</option>' + C.projects.filter(function (p) { return (p.status || 'active') === 'active'; }).map(function (p) { return '<option value="' + p.id + '"' + (String(p.id) === String(f.project_id) ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('');
+    var html = top('<span class="tag" style="--bg:' + LAYER.fund.bg + ';--ink:' + LAYER.fund.ink + '">' + I('heart') + (doneMode ? 'Record the result' : isNew ? 'New fundraising event' : 'Edit the event') + '</span>')
+      + '<form data-w124fform="' + (f.id || '') + '" novalidate>'
+      + (doneMode ? '<h2>' + E(f.title) + '</h2>' : '<label class="f" for="w124ft">Name</label><input type="text" id="w124ft" name="title" maxlength="140" value="' + E(f.title) + '" required>')
+      + (doneMode ? '' : '<div class="two"><div><label class="f" for="w124fs">Season</label><select id="w124fs" name="season">' + SEASONS.map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === f.season ? ' selected' : '') + '>' + E(x[1]) + '</option>'; }).join('') + '</select></div>'
+        + '<div><label class="f" for="w124fst">Status</label><select id="w124fst" name="status">' + Object.keys(STATUS).map(function (k) { return '<option value="' + k + '"' + (k === f.status ? ' selected' : '') + '>' + E(STATUS[k][0]) + '</option>'; }).join('') + '</select></div></div>'
+        + '<label class="f" for="w124fp">When</label><select id="w124fp" name="precision">' + [['day', 'On a date'], ['month', 'Sometime in a month'], ['range', 'Across a few months'], ['season', 'Sometime in a season'], ['flexible', 'Flexible'], ['none', 'Not scheduled yet']].map(function (x) { return '<option value="' + x[0] + '"' + (x[0] === f.precision ? ' selected' : '') + '>' + x[1] + '</option>'; }).join('') + '</select>'
+        + '<div class="two" data-w124dates><div data-p="day"><label class="f" for="w124fd1">Date</label><input type="date" id="w124fd1" name="d1" value="' + (s ? ymd(s) : '') + '"></div><div data-p="day"><label class="f" for="w124fd2">Until<span class="op">optional</span></label><input type="date" id="w124fd2" name="d2" value="' + (e && s && !sameDay(s, e) ? ymd(e) : '') + '"></div>'
+        + '<div data-p="month range season"><label class="f" for="w124fm1">From month</label><input type="month" id="w124fm1" name="m1" value="' + monthVal(s) + '"></div><div data-p="range season"><label class="f" for="w124fm2">To month</label><input type="month" id="w124fm2" name="m2" value="' + monthVal(e) + '"></div></div>'
+        + '<label class="f" for="w124fpa">Partners<span class="op">optional</span></label><input type="text" id="w124fpa" name="partners" maxlength="240" value="' + E(f.partners || '') + '">'
+        + '<div class="two"><div><label class="f" for="w124fmin">Target from ($)<span class="op">optional</span></label><input type="number" id="w124fmin" name="target_min" min="0" step="100" value="' + E(f.target_min == null ? '' : f.target_min) + '"></div><div><label class="f" for="w124fmax">Target up to ($)<span class="op">optional</span></label><input type="number" id="w124fmax" name="target_max" min="0" step="100" value="' + E(f.target_max == null ? '' : f.target_max) + '"></div></div>'
+        + '<div class="two"><div><label class="f" for="w124fl">Lead<span class="op">optional</span></label><input type="text" id="w124fl" name="lead" maxlength="80" value="' + E(f.lead || '') + '" list="w124people"></div><div><label class="f" for="w124fpr">Project board<span class="op">optional</span></label><select id="w124fpr" name="project_id">' + projOpts + '</select></div></div>'
+        + '<datalist id="w124people">' + members().filter(function (m) { return m.active !== false; }).map(function (m) { return '<option value="' + E(m.name) + '">'; }).join('') + '</datalist>'
+        + '<label class="f" for="w124fn">Notes<span class="op">optional</span></label><textarea id="w124fn" name="notes">' + E(f.notes || '') + '</textarea>')
+      + '<div class="two"><div><label class="f" for="w124fr">Raised ($)' + (doneMode ? '' : '<span class="op">once it has happened</span>') + '</label><input type="number" id="w124fr" name="raised" min="0" step="1" value="' + E(f.raised == null ? '' : f.raised) + '"></div><div></div></div>'
+      + '<label class="f" for="w124frn">How it went<span class="op">optional</span></label><textarea id="w124frn" name="result_note" placeholder="Turnout, what worked, what to change next time">' + E(f.result_note || '') + '</textarea>'
+      + '<p class="err" data-w124ferr style="display:none"></p>'
+      + '<div class="acts"><button type="submit" class="w124btn">' + (doneMode ? 'Save the result' : isNew ? 'Add the event' : 'Save') + '</button><button type="button" class="w124btn ghost" data-w124close>Cancel</button>' + (!isNew && !doneMode && isLeader() ? '<button type="button" class="w124btn ghost" data-w124fdel="' + f.id + '" style="margin-left:auto;color:' + FLAG + ' !important">Delete</button>' : '') + '</div>'
+      + '<input type="hidden" name="__done" value="' + (doneMode ? '1' : '') + '"></form>';
+    openSheet(html, 'form');
+    syncDates();
+  }
+  function syncDates() {
+    var sel = document.querySelector('#w124sheet select[name=precision]'); var box = document.querySelector('#w124sheet [data-w124dates]');
+    if (!box) return; var p = sel ? sel.value : 'day';
+    box.style.display = (p === 'flexible' || p === 'none') ? 'none' : '';
+    box.querySelectorAll('[data-p]').forEach(function (el) { el.style.display = el.getAttribute('data-p').split(' ').indexOf(p) >= 0 ? '' : 'none'; });
+  }
+  function lastOfMonth(v) { var m = /^(\d{4})-(\d{2})$/.exec(v || ''); if (!m) return null; var d = mk(Number(m[1]), Number(m[2]), 0, 12); return ymd(d); }
+  function firstOfMonth(v) { var m = /^(\d{4})-(\d{2})$/.exec(v || ''); return m ? m[1] + '-' + m[2] + '-01' : null; }
+  async function saveFund(form) {
+    var id = form.getAttribute('data-w124fform'), f = id ? fundById(id) : null, fd = {};
+    Array.prototype.forEach.call(form.elements, function (el) { if (el.name) fd[el.name] = el.value; });
+    var err = form.querySelector('[data-w124ferr]'), fail = function (m) { if (err) { err.style.display = ''; err.textContent = m; } };
+    var num = function (v) { v = String(v || '').trim(); return v === '' ? null : Number(v); };
+    var row = {};
+    if (fd.__done === '1') { row.status = 'done'; row.raised = num(fd.raised); row.result_note = String(fd.result_note || '').trim() || null; }
+    else {
+      row.title = String(fd.title || '').trim(); if (!row.title) { fail('Give the event a name.'); return; }
+      row.season = fd.season; row.status = fd.status; row.precision = fd.precision;
+      row.partners = String(fd.partners || '').trim() || null; row.lead = String(fd.lead || '').trim() || null;
+      row.target_min = num(fd.target_min); row.target_max = num(fd.target_max); row.raised = num(fd.raised);
+      row.result_note = String(fd.result_note || '').trim() || null; row.notes = String(fd.notes || '').trim() || null;
+      row.project_id = fd.project_id ? Number(fd.project_id) : null;
+      if (row.precision === 'day') { if (!fd.d1) { fail('Pick the date.'); return; } row.start_date = fd.d1; row.end_date = fd.d2 && fd.d2 > fd.d1 ? fd.d2 : null; row.timing = MONTHS[parseDay(fd.d1).getMonth()]; }
+      else if (row.precision === 'month') { if (!fd.m1) { fail('Pick the month.'); return; } row.start_date = firstOfMonth(fd.m1); row.end_date = lastOfMonth(fd.m1); row.timing = MONTHS[Number(fd.m1.slice(5)) - 1]; }
+      else if (row.precision === 'range' || row.precision === 'season') { if (!fd.m1 || !fd.m2) { fail('Pick the first and last month.'); return; } if (fd.m2 < fd.m1) { fail('The last month is before the first.'); return; } row.start_date = firstOfMonth(fd.m1); row.end_date = lastOfMonth(fd.m2); row.timing = MONTHS[Number(fd.m1.slice(5)) - 1].slice(0, 3) + ' to ' + MONTHS[Number(fd.m2.slice(5)) - 1].slice(0, 3); }
+      else { row.start_date = null; row.end_date = null; row.timing = row.precision === 'flexible' ? 'Flexible' : 'Not yet scheduled'; }
+      if (row.target_min != null && row.target_max != null && row.target_max < row.target_min) { fail('The target range runs backwards.'); return; }
+    }
+    row.updated_by = me().name; row.updated_at = new Date().toISOString();
+    var res;
+    if (f) { res = await q(db.from('fund_events').update(row).eq('id', f.id)); if (!res.error) Object.assign(f, row); }
+    else { row.created_by = me().name; row.plan = '2026-27'; row.source = 'hub'; row.sort = 100 + C.fund.length; res = await q(db.from('fund_events').insert(row).select('*').single()); if (!res.error) C.fund.push((res.data && res.data.id) ? res.data : Object.assign({ id: -Date.now() }, row)); }
+    if (res.error) { fail('It did not save: ' + String(res.error.message || res.error).slice(0, 140)); return; }
+    try { await db.from('change_log').insert({ entity_type: 'fund_event', entity_id: String(f ? f.id : 'new'), field: fd.__done === '1' ? 'result' : (f ? 'edited' : 'created'), old_value: null, new_value: (row.title || (f && f.title) || '') + (row.raised != null ? ' raised ' + row.raised : ''), changed_by: me().name }); } catch (e) { /* audit */ }
+    closeSheet();
+    toastS(fd.__done === '1' ? 'Result saved' : f ? 'Saved' : 'Event added');
+    repaintAll();
+  }
+  async function deleteFund(id) {
+    var f = fundById(id); if (!f) return;
+    if (typeof confirm === 'function' && !confirm('Delete ' + f.title + '? This cannot be undone.')) return;
+    var res = await q(db.from('fund_events').delete().eq('id', f.id));
+    if (res.error) { toastS('Could not delete it'); return; }
+    C.fund = C.fund.filter(function (x) { return x !== f; });
+    closeSheet(); toastS('Deleted'); repaintAll();
+  }
+
+  /* ---------- birthdays ---------- */
+  function openBdayForm() {
+    var b = myBirthday() || { month: '', day: '', share: 'everyone' };
+    var html = top('<span class="tag" style="--bg:' + LAYER.bday.bg + ';--ink:' + LAYER.bday.ink + '">' + I('cake') + 'Your birthday</span>') + '<h2>' + (myBirthday() ? 'Change your birthday' : 'Add your birthday') + '</h2>'
+      + '<p class="w124empty">Month and day only. It shows on the calendar on the day, to the people you choose.</p>'
+      + '<form data-w124bform novalidate><div class="two"><div><label class="f" for="w124bm">Month</label><select id="w124bm" name="month"><option value="">Month</option>' + MONTHS.map(function (m, i) { return '<option value="' + (i + 1) + '"' + (Number(b.month) === i + 1 ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select></div>'
+      + '<div><label class="f" for="w124bd">Day</label><select id="w124bd" name="day"><option value="">Day</option>' + Array.apply(null, Array(31)).map(function (x, i) { return '<option value="' + (i + 1) + '"' + (Number(b.day) === i + 1 ? ' selected' : '') + '>' + (i + 1) + '</option>'; }).join('') + '</select></div></div>'
+      + '<label class="f">Who sees it on the calendar</label><div class="radios">'
+      + [['everyone', 'Everyone at Welfare Avenue', 'It shows on everyone\u2019s calendar on the day.'], ['team', 'My team', 'Only people on your team see it.'], ['me', 'Only me', 'Just a reminder for you.']].map(function (o) { return '<label><input type="radio" name="share" value="' + o[0] + '"' + (b.share === o[0] ? ' checked' : '') + '><div><b>' + o[1] + '</b><span>' + o[2] + '</span></div></label>'; }).join('') + '</div>'
+      + '<p class="err" data-w124berr style="display:none"></p>'
+      + '<div class="acts"><button type="submit" class="w124btn">Save</button><button type="button" class="w124btn ghost" data-w124close>Cancel</button>' + (myBirthday() ? '<button type="button" class="w124btn ghost" data-w124bdel style="margin-left:auto">Remove it</button>' : '') + '</div></form>';
+    openSheet(html, 'form');
+  }
+  async function saveBday(form) {
+    var m = Number(form.month.value), d = Number(form.day.value), share = (form.querySelector('input[name=share]:checked') || {}).value || 'everyone';
+    var err = form.querySelector('[data-w124berr]'), fail = function (t) { if (err) { err.style.display = ''; err.textContent = t; } };
+    if (!m || !d) { fail('Pick the month and the day.'); return; }
+    var max = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1]; if (d > max) { fail(MONTHS[m - 1] + ' has ' + max + ' days.'); return; }
+    var em = me().email; if (!em) { fail('Sign in again first.'); return; }
+    var row = { email: em, month: m, day: d, share: share, updated_at: new Date().toISOString() };
+    var res = await q(db.from('hub_birthdays').upsert(row, { onConflict: 'email' }));
+    if (res.error) { fail('It did not save: ' + String(res.error.message || res.error).slice(0, 140)); return; }
+    C.bdays = C.bdays.filter(function (b) { return lower(b.email) !== em; }).concat([row]);
+    closeSheet(); toastS('Birthday saved: ' + MONTHS[m - 1] + ' ' + d); repaintAll();
+  }
+  async function deleteBday() {
+    var em = me().email; var res = await q(db.from('hub_birthdays').delete().eq('email', em));
+    if (res.error) { toastS('Could not remove it'); return; }
+    C.bdays = C.bdays.filter(function (b) { return lower(b.email) !== em; });
+    closeSheet(); toastS('Birthday removed'); repaintAll();
+  }
+
+  /* ---------- page tours for the academy (wave122's engine; trainings rows tour:calendar and tour:fundevents) ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return;
+      var OPT = { opt: 1 };
+      var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      if (!W.tours.calendar) W.tours.calendar = { tab: 'calendar', icon: 'clock', hash: '#calendar', steps: [
+        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays.'),
+        S('#w124cal .w124bar', 'Move around', 'Step through the months, jump back to today, and switch between the month grid and the agenda list.', OPT),
+        S('#w124cal .w124layers', 'Layers', 'Switch each layer on or off; the Hub remembers your choice. My meetings are only the meetings you are invited to.', OPT),
+        S('#w124cal .w124band', 'All month long', 'Fundraising events that run all month or all season sit above the grid.', OPT),
+        S('#w124cal .w124grid || #w124cal .w124ag', 'Open anything', 'Each item opens with its details and links: join the meeting, open the event, the post or the serving.', OPT),
+        S('#w124cal .w124up', 'Up next', 'The next things on your calendar over the coming five weeks.', OPT),
+        S('#w124cal .w124side [data-w124bday]', 'Your birthday', 'Add your birthday (month and day only) and choose who sees it: everyone, your team, or only you. You can also add it from your profile.', OPT)
+      ] };
+      if (!W.tours.fundevents) W.tours.fundevents = { tab: 'fundevents', icon: 'target', hash: '#fundevents', steps: [
+        S('#fundevents > .w118mast', 'Events calendar', 'The year\u2019s fundraising events, season by season, from the 2026-27 plan.'),
+        S('#w124fund .w124goals', 'The goals', 'What the events raised this fiscal year (from October 1) against the minimum, healthy and target amounts.', OPT),
+        S('#w124fund .w124sw', 'The year at a glance', 'Every dated event on one line, month by month. The mark before October is where the fiscal year starts.', OPT),
+        S('#w124fund .w124evs', 'Season by season', 'Each card shows the partners, the target, where it stands and links to its project board and SOP. Open one for the details.', OPT),
+        S('#w124fund .w124ideas', 'Ideas', 'Ideas parked for later. Open one to give it a season and a date.', OPT),
+        S('#w124fund [data-w124fadd]', 'Add and update', 'Leaders and the fundraising team add events, edit them and record what each one raised once it is done.', OPT)
+      ] };
+    } catch (e) { /* fine */ }
+  }
+  addTours();
+
+  /* ---------- person pages: the birthday pill ---------- */
+  function personId() { var h = decodeURIComponent(location.hash || '').replace(/^#/, '').split('/'); return h[0] === 'person' && h[1] ? h[1] : null; }
+  var pillBusy = false;
+  function personPill() {
+    if (pillBusy || !staffOk()) return;
+    var sec = document.querySelector('section#personpage:not([data-w116kdecoy])'); if (!sec || !sec.classList.contains('active')) return;
+    var meta = sec.querySelector('.w116khead .meta'); if (!meta) return;
+    var id = personId(), m0 = me();
+    var m = id ? members().filter(function (x) { return String(x.id) === String(id); })[0] : members().filter(function (x) { return lower(x.email) === m0.email; })[0];
+    if (!m) return;
+    var self = lower(m.email) === m0.email && !!m0.email;
+    var b = C.bdays.filter(function (x) { return lower(x.email) === lower(m.email); })[0];
+    var html = b ? '<button type="button" class="w124bpill"' + (self ? ' data-w124bday="1" title="Change your birthday"' : '') + '>' + I('cake') + E(MONTHS[b.month - 1] + ' ' + b.day) + '</button>' : (self ? '<button type="button" class="w124bpill add" data-w124bday="1">' + I('cake') + 'Add your birthday</button>' : '');
+    var cur = meta.querySelector('.w124bpill');
+    var sig = (m.id || '') + '|' + html;
+    if (cur && cur.getAttribute('data-sig') === sig) return;
+    pillBusy = true;
+    try { if (cur) cur.remove(); if (html) { meta.insertAdjacentHTML('beforeend', html); var nb = meta.querySelector('.w124bpill'); if (nb) nb.setAttribute('data-sig', sig); } } finally { pillBusy = false; }
+  }
+  var ppT = null;
+  function watchPerson() {
+    var sec = document.querySelector('section#personpage:not([data-w116kdecoy])'); if (!sec || sec.__w124obs) return;
+    sec.__w124obs = true;
+    try { new MutationObserver(function () { if (pillBusy) return; clearTimeout(ppT); ppT = setTimeout(personPill, 80); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- menus: Calendar under Home, Events calendar in Fundraising & Finances ---------- */
+  function placeTabs() {
+    try {
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      /* after Home; the board has no Home, so after Overview */
+      var cal = bar.querySelector('.tab[data-tab="calendar"]'), home = bar.querySelector('.tab[data-tab="mypage"]');
+      var anchor = home && home.style.display !== 'none' ? home : (bar.querySelector('.tab[data-tab="overview"]') || home);
+      if (cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
+      var fe = bar.querySelector('.tab[data-tab="fundevents"]');
+      if (fe) {
+        /* inside Fundraising & Finances when that page is yours; otherwise (the board) right after the calendar */
+        var fr = bar.querySelector('.tab[data-tab="fundraising"]'); var row = fr && fr.closest ? fr.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
+        if (sub && tabOk('fundraising')) { if (fe.parentNode !== sub) { var fin = sub.querySelector('.tab[data-tab="finances"]'); if (fin) sub.insertBefore(fe, fin); else sub.appendChild(fe); } fe.classList.add('w116tool'); }
+        else if (cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }
+        fe.style.display = tabOk('fundevents') ? '' : 'none';
+      }
+      if (cal) cal.style.display = tabOk('calendar') ? '' : 'none';
+    } catch (e) { /* fine */ }
+  }
+  function tabOk(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return true; } }
+  var navT = null;
+  function watchNav() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.__w124obs) return;
+    bar.__w124obs = true;
+    try { new MutationObserver(function () { if (navT) return; navT = setTimeout(function () { navT = null; placeTabs(); }, 150); }).observe(bar, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  function teamPill() {
+    try {
+      var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#team/fundraising') !== 0) return;
+      var seg = document.querySelector('#team .w116seg'); if (!seg || seg.querySelector('[data-w116go="#fundevents"]')) return;
+      var a = document.createElement('a'); a.setAttribute('data-w116go', '#fundevents'); a.textContent = 'Events calendar';
+      var fin = seg.querySelector('[data-w116go="#finances"]'); if (fin) seg.insertBefore(a, fin); else seg.appendChild(a);
+    } catch (e) { /* fine */ }
+  }
+  var tpT = null;
+  function watchTeam() {
+    var sec = document.getElementById('team'); if (!sec || sec.__w124obs) return;
+    sec.__w124obs = true;
+    try { new MutationObserver(function () { clearTimeout(tpT); tpT = setTimeout(teamPill, 60); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  /* people with their own tab list (hub_roles.tabs: 3 admins and 2 leaders today) never had these two pages on it:
+     everyone signed in gets the calendar, and whoever can see Fundraising or Finances (or the board) gets the events calendar */
+  function enrolAllowed() {
+    try {
+      if (typeof wa40Allowed !== 'function' || wa40Allowed.__w124) return;
+      var __al = wa40Allowed;
+      wa40Allowed = function () {
+        var a = __al.apply(this, arguments) || [];
+        if (role() === 'blocked') return a;
+        var add = [];
+        if ((staffOk() || boardOk()) && a.indexOf('calendar') < 0) add.push('calendar');
+        if ((a.indexOf('fundraising') >= 0 || a.indexOf('finances') >= 0 || boardOk()) && a.indexOf('fundevents') < 0) add.push('fundevents');
+        return add.length ? a.concat(add) : a;
+      };
+      Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+      wa40Allowed.__w124 = true;
+    } catch (e) { /* fine */ }
+  }
+  function register() {
+    enrolAllowed();
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'calendar'; })) WA_NAV.register({ id: 'calendar', label: 'Calendar', dot: GOLD, gate: 'viewer', onShow: function (h) { routeCal(h); } });
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'fundevents'; })) WA_NAV.register({ id: 'fundevents', label: 'Events calendar', dot: '#C8961F', gate: 'viewer', onShow: function (h) { routeFund(h); } });
+    placeTabs(); watchNav();
+  }
+
+  /* ---------- routes ---------- */
+  function routeCal(h) {
+    var p = String(h || '').split('/');
+    if (/^\d{4}-\d{2}$/.test(p[1] || '')) { C.anchor = mk(Number(p[1].slice(0, 4)), Number(p[1].slice(5)) - 1, 1, 12); }
+    if (p[1] === 'agenda' || p[2] === 'agenda') { C.view = 'agenda'; C.scrollOnce = true; }
+    if (p[1] === 'month' || p[2] === 'month') C.view = 'month';
+    try { document.title = 'Calendar \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    calShow();
+  }
+  function routeFund(h) {
+    var p = String(h || '').split('/');
+    try { document.title = 'Events calendar \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    try { var fe = document.querySelector('#tabBar .tab[data-tab="fundevents"]'); var row = fe && fe.closest ? fe.closest('.w42d') : null; if (row) row.classList.add('w116open', 'w116act'); } catch (e) { /* fine */ }
+    fundShow(p[1] || '');
+  }
+  function repaintAll() {
+    if (onCal()) calPaint();
+    if (onFund()) fundPaint();
+    personPill();
+  }
+
+  /* ---------- events ---------- */
+  function go(h) { closeSheet(); if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el, inSheet = !!t.closest('#w124sheet'), inCal = !!t.closest('#w124cal'), inFund = !!t.closest('#w124fund'), inPerson = !!t.closest('#personpage');
+    if (!inSheet && !inCal && !inFund && !(inPerson && t.closest('.w124bpill'))) return;
+    if ((el = t.closest('[data-w124close]'))) { closeSheet(); return; }
+    if ((el = t.closest('[data-w124go]'))) { e.preventDefault(); go(el.getAttribute('data-w124go')); return; }
+    if ((el = t.closest('[data-w124bday]'))) { e.preventDefault(); openBdayForm(); return; }
+    if ((el = t.closest('[data-w124bdel]'))) { deleteBday(); return; }
+    if ((el = t.closest('[data-w124fedit]'))) { openFundForm(fundById(el.getAttribute('data-w124fedit'))); return; }
+    if ((el = t.closest('[data-w124fdone]'))) { openFundForm(fundById(el.getAttribute('data-w124fdone')), null, true); return; }
+    if ((el = t.closest('[data-w124fdel]'))) { deleteFund(el.getAttribute('data-w124fdel')); return; }
+    if ((el = t.closest('[data-w124fadd]'))) { openFundForm(null, el.getAttribute('data-w124fadd')); return; }
+    if ((el = t.closest('[data-w124fund]'))) { openFund(fundById(el.getAttribute('data-w124fund'))); return; }
+    if ((el = t.closest('[data-w124person]'))) { go('#person/' + el.getAttribute('data-w124person')); return; }
+    if (inCal) {
+      if ((el = t.closest('[data-w124it]'))) { openItem(calItemById(el.getAttribute('data-w124it'))); return; }
+      if ((el = t.closest('[data-w124nav]'))) { var n = Number(el.getAttribute('data-w124nav')); C.anchor = n === 0 ? monthStart(today()) : addMonths(C.anchor, n); if (n === 0) C.scrollOnce = true; calPaint(); loadRange().then(function () { if (onCal()) calPaint(); }); return; }
+      if ((el = t.closest('[data-w124view]'))) { C.view = el.getAttribute('data-w124view'); lsSet('w124view', C.view); C.scrollOnce = true; calPaint(); loadRange().then(function () { if (onCal()) calPaint(); }); return; }
+      if ((el = t.closest('[data-w124layer]'))) { var k = el.getAttribute('data-w124layer'); C.layers[k] = !C.layers[k]; lsSet('w124layers', JSON.stringify(C.layers)); calPaint(); return; }
+      if ((el = t.closest('[data-w124day]'))) { C.view = 'agenda'; C.scrollOnce = true; calPaint(); var dd = document.getElementById('w124d' + el.getAttribute('data-w124day')); if (dd) dd.scrollIntoView({ block: 'center' }); return; }
+    }
+  });
+  document.addEventListener('change', function (e) { var t = e.target; if (t && t.matches && t.matches('#w124sheet select[name=precision]')) syncDates(); });
+  document.addEventListener('submit', function (e) {
+    var f = e.target; if (!f || !f.closest || !f.closest('#w124sheet')) return;
+    e.preventDefault();
+    if (f.hasAttribute('data-w124fform')) saveFund(f);
+    else if (f.hasAttribute('data-w124bform')) saveBday(f);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && C.sheet) { e.preventDefault(); closeSheet(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#w124cal [data-w124it], #w124cal [data-w124layer], #w124fund .w124fe, #w124cal .w124row[data-w124fund]')) { e.preventDefault(); e.target.click(); }
+  });
+  window.addEventListener('hashchange', function () {
+    if (C.sheet) closeSheet();
+    try { if (personId() !== null || location.hash === '#mypage') { watchPerson(); if (!C.loadedBase) loadBase().then(personPill); else setTimeout(personPill, 120); } } catch (e) { /* fine */ }
+    try { if ((location.hash || '').indexOf('#team/fundraising') === 0) { watchTeam(); setTimeout(teamPill, 120); } } catch (e) { /* fine */ }
+  });
+  if (typeof showPanel === 'function') {
+    var __sp124 = showPanel;
+    showPanel = function (id) {
+      var out = __sp124.apply(this, arguments);
+      try {
+        if (id === 'personpage') { setTimeout(function () { watchPerson(); if (!C.loadedBase) loadBase().then(personPill); else personPill(); }, 250); }
+        if (id === 'team') { watchTeam(); setTimeout(teamPill, 120); }
+        if (id !== 'calendar' && id !== 'fundevents' && C.sheet) closeSheet();
+      } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa124 = startApp;
+    startApp = async function () {
+      var out = await __sa124.apply(this, arguments);
+      try {
+        register(); watchTeam();
+        [400, 1500, 3500].forEach(function (ms) { setTimeout(placeTabs, ms); });
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+        if (h.split('/')[0] === 'calendar') { showPanel('calendar'); routeCal(h); }
+        else if (h.split('/')[0] === 'fundevents') { showPanel('fundevents'); routeFund(h); }
+        else if (h.split('/')[0] === 'person') { watchPerson(); loadBase().then(personPill); }
+        if (h.indexOf('team/fundraising') === 0) setTimeout(teamPill, 300);
+      } catch (e) { console.warn('wave124 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w124 = { state: function () { return C; }, items: items, bands: bands, load: loadBase, range: loadRange, cal: calPaint, fund: fundPaint, openFund: openFund, openItem: openItem, bday: openBdayForm, close: closeSheet };
+})();
+/* =====================================================================
    WA v117 more of the brand feel (25/09/26)
    =====================================================================
    Steel: "update hub to have more of the brand feel", "add some

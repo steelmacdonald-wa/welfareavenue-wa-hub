@@ -1,0 +1,7 @@
+-- wave124: academy page tours for the Calendar and the Events calendar (run after the wave124 deploy)
+insert into public.trainings (category, title, description, source, path_group, sort, active, kind, key, body, minutes, xp)
+  values ('Hub tours', 'Page tour: Calendar', 'Fundraising events, your meetings, marketing posts, volunteering and birthdays in one calendar.', 'hub', 'Hub page tours', 30, true, 'tour', 'tour:calendar', $j${"tour": "calendar", "tab": "calendar"}$j$::jsonb, 2, 20)
+  on conflict (key) where key is not null do update set title = excluded.title, description = excluded.description, body = excluded.body, minutes = excluded.minutes, path_group = excluded.path_group, sort = excluded.sort, category = excluded.category, kind = excluded.kind, active = true, updated_at = now();
+insert into public.trainings (category, title, description, source, path_group, sort, active, kind, key, body, minutes, xp)
+  values ('Hub tours', 'Page tour: Events calendar', 'The year''s fundraising events, the goals, and how to add and update them.', 'hub', 'Hub page tours', 31, true, 'tour', 'tour:fundevents', $j${"tour": "fundevents", "tab": "fundevents"}$j$::jsonb, 2, 20)
+  on conflict (key) where key is not null do update set title = excluded.title, description = excluded.description, body = excluded.body, minutes = excluded.minutes, path_group = excluded.path_group, sort = excluded.sort, category = excluded.category, kind = excluded.kind, active = true, updated_at = now();

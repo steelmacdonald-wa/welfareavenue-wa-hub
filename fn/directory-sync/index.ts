@@ -1,4 +1,4 @@
-// Welfare Avenue: directory-sync (v1.3, 25/09/26): probe action (which delegated scopes work), start dates from Workspace account creation dates
+// Welfare Avenue: directory-sync (v1.4, 25/09/26: keeps each account's aliases for the master calendar's own-meetings filter; v1.3, 25/09/26): probe action (which delegated scopes work), start dates from Workspace account creation dates
 // v1.1: shared mailboxes recognised by name (Welfare Avenue, Hub Avenue) and
 //   by more local parts (donors, support, media...).
 // The roster follows Google Workspace. Reads the welfareavenue.com user
@@ -190,6 +190,8 @@ async function sync(trigger: string) {
       account_created_at: u.creationTime || null, last_login_at: u.lastLoginTime && !/^1970/.test(String(u.lastLoginTime)) ? u.lastLoginTime : null,
       synced_at: now, skipped,
       member_id: member ? member.id : (prev?.member_id || null),
+      /* v1.4: the account's other addresses, so calendar invites sent to an alias still count as theirs */
+      aliases: Array.from(new Set(([] as string[]).concat(u.aliases || [], u.nonEditableAliases || []).map((a: string) => lower(a)).filter((a: string) => a && a !== email))),
     };
     if (member && !prev?.member_id) { row.placed_at = prev?.placed_at || now; row.placed_by = prev?.placed_by || 'match by email'; }
     if (prev) await svc.from('hub_directory').update(row).eq('email', email);
