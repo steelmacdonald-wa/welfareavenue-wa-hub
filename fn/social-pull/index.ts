@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.2, 25/09/26: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.3, 25/09/26: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -186,11 +186,18 @@ async function syncInstagram(a: Account, token: string, days: number): Promise<{
   const rows: Row[] = []; const skipped: string[] = [];
   try { const p = await graph('/' + ig, token, { fields: 'username,name,followers_count,media_count,profile_picture_url' }); if (typeof p.followers_count === 'number') rows.push({ platform: 'instagram', account_id: a.id, day: until, metric: 'followers', value: p.followers_count }); await svc.from('social_accounts').update({ handle: p.username || a.handle, name: p.name || a.name, url: p.username ? 'https://www.instagram.com/' + p.username + '/' : a.url, picture_url: p.profile_picture_url || a.picture_url, meta: { ...(a.meta || {}), media_count: p.media_count } }).eq('id', a.id); } catch (e) { skipped.push('profile: ' + String((e as Error).message).slice(0, 80)); }
   // per-day series: reach and follower_count (new followers per day)
+  // Instagram caps a day series at 30 days per call: walk back in 29 day windows (v1.3)
   for (const [m, metric] of [['reach', 'reach'], ['follower_count', 'new_followers']] as Array<[string, string]>) {
-    try {
-      const r = await graph('/' + ig + '/insights', token, { metric: m, period: 'day', since: String(unix(since)), until: String(unix(until) + 86400) });
-      for (const v of (((r.data || [])[0] || {}).values || [])) { const day = String(v.end_time || '').slice(0, 10); const val = typeof v.value === 'number' ? v.value : Number(v.value); if (day && isFinite(val)) rows.push({ platform: 'instagram', account_id: a.id, day: isoDay(new Date(new Date(day + 'T00:00:00Z').getTime() - 86400000)), metric, value: val }); }
-    } catch (e) { skipped.push(m + ': ' + String((e as Error).message).slice(0, 80)); }
+    let okN = 0, firstErr = '';
+    for (let hi = 0; hi < days; hi += 29) {
+      const lo = Math.min(days, hi + 29);
+      try {
+        const r = await graph('/' + ig + '/insights', token, { metric: m, period: 'day', since: String(unix(dayAgo(lo))), until: String(unix(dayAgo(hi)) + (hi === 0 ? 86400 : 0)) });
+        okN++;
+        for (const v of (((r.data || [])[0] || {}).values || [])) { const day = String(v.end_time || '').slice(0, 10); const val = typeof v.value === 'number' ? v.value : Number(v.value); if (day && isFinite(val)) rows.push({ platform: 'instagram', account_id: a.id, day: isoDay(new Date(new Date(day + 'T00:00:00Z').getTime() - 86400000)), metric, value: val }); }
+      } catch (e) { if (!firstErr) firstErr = String((e as Error).message).slice(0, 80); }
+    }
+    if (!okN && firstErr) skipped.push(m + ': ' + firstErr);
   }
   // total_value metrics: one call per missing day (at most `days`, newest first)
   const { data: haveRows } = await svc.from('social_daily').select('day').eq('platform', 'instagram').eq('account_id', a.id).eq('metric', 'views').gte('day', since);
