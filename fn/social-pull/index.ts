@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1, 25/09/26)
+// Welfare Avenue: social-pull (v1.1, 25/09/26: a Page token from the Graph API Explorer works too; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -111,18 +111,30 @@ async function graph(path: string, token: string, params: Record<string, string>
   if (!res.ok || body.error) throw new Error((body.error && (body.error.message + (body.error.code ? ' (code ' + body.error.code + ')' : ''))) || ('HTTP ' + res.status));
   return body;
 }
+const PAGE_FIELDS = 'id,name,link,followers_count,picture{url},instagram_business_account{id,username,name,followers_count,media_count,profile_picture_url}';
+// A system user or user token lists its Pages; a Page token (Graph API Explorer route) IS the page: /me is the Page.
 async function metaPages(token: string): Promise<Any[]> {
   const out: Any[] = [];
   let next: string | null = null;
-  const first = await graph('/me/accounts', token, { fields: 'id,name,link,followers_count,picture{url},instagram_business_account{id,username,name,followers_count,media_count,profile_picture_url}', limit: '50' });
-  out.push(...(first.data || [])); next = first.paging && first.paging.next ? first.paging.next : null;
-  let guard = 0;
-  while (next && guard++ < 5) { const r = await fetch(next); const b = await r.json(); out.push(...(b.data || [])); next = b.paging && b.paging.next ? b.paging.next : null; }
+  try {
+    const first = await graph('/me/accounts', token, { fields: PAGE_FIELDS, limit: '50' });
+    out.push(...(first.data || [])); next = first.paging && first.paging.next ? first.paging.next : null;
+    let guard = 0;
+    while (next && guard++ < 5) { const r = await fetch(next); const b = await r.json(); out.push(...(b.data || [])); next = b.paging && b.paging.next ? b.paging.next : null; }
+  } catch (e) {
+    const me = await graph('/me', token, { fields: PAGE_FIELDS }).catch(() => null);
+    if (me && me.id && (me.link || typeof me.followers_count === 'number' || me.instagram_business_account)) return [{ ...me, _page_token: true }];
+    throw e;
+  }
+  if (!out.length) {
+    const me = await graph('/me', token, { fields: PAGE_FIELDS }).catch(() => null);
+    if (me && me.id && (me.link || typeof me.followers_count === 'number' || me.instagram_business_account)) return [{ ...me, _page_token: true }];
+  }
   return out;
 }
 async function pageToken(pageId: string, token: string): Promise<string> {
-  const r = await graph('/' + pageId, token, { fields: 'access_token' });
-  return r.access_token || token;
+  try { const r = await graph('/' + pageId, token, { fields: 'access_token' }); return r.access_token || token; }
+  catch (_) { return token; }
 }
 const FB_METRICS: Array<[string, string]> = [
   ['page_follows', 'followers'], ['page_daily_follows_unique', 'new_followers'], ['page_daily_unfollows_unique', 'unfollows'],
@@ -353,7 +365,7 @@ Deno.serve(async (req: Request) => {
         try {
           const me2 = await graph('/me', token, { fields: 'id,name' });
           const pages = await metaPages(token);
-          out.meta = { ok: true, as: me2.name || me2.id, pages: pages.map(p => ({ id: p.id, name: p.name, link: p.link, followers: p.followers_count, picture: p.picture && p.picture.data && p.picture.data.url, instagram: p.instagram_business_account ? { id: p.instagram_business_account.id, username: p.instagram_business_account.username, followers: p.instagram_business_account.followers_count, media: p.instagram_business_account.media_count } : null })) };
+          out.meta = { ok: true, as: me2.name || me2.id, token_kind: pages.length && pages[0]._page_token ? 'page' : 'user', pages: pages.map(p => ({ id: p.id, name: p.name, link: p.link, followers: p.followers_count, picture: p.picture && p.picture.data && p.picture.data.url, instagram: p.instagram_business_account ? { id: p.instagram_business_account.id, username: p.instagram_business_account.username, followers: p.instagram_business_account.followers_count, media: p.instagram_business_account.media_count } : null })) };
         } catch (e) { out.meta = { ok: false, error: String((e as Error).message) }; }
       }
       const { data } = await svc.from('social_accounts').select('*').order('platform');
