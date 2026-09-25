@@ -1,4 +1,9 @@
-// Welfare Avenue: hub-connect (v1, 25/09/26)
+// Welfare Avenue: hub-connect (v2, 25/09/26)
+// v2: Google Calendar verifies with calendar.events + calendar.readonly (the
+//   events scope alone cannot read the calendar itself); Slack resolves the
+//   way notify does (wa_slack_ids, then lookupByEmail, then a unique name
+//   match) and, when nothing matches, the person picks their own account
+//   from the workspace list (actions slack_users, slack_pick).
 // Per-person platform connections behind the profile menu's Settings tab.
 // Slack: the hub finds the caller's Slack account by email (bot token) so
 // hub messages reach their DMs. Google Calendar and Google Drive: the hub acts
@@ -24,7 +29,7 @@ const CORS: Record<string, string> = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 const SCOPE: Record<string, string> = {
-  google_calendar: 'https://www.googleapis.com/auth/calendar.events',
+  google_calendar: 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.readonly',
   google_drive: 'https://www.googleapis.com/auth/drive.readonly',
 };
 
@@ -85,14 +90,60 @@ async function gapi(token: string, method: string, url: string, body?: unknown):
 }
 
 /* ---- Slack ---- */
-async function slackLookup(email: string): Promise<{ id: string; name: string; handle: string } | null> {
+type SlackUser = { id: string; name: string; handle: string; title?: string };
+function norm(s: string): string { return String(s || '').toLowerCase().replace(/[^a-z]/g, ''); }
+// deno-lint-ignore no-explicit-any
+function su(u: any): SlackUser { return { id: u.id, name: u.real_name || u.profile?.real_name || u.profile?.display_name || u.name, handle: u.name, title: u.profile?.title || '' }; }
+async function slackUsers(): Promise<SlackUser[]> {
+  const tok = await getSecret('SLACK_BOT_TOKEN');
+  const out: SlackUser[] = [];
+  let cursor = '';
+  for (let page = 0; page < 6; page++) {
+    const res = await fetch('https://slack.com/api/users.list?limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { headers: { Authorization: 'Bearer ' + tok } });
+    const b = await res.json();
+    if (!b.ok) throw new Error('Slack users.list: ' + String(b.error || 'failed'));
+    for (const u of (b.members || [])) { if (u.deleted || u.is_bot || u.id === 'USLACKBOT' || u.is_app_user) continue; out.push(su(u)); }
+    cursor = b.response_metadata?.next_cursor || '';
+    if (!cursor) break;
+  }
+  out.sort((x, y) => String(x.name).localeCompare(String(y.name)));
+  return out;
+}
+async function slackInfo(id: string): Promise<SlackUser | null> {
+  try {
+    const tok = await getSecret('SLACK_BOT_TOKEN');
+    const res = await fetch('https://slack.com/api/users.info?user=' + encodeURIComponent(id), { headers: { Authorization: 'Bearer ' + tok } });
+    const b = await res.json();
+    return b.ok && b.user && !b.user.deleted ? su(b.user) : null;
+  } catch (_) { return null; }
+}
+async function slackLookup(email: string): Promise<SlackUser | null> {
+  /* 1. the id table notify uses (seeded and cached) */
+  try {
+    const { data } = await svc.from('wa_slack_ids').select('slack_id').eq('email', email).maybeSingle();
+    if (data?.slack_id) { const u = await slackInfo(String(data.slack_id)); if (u) return u; }
+  } catch (_) { /* fine */ }
+  /* 2. the profile email */
   try {
     const tok = await getSecret('SLACK_BOT_TOKEN');
     const res = await fetch('https://slack.com/api/users.lookupByEmail?email=' + encodeURIComponent(email), { headers: { Authorization: 'Bearer ' + tok } });
     const b = await res.json();
-    if (!b.ok || !b.user) return null;
-    return { id: b.user.id, name: b.user.real_name || b.user.profile?.real_name || b.user.name, handle: b.user.name };
-  } catch (_) { return null; }
+    if (b.ok && b.user) { const u = su(b.user); await svc.from('wa_slack_ids').upsert({ email, slack_id: u.id, source: 'lookupByEmail', updated_at: new Date().toISOString() }); return u; }
+  } catch (_) { /* fine */ }
+  /* 3. a unique name match against the roster name */
+  try {
+    const { data: m } = await svc.from('team_members').select('name').ilike('email', email).maybeSingle();
+    const rosterName = String(m?.name || '');
+    if (rosterName) {
+      const all = await slackUsers();
+      const target = norm(rosterName), first = norm(rosterName.split(' ')[0]);
+      const hits = all.filter(u => [u.name, u.handle].some(n => norm(n) === target));
+      const firstHits = all.filter(u => [u.name, u.handle].some(n => norm(String(n).split(' ')[0]) === first));
+      const pick = hits.length === 1 ? hits[0] : (hits.length === 0 && firstHits.length === 1 ? firstHits[0] : null);
+      if (pick) { await svc.from('wa_slack_ids').upsert({ email, slack_id: pick.id, source: 'users.list name match', updated_at: new Date().toISOString() }); return pick; }
+    }
+  } catch (_) { /* fine */ }
+  return null;
 }
 
 async function upsertConn(email: string, provider: string, patch: Record<string, unknown>) {
@@ -132,7 +183,7 @@ Deno.serve(async (req: Request) => {
   try {
     if (action === 'status') {
       const c = await conns(me.email);
-      if (!c.slack) {
+      if (!c.slack || (!(c.slack as Record<string, unknown>).external_id && (c.slack as Record<string, unknown>).enabled !== false)) {
         const s = await slackLookup(me.email);
         if (s) { await upsertConn(me.email, 'slack', { enabled: true, external_id: s.id, external_name: s.name, meta: { handle: s.handle }, last_ok_at: new Date().toISOString() }); }
       }
@@ -144,7 +195,7 @@ Deno.serve(async (req: Request) => {
       if (provider === 'slack') {
         if (!enabled) { await upsertConn(me.email, 'slack', { enabled: false }); return json({ ok: true }); }
         const s = await slackLookup(me.email);
-        if (!s) return json({ ok: false, error: 'No Slack account uses ' + me.email + '. Set your Slack profile email to it, then try again.' });
+        if (!s) return json({ ok: false, pick: true, error: 'No Slack account matches ' + me.email + ' by email or name. Choose your account from the list.' });
         await upsertConn(me.email, 'slack', { enabled: true, external_id: s.id, external_name: s.name, meta: { handle: s.handle }, last_ok_at: new Date().toISOString(), last_error: null });
         return json({ ok: true, slack: s });
       }
@@ -153,6 +204,20 @@ Deno.serve(async (req: Request) => {
       if (!me.email.endsWith('@welfareavenue.com')) return json({ ok: false, error: 'Google connections work for welfareavenue.com accounts.' });
       const v = await verify(me.email, provider);
       return json({ ok: v.ok, error: v.error, detail: v.detail });
+    }
+    if (action === 'slack_users') {
+      const list = await slackUsers();
+      return json({ ok: true, users: list.map(u => ({ id: u.id, name: u.name, handle: u.handle, title: u.title })) });
+    }
+    if (action === 'slack_pick') {
+      const id = String(body.slack_id || '').trim();
+      if (!/^[UW][A-Z0-9]{6,}$/.test(id)) return json({ error: 'slack_id required' }, 400);
+      const u = await slackInfo(id);
+      if (!u) return json({ ok: false, error: 'That Slack account could not be read.' });
+      await svc.from('wa_slack_ids').upsert({ email: me.email, slack_id: u.id, source: 'chosen in Settings', updated_at: new Date().toISOString() });
+      await upsertConn(me.email, 'slack', { enabled: true, external_id: u.id, external_name: u.name, meta: { handle: u.handle }, last_ok_at: new Date().toISOString(), last_error: null });
+      try { await svc.from('change_log').insert({ entity_type: 'hub_connection', entity_id: me.email, field: 'slack', old_value: null, new_value: u.name + ' (' + u.id + '), chosen in Settings', changed_by: me.email }); } catch (_) { /* audit */ }
+      return json({ ok: true, slack: u });
     }
     if (action === 'rsvp') {
       const eventId = String(body.event_id || ''); const response = String(body.response || '');

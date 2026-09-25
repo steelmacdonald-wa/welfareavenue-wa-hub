@@ -33,7 +33,7 @@
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
-  var J = { open: null, timer: null, presence: [], checked: {}, conn: null, tab: 'connections', busy: false };
+  var J = { open: null, timer: null, presence: [], checked: {}, conn: null, tab: 'connections', busy: false, slackPick: false, slackUsers: undefined, slackQ: '' };
   window.w116Conn = window.w116Conn || { calendar: false, drive: false, slack: false };
 
   var css = document.createElement('style');
@@ -94,6 +94,11 @@
     '.w116js .files a{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--wa-text);text-decoration:none;padding:5px 0;border-top:1px solid rgba(16,63,57,.06);}' +
     '.w116js .files a img{width:16px;height:16px;}' +
     '.w116js .files a span{color:var(--wa-muted);font-size:11px;margin-left:auto;white-space:nowrap;}' +
+    '.w116js .pick{background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;margin:4px 0 8px;}' +
+    '.w116js .pick .list{max-height:220px;overflow:auto;margin:6px 0 0;border-top:1px solid rgba(16,63,57,.08);}' +
+    '.w116js .pick .list a{display:flex;gap:8px;align-items:baseline;padding:7px 4px;border-bottom:1px solid rgba(16,63,57,.06);cursor:pointer;font-size:13px;color:var(--wa-text);}' +
+    '.w116js .pick .list a:hover{background:rgba(16,63,57,.06);}' +
+    '.w116js .pick .list a span{font-size:11.5px;color:var(--wa-muted);}' +
     /* HR centre hours block */
     '#w116jhours{margin:16px 0 0;}' +
     '#w116jhours .g{display:grid;grid-template-columns:minmax(140px,1.6fr) minmax(110px,1.2fr) repeat(4,minmax(70px,.8fr));font-size:13px;}' +
@@ -314,7 +319,14 @@
     var body = '';
     if (J.tab === 'connections') {
       var slack = c.slack, cal = c.google_calendar, drv = c.google_drive;
-      body += connRow('S', '#4A154B', 'Slack', slack && slack.enabled !== false && slack.external_id ? { text: 'Connected as ' + E(slack.external_name || '') + (slack.meta && slack.meta.handle ? ' (@' + E(slack.meta.handle) + ')' : '') + '. Hub updates, mentions and requests reach your DMs.', cls: 'ok' } : (slack && slack.enabled === false ? { text: 'Off. Hub messages skip your DMs.' } : { text: 'No Slack account matches ' + E(myEmail()) + ' yet. Set your Slack profile email to it, then switch this on.' }), sw(!!(slack && slack.enabled !== false && slack.external_id), 'slack'));
+      var slackOn = !!(slack && slack.enabled !== false && slack.external_id);
+      body += connRow('S', '#4A154B', 'Slack', slackOn ? { text: 'Connected as ' + E(slack.external_name || '') + (slack.meta && slack.meta.handle ? ' (@' + E(slack.meta.handle) + ')' : '') + '. Hub updates, mentions and requests reach your DMs. <span class="lnk" data-jslackpick="1">Not you? Choose another account</span>', cls: 'ok' } : (slack && slack.enabled === false ? { text: 'Off. Hub messages skip your DMs.' } : { text: 'Not connected yet. Switch it on and the hub looks for your account by email and name, or <span class="lnk" data-jslackpick="1">choose your Slack account</span> yourself.' }), sw(slackOn, 'slack'));
+      if (J.slackPick) {
+        var q = lower(J.slackQ || ''); var list = (J.slackUsers || []).filter(function (u) { return !q || lower(u.name + ' ' + u.handle + ' ' + (u.title || '')).indexOf(q) >= 0; }).slice(0, 40);
+        body += '<div class="pick" id="w116jspick"><div class="note" style="margin:0 0 6px">Pick the Slack account that is you. Hub notifications will go to its DMs.</div><input type="text" id="w116jsq" placeholder="Search by name" value="' + E(J.slackQ || '') + '" autocomplete="off" />' +
+          (J.slackUsers === null ? '<div class="note">Loading the workspace...</div>' : (list.length ? '<div class="list">' + list.map(function (u) { return '<a data-jslackid="' + E(u.id) + '"><b>' + E(u.name) + '</b><span>@' + E(u.handle) + (u.title ? ' &middot; ' + E(u.title) : '') + '</span></a>'; }).join('') + '</div>' : '<div class="note">Nobody matches that.</div>')) +
+          '<div class="note"><span class="lnk" data-jslackpick="0">Close</span></div></div>';
+      }
       body += connRow('C', '#1a73e8', 'Google Calendar', connStatus(cal, 'On. Accept or decline hub meetings from Home; replies land on your calendar' + (cal && cal.external_name ? ' (' + E(cal.external_name) + ')' : '') + '.'), sw(!!(cal && cal.enabled), 'google_calendar'));
       body += connRow('D', '#188038', 'Google Drive', connStatus(drv, 'On. Your recent files show on your profile and here.'), sw(!!(drv && drv.enabled), 'google_drive'));
       body += connRow('@', GOLD, 'Email (hub@welfareavenue.com)', 'Cc the hub on anything worth keeping: invoices go to Finance, Loom or Otter summaries through the transcript pipeline, other threads to your team page. No setup needed.', '<span class="lnk" data-jgo="#hubmail">Hub inbox</span>');
@@ -360,6 +372,18 @@
     var tab = t.closest('[data-jtab]') || t.closest('[data-jtab2]');
     if (tab) { J.tab = tab.getAttribute('data-jtab') || tab.getAttribute('data-jtab2'); paintSettings(); return; }
     var go = t.closest('[data-jgo]'); if (go) { closeModal(); location.hash = go.getAttribute('data-jgo'); return; }
+    var sp = t.closest('[data-jslackpick]');
+    if (sp) {
+      J.slackPick = sp.getAttribute('data-jslackpick') === '1';
+      if (J.slackPick && J.slackUsers === undefined) { J.slackUsers = null; paintSettings(); try { var su = await fn('hub-connect', { action: 'slack_users' }); J.slackUsers = su.users || []; } catch (err) { J.slackUsers = []; toastS('Could not read the Slack workspace'); } }
+      paintSettings(); var qi = document.getElementById('w116jsq'); if (qi) qi.focus(); return;
+    }
+    var sid = t.closest('[data-jslackid]');
+    if (sid) {
+      try { var pr = await fn('hub-connect', { action: 'slack_pick', slack_id: sid.getAttribute('data-jslackid') }); if (pr.ok === true) { toastS('Slack connected as ' + (pr.slack && pr.slack.name ? pr.slack.name : 'you')); J.slackPick = false; } else toastS(String(pr.error || 'Could not connect Slack').slice(0, 160)); }
+      catch (err) { toastS('Could not connect Slack'); }
+      await loadConn(); paintSettings(); return;
+    }
     var s = t.closest('[data-jsw]');
     if (s) {
       var prov = s.getAttribute('data-jsw'); var on = !s.classList.contains('on');
@@ -367,6 +391,7 @@
       try {
         var r = await fn('hub-connect', { action: 'toggle', provider: prov, enabled: on });
         if (r.ok === true) toastS(on ? 'Connected' : 'Switched off');
+        else if (r.pick) { J.slackPick = true; if (J.slackUsers === undefined) { J.slackUsers = null; try { var su2 = await fn('hub-connect', { action: 'slack_users' }); J.slackUsers = su2.users || []; } catch (err2) { J.slackUsers = []; } } toastS('Pick your Slack account from the list'); }
         else toastS(String(r.error || 'The connection service did not answer').slice(0, 160));
       } catch (err) { toastS('Could not reach the connection service'); }
       await loadConn(); paintSettings();
@@ -390,6 +415,13 @@
         act.disabled = false; return;
       }
     }
+  });
+  document.addEventListener('input', function (e) {
+    if (!e.target || e.target.id !== 'w116jsq') return;
+    J.slackQ = e.target.value; var list = document.querySelector('#w116jspick .list'); var q = lower(J.slackQ || '');
+    var rows = (J.slackUsers || []).filter(function (u) { return !q || lower(u.name + ' ' + u.handle + ' ' + (u.title || '')).indexOf(q) >= 0; }).slice(0, 40);
+    var html = rows.length ? rows.map(function (u) { return '<a data-jslackid="' + E(u.id) + '"><b>' + E(u.name) + '</b><span>@' + E(u.handle) + (u.title ? ' &middot; ' + E(u.title) : '') + '</span></a>'; }).join('') : '<div class="note">Nobody matches that.</div>';
+    if (list) list.innerHTML = html; else { var pk = document.getElementById('w116jspick'); if (pk) { var d = document.createElement('div'); d.className = 'list'; d.innerHTML = html; pk.insertBefore(d, pk.lastElementChild); } }
   });
   document.addEventListener('change', function (e) {
     var c = e.target.closest && e.target.closest('[data-jev]'); if (!c) return;
