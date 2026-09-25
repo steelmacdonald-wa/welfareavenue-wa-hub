@@ -107,5 +107,5 @@
     }
     if (!parts) return '';
     return '<div class="cardy"><h4>Who follows us <span class="sub">the audience each platform shares</span><span class="sp"></span>' + (lid ? '<span class="w129seg"><a data-w129aud="followers"' + (X.aud === 'followers' ? ' class="on"' : '') + '>LinkedIn followers</a><a data-w129aud="visitors"' + (X.aud === 'visitors' ? ' class="on"' : '') + '>LinkedIn visitors</a></span>' : '') + '</h4>'
-      + '<div class="w129aud">' + parts + '</div><p class="w129note" style="margin:10px 0 0">Facebook: Meta stopped sharing Page audience breakdowns (age, gender, city) through its API in 2024; Meta Business Suite still shows them.</p></div>';
+      + '<div class="w129aud">' + parts + '</div><p class="w129note" style="margin:10px 0 0">Facebook: Meta no longer shares Page audience breakdowns (age, gender, city) through its API; Meta Business Suite still shows them.</p></div>';
   }

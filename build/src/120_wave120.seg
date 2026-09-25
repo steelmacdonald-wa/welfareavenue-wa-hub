@@ -307,7 +307,7 @@
       if (p.shares != null) nums.push('<span><b>' + num(p.shares) + '</b>shares</span>');
       if (p.saves != null) nums.push('<span><b>' + num(p.saves) + '</b>saves</span>');
       return '<a class="post" ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="th">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="big">' + E(P[p.platform] ? P[p.platform].mark : '') + '</span>') + mark(p.platform) + '</div>' +
-        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(dayR(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
+        '<div class="bd"><div class="cap">' + (p.caption ? E(p.caption) : '<span style="color:var(--wa-muted)">No caption</span>') + '</div><div class="when">' + E(dayR(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
     }).join('') + '</div>';
     if (pages.length) html += '<h4 style="margin-top:16px;font-size:17px">Most read pages on the website</h4><div style="font-size:13px;line-height:1.7">' + pages.map(function (p) { return '<div><b style="font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';margin-right:6px">' + num(p.views) + '</b>' + (p.url ? '<a href="' + E(p.url) + '" target="_blank" rel="noopener" style="color:' + GREEN + '">' + E(p.caption || p.external_id) + '</a>' : E(p.caption || p.external_id)) + ' <span style="color:var(--wa-muted);font-size:11.5px">' + E(p.external_id) + '</span></div>'; }).join('') + '</div>';
     return html + '</div>';
