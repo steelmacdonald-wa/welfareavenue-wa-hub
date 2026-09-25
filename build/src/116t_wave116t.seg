@@ -1,0 +1,410 @@
+/* =====================================================================
+   WA v116t tasks: subtasks, descriptions, attachments, the tree (25/09/26)
+   =====================================================================
+   Ahmed, via Steel: "Tasks hierarchy like in ClickUp: SOP & Requests ->
+   Marketing -> Posts Requests -> tasks. Formatting task descriptions
+   (bold, bullet points) and attaching files and pictures."
+   The hierarchy was already Team > Project > Sub-project > Task, with
+   workstreams inside a team. This wave adds the two missing levels and
+   the way to see them:
+   - Subtasks: any task can hold subtasks (dept_tasks.parent_task_id).
+     The task drawer (wave116b) shows them with a tick, an "Add a
+     subtask" line, and the parent's breadcrumb (Team > Project >
+     Parent task) at the top. Subtask rows on the boards are indented
+     with the parent's name; a parent row shows "2/5 subtasks".
+   - Description: a proper description on every task (dept_tasks.
+     description) with a small toolbar: bold, italic, bullets, numbers,
+     link, and a preview. Stored as light Markdown, rendered safely.
+   - Attachments: files and pictures on a task (task_files + the
+     private task-files bucket): drop them on the drawer, pick them, or
+     paste a screenshot into the description. Pictures show as
+     thumbnails; everything opens through a signed link.
+   - Tree: a "Tree" view on every team's task page (next to List, Board,
+     Calendar): Team > Projects (with sub-projects) > tasks > subtasks,
+     collapsible, with counts, each line opening its task or project.
+   ===================================================================== */
+(function () {
+  if (window.__wa116t) return; window.__wa116t = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var K = { task: null, files: {}, urls: {}, preview: {}, tree: {}, pend: null, saving: {} };
+
+  var css = document.createElement('style');
+  css.id = 'wa116tcss';
+  css.textContent = '' +
+    '#w116dr .w116tcrumb{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;color:var(--wa-muted);margin:0 0 8px;font-family:' + BODY + ';}' +
+    '#w116dr .w116tcrumb a{color:' + GREEN + ';cursor:pointer;font-weight:600;text-decoration:none;}' +
+    '#w116dr .w116tcrumb a:hover{text-decoration:underline;}' +
+    '#w116dr .w116tcrumb .sep{opacity:.5;}' +
+    '#w116dr .w116tdesc{font-family:' + BODY + ';}' +
+    '#w116dr .w116ttb{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 6px;}' +
+    '#w116dr .w116ttb button{font-family:' + BODY + ';font-size:12px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.07);border:none;border-radius:8px;padding:5px 9px;cursor:pointer;}' +
+    '#w116dr .w116ttb button:hover{background:rgba(16,63,57,.14);}' +
+    '#w116dr .w116ttb button.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w116dr .w116ttb .sp{flex:1;}' +
+    '#w116dr .w116ttb .st{font-size:11px;color:var(--wa-muted);align-self:center;}' +
+    '#w116dr textarea.w116tta{width:100%;box-sizing:border-box;min-height:110px;padding:10px 12px;border:1px solid rgba(16,63,57,.18);border-radius:10px;font-size:13.5px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
+    '#w116dr textarea.w116tta:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.10);}' +
+    '#w116dr .w116tpv{min-height:60px;padding:10px 12px;border:1px dashed rgba(16,63,57,.18);border-radius:10px;font-size:13.5px;line-height:1.55;color:var(--wa-text);cursor:text;}' +
+    '#w116dr .w116tpv.empty{color:var(--wa-muted);font-style:italic;}' +
+    '.w116md p{margin:0 0 8px;}.w116md ul,.w116md ol{margin:0 0 8px 20px;padding:0;}.w116md li{margin:2px 0;}.w116md a{color:' + GREEN + ';}.w116md code{background:rgba(16,63,57,.08);padding:1px 5px;border-radius:5px;font-size:12.5px;}.w116md strong{font-weight:700;}' +
+    '#w116dr .w116tsub{display:flex;flex-direction:column;gap:4px;font-family:' + BODY + ';}' +
+    '#w116dr .w116tsub .s{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;background:rgba(16,63,57,.04);font-size:13px;}' +
+    '#w116dr .w116tsub .s .dn{width:18px;height:18px;border-radius:6px;border:1.5px solid rgba(16,63,57,.35);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;color:' + CREAM + ';}' +
+    '#w116dr .w116tsub .s.done .dn{background:' + TEAL + ';border-color:' + TEAL + ';}' +
+    '#w116dr .w116tsub .s.done .t{text-decoration:line-through;color:var(--wa-muted);}' +
+    '#w116dr .w116tsub .s .t{cursor:pointer;}' +
+    '#w116dr .w116tsub .s .t:hover{text-decoration:underline;}' +
+    '#w116dr .w116tsub .s .m{font-size:11.5px;color:var(--wa-muted);white-space:nowrap;}' +
+    '#w116dr .w116tsub .add{display:flex;gap:6px;margin-top:4px;}' +
+    '#w116dr .w116tsub .add input{flex:1;padding:8px 10px;border:1px solid rgba(16,63,57,.18);border-radius:10px;font-size:13px;font-family:' + BODY + ';}' +
+    '#w116dr .w116tsub .add button{font-family:' + BODY + ';font-size:12px;font-weight:700;color:' + CREAM + ';background:' + GREEN + ';border:none;border-radius:10px;padding:0 12px;cursor:pointer;}' +
+    '#w116dr .w116tsub .bar{height:6px;border-radius:3px;background:rgba(16,63,57,.10);margin:0 0 6px;overflow:hidden;}' +
+    '#w116dr .w116tsub .bar i{display:block;height:100%;background:' + TEAL + ';}' +
+    '#w116dr .w116tfiles{font-family:' + BODY + ';}' +
+    '#w116dr .w116tfiles .drop{border:2px dashed rgba(16,63,57,.22);border-radius:12px;padding:12px;text-align:center;font-size:12.5px;color:var(--wa-muted);cursor:pointer;transition:background .15s,border-color .15s;}' +
+    '#w116dr .w116tfiles .drop.over{background:rgba(220,165,39,.15);border-color:' + GOLD + ';}' +
+    '#w116dr .w116tfiles .drop b{color:' + GREEN + ';}' +
+    '#w116dr .w116tfiles .grid{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;}' +
+    '#w116dr .w116tfiles .f{position:relative;width:96px;border-radius:10px;overflow:hidden;background:rgba(16,63,57,.05);cursor:pointer;font-size:11px;color:var(--wa-text);}' +
+    '#w116dr .w116tfiles .f img{width:96px;height:72px;object-fit:cover;display:block;}' +
+    '#w116dr .w116tfiles .f .ic{height:72px;display:flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:16px;color:' + GREEN + ';font-weight:700;letter-spacing:.5px;}' +
+    '#w116dr .w116tfiles .f .n{padding:4px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w116dr .w116tfiles .f .x{position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:11px;display:none;align-items:center;justify-content:center;}' +
+    '#w116dr .w116tfiles .f:hover .x{display:flex;}' +
+    '#w116dr .w116tfiles .up{font-size:12px;color:var(--wa-muted);margin:4px 0 0;}' +
+    /* board rows */
+    '.w116r.w116tchild{margin-left:26px;}' +
+    '.w116r .w116tag.sub{background:rgba(111,100,171,.14);color:#4d4480;}' +
+    '.w116r .w116tag.subs{background:rgba(42,140,122,.14);color:#1c6b5d;}' +
+    /* tree */
+    '.w116tree{font-family:' + BODY + ';font-size:13.5px;}' +
+    '.w116tree .n{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:10px;}' +
+    '.w116tree .n:hover{background:rgba(16,63,57,.05);}' +
+    '.w116tree .n .tg{width:18px;height:18px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:' + GREEN + ';background:rgba(16,63,57,.08);cursor:pointer;flex:none;}' +
+    '.w116tree .n .tg.leaf{visibility:hidden;}' +
+    '.w116tree .n .lb{cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.w116tree .n .lb:hover{text-decoration:underline;}' +
+    '.w116tree .n.team .lb{font-family:' + HEAD + ';font-size:20px;color:' + GREEN + ';}' +
+    '.w116tree .n.project .lb{font-weight:700;}' +
+    '.w116tree .n.task.done .lb{text-decoration:line-through;color:var(--wa-muted);}' +
+    '.w116tree .n .ct{font-size:11px;color:var(--wa-muted);white-space:nowrap;}' +
+    '.w116tree .n .ct b{color:' + GREEN + ';}' +
+    '.w116tree .ch{margin-left:22px;border-left:1px solid rgba(16,63,57,.12);padding-left:6px;}' +
+    '.w116tree .ch.closed{display:none;}' +
+    '.w116tree .n .w116st{margin-left:auto;}' +
+    '.w116tree .n .add{font-size:12px;color:' + GREEN + ';cursor:pointer;opacity:0;margin-left:6px;}' +
+    '.w116tree .n:hover .add{opacity:1;}' +
+    '.w116tree .n.ws .lb{font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function who0() { try { return who(); } catch (e) { return 'staff'; } }
+  function myName() { try { var em = lower(USER && USER.email); var m = (DB_MEMBERS || []).filter(function (x) { return lower(x.email) === em; })[0]; return (m && m.name) || (USER && USER.name) || ''; } catch (e) { return ''; } }
+  function tasks() { return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []); }
+  function taskById(id) { return tasks().filter(function (t) { return String(t.id) === String(id); })[0] || null; }
+  function children(id) { return tasks().filter(function (t) { return String(t.parent_task_id) === String(id); }); }
+  function projects() { return window.w116Projects ? window.w116Projects() : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []); }
+  function projById(id) { return projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
+  function label(d) { try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function logT(t, field, a, b) { try { logChange('dept_task', t.id, field, a, b); } catch (e) { /* fine */ } }
+  function openTask(id) { try { if (window.w116Board && window.w116Board.open) { window.w116Board.open(Number(id)); return; } } catch (e) { /* fine */ } location.hash = '#task/' + id; }
+  function repaint() { try { if (window.w116Board && window.w116Board.refresh) window.w116Board.refresh(); } catch (e) { /* fine */ } }
+
+  /* ---------- markdown, small and safe ---------- */
+  function inline(s) {
+    s = E(s);
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    s = s.replace(/(^|\s)(https?:\/\/[^\s<]+)/g, function (m, a, u) { return a + '<a href="' + u + '" target="_blank" rel="noopener">' + u.replace(/^https?:\/\/(www\.)?/, '').slice(0, 50) + '</a>'; });
+    return s;
+  }
+  function md(text) {
+    var lines = String(text || '').replace(/\r/g, '').split('\n'); var out = ''; var list = null; var para = [];
+    function flushP() { if (para.length) { out += '<p>' + para.map(inline).join('<br>') + '</p>'; para = []; } }
+    function flushL() { if (list) { out += '</' + list + '>'; list = null; } }
+    lines.forEach(function (l) {
+      var mb = l.match(/^\s*[-*\u2022]\s+(.*)$/), mo = l.match(/^\s*\d+[.)]\s+(.*)$/);
+      if (mb || mo) { flushP(); var kind = mb ? 'ul' : 'ol'; if (list !== kind) { flushL(); out += '<' + kind + '>'; list = kind; } out += '<li>' + inline((mb || mo)[1]) + '</li>'; return; }
+      flushL();
+      if (!l.trim()) { flushP(); return; }
+      para.push(l);
+    });
+    flushL(); flushP();
+    return out;
+  }
+  window.w116tMarkdown = md;
+
+  /* ---------- the drawer ---------- */
+  function drawerTaskId() { var hs = document.querySelectorAll('#w116dr .w116drh span'); for (var i = 0; i < hs.length; i++) { var m = hs[i].textContent.match(/#(\d+)/); if (m) return Number(m[1]); } return null; }
+  function crumbHtml(t) {
+    var bits = ['<a data-w116tgo="#team/' + E(t.department) + '">' + E(label(t.department)) + '</a>'];
+    var p = t.project_id ? projById(t.project_id) : null;
+    if (p && p.parent_id) { var pp = projById(p.parent_id); if (pp) bits.push('<a data-w116tgo="#project/' + pp.id + '">' + E(pp.name) + '</a>'); }
+    if (p) bits.push('<a data-w116tgo="#project/' + p.id + '">' + E(p.name) + '</a>');
+    if (t.subsection && t.subsection !== 'General') bits.push('<span>' + E(t.subsection) + '</span>');
+    var par = t.parent_task_id ? taskById(t.parent_task_id) : null;
+    if (par) bits.push('<a data-w116topen="' + par.id + '" title="Parent task">' + E(par.title.length > 40 ? par.title.slice(0, 38) + '\u2026' : par.title) + '</a>');
+    return '<div class="w116tcrumb">' + bits.join('<span class="sep">&rsaquo;</span>') + '<span class="sep">&rsaquo;</span><span>this task</span></div>';
+  }
+  function descHtml(t) {
+    var pv = K.preview[t.id] !== false; var text = t.description || '';
+    return '<div class="w116tdw"><div class="w116drs">Description</div><div class="w116tdesc" data-tid="' + t.id + '">' +
+      '<div class="w116ttb"><button data-w116tf="bold" title="Bold (Ctrl+B)"><b>B</b></button><button data-w116tf="italic" title="Italic (Ctrl+I)"><i>I</i></button><button data-w116tf="ul" title="Bullet list">&bull; List</button><button data-w116tf="ol" title="Numbered list">1. List</button><button data-w116tf="link" title="Link">Link</button><span class="sp"></span><span class="st" id="w116tdst"></span><button data-w116tf="pv" class="' + (pv ? 'on' : '') + '">' + (pv ? 'Edit' : 'Preview') + '</button></div>' +
+      (pv ? '<div class="w116tpv w116md' + (text.trim() ? '' : ' empty') + '" data-w116tf="edit">' + (text.trim() ? md(text) : 'No description yet. Click to write one: bold, bullets, links, or paste a screenshot.') + '</div>' :
+        '<textarea class="w116tta" id="w116tta" placeholder="What this is, what done looks like, links... **bold**, *italic*, - bullets, 1. numbered">' + E(text) + '</textarea>') + '</div></div>';
+  }
+  function subsHtml(t) {
+    var kids = children(t.id); var done = kids.filter(function (k) { return k.done; }).length;
+    return '<div class="w116tsw" data-tid="' + t.id + '"><div class="w116drs">Subtasks' + (kids.length ? ' <span style="font-weight:500;letter-spacing:0;text-transform:none">' + done + '/' + kids.length + '</span>' : '') + '</div><div class="w116tsub" data-tid="' + t.id + '">' +
+      (kids.length ? '<div class="bar"><i style="width:' + Math.round(done / kids.length * 100) + '%"></i></div>' : '') +
+      kids.map(function (k) { return '<div class="s' + (k.done ? ' done' : '') + '" data-sid="' + k.id + '"><span class="dn" data-w116tsd="' + k.id + '">' + (k.done ? '&#10003;' : '') + '</span><span class="t" data-w116topen="' + k.id + '">' + E(k.title) + '</span><span class="m">' + E(k.owner ? k.owner.split(' ')[0] : '') + (k.due_date ? ' \u00b7 ' + E(String(k.due_date).slice(5)) : '') + '</span></div>'; }).join('') +
+      '<div class="add"><input type="text" id="w116tsa" placeholder="Add a subtask and press Enter"><button data-w116tsadd="' + t.id + '">Add</button></div></div></div>';
+  }
+  function filesHtml(t) {
+    var list = K.files[t.id] || null;
+    var grid = list === null ? '<p class="up">Loading...</p>' : (list.length ? '<div class="grid">' + list.map(function (f) {
+      var img = /^image\//.test(f.mime || ''); var u = K.urls[f.path];
+      return '<div class="f" data-w116tfo="' + f.id + '" title="' + E(f.name) + (f.by ? ' \u00b7 ' + E(f.by) : '') + '">' + (img && u ? '<img src="' + E(u) + '" alt="">' : '<div class="ic">' + E((f.name.split('.').pop() || 'file').toUpperCase().slice(0, 5)) + '</div>') + '<div class="n">' + E(f.name) + '</div><span class="x" data-w116tfx="' + f.id + '" title="Remove">&#10005;</span></div>';
+    }).join('') + '</div>' : '');
+    return '<div class="w116tfw" data-tid="' + t.id + '"><div class="w116drs">Attachments' + (list && list.length ? ' <span style="font-weight:500;letter-spacing:0;text-transform:none">' + list.length + '</span>' : '') + '</div><div class="w116tfiles" data-tid="' + t.id + '">' + grid +
+      '<div class="drop" data-w116tpick="' + t.id + '"><b>Add files or pictures</b> \u00b7 drop them here, click to pick, or paste a screenshot into the description<input type="file" multiple style="display:none" data-w116tfile="' + t.id + '"></div><p class="up" id="w116tup"></p></div></div>';
+  }
+  function inject() {
+    var dr = document.getElementById('w116dr'); if (!dr || !dr.classList.contains('open')) return;
+    var id = drawerTaskId(); if (!id) return; var t = taskById(id); if (!t) return;
+    if (dr.querySelector('.w116tdesc') && K.task === id) return;
+    K.task = id;
+    var body = dr.querySelector('.w116drc'); var fields = dr.querySelector('.w116f'); if (!body || !fields) return;
+    var old = dr.querySelectorAll('.w116tcrumb, .w116tdesc, .w116tsub, .w116tfiles, .w116tsec'); old.forEach(function (x) { x.remove(); });
+    var ttl = dr.querySelector('textarea.ttl'); if (ttl) ttl.insertAdjacentHTML('beforebegin', crumbHtml(t));
+    var wrap = document.createElement('div'); wrap.className = 'w116tsec'; wrap.innerHTML = descHtml(t) + subsHtml(t) + filesHtml(t);
+    fields.insertAdjacentElement('afterend', wrap);
+    loadFiles(t);
+  }
+  async function loadFiles(t) {
+    try {
+      var r = await db.from('task_files').select('*').eq('task_id', Number(t.id)).order('created_at');
+      var rows = (r && r.data) || []; K.files[t.id] = rows;
+      for (var i = 0; i < rows.length; i++) { var f = rows[i]; if (/^image\//.test(f.mime || '') && !K.urls[f.path]) { try { var s = await db.storage.from('task-files').createSignedUrl(f.path, 3600); if (s && s.data && s.data.signedUrl) K.urls[f.path] = s.data.signedUrl; } catch (e) { /* fine */ } } }
+    } catch (e) { K.files[t.id] = K.files[t.id] || []; }
+    var box = document.querySelector('#w116dr .w116tfw[data-tid="' + t.id + '"]'); if (box && K.task === t.id) box.outerHTML = filesHtml(t);
+  }
+  async function saveDesc(t, text) {
+    text = String(text || '').slice(0, 20000);
+    if ((t.description || '') === text) return;
+    var st = document.getElementById('w116tdst'); if (st) st.textContent = 'Saving...';
+    try {
+      var r = await db.from('dept_tasks').update({ description: text, updated_at: new Date().toISOString(), updated_by: who0() }).eq('id', t.id);
+      if (r && r.error) throw r.error;
+      t.description = text; logT(t, 'description', null, text.slice(0, 120));
+      if (st) st.textContent = 'Saved';
+      setTimeout(function () { var s2 = document.getElementById('w116tdst'); if (s2 && s2.textContent === 'Saved') s2.textContent = ''; }, 2000);
+    } catch (e) { if (st) st.textContent = 'Not saved'; toastS('Could not save the description'); }
+  }
+  function wrapSel(ta, before, after, placeholder) {
+    var s = ta.selectionStart, e = ta.selectionEnd; var v = ta.value; var sel = v.slice(s, e) || placeholder;
+    ta.value = v.slice(0, s) + before + sel + after + v.slice(e); ta.focus(); ta.selectionStart = s + before.length; ta.selectionEnd = s + before.length + sel.length;
+  }
+  function prefixLines(ta, fn) {
+    var s = ta.selectionStart, e = ta.selectionEnd; var v = ta.value;
+    var ls = v.lastIndexOf('\n', s - 1) + 1; var le = v.indexOf('\n', e); if (le < 0) le = v.length;
+    var block = v.slice(ls, le).split('\n').map(fn).join('\n');
+    ta.value = v.slice(0, ls) + block + v.slice(le); ta.focus(); ta.selectionStart = ls; ta.selectionEnd = ls + block.length;
+  }
+  async function addSub(t, title) {
+    title = String(title || '').trim(); if (!title) return;
+    var row = { department: t.department, subsection: t.subsection || null, title: title, owner: t.owner || myName() || '', status: 'Open', flag: false, priority: false, done: false, sort: 999, due_date: null, project_id: t.project_id || null, parent_task_id: t.id, updated_by: who0(), opened_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    var r = await db.from('dept_tasks').insert(row).select('*').single();
+    if (r && r.error) { toastS('Could not add the subtask'); return; }
+    var saved = (r && r.data) || row; if (!saved.id) saved.id = -Date.now();
+    tasks().push(saved); logT(saved, 'added', null, title + ' (subtask of #' + t.id + ')');
+    var box = document.querySelector('#w116dr .w116tsw[data-tid="' + t.id + '"]'); if (box) box.outerHTML = subsHtml(t);
+    var inp = document.getElementById('w116tsa'); if (inp) inp.focus();
+    repaint();
+  }
+  async function toggleSub(id) {
+    var k = taskById(id); if (!k) return; var nowDone = !k.done; var now = new Date().toISOString();
+    var r = await db.from('dept_tasks').update({ done: nowDone, closed_at: nowDone ? now : null, status: nowDone ? 'Done' : 'Open', updated_at: now, updated_by: who0() }).eq('id', k.id);
+    if (r && r.error) { toastS('Could not update'); return; }
+    k.done = nowDone; k.closed_at = nowDone ? now : null; k.status = nowDone ? 'Done' : 'Open'; logT(k, 'done', String(!nowDone), String(nowDone));
+    var par = taskById(k.parent_task_id); if (par) { var box = document.querySelector('#w116dr .w116tsw[data-tid="' + par.id + '"]'); if (box) box.outerHTML = subsHtml(par); }
+    repaint();
+  }
+  async function upload(t, files) {
+    var up = document.getElementById('w116tup'); var done = 0, list = Array.prototype.slice.call(files || []);
+    if (!list.length) return;
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i];
+      if (f.size > 25 * 1024 * 1024) { toastS(f.name + ' is over 25 MB'); continue; }
+      if (up) up.textContent = 'Uploading ' + f.name + ' (' + (i + 1) + '/' + list.length + ')...';
+      var safe = String(f.name || 'file').replace(/[^\w.\-]+/g, '_').slice(0, 100);
+      var path = t.id + '/' + Date.now().toString(36) + '_' + safe;
+      try {
+        var r = await db.storage.from('task-files').upload(path, f, { contentType: f.type || 'application/octet-stream', upsert: false });
+        if (r && r.error) throw r.error;
+        var ins = await db.from('task_files').insert({ task_id: t.id, name: f.name || safe, path: path, mime: f.type || null, size: f.size || null, by: who0() }).select('*').single();
+        if (ins && ins.error) throw ins.error;
+        (K.files[t.id] = K.files[t.id] || []).push(ins.data);
+        if (/^image\//.test(f.type || '')) { try { var s = await db.storage.from('task-files').createSignedUrl(path, 3600); if (s && s.data && s.data.signedUrl) K.urls[path] = s.data.signedUrl; } catch (e) { /* fine */ } }
+        logT(t, 'attachment', null, f.name); done++;
+      } catch (e) { toastS('Could not upload ' + f.name + ': ' + (e.message || e)); }
+    }
+    var box = document.querySelector('#w116dr .w116tfw[data-tid="' + t.id + '"]'); if (box && K.task === t.id) box.outerHTML = filesHtml(t);
+    if (done) toastS(done + (done === 1 ? ' file attached' : ' files attached'));
+  }
+  async function openFile(t, fid) {
+    var f = (K.files[t.id] || []).filter(function (x) { return String(x.id) === String(fid); })[0]; if (!f) return;
+    try { var s = await db.storage.from('task-files').createSignedUrl(f.path, 600); if (s && s.data && s.data.signedUrl) window.open(s.data.signedUrl, '_blank', 'noopener'); else toastS('Could not open the file'); } catch (e) { toastS('Could not open the file'); }
+  }
+  async function removeFile(t, fid) {
+    var f = (K.files[t.id] || []).filter(function (x) { return String(x.id) === String(fid); })[0]; if (!f) return;
+    if (!confirm('Remove ' + f.name + ' from this task?')) return;
+    try { var r = await db.from('task_files').delete().eq('id', f.id); if (r && r.error) throw r.error; try { await db.storage.from('task-files').remove([f.path]); } catch (e) { /* fine */ } K.files[t.id] = (K.files[t.id] || []).filter(function (x) { return x.id !== f.id; }); logT(t, 'attachment removed', f.name, null); var box = document.querySelector('#w116dr .w116tfw[data-tid="' + t.id + '"]'); if (box) box.outerHTML = filesHtml(t); }
+    catch (e) { toastS('Could not remove it: ' + (e.message || e)); }
+  }
+
+  /* ---------- the boards: subtask rows ---------- */
+  function decorateRows() {
+    document.querySelectorAll('.w116r[data-tid]').forEach(function (r) {
+      var t = taskById(r.getAttribute('data-tid')); if (!t) return;
+      var kids = children(t.id); var ttl = r.querySelector('.w116t');
+      if (t.parent_task_id && !r.classList.contains('w116tchild')) { var par = taskById(t.parent_task_id); r.classList.add('w116tchild'); if (ttl && par && !ttl.querySelector('.w116tag.sub')) ttl.insertAdjacentHTML('beforeend', '<span class="w116tag sub" title="Subtask of ' + E(par.title) + '">&#8627; ' + E(par.title.length > 28 ? par.title.slice(0, 26) + '\u2026' : par.title) + '</span>'); }
+      if (kids.length && ttl && !ttl.querySelector('.w116tag.subs')) ttl.insertAdjacentHTML('beforeend', '<span class="w116tag subs" title="Subtasks">' + kids.filter(function (k) { return k.done; }).length + '/' + kids.length + ' subtasks</span>');
+    });
+  }
+
+  /* ---------- the tree view ---------- */
+  function ensureTreeButton() {
+    document.querySelectorAll('.w116tb').forEach(function (tb) {
+      if (tb.querySelector('[data-w116tview]')) return;
+      var views = tb.querySelectorAll('.w116seg a[data-act="view"]'); var last = views[views.length - 1]; if (!last) return;
+      last.insertAdjacentHTML('afterend', '<a data-w116tview="tree" class="' + (K.tree.on ? 'on' : '') + '" title="Team, projects, tasks and subtasks as a tree">Tree</a>');
+    });
+  }
+  function scopeDept() { var m = String(location.hash || '').match(/^#team\/([a-z0-9_-]+)/); if (m) return m[1]; try { var g = document.querySelector('.w116r[data-tid]'); var t = g && taskById(g.getAttribute('data-tid')); return t ? t.department : null; } catch (e) { return null; } }
+  function treeHtml(d) {
+    var all = tasks().filter(function (t) { return t.department === d; });
+    var showDone = !!K.tree.showDone;
+    var visible = all.filter(function (t) { return showDone || !t.done; });
+    var byId = {}; visible.forEach(function (t) { byId[t.id] = t; });
+    var projs = projects().filter(function (p) { return p.department === d && (p.status || 'active') === 'active'; });
+    var closed = K.tree.closed || {};
+    function taskNode(t, depth) {
+      var kids = visible.filter(function (k) { return String(k.parent_task_id) === String(t.id); });
+      var key = 't' + t.id; var isClosed = !!closed[key];
+      var st = window.w116Board ? '' : ''; var stp = '<span class="w116st" style="font-size:10.5px;padding:2px 8px;border-radius:999px;background:rgba(16,63,57,.08)">' + E(t.status || (t.done ? 'Done' : 'Open')) + '</span>';
+      return '<div class="n task' + (t.done ? ' done' : '') + '" data-w116tn="' + key + '"><span class="tg' + (kids.length ? '' : ' leaf') + '" data-w116ttg="' + key + '">' + (isClosed ? '+' : '\u2212') + '</span><span class="lb" data-w116topen="' + t.id + '">' + E(t.title) + '</span>' + (kids.length ? '<span class="ct"><b>' + kids.filter(function (k) { return k.done; }).length + '</b>/' + kids.length + '</span>' : '') + (t.owner ? '<span class="ct">' + E(t.owner.split(' ')[0]) + '</span>' : '') + (t.due_date ? '<span class="ct">' + E(String(t.due_date).slice(5)) + '</span>' : '') + stp + '<span class="add" data-w116tsq="' + t.id + '" title="Add a subtask">+ subtask</span></div>' +
+        (kids.length ? '<div class="ch' + (isClosed ? ' closed' : '') + '">' + kids.map(function (k) { return taskNode(k, depth + 1); }).join('') + '</div>' : '');
+    }
+    function taskList(list) {
+      /* top-level tasks in this bucket: no parent, or a parent outside the bucket */
+      var ids = {}; list.forEach(function (t) { ids[t.id] = 1; });
+      var roots = list.filter(function (t) { return !t.parent_task_id || !ids[t.parent_task_id]; });
+      var byWs = {}; roots.forEach(function (t) { var w = t.subsection || ''; (byWs[w] = byWs[w] || []).push(t); });
+      var wss = Object.keys(byWs).sort(function (a, b) { return (a === '' ? -1 : b === '' ? 1 : a.localeCompare(b)); });
+      return wss.map(function (w) { return (w ? '<div class="n ws"><span class="tg leaf"></span><span class="lb">' + E(w) + '</span><span class="ct">' + byWs[w].length + '</span></div>' : '') + byWs[w].map(function (t) { return taskNode(t, 0); }).join(''); }).join('');
+    }
+    function projNode(p) {
+      var subs = projs.filter(function (x) { return Number(x.parent_id) === Number(p.id); });
+      var mine = visible.filter(function (t) { return Number(t.project_id) === Number(p.id); });
+      var total = mine.length + subs.reduce(function (a, s) { return a + visible.filter(function (t) { return Number(t.project_id) === Number(s.id); }).length; }, 0);
+      var key = 'p' + p.id; var isClosed = !!closed[key];
+      return '<div class="n project" data-w116tn="' + key + '"><span class="tg" data-w116ttg="' + key + '">' + (isClosed ? '+' : '\u2212') + '</span><span class="lb" data-w116tgo="#project/' + p.id + '">' + E(p.name) + '</span><span class="ct"><b>' + total + '</b> task' + (total === 1 ? '' : 's') + (subs.length ? ' \u00b7 ' + subs.length + ' sub-project' + (subs.length === 1 ? '' : 's') : '') + '</span></div>' +
+        '<div class="ch' + (isClosed ? ' closed' : '') + '">' + subs.map(projNode).join('') + taskList(mine) + '</div>';
+    }
+    var tops = projs.filter(function (p) { return !p.parent_id || !projs.some(function (x) { return Number(x.id) === Number(p.parent_id); }); });
+    var general = visible.filter(function (t) { return !t.project_id || !projs.some(function (p) { return Number(p.id) === Number(t.project_id); }); });
+    return '<div class="w116tree"><div class="n team"><span class="tg leaf"></span><span class="lb" data-w116tgo="#team/' + E(d) + '">' + E(label(d)) + '</span><span class="ct"><b>' + visible.length + '</b> open task' + (visible.length === 1 ? '' : 's') + ' \u00b7 ' + tops.length + ' project' + (tops.length === 1 ? '' : 's') + '</span><span class="add" data-w116tdone="1">' + (showDone ? 'hide done' : 'show done') + '</span></div><div class="ch">' +
+      tops.map(projNode).join('') +
+      (general.length ? '<div class="n project" data-w116tn="pg"><span class="tg" data-w116ttg="pg">' + (closed.pg ? '+' : '\u2212') + '</span><span class="lb">General (no project)</span><span class="ct"><b>' + general.length + '</b></span></div><div class="ch' + (closed.pg ? ' closed' : '') + '">' + taskList(general) + '</div>' : '') +
+      '</div></div>';
+  }
+  function showTree() {
+    var host = document.querySelector('.w116b'); if (!host) return;
+    var d = scopeDept(); if (!d) return;
+    var slot = host.querySelector('.w116tree'); if (slot) slot.remove();
+    var content = host.querySelector('.w116groups, .w116kan, .w116cal, .w116list');
+    var box = document.createElement('div'); box.innerHTML = treeHtml(d);
+    var tb = host.querySelector('.w116tb');
+    if (tb) tb.insertAdjacentElement('afterend', box.firstChild); else host.appendChild(box.firstChild);
+    host.querySelectorAll(':scope > *:not(.w116tb):not(.w116tree)').forEach(function (el) { el.setAttribute('data-w116thid', '1'); el.style.display = 'none'; });
+    host.querySelectorAll('.w116tb .w116seg a[data-act="view"]').forEach(function (b) { b.classList.remove('on'); });
+    var tv = host.querySelector('[data-w116tview]'); if (tv) tv.classList.add('on');
+    K.tree.on = d;
+  }
+  function hideTree() {
+    var host = document.querySelector('.w116b'); if (!host) return;
+    var slot = host.querySelector('.w116tree'); if (slot) slot.remove();
+    host.querySelectorAll('[data-w116thid]').forEach(function (el) { el.style.display = ''; el.removeAttribute('data-w116thid'); });
+    var tv = host.querySelector('[data-w116tview]'); if (tv) tv.classList.remove('on');
+    K.tree.on = null;
+  }
+
+  /* ---------- wiring ---------- */
+  var mo = new MutationObserver(function (muts) {
+    var dr = false, board = false;
+    for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (!t || !t.closest) continue; if (t.id === 'w116dr' || t.closest('#w116dr')) { if (!t.closest('.w116tsec') && !t.closest('.w116tcrumb')) dr = true; } else if (t.closest('.w116b') || (t.querySelector && t.querySelector('.w116b'))) board = true; }
+    if (dr) { clearTimeout(K.pend); K.pend = setTimeout(inject, 60); }
+    if (board) { clearTimeout(K.pend2); K.pend2 = setTimeout(function () { ensureTreeButton(); decorateRows(); if (K.tree.on && !document.querySelector('.w116tree')) showTree(); }, 80); }
+  });
+  mo.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var go = t.closest('[data-w116tgo]'); if (go) { e.preventDefault(); e.stopPropagation(); try { if (window.w116Board) window.w116Board.closeDrawer(); } catch (e2) { /* fine */ } location.hash = go.getAttribute('data-w116tgo'); return; }
+    var op = t.closest('[data-w116topen]'); if (op) { e.preventDefault(); e.stopPropagation(); openTask(op.getAttribute('data-w116topen')); return; }
+    var task = K.task ? taskById(K.task) : null;
+    var f = t.closest('#w116dr [data-w116tf]');
+    if (f && task) {
+      e.preventDefault(); e.stopPropagation();
+      var act = f.getAttribute('data-w116tf'); var ta = document.getElementById('w116tta');
+      if (act === 'pv' || act === 'edit') { if (ta) await saveDesc(task, ta.value); K.preview[task.id] = act === 'edit' ? false : !(K.preview[task.id] !== false); var box = document.querySelector('#w116dr .w116tdw'); if (box) box.outerHTML = descHtml(task); var ta2 = document.getElementById('w116tta'); if (ta2) ta2.focus(); return; }
+      if (!ta) { K.preview[task.id] = false; var box2 = document.querySelector('#w116dr .w116tdw'); if (box2) box2.outerHTML = descHtml(task); ta = document.getElementById('w116tta'); if (!ta) return; }
+      if (act === 'bold') wrapSel(ta, '**', '**', 'bold text');
+      if (act === 'italic') wrapSel(ta, '*', '*', 'italic text');
+      if (act === 'ul') prefixLines(ta, function (l) { return /^\s*[-*]\s/.test(l) ? l.replace(/^\s*[-*]\s/, '') : '- ' + l; });
+      if (act === 'ol') { var n = 0; prefixLines(ta, function (l) { n++; return /^\s*\d+[.)]\s/.test(l) ? l.replace(/^\s*\d+[.)]\s/, '') : n + '. ' + l; }); }
+      if (act === 'link') { var url = prompt('Link address (https://...)'); if (url) wrapSel(ta, '[', '](' + url.trim() + ')', 'link text'); }
+      return;
+    }
+    var sd = t.closest('#w116dr [data-w116tsd]'); if (sd) { e.stopPropagation(); toggleSub(sd.getAttribute('data-w116tsd')); return; }
+    var sa = t.closest('#w116dr [data-w116tsadd]'); if (sa && task) { e.stopPropagation(); var inp = document.getElementById('w116tsa'); if (inp) { await addSub(task, inp.value); } return; }
+    var pick = t.closest('#w116dr [data-w116tpick]'); if (pick && task) { e.stopPropagation(); var fi = pick.querySelector('input[type=file]'); if (fi) fi.click(); return; }
+    var fx = t.closest('#w116dr [data-w116tfx]'); if (fx && task) { e.stopPropagation(); removeFile(task, fx.getAttribute('data-w116tfx')); return; }
+    var fo = t.closest('#w116dr [data-w116tfo]'); if (fo && task) { e.stopPropagation(); openFile(task, fo.getAttribute('data-w116tfo')); return; }
+    /* tree */
+    var tv = t.closest('[data-w116tview]'); if (tv) { e.preventDefault(); e.stopPropagation(); if (K.tree.on) hideTree(); else showTree(); return; }
+    var otherView = t.closest('.w116tb a[data-act="view"]'); if (otherView && K.tree.on) { hideTree(); return; }
+    var tg = t.closest('[data-w116ttg]'); if (tg) { e.stopPropagation(); var key = tg.getAttribute('data-w116ttg'); K.tree.closed = K.tree.closed || {}; K.tree.closed[key] = !K.tree.closed[key]; var ch = tg.parentNode.nextElementSibling; if (ch && ch.classList.contains('ch')) ch.classList.toggle('closed', !!K.tree.closed[key]); tg.textContent = K.tree.closed[key] ? '+' : '\u2212'; return; }
+    var dn = t.closest('[data-w116tdone]'); if (dn) { e.stopPropagation(); K.tree.showDone = !K.tree.showDone; showTree(); return; }
+    var sq = t.closest('[data-w116tsq]'); if (sq) { e.stopPropagation(); var par = taskById(sq.getAttribute('data-w116tsq')); if (!par) return; var title = prompt('Subtask of "' + par.title.slice(0, 60) + '":'); if (title) { await addSub(par, title); showTree(); } return; }
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w116tsa' && e.key === 'Enter') { e.preventDefault(); var task = K.task ? taskById(K.task) : null; if (task) addSub(task, t.value); return; }
+    if (t.id === 'w116tta') {
+      var task2 = K.task ? taskById(K.task) : null; if (!task2) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); wrapSel(t, '**', '**', 'bold text'); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); wrapSel(t, '*', '*', 'italic text'); }
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveDesc(task2, t.value); K.preview[task2.id] = true; var box = document.querySelector('#w116dr .w116tdw'); if (box) box.outerHTML = descHtml(task2); }
+    }
+  });
+  document.addEventListener('focusout', function (e) { var t = e.target; if (t && t.id === 'w116tta') { var task = K.task ? taskById(K.task) : null; if (task) saveDesc(task, t.value); } });
+  document.addEventListener('change', function (e) { var t = e.target; if (t && t.getAttribute && t.getAttribute('data-w116tfile')) { var task = taskById(t.getAttribute('data-w116tfile')); if (task) upload(task, t.files); t.value = ''; } });
+  document.addEventListener('dragover', function (e) { var z = e.target && e.target.closest && e.target.closest('#w116dr .drop'); if (z) { e.preventDefault(); z.classList.add('over'); } });
+  document.addEventListener('dragleave', function (e) { var z = e.target && e.target.closest && e.target.closest('#w116dr .drop'); if (z) z.classList.remove('over'); });
+  document.addEventListener('drop', function (e) { var z = e.target && e.target.closest && e.target.closest('#w116dr'); if (!z) return; e.preventDefault(); var d = z.querySelector('.drop'); if (d) d.classList.remove('over'); var task = K.task ? taskById(K.task) : null; if (task && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) upload(task, e.dataTransfer.files); });
+  document.addEventListener('paste', function (e) {
+    var t = e.target; if (!t || t.id !== 'w116tta') return; var task = K.task ? taskById(K.task) : null; if (!task) return;
+    var items = (e.clipboardData && e.clipboardData.items) || []; var files = [];
+    for (var i = 0; i < items.length; i++) { if (items[i].kind === 'file') { var f = items[i].getAsFile(); if (f) files.push(f); } }
+    if (files.length) { e.preventDefault(); upload(task, files); }
+  });
+  window.w116tDebug = function () { return { task: K.task, files: K.files, tree: K.tree }; };
+})();
