@@ -27,7 +27,23 @@
   var ORDER = ['instagram', 'facebook', 'tiktok', 'linkedin', 'ga4'];
   var MLABEL = { followers: 'Followers', new_followers: 'New followers', unfollows: 'Unfollows', reach: 'Reach', views: 'Views', video_views: 'Video views', profile_views: 'Profile visits', engagement: 'Engagement', accounts_engaged: 'Accounts engaged', likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves', clicks: 'Clicks', posts: 'Posts', sessions: 'Sessions', users: 'Visitors', new_users: 'New visitors', pageviews: 'Page views', sessions_social: 'From social' };
   var CHART_METRICS = ['reach', 'views', 'engagement', 'new_followers', 'sessions'];
-  var S = { days: 30, data: null, loading: false, err: null, filter: null, setup: false, status: null, probe: null, csv: null, chart: 'reach', busy: {}, insTried: false };
+  var S = { days: 30, range: '30', cfrom: null, cto: null, data: null, loading: false, err: null, filter: null, setup: false, status: null, probe: null, csv: null, chart: 'reach', busy: {}, insTried: false };
+  /* wave129: ranges from a week to everything the platforms kept, or two dates */
+  var RANGES = [['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['182', '6 months'], ['365', '1 year'], ['730', '2 years'], ['all', 'All time'], ['custom', 'Custom']];
+  function ymdTz(d) { try { return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); } catch (e) { return d.toISOString().slice(0, 10); } }
+  function rangeDates() {
+    var now = new Date(), to = ymdTz(now);
+    if (S.range === 'custom' && S.cfrom && S.cto) return [S.cfrom <= S.cto ? S.cfrom : S.cto, S.cfrom <= S.cto ? S.cto : S.cfrom];
+    if (S.range === 'all') return [null, to];
+    var n = Number(S.range) || 30; var f = new Date(now.getTime() - (n - 1) * 86400000);
+    return [ymdTz(f), to];
+  }
+  var RSENT = { '7': '7 days', '30': '30 days', '90': '90 days', '182': '6 months', '365': 'year', '730': '2 years' };
+  function dLong(iso) { return iso ? niceDay(iso) + ', ' + String(iso).slice(0, 4) : ''; }
+  function rangeLabel() { var d = S.data || {}; if (S.range === 'all') return 'all time' + (d.from ? ' (since ' + dLong(d.from) + ')' : ''); if (S.range === 'custom') return (d.from ? dLong(d.from) + ' to ' + dLong(d.to) : 'the dates you picked'); return 'the last ' + (RSENT[S.range] || (S.days + ' days')); }
+  function dayR(iso) { var d = S.data || {}; return (Number(d.days) || 0) > 330 || (d.from && String(d.from).slice(0, 4) !== String(d.to || '').slice(0, 4)) ? dLong(iso) : niceDay(iso); }
+  function overLabel() { var d = S.data || {}; if (S.range === 'all') return d.from ? 'since ' + dLong(d.from) : 'over all time'; if (S.range === 'custom') return d.from ? 'from ' + dLong(d.from) + ' to ' + dLong(d.to) : 'over the dates you picked'; return 'over ' + rangeLabel(); }
+  function vsLabel() { var d = S.data || {}; if (S.range === 'custom' || !RSENT[S.range]) return 'these ' + (d.days || S.days) + ' days against the ' + (d.days || S.days) + ' before'; return 'the last ' + RSENT[S.range] + ' against the ' + RSENT[S.range] + ' before'; }
 
   var css = document.createElement('style'); css.id = 'wa120css';
   css.textContent = '' +
@@ -35,9 +51,12 @@
     '#socialstats .w120wrap{max-width:1180px;}' +
     '#socialstats .w120ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}' +
     '#socialstats .w120ctl .meta{font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .w120rng{flex-wrap:wrap;}' +
+    '#socialstats .w120cust{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .w120cust input{font-size:12.5px;padding:5px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;}' +
     '#socialstats .w120tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin:0 0 16px;}' +
     '#socialstats .tile{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:14px 15px 12px;box-shadow:0 12px 28px -22px rgba(16,63,57,.55);position:relative;overflow:hidden;min-height:150px;display:flex;flex-direction:column;}' +
-    '#socialstats .tile .ph{display:flex;align-items:center;gap:8px;margin:0 0 8px;}' +
+    '#socialstats .tile .ph{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px;}' +
     '#socialstats .tile .mk{width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#fff;letter-spacing:.3px;flex:none;}' +
     '#socialstats .tile .ph b{font-family:' + HEAD + ';font-size:17px;color:' + GREEN + ';letter-spacing:.3px;}' +
     '#socialstats .tile .ph .st{margin-left:auto;font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:2px 8px;background:rgba(42,140,122,.14);color:#1c6b5d;white-space:nowrap;}' +
@@ -67,9 +86,9 @@
     '#socialstats .note .btn{background:rgba(255,250,242,.14);color:' + CREAM + ';border:none;}' +
     '#socialstats .posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}' +
     '#socialstats .post{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;text-decoration:none;color:inherit;}' +
-    '#socialstats .post .th{aspect-ratio:16/10;background:rgba(16,63,57,.06);position:relative;display:flex;align-items:center;justify-content:center;}' +
-    '#socialstats .post .th img{width:100%;height:100%;object-fit:cover;display:block;}' +
-    '#socialstats .post .th .mk{position:absolute;left:10px;top:10px;width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);}' +
+    '#socialstats .post .th{aspect-ratio:16/10;background:rgba(16,63,57,.06);position:relative;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;flex:none;}' +
+    '#socialstats .post .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#socialstats .post .th .mk{position:absolute;z-index:1;left:10px;top:10px;width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 6px rgba(0,0,0,.25);}' +
     '#socialstats .post .th .big{font-family:' + HEAD + ';font-size:30px;color:rgba(16,63,57,.25);}' +
     '#socialstats .post .bd{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1;}' +
     '#socialstats .post .cap{font-size:13px;line-height:1.35;color:var(--wa-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
@@ -136,7 +155,7 @@
     '#socialstats .ev .ft .c{font-weight:800;text-transform:uppercase;letter-spacing:.6px;}#socialstats .ev .ft .c.high{color:#1c6b5d;}#socialstats .ev .ft .c.medium{color:#9a6f10;}' +
     '#socialstats .insempty{font-size:13px;color:var(--wa-muted);line-height:1.5;background:rgba(16,63,57,.04);border-radius:14px;padding:14px 16px;}' +
     '@media (min-width:1120px){#socialstats .w120tiles{grid-template-columns:repeat(5,minmax(0,1fr));}}' +
-    '@media (max-width:700px){#socialstats .tile .big{font-size:30px;}#socialstats .cardy h4 .w116seg{margin-left:0;}}';
+    '@media (max-width:700px){#socialstats .tile .big{font-size:30px;}#socialstats .cardy h4 .w116seg{margin-left:0;}#socialstats .posts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}#socialstats .post .bd{padding:8px 10px 10px;}#socialstats .post .nums{gap:6px 8px;}}';
   document.head.appendChild(css);
 
   /* ---------- helpers ---------- */
@@ -160,7 +179,8 @@
   function mark(p, size) { var c = P[p] || { color: GREEN, mark: '?' }; return '<span class="mk" style="background:' + c.color + (size ? ';width:' + size + 'px;height:' + size + 'px' : '') + '">' + E(c.mark) + '</span>'; }
   function acctOf(p) { var d = S.data; return ((d && d.accounts) || []).filter(function (a) { return a.platform === p; })[0] || null; }
   function series(p, metric) { var d = S.data; var s = d && d.series && d.series[p] && d.series[p][metric]; return Array.isArray(s) ? s : []; }
-  function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from; }) : pts; }
+  function bucketEnd(key) { var b = S.data && S.data.bucket; if (b !== 'week' && b !== 'month') return key; var dt = new Date(String(key).slice(0, 10) + 'T00:00:00Z'); return (b === 'week' ? new Date(dt.getTime() + 6 * 86400000) : new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0))).toISOString().slice(0, 10); }
+  function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from || bucketEnd(x[0]) >= from; }) : pts; }
   function spark(pts, color) {
     if (!pts || pts.length < 2) return '';
     var w = 200, h = 34, vals = pts.map(function (x) { return Number(x[1]) || 0; }); var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals); var span = (mx - mn) || 1;
@@ -180,23 +200,28 @@
   }
   async function load(force) {
     if (S.loading) return;
-    if (!force && S.data && S.at && Date.now() - S.at < 60000 && S.data.days === S.days) { paint(); return; }
+    var rd = rangeDates();
+    if (!force && S.data && S.at && Date.now() - S.at < 60000 && S.data._key === S.range + '|' + rd.join('|')) { paint(); return; }
     S.loading = true; S.err = null;
     if (force || !S.data) paint();
     try {
-      var r = await db.rpc('social_overview', { p_days: S.days });
+      var r = await db.rpc('social_range', { p_from: rd[0], p_to: rd[1] });
+      if (r.error) { var n = Math.min(90, Number(S.range) || 30); r = await db.rpc('social_overview', { p_days: n }); }
       if (r.error) throw r.error;
-      S.data = r.data || {}; S.at = Date.now();
+      S.data = r.data || {}; S.data._key = S.range + '|' + rd.join('|'); S.at = Date.now();
+      S.days = Number(S.data.days) || S.days;
     } catch (e) { S.err = e.message || String(e); }
     S.loading = false;
     paint();
+    try { document.dispatchEvent(new CustomEvent('w120:data')); } catch (e) { /* fine */ }
   }
   function header() {
     var d = S.data; var last = null;
     ((d && d.accounts) || []).forEach(function (a) { if (a.last_sync_at && (!last || a.last_sync_at > last)) last = a.last_sync_at; });
     return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Analytics</div>' +
       '<div class="w116top"><div><h2><span class="dot" style="background:' + PURPLE + '"></span>Marketing analytics</h2><p class="sub">Followers, reach and what worked across Instagram, Facebook, TikTok, LinkedIn and the website. Numbers refresh every morning.</p></div>' +
-      '<div class="w120ctl"><span class="w116seg">' + [7, 30, 90].map(function (n) { return '<a data-w120days="' + n + '" class="' + (S.days === n ? 'on' : '') + '">' + n + ' days</a>'; }).join('') + '</span>' +
+      '<div class="w120ctl"><span class="w116seg w120rng">' + RANGES.map(function (r) { return '<a data-w120range="' + r[0] + '" class="' + (S.range === r[0] ? 'on' : '') + '">' + r[1] + '</a>'; }).join('') + '</span>' +
+      (S.range === 'custom' ? '<span class="w120cust"><input type="date" id="w120cf" value="' + E(S.cfrom || '') + '"><span>to</span><input type="date" id="w120ct" value="' + E(S.cto || '') + '"><button class="btn mini" data-w120apply="1">Show</button></span>' : '') +
       (staff() ? '<button class="btn mini ghost" data-w120sync="all"' + (S.busy.sync ? ' disabled' : '') + '>' + (S.busy.sync ? 'Syncing\u2026' : 'Sync now') + '</button><button class="btn mini' + (S.setup ? '' : ' ghost') + '" data-w120setup="toggle">' + (S.setup ? 'Close set-up' : 'Set up') + '</button>' : '') +
       '<span class="meta">' + (last ? 'Last sync ' + E(ago(last)) : '') + '</span></div></div>';
   }
@@ -226,17 +251,38 @@
     var lines = []; var maxV = 0; var from = d.from || '', to = d.to || '';
     ORDER.forEach(function (p) { var pts = windowed(series(p, m)); if (pts.length > 1) { lines.push({ p: p, pts: pts }); pts.forEach(function (x) { maxV = Math.max(maxV, Number(x[1]) || 0); }); } });
     var seg = '<span class="w116seg">' + CHART_METRICS.map(function (k) { return '<a data-w120chart="' + k + '" class="' + (S.chart === k ? 'on' : '') + '">' + E(MLABEL[k] || k) + '</a>'; }).join('') + '</span>';
-    if (!lines.length) return '<div class="cardy chart"><h4>By day' + seg + '</h4><div class="none">No daily ' + E((MLABEL[m] || m).toLowerCase()) + ' numbers in this window yet.</div></div>';
+    if (!lines.length) return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><div class="none">No ' + E((MLABEL[m] || m).toLowerCase()) + ' numbers in this window yet.</div></div>';
     var w = 800, h = 220, padL = 36, padB = 22, padT = 10;
+    if (S.range === 'all') { var first = null; lines.forEach(function (l) { if (!first || l.pts[0][0] < first) first = l.pts[0][0]; }); if (first && first > from) from = first; }
     var t0 = new Date(from + 'T00:00:00Z').getTime(), t1 = new Date(to + 'T00:00:00Z').getTime(); var span = (t1 - t0) || 1;
-    function X(day) { return padL + (new Date(day + 'T00:00:00Z').getTime() - t0) / span * (w - padL - 8); }
+    function X(day) { var k = String(day).slice(0, 10); if (k < from) k = from; return padL + (new Date(k + 'T00:00:00Z').getTime() - t0) / span * (w - padL - 8); }
     function Y(v) { return padT + (1 - (Number(v) || 0) / (maxV || 1)) * (h - padT - padB); }
     var grid = ''; for (var g = 0; g <= 4; g++) { var yv = maxV / 4 * g; grid += '<line x1="' + padL + '" x2="' + w + '" y1="' + Y(yv).toFixed(1) + '" y2="' + Y(yv).toFixed(1) + '" stroke="rgba(16,63,57,.08)"></line><text x="' + (padL - 6) + '" y="' + (Y(yv) + 4).toFixed(1) + '" font-size="10" text-anchor="end" fill="#7b8a86">' + num(yv) + '</text>'; }
-    var ticks = ''; var days = Math.round(span / 86400000) + 1; var step = days > 40 ? 14 : days > 10 ? 7 : 1;
-    for (var i = 0; i < days; i += step) { var dd = new Date(t0 + i * 86400000).toISOString().slice(0, 10); ticks += '<text x="' + X(dd).toFixed(1) + '" y="' + (h - 6) + '" font-size="10" text-anchor="middle" fill="#7b8a86">' + E(niceDay(dd)) + '</text>'; }
-    var paths = lines.map(function (l) { var c = P[l.p].color; return '<polyline fill="none" stroke="' + c + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + l.pts.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"></polyline>'; }).join('');
-    var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' \u00b7 ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('');
-    return '<div class="cardy chart"><h4>By day' + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
+    var ticks = ''; var days = Math.round(span / 86400000) + 1; var target = (window.innerWidth || 1000) < 640 ? 4 : 8;
+    var tick = function (iso, text) { var x = X(iso); if (x > w - 24 || x < padL - 2) return; ticks += '<text x="' + x.toFixed(1) + '" y="' + (h - 6) + '" font-size="10" text-anchor="middle" fill="#7b8a86">' + E(text) + '</text>'; };
+    if (days > 100) {
+      var MSH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var a0 = new Date(t0), a1 = new Date(t1); var months = (a1.getUTCFullYear() - a0.getUTCFullYear()) * 12 + a1.getUTCMonth() - a0.getUTCMonth() + 1;
+      var k = months <= target ? 1 : months <= target * 2 ? 2 : months <= target * 3.5 ? 3 : months <= target * 6.5 ? 6 : 12 * Math.ceil(months / (target * 12));
+      var yx = a0.getUTCFullYear() !== a1.getUTCFullYear();
+      for (var mi = 0; mi <= months; mi++) { var md = new Date(Date.UTC(a0.getUTCFullYear(), a0.getUTCMonth() + mi, 1)); if (md.getTime() < t0 || md.getTime() > t1 || (md.getUTCFullYear() * 12 + md.getUTCMonth()) % k) continue; tick(md.toISOString().slice(0, 10), MSH[md.getUTCMonth()] + (yx ? ' ' + md.getUTCFullYear() : '')); }
+    } else {
+      var step = Math.max(1, Math.ceil(days / target));
+      for (var i = 0; i < days; i += step) { var dd = new Date(t0 + i * 86400000).toISOString().slice(0, 10); tick(dd, niceDay(dd)); }
+    }
+    /* a week or month only partly inside the range (or the data) is drawn dashed, so a short last month does not read as a drop */
+    var dashed = false, lastTo = d.to || to;
+    var paths = lines.map(function (l) {
+      var c = P[l.p].color, pts = l.pts, cov = (d.coverage || {})[l.p] || {};
+      var line = function (a, dash) { return a.length > 1 ? '<polyline fill="none" stroke="' + c + '" stroke-width="2.2"' + (dash ? ' stroke-dasharray="5 4" opacity=".75"' : '') + ' stroke-linejoin="round" stroke-linecap="round" points="' + a.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"></polyline>' : ''; };
+      if ((d.bucket !== 'week' && d.bucket !== 'month') || m === 'followers' || pts.length < 3) return line(pts);
+      var dataFrom = cov.from && cov.from > (d.from || '') ? cov.from : d.from, dataTo = cov.to && cov.to < lastTo ? cov.to : lastTo;
+      var headP = pts[0][0] < (dataFrom || ''), tailP = bucketEnd(pts[pts.length - 1][0]) > dataTo;
+      if (headP || tailP) dashed = true;
+      return (headP ? line(pts.slice(0, 2), true) : '') + line(pts.slice(headP ? 1 : 0, tailP ? pts.length - 1 : pts.length)) + (tailP ? line(pts.slice(-2), true) : '');
+    }).join('');
+    var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' · ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('') + (dashed ? '<span style="color:var(--wa-muted)">Dashed: a ' + (d.bucket === 'week' ? 'week' : 'month') + ' only partly counted</span>' : '');
+    return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
   }
   function noteCard() {
     var n = S.data && S.data.note; var any = S.data && (S.data.accounts || []).length;
@@ -250,7 +296,7 @@
     var pages = (d.posts || []).filter(function (p) { return p.platform === 'ga4'; }).sort(function (a, b) { return (Number(b.views) || 0) - (Number(a.views) || 0); }).slice(0, 6);
     var plats = []; (d.posts || []).forEach(function (p) { if (p.platform !== 'ga4' && plats.indexOf(p.platform) < 0) plats.push(p.platform); });
     var chips = plats.length > 1 ? '<div class="fchips"><span data-w120f="" class="' + (S.filter ? '' : 'on') + '">All</span>' + plats.map(function (p) { return '<span data-w120f="' + E(p) + '" class="' + (S.filter === p ? 'on' : '') + '">' + E(P[p] ? P[p].label : p) + '</span>'; }).join('') + '</div>' : '';
-    var html = '<div class="cardy"><h4>What worked <span style="font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted)">posts from the last ' + S.days + ' days, best first</span></h4>' + chips;
+    var html = '<div class="cardy"><h4>What worked <span style="font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted)">posts from ' + E(rangeLabel()) + ', best first</span></h4>' + chips;
     if (!posts.length) html += '<div class="empty">No posts in this window yet.</div>';
     else html += '<div class="posts">' + posts.slice(0, 12).map(function (p) {
       var nums = [];
@@ -261,7 +307,7 @@
       if (p.shares != null) nums.push('<span><b>' + num(p.shares) + '</b>shares</span>');
       if (p.saves != null) nums.push('<span><b>' + num(p.saves) + '</b>saves</span>');
       return '<a class="post" ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="th">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="big">' + E(P[p.platform] ? P[p.platform].mark : '') + '</span>') + mark(p.platform) + '</div>' +
-        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(niceDay(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
+        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(dayR(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
     }).join('') + '</div>';
     if (pages.length) html += '<h4 style="margin-top:16px;font-size:17px">Most read pages on the website</h4><div style="font-size:13px;line-height:1.7">' + pages.map(function (p) { return '<div><b style="font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';margin-right:6px">' + num(p.views) + '</b>' + (p.url ? '<a href="' + E(p.url) + '" target="_blank" rel="noopener" style="color:' + GREEN + '">' + E(p.caption || p.external_id) + '</a>' : E(p.caption || p.external_id)) + ' <span style="color:var(--wa-muted);font-size:11.5px">' + E(p.external_id) + '</span></div>'; }).join('') + '</div>';
     return html + '</div>';
@@ -377,9 +423,10 @@
     /* cadence: weeks with more posts against weeks with fewer, from the daily reach */
     (function () {
       var daily = {}; ['instagram', 'facebook'].forEach(function (pl) { var s = d.series && d.series[pl] && d.series[pl].reach; (s || []).forEach(function (x) { daily[x[0]] = (daily[x[0]] || 0) + (Number(x[1]) || 0); }); });
-      var days = Object.keys(daily); if (days.length < 28) return;
+      if (d.bucket === 'month') return; var wkB = d.bucket === 'week'; var days = Object.keys(daily); if (days.length < (wkB ? 8 : 28)) return;
       function wk(iso) { var dt = new Date(String(iso).slice(0, 10) + 'T12:00:00'); var dow = (dt.getDay() + 6) % 7; return new Date(dt.getTime() - dow * 86400000).toISOString().slice(0, 10); }
-      var W = {}; days.forEach(function (day) { var k = wk(day); W[k] = W[k] || { reach: 0, posts: 0, days: 0 }; W[k].reach += daily[day]; W[k].days++; });
+      var W = {}; days.forEach(function (day) { var k = wk(day); W[k] = W[k] || { reach: 0, posts: 0, days: 0 }; W[k].reach += daily[day]; W[k].days += wkB ? 7 : 1; });
+      if (wkB) { var wks = Object.keys(W).sort(); if (wks.length > 2) { delete W[wks[0]]; delete W[wks[wks.length - 1]]; } }
       posts.forEach(function (p) { if (p.platform !== 'instagram' && p.platform !== 'facebook') return; var k = wk(p.published_at); if (W[k]) W[k].posts++; });
       var full = Object.keys(W).filter(function (k) { return W[k].days >= 6; }).map(function (k) { return W[k]; });
       var busy = full.filter(function (w) { return w.posts >= 3; }), quiet = full.filter(function (w) { return w.posts <= 1; });
@@ -394,14 +441,14 @@
       if (!g.length) return; g.sort(function (a, b) { return b.pct - a.pct; });
       var lead = g[0]; var name = function (pl) { return P[pl] ? P[pl].label : pl; };
       var sign = function (x) { return (x >= 0 ? '+' : '\u2212') + Math.abs(x).toFixed(1) + '%'; };
-      ev.push({ key: 'growth', title: lead.pct >= 1 ? name(lead.pl) + ' is growing fastest (' + sign(lead.pct) + ')' : 'Followers are flat', detail: g.map(function (x) { return name(x.pl) + ' ' + (x.now - x.then >= 0 ? '+' : '\u2212') + num(Math.abs(x.now - x.then)) + ' (' + sign(x.pct) + ')'; }).join(', ') + ' over the last ' + (d.days || S.days) + ' days.', n: g.length, confidence: 'high', bars: g.map(function (x) { var mx = Math.max.apply(null, g.map(function (y) { return Math.abs(y.pct); }).concat([0.1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x === lead && x.pct > 0, neg: x.pct < 0, text: sign(x.pct) }; }) });
+      ev.push({ key: 'growth', title: lead.pct >= 1 ? name(lead.pl) + ' is growing fastest (' + sign(lead.pct) + ')' : 'Followers are flat', detail: g.map(function (x) { return name(x.pl) + ' ' + (x.now - x.then >= 0 ? '+' : '\u2212') + num(Math.abs(x.now - x.then)) + ' (' + sign(x.pct) + ')'; }).join(', ') + ' ' + overLabel() + '.', n: g.length, confidence: 'high', bars: g.map(function (x) { var mx = Math.max.apply(null, g.map(function (y) { return Math.abs(y.pct); }).concat([0.1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x === lead && x.pct > 0, neg: x.pct < 0, text: sign(x.pct) }; }) });
     })();
     /* momentum: reach (or views) against the previous window */
     (function () {
       var m = []; Object.keys(d.totals || {}).forEach(function (pl) { if (pl === 'ga4') return; var t = d.totals[pl] || {}; var k = t.reach && t.reach.prev ? 'reach' : t.views && t.views.prev ? 'views' : null; if (!k) return; var cur = Number(t[k].cur) || 0, prev = Number(t[k].prev) || 0; if (!prev) return; m.push({ pl: pl, k: k, cur: cur, prev: prev, pct: (cur - prev) / prev * 100 }); });
       if (!m.length) return; m.sort(function (a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
       var top = m[0]; var name = function (pl) { return P[pl] ? P[pl].label : pl; };
-      ev.push({ key: 'momentum', title: (top.k === 'reach' ? 'Reach' : 'Views') + ' ' + (top.pct >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(top.pct)) + '% on ' + name(top.pl), detail: m.map(function (x) { return name(x.pl) + ' ' + x.k + ' ' + num(x.cur) + ' against ' + num(x.prev) + ' (' + (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%)'; }).join('; ') + ', last ' + (d.days || S.days) + ' days against the ' + (d.days || S.days) + ' before.', n: m.length, confidence: 'high', bars: m.map(function (x) { var mx = Math.max.apply(null, m.map(function (y) { return Math.abs(y.pct); }).concat([1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x.pct > 0 && x === top, neg: x.pct < 0, text: (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%' }; }) });
+      ev.push({ key: 'momentum', title: (top.k === 'reach' ? 'Reach' : 'Views') + ' ' + (top.pct >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(top.pct)) + '% on ' + name(top.pl), detail: m.map(function (x) { return name(x.pl) + ' ' + x.k + ' ' + num(x.cur) + ' against ' + num(x.prev) + ' (' + (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%)'; }).join('; ') + ', ' + vsLabel() + '.', n: m.length, confidence: 'high', bars: m.map(function (x) { var mx = Math.max.apply(null, m.map(function (y) { return Math.abs(y.pct); }).concat([1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x.pct > 0 && x === top, neg: x.pct < 0, text: (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%' }; }) });
     })();
     /* website: what social brings */
     (function () {
@@ -418,10 +465,13 @@
       ev.push({ key: 'top_post', title: 'Top post: \u201c' + cap + '\u201d', detail: top.kind + ' on ' + (P[top.platform] ? P[top.platform].label : top.platform) + ', ' + (WDL[top.wd] || top.wd) + ' ' + top.tod.toLowerCase() + ', ' + (top.len < 80 ? 'short' : top.len <= 250 ? 'medium' : 'long') + ' caption' + (top.tags ? ', ' + top.tags + ' hashtags' : '') + ': ' + fx(top.idx) + ' a typical post (' + num(top.v) + ' ' + (top.metric === 'eng' ? 'interactions' : top.metric) + ').', n: rows.length, confidence: rows.length >= 10 ? 'medium' : 'low' });
       var dates = posts.map(function (p) { return String(p.published_at).slice(0, 10); }).filter(Boolean).sort();
       if (dates.length >= 4) {
-        var span = Math.max(7, (Date.now() - new Date(dates[0] + 'T12:00:00').getTime()) / 86400000); var per = dates.length / (span / 7);
-        var gap = 0, gFrom = null, gTo = null; var all = dates.concat([new Date().toISOString().slice(0, 10)]);
+        var endDay = String(d.to || new Date().toISOString()).slice(0, 10); var startDay = d.from && S.range !== 'all' ? String(d.from).slice(0, 10) : dates[0];
+        var span = Math.max(7, (new Date(endDay + 'T12:00:00').getTime() - new Date(startDay + 'T12:00:00').getTime()) / 86400000 + 1); var per = dates.length / (span / 7);
+        var gap = 0, gFrom = null, gTo = null; var all = dates.concat([endDay]);
         for (var i = 1; i < all.length; i++) { var g = (new Date(all[i] + 'T12:00:00') - new Date(all[i - 1] + 'T12:00:00')) / 86400000; if (g > gap) { gap = g; gFrom = all[i - 1]; gTo = all[i]; } }
-        ev.push({ key: 'rhythm', title: (Math.round(per * 10) / 10) + ' posts a week' + (gap >= 10 ? ', with a ' + Math.round(gap) + '-day gap' : ''), detail: dates.length + ' posts across Instagram, Facebook and TikTok in the last ' + Math.round(span) + ' days' + (gap >= 5 ? '; the longest quiet stretch was ' + Math.round(gap) + ' days (' + niceDay(gFrom) + ' to ' + niceDay(gTo) + ').' : '.'), n: dates.length, confidence: 'high' });
+        var pls = []; posts.forEach(function (p) { var nm = P[p.platform] ? P[p.platform].label : p.platform; if (pls.indexOf(nm) < 0) pls.push(nm); });
+        var plsTxt = pls.length > 1 ? pls.slice(0, -1).join(', ') + ' and ' + pls[pls.length - 1] : (pls[0] || 'the platforms');
+        ev.push({ key: 'rhythm', title: (Math.round(per * 10) / 10) + ' posts a week' + (gap >= 10 ? ', with a ' + Math.round(gap) + '-day gap' : ''), detail: dates.length + ' posts across ' + plsTxt + ' ' + overLabel() + (gap >= 5 ? '; the longest quiet stretch was ' + Math.round(gap) + ' days (' + dayR(gFrom) + ' to ' + dayR(gTo) + ').' : '.'), n: dates.length, confidence: 'high' });
       }
     })();
     return ev;
@@ -448,7 +498,7 @@
       '<div class="meta">' + (ins ? '<span>' + E(ago(ins.created_at)) + (ins.model ? ' \u00b7 ' + E(String(ins.model).split('/').pop()) : '') + '</span>' : '') + (staff() && ev.length >= 3 ? '<button class="btn mini ghost" data-w120ins="1"' + (S.busy.ins ? ' disabled' : '') + '>' + (S.busy.ins ? 'Thinking\u2026' : (recs.length ? 'Refresh' : 'Get recommendations')) + '</button>' : '') + '</div></div>';
     if (ev.length < 3 && !recs.length) return '<div class="ins">' + head + '<div class="insempty">Insights need posts with numbers: at least six in the last 90 days, from Meta, TikTok or LinkedIn. Right now there ' + (nPosts === 1 ? 'is 1' : 'are ' + nPosts) + '. Once the accounts are connected (Set up above), the hub compares days, times, formats, captions and posting rhythm, and turns what stands out into three to five things to try.</div></div>';
     var recHtml = recs.length ? '<div class="recs">' + recs.map(function (r, i) { return '<div class="rec"><div class="top"><span class="n">' + String(i + 1).padStart(2, '0') + '</span><span class="cf ' + E(r.confidence || 'medium') + '">' + E(r.confidence || 'medium') + ' confidence</span></div><b>' + E(r.title) + '</b><p class="why">' + E(r.why) + '</p><p class="act"><i>Try</i>' + E(r.action) + '</p>' + (staff() ? '<button class="btn mini go" data-w120plan="' + i + '">Plan it in the calendar</button>' : '') + '</div>'; }).join('') + '</div>' : (staff() ? '<div class="insempty" style="margin:0 0 16px">' + (S.busy.ins ? 'Reading the numbers\u2026' : 'The numbers are in; ask for recommendations to turn them into three to five things to try.') + '</div>' : '');
-    var evHtml = ev.length ? '<div class="evh">What the numbers say <small>last 90 days, ' + nPosts + ' posts; 1.0x is a typical post on its own platform</small></div><div class="evs">' + ev.map(evCard).join('') + '</div>' : '';
+    var evHtml = ev.length ? '<div class="evh">What the numbers say <small>' + E(rangeLabel()) + ', ' + nPosts + ' posts; 1.0x is a typical post on its own platform</small></div><div class="evs">' + ev.map(evCard).join('') + '</div>' : '';
     return '<div class="ins" id="w120ins">' + head + recHtml + evHtml + '</div>';
   }
   async function refreshInsights(auto) {
@@ -565,7 +615,9 @@
     var t = e.target; if (!t || !t.closest) return;
     var sec = t.closest('#socialstats'); if (!sec) return;
     var el;
-    if ((el = t.closest('[data-w120days]'))) { S.days = Number(el.getAttribute('data-w120days')); S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120days]'))) { S.range = String(el.getAttribute('data-w120days')); S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120range]'))) { S.range = el.getAttribute('data-w120range'); if (S.range === 'custom') { var rd0 = rangeDates(); S.cfrom = S.cfrom || (S.data && S.data.from) || rd0[0]; S.cto = S.cto || (S.data && S.data.to) || rd0[1]; paint(); return; } S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120apply]'))) { var cf = (document.getElementById('w120cf') || {}).value || '', ct = (document.getElementById('w120ct') || {}).value || ''; if (!/^\d{4}-\d{2}-\d{2}$/.test(cf) || !/^\d{4}-\d{2}-\d{2}$/.test(ct)) { toastS('Pick both dates'); return; } S.cfrom = cf; S.cto = ct; S.data = null; load(true); return; }
     if ((el = t.closest('[data-w120ins]'))) { e.preventDefault(); await refreshInsights(false); return; }
     if ((el = t.closest('[data-w120plan]'))) { e.preventDefault(); var ri = Number(el.getAttribute('data-w120plan')); var ins = S.data && S.data.insights; var rec = ins && ins.data && ins.data.recommendations ? ins.data.recommendations[ri] : null; if (!rec) return; window.__w121prefill = { title: rec.title, notes: 'From the insights (' + (ins.week_start || '') + '): ' + rec.action + '\nWhy: ' + rec.why, campaign: 'Insights', slot: bestSlot(S.data) }; location.hash = '#contentcal'; return; }
     if ((el = t.closest('[data-w120chart]'))) { S.chart = el.getAttribute('data-w120chart'); paint(); return; }
@@ -592,5 +644,6 @@
     }
     if (t.getAttribute('data-w120csvkind') && S.csv && S.csv.platform === t.getAttribute('data-w120csvkind')) { S.csv.kind = t.value; S.csv.guess = guessMap(S.csv.cols, t.value); paint(); }
   });
+  window.w120 = { data: function () { return S.data; }, range: function () { return S.range; }, label: function () { return rangeLabel(); }, dates: function () { return rangeDates(); }, reload: function () { S.data = null; return load(true); }, fn: function (b) { return fn(b); } };
   window.w120Debug = function () { return { days: S.days, loaded: !!S.data, accounts: S.data ? (S.data.accounts || []).length : null, setup: S.setup }; };
 })();

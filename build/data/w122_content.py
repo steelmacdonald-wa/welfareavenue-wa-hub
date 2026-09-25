@@ -339,7 +339,7 @@ TOURS = [
     ("hrcentre", "HR centre", "hrcentre", "People, hours, onboarding, training, hiring and policies.", 3),
     ("finances", "Finances", "finances", "Statements, budgets, the ledger and nonprofit health.", 3),
     ("contentcal", "Content calendar", "contentcal", "Plan, publish and confirm Instagram and Facebook posts.", 3),
-    ("socialstats", "Marketing analytics", "socialstats", "Followers, reach, what worked, and what to try next.", 2),
+    ("socialstats", "Marketing analytics", "socialstats", "Followers, reach and what worked over any range back to the start, every post with its numbers, who follows us, and how far back each platform goes.", 3),
     ("create", "Create studio", "create", "Branded drafts from a short brief.", 2),
     ("brain", "The Brain", "brain", "The living map of people, meetings, tasks and goals.", 2),
     ("importantinfo", "Important info", "importantinfo", "Logins, videos, drives and key links.", 2),

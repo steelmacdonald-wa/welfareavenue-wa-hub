@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.6, 25/09/26: backfill walks each account back as far as its API allows (Facebook and Instagram two years, posts and media all of them, GA4 since the property started), Instagram follower demographics (age and gender, cities, countries), a WhatsApp Business check in the probe, posts deduplicated before the upsert (GA4 pages); v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -17,6 +17,7 @@
 //   {action:'import_csv', platform, rows, posts?, handle?, name?, demographics?}  CSV or export rows (staff); v1.5 keeps post clicks, engagement and raw fields, and audience breakdowns in the account meta
 //   {action:'note', days?}                     the AI note                      (staff or x-wa-secret, cron wa-social-note)
 //   {action:'insights', evidence[], days?}      3 to 5 directional recommendations from the evidence the page computed (staff or automation)
+//   {action:'backfill', account_id, budget?}     one step of history: older days, older posts, demographics; call again until done (staff or automation)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -78,7 +79,16 @@ async function putDaily(rows: Row[]): Promise<number> {
 }
 type Post = { platform: string; account_id: number | null; external_id: string; url?: string | null; kind?: string | null; caption?: string | null; thumb_url?: string | null; published_at?: string | null; reach?: number | null; views?: number | null; likes?: number | null; comments?: number | null; shares?: number | null; saves?: number | null; clicks?: number | null; engagement?: number | null; raw?: Any; source?: string };
 async function putPosts(posts: Post[]): Promise<number> {
-  const clean = posts.filter(p => p && p.external_id);
+  // one row per platform and id: the same GA4 page can come back under two titles (v1.6)
+  const byKey = new Map<string, Post>();
+  for (const p of posts) {
+    if (!p || !p.external_id) continue;
+    const k = p.platform + '|' + p.external_id;
+    const cur = byKey.get(k);
+    if (!cur) { byKey.set(k, p); continue; }
+    if (p.platform === 'ga4') { cur.views = (cur.views || 0) + (p.views || 0); cur.reach = (cur.reach || 0) + (p.reach || 0); }
+  }
+  const clean = Array.from(byKey.values());
   if (!clean.length) return 0;
   const rows = clean.map(p => ({ ...p, caption: p.caption ? String(p.caption).slice(0, 600) : null, engagement: p.engagement != null ? p.engagement : ((p.likes || 0) + (p.comments || 0) + (p.shares || 0) + (p.saves || 0)), source: p.source || 'api', updated_at: new Date().toISOString() }));
   for (let i = 0; i < rows.length; i += 200) {
@@ -231,6 +241,12 @@ async function syncInstagram(a: Account, token: string, days: number): Promise<{
   } catch (e) { skipped.push('media: ' + String((e as Error).message).slice(0, 80)); }
   const np = await putPosts(posts);
   if (np) await putDaily([{ platform: 'instagram', account_id: a.id, day: until, metric: 'posts', value: posts.filter(p => p.published_at && p.published_at >= since).length }]);
+  // the audience, refreshed once a week (v1.6)
+  try {
+    const { data: cur } = await svc.from('social_accounts').select('meta').eq('id', a.id).single();
+    const demo = cur && cur.meta && (cur.meta as Any).demographics;
+    if (!demo || !demo.as_of || demo.as_of < dayAgo(7)) { const d = await igDemographics(a, token); if (d && !d.error) await svc.from('social_accounts').update({ meta: { ...((cur && cur.meta) || {}), demographics: d } }).eq('id', a.id); else if (d && d.error) skipped.push('demographics: ' + String(d.error).slice(0, 80)); }
+  } catch (e) { skipped.push('demographics: ' + String((e as Error).message).slice(0, 80)); }
   return { rows: n, posts: np, skipped };
 }
 
@@ -263,14 +279,14 @@ async function syncGa4(a: Account, days: number): Promise<{ rows: number; posts:
   const pid = a.external_id!;
   const rows: Row[] = []; const skipped: string[] = [];
   const range = [{ startDate: days + 'daysAgo', endDate: 'yesterday' }];
-  const r = await ga4Report(pid, token, { dateRanges: range, dimensions: [{ name: 'date' }], metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'screenPageViews' }], limit: 400 });
+  const r = await ga4Report(pid, token, { dateRanges: range, dimensions: [{ name: 'date' }], metrics: [{ name: 'sessions' }, { name: 'totalUsers' }, { name: 'newUsers' }, { name: 'screenPageViews' }], limit: 1000 });
   for (const row of (r.rows || [])) {
     const d = row.dimensionValues[0].value; const day = d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8);
     const v = row.metricValues.map((m: Any) => Number(m.value));
     rows.push({ platform: 'ga4', account_id: a.id, day, metric: 'sessions', value: v[0] }, { platform: 'ga4', account_id: a.id, day, metric: 'users', value: v[1] }, { platform: 'ga4', account_id: a.id, day, metric: 'new_users', value: v[2] }, { platform: 'ga4', account_id: a.id, day, metric: 'pageviews', value: v[3] });
   }
   try {
-    const s = await ga4Report(pid, token, { dateRanges: range, dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }], metrics: [{ name: 'sessions' }], dimensionFilter: { filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { matchType: 'EXACT', value: 'Organic Social' } } }, limit: 400 });
+    const s = await ga4Report(pid, token, { dateRanges: range, dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }], metrics: [{ name: 'sessions' }], dimensionFilter: { filter: { fieldName: 'sessionDefaultChannelGroup', stringFilter: { matchType: 'EXACT', value: 'Organic Social' } } }, limit: 1000 });
     for (const row of (s.rows || [])) { const d = row.dimensionValues[0].value; const day = d.slice(0, 4) + '-' + d.slice(4, 6) + '-' + d.slice(6, 8); rows.push({ platform: 'ga4', account_id: a.id, day, metric: 'sessions_social', value: Number(row.metricValues[0].value) }); }
   } catch (e) { skipped.push('channels: ' + String((e as Error).message).slice(0, 80)); }
   const n = await putDaily(rows);
@@ -282,6 +298,218 @@ async function syncGa4(a: Account, days: number): Promise<{ rows: number; posts:
   } catch (e) { skipped.push('pages: ' + String((e as Error).message).slice(0, 80)); }
   const np = await putPosts(posts);
   return { rows: n, posts: np, skipped };
+}
+
+/* ---------- history and audience (v1.6) ---------- */
+const MAX_BACK = 730; // Meta keeps two years of insights; GA4 keeps what the property collected
+type History = { daily_from?: string | null; daily_done?: boolean; totals_from?: string | null; totals_done?: boolean; posts_after?: string | null; posts_done?: boolean; started_at?: string; updated_at?: string; notes?: string[] };
+function hist(a: Account): History { return ((a.meta || {}) as Any).history || {}; }
+async function saveHistory(a: Account, h: History, extra: Record<string, Any> = {}): Promise<void> {
+  const { data: cur } = await svc.from('social_accounts').select('meta').eq('id', a.id).single();
+  const meta = { ...((cur && cur.meta) || a.meta || {}), ...extra, history: { ...h, updated_at: new Date().toISOString() } };
+  await svc.from('social_accounts').update({ meta }).eq('id', a.id);
+  a.meta = meta;
+}
+async function oldestDay(a: Account, metric?: string): Promise<string | null> {
+  let q = svc.from('social_daily').select('day').eq('account_id', a.id).order('day', { ascending: true }).limit(1);
+  if (metric) q = q.eq('metric', metric);
+  const { data } = await q;
+  return data && data[0] ? String(data[0].day) : null;
+}
+function addDay(day: string, n: number): string { return isoDay(new Date(new Date(day + 'T00:00:00Z').getTime() + n * 86400000)); }
+function limitDay(): string { return dayAgo(MAX_BACK); }
+
+/* Instagram audience: follower demographics by age and gender, city and country */
+async function igDemographics(a: Account, token: string): Promise<Any | null> {
+  const out: Any = { source: 'Instagram API', as_of: dayAgo(0), followers: {} };
+  let any = false; const errs: string[] = [];
+  for (const [key, breakdown] of [['age_gender', 'age,gender'], ['city', 'city'], ['country', 'country']] as Array<[string, string]>) {
+    let r: Any = null;
+    try { r = await graph('/' + a.external_id + '/insights', token, { metric: 'follower_demographics', period: 'lifetime', metric_type: 'total_value', breakdown }); }
+    catch (e) {
+      try { r = await graph('/' + a.external_id + '/insights', token, { metric: 'follower_demographics', period: 'lifetime', metric_type: 'total_value', breakdown, timeframe: 'this_month' }); }
+      catch (e2) { errs.push(breakdown + ': ' + String((e2 as Error).message || e).slice(0, 90)); continue; }
+    }
+    const tv = ((r.data || [])[0] || {}).total_value || {};
+    const res = (((tv.breakdowns || [])[0] || {}).results || []) as Any[];
+    const rows: Array<[string, number]> = res.map(x => [(x.dimension_values || []).join(' '), Number(x.value) || 0] as [string, number]).filter(x => x[0]);
+    rows.sort((x, y) => y[1] - x[1]);
+    if (!rows.length) continue;
+    any = true;
+    if (key === 'age_gender') {
+      const age: Record<string, number> = {}, gender: Record<string, number> = {};
+      for (const x of res) { const dv = x.dimension_values || []; const v = Number(x.value) || 0; if (dv[0]) age[dv[0]] = (age[dv[0]] || 0) + v; if (dv[1]) gender[dv[1]] = (gender[dv[1]] || 0) + v; }
+      out.followers.age = Object.keys(age).sort().map(k => [k, age[k]]);
+      out.followers.gender = Object.keys(gender).map(k => [k === 'F' ? 'Women' : k === 'M' ? 'Men' : k === 'U' ? 'Not given' : k, gender[k]]).sort((x: Any, y: Any) => y[1] - x[1]);
+      out.followers.age_gender = rows.slice(0, 40);
+    } else out.followers[key] = rows.slice(0, 25);
+  }
+  if (errs.length) out.errors = errs;
+  return any ? out : (errs.length ? { error: errs.join(' | ') } : null);
+}
+
+async function backfillFacebook(a: Account, token: string, budget: number): Promise<Any> {
+  const pt = await pageToken(a.external_id!, token);
+  const h = hist(a); const notes: string[] = [];
+  let from = h.daily_from || (await oldestDay(a)) || dayAgo(0);
+  let rows = 0, windows = 0;
+  while (!h.daily_done && windows < Math.max(1, Math.ceil(budget / 20))) {
+    if (from <= limitDay()) { h.daily_done = true; break; }
+    const lo = addDay(from, -90) < limitDay() ? limitDay() : addDay(from, -90);
+    const batch: Row[] = []; const have = new Set<string>();
+    for (const [m, metric] of FB_METRICS) {
+      if (have.has(metric)) continue;
+      try {
+        const r = await graph('/' + a.external_id + '/insights', pt, { metric: m, period: 'day', since: String(unix(lo)), until: String(unix(from)) });
+        let n = 0;
+        for (const v of (((r.data || [])[0] || {}).values || [])) { const day = String(v.end_time || '').slice(0, 10); const val = typeof v.value === 'number' ? v.value : Number(v.value); if (day && isFinite(val)) { batch.push({ platform: 'facebook', account_id: a.id, day: addDay(day, -1), metric, value: val, source: 'api' }); n++; } }
+        if (n) have.add(metric);
+      } catch (e) { if (notes.length < 6) notes.push(m + ' ' + lo + ': ' + String((e as Error).message).slice(0, 80)); }
+    }
+    windows++;
+    const nonzero = batch.some(r => Number(r.value) > 0);
+    rows += await putDaily(batch);
+    from = lo;
+    if (!nonzero) { h.daily_done = true; notes.push('no Page numbers before ' + from); }
+  }
+  h.daily_from = from;
+  // every published post, fifty at a time
+  let posts = 0, pages = 0;
+  while (!h.posts_done && pages < Math.max(1, Math.ceil(budget / 25))) {
+    const params: Record<string, string> = { fields: 'id,message,created_time,permalink_url,full_picture,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0),insights.metric(post_total_media_view_unique,post_media_view,post_clicks)', limit: '50' };
+    if (h.posts_after) params.after = h.posts_after;
+    let r: Any;
+    try { r = await graph('/' + a.external_id + '/published_posts', pt, params); }
+    catch (_) { delete params.fields; params.fields = 'id,message,created_time,permalink_url,full_picture,shares,reactions.summary(total_count).limit(0),comments.summary(total_count).limit(0)'; try { r = await graph('/' + a.external_id + '/published_posts', pt, params); } catch (e2) { notes.push('posts: ' + String((e2 as Error).message).slice(0, 80)); break; } }
+    const batch: Post[] = [];
+    for (const p of (r.data || [])) {
+      const ins: Record<string, number> = {};
+      for (const i of ((p.insights && p.insights.data) || [])) { const v = ((i.values || [])[0] || {}).value; if (typeof v === 'number') ins[i.name] = v; }
+      batch.push({ platform: 'facebook', account_id: a.id, external_id: String(p.id), url: p.permalink_url || null, kind: 'post', caption: p.message || null, thumb_url: p.full_picture || null, published_at: p.created_time || null,
+        reach: ins.post_total_media_view_unique ?? null, views: ins.post_media_view ?? null, clicks: ins.post_clicks ?? null,
+        likes: (p.reactions && p.reactions.summary && p.reactions.summary.total_count) || 0, comments: (p.comments && p.comments.summary && p.comments.summary.total_count) || 0, shares: (p.shares && p.shares.count) || 0, saves: null, raw: null });
+    }
+    posts += await putPosts(batch); pages++;
+    const next = r.paging && r.paging.cursors && r.paging.next ? r.paging.cursors.after : null;
+    if (!next || !(r.data || []).length) { h.posts_done = true; h.posts_after = null; } else h.posts_after = next;
+  }
+  const done = !!(h.daily_done && h.posts_done);
+  await saveHistory(a, { ...h, notes });
+  return { platform: 'facebook', done, daily_from: h.daily_from, rows, posts, notes };
+}
+
+async function backfillInstagram(a: Account, token: string, budget: number): Promise<Any> {
+  const ig = a.external_id!; const h = hist(a); const notes: string[] = [];
+  let rows = 0;
+  // reach by day, 29 days per call, back two years
+  let from = h.daily_from || (await oldestDay(a, 'reach')) || dayAgo(0);
+  let win = 0;
+  while (!h.daily_done && win < 8) {
+    if (from <= limitDay()) { h.daily_done = true; break; }
+    const lo = addDay(from, -29) < limitDay() ? limitDay() : addDay(from, -29);
+    try {
+      const r = await graph('/' + ig + '/insights', token, { metric: 'reach', period: 'day', since: String(unix(lo)), until: String(unix(from)) });
+      const batch: Row[] = [];
+      for (const v of (((r.data || [])[0] || {}).values || [])) { const day = String(v.end_time || '').slice(0, 10); const val = typeof v.value === 'number' ? v.value : Number(v.value); if (day && isFinite(val)) batch.push({ platform: 'instagram', account_id: a.id, day: addDay(day, -1), metric: 'reach', value: val }); }
+      rows += await putDaily(batch);
+      if (!batch.some(b => Number(b.value) > 0)) { h.daily_done = true; notes.push('no reach before ' + lo); }
+    } catch (e) { h.daily_done = true; notes.push('reach ' + lo + ': ' + String((e as Error).message).slice(0, 90)); }
+    from = lo; win++;
+  }
+  h.daily_from = from;
+  // the day totals (views, likes, comments, shares, saves, profile visits, engaged accounts): one call a day, newest missing first
+  let tfrom = h.totals_from || (await oldestDay(a, 'views')) || dayAgo(0);
+  let calls = 0, empty = 0;
+  while (!h.totals_done && calls < Math.max(10, budget)) {
+    const day = addDay(tfrom, -1);
+    if (day < limitDay()) { h.totals_done = true; break; }
+    calls++;
+    try {
+      const r = await graph('/' + ig + '/insights', token, { metric: IG_TOTAL.join(','), period: 'day', metric_type: 'total_value', since: String(unix(day)), until: String(unix(day) + 86400) });
+      const batch: Row[] = [];
+      for (const m of (r.data || [])) { const v = m.total_value && typeof m.total_value.value === 'number' ? m.total_value.value : null; if (v != null && IG_MAP[m.name]) batch.push({ platform: 'instagram', account_id: a.id, day, metric: IG_MAP[m.name], value: v }); }
+      rows += await putDaily(batch);
+      empty = batch.some(b => Number(b.value) > 0) ? 0 : empty + 1;
+      if (empty >= 21) { h.totals_done = true; notes.push('no day totals before ' + day); }
+    } catch (e) { h.totals_done = true; notes.push('totals ' + day + ': ' + String((e as Error).message).slice(0, 90)); }
+    tfrom = day;
+  }
+  h.totals_from = tfrom;
+  // every post and reel with its numbers, twenty-five at a time
+  let posts = 0, pages = 0;
+  while (!h.posts_done && pages < Math.max(1, Math.ceil(budget / 25))) {
+    const params: Record<string, string> = { fields: 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp,like_count,comments_count', limit: '25' };
+    if (h.posts_after) params.after = h.posts_after;
+    let r: Any;
+    try { r = await graph('/' + ig + '/media', token, params); } catch (e) { notes.push('media: ' + String((e as Error).message).slice(0, 80)); break; }
+    const batch: Post[] = [];
+    for (const m of (r.data || [])) {
+      const ins: Record<string, number> = {};
+      try {
+        const metrics = m.media_product_type === 'REELS' ? 'reach,views,saved,shares,total_interactions,likes,comments' : 'reach,views,saved,shares,total_interactions';
+        const ir = await graph('/' + m.id + '/insights', token, { metric: metrics });
+        for (const i of (ir.data || [])) { const v = ((i.values || [])[0] || {}).value; if (typeof v === 'number') ins[i.name] = v; }
+      } catch (_) { /* old media and stories have no insights */ }
+      batch.push({ platform: 'instagram', account_id: a.id, external_id: String(m.id), url: m.permalink || null, kind: (m.media_product_type || m.media_type || 'post').toLowerCase(), caption: m.caption || null, thumb_url: m.thumbnail_url || m.media_url || null, published_at: m.timestamp || null,
+        reach: ins.reach ?? null, views: ins.views ?? null, likes: m.like_count ?? ins.likes ?? 0, comments: m.comments_count ?? ins.comments ?? 0, shares: ins.shares ?? null, saves: ins.saved ?? null, engagement: ins.total_interactions ?? null, raw: null });
+    }
+    posts += await putPosts(batch); pages++;
+    const next = r.paging && r.paging.next && r.paging.cursors ? r.paging.cursors.after : null;
+    if (!next || !(r.data || []).length) { h.posts_done = true; h.posts_after = null; } else h.posts_after = next;
+  }
+  // the audience, once a week
+  const extra: Record<string, Any> = {};
+  const demo = ((a.meta || {}) as Any).demographics;
+  if (!demo || !demo.as_of || demo.as_of < dayAgo(7)) { const d = await igDemographics(a, token); if (d && !d.error) extra.demographics = d; else if (d && d.error) notes.push('demographics: ' + String(d.error).slice(0, 120)); }
+  const done = !!(h.daily_done && h.totals_done && h.posts_done);
+  await saveHistory(a, { ...h, notes }, extra);
+  return { platform: 'instagram', done, daily_from: h.daily_from, totals_from: h.totals_from, rows, posts, demographics: !!extra.demographics, notes };
+}
+
+async function backfillGa4(a: Account): Promise<Any> {
+  const r = await syncGa4(a, MAX_BACK);
+  const first = await oldestDay(a);
+  await saveHistory(a, { ...hist(a), daily_done: true, posts_done: true, daily_from: first, notes: r.skipped });
+  return { platform: 'ga4', done: true, daily_from: first, rows: r.rows, posts: r.posts, notes: r.skipped };
+}
+
+async function backfill(a: Account, budget: number): Promise<Any> {
+  const started = Date.now();
+  const h = hist(a);
+  if (!h.started_at) { h.started_at = new Date().toISOString(); await saveHistory(a, h); }
+  if (a.platform === 'facebook') return { ...(await backfillFacebook(a, await getSecret('META_SYSTEM_TOKEN'), budget)), id: a.id, ms: Date.now() - started };
+  if (a.platform === 'instagram') return { ...(await backfillInstagram(a, await getSecret('META_SYSTEM_TOKEN'), budget)), id: a.id, ms: Date.now() - started };
+  if (a.platform === 'ga4') return { ...(await backfillGa4(a)), id: a.id, ms: Date.now() - started };
+  return { id: a.id, platform: a.platform, done: true, notes: ['a CSV platform: its history is what the export holds'] };
+}
+
+/* WhatsApp Business: can the token see a WhatsApp Business account, and its message numbers? */
+async function whatsappProbe(token: string): Promise<Any> {
+  const out: Any = { ok: false, permissions: [], wabas: [] };
+  try { const p = await graph('/me/permissions', token); out.permissions = (p.data || []).filter((x: Any) => x.status === 'granted').map((x: Any) => x.permission); } catch (e) { out.permissions_error = String((e as Error).message).slice(0, 120); }
+  out.has_permission = (out.permissions as string[]).some(x => /whatsapp/.test(x));
+  try {
+    const b = await graph('/me/businesses', token, { fields: 'id,name', limit: '10' });
+    for (const biz of (b.data || [])) {
+      for (const edge of ['owned_whatsapp_business_accounts', 'client_whatsapp_business_accounts']) {
+        try { const w = await graph('/' + biz.id + '/' + edge, token, { fields: 'id,name,currency,message_template_namespace', limit: '10' }); for (const x of (w.data || [])) out.wabas.push({ id: x.id, name: x.name, business: biz.name }); } catch (_) { /* not shared */ }
+      }
+    }
+  } catch (e) { out.businesses_error = String((e as Error).message).slice(0, 120); }
+  if (out.wabas.length) {
+    const w = out.wabas[0];
+    try {
+      const end = Math.floor(Date.now() / 1000), start = end - 30 * 86400;
+      const r = await graph('/' + w.id, token, { fields: 'analytics.start(' + start + ').end(' + end + ').granularity(DAY)' });
+      const pts = (r.analytics && r.analytics.data_points) || [];
+      out.analytics = { days: pts.length, sent: pts.reduce((s: number, x: Any) => s + (Number(x.sent) || 0), 0), delivered: pts.reduce((s: number, x: Any) => s + (Number(x.delivered) || 0), 0) };
+      out.ok = true;
+    } catch (e) { out.analytics_error = String((e as Error).message).slice(0, 160); }
+  }
+  out.next = out.ok ? 'The WhatsApp Business account is readable: its message numbers can join Analytics.'
+    : out.wabas.length ? 'A WhatsApp Business account is shared, but its analytics need the whatsapp_business_management permission on the system user token.'
+    : 'No WhatsApp Business account is shared with the system user. In Meta Business settings: WhatsApp accounts > your account > Add people > the system user, then regenerate the token with whatsapp_business_management.';
+  return out;
 }
 
 /* ---------- the sync ---------- */
@@ -405,6 +633,7 @@ Deno.serve(async (req: Request) => {
           const pages = await metaPages(token);
           out.meta = { ok: true, as: me2.name || me2.id, token_kind: pages.length && pages[0]._page_token ? 'page' : 'user', pages: pages.map(p => ({ id: p.id, name: p.name, link: p.link, followers: p.followers_count, picture: p.picture && p.picture.data && p.picture.data.url, instagram: p.instagram_business_account ? { id: p.instagram_business_account.id, username: p.instagram_business_account.username, followers: p.instagram_business_account.followers_count, media: p.instagram_business_account.media_count } : null })) };
         } catch (e) { out.meta = { ok: false, error: String((e as Error).message) }; }
+        try { out.whatsapp = await whatsappProbe(token); } catch (e) { out.whatsapp = { ok: false, error: String((e as Error).message).slice(0, 160) }; }
       }
       const { data } = await svc.from('social_accounts').select('*').order('platform');
       out.accounts = data || [];
@@ -467,6 +696,16 @@ Deno.serve(async (req: Request) => {
       let confirmed: Any = null;
       try { const r = await fetch(SUPABASE_URL + '/functions/v1/social-publish', { method: 'POST', headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', days: 60 }) }); confirmed = await r.json(); } catch (_) { /* the calendar catches up on the next run */ }
       return json({ ok: true, results, confirmed });
+    }
+    if (action === 'backfill') {
+      const id = Number(body.account_id);
+      if (!id) return json({ error: 'account_id' }, 400);
+      const { data: acc } = await svc.from('social_accounts').select('*').eq('id', id).maybeSingle();
+      if (!acc) return json({ error: 'no such account' }, 404);
+      if (body.restart) { const m = { ...((acc as Account).meta || {}) }; delete (m as Any).history; await svc.from('social_accounts').update({ meta: m }).eq('id', id); (acc as Account).meta = m; }
+      const budget = Math.max(10, Math.min(60, Number(body.budget) || 40));
+      try { return json({ ok: true, ...(await backfill(acc as Account, budget)) }); }
+      catch (e) { return json({ ok: false, id, error: String((e as Error).message || e).slice(0, 300) }); }
     }
     if (action === 'import_csv') return json(await importCsv(body, me));
     if (action === 'note') return json({ ok: true, ...(await writeNote(Math.max(7, Math.min(30, Number(body.days) || 7)))) });

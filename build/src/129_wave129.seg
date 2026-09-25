@@ -1,0 +1,381 @@
+/* =====================================================================
+   WA v129 analytics depth (25/09/26): every number the platforms keep, as far back as they keep it
+   =====================================================================
+   Steel: "more granular data from Instagram and Facebook", "even do WhatsApp maybe", and "look as far
+   back as possible in time for analytics and have all analytics, as many as possible, visible to me."
+   - Ranges (wave120 edited): 7, 30 and 90 days, 6 months, 1 year, 2 years, all time, or two dates;
+     longer ranges chart by week or by month (social_range() in wa129).
+   - History: social-pull v1.6 walks Facebook and Instagram back two years (the most Meta keeps),
+     every Facebook post and every Instagram post and reel with its numbers, and the website since
+     the property started. The coverage card shows how far back each platform goes, with Load more
+     history for staff.
+   - Every post: a table of every post in the range with reach, views, likes, comments, shares,
+     saves and the engagement rate; filter by platform, type and words, sort by any column, and
+     download it as a CSV. The daily numbers download as a CSV too.
+   - Audience: Instagram followers by age, gender, city and country (weekly, from the API); LinkedIn
+     followers and visitors by industry, seniority, function, location and company size (the export).
+     Meta no longer gives Facebook Page audiences.
+   - LinkedIn: set the follower total once and the Hub rebuilds the year of totals from the daily
+     new followers in the export.
+   - WhatsApp: the check says whether a WhatsApp Business account is shared with the Hub and what to
+     do if not.
+   ===================================================================== */
+(function () {
+  if (window.__wa129) return; window.__wa129 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var PL = {
+    instagram: ['Instagram', '#C13584', 'IG'], facebook: ['Facebook', '#1877F2', 'f'], linkedin: ['LinkedIn', '#0A66C2', 'in'],
+    tiktok: ['TikTok', '#111111', 'TT'], ga4: ['Website', TEAL, 'W'], youtube: ['YouTube', '#FF0000', 'YT'], whatsapp: ['WhatsApp', '#25D366', 'WA']
+  };
+  var COLS = [['published_at', 'Date'], ['reach', 'Reach'], ['views', 'Views'], ['likes', 'Likes'], ['comments', 'Comments'], ['shares', 'Shares'], ['saves', 'Saves'], ['clicks', 'Clicks'], ['engagement', 'Engaged'], ['rate', 'Rate']];
+  var X = { q: '', plat: '', kind: '', sort: 'published_at', dir: -1, show: 25, busy: {}, wa: null, liTotal: '', aud: 'followers', open: { coverage: true, explorer: true, audience: true }, run: null };
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function num(v) { v = Number(v); if (!isFinite(v)) return '\u2013'; var a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (a >= 1e4) return Math.round(v / 1e3) + 'k'; if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return String(Math.round(v)); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function data() { try { return (window.w120 && window.w120.data()) || null; } catch (e) { return null; } }
+  function mk(p) { var c = PL[p] || [p, GREEN, '?']; return '<span class="w129mk" style="background:' + c[1] + '">' + E(c[2]) + '</span>'; }
+  function label(p) { return (PL[p] || [p])[0]; }
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function day(iso) { if (!iso) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso)); return m ? MON[Number(m[2]) - 1] + ' ' + Number(m[3]) + ', ' + m[1] : String(iso); }
+  function monthY(iso) { var m = /^(\d{4})-(\d{2})/.exec(String(iso || '')); return m ? MON[Number(m[2]) - 1] + ' ' + m[1] : ''; }
+  function engOf(p) { var e = Number(p.engagement); if (p.engagement != null && isFinite(e) && e > 0) return e; var s = 0, any = false; ['likes', 'comments', 'shares', 'saves'].forEach(function (k) { if (p[k] != null && isFinite(Number(p[k]))) { s += Number(p[k]); any = true; } }); return any ? s : null; }
+  function rateOf(p) { var e = engOf(p), r = Number(p.reach) || Number(p.views) || 0; return e != null && r > 0 ? e / r : null; }
+  function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function download(name, rows) {
+    var text = rows.map(function (r) { return r.map(csvCell).join(','); }).join('\n');
+    try { var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400); toastS('Downloaded ' + name); }
+    catch (e) { toastS('Could not download it'); }
+  }
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'wa129css';
+  css.textContent = ''
+    + '#w129{font-family:' + BODY + ';}'
+    + '#w129 .cardy h4 .sub{font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted);}'
+    + '#w129 .cardy h4 .sp{flex:1;}'
+    + '.w129mk{width:24px;height:24px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:11.5px;font-weight:800;color:#fff;flex:none;text-transform:none;letter-spacing:0;}'
+    + '.w129btn{display:inline-flex;align-items:center;gap:6px;font-family:' + BODY + ';font-size:12.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:9px;padding:6px 11px;cursor:pointer;text-decoration:none !important;white-space:nowrap;}'
+    + '.w129btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w129btn[disabled]{opacity:.55;cursor:default;}'
+    /* coverage */
+    + '.w129cov{display:grid;grid-template-columns:28px minmax(150px,.9fr) minmax(0,2fr) auto;column-gap:12px;}'
+    + '.w129cov .r{display:grid;grid-column:1/-1;grid-template-columns:subgrid;align-items:center;padding:10px 0;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w129cov .r:first-child{border-top:none;}'
+    + '.w129cov .r b{font-size:13.5px;}'
+    + '.w129cov .r .m{font-size:12.5px;color:#5c5a56;line-height:1.45;}'
+    + '.w129cov .r .m em{font-style:normal;font-weight:700;color:' + INK + ';}'
+    + '.w129cov .st{font-size:11px;font-weight:700;letter-spacing:.3px;border-radius:999px;padding:3px 9px;white-space:nowrap;background:rgba(42,140,122,.14);color:#1c6b5d;}'
+    + '.w129cov .st.run{background:rgba(220,165,39,.22);color:#6b4d05;}'
+    + '.w129cov .st.csv{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w129cov .st.off{background:rgba(121,119,115,.14);color:#5c5a56;}'
+    + '.w129cov .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}'
+    + '.w129cov .act input{width:132px;font-size:12.5px;padding:5px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;}'
+    + '.w129bar{height:6px;border-radius:3px;background:rgba(16,63,57,.08);overflow:hidden;margin-top:6px;}'
+    + '.w129bar i{display:block;height:100%;background:' + GOLD + ';}'
+    + '.w129foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:12px;color:var(--wa-muted);}'
+    + '.w129foot .sp{flex:1;}'
+    /* explorer */
+    + '.w129tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}'
+    + '.w129tools .chips{display:flex;gap:5px;flex-wrap:wrap;}'
+    + '.w129tools .chips a{font-size:12px;font-weight:600;border-radius:999px;padding:5px 11px;background:rgba(16,63,57,.06);color:' + GREEN + ';cursor:pointer;text-decoration:none;}'
+    + '.w129tools .chips a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w129tools input[type=search],.w129tools select{font-size:12.5px;padding:6px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:#fff;}'
+    + '.w129tools input[type=search]{min-width:180px;flex:1 1 180px;}'
+    + '.w129tbl{width:100%;border-collapse:collapse;font-size:12.8px;}'
+    + '.w129wrap{overflow-x:auto;}'
+    + '.w129tbl th{text-align:right;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--wa-muted);padding:7px 8px;border-bottom:1px solid rgba(16,63,57,.12);cursor:pointer;white-space:nowrap;user-select:none;}'
+    + '.w129tbl th:first-child,.w129tbl th.l{text-align:left;}'
+    + '.w129tbl th.on{color:' + GREEN + ';}'
+    + '.w129tbl td{padding:8px;border-bottom:1px solid rgba(16,63,57,.06);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
+    + '.w129tbl td.p{text-align:left;white-space:normal;min-width:280px;}'
+    + '.w129tbl td.p .in{display:flex;gap:10px;align-items:flex-start;}'
+    + '.w129tbl td.p img,.w129tbl td.p .ph{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:rgba(16,63,57,.06);display:flex;align-items:center;justify-content:center;}'
+    + '.w129tbl td.p .cap{font-size:12.8px;line-height:1.4;color:' + INK + ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}'
+    + '.w129tbl td.p .mt{font-size:11.5px;color:var(--wa-muted);margin-top:3px;display:flex;gap:6px;align-items:center;}'
+    + '.w129tbl td.p .mt .w129mk{width:16px;height:16px;border-radius:5px;font-size:8.5px;}'
+    + '.w129tbl tr:hover td{background:rgba(220,165,39,.06);}'
+    + '.w129tbl td a{color:inherit;text-decoration:none;}'
+    + '.w129tbl td.rt b{color:' + GREEN + ';}'
+    + '.w129tools .w129ss{display:none;}'
+    + '@media (max-width:640px){.w129tools .w129ss{display:inline-block;}.w129tbl thead{display:none;}.w129tbl,.w129tbl tbody{display:block;}.w129tbl tr{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 0;border-bottom:1px solid rgba(16,63,57,.08);}.w129tbl td{display:none;border:0;padding:0;}.w129tbl td.p{display:block;width:100%;min-width:0;}.w129tbl td.k{display:inline-block;font-size:12.5px;}.w129tbl td.k::before{content:attr(data-l) " ";font-size:11px;color:var(--wa-muted);}.w129tbl tr:hover td{background:none;}}'
+    + '.w129sum{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#5c5a56;margin:0 0 10px;}'
+    + '.w129sum b{font-family:' + HEAD + ';font-size:17px;color:' + GREEN + ';margin-right:3px;}'
+    /* audience */
+    + '.w129aud{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;}'
+    + '.w129aud .b{background:rgba(16,63,57,.035);border-radius:14px;padding:12px 14px;}'
+    + '.w129aud .b h5{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 8px;}'
+    + '.w129aud .row{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center;font-size:12.5px;margin:0 0 5px;}'
+    + '.w129aud .row .t{min-width:0;}'
+    + '.w129aud .row .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.w129aud .row .t i{display:block;height:6px;border-radius:3px;background:var(--c,' + GREEN + ');margin-top:3px;}'
+    + '.w129aud .row b{text-align:right;font-variant-numeric:tabular-nums;}'
+    + '#w129 .w129note{font-size:12px;color:var(--wa-muted);line-height:1.45;margin:6px 0 0;background:none;padding:0;border:0;box-shadow:none;}'
+    + '.w129seg{display:inline-flex;background:rgba(16,63,57,.08);border-radius:10px;padding:3px;gap:2px;}'
+    + '.w129seg a{font-size:12px;font-weight:600;color:' + GREEN + ';padding:5px 10px;border-radius:8px;cursor:pointer;text-decoration:none;}'
+    + '.w129seg a.on{background:#fff;box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '@media (max-width:760px){.w129cov{grid-template-columns:28px minmax(0,1fr);}.w129cov .r{row-gap:6px;}.w129cov .r .m,.w129cov .r .act{grid-column:2;}.w129cov .act{justify-content:flex-start;}}';
+  document.head.appendChild(css);
+
+  /* ---------- how far back each platform goes ---------- */
+  function histDone(a) { var h = (a.meta && a.meta.history) || {}; if (a.platform === 'instagram') return !!(h.daily_done && h.totals_done && h.posts_done); return !!(h.daily_done && h.posts_done); }
+  function canBack(a) { return a && (a.platform === 'facebook' || a.platform === 'instagram' || a.platform === 'ga4') && a.status !== 'csv'; }
+  function coverageHtml(d) {
+    var accs = d.accounts || [], cov = d.coverage || {};
+    var rows = ['instagram', 'facebook', 'linkedin', 'tiktok', 'ga4'].map(function (p) {
+      var a = accs.filter(function (x) { return x.platform === p; })[0];
+      if (!a) return p === 'tiktok' ? '<div class="r">' + mk(p) + '<b>' + E(label(p)) + '</b><span class="m">Not connected. TikTok\u2019s analytics API needs an approval first; its CSV export works in Set up.</span><span class="act"><span class="st off">Not connected</span></span></div>' : '';
+      var c = cov[p] || {}, h = (a.meta && a.meta.history) || {};
+      var running = X.run && X.run.id === a.id;
+      var st = a.status === 'csv' ? '<span class="st csv">From the export</span>' : running ? '<span class="st run">Loading\u2026</span>' : histDone(a) ? '<span class="st">All the history</span>' : h.started_at ? '<span class="st run">Partly loaded</span>' : '<span class="st off">Recent only</span>';
+      var m = c.from ? '<em>Daily numbers</em> since ' + E(day(c.from)) + ' (' + num(c.days) + ' days)' : 'No daily numbers yet';
+      m += c.posts ? ' \u00b7 <em>' + num(c.posts) + (p === 'ga4' ? ' pages' : ' posts') + '</em>' + (c.posts_from && p !== 'ga4' ? ' since ' + E(monthY(c.posts_from)) : '') : '';
+      if (p === 'instagram' || p === 'facebook') m += '<br>Meta keeps two years of daily numbers' + (p === 'facebook' ? '; posts go back to the start of the Page.' : '; posts and reels go back to the first one.');
+      if (p === 'linkedin') m += '<br>LinkedIn\u2019s export covers the last year. A new export extends it.';
+      if (p === 'ga4') m += '<br>The website keeps what Google Analytics collected since the property started.';
+      if (running && X.run.text) m += '<div class="w129bar"><i style="width:' + Math.max(4, Math.min(100, X.run.pct || 0)).toFixed(0) + '%"></i></div><span style="font-size:11.5px">' + E(X.run.text) + '</span>';
+      var act = st;
+      if (staff() && canBack(a) && !histDone(a)) act += '<button class="w129btn ghost" data-w129back="' + a.id + '"' + (X.run ? ' disabled' : '') + '>Load more history</button>';
+      if (staff() && p === 'linkedin') act += '<input type="number" min="0" id="w129li" placeholder="Followers now" value="' + E(X.liTotal) + '"><button class="w129btn ghost" data-w129li="' + a.id + '"' + (X.busy.li ? ' disabled' : '') + '>' + (X.busy.li ? 'Saving\u2026' : 'Set the total') + '</button>';
+      return '<div class="r">' + mk(p) + '<b>' + E(label(p)) + (a.handle ? ' <span style="font-weight:500;color:var(--wa-muted)">@' + E(a.handle) + '</span>' : '') + '</b><span class="m">' + m + '</span><span class="act">' + act + '</span></div>';
+    }).join('');
+    var wa = X.wa;
+    var waMsg = wa ? (wa.ok ? 'Readable: ' + num(wa.analytics && wa.analytics.sent) + ' messages sent in the last 30 days.' : (wa.wabas && wa.wabas.length ? 'A WhatsApp Business account is shared (' + E(wa.wabas[0].name || wa.wabas[0].id) + ') but its numbers are not readable yet.' : (wa.has_permission ? 'The token can read WhatsApp, but no WhatsApp Business account is shared with the Hub\u2019s system user. In Meta Business settings: Accounts > WhatsApp accounts > your account > Assign people > the system user. If Welfare Avenue uses the WhatsApp Business app on a phone, it has no analytics API; the WhatsApp Business Platform does.' : E(wa.next || wa.error || '')))) : 'Message numbers can join once a WhatsApp Business account is shared with the Hub\u2019s system user in Meta Business settings.';
+    rows += '<div class="r">' + mk('whatsapp') + '<b>WhatsApp</b><span class="m">' + waMsg + '</span><span class="act"><span class="st off">' + (wa && wa.ok ? 'Readable' : 'Not shared') + '</span>' + (staff() ? '<button class="w129btn ghost" data-w129wa="1"' + (X.busy.wa ? ' disabled' : '') + '>' + (X.busy.wa ? 'Checking\u2026' : 'Check') + '</button>' : '') + '</span></div>';
+    var todo = (d.accounts || []).filter(function (a) { return canBack(a) && !histDone(a); });
+    return '<div class="cardy"><h4>How far back <span class="sub">each platform, and what it keeps</span></h4><div class="w129cov">' + rows + '</div>'
+      + '<div class="w129foot"><span>Pick <b>All time</b> or <b>2 years</b> above to see all of it.</span><span class="sp"></span>'
+      + (staff() && todo.length ? '<button class="w129btn" data-w129all="1"' + (X.run ? ' disabled' : '') + '>Load all the history</button>' : '')
+      + '<button class="w129btn ghost" data-w129csvd="1"' + (X.busy.csvd ? ' disabled' : '') + '>' + (X.busy.csvd ? 'Preparing\u2026' : 'Download the daily numbers (CSV)') + '</button></div></div>';
+  }
+
+  /* ---------- every post ---------- */
+  function kindOf(p) { var k = String(p.kind || 'post').toLowerCase(); if (/reel/.test(k)) return 'reel'; if (/video/.test(k)) return 'video'; if (/carousel|album/.test(k)) return 'carousel'; if (/story/.test(k)) return 'story'; if (/image|photo/.test(k)) return 'image'; return k === 'feed' ? 'post' : k; }
+  function explorerRows(d) {
+    var q = X.q.toLowerCase();
+    var rows = (d.posts_all || []).filter(function (p) { return (!X.plat || p.platform === X.plat) && (!X.kind || kindOf(p) === X.kind) && (!q || String(p.caption || '').toLowerCase().indexOf(q) >= 0); });
+    var key = X.sort, dir = X.dir;
+    rows.sort(function (a, b) {
+      var va = key === 'rate' ? rateOf(a) : key === 'engagement' ? engOf(a) : key === 'published_at' ? String(a.published_at || '') : a[key];
+      var vb = key === 'rate' ? rateOf(b) : key === 'engagement' ? engOf(b) : key === 'published_at' ? String(b.published_at || '') : b[key];
+      if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
+      return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+    });
+    return rows;
+  }
+  function explorerHtml(d) {
+    var all = d.posts_all || [];
+    var plats = []; all.forEach(function (p) { if (plats.indexOf(p.platform) < 0) plats.push(p.platform); });
+    var kinds = []; all.forEach(function (p) { var k = kindOf(p); if (kinds.indexOf(k) < 0) kinds.push(k); });
+    var rows = explorerRows(d);
+    var tot = { reach: 0, views: 0, eng: 0 }; rows.forEach(function (p) { tot.reach += Number(p.reach) || 0; tot.views += Number(p.views) || 0; tot.eng += engOf(p) || 0; });
+    var h = '<div class="cardy"><h4>Every post <span class="sub">' + E(window.w120 ? window.w120.label() : '') + '</span><span class="sp"></span><button class="w129btn ghost" data-w129csvp="1"' + (rows.length ? '' : ' disabled') + '>Download these posts (CSV)</button></h4>'
+      + '<div class="w129tools"><span class="chips"><a data-w129plat=""' + (X.plat ? '' : ' class="on"') + '>All</a>' + plats.map(function (p) { return '<a data-w129plat="' + E(p) + '"' + (X.plat === p ? ' class="on"' : '') + '>' + E(label(p)) + '</a>'; }).join('') + '</span>'
+      + '<select data-w129kind><option value="">Every type</option>' + kinds.sort().map(function (k) { return '<option value="' + E(k) + '"' + (X.kind === k ? ' selected' : '') + '>' + E(k.charAt(0).toUpperCase() + k.slice(1) + 's') + '</option>'; }).join('') + '</select>'
+      + '<select class="w129ss" data-w129ss aria-label="Sort">' + '<option value="published_at|-1"' + (X.sort + '|' + X.dir === 'published_at|-1' ? ' selected' : '') + '>Newest first</option>' + '<option value="published_at|1"' + (X.sort + '|' + X.dir === 'published_at|1' ? ' selected' : '') + '>Oldest first</option>' + '<option value="reach|-1"' + (X.sort + '|' + X.dir === 'reach|-1' ? ' selected' : '') + '>Most reach</option>' + '<option value="views|-1"' + (X.sort + '|' + X.dir === 'views|-1' ? ' selected' : '') + '>Most views</option>' + '<option value="engagement|-1"' + (X.sort + '|' + X.dir === 'engagement|-1' ? ' selected' : '') + '>Most engaged</option>' + '<option value="rate|-1"' + (X.sort + '|' + X.dir === 'rate|-1' ? ' selected' : '') + '>Best engagement rate</option>' + '</select>'
+      + '<input type="search" data-w129q placeholder="Search the captions" value="' + E(X.q) + '"></div>';
+    if (!rows.length) return h + '<p style="font-size:13px;color:var(--wa-muted);margin:0">' + (all.length ? 'No post matches.' : 'No posts in this range yet.') + '</p></div>';
+    h += '<div class="w129sum"><span><b>' + num(rows.length) + '</b>posts</span><span><b>' + num(tot.reach) + '</b>reach</span><span><b>' + num(tot.views) + '</b>views</span><span><b>' + num(tot.eng) + '</b>engagements</span>' + (tot.reach ? '<span><b>' + (tot.eng / tot.reach * 100).toFixed(1) + '%</b>engaged per reach</span>' : '') + '</div>';
+    h += '<div class="w129wrap"><table class="w129tbl"><thead><tr><th class="l' + (X.sort === 'published_at' ? ' on' : '') + '" data-w129sort="published_at">Post' + (X.sort === 'published_at' ? (X.dir < 0 ? ' \u2193' : ' \u2191') : '') + '</th>'
+      + COLS.slice(1).map(function (c) { return '<th data-w129sort="' + c[0] + '"' + (X.sort === c[0] ? ' class="on"' : '') + ' title="' + (c[0] === 'rate' ? 'Engagements divided by reach (or views)' : c[0] === 'engagement' ? 'Likes, comments, shares and saves' : '') + '">' + E(c[1]) + (X.sort === c[0] ? (X.dir < 0 ? ' \u2193' : ' \u2191') : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
+    h += rows.slice(0, X.show).map(function (p) {
+      var r = rateOf(p);
+      var cell = function (v, l, k) { return '<td data-l="' + l + '"' + (k ? ' class="k"' : '') + '>' + (v == null || v === '' ? '<span style="color:var(--wa-muted)">\u2013</span>' : num(v)) + '</td>'; };
+      return '<tr><td class="p"><a ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="in">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="ph">' + mk(p.platform) + '</span>') + '<div><div class="cap">' + (p.caption ? E(p.caption) : '<span style="color:var(--wa-muted)">No caption</span>') + '</div><div class="mt">' + mk(p.platform) + E(day(p.published_at)) + ' \u00b7 ' + E(kindOf(p)) + '</div></div></div></a></td>'
+        + cell(p.reach, 'Reach', 1) + cell(p.views, 'Views', 1) + cell(p.likes, 'Likes') + cell(p.comments, 'Comments') + cell(p.shares, 'Shares') + cell(p.saves, 'Saves') + cell(p.clicks, 'Clicks') + cell(engOf(p), 'Engaged', 1) + '<td class="rt k" data-l="Rate">' + (r == null ? '<span style="color:var(--wa-muted)">\u2013</span>' : '<b>' + (r * 100).toFixed(1) + '%</b>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+    if (rows.length > X.show) h += '<div class="w129foot"><button class="w129btn ghost" data-w129more="1">Show ' + Math.min(50, rows.length - X.show) + ' more</button><span>' + num(rows.length - X.show) + ' more posts</span></div>';
+    return h + '</div>';
+  }
+
+  /* ---------- the audience ---------- */
+  var RN = null;
+  function country(c) { try { RN = RN || new Intl.DisplayNames(['en'], { type: 'region' }); return RN.of(String(c).toUpperCase()) || c; } catch (e) { return c; } }
+  function lead(x) { var m = /\d+/.exec(String(x)); return m ? Number(m[0]) : 1e9; }
+  /* one breakdown: the top rows as bars, each as a share of everyone counted (or the follower total when it is larger) */
+  function bars(title, pairs, color, note, max, o) {
+    o = o || {};
+    var all = (pairs || []).filter(function (x) { return x && x[0] != null && Number(x[1]) > 0; });
+    if (!all.length) return '';
+    var sum = all.reduce(function (s, x) { return s + Number(x[1]); }, 0), den = Math.max(sum, Number(o.total) || 0);
+    var list = o.order ? all.slice().sort(function (a, b) { return lead(a[0]) - lead(b[0]); }) : all.slice().sort(function (a, b) { return Number(b[1]) - Number(a[1]); });
+    list = list.slice(0, max || 8);
+    var top = Math.max.apply(null, list.map(function (x) { return Number(x[1]) || 0; })) || 1;
+    return '<div class="b" style="--c:' + color + '"><h5>' + title + '</h5>' + list.map(function (x) {
+      var nm = o.name ? o.name(x[0]) : x[0], pct = den ? Number(x[1]) / den * 100 : 0;
+      return '<div class="row"><div class="t"><span title="' + E(nm) + '">' + E(nm) + '</span><i style="width:' + Math.max(3, Number(x[1]) / top * 100).toFixed(1) + '%"></i></div><b title="' + E(num(x[1])) + '">' + (pct > 0 && pct < 1 ? pct.toFixed(1) : Math.round(pct)) + '%</b></div>';
+    }).join('') + (note ? '<p class="w129note">' + note + '</p>' : '') + '</div>';
+  }
+  function audienceHtml(d) {
+    var accs = d.accounts || [];
+    var ig = accs.filter(function (a) { return a.platform === 'instagram'; })[0], li = accs.filter(function (a) { return a.platform === 'linkedin'; })[0];
+    var igd = ig && ig.meta && ig.meta.demographics && ig.meta.demographics.followers, lid = li && li.meta && li.meta.demographics;
+    var parts = '';
+    if (igd) {
+      var c = PL.instagram[1], asOf = ig.meta.demographics.as_of, igTot = d.followers && d.followers.instagram && Number(d.followers.instagram.now);
+      parts += bars(mk('instagram') + 'Followers by age', igd.age, c, null, 8, { order: 1 })
+        + bars(mk('instagram') + 'Followers by gender', igd.gender, c, null, 4)
+        + bars(mk('instagram') + 'Top cities', igd.city, c, null, 8, { total: igTot })
+        + bars(mk('instagram') + 'Top countries', igd.country, c, asOf ? 'Instagram API, ' + E(day(asOf)) + '. Refreshed every week.' : null, 6, { total: igTot, name: country });
+    }
+    if (lid) {
+      var g = lid[X.aud] || lid.followers || {}, lc = PL.linkedin[1], liTot = X.aud === 'visitors' ? 0 : (d.followers && d.followers.linkedin && Number(d.followers.linkedin.now));
+      var names = { industry: 'by industry', seniority: 'by seniority', job_function: 'by job function', location: 'by location', company_size: 'by company size' };
+      parts += Object.keys(names).map(function (k, i) { return bars(mk('linkedin') + (X.aud === 'visitors' ? 'Page visitors ' : 'Followers ') + names[k], g[k], lc, i === 4 ? 'LinkedIn export' + (lid.period ? ', ' + E(day(lid.period[0])) + ' to ' + E(day(lid.period[1])) : '') + '.' : null, 7, { order: k === 'company_size', total: liTot }); }).join('');
+    }
+    if (!parts) return '';
+    return '<div class="cardy"><h4>Who follows us <span class="sub">the audience each platform shares</span><span class="sp"></span>' + (lid ? '<span class="w129seg"><a data-w129aud="followers"' + (X.aud === 'followers' ? ' class="on"' : '') + '>LinkedIn followers</a><a data-w129aud="visitors"' + (X.aud === 'visitors' ? ' class="on"' : '') + '>LinkedIn visitors</a></span>' : '') + '</h4>'
+      + '<div class="w129aud">' + parts + '</div><p class="w129note" style="margin:10px 0 0">Facebook: Meta stopped sharing Page audience breakdowns (age, gender, city) through its API in 2024; Meta Business Suite still shows them.</p></div>';
+  }
+
+  /* ---------- paint into the Analytics page, after wave120's own content ---------- */
+  var HOST = null;
+  function host() {
+    var wrap = document.querySelector('#socialstats .w120wrap'); if (!wrap) return null;
+    if (!HOST) { HOST = document.createElement('div'); HOST.id = 'w129'; }
+    if (HOST.parentNode !== wrap || wrap.lastElementChild !== HOST) wrap.appendChild(HOST);
+    return HOST;
+  }
+  function paint() {
+    watch();
+    var d = data(); if (!d || !(d.accounts || []).length) { if (HOST) { HOST.innerHTML = ''; HOST.__h = ''; } return; }
+    var h = host(); if (!h) return;
+    var html = explorerHtml(d) + audienceHtml(d) + coverageHtml(d);
+    if (h.__h !== html) {
+      var focus = document.activeElement && document.activeElement.matches && document.activeElement.matches('#w129 [data-w129q]') ? document.activeElement.selectionStart : null;
+      h.innerHTML = html; h.__h = html;
+      if (focus != null) { var q = h.querySelector('[data-w129q]'); if (q) { q.focus(); try { q.setSelectionRange(focus, focus); } catch (e) { /* fine */ } } }
+    }
+  }
+  var paintT = null;
+  function soon() { clearTimeout(paintT); paintT = setTimeout(paint, 30); }
+  /* wave120 rewrites its section on every paint: put the same block straight back (a microtask, before the browser draws), so nothing flickers */
+  function watch() {
+    var sec = document.getElementById('socialstats'); if (!sec || sec.__w129) return;
+    sec.__w129 = true;
+    try { new MutationObserver(function () { var d = data(); if (d && (d.accounts || []).length && HOST && HOST.__h) host(); soon(); }).observe(sec, { childList: true }); } catch (e) { /* fine */ }
+  }
+  document.addEventListener('w120:data', function () { X.show = 25; soon(); });
+
+  /* ---------- history, one step at a time ---------- */
+  async function runBackfill(ids) {
+    if (X.run || !window.w120) return;
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      X.run = { id: id, text: 'Starting\u2026', pct: 2 }; paint();
+      for (var step = 0; step < 40; step++) {
+        var r = null;
+        try { r = await window.w120.fn({ action: 'backfill', account_id: id, budget: 40 }); } catch (e) { r = { ok: false, error: e.message || String(e) }; }
+        if (!r || r.ok === false) { toastS('History stopped: ' + String((r && r.error) || 'no answer').slice(0, 80)); break; }
+        var back = r.daily_from || r.totals_from;
+        var covered = back ? Math.round((Date.now() - new Date(back + 'T12:00:00Z').getTime()) / 86400000) : 0;
+        X.run.pct = Math.min(99, covered / 730 * 100);
+        X.run.text = (back ? 'Back to ' + day(back) : 'Working') + (r.posts ? ', ' + num(r.posts) + ' more posts this step' : '') + (r.done ? '. Done.' : '\u2026');
+        paint();
+        if (r.done) break;
+      }
+    }
+    X.run = null;
+    try { await window.w120.reload(); } catch (e) { /* fine */ }
+    toastS('The history is loaded');
+  }
+
+  /* LinkedIn: the follower total today, and the year rebuilt from the daily new followers */
+  async function setLinkedIn(id) {
+    var inp = document.getElementById('w129li'); var n = Math.round(Number(inp && inp.value));
+    if (!(n > 0)) { toastS('Type the follower total shown on the LinkedIn page'); return; }
+    X.liTotal = String(n); X.busy.li = true; paint();
+    try {
+      var r = await db.from('social_daily').select('day,value').eq('platform', 'linkedin').eq('metric', 'new_followers').order('day', { ascending: false }).limit(1000);
+      var rows = [], cum = 0, today = (window.w120 && window.w120.dates ? window.w120.dates()[1] : new Date().toISOString().slice(0, 10));
+      rows.push({ day: today, metric: 'followers', value: n });
+      ((r && r.data) || []).forEach(function (x) { if (String(x.day) < today) rows.push({ day: String(x.day), metric: 'followers', value: n - cum }); cum += Number(x.value) || 0; });
+      await window.w120.fn({ action: 'import_csv', platform: 'linkedin', rows: rows });
+      toastS('LinkedIn: ' + num(n) + ' followers, and the year rebuilt');
+      await window.w120.reload();
+    } catch (e) { toastS('Could not save it: ' + (e.message || e)); }
+    X.busy.li = false; paint();
+  }
+  async function checkWhatsApp() {
+    X.busy.wa = true; paint();
+    try { var r = await window.w120.fn({ action: 'probe' }); X.wa = (r && r.whatsapp) || { ok: false, error: 'No answer' }; }
+    catch (e) { X.wa = { ok: false, error: e.message || String(e) }; }
+    X.busy.wa = false; paint();
+  }
+  async function csvDaily() {
+    var d = data(); if (!d) return;
+    X.busy.csvd = true; paint();
+    try {
+      var out = [['platform', 'day', 'metric', 'value']], from = d.from, to = d.to;
+      for (var i = 0; i < 40; i++) {
+        var q = db.from('social_daily').select('platform,day,metric,value').lte('day', to).order('day', { ascending: true }).order('platform').range(i * 1000, i * 1000 + 999);
+        if (from) q = q.gte('day', from);
+        var r = await q; var rows = (r && r.data) || [];
+        rows.forEach(function (x) { out.push([x.platform, x.day, x.metric, x.value]); });
+        if (rows.length < 1000) break;
+      }
+      download('welfare-avenue-analytics-daily-' + (from || 'start') + '-to-' + to + '.csv', out);
+    } catch (e) { toastS('Could not build the file'); }
+    X.busy.csvd = false; paint();
+  }
+  function csvPosts() {
+    var d = data(); if (!d) return;
+    var rows = explorerRows(d);
+    var out = [['platform', 'published', 'type', 'caption', 'link', 'reach', 'views', 'likes', 'comments', 'shares', 'saves', 'clicks', 'engagements', 'engagement rate']];
+    rows.forEach(function (p) { var r = rateOf(p); out.push([p.platform, String(p.published_at || '').slice(0, 10), kindOf(p), String(p.caption || '').replace(/\s+/g, ' '), p.url || '', p.reach, p.views, p.likes, p.comments, p.shares, p.saves, p.clicks, engOf(p), r == null ? '' : (r * 100).toFixed(2) + '%']); });
+    download('welfare-avenue-posts-' + (d.from || 'start') + '-to-' + d.to + '.csv', out);
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w129')) return;
+    var el;
+    if ((el = t.closest('[data-w129plat]'))) { X.plat = el.getAttribute('data-w129plat'); X.show = 25; paint(); return; }
+    if ((el = t.closest('[data-w129sort]'))) { var k = el.getAttribute('data-w129sort'); if (X.sort === k) X.dir = -X.dir; else { X.sort = k; X.dir = -1; } paint(); return; }
+    if ((el = t.closest('[data-w129more]'))) { X.show += 50; paint(); return; }
+    if ((el = t.closest('[data-w129csvp]'))) { csvPosts(); return; }
+    if ((el = t.closest('[data-w129csvd]'))) { csvDaily(); return; }
+    if ((el = t.closest('[data-w129aud]'))) { X.aud = el.getAttribute('data-w129aud'); paint(); return; }
+    if ((el = t.closest('[data-w129back]'))) { runBackfill([Number(el.getAttribute('data-w129back'))]); return; }
+    if ((el = t.closest('[data-w129all]'))) { var d = data(); runBackfill(((d && d.accounts) || []).filter(function (a) { return canBack(a) && !histDone(a); }).map(function (a) { return a.id; })); return; }
+    if ((el = t.closest('[data-w129li]'))) { setLinkedIn(Number(el.getAttribute('data-w129li'))); return; }
+    if ((el = t.closest('[data-w129wa]'))) { checkWhatsApp(); return; }
+  });
+  var qT = null;
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.matches) return;
+    if (t.matches('#w129 [data-w129q]')) { clearTimeout(qT); var v = t.value; qT = setTimeout(function () { X.q = v; X.show = 25; paint(); }, 200); return; }
+    if (t.matches('#w129li')) { X.liTotal = t.value; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.matches) return;
+    if (t.matches('#w129 [data-w129kind]')) { X.kind = t.value; X.show = 25; paint(); }
+    if (t.matches('#w129 [data-w129ss]')) { var sv = String(t.value).split('|'); X.sort = sv[0]; X.dir = Number(sv[1]) || -1; paint(); }
+  });
+
+  /* ---------- the page tour ---------- */
+  function tour() {
+    try {
+      var W = window.w122; if (!W || !W.tours || !W.tours.socialstats || W.tours.socialstats.__w129) return;
+      var st = W.tours.socialstats.steps, OPT = { opt: 1 };
+      var S2 = function (sel, tt, p) { return { s: sel, t: tt, p: p, opt: 1 }; };
+      st.forEach(function (x) { if (x.s === '#socialstats .w120ctl') x.p = 'Look at the last week, month or quarter, six months, one or two years, all time, or pick two dates. Long ranges chart by week or by month.'; if (x.s === '#socialstats .cardy.chart') { x.t = 'Over time'; x.p = 'The numbers per platform by day, week or month. Switch the measure at the top of the chart.'; } if (x.s === '#socialstats .posts') x.p = 'The posts in the range, ranked by what worked.'; });
+      st.push(S2('#w129 .w129tbl', 'Every post', 'Every post in the range with its reach, views, likes, comments, shares, saves and engagement rate. Filter, search, sort any column, and download it.'));
+      st.push(S2('#w129 .w129aud', 'Who follows us', 'Instagram followers by age, gender, city and country, and LinkedIn followers and visitors by industry, seniority, function, location and company size.'));
+      st.push(S2('#w129 .w129cov', 'How far back', 'How far back each platform goes. Meta keeps two years of daily numbers; posts go back to the first one. Download the daily numbers here.'));
+      W.tours.socialstats.__w129 = true;
+    } catch (e) { /* fine */ }
+  }
+  tour();
+  if (typeof showPanel === 'function') {
+    var __sp129 = showPanel;
+    showPanel = function (id) { var out = __sp129.apply(this, arguments); try { if (id === 'socialstats') { watch(); setTimeout(paint, 60); } } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof startApp === 'function') {
+    var __sa129 = startApp;
+    startApp = async function () { var out = await __sa129.apply(this, arguments); try { tour(); watch(); } catch (e) { /* fine */ } return out; };
+  }
+  window.w129 = { paint: paint, state: function () { return X; }, rows: function () { var d = data(); return d ? explorerRows(d) : []; } };
+})();

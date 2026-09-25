@@ -36438,7 +36438,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var ORDER = ['instagram', 'facebook', 'tiktok', 'linkedin', 'ga4'];
   var MLABEL = { followers: 'Followers', new_followers: 'New followers', unfollows: 'Unfollows', reach: 'Reach', views: 'Views', video_views: 'Video views', profile_views: 'Profile visits', engagement: 'Engagement', accounts_engaged: 'Accounts engaged', likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves', clicks: 'Clicks', posts: 'Posts', sessions: 'Sessions', users: 'Visitors', new_users: 'New visitors', pageviews: 'Page views', sessions_social: 'From social' };
   var CHART_METRICS = ['reach', 'views', 'engagement', 'new_followers', 'sessions'];
-  var S = { days: 30, data: null, loading: false, err: null, filter: null, setup: false, status: null, probe: null, csv: null, chart: 'reach', busy: {}, insTried: false };
+  var S = { days: 30, range: '30', cfrom: null, cto: null, data: null, loading: false, err: null, filter: null, setup: false, status: null, probe: null, csv: null, chart: 'reach', busy: {}, insTried: false };
+  /* wave129: ranges from a week to everything the platforms kept, or two dates */
+  var RANGES = [['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['182', '6 months'], ['365', '1 year'], ['730', '2 years'], ['all', 'All time'], ['custom', 'Custom']];
+  function ymdTz(d) { try { return d.toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); } catch (e) { return d.toISOString().slice(0, 10); } }
+  function rangeDates() {
+    var now = new Date(), to = ymdTz(now);
+    if (S.range === 'custom' && S.cfrom && S.cto) return [S.cfrom <= S.cto ? S.cfrom : S.cto, S.cfrom <= S.cto ? S.cto : S.cfrom];
+    if (S.range === 'all') return [null, to];
+    var n = Number(S.range) || 30; var f = new Date(now.getTime() - (n - 1) * 86400000);
+    return [ymdTz(f), to];
+  }
+  var RSENT = { '7': '7 days', '30': '30 days', '90': '90 days', '182': '6 months', '365': 'year', '730': '2 years' };
+  function dLong(iso) { return iso ? niceDay(iso) + ', ' + String(iso).slice(0, 4) : ''; }
+  function rangeLabel() { var d = S.data || {}; if (S.range === 'all') return 'all time' + (d.from ? ' (since ' + dLong(d.from) + ')' : ''); if (S.range === 'custom') return (d.from ? dLong(d.from) + ' to ' + dLong(d.to) : 'the dates you picked'); return 'the last ' + (RSENT[S.range] || (S.days + ' days')); }
+  function dayR(iso) { var d = S.data || {}; return (Number(d.days) || 0) > 330 || (d.from && String(d.from).slice(0, 4) !== String(d.to || '').slice(0, 4)) ? dLong(iso) : niceDay(iso); }
+  function overLabel() { var d = S.data || {}; if (S.range === 'all') return d.from ? 'since ' + dLong(d.from) : 'over all time'; if (S.range === 'custom') return d.from ? 'from ' + dLong(d.from) + ' to ' + dLong(d.to) : 'over the dates you picked'; return 'over ' + rangeLabel(); }
+  function vsLabel() { var d = S.data || {}; if (S.range === 'custom' || !RSENT[S.range]) return 'these ' + (d.days || S.days) + ' days against the ' + (d.days || S.days) + ' before'; return 'the last ' + RSENT[S.range] + ' against the ' + RSENT[S.range] + ' before'; }
 
   var css = document.createElement('style'); css.id = 'wa120css';
   css.textContent = '' +
@@ -36446,9 +36462,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '#socialstats .w120wrap{max-width:1180px;}' +
     '#socialstats .w120ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}' +
     '#socialstats .w120ctl .meta{font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .w120rng{flex-wrap:wrap;}' +
+    '#socialstats .w120cust{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .w120cust input{font-size:12.5px;padding:5px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;}' +
     '#socialstats .w120tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin:0 0 16px;}' +
     '#socialstats .tile{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:14px 15px 12px;box-shadow:0 12px 28px -22px rgba(16,63,57,.55);position:relative;overflow:hidden;min-height:150px;display:flex;flex-direction:column;}' +
-    '#socialstats .tile .ph{display:flex;align-items:center;gap:8px;margin:0 0 8px;}' +
+    '#socialstats .tile .ph{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 8px;}' +
     '#socialstats .tile .mk{width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#FFFAF2;letter-spacing:.3px;flex:none;}' +
     '#socialstats .tile .ph b{font-family:' + HEAD + ';font-size:17px;color:' + GREEN + ';letter-spacing:.3px;}' +
     '#socialstats .tile .ph .st{margin-left:auto;font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:2px 8px;background:rgba(42,140,122,.14);color:#1c6b5d;white-space:nowrap;}' +
@@ -36478,9 +36497,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '#socialstats .note .btn{background:rgba(255,250,242,.14);color:' + CREAM + ';border:none;}' +
     '#socialstats .posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}' +
     '#socialstats .post{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;text-decoration:none;color:inherit;}' +
-    '#socialstats .post .th{aspect-ratio:16/10;background:rgba(16,63,57,.06);position:relative;display:flex;align-items:center;justify-content:center;}' +
-    '#socialstats .post .th img{width:100%;height:100%;object-fit:cover;display:block;}' +
-    '#socialstats .post .th .mk{position:absolute;left:10px;top:10px;width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#FFFAF2;box-shadow:0 2px 6px rgba(0,0,0,.25);}' +
+    '#socialstats .post .th{aspect-ratio:16/10;background:rgba(16,63,57,.06);position:relative;display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden;flex:none;}' +
+    '#socialstats .post .th img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#socialstats .post .th .mk{position:absolute;z-index:1;left:10px;top:10px;width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#FFFAF2;box-shadow:0 2px 6px rgba(0,0,0,.25);}' +
     '#socialstats .post .th .big{font-family:' + HEAD + ';font-size:30px;color:rgba(16,63,57,.25);}' +
     '#socialstats .post .bd{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1;}' +
     '#socialstats .post .cap{font-size:13px;line-height:1.35;color:var(--wa-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
@@ -36547,7 +36566,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '#socialstats .ev .ft .c{font-weight:800;text-transform:uppercase;letter-spacing:.6px;}#socialstats .ev .ft .c.high{color:#1c6b5d;}#socialstats .ev .ft .c.medium{color:#9a6f10;}' +
     '#socialstats .insempty{font-size:13px;color:var(--wa-muted);line-height:1.5;background:rgba(16,63,57,.04);border-radius:14px;padding:14px 16px;}' +
     '@media (min-width:1120px){#socialstats .w120tiles{grid-template-columns:repeat(5,minmax(0,1fr));}}' +
-    '@media (max-width:700px){#socialstats .tile .big{font-size:30px;}#socialstats .cardy h4 .w116seg{margin-left:0;}}';
+    '@media (max-width:700px){#socialstats .tile .big{font-size:30px;}#socialstats .cardy h4 .w116seg{margin-left:0;}#socialstats .posts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}#socialstats .post .bd{padding:8px 10px 10px;}#socialstats .post .nums{gap:6px 8px;}}';
   document.head.appendChild(css);
 
   /* ---------- helpers ---------- */
@@ -36571,7 +36590,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function mark(p, size) { var c = P[p] || { color: GREEN, mark: '?' }; return '<span class="mk" style="background:' + c.color + (size ? ';width:' + size + 'px;height:' + size + 'px' : '') + '">' + E(c.mark) + '</span>'; }
   function acctOf(p) { var d = S.data; return ((d && d.accounts) || []).filter(function (a) { return a.platform === p; })[0] || null; }
   function series(p, metric) { var d = S.data; var s = d && d.series && d.series[p] && d.series[p][metric]; return Array.isArray(s) ? s : []; }
-  function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from; }) : pts; }
+  function bucketEnd(key) { var b = S.data && S.data.bucket; if (b !== 'week' && b !== 'month') return key; var dt = new Date(String(key).slice(0, 10) + 'T00:00:00Z'); return (b === 'week' ? new Date(dt.getTime() + 6 * 86400000) : new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0))).toISOString().slice(0, 10); }
+  function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from || bucketEnd(x[0]) >= from; }) : pts; }
   function spark(pts, color) {
     if (!pts || pts.length < 2) return '';
     var w = 200, h = 34, vals = pts.map(function (x) { return Number(x[1]) || 0; }); var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals); var span = (mx - mn) || 1;
@@ -36591,23 +36611,28 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   async function load(force) {
     if (S.loading) return;
-    if (!force && S.data && S.at && Date.now() - S.at < 60000 && S.data.days === S.days) { paint(); return; }
+    var rd = rangeDates();
+    if (!force && S.data && S.at && Date.now() - S.at < 60000 && S.data._key === S.range + '|' + rd.join('|')) { paint(); return; }
     S.loading = true; S.err = null;
     if (force || !S.data) paint();
     try {
-      var r = await db.rpc('social_overview', { p_days: S.days });
+      var r = await db.rpc('social_range', { p_from: rd[0], p_to: rd[1] });
+      if (r.error) { var n = Math.min(90, Number(S.range) || 30); r = await db.rpc('social_overview', { p_days: n }); }
       if (r.error) throw r.error;
-      S.data = r.data || {}; S.at = Date.now();
+      S.data = r.data || {}; S.data._key = S.range + '|' + rd.join('|'); S.at = Date.now();
+      S.days = Number(S.data.days) || S.days;
     } catch (e) { S.err = e.message || String(e); }
     S.loading = false;
     paint();
+    try { document.dispatchEvent(new CustomEvent('w120:data')); } catch (e) { /* fine */ }
   }
   function header() {
     var d = S.data; var last = null;
     ((d && d.accounts) || []).forEach(function (a) { if (a.last_sync_at && (!last || a.last_sync_at > last)) last = a.last_sync_at; });
     return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Analytics</div>' +
       '<div class="w116top"><div><h2><span class="dot" style="background:' + PURPLE + '"></span>Marketing analytics</h2><p class="sub">Followers, reach and what worked across Instagram, Facebook, TikTok, LinkedIn and the website. Numbers refresh every morning.</p></div>' +
-      '<div class="w120ctl"><span class="w116seg">' + [7, 30, 90].map(function (n) { return '<a data-w120days="' + n + '" class="' + (S.days === n ? 'on' : '') + '">' + n + ' days</a>'; }).join('') + '</span>' +
+      '<div class="w120ctl"><span class="w116seg w120rng">' + RANGES.map(function (r) { return '<a data-w120range="' + r[0] + '" class="' + (S.range === r[0] ? 'on' : '') + '">' + r[1] + '</a>'; }).join('') + '</span>' +
+      (S.range === 'custom' ? '<span class="w120cust"><input type="date" id="w120cf" value="' + E(S.cfrom || '') + '"><span>to</span><input type="date" id="w120ct" value="' + E(S.cto || '') + '"><button class="btn mini" data-w120apply="1">Show</button></span>' : '') +
       (staff() ? '<button class="btn mini ghost" data-w120sync="all"' + (S.busy.sync ? ' disabled' : '') + '>' + (S.busy.sync ? 'Syncing\u2026' : 'Sync now') + '</button><button class="btn mini' + (S.setup ? '' : ' ghost') + '" data-w120setup="toggle">' + (S.setup ? 'Close set-up' : 'Set up') + '</button>' : '') +
       '<span class="meta">' + (last ? 'Last sync ' + E(ago(last)) : '') + '</span></div></div>';
   }
@@ -36637,17 +36662,38 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var lines = []; var maxV = 0; var from = d.from || '', to = d.to || '';
     ORDER.forEach(function (p) { var pts = windowed(series(p, m)); if (pts.length > 1) { lines.push({ p: p, pts: pts }); pts.forEach(function (x) { maxV = Math.max(maxV, Number(x[1]) || 0); }); } });
     var seg = '<span class="w116seg">' + CHART_METRICS.map(function (k) { return '<a data-w120chart="' + k + '" class="' + (S.chart === k ? 'on' : '') + '">' + E(MLABEL[k] || k) + '</a>'; }).join('') + '</span>';
-    if (!lines.length) return '<div class="cardy chart"><h4>By day' + seg + '</h4><div class="none">No daily ' + E((MLABEL[m] || m).toLowerCase()) + ' numbers in this window yet.</div></div>';
+    if (!lines.length) return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><div class="none">No ' + E((MLABEL[m] || m).toLowerCase()) + ' numbers in this window yet.</div></div>';
     var w = 800, h = 220, padL = 36, padB = 22, padT = 10;
+    if (S.range === 'all') { var first = null; lines.forEach(function (l) { if (!first || l.pts[0][0] < first) first = l.pts[0][0]; }); if (first && first > from) from = first; }
     var t0 = new Date(from + 'T00:00:00Z').getTime(), t1 = new Date(to + 'T00:00:00Z').getTime(); var span = (t1 - t0) || 1;
-    function X(day) { return padL + (new Date(day + 'T00:00:00Z').getTime() - t0) / span * (w - padL - 8); }
+    function X(day) { var k = String(day).slice(0, 10); if (k < from) k = from; return padL + (new Date(k + 'T00:00:00Z').getTime() - t0) / span * (w - padL - 8); }
     function Y(v) { return padT + (1 - (Number(v) || 0) / (maxV || 1)) * (h - padT - padB); }
     var grid = ''; for (var g = 0; g <= 4; g++) { var yv = maxV / 4 * g; grid += '<line x1="' + padL + '" x2="' + w + '" y1="' + Y(yv).toFixed(1) + '" y2="' + Y(yv).toFixed(1) + '" stroke="rgba(16,63,57,.08)"></line><text x="' + (padL - 6) + '" y="' + (Y(yv) + 4).toFixed(1) + '" font-size="10" text-anchor="end" fill="#797773">' + num(yv) + '</text>'; }
-    var ticks = ''; var days = Math.round(span / 86400000) + 1; var step = days > 40 ? 14 : days > 10 ? 7 : 1;
-    for (var i = 0; i < days; i += step) { var dd = new Date(t0 + i * 86400000).toISOString().slice(0, 10); ticks += '<text x="' + X(dd).toFixed(1) + '" y="' + (h - 6) + '" font-size="10" text-anchor="middle" fill="#797773">' + E(niceDay(dd)) + '</text>'; }
-    var paths = lines.map(function (l) { var c = P[l.p].color; return '<polyline fill="none" stroke="' + c + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + l.pts.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"></polyline>'; }).join('');
-    var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' \u00b7 ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('');
-    return '<div class="cardy chart"><h4>By day' + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
+    var ticks = ''; var days = Math.round(span / 86400000) + 1; var target = (window.innerWidth || 1000) < 640 ? 4 : 8;
+    var tick = function (iso, text) { var x = X(iso); if (x > w - 24 || x < padL - 2) return; ticks += '<text x="' + x.toFixed(1) + '" y="' + (h - 6) + '" font-size="10" text-anchor="middle" fill="#797773">' + E(text) + '</text>'; };
+    if (days > 100) {
+      var MSH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var a0 = new Date(t0), a1 = new Date(t1); var months = (a1.getUTCFullYear() - a0.getUTCFullYear()) * 12 + a1.getUTCMonth() - a0.getUTCMonth() + 1;
+      var k = months <= target ? 1 : months <= target * 2 ? 2 : months <= target * 3.5 ? 3 : months <= target * 6.5 ? 6 : 12 * Math.ceil(months / (target * 12));
+      var yx = a0.getUTCFullYear() !== a1.getUTCFullYear();
+      for (var mi = 0; mi <= months; mi++) { var md = new Date(Date.UTC(a0.getUTCFullYear(), a0.getUTCMonth() + mi, 1)); if (md.getTime() < t0 || md.getTime() > t1 || (md.getUTCFullYear() * 12 + md.getUTCMonth()) % k) continue; tick(md.toISOString().slice(0, 10), MSH[md.getUTCMonth()] + (yx ? ' ' + md.getUTCFullYear() : '')); }
+    } else {
+      var step = Math.max(1, Math.ceil(days / target));
+      for (var i = 0; i < days; i += step) { var dd = new Date(t0 + i * 86400000).toISOString().slice(0, 10); tick(dd, niceDay(dd)); }
+    }
+    /* a week or month only partly inside the range (or the data) is drawn dashed, so a short last month does not read as a drop */
+    var dashed = false, lastTo = d.to || to;
+    var paths = lines.map(function (l) {
+      var c = P[l.p].color, pts = l.pts, cov = (d.coverage || {})[l.p] || {};
+      var line = function (a, dash) { return a.length > 1 ? '<polyline fill="none" stroke="' + c + '" stroke-width="2.2"' + (dash ? ' stroke-dasharray="5 4" opacity=".75"' : '') + ' stroke-linejoin="round" stroke-linecap="round" points="' + a.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"></polyline>' : ''; };
+      if ((d.bucket !== 'week' && d.bucket !== 'month') || m === 'followers' || pts.length < 3) return line(pts);
+      var dataFrom = cov.from && cov.from > (d.from || '') ? cov.from : d.from, dataTo = cov.to && cov.to < lastTo ? cov.to : lastTo;
+      var headP = pts[0][0] < (dataFrom || ''), tailP = bucketEnd(pts[pts.length - 1][0]) > dataTo;
+      if (headP || tailP) dashed = true;
+      return (headP ? line(pts.slice(0, 2), true) : '') + line(pts.slice(headP ? 1 : 0, tailP ? pts.length - 1 : pts.length)) + (tailP ? line(pts.slice(-2), true) : '');
+    }).join('');
+    var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' · ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('') + (dashed ? '<span style="color:var(--wa-muted)">Dashed: a ' + (d.bucket === 'week' ? 'week' : 'month') + ' only partly counted</span>' : '');
+    return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
   }
   function noteCard() {
     var n = S.data && S.data.note; var any = S.data && (S.data.accounts || []).length;
@@ -36661,7 +36707,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var pages = (d.posts || []).filter(function (p) { return p.platform === 'ga4'; }).sort(function (a, b) { return (Number(b.views) || 0) - (Number(a.views) || 0); }).slice(0, 6);
     var plats = []; (d.posts || []).forEach(function (p) { if (p.platform !== 'ga4' && plats.indexOf(p.platform) < 0) plats.push(p.platform); });
     var chips = plats.length > 1 ? '<div class="fchips"><span data-w120f="" class="' + (S.filter ? '' : 'on') + '">All</span>' + plats.map(function (p) { return '<span data-w120f="' + E(p) + '" class="' + (S.filter === p ? 'on' : '') + '">' + E(P[p] ? P[p].label : p) + '</span>'; }).join('') + '</div>' : '';
-    var html = '<div class="cardy"><h4>What worked <span style="font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted)">posts from the last ' + S.days + ' days, best first</span></h4>' + chips;
+    var html = '<div class="cardy"><h4>What worked <span style="font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted)">posts from ' + E(rangeLabel()) + ', best first</span></h4>' + chips;
     if (!posts.length) html += '<div class="empty">No posts in this window yet.</div>';
     else html += '<div class="posts">' + posts.slice(0, 12).map(function (p) {
       var nums = [];
@@ -36672,7 +36718,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (p.shares != null) nums.push('<span><b>' + num(p.shares) + '</b>shares</span>');
       if (p.saves != null) nums.push('<span><b>' + num(p.saves) + '</b>saves</span>');
       return '<a class="post" ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="th">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="big">' + E(P[p.platform] ? P[p.platform].mark : '') + '</span>') + mark(p.platform) + '</div>' +
-        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(niceDay(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
+        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(dayR(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
     }).join('') + '</div>';
     if (pages.length) html += '<h4 style="margin-top:16px;font-size:17px">Most read pages on the website</h4><div style="font-size:13px;line-height:1.7">' + pages.map(function (p) { return '<div><b style="font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';margin-right:6px">' + num(p.views) + '</b>' + (p.url ? '<a href="' + E(p.url) + '" target="_blank" rel="noopener" style="color:' + GREEN + '">' + E(p.caption || p.external_id) + '</a>' : E(p.caption || p.external_id)) + ' <span style="color:var(--wa-muted);font-size:11.5px">' + E(p.external_id) + '</span></div>'; }).join('') + '</div>';
     return html + '</div>';
@@ -36788,9 +36834,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     /* cadence: weeks with more posts against weeks with fewer, from the daily reach */
     (function () {
       var daily = {}; ['instagram', 'facebook'].forEach(function (pl) { var s = d.series && d.series[pl] && d.series[pl].reach; (s || []).forEach(function (x) { daily[x[0]] = (daily[x[0]] || 0) + (Number(x[1]) || 0); }); });
-      var days = Object.keys(daily); if (days.length < 28) return;
+      if (d.bucket === 'month') return; var wkB = d.bucket === 'week'; var days = Object.keys(daily); if (days.length < (wkB ? 8 : 28)) return;
       function wk(iso) { var dt = new Date(String(iso).slice(0, 10) + 'T12:00:00'); var dow = (dt.getDay() + 6) % 7; return new Date(dt.getTime() - dow * 86400000).toISOString().slice(0, 10); }
-      var W = {}; days.forEach(function (day) { var k = wk(day); W[k] = W[k] || { reach: 0, posts: 0, days: 0 }; W[k].reach += daily[day]; W[k].days++; });
+      var W = {}; days.forEach(function (day) { var k = wk(day); W[k] = W[k] || { reach: 0, posts: 0, days: 0 }; W[k].reach += daily[day]; W[k].days += wkB ? 7 : 1; });
+      if (wkB) { var wks = Object.keys(W).sort(); if (wks.length > 2) { delete W[wks[0]]; delete W[wks[wks.length - 1]]; } }
       posts.forEach(function (p) { if (p.platform !== 'instagram' && p.platform !== 'facebook') return; var k = wk(p.published_at); if (W[k]) W[k].posts++; });
       var full = Object.keys(W).filter(function (k) { return W[k].days >= 6; }).map(function (k) { return W[k]; });
       var busy = full.filter(function (w) { return w.posts >= 3; }), quiet = full.filter(function (w) { return w.posts <= 1; });
@@ -36805,14 +36852,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (!g.length) return; g.sort(function (a, b) { return b.pct - a.pct; });
       var lead = g[0]; var name = function (pl) { return P[pl] ? P[pl].label : pl; };
       var sign = function (x) { return (x >= 0 ? '+' : '\u2212') + Math.abs(x).toFixed(1) + '%'; };
-      ev.push({ key: 'growth', title: lead.pct >= 1 ? name(lead.pl) + ' is growing fastest (' + sign(lead.pct) + ')' : 'Followers are flat', detail: g.map(function (x) { return name(x.pl) + ' ' + (x.now - x.then >= 0 ? '+' : '\u2212') + num(Math.abs(x.now - x.then)) + ' (' + sign(x.pct) + ')'; }).join(', ') + ' over the last ' + (d.days || S.days) + ' days.', n: g.length, confidence: 'high', bars: g.map(function (x) { var mx = Math.max.apply(null, g.map(function (y) { return Math.abs(y.pct); }).concat([0.1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x === lead && x.pct > 0, neg: x.pct < 0, text: sign(x.pct) }; }) });
+      ev.push({ key: 'growth', title: lead.pct >= 1 ? name(lead.pl) + ' is growing fastest (' + sign(lead.pct) + ')' : 'Followers are flat', detail: g.map(function (x) { return name(x.pl) + ' ' + (x.now - x.then >= 0 ? '+' : '\u2212') + num(Math.abs(x.now - x.then)) + ' (' + sign(x.pct) + ')'; }).join(', ') + ' ' + overLabel() + '.', n: g.length, confidence: 'high', bars: g.map(function (x) { var mx = Math.max.apply(null, g.map(function (y) { return Math.abs(y.pct); }).concat([0.1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x === lead && x.pct > 0, neg: x.pct < 0, text: sign(x.pct) }; }) });
     })();
     /* momentum: reach (or views) against the previous window */
     (function () {
       var m = []; Object.keys(d.totals || {}).forEach(function (pl) { if (pl === 'ga4') return; var t = d.totals[pl] || {}; var k = t.reach && t.reach.prev ? 'reach' : t.views && t.views.prev ? 'views' : null; if (!k) return; var cur = Number(t[k].cur) || 0, prev = Number(t[k].prev) || 0; if (!prev) return; m.push({ pl: pl, k: k, cur: cur, prev: prev, pct: (cur - prev) / prev * 100 }); });
       if (!m.length) return; m.sort(function (a, b) { return Math.abs(b.pct) - Math.abs(a.pct); });
       var top = m[0]; var name = function (pl) { return P[pl] ? P[pl].label : pl; };
-      ev.push({ key: 'momentum', title: (top.k === 'reach' ? 'Reach' : 'Views') + ' ' + (top.pct >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(top.pct)) + '% on ' + name(top.pl), detail: m.map(function (x) { return name(x.pl) + ' ' + x.k + ' ' + num(x.cur) + ' against ' + num(x.prev) + ' (' + (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%)'; }).join('; ') + ', last ' + (d.days || S.days) + ' days against the ' + (d.days || S.days) + ' before.', n: m.length, confidence: 'high', bars: m.map(function (x) { var mx = Math.max.apply(null, m.map(function (y) { return Math.abs(y.pct); }).concat([1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x.pct > 0 && x === top, neg: x.pct < 0, text: (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%' }; }) });
+      ev.push({ key: 'momentum', title: (top.k === 'reach' ? 'Reach' : 'Views') + ' ' + (top.pct >= 0 ? 'up ' : 'down ') + Math.abs(Math.round(top.pct)) + '% on ' + name(top.pl), detail: m.map(function (x) { return name(x.pl) + ' ' + x.k + ' ' + num(x.cur) + ' against ' + num(x.prev) + ' (' + (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%)'; }).join('; ') + ', ' + vsLabel() + '.', n: m.length, confidence: 'high', bars: m.map(function (x) { var mx = Math.max.apply(null, m.map(function (y) { return Math.abs(y.pct); }).concat([1])); return { label: name(x.pl), n: 0, idx: x.pct, w: Math.round(Math.abs(x.pct) / mx * 100), best: x.pct > 0 && x === top, neg: x.pct < 0, text: (x.pct >= 0 ? '+' : '\u2212') + Math.abs(Math.round(x.pct)) + '%' }; }) });
     })();
     /* website: what social brings */
     (function () {
@@ -36829,10 +36876,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       ev.push({ key: 'top_post', title: 'Top post: \u201c' + cap + '\u201d', detail: top.kind + ' on ' + (P[top.platform] ? P[top.platform].label : top.platform) + ', ' + (WDL[top.wd] || top.wd) + ' ' + top.tod.toLowerCase() + ', ' + (top.len < 80 ? 'short' : top.len <= 250 ? 'medium' : 'long') + ' caption' + (top.tags ? ', ' + top.tags + ' hashtags' : '') + ': ' + fx(top.idx) + ' a typical post (' + num(top.v) + ' ' + (top.metric === 'eng' ? 'interactions' : top.metric) + ').', n: rows.length, confidence: rows.length >= 10 ? 'medium' : 'low' });
       var dates = posts.map(function (p) { return String(p.published_at).slice(0, 10); }).filter(Boolean).sort();
       if (dates.length >= 4) {
-        var span = Math.max(7, (Date.now() - new Date(dates[0] + 'T12:00:00').getTime()) / 86400000); var per = dates.length / (span / 7);
-        var gap = 0, gFrom = null, gTo = null; var all = dates.concat([new Date().toISOString().slice(0, 10)]);
+        var endDay = String(d.to || new Date().toISOString()).slice(0, 10); var startDay = d.from && S.range !== 'all' ? String(d.from).slice(0, 10) : dates[0];
+        var span = Math.max(7, (new Date(endDay + 'T12:00:00').getTime() - new Date(startDay + 'T12:00:00').getTime()) / 86400000 + 1); var per = dates.length / (span / 7);
+        var gap = 0, gFrom = null, gTo = null; var all = dates.concat([endDay]);
         for (var i = 1; i < all.length; i++) { var g = (new Date(all[i] + 'T12:00:00') - new Date(all[i - 1] + 'T12:00:00')) / 86400000; if (g > gap) { gap = g; gFrom = all[i - 1]; gTo = all[i]; } }
-        ev.push({ key: 'rhythm', title: (Math.round(per * 10) / 10) + ' posts a week' + (gap >= 10 ? ', with a ' + Math.round(gap) + '-day gap' : ''), detail: dates.length + ' posts across Instagram, Facebook and TikTok in the last ' + Math.round(span) + ' days' + (gap >= 5 ? '; the longest quiet stretch was ' + Math.round(gap) + ' days (' + niceDay(gFrom) + ' to ' + niceDay(gTo) + ').' : '.'), n: dates.length, confidence: 'high' });
+        var pls = []; posts.forEach(function (p) { var nm = P[p.platform] ? P[p.platform].label : p.platform; if (pls.indexOf(nm) < 0) pls.push(nm); });
+        var plsTxt = pls.length > 1 ? pls.slice(0, -1).join(', ') + ' and ' + pls[pls.length - 1] : (pls[0] || 'the platforms');
+        ev.push({ key: 'rhythm', title: (Math.round(per * 10) / 10) + ' posts a week' + (gap >= 10 ? ', with a ' + Math.round(gap) + '-day gap' : ''), detail: dates.length + ' posts across ' + plsTxt + ' ' + overLabel() + (gap >= 5 ? '; the longest quiet stretch was ' + Math.round(gap) + ' days (' + dayR(gFrom) + ' to ' + dayR(gTo) + ').' : '.'), n: dates.length, confidence: 'high' });
       }
     })();
     return ev;
@@ -36859,7 +36909,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="meta">' + (ins ? '<span>' + E(ago(ins.created_at)) + (ins.model ? ' \u00b7 ' + E(String(ins.model).split('/').pop()) : '') + '</span>' : '') + (staff() && ev.length >= 3 ? '<button class="btn mini ghost" data-w120ins="1"' + (S.busy.ins ? ' disabled' : '') + '>' + (S.busy.ins ? 'Thinking\u2026' : (recs.length ? 'Refresh' : 'Get recommendations')) + '</button>' : '') + '</div></div>';
     if (ev.length < 3 && !recs.length) return '<div class="ins">' + head + '<div class="insempty">Insights need posts with numbers: at least six in the last 90 days, from Meta, TikTok or LinkedIn. Right now there ' + (nPosts === 1 ? 'is 1' : 'are ' + nPosts) + '. Once the accounts are connected (Set up above), the hub compares days, times, formats, captions and posting rhythm, and turns what stands out into three to five things to try.</div></div>';
     var recHtml = recs.length ? '<div class="recs">' + recs.map(function (r, i) { return '<div class="rec"><div class="top"><span class="n">' + String(i + 1).padStart(2, '0') + '</span><span class="cf ' + E(r.confidence || 'medium') + '">' + E(r.confidence || 'medium') + ' confidence</span></div><b>' + E(r.title) + '</b><p class="why">' + E(r.why) + '</p><p class="act"><i>Try</i>' + E(r.action) + '</p>' + (staff() ? '<button class="btn mini go" data-w120plan="' + i + '">Plan it in the calendar</button>' : '') + '</div>'; }).join('') + '</div>' : (staff() ? '<div class="insempty" style="margin:0 0 16px">' + (S.busy.ins ? 'Reading the numbers\u2026' : 'The numbers are in; ask for recommendations to turn them into three to five things to try.') + '</div>' : '');
-    var evHtml = ev.length ? '<div class="evh">What the numbers say <small>last 90 days, ' + nPosts + ' posts; 1.0x is a typical post on its own platform</small></div><div class="evs">' + ev.map(evCard).join('') + '</div>' : '';
+    var evHtml = ev.length ? '<div class="evh">What the numbers say <small>' + E(rangeLabel()) + ', ' + nPosts + ' posts; 1.0x is a typical post on its own platform</small></div><div class="evs">' + ev.map(evCard).join('') + '</div>' : '';
     return '<div class="ins" id="w120ins">' + head + recHtml + evHtml + '</div>';
   }
   async function refreshInsights(auto) {
@@ -36976,7 +37026,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var t = e.target; if (!t || !t.closest) return;
     var sec = t.closest('#socialstats'); if (!sec) return;
     var el;
-    if ((el = t.closest('[data-w120days]'))) { S.days = Number(el.getAttribute('data-w120days')); S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120days]'))) { S.range = String(el.getAttribute('data-w120days')); S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120range]'))) { S.range = el.getAttribute('data-w120range'); if (S.range === 'custom') { var rd0 = rangeDates(); S.cfrom = S.cfrom || (S.data && S.data.from) || rd0[0]; S.cto = S.cto || (S.data && S.data.to) || rd0[1]; paint(); return; } S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120apply]'))) { var cf = (document.getElementById('w120cf') || {}).value || '', ct = (document.getElementById('w120ct') || {}).value || ''; if (!/^\d{4}-\d{2}-\d{2}$/.test(cf) || !/^\d{4}-\d{2}-\d{2}$/.test(ct)) { toastS('Pick both dates'); return; } S.cfrom = cf; S.cto = ct; S.data = null; load(true); return; }
     if ((el = t.closest('[data-w120ins]'))) { e.preventDefault(); await refreshInsights(false); return; }
     if ((el = t.closest('[data-w120plan]'))) { e.preventDefault(); var ri = Number(el.getAttribute('data-w120plan')); var ins = S.data && S.data.insights; var rec = ins && ins.data && ins.data.recommendations ? ins.data.recommendations[ri] : null; if (!rec) return; window.__w121prefill = { title: rec.title, notes: 'From the insights (' + (ins.week_start || '') + '): ' + rec.action + '\nWhy: ' + rec.why, campaign: 'Insights', slot: bestSlot(S.data) }; location.hash = '#contentcal'; return; }
     if ((el = t.closest('[data-w120chart]'))) { S.chart = el.getAttribute('data-w120chart'); paint(); return; }
@@ -37003,6 +37055,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     if (t.getAttribute('data-w120csvkind') && S.csv && S.csv.platform === t.getAttribute('data-w120csvkind')) { S.csv.kind = t.value; S.csv.guess = guessMap(S.csv.cols, t.value); paint(); }
   });
+  window.w120 = { data: function () { return S.data; }, range: function () { return S.range; }, label: function () { return rangeLabel(); }, dates: function () { return rangeDates(); }, reload: function () { S.data = null; return load(true); }, fn: function (b) { return fn(b); } };
   window.w120Debug = function () { return { days: S.days, loaded: !!S.data, accounts: S.data ? (S.data.accounts || []).length : null, setup: S.setup }; };
 })();
 /* =====================================================================
@@ -48037,6 +48090,387 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return out;
     };
   }
+})();
+/* =====================================================================
+   WA v129 analytics depth (25/09/26): every number the platforms keep, as far back as they keep it
+   =====================================================================
+   Steel: "more granular data from Instagram and Facebook", "even do WhatsApp maybe", and "look as far
+   back as possible in time for analytics and have all analytics, as many as possible, visible to me."
+   - Ranges (wave120 edited): 7, 30 and 90 days, 6 months, 1 year, 2 years, all time, or two dates;
+     longer ranges chart by week or by month (social_range() in wa129).
+   - History: social-pull v1.6 walks Facebook and Instagram back two years (the most Meta keeps),
+     every Facebook post and every Instagram post and reel with its numbers, and the website since
+     the property started. The coverage card shows how far back each platform goes, with Load more
+     history for staff.
+   - Every post: a table of every post in the range with reach, views, likes, comments, shares,
+     saves and the engagement rate; filter by platform, type and words, sort by any column, and
+     download it as a CSV. The daily numbers download as a CSV too.
+   - Audience: Instagram followers by age, gender, city and country (weekly, from the API); LinkedIn
+     followers and visitors by industry, seniority, function, location and company size (the export).
+     Meta no longer gives Facebook Page audiences.
+   - LinkedIn: set the follower total once and the Hub rebuilds the year of totals from the daily
+     new followers in the export.
+   - WhatsApp: the check says whether a WhatsApp Business account is shared with the Hub and what to
+     do if not.
+   ===================================================================== */
+(function () {
+  if (window.__wa129) return; window.__wa129 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var PL = {
+    instagram: ['Instagram', '#C13584', 'IG'], facebook: ['Facebook', '#1877F2', 'f'], linkedin: ['LinkedIn', '#0A66C2', 'in'],
+    tiktok: ['TikTok', '#111111', 'TT'], ga4: ['Website', TEAL, 'W'], youtube: ['YouTube', '#FF0000', 'YT'], whatsapp: ['WhatsApp', '#25D366', 'WA']
+  };
+  var COLS = [['published_at', 'Date'], ['reach', 'Reach'], ['views', 'Views'], ['likes', 'Likes'], ['comments', 'Comments'], ['shares', 'Shares'], ['saves', 'Saves'], ['clicks', 'Clicks'], ['engagement', 'Engaged'], ['rate', 'Rate']];
+  var X = { q: '', plat: '', kind: '', sort: 'published_at', dir: -1, show: 25, busy: {}, wa: null, liTotal: '', aud: 'followers', open: { coverage: true, explorer: true, audience: true }, run: null };
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function num(v) { v = Number(v); if (!isFinite(v)) return '\u2013'; var a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (a >= 1e4) return Math.round(v / 1e3) + 'k'; if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return String(Math.round(v)); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function data() { try { return (window.w120 && window.w120.data()) || null; } catch (e) { return null; } }
+  function mk(p) { var c = PL[p] || [p, GREEN, '?']; return '<span class="w129mk" style="background:' + c[1] + '">' + E(c[2]) + '</span>'; }
+  function label(p) { return (PL[p] || [p])[0]; }
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  function day(iso) { if (!iso) return ''; var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso)); return m ? MON[Number(m[2]) - 1] + ' ' + Number(m[3]) + ', ' + m[1] : String(iso); }
+  function monthY(iso) { var m = /^(\d{4})-(\d{2})/.exec(String(iso || '')); return m ? MON[Number(m[2]) - 1] + ' ' + m[1] : ''; }
+  function engOf(p) { var e = Number(p.engagement); if (p.engagement != null && isFinite(e) && e > 0) return e; var s = 0, any = false; ['likes', 'comments', 'shares', 'saves'].forEach(function (k) { if (p[k] != null && isFinite(Number(p[k]))) { s += Number(p[k]); any = true; } }); return any ? s : null; }
+  function rateOf(p) { var e = engOf(p), r = Number(p.reach) || Number(p.views) || 0; return e != null && r > 0 ? e / r : null; }
+  function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function download(name, rows) {
+    var text = rows.map(function (r) { return r.map(csvCell).join(','); }).join('\n');
+    try { var blob = new Blob(['\ufeff' + text], { type: 'text/csv;charset=utf-8' }); var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 400); toastS('Downloaded ' + name); }
+    catch (e) { toastS('Could not download it'); }
+  }
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'wa129css';
+  css.textContent = ''
+    + '#w129{font-family:' + BODY + ';}'
+    + '#w129 .cardy h4 .sub{font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted);}'
+    + '#w129 .cardy h4 .sp{flex:1;}'
+    + '.w129mk{width:24px;height:24px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:11.5px;font-weight:800;color:#FFFAF2;flex:none;text-transform:none;letter-spacing:0;}'
+    + '.w129btn{display:inline-flex;align-items:center;gap:6px;font-family:' + BODY + ';font-size:12.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:9px;padding:6px 11px;cursor:pointer;text-decoration:none !important;white-space:nowrap;}'
+    + '.w129btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w129btn[disabled]{opacity:.55;cursor:default;}'
+    /* coverage */
+    + '.w129cov{display:grid;grid-template-columns:28px minmax(150px,.9fr) minmax(0,2fr) auto;column-gap:12px;}'
+    + '.w129cov .r{display:grid;grid-column:1/-1;grid-template-columns:subgrid;align-items:center;padding:10px 0;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w129cov .r:first-child{border-top:none;}'
+    + '.w129cov .r b{font-size:13.5px;}'
+    + '.w129cov .r .m{font-size:12.5px;color:#5c5a56;line-height:1.45;}'
+    + '.w129cov .r .m em{font-style:normal;font-weight:700;color:' + INK + ';}'
+    + '.w129cov .st{font-size:11px;font-weight:700;letter-spacing:.3px;border-radius:999px;padding:3px 9px;white-space:nowrap;background:rgba(42,140,122,.14);color:#1c6b5d;}'
+    + '.w129cov .st.run{background:rgba(220,165,39,.22);color:#6b4d05;}'
+    + '.w129cov .st.csv{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w129cov .st.off{background:rgba(121,119,115,.14);color:#5c5a56;}'
+    + '.w129cov .act{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}'
+    + '.w129cov .act input{width:132px;font-size:12.5px;padding:5px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;}'
+    + '.w129bar{height:6px;border-radius:3px;background:rgba(16,63,57,.08);overflow:hidden;margin-top:6px;}'
+    + '.w129bar i{display:block;height:100%;background:' + GOLD + ';}'
+    + '.w129foot{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;font-size:12px;color:var(--wa-muted);}'
+    + '.w129foot .sp{flex:1;}'
+    /* explorer */
+    + '.w129tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}'
+    + '.w129tools .chips{display:flex;gap:5px;flex-wrap:wrap;}'
+    + '.w129tools .chips a{font-size:12px;font-weight:600;border-radius:999px;padding:5px 11px;background:rgba(16,63,57,.06);color:' + GREEN + ';cursor:pointer;text-decoration:none;}'
+    + '.w129tools .chips a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w129tools input[type=search],.w129tools select{font-size:12.5px;padding:6px 9px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:#FFFAF2;}'
+    + '.w129tools input[type=search]{min-width:180px;flex:1 1 180px;}'
+    + '.w129tbl{width:100%;border-collapse:collapse;font-size:12.8px;}'
+    + '.w129wrap{overflow-x:auto;}'
+    + '.w129tbl th{text-align:right;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--wa-muted);padding:7px 8px;border-bottom:1px solid rgba(16,63,57,.12);cursor:pointer;white-space:nowrap;user-select:none;}'
+    + '.w129tbl th:first-child,.w129tbl th.l{text-align:left;}'
+    + '.w129tbl th.on{color:' + GREEN + ';}'
+    + '.w129tbl td{padding:8px;border-bottom:1px solid rgba(16,63,57,.06);text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}'
+    + '.w129tbl td.p{text-align:left;white-space:normal;min-width:280px;}'
+    + '.w129tbl td.p .in{display:flex;gap:10px;align-items:flex-start;}'
+    + '.w129tbl td.p img,.w129tbl td.p .ph{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:none;background:rgba(16,63,57,.06);display:flex;align-items:center;justify-content:center;}'
+    + '.w129tbl td.p .cap{font-size:12.8px;line-height:1.4;color:' + INK + ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}'
+    + '.w129tbl td.p .mt{font-size:11.5px;color:var(--wa-muted);margin-top:3px;display:flex;gap:6px;align-items:center;}'
+    + '.w129tbl td.p .mt .w129mk{width:16px;height:16px;border-radius:5px;font-size:8.5px;}'
+    + '.w129tbl tr:hover td{background:rgba(220,165,39,.06);}'
+    + '.w129tbl td a{color:inherit;text-decoration:none;}'
+    + '.w129tbl td.rt b{color:' + GREEN + ';}'
+    + '.w129tools .w129ss{display:none;}'
+    + '@media (max-width:640px){.w129tools .w129ss{display:inline-block;}.w129tbl thead{display:none;}.w129tbl,.w129tbl tbody{display:block;}.w129tbl tr{display:flex;flex-wrap:wrap;gap:4px 14px;padding:10px 0;border-bottom:1px solid rgba(16,63,57,.08);}.w129tbl td{display:none;border:0;padding:0;}.w129tbl td.p{display:block;width:100%;min-width:0;}.w129tbl td.k{display:inline-block;font-size:12.5px;}.w129tbl td.k::before{content:attr(data-l) " ";font-size:11px;color:var(--wa-muted);}.w129tbl tr:hover td{background:none;}}'
+    + '.w129sum{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#5c5a56;margin:0 0 10px;}'
+    + '.w129sum b{font-family:' + HEAD + ';font-size:17px;color:' + GREEN + ';margin-right:3px;}'
+    /* audience */
+    + '.w129aud{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;}'
+    + '.w129aud .b{background:rgba(16,63,57,.035);border-radius:14px;padding:12px 14px;}'
+    + '.w129aud .b h5{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 8px;}'
+    + '.w129aud .row{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center;font-size:12.5px;margin:0 0 5px;}'
+    + '.w129aud .row .t{min-width:0;}'
+    + '.w129aud .row .t span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.w129aud .row .t i{display:block;height:6px;border-radius:3px;background:var(--c,' + GREEN + ');margin-top:3px;}'
+    + '.w129aud .row b{text-align:right;font-variant-numeric:tabular-nums;}'
+    + '#w129 .w129note{font-size:12px;color:var(--wa-muted);line-height:1.45;margin:6px 0 0;background:none;padding:0;border:0;box-shadow:none;}'
+    + '.w129seg{display:inline-flex;background:rgba(16,63,57,.08);border-radius:10px;padding:3px;gap:2px;}'
+    + '.w129seg a{font-size:12px;font-weight:600;color:' + GREEN + ';padding:5px 10px;border-radius:8px;cursor:pointer;text-decoration:none;}'
+    + '.w129seg a.on{background:#FFFAF2;box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '@media (max-width:760px){.w129cov{grid-template-columns:28px minmax(0,1fr);}.w129cov .r{row-gap:6px;}.w129cov .r .m,.w129cov .r .act{grid-column:2;}.w129cov .act{justify-content:flex-start;}}';
+  document.head.appendChild(css);
+
+  /* ---------- how far back each platform goes ---------- */
+  function histDone(a) { var h = (a.meta && a.meta.history) || {}; if (a.platform === 'instagram') return !!(h.daily_done && h.totals_done && h.posts_done); return !!(h.daily_done && h.posts_done); }
+  function canBack(a) { return a && (a.platform === 'facebook' || a.platform === 'instagram' || a.platform === 'ga4') && a.status !== 'csv'; }
+  function coverageHtml(d) {
+    var accs = d.accounts || [], cov = d.coverage || {};
+    var rows = ['instagram', 'facebook', 'linkedin', 'tiktok', 'ga4'].map(function (p) {
+      var a = accs.filter(function (x) { return x.platform === p; })[0];
+      if (!a) return p === 'tiktok' ? '<div class="r">' + mk(p) + '<b>' + E(label(p)) + '</b><span class="m">Not connected. TikTok\u2019s analytics API needs an approval first; its CSV export works in Set up.</span><span class="act"><span class="st off">Not connected</span></span></div>' : '';
+      var c = cov[p] || {}, h = (a.meta && a.meta.history) || {};
+      var running = X.run && X.run.id === a.id;
+      var st = a.status === 'csv' ? '<span class="st csv">From the export</span>' : running ? '<span class="st run">Loading\u2026</span>' : histDone(a) ? '<span class="st">All the history</span>' : h.started_at ? '<span class="st run">Partly loaded</span>' : '<span class="st off">Recent only</span>';
+      var m = c.from ? '<em>Daily numbers</em> since ' + E(day(c.from)) + ' (' + num(c.days) + ' days)' : 'No daily numbers yet';
+      m += c.posts ? ' \u00b7 <em>' + num(c.posts) + (p === 'ga4' ? ' pages' : ' posts') + '</em>' + (c.posts_from && p !== 'ga4' ? ' since ' + E(monthY(c.posts_from)) : '') : '';
+      if (p === 'instagram' || p === 'facebook') m += '<br>Meta keeps two years of daily numbers' + (p === 'facebook' ? '; posts go back to the start of the Page.' : '; posts and reels go back to the first one.');
+      if (p === 'linkedin') m += '<br>LinkedIn\u2019s export covers the last year. A new export extends it.';
+      if (p === 'ga4') m += '<br>The website keeps what Google Analytics collected since the property started.';
+      if (running && X.run.text) m += '<div class="w129bar"><i style="width:' + Math.max(4, Math.min(100, X.run.pct || 0)).toFixed(0) + '%"></i></div><span style="font-size:11.5px">' + E(X.run.text) + '</span>';
+      var act = st;
+      if (staff() && canBack(a) && !histDone(a)) act += '<button class="w129btn ghost" data-w129back="' + a.id + '"' + (X.run ? ' disabled' : '') + '>Load more history</button>';
+      if (staff() && p === 'linkedin') act += '<input type="number" min="0" id="w129li" placeholder="Followers now" value="' + E(X.liTotal) + '"><button class="w129btn ghost" data-w129li="' + a.id + '"' + (X.busy.li ? ' disabled' : '') + '>' + (X.busy.li ? 'Saving\u2026' : 'Set the total') + '</button>';
+      return '<div class="r">' + mk(p) + '<b>' + E(label(p)) + (a.handle ? ' <span style="font-weight:500;color:var(--wa-muted)">@' + E(a.handle) + '</span>' : '') + '</b><span class="m">' + m + '</span><span class="act">' + act + '</span></div>';
+    }).join('');
+    var wa = X.wa;
+    var waMsg = wa ? (wa.ok ? 'Readable: ' + num(wa.analytics && wa.analytics.sent) + ' messages sent in the last 30 days.' : (wa.wabas && wa.wabas.length ? 'A WhatsApp Business account is shared (' + E(wa.wabas[0].name || wa.wabas[0].id) + ') but its numbers are not readable yet.' : (wa.has_permission ? 'The token can read WhatsApp, but no WhatsApp Business account is shared with the Hub\u2019s system user. In Meta Business settings: Accounts > WhatsApp accounts > your account > Assign people > the system user. If Welfare Avenue uses the WhatsApp Business app on a phone, it has no analytics API; the WhatsApp Business Platform does.' : E(wa.next || wa.error || '')))) : 'Message numbers can join once a WhatsApp Business account is shared with the Hub\u2019s system user in Meta Business settings.';
+    rows += '<div class="r">' + mk('whatsapp') + '<b>WhatsApp</b><span class="m">' + waMsg + '</span><span class="act"><span class="st off">' + (wa && wa.ok ? 'Readable' : 'Not shared') + '</span>' + (staff() ? '<button class="w129btn ghost" data-w129wa="1"' + (X.busy.wa ? ' disabled' : '') + '>' + (X.busy.wa ? 'Checking\u2026' : 'Check') + '</button>' : '') + '</span></div>';
+    var todo = (d.accounts || []).filter(function (a) { return canBack(a) && !histDone(a); });
+    return '<div class="cardy"><h4>How far back <span class="sub">each platform, and what it keeps</span></h4><div class="w129cov">' + rows + '</div>'
+      + '<div class="w129foot"><span>Pick <b>All time</b> or <b>2 years</b> above to see all of it.</span><span class="sp"></span>'
+      + (staff() && todo.length ? '<button class="w129btn" data-w129all="1"' + (X.run ? ' disabled' : '') + '>Load all the history</button>' : '')
+      + '<button class="w129btn ghost" data-w129csvd="1"' + (X.busy.csvd ? ' disabled' : '') + '>' + (X.busy.csvd ? 'Preparing\u2026' : 'Download the daily numbers (CSV)') + '</button></div></div>';
+  }
+
+  /* ---------- every post ---------- */
+  function kindOf(p) { var k = String(p.kind || 'post').toLowerCase(); if (/reel/.test(k)) return 'reel'; if (/video/.test(k)) return 'video'; if (/carousel|album/.test(k)) return 'carousel'; if (/story/.test(k)) return 'story'; if (/image|photo/.test(k)) return 'image'; return k === 'feed' ? 'post' : k; }
+  function explorerRows(d) {
+    var q = X.q.toLowerCase();
+    var rows = (d.posts_all || []).filter(function (p) { return (!X.plat || p.platform === X.plat) && (!X.kind || kindOf(p) === X.kind) && (!q || String(p.caption || '').toLowerCase().indexOf(q) >= 0); });
+    var key = X.sort, dir = X.dir;
+    rows.sort(function (a, b) {
+      var va = key === 'rate' ? rateOf(a) : key === 'engagement' ? engOf(a) : key === 'published_at' ? String(a.published_at || '') : a[key];
+      var vb = key === 'rate' ? rateOf(b) : key === 'engagement' ? engOf(b) : key === 'published_at' ? String(b.published_at || '') : b[key];
+      if (va == null && vb == null) return 0; if (va == null) return 1; if (vb == null) return -1;
+      return (va < vb ? -1 : va > vb ? 1 : 0) * dir;
+    });
+    return rows;
+  }
+  function explorerHtml(d) {
+    var all = d.posts_all || [];
+    var plats = []; all.forEach(function (p) { if (plats.indexOf(p.platform) < 0) plats.push(p.platform); });
+    var kinds = []; all.forEach(function (p) { var k = kindOf(p); if (kinds.indexOf(k) < 0) kinds.push(k); });
+    var rows = explorerRows(d);
+    var tot = { reach: 0, views: 0, eng: 0 }; rows.forEach(function (p) { tot.reach += Number(p.reach) || 0; tot.views += Number(p.views) || 0; tot.eng += engOf(p) || 0; });
+    var h = '<div class="cardy"><h4>Every post <span class="sub">' + E(window.w120 ? window.w120.label() : '') + '</span><span class="sp"></span><button class="w129btn ghost" data-w129csvp="1"' + (rows.length ? '' : ' disabled') + '>Download these posts (CSV)</button></h4>'
+      + '<div class="w129tools"><span class="chips"><a data-w129plat=""' + (X.plat ? '' : ' class="on"') + '>All</a>' + plats.map(function (p) { return '<a data-w129plat="' + E(p) + '"' + (X.plat === p ? ' class="on"' : '') + '>' + E(label(p)) + '</a>'; }).join('') + '</span>'
+      + '<select data-w129kind><option value="">Every type</option>' + kinds.sort().map(function (k) { return '<option value="' + E(k) + '"' + (X.kind === k ? ' selected' : '') + '>' + E(k.charAt(0).toUpperCase() + k.slice(1) + 's') + '</option>'; }).join('') + '</select>'
+      + '<select class="w129ss" data-w129ss aria-label="Sort">' + '<option value="published_at|-1"' + (X.sort + '|' + X.dir === 'published_at|-1' ? ' selected' : '') + '>Newest first</option>' + '<option value="published_at|1"' + (X.sort + '|' + X.dir === 'published_at|1' ? ' selected' : '') + '>Oldest first</option>' + '<option value="reach|-1"' + (X.sort + '|' + X.dir === 'reach|-1' ? ' selected' : '') + '>Most reach</option>' + '<option value="views|-1"' + (X.sort + '|' + X.dir === 'views|-1' ? ' selected' : '') + '>Most views</option>' + '<option value="engagement|-1"' + (X.sort + '|' + X.dir === 'engagement|-1' ? ' selected' : '') + '>Most engaged</option>' + '<option value="rate|-1"' + (X.sort + '|' + X.dir === 'rate|-1' ? ' selected' : '') + '>Best engagement rate</option>' + '</select>'
+      + '<input type="search" data-w129q placeholder="Search the captions" value="' + E(X.q) + '"></div>';
+    if (!rows.length) return h + '<p style="font-size:13px;color:var(--wa-muted);margin:0">' + (all.length ? 'No post matches.' : 'No posts in this range yet.') + '</p></div>';
+    h += '<div class="w129sum"><span><b>' + num(rows.length) + '</b>posts</span><span><b>' + num(tot.reach) + '</b>reach</span><span><b>' + num(tot.views) + '</b>views</span><span><b>' + num(tot.eng) + '</b>engagements</span>' + (tot.reach ? '<span><b>' + (tot.eng / tot.reach * 100).toFixed(1) + '%</b>engaged per reach</span>' : '') + '</div>';
+    h += '<div class="w129wrap"><table class="w129tbl"><thead><tr><th class="l' + (X.sort === 'published_at' ? ' on' : '') + '" data-w129sort="published_at">Post' + (X.sort === 'published_at' ? (X.dir < 0 ? ' \u2193' : ' \u2191') : '') + '</th>'
+      + COLS.slice(1).map(function (c) { return '<th data-w129sort="' + c[0] + '"' + (X.sort === c[0] ? ' class="on"' : '') + ' title="' + (c[0] === 'rate' ? 'Engagements divided by reach (or views)' : c[0] === 'engagement' ? 'Likes, comments, shares and saves' : '') + '">' + E(c[1]) + (X.sort === c[0] ? (X.dir < 0 ? ' \u2193' : ' \u2191') : '') + '</th>'; }).join('') + '</tr></thead><tbody>';
+    h += rows.slice(0, X.show).map(function (p) {
+      var r = rateOf(p);
+      var cell = function (v, l, k) { return '<td data-l="' + l + '"' + (k ? ' class="k"' : '') + '>' + (v == null || v === '' ? '<span style="color:var(--wa-muted)">\u2013</span>' : num(v)) + '</td>'; };
+      return '<tr><td class="p"><a ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="in">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="ph">' + mk(p.platform) + '</span>') + '<div><div class="cap">' + (p.caption ? E(p.caption) : '<span style="color:var(--wa-muted)">No caption</span>') + '</div><div class="mt">' + mk(p.platform) + E(day(p.published_at)) + ' \u00b7 ' + E(kindOf(p)) + '</div></div></div></a></td>'
+        + cell(p.reach, 'Reach', 1) + cell(p.views, 'Views', 1) + cell(p.likes, 'Likes') + cell(p.comments, 'Comments') + cell(p.shares, 'Shares') + cell(p.saves, 'Saves') + cell(p.clicks, 'Clicks') + cell(engOf(p), 'Engaged', 1) + '<td class="rt k" data-l="Rate">' + (r == null ? '<span style="color:var(--wa-muted)">\u2013</span>' : '<b>' + (r * 100).toFixed(1) + '%</b>') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+    if (rows.length > X.show) h += '<div class="w129foot"><button class="w129btn ghost" data-w129more="1">Show ' + Math.min(50, rows.length - X.show) + ' more</button><span>' + num(rows.length - X.show) + ' more posts</span></div>';
+    return h + '</div>';
+  }
+
+  /* ---------- the audience ---------- */
+  var RN = null;
+  function country(c) { try { RN = RN || new Intl.DisplayNames(['en'], { type: 'region' }); return RN.of(String(c).toUpperCase()) || c; } catch (e) { return c; } }
+  function lead(x) { var m = /\d+/.exec(String(x)); return m ? Number(m[0]) : 1e9; }
+  /* one breakdown: the top rows as bars, each as a share of everyone counted (or the follower total when it is larger) */
+  function bars(title, pairs, color, note, max, o) {
+    o = o || {};
+    var all = (pairs || []).filter(function (x) { return x && x[0] != null && Number(x[1]) > 0; });
+    if (!all.length) return '';
+    var sum = all.reduce(function (s, x) { return s + Number(x[1]); }, 0), den = Math.max(sum, Number(o.total) || 0);
+    var list = o.order ? all.slice().sort(function (a, b) { return lead(a[0]) - lead(b[0]); }) : all.slice().sort(function (a, b) { return Number(b[1]) - Number(a[1]); });
+    list = list.slice(0, max || 8);
+    var top = Math.max.apply(null, list.map(function (x) { return Number(x[1]) || 0; })) || 1;
+    return '<div class="b" style="--c:' + color + '"><h5>' + title + '</h5>' + list.map(function (x) {
+      var nm = o.name ? o.name(x[0]) : x[0], pct = den ? Number(x[1]) / den * 100 : 0;
+      return '<div class="row"><div class="t"><span title="' + E(nm) + '">' + E(nm) + '</span><i style="width:' + Math.max(3, Number(x[1]) / top * 100).toFixed(1) + '%"></i></div><b title="' + E(num(x[1])) + '">' + (pct > 0 && pct < 1 ? pct.toFixed(1) : Math.round(pct)) + '%</b></div>';
+    }).join('') + (note ? '<p class="w129note">' + note + '</p>' : '') + '</div>';
+  }
+  function audienceHtml(d) {
+    var accs = d.accounts || [];
+    var ig = accs.filter(function (a) { return a.platform === 'instagram'; })[0], li = accs.filter(function (a) { return a.platform === 'linkedin'; })[0];
+    var igd = ig && ig.meta && ig.meta.demographics && ig.meta.demographics.followers, lid = li && li.meta && li.meta.demographics;
+    var parts = '';
+    if (igd) {
+      var c = PL.instagram[1], asOf = ig.meta.demographics.as_of, igTot = d.followers && d.followers.instagram && Number(d.followers.instagram.now);
+      parts += bars(mk('instagram') + 'Followers by age', igd.age, c, null, 8, { order: 1 })
+        + bars(mk('instagram') + 'Followers by gender', igd.gender, c, null, 4)
+        + bars(mk('instagram') + 'Top cities', igd.city, c, null, 8, { total: igTot })
+        + bars(mk('instagram') + 'Top countries', igd.country, c, asOf ? 'Instagram API, ' + E(day(asOf)) + '. Refreshed every week.' : null, 6, { total: igTot, name: country });
+    }
+    if (lid) {
+      var g = lid[X.aud] || lid.followers || {}, lc = PL.linkedin[1], liTot = X.aud === 'visitors' ? 0 : (d.followers && d.followers.linkedin && Number(d.followers.linkedin.now));
+      var names = { industry: 'by industry', seniority: 'by seniority', job_function: 'by job function', location: 'by location', company_size: 'by company size' };
+      parts += Object.keys(names).map(function (k, i) { return bars(mk('linkedin') + (X.aud === 'visitors' ? 'Page visitors ' : 'Followers ') + names[k], g[k], lc, i === 4 ? 'LinkedIn export' + (lid.period ? ', ' + E(day(lid.period[0])) + ' to ' + E(day(lid.period[1])) : '') + '.' : null, 7, { order: k === 'company_size', total: liTot }); }).join('');
+    }
+    if (!parts) return '';
+    return '<div class="cardy"><h4>Who follows us <span class="sub">the audience each platform shares</span><span class="sp"></span>' + (lid ? '<span class="w129seg"><a data-w129aud="followers"' + (X.aud === 'followers' ? ' class="on"' : '') + '>LinkedIn followers</a><a data-w129aud="visitors"' + (X.aud === 'visitors' ? ' class="on"' : '') + '>LinkedIn visitors</a></span>' : '') + '</h4>'
+      + '<div class="w129aud">' + parts + '</div><p class="w129note" style="margin:10px 0 0">Facebook: Meta stopped sharing Page audience breakdowns (age, gender, city) through its API in 2024; Meta Business Suite still shows them.</p></div>';
+  }
+
+  /* ---------- paint into the Analytics page, after wave120's own content ---------- */
+  var HOST = null;
+  function host() {
+    var wrap = document.querySelector('#socialstats .w120wrap'); if (!wrap) return null;
+    if (!HOST) { HOST = document.createElement('div'); HOST.id = 'w129'; }
+    if (HOST.parentNode !== wrap || wrap.lastElementChild !== HOST) wrap.appendChild(HOST);
+    return HOST;
+  }
+  function paint() {
+    watch();
+    var d = data(); if (!d || !(d.accounts || []).length) { if (HOST) { HOST.innerHTML = ''; HOST.__h = ''; } return; }
+    var h = host(); if (!h) return;
+    var html = explorerHtml(d) + audienceHtml(d) + coverageHtml(d);
+    if (h.__h !== html) {
+      var focus = document.activeElement && document.activeElement.matches && document.activeElement.matches('#w129 [data-w129q]') ? document.activeElement.selectionStart : null;
+      h.innerHTML = html; h.__h = html;
+      if (focus != null) { var q = h.querySelector('[data-w129q]'); if (q) { q.focus(); try { q.setSelectionRange(focus, focus); } catch (e) { /* fine */ } } }
+    }
+  }
+  var paintT = null;
+  function soon() { clearTimeout(paintT); paintT = setTimeout(paint, 30); }
+  /* wave120 rewrites its section on every paint: put the same block straight back (a microtask, before the browser draws), so nothing flickers */
+  function watch() {
+    var sec = document.getElementById('socialstats'); if (!sec || sec.__w129) return;
+    sec.__w129 = true;
+    try { new MutationObserver(function () { var d = data(); if (d && (d.accounts || []).length && HOST && HOST.__h) host(); soon(); }).observe(sec, { childList: true }); } catch (e) { /* fine */ }
+  }
+  document.addEventListener('w120:data', function () { X.show = 25; soon(); });
+
+  /* ---------- history, one step at a time ---------- */
+  async function runBackfill(ids) {
+    if (X.run || !window.w120) return;
+    for (var i = 0; i < ids.length; i++) {
+      var id = ids[i];
+      X.run = { id: id, text: 'Starting\u2026', pct: 2 }; paint();
+      for (var step = 0; step < 40; step++) {
+        var r = null;
+        try { r = await window.w120.fn({ action: 'backfill', account_id: id, budget: 40 }); } catch (e) { r = { ok: false, error: e.message || String(e) }; }
+        if (!r || r.ok === false) { toastS('History stopped: ' + String((r && r.error) || 'no answer').slice(0, 80)); break; }
+        var back = r.daily_from || r.totals_from;
+        var covered = back ? Math.round((Date.now() - new Date(back + 'T12:00:00Z').getTime()) / 86400000) : 0;
+        X.run.pct = Math.min(99, covered / 730 * 100);
+        X.run.text = (back ? 'Back to ' + day(back) : 'Working') + (r.posts ? ', ' + num(r.posts) + ' more posts this step' : '') + (r.done ? '. Done.' : '\u2026');
+        paint();
+        if (r.done) break;
+      }
+    }
+    X.run = null;
+    try { await window.w120.reload(); } catch (e) { /* fine */ }
+    toastS('The history is loaded');
+  }
+
+  /* LinkedIn: the follower total today, and the year rebuilt from the daily new followers */
+  async function setLinkedIn(id) {
+    var inp = document.getElementById('w129li'); var n = Math.round(Number(inp && inp.value));
+    if (!(n > 0)) { toastS('Type the follower total shown on the LinkedIn page'); return; }
+    X.liTotal = String(n); X.busy.li = true; paint();
+    try {
+      var r = await db.from('social_daily').select('day,value').eq('platform', 'linkedin').eq('metric', 'new_followers').order('day', { ascending: false }).limit(1000);
+      var rows = [], cum = 0, today = (window.w120 && window.w120.dates ? window.w120.dates()[1] : new Date().toISOString().slice(0, 10));
+      rows.push({ day: today, metric: 'followers', value: n });
+      ((r && r.data) || []).forEach(function (x) { if (String(x.day) < today) rows.push({ day: String(x.day), metric: 'followers', value: n - cum }); cum += Number(x.value) || 0; });
+      await window.w120.fn({ action: 'import_csv', platform: 'linkedin', rows: rows });
+      toastS('LinkedIn: ' + num(n) + ' followers, and the year rebuilt');
+      await window.w120.reload();
+    } catch (e) { toastS('Could not save it: ' + (e.message || e)); }
+    X.busy.li = false; paint();
+  }
+  async function checkWhatsApp() {
+    X.busy.wa = true; paint();
+    try { var r = await window.w120.fn({ action: 'probe' }); X.wa = (r && r.whatsapp) || { ok: false, error: 'No answer' }; }
+    catch (e) { X.wa = { ok: false, error: e.message || String(e) }; }
+    X.busy.wa = false; paint();
+  }
+  async function csvDaily() {
+    var d = data(); if (!d) return;
+    X.busy.csvd = true; paint();
+    try {
+      var out = [['platform', 'day', 'metric', 'value']], from = d.from, to = d.to;
+      for (var i = 0; i < 40; i++) {
+        var q = db.from('social_daily').select('platform,day,metric,value').lte('day', to).order('day', { ascending: true }).order('platform').range(i * 1000, i * 1000 + 999);
+        if (from) q = q.gte('day', from);
+        var r = await q; var rows = (r && r.data) || [];
+        rows.forEach(function (x) { out.push([x.platform, x.day, x.metric, x.value]); });
+        if (rows.length < 1000) break;
+      }
+      download('welfare-avenue-analytics-daily-' + (from || 'start') + '-to-' + to + '.csv', out);
+    } catch (e) { toastS('Could not build the file'); }
+    X.busy.csvd = false; paint();
+  }
+  function csvPosts() {
+    var d = data(); if (!d) return;
+    var rows = explorerRows(d);
+    var out = [['platform', 'published', 'type', 'caption', 'link', 'reach', 'views', 'likes', 'comments', 'shares', 'saves', 'clicks', 'engagements', 'engagement rate']];
+    rows.forEach(function (p) { var r = rateOf(p); out.push([p.platform, String(p.published_at || '').slice(0, 10), kindOf(p), String(p.caption || '').replace(/\s+/g, ' '), p.url || '', p.reach, p.views, p.likes, p.comments, p.shares, p.saves, p.clicks, engOf(p), r == null ? '' : (r * 100).toFixed(2) + '%']); });
+    download('welfare-avenue-posts-' + (d.from || 'start') + '-to-' + d.to + '.csv', out);
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w129')) return;
+    var el;
+    if ((el = t.closest('[data-w129plat]'))) { X.plat = el.getAttribute('data-w129plat'); X.show = 25; paint(); return; }
+    if ((el = t.closest('[data-w129sort]'))) { var k = el.getAttribute('data-w129sort'); if (X.sort === k) X.dir = -X.dir; else { X.sort = k; X.dir = -1; } paint(); return; }
+    if ((el = t.closest('[data-w129more]'))) { X.show += 50; paint(); return; }
+    if ((el = t.closest('[data-w129csvp]'))) { csvPosts(); return; }
+    if ((el = t.closest('[data-w129csvd]'))) { csvDaily(); return; }
+    if ((el = t.closest('[data-w129aud]'))) { X.aud = el.getAttribute('data-w129aud'); paint(); return; }
+    if ((el = t.closest('[data-w129back]'))) { runBackfill([Number(el.getAttribute('data-w129back'))]); return; }
+    if ((el = t.closest('[data-w129all]'))) { var d = data(); runBackfill(((d && d.accounts) || []).filter(function (a) { return canBack(a) && !histDone(a); }).map(function (a) { return a.id; })); return; }
+    if ((el = t.closest('[data-w129li]'))) { setLinkedIn(Number(el.getAttribute('data-w129li'))); return; }
+    if ((el = t.closest('[data-w129wa]'))) { checkWhatsApp(); return; }
+  });
+  var qT = null;
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.matches) return;
+    if (t.matches('#w129 [data-w129q]')) { clearTimeout(qT); var v = t.value; qT = setTimeout(function () { X.q = v; X.show = 25; paint(); }, 200); return; }
+    if (t.matches('#w129li')) { X.liTotal = t.value; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.matches) return;
+    if (t.matches('#w129 [data-w129kind]')) { X.kind = t.value; X.show = 25; paint(); }
+    if (t.matches('#w129 [data-w129ss]')) { var sv = String(t.value).split('|'); X.sort = sv[0]; X.dir = Number(sv[1]) || -1; paint(); }
+  });
+
+  /* ---------- the page tour ---------- */
+  function tour() {
+    try {
+      var W = window.w122; if (!W || !W.tours || !W.tours.socialstats || W.tours.socialstats.__w129) return;
+      var st = W.tours.socialstats.steps, OPT = { opt: 1 };
+      var S2 = function (sel, tt, p) { return { s: sel, t: tt, p: p, opt: 1 }; };
+      st.forEach(function (x) { if (x.s === '#socialstats .w120ctl') x.p = 'Look at the last week, month or quarter, six months, one or two years, all time, or pick two dates. Long ranges chart by week or by month.'; if (x.s === '#socialstats .cardy.chart') { x.t = 'Over time'; x.p = 'The numbers per platform by day, week or month. Switch the measure at the top of the chart.'; } if (x.s === '#socialstats .posts') x.p = 'The posts in the range, ranked by what worked.'; });
+      st.push(S2('#w129 .w129tbl', 'Every post', 'Every post in the range with its reach, views, likes, comments, shares, saves and engagement rate. Filter, search, sort any column, and download it.'));
+      st.push(S2('#w129 .w129aud', 'Who follows us', 'Instagram followers by age, gender, city and country, and LinkedIn followers and visitors by industry, seniority, function, location and company size.'));
+      st.push(S2('#w129 .w129cov', 'How far back', 'How far back each platform goes. Meta keeps two years of daily numbers; posts go back to the first one. Download the daily numbers here.'));
+      W.tours.socialstats.__w129 = true;
+    } catch (e) { /* fine */ }
+  }
+  tour();
+  if (typeof showPanel === 'function') {
+    var __sp129 = showPanel;
+    showPanel = function (id) { var out = __sp129.apply(this, arguments); try { if (id === 'socialstats') { watch(); setTimeout(paint, 60); } } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof startApp === 'function') {
+    var __sa129 = startApp;
+    startApp = async function () { var out = await __sa129.apply(this, arguments); try { tour(); watch(); } catch (e) { /* fine */ } return out; };
+  }
+  window.w129 = { paint: paint, state: function () { return X; }, rows: function () { var d = data(); return d ? explorerRows(d) : []; } };
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
