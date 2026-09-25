@@ -107,6 +107,10 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 - Tables `hub_directory` and `hub_directory_state` (migration `wa116l_hub_directory`). Steel enabled the Admin SDK API in the Cloud project (939437859037) on 25/09; first pass: 47 accounts, 12 matched by email, 32 waiting to be placed (most are roster profiles that never had an email), Natasha's profile marked inactive because her account is deleted in Workspace, 3 Google photos copied, hub@ and donors@ skipped by rule.
 - "Link N to existing profiles" (the card's gold button) opens one screen for the whole queue: each account beside the roster profile it looks like (first-name match preselected; ticked when the match is unique, marked *check* when another profile could fit), one click links them all: the email goes on the profile, the photo is copied, nothing is emailed.
 
+## People open the profile page from anywhere (`116m_wave116m`)
+
+- Steel: "People profile when clicked on from a task, org chart, or anywhere should open up like the my profile tab does." The org chart used to open its own popup (wave12); it now opens `#person/<id>`. Every wave116 avatar with a name is a link to the person (task rows and cards, meeting attendee stacks, the header's active bubbles, the profile page), and so are the names in People and access, the HR centre hours tables, the Home "Also on the Hub right now" line, "decides: Name" on the Executive dashboard (a combined "Steel & Suhaib" opens either one) and the task drawer (assignee chips, plus an "Open X's profile" link beside the owner). Pickers keep their own behaviour (modals, the drawer's remove buttons, the header identity button). Resolution: exact roster name, else a unique first name; `window.w116OpenPerson(nameOrId)` for other code.
+
 ## Backend
 
 - `public.hub_events` + `public.hub_calendar_state` (migration `wa116_hub_events`), RLS read for staff/board/admin.

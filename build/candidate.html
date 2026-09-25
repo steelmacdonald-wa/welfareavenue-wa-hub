@@ -33656,6 +33656,148 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w116lDebug = function () { return { rows: L.rows.length, queue: queue().length, state: L.state, err: L.err }; };
 })();
 /* =====================================================================
+   WA v116m people open the profile page from anywhere (25/09/26)
+   =====================================================================
+   Steel: "People profile when clicked on from a task, org chart, or
+   anywhere should open up like the my profile tab does."
+   - The org chart's own mini-profile popup (wave12 waOpenProfile) is
+     retired: names there open #person/<id> like everything else.
+   - Every wave116 avatar (.w116av with a name) is a link to the person:
+     task rows and cards, meeting attendee stacks, the header's active
+     bubbles, project leads, the executive dashboard, the profile page.
+     Not inside pickers (modals, the task drawer's chips keep their
+     remove button, the header identity button).
+   - Names in People and access, the HR centre hours tables, the Home
+     "Also on the Hub right now" line and the task drawer (assignee chips,
+     an Open profile link beside the owner) open the person too.
+   - Resolution: exact roster name, else a unique first name; no match,
+     no navigation.
+   ===================================================================== */
+(function () {
+  if (window.__wa116m) return; window.__wa116m = true;
+  var GREEN = '#103F39';
+
+  var css = document.createElement('style');
+  css.id = 'wa116mcss';
+  css.textContent = '' +
+    '.w116av[title]{cursor:pointer;}' +
+    '#w115btn .w116av,#modalBack .w116av,.w116pick .w116av,[data-pact="lead"] .w116av,.w116kteam .w116av{cursor:inherit;}' +
+    '.w116av[title]:not(#w115btn .w116av):not(#modalBack .w116av):hover{box-shadow:0 0 0 2px rgba(220,165,39,.75);}' +
+    '#w113tbl td:nth-child(2) b,#w113tbl2 td:nth-child(2) b,.w116pname{cursor:pointer;}' +
+    '#w113tbl td:nth-child(2) b:hover,#w113tbl2 td:nth-child(2) b:hover,.w116pname:hover{color:' + GREEN + ';text-decoration:underline;}' +
+    '#w52hours table td:first-child b{cursor:pointer;}' +
+    '#w52hours table td:first-child b:hover{text-decoration:underline;}' +
+    '#w116jhours .g > span:first-child{cursor:pointer;}' +
+    '#w116jhours .g > span:first-child:hover{color:' + GREEN + ';text-decoration:underline;}' +
+    '#w116dr .w116chip{cursor:pointer;}' +
+    '#w116dr .w116chip:hover{box-shadow:0 0 0 2px rgba(220,165,39,.6);}' +
+    '.w116mlnk{display:inline-block;font-size:11px;font-weight:700;color:' + GREEN + ';cursor:pointer;margin:2px 0 6px;}' +
+    '.w116mlnk:hover{text-decoration:underline;}' +
+    '.mp-online .w116pname{color:' + GREEN + ';font-weight:600;}';
+  document.head.appendChild(css);
+
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false; }); }
+  function resolve(name) {
+    var n = lower(name).replace(/\s*\(.*$/, '').replace(/\s+/g, ' '); if (!n) return null;
+    var all = members();
+    var hit = all.filter(function (m) { return lower(m.name) === n; })[0];
+    if (hit) return hit.id;
+    var fn = n.split(' ')[0];
+    var firsts = all.filter(function (m) { return lower(m.name).split(' ')[0] === fn; });
+    if (firsts.length === 1) return firsts[0].id;
+    /* "Steel M" or "S. MacDonald" style: last token match, unique */
+    var last = n.split(' ').slice(-1)[0];
+    if (last && last.length > 2) { var lasts = all.filter(function (m) { return lower(m.name).split(' ').slice(-1)[0] === last; }); if (lasts.length === 1 && firsts.length === 0) return lasts[0].id; }
+    return null;
+  }
+  function open(id) { if (!id) return false; try { var oc = document.getElementById('ocModal'); if (oc) oc.style.display = 'none'; } catch (e) { /* fine */ } location.hash = '#person/' + id; return true; }
+  function openByName(name) { var id = resolve(name); if (id) return open(id); try { toast('No profile found for ' + String(name || '').trim()); } catch (e) { /* fine */ } return false; }
+  window.w116OpenPerson = function (nameOrId) { if (/^\d+$/.test(String(nameOrId))) return open(Number(nameOrId)); return openByName(nameOrId); };
+
+  /* 1. the org chart's popup becomes the profile page */
+  if (typeof waOpenProfile === 'function') {
+    var __wop = waOpenProfile;
+    waOpenProfile = function (name) { var id = resolve(name); if (id) { open(id); return; } return __wop.apply(this, arguments); };
+  }
+
+  /* 2. clicks */
+  function inside(el, sel) { try { return !!(el.closest && el.closest(sel)); } catch (e) { return false; } }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (t.closest('a[href^="#person/"]') || t.closest('[data-w116go^="#person/"]')) return; /* already a link */
+    /* the header's active bubbles: open that person */
+    var pres = t.closest('#w116jpres .w116av[title]');
+    if (pres) { e.preventDefault(); e.stopPropagation(); openByName(pres.getAttribute('title')); return; }
+    /* the task drawer: an assignee chip (not its remove button) */
+    var chip = t.closest('#w116dr .w116chip');
+    if (chip) { if (t.closest('.rm')) return; var nm = chip.textContent.replace(/\u2715|\u00d7/g, '').trim(); e.preventDefault(); e.stopPropagation(); openByName(nm); return; }
+    var lnk = t.closest('[data-w116person]');
+    if (lnk) { e.preventDefault(); e.stopPropagation(); window.w116OpenPerson(lnk.getAttribute('data-w116person')); return; }
+    /* avatars anywhere, except inside pickers and the identity button */
+    var av = t.closest('.w116av[title]');
+    if (av) {
+      if (inside(av, '#w115btn') || inside(av, '#modalBack') || inside(av, '#w116dr') || inside(av, '[data-pact="lead"]') || inside(av, '.w116kteam') || inside(av, 'select, button, label')) return;
+      var name = av.getAttribute('title') || ''; if (!name || /^\?$/.test(name)) return;
+      var id = resolve(name); if (!id) return;
+      e.preventDefault(); e.stopPropagation(); open(id); return;
+    }
+    /* People and access: the name */
+    var pa = t.closest('#w113tbl td:nth-child(2) b, #w113tbl2 td:nth-child(2) b');
+    if (pa) { e.preventDefault(); e.stopPropagation(); openByName(pa.textContent); return; }
+    /* HR centre hours tables */
+    var hb = t.closest('#w52hours table td:first-child b'); if (hb) { e.preventDefault(); e.stopPropagation(); openByName(hb.textContent); return; }
+    var hj = t.closest('#w116jhours .g > span:first-child'); if (hj) { e.preventDefault(); e.stopPropagation(); openByName(hj.childNodes[0] ? hj.childNodes[0].textContent : hj.textContent); return; }
+    /* names wrapped by this wave (Home presence line, executive owners) */
+    var pn = t.closest('.w116pname'); if (pn) { e.preventDefault(); e.stopPropagation(); openByName(pn.getAttribute('data-name') || pn.textContent); return; }
+  }, true);
+
+  /* 3. wrap plain-text names where the click has nothing to hold on to */
+  function wrapNames(el, names) {
+    try {
+      if (!el || el.dataset.w116m) return;
+      var html = el.innerHTML;
+      names.forEach(function (n) { if (!n) return; var re = new RegExp('(^|[\\s,:>])(' + n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?=$|[\\s,.<])'); html = html.replace(re, '$1<span class="w116pname" data-name="' + n.replace(/"/g, '&quot;') + '">$2</span>'); });
+      el.innerHTML = html; el.dataset.w116m = '1';
+    } catch (e) { /* cosmetic */ }
+  }
+  function decorateHome() {
+    var line = document.querySelector('#mypage .mp-online'); if (!line || line.dataset.w116m) return;
+    var text = line.textContent || ''; var m = text.match(/right now:\s*(.+)$/); if (!m) return;
+    wrapNames(line, m[1].split(',').map(function (x) { return x.trim(); }).filter(Boolean));
+  }
+  function decorateExec() {
+    /* "decides: <b>Name</b>" on the Executive dashboard, the Decisions waiting folder and the team pages */
+    document.querySelectorAll('#overview b, #w111body b, #w116host .w116dec b').forEach(function (bEl) {
+      if (bEl.dataset.w116m) return;
+      var prev = bEl.previousSibling; var pt = prev && prev.nodeType === 3 ? prev.textContent : '';
+      if (!/decides:\s*$/i.test(pt)) return;
+      var n = bEl.textContent.trim();
+      if (/&|\band\b/i.test(n)) {
+        /* "Steel & Suhaib": each name opens its own person */
+        bEl.innerHTML = n.split(/\s*(?:&|\band\b)\s*/i).map(function (part, i) { var ok = resolve(part); return (i ? ' &amp; ' : '') + (ok ? '<span class="w116pname" data-name="' + part.replace(/"/g, '&quot;') + '">' + part.replace(/</g, '&lt;') + '</span>' : part.replace(/</g, '&lt;')); }).join('');
+      } else if (resolve(n)) { bEl.classList.add('w116pname'); bEl.setAttribute('data-name', n); }
+      bEl.dataset.w116m = '1';
+    });
+  }
+  function decorateDrawer() {
+    var dr = document.getElementById('w116dr'); if (!dr) return;
+    var sel = dr.querySelector('select[data-dfield="owner"]'); if (!sel) return;
+    var owner = sel.value; var id = (!owner || owner === '__custom') ? null : resolve(owner);
+    var old = dr.querySelector('.w116mlnk');
+    if (old && id && old.getAttribute('data-w116person') === String(id) && old.previousElementSibling === sel) return;
+    if (old) old.remove();
+    if (!id) return;
+    var a = document.createElement('span'); a.className = 'w116mlnk'; a.setAttribute('data-w116person', String(id)); a.textContent = 'Open ' + owner.split(' ')[0] + '\u2019s profile';
+    sel.insertAdjacentElement('afterend', a);
+  }
+  var pend = null;
+  try {
+    new MutationObserver(function () { clearTimeout(pend); pend = setTimeout(function () { decorateHome(); decorateExec(); decorateDrawer(); }, 120); }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+  document.addEventListener('change', function (e) { if (e.target && e.target.matches && e.target.matches('#w116dr select[data-dfield="owner"]')) setTimeout(decorateDrawer, 400); });
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
