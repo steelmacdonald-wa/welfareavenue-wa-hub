@@ -1,0 +1,207 @@
+/* =====================================================================
+   WA v118b check-in nudges: the little note under the Check in pill (25/09/26)
+   =====================================================================
+   Steel: "When people open the dashboard if they aren't yet checked in and
+   they haven't opened it for a while prompt them to check in with a little
+   notif right below the check in bar. If someone leaves from their mobile
+   prompt them to check out or if it's been longer than a few hours, prompt
+   them to change the check-out time so it's logged properly."
+   Three notes, one at a time, anchored under the wave116j pill (#w116jck):
+   1. Not checked in, and the hub has not been open for 3 hours (or ever
+      on this device): "Starting a session? Check in so your hours count."
+      Check in goes through the pill (wave116q posts to Slack). Not now
+      snoozes it for 4 hours.
+   2. Checked in and back after being away 20 minutes or more (the tab or
+      app was hidden; on a phone that is leaving the app): "Away since
+      12:40": check out as of the moment they left, check out now (the
+      usual note sheet), or still working.
+   3. Checked in for more than 3 hours: "Still here?", check out now, or
+      set the time they actually stopped. Asked again 2 hours later.
+   A time-adjusted check-out writes ended_at and minutes on the open
+   hub_checkins row, then calls checkin-post {action: out} so the Slack
+   line and the row's summary fields follow the same path as a normal
+   check-out (the function keeps an ended_at that is already set).
+   Works in both looks (this is behaviour, not skin). window.__wa118b.
+   ===================================================================== */
+(function () {
+  if (window.__wa118b) return; window.__wa118b = { version: 1 };
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif", BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var AWAY_MS = 3 * 3600000;      /* "has not opened the hub for a while" */
+  var GONE_MS = 20 * 60000;       /* away from the tab or app this long while checked in: offer to check out as of then */
+  var LONG_MS = 3 * 3600000;      /* checked in this long: ask */
+  var REASK_MS = 2 * 3600000;     /* ask about a long session again after this */
+  var SNOOZE_MS = 4 * 3600000;    /* "Not now" on the check-in nudge */
+  var K = { seen: 'w118bSeen', hid: 'w118bHid', snooze: 'w118bSnooze', asked: 'w118bAsked' };
+  var S = { timer: null, kind: null };
+
+  var css = document.createElement('style');
+  css.id = 'wa118bcss';
+  css.textContent = ''
+    + '#w118ck{position:fixed;z-index:95;width:300px;max-width:calc(100vw - 24px);background:' + GREEN + ';color:' + CREAM + ';border-radius:14px;padding:12px 14px 12px;box-shadow:0 14px 40px rgba(16,63,57,.28);font-family:' + BODY + ';font-size:13px;line-height:1.45;animation:w118ck .28s ease-out;}'
+    + '#w118ck:before{content:"";position:absolute;top:-7px;left:26px;width:14px;height:14px;background:' + GREEN + ';transform:rotate(45deg);border-radius:2px;}'
+    + '#w118ck.r:before{left:auto;right:26px;}'
+    + '#w118ck b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:17px;letter-spacing:.4px;text-transform:uppercase;margin:0 0 3px;color:' + CREAM + ';}'
+    + '#w118ck b i{display:inline-block;width:8px;height:8px;border-radius:50%;background:' + GOLD + ';margin-right:8px;vertical-align:2px;}'
+    + '#w118ck p{margin:0 0 10px;color:rgba(255,250,242,.86);}'
+    + '#w118ck .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}'
+    + '#w118ck button{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:.8px;text-transform:uppercase;border-radius:9px;padding:7px 11px;border:none;cursor:pointer;line-height:1.2;}'
+    + '#w118ck button.go{background:' + GOLD + ';color:' + GREEN + ';}'
+    + '#w118ck button.ghost{background:transparent;color:' + CREAM + ';border:1.5px solid rgba(255,250,242,.55);}'
+    + '#w118ck button.link{background:transparent;color:rgba(255,250,242,.8);padding:7px 4px;letter-spacing:.4px;text-transform:none;font-family:' + BODY + ';font-weight:600;font-size:12.5px;}'
+    + '#w118ck .x{position:absolute;top:8px;right:10px;background:none;border:none;color:rgba(255,250,242,.7);font-size:16px;padding:2px 6px;cursor:pointer;font-family:' + BODY + ';}'
+    + '#w118ck .when{display:flex;gap:6px;align-items:center;margin:2px 0 8px;}'
+    + '#w118ck .when input{font-family:' + BODY + ';font-size:14px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,250,242,.4);background:rgba(255,250,242,.12);color:' + CREAM + ';color-scheme:dark;}'
+    + '#w118ck .err{color:#F5C9BF;font-size:12px;margin:-4px 0 8px;}'
+    + '@keyframes w118ck{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:none;}}'
+    + '@media (prefers-reduced-motion:reduce){#w118ck{animation:none;}}';
+  document.head.appendChild(css);
+
+  function num(k) { try { return Number(localStorage.getItem(k) || 0) || 0; } catch (e) { return 0; } }
+  function put(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) { /* fine */ } }
+  function drop(k) { try { localStorage.removeItem(k); } catch (e) { /* fine */ } }
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function ck() { return window.w116jCk || null; }
+  function pill() { return document.getElementById('w116jck'); }
+  function open() { var c = ck(); try { return c ? c.open() : null; } catch (e) { return null; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function fmtMins(m) { var c = ck(); try { if (c && c.fmtMins) return c.fmtMins(m); } catch (e) { /* fine */ } var h = Math.floor(m / 60), r = Math.round(m % 60); return (h ? h + 'h ' : '') + (r || !h ? r + 'm' : ''); }
+  function clock(t) { return new Date(t).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+  function dayWord(t) { var d = new Date(t), n = new Date(); return d.toDateString() === n.toDateString() ? 'today' : (n - d < 2 * 86400000 ? 'yesterday' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })); }
+  function hhmm(t) { var d = new Date(t); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
+  function gateUp() { var g = document.getElementById('gate'); return g && g.style.display !== 'none'; }
+  function myEmail() { try { return String(USER && USER.email || '').toLowerCase(); } catch (e) { return ''; } }
+  function myName() { try { var em = myEmail(); var m = (DB_MEMBERS || []).filter(function (x) { return String(x.email || '').toLowerCase() === em; })[0]; return (m && m.name) || (USER && USER.name) || em; } catch (e) { return ''; } }
+
+  /* ---------- the note ---------- */
+  function hide() { var n = document.getElementById('w118ck'); if (n) n.parentNode.removeChild(n); S.kind = null; }
+  function place() {
+    var n = document.getElementById('w118ck'), p = pill();
+    if (!n || !p) return;
+    var r = p.getBoundingClientRect();
+    if (!r.width) { n.style.top = '70px'; n.style.left = '12px'; n.classList.remove('r'); return; }
+    var top = r.bottom + 10, w = Math.min(300, window.innerWidth - 24);
+    var left = r.left;
+    if (left + w > window.innerWidth - 12) { left = Math.max(12, r.right - w); n.classList.add('r'); } else n.classList.remove('r');
+    n.style.top = Math.round(top) + 'px'; n.style.left = Math.round(left) + 'px';
+  }
+  function show(kind, html) {
+    hide();
+    var n = document.createElement('div'); n.id = 'w118ck'; n.setAttribute('role', 'status'); n.setAttribute('data-kind', kind);
+    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button>' + html;
+    document.body.appendChild(n); S.kind = kind; place();
+  }
+  window.addEventListener('resize', place); window.addEventListener('scroll', place, true);
+
+  /* ---------- the three notes ---------- */
+  function nudgeIn() {
+    var last = num(K.seen);
+    if (open() || !pill() || gateUp()) return false;
+    if (num(K.snooze) > Date.now()) return false;
+    if (last && Date.now() - last < AWAY_MS) return false;
+    show('in', '<b><i></i>Starting a session?</b><p>Check in so your hours on the hub count from now.</p><div class="row"><button class="go" data-w118b="in">Check in</button><button class="link" data-w118b="later">Not now</button></div>');
+    return true;
+  }
+  function nudgeBack(row, leftAt) {
+    show('back', '<b><i></i>Welcome back</b><p>You are still checked in (since ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + ') and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Log it the way it happened?</p>'
+      + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Check out as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Check out now</button><button class="link" data-w118b="still">Still working</button></div>');
+  }
+  function nudgeLong(row) {
+    var mins = (Date.now() - new Date(row.started_at).getTime()) / 60000;
+    show('long', '<b><i></i>Still here?</b><p>You have been checked in for ' + E(fmtMins(Math.round(mins))) + '. If you stopped earlier, set the time so your hours are logged properly.</p>'
+      + '<div class="row"><button class="ghost" data-w118b="still">Still here</button><button class="go" data-w118b="out">Check out now</button><button class="link" data-w118b="settime">Set the time</button></div>');
+    put(K.asked, Date.now());
+  }
+  function timeForm(row) {
+    var n = document.getElementById('w118ck'); if (!n) return;
+    var guess = num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now();
+    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you stop?</b><p>Checked in ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. The check-out is logged at this time.</p>'
+      + '<div class="when"><input type="time" id="w118bt" value="' + hhmm(guess) + '" step="60"><span>' + E(dayWord(guess)) + '</span></div><div class="err" id="w118berr"></div>'
+      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Check out at that time</button><button class="link" data-w118b="still">Cancel</button></div>';
+    place();
+  }
+
+  /* ---------- writing a check-out at a chosen moment ---------- */
+  async function checkOutAt(row, endMs) {
+    var start = new Date(row.started_at).getTime();
+    if (endMs <= start) return 'That is before you checked in (' + clock(row.started_at) + ').';
+    if (endMs > Date.now() + 60000) return 'That is in the future.';
+    var mins = Math.max(1, Math.round((endMs - start) / 60000));
+    var endIso = new Date(endMs).toISOString();
+    try {
+      var r = await db.from('hub_checkins').update({ ended_at: endIso, minutes: mins }).eq('id', row.id).is('ended_at', null);
+      if (r && r.error) throw r.error;
+    } catch (e) { return 'Could not save the check-out (' + ((e && e.message) || e) + ').'; }
+    var posted = false, perr = '';
+    try { var fr = await db.functions.invoke('checkin-post', { body: { action: 'out', checkin_id: row.id, bullets: [], close_task_ids: [], skipped: true } }); posted = !!(fr && fr.data && fr.data.posted); perr = (fr && fr.data && fr.data.error) || (fr && fr.error && fr.error.message) || ''; } catch (e) { perr = (e && e.message) || String(e); }
+    try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: myEmail(), field: 'out', old_value: null, new_value: 'checked out as of ' + clock(endMs) + ' (' + fmtMins(mins) + ', time set by hand)', changed_by: myName() }); } catch (e) { /* audit */ }
+    var c = ck(); try { if (c && c.clear) c.clear(); } catch (e) { /* fine */ }
+    try { if (c && c.reload) await c.reload(); } catch (e) { /* fine */ }
+    try { if (c && c.render) c.render(); if (c && c.presence) c.presence(); } catch (e) { /* fine */ }
+    toastS('Checked out as of ' + clock(endMs) + ': ' + fmtMins(mins) + ' on the hub' + (posted ? ', posted to #check-in-out-wa' : (perr ? ' (Slack post failed: ' + perr + ')' : '')));
+    return '';
+  }
+
+  /* ---------- decide what to show ---------- */
+  function decide(reason) {
+    if (gateUp() || !pill()) return;
+    var row = open();
+    if (!row) { if (reason !== 'tick') nudgeIn(); return; }
+    var hid = num(K.hid);
+    if (hid && Date.now() - hid > GONE_MS && hid > new Date(row.started_at).getTime()) { drop(K.hid); nudgeBack(row, hid); return; }
+    var age = Date.now() - new Date(row.started_at).getTime();
+    if (age > LONG_MS && Date.now() - num(K.asked) > REASK_MS && S.kind !== 'long') nudgeLong(row);
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target.closest('[data-w118b]') : null; if (!t) return;
+    var a = t.getAttribute('data-w118b'), row = open();
+    if (a === 'x' || a === 'still') { hide(); if (a === 'still') put(K.asked, Date.now()); return; }
+    if (a === 'later') { put(K.snooze, Date.now() + SNOOZE_MS); hide(); return; }
+    if (a === 'in') { hide(); var p = pill(); if (p) p.click(); return; }
+    if (a === 'out') { hide(); put(K.asked, Date.now()); var p2 = pill(); if (p2) p2.click(); return; }
+    if (a === 'settime') { if (row) timeForm(row); return; }
+    if (a === 'asof') { if (!row) { hide(); return; } t.disabled = true; checkOutAt(row, Number(t.getAttribute('data-t'))).then(function (err) { if (err) { t.disabled = false; toastS(err); } else hide(); }); return; }
+    if (a === 'save') {
+      if (!row) { hide(); return; }
+      var inp = document.getElementById('w118bt'), err = document.getElementById('w118berr');
+      var v = inp && inp.value ? inp.value.split(':') : null;
+      if (!v || v.length < 2) { if (err) err.textContent = 'Pick a time.'; return; }
+      var d = new Date(t.getAttribute('data-day') || new Date().toDateString()); d.setHours(Number(v[0]), Number(v[1]), 0, 0);
+      t.disabled = true;
+      checkOutAt(row, d.getTime()).then(function (msg) { if (msg) { t.disabled = false; if (err) err.textContent = msg; } else hide(); });
+      return;
+    }
+  }, true);
+
+  /* ---------- presence: when the hub was last open, when it went out of sight ---------- */
+  function seen() { put(K.seen, Date.now()); }
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { if (open()) put(K.hid, Date.now()); seen(); }
+    else { setTimeout(function () { decide('back'); seen(); }, 400); }
+  });
+  window.addEventListener('pagehide', function () { if (open()) put(K.hid, Date.now()); seen(); });
+  window.addEventListener('pageshow', function (ev) { if (ev.persisted) setTimeout(function () { decide('back'); }, 400); });
+  function boot() {
+    /* the first decision waits for wave116j to have loaded the open check-in */
+    var tries = 0;
+    (function wait() {
+      tries += 1;
+      var c = ck();
+      if ((c && pill()) || tries > 40) { decide('open'); seen(); }
+      else setTimeout(wait, 500);
+    })();
+    setInterval(function () { if (!document.hidden) { seen(); decide('tick'); } }, 60000);
+    /* the check-in pill changing state means a check-in or check-out happened: the note is stale */
+    var p = pill();
+    var mo = new MutationObserver(function () { if (S.kind && S.kind !== 'long') hide(); else if (S.kind === 'long' && !open()) hide(); });
+    if (p) mo.observe(p, { childList: true, attributes: true, subtree: true });
+    else { var mo2 = new MutationObserver(function () { var q = pill(); if (q) { mo.observe(q, { childList: true, attributes: true, subtree: true }); mo2.disconnect(); } }); mo2.observe(document.body, { childList: true, subtree: true }); }
+  }
+  if (typeof startApp === 'function') {
+    var __sa118b = startApp;
+    startApp = async function () { var r = await __sa118b.apply(this, arguments); setTimeout(boot, 3500); return r; };
+  } else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(boot, 3500); });
+  else setTimeout(boot, 3500);
+
+  window.__wa118b = { version: 1, decide: decide, show: show, hide: hide, checkOutAt: checkOutAt, K: K };
+})();

@@ -67,6 +67,7 @@ async function main() {
     })();
   `);
   await page.addInitScript("window.__WAFIX = " + fixture + ";");
+  if (process.env.W118_STRIP === "1") await page.addInitScript("window.__WA_STRIP118 = true;");
 
   // Serve the candidate; stub the supabase CDN; kill all other network.
   await page.route("**/*", route => {
@@ -107,7 +108,8 @@ async function main() {
     await settle();
     const snap = await page.evaluate(pid => {
       const el = document.getElementById(pid);
-      return el ? el.outerHTML : "<missing/>";
+      if (!el) return "<missing/>";
+      return (window.__WA_STRIP118 && window.__wa118 && window.__wa118.clean) ? window.__wa118.clean(el) : el.outerHTML;
     }, id);
     fs.writeFileSync(path.join(outdir, "pages", id + ".html"), snap);
     report.pages[id] = { bytes: Buffer.byteLength(snap) };
@@ -126,7 +128,8 @@ async function main() {
     await settle();
     const snap = await page.evaluate(p => {
       const el = p ? document.getElementById(p) : document.querySelector(".panel.active");
-      return el ? el.outerHTML : "<missing/>";
+      if (!el) return "<missing/>";
+      return (window.__WA_STRIP118 && window.__wa118 && window.__wa118.clean) ? window.__wa118.clean(el) : el.outerHTML;
     }, pid);
     fs.writeFileSync(path.join(outdir, "pages", label + ".html"), snap);
     report.pages[label] = { bytes: Buffer.byteLength(snap) };
@@ -134,7 +137,7 @@ async function main() {
 
   // Chrome snapshot: body with page interiors stripped (nav, header, chat, footer).
   const chrome = await page.evaluate(() => {
-    const b = document.body.cloneNode(true);
+    const b = (window.__WA_STRIP118 && window.__wa118 && window.__wa118.cleanNode) ? window.__wa118.cleanNode(document.body) : document.body.cloneNode(true);
     b.querySelectorAll(".panel[id]").forEach(e => { e.innerHTML = ""; });
     b.querySelectorAll("script").forEach(e => e.remove());
     return b.outerHTML;
