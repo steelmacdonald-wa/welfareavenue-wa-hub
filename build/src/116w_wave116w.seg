@@ -1,0 +1,34 @@
+/* =====================================================================
+   WA v116w Home: "Got it" on a mention works (25/09/26)
+   =====================================================================
+   Steel: "In Home, when I look at mentions and click Got it, it doesn't
+   go away." Two causes: wave65's handler looked for its own row class
+   (.w65men) while wave74 renders the Home list as .w74men, so the row
+   never changed on screen; and the mentions update policy only let a
+   person mark their own mentions, so an admin reading everyone's saw
+   the click do nothing (policy widened to admins in wa116w). This
+   handler runs first, saves, and hides the mention whichever list it
+   sits in; a failed save says so instead of pretending.
+   ===================================================================== */
+(function () {
+  if (window.__wa116w) return; window.__wa116w = true;
+  document.addEventListener('click', async function (e) {
+    var a = e.target && e.target.closest && e.target.closest('[data-w65got]');
+    if (!a) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var id = Number(a.getAttribute('data-w65got'));
+    var row = a.closest('.w74men') || a.closest('.w65men') || a.parentNode;
+    a.textContent = 'Saving...';
+    try {
+      var r = await db.from('mentions').update({ seen: true }).eq('id', id).select('id');
+      if (r && r.error) throw r.error;
+      if (!r || !r.data || !r.data.length) throw new Error('not allowed');
+      if (row) { row.classList.add('seen'); var nb = row.querySelector('.w74new, .w65new'); if (nb) nb.remove(); row.style.transition = 'opacity .3s, max-height .3s'; row.style.opacity = '.45'; }
+      a.remove();
+      try { toast('Marked as seen'); } catch (e2) { /* fine */ }
+    } catch (e3) {
+      a.textContent = 'Got it';
+      try { toast('Could not mark it as seen: ' + (e3.message || e3)); } catch (e4) { /* fine */ }
+    }
+  }, true);
+})();

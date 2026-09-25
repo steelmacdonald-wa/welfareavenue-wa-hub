@@ -132,6 +132,8 @@
 116p_wave116p
 116r_wave116r
 116t_wave116t
+116w_wave116w
+119_wave119
 117_wave117
 118_wave118
 118b_wave118b

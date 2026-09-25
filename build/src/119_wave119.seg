@@ -1,0 +1,385 @@
+/* =====================================================================
+   WA v119 MTL Volunteering: the event command centre (25/09/26)
+   =====================================================================
+   Steel: "MTL Volunteering can use some Apple-looking UI and ClickUp
+   robustness, dragging and dropping, AI features and any other
+   recommendations." Cut 1 of three:
+   - The event page becomes one screen: a masthead (date, countdown,
+     venue, meals, status) with two readiness rings (checklist, roster)
+     and "what's next": the three most urgent unticked steps with a
+     one-tap tick.
+   - Three columns on a wide screen: the checklist (the same phases and
+     steps as before, every handler untouched), the roster as a board
+     (one column per role, volunteer cards you drag between roles or in
+     from a bench of available volunteers, targets per role, status on
+     the card), and a side rail (the event summary, tasks that came
+     from meetings, the cancel button).
+   - Calendar: a month grid beside the list, each event with its
+     readiness and gaps; the next-event hero counts down.
+   Everything older keeps working underneath: this wave regroups what
+   wave20, 26, 28, 31 and 59 paint, and adds its own roster board on the
+   same event_roster rows.
+   ===================================================================== */
+(function () {
+  if (window.__wa119) return; window.__wa119 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_talker: 2, community_debrief: 1 };
+  var V = { pend: null, bench: null, benchRole: null, q: '', drag: null, calMonth: null, busy: false };
+
+  var css = document.createElement('style');
+  css.id = 'wa119css';
+  css.textContent = '' +
+    '#w119{font-family:' + BODY + ';}' +
+    '#w119 .mast{background:' + GREEN + ';color:' + CREAM + ';border-radius:22px;padding:22px 24px 20px;margin:8px 0 16px;position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px 24px;align-items:center;}' +
+    '#w119 .mast:before{content:"";position:absolute;right:-80px;top:-110px;width:320px;height:320px;border-radius:50%;background:radial-gradient(closest-side,rgba(111,100,171,.5),rgba(111,100,171,0));pointer-events:none;}' +
+    '#w119 .mast .k{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 4px;}' +
+    '#w119 .mast h3{font-family:' + HEAD + ';font-size:36px;line-height:1;margin:0 0 6px;color:' + CREAM + ';letter-spacing:.3px;font-weight:700;}' +
+    '#w119 .mast .meta{font-size:13px;color:rgba(255,250,242,.85);display:flex;gap:14px;flex-wrap:wrap;align-items:center;}' +
+    '#w119 .mast .meta .st{display:inline-block;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:3px 10px;background:' + GOLD + ';color:' + GREEN + ';}' +
+    '#w119 .mast .meta .st.cancelled{background:' + FLAG + ';color:' + CREAM + ';}#w119 .mast .meta .st.completed{background:' + TEAL + ';color:' + CREAM + ';}' +
+    '#w119 .mast .cd{font-family:' + HEAD + ';font-size:15px;color:' + CREAM + ';}' +
+    '#w119 .mast .cd b{font-size:22px;color:' + GOLD + ';}' +
+    '#w119 .rings{display:flex;gap:18px;position:relative;}' +
+    '#w119 .ring{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;color:rgba(255,250,242,.85);letter-spacing:.4px;text-transform:uppercase;font-weight:700;}' +
+    '#w119 .ring svg{width:74px;height:74px;transform:rotate(-90deg);}' +
+    '#w119 .ring circle{fill:none;stroke-width:7;}' +
+    '#w119 .ring .bg{stroke:rgba(255,250,242,.18);}' +
+    '#w119 .ring .fg{stroke:' + GOLD + ';stroke-linecap:round;transition:stroke-dasharray .5s ease;}' +
+    '#w119 .ring .fg.ok{stroke:' + TEAL + ';}' +
+    '#w119 .ring .v{position:absolute;font-family:' + HEAD + ';font-size:19px;color:' + CREAM + ';margin-top:24px;}' +
+    '#w119 .ring .wrap{position:relative;display:flex;justify-content:center;}' +
+    '#w119 .mast .acts{grid-column:1 / -1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
+    '#w119 .mast .acts .btn{background:rgba(255,250,242,.14);color:' + CREAM + ';border:none;}' +
+    '#w119 .mast .acts .btn:hover{background:rgba(255,250,242,.24);}' +
+    '#w119 .mast .acts .btn.warn{background:rgba(179,64,47,.55);}' +
+    /* what's next */
+    '#w119 .next{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin:0 0 16px;}' +
+    '#w119 .next .n{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:11px 13px;display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;align-items:start;box-shadow:0 8px 20px -18px rgba(16,63,57,.6);}' +
+    '#w119 .next .n .tk{width:20px;height:20px;border-radius:7px;border:1.5px solid rgba(16,63,57,.35);cursor:pointer;margin-top:1px;}' +
+    '#w119 .next .n .tk:hover{background:rgba(42,140,122,.18);border-color:' + TEAL + ';}' +
+    '#w119 .next .n b{display:block;font-size:13.5px;line-height:1.35;color:var(--wa-text);}' +
+    '#w119 .next .n span{display:block;font-size:11.5px;color:var(--wa-muted);margin-top:3px;}' +
+    '#w119 .next .n span i{font-style:normal;color:' + FLAG + ';font-weight:700;}' +
+    '#w119 .next .lbl{grid-column:1 / -1;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;margin:0 0 -4px;}' +
+    /* grid */
+    '#w119 .grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:18px;align-items:start;}' +
+    '#w119 .col h3.block{margin-top:0;}' +
+    '#w119 .col .cardy{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 16px;margin:0 0 14px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);}' +
+    '#w119 .col .cardy h4{font-family:' + HEAD + ';font-size:20px;margin:0 0 8px;color:' + GREEN + ';display:flex;align-items:center;gap:8px;}' +
+    '#w119 details.vl-phase{border-radius:14px;box-shadow:0 8px 20px -18px rgba(16,63,57,.5);}' +
+    '#w119 details.vl-phase>summary{font-family:' + HEAD + ';font-size:17px;padding:12px 16px;}' +
+    '#w119 .vl-step{padding:8px 0;}' +
+    '#w119 .vl-step .vl-name{font-size:14px;}' +
+    '#w119 .vl-step input[type=checkbox]{width:19px;height:19px;border-radius:6px;}' +
+    /* roster board */
+    '#w119 .board{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;}' +
+    '#w119 .rc{background:rgba(16,63,57,.045);border-radius:14px;padding:10px;min-height:120px;transition:background .15s,box-shadow .15s;}' +
+    '#w119 .rc.over{background:rgba(220,165,39,.16);box-shadow:inset 0 0 0 2px ' + GOLD + ';}' +
+    '#w119 .rc .h{display:flex;align-items:center;justify-content:space-between;gap:6px;margin:0 0 8px;}' +
+    '#w119 .rc .h b{font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';letter-spacing:.3px;}' +
+    '#w119 .rc .h .n{font-size:11px;color:var(--wa-muted);font-weight:700;}' +
+    '#w119 .rc .h .n.short{color:' + FLAG + ';}' +
+    '#w119 .rc .h .n.full{color:' + TEAL + ';}' +
+    '#w119 .rc .add{width:22px;height:22px;border-radius:50%;border:none;background:' + GREEN + ';color:' + CREAM + ';font-size:15px;line-height:1;cursor:pointer;flex:none;}' +
+    '#w119 .pc{background:#fff;border-radius:12px;padding:8px 9px;margin:0 0 7px;box-shadow:0 6px 16px -14px rgba(16,63,57,.7);cursor:grab;position:relative;font-size:12.5px;}' +
+    '#w119 .pc:active{cursor:grabbing;}' +
+    '#w119 .pc.dragging{opacity:.4;}' +
+    '#w119 .pc b{display:block;font-size:13px;line-height:1.25;color:var(--wa-text);padding-right:16px;}' +
+    '#w119 .pc .x{position:absolute;top:6px;right:7px;font-size:11px;color:var(--wa-muted);cursor:pointer;background:none;border:none;padding:0;}' +
+    '#w119 .pc .x:hover{color:' + FLAG + ';}' +
+    '#w119 .pc select{width:100%;margin-top:6px;border:none;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800;letter-spacing:.3px;font-family:' + BODY + ';background:rgba(16,63,57,.08);color:' + GREEN + ';appearance:none;-webkit-appearance:none;cursor:pointer;}' +
+    '#w119 .pc.s-confirmed select{background:rgba(42,140,122,.18);color:#1c6b5d;}' +
+    '#w119 .pc.s-waiting select{background:rgba(220,165,39,.22);color:#6b4d05;}' +
+    '#w119 .pc.s-unavailable select,#w119 .pc.s-cancelled select{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '#w119 .pc .c{display:block;font-size:11px;color:var(--wa-muted);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w119 .pc .c a{color:' + GREEN + ';text-decoration:none;}' +
+    '#w119 .pc .flag{display:inline-block;font-size:10px;color:#8a5417;background:#fdf3e6;border-radius:999px;padding:1px 6px;margin-top:4px;}' +
+    '#w119 .pc .mv{display:block;margin-top:5px;font-size:10.5px;color:var(--wa-muted);background:none;border:none;padding:0;cursor:pointer;text-align:left;}' +
+    '#w119 .pc .mv:hover{color:' + GREEN + ';text-decoration:underline;}' +
+    '#w119 .pc select.mvsel{margin-top:5px;background:rgba(111,100,171,.12);color:' + PURPLE + ';}' +
+    '#w119 .top input[type=date]{width:150px;}' +
+    '#w119 .rc .empty{font-size:11.5px;color:var(--wa-muted);text-align:center;padding:14px 4px;border:1px dashed rgba(16,63,57,.2);border-radius:10px;}' +
+    /* bench */
+    '#w119 .bench{background:#fff;border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:10px 12px;margin:10px 0 0;box-shadow:0 14px 30px -20px rgba(16,63,57,.6);}' +
+    '#w119 .bench .bh{display:flex;gap:8px;align-items:center;margin:0 0 8px;}' +
+    '#w119 .bench .bh b{font-family:' + HEAD + ';font-size:16px;color:' + GREEN + ';flex:1;}' +
+    '#w119 .bench input{flex:2;padding:7px 10px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';}' +
+    '#w119 .bench .bl{max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:4px;}' +
+    '#w119 .bench .bp{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 8px;border-radius:10px;background:rgba(16,63,57,.04);cursor:grab;font-size:12.5px;}' +
+    '#w119 .bench .bp b{display:block;font-size:12.5px;}' +
+    '#w119 .bench .bp span{display:block;font-size:11px;color:var(--wa-muted);}' +
+    '#w119 .bench .bp button{font-size:11px;padding:4px 9px;}' +
+    '#w119 .bench .close{font-size:12px;color:var(--wa-muted);cursor:pointer;background:none;border:none;}' +
+    /* hidden originals */
+    '#w119 .w119hide{display:none !important;}' +
+    /* calendar */
+    '#w119cal{margin:0 0 16px;font-family:' + BODY + ';}' +
+    '#w119cal .ch{display:flex;align-items:center;gap:10px;margin:0 0 8px;}' +
+    '#w119cal .ch b{font-family:' + HEAD + ';font-size:22px;color:' + GREEN + ';flex:1;}' +
+    '#w119cal .ch button{font-size:12px;padding:5px 10px;}' +
+    '#w119cal .g{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;}' +
+    '#w119cal .dow{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;text-align:center;padding:2px 0 4px;}' +
+    '#w119cal .d{min-height:64px;border-radius:10px;background:rgba(16,63,57,.035);padding:5px 6px;font-size:11.5px;color:var(--wa-muted);position:relative;}' +
+    '#w119cal .d.out{opacity:.35;}' +
+    '#w119cal .d.today{box-shadow:inset 0 0 0 2px ' + GOLD + ';}' +
+    '#w119cal .d .ev{display:block;margin-top:4px;background:' + GREEN + ';color:' + CREAM + ';border-radius:8px;padding:4px 6px;font-size:11px;line-height:1.3;cursor:pointer;}' +
+    '#w119cal .d .ev.past{background:rgba(16,63,57,.35);}' +
+    '#w119cal .d .ev.cancelled{background:' + FLAG + ';}' +
+    '#w119cal .d .ev.completed{background:' + TEAL + ';}' +
+    '#w119cal .d .ev i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:3px;background:' + GOLD + ';}' +
+    '#w119cal .d .ev i.ok{background:' + TEAL + ';}' +
+    '#w119cal .d .ev i.bad{background:#ff8a7a;}' +
+    '#volunteering .vl-ev .w119gaps{margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;}' +
+    '#volunteering .vl-ev .w119gaps span{font-size:10.5px;border-radius:999px;padding:2px 7px;background:rgba(179,64,47,.10);color:' + FLAG + ';font-weight:700;}' +
+    '#volunteering .vl-ev .w119gaps span.ok{background:rgba(42,140,122,.14);color:#1c6b5d;}' +
+    '@media (max-width:980px){#w119 .grid{grid-template-columns:1fr;}#w119 .mast{grid-template-columns:1fr;}#w119 .rings{justify-content:flex-start;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : true; } catch (e) { return true; } }
+  function curEvent() { var ev = null; try { (WA_VOL_EVENTS || []).forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; }); } catch (e) { /* fine */ } return ev; }
+  function detail() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+  function roleLabel(r) { try { return waVolRoleLabel(r); } catch (e) { return r; } }
+  function daysTo(iso) { try { return waVolDaysTo(iso); } catch (e) { return Math.round((new Date(iso + 'T12:00:00').getTime() - Date.now()) / 86400000); } }
+  function niceDate(iso, long) { try { return waVolDate(iso, long); } catch (e) { return iso; } }
+  function statusClass(s) { s = lower(s); if (s.indexOf('confirm') === 0) return 's-confirmed'; if (s.indexOf('wait') === 0 || s === 'tbd') return 's-waiting'; if (s === 'unavailable') return 's-unavailable'; if (s === 'cancelled') return 's-cancelled'; return ''; }
+  function tmplById(id) { try { return (WA_VOL_TMPL || []).filter(function (t) { return t.id === id; })[0] || null; } catch (e) { return null; } }
+  function phaseIndex(p) { try { return WA_VOL_PHASES.map(function (x) { return x[0]; }).indexOf(p || 'anytime'); } catch (e) { return 9; } }
+
+  /* ---------- the event page ---------- */
+  function ring(pct, label, ok) {
+    var r = 30, c = 2 * Math.PI * r; var dash = Math.max(0, Math.min(100, pct)) / 100 * c;
+    return '<div class="ring"><div class="wrap"><svg viewBox="0 0 74 74"><circle class="bg" cx="37" cy="37" r="' + r + '"></circle><circle class="fg' + (ok ? ' ok' : '') + '" cx="37" cy="37" r="' + r + '" stroke-dasharray="' + dash.toFixed(1) + ' ' + c.toFixed(1) + '"></circle></svg><span class="v">' + Math.round(pct) + '%</span></div>' + label + '</div>';
+  }
+  function mastHtml(ev, D) {
+    var steps = D.steps || []; var done = steps.filter(function (s) { return s.done; }).length; var pctS = steps.length ? done / steps.length * 100 : 0;
+    var roster = D.roster || []; var conf = roster.filter(function (r) { return lower(r.status).indexOf('confirm') === 0; }).length;
+    var target = 0; Object.keys(TARGET).forEach(function (k) { target += TARGET[k]; });
+    var pctR = target ? Math.min(100, conf / target * 100) : 0;
+    var d = daysTo(ev.event_date);
+    var cd = ev.status === 'cancelled' ? 'Cancelled' : ev.status === 'completed' ? 'Done' : d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : d > 1 ? '<b>' + d + '</b> days to go' : Math.abs(d) + ' days ago';
+    var meals = ev.planned_meals ? '<span>' + E(ev.planned_meals) + ' meals planned</span>' : '';
+    return '<div class="mast"><div><div class="k">' + E(ev.code || 'Serving event') + (ev.season ? ' \u00b7 ' + E(ev.season) : '') + '</div><h3>' + E(niceDate(ev.event_date, true)) + '</h3>' +
+      '<div class="meta"><span class="st ' + E(ev.status || '') + '">' + E(ev.status || 'planned') + '</span>' + (ev.title ? '<span>' + E(ev.title) + '</span>' : '') + (ev.location ? '<span>' + E(ev.location) + '</span>' : '') + meals + '<span class="cd">' + cd + '</span></div></div>' +
+      '<div class="rings">' + ring(pctS, 'Checklist', pctS >= 100) + ring(pctR, 'Roster', conf >= target) + '</div>' +
+      '<div class="acts" id="w119acts"><span style="font-size:12.5px;color:rgba(255,250,242,.8)">' + done + ' of ' + steps.length + ' steps \u00b7 ' + conf + ' confirmed of ' + target + ' places' + (roster.length ? ' (' + roster.length + ' on the list)' : '') + '</span><span style="flex:1"></span></div></div>';
+  }
+  function nextHtml(D) {
+    var rows = (D.steps || []).filter(function (s) { return !s.done; }).map(function (s) { var t = tmplById(s.template_id) || {}; return { s: s, t: t }; }).filter(function (r) { return r.t.id && r.t.active !== false; });
+    rows.sort(function (a, b) { var ad = a.s.due_date || '9999', bd = b.s.due_date || '9999'; if (ad !== bd) return ad < bd ? -1 : 1; return phaseIndex(a.t.phase) - phaseIndex(b.t.phase) || (a.t.sort || 0) - (b.t.sort || 0); });
+    var top = rows.slice(0, 3); if (!top.length) return '';
+    var today = new Date().toISOString().slice(0, 10);
+    return '<div class="next"><div class="lbl">What\u2019s next</div>' + top.map(function (r) {
+      var over = r.s.due_date && r.s.due_date < today;
+      return '<div class="n"><span class="tk" data-w119tick="' + r.s.id + '" title="Mark done"></span><div><b>' + E(r.t.name || 'Step') + '</b><span>' + E(r.s.owner || r.t.default_owner || 'no owner yet') + (r.s.due_date ? ' \u00b7 ' + (over ? '<i>due ' + E(r.s.due_date) + '</i>' : 'due ' + E(r.s.due_date)) : '') + (r.t.section ? ' \u00b7 ' + E(r.t.section) : '') + '</span></div></div>';
+    }).join('') + '</div>';
+  }
+  function boardHtml(D) {
+    var roster = D.roster || [];
+    var roles = ROLE_ORDER.slice(); roster.forEach(function (r) { if (r.role && roles.indexOf(r.role) < 0) roles.push(r.role); });
+    return '<div class="board">' + roles.map(function (role) {
+      var list = roster.filter(function (r) { return (r.role || 'other') === role; });
+      var conf = list.filter(function (r) { return lower(r.status).indexOf('confirm') === 0; }).length;
+      var target = TARGET[role] || 0;
+      var cls = target ? (conf >= target ? 'full' : (list.length < target ? 'short' : '')) : '';
+      return '<div class="rc" data-w119role="' + E(role) + '"><div class="h"><b>' + E(roleLabel(role)) + '</b><span class="n ' + cls + '">' + conf + (target ? '/' + target : '') + '</span>' + (staff() ? '<button class="add" data-w119bench="' + E(role) + '" title="Add someone">+</button>' : '') + '</div>' +
+        (list.length ? list.map(cardHtml).join('') : '<div class="empty">' + (target ? 'Need ' + target : 'Nobody yet') + '<br>drop someone here</div>') +
+        (V.benchRole === role ? benchHtml(role) : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function cardHtml(r) {
+    var d = r.detail || {}; var phone = d.phone ? String(d.phone) : '';
+    var opts = '<option value=""' + (r.status ? '' : ' selected') + '>Not set</option>' + (WA_VOL_STATUSES || []).map(function (s) { return '<option' + (r.status === s ? ' selected' : '') + '>' + E(s) + '</option>'; }).join('') + (r.status && (WA_VOL_STATUSES || []).indexOf(r.status) < 0 ? '<option selected>' + E(r.status) + '</option>' : '');
+    return '<div class="pc ' + statusClass(r.status) + '" draggable="' + (staff() ? 'true' : 'false') + '" data-w119card="' + r.id + '"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (staff() ? '<button class="x" data-w119rm="' + r.id + '" title="Take off this event">&#10005;</button>' : '') +
+      '<select data-vlrstat="' + r.id + '"' + (staff() ? '' : ' disabled') + '>' + opts + '</select>' +
+      (phone || d.email ? '<span class="c" title="' + E([phone, d.email].filter(Boolean).join(' \u00b7 ')) + '">' + (phone ? '<a href="tel:' + E(phone.replace(/[^\d+]/g, '')) + '">' + E(phone) + '</a>' : '') + (phone && d.email ? ' \u00b7 ' : '') + (d.email ? E(d.email) : '') + '</span>' : '') + (r.notes ? '<span class="c" title="' + E(r.notes) + '">' + E(r.notes) + '</span>' : '') +
+      (r.person_id ? '' : '<span class="flag">not matched to a volunteer record</span>') +
+      (staff() ? '<button class="mv" data-w119mvbtn="' + r.id + '" title="Move to another role">\u21c4 move</button>' : '') + '</div>';
+  }
+  function benchHtml(role) {
+    var people = (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || [];
+    var D = detail(); var on = {}; ((D && D.roster) || []).forEach(function (r) { if (r.person_id) on[r.person_id] = 1; });
+    var q = lower(V.q);
+    var list = people.filter(function (p) { return !on[p.id] && (!q || lower(p.full_name).indexOf(q) >= 0 || (p.tags || []).join(' ').toLowerCase().indexOf(q) >= 0); });
+    list.sort(function (a, b) { var ar = (a.roles || []).indexOf(role) >= 0 ? 0 : 1, br = (b.roles || []).indexOf(role) >= 0 ? 0 : 1; return ar - br || String(a.full_name).localeCompare(String(b.full_name)); });
+    return '<div class="bench" data-w119benchbox="' + E(role) + '"><div class="bh"><b>Add a ' + E(roleLabel(role).replace(/s$/, '').toLowerCase()) + '</b><input type="search" id="w119bq" placeholder="Search volunteers" value="' + E(V.q) + '"><button class="close" data-w119benchclose="1">&#10005;</button></div>' +
+      (people.length ? '<div class="bl">' + list.slice(0, 40).map(function (p) { var fits = (p.roles || []).indexOf(role) >= 0; return '<div class="bp" draggable="true" data-w119pid="' + p.id + '"><div><b>' + E(p.full_name) + '</b><span>' + ((p.roles || []).map(roleLabel).join(', ') || 'no role yet') + (fits ? '' : '') + ((p.phones || [])[0] ? ' \u00b7 ' + E((p.phones || [])[0]) : '') + '</span></div><button class="btn" data-w119addp="' + p.id + '" data-role="' + E(role) + '">Add</button></div>'; }).join('') + (list.length > 40 ? '<div class="empty">Type to narrow it down</div>' : '') + '</div>' : '<div class="empty">Loading volunteers...</div>') + '</div>';
+  }
+  function layout() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'event') return;
+    var card = sec.querySelector('.card'); if (!card || card.querySelector('#w119')) return;
+    var ev = curEvent(); var D = detail(); if (!ev || !D) return;
+    var back = card.querySelector('.vl-back'); if (!back) return;
+    /* the pieces the older waves painted */
+    var kids = Array.prototype.slice.call(card.children);
+    var sub = card.querySelector('.vl-sub'); var start = kids.indexOf(sub) + 1;
+    var tail = kids.slice(start);
+    var hero = card.querySelector('.vl-hero'); var sum = card.querySelector('.w31sum');
+    var h3s = Array.prototype.filter.call(card.querySelectorAll('h3.block'), function (h) { return true; });
+    var rosterH = h3s.filter(function (h) { return /who is on/i.test(h.textContent); })[0];
+    var extrasH = h3s.filter(function (h) { return /added for this event/i.test(h.textContent); })[0];
+    var checkH = h3s.filter(function (h) { return /checklist/i.test(h.textContent); })[0];
+    function between(a, b) { var out = []; var n = a ? a.nextElementSibling : null; while (n && n !== b) { out.push(n); n = n.nextElementSibling; } return out; }
+    var rosterEls = rosterH ? [rosterH].concat(between(rosterH, extrasH || checkH)) : [];
+    var extrasEls = extrasH ? [extrasH].concat(between(extrasH, checkH)) : [];
+    var checkEls = checkH ? [checkH].concat(between(checkH, null)) : [];
+    /* the top line: back link and the date control (wave28) stay above the masthead */
+    var topEls = []; var n = back; while (n && n !== sum && n !== hero && !(n.tagName === 'H3')) { topEls.push(n); n = n.nextElementSibling; }
+    var root = document.createElement('div'); root.id = 'w119';
+    root.innerHTML = '<div class="top"></div>' + mastHtml(ev, D) + nextHtml(D) + '<div class="grid"><div class="col" id="w119left"><div class="cardy"><h4>Checklist</h4><div id="w119check"></div></div></div><div class="col" id="w119right"><div class="cardy"><h4>Roster <span style="font-family:' + BODY + ';font-size:11.5px;font-weight:500;color:var(--wa-muted)">drag between roles \u00b7 + adds from the volunteer list</span></h4>' + boardHtml(D) + '</div><div id="w119rail"></div></div></div>';
+    card.insertBefore(root, back);
+    var top = root.querySelector('.top'); topEls.forEach(function (el) { top.appendChild(el); });
+    var check = root.querySelector('#w119check'); checkEls.forEach(function (el) { if (el.tagName === 'H3') el.classList.add('w119hide'); check.appendChild(el); });
+    var rail = root.querySelector('#w119rail');
+    if (sum) { sum.classList.add('cardy'); rail.appendChild(sum); }
+    if (extrasEls.length) { var ex = document.createElement('div'); ex.className = 'cardy'; ex.innerHTML = '<h4>From the meetings</h4>'; extrasEls.forEach(function (el) { if (el.tagName === 'H3') el.classList.add('w119hide'); ex.appendChild(el); }); rail.appendChild(ex); }
+    rosterEls.forEach(function (el) { el.classList.add('w119hide'); rail.appendChild(el); });
+    if (hero) { hero.classList.add('w119hide'); rail.appendChild(hero); }
+    /* anything else that older waves appended after the checklist stays visible in the rail */
+    Array.prototype.slice.call(card.children).forEach(function (el) { if (el !== root && el !== sub && !el.classList.contains('vl-sub') && el.tagName !== 'H2' && el.tagName !== 'P' && !el.classList.contains('vl-back')) { if (kids.indexOf(el) >= start) rail.appendChild(el); } });
+    adopt();
+    if (V.benchRole && typeof waVolLoadPeople === 'function') waVolLoadPeople().then(repaintBoard);
+  }
+  function repaintBoard() { var D = detail(); var b = document.querySelector('#w119 .board'); if (!b || !D) return; b.outerHTML = boardHtml(D); }
+  function repaintMast() { var ev = curEvent(), D = detail(); var m = document.querySelector('#w119 .mast'); if (!m || !ev || !D) return; var acts = m.querySelector('#w119acts'); var keep = acts ? Array.prototype.slice.call(acts.querySelectorAll('button')) : []; m.outerHTML = mastHtml(ev, D); var acts2 = document.querySelector('#w119acts'); if (acts2) keep.forEach(function (b) { acts2.appendChild(b); }); var nx = document.querySelector('#w119 .next'); if (nx) nx.outerHTML = nextHtml(D); else { var m2 = document.querySelector('#w119 .mast'); if (m2) m2.insertAdjacentHTML('afterend', nextHtml(D)); } }
+
+  /* roster writes */
+  async function moveCard(id, role) {
+    var D = detail(); if (!D) return; var row = D.roster.filter(function (r) { return String(r.id) === String(id); })[0]; if (!row || row.role === role) return;
+    var old = row.role; row.role = role; repaintBoard();
+    var r = await db.from('event_roster').update({ role: role }).eq('id', Number(id));
+    if (r && r.error) { row.role = old; repaintBoard(); toastS('Could not move: ' + r.error.message); return; }
+    try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    toastS((row.person_name || 'Volunteer') + ' is now a ' + roleLabel(role).replace(/s$/, '').toLowerCase());
+    try { logChange('event_roster', id, 'role', old, role); } catch (e) { /* fine */ }
+    repaintMast();
+  }
+  async function addPerson(pid, role) {
+    var D = detail(); var ev = curEvent(); if (!D || !ev) return;
+    var p = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []).filter(function (x) { return String(x.id) === String(pid); })[0]; if (!p) return;
+    var row = { event_id: ev.id, person_id: p.id, person_name: p.full_name, role: role, status: 'Waiting For Response', notes: null, detail: { phone: (p.phones || [])[0] || null, email: (p.emails || [])[0] || null }, sort: 999 };
+    var r = await db.from('event_roster').insert(row).select('*').single();
+    if (r && r.error) { toastS('Could not add: ' + r.error.message); return; }
+    D.roster.push(r.data || row); V.benchRole = null; V.q = '';
+    try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    try { logChange('event_roster', (r.data || {}).id || 'new', 'added', null, p.full_name + ' as ' + role); } catch (e) { /* fine */ }
+    toastS(p.full_name + ' added as ' + roleLabel(role).replace(/s$/, '').toLowerCase());
+    repaintBoard(); repaintMast();
+  }
+  async function removeCard(id) {
+    var D = detail(); if (!D) return; var row = D.roster.filter(function (r) { return String(r.id) === String(id); })[0]; if (!row) return;
+    if (!confirm('Take ' + (row.person_name || 'this person') + ' off this event?')) return;
+    var r = await db.from('event_roster').delete().eq('id', Number(id));
+    if (r && r.error) { toastS('Could not remove: ' + r.error.message); return; }
+    D.roster = D.roster.filter(function (x) { return String(x.id) !== String(id); });
+    try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    try { logChange('event_roster', id, 'removed', row.person_name, null); } catch (e) { /* fine */ }
+    repaintBoard(); repaintMast();
+  }
+
+  /* ---------- calendar ---------- */
+  function monthGrid() {
+    var evs = (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []; if (!evs.length) return '';
+    var today = new Date().toISOString().slice(0, 10);
+    if (!V.calMonth) { var nxt = evs.filter(function (e) { return e.event_date >= today; })[0]; V.calMonth = (nxt ? nxt.event_date : today).slice(0, 7); }
+    var y = Number(V.calMonth.slice(0, 4)), m = Number(V.calMonth.slice(5, 7)) - 1;
+    var first = new Date(V.calMonth + '-01T12:00:00'); var startDow = (first.getDay() + 6) % 7; var days = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    var cells = ''; var dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
+    var prevDays = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    for (var i = 0; i < 42; i++) {
+      var dn = i - startDow + 1; var out = dn < 1 || dn > days; var dateNum = dn < 1 ? prevDays + dn : dn > days ? dn - days : dn;
+      var iso = out ? '' : y + '-' + String(m + 1).padStart(2, '0') + '-' + String(dn).padStart(2, '0');
+      var mine = out ? [] : evs.filter(function (e) { return e.event_date === iso; });
+      cells += '<div class="d' + (out ? ' out' : '') + (iso === today ? ' today' : '') + '">' + dateNum + mine.map(function (e) {
+        var past = e.event_date < today; var stepsOk = e.steps_total && e.steps_done >= e.steps_total; var rosterOk = e.roster_count && e.roster_confirmed >= Math.min(e.roster_count, 8);
+        return '<span class="ev ' + E(e.status || '') + (past ? ' past' : '') + '" data-vlev="' + e.id + '" title="' + E(e.code || '') + ' \u00b7 ' + (e.steps_done || 0) + '/' + (e.steps_total || 0) + ' steps \u00b7 ' + (e.roster_confirmed || 0) + '/' + (e.roster_count || 0) + ' confirmed">' + (past || e.status === 'cancelled' ? '' : '<i class="' + (stepsOk ? 'ok' : (e.steps_total && e.steps_done / e.steps_total < 0.3 && daysTo(e.event_date) < 7 ? 'bad' : '')) + '"></i><i class="' + (rosterOk ? 'ok' : (daysTo(e.event_date) < 7 && (e.roster_confirmed || 0) < 3 ? 'bad' : '')) + '"></i>') + E(e.title || e.code || 'Event') + '</span>';
+      }).join('') + '</div>';
+      if (i >= 34 && (i - startDow + 2) > days) break;
+    }
+    var label = first.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
+    return '<div id="w119cal"><div class="ch"><b>' + E(label) + '</b><button class="btn" data-w119cal="-1">&lsaquo;</button><button class="btn" data-w119cal="today">Today</button><button class="btn" data-w119cal="0">Next event</button><button class="btn" data-w119cal="1">&rsaquo;</button></div><div class="g">' + dows + cells + '</div></div>';
+  }
+  function calKey() { var evs = (typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []; return String(V.calMonth) + '|' + evs.map(function (e) { return e.id + ':' + e.event_date + ':' + (e.status || '') + ':' + (e.steps_done || 0) + '/' + (e.steps_total || 0) + ':' + (e.roster_confirmed || 0) + '/' + (e.roster_count || 0); }).join(','); }
+  function decorateCalendar() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'calendar') return;
+    var card = sec.querySelector('.card'); if (!card) return;
+    var old = card.querySelector('#w119cal');
+    var html = monthGrid(); var key = calKey();
+    if (old && old.getAttribute('data-key') === key) { /* nothing changed: leave it alone */ }
+    else {
+      if (old) old.remove();
+      var hero = card.querySelector('.vl-hero'); var anchor = hero || card.querySelector('h3.block') || null;
+      var box = document.createElement('div'); box.innerHTML = html;
+      if (box.firstChild) { box.firstChild.setAttribute('data-key', key); if (anchor) anchor.insertAdjacentElement('afterend', box.firstChild); else card.appendChild(box.firstChild); }
+    }
+    var today = new Date().toISOString().slice(0, 10);
+    card.querySelectorAll('.vl-ev[data-vlev]').forEach(function (el) {
+      if (el.querySelector('.w119gaps')) return;
+      var e = ((typeof WA_VOL_EVENTS !== 'undefined' ? WA_VOL_EVENTS : []) || []).filter(function (x) { return String(x.id) === el.getAttribute('data-vlev'); })[0]; if (!e || e.event_date < today || e.status === 'cancelled') return;
+      var gaps = [];
+      var unconf = (e.roster_count || 0) - (e.roster_confirmed || 0);
+      if (!e.roster_count) gaps.push('<span>no roster yet</span>'); else if (unconf > 0) gaps.push('<span>' + unconf + ' to confirm</span>'); else gaps.push('<span class="ok">roster confirmed</span>');
+      var left = (e.steps_total || 0) - (e.steps_done || 0);
+      if (e.steps_total && left === 0) gaps.push('<span class="ok">checklist done</span>'); else if (left) gaps.push('<span' + (daysTo(e.event_date) < 7 && left > 10 ? '' : ' class="ok"') + '>' + left + ' steps left</span>');
+      el.insertAdjacentHTML('beforeend', '<div class="w119gaps">' + gaps.join('') + '</div>');
+    });
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof waVolRenderEvent === 'function') {
+    var __ev119 = waVolRenderEvent;
+    waVolRenderEvent = function () { var out = __ev119.apply(this, arguments); setTimeout(layout, 140); return out; };
+  }
+  if (typeof waVolRenderCalendar === 'function') {
+    var __cal119 = waVolRenderCalendar;
+    waVolRenderCalendar = function () { var out = __cal119.apply(this, arguments); setTimeout(decorateCalendar, 40); return out; };
+  }
+  /* pieces other waves add after the layout ran (wave31's summary is async,
+     wave106's cancel button can be late): move them where they belong */
+  function adopt() {
+    var root = document.getElementById('w119'); if (!root) return;
+    var rail = root.querySelector('#w119rail'); var acts = root.querySelector('#w119acts');
+    var sum = root.querySelector('.w31sum'); if (sum && rail && !sum.classList.contains('cardy')) { sum.classList.add('cardy'); rail.insertBefore(sum, rail.firstChild); }
+    var hero = root.querySelector('.vl-hero'); if (hero && acts) { Array.prototype.slice.call(hero.querySelectorAll('button')).forEach(function (b) { b.classList.add('btn'); if (b.id === 'w106can') b.classList.add('warn'); acts.appendChild(b); }); }
+  }
+  function own(m) {
+    function is(n) { return n && n.nodeType === 1 && (n.id === 'w119' || n.id === 'w119cal' || (n.classList && n.classList.contains('w119gaps'))); }
+    var i; for (i = 0; i < m.addedNodes.length; i++) if (is(m.addedNodes[i])) return true;
+    for (i = 0; i < m.removedNodes.length; i++) if (is(m.removedNodes[i])) return true;
+    return false;
+  }
+  try {
+    new MutationObserver(function (muts) {
+      var outside = false;
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && t.closest('#w119,#w119cal')) continue; if (own(muts[i])) continue; outside = true; break; }
+      clearTimeout(V.pend); V.pend = setTimeout(function () { adopt(); if (outside) { layout(); decorateCalendar(); adopt(); } }, 160);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var tk = t.closest('#w119 [data-w119tick]'); if (tk) { e.preventDefault(); e.stopPropagation(); var sid = tk.getAttribute('data-w119tick'); var box = document.querySelector('#w119 input[data-vlchk="' + sid + '"]'); if (box) { box.click(); } else if (typeof waVolToggleStep === 'function') { await waVolToggleStep(sid, true, null); repaintMast(); } return; }
+    var cal = t.closest('#w119cal [data-w119cal]'); if (cal) { e.preventDefault(); e.stopPropagation(); var dv = cal.getAttribute('data-w119cal'); var d = Number(dv); if (dv === 'today') V.calMonth = new Date().toISOString().slice(0, 7); else if (d === 0) V.calMonth = null; else { var y = Number(V.calMonth.slice(0, 4)), m = Number(V.calMonth.slice(5, 7)) - 1 + d; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } V.calMonth = y + '-' + String(m + 1).padStart(2, '0'); } decorateCalendar(); return; }
+    var bench = t.closest('#w119 [data-w119bench]'); if (bench) { e.preventDefault(); e.stopPropagation(); V.benchRole = bench.getAttribute('data-w119bench'); V.q = ''; repaintBoard(); try { await waVolLoadPeople(); } catch (e2) { /* fine */ } repaintBoard(); var q = document.getElementById('w119bq'); if (q) q.focus(); return; }
+    if (t.closest('#w119 [data-w119benchclose]')) { e.preventDefault(); e.stopPropagation(); V.benchRole = null; repaintBoard(); return; }
+    var addp = t.closest('#w119 [data-w119addp]'); if (addp) { e.preventDefault(); e.stopPropagation(); await addPerson(addp.getAttribute('data-w119addp'), addp.getAttribute('data-role')); return; }
+    var rm = t.closest('#w119 [data-w119rm]'); if (rm) { e.preventDefault(); e.stopPropagation(); await removeCard(rm.getAttribute('data-w119rm')); return; }
+    var mv = t.closest('#w119 [data-w119mvbtn]'); if (mv) { e.preventDefault(); e.stopPropagation(); var cur = (mv.closest('.rc') || {}).getAttribute ? mv.closest('.rc').getAttribute('data-w119role') : ''; var roles = ROLE_ORDER.slice(); document.querySelectorAll('#w119 .rc[data-w119role]').forEach(function (c) { var rr = c.getAttribute('data-w119role'); if (roles.indexOf(rr) < 0) roles.push(rr); }); mv.outerHTML = '<select class="mvsel" data-w119mv="' + mv.getAttribute('data-w119mvbtn') + '"><option value="">Move to\u2026</option>' + roles.filter(function (rr) { return rr !== cur; }).map(function (rr) { return '<option value="' + E(rr) + '">' + E(roleLabel(rr)) + '</option>'; }).join('') + '</select>'; var sel = document.querySelector('#w119 select[data-w119mv]'); if (sel) sel.focus(); return; }
+  }, true);
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.id === 'w119bq') { V.q = t.value; var box = document.querySelector('#w119 [data-w119benchbox]'); if (box) { var role = box.getAttribute('data-w119benchbox'); box.outerHTML = benchHtml(role); var q = document.getElementById('w119bq'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e2) { /* fine */ } } } } });
+  document.addEventListener('change', function (e) { var t = e.target; if (!t || !t.getAttribute || !t.closest || !t.closest('#w119')) return; if (t.getAttribute('data-w119mv')) { if (t.value) moveCard(t.getAttribute('data-w119mv'), t.value); else repaintBoard(); return; } if (t.getAttribute('data-vlchk')) { setTimeout(repaintMast, 450); return; } if (t.getAttribute('data-vlrstat')) { setTimeout(function () { var card = t.closest('.pc'); if (card) { card.className = 'pc ' + statusClass(t.value); } repaintMast(); var b = document.querySelector('#w119 .board'); if (b) { var D = detail(); if (D) { /* header counts */ b.outerHTML = boardHtml(D); } } }, 250); } });
+  /* drag and drop: roster cards between roles, bench people into a role */
+  document.addEventListener('dragstart', function (e) { var c = e.target && e.target.closest && (e.target.closest('#w119 [data-w119card]') || e.target.closest('#w119 [data-w119pid]')); if (!c) return; V.drag = c.getAttribute('data-w119card') ? { kind: 'card', id: c.getAttribute('data-w119card') } : { kind: 'person', id: c.getAttribute('data-w119pid') }; c.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'w119'); } catch (e2) { /* fine */ } });
+  document.addEventListener('dragend', function (e) { var c = e.target && e.target.closest && e.target.closest('.dragging'); if (c) c.classList.remove('dragging'); document.querySelectorAll('#w119 .rc.over').forEach(function (x) { x.classList.remove('over'); }); });
+  document.addEventListener('dragover', function (e) { if (!V.drag) return; var col = e.target && e.target.closest && e.target.closest('#w119 .rc'); if (col) { e.preventDefault(); document.querySelectorAll('#w119 .rc.over').forEach(function (x) { if (x !== col) x.classList.remove('over'); }); col.classList.add('over'); } });
+  document.addEventListener('dragleave', function (e) { var col = e.target && e.target.closest && e.target.closest('#w119 .rc'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
+  document.addEventListener('drop', async function (e) { if (!V.drag) return; var col = e.target && e.target.closest && e.target.closest('#w119 .rc'); if (!col) return; e.preventDefault(); e.stopPropagation(); col.classList.remove('over'); var role = col.getAttribute('data-w119role'); var d = V.drag; V.drag = null; if (d.kind === 'card') await moveCard(d.id, role); else await addPerson(d.id, role); }, true);
+  window.w119Debug = function () { return { view: typeof WA_VOL_VIEW !== 'undefined' ? WA_VOL_VIEW : null, event: typeof WA_VOL_EVENT !== 'undefined' ? WA_VOL_EVENT : null, laid: !!document.getElementById('w119'), bench: V.benchRole }; };
+})();
