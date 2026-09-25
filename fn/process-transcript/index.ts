@@ -1,3 +1,4 @@
+// v8 (25/09/26): routed through the Hub model router (llm, task transcript_extract; Jev picks the model) and every extracted item gets a Jev second opinion (jevCheck).
 // Welfare Avenue: process-transcript (v7, 24/09/26)
 // v7: Program Development is its own team (key 'progdev'). Labels renamed:
 // Operations Montreal, Operations Toronto, Fundraising and Finances. deptKey
@@ -144,14 +145,19 @@ const TOOL = {
 const MODELS = ['claude-sonnet-5', 'claude-sonnet-4-5', 'claude-sonnet-4-20250514'];
 
 async function callAnthropic(context: unknown, transcriptText: string): Promise<Record<string, unknown>> {
-  const key = await getSecret('ANTHROPIC_API_KEY');
+  const key = 'hub-router';
   const userContent = 'CONTEXT (current board state, JSON):\n' + JSON.stringify(context) +
     '\n\nTRANSCRIPT:\n' + transcriptText.slice(0, 30000);
   let lastErr = '';
   for (const model of MODELS) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      headers: {
+        'Authorization': 'Bearer ' + SERVICE_KEY,
+        'x-wa-task': 'transcript_extract',
+        'x-wa-caller': 'process-transcript',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({
         model, max_tokens: 3500, temperature: 0.2, system: SYSTEM,
         messages: [{ role: 'user', content: userContent }],
@@ -169,6 +175,110 @@ async function callAnthropic(context: unknown, transcriptText: string): Promise<
     if (res.status !== 404 && res.status !== 400) break;
   }
   throw new Error('Anthropic call failed: ' + lastErr);
+}
+
+/* ---- Jev checks every extracted item against the transcript (25/09/26) ----
+   OpenRouter's decision model reads the lines of the transcript that mention
+   the item and answers: is this a real commitment, is the owner right, is
+   the due date stated. Weak items are dropped, wrong owners corrected when
+   Jev is confident, unsupported due dates cleared. Cheap (a fraction of a
+   cent per transcript) and it never blocks the run: any failure keeps the
+   model's output as it was. */
+type JevAnswer = { type: string; choice?: string; noul?: number; score?: number; confidence?: number; probabilities?: Record<string, number> };
+async function jev(state: unknown, questions: Record<string, unknown>): Promise<Record<string, JevAnswer> | null> {
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'transcript_extract', 'x-wa-caller': 'process-transcript', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state, questions })
+    });
+    if (!res.ok) return null;
+    const out = await res.json();
+    return (out && out.answers) ? out.answers as Record<string, JevAnswer> : null;
+  } catch (_) { return null; }
+}
+const STOP = new Set(['with', 'from', 'that', 'this', 'will', 'have', 'about', 'their', 'them', 'they', 'into', 'need', 'needs', 'make', 'send', 'follow', 'update', 'check', 'week', 'next', 'team', 'meeting']);
+function excerpt(text: string, needles: string[], max = 3500): string {
+  const lines = text.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const keys = [...new Set(needles.join(' ').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOP.has(w)))];
+  if (!keys.length) return text.slice(0, max);
+  const scored = lines.map((l, i) => ({ i, s: keys.reduce((a, k) => a + (l.toLowerCase().includes(k) ? 1 : 0), 0) })).filter(x => x.s > 0).sort((a, b) => b.s - a.s).slice(0, 10).sort((a, b) => a.i - b.i);
+  let out = ''; const seen = new Set<number>();
+  for (const x of scored) {
+    const bits: string[] = [];
+    for (let j = Math.max(0, x.i - 1); j <= Math.min(lines.length - 1, x.i + 1); j++) { if (!seen.has(j)) { seen.add(j); bits.push(lines[j]); } }
+    const chunk = bits.join('\n');
+    if (out.length + chunk.length > max) break;
+    out += chunk + '\n...\n';
+  }
+  return out || text.slice(0, max);
+}
+function noul(a: JevAnswer | undefined): number | null { return a && typeof a.noul === 'number' ? a.noul : null; }
+type JevReport = { checked: number; dropped: string[]; owners: string[]; due_cleared: number; decisions_dropped: string[]; closes_dropped: number; skipped: boolean };
+async function jevCheck(result: Record<string, unknown>, transcript: string, roster: string[], meetingLabel: string): Promise<JevReport> {
+  const rep: JevReport = { checked: 0, dropped: [], owners: [], due_cleared: 0, decisions_dropped: [], closes_dropped: 0, skipped: false };
+  const tasks = Array.isArray(result.new_tasks) ? (result.new_tasks as Array<Record<string, unknown>>) : [];
+  const keep: Array<Record<string, unknown>> = [];
+  let failures = 0;
+  for (const t of tasks.slice(0, 30)) {
+    const title = String(t.title || ''); const owner = String(t.owner || ''); const due = typeof t.due_date === 'string' ? t.due_date : null;
+    const ex = excerpt(transcript, [title, owner, ...(Array.isArray(t.assignees) ? t.assignees.map(String) : [])]);
+    const firsts = roster.map(n => n.split(' ')[0].toLowerCase());
+    const mentioned = roster.filter((n, i) => ex.toLowerCase().includes(firsts[i]));
+    const cands = [...new Set([owner, ...(Array.isArray(t.assignees) ? t.assignees.map(String) : []), ...mentioned])].filter(Boolean).slice(0, 14);
+    const criteria: Record<string, string> = {}; cands.forEach((c, i) => { criteria['p' + i] = c; });
+    const questions: Record<string, unknown> = {
+      real: { type: 'noul', instructions: 'Did someone in the meeting actually commit to doing this (an action item agreed in the conversation), rather than a passing mention, a question, an idea floated, or something already finished?' },
+      owner_ok: { type: 'noul', instructions: 'According to the excerpt, is "' + owner + '" the person who took this on?' },
+    };
+    if (cands.length > 1) questions.owner = { type: 'choice', instructions: 'Who took this on, according to the excerpt?', criteria };
+    if (due) questions.due_ok = { type: 'noul', instructions: 'Does the excerpt state or strongly imply the due date ' + due + ' for this item (a named day, "by Friday", "before the event on the 12th")? Vague timing does not count.' };
+    const ans = await jev({ meeting: meetingLabel, item: { title, owner, assignees: t.assignees || [], due_date: due, workstream: t.subsection || null }, transcript_excerpt: ex, note: 'Names in the roster are the only valid owners.' }, questions);
+    if (!ans) { failures += 1; keep.push(t); if (failures >= 3) { rep.skipped = true; keep.push(...tasks.slice(keep.length)); break; } continue; }
+    rep.checked += 1;
+    const real = noul(ans.real);
+    if (real !== null && real < 0.3) { rep.dropped.push(title); continue; }
+    const ok = noul(ans.owner_ok);
+    const pick = ans.owner && ans.owner.choice ? criteria[ans.owner.choice] : null;
+    if (pick && pick !== owner && ok !== null && ok < 0.4 && typeof ans.owner.confidence === 'number' && ans.owner.confidence >= 0.6 && roster.some(n => n.toLowerCase() === pick.toLowerCase())) {
+      rep.owners.push(title + ': ' + owner + ' > ' + pick); t.owner = pick;
+    }
+    const dueOk = noul(ans.due_ok);
+    if (due && dueOk !== null && dueOk < 0.3) { t.due_date = null; rep.due_cleared += 1; }
+    keep.push(t);
+  }
+  if (tasks.length > 30) keep.push(...tasks.slice(30));
+  result.new_tasks = keep;
+  if (rep.skipped) return rep;
+  const decs = Array.isArray(result.new_decisions) ? (result.new_decisions as Array<Record<string, unknown>>) : [];
+  const keepD: Array<Record<string, unknown>> = [];
+  for (const d of decs.slice(0, 12)) {
+    const title = String(d.title || '');
+    const ans = await jev({ meeting: meetingLabel, decision: { title, why: d.reason_note || null, category: d.reason_category || null }, transcript_excerpt: excerpt(transcript, [title, String(d.reason_note || '')]) },
+      { needs_exec: { type: 'noul', instructions: 'Does the excerpt show a call that only the co executive directors (Steel or Suhaib) can make (money, hiring, legal, strategy, partnerships, policy), rather than something the team can decide itself or has already decided?' } });
+    if (!ans) { keepD.push(d); continue; }
+    rep.checked += 1;
+    const v = noul(ans.needs_exec);
+    if (v !== null && v < 0.3) { rep.decisions_dropped.push(title); continue; }
+    keepD.push(d);
+  }
+  if (decs.length > 12) keepD.push(...decs.slice(12));
+  result.new_decisions = keepD;
+  const closes = Array.isArray(result.close_tasks) ? (result.close_tasks as Array<Record<string, unknown>>) : [];
+  const keepC: Array<Record<string, unknown>> = [];
+  for (const c of closes.slice(0, 15)) {
+    const ev = String(c.evidence || '');
+    const ans = await jev({ meeting: meetingLabel, close: { task_id: c.task_id, evidence: ev }, transcript_excerpt: excerpt(transcript, [ev]) },
+      { done: { type: 'noul', instructions: 'Does the excerpt show this task is finished or no longer needed? Progress, plans or "almost done" do not count.' } });
+    if (!ans) { keepC.push(c); continue; }
+    rep.checked += 1;
+    const v = noul(ans.done);
+    if (v !== null && v < 0.5) { rep.closes_dropped += 1; continue; }
+    keepC.push(c);
+  }
+  if (closes.length > 15) keepC.push(...closes.slice(15));
+  result.close_tasks = keepC;
+  return rep;
 }
 
 type CloseItem = { task_id?: unknown; evidence?: unknown };
@@ -290,6 +400,9 @@ async function processTranscript(transcriptId: number) {
 
   const result = await callAnthropic(context, tx.body);
   const changedBy = 'AI: ' + (tx.title || 'transcript ' + transcriptId);
+  // Jev second opinion on every item (see jevCheck); the roster is whatever the context lists as valid owners
+  const rosterNames: string[] = [...new Set([...(Array.isArray((context as { roster?: unknown }).roster) ? ((context as { roster: Array<Record<string, unknown>> }).roster).map(m => String(m.name || '')).filter(Boolean) : []), 'Steel MacDonald', 'Steel', 'Suhaib', 'Both'])];
+  const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''));
 
   const boardSensitive = result.board_sensitive === true;
   const effectiveBoardOnly = tx.board_only === true || boardSensitive;
@@ -363,6 +476,16 @@ async function processTranscript(transcriptId: number) {
   }
   if (r.decisions_decided) parts.push(r.decisions_decided + ' decided');
   if (r.updates) parts.push(r.updates + (r.updates === 1 ? ' update' : ' updates'));
+  let jevLine = '';
+  if (jevRep.checked) {
+    const bits: string[] = [];
+    if (jevRep.dropped.length) bits.push(jevRep.dropped.length + ' not a firm commitment (left out: ' + jevRep.dropped.slice(0, 3).map(x => '"' + x.slice(0, 50) + '"').join(', ') + (jevRep.dropped.length > 3 ? ', ...' : '') + ')');
+    if (jevRep.owners.length) bits.push(jevRep.owners.length + (jevRep.owners.length === 1 ? ' owner corrected' : ' owners corrected'));
+    if (jevRep.due_cleared) bits.push(jevRep.due_cleared + (jevRep.due_cleared === 1 ? ' due date cleared' : ' due dates cleared'));
+    if (jevRep.decisions_dropped.length) bits.push(jevRep.decisions_dropped.length + ' decision' + (jevRep.decisions_dropped.length === 1 ? '' : 's') + ' kept with the team');
+    if (jevRep.closes_dropped) bits.push(jevRep.closes_dropped + ' task' + (jevRep.closes_dropped === 1 ? '' : 's') + ' left open (not proven done)');
+    jevLine = '\n:mag: Jev checked ' + jevRep.checked + ' items' + (bits.length ? ': ' + bits.join(', ') : ', all held up') + '.';
+  }
   const dateStr = tx.meeting_date ? new Date(tx.meeting_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'recent';
   const attention = newDecs.some(d => /budget|legal/i.test(d.reason_category || '')) ? '\n:small_orange_diamond: A Budget or Legal item needs executive attention.' : '';
   let eventLine = '';
@@ -375,9 +498,9 @@ async function processTranscript(transcriptId: number) {
   }
   const isTest = /\[test\]/i.test(tx.title || '');
   if (!isTest) {
-    await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
+    await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + jevLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
   }
-  return { ...(applied as Record<string, unknown>), tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount };
+  return { ...(applied as Record<string, unknown>), tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, jev: jevRep };
 }
 
 Deno.serve(async (req: Request) => {

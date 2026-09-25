@@ -176,10 +176,14 @@ async function verify(email: string, provider: string): Promise<{ ok: boolean; e
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  const me = await caller(req);
-  if (!me) return json({ error: 'unauthorized' }, 401);
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || 'status');
+  let me = await caller(req);
+  if (!me && action === 'slack_scopes') {
+    // the build may ask what the Slack app can do, with the trigger secret
+    try { const g = req.headers.get('x-wa-secret'); if (g && g === (await getSecret('WA_TRIGGER_SECRET'))) me = { email: 'automation', name: 'automation' }; } catch (_) { /* no */ }
+  }
+  if (!me) return json({ error: 'unauthorized' }, 401);
   try {
     if (action === 'status') {
       const c = await conns(me.email);
@@ -204,6 +208,15 @@ Deno.serve(async (req: Request) => {
       if (!me.email.endsWith('@welfareavenue.com')) return json({ ok: false, error: 'Google connections work for welfareavenue.com accounts.' });
       const v = await verify(me.email, provider);
       return json({ ok: v.ok, error: v.error, detail: v.detail });
+    }
+    if (action === 'slack_scopes') {
+      // what the Slack app may do today (onboarding needs channels:manage, groups:write, channels:join, users:read.email)
+      const tok = await getSecret('SLACK_BOT_TOKEN');
+      const res = await fetch('https://slack.com/api/auth.test', { method: 'POST', headers: { Authorization: 'Bearer ' + tok } });
+      const info = await res.json().catch(() => ({}));
+      const scopes = (res.headers.get('x-oauth-scopes') || '').split(',').map(x => x.trim()).filter(Boolean);
+      const need = ['chat:write', 'users:read', 'users:read.email', 'channels:read', 'channels:manage', 'channels:join', 'groups:read', 'groups:write'];
+      return json({ ok: !!info.ok, team: info.team || null, bot: info.user || null, scopes, missing: need.filter(n => !scopes.includes(n)), error: info.ok ? null : (info.error || null) });
     }
     if (action === 'slack_users') {
       const list = await slackUsers();

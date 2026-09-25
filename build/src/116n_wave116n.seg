@@ -1,0 +1,260 @@
+/* =====================================================================
+   WA v116n AI models: the router's admin card (25/09/26)
+   =====================================================================
+   Steel: "I want all to use OpenRouter using the right model for the
+   right task; sonnet, qwen, kimi, gpt, whatever you suggest. Jev... it
+   helps with making decisions on things, this should be used alongside
+   other models."
+   Every AI job now goes through the Hub model router (edge function llm)
+   to OpenRouter. Each job has a list of models, cheapest that works
+   first; for the mixed jobs Jev reads each request and picks. This card
+   (Admin, above People and access) shows every job, its models, who
+   picks, what it cost this week, and lets an admin change the list, test
+   a route, or read the last calls.
+   ===================================================================== */
+(function () {
+  if (window.__wa116n) return; window.__wa116n = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var N = { routes: [], usage7: [], usage30: [], recent: [], models: null, loaded: false, loading: null, err: null, showRecent: false, tests: {} };
+  var ORDER = ['brain', 'brain_suggest', 'transcript_extract', 'transcript_preview', 'leadership', 'mail_triage', 'mail_recruit', 'decision', 'goals', 'draft', 'profile', 'reason', 'checkin', 'digest', 'shoutout', 'default', 'decide'];
+
+  var css = document.createElement('style');
+  css.id = 'wa116ncss';
+  css.textContent = '' +
+    '#w116ncard{margin-bottom:16px;font-family:' + BODY + ';}' +
+    '#w116ncard .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 14px;}' +
+    '#w116ncard .tile{background:rgba(16,63,57,.05);border-radius:14px;padding:12px 14px;}' +
+    '#w116ncard .tile b{display:block;font-family:' + HEAD + ';font-size:26px;line-height:1;color:' + GREEN + ';letter-spacing:.3px;}' +
+    '#w116ncard .tile span{display:block;font-size:11.5px;color:var(--wa-muted);margin-top:5px;line-height:1.35;}' +
+    '#w116ncard .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;}' +
+    '#w116ncard .bar .sp{flex:1;}' +
+    '#w116ncard .err{background:rgba(179,64,47,.08);border-left:4px solid ' + FLAG + ';border-radius:10px;padding:10px 14px;font-size:13px;color:var(--wa-text);margin:0 0 12px;line-height:1.5;}' +
+    '#w116ncard .rt{display:flex;flex-direction:column;gap:8px;}' +
+    '#w116ncard .r{display:grid;grid-template-columns:minmax(150px,1.1fr) minmax(220px,2fr) minmax(130px,1fr) auto;gap:12px;align-items:center;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 14px;}' +
+    '#w116ncard .r .job b{display:block;font-size:14px;color:var(--wa-text);}' +
+    '#w116ncard .r .job span{display:block;font-size:11.5px;color:var(--wa-muted);margin-top:2px;line-height:1.4;}' +
+    '#w116ncard .r .job code{font-size:11px;background:rgba(16,63,57,.06);padding:1px 5px;border-radius:5px;color:var(--wa-muted);}' +
+    '#w116ncard .chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}' +
+    '#w116ncard .chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;border-radius:999px;padding:3px 10px;background:rgba(16,63,57,.07);color:var(--wa-text);white-space:nowrap;}' +
+    '#w116ncard .chip.p{background:' + GREEN + ';color:' + CREAM + ';font-weight:700;}' +
+    '#w116ncard .chip.j{background:rgba(220,165,39,.22);color:#5a4200;font-weight:700;}' +
+    '#w116ncard .chip.jv{background:' + GOLD + ';color:' + GREEN + ';font-weight:800;}' +
+    '#w116ncard .r .use{font-size:12px;color:var(--wa-muted);line-height:1.5;}' +
+    '#w116ncard .r .use b{color:var(--wa-text);font-weight:700;}' +
+    '#w116ncard .r .acts{display:flex;gap:6px;flex-wrap:wrap;}' +
+    '#w116ncard .r .acts button{font-size:12px;padding:5px 10px;}' +
+    '#w116ncard .r .tres{grid-column:1 / -1;font-size:12px;color:var(--wa-text);background:rgba(42,140,122,.10);border-radius:8px;padding:6px 10px;}' +
+    '#w116ncard .r .tres.bad{background:rgba(179,64,47,.10);}' +
+    '#w116ncard h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:16px 0 8px;}' +
+    '#w116ncard .lnk{font-size:12px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;}' +
+    '#w116ncard table.rc{width:100%;border-collapse:collapse;font-size:12px;}' +
+    '#w116ncard table.rc th{text-align:left;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);padding:4px 8px;border-bottom:1px solid rgba(16,63,57,.12);}' +
+    '#w116ncard table.rc td{padding:5px 8px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:top;}' +
+    '#w116ncard table.rc td.bad{color:' + FLAG + ';}' +
+    '#w116ncard .how{font-size:13px;color:var(--wa-text);line-height:1.6;margin:0 0 12px;}' +
+    '.w116nm label{display:block;font-size:12px;font-weight:700;margin:12px 0 4px;color:var(--wa-text);}' +
+    '.w116nm input[type=text],.w116nm textarea,.w116nm select{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:13px;font-family:' + BODY + ';}' +
+    '.w116nm .hint{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
+    '.w116nm .chain{display:flex;flex-direction:column;gap:6px;margin-top:6px;}' +
+    '.w116nm .chain .c{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:8px;align-items:center;background:rgba(16,63,57,.05);border-radius:10px;padding:7px 10px;font-size:13px;}' +
+    '.w116nm .chain .c .n{font-family:' + HEAD + ';font-size:14px;color:' + GREEN + ';font-weight:700;}' +
+    '.w116nm .chain .c .m b{display:block;}' +
+    '.w116nm .chain .c .m span{font-size:11.5px;color:var(--wa-muted);}' +
+    '.w116nm .chain .c .b{display:flex;gap:4px;}' +
+    '.w116nm .chain .c .b button{font-size:11px;padding:3px 7px;}' +
+    '.w116nm .pick{display:flex;gap:8px;margin-top:8px;}' +
+    '.w116nm .pick select{flex:1;}' +
+    '.w116nm .modes{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;}' +
+    '.w116nm .modes label{display:inline-flex;align-items:center;gap:6px;margin:0;font-weight:600;background:rgba(16,63,57,.05);border-radius:999px;padding:6px 12px;cursor:pointer;}' +
+    '.w116nm .res{margin-top:12px;padding:12px;background:rgba(16,63,57,.05);border-radius:10px;font-size:13px;line-height:1.55;}' +
+    '@media (max-width:760px){#w116ncard .r{grid-template-columns:minmax(0,1fr);}#w116ncard .r .acts{justify-content:flex-start;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function isAdmin() { if (FOUNDERS.indexOf(myEmail()) >= 0) return true; try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function money(v) { v = Number(v || 0); if (!v) return '$0'; if (v < 0.01) return '<$0.01'; return '$' + (v < 10 ? v.toFixed(2) : Math.round(v)); }
+  function when(s) { if (!s) return 'never'; try { var d = new Date(s); var diff = (Date.now() - d.getTime()) / 60000; if (diff < 2) return 'just now'; if (diff < 60) return Math.round(diff) + ' min ago'; if (diff < 36 * 60) return Math.round(diff / 60) + ' h ago'; return Math.round(diff / 1440) + ' d ago'; } catch (e) { return ''; } }
+  function short(id) { var s = String(id || ''); s = s.replace(/^~/, ''); var v = s.split('/')[0], m = s.split('/').slice(1).join('/'); var names = { anthropic: 'Claude', openai: 'OpenAI', moonshotai: 'Moonshot', qwen: 'Qwen', google: 'Google', 'z-ai': 'Z.ai', deepseek: 'DeepSeek', 'x-ai': 'xAI', typesafe: 'Jev', mistralai: 'Mistral' }; m = m.replace(/^claude-/, '').replace(/^gemini-/, 'Gemini ').replace(/^kimi-/, 'Kimi ').replace(/^qwen/, 'Qwen ').replace(/^gpt-/, 'GPT-').replace(/-/g, ' '); if (v === 'typesafe') return 'Jev'; return (names[v] || v) + ' ' + m.replace(/\b\w/g, function (c) { return c.toUpperCase(); }).replace(/Gpt/g, 'GPT'); }
+  async function fn(name, body) {
+    var r = await db.functions.invoke(name, { body: body });
+    if (r && r.error) { var msg = ''; try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ } throw new Error(msg || r.error.message || 'failed'); }
+    if (!r || !r.data) throw new Error('no reply from the Hub');
+    if (r.data.error && r.data.ok !== true) throw new Error(r.data.error);
+    return r.data;
+  }
+
+  /* ---------- data ---------- */
+  function load(force) {
+    if (N.loading) return N.loading;
+    if (N.loaded && !force) return Promise.resolve();
+    N.loading = fn('llm', { action: 'routes' }).then(function (r) {
+      N.routes = r.routes || []; N.usage7 = r.usage7 || []; N.usage30 = r.usage30 || []; N.recent = r.recent || []; N.err = null; N.loaded = true;
+    }).catch(function (e) { N.err = String(e.message || e); }).then(function () { N.loading = null; });
+    return N.loading;
+  }
+  function usage(task, days) { var u = (days === 30 ? N.usage30 : N.usage7).filter(function (x) { return x.task === task; })[0]; return u || null; }
+  function sortedRoutes() { return N.routes.slice().sort(function (a, b) { var ia = ORDER.indexOf(a.task), ib = ORDER.indexOf(b.task); if (ia < 0) ia = 99; if (ib < 0) ib = 99; return ia - ib || a.task.localeCompare(b.task); }); }
+
+  /* ---------- the card ---------- */
+  function ensureCard() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !isAdmin()) return null;
+    var card = document.getElementById('w116ncard'); if (card) return card;
+    var anchor = document.getElementById('w116lcard') || document.getElementById('w113card');
+    card = document.createElement('div'); card.className = 'card'; card.id = 'w116ncard';
+    card.innerHTML = '<h2>AI models</h2><p class="read">Every AI job in the hub runs through OpenRouter. Each job has a list of models, the cheapest that does the job well first; for the mixed jobs Jev reads each request and picks. Jev also double-checks transcript items, email filing and decision options.</p><div id="w116nbody">Loading...</div>';
+    if (anchor && anchor.parentNode === panel) panel.insertBefore(card, anchor); else panel.insertBefore(card, panel.firstChild);
+    return card;
+  }
+  function paint() {
+    var body = document.getElementById('w116nbody'); if (!body) return;
+    if (N.err && !N.routes.length) { body.innerHTML = '<div class="err">' + E(N.err) + '</div><div class="bar"><span class="sp"></span><button class="btn" data-w116n="reload">Try again</button></div>'; return; }
+    if (!N.loaded) { body.innerHTML = 'Loading...'; return; }
+    var calls7 = 0, cost7 = 0, cost30 = 0, jev7 = 0, ms = [], fails = 0;
+    N.usage7.forEach(function (u) { calls7 += Number(u.calls || 0); cost7 += Number(u.cost || 0); fails += Number(u.calls || 0) - Number(u.ok_calls || 0); if (u.avg_ms) ms.push(Number(u.avg_ms)); });
+    N.usage30.forEach(function (u) { cost30 += Number(u.cost || 0); });
+    N.recent.forEach(function (c) { if (c.via === 'jev' && /jev/.test(String(c.requested_model || ''))) jev7++; });
+    var avgMs = ms.length ? Math.round(ms.reduce(function (a, b) { return a + b; }, 0) / ms.length) : 0;
+    var html = '<div class="tiles">' +
+      '<div class="tile"><b>' + calls7 + '</b><span>model calls this week</span></div>' +
+      '<div class="tile"><b>' + money(cost7) + '</b><span>spent this week</span></div>' +
+      '<div class="tile"><b>' + money(cost30) + '</b><span>last 30 days</span></div>' +
+      '<div class="tile"><b>' + (avgMs ? (avgMs >= 1000 ? (avgMs / 1000).toFixed(1) + 's' : avgMs + 'ms') : '-') + '</b><span>typical answer time</span></div>' +
+      '<div class="tile' + (fails ? ' warn' : '') + '"><b>' + fails + '</b><span>failed calls this week (fallbacks took over)</span></div>' +
+      '</div>';
+    html += '<div class="bar"><span>Credit and keys live on OpenRouter; the hub keeps one key in the vault.</span><span class="sp"></span><a class="lnk" href="https://openrouter.ai/settings/credits" target="_blank" rel="noopener">OpenRouter credit</a><button class="btn" data-w116n="reload">Refresh</button><button class="btn primary" data-w116n="new">Add a job</button></div>';
+    html += '<div class="rt">' + sortedRoutes().map(function (r) {
+      var u7 = usage(r.task, 7);
+      var chips = (r.chain || []).map(function (m, i) { var jv = /^~?typesafe/.test(m); return '<span class="chip' + (jv ? ' jv' : (i === 0 ? ' p' : '')) + '" title="' + E(m) + '">' + E(short(m)) + '</span>'; }).join('');
+      if (r.mode === 'jev' && (r.chain || []).length > 1) chips = '<span class="chip j" title="Jev reads each request and picks the cheapest model in this list that will do it well">Jev picks</span>' + chips;
+      var use = u7 ? '<b>' + Number(u7.calls) + '</b> call' + (Number(u7.calls) === 1 ? '' : 's') + ', ' + money(u7.cost) + (u7.last_model ? '<br>last: ' + E(short(u7.last_model)) + ' ' + when(u7.last_at) : '') : 'no calls this week';
+      var t = N.tests[r.task];
+      var tres = t ? '<div class="tres' + (t.ok ? '' : ' bad') + '">' + E(t.text) + '</div>' : '';
+      return '<div class="r" data-task="' + E(r.task) + '"><div class="job"><b>' + E(r.label || r.task) + '</b><span>' + (r.notes ? E(r.notes) + ' ' : '') + '<code>' + E(r.task) + '</code></span></div>' +
+        '<div class="chips">' + chips + '</div><div class="use">' + use + '</div>' +
+        '<div class="acts"><button class="btn" data-w116n="test" data-task="' + E(r.task) + '"' + (t && t.busy ? ' disabled' : '') + '>' + (t && t.busy ? 'Testing...' : 'Test') + '</button><button class="btn" data-w116n="edit" data-task="' + E(r.task) + '">Edit</button></div>' + tres + '</div>';
+    }).join('') + '</div>';
+    html += '<h4><span class="lnk" data-w116n="recent">' + (N.showRecent ? 'Hide the last calls' : 'Show the last ' + N.recent.length + ' calls') + '</span></h4>';
+    if (N.showRecent) {
+      html += '<table class="rc"><thead><tr><th>When</th><th>Job</th><th>Model</th><th>Result</th><th>Time</th><th>Cost</th></tr></thead><tbody>' + N.recent.map(function (c) {
+        var res = c.ok ? (c.via === 'jev' && /jev/.test(String(c.requested_model || '')) ? 'Jev ' + E((c.error || '').replace(/^picked /, 'picked ')) : 'ok' + (c.fallback_used ? ' (fallback)' : '')) : E(String(c.error || 'failed').slice(0, 90));
+        return '<tr><td>' + E(when(c.created_at)) + '</td><td>' + E(c.task) + (c.caller ? '<br><span style="color:var(--wa-muted)">' + E(c.caller) + '</span>' : '') + '</td><td title="' + E(c.model || c.requested_model) + '">' + E(short(c.model || c.requested_model)) + '</td><td class="' + (c.ok ? '' : 'bad') + '">' + res + '</td><td>' + (c.ms ? (c.ms >= 1000 ? (c.ms / 1000).toFixed(1) + 's' : c.ms + 'ms') : '') + '</td><td>' + (c.cost != null ? (Number(c.cost) < 0.001 ? '<$0.001' : '$' + Number(c.cost).toFixed(3)) : '') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+    }
+    body.innerHTML = html;
+  }
+
+  /* ---------- test ---------- */
+  async function test(task) {
+    N.tests[task] = { busy: true, ok: true, text: '' }; paint();
+    try {
+      var r = await fn('llm', { action: 'test', task: task });
+      if (r.ok) N.tests[task] = { ok: true, text: (task === 'decide' ? 'Jev answered' : 'Answered by ' + short(r.model)) + ' in ' + (r.ms >= 1000 ? (r.ms / 1000).toFixed(1) + 's' : r.ms + 'ms') + (r.cost != null ? ' for ' + (Number(r.cost) < 0.001 ? 'under a tenth of a cent' : '$' + Number(r.cost).toFixed(3)) : '') + '.' };
+      else N.tests[task] = { ok: false, text: 'No answer: ' + (r.error || 'unknown') };
+    } catch (e) { N.tests[task] = { ok: false, text: 'Test failed: ' + (e.message || e) }; }
+    paint();
+  }
+
+  /* ---------- edit ---------- */
+  var M = { task: null, chain: [], mode: 'chain' };
+  async function ensureModels() {
+    if (N.models) return N.models;
+    try { var r = await fn('llm', { action: 'models' }); N.models = r.models || []; } catch (e) { N.models = []; }
+    return N.models;
+  }
+  function priceOf(id) { var m = (N.models || []).filter(function (x) { return x.id === id; })[0]; if (!m || m.in_per_m == null) return ''; return '$' + m.in_per_m + ' in / $' + m.out_per_m + ' out per M'; }
+  function paintChain() {
+    var box = document.getElementById('w116nchain'); if (!box) return;
+    box.innerHTML = M.chain.map(function (m, i) {
+      return '<div class="c"><span class="n">' + (i + 1) + '</span><div class="m"><b>' + E(short(m)) + '</b><span>' + E(m) + (priceOf(m) ? ' &middot; ' + E(priceOf(m)) : '') + '</span></div><div class="b">' +
+        (i > 0 ? '<button class="btn" data-w116nc="up" data-i="' + i + '">&#8593;</button>' : '') + (i < M.chain.length - 1 ? '<button class="btn" data-w116nc="down" data-i="' + i + '">&#8595;</button>' : '') + '<button class="btn" data-w116nc="rm" data-i="' + i + '">Remove</button></div></div>';
+    }).join('') || '<div class="hint">No models yet: pick one below.</div>';
+    var modes = document.getElementById('w116nmodes'); if (modes) modes.style.display = M.chain.length > 1 ? '' : 'none';
+  }
+  async function editModal(task) {
+    var r = task ? N.routes.filter(function (x) { return x.task === task; })[0] : null;
+    M.task = r ? r.task : null; M.chain = r ? (r.chain || []).slice() : ['anthropic/claude-haiku-4.5', 'openai/gpt-5-mini']; M.mode = r ? (r.mode || 'chain') : 'chain';
+    openModal('<div class="w113modal w116nm"><h3>' + (r ? 'Models for ' + E(r.label || r.task) : 'A new AI job') + '</h3>' +
+      (r ? '<p class="m-sub"><code>' + E(r.task) + '</code></p>' : '<label>Job key</label><input type="text" id="w116nkey" placeholder="lower case, e.g. grant_writer"><div class="hint">The key a function sends as its task. Jobs the hub does not know use the <code>default</code> list.</div>') +
+      '<label>Name</label><input type="text" id="w116nlabel" value="' + E(r ? r.label : '') + '">' +
+      '<label>Models, in order</label><div class="hint">The first one answers; the rest take over if it fails. With "Jev picks", Jev reads each request and chooses the cheapest one in the list that will do it well.</div>' +
+      '<div class="chain" id="w116nchain"></div>' +
+      '<div class="pick"><select id="w116nadd"><option value="">Loading the model list...</option></select><button class="btn" id="w116naddb">Add</button></div>' +
+      '<div id="w116nmodes"><label>Who picks</label><div class="modes"><label><input type="radio" name="w116nmode" value="jev"' + (M.mode === 'jev' ? ' checked' : '') + '> Jev picks per request</label><label><input type="radio" name="w116nmode" value="chain"' + (M.mode !== 'jev' ? ' checked' : '') + '> Always the first one</label></div></div>' +
+      '<label>Notes</label><input type="text" id="w116nnotes" value="' + E(r ? (r.notes || '') : '') + '" placeholder="Why these models">' +
+      '<div class="w113acts"><span class="w113ok" id="w116nsaved"></span><span style="flex:1"></span>' + (r && r.task !== 'default' && r.task !== 'decide' ? '<button class="btn" id="w116ndel">Remove this job</button>' : '') + '<button class="btn" onclick="closeModal()">Cancel</button><button class="btn primary" id="w116nsave">Save</button></div></div>');
+    paintChain();
+    var models = await ensureModels();
+    var sel = document.getElementById('w116nadd'); if (!sel) return;
+    var groups = {};
+    models.forEach(function (m) { var v = String(m.id).split('/')[0]; (groups[v] = groups[v] || []).push(m); });
+    var order = ['anthropic', 'openai', 'moonshotai', 'qwen', 'google', 'z-ai', 'deepseek', 'x-ai', 'mistralai', 'meta-llama'];
+    sel.innerHTML = '<option value="">Pick a model to add</option>' + order.filter(function (v) { return groups[v]; }).map(function (v) {
+      return '<optgroup label="' + E(short(v + '/x').replace(/ X$/, '')) + '">' + groups[v].map(function (m) { return '<option value="' + E(m.id) + '">' + E(m.name || m.id) + (m.in_per_m != null ? ' ($' + m.in_per_m + ' / $' + m.out_per_m + ')' : '') + '</option>'; }).join('') + '</optgroup>';
+    }).join('') + '<optgroup label="Jev"><option value="~typesafe/jev-latest">Jev (decisions only)</option></optgroup>';
+    paintChain();
+  }
+  async function save() {
+    var task = M.task || lower((document.getElementById('w116nkey') || {}).value || '').replace(/[^a-z0-9_]/g, '_');
+    var label = (document.getElementById('w116nlabel') || {}).value || '';
+    var notes = (document.getElementById('w116nnotes') || {}).value || '';
+    var modeEl = document.querySelector('input[name="w116nmode"]:checked'); var mode = modeEl ? modeEl.value : 'chain';
+    var ok = document.getElementById('w116nsaved');
+    if (!task || task.length < 2) { if (ok) ok.textContent = 'Give the job a key.'; return; }
+    if (!M.chain.length) { if (ok) ok.textContent = 'Add at least one model.'; return; }
+    if (ok) ok.textContent = 'Saving...';
+    try {
+      await fn('llm', { action: 'set_route', task: task, chain: M.chain, label: label, notes: notes, mode: mode });
+      toastS('Saved: ' + (label || task)); closeModal(); await load(true); paint();
+    } catch (e) { if (ok) ok.textContent = 'Could not save: ' + (e.message || e); }
+  }
+  async function remove() {
+    if (!M.task) return;
+    if (!confirm('Remove the ' + M.task + ' job? Functions that send it will use the default list.')) return;
+    try { await fn('llm', { action: 'delete_route', task: M.task }); toastS('Removed'); closeModal(); await load(true); paint(); } catch (e) { toastS('Could not remove: ' + (e.message || e)); }
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w116n]');
+    if (b) {
+      var a = b.getAttribute('data-w116n');
+      if (a === 'reload') { load(true).then(paint); return; }
+      if (a === 'recent') { N.showRecent = !N.showRecent; paint(); return; }
+      if (a === 'test') { test(b.getAttribute('data-task')); return; }
+      if (a === 'edit') { editModal(b.getAttribute('data-task')); return; }
+      if (a === 'new') { editModal(null); return; }
+    }
+    var c = t.closest('[data-w116nc]');
+    if (c) {
+      var i = Number(c.getAttribute('data-i')), act = c.getAttribute('data-w116nc');
+      if (act === 'rm') M.chain.splice(i, 1);
+      if (act === 'up' && i > 0) { var x = M.chain[i]; M.chain[i] = M.chain[i - 1]; M.chain[i - 1] = x; }
+      if (act === 'down' && i < M.chain.length - 1) { var y = M.chain[i]; M.chain[i] = M.chain[i + 1]; M.chain[i + 1] = y; }
+      paintChain(); return;
+    }
+    if (t.id === 'w116naddb') { var sel = document.getElementById('w116nadd'); var v = sel ? sel.value : ''; if (v && M.chain.indexOf(v) < 0) { M.chain.push(v); paintChain(); } if (sel) sel.value = ''; return; }
+    if (t.id === 'w116nsave') { save(); return; }
+    if (t.id === 'w116ndel') { remove(); return; }
+  });
+
+  /* ---------- wiring ---------- */
+  if (typeof wa40Render === 'function') {
+    var __w40r116n = wa40Render;
+    wa40Render = async function () {
+      var out = await __w40r116n.apply(this, arguments);
+      try { if (ensureCard()) { paint(); await load(false); paint(); } } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116n = showPanel;
+    showPanel = function (id) { var out = __sp116n.apply(this, arguments); try { if (id === 'adminpanel' && isAdmin()) setTimeout(function () { if (ensureCard()) { paint(); load(true).then(paint); } }, 900); } catch (e) { /* fine */ } return out; };
+  }
+  window.w116nDebug = function () { return { routes: N.routes.length, usage7: N.usage7.length, recent: N.recent.length, err: N.err }; };
+})();

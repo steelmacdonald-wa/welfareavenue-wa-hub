@@ -246,6 +246,8 @@
     } catch (e) { J.open = null; }
     renderCk();
   }
+  /* wave116q takes over the button (Slack post, spoken summary) through this handle */
+  window.w116jCk = { open: function () { return J.open; }, busy: function () { return J.busy; }, toggle: function () { return toggleCheck(); }, reload: function () { return loadOpen(); }, render: renderCk, presence: function () { return refreshPresence(); }, fmtMins: fmtMins, clear: function () { J.open = null; } };
   async function toggleCheck() {
     if (J.busy) return; J.busy = true;
     try {

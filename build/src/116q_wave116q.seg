@@ -1,0 +1,188 @@
+/* =====================================================================
+   WA v116q check in and out post to Slack, with a spoken summary (25/09/26)
+   =====================================================================
+   Steel: "Check in should send a message in Slack channel #check-in-out-wa
+   and checking out should do the same with bullet points about what one
+   has done. Allow them to use voice to text to summarise what they've
+   done; the AI makes it into bullet point form and even suggests closing
+   tasks."
+   - Check in: same button as before (wave116j); the hub posts "checked
+     in \u00b7 9:02 AM" to #check-in-out-wa through the edge function
+     checkin-post.
+   - Check out: a small sheet asks what you got done. Talk (the browser's
+     speech recognition, Chrome and Edge and Safari) or type; "Make it
+     bullets" sends your words to the model (router task 'checkin'),
+     which returns 2 to 6 bullets and the open tasks your words show are
+     finished. Edit the bullets, tick the tasks, "Check out and post":
+     the tasks close (with a change_log line), the note is saved on the
+     check-in row and posted to Slack with your hours.
+   - "Check out without a note" still posts the check-out line.
+   ===================================================================== */
+(function () {
+  if (window.__wa116q) return; window.__wa116q = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var Q = { rec: null, listening: false, finalText: '', bullets: [], suggest: [], others: [], picked: {}, busy: false, row: null };
+
+  var css = document.createElement('style');
+  css.id = 'wa116qcss';
+  css.textContent = '' +
+    '.w116qm h3{margin-bottom:4px;}' +
+    '.w116qm .m-sub{margin:0 0 12px;line-height:1.5;}' +
+    '.w116qm textarea{width:100%;box-sizing:border-box;min-height:120px;padding:12px 14px;border:1px solid rgba(16,63,57,.2);border-radius:14px;font-size:15px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
+    '.w116qm textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
+    '.w116qm .say{position:relative;}' +
+    '.w116qm .mic{display:inline-flex;align-items:center;gap:8px;margin-top:10px;font-family:' + BODY + ';font-size:13.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border:none;border-radius:999px;padding:10px 16px;cursor:pointer;}' +
+    '.w116qm .mic:hover{background:rgba(16,63,57,.14);}' +
+    '.w116qm .mic.on{background:' + FLAG + ';color:' + CREAM + ';animation:w116qpulse 1.2s ease-in-out infinite;}' +
+    '@keyframes w116qpulse{0%{box-shadow:0 0 0 0 rgba(179,64,47,.45);}70%{box-shadow:0 0 0 12px rgba(179,64,47,0);}100%{box-shadow:0 0 0 0 rgba(179,64,47,0);}}' +
+    '.w116qm .mic .ic{width:18px;height:18px;border-radius:50%;background:currentColor;display:inline-block;position:relative;}' +
+    '.w116qm .mic .ic:after{content:"";position:absolute;left:5px;top:5px;width:8px;height:8px;border-radius:50%;background:' + CREAM + ';opacity:.9;}' +
+    '.w116qm .mic.on .ic:after{background:' + FLAG + ';}' +
+    '.w116qm .hint{font-size:12px;color:var(--wa-muted);margin:8px 0 0;line-height:1.5;}' +
+    '.w116qm .bul{display:flex;flex-direction:column;gap:8px;margin:6px 0 4px;}' +
+    '.w116qm .bul .b{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;}' +
+    '.w116qm .bul .b .dot{width:8px;height:8px;border-radius:50%;background:' + GREEN + ';}' +
+    '.w116qm .bul .b input{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid rgba(16,63,57,.18);border-radius:10px;font-size:14px;font-family:' + BODY + ';}' +
+    '.w116qm .bul .b .rm{font-size:12px;color:var(--wa-muted);cursor:pointer;background:none;border:none;padding:4px 6px;}' +
+    '.w116qm .bul .b .rm:hover{color:' + FLAG + ';}' +
+    '.w116qm .addl{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;display:inline-block;margin:2px 0 10px;}' +
+    '.w116qm h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:14px 0 8px;}' +
+    '.w116qm .tk{display:flex;flex-direction:column;gap:6px;}' +
+    '.w116qm .tk label{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start;background:rgba(16,63,57,.05);border-radius:12px;padding:9px 12px;cursor:pointer;font-size:13.5px;line-height:1.45;}' +
+    '.w116qm .tk label.sug{background:rgba(220,165,39,.16);}' +
+    '.w116qm .tk label input{width:16px;height:16px;margin-top:2px;accent-color:' + GREEN + ';}' +
+    '.w116qm .tk label b{display:block;font-weight:600;color:var(--wa-text);}' +
+    '.w116qm .tk label span{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;}' +
+    '.w116qm .more{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;margin:6px 0 0;display:inline-block;}' +
+    '.w116qm .w113acts{margin-top:16px;}' +
+    '.w116qm .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
+    '.w116qm .hrs{display:inline-block;font-family:' + HEAD + ';font-size:22px;color:' + GREEN + ';font-weight:700;letter-spacing:.3px;margin-right:6px;}' +
+    '.w116qm .slk{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--wa-muted);}' +
+    '.w116qm .slk i{width:8px;height:8px;border-radius:50%;background:' + TEAL + ';display:inline-block;}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function ck() { return window.w116jCk || null; }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function myName() { try { var em = myEmail(); var m = (DB_MEMBERS || []).filter(function (x) { return lower(x.email) === em; })[0]; return (m && m.name) || (USER && USER.name) || em; } catch (e) { return ''; } }
+  async function fn(name, body) {
+    var r = await db.functions.invoke(name, { body: body });
+    if (r && r.error) { var msg = ''; try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ } throw new Error(msg || r.error.message || 'failed'); }
+    if (!r || !r.data) throw new Error('no reply from the Hub');
+    if (r.data.error && r.data.ok !== true) throw new Error(r.data.error);
+    return r.data;
+  }
+  function SR() { return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
+
+  /* ---------- check in ---------- */
+  async function checkIn() {
+    var c = ck(); if (!c) return;
+    await c.toggle();
+    var row = c.open(); if (!row || !row.id) return;
+    try { var r = await fn('checkin-post', { action: 'in', checkin_id: row.id }); toastS(r.posted ? 'Checked in and posted to #check-in-out-wa' : 'Checked in (Slack post failed: ' + (r.error || 'unknown') + ')'); }
+    catch (e) { toastS('Checked in (could not post to Slack: ' + (e.message || e) + ')'); }
+  }
+
+  /* ---------- check out ---------- */
+  function mins(row) { return Math.max(1, Math.round((Date.now() - new Date(row.started_at).getTime()) / 60000)); }
+  function stopRec() { try { if (Q.rec) Q.rec.stop(); } catch (e) { /* fine */ } Q.listening = false; var b = document.getElementById('w116qmic'); if (b) { b.classList.remove('on'); b.innerHTML = '<span class="ic"></span>Talk instead'; } }
+  function startRec() {
+    var R = SR(); if (!R) return;
+    try {
+      var rec = new R(); rec.lang = (navigator.language && /^fr/i.test(navigator.language)) ? 'fr-CA' : 'en-CA'; rec.continuous = true; rec.interimResults = true;
+      var ta = document.getElementById('w116qtext'); Q.finalText = ta ? ta.value : '';
+      rec.onresult = function (ev) {
+        var interim = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) { var t = ev.results[i][0].transcript; if (ev.results[i].isFinal) Q.finalText = (Q.finalText + ' ' + t).replace(/\s+/g, ' ').trim(); else interim += t; }
+        var box = document.getElementById('w116qtext'); if (box) { box.value = (Q.finalText + (interim ? ' ' + interim : '')).trim(); box.scrollTop = box.scrollHeight; }
+      };
+      rec.onerror = function (ev) { stopRec(); var h = document.getElementById('w116qhint'); if (h) h.textContent = ev.error === 'not-allowed' ? 'The browser blocked the microphone. Allow it in the address bar, or type instead.' : 'Listening stopped (' + (ev.error || 'error') + '). Type or try again.'; };
+      rec.onend = function () { if (Q.listening) { try { rec.start(); } catch (e) { stopRec(); } } };
+      rec.start(); Q.rec = rec; Q.listening = true;
+      var b = document.getElementById('w116qmic'); if (b) { b.classList.add('on'); b.innerHTML = '<span class="ic"></span>Listening&hellip; tap to stop'; }
+    } catch (e) { stopRec(); }
+  }
+  function openCheckout(row) {
+    Q.row = row; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = '';
+    var c = ck(); var hrs = c ? c.fmtMins(mins(row)) : mins(row) + 'm';
+    openModal('<div class="w113modal w116qm"><h3>Checking out</h3>' +
+      '<p class="m-sub"><span class="hrs">' + E(hrs) + '</span> on the hub today. What did you get done? Say it or type it; the hub turns it into bullet points for <b>#check-in-out-wa</b>.</p>' +
+      '<div class="say"><textarea id="w116qtext" placeholder="e.g. finished the board deck and sent it to Tamara, met Amanda about the flyers, she prints Friday..."></textarea>' +
+      (SR() ? '<button type="button" class="mic" id="w116qmic"><span class="ic"></span>Talk instead</button>' : '') +
+      '<p class="hint" id="w116qhint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate; slips get tidied.' : 'This browser cannot listen; typing works the same.') + '</p></div>' +
+      '<div class="w113acts"><span class="w113ok" id="w116qok"></span><span style="flex:1"></span><button class="btn" id="w116qskip">Check out without a note</button><button class="btn primary" id="w116qsum">Make it bullets</button></div></div>');
+    setTimeout(function () { var t = document.getElementById('w116qtext'); if (t) t.focus(); }, 50);
+  }
+  async function summarise() {
+    var ta = document.getElementById('w116qtext'); var text = ta ? ta.value.trim() : '';
+    var ok = document.getElementById('w116qok');
+    if (text.length < 3) { if (ok) ok.textContent = 'Say or type a line first.'; return; }
+    stopRec();
+    if (Q.busy) return; Q.busy = true; if (ok) ok.textContent = 'Turning that into bullets...';
+    var btn = document.getElementById('w116qsum'); if (btn) btn.disabled = true;
+    try {
+      var r = await fn('checkin-post', { action: 'summarise', text: text });
+      Q.bullets = (r.bullets || []).slice(); Q.suggest = r.suggest || []; Q.others = (r.open_tasks || []).filter(function (t) { return !Q.suggest.some(function (s) { return s.id === t.id; }); });
+      Q.suggest.forEach(function (s) { Q.picked[s.id] = true; });
+      Q.text = text; paintReview();
+    } catch (e) { if (ok) ok.textContent = 'Could not summarise: ' + (e.message || e) + '. You can still check out with your words as they are.'; Q.bullets = [text]; Q.suggest = []; Q.others = []; if (btn) { btn.disabled = false; btn.textContent = 'Use my words as they are'; btn.setAttribute('data-raw', '1'); } }
+    Q.busy = false;
+  }
+  function paintReview() {
+    var c = ck(); var hrs = c ? c.fmtMins(mins(Q.row)) : '';
+    var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w116qb="' + i + '" value="' + E(b) + '"><button type="button" class="rm" data-w116qrm="' + i + '" title="Remove">&#10005;</button></div>'; }).join('');
+    var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w116qt="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
+    var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w116qt="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
+    openModal('<div class="w113modal w116qm"><h3>Your check-out note</h3>' +
+      '<p class="m-sub"><span class="hrs">' + E(hrs) + '</span> on the hub. Edit anything, tick what is finished, then post.</p>' +
+      '<div class="bul" id="w116qbul">' + bul + '</div><span class="addl" id="w116qadd">+ add a line</span>' +
+      (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk">' + sug + '</div>' : '') +
+      (Q.others.length ? '<span class="more" id="w116qmore">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</span><div class="tk" id="w116qoth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
+      '<div class="w113acts"><span class="w113ok" id="w116qok"></span><span style="flex:1"></span><button class="btn" id="w116qback">Back</button><button class="btn primary" id="w116qgo">Check out and post</button></div></div>');
+  }
+  function readBullets() { var out = []; document.querySelectorAll('[data-w116qb]').forEach(function (i) { var v = i.value.trim(); if (v) out.push(v.slice(0, 220)); }); return out; }
+  function readPicked() { var out = []; document.querySelectorAll('[data-w116qt]').forEach(function (i) { if (i.checked) out.push(Number(i.getAttribute('data-w116qt'))); }); return out; }
+  async function finish(bullets, closeIds, skipped) {
+    var c = ck(); if (!c || !Q.row || Q.busy) return; Q.busy = true;
+    var ok = document.getElementById('w116qok'); if (ok) ok.textContent = 'Posting...';
+    var go = document.getElementById('w116qgo') || document.getElementById('w116qskip'); if (go) go.disabled = true;
+    try {
+      var r = await fn('checkin-post', { action: 'out', checkin_id: Q.row.id, bullets: bullets, close_task_ids: closeIds, skipped: !!skipped });
+      try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: myEmail(), field: 'out', old_value: null, new_value: 'checked out' + (bullets.length ? ' with a note' : ''), changed_by: myName() }); } catch (e) { /* audit */ }
+      c.clear(); closeModal();
+      toastS('Checked out: ' + c.fmtMins(r.minutes || mins(Q.row)) + (r.posted ? ', posted to #check-in-out-wa' : ' (Slack post failed: ' + (r.error || 'unknown') + ')') + (r.closed && r.closed.length ? '. Closed ' + r.closed.length + (r.closed.length === 1 ? ' task' : ' tasks') : ''));
+      try { if (r.closed && r.closed.length && typeof loadTasks === 'function') loadTasks(); } catch (e) { /* fine */ }
+      c.render(); c.presence();
+    } catch (e) {
+      if (ok) ok.textContent = 'Could not check out: ' + (e.message || e);
+      if (go) go.disabled = false;
+    }
+    Q.busy = false;
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('#w116jck');
+    if (b) {
+      var c = ck(); if (!c) return; /* wave116j not booted yet: its own handler runs */
+      e.preventDefault(); e.stopPropagation();
+      if (c.busy() || Q.busy) return;
+      if (c.open()) openCheckout(c.open()); else checkIn();
+      return;
+    }
+    if (t.id === 'w116qmic' || t.closest('#w116qmic')) { if (Q.listening) stopRec(); else startRec(); return; }
+    if (t.id === 'w116qsum') { if (t.getAttribute('data-raw')) { Q.bullets = [(document.getElementById('w116qtext') || {}).value || '']; paintReview(); } else summarise(); return; }
+    if (t.id === 'w116qskip') { stopRec(); finish([], [], true); return; }
+    if (t.id === 'w116qback') { Q.bullets = readBullets(); openCheckout(Q.row); var ta = document.getElementById('w116qtext'); if (ta) ta.value = Q.text || ''; return; }
+    if (t.id === 'w116qadd') { Q.bullets = readBullets(); Q.bullets.push(''); Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; }); paintReview(); var last = document.querySelectorAll('[data-w116qb]'); if (last.length) last[last.length - 1].focus(); return; }
+    var rm = t.closest('[data-w116qrm]'); if (rm) { Q.bullets = readBullets(); Q.bullets.splice(Number(rm.getAttribute('data-w116qrm')), 1); Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; }); paintReview(); return; }
+    if (t.id === 'w116qmore') { var o = document.getElementById('w116qoth'); if (o) { o.style.display = o.style.display === 'none' ? '' : 'none'; } return; }
+    if (t.id === 'w116qgo') { finish(readBullets(), readPicked(), false); return; }
+  }, true);
+  window.w116qDebug = function () { return { row: Q.row, bullets: Q.bullets, suggest: Q.suggest, listening: Q.listening }; };
+})();

@@ -1,0 +1,243 @@
+/* =====================================================================
+   WA v116o Ask the Hub: proposals you can edit, with suggestions (25/09/26)
+   =====================================================================
+   Steel: "Any requests that I file through the Ask the Hub should allow
+   me to make some edits and also give me suggestions."
+   The confirmation card (wave38) becomes a small form: for a task the
+   title, team, owner, due date, project, priority and details; for a
+   request the title, team, type, who it is for and the details; a note
+   for closing a task; the status for a request. Under the fields, chips
+   the hub works out on the spot (people on that team whose role or
+   responsibilities match the words, projects that match, quick dates)
+   and, a moment later, the model's suggestions (router task
+   brain_suggest, the cheap tier). A chip fills the field; Confirm sends
+   what is on the form, not what the Brain first drafted.
+   ===================================================================== */
+(function () {
+  if (window.__wa116o) return; window.__wa116o = true;
+  var GREEN = '#103F39', GOLD = '#DCA527';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var FOUNDERS = ['Steel MacDonald', 'Suhaib Abdillahi'];
+  var STOP = ['the', 'and', 'for', 'with', 'from', 'that', 'this', 'about', 'into', 'over', 'under', 'task', 'request', 'please', 'need', 'needs', 'make', 'have', 'will', 'team', 'new', 'add', 'get', 'set', 'our', 'their', 'them', 'they', 'week', 'next', 'some', 'more'];
+  var O = { forms: {}, models: {} };
+
+  var css = document.createElement('style');
+  css.id = 'wa116ocss';
+  css.textContent = '' +
+    '.wac-card .w116oed{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;margin-top:8px;font-family:' + BODY + ';}' +
+    '.wac-card .w116oed label{display:flex;flex-direction:column;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#7b8a86;}' +
+    '.wac-card .w116oed label.wide{grid-column:1 / -1;}' +
+    '.wac-card .w116oed label.chk{flex-direction:row;align-items:center;gap:6px;text-transform:none;font-size:12px;font-weight:600;letter-spacing:0;color:#2b3b37;padding-top:14px;}' +
+    '.wac-card .w116oed input[type=text],.wac-card .w116oed input[type=date],.wac-card .w116oed select,.wac-card .w116oed textarea{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:12.5px;font-family:' + BODY + ';background:#fff;color:#1f2d29;font-weight:500;letter-spacing:0;text-transform:none;}' +
+    '.wac-card .w116oed textarea{min-height:52px;resize:vertical;}' +
+    '.wac-card .w116oed input:focus,.wac-card .w116oed select:focus,.wac-card .w116oed textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 2px rgba(16,63,57,.12);}' +
+    '.wac-card .w116oed input[type=checkbox]{width:15px;height:15px;accent-color:' + GREEN + ';}' +
+    '.wac-card .w116osug{margin-top:8px;}' +
+    '.wac-card .w116osug .h{font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:#7b8a86;margin:0 0 4px;}' +
+    '.wac-card .w116osug .chips{display:flex;flex-wrap:wrap;gap:5px;}' +
+    '.wac-card .w116osug .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;border-radius:999px;padding:4px 10px;background:rgba(16,63,57,.07);color:#1f2d29;cursor:pointer;border:1px solid transparent;font-family:' + BODY + ';font-weight:600;max-width:100%;}' +
+    '.wac-card .w116osug .chip:hover{border-color:' + GREEN + ';}' +
+    '.wac-card .w116osug .chip.ai{background:rgba(220,165,39,.18);}' +
+    '.wac-card .w116osug .chip.on{background:' + GREEN + ';color:#FFFAF2;}' +
+    '.wac-card .w116osug .chip span{opacity:.75;font-weight:500;}' +
+    '.wac-card .w116osug .tip{font-size:11.5px;color:#5b6b66;margin:4px 0 0;line-height:1.4;}' +
+    '.wac-card .w116osug .wait{font-size:11px;color:#9aa5a1;font-style:italic;}' +
+    '@media (max-width:420px){.wac-card .w116oed{grid-template-columns:1fr;}.wac-card .w116oed label.chk{padding-top:0;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function label(d) { try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function depts() { var o = (window.WA_TEAMS && WA_TEAMS.order) ? WA_TEAMS.order.slice() : ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr']; if (o.indexOf('board') < 0) o.push('board'); return o; }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name; }); }
+  function people(dept) { var all = members(); var inTeam = all.filter(function (m) { return m.department === dept; }); var founders = all.filter(function (m) { return FOUNDERS.indexOf(m.name) >= 0 && inTeam.indexOf(m) < 0; }); return inTeam.concat(founders); }
+  function projects(dept) { var rows = (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []) || []; return rows.filter(function (p) { return p && (!dept || p.department === dept) && p.status !== 'done' && p.status !== 'archived'; }); }
+  function words(s) { return lower(s).replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(function (w) { return w.length > 3 && STOP.indexOf(w) < 0; }); }
+  function iso(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function quickDates() {
+    var now = new Date(); now.setHours(12, 0, 0, 0);
+    var fri = new Date(now.getTime()); var dow = fri.getDay(); var add = (5 - dow + 7) % 7 || 7; fri.setDate(fri.getDate() + add);
+    var week = new Date(now.getTime()); week.setDate(week.getDate() + 7);
+    var eom = new Date(now.getTime()); eom.setMonth(eom.getMonth() + 1); eom.setDate(0);
+    var two = new Date(now.getTime()); two.setDate(two.getDate() + 14);
+    return [{ t: 'This Friday', v: iso(fri) }, { t: 'In a week', v: iso(week) }, { t: 'Two weeks', v: iso(two) }, { t: 'End of month', v: iso(eom) }];
+  }
+  function score(text, keys) { var t = lower(text); return keys.reduce(function (a, k) { return a + (t.indexOf(k) >= 0 ? 1 : 0); }, 0); }
+  function peopleFor(title, dept) {
+    var keys = words(title); if (!keys.length) return [];
+    return people(dept).map(function (m) {
+      var resp = Array.isArray(m.responsibilities) ? m.responsibilities.join(' ') : String(m.responsibilities || '');
+      var s = score(resp, keys) * 2 + score(m.role || '', keys);
+      var why = keys.filter(function (k) { return lower(resp + ' ' + (m.role || '')).indexOf(k) >= 0; }).slice(0, 2).join(', ');
+      return { m: m, s: s, why: why };
+    }).filter(function (x) { return x.s > 0; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 3);
+  }
+  function projectsFor(title, dept) {
+    var keys = words(title); if (!keys.length) return [];
+    return projects(dept).map(function (p) { return { p: p, s: score((p.name || '') + ' ' + (p.description || ''), keys) }; }).filter(function (x) { return x.s > 0; }).sort(function (a, b) { return b.s - a.s; }).slice(0, 2);
+  }
+
+  /* ---------- the form ---------- */
+  function opt(v, t, sel) { return '<option value="' + E(v) + '"' + (sel ? ' selected' : '') + '>' + E(t) + '</option>'; }
+  function ownerOptions(dept, cur) {
+    var ps = people(dept); var names = ps.map(function (m) { return m.name; });
+    var html = opt('', 'Nobody yet', !cur);
+    ps.forEach(function (m) { html += opt(m.name, m.name + (m.role ? ' (' + m.role + ')' : ''), cur === m.name); });
+    if (cur && names.indexOf(cur) < 0) html += opt(cur, cur + ' (as written)', true);
+    return html;
+  }
+  function projectOptions(dept, cur) { var html = opt('', 'General list', !cur); projects(dept).forEach(function (p) { html += opt(p.id, p.name, String(cur) === String(p.id)); }); return html; }
+  function typeOptions(cur) { var types = (window.WA46 && WA46.types) || {}; var keys = Object.keys(types); var html = ''; keys.forEach(function (k) { html += opt(k, types[k].label || k, cur === k); }); html += opt('other', 'Other', cur === 'other' || (cur && keys.indexOf(cur) < 0)); return html; }
+  function formHtml(p) {
+    var i = p.input || {}; var d = i.department || depts()[0];
+    var dsel = depts().map(function (k) { return opt(k, label(k), d === k); }).join('');
+    if (p.name === 'create_task') {
+      return '<div class="w116oed">' +
+        '<label class="wide">Task<input type="text" data-f="title" value="' + E(i.title || '') + '"></label>' +
+        '<label>Team<select data-f="department">' + dsel + '</select></label>' +
+        '<label>Owner<select data-f="owner">' + ownerOptions(d, i.owner || '') + '</select></label>' +
+        '<label>Due<input type="date" data-f="due_date" value="' + E(i.due_date || '') + '"></label>' +
+        '<label>Project<select data-f="project_id">' + projectOptions(d, i.project_id || '') + '</select></label>' +
+        '<label class="wide">Details<textarea data-f="detail">' + E(i.detail || '') + '</textarea></label>' +
+        '<label class="chk"><input type="checkbox" data-f="priority"' + (i.priority ? ' checked' : '') + '> Priority</label>' +
+        '</div>';
+    }
+    if (p.name === 'create_request') {
+      return '<div class="w116oed">' +
+        '<label class="wide">Request<input type="text" data-f="title" value="' + E(i.title || '') + '"></label>' +
+        '<label>To<select data-f="department">' + dsel + '</select></label>' +
+        '<label>Type<select data-f="type_key">' + typeOptions(i.type_key || 'other') + '</select></label>' +
+        '<label class="wide">For<select data-f="assignee">' + ownerOptions(d, i.assignee || '') + '</select></label>' +
+        '<label class="wide">Details<textarea data-f="details">' + E(i.details || '') + '</textarea></label>' +
+        '</div>';
+    }
+    if (p.name === 'close_task') return '<div class="w116oed"><label class="wide">Closing note<input type="text" data-f="note" value="' + E(i.note || '') + '" placeholder="Optional: what settled it"></label></div>';
+    if (p.name === 'set_request_status') return '<div class="w116oed"><label class="wide">New status<input type="text" data-f="status" value="' + E(i.status || '') + '" list="w116ost"></label><datalist id="w116ost"><option value="new"><option value="in progress"><option value="waiting"><option value="interviewing"><option value="offer accepted"><option value="done"></datalist></div>';
+    return '';
+  }
+  function readForm(card, p) {
+    var out = {}; var i = p.input || {};
+    Object.keys(i).forEach(function (k) { out[k] = i[k]; });
+    card.querySelectorAll('[data-f]').forEach(function (el) {
+      var k = el.getAttribute('data-f');
+      if (el.type === 'checkbox') out[k] = !!el.checked;
+      else if (k === 'project_id') out[k] = el.value ? Number(el.value) : null;
+      else out[k] = el.value.trim();
+    });
+    if (out.due_date === '') out.due_date = null;
+    if (out.owner === '') out.owner = null;
+    if (out.assignee === '') out.assignee = null;
+    return out;
+  }
+  function localChips(p, card) {
+    var i = readForm(card, p); var out = [];
+    var title = i.title || '';
+    if (p.name === 'create_task' || p.name === 'create_request') {
+      var fld = p.name === 'create_task' ? 'owner' : 'assignee';
+      peopleFor(title, i.department).forEach(function (x) { out.push({ f: fld, v: x.m.name, t: x.m.name.split(' ')[0], why: x.why || x.m.role || '' }); });
+      if (p.name === 'create_task') {
+        projectsFor(title, i.department).forEach(function (x) { out.push({ f: 'project_id', v: String(x.p.id), t: x.p.name, why: 'project' }); });
+        if (!i.due_date) quickDates().forEach(function (q) { out.push({ f: 'due_date', v: q.v, t: q.t, why: q.v.slice(5) }); });
+      }
+    }
+    return out;
+  }
+  function chipHtml(c, ai) { return '<span class="chip' + (ai ? ' ai' : '') + '" data-w116oc="' + E(c.f) + '" data-v="' + E(c.v) + '" title="' + E(c.f === 'title' ? c.v : '') + '">' + E(c.t) + (c.why ? ' <span>' + E(c.why) + '</span>' : '') + '</span>'; }
+  function paintSug(card, key) {
+    var box = card.querySelector('.w116osug'); if (!box) return;
+    var p = WA38_PENDING[key]; if (!p) return;
+    var loc = localChips(p, card); var ai = O.models[key];
+    var html = '';
+    var chips = loc.map(function (c) { return chipHtml(c, false); });
+    if (ai && ai.chips) ai.chips.forEach(function (c) { chips.push(chipHtml(c, true)); });
+    if (chips.length) html += '<div class="h">Suggestions</div><div class="chips">' + chips.join('') + '</div>';
+    if (ai && ai.tips && ai.tips.length) html += ai.tips.map(function (t) { return '<div class="tip">' + E(t) + '</div>'; }).join('');
+    if (!ai && (p.name === 'create_task' || p.name === 'create_request')) html += '<div class="wait">Asking the hub for more...</div>';
+    box.innerHTML = html;
+    box.style.display = html ? '' : 'none';
+  }
+  async function modelSuggest(key, card) {
+    var p = WA38_PENDING[key]; if (!p || (p.name !== 'create_task' && p.name !== 'create_request')) return;
+    var i = readForm(card, p);
+    var roster = people(i.department).map(function (m) { return { name: m.name, role: m.role || '', responsibilities: (Array.isArray(m.responsibilities) ? m.responsibilities : []).slice(0, 5) }; });
+    var projs = p.name === 'create_task' ? projects(i.department).map(function (pr) { return { id: pr.id, name: pr.name }; }) : [];
+    var tool = { name: 'suggest_edits', description: 'Suggestions for the proposed action.', input_schema: { type: 'object', properties: {
+      owner: { type: ['string', 'null'], description: 'The best person on the roster for it, only if clearly better than the current one; exact roster name.' },
+      why_owner: { type: ['string', 'null'], description: 'Under 8 words.' },
+      due_date: { type: ['string', 'null'], description: 'YYYY-MM-DD only if the details imply a date.' },
+      project_id: { type: ['integer', 'null'], description: 'A project from the list this belongs to, or null.' },
+      title: { type: ['string', 'null'], description: 'A sharper title if the current one is vague, else null.' },
+      tips: { type: 'array', items: { type: 'string' }, description: 'Up to 2 short, useful notes (a missing detail, a duplicate risk, a better split). No em dashes.' }
+    }, required: ['owner', 'why_owner', 'due_date', 'project_id', 'title', 'tips'] } };
+    try {
+      var r = await db.functions.invoke('llm', { body: { task: 'brain_suggest', max_tokens: 400, temperature: 0.2,
+        system: 'You help Welfare Avenue staff file tasks and requests well. Suggest only what helps; null is fine. Never invent people or projects outside the lists. Today is ' + iso(new Date()) + '.',
+        messages: [{ role: 'user', content: 'PROPOSED ' + (p.name === 'create_task' ? 'TASK' : 'REQUEST') + ': ' + JSON.stringify({ title: i.title, team: label(i.department), owner: i.owner || i.assignee || null, due_date: i.due_date || null, details: i.detail || i.details || '' }) + '\nROSTER: ' + JSON.stringify(roster) + (projs.length ? '\nPROJECTS: ' + JSON.stringify(projs) : '') }],
+        tools: [tool], tool_choice: { type: 'tool', name: 'suggest_edits' } } });
+      var data = r && r.data; if (!data || r.error) throw (r && r.error) || new Error('no reply');
+      var tu = (data.content || []).filter(function (c) { return c.type === 'tool_use'; })[0]; var s = (tu && tu.input) || {};
+      var chips = []; var names = roster.map(function (x) { return x.name; });
+      var fld = p.name === 'create_task' ? 'owner' : 'assignee';
+      if (s.owner && names.indexOf(s.owner) >= 0 && s.owner !== (i.owner || i.assignee)) chips.push({ f: fld, v: s.owner, t: s.owner.split(' ')[0], why: s.why_owner || 'suggested' });
+      if (s.due_date && /^\d{4}-\d{2}-\d{2}$/.test(s.due_date) && s.due_date !== i.due_date) chips.push({ f: 'due_date', v: s.due_date, t: 'Due ' + s.due_date.slice(5), why: 'from the details' });
+      if (s.project_id && projs.some(function (x) { return x.id === s.project_id; })) chips.push({ f: 'project_id', v: String(s.project_id), t: projs.filter(function (x) { return x.id === s.project_id; })[0].name, why: 'project' });
+      if (s.title && s.title !== i.title) chips.push({ f: 'title', v: s.title, t: 'Sharper title', why: s.title.length > 46 ? s.title.slice(0, 44) + '\u2026' : s.title });
+      O.models[key] = { chips: chips, tips: (s.tips || []).slice(0, 2).map(function (t) { return String(t).replace(/\u2014/g, ','); }) };
+    } catch (e) { O.models[key] = { chips: [], tips: [] }; }
+    var c2 = document.getElementById('wac-' + key); if (c2 && WA38_PENDING[key]) paintSug(c2, key);
+  }
+
+  /* ---------- take over the card ---------- */
+  if (typeof wa38Card === 'function') {
+    var __card = wa38Card;
+    wa38Card = function (p) {
+      __card(p);
+      var key = 'p' + WA38_N; var card = document.getElementById('wac-' + key); if (!card || !WA38_PENDING[key]) return;
+      var form = formHtml(p); if (!form) return;
+      var f = card.querySelector('.f'); if (f) f.remove();
+      var act = card.querySelector('.act');
+      var wrap = document.createElement('div'); wrap.innerHTML = form + '<div class="w116osug" style="display:none"></div>';
+      while (wrap.firstChild) card.insertBefore(wrap.firstChild, act);
+      var go = card.querySelector('.go'); if (go) go.textContent = 'Confirm';
+      try { if (typeof wa27Load === 'function' && !WA27_LOADED) wa27Load(false).then(function () { var d = card.querySelector('[data-f="department"]'); var ps = card.querySelector('[data-f="project_id"]'); if (ps && d) ps.innerHTML = projectOptions(d.value, ps.value); paintSug(card, key); }); } catch (e) { /* fine */ }
+      paintSug(card, key);
+      modelSuggest(key, card);
+      var m = document.getElementById('wacMsgs'); if (m) m.scrollTop = m.scrollHeight;
+    };
+  }
+  if (typeof wa38Execute === 'function') {
+    var __exec = wa38Execute;
+    wa38Execute = function (key) {
+      var p = WA38_PENDING[key]; var card = document.getElementById('wac-' + key);
+      if (p && card && card.querySelector('[data-f]')) {
+        var edited = readForm(card, p);
+        if ((p.name === 'create_task' || p.name === 'create_request') && !edited.title) { var res = card.querySelector('.w116osug'); if (res) { res.style.display = ''; res.innerHTML = '<div class="tip" style="color:#b3402f">Give it a title first.</div>'; } return; }
+        p.input = edited;
+        /* keep a plain summary of what was confirmed */
+        var b = card.querySelector('b'); if (b) b.textContent = (p.name === 'create_task' ? 'Add a task to ' + label(edited.department) + ': ' : p.name === 'create_request' ? 'File a request to ' + label(edited.department) + ': ' : '') + (edited.title || b.textContent);
+        card.querySelectorAll('[data-f]').forEach(function (el) { el.disabled = true; });
+        var sug = card.querySelector('.w116osug'); if (sug) sug.remove();
+      }
+      return __exec(key);
+    };
+  }
+  document.addEventListener('change', function (e) {
+    var el = e.target; if (!el || !el.matches || !el.matches('.wac-card [data-f]')) return;
+    var card = el.closest('.wac-card'); var key = card && card.id.replace('wac-', ''); if (!key || !WA38_PENDING[key]) return;
+    if (el.getAttribute('data-f') === 'department') {
+      var p = WA38_PENDING[key]; var o = card.querySelector('[data-f="owner"], [data-f="assignee"]'); if (o) o.innerHTML = ownerOptions(el.value, o.value);
+      var ps = card.querySelector('[data-f="project_id"]'); if (ps) ps.innerHTML = projectOptions(el.value, '');
+      O.models[key] = null; paintSug(card, key); modelSuggest(key, card);
+    } else if (el.getAttribute('data-f') === 'title') { O.models[key] = null; paintSug(card, key); modelSuggest(key, card); }
+    else paintSug(card, key);
+  });
+  document.addEventListener('click', function (e) {
+    var chip = e.target && e.target.closest && e.target.closest('.wac-card .w116osug [data-w116oc]'); if (!chip) return;
+    var card = chip.closest('.wac-card'); var f = chip.getAttribute('data-w116oc'), v = chip.getAttribute('data-v');
+    var el = card.querySelector('[data-f="' + f + '"]'); if (!el) return;
+    if (el.tagName === 'SELECT' && !Array.prototype.some.call(el.options, function (o) { return o.value === v; })) el.insertAdjacentHTML('beforeend', '<option value="' + E(v) + '">' + E(v) + '</option>');
+    el.value = v;
+    chip.parentNode.querySelectorAll('[data-w116oc="' + f + '"]').forEach(function (c) { c.classList.remove('on'); }); chip.classList.add('on');
+  });
+  window.w116oDebug = function () { return { models: O.models }; };
+})();

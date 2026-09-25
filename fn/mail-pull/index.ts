@@ -1,3 +1,4 @@
+// v6 (25/09/26): classifier routed through the Hub model router (llm, task mail_triage), Jev checks every filing (jevMail), job applications become candidates in Recruitment (fileApplication, label Hub/Recruitment).
 // Welfare Avenue: mail-pull (v5, 25/09/26)
 // v5: the hub@ mailbox shows the trail. Every processed email gets a Gmail
 //   label (Hub/Filed, Hub/Needs a team, Hub/Ignored) through gmail.modify;
@@ -119,6 +120,7 @@ const LABELS: Record<string, { name: string; bg: string; fg: string }> = {
   filed: { name: 'Hub/Filed', bg: '#16a765', fg: '#ffffff' },
   needs: { name: 'Hub/Needs a team', bg: '#ffad47', fg: '#000000' },
   ignored: { name: 'Hub/Ignored', bg: '#cccccc', fg: '#000000' },
+  recruit: { name: 'Hub/Recruitment', bg: '#4986e7', fg: '#ffffff' },
 };
 let LABEL_IDS: Record<string, string> | null = null;
 let MODIFY_TOKEN: string | null | undefined = undefined;
@@ -158,14 +160,15 @@ async function labelIds(token: string): Promise<Record<string, string>> {
   return out;
 }
 /* outcome: 'filed' (read + archived), 'needs' (stays in the inbox, unread), 'ignored' (read + archived), 'undo' (back in the inbox as needs) */
-async function labelMessage(gmailId: string, outcome: 'filed' | 'needs' | 'ignored' | 'undo'): Promise<boolean> {
+async function labelMessage(gmailId: string, outcome: 'filed' | 'needs' | 'ignored' | 'undo' | 'recruit'): Promise<boolean> {
   if (!gmailId || gmailId.startsWith('test-')) return false;
   const token = await modifyToken(); if (!token) return false;
   try {
     const ids = await labelIds(token);
-    const all = [ids.filed, ids.needs, ids.ignored];
+    const all = [ids.filed, ids.needs, ids.ignored, ids.recruit];
     let add: string[] = [], remove: string[] = [];
     if (outcome === 'filed') { add = [ids.filed]; remove = all.filter(x => x !== ids.filed).concat(['UNREAD', 'INBOX']); }
+    else if (outcome === 'recruit') { add = [ids.recruit]; remove = all.filter(x => x !== ids.recruit).concat(['UNREAD', 'INBOX']); }
     else if (outcome === 'ignored') { add = [ids.ignored]; remove = all.filter(x => x !== ids.ignored).concat(['UNREAD', 'INBOX']); }
     else { add = [ids.needs, 'INBOX']; remove = all.filter(x => x !== ids.needs); if (outcome === 'undo') add.push('UNREAD'); }
     await gmailWrite(token, 'POST', '/messages/' + encodeURIComponent(gmailId) + '/modify', { addLabelIds: add, removeLabelIds: remove });
@@ -216,7 +219,8 @@ function shortDate(d: Date): string { return d.toLocaleDateString('en-CA', { mon
 function safeName(s: string): string { return String(s || 'file').replace(/[^\w.\-]+/g, '_').slice(0, 120); }
 
 /* ---- classification ---- */
-type Cls = { kind: 'invoice' | 'meeting_summary' | 'update' | 'noise'; department: string | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor: string | null; confidence: number; reason: string };
+type Candidate = { name: string; email: string | null; phone: string | null; role: string | null; links: string[] };
+type Cls = { kind: 'invoice' | 'meeting_summary' | 'update' | 'noise' | 'application'; department: string | null; candidate?: Candidate | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor: string | null; confidence: number; reason: string };
 type Roster = Array<{ name: string; email: string | null; department: string | null }>;
 
 function rulesClassify(m: { from_email: string; subject: string; body_text: string; attachments: Att[]; links: string[]; cc_list: string; to_list: string }, roster: Roster): Cls {
@@ -244,21 +248,24 @@ function rulesClassify(m: { from_email: string; subject: string; body_text: stri
   const amount = amountM ? Number(String(amountM[1]).replace(/,/g, '')) : null;
   const isInvoice = /invoice|facture|receipt|re[cç]u|payment due|amount due|bill\b|statement of account/.test(text) || /invoice|facture|receipt|recu/.test(attNames);
   const isSummary = /loom\.com|otter\.ai|fireflies|tl;dv|tldv|plaud|fathom/.test(text + ' ' + m.links.join(' ')) || /\b(recap|summary|meeting notes|transcript|minutes)\b/.test(subj.toLowerCase());
-  const kind: Cls['kind'] = isInvoice ? 'invoice' : (isSummary ? 'meeting_summary' : 'update');
+  const isApplication = /\b(resume|r\u00e9sum\u00e9|curriculum vitae|\bcv\b|cover letter|applying for|application for|apply for the|job application|internship|volunteer position)\b/i.test(subj + '\n' + body) || /resume|\bcv\b|cover/.test(attNames);
+  const kind: Cls['kind'] = isInvoice ? 'invoice' : (isSummary ? 'meeting_summary' : (isApplication ? 'application' : 'update'));
   const first = body.split('\n').map(s => s.trim()).filter(Boolean)[0] || subj;
-  return { kind, department: department || (kind === 'invoice' ? 'fundraising' : null), title: subj.slice(0, 90) || 'Email', summary: first.slice(0, 280), amount: kind === 'invoice' ? amount : null, due_date: null, meeting_date: null, vendor: null, confidence: 0.4, reason: 'rules' };
+  if (kind === 'application') department = 'hr';
+  return { kind, department: department || (kind === 'invoice' ? 'fundraising' : null), candidate: kind === 'application' ? { name: m.from_email, email: m.from_email, phone: null, role: null, links: [] } : null, title: subj.slice(0, 90) || 'Email', summary: first.slice(0, 280), amount: kind === 'invoice' ? amount : null, due_date: null, meeting_date: null, vendor: null, confidence: 0.4, reason: 'rules' };
 }
 
 const MODELS = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-sonnet-5'];
 const CLS_SYSTEM = `You file emails that Welfare Avenue staff cc to the shared hub@ inbox. Welfare Avenue is a charity serving people in need in Montreal and Toronto. Decide what each email is and which team it belongs to, then write a one line summary a busy executive can read in three seconds. Never use em dashes. Teams (use the key): opsmtl Operations Montreal (serving events, volunteers, kitchen, inventory), progdev Program Development (beneficiary programs, partnerships, research), opsto Operations Toronto, marketing (brand, social, website, content), fundraising (grants, donors, sponsorships, events, and all finance: invoices, receipts, statements, bookkeeping), hr (hiring, onboarding, policies, people), board (governance).
-Kinds: invoice = a bill, invoice, receipt or payment request (any team; it files under finance); meeting_summary = an AI meeting recap or transcript (Loom, Otter, Fireflies, tl;dv, Plaud, Fathom) or meeting notes with decisions and action items; update = anything else with substance about the work (a thread the team wants on record); noise = automated notices, calendar mail, newsletters, marketing blasts, receipts for nothing, empty forwards. Prefer the team of the sender or of the colleagues on the thread; for invoices set vendor and the amount actually owed; dates in ISO.`;
+Kinds: invoice = a bill, invoice, receipt or payment request (any team; it files under finance); meeting_summary = an AI meeting recap or transcript (Loom, Otter, Fireflies, tl;dv, Plaud, Fathom) or meeting notes with decisions and action items; application = a person applying for a job, internship, placement or volunteer role with us (a CV or resume attached, or a cover note; often sent to hub@ or forwarded from jobs@), department hr, and fill in candidate; update = anything else with substance about the work (a thread the team wants on record); noise = automated notices, calendar mail, newsletters, marketing blasts, receipts for nothing, empty forwards. Prefer the team of the sender or of the colleagues on the thread; for invoices set vendor and the amount actually owed; dates in ISO.`;
 const CLS_TOOL = {
   name: 'file_email',
   description: 'Classify one email for the hub.',
   input_schema: {
     type: 'object',
     properties: {
-      kind: { type: 'string', enum: ['invoice', 'meeting_summary', 'update', 'noise'] },
+      kind: { type: 'string', enum: ['invoice', 'meeting_summary', 'update', 'noise', 'application'] },
+      candidate: { type: ['object', 'null'], description: 'Only for kind application: the applicant', properties: { name: { type: 'string' }, email: { type: ['string', 'null'] }, phone: { type: ['string', 'null'] }, role: { type: ['string', 'null'], description: 'The position they are applying for, as they put it' }, links: { type: 'array', items: { type: 'string' }, description: 'LinkedIn, portfolio' } }, required: ['name'] },
       department: { type: ['string', 'null'], enum: [...DEPT_KEYS, null] },
       title: { type: 'string', description: 'Short label, at most 90 characters, no em dashes' },
       summary: { type: 'string', description: 'One or two sentences: what it is and what it asks for' },
@@ -269,15 +276,21 @@ const CLS_TOOL = {
   }
 };
 async function modelClassify(m: { from_email: string; from_name: string; to_list: string; cc_list: string; subject: string; internal_date: string; body_text: string; attachments: Att[]; links: string[] }, roster: Roster): Promise<Cls> {
-  const key = await getSecret('ANTHROPIC_API_KEY');
+  const key = 'hub-router';
   const user = 'ROSTER (name, email, team key):\n' + roster.map(r => r.name + ' <' + (r.email || '') + '> ' + (r.department || '')).join('\n') +
     '\n\nEMAIL\nFrom: ' + m.from_name + ' <' + m.from_email + '>\nTo: ' + m.to_list + '\nCc: ' + m.cc_list + '\nDate: ' + m.internal_date + '\nSubject: ' + m.subject +
     '\nAttachments: ' + (m.attachments.map(a => a.filename + ' (' + a.mime + ', ' + a.size + ' bytes)').join('; ') || 'none') +
     '\nLinks: ' + (m.links.slice(0, 8).join(' ') || 'none') + '\n\nBODY:\n' + (m.body_text || '').slice(0, 7000);
   let lastErr = '';
   for (const model of MODELS) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + SERVICE_KEY,
+        'x-wa-task': 'mail_triage',
+        'x-wa-caller': 'mail-pull',
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ model, max_tokens: 700, temperature: 0, system: CLS_SYSTEM, messages: [{ role: 'user', content: user }], tools: [CLS_TOOL], tool_choice: { type: 'tool', name: 'file_email' } })
     });
     if (res.ok) {
@@ -286,9 +299,12 @@ async function modelClassify(m: { from_email: string; from_name: string; to_list
       const tu = (body.content || []).find((c: any) => c.type === 'tool_use');
       if (tu?.input) {
         const i = tu.input as Record<string, unknown>;
-        const kind = ['invoice', 'meeting_summary', 'update', 'noise'].includes(String(i.kind)) ? String(i.kind) as Cls['kind'] : 'update';
-        const dep = DEPT_KEYS.includes(String(i.department)) ? String(i.department) : null;
-        return { kind, department: dep, title: String(i.title || m.subject || 'Email').replace(/—/g, ',').slice(0, 90), summary: String(i.summary || '').replace(/—/g, ',').slice(0, 600), amount: typeof i.amount === 'number' ? i.amount : null, vendor: i.vendor ? String(i.vendor).slice(0, 80) : null, due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.due_date || '')) ? String(i.due_date) : null, meeting_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.meeting_date || '')) ? String(i.meeting_date) : null, confidence: Number(i.confidence || 0), reason: String(i.reason || '').slice(0, 300) };
+        const kind = ['invoice', 'meeting_summary', 'update', 'noise', 'application'].includes(String(i.kind)) ? String(i.kind) as Cls['kind'] : 'update';
+        const dep = kind === 'application' ? 'hr' : (DEPT_KEYS.includes(String(i.department)) ? String(i.department) : null);
+        const cnd = i.candidate && typeof i.candidate === 'object' ? i.candidate as Record<string, unknown> : null;
+        const candidate: Candidate | null = kind === 'application' ? { name: String((cnd && cnd.name) || m.from_name || m.from_email).slice(0, 120), email: cnd && cnd.email ? String(cnd.email).slice(0, 160) : (m.from_email || null), phone: cnd && cnd.phone ? String(cnd.phone).slice(0, 40) : null, role: cnd && cnd.role ? String(cnd.role).slice(0, 120) : null, links: Array.isArray(cnd && cnd.links) ? (cnd!.links as unknown[]).map(String).slice(0, 5) : [] } : null;
+        const cls: Cls = { kind, department: dep, candidate, title: String(i.title || m.subject || 'Email').replace(/—/g, ',').slice(0, 90), summary: String(i.summary || '').replace(/—/g, ',').slice(0, 600), amount: typeof i.amount === 'number' ? i.amount : null, vendor: i.vendor ? String(i.vendor).slice(0, 80) : null, due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.due_date || '')) ? String(i.due_date) : null, meeting_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.meeting_date || '')) ? String(i.meeting_date) : null, confidence: Number(i.confidence || 0), reason: String(i.reason || '').slice(0, 300) };
+        return await jevMail(cls, m);
       }
       lastErr = 'no tool_use';
       continue;
@@ -300,7 +316,7 @@ async function modelClassify(m: { from_email: string; from_name: string; to_list
 }
 
 /* ---- filing ---- */
-type MailRow = { id: number; gmail_id: string; from_email: string; from_name: string; subject: string; body_text: string; attachments: Att[]; links: string[]; internal_date: string; kind: string; department: string | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor?: string | null };
+type MailRow = { id: number; gmail_id: string; from_email: string; from_name: string; subject: string; body_text: string; attachments: Att[]; links: string[]; internal_date: string; kind: string; department: string | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor?: string | null; candidate?: Candidate | null };
 
 async function storeAttachments(token: string, row: MailRow): Promise<Att[]> {
   const out: Att[] = [];
@@ -365,7 +381,96 @@ async function fileSummary(row: MailRow, site: string): Promise<Record<string, u
   return { type: 'transcript', id: ins.data.id, department: dept, title: row.title || row.subject, site };
 }
 
+/* ---- job applications become candidates in Recruitment (25/09/26) ---- */
+async function fileApplication(token: string, row: MailRow, site: string): Promise<Record<string, unknown>> {
+  const atts = token ? await storeAttachments(token, row) : (row.attachments || []);
+  if (token) await svc.from('hub_mail').update({ attachments: atts }).eq('id', row.id);
+  const isDoc = (a: Att) => /pdf|word|officedocument|text/i.test(a.mime || '') || /\.(pdf|docx?|rtf|txt)$/i.test(a.filename || '');
+  const cv = atts.find(a => a.path && isDoc(a) && /resume|résumé|\bcv\b|curriculum/i.test(a.filename || '')) || atts.find(a => a.path && isDoc(a)) || null;
+  const c = row.candidate || { name: row.from_name || row.from_email, email: row.from_email, phone: null, role: null, links: [] };
+  const name = (c.name || row.from_name || row.from_email || 'Applicant').trim().slice(0, 120);
+  const email = (c.email || row.from_email || '').toLowerCase() || null;
+  /* an open position that matches the role they name */
+  let requestId: number | null = null;
+  try {
+    const { data: reqs } = await svc.from('requests').select('id, title, done').eq('type_key', 'hiring-request').eq('done', false);
+    const words = String(c.role || row.subject || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !/application|position|role|job|apply|applying|for|the|with|your|welfare|avenue/.test(w));
+    let best: { id: number; score: number } | null = null;
+    for (const r of (reqs || []) as Array<{ id: number; title: string }>) {
+      const t = String(r.title || '').toLowerCase();
+      const score = words.reduce((a, w) => a + (t.includes(w) ? 1 : 0), 0);
+      if (score > 0 && (!best || score > best.score)) best = { id: r.id, score };
+    }
+    if (best) requestId = best.id;
+  } catch (_) { /* optional */ }
+  /* the same person applying twice within 90 days updates the earlier row */
+  let existing: { id: number } | null = null;
+  if (email) {
+    const { data } = await svc.from('hub_candidates').select('id').eq('email', email).gte('created_at', new Date(Date.now() - 90 * 86400000).toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    existing = data as { id: number } | null;
+  }
+  const rowOut = {
+    name, email, phone: c.phone || null, role: c.role || null, request_id: requestId, source: 'email', mail_id: row.id, gmail_id: row.gmail_id,
+    cv_path: cv ? cv.path : null, cv_name: cv ? cv.filename : null, links: (c.links || []).concat((row.links || []).filter(l => /linkedin|portfolio|github|behance|dribbble/i.test(l))).slice(0, 6),
+    summary: (row.summary || row.subject || '').slice(0, 600), updated_at: new Date().toISOString(), updated_by: 'Hub inbox'
+  };
+  let id: number;
+  if (existing) {
+    const up = await svc.from('hub_candidates').update({ ...rowOut, notes: null }).eq('id', existing.id).select('id').single();
+    if (up.error) throw new Error('candidate update failed: ' + up.error.message);
+    id = up.data.id;
+  } else {
+    const ins = await svc.from('hub_candidates').insert({ ...rowOut, status: 'new', stage_at: new Date().toISOString() }).select('id').single();
+    if (ins.error) throw new Error('candidate insert failed: ' + ins.error.message);
+    id = ins.data.id;
+  }
+  await log('candidate:' + id, existing ? 'reapplied' : 'applied', null, name + (c.role ? ' for ' + c.role : '') + (cv ? ' (CV attached)' : ''));
+  return { type: 'candidate', id, department: 'hr', title: name + (c.role ? ': ' + c.role : ''), request_id: requestId, cv: cv ? cv.path : null, site, updated: !!existing };
+}
+
+/* ---- Jev checks the filing (25/09/26) ----
+   OpenRouter's decision model reads the same email and says whether the
+   proposed kind and team are right. Strong disagreement sends the email to
+   the Hub inbox for a person instead of filing it wrongly; a confident team
+   from Jev fills in a missing team. Never blocks: any failure keeps the
+   model's answer. */
+async function jevMail(cls: Cls, m: { from_email: string; from_name: string; to_list: string; subject: string; body_text: string; attachments: Att[] }): Promise<Cls> {
+  try {
+    const teams: Record<string, string> = { opsmtl: 'Operations Montreal (serving events, volunteers, kitchen, inventory)', progdev: 'Program Development (beneficiary programs, partnerships, research)', opsto: 'Operations Toronto', marketing: 'Marketing (brand, social, website, content)', fundraising: 'Fundraising and finance (grants, donors, sponsorships, invoices, bookkeeping)', hr: 'HR (hiring, onboarding, policies, people)', board: 'Board (governance)', unsure: 'Cannot tell from the email' };
+    const kinds: Record<string, string> = { invoice: 'a bill, invoice, receipt or payment request', meeting_summary: 'an AI meeting recap, transcript or meeting notes', application: 'a person applying for a job, internship or volunteer role', update: 'something with substance about the work worth putting on record', noise: 'automated notices, newsletters, calendar mail, empty forwards' };
+    const state = { email: { from: m.from_name + ' <' + m.from_email + '>', to: m.to_list, subject: m.subject, attachments: m.attachments.map(a => a.filename), body_excerpt: (m.body_text || '').slice(0, 2500) }, proposed: { kind: cls.kind, team: cls.department, title: cls.title, summary: cls.summary }, teams };
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'mail_triage', 'x-wa-caller': 'mail-pull', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ state, questions: {
+        agree: { type: 'noul', instructions: 'Is the proposed filing (kind and team) right for this email?' },
+        kind: { type: 'choice', instructions: 'What is this email?', criteria: kinds },
+        team: { type: 'choice', instructions: 'Which team should this be filed under?', criteria: teams },
+      } })
+    });
+    if (!res.ok) return cls;
+    const out = await res.json();
+    const a = out?.answers || {};
+    const agree = typeof a.agree?.noul === 'number' ? a.agree.noul : null;
+    const jk = String(a.kind?.choice || ''); const jkConf = typeof a.kind?.confidence === 'number' ? a.kind.confidence : 0;
+    const jt = String(a.team?.choice || ''); const jtConf = typeof a.team?.confidence === 'number' ? a.team.confidence : 0;
+    const note = 'Jev: ' + (jk || '?') + '/' + (jt || '?') + (agree !== null ? ' (agree ' + Math.round(agree * 100) + '%)' : '');
+    if (agree !== null && agree < 0.3 && jk && jk !== cls.kind && jkConf >= 0.7) {
+      /* strong disagreement on what it is: do not file it as an invoice or an application on the model's word alone */
+      if (cls.kind === 'invoice' || cls.kind === 'application' || jk === 'noise') { cls = { ...cls, kind: 'update', department: null, confidence: Math.min(cls.confidence, 0.3), reason: (cls.reason + ' | ' + note + ': sent to the inbox for a person').slice(0, 300) }; return cls; }
+    }
+    if (!cls.department && cls.kind !== 'noise' && cls.kind !== 'invoice' && jt && jt !== 'unsure' && DEPT_KEYS.includes(jt) && jtConf >= 0.75) {
+      cls = { ...cls, department: jt, reason: (cls.reason + ' | team by ' + note).slice(0, 300) };
+    } else if (agree !== null && agree < 0.3 && jt && jt !== 'unsure' && jt !== cls.department && jtConf >= 0.8 && cls.confidence < 0.8 && cls.kind !== 'invoice' && cls.kind !== 'application') {
+      cls = { ...cls, department: null, confidence: Math.min(cls.confidence, 0.3), reason: (cls.reason + ' | ' + note + ': team unclear, sent to the inbox').slice(0, 300) };
+    } else {
+      cls = { ...cls, reason: (cls.reason + ' | ' + note).slice(0, 300) };
+    }
+    return cls;
+  } catch (_) { return cls; }
+}
+
 async function fileOne(token: string, row: MailRow, site: string): Promise<Record<string, unknown>> {
+  if (row.kind === 'application') return fileApplication(token, row, site);
   if (row.kind === 'invoice') return fileInvoice(token, row, site);
   if (row.kind === 'meeting_summary') return fileSummary(row, site);
   return fileUpdate(row, site);
@@ -378,6 +483,7 @@ async function undoOne(mailId: number, by: string): Promise<Record<string, unkno
   const removed: string[] = [];
   if (filed.type === 'task' && filed.id) { await svc.from('dept_tasks').delete().eq('id', filed.id); removed.push('task ' + filed.id); }
   if (filed.type === 'update' && filed.id) { await svc.from('dept_updates').delete().eq('id', filed.id); removed.push('update ' + filed.id); }
+  if (filed.type === 'candidate' && filed.id) { await svc.from('hub_candidates').delete().eq('id', filed.id); removed.push('candidate ' + filed.id); }
   if (filed.type === 'transcript' && filed.id) {
     const { data: tx } = await svc.from('transcripts').select('id, title').eq('id', filed.id).maybeSingle();
     if (tx) {
@@ -433,14 +539,14 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
       if (ins.error) throw new Error('hub_mail insert failed: ' + ins.error.message);
       if (!newest || internal > newest) newest = internal;
       if (cls.kind === 'noise') { ignored++; await labelMessage(id, 'ignored'); continue; }
-      const row: MailRow = { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor };
+      const row: MailRow = { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null };
       try {
         const result = await fileOne(token, row, site);
         await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', row.id);
-        await labelMessage(id, result.type === 'inbox' ? 'needs' : 'filed');
-        const where = result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
+        await labelMessage(id, result.type === 'inbox' ? 'needs' : result.type === 'candidate' ? 'recruit' : 'filed');
+        const where = result.type === 'candidate' ? 'Recruitment (HR centre)' : result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
         await log(String(row.id), 'filed', null, cls.kind + ' -> ' + where + ': ' + (cls.title || base.subject));
-        lines.push('*' + (cls.kind === 'invoice' ? 'Invoice' : cls.kind === 'meeting_summary' ? 'Meeting summary' : 'Update') + '* from ' + (from.name || from.email) + ' filed as ' + where + ': ' + (cls.title || base.subject) + (cls.amount != null ? ' ($' + cls.amount + ')' : ''));
+        lines.push('*' + (cls.kind === 'invoice' ? 'Invoice' : cls.kind === 'meeting_summary' ? 'Meeting summary' : cls.kind === 'application' ? 'Job application' : 'Update') + '* from ' + (from.name || from.email) + ' filed as ' + where + ': ' + (cls.title || base.subject) + (cls.amount != null ? ' ($' + cls.amount + ')' : ''));
         filed++;
       } catch (e) {
         failed++;
@@ -503,7 +609,7 @@ Deno.serve(async (req: Request) => {
       const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new' }).select('id').single();
       if (ins.error) throw new Error(ins.error.message);
       if (cls.kind === 'noise' || body.dry_run === true) return json({ ok: true, mail_id: ins.data.id, classification: cls, filed: null });
-      const result = await fileOne('', { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor }, site);
+      const result = await fileOne('', { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null }, site);
       await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', ins.data.id);
       await log(String(ins.data.id), 'filed', null, 'test: ' + cls.kind + ' -> ' + String(result.type) + ' ' + String(result.id), caller);
       return json({ ok: true, mail_id: ins.data.id, classification: cls, filed: result });
@@ -517,13 +623,13 @@ Deno.serve(async (req: Request) => {
       const { data: row } = await svc.from('hub_mail').select('*').eq('id', id).maybeSingle();
       if (!row) return json({ error: 'not found' }, 404);
       if (row.status === 'filed') await undoOne(id, caller);
-      const kind = ['invoice', 'meeting_summary', 'update'].includes(String(body.kind)) ? String(body.kind) : (row.kind === 'noise' ? 'update' : row.kind);
+      const kind = ['invoice', 'meeting_summary', 'update', 'application'].includes(String(body.kind)) ? String(body.kind) : (row.kind === 'noise' ? 'update' : row.kind);
       const department = DEPT_KEYS.includes(String(body.department)) ? String(body.department) : row.department;
       const { token } = await delegatedToken();
       const site = await siteUrl();
       const result = await fileOne(token, { ...(row as MailRow), kind, department }, site);
       await svc.from('hub_mail').update({ kind, department, filed: result, status: 'filed', error: null, undone_at: null, undone_by: null }).eq('id', id);
-      await labelMessage(String(row.gmail_id || ''), result.type === 'inbox' ? 'needs' : 'filed');
+      await labelMessage(String(row.gmail_id || ''), result.type === 'inbox' ? 'needs' : result.type === 'candidate' ? 'recruit' : 'filed');
       await log(String(id), 'refiled', row.kind + '/' + (row.department || ''), kind + '/' + (department || '') + ' -> ' + String(result.type) + ' ' + String(result.id), caller);
       return json({ ok: true, filed: result });
     }

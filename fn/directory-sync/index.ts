@@ -1,4 +1,4 @@
-// Welfare Avenue: directory-sync (v1.1, 25/09/26)
+// Welfare Avenue: directory-sync (v1.3, 25/09/26): probe action (which delegated scopes work), start dates from Workspace account creation dates
 // v1.1: shared mailboxes recognised by name (Welfare Avenue, Hub Avenue) and
 //   by more local parts (donors, support, media...).
 // The roster follows Google Workspace. Reads the welfareavenue.com user
@@ -72,19 +72,19 @@ async function staffCaller(req: Request): Promise<string | null> {
 /* ---- delegated token (the admin actor) ---- */
 function b64url(bytes: Uint8Array): string { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
 function pemToDer(pem: string): Uint8Array { const body = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, ''); const raw = atob(body); const out = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out; }
-async function token(): Promise<string> {
+async function token(scope: string = SCOPE): Promise<string> {
   const sa = JSON.parse(await getSecret('GOOGLE_SA_KEY'));
   const now = Math.floor(Date.now() / 1000);
   const enc = new TextEncoder();
   const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
-  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: ADMIN_ACTOR, scope: SCOPE, aud: sa.token_uri, iat: now, exp: now + 3600 })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: ADMIN_ACTOR, scope, aud: sa.token_uri, iat: now, exp: now + 3600 })));
   const signingInput = header + '.' + claims;
   const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput)));
   const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: signingInput + '.' + b64url(sig) }) });
   const body = await res.json();
   if (!body.access_token) {
-    if (/unauthorized_client|scope|invalid_grant/i.test(JSON.stringify(body))) throw new Error('The hub is not yet allowed to read the Workspace directory. Add ' + SCOPE + ' to the domain-wide delegation entry (client id 107460787452614031265).');
+    if (/unauthorized_client|scope|invalid_grant/i.test(JSON.stringify(body))) throw new Error('Not delegated yet: add ' + scope + ' to the domain-wide delegation entry (client id 107460787452614031265).');
     throw new Error('Google refused: ' + String(body.error_description || body.error || 'delegation failed').slice(0, 200));
   }
   return body.access_token as string;
@@ -127,7 +127,7 @@ async function log(entityType: string, entityId: string, field: string, oldV: st
   try { await svc.from('change_log').insert({ entity_type: entityType, entity_id: entityId, field, old_value: oldV, new_value: newV, changed_by: by }); } catch (_) { /* audit */ }
 }
 async function members(): Promise<Row[]> {
-  const { data } = await svc.from('team_members').select('id, name, email, department, role, active, avatar_url');
+  const { data } = await svc.from('team_members').select('id, name, email, department, role, active, avatar_url, start_date, start_source');
   return data || [];
 }
 function memberByEmail(all: Row[], email: string): Row | null { return all.filter((m) => lower(m.email) === lower(email))[0] || null; }
@@ -161,7 +161,7 @@ async function applyPhoto(tok: string, dir: Row, member: Row): Promise<'applied'
 /* ---- the pass ---- */
 async function sync(trigger: string) {
   const startedAt = new Date().toISOString();
-  const result: Row = { users: 0, deleted_seen: 0, matched: 0, queued: 0, new_in_queue: [], deactivated: [], reactivated: [], photos: 0, skipped: 0, photo_errors: 0 };
+  const result: Row = { users: 0, deleted_seen: 0, matched: 0, queued: 0, new_in_queue: [], deactivated: [], reactivated: [], photos: 0, skipped: 0, photo_errors: 0, start_dates: 0 };
   const tok = await token();
   const users = await listUsers(tok, false);
   let gone: Row[] = [];
@@ -197,6 +197,16 @@ async function sync(trigger: string) {
     if (skipped) result.skipped++;
     else if (member) result.matched++;
     else if (!prev?.dismissed && !u.suspended && !u.archived) { result.queued++; if (!prev) result.new_in_queue.push(fullName || email); }
+
+    /* start date: the day the Workspace account was created, unless HR set one by hand */
+    if (member && u.creationTime && member.start_source !== 'manual') {
+      const started = String(u.creationTime).slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(started) && member.start_date !== started) {
+        await svc.from('team_members').update({ start_date: started, start_source: 'google' }).eq('id', member.id);
+        if (!member.start_date) result.start_dates++;
+        member.start_date = started;
+      }
+    }
 
     /* leaving and coming back */
     const off = !!u.suspended || !!u.archived;
@@ -255,6 +265,7 @@ async function sync(trigger: string) {
     if (result.new_in_queue.length) bits.push(result.new_in_queue.length + ' new Workspace account' + (result.new_in_queue.length === 1 ? '' : 's') + ' to place on the roster: ' + result.new_in_queue.join(', ') + ' (' + site + '/#adminpanel)');
     if (result.deactivated.length) bits.push('Marked inactive from Workspace: ' + result.deactivated.join(', '));
     if (result.reactivated.length) bits.push('Back on the roster: ' + result.reactivated.join(', '));
+    if (result.start_dates) bits.push(result.start_dates + ' start date' + (result.start_dates === 1 ? '' : 's') + ' filled in from Workspace account dates');
     await postSlack(':busts_in_silhouette: Roster sync. ' + bits.join('. '));
   }
   return result;
@@ -290,6 +301,24 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, state: st || null, rows: queue || [] });
     }
     if (!who) return json({ error: 'admins only' }, 403);
+    if (action === 'probe') {
+      // which delegated scopes Google grants the hub today (onboarding needs the first four)
+      const want: Record<string, string> = {
+        'https://www.googleapis.com/auth/admin.directory.user': 'create, suspend and update Workspace accounts',
+        'https://www.googleapis.com/auth/admin.directory.group.member': 'add people to Google Groups',
+        'https://www.googleapis.com/auth/admin.directory.group.readonly': 'list Google Groups',
+        'https://www.googleapis.com/auth/drive': 'add people to shared drives',
+        'https://www.googleapis.com/auth/calendar.events': 'send calendar invitations',
+        'https://www.googleapis.com/auth/gmail.send': 'send the welcome email from hub@',
+        'https://www.googleapis.com/auth/admin.datatransfer': 'hand over Drive files when someone leaves (optional)',
+      };
+      const out: Record<string, { ok: boolean; purpose: string; error: string | null }> = {};
+      for (const [sc, purpose] of Object.entries(want)) {
+        try { await token(sc); out[sc] = { ok: true, purpose, error: null }; }
+        catch (e) { out[sc] = { ok: false, purpose, error: String((e as Error).message || e).slice(0, 200) }; }
+      }
+      return json({ ok: true, scopes: out });
+    }
     if (action === 'sync') {
       try { const r = await sync(who); return json({ ok: true, result: r }); }
       catch (e) {
