@@ -50,7 +50,18 @@
     '#w116lcard .left{font-size:13px;color:var(--wa-text);margin:0;line-height:1.6;}' +
     '.w116lm .hint{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
     '.w116lm .res{margin-top:12px;padding:12px;background:rgba(16,63,57,.05);border-radius:10px;font-size:13px;line-height:1.55;}' +
-    '@media (max-width:700px){#w116lcard .q .r{grid-template-columns:36px minmax(0,1fr);}#w116lcard .q .r .acts{grid-column:1 / -1;}}';
+    '.w116lb .w116lbl{max-height:52vh;overflow:auto;border:1px solid rgba(16,63,57,.10);border-radius:12px;margin-top:10px;}' +
+    '.w116lb .brow{display:grid;grid-template-columns:28px minmax(0,1.2fr) 20px minmax(0,1.4fr) auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid rgba(16,63,57,.06);font-size:13px;}' +
+    '.w116lb .brow:first-child{border-top:none;}' +
+    '.w116lb .brow.none{opacity:.55;}' +
+    '.w116lb .brow .who b{display:block;font-size:13px;}' +
+    '.w116lb .brow .who span{font-size:11.5px;color:var(--wa-muted);}' +
+    '.w116lb .brow .arrow{color:var(--wa-muted);text-align:center;}' +
+    '.w116lb .brow select{width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:12.5px;}' +
+    '.w116lb .brow .warn{font-size:11px;font-weight:700;color:#8a5a12;background:rgba(220,165,39,.22);border-radius:999px;padding:2px 8px;}' +
+    '.w116lb .ck input{width:16px;height:16px;accent-color:' + GREEN + ';}' +
+    '.w116lb .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
+    '@media (max-width:700px){#w116lcard .q .r{grid-template-columns:36px minmax(0,1fr);}#w116lcard .q .r .acts{grid-column:1 / -1;}.w116lb .brow{grid-template-columns:28px minmax(0,1fr);}.w116lb .brow .arrow{display:none;}}';
   document.head.appendChild(css);
 
   function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
@@ -104,7 +115,7 @@
     var h2 = document.querySelector('#w116lcard h2'); if (h2) { var old = h2.querySelector('.n'); if (old) old.remove(); if (q.length) { var n = document.createElement('span'); n.className = 'n'; n.textContent = q.length + ' to place'; h2.appendChild(n); } }
     var html = '<div class="bar"><span>Last checked: <b>' + E(when(st.last_sync_at)) + '</b></span>' +
       (res ? '<span>' + E(res.users || 0) + ' accounts in Workspace, ' + E(res.matched || 0) + ' on the roster' + (res.photos ? ', ' + res.photos + ' photo' + (res.photos === 1 ? '' : 's') + ' filled in' : '') + (res.skipped ? ', ' + res.skipped + ' shared mailbox' + (res.skipped === 1 ? '' : 'es') + ' skipped' : '') + '</span>' : '') +
-      '<span class="sp"></span><button class="w113btn ghost" data-w116l="sync"' + (L.busy ? ' disabled' : '') + '>' + (L.busy ? 'Checking...' : 'Check Workspace now') + '</button></div>';
+      '<span class="sp"></span>' + (matchable(q).length >= 2 ? '<button class="w113btn" data-w116l="bulk">Link ' + matchable(q).length + ' to existing profiles</button>' : '') + '<button class="w113btn ghost" data-w116l="sync"' + (L.busy ? ' disabled' : '') + '>' + (L.busy ? 'Checking...' : 'Check Workspace now') + '</button></div>';
     if (L.err) html += '<div class="err">Could not reach the roster sync: ' + E(L.err) + '</div>';
     if (st.last_error) html += '<div class="err">The last check failed: ' + E(st.last_error).replace(/(https?:\/\/[^\s)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + '</div>';
     html += '<h4>Place on the roster (' + q.length + ')</h4>';
@@ -164,6 +175,38 @@
     });
   }
 
+  function proposal(r) { var c = candidates(r); var best = c[0] && c[0].score > 0 ? c[0] : null; var unique = !!(best && !(c[1] && c[1].score === best.score)); return { r: r, cands: c, best: best, sure: !!(best && best.score >= 2 && unique) }; }
+  function matchable(rows) { return rows.map(proposal).filter(function (p) { return p.best; }); }
+  function bulkModal() {
+    var items = queue().map(proposal);
+    var rows = items.map(function (it, i) {
+      var opts = '<option value="">Leave in the queue</option>' + it.cands.slice(0, 12).map(function (c) { return '<option value="' + E(c.id) + '"' + (it.best && c.id === it.best.id ? ' selected' : '') + '>' + E(c.name) + (c.role ? ' (' + E(c.role) + ')' : '') + (c.dept ? ', ' + E(label(c.dept)) : '') + '</option>'; }).join('');
+      return '<div class="brow' + (it.best ? '' : ' none') + '"><label class="ck"><input type="checkbox" data-bi="' + i + '"' + (it.sure ? ' checked' : '') + (it.best ? '' : ' disabled') + ' /></label><div class="who"><b>' + E(it.r.full_name || it.r.email) + '</b><span>' + E(it.r.email) + '</span></div><div class="arrow">&rarr;</div><select data-bs="' + i + '"' + (it.best ? '' : ' disabled') + '>' + opts + '</select>' + (it.best && !it.sure ? '<span class="warn">check</span>' : '') + '</div>';
+    }).join('');
+    openModal('<div class="w113modal w116lm w116lb"><h3>Link Workspace accounts to existing profiles</h3>' +
+      '<p class="m-sub">Each account on the left gets the email of the profile on the right, keeping that person\'s tasks, projects and history; the Google photo is copied. Ticked rows are first-name matches with one candidate; rows marked <b>check</b> have a first-name match but another profile could fit too. No invitation emails are sent here.</p>' +
+      '<div class="w116lbl">' + (rows || '<p class="empty">Nothing in the queue.</p>') + '</div>' +
+      '<div class="w113acts"><button class="w113btn" id="w116lbgo">Link the ticked rows</button><button class="w113btn ghost" id="w116lbc">Cancel</button><span class="w113ok" id="w116lbout"></span></div></div>');
+    document.getElementById('w116lbc').addEventListener('click', closeModal);
+    document.getElementById('w116lbgo').addEventListener('click', async function () {
+      var btn = this; btn.disabled = true; var out = document.getElementById('w116lbout');
+      var picks = [];
+      items.forEach(function (it, i) { var cb = document.querySelector('[data-bi="' + i + '"]'); var sel = document.querySelector('[data-bs="' + i + '"]'); if (cb && cb.checked && sel && sel.value) picks.push({ email: it.r.email, member_id: Number(sel.value), name: (it.cands.filter(function (c) { return c.id === Number(sel.value); })[0] || {}).name }); });
+      if (!picks.length) { out.textContent = 'Nothing ticked.'; btn.disabled = false; return; }
+      var done = 0, failed = [];
+      for (var k = 0; k < picks.length; k++) {
+        var pk = picks[k]; out.textContent = 'Linking ' + (k + 1) + ' of ' + picks.length + ': ' + pk.name + '...';
+        try { await fn('hub-invite', { action: 'set_email', member_id: pk.member_id, email: pk.email }); await fn('directory-sync', { action: 'place', email: pk.email, member_id: pk.member_id }); done++; }
+        catch (err) { failed.push(pk.name + ' (' + String(err.message || err).slice(0, 80) + ')'); }
+      }
+      out.textContent = done + ' linked' + (failed.length ? '; could not link ' + failed.join(', ') : '') + '.';
+      try { if (typeof loadAll === 'function') await loadAll(); } catch (e) { /* fine */ }
+      await load(true); paint();
+      try { if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+      btn.textContent = 'Done'; btn.disabled = false; btn.onclick = closeModal;
+    });
+  }
+
   document.addEventListener('click', async function (e) {
     var b = e.target.closest && e.target.closest('#w116lcard [data-w116l]'); if (!b) return;
     var what = b.getAttribute('data-w116l'); var email = b.getAttribute('data-email');
@@ -174,6 +217,7 @@
       L.busy = false; await load(true); paint(); return;
     }
     if (what === 'place') { var row = L.rows.filter(function (x) { return x.email === email; })[0]; if (row) placeModal(row); return; }
+    if (what === 'bulk') { bulkModal(); return; }
     if (what === 'dismiss' || what === 'undismiss') {
       try { await fn('directory-sync', { action: 'dismiss', email: email, undo: what === 'undismiss' }); toastS(what === 'dismiss' ? 'Skipped: not a person' : 'Back in the queue'); } catch (err) { toastS('Could not save that'); }
       await load(true); paint(); return;

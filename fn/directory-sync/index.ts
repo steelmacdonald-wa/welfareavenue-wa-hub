@@ -1,4 +1,6 @@
-// Welfare Avenue: directory-sync (v1, 25/09/26)
+// Welfare Avenue: directory-sync (v1.1, 25/09/26)
+// v1.1: shared mailboxes recognised by name (Welfare Avenue, Hub Avenue) and
+//   by more local parts (donors, support, media...).
 // The roster follows Google Workspace. Reads the welfareavenue.com user
 // directory through the service account's domain-wide delegation, acting as
 // the hub's admin account (the Directory API only answers an admin), and:
@@ -34,7 +36,7 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 const SCOPE = 'https://www.googleapis.com/auth/admin.directory.user.readonly';
 const ADMIN_ACTOR = 'steel.macdonald@welfareavenue.com';
 const DOMAIN = 'welfareavenue.com';
-const SHARED = ['hub', 'info', 'org', 'jobs', 'job', 'admin', 'noreply', 'no-reply', 'donations', 'volunteer', 'volunteers', 'contact', 'hello', 'finance', 'grants', 'events', 'marketing', 'hr', 'board', 'team', 'welfareavenue', 'welfare'];
+const SHARED = ['hub', 'info', 'org', 'jobs', 'job', 'admin', 'noreply', 'no-reply', 'donations', 'donors', 'donate', 'volunteer', 'volunteers', 'contact', 'hello', 'finance', 'grants', 'events', 'marketing', 'hr', 'board', 'team', 'welfareavenue', 'welfare', 'support', 'newsletter', 'media', 'press', 'partnerships'];
 const FALLBACK_ADMINS = ['steel.macdonald', 'suhaib.abdillahi', 'ian.odhiambo', 'valex.sanon', 'tuna.kaynak', 'michael.michailidis'];
 const BUCKET = 'avatars';
 
@@ -113,7 +115,9 @@ function isShared(email: string, fullName: string, orgUnit: string): boolean {
   const local = email.split('@')[0];
   if (SHARED.indexOf(local) >= 0) return true;
   if (/shared|mailbox|service/i.test(orgUnit || '')) return true;
-  if (/^(hub|info|org|jobs|welfare avenue|welfareavenue|admin|noreply)\b/i.test(fullName || '') && !/\s[A-Z]/.test(fullName || '')) return true;
+  const fn = String(fullName || '').trim();
+  if (/^(welfare avenue|welfareavenue|hub avenue|hub|info|org|jobs|admin|noreply|no-reply|donors|donations)$/i.test(fn)) return true;
+  if (/^(hub|info|org|jobs|admin|noreply)\b/i.test(fn) && !/\s[A-Z]/.test(fn)) return true;
   return false;
 }
 async function postSlack(text: string) {

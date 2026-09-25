@@ -1,4 +1,10 @@
-// Welfare Avenue: mail-pull (v2, 24/09/26)
+// Welfare Avenue: mail-pull (v5, 25/09/26)
+// v5: the hub@ mailbox shows the trail. Every processed email gets a Gmail
+//   label (Hub/Filed, Hub/Needs a team, Hub/Ignored) through gmail.modify;
+//   filed and ignored mail is marked read and archived out of the inbox, so
+//   only what needs a human stays there. Undo puts the email back in the
+//   inbox under Hub/Needs a team; refiling labels it Hub/Filed again. If the
+//   modify scope is missing the sync still runs, just without labels.
 // Reads the hub@welfareavenue.com inbox through the service account with
 // Google Workspace domain-wide delegation (client id 107460787452614031265,
 // scope gmail.readonly) and files what members cc the hub on. Steel: fully
@@ -89,14 +95,15 @@ function pemToDer(pem: string): Uint8Array {
   for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
   return out;
 }
-let TOKEN: { value: string; exp: number } | null = null;
-async function delegatedToken(): Promise<{ token: string; sa: string }> {
+const TOKENS: Record<string, { value: string; exp: number }> = {};
+async function delegatedToken(scope = 'https://www.googleapis.com/auth/gmail.readonly'): Promise<{ token: string; sa: string }> {
   const sa = JSON.parse(await getSecret('GOOGLE_SA_KEY'));
-  if (TOKEN && Date.now() < TOKEN.exp - 60000) return { token: TOKEN.value, sa: sa.client_email };
+  const cached = TOKENS[scope];
+  if (cached && Date.now() < cached.exp - 60000) return { token: cached.value, sa: sa.client_email };
   const now = Math.floor(Date.now() / 1000);
   const enc = new TextEncoder();
   const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
-  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: HUB, scope: 'https://www.googleapis.com/auth/gmail.readonly', aud: sa.token_uri, iat: now, exp: now + 3600 })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: HUB, scope, aud: sa.token_uri, iat: now, exp: now + 3600 })));
   const signingInput = header + '.' + claims;
   const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput)));
@@ -104,8 +111,66 @@ async function delegatedToken(): Promise<{ token: string; sa: string }> {
   const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }) });
   const body = await res.json();
   if (!body.access_token) throw new Error('delegation failed: ' + JSON.stringify(body).slice(0, 300));
-  TOKEN = { value: body.access_token, exp: Date.now() + (body.expires_in || 3600) * 1000 };
-  return { token: TOKEN.value, sa: sa.client_email };
+  TOKENS[scope] = { value: body.access_token, exp: Date.now() + (body.expires_in || 3600) * 1000 };
+  return { token: TOKENS[scope].value, sa: sa.client_email };
+}
+/* ---- labels in the hub@ mailbox (gmail.modify; silent when the scope is missing) ---- */
+const LABELS: Record<string, { name: string; bg: string; fg: string }> = {
+  filed: { name: 'Hub/Filed', bg: '#16a765', fg: '#ffffff' },
+  needs: { name: 'Hub/Needs a team', bg: '#ffad47', fg: '#000000' },
+  ignored: { name: 'Hub/Ignored', bg: '#cccccc', fg: '#000000' },
+};
+let LABEL_IDS: Record<string, string> | null = null;
+let MODIFY_TOKEN: string | null | undefined = undefined;
+async function modifyToken(): Promise<string | null> {
+  if (MODIFY_TOKEN !== undefined) return MODIFY_TOKEN;
+  try { MODIFY_TOKEN = (await delegatedToken('https://www.googleapis.com/auth/gmail.modify')).token; }
+  catch (e) { console.error('gmail.modify not available yet', String(e).slice(0, 200)); MODIFY_TOKEN = null; }
+  return MODIFY_TOKEN;
+}
+// deno-lint-ignore no-explicit-any
+async function gmailWrite(token: string, method: string, path: string, payload: unknown): Promise<any> {
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me' + path, { method, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const b = await res.json().catch(() => null);
+  if (!res.ok) throw new Error('gmail ' + method + ' ' + path + ' -> ' + res.status + ' ' + JSON.stringify(b).slice(0, 200));
+  return b;
+}
+async function labelIds(token: string): Promise<Record<string, string>> {
+  if (LABEL_IDS) return LABEL_IDS;
+  const list = await gmail(token, '/labels');
+  const byName: Record<string, string> = {};
+  // deno-lint-ignore no-explicit-any
+  ((list.labels || []) as any[]).forEach(l => { byName[String(l.name)] = String(l.id); });
+  /* Gmail nests "Hub/Filed" under a "Hub" label: make the parent first */
+  if (!byName['Hub']) { try { const p = await gmailWrite(token, 'POST', '/labels', { name: 'Hub', labelListVisibility: 'labelShow', messageListVisibility: 'show' }); byName['Hub'] = String(p.id); } catch (_) { /* may exist */ } }
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(LABELS)) {
+    const def = LABELS[key];
+    if (!byName[def.name]) {
+      let made = null;
+      try { made = await gmailWrite(token, 'POST', '/labels', { name: def.name, labelListVisibility: 'labelShow', messageListVisibility: 'show', color: { backgroundColor: def.bg, textColor: def.fg } }); }
+      catch (_) { made = await gmailWrite(token, 'POST', '/labels', { name: def.name, labelListVisibility: 'labelShow', messageListVisibility: 'show' }); }
+      byName[def.name] = String(made.id);
+    }
+    out[key] = byName[def.name];
+  }
+  LABEL_IDS = out;
+  return out;
+}
+/* outcome: 'filed' (read + archived), 'needs' (stays in the inbox, unread), 'ignored' (read + archived), 'undo' (back in the inbox as needs) */
+async function labelMessage(gmailId: string, outcome: 'filed' | 'needs' | 'ignored' | 'undo'): Promise<boolean> {
+  if (!gmailId || gmailId.startsWith('test-')) return false;
+  const token = await modifyToken(); if (!token) return false;
+  try {
+    const ids = await labelIds(token);
+    const all = [ids.filed, ids.needs, ids.ignored];
+    let add: string[] = [], remove: string[] = [];
+    if (outcome === 'filed') { add = [ids.filed]; remove = all.filter(x => x !== ids.filed).concat(['UNREAD', 'INBOX']); }
+    else if (outcome === 'ignored') { add = [ids.ignored]; remove = all.filter(x => x !== ids.ignored).concat(['UNREAD', 'INBOX']); }
+    else { add = [ids.needs, 'INBOX']; remove = all.filter(x => x !== ids.needs); if (outcome === 'undo') add.push('UNREAD'); }
+    await gmailWrite(token, 'POST', '/messages/' + encodeURIComponent(gmailId) + '/modify', { addLabelIds: add, removeLabelIds: remove });
+    return true;
+  } catch (e) { console.error('label failed', gmailId, String(e).slice(0, 200)); return false; }
 }
 // deno-lint-ignore no-explicit-any
 async function gmail(token: string, path: string): Promise<any> {
@@ -326,6 +391,7 @@ async function undoOne(mailId: number, by: string): Promise<Record<string, unkno
   }
   await svc.from('hub_mail').update({ status: 'undone', undone_at: new Date().toISOString(), undone_by: by }).eq('id', mailId);
   await log(String(mailId), 'undone', JSON.stringify(filed).slice(0, 200), removed.join(', ') || 'nothing to remove', by);
+  await labelMessage(String(row.gmail_id || ''), 'undo');
   return { ok: true, removed };
 }
 
@@ -366,11 +432,12 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
       const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new' }).select('id').single();
       if (ins.error) throw new Error('hub_mail insert failed: ' + ins.error.message);
       if (!newest || internal > newest) newest = internal;
-      if (cls.kind === 'noise') { ignored++; continue; }
+      if (cls.kind === 'noise') { ignored++; await labelMessage(id, 'ignored'); continue; }
       const row: MailRow = { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor };
       try {
         const result = await fileOne(token, row, site);
         await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', row.id);
+        await labelMessage(id, result.type === 'inbox' ? 'needs' : 'filed');
         const where = result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
         await log(String(row.id), 'filed', null, cls.kind + ' -> ' + where + ': ' + (cls.title || base.subject));
         lines.push('*' + (cls.kind === 'invoice' ? 'Invoice' : cls.kind === 'meeting_summary' ? 'Meeting summary' : 'Update') + '* from ' + (from.name || from.email) + ' filed as ' + where + ': ' + (cls.title || base.subject) + (cls.amount != null ? ' ($' + cls.amount + ')' : ''));
@@ -379,6 +446,7 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
         failed++;
         await svc.from('hub_mail').update({ status: 'failed', error: String(e).slice(0, 400) }).eq('id', row.id);
         await log(String(row.id), 'failed', null, String(e).slice(0, 300));
+        await labelMessage(id, 'needs');
       }
     } catch (e) {
       failed++;
@@ -412,7 +480,8 @@ Deno.serve(async (req: Request) => {
         const m = await gmail(token, '/messages/' + it.id + '?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Date');
         rows.push({ id: it.id, date: hdr(m, 'Date'), from: hdr(m, 'From'), to: hdr(m, 'To'), cc: hdr(m, 'Cc'), subject: hdr(m, 'Subject'), snippet: String(m.snippet || '').slice(0, 160), labels: m.labelIds || [] });
       }
-      return json({ ok: true, as: HUB, service_account: sa, email: profile.emailAddress, messages_total: profile.messagesTotal, threads_total: profile.threadsTotal, newest: rows });
+      const mt = await modifyToken(); let labels: Record<string, string> | null = null; if (mt) { try { labels = await labelIds(mt); } catch (e) { labels = { error: String(e).slice(0, 200) }; } }
+      return json({ ok: true, as: HUB, service_account: sa, email: profile.emailAddress, messages_total: profile.messagesTotal, threads_total: profile.threadsTotal, modify_scope: !!mt, labels, newest: rows });
     }
     if (action === 'sync') {
       if (body.wait === true) return json({ ok: true, ...(await runSync(Number(body.max || 40))) });
@@ -454,8 +523,21 @@ Deno.serve(async (req: Request) => {
       const site = await siteUrl();
       const result = await fileOne(token, { ...(row as MailRow), kind, department }, site);
       await svc.from('hub_mail').update({ kind, department, filed: result, status: 'filed', error: null, undone_at: null, undone_by: null }).eq('id', id);
+      await labelMessage(String(row.gmail_id || ''), result.type === 'inbox' ? 'needs' : 'filed');
       await log(String(id), 'refiled', row.kind + '/' + (row.department || ''), kind + '/' + (department || '') + ' -> ' + String(result.type) + ' ' + String(result.id), caller);
       return json({ ok: true, filed: result });
+    }
+    if (action === 'relabel') {
+      /* one-off catch-up: label every email the hub has already processed */
+      const { data: rows } = await svc.from('hub_mail').select('gmail_id, kind, status, filed').order('id', { ascending: true }).limit(Number(body.max || 300));
+      let done = 0, skipped = 0;
+      for (const r of (rows || [])) {
+        const gid = String(r.gmail_id || ''); if (!gid || gid.startsWith('test-')) { skipped++; continue; }
+        const filed = (r.filed || {}) as Record<string, unknown>;
+        const outcome = r.status === 'undone' ? 'undo' : r.status === 'failed' ? 'needs' : r.kind === 'noise' ? 'ignored' : (filed.type === 'inbox' ? 'needs' : 'filed');
+        if (await labelMessage(gid, outcome as 'filed')) done++; else skipped++;
+      }
+      return json({ ok: true, labelled: done, skipped, modify_scope: !!(await modifyToken()) });
     }
     return json({ error: 'unknown action' }, 400);
   } catch (e) {

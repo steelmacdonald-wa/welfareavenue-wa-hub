@@ -34,6 +34,8 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
         if (name === 'directory-sync') {
           if (body.action === 'status') return { ok: true, state: { last_sync_at: ago(0.2), last_result: { users: 31, matched: 24, queued: 2, skipped: 4, photos: 3, deactivated: ['Rami'] }, last_error: window.__DS_ERR || null }, rows: [
             { email: 'daniela.pidi@welfareavenue.com', full_name: 'Daniela Pidi', title: 'Finance lead', account_created_at: ago(3), last_login_at: ago(1), first_seen_at: ago(0.2), member_id: null, dismissed: false, skipped: false, suspended: false },
+            { email: 'karan.singh@welfareavenue.com', full_name: 'Karan Singh', title: '', account_created_at: ago(30), last_login_at: ago(2), first_seen_at: ago(0.2), member_id: null, dismissed: false, skipped: false, suspended: false },
+            { email: 'tuna.kaynak@welfareavenue.com', full_name: 'Tuna Kaynak', title: '', account_created_at: ago(30), last_login_at: ago(2), first_seen_at: ago(0.2), member_id: null, dismissed: false, skipped: false, suspended: false },
             { email: 'new.person@welfareavenue.com', full_name: 'New Person', title: '', account_created_at: ago(1), last_login_at: null, first_seen_at: ago(0.2), member_id: null, dismissed: !!window.__DISMISSED, skipped: false, suspended: false },
             { email: 'hub@welfareavenue.com', full_name: 'Hub', title: '', first_seen_at: ago(0.2), member_id: null, dismissed: false, skipped: true, suspended: false },
             { email: 'rami.al-siq@welfareavenue.com', full_name: 'Rami Al-Siq', first_seen_at: ago(0.2), member_id: 28, dismissed: false, skipped: false, suspended: true, deactivated_member_id: 28, deactivated_at: ago(0.2) },
@@ -95,6 +97,18 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
     await page.evaluate(() => { window.__CALLS = []; });
     await page.click('#w116lgo'); await page.waitForTimeout(1200);
     out.created = await page.evaluate(() => ({ res: (document.querySelector('#w116lout .res') || {}).textContent, calls: window.__CALLS.filter(c => !(c.name === 'directory-sync' && c.body.action === 'status')).map(c => c.name + ':' + c.body.action + ':' + (c.body.department || '') + ':' + (c.body.role_title || '') + ':' + (c.body.send_email)) }));
+    await page.evaluate(() => closeModal());
+  }
+  /* bulk link */
+  const bulk = await page.$('#w116lcard [data-w116l="bulk"]');
+  if (bulk) {
+    out.bulkButton = await bulk.textContent();
+    await bulk.click(); await page.waitForTimeout(500);
+    out.bulk = await page.evaluate(() => Array.from(document.querySelectorAll('.w116lb .brow')).map(r => ({ who: r.querySelector('.who b').textContent, checked: r.querySelector('input').checked, disabled: r.querySelector('input').disabled, pick: r.querySelector('select') ? r.querySelector('select').options[r.querySelector('select').selectedIndex].textContent : null, warn: !!r.querySelector('.warn') })));
+    await page.evaluate(() => { window.__CALLS = []; });
+    await page.click('#w116lbgo'); await page.waitForTimeout(1500);
+    out.bulkResult = await page.evaluate(() => ({ out: (document.getElementById('w116lbout') || {}).textContent, calls: window.__CALLS.filter(c => !(c.name === 'directory-sync' && c.body.action === 'status')).map(c => c.name + ':' + c.body.action + ':' + (c.body.member_id || '')) }));
+    await shot("4_bulk");
     await page.evaluate(() => closeModal());
   }
   /* dismiss */

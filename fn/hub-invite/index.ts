@@ -1,4 +1,9 @@
-// Welfare Avenue: hub-invite (v4, 25/09/26)
+// Welfare Avenue: hub-invite (v5, 25/09/26)
+// v5: the invitation email goes out from hub@welfareavenue.com through the
+//   Gmail API (domain-wide delegation, scope gmail.send): a branded message
+//   with a one-time sign-in button (Supabase generateLink), reply-to the
+//   inviter. If Gmail refuses, the Supabase invitation email is sent instead,
+//   so nobody is left without a way in.
 // v4: Program Development (progdev) is a department people can be invited into.
 // v3: when a person already has Hub access and the request does not name
 //   an access level (bulk invites default to "keep each person's current
@@ -100,6 +105,86 @@ async function slackWelcome(memberId: number | null): Promise<string> {
   } catch (e) { return 'failed: ' + String(e).slice(0, 80); }
 }
 
+/* ---- the invitation email, sent from hub@ through Gmail ---- */
+const HUB = 'hub@welfareavenue.com';
+function b64url(bytes: Uint8Array): string { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function pemToDer(pem: string): Uint8Array { const body = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, ''); const raw = atob(body); const out = new Uint8Array(raw.length); for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out; }
+async function hubToken(scope: string): Promise<string> {
+  const raw = await getSecret('GOOGLE_SA_KEY'); if (!raw) throw new Error('GOOGLE_SA_KEY unavailable');
+  const sa = JSON.parse(raw);
+  const now = Math.floor(Date.now() / 1000);
+  const enc = new TextEncoder();
+  const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: HUB, scope, aud: sa.token_uri, iat: now, exp: now + 3600 })));
+  const signingInput = header + '.' + claims;
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput)));
+  const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: signingInput + '.' + b64url(sig) }) });
+  const body = await res.json();
+  if (!body.access_token) throw new Error('delegation refused for ' + scope + ': ' + String(body.error_description || body.error || '').slice(0, 160));
+  return body.access_token as string;
+}
+function escHtml(s: string): string { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function encodeSubject(s: string): string { return '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(s))) + '?='; }
+function inviteHtml(first: string, link: string, inviterFirst: string, site: string): string {
+  return '<!doctype html><html><body style="margin:0;padding:0;background:#FFFAF2;font-family:Helvetica,Arial,sans-serif;color:#1F201E;">' +
+    '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#FFFAF2;"><tr><td align="center" style="padding:32px 16px;">' +
+    '<table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:16px;border:1px solid rgba(16,63,57,.10);">' +
+    '<tr><td style="padding:28px 32px 8px;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#103F39;font-weight:700;">Welfare Avenue Hub</td></tr>' +
+    '<tr><td style="padding:0 32px;font-size:26px;line-height:1.2;color:#103F39;font-weight:700;">You are on the Hub, ' + escHtml(first) + '</td></tr>' +
+    '<tr><td style="padding:14px 32px 0;font-size:15px;line-height:1.55;">The Welfare Avenue Hub is the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves. Your profile is set up and waiting for you.</td></tr>' +
+    '<tr><td style="padding:22px 32px 6px;"><a href="' + escHtml(link) + '" style="display:inline-block;background:#103F39;color:#FFFAF2;text-decoration:none;font-weight:700;font-size:15px;padding:13px 26px;border-radius:999px;">Open the Hub</a></td></tr>' +
+    '<tr><td style="padding:10px 32px 0;font-size:13px;line-height:1.55;color:#5c6b66;">The button signs you in once. After that, use <b>Sign in with Google</b> and your Welfare Avenue account at <a href="' + escHtml(site) + '" style="color:#103F39;">' + escHtml(site.replace(/^https?:\/\//, '')) + '</a>.</td></tr>' +
+    '<tr><td style="padding:18px 32px 28px;font-size:13px;line-height:1.55;color:#5c6b66;">Questions? Reply to this email and ' + escHtml(inviterFirst) + ' will get it.</td></tr>' +
+    '</table><div style="max-width:560px;padding:14px 8px 0;font-size:11px;color:#8a938f;">Welfare Avenue, Building pathways in our community. Sent by the Hub on behalf of ' + escHtml(inviterFirst) + '.</div>' +
+    '</td></tr></table></body></html>';
+}
+function inviteText(first: string, link: string, inviterFirst: string, site: string): string {
+  return 'Hi ' + first + ',\n\nYou are on the Welfare Avenue Hub, the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves.\n\nOpen the Hub (signs you in once): ' + link + '\n\nAfter that, use Sign in with Google and your Welfare Avenue account at ' + site + '.\n\nQuestions? Reply to this email and ' + inviterFirst + ' will get it.\n\nWelfare Avenue Hub';
+}
+async function sendInviteMail(email: string, name: string, link: string, inviter: string, site: string): Promise<void> {
+  const token = await hubToken('https://www.googleapis.com/auth/gmail.send');
+  const first = (name || '').split(' ')[0] || 'there';
+  const inviterFirst = inviter.split('@')[0].split('.')[0].replace(/^./, c => c.toUpperCase());
+  const boundary = 'wa' + Date.now().toString(36);
+  const b64 = (s: string) => btoa(unescape(encodeURIComponent(s)));
+  const mime = [
+    'From: Welfare Avenue Hub <' + HUB + '>',
+    'To: ' + (name ? '"' + name.replace(/"/g, '') + '" <' + email + '>' : email),
+    'Reply-To: ' + inviter,
+    'Subject: ' + encodeSubject('You are on the Welfare Avenue Hub'),
+    'MIME-Version: 1.0',
+    'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+    '',
+    '--' + boundary,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(inviteText(first, link, inviterFirst, site)),
+    '--' + boundary,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64(inviteHtml(first, link, inviterFirst, site)),
+    '--' + boundary + '--',
+    ''
+  ].join('\r\n');
+  const raw = b64url(new TextEncoder().encode(mime));
+  const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
+  if (!res.ok) throw new Error('gmail send -> ' + res.status + ' ' + (await res.text()).slice(0, 160));
+}
+async function signInLink(email: string, name: string, site: string): Promise<string> {
+  const uid = await findAuthUser(email);
+  let res = uid
+    ? await svc.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: site } })
+    : await svc.auth.admin.generateLink({ type: 'invite', email, options: { redirectTo: site, data: { full_name: name } } });
+  if (res.error && !uid) res = await svc.auth.admin.generateLink({ type: 'magiclink', email, options: { redirectTo: site } });
+  if (res.error) throw new Error(res.error.message);
+  const link = res.data?.properties?.action_link || '';
+  if (!link) throw new Error('no sign-in link returned');
+  return link;
+}
+
 type InviteResult = { ok: boolean; email: string; name?: string; error?: string; member_id?: number | null; email_sent?: boolean; note?: string | null; slack?: string; existed?: boolean; hub_role?: string };
 
 async function invite(person: Record<string, unknown>, who: Caller): Promise<InviteResult> {
@@ -148,12 +233,20 @@ async function invite(person: Record<string, unknown>, who: Caller): Promise<Inv
 
   let emailSent = false, emailNote = '';
   if (sendEmail) {
+    const site = await siteUrl();
     try {
-      const site = await siteUrl();
-      const { error: invErr } = await svc.auth.admin.inviteUserByEmail(email, { redirectTo: site, data: { full_name: name } });
-      if (invErr) emailNote = invErr.message;
-      else emailSent = true;
-    } catch (e) { emailNote = String((e as Error).message || e); }
+      /* v5: from hub@ through Gmail, with a one-time sign-in button */
+      const link = await signInLink(email, name, site);
+      await sendInviteMail(email, name, link, who.email, site);
+      emailSent = true; emailNote = 'sent from hub@';
+    } catch (e) {
+      const why = String((e as Error).message || e).slice(0, 160);
+      try {
+        const { error: invErr } = await svc.auth.admin.inviteUserByEmail(email, { redirectTo: site, data: { full_name: name } });
+        if (invErr) emailNote = 'hub@ send failed (' + why + '); Supabase email failed too: ' + invErr.message;
+        else { emailSent = true; emailNote = 'sent by Supabase (hub@ send failed: ' + why + ')'; }
+      } catch (e2) { emailNote = 'hub@ send failed (' + why + '); ' + String((e2 as Error).message || e2); }
+    }
   } else {
     emailNote = 'not requested';
   }
