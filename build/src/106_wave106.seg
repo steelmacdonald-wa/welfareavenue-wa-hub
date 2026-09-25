@@ -27,8 +27,8 @@
   function w106Renames() {
     try {
       var t = document.querySelector('#tabBar .tab[data-tab="training"]');
-      if (t && t.textContent.indexOf('My trainings') < 0) {
-        t.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>My trainings';
+      if (t && t.textContent.indexOf('Training academy') < 0) {
+        t.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Training academy';
       }
       var v = document.querySelector('#tabBar .tab[data-tab="volunteering"]');
       if (v && v.textContent.indexOf('MTL volunteering') < 0) {

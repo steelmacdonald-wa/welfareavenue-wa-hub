@@ -1,0 +1,1742 @@
+{
+ "academy_paths": [
+  {
+   "key": "foundations",
+   "name": "Welfare Avenue foundations",
+   "title": "Welfare Avenue foundations",
+   "blurb": "Who we are, the eight activities we are registered for, and the partners we work with.",
+   "dept": null,
+   "required": true,
+   "cert_title": "Welfare Avenue Foundations",
+   "color": "#DCA527",
+   "icon": "heart",
+   "sort": 10,
+   "active": true
+  },
+  {
+   "key": "hub",
+   "name": "Using the Hub",
+   "title": "Using the Hub",
+   "blurb": "Eight short modules on how the Hub turns meetings into work.",
+   "dept": null,
+   "required": true,
+   "cert_title": "Hub Essentials",
+   "color": "#103F39",
+   "icon": "compass",
+   "sort": 20,
+   "active": true
+  },
+  {
+   "key": "tours",
+   "name": "Hub page tours",
+   "title": "Hub page tours",
+   "blurb": "A guided walkthrough of every page of the Hub, section by section.",
+   "dept": null,
+   "required": false,
+   "cert_title": "Hub Navigator",
+   "color": "#2A8C7A",
+   "icon": "map",
+   "sort": 30,
+   "active": true
+  },
+  {
+   "key": "marketing",
+   "name": "Marketing Strategy Package",
+   "title": "Marketing strategy",
+   "blurb": "The marketing strategy built for Welfare Avenue, module by module.",
+   "dept": "marketing",
+   "required": false,
+   "cert_title": "Marketing Strategy",
+   "color": "#6F64AB",
+   "icon": "megaphone",
+   "sort": 40,
+   "active": true
+  },
+  {
+   "key": "branding",
+   "name": "Branding",
+   "title": "Our brand",
+   "blurb": "The brand refresh: what changed and why.",
+   "dept": "marketing",
+   "required": false,
+   "cert_title": "Brand Ready",
+   "color": "#B9851B",
+   "icon": "sparkle",
+   "sort": 45,
+   "active": true
+  },
+  {
+   "key": "ops",
+   "name": "Operations Basics",
+   "title": "Operations basics",
+   "blurb": "Running volunteers and ordering for a serving.",
+   "dept": "opsmtl",
+   "required": false,
+   "cert_title": "Operations Basics",
+   "color": "#2B6F55",
+   "icon": "box",
+   "sort": 50,
+   "active": true
+  },
+  {
+   "key": "keela",
+   "name": "Keela donor CRM",
+   "title": "Keela donor CRM",
+   "blurb": "Contacts, donation forms, volunteers and Smart Ask in Keela.",
+   "dept": "fundraising",
+   "required": false,
+   "cert_title": "Keela Ready",
+   "color": "#B3402F",
+   "icon": "gift",
+   "sort": 60,
+   "active": true
+  },
+  {
+   "key": "governance",
+   "name": "Charity governance",
+   "title": "Charity governance",
+   "blurb": "Keeping our registration, filing the T3010, and gifting and receipting.",
+   "dept": "board",
+   "required": false,
+   "cert_title": "Governance Ready",
+   "color": "#1F201E",
+   "icon": "shield",
+   "sort": 70,
+   "active": true
+  }
+ ],
+ "trainings_new": [
+  {
+   "id": 1001,
+   "category": "Welfare Avenue",
+   "title": "Our eight charitable activities",
+   "description": "What we are registered to do, how each activity works in practice, and how to talk about it.",
+   "source": "hub",
+   "path_group": "Welfare Avenue foundations",
+   "sort": 1,
+   "active": true,
+   "kind": "lesson",
+   "key": "lesson:activities",
+   "body": {
+    "v": 1,
+    "cover": "gold",
+    "summary": "The eight activities we described to the CRA when we applied for charitable status, what each one looks like in practice, and how to talk about our work.",
+    "chapters": [
+     {
+      "id": "why",
+      "t": "Why this matters",
+      "blocks": [
+       {
+        "type": "lead",
+        "text": "When Welfare Avenue applied for charitable status, we described our work to the Canada Revenue Agency (CRA) as eight charitable activities. They are the backbone of everything we do: every serving, drive, workshop and partnership should trace back to at least one of them."
+       },
+       {
+        "type": "p",
+        "text": "Our charitable purposes are the **relief of poverty** and the **advancement of education**. The eight activities are how we carry out those purposes, day to day."
+       },
+       {
+        "type": "quote",
+        "text": "Welfare Avenue is a youth-powered non-profit dedicated to fighting food insecurity and poverty through direct community action, delivering meals and essential support directly to people where they are.",
+        "by": "Our mission"
+       },
+       {
+        "type": "stats",
+        "items": [
+         {
+          "n": "25,000+",
+          "l": "meals delivered"
+         },
+         {
+          "n": "600+",
+          "l": "volunteers engaged"
+         },
+         {
+          "n": "3,000+",
+          "l": "holiday gifts delivered"
+         },
+         {
+          "n": "$40,000+",
+          "l": "raised since our founding"
+         }
+        ],
+        "note": "From our 2026 brand guide and recent grant applications."
+       }
+      ]
+     },
+     {
+      "id": "eight",
+      "t": "The eight activities",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Tap an activity to open it. Each one has a purpose, the way we carry it out, and the teams involved."
+       },
+       {
+        "type": "activities",
+        "items": [
+         {
+          "n": 1,
+          "t": "Outreach and partnerships",
+          "icon": "handshake",
+          "sum": "Building relationships with organizations, businesses and schools that share our mission, so we reach more people and pool resources.",
+          "how": [
+           "Find organizations working on poverty, food security and inclusion, and learn about their impact.",
+           "Reach out, meet, and present our mission and current activities.",
+           "Write tailored partnership and sponsorship proposals with clear roles and shared projects.",
+           "Run the joint projects, then review the results together and adjust."
+          ],
+          "teams": "Outreach finds and grows partners and sponsors, Marketing promotes, Operations runs the volunteer base and equipment, Finance tracks sponsorship and campaign money, and the executive team makes sure every partnership fits the mission.",
+          "extra": "As a youth-powered organization, outreach also builds our volunteer base through schools, student associations and clubs."
+         },
+         {
+          "n": 2,
+          "t": "Essential goods and services",
+          "icon": "gift",
+          "sum": "Relieving poverty by getting clothing, hygiene products and other essentials to people who need them, and connecting them with services.",
+          "how": [
+           "Run donation drives with supermarkets, schools, colleges and companies.",
+           "Sort, store and distribute what comes in, with volunteers at every step.",
+           "Connect people with mental health, employment, housing and shelter resources through our network.",
+           "Gather feedback after each drive to make the next one better."
+          ],
+          "teams": "Operations runs collection and distribution, Outreach brings in organizations and students, Marketing invites the community to contribute, and Finance tracks what we spend."
+         },
+         {
+          "n": 3,
+          "t": "Free, healthy meals",
+          "icon": "bowl",
+          "sum": "Addressing food insecurity with free meals at our Sunday servings.",
+          "how": [
+           "Fundraise for food and receive food donations.",
+           "Plan meals with Canada's Food Guide in mind: fresh, balanced and mostly plant-based.",
+           "Coordinate volunteer cooks, drivers and servers through the volunteering manager.",
+           "Serve with care: safely, respectfully and on time."
+          ],
+          "teams": "Operations plans each serving, the recipes and the food, Finance tracks food spending and budgets, Marketing raises awareness of food insecurity, and Outreach finds funding for meals."
+         },
+         {
+          "n": 4,
+          "t": "Community and belonging",
+          "icon": "people",
+          "sum": "Addressing isolation by making our servings and events places where people feel welcome and connected.",
+          "how": [
+           "Organize free community events, indoors and outdoors, where everyone can take part.",
+           "Put the proceeds of paid events back into food, hygiene supplies and clothing.",
+           "Talk with the people we serve, one on one and in groups, to understand their needs and build real connection.",
+           "Help young people understand homelessness and reduce stigma."
+          ],
+          "teams": "Operations makes each serving a place for real connection, Outreach and Marketing raise awareness of isolation, and Finance keeps money available for community events."
+         },
+         {
+          "n": 5,
+          "t": "Access to resources",
+          "icon": "compass",
+          "sum": "Helping people meet their basic needs by knowing what support exists and how to reach it.",
+          "how": [
+           "Make space for open conversation at servings to learn what people need, including dietary needs and preferences.",
+           "Bring in information from partner organizations on mental health, shelters, housing and employment training.",
+           "Turn it into clear infographics, factsheets and brochures that we share at servings."
+          ],
+          "teams": "Operations makes sure people know where we will be and what is available, Marketing shows why access matters, and Outreach shares what people tell us they need."
+         },
+         {
+          "n": 6,
+          "t": "Mobilizing youth and volunteers",
+          "icon": "spark",
+          "sum": "Engaging students and young people to take action on poverty and homelessness.",
+          "how": [
+           "Network at schools such as McGill, Concordia, Dawson and Vanier.",
+           "Run campus events like bake sales and student gatherings to raise awareness, volunteers and donations.",
+           "Offer volunteer roles and run workshops that encourage civic engagement."
+          ],
+          "teams": "Outreach works with schools and clubs, Operations sets new student volunteers up, and Marketing reaches students online."
+         },
+         {
+          "n": 7,
+          "t": "Working with other charities",
+          "icon": "link",
+          "sum": "Joining forces with non-profits and charities on the issues that affect the people we serve.",
+          "how": [
+           "Network with local organizations, charities and community workers.",
+           "Take part in advisory work on poverty, such as Campaign 2000 advisory meetings.",
+           "Attend events that highlight these issues, such as Disability Without Poverty and Dignity for All."
+          ],
+          "teams": "Outreach connects with other charities, Operations runs joint volunteer events, and Marketing supports partners online."
+         },
+         {
+          "n": 8,
+          "t": "A voice for the people we serve",
+          "icon": "mic",
+          "sum": "Working with people who share our concern, and bringing the lived experience of the people we serve into the conversation.",
+          "how": [
+           "Attend forums and conferences on poverty and homelessness in Canada.",
+           "Listen closely through conversations and feedback surveys, and learn the barriers people face.",
+           "Use what we learn to shape our services and to raise awareness on social media."
+          ],
+          "teams": "Outreach attends forums and conferences, Operations gathers feedback at servings, Marketing amplifies the voices of the people we serve, and the executive team keeps everyone coordinated."
+         }
+        ]
+       },
+       {
+        "type": "note",
+        "text": "Team names are as written in our submission. They map onto today's departments on the Hub."
+       }
+      ]
+     },
+     {
+      "id": "pillars",
+      "t": "How they show up today",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Our 2026 brand guide describes the same work as four pillars. Here is how the eight activities feed them."
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "icon": "bowl",
+          "t": "Food security mobilization",
+          "d": "Consistent, well-coordinated food distribution, using the meal as a trust-building first step toward long-term reintegration.",
+          "k": "Activities 3 and 2"
+         },
+         {
+          "icon": "gift",
+          "t": "Dignified resource distribution",
+          "d": "Seasonal clothing, hygiene essentials and basic amenities, always offered with respect and solidarity.",
+          "k": "Activity 2"
+         },
+         {
+          "icon": "people",
+          "t": "Dismantling social isolation",
+          "d": "Pop-ups, creative arts and recreational sports that break down barriers and build belonging.",
+          "k": "Activity 4"
+         },
+         {
+          "icon": "link",
+          "t": "Integrating the care ecosystem",
+          "d": "Bridging street-level trust with housing, mental health and employment networks across our partners.",
+          "k": "Activities 1, 5 and 7"
+         }
+        ]
+       },
+       {
+        "type": "callout",
+        "tone": "tip",
+        "t": "And the energy behind all four",
+        "text": "Activities 6 and 8 are why we call ourselves youth-powered: young leaders mobilizing their communities, and a voice for the people we serve."
+       }
+      ]
+     },
+     {
+      "id": "where",
+      "t": "Where the work happens",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Our submission names **Place Émilie-Gamelin** (1500 rue Berri, by Berri-UQAM) as our main serving location, with a storage unit in Parc-Extension for the tents, tables and serving equipment."
+       },
+       {
+        "type": "p",
+        "text": "Schools and campuses host much of our outreach, youth and education work: LaurenHill Academy, Vanier College, McGill, Dawson and Concordia."
+       },
+       {
+        "type": "p",
+        "text": "Today we work in Montreal and Toronto, in parks, shelters and other community spaces."
+       },
+       {
+        "type": "callout",
+        "tone": "info",
+        "t": "Always current in the Hub",
+        "text": "The volunteering manager has the details of the next serving: date, place, roster and checklist. Take its page tour to see how it works."
+       }
+      ]
+     },
+     {
+      "id": "who",
+      "t": "Who we serve, and how we say it",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "We serve people experiencing homelessness or housing instability, low-income individuals and families, and anyone facing food insecurity. Support is based on need: people self-identify, or a partner organization refers them."
+       },
+       {
+        "type": "p",
+        "text": "The words we use matter. If we call it the wrong word, someone reading gets the wrong image of what we do."
+       },
+       {
+        "type": "compare",
+        "cols": [
+         {
+          "t": "We say",
+          "tone": "good",
+          "items": [
+           "The people we serve, community, support",
+           "Support, dignity, connection, safety",
+           "Food as a starting point, refer, reintegrate",
+           "Youth-powered, professional, a movement",
+           "Collaborate, ecosystem, partnership"
+          ]
+         },
+         {
+          "t": "We don't say",
+          "tone": "bad",
+          "items": [
+           "The homeless, beneficiaries, people in need",
+           "Pity, saving people, feeling sorry",
+           "Feed people, hand out food",
+           "Student club, just volunteers, a small project",
+           "We do everything, we're the only ones"
+          ]
+         }
+        ]
+       },
+       {
+        "type": "callout",
+        "tone": "info",
+        "t": "One exception",
+        "text": "Formal filings, like our CRA forms, use the word beneficiaries because it is the legal term. Everywhere else, we say the people we serve."
+       }
+      ]
+     },
+     {
+      "id": "education",
+      "t": "The other half: education",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Advancing education is part of our charitable purpose, not an extra. We help our community understand food insecurity, isolation and access to resources, and invite them to act."
+       },
+       {
+        "type": "list",
+        "items": [
+         "Workshops and presentations in schools, from LaurenHill Academy to Concordia.",
+         "Conferences such as Apathy is Boring, and Force Avenir, where we were selected in the Mutual Aid, Peace and Justice category.",
+         "Research and knowledge sharing: infographics, factsheets and information letters.",
+         "Social media that shows homelessness is about belonging and dignity, not only basic necessities.",
+         "Recruiting people who care about their community, and helping them grow professionally."
+        ]
+       }
+      ]
+     },
+     {
+      "id": "you",
+      "t": "What this means for you",
+      "blocks": [
+       {
+        "type": "steps",
+        "items": [
+         {
+          "t": "Tie your work to an activity",
+          "d": "When you plan an event, a post or a partnership, know which activity it serves. It makes reports, grant applications and our annual return stronger."
+         },
+         {
+          "t": "Check new ideas",
+          "d": "If an idea does not clearly fit one of the eight activities or our purposes, check with the executive team before committing time or money."
+         },
+         {
+          "t": "Use our language",
+          "d": "Say the people we serve, and lead with dignity."
+         },
+         {
+          "t": "Record the impact",
+          "d": "Log servings, volunteers and outcomes in the Hub so the numbers are ready when a funder or the CRA asks."
+         }
+        ]
+       },
+       {
+        "type": "link",
+        "t": "Read the full document",
+        "d": "Our 8 Charitable Activities, the training copy of our submission to the CRA Charities Directorate.",
+        "url": "https://drive.google.com/file/d/1jCbzwXECdzeRskF7NHjPB7n4_wW9wn-X/view"
+       }
+      ]
+     }
+    ],
+    "quiz": {
+     "pass": 0.8,
+     "questions": [
+      {
+       "q": "What are our two charitable purposes?",
+       "a": [
+        "Relief of poverty and advancement of education",
+        "Sports and recreation",
+        "Housing construction and health care"
+       ],
+       "c": 0,
+       "why": "Everything we do serves the relief of poverty and the advancement of education."
+      },
+      {
+       "q": "Our Sunday servings mainly carry out which activity?",
+       "a": [
+        "Activity 7: working with other charities",
+        "Activity 3: free, healthy meals",
+        "Activity 6: mobilizing youth"
+       ],
+       "c": 1,
+       "why": "Free, healthy meals address food insecurity. Servings touch other activities too, like community and belonging."
+      },
+      {
+       "q": "How are our meals planned?",
+       "a": [
+        "Whatever is cheapest that week",
+        "Only from restaurant donations",
+        "With Canada's Food Guide in mind: fresh, balanced and mostly plant-based"
+       ],
+       "c": 2,
+       "why": "Healthy meals are part of dignity: fresh ingredients, balanced and mostly plant-based."
+      },
+      {
+       "q": "Which activity is about making servings and events places of belonging?",
+       "a": [
+        "Activity 4: community and belonging",
+        "Activity 1: outreach and partnerships",
+        "Activity 5: access to resources"
+       ],
+       "c": 0,
+       "why": "Isolation is as real as hunger. Activity 4 is about welcome, conversation and connection."
+      },
+      {
+       "q": "How do we refer to the people who come to our servings?",
+       "a": [
+        "Beneficiaries",
+        "The people we serve",
+        "The homeless"
+       ],
+       "c": 1,
+       "why": "We lead with the person, not their circumstance. Beneficiary is only the legal term in formal filings."
+      },
+      {
+       "q": "You have an idea for a project that does not clearly fit any of the eight activities. What do you do?",
+       "a": [
+        "Start it and explain later",
+        "Drop it",
+        "Check with the executive team before committing time or money"
+       ],
+       "c": 2,
+       "why": "Our resources must go to our charitable purposes. A quick check keeps us compliant and often sharpens the idea."
+      }
+     ]
+    }
+   },
+   "minutes": 12,
+   "xp": 60,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1002,
+   "category": "Welfare Avenue",
+   "title": "Our partners and how we work with them",
+   "description": "Partners, sponsors and collaborators, who we work with today, and how a partnership comes together.",
+   "source": "hub",
+   "path_group": "Welfare Avenue foundations",
+   "sort": 2,
+   "active": true,
+   "kind": "lesson",
+   "key": "lesson:partners",
+   "body": {
+    "v": 1,
+    "cover": "green",
+    "summary": "Why we partner, the difference between partners, sponsors and collaborators, who we work with today, and how a partnership comes together.",
+    "chapters": [
+     {
+      "id": "default",
+      "t": "Collaboration is the default",
+      "blocks": [
+       {
+        "type": "lead",
+        "text": "Welfare Avenue does not try to do everything itself. We complement the services that already exist and connect people with the right support. Partners make that possible."
+       },
+       {
+        "type": "quote",
+        "text": "Collaboration is the default. Until we build a larger audience, most events run with a partner org that shares the planning load.",
+        "by": "Fundraising planning notes, June 2026"
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "icon": "spark",
+          "t": "More impact",
+          "d": "Combining strengths, resources and expertise lets us reach more people, more effectively."
+         },
+         {
+          "icon": "people",
+          "t": "Inclusion",
+          "d": "Programs shaped with partners reflect the communities we serve."
+         },
+         {
+          "icon": "check",
+          "t": "Better programs",
+          "d": "Co-created programs draw on shared knowledge and experience."
+         },
+         {
+          "icon": "box",
+          "t": "Shared resources",
+          "d": "Kitchens, halls, equipment and networks, without duplicating effort."
+         },
+         {
+          "icon": "megaphone",
+          "t": "Visibility for both",
+          "d": "Joint communication amplifies both missions."
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "kinds",
+      "t": "Partners, sponsors and collaborators",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Three words, three different relationships. Using the right one keeps our records, reports and thank-yous accurate."
+       },
+       {
+        "type": "kinds",
+        "items": [
+         {
+          "t": "Partner",
+          "icon": "handshake",
+          "d": "An organization we work with toward a shared goal, through joint programs or initiatives. Formalized in writing: an MOU or a project agreement.",
+          "e": "DESTA Black Community Network (community kitchen and a joint grant application), Union United Church (kitchen space)."
+         },
+         {
+          "t": "Sponsor",
+          "icon": "star",
+          "d": "A person, business or organization that gives money or in-kind support, and gets recognition in return.",
+          "e": "VCSA (has funded our club since the beginning), Sportira (jerseys and pinnies), Poulet Rouge (Flag Football)."
+         },
+         {
+          "t": "Collaborator",
+          "icon": "link",
+          "d": "An organization that joins us for an event or initiative, without a formal agreement.",
+          "e": "Student clubs and companies that join a serving or co-host a fundraiser."
+         }
+        ]
+       },
+       {
+        "type": "callout",
+        "tone": "tip",
+        "t": "Relationships grow",
+        "text": "Collaborators often become partners or sponsors. Every good event is the start of a relationship, so log it."
+       }
+      ]
+     },
+     {
+      "id": "who",
+      "t": "Who we work with",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "A snapshot from our Partner Relations sheet and this year's plans. The sheet has the full list, points of contact and history."
+       },
+       {
+        "type": "partners",
+        "groups": [
+         {
+          "g": "Community and non-profit",
+          "items": [
+           {
+            "n": "DESTA Black Community Network",
+            "d": "Community kitchen pilot and a joint Community Connections grant application.",
+            "s": "New in 2026"
+           },
+           {
+            "n": "Union United Church",
+            "d": "Kitchen space for our December 2024 cooking event with Adaptavist.",
+            "s": "Established"
+           },
+           {
+            "n": "Scattered",
+            "d": "Holiday gift drive for children in hospitals (December 2024). Art4All is a possible summer event.",
+            "s": "Established"
+           },
+           {
+            "n": "Old Brewery Mission",
+            "d": "We have delivered food donations many times.",
+            "s": "Developing"
+           },
+           {
+            "n": "Refuge des Jeunes de Montréal",
+            "d": "Received meals from our December 2024 cooking event.",
+            "s": "Developing"
+           },
+           {
+            "n": "Moisson Montréal",
+            "d": "Food bank accreditation in progress: it would supply food for our meals.",
+            "s": "Developing"
+           },
+           {
+            "n": "Chez Doris",
+            "d": "Receives leftover clothing from the fashion show, and a possible Women's Day partner.",
+            "s": "Planned"
+           }
+          ]
+         },
+         {
+          "g": "Schools, student associations and clubs",
+          "items": [
+           {
+            "n": "VCSA",
+            "d": "The Vanier College Student Association has funded our club since the beginning.",
+            "s": "Established"
+           },
+           {
+            "n": "JMCC",
+            "d": "Rally Paper partner. Runs offload fundraisers with us, usually two a year.",
+            "s": "Established"
+           },
+           {
+            "n": "CASA Cares",
+            "d": "Volunteer events and fundraisers, and promotes our volunteering to Concordia business students.",
+            "s": "Established"
+           },
+           {
+            "n": "Enactus Concordia",
+            "d": "Invited us as panelists and is planning a volunteering event.",
+            "s": "Established"
+           },
+           {
+            "n": "LaurenHill Academy",
+            "d": "Student volunteers, workshops and food drives.",
+            "s": "Established"
+           },
+           {
+            "n": "CASA JMSB",
+            "d": "A five-day volunteering and fundraising event.",
+            "s": "Developing"
+           },
+           {
+            "n": "CUTEA",
+            "d": "Volunteering event in February 2025.",
+            "s": "Developing"
+           }
+          ]
+         },
+         {
+          "g": "Businesses and companies",
+          "items": [
+           {
+            "n": "Sportira",
+            "d": "Has supported us since we were founded: jerseys, pinnies and volunteering events.",
+            "s": "Established"
+           },
+           {
+            "n": "Reggie's",
+            "d": "Venue for five or six fundraisers over the years.",
+            "s": "Established"
+           },
+           {
+            "n": "Adaptavist",
+            "d": "A cooking event that served over 250 people and raised about $2,000 (2024).",
+            "s": "Established"
+           },
+           {
+            "n": "MTL Flag Plus and Poulet Rouge",
+            "d": "Our Flag Football fundraiser: Flag Plus runs the games, Poulet Rouge sponsors.",
+            "s": "Active"
+           },
+           {
+            "n": "GHD Group",
+            "d": "Volunteer event (2021) and a food donation (2024). Employees volunteer with us.",
+            "s": "Developing"
+           },
+           {
+            "n": "Lauzon driving school",
+            "d": "Equipment support, and a possible source of volunteer drivers.",
+            "s": "Developing"
+           },
+           {
+            "n": "Oberoi Financial and RBC",
+            "d": "Past volunteering events. Worth re-engaging.",
+            "s": "Dormant"
+           }
+          ]
+         },
+         {
+          "g": "Guidance and media",
+          "items": [
+           {
+            "n": "MCC",
+            "d": "Strategic guidance through the CMP program. The growth strategy deck in the academy came from it.",
+            "s": "Established"
+           },
+           {
+            "n": "CBC, CityNews and CTV",
+            "d": "Television coverage of our servings.",
+            "s": "Established"
+           },
+           {
+            "n": "The Montreal Guardian and The Link",
+            "d": "Articles featuring our work.",
+            "s": "Established"
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "type": "link",
+        "t": "Open the Partner Relations sheet",
+        "d": "Every organization, its status, point of contact, notes and completed goals.",
+        "url": "https://docs.google.com/spreadsheets/d/194k4xp372pFmAt1WO-WvDRoxjni0ZWPaRoaaEN8koDw/edit"
+       }
+      ]
+     },
+     {
+      "id": "stages",
+      "t": "Relationship stages",
+      "blocks": [
+       {
+        "type": "p",
+        "text": "Every organization in the sheet has a status. Moving a relationship forward is a team effort, so keep it current."
+       },
+       {
+        "type": "stages",
+        "items": [
+         {
+          "t": "Follow up",
+          "d": "Someone to contact. Pick an owner and a first step.",
+          "tone": "muted"
+         },
+         {
+          "t": "Developing",
+          "d": "Conversations are happening. Agree on a first joint project.",
+          "tone": "gold"
+         },
+         {
+          "t": "Established",
+          "d": "We have worked together and plan to keep going.",
+          "tone": "green"
+         },
+         {
+          "t": "Collaborated but dormant",
+          "d": "We worked together before. Re-engage with a specific ask.",
+          "tone": "purple"
+         },
+         {
+          "t": "Dead end",
+          "d": "No reply, or not interested. Note why, and move on.",
+          "tone": "flag"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "how",
+      "t": "How a partnership comes together",
+      "blocks": [
+       {
+        "type": "steps",
+        "items": [
+         {
+          "t": "Define the scope and objectives",
+          "d": "The goals, the programs or events involved, and the impact we expect for the people we serve."
+         },
+         {
+          "t": "Agree roles and responsibilities",
+          "d": "Who coordinates, who handles volunteers, logistics, communications and reporting. One point of contact on each side."
+         },
+         {
+          "t": "Plan operations and resources",
+          "d": "Facilities, equipment, volunteers, materials and timelines, plus any budget or in-kind contributions."
+         },
+         {
+          "t": "Formalize it",
+          "d": "An MOU or project agreement covering commitments, liability, safeguarding, branding and reporting."
+         },
+         {
+          "t": "Monitor and evaluate",
+          "d": "Clear measures, regular check-ins, and feedback from partners, volunteers and the people we serve."
+         },
+         {
+          "t": "Plan what comes next",
+          "d": "How good work continues, and how to end a partnership responsibly if it needs to."
+         }
+        ]
+       },
+       {
+        "type": "p",
+        "text": "Three models give us a flexible starting point, from our community kitchen partnership plan:"
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "icon": "home",
+          "t": "Host arrangement",
+          "d": "A partner provides a space, like a certified kitchen, on a predictable schedule. We bring the volunteers, food and supplies."
+         },
+         {
+          "icon": "handshake",
+          "t": "Program collaboration",
+          "d": "We design and deliver a program together, sharing the work and the credit."
+         },
+         {
+          "icon": "flag",
+          "t": "Pilot project",
+          "d": "A short trial with clear goals. Then we decide together what comes next."
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "offer",
+      "t": "What we offer, what we ask",
+      "blocks": [
+       {
+        "type": "compare",
+        "cols": [
+         {
+          "t": "We offer",
+          "tone": "good",
+          "items": [
+           "A dedicated, diverse volunteer network",
+           "Experience designing and delivering programs",
+           "A strong community presence",
+           "Promotion on our channels, and co-branding"
+          ]
+         },
+         {
+          "t": "We look for",
+          "tone": "neutral",
+          "items": [
+           "Alignment with our mission and values",
+           "Resources: space, expertise, networks or funding",
+           "A collaborative spirit and open communication",
+           "Active support for delivery and outreach"
+          ]
+         }
+        ]
+       },
+       {
+        "type": "p",
+        "text": "And the principles we hold ourselves to:"
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "icon": "scale",
+          "t": "Mutual benefit",
+          "d": "Every partner gets real value, and is treated fairly."
+         },
+         {
+          "icon": "eye",
+          "t": "Transparency",
+          "d": "Open communication and responsible use of every resource."
+         },
+         {
+          "icon": "chat",
+          "t": "Clear communication",
+          "d": "Regular, consistent updates build trust."
+         },
+         {
+          "icon": "shield",
+          "t": "Safeguarding and dignity",
+          "d": "Everyone is treated with dignity and respect, and partners follow safeguarding practices."
+         },
+         {
+          "icon": "target",
+          "t": "Impact first",
+          "d": "Measurable outcomes for the communities we serve."
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "id": "you",
+      "t": "Your part",
+      "blocks": [
+       {
+        "type": "steps",
+        "items": [
+         {
+          "t": "Check the sheet first",
+          "d": "Before contacting an organization, look it up in the Partner Relations sheet. Someone may already own the relationship."
+         },
+         {
+          "t": "Use the templates",
+          "d": "The Partnership Email Templates cover pharmacies, clothing charities and thrift stores, food suppliers and restaurants, and other non-profits."
+         },
+         {
+          "t": "Log every contact",
+          "d": "Update the status, point of contact, notes and completed goals after each conversation."
+         },
+         {
+          "t": "Keep commitments with your lead",
+          "d": "Anything involving money, logos or a formal agreement goes through your lead and the executive team."
+         },
+         {
+          "t": "Bring it back to the Hub",
+          "d": "Record outcomes on your team page, and ask Marketing through Requests for co-branded posts."
+         }
+        ]
+       },
+       {
+        "type": "links",
+        "items": [
+         {
+          "t": "Partner Relations 2025-2030",
+          "d": "The live partner list.",
+          "url": "https://docs.google.com/spreadsheets/d/194k4xp372pFmAt1WO-WvDRoxjni0ZWPaRoaaEN8koDw/edit"
+         },
+         {
+          "t": "Partnership Outreach Document",
+          "d": "Our full approach to partnerships.",
+          "url": "https://docs.google.com/document/d/1hQ6jkvhWWDgEa9DdhWPEvujlGjQMfKY01FpVffoQYoE/edit"
+         },
+         {
+          "t": "Partnership Email Templates",
+          "d": "Ready-to-edit first emails.",
+          "url": "https://docs.google.com/document/d/1V6c52sZNcKCnbYazrXyx60aZPDXhgRwYKLzdzkjvfZg/edit"
+         },
+         {
+          "t": "Community kitchen partnership plan",
+          "d": "A worked example with the three models.",
+          "url": "https://drive.google.com/file/d/1_8RZR3_GedHD2wZcJpFi8goCYPWgZus7/view"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "quiz": {
+     "pass": 0.8,
+     "questions": [
+      {
+       "q": "A company gives us $500 and we put their logo on our event banner. What is that relationship?",
+       "a": [
+        "Partner",
+        "Sponsor",
+        "Collaborator"
+       ],
+       "c": 1,
+       "why": "Sponsors give money or in-kind support and get recognition in return."
+      },
+      {
+       "q": "A student club joins one of our Sunday servings, with no formal agreement. What is that?",
+       "a": [
+        "A collaborator",
+        "A sponsor",
+        "A partner"
+       ],
+       "c": 0,
+       "why": "Collaborators join events or initiatives without a formal agreement, and often grow into partners."
+      },
+      {
+       "q": "Before emailing an organization about working together, what comes first?",
+       "a": [
+        "Send a template right away",
+        "Check the Partner Relations sheet for an existing relationship",
+        "Post about it on social media"
+       ],
+       "c": 1,
+       "why": "Someone may already own the relationship. The sheet also shows the history, so your email starts in the right place."
+      },
+      {
+       "q": "What formalizes a partnership's roles, liability, safeguarding and branding?",
+       "a": [
+        "A handshake",
+        "A social media post",
+        "An MOU or project agreement"
+       ],
+       "c": 2,
+       "why": "Partnerships are formalized in writing, with roles, responsibilities and expectations agreed up front."
+      },
+      {
+       "q": "A relationship is marked Collaborated but dormant. What is the best move?",
+       "a": [
+        "Re-engage with a specific ask",
+        "Remove it from the sheet",
+        "Never contact them again"
+       ],
+       "c": 0,
+       "why": "We have worked together before. A clear, specific ask is the best way to restart."
+      },
+      {
+       "q": "Which model fits using a partner's certified kitchen on a predictable schedule?",
+       "a": [
+        "Sponsorship",
+        "Host arrangement",
+        "Media coverage"
+       ],
+       "c": 1,
+       "why": "In a host arrangement the partner provides the space; we bring the volunteers, food and supplies."
+      }
+     ]
+    }
+   },
+   "minutes": 12,
+   "xp": 60,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1003,
+   "category": "Hub tours",
+   "title": "Page tour: Finding your way around",
+   "description": "The menu, search, check-in, Needs me and Ask the Hub: the parts that follow you everywhere.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 1,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:chrome",
+   "body": {
+    "tour": "chrome",
+    "tab": "mypage"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1004,
+   "category": "Hub tours",
+   "title": "Page tour: Home",
+   "description": "Your personal queue: meetings, tasks, mentions, updates and time.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 2,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:home",
+   "body": {
+    "tour": "home",
+    "tab": "mypage"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1005,
+   "category": "Hub tours",
+   "title": "Page tour: Your department page",
+   "description": "Your team's pulse, decisions, updates, meetings, projects and tools.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 3,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:team",
+   "body": {
+    "tour": "team",
+    "tab": "dept"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1006,
+   "category": "Hub tours",
+   "title": "Page tour: Team tasks and agendas",
+   "description": "Lists, boards and calendars for the team's work, and the team agenda.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 4,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:tasks",
+   "body": {
+    "tour": "tasks",
+    "tab": "dept"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1007,
+   "category": "Hub tours",
+   "title": "Page tour: Executive dashboard",
+   "description": "The numbers, what is new and the decisions that sit with the executives.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 5,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:overview",
+   "body": {
+    "tour": "overview",
+    "tab": "overview"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1008,
+   "category": "Hub tours",
+   "title": "Page tour: Delivery numbers",
+   "description": "How fast work moves: time to close, open workload and aging.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 6,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:dashboard",
+   "body": {
+    "tour": "dashboard",
+    "tab": "dashboard"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1009,
+   "category": "Hub tours",
+   "title": "Page tour: Organizational goals",
+   "description": "The yearly and multi-year goals everything rolls up to.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 7,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:orggoals",
+   "body": {
+    "tour": "orggoals",
+    "tab": "orggoals"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1010,
+   "category": "Hub tours",
+   "title": "Page tour: Department goals",
+   "description": "Every team's quarterly goals, with the projects and tasks behind them.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 8,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:goals",
+   "body": {
+    "tour": "goals",
+    "tab": "goals"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1011,
+   "category": "Hub tours",
+   "title": "Page tour: Projects",
+   "description": "Every active project by team, with its lead and its goal.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 9,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:projects",
+   "body": {
+    "tour": "projects",
+    "tab": "projects"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1012,
+   "category": "Hub tours",
+   "title": "Page tour: Goal alignment",
+   "description": "How projects, department goals and organizational goals connect.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 10,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:goalmap",
+   "body": {
+    "tour": "goalmap",
+    "tab": "goalmap"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1013,
+   "category": "Hub tours",
+   "title": "Page tour: Project pages",
+   "description": "One project's tasks, lead and progress.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 11,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:project",
+   "body": {
+    "tour": "project",
+    "tab": "projects"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1014,
+   "category": "Hub tours",
+   "title": "Page tour: Requests",
+   "description": "How teams ask each other for work.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 12,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:requests",
+   "body": {
+    "tour": "requests",
+    "tab": "requests"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1015,
+   "category": "Hub tours",
+   "title": "Page tour: Transcript archive",
+   "description": "How a meeting becomes tasks, updates and decisions.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 13,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:transcripts",
+   "body": {
+    "tour": "transcripts",
+    "tab": "transcripts"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1016,
+   "category": "Hub tours",
+   "title": "Page tour: Agendas",
+   "description": "Build an agenda, run the meeting, share it.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 14,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:agendas",
+   "body": {
+    "tour": "agendas",
+    "tab": "agendas"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1017,
+   "category": "Hub tours",
+   "title": "Page tour: Hub inbox",
+   "description": "What happens when you cc hub@welfareavenue.com.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 15,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:hubmail",
+   "body": {
+    "tour": "hubmail",
+    "tab": "hubmail"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1018,
+   "category": "Hub tours",
+   "title": "Page tour: Org chart",
+   "description": "Who does what, team by team.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 16,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:orgchart",
+   "body": {
+    "tour": "orgchart",
+    "tab": "orgchart"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1019,
+   "category": "Hub tours",
+   "title": "Page tour: People pages",
+   "description": "A person's work, responsibilities, meetings and progress.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 17,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:person",
+   "body": {
+    "tour": "person",
+    "tab": "orgchart"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1020,
+   "category": "Hub tours",
+   "title": "Page tour: Training academy",
+   "description": "Onboarding, paths, tours, the library and your trophy case.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 18,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:academy",
+   "body": {
+    "tour": "academy",
+    "tab": "training"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1021,
+   "category": "Hub tours",
+   "title": "Page tour: Volunteering",
+   "description": "The serving programme: calendar, events, checklist and roster.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 19,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:volunteering",
+   "body": {
+    "tour": "volunteering",
+    "tab": "volunteering"
+   },
+   "minutes": 4,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1022,
+   "category": "Hub tours",
+   "title": "Page tour: HR centre",
+   "description": "People, hours, onboarding, training, hiring and policies.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 20,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:hrcentre",
+   "body": {
+    "tour": "hrcentre",
+    "tab": "hrcentre"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1023,
+   "category": "Hub tours",
+   "title": "Page tour: Finances",
+   "description": "Statements, budgets, the ledger and nonprofit health.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 21,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:finances",
+   "body": {
+    "tour": "finances",
+    "tab": "finances"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1024,
+   "category": "Hub tours",
+   "title": "Page tour: Content calendar",
+   "description": "Plan, publish and confirm Instagram and Facebook posts.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 22,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:contentcal",
+   "body": {
+    "tour": "contentcal",
+    "tab": "contentcal"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1025,
+   "category": "Hub tours",
+   "title": "Page tour: Marketing analytics",
+   "description": "Followers, reach, what worked, and what to try next.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 23,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:socialstats",
+   "body": {
+    "tour": "socialstats",
+    "tab": "socialstats"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1026,
+   "category": "Hub tours",
+   "title": "Page tour: Create studio",
+   "description": "Branded drafts from a short brief.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 24,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:create",
+   "body": {
+    "tour": "create",
+    "tab": "create"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1027,
+   "category": "Hub tours",
+   "title": "Page tour: The Brain",
+   "description": "The living map of people, meetings, tasks and goals.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 25,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:brain",
+   "body": {
+    "tour": "brain",
+    "tab": "brain"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1028,
+   "category": "Hub tours",
+   "title": "Page tour: Important info",
+   "description": "Logins, videos, drives and key links.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 26,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:importantinfo",
+   "body": {
+    "tour": "importantinfo",
+    "tab": "importantinfo"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1029,
+   "category": "Hub tours",
+   "title": "Page tour: Photo library",
+   "description": "Our photos, labelled and cleared for use, ready for posts and the Create studio.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 27,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:photos",
+   "body": {
+    "tour": "photos",
+    "tab": "photos"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1030,
+   "category": "Hub tours",
+   "title": "Page tour: Activity",
+   "description": "The audit trail of every change.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 28,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:activity",
+   "body": {
+    "tour": "activity",
+    "tab": "activity"
+   },
+   "minutes": 1,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  },
+  {
+   "id": 1031,
+   "category": "Hub tours",
+   "title": "Page tour: Admin",
+   "description": "AI models, adoption, accounts, access, security and changes.",
+   "source": "hub",
+   "path_group": "Hub page tours",
+   "sort": 29,
+   "active": true,
+   "kind": "tour",
+   "key": "tour:adminpanel",
+   "body": {
+    "tour": "adminpanel",
+    "tab": "adminpanel"
+   },
+   "minutes": 3,
+   "xp": 20,
+   "resource_url": null,
+   "ext_id": null,
+   "duration_sec": null
+  }
+ ],
+ "academy_awards": [],
+ "module7": "The Training academy starts with your onboarding: your onboarding plan week by week, the Hub first steps and the policies to sign. Below it: your level and progress, what is up next, learning paths with a certificate at the end, a guided tour for every page of the Hub, and the full library of videos, lessons and documents. Open anything and it fills the screen: watch, read or take the quiz, then mark it complete. Certificates and badges show on your profile. HR manages onboarding and assigns trainings from the HR centre.\n\nTry it: take the tour of the academy itself, then one page tour.\n\nDone when: you know where your onboarding, your assigned trainings and the page tours live.",
+ "module_tours": {
+  "39": [
+   "home",
+   "chrome"
+  ],
+  "40": [
+   "team",
+   "tasks"
+  ],
+  "41": [
+   "transcripts"
+  ],
+  "42": [
+   "requests"
+  ],
+  "43": [
+   "goals",
+   "orggoals",
+   "goalmap"
+  ],
+  "44": [
+   "volunteering"
+  ],
+  "45": [
+   "academy"
+  ],
+  "46": [
+   "chrome",
+   "agendas"
+  ]
+ },
+ "keela_ids": [
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19
+ ],
+ "gov_ids": [
+  6,
+  7,
+  8,
+  10,
+  11,
+  12
+ ]
+}

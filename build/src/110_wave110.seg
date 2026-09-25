@@ -37,7 +37,7 @@
   var TAB_LABEL = {
     dashboard: 'Dashboard', opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing',
     fundraising: 'Fundraising & Grants', hr: 'Human Resources', board: 'Board & Governance',
-    training: 'My trainings', transcripts: 'Transcript archive', activity: 'Activity',
+    training: 'Training academy', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', finances: 'Finances', brain: 'The Brain', hrcentre: 'HR centre'
   };
   function me() {

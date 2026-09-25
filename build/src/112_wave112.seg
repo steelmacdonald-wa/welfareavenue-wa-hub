@@ -320,6 +320,27 @@
     };
   }
 
+  /* wave122: the Training academy shows these steps in its Onboarding section (ticks work there even after the My page card is dismissed) */
+  window.w112Api = {
+    eligible: w112Eligible,
+    loaded: function () { return W112.loaded; },
+    load: w112Load,
+    steps: w112Steps,
+    done: w112Done,
+    row: function () { return W112.row; },
+    go: w112Go,
+    set: function (id, on) {
+      if (!w112Eligible() || !W112.loaded) return false;
+      var r = w112Ensure(); var val = on !== false;
+      if (!!r.steps[id] === val) return true;
+      if (val) r.steps[id] = new Date().toISOString(); else delete r.steps[id];
+      var all = w112Steps().every(function (s) { return !!r.steps[s.id]; });
+      if (all && !r.completed_at) r.completed_at = new Date().toISOString();
+      if (!all && r.completed_at) r.completed_at = null;
+      w112Save(); try { w112Paint(); } catch (e) { /* My page may not be on screen */ }
+      return true;
+    }
+  };
   window.w112Debug = function () { return { loaded: W112.loaded, row: W112.row, myId: W112.myId, steps: w112Steps().map(function (s) { return s.id; }) }; };
 })();
 
