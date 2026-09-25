@@ -128,3 +128,5 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 - Consider dropping the calendar share from "Make changes and manage sharing" to "Make changes to events".
 - Custom SMTP for hub@ (branded auth emails) still returns 500; deferred by Steel.
 - `metrics` table drives "KPIs we track" per team (staff can update values inline); add rows for Program Development, HR, Ops Toronto when the teams pick their numbers.
+
+- 25/09/26, later the same day: the model router (OpenRouter + Jev), Admin > AI models, editable Ask the Hub proposals, check in/out to Slack, the HR centre revamp with shout-outs and applications, Admin > Adoption, and task subtasks, descriptions, attachments and the tree view are in `docs/25-09-26 - waves 116n to 116t, the model router, HR centre, adoption, tasks.md`. The Anthropic credit item above is moot: nothing calls Anthropic directly any more.
