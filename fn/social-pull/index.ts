@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.4, 25/09/26: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -14,7 +14,7 @@
 //   {action:'connect_ga4', property_id}        add a GA4 property               (staff)
 //   {action:'disconnect', account_id}          remove an account and its rows   (staff)
 //   {action:'sync', account_id?, days?}        pull the numbers                 (staff or x-wa-secret, cron wa-social-pull)
-//   {action:'import_csv', platform, rows, posts?, handle?}  CSV rows            (staff)
+//   {action:'import_csv', platform, rows, posts?, handle?, name?, demographics?}  CSV or export rows (staff); v1.5 keeps post clicks, engagement and raw fields, and audience breakdowns in the account meta
 //   {action:'note', days?}                     the AI note                      (staff or x-wa-secret, cron wa-social-note)
 //   {action:'insights', evidence[], days?}      3 to 5 directional recommendations from the evidence the page computed (staff or automation)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -369,9 +369,16 @@ async function importCsv(body: Any, me: Me): Promise<Any> {
   else if (handle && !acc.handle) await svc.from('social_accounts').update({ handle, name: acc.name || handle }).eq('id', acc.id);
   const rows: Row[] = (Array.isArray(body.rows) ? body.rows : []).slice(0, 5000).map((r: Any) => ({ platform, account_id: acc!.id, day: String(r.day || '').slice(0, 10), metric: String(r.metric || ''), value: Number(r.value), source: 'csv' }));
   const n = await putDaily(rows);
-  const posts: Post[] = (Array.isArray(body.posts) ? body.posts : []).slice(0, 500).map((p: Any) => ({ platform, account_id: acc!.id, external_id: String(p.external_id || p.url || '').slice(0, 300), url: p.url ? String(p.url).slice(0, 500) : null, kind: p.kind ? String(p.kind).slice(0, 40) : 'post', caption: p.caption ? String(p.caption).slice(0, 600) : null, thumb_url: null, published_at: p.published_at || null, reach: p.reach != null ? Number(p.reach) : null, views: p.views != null ? Number(p.views) : null, likes: p.likes != null ? Number(p.likes) : null, comments: p.comments != null ? Number(p.comments) : null, shares: p.shares != null ? Number(p.shares) : null, saves: p.saves != null ? Number(p.saves) : null, source: 'csv' }));
+  const num = (v: Any) => (v != null && v !== '' && isFinite(Number(v))) ? Number(v) : null;
+  const posts: Post[] = (Array.isArray(body.posts) ? body.posts : []).slice(0, 500).map((p: Any) => ({ platform, account_id: acc!.id, external_id: String(p.external_id || p.url || '').slice(0, 300), url: p.url ? String(p.url).slice(0, 500) : null, kind: p.kind ? String(p.kind).slice(0, 40) : 'post', caption: p.caption ? String(p.caption).slice(0, 600) : null, thumb_url: null, published_at: p.published_at || null, reach: num(p.reach), views: num(p.views), likes: num(p.likes), comments: num(p.comments), shares: num(p.shares), saves: num(p.saves), clicks: num(p.clicks), engagement: num(p.engagement), raw: p.raw && typeof p.raw === 'object' ? p.raw : null, source: 'csv' }));
   const np = await putPosts(posts);
-  await svc.from('social_accounts').update({ last_sync_at: new Date().toISOString(), last_error: null, status: acc.status === 'connected' ? 'connected' : 'csv' }).eq('id', acc.id);
+  const patch: Record<string, Any> = { last_sync_at: new Date().toISOString(), last_error: null, status: acc.status === 'connected' ? 'connected' : 'csv' };
+  if (body.name && !acc.name) patch.name = String(body.name).slice(0, 120);
+  if (body.url && !acc.url) patch.url = String(body.url).slice(0, 300);
+  /* audience breakdowns from the export (followers and visitors by location, job function, seniority, industry, company size) */
+  if (body.demographics && typeof body.demographics === 'object') patch.meta = { ...(acc.meta || {}), demographics: { ...(((acc.meta || {}) as Any).demographics || {}), ...body.demographics, imported_at: new Date().toISOString(), by: me.email } };
+  if (body.totals && typeof body.totals === 'object') patch.meta = { ...(patch.meta || acc.meta || {}), totals: body.totals };
+  await svc.from('social_accounts').update(patch).eq('id', acc.id);
   return { ok: true, account_id: acc.id, rows: n, posts: np };
 }
 
