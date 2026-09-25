@@ -49,6 +49,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
           if (body.action === 'summarise') return { ok: true, bullets: ['Finished the board deck and sent it to Tamara', 'Met Amanda about the flyers; she prints Friday'], suggest: [ { id: 501, title: 'Finish the Q2 board deck', why: 'finished the board deck' } ], open_tasks: [ { id: 502, title: 'Recover the impact report comments', owner: 'Steel' } ] };
           if (body.action === 'out') { window.__OUT = body; return { ok: true, posted: true, closed: body.close_task_ids.length ? ['Finish the Q2 board deck'] : [], minutes: 245 }; }
         }
+        if (name === 'hub-connect' && body.action === 'drive_meta') return { ok: true, id: 'x', name: 'Q2 July 22nd - Board Agenda', mime: 'application/vnd.google-apps.document', icon: null, url: body.url, size: null };
         if (name === 'ask' && body.execute) { window.__EXEC = body.execute; return { executed: { ok: true, detail: 'Added task #1 to Marketing: ' + (body.execute.input.title || '') } }; }
         return null;
       };
@@ -82,15 +83,16 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   await page.waitForTimeout(900);
   out.drawer = await page.evaluate(() => { const dr = document.getElementById('w116dr'); if (!dr) return { open: false, t0: window.__T0, boardApi: !!window.w116Board }; return { open: dr && dr.classList.contains('open'), crumb: (dr.querySelector('.w116tcrumb') || {}).textContent, sections: Array.from(dr.querySelectorAll('.w116drs')).map(x => x.textContent.trim()), previewHtml: (dr.querySelector('.w116tpv') || {}).innerHTML, subs: Array.from(dr.querySelectorAll('.w116tsub .s')).map(x => ({ t: x.querySelector('.t').textContent, done: x.classList.contains('done') })), files: Array.from(dr.querySelectorAll('.w116tfiles .f')).map(x => x.querySelector('.n').textContent), drop: !!dr.querySelector('.w116tfiles .drop') }; });
   await shot("1_drawer", false);
-  /* edit the description with the toolbar */
-  await page.click('#w116dr [data-w116tf="pv"]'); await page.waitForTimeout(200);
-  await page.evaluate(() => { const ta = document.getElementById('w116tta'); ta.value = 'Needs sign-off'; ta.setSelectionRange(0, 5); });
-  await page.click('#w116dr [data-w116tf="bold"]'); await page.waitForTimeout(100);
-  await page.evaluate(() => { const ta = document.getElementById('w116tta'); ta.value += '\nstep one\nstep two'; ta.setSelectionRange(ta.value.indexOf('step one'), ta.value.length); });
-  await page.click('#w116dr [data-w116tf="ol"]'); await page.waitForTimeout(100);
-  out.edited = await page.evaluate(() => (document.getElementById('w116tta') || {}).value);
-  await page.click('#w116dr [data-w116tf="pv"]'); await page.waitForTimeout(500);
-  out.previewAfter = await page.evaluate(() => ({ html: (document.querySelector('#w116dr .w116tpv') || {}).innerHTML, saved: (function(){ const t = DB_TASKS.find(x => x.id === window.__T0); return t && t.description; })() }));
+  /* edit the description in place: select a word, bold it, add a list line, autosave */
+  await page.evaluate(() => { const ed = document.getElementById('w116ted'); ed.focus(); const sel = window.getSelection(); const r = document.createRange(); const tn = ed.querySelector('p').firstChild; r.setStart(tn, 0); r.setEnd(tn, 5); sel.removeAllRanges(); sel.addRange(r); });
+  await page.click('#w116dr [data-w116tf="bold"]'); await page.waitForTimeout(150);
+  await page.evaluate(() => { const ed = document.getElementById('w116ted'); const sel = window.getSelection(); const r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); sel.removeAllRanges(); sel.addRange(r); ed.focus(); });
+  await page.keyboard.press('Enter'); await page.keyboard.type('- '); await page.keyboard.type('bring the banner'); await page.waitForTimeout(1500);
+  out.edited = await page.evaluate(() => ({ html: document.getElementById('w116ted').innerHTML.slice(0, 260), saved: (function(){ const t = DB_TASKS.find(x => x.id === window.__T0); return t && t.description; })(), status: (document.getElementById('w116tdst') || {}).textContent, toolbarBold: !!document.querySelector('#w116dr [data-w116tf="bold"]') }));
+  /* attach a Google Drive link */
+  await page.fill('#w116tlink', 'https://docs.google.com/document/d/1AJOSwwl1WLJCa14vVs_qfdcJyXv3R4EjEXYiuzkUqcg/edit');
+  await page.click('#w116dr [data-w116tlinkadd]'); await page.waitForTimeout(700);
+  out.driveLink = await page.evaluate(() => ({ chips: Array.from(document.querySelectorAll('#w116dr .w116tfiles .f')).map(f => ({ name: f.querySelector('.n').textContent, link: f.classList.contains('lnk'), kind: (f.querySelector('.g') || {}).className })), calls: window.__CALLS.filter(c => c.name === 'hub-connect').map(c => c.body.action) }));
   /* add a subtask */
   await page.fill('#w116tsa', 'Order the paper'); await page.keyboard.press('Enter'); await page.waitForTimeout(600);
   out.subAdded = await page.evaluate(() => ({ subs: Array.from(document.querySelectorAll('#w116dr .w116tsub .s .t')).map(x => x.textContent), inDb: DB_TASKS.filter(t => String(t.parent_task_id) === String(window.__T0)).map(t => t.title) }));

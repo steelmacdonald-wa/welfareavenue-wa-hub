@@ -1,4 +1,4 @@
-// v8 (25/09/26): routed through the Hub model router (llm, task transcript_extract; Jev picks the model) and every extracted item gets a Jev second opinion (jevCheck).
+// v10 (25/09/26): every new task carries a description and a priority, relative due dates resolve from the meeting date, Jev checks the project each task landed in. v8: routed through the Hub model router (llm, task transcript_extract; Sonnet 5 first) and every extracted item gets a Jev second opinion (jevCheck).
 // Welfare Avenue: process-transcript (v7, 24/09/26)
 // v7: Program Development is its own team (key 'progdev'). Labels renamed:
 // Operations Montreal, Operations Toronto, Fundraising and Finances. deptKey
@@ -98,7 +98,9 @@ Rules:
 5. Raise a new executive decision only when a call needs Steel or Suhaib personally. Every new decision needs reason_category and a one line reason_note. Categories: Budget or purchase; Hiring or people; Legal, risk, or governance; Strategy or direction; Partnership or external; Ethics or policy. Use a better fitting short category only if none apply. Flagged tasks (flag true) need the same two fields.
 6. progress: an updated 2 to 4 sentence paragraph for the department, keeping prior content that is still true. read: only update if team mood or energy clearly shifted; otherwise null. priorities: 2 to 4 short items, or null to keep current.
 7. new_updates: 1 to 3 new update entries summarizing what the meeting moved, label like "Jul 2 (Otter)".
-8. due_date only when the transcript states or strongly implies a date (ISO format).
+8. due_date only when the transcript states or strongly implies a date, resolved to ISO with calendar_after_meeting (one line per day after the meeting, with its weekday): "by Friday" is the first Friday after the meeting, "next week" is the Friday of the following week, "end of the month" is the last day of that month, "before the event on the 12th" is the day before, "in two weeks" is meeting date plus 14 days. No date when timing is vague ("soon", "at some point").
+8b. description: every new task gets 2 to 4 plain sentences a colleague could act on without having been in the meeting: what exactly needs doing, why (the context from the discussion), what done looks like, and any names, numbers, places or links mentioned. Use "- " bullets for lists of items. Never pad; never invent.
+8c. priority true only when the meeting clearly treats the task as urgent or the top priority ("this has to happen this week", "top priority", "blocking"), else false.
 9. subsection must be exactly one of the provided workstream names, or null.
 10. mark confidential true on anything about succession, individual performance, or personnel issues.
 11. Reconcile the open executive decisions list the same way: if the transcript shows a decision was made, include its id in decide_decisions with a short decided_note quoting the call that was made.
@@ -121,10 +123,12 @@ const TOOL = {
         title: { type: 'string' }, subsection: { type: ['string', 'null'] }, owner: { type: 'string' },
         assignees: { type: 'array', items: { type: 'string' } }, due_date: { type: ['string', 'null'] },
         flag: { type: 'boolean' }, reason_category: { type: ['string', 'null'] }, reason_note: { type: ['string', 'null'] },
+        description: { type: 'string', description: '2 to 4 plain sentences: what needs doing, why, what done looks like, names, numbers, places, links from the meeting. Use "- " bullets for lists. No em dashes.' },
+        priority: { type: 'boolean', description: 'True only when the meeting treats it as urgent or the top priority.' },
         status: { type: 'string' }, confidential: { type: 'boolean' },
         event_routing: { type: 'string', enum: ['event', 'adhoc'], description: 'For operations departments: "event" when the task belongs to a regular biweekly Sunday serving event, "adhoc" otherwise (including special or corporate volunteering events). Other departments: "adhoc".' },
         event_date: { type: ['string', 'null'], description: 'ISO date of the specific serving event this task is for, only when the transcript states it. Prefer a date from upcoming_serving_events. Null when unstated.' },
-        project_id: { type: ['integer', 'null'], description: 'Id from the projects list this task belongs to, or null for the department general list. Only use ids from the provided projects list.' } }, required: ['title', 'owner', 'flag'] } },
+        project_id: { type: ['integer', 'null'], description: 'Id from the projects list this task belongs to, or null for the department general list. Only use ids from the provided projects list.' } }, required: ['title', 'owner', 'flag', 'description', 'priority'] } },
       close_tasks: { type: 'array', description: 'Open tasks the transcript proves are complete or no longer needed. Be conservative: when in doubt, leave the task open.', items: { type: 'object', properties: {
         task_id: { type: 'integer', description: 'The task_id from the numbered open task list.' },
         evidence: { type: 'string', description: 'A short quote or close paraphrase from the transcript proving the task is done or no longer needed.' } },
@@ -214,9 +218,17 @@ function excerpt(text: string, needles: string[], max = 3500): string {
   return out || text.slice(0, max);
 }
 function noul(a: JevAnswer | undefined): number | null { return a && typeof a.noul === 'number' ? a.noul : null; }
-type JevReport = { checked: number; dropped: string[]; owners: string[]; due_cleared: number; decisions_dropped: string[]; closes_dropped: number; skipped: boolean };
-async function jevCheck(result: Record<string, unknown>, transcript: string, roster: string[], meetingLabel: string): Promise<JevReport> {
-  const rep: JevReport = { checked: 0, dropped: [], owners: [], due_cleared: 0, decisions_dropped: [], closes_dropped: 0, skipped: false };
+type JevReport = { checked: number; dropped: string[]; owners: string[]; due_cleared: number; decisions_dropped: string[]; closes_dropped: number; skipped: boolean; projects: string[] };
+type ProjRow = { id: number; name: string; description: string | null; department: string | null; parent_id: number | null };
+/* the three weeks after the meeting, one line a day, so "by Thursday" resolves to the right date */
+function calendarStrip(meetingDate: string | null): string[] {
+  if (!meetingDate || !/^\d{4}-\d{2}-\d{2}$/.test(meetingDate)) return [];
+  const out: string[] = [];
+  for (let i = 0; i <= 21; i++) { const d = new Date(meetingDate + 'T12:00:00'); d.setDate(d.getDate() + i); out.push(d.toISOString().slice(0, 10) + ' ' + d.toLocaleDateString('en-CA', { weekday: 'long' }) + (i === 0 ? ' (the meeting)' : '')); }
+  return out;
+}
+async function jevCheck(result: Record<string, unknown>, transcript: string, roster: string[], meetingLabel: string, projs: ProjRow[], dept: string, meetingDateIso: string | null): Promise<JevReport> {
+  const rep: JevReport = { checked: 0, dropped: [], owners: [], due_cleared: 0, decisions_dropped: [], closes_dropped: 0, skipped: false, projects: [] };
   const tasks = Array.isArray(result.new_tasks) ? (result.new_tasks as Array<Record<string, unknown>>) : [];
   const keep: Array<Record<string, unknown>> = [];
   let failures = 0;
@@ -232,8 +244,14 @@ async function jevCheck(result: Record<string, unknown>, transcript: string, ros
       owner_ok: { type: 'noul', instructions: 'According to the excerpt, is "' + owner + '" the person who took this on?' },
     };
     if (cands.length > 1) questions.owner = { type: 'choice', instructions: 'Who took this on, according to the excerpt?', criteria };
-    if (due) questions.due_ok = { type: 'noul', instructions: 'Does the excerpt state or strongly imply the due date ' + due + ' for this item (a named day, "by Friday", "before the event on the 12th")? Vague timing does not count.' };
-    const ans = await jev({ meeting: meetingLabel, item: { title, owner, assignees: t.assignees || [], due_date: due, workstream: t.subsection || null }, transcript_excerpt: ex, note: 'Names in the roster are the only valid owners.' }, questions);
+    if (due) questions.due_ok = { type: 'noul', instructions: 'Does the excerpt state or strongly imply the due date ' + due + ' for this item (a named day, "by Friday", "before the event on the 12th"), checked against the calendar given? Vague timing, or a different day than the calendar gives, does not count.' };
+    /* the project it landed in: the model's pick against the department's other projects */
+    const pickedP = t.project_id ? projs.find(p => Number(p.id) === Number(t.project_id)) : null;
+    const pool = projs.filter(p => p.department === dept || (pickedP && p.id === pickedP.id)).slice(0, 10);
+    const pcrit: Record<string, string> = { none: 'No project: the department\u2019s general list' };
+    pool.forEach(p => { pcrit['pr' + p.id] = p.name + (p.description ? ': ' + String(p.description).slice(0, 120) : ''); });
+    if (pool.length) questions.project = { type: 'choice', instructions: 'Which project does this task belong to? Pick "none" unless the task is clearly part of one.', criteria: pcrit };
+    const ans = await jev({ meeting: meetingLabel, item: { title, owner, assignees: t.assignees || [], due_date: due, workstream: t.subsection || null }, transcript_excerpt: ex, calendar_after_meeting: due ? calendarStrip(meetingDateIso).slice(0, 15) : undefined, note: 'Names in the roster are the only valid owners.' }, questions);
     if (!ans) { failures += 1; keep.push(t); if (failures >= 3) { rep.skipped = true; keep.push(...tasks.slice(keep.length)); break; } continue; }
     rep.checked += 1;
     const real = noul(ans.real);
@@ -245,6 +263,18 @@ async function jevCheck(result: Record<string, unknown>, transcript: string, ros
     }
     const dueOk = noul(ans.due_ok);
     if (due && dueOk !== null && dueOk < 0.3) { t.due_date = null; rep.due_cleared += 1; }
+    if (ans.project && typeof ans.project.choice === 'string' && typeof ans.project.confidence === 'number' && ans.project.confidence >= 0.75) {
+      const cur = t.project_id ? 'pr' + t.project_id : 'none';
+      const ch = ans.project.choice;
+      const probs = ans.project.probabilities || {};
+      const curP = typeof probs[cur] === 'number' ? probs[cur] : 0;
+      if (ch !== cur && curP < 0.25) {
+        const newId = ch === 'none' ? null : Number(ch.replace('pr', ''));
+        const np = newId ? projs.find(p => Number(p.id) === newId) : null;
+        rep.projects.push(title + ': ' + (pickedP ? pickedP.name : 'general') + ' > ' + (np ? np.name : 'general'));
+        t.project_id = newId;
+      }
+    }
     keep.push(t);
   }
   if (tasks.length > 30) keep.push(...tasks.slice(30));
@@ -348,7 +378,7 @@ function pickEvent(events: EventRow[], hint: unknown): EventRow | null {
   return events[0];
 }
 
-async function processTranscript(transcriptId: number) {
+async function processTranscript(transcriptId: number, dryRun = false) {
   const { data: tx, error } = await svc.from('transcripts').select('*').eq('id', transcriptId).single();
   if (error || !tx) throw new Error('transcript not found');
   if (!tx.body || tx.body.trim().length < 40) throw new Error('transcript body too short to process');
@@ -387,6 +417,8 @@ async function processTranscript(transcriptId: number) {
     department: dept,
     department_label: DEPT_LABEL[dept],
     meeting_title: tx.title, meeting_date: tx.meeting_date,
+    meeting_weekday: tx.meeting_date ? new Date(tx.meeting_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long' }) : null,
+    calendar_after_meeting: calendarStrip(tx.meeting_date),
     overview: metaQ.data || {},
     workstreams: subsections,
     open_tasks: tasksQ.data || [],
@@ -402,8 +434,12 @@ async function processTranscript(transcriptId: number) {
   const changedBy = 'AI: ' + (tx.title || 'transcript ' + transcriptId);
   // Jev second opinion on every item (see jevCheck); the roster is whatever the context lists as valid owners
   const rosterNames: string[] = [...new Set([...(Array.isArray((context as { roster?: unknown }).roster) ? ((context as { roster: Array<Record<string, unknown>> }).roster).map(m => String(m.name || '')).filter(Boolean) : []), 'Steel MacDonald', 'Steel', 'Suhaib', 'Both'])];
-  const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''));
+  const jevRep = await jevCheck(result, tx.body, rosterNames, (tx.title || 'meeting') + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : ''), projRows.map(p => ({ id: p.id, name: (p.parent_id && projName.get(p.parent_id) ? projName.get(p.parent_id) + ' > ' : '') + p.name, description: p.description, department: p.department, parent_id: p.parent_id })), dept, tx.meeting_date || null);
 
+  if (dryRun) {
+    /* preview: what the model and Jev would put on the board, nothing written */
+    return { dry_run: true, department: dept, model_result: result, jev: jevRep };
+  }
   const boardSensitive = result.board_sensitive === true;
   const effectiveBoardOnly = tx.board_only === true || boardSensitive;
   if (boardSensitive && tx.board_only !== true) {
@@ -482,6 +518,7 @@ async function processTranscript(transcriptId: number) {
     if (jevRep.dropped.length) bits.push(jevRep.dropped.length + ' not a firm commitment (left out: ' + jevRep.dropped.slice(0, 3).map(x => '"' + x.slice(0, 50) + '"').join(', ') + (jevRep.dropped.length > 3 ? ', ...' : '') + ')');
     if (jevRep.owners.length) bits.push(jevRep.owners.length + (jevRep.owners.length === 1 ? ' owner corrected' : ' owners corrected'));
     if (jevRep.due_cleared) bits.push(jevRep.due_cleared + (jevRep.due_cleared === 1 ? ' due date cleared' : ' due dates cleared'));
+    if (jevRep.projects.length) bits.push(jevRep.projects.length + (jevRep.projects.length === 1 ? ' project corrected' : ' projects corrected'));
     if (jevRep.decisions_dropped.length) bits.push(jevRep.decisions_dropped.length + ' decision' + (jevRep.decisions_dropped.length === 1 ? '' : 's') + ' kept with the team');
     if (jevRep.closes_dropped) bits.push(jevRep.closes_dropped + ' task' + (jevRep.closes_dropped === 1 ? '' : 's') + ' left open (not proven done)');
     jevLine = '\n:mag: Jev checked ' + jevRep.checked + ' items' + (bits.length ? ': ' + bits.join(', ') : ', all held up') + '.';
@@ -510,6 +547,10 @@ Deno.serve(async (req: Request) => {
   const body = await req.json().catch(() => ({}));
   const transcriptId = Number(body.transcript_id);
   if (!transcriptId) return json({ error: 'transcript_id required' }, 400);
+  if (body.dry_run === true) {
+    /* synchronous preview for the build and for a future "preview before applying" button */
+    try { return json(await processTranscript(transcriptId, true)); } catch (e) { return json({ error: String((e as Error).message || e).slice(0, 300) }, 500); }
+  }
 
   const work = processTranscript(transcriptId).catch(async (e) => {
     console.error('processing failed', e);

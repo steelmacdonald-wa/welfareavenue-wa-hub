@@ -1,4 +1,4 @@
-// Welfare Avenue: llm (v1.4, 25/09/26)
+// Welfare Avenue: llm (v1.5, 25/09/26)
 // The Hub's model router. Every AI job in the Hub sends its request here
 // unchanged (Anthropic Messages format) with an x-wa-task header naming
 // the job. The router looks the job up in ai_routes, sends the request to
@@ -102,7 +102,7 @@ async function jevPick(task: string, route: Route, chain: string[], req: Record<
     const state = {
       job: route.label, task, notes: route.notes || null,
       request: { system_excerpt: textOf(req.system).slice(0, 500), last_user_excerpt: textOf(lastUser ? lastUser.content : '').slice(0, 900), input_chars: inputChars, turns: msgs.length, tools, forced_tool: tc && tc.type === 'tool' ? tc.name : null, max_tokens: req.max_tokens },
-      guidance: 'Welfare Avenue is a small charity: spend as little as possible without harming the result. Cheaper models are right for short, well specified, extraction, classification and lookup jobs. Choose a stronger model when the request needs careful reasoning, nuanced writing for people outside the team, very long context, or reliable multi-step tool use. Candidates are listed with their prices.'
+      guidance: 'Welfare Avenue is a small charity: spend as little as possible without harming the result. Cheaper models are right for short, well specified, extraction, classification and lookup jobs. Choose a stronger model when the request needs careful reasoning, nuanced writing for people outside the team, very long context, or reliable multi-step tool use. Known from use: Kimi K2.6 is good for plain writing and summaries but tends to run out of budget on long inputs that force a structured tool call (transcripts); Sonnet and GPT-5 mini complete those reliably. Candidates are listed with their prices.'
     };
     const res = await fetch(OR + '/alpha/decisions', { method: 'POST', headers: orHeaders(key), body: JSON.stringify({ model: JEV, state, questions: { model: { type: 'choice', instructions: 'Which candidate should handle this request? Pick the cheapest one that will do it well.', criteria } } }) });
     if (!res.ok) { await log({ task, caller, requested_model: JEV, ok: false, status: res.status, ms: 0, error: 'jev pick ' + res.status + ' ' + (await res.text()).slice(0, 200), via: 'jev' }); return null; }
@@ -153,12 +153,13 @@ async function chat(task: string, caller: string | null, body: Record<string, un
       await log({ task, caller, requested_model: model, ok: false, ms: Date.now() - t0, error: lastErr, fallback_used: i > 0 });
       continue;
     }
-    const ms = Date.now() - t0;
     if (res.ok && streaming) {
+      const ms = Date.now() - t0;
       await log({ task, caller, requested_model: model, model, ok: true, status: res.status, ms, fallback_used: i > 0, error: 'stream (usage not recorded)', via });
       return new Response(res.body, { status: 200, headers: { ...CORS, 'Content-Type': res.headers.get('Content-Type') || 'text/event-stream' } });
     }
     const text = await res.text();
+    const ms = Date.now() - t0; // the body is the slow part: measure after it arrived
     if (res.ok) {
       // deno-lint-ignore no-explicit-any
       let out: any;

@@ -1,4 +1,4 @@
-// Welfare Avenue: hub-connect (v2, 25/09/26)
+// Welfare Avenue: hub-connect (v5, 25/09/26: drive_meta for task attachments; v4 slack_scopes; v2
 // v2: Google Calendar verifies with calendar.events + calendar.readonly (the
 //   events scope alone cannot read the calendar itself); Slack resolves the
 //   way notify does (wa_slack_ids, then lookupByEmail, then a unique name
@@ -14,6 +14,7 @@
 //   {action:'toggle', provider, enabled}           google_calendar | google_drive | slack
 //   {action:'rsvp', event_id, response}            accepted | declined | tentative (calendar.events)
 //   {action:'drive_recent', limit?, q?}            the caller's recent Drive files (drive.readonly)
+//   {action:'drive_meta', url}                      name and kind of a pasted Drive link (task attachments)
 // Scopes the delegation entry (client id 107460787452614031265) must carry:
 //   gmail.readonly, calendar.readonly, calendar.events, drive.readonly
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -256,6 +257,21 @@ Deno.serve(async (req: Request) => {
       } catch (_) { /* the next sync catches up */ }
       await upsertConn(me.email, 'google_calendar', { last_ok_at: new Date().toISOString(), last_error: null });
       return json({ ok: true, response });
+    }
+    if (action === 'drive_meta') {
+      /* the name and kind of a Google Drive link someone pastes on a task (wave116t attachments) */
+      const raw = String(body.url || '').trim();
+      const m = raw.match(/\/(?:d|folders|file\/d|document\/d|spreadsheets\/d|presentation\/d|forms\/d)\/([A-Za-z0-9_-]{10,})/) || raw.match(/[?&]id=([A-Za-z0-9_-]{10,})/);
+      if (!m) return json({ ok: false, error: 'That does not look like a Google Drive link.' });
+      const id = m[1];
+      const actor = me.email.endsWith('@welfareavenue.com') ? me.email : 'hub@welfareavenue.com';
+      try {
+        const token = await tokenFor(actor, SCOPE.google_drive);
+        const r = await gapi(token, 'GET', 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(id) + '?supportsAllDrives=true&fields=id,name,mimeType,iconLink,webViewLink,size');
+        return json({ ok: true, id, name: r.name || null, mime: r.mimeType || null, icon: r.iconLink || null, url: r.webViewLink || raw, size: r.size ? Number(r.size) : null });
+      } catch (e) {
+        return json({ ok: true, id, name: null, mime: null, icon: null, url: raw, note: String((e as Error).message || e).slice(0, 160) });
+      }
     }
     if (action === 'drive_recent') {
       const c = await conns(me.email);

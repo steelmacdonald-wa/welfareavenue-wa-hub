@@ -12,3 +12,4 @@ __pycache__/
 *.key
 .env
 .pushed.json
+build/live.html
