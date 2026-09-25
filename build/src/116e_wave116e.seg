@@ -136,13 +136,19 @@
   async function load(force) {
     if (!force && P.loaded && Date.now() - P.loaded < 60000) return;
     try {
-      var r = await db.from('projects').select('*').order('sort', { ascending: true });
-      P.rows = (r && r.data) || [];
+      /* the shared store (wave116i): the same rows the team pages, boards and goal pages read */
+      if (window.w116LoadProjects) P.rows = (await window.w116LoadProjects(true)) || [];
+      else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); P.rows = (r && r.data) || []; }
       var g = await db.from('goals').select('id, title, department, quarter, status').limit(500);
       P.goals = (g && g.data) || [];
       P.loaded = Date.now();
-      try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS = P.rows.slice(); } catch (e) { /* fine */ }
     } catch (e) { /* offline */ }
+  }
+  function changed() { try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(P.rows); } catch (e) { /* fine */ } }
+  function wsOptions(dept, cur) {
+    var bs = (T.boards && T.boards[dept]) || [];
+    if (!bs.length) return '';
+    return '<label>Board (sub-team)</label><select id="w116pws"><option value="">Not on a board</option>' + bs.map(function (b) { return '<option value="' + E(b.ws) + '"' + (lower(cur) === lower(b.ws) ? ' selected' : '') + '>' + E(b.label) + '</option>'; }).join('') + '</select><div class="hint" style="font-size:11.5px;color:var(--wa-muted);margin:3px 0 0">Which ' + E(label(dept)) + ' board lists this project and its tasks.</div>';
   }
 
   /* ---------- writes ---------- */
@@ -152,6 +158,7 @@
     Object.assign(p, fields);
     try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(p.id), field: field, old_value: oldV == null ? null : String(oldV), new_value: newV == null ? null : String(newV), changed_by: who0() }); } catch (e) { /* audit */ }
     try { (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (x) { if (Number(x.id) === Number(p.id)) Object.assign(x, fields); }); } catch (e) { /* fine */ }
+    changed();
     return true;
   }
   async function setLead(p, name) {
@@ -176,18 +183,22 @@
       '<label>Owner team</label><select id="w116pt">' + T.order.map(function (d) { return '<option value="' + d + '"' + (d === dept ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
       '<label>Project lead</label><select id="w116pl"><option value="">Choose later</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '">' + E(m.name) + ' (' + E(T.short[m.department] || m.department || '') + ')</option>'; }).join('') + '</select>' +
       '<label>Part of (optional)</label><select id="w116pp"><option value="">Stands on its own</option>' + parents.map(function (p) { return '<option value="' + p.id + '">' + E(p.name) + '</option>'; }).join('') + '</select>' +
+      '<div id="w116pwsbox">' + wsOptions(dept, '') + '</div>' +
       '<div class="m-foot"><button class="btn ghost" id="w116pc">Cancel</button><button class="btn" id="w116ps">Create project</button></div></div>');
     document.getElementById('w116pc').addEventListener('click', closeModal);
+    document.getElementById('w116pt').addEventListener('change', function () { var box = document.getElementById('w116pwsbox'); if (box) box.innerHTML = wsOptions(this.value, ''); });
     document.getElementById('w116ps').addEventListener('click', async function () {
       var name = document.getElementById('w116pn').value.trim(); if (!name) { toast('Give the project a name'); return; }
       var lead = document.getElementById('w116pl').value; var pid = document.getElementById('w116pp').value;
-      var row = { name: name, description: document.getElementById('w116pd').value.trim() || null, department: document.getElementById('w116pt').value, status: 'active', leads: lead ? [lead] : [], parent_id: pid ? Number(pid) : null, sort: 999, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      var wsEl = document.getElementById('w116pws');
+      var row = { name: name, description: document.getElementById('w116pd').value.trim() || null, department: document.getElementById('w116pt').value, status: 'active', leads: lead ? [lead] : [], parent_id: pid ? Number(pid) : null, workstream: wsEl && wsEl.value ? wsEl.value : null, sort: 999, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       var r = await db.from('projects').insert(row).select('*').single();
       if (r && r.error) { toast('Could not create the project'); return; }
       var saved = (r && r.data) || row; if (!saved.id) saved.id = -Date.now();
       P.rows.push(saved);
       try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(saved.id), field: 'added', old_value: null, new_value: name, changed_by: who0() }); } catch (e) { /* audit */ }
       try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS.push(saved); } catch (e) { /* fine */ }
+      changed();
       closeModal(); toast('Project created'); render();
     });
   }
@@ -311,6 +322,7 @@
     openModal('<div class="w116pm"><h3>' + E(p.name) + '</h3>' +
       '<label>Name</label><input type="text" id="w116en" value="' + E(p.name) + '" />' +
       '<label>What it is</label><textarea id="w116ed">' + E(p.description || '') + '</textarea>' +
+      wsOptions(p.department, p.workstream || '') +
       '<div class="m-foot"><button class="btn ghost" id="w116ec">Cancel</button><button class="btn" id="w116es">Save</button></div></div>');
     document.getElementById('w116ec').addEventListener('click', closeModal);
     document.getElementById('w116es').addEventListener('click', async function () {
@@ -319,6 +331,8 @@
       var ok = true;
       if (name !== p.name) ok = await patch(p, { name: name }, 'name', p.name, name);
       if (ok && desc !== (p.description || null)) ok = await patch(p, { description: desc }, 'description', (p.description || '').slice(0, 80), (desc || '').slice(0, 80));
+      var wsEl = document.getElementById('w116pws');
+      if (ok && wsEl && (wsEl.value || null) !== (p.workstream || null)) ok = await patch(p, { workstream: wsEl.value || null }, 'workstream', p.workstream || null, wsEl.value || null);
       if (ok) { closeModal(); toast('Project saved'); render(); }
     });
   }

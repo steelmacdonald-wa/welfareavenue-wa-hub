@@ -28526,6 +28526,33 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w116card h3{font-family:' + BODY + ';font-weight:700;font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;}' +
     '.w116card h3 .lnk{font-size:11px;letter-spacing:.4px;text-transform:none;font-weight:600;color:var(--wa-muted);cursor:pointer;}' +
     '.w116card h3 .lnk:hover{color:' + GREEN + ';}' +
+    /* wave116i: the classic department page folds into the Overview */
+    '.w116prog{font-size:13.5px;line-height:1.55;color:var(--wa-text);}' +
+    '.w116prog p{margin:0 0 8px;}' +
+    '.w116prog .pulse{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--wa-muted);background:rgba(16,63,57,.05);border-radius:999px;padding:4px 12px;margin:0 0 10px;}' +
+    '.w116prog .pulse b{color:' + GREEN + ';}' +
+    '.w116prog h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:12px 0 6px;}' +
+    '.w116prog ol{margin:0;padding-left:20px;}' +
+    '.w116prog ol li{margin:0 0 5px;}' +
+    '.w116prog .more{display:inline-block;margin-top:4px;font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    '.w116prog.clamp p.body{display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;}' +
+    '.w116dec{display:flex;flex-direction:column;gap:10px;}' +
+    '.w116dec .d{background:rgba(220,165,39,.10);border-left:4px solid ' + GOLD + ';border-radius:12px;padding:10px 14px;font-size:13px;}' +
+    '.w116dec .d b{display:block;color:var(--wa-text);line-height:1.35;}' +
+    '.w116dec .d .m{font-size:11.5px;color:var(--wa-muted);margin:3px 0 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
+    '.w116dec .d .m .ex{font-weight:700;color:' + GREEN + ';}' +
+    '.w116dec .d .mv{font-size:12.5px;color:var(--wa-text);margin:6px 0 0;}' +
+    '.w116dec .d .rec-box{font-size:12.5px;line-height:1.5;color:var(--wa-text);background:var(--wa-card);border-radius:10px;padding:8px 10px;margin:8px 0 0;}' +
+    '.w116dec .d .exec-rec:empty{display:none;}' +
+    '.w116dec .d .acts{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0;}' +
+    '.w116dec .d .acts a,.w116dec .d .acts button{font-family:' + BODY + ';font-size:12px;font-weight:700;color:' + GREEN + ';background:none;border:none;padding:0;cursor:pointer;}' +
+    '.w116dec .d .acts a:hover,.w116dec .d .acts button:hover{text-decoration:underline;}' +
+    '.w116tools{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w116tools a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.06);border-radius:12px;padding:8px 14px;cursor:pointer;text-decoration:none;}' +
+    '.w116tools a:hover{background:rgba(16,63,57,.12);}' +
+    '.w116addrow{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0;}' +
+    '.w116addrow a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    '.w116addrow a:hover{text-decoration:underline;}' +
     '.w116kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 16px;}' +
     '.w116kpi{display:flex;flex-direction:column;align-items:flex-start;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;min-width:0;}' +
     '.w116kpi:hover{border-color:rgba(16,63,57,.25);}' +
@@ -28654,6 +28681,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
   function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function admin() { try { return typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'; } catch (e) { return false; } }
+  function who0() { try { return who(); } catch (e) { return 'staff'; } }
   function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
   function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || T.labels[d] || d; }
   function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
@@ -28794,35 +28822,69 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     catch (e) { W116.mentions = []; }
     return W116.mentions;
   }
+  /* wave116i: one project store for every surface (team pages, boards, Projects
+     page, goal pages, the map). Fresh within 30 seconds; an edit anywhere calls
+     w116ProjectsChanged and every visible surface repaints from the same rows. */
+  var PSTORE = window.__waProjects = window.__waProjects || { rows: null, at: 0, loading: null };
+  function syncLegacy() { try { if (typeof WA27_PROJECTS !== 'undefined' && PSTORE.rows) WA27_PROJECTS = PSTORE.rows.filter(function (p) { return (p.status || 'active') === 'active'; }); } catch (e) { /* fine */ } }
   async function loadProjects(force) {
-    if (!force && typeof WA27_PROJECTS !== 'undefined' && WA27_PROJECTS && WA27_PROJECTS.length) { W116.projects = WA27_PROJECTS; return W116.projects; }
-    if (W116.projects && !force) return W116.projects;
-    try { var r = await db.from('projects').select('*').order('sort', { ascending: true }); W116.projects = (r && r.data) || []; }
-    catch (e) { W116.projects = W116.projects || []; }
+    if (!force && PSTORE.rows && Date.now() - PSTORE.at < 30000) { W116.projects = PSTORE.rows; return PSTORE.rows; }
+    if (!PSTORE.loading) {
+      PSTORE.loading = (async function () {
+        try { var r = await db.from('projects').select('*').order('sort', { ascending: true }); if (r && !r.error) { PSTORE.rows = (r.data || []); PSTORE.at = Date.now(); syncLegacy(); } }
+        catch (e) { /* offline */ }
+        PSTORE.loading = null;
+      })();
+    }
+    await PSTORE.loading;
+    if (!PSTORE.rows) PSTORE.rows = (typeof WA27_PROJECTS !== 'undefined' && WA27_PROJECTS) ? WA27_PROJECTS.slice() : [];
+    W116.projects = PSTORE.rows;
     return W116.projects;
   }
+  window.w116LoadProjects = loadProjects;
+  window.w116ProjectsChanged = function (rows) {
+    if (Array.isArray(rows)) { PSTORE.rows = rows; PSTORE.at = Date.now(); } else PSTORE.at = 0;
+    W116.projects = PSTORE.rows; syncLegacy();
+    try { if (W116.cur && document.getElementById('team') && document.getElementById('team').classList.contains('active') && window.w116Route) window.w116Route(); } catch (e) { /* fine */ }
+    try { if (window.w116Goals && window.w116Goals.refreshLive) window.w116Goals.refreshLive(); } catch (e) { /* fine */ }
+    try { document.dispatchEvent(new CustomEvent('wa:projects')); } catch (e) { /* fine */ }
+  };
   async function loadMetrics(force) {
     if (W116.metrics && !force) return W116.metrics;
     try { var r = await db.from('metrics').select('*').order('sort', { ascending: true }); W116.metrics = (r && r.data) || []; }
     catch (e) { W116.metrics = W116.metrics || []; }
     return W116.metrics;
   }
-  window.w116Projects = function () { return W116.projects || (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []) || []; };
+  window.w116Projects = function () { return PSTORE.rows || W116.projects || (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []) || []; };
 
   /* ---------- scope helpers shared with the boards ---------- */
   function boardDef(d, key) { return ((T.boards[d]) || []).filter(function (b) { return b.key === key; })[0] || null; }
+  /* which board (sub-team) a project belongs to: its own workstream, else its
+     parent's, else the static list in WA_TEAMS.boardProjects */
+  function boardKeyOf(p, all) {
+    if (!p) return null;
+    all = all || window.w116Projects();
+    var bs = T.boards[p.department] || [];
+    var ws = lower(p.workstream || '');
+    var par = p.parent_id ? all.filter(function (x) { return Number(x.id) === Number(p.parent_id); })[0] : null;
+    if (!ws && par) ws = lower(par.workstream || '');
+    for (var i = 0; i < bs.length; i++) { if (ws && lower(bs[i].ws) === ws) return bs[i].key; }
+    var keys = Object.keys(T.boardProjects || {});
+    for (var k = 0; k < keys.length; k++) { var ids = T.boardProjects[keys[k]] || []; if (ids.indexOf(Number(p.id)) >= 0 || (par && ids.indexOf(Number(par.id)) >= 0)) return keys[k]; }
+    return null;
+  }
+  function boardIds(boardKey) { var all = window.w116Projects(); return all.filter(function (p) { return boardKeyOf(p, all) === boardKey; }).map(function (p) { return Number(p.id); }); }
+  window.w116BoardKeyOf = boardKeyOf;
+  window.w116BoardIds = boardIds;
   function projectsFor(d, board) {
     var all = window.w116Projects();
-    if (board) {
-      var ids = T.boardProjects[board.key] || [];
-      return all.filter(function (p) { return ids.indexOf(Number(p.id)) >= 0 || (p.department === d && lower(p.name).indexOf(lower(board.ws).split(' ')[0]) >= 0 && ids.length === 0); });
-    }
+    if (board) { return all.filter(function (p) { return boardKeyOf(p, all) === board.key; }); }
     return all.filter(function (p) { return p.department === d; });
   }
   function tasksFor(d, board, ws) {
     var rows = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return t.department === d; });
     if (board) {
-      var ids = T.boardProjects[board.key] || [];
+      var ids = boardIds(board.key);
       rows = rows.filter(function (t) { return t.subsection === board.ws || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0); });
     } else if (ws) rows = rows.filter(function (t) { return (t.subsection || 'General') === ws; });
     return rows;
@@ -28997,6 +29059,98 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return '<div class="p" data-w116go="#project/' + E(p.id) + '"><div class="n"><span>' + E(parent + p.name) + '</span><span>' + done + '/' + ts.length + '</span></div><div class="bar"><i style="width:' + pct + '%"></i></div></div>';
     }).join('') + '</div>';
   }
+  /* the classic page's narrative: progress this period, priorities, pulse (dept_meta + dept_sentiment) */
+  function progressHtml(d) {
+    var meta = (typeof DB_META !== 'undefined' && DB_META[d]) || {};
+    var prog = String(meta.progress || '').trim();
+    var pri = Array.isArray(meta.priorities) ? meta.priorities.filter(Boolean) : [];
+    var pulse = ''; try { pulse = typeof pulseChip === 'function' ? pulseChip(d) : ''; } catch (e) { pulse = ''; }
+    if (!prog && !pri.length && !pulse) return '<p class="w116empty">No progress notes yet. They arrive from meeting transcripts' + (staff() ? ', or run the unprocessed ones below.' : '.') + '</p>' + (staff() ? '<div class="w116addrow"><a data-w116act="rerun" data-d="' + E(d) + '">&#8635; Re-run from transcripts</a></div>' : '');
+    var pulseTxt = '';
+    try {
+      if (pulse) { var tmp = document.createElement('div'); tmp.innerHTML = pulse; var txt = String(tmp.textContent || '').replace(/\s+/g, ' ').replace(/[\u2661\u2665]/g, '').replace(/Team pulse/gi, '').trim(); var sc = txt.match(/^(\d+\/10\s*[\u2196-\u2199\u2192]?)\s*(?:\u00b7)?\s*(.*)$/); pulseTxt = '<span class="pulse"><b>Team pulse ' + E(sc ? sc[1].trim() : '') + '</b>' + E((sc ? sc[2] : txt).slice(0, 160)) + '</span>'; }
+    } catch (e) { pulseTxt = ''; }
+    var long = prog.length > 700;
+    return '<div class="w116prog' + (long ? ' clamp' : '') + '" data-w116prog="1">' + pulseTxt +
+      (prog ? '<p class="body">' + E(prog) + '</p>' + (long ? '<span class="more" data-w116act="unclamp">Read the whole note</span>' : '') : '') +
+      (pri.length ? '<h4>High priority</h4><ol>' + pri.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ol>' : '') +
+      (staff() ? '<div class="w116addrow"><a data-w116act="rerun" data-d="' + E(d) + '">&#8635; Re-run from transcripts</a></div>' : '') + '</div>';
+  }
+  var AREA_DEPT = { 'ops mtl': 'opsmtl', 'program development': 'progdev', 'ops to': 'opsto', 'marketing': 'marketing', 'fundraising': 'fundraising', 'grants': 'fundraising', 'events': 'fundraising', 'finance': 'fundraising', 'hr': 'hr', 'board': 'board' };
+  function areaDept(area) {
+    var s = lower(area);
+    if (AREA_DEPT[s]) return AREA_DEPT[s];
+    if (s.indexOf('program dev') >= 0) return 'progdev';
+    if (s.indexOf('montreal') >= 0 || s === 'ops mtl') return 'opsmtl';
+    if (s.indexOf('toronto') >= 0) return 'opsto';
+    if (s.indexOf('fund') >= 0 || s.indexOf('grant') >= 0 || s.indexOf('financ') >= 0 || s.indexOf('event') >= 0) return 'fundraising';
+    if (s.indexOf('market') >= 0) return 'marketing';
+    if (s.indexOf('human') >= 0 || s === 'hr') return 'hr';
+    if (s.indexOf('board') >= 0) return 'board';
+    return null;
+  }
+  function decisionsHtml(d) {
+    var rows = (typeof DB_DECISIONS !== 'undefined' ? DB_DECISIONS : []).filter(function (x) { return !x.done && areaDept(x.area) === d; });
+    if (!rows.length) return '';
+    return '<div class="w116card"><h3>Executive decisions for this team <span class="lnk" data-w116go="#overview">executive dashboard</span></h3><div class="w116dec">' + rows.map(function (x) {
+      var ex = window.w116ExecOf ? window.w116ExecOf({ owner: x.owner, area: x.area }) : (x.owner || 'Steel');
+      return '<div class="d" data-dec="' + E(x.id) + '"><b>' + E(x.title) + '</b>' +
+        '<div class="m"><span class="ex">' + E(ex) + ' decides</span>' + (x.reason_category ? '<span>' + E(x.reason_category) + '</span>' : '') + (x.opened_at ? '<span>open since ' + E(String(x.opened_at).slice(0, 10)) + '</span>' : '') + '</div>' +
+        (x.suggested_move ? '<div class="mv">Suggested move: ' + E(x.suggested_move) + '</div>' : '') +
+        '<div class="exec-rec" id="rec-' + E(d) + '-' + E(x.id) + '">' + (x.recommendation ? '<div class="rec-box">' + E(x.recommendation) + '</div>' : '') + '</div>' +
+        '<div class="acts">' + (staff() ? '<button data-rec="' + E(x.id) + '" data-w116act="rec" data-d="' + E(d) + '">' + (x.recommendation ? '&#8635; Refresh the recommendation' : '&#10024; Get a recommendation') + '</button>' : '') + '<a data-w116go="#decision/' + E(x.id) + '">Open on the dashboard &rarr;</a></div></div>';
+    }).join('') + '</div></div>';
+  }
+  function toolsHtml(d) {
+    var tools = [];
+    if (d === 'opsmtl' || d === 'opsto') { tools.push(['&#129387;', 'Volunteering manager', '#volunteering']); tools.push(['&#128214;', 'Recipes', '#volunteering/recipes']); }
+    if (d === 'hr') { tools.push(['&#127891;', 'Training', '#training']); tools.push(['&#128202;', 'Onboarding board', '#training']); if (tabVisible('hrcentre')) tools.push(['&#128101;', 'HR centre', '#hrcentre']); }
+    if (d === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
+    if (d === 'marketing') { tools.push(['&#9997;', 'Content drafter', '#create']); tools.push(['&#127891;', 'Training paths', '#training']); }
+    if (d === 'fundraising' && tabVisible('finances')) tools.push(['&#128176;', 'Finances', '#finances']);
+    tools.push(['&#127919;', 'Department goals', '#goals']);
+    tools.push(['&#128194;', 'Projects', '#projects']);
+    tools.push(['&#128196;', 'Transcripts', '#transcripts']);
+    return '<div class="w116tools">' + tools.map(function (t) { return '<a data-w116go="' + E(t[2]) + '">' + t[0] + ' ' + E(t[1]) + '</a>'; }).join('') + '</div>';
+  }
+  function addUpdateModal(d) {
+    var when = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    openModal('<div class="w116pm"><h3>Add an update for ' + E(label(d)) + '</h3><p class="m-sub">A note the whole team sees on this page, in the bullets on the Overview and in the executive digest.</p>' +
+      '<label>Label</label><input type="text" id="w116ul" value="' + E(when) + '" placeholder="Jul 2 or Jul 2 (Otter)" />' +
+      '<label>What happened</label><textarea id="w116ut" placeholder="Two or three sentences: what moved, what is next."></textarea>' +
+      '<label style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text);margin-top:10px"><input type="checkbox" id="w116uc" style="width:15px;height:15px" /> Confidential (hidden from the board view)</label>' +
+      '<div class="m-foot"><button class="btn ghost" id="w116ux">Cancel</button><button class="btn" id="w116us">Add the update</button></div></div>');
+    document.getElementById('w116ux').addEventListener('click', closeModal);
+    document.getElementById('w116us').addEventListener('click', async function () {
+      var text = document.getElementById('w116ut').value.trim(); if (!text) { toast('Write the update first'); return; }
+      var lab = document.getElementById('w116ul').value.trim() || when; var conf = document.getElementById('w116uc').checked;
+      var b = document.getElementById('w116us'); b.disabled = true;
+      var r = await db.from('dept_updates').insert({ department: d, entry_label: lab, text: text, added_by: who0(), confidential: conf, created_at: new Date().toISOString() });
+      if (r && r.error) { b.disabled = false; toast('Save failed'); return; }
+      try { logChange('dept_update', d, 'added', null, lab + ': ' + text.slice(0, 200)); } catch (e) { /* audit */ }
+      closeModal(); toast('Update added');
+      try { if (typeof loadAll === 'function') await loadAll(); } catch (e) { /* fine */ }
+      try { if (typeof renderSection === 'function') renderSection(d); } catch (e) { /* fine */ }
+      try { if (typeof renderWhatsNew === 'function') renderWhatsNew(); } catch (e) { /* fine */ }
+      if (window.w116Route) window.w116Route();
+    });
+  }
+  function allUpdatesHtml(d) {
+    var rows = (typeof DB_UPDATES !== 'undefined' ? DB_UPDATES : []).filter(function (u) { return u.department === d; }).sort(function (a, b) { return String(b.created_at).localeCompare(String(a.created_at)); });
+    if (!rows.length) return '<p class="w116empty">No updates yet.</p>';
+    return '<div class="w116upd">' + rows.map(function (u) {
+      var src = srcOf(u); var tx = txFor(u);
+      return '<div class="u"><div class="hd"><b>' + E(u.entry_label || (u.created_at ? String(u.created_at).slice(0, 10) : '')) + '</b><span class="w116src ' + src[0] + '">' + src[1] + '</span>' + (tx ? '<a data-w116go="#tx/' + E(tx.id) + '">' + E(tx.title) + '</a>' : '') + (u.confidential ? '<span class="w116src manual">confidential</span>' : '') + '<span style="margin-left:auto;font-size:11px;color:var(--wa-muted)">' + E(String(u.created_at || '').slice(0, 10)) + '</span></div><ul>' + sentences(u.text).map(function (b) { return '<li>' + E(b) + '</li>'; }).join('') + '</ul></div>';
+    }).join('') + '</div>';
+  }
+  function canInvite(d) {
+    try {
+      var r = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || '';
+      if (r === 'admin') return true;
+      if (r === 'leader') { var me = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return lower(m.email) === lower((typeof USER !== 'undefined' && USER && USER.email) || ''); })[0]; return !!(me && me.department === d); }
+    } catch (e) { /* fine */ }
+    return false;
+  }
   function teamHtml(d) {
     var ms = members(d);
     if (!ms.length) return '<p class="w116empty">No one on the roster yet.</p>';
@@ -29030,15 +29184,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       boardsHtml(d) +
       kpiTiles(d, null) +
       '<div class="w116grid"><div class="w116col">' +
-      '<div class="w116card"><h3>Updates <span class="lnk" data-w116go="#dept/' + E(d) + '">full department page</span></h3>' + updatesHtml(d, 6) + '</div>' +
+      '<div class="w116card"><h3>Where the team is <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">open work</span></h3>' + progressHtml(d) + '</div>' +
+      decisionsHtml(d) +
+      '<div class="w116card" id="w116updcard"><h3>Updates <span class="lnk" data-w116act="allupd" data-d="' + E(d) + '">show all</span></h3>' + updatesHtml(d, 6) + (staff() ? '<div class="w116addrow"><a data-w116act="addupd" data-d="' + E(d) + '">+ Add an update</a><a data-w116act="addtask" data-d="' + E(d) + '">+ Add a task</a></div>' : '') + '</div>' +
       '<div class="w116card"><h3>Mentions from other teams</h3>' + mentionsHtml(d) + '</div>' +
       '</div><div class="w116col">' +
       '<div class="w116card" id="w116meet"><h3>Upcoming meetings <span class="lnk" data-w116go="#team/' + E(d) + '/agenda">agenda</span></h3>' + eventsHtml(d) + '</div>' +
       '<div class="w116card"><h3>KPIs we track</h3>' + metricsHtml(d) + '</div>' +
-      '<div class="w116card"><h3>Projects <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">tasks</span></h3>' + projectsHtml(d, null) + '</div>' +
-      '<div class="w116card"><h3>Team <span class="lnk" data-w116go="#orgchart">org chart</span></h3>' + teamHtml(d) + '</div>' +
-      '</div></div>' +
-      '<div class="w116foot"><a data-w116go="#dept/' + E(d) + '">Open the full department page (executive decisions, progress notes, workstreams)</a><a data-w116go="#transcripts">Transcripts</a></div>';
+      '<div class="w116card"><h3>Projects <span class="lnk" data-w116go="#team/' + E(d) + '/tasks">tasks</span></h3>' + projectsHtml(d, null) + (staff() ? '<div class="w116addrow"><a data-w116act="addproj" data-d="' + E(d) + '">+ Add a project</a><a data-w116go="#projects">All projects</a></div>' : '') + '</div>' +
+      '<div class="w116card"><h3>Team <span class="lnk" data-w116go="#orgchart">org chart</span></h3>' + teamHtml(d) + (canInvite(d) ? '<div class="w116addrow"><a data-w113deptinv="' + E(d) + '">+ Invite a team member</a></div>' : '') + '</div>' +
+      '<div class="w116card"><h3>Tools</h3>' + toolsHtml(d) + '</div>' +
+      '</div></div>';
     h.innerHTML = html;
     if (d === 'opsmtl') volunteeringTiles(d);
   }
@@ -29101,7 +29257,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     h.innerHTML = header(d, board ? board.key : 'tasks', title, sub) + extra + '<div id="w116tasks"><p class="w116empty">Loading tasks...</p></div>';
     var slot = document.getElementById('w116tasks');
     if (window.w116Board && window.w116Board.render) {
-      loadProjects().then(function () { if (W116.cur && W116.cur.d === d) window.w116Board.render(slot, { dept: d, board: board, ws: ws || null }); });
+      loadProjects().then(function () {
+        if (!(W116.cur && W116.cur.d === d)) return;
+        window.w116Board.render(slot, { dept: d, board: board, ws: ws || null });
+        /* #task/<id> deep links (wave116i) open the task's drawer on its team board */
+        if (window.__w116openTask) { var tid = window.__w116openTask; window.__w116openTask = null; setTimeout(function () { try { window.w116Board.open(tid); } catch (e) { /* fine */ } }, 250); }
+      });
     } else slot.innerHTML = '<p class="w116empty">The task board is not available in this build.</p>';
   }
 
@@ -29220,6 +29381,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   if (!document.body.dataset.wa116Wired) {
     document.body.dataset.wa116Wired = '1';
+    /* wave116i: the classic page's actions, now on the Overview */
+    document.body.addEventListener('click', async function (e) {
+      var a = e.target.closest && e.target.closest('[data-w116act]');
+      if (!a) return;
+      var act = a.getAttribute('data-w116act'); var d = a.getAttribute('data-d') || (W116.cur && W116.cur.d);
+      e.preventDefault();
+      try {
+        if (act === 'unclamp') { var box = a.closest('.w116prog'); if (box) box.classList.remove('clamp'); a.remove(); return; }
+        if (act === 'allupd') { var card = document.getElementById('w116updcard'); if (card) { var body = card.querySelector('.w116upd, .w116empty'); if (body) body.outerHTML = allUpdatesHtml(d); a.textContent = 'all updates shown'; } return; }
+        if (!staff()) return;
+        if (act === 'rerun') { if (typeof rerunDept === 'function') await rerunDept(d); return; }
+        if (act === 'addupd') { addUpdateModal(d); return; }
+        if (act === 'addtask') { if (typeof taskModal === 'function') taskModal(d, null); return; }
+        if (act === 'addproj') { try { var st = JSON.parse(localStorage.getItem('wa116.projects') || '{}'); st.team = d; localStorage.setItem('wa116.projects', JSON.stringify(st)); } catch (x) { /* fine */ } location.hash = '#projects'; setTimeout(function () { var b = document.querySelector('#projects [data-pact="new"]'); if (b) b.click(); }, 900); return; }
+        if (act === 'rec') { var id = Number(a.getAttribute('data-rec')); if (id && typeof waGetRecommendation === 'function') waGetRecommendation(id, d, a); return; }
+      } catch (err) { console.warn('wave116 overview action', err); }
+    });
     document.body.addEventListener('click', function (e) {
       var a = e.target.closest && e.target.closest('[data-w116],[data-w116go]');
       if (!a) return;
@@ -29575,9 +29753,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function saveState() { try { var s = Object.assign({}, B.st); s.q = ''; localStorage.setItem(key(B.scope), JSON.stringify(s)); } catch (e) { /* fine */ } }
   function boardOf(t) {
     var bs = T.boards[t.department] || [];
+    var pk = t.project_id && window.w116BoardKeyOf ? window.w116BoardKeyOf(projById(t.project_id)) : null;
     for (var i = 0; i < bs.length; i++) {
       var b = bs[i]; var ids = T.boardProjects[b.key] || [];
-      if (t.subsection === b.ws || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0)) return b;
+      if (t.subsection === b.ws || pk === b.key || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0)) return b;
     }
     return null;
   }
@@ -29884,6 +30063,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label>Due date</label><input type="date" data-dfield="due" value="' + E(t.due_date || '') + '" />' +
       '<label>Project</label><select data-dfield="project"><option value="">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (Number(t.project_id) === Number(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + (p.department !== d ? ' (' + E(T.short[p.department] || p.department) + ')' : '') + '</option>'; }).join('') + '</select>' +
       '<label>Workstream</label><select data-dfield="ws">' + wsList(d).map(function (w) { return '<option value="' + E(w) + '"' + ((t.subsection || 'General') === w ? ' selected' : '') + '>' + E(w) + '</option>'; }).join('') + '</select>' +
+      '<label>Team</label><select data-dfield="dept" title="Move this task to another team">' + T.order.map(function (k) { return '<option value="' + k + '"' + (k === d ? ' selected' : '') + '>' + E((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k) + '</option>'; }).join('') + '</select>' +
       '<label>Flags</label><div><label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="flag"' + (t.flag ? ' checked' : '') + ' /> Needs an executive decision</label>' +
       '<label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="conf"' + (t.confidential ? ' checked' : '') + ' /> Confidential (hidden from the board view)</label></div>' +
       (t.flag ? '<label>Why</label><input type="text" data-dfield="note" value="' + E(t.reason_note || '') + '" placeholder="One line for the executives" />' : '') +
@@ -29948,6 +30128,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (k === 'due') await setDue(t, f.value || null);
     if (k === 'project') await setProject(t, f.value || null);
     if (k === 'ws') await setWs(t, f.value);
+    if (k === 'dept') {
+      var nd = f.value; if (nd && nd !== t.department) {
+        var oldD = t.department; var keepWs = wsList(nd).indexOf(t.subsection || 'General') >= 0 ? (t.subsection || 'General') : 'General';
+        if (await patch(t, { department: nd, subsection: keepWs === 'General' ? null : keepWs }, [['department', oldD, nd]])) {
+          toast('Moved to ' + ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[nd]) || nd)); closeDrawer(); after();
+          try { if (typeof renderSection === 'function') renderSection(nd); } catch (x) { /* fine */ }
+        }
+      }
+    }
     if (k === 'flag') { var on = f.checked; if (await patch(t, { flag: on }, [['flag', String(!on), String(on)]])) { toast(on ? 'Flagged for the executives' : 'Flag removed'); after(); openDrawer(t.id); } }
     if (k === 'conf') { var c = f.checked; if (await patch(t, { confidential: c }, [['confidential', String(!c), String(c)]])) { toast(c ? 'Marked confidential' : 'No longer confidential'); after(); } }
     if (k === 'note') { var n = f.value.trim(); if (await patch(t, { reason_note: n || null }, [['reason_note', t.reason_note, n]])) toast('Saved'); }
@@ -30578,13 +30767,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function load(force) {
     if (!force && P.loaded && Date.now() - P.loaded < 60000) return;
     try {
-      var r = await db.from('projects').select('*').order('sort', { ascending: true });
-      P.rows = (r && r.data) || [];
+      /* the shared store (wave116i): the same rows the team pages, boards and goal pages read */
+      if (window.w116LoadProjects) P.rows = (await window.w116LoadProjects(true)) || [];
+      else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); P.rows = (r && r.data) || []; }
       var g = await db.from('goals').select('id, title, department, quarter, status').limit(500);
       P.goals = (g && g.data) || [];
       P.loaded = Date.now();
-      try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS = P.rows.slice(); } catch (e) { /* fine */ }
     } catch (e) { /* offline */ }
+  }
+  function changed() { try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(P.rows); } catch (e) { /* fine */ } }
+  function wsOptions(dept, cur) {
+    var bs = (T.boards && T.boards[dept]) || [];
+    if (!bs.length) return '';
+    return '<label>Board (sub-team)</label><select id="w116pws"><option value="">Not on a board</option>' + bs.map(function (b) { return '<option value="' + E(b.ws) + '"' + (lower(cur) === lower(b.ws) ? ' selected' : '') + '>' + E(b.label) + '</option>'; }).join('') + '</select><div class="hint" style="font-size:11.5px;color:var(--wa-muted);margin:3px 0 0">Which ' + E(label(dept)) + ' board lists this project and its tasks.</div>';
   }
 
   /* ---------- writes ---------- */
@@ -30594,6 +30789,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     Object.assign(p, fields);
     try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(p.id), field: field, old_value: oldV == null ? null : String(oldV), new_value: newV == null ? null : String(newV), changed_by: who0() }); } catch (e) { /* audit */ }
     try { (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (x) { if (Number(x.id) === Number(p.id)) Object.assign(x, fields); }); } catch (e) { /* fine */ }
+    changed();
     return true;
   }
   async function setLead(p, name) {
@@ -30618,18 +30814,22 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label>Owner team</label><select id="w116pt">' + T.order.map(function (d) { return '<option value="' + d + '"' + (d === dept ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
       '<label>Project lead</label><select id="w116pl"><option value="">Choose later</option>' + ms.map(function (m) { return '<option value="' + E(m.name) + '">' + E(m.name) + ' (' + E(T.short[m.department] || m.department || '') + ')</option>'; }).join('') + '</select>' +
       '<label>Part of (optional)</label><select id="w116pp"><option value="">Stands on its own</option>' + parents.map(function (p) { return '<option value="' + p.id + '">' + E(p.name) + '</option>'; }).join('') + '</select>' +
+      '<div id="w116pwsbox">' + wsOptions(dept, '') + '</div>' +
       '<div class="m-foot"><button class="btn ghost" id="w116pc">Cancel</button><button class="btn" id="w116ps">Create project</button></div></div>');
     document.getElementById('w116pc').addEventListener('click', closeModal);
+    document.getElementById('w116pt').addEventListener('change', function () { var box = document.getElementById('w116pwsbox'); if (box) box.innerHTML = wsOptions(this.value, ''); });
     document.getElementById('w116ps').addEventListener('click', async function () {
       var name = document.getElementById('w116pn').value.trim(); if (!name) { toast('Give the project a name'); return; }
       var lead = document.getElementById('w116pl').value; var pid = document.getElementById('w116pp').value;
-      var row = { name: name, description: document.getElementById('w116pd').value.trim() || null, department: document.getElementById('w116pt').value, status: 'active', leads: lead ? [lead] : [], parent_id: pid ? Number(pid) : null, sort: 999, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+      var wsEl = document.getElementById('w116pws');
+      var row = { name: name, description: document.getElementById('w116pd').value.trim() || null, department: document.getElementById('w116pt').value, status: 'active', leads: lead ? [lead] : [], parent_id: pid ? Number(pid) : null, workstream: wsEl && wsEl.value ? wsEl.value : null, sort: 999, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
       var r = await db.from('projects').insert(row).select('*').single();
       if (r && r.error) { toast('Could not create the project'); return; }
       var saved = (r && r.data) || row; if (!saved.id) saved.id = -Date.now();
       P.rows.push(saved);
       try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(saved.id), field: 'added', old_value: null, new_value: name, changed_by: who0() }); } catch (e) { /* audit */ }
       try { if (typeof WA27_PROJECTS !== 'undefined') WA27_PROJECTS.push(saved); } catch (e) { /* fine */ }
+      changed();
       closeModal(); toast('Project created'); render();
     });
   }
@@ -30753,6 +30953,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     openModal('<div class="w116pm"><h3>' + E(p.name) + '</h3>' +
       '<label>Name</label><input type="text" id="w116en" value="' + E(p.name) + '" />' +
       '<label>What it is</label><textarea id="w116ed">' + E(p.description || '') + '</textarea>' +
+      wsOptions(p.department, p.workstream || '') +
       '<div class="m-foot"><button class="btn ghost" id="w116ec">Cancel</button><button class="btn" id="w116es">Save</button></div></div>');
     document.getElementById('w116ec').addEventListener('click', closeModal);
     document.getElementById('w116es').addEventListener('click', async function () {
@@ -30761,6 +30962,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var ok = true;
       if (name !== p.name) ok = await patch(p, { name: name }, 'name', p.name, name);
       if (ok && desc !== (p.description || null)) ok = await patch(p, { description: desc }, 'description', (p.description || '').slice(0, 80), (desc || '').slice(0, 80));
+      var wsEl = document.getElementById('w116pws');
+      if (ok && wsEl && (wsEl.value || null) !== (p.workstream || null)) ok = await patch(p, { workstream: wsEl.value || null }, 'workstream', p.workstream || null, wsEl.value || null);
       if (ok) { closeModal(); toast('Project saved'); render(); }
     });
   }
@@ -31045,7 +31248,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function memberByName(n) { n = lower(n); if (!n) return null; return members().filter(function (m) { return lower(m.name) === n; })[0] || members().filter(function (m) { return lower(m.name).split(' ')[0] === n.split(' ')[0]; })[0] || null; }
   function goals() { return (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return g && g.status !== 'archived'; }); }
   function goalById(id) { return (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return Number(g.id) === Number(id); })[0] || null; }
-  function projects() { return M.projects.length ? M.projects : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []); }
+  function projects() { if (window.w116Projects) { var r = window.w116Projects(); if (r && r.length) return r; } return M.projects.length ? M.projects : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []); }
   function projById(id) { return projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
   function projName(p) { var par = p && p.parent_id ? projById(p.parent_id) : null; return (par ? par.name + ' \u203a ' : '') + (p ? p.name : ''); }
   function projActive(p) { var s = lower(p.status || 'active'); return !(s.indexOf('done') >= 0 || s.indexOf('complete') >= 0 || s.indexOf('closed') >= 0 || s.indexOf('archiv') >= 0); }
@@ -31101,8 +31304,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!force && M.loaded && Date.now() - M.loaded < 45000) return;
     try {
       if (typeof waLoadGoals === 'function') await waLoadGoals();
-      var r = await db.from('projects').select('*').order('sort', { ascending: true });
-      M.projects = (r && r.data) || [];
+      if (window.w116LoadProjects) M.projects = (await window.w116LoadProjects(force)) || [];
+      else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); M.projects = (r && r.data) || []; }
       M.loaded = Date.now();
     } catch (e) { /* offline */ }
   }
@@ -31132,6 +31335,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try { (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (x) { if (Number(x.id) === Number(p.id)) x.goal_id = p.goal_id; }); } catch (e) { /* fine */ }
     try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(p.id), field: 'goal', old_value: old == null ? null : String(old), new_value: gid == null ? null : String(gid), changed_by: who0() }); } catch (e) { /* audit */ }
     toast(gid ? 'Project linked' : 'Project unlinked');
+    try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(null); } catch (e) { /* fine */ }
     refreshAll();
   }
   async function setParent(g, pid) {
@@ -31576,7 +31780,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try { if (M.dept.host && visiblePanel('goals')) renderDept(); } catch (e) { console.warn('dept goals', e); }
     try { if (M.map.host && visiblePanel('goalmap')) renderMap(); } catch (e) { console.warn('goal map', e); }
   }
-  window.w116Goals = { refresh: function () { M.loaded = 0; return load(true).then(refreshAll); }, org: renderOrg, dept: renderDept, map: renderMap, modal: goalModal };
+  window.w116Goals = { refresh: function () { M.loaded = 0; return load(true).then(refreshAll); }, refreshLive: function () { try { refreshAll(); } catch (e) { /* fine */ } }, org: renderOrg, dept: renderDept, map: renderMap, modal: goalModal };
 
   /* the Department goals page takes over the goals page body after the older waves have run */
   if (typeof renderGoalsPage === 'function') {
@@ -32282,6 +32486,84 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         /* people with a per-person tab list: leaders and admins get the page too */
         if (typeof WA40_MINE !== 'undefined' && WA40_MINE && Array.isArray(WA40_MINE.tabs) && WA40_MINE.tabs.length && canAct() && WA40_MINE.tabs.indexOf('hubmail') < 0) WA40_MINE.tabs.push('hubmail');
         if (typeof wa40Enforce === 'function') wa40Enforce(); if (String(location.hash || '') === '#hubmail') { try { applyHash(); } catch (e) { /* fine */ } } } catch (e) { console.warn('wave116h boot', e); }
+      return r;
+    };
+  }
+})();
+/* =====================================================================
+   WA v116i the classic department page retires (25/09/26)
+   =====================================================================
+   Steel: "We don't need this page anymore for all departments because
+   of the reorganising we did... as long as we aren't losing
+   functionality." Everything the classic page did now lives on the team
+   pages (wave116 Overview: progress this period, high priority, team
+   pulse, the team's executive decisions with AI recommendations, add an
+   update or a task, all updates, invite a team member, add a project,
+   tools; wave116b Tasks: list, board, calendar, workstreams, move a task
+   to another team). This segment closes the old doors:
+   - #dept/<team> and #<team> land on the team Overview.
+   - #task/<id> opens the team's task board with that task's drawer.
+   - showPanel(<team>) from older code routes to the team page too.
+   - renderSection(<team>) (older write paths: add task, add update,
+     transcripts) repaints the Overview when it is the page on screen.
+   The classic panels stay in the DOM, hidden, so nothing older breaks.
+   ===================================================================== */
+(function () {
+  if (window.__wa116i) return; window.__wa116i = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  function isDept(id) { return T.order.indexOf(String(id || '')) >= 0; }
+  function taskDept(id) { try { var t = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (x) { return String(x.id) === String(id); })[0]; return t ? t.department : null; } catch (e) { return null; } }
+
+  var css = document.createElement('style');
+  css.id = 'wa116icss';
+  css.textContent = T.order.map(function (d) { return '#' + d + '.panel'; }).join(',') + '{display:none !important;}';
+  document.head.appendChild(css);
+
+  if (typeof applyHash === 'function') {
+    var __ah116i = applyHash;
+    applyHash = function () {
+      try {
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+        var parts = h.split('/'); var a = parts[0], b = parts[1];
+        if (a === 'dept' && isDept(b)) { location.hash = '#team/' + b; return; }
+        if (isDept(a) && !b) { location.hash = '#team/' + a; return; }
+        if (a === 'task' && b) {
+          var d = taskDept(b);
+          if (d && isDept(d)) {
+            window.__w116openTask = String(b);
+            var target = '#team/' + d + '/tasks';
+            if (location.hash === target) { try { __ah116i.apply(this, arguments); } catch (e) { /* fine */ } } else location.hash = target;
+            return;
+          }
+        }
+      } catch (e) { /* fall through to the normal router */ }
+      return __ah116i.apply(this, arguments);
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116i = showPanel;
+    showPanel = function (id) {
+      if (isDept(id)) {
+        var target = '#team/' + id;
+        if (location.hash !== target) { location.hash = target; }
+        else { try { applyHash(); } catch (e) { /* fine */ } }
+        return;
+      }
+      return __sp116i.apply(this, arguments);
+    };
+  }
+  /* older write paths repaint the classic panel; mirror that on the Overview when it is on screen */
+  if (typeof renderSection === 'function') {
+    var __rs116i = renderSection, t116i = null;
+    renderSection = function (id) {
+      var r = __rs116i.apply(this, arguments);
+      try {
+        var team = document.getElementById('team');
+        if (team && team.classList.contains('active') && window.w116Route) {
+          var cur = String((location.hash || '')).replace(/^#/, '').split('/');
+          if (cur[0] === 'team' && cur[1] === id && (!cur[2] || cur[2] === 'overview')) { clearTimeout(t116i); t116i = setTimeout(function () { try { window.w116Route(); } catch (e) { /* fine */ } }, 150); }
+        }
+      } catch (e) { /* fine */ }
       return r;
     };
   }

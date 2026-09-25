@@ -209,9 +209,10 @@
   function saveState() { try { var s = Object.assign({}, B.st); s.q = ''; localStorage.setItem(key(B.scope), JSON.stringify(s)); } catch (e) { /* fine */ } }
   function boardOf(t) {
     var bs = T.boards[t.department] || [];
+    var pk = t.project_id && window.w116BoardKeyOf ? window.w116BoardKeyOf(projById(t.project_id)) : null;
     for (var i = 0; i < bs.length; i++) {
       var b = bs[i]; var ids = T.boardProjects[b.key] || [];
-      if (t.subsection === b.ws || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0)) return b;
+      if (t.subsection === b.ws || pk === b.key || (t.project_id && ids.indexOf(Number(t.project_id)) >= 0)) return b;
     }
     return null;
   }
@@ -518,6 +519,7 @@
       '<label>Due date</label><input type="date" data-dfield="due" value="' + E(t.due_date || '') + '" />' +
       '<label>Project</label><select data-dfield="project"><option value="">No project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (Number(t.project_id) === Number(p.id) ? ' selected' : '') + '>' + E(projLabel(p)) + (p.department !== d ? ' (' + E(T.short[p.department] || p.department) + ')' : '') + '</option>'; }).join('') + '</select>' +
       '<label>Workstream</label><select data-dfield="ws">' + wsList(d).map(function (w) { return '<option value="' + E(w) + '"' + ((t.subsection || 'General') === w ? ' selected' : '') + '>' + E(w) + '</option>'; }).join('') + '</select>' +
+      '<label>Team</label><select data-dfield="dept" title="Move this task to another team">' + T.order.map(function (k) { return '<option value="' + k + '"' + (k === d ? ' selected' : '') + '>' + E((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) || k) + '</option>'; }).join('') + '</select>' +
       '<label>Flags</label><div><label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="flag"' + (t.flag ? ' checked' : '') + ' /> Needs an executive decision</label>' +
       '<label class="chk" style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--wa-text)"><input type="checkbox" data-dfield="conf"' + (t.confidential ? ' checked' : '') + ' /> Confidential (hidden from the board view)</label></div>' +
       (t.flag ? '<label>Why</label><input type="text" data-dfield="note" value="' + E(t.reason_note || '') + '" placeholder="One line for the executives" />' : '') +
@@ -582,6 +584,15 @@
     if (k === 'due') await setDue(t, f.value || null);
     if (k === 'project') await setProject(t, f.value || null);
     if (k === 'ws') await setWs(t, f.value);
+    if (k === 'dept') {
+      var nd = f.value; if (nd && nd !== t.department) {
+        var oldD = t.department; var keepWs = wsList(nd).indexOf(t.subsection || 'General') >= 0 ? (t.subsection || 'General') : 'General';
+        if (await patch(t, { department: nd, subsection: keepWs === 'General' ? null : keepWs }, [['department', oldD, nd]])) {
+          toast('Moved to ' + ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[nd]) || nd)); closeDrawer(); after();
+          try { if (typeof renderSection === 'function') renderSection(nd); } catch (x) { /* fine */ }
+        }
+      }
+    }
     if (k === 'flag') { var on = f.checked; if (await patch(t, { flag: on }, [['flag', String(!on), String(on)]])) { toast(on ? 'Flagged for the executives' : 'Flag removed'); after(); openDrawer(t.id); } }
     if (k === 'conf') { var c = f.checked; if (await patch(t, { confidential: c }, [['confidential', String(!c), String(c)]])) { toast(c ? 'Marked confidential' : 'No longer confidential'); after(); } }
     if (k === 'note') { var n = f.value.trim(); if (await patch(t, { reason_note: n || null }, [['reason_note', t.reason_note, n]])) toast('Saved'); }

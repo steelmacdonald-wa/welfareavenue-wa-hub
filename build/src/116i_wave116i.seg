@@ -1,0 +1,78 @@
+/* =====================================================================
+   WA v116i the classic department page retires (25/09/26)
+   =====================================================================
+   Steel: "We don't need this page anymore for all departments because
+   of the reorganising we did... as long as we aren't losing
+   functionality." Everything the classic page did now lives on the team
+   pages (wave116 Overview: progress this period, high priority, team
+   pulse, the team's executive decisions with AI recommendations, add an
+   update or a task, all updates, invite a team member, add a project,
+   tools; wave116b Tasks: list, board, calendar, workstreams, move a task
+   to another team). This segment closes the old doors:
+   - #dept/<team> and #<team> land on the team Overview.
+   - #task/<id> opens the team's task board with that task's drawer.
+   - showPanel(<team>) from older code routes to the team page too.
+   - renderSection(<team>) (older write paths: add task, add update,
+     transcripts) repaints the Overview when it is the page on screen.
+   The classic panels stay in the DOM, hidden, so nothing older breaks.
+   ===================================================================== */
+(function () {
+  if (window.__wa116i) return; window.__wa116i = true;
+  var T = window.WA_TEAMS; if (!T) return;
+  function isDept(id) { return T.order.indexOf(String(id || '')) >= 0; }
+  function taskDept(id) { try { var t = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (x) { return String(x.id) === String(id); })[0]; return t ? t.department : null; } catch (e) { return null; } }
+
+  var css = document.createElement('style');
+  css.id = 'wa116icss';
+  css.textContent = T.order.map(function (d) { return '#' + d + '.panel'; }).join(',') + '{display:none !important;}';
+  document.head.appendChild(css);
+
+  if (typeof applyHash === 'function') {
+    var __ah116i = applyHash;
+    applyHash = function () {
+      try {
+        var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+        var parts = h.split('/'); var a = parts[0], b = parts[1];
+        if (a === 'dept' && isDept(b)) { location.hash = '#team/' + b; return; }
+        if (isDept(a) && !b) { location.hash = '#team/' + a; return; }
+        if (a === 'task' && b) {
+          var d = taskDept(b);
+          if (d && isDept(d)) {
+            window.__w116openTask = String(b);
+            var target = '#team/' + d + '/tasks';
+            if (location.hash === target) { try { __ah116i.apply(this, arguments); } catch (e) { /* fine */ } } else location.hash = target;
+            return;
+          }
+        }
+      } catch (e) { /* fall through to the normal router */ }
+      return __ah116i.apply(this, arguments);
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116i = showPanel;
+    showPanel = function (id) {
+      if (isDept(id)) {
+        var target = '#team/' + id;
+        if (location.hash !== target) { location.hash = target; }
+        else { try { applyHash(); } catch (e) { /* fine */ } }
+        return;
+      }
+      return __sp116i.apply(this, arguments);
+    };
+  }
+  /* older write paths repaint the classic panel; mirror that on the Overview when it is on screen */
+  if (typeof renderSection === 'function') {
+    var __rs116i = renderSection, t116i = null;
+    renderSection = function (id) {
+      var r = __rs116i.apply(this, arguments);
+      try {
+        var team = document.getElementById('team');
+        if (team && team.classList.contains('active') && window.w116Route) {
+          var cur = String((location.hash || '')).replace(/^#/, '').split('/');
+          if (cur[0] === 'team' && cur[1] === id && (!cur[2] || cur[2] === 'overview')) { clearTimeout(t116i); t116i = setTimeout(function () { try { window.w116Route(); } catch (e) { /* fine */ } }, 150); }
+        }
+      } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+})();

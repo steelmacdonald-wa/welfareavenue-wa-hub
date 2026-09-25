@@ -234,7 +234,7 @@
   function memberByName(n) { n = lower(n); if (!n) return null; return members().filter(function (m) { return lower(m.name) === n; })[0] || members().filter(function (m) { return lower(m.name).split(' ')[0] === n.split(' ')[0]; })[0] || null; }
   function goals() { return (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return g && g.status !== 'archived'; }); }
   function goalById(id) { return (typeof GOALS_CACHE !== 'undefined' ? GOALS_CACHE : []).filter(function (g) { return Number(g.id) === Number(id); })[0] || null; }
-  function projects() { return M.projects.length ? M.projects : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []); }
+  function projects() { if (window.w116Projects) { var r = window.w116Projects(); if (r && r.length) return r; } return M.projects.length ? M.projects : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []); }
   function projById(id) { return projects().filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
   function projName(p) { var par = p && p.parent_id ? projById(p.parent_id) : null; return (par ? par.name + ' \u203a ' : '') + (p ? p.name : ''); }
   function projActive(p) { var s = lower(p.status || 'active'); return !(s.indexOf('done') >= 0 || s.indexOf('complete') >= 0 || s.indexOf('closed') >= 0 || s.indexOf('archiv') >= 0); }
@@ -290,8 +290,8 @@
     if (!force && M.loaded && Date.now() - M.loaded < 45000) return;
     try {
       if (typeof waLoadGoals === 'function') await waLoadGoals();
-      var r = await db.from('projects').select('*').order('sort', { ascending: true });
-      M.projects = (r && r.data) || [];
+      if (window.w116LoadProjects) M.projects = (await window.w116LoadProjects(force)) || [];
+      else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); M.projects = (r && r.data) || []; }
       M.loaded = Date.now();
     } catch (e) { /* offline */ }
   }
@@ -321,6 +321,7 @@
     try { (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).forEach(function (x) { if (Number(x.id) === Number(p.id)) x.goal_id = p.goal_id; }); } catch (e) { /* fine */ }
     try { await db.from('change_log').insert({ entity_type: 'project', entity_id: String(p.id), field: 'goal', old_value: old == null ? null : String(old), new_value: gid == null ? null : String(gid), changed_by: who0() }); } catch (e) { /* audit */ }
     toast(gid ? 'Project linked' : 'Project unlinked');
+    try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(null); } catch (e) { /* fine */ }
     refreshAll();
   }
   async function setParent(g, pid) {
@@ -765,7 +766,7 @@
     try { if (M.dept.host && visiblePanel('goals')) renderDept(); } catch (e) { console.warn('dept goals', e); }
     try { if (M.map.host && visiblePanel('goalmap')) renderMap(); } catch (e) { console.warn('goal map', e); }
   }
-  window.w116Goals = { refresh: function () { M.loaded = 0; return load(true).then(refreshAll); }, org: renderOrg, dept: renderDept, map: renderMap, modal: goalModal };
+  window.w116Goals = { refresh: function () { M.loaded = 0; return load(true).then(refreshAll); }, refreshLive: function () { try { refreshAll(); } catch (e) { /* fine */ } }, org: renderOrg, dept: renderDept, map: renderMap, modal: goalModal };
 
   /* the Department goals page takes over the goals page body after the older waves have run */
   if (typeof renderGoalsPage === 'function') {
