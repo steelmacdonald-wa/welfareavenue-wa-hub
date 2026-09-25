@@ -1,4 +1,4 @@
-// Welfare Avenue: repo-sync (v1, 24/09/26)
+// Welfare Avenue: repo-sync (v2, 25/09/26: v1 plus read-only actions log / tree / read so a build session can rebase on the repo before pushing)
 // Pushes hub source files to GitHub through the Git Data API using the vault
 // GITHUB_TOKEN (fine-grained PAT, Contents read/write on the hub repo). Lives
 // here because the build sandbox cannot talk to GitHub with its own
@@ -8,6 +8,9 @@
 //   {action:'blobs', repo, files:[{path, content_b64}]}  create blobs, returns [{path, sha}]
 //   {action:'commit', repo, branch, message, entries:[{path, sha, mode?}], deletes:[path]}
 //                                          one commit on top of the branch head (or the first commit)
+//   {action:'log', repo, branch?, n?}       recent commits (sha, message, date)
+//   {action:'tree', repo, branch?}         every path at the branch head with blob sha and size
+//   {action:'read', repo, path, branch?}   one file (base64) from the branch head, up to 1 MB
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -123,6 +126,25 @@ Deno.serve(async (req: Request) => {
         await svc.from('app_config').upsert({ key: 'github_repo', value: repo, updated_at: new Date().toISOString() });
       } catch (_) { /* audit */ }
       return json({ commit: cm.body.sha, url: 'https://github.com/' + repo + '/commit/' + cm.body.sha, branch, files: entries.length, deletes: deletes.length, first_commit: !parentSha });
+    }
+    if (action === 'log') {
+      const repo = repoPath(body.repo); const branch = String(body.branch || 'main'); const n = Math.min(Number(body.n || 10), 50);
+      const r = await gh(token, 'GET', '/repos/' + repo + '/commits?sha=' + encodeURIComponent(branch) + '&per_page=' + n);
+      if (!r.ok) throw new Error('log failed: ' + r.status + ' ' + ((r.body && r.body.message) || ''));
+      return json({ branch, commits: (r.body as any[]).map((c: any) => ({ sha: c.sha, message: c.commit.message, date: c.commit.author && c.commit.author.date })) });
+    }
+    if (action === 'tree') {
+      const repo = repoPath(body.repo); const branch = String(body.branch || 'main');
+      const r = await gh(token, 'GET', '/repos/' + repo + '/git/trees/' + encodeURIComponent(branch) + '?recursive=1');
+      if (!r.ok) throw new Error('tree failed: ' + r.status + ' ' + ((r.body && r.body.message) || ''));
+      return json({ branch, sha: r.body.sha, truncated: !!r.body.truncated, files: (r.body.tree as any[]).filter((e: any) => e.type === 'blob').map((e: any) => ({ path: e.path, sha: e.sha, size: e.size })) });
+    }
+    if (action === 'read') {
+      const repo = repoPath(body.repo); const branch = String(body.branch || 'main'); const p = String(body.path || '');
+      if (!p || p.indexOf('..') >= 0) throw new Error('path required');
+      const r = await gh(token, 'GET', '/repos/' + repo + '/contents/' + p.split('/').map(encodeURIComponent).join('/') + '?ref=' + encodeURIComponent(branch));
+      if (!r.ok) throw new Error('read failed: ' + r.status + ' ' + ((r.body && r.body.message) || ''));
+      return json({ path: p, sha: r.body.sha, size: r.body.size, encoding: r.body.encoding, content_b64: String(r.body.content || '').replace(/\n/g, '') });
     }
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
