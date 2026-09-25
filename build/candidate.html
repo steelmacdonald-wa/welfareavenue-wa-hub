@@ -28553,6 +28553,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w116addrow{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0;}' +
     '.w116addrow a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
     '.w116addrow a:hover{text-decoration:underline;}' +
+    '.w116rsvpw{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}' +
+    '.w116rsvpb{display:inline-flex;gap:6px;align-items:center;}' +
+    '.w116rsvpb a{font-size:11px;font-weight:700;color:' + GREEN + ';cursor:pointer;background:rgba(16,63,57,.07);border-radius:999px;padding:3px 9px;}' +
+    '.w116rsvpb a:hover{background:rgba(16,63,57,.14);}' +
     '.w116kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 16px;}' +
     '.w116kpi{display:flex;flex-direction:column;align-items:flex-start;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;min-width:0;}' +
     '.w116kpi:hover{border-color:rgba(16,63,57,.25);}' +
@@ -28781,7 +28785,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var rsvp = '';
     if (opts.mine) {
       var map = { accepted: 'Going', tentative: 'Maybe', declined: 'Declined', needsAction: 'No reply yet' };
-      rsvp = st ? '<a class="w116rsvp ' + E(st) + (isToday && st === 'accepted' ? ' today' : '') + '" href="' + E(e.html_link || '#') + '" target="_blank" rel="noopener" title="Open in Google Calendar to change your reply">' + (map[st] || st) + '</a>' : '<span></span>';
+      /* wave116j: reply from the hub when Google Calendar is connected in Settings; the pill still opens Google Calendar */
+      var can = !!(window.w116Conn && window.w116Conn.calendar);
+      rsvp = '<span class="w116rsvpw">' + (st ? '<a class="w116rsvp ' + E(st) + (isToday && st === 'accepted' ? ' today' : '') + '" href="' + E(e.html_link || '#') + '" target="_blank" rel="noopener" title="Open in Google Calendar">' + (map[st] || st) + '</a>' : '') +
+        (!past ? '<span class="w116rsvpb" data-w116rsvp="' + E(e.id) + '">' + (st !== 'accepted' ? '<a data-r="accepted" title="' + (can ? 'Accept from the hub' : 'Turn on Google Calendar in Settings to reply here') + '">Accept</a>' : '') + (st !== 'declined' ? '<a data-r="declined" title="' + (can ? 'Decline from the hub' : 'Turn on Google Calendar in Settings to reply here') + '">Decline</a>' : '') + '</span>' : '') + '</span>';
     } else rsvp = isToday ? '<span class="w116rsvp today">Today</span>' : '<span></span>';
     return '<div class="w116ev' + (past ? ' past' : '') + '" data-w116ev="' + E(e.id) + '">' +
       '<div class="w116evd"><b>' + E(dayNum(e.start_at)) + '</b><span>' + E(dow(e.start_at)) + '</span></div>' +
@@ -29455,7 +29462,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!W116.eventsAt) inner = '<p class="mp-empty">Loading the hub calendar...</p>';
     else if (!ev.length) inner = '<p class="mp-empty">No meetings with your name on the hub calendar in the next two months.' + (W116.calState && W116.calState.last_ok ? '' : ' The calendar sync has not run successfully yet.') + '</p>';
     else inner = '<div class="w116evl">' + ev.map(function (e) { return eventRow(e, { mine: true }); }).join('') + '</div>';
-    return inner + '<p class="w116note">From hub@welfareavenue.com\'s calendar. Reply to an invite in Google Calendar and it updates here within 30 minutes.</p>';
+    return inner + '<p class="w116note">From hub@welfareavenue.com\'s calendar. Accept or decline here once Google Calendar is on in Settings (profile menu), or reply in Google Calendar; either way it updates here within 30 minutes.</p>';
   }
   function injectHome() {
     var page = document.getElementById('mypage');
@@ -32564,6 +32571,438 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           if (cur[0] === 'team' && cur[1] === id && (!cur[2] || cur[2] === 'overview')) { clearTimeout(t116i); t116i = setTimeout(function () { try { window.w116Route(); } catch (e) { /* fine */ } }, 150); }
         }
       } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+})();
+/* =====================================================================
+   WA v116j the header (25/09/26): one profile bubble, who is active,
+   check in / check out, Settings with platform connections
+   =====================================================================
+   Steel: "I don't want to see 'Signed in: Steel MacDonald'; keep my
+   profile picture with my name as one bubble that gives me options for
+   notifications, settings, my profile, password etc. The cloud connected
+   part of the header can be removed and instead show the bubbles of who
+   is active on the hub. A log in and log out from being active on the
+   hub, or clicking a button manually to track hours. In the settings
+   tab: connect to Slack for Hub updates and control, Google Calendar to
+   accept meetings in the Hub, Google Drive access to their files."
+   - The identity pill is one bubble: photo (wave115) + first name +
+     caret. It opens the wave115 menu, re-labelled: My profile (the
+     person page), Edit profile and photo, Notifications, Settings,
+     Change password, Request more access, Sign out.
+   - The "Cloud connected" pill becomes the active bubbles: everyone
+     seen in the last ten minutes (user_state heartbeat), a green ring
+     for people checked in.
+   - Check in / Check out (staff): hub_checkins rows with minutes; the
+     HR centre hours tab gains "Hours checked in on the hub"; the person
+     page shows the month's hours (wave116k). Sessions left open close
+     themselves at eight hours.
+   - Settings (openModal): Connections (Slack, Google Calendar, Google
+     Drive through hub-connect: the delegated service account acts for
+     the person once they switch it on; Loom/Otter and hub@ as info),
+     Notifications (the wave89 switches), Account (profile, password via
+     supabase auth, sign out). Home meeting rows gain Accept / Decline
+     (hub-connect rsvp) once Calendar is on.
+   ===================================================================== */
+(function () {
+  if (window.__wa116j) return; window.__wa116j = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var J = { open: null, timer: null, presence: [], checked: {}, conn: null, tab: 'connections', busy: false };
+  window.w116Conn = window.w116Conn || { calendar: false, drive: false, slack: false };
+
+  var css = document.createElement('style');
+  css.id = 'wa116jcss';
+  css.textContent = '' +
+    /* identity bubble */
+    '.wa-toolbar .pill.w115pill{display:inline-flex;align-items:center;gap:8px;background:rgba(16,63,57,.08);border-radius:999px;padding:4px 12px 4px 4px;cursor:pointer;color:' + GREEN + ' !important;}' +
+    '.wa-toolbar .pill.w115pill:hover{background:rgba(16,63,57,.14);}' +
+    '.wa-toolbar .pill.w115pill #w115btn{margin-right:0;box-shadow:none;}' +
+    '.wa-toolbar .pill.w115pill #whoName{color:' + GREEN + ' !important;font-family:' + BODY + ';font-weight:700;font-size:13px;}' +
+    '.wa-toolbar .pill.w115pill .w116jcaret{font-size:9px;opacity:.7;}' +
+    '.wa-toolbar .pill.w115pill #signOutBtn{display:none;}' +
+    /* who is active */
+    '#w116jpres{display:inline-flex;align-items:center;gap:6px;cursor:pointer;}' +
+    '#w116jpres .st{display:inline-flex;}' +
+    '#w116jpres .st .w116av{box-shadow:0 0 0 2px var(--wa-card, #FFFAF2);margin-left:-6px;}' +
+    '#w116jpres .st span:first-child .w116av{margin-left:0;}' +
+    '#w116jpres .st .w116av.in{box-shadow:0 0 0 2px var(--wa-card, #FFFAF2),0 0 0 4px #2A8C7A;}' +
+    '#w116jpres .n{font-size:12px;color:var(--wa-muted);white-space:nowrap;}' +
+    '#w116jpres .n b{color:' + GREEN + ';}' +
+    '.wa-toolbar .pill.w116jpill{background:transparent;padding:0 4px;}' +
+    /* check in */
+    '#w116jck{display:inline-flex;align-items:center;gap:8px;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border:none;border-radius:999px;padding:7px 14px;cursor:pointer;white-space:nowrap;}' +
+    '#w116jck:hover{background:rgba(16,63,57,.14);}' +
+    '#w116jck.in{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w116jck.in:hover{background:#0c332e;}' +
+    '#w116jck .dot{width:8px;height:8px;border-radius:50%;background:#2A8C7A;}' +
+    '#w116jck.in .dot{background:' + GOLD + ';}' +
+    '#w116jck .t{font-weight:500;opacity:.85;}' +
+    /* settings modal */
+    '.w116js{font-family:' + BODY + ';}' +
+    '.w116js .tabs{display:inline-flex;background:rgba(16,63,57,.08);border-radius:12px;padding:3px;gap:2px;margin:0 0 14px;}' +
+    '.w116js .tabs a{font-size:13px;font-weight:600;color:' + GREEN + ';padding:7px 14px;border-radius:9px;cursor:pointer;}' +
+    '.w116js .tabs a.on{background:var(--wa-card);box-shadow:0 1px 2px rgba(16,63,57,.12);}' +
+    '.w116js .row{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-top:1px solid rgba(16,63,57,.08);}' +
+    '.w116js .row:first-of-type{border-top:none;}' +
+    '.w116js .row .ic{width:40px;height:40px;border-radius:12px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-weight:600;font-size:16px;color:' + CREAM + ';}' +
+    '.w116js .row b{display:block;font-size:14px;color:var(--wa-text);}' +
+    '.w116js .row .s{font-size:12px;color:var(--wa-muted);line-height:1.4;margin-top:2px;}' +
+    '.w116js .row .s.err{color:' + FLAG + ';}' +
+    '.w116js .row .s.ok{color:#1f6b5d;}' +
+    '.w116js .sw{position:relative;width:44px;height:26px;border-radius:999px;background:rgba(16,63,57,.18);cursor:pointer;flex:0 0 auto;transition:background .15s;}' +
+    '.w116js .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#FFFAF2;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s;}' +
+    '.w116js .sw.on{background:#2A8C7A;}' +
+    '.w116js .sw.on i{left:21px;}' +
+    '.w116js .sw.busy{opacity:.5;pointer-events:none;}' +
+    '.w116js .lnk{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;white-space:nowrap;}' +
+    '.w116js .lnk:hover{text-decoration:underline;}' +
+    '.w116js .note{font-size:12px;color:var(--wa-muted);margin:10px 0 0;line-height:1.5;}' +
+    '.w116js .chk{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--wa-text);padding:7px 0;}' +
+    '.w116js .chk input{width:16px;height:16px;accent-color:' + GREEN + ';margin:0;}' +
+    '.w116js label.f{display:block;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);margin:10px 0 4px;}' +
+    '.w116js input[type=password],.w116js input[type=text]{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13px;padding:8px 10px;border:1px solid rgba(16,63,57,.2);border-radius:9px;background:var(--wa-card);}' +
+    '.w116js .acct{display:flex;gap:14px;align-items:center;margin:0 0 6px;}' +
+    '.w116js .acct b{font-size:15px;display:block;}' +
+    '.w116js .acct .s{font-size:12px;color:var(--wa-muted);}' +
+    '.w116js .files{margin:8px 0 0;}' +
+    '.w116js .files a{display:flex;gap:8px;align-items:center;font-size:12.5px;color:var(--wa-text);text-decoration:none;padding:5px 0;border-top:1px solid rgba(16,63,57,.06);}' +
+    '.w116js .files a img{width:16px;height:16px;}' +
+    '.w116js .files a span{color:var(--wa-muted);font-size:11px;margin-left:auto;white-space:nowrap;}' +
+    /* HR centre hours block */
+    '#w116jhours{margin:16px 0 0;}' +
+    '#w116jhours .g{display:grid;grid-template-columns:minmax(140px,1.6fr) minmax(110px,1.2fr) repeat(4,minmax(70px,.8fr));font-size:13px;}' +
+    '#w116jhours .g > span{padding:7px 8px;border-bottom:1px solid rgba(16,63,57,.06);}' +
+    '#w116jhours .g > span.h{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);padding:6px 8px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '#w116jhours .g > span.n{text-align:right;font-variant-numeric:tabular-nums;}' +
+    '@media (max-width:740px){#w116jhours .g{grid-template-columns:minmax(120px,1.6fr) repeat(3,minmax(60px,.8fr));}#w116jhours .g > span.t,#w116jhours .g > span.s5{display:none;}}' +
+    '@media (max-width:740px){#w116jck .t{display:none;}#w116jpres .n{display:none;}.wa-toolbar .pill.w115pill #whoName{display:none;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []); }
+  function me() {
+    var em = myEmail(); var all = members();
+    var hit = all.filter(function (m) { return lower(m.email) === em; })[0] || null;
+    try { if (!hit && typeof WA_ME !== 'undefined' && WA_ME && WA_ME.id) hit = all.filter(function (m) { return String(m.id) === String(WA_ME.id); })[0] || null; } catch (e) { /* fine */ }
+    try { if (!hit && typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) hit = all.filter(function (m) { return lower(m.name) === lower(WA_ME.name); })[0] || null; } catch (e) { /* fine */ }
+    try { if (!hit && typeof USER !== 'undefined' && USER && USER.name) hit = all.filter(function (m) { return lower(m.name) === lower(USER.name); })[0] || null; } catch (e) { /* fine */ }
+    return hit;
+  }
+  function myName() { var m = me(); return (m && m.name) || (typeof USER !== 'undefined' && USER && USER.name) || myEmail().split('@')[0]; }
+  function personByEmail(em) { em = lower(em); return members().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function firstName(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function av(p, size, cls) { return window.w116Avatar ? window.w116Avatar(p, size, cls) : ''; }
+  function fmtMins(m) { m = Math.max(0, Math.round(m)); var h = Math.floor(m / 60), r = m % 60; return h ? h + 'h ' + (r < 10 ? '0' : '') + r + 'm' : r + 'm'; }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  async function fn(name, body) {
+    var r = await db.functions.invoke(name, { body: body });
+    if (r && r.error) throw new Error(String(r.error.message || r.error));
+    if (r && r.data && r.data.error && !('ok' in r.data)) throw new Error(String(r.data.error));
+    return (r && r.data) || {};
+  }
+
+  /* ---------- 1. the identity bubble ---------- */
+  function bubble() {
+    try {
+      var who = document.getElementById('whoName'); if (!who) return;
+      var pill = who.closest('.pill'); if (!pill) return;
+      pill.classList.add('w115pill');
+      Array.prototype.slice.call(pill.childNodes).forEach(function (n) { if (n.nodeType === 3 && /signed in/i.test(n.textContent)) n.textContent = ''; });
+      var nm = myName();
+      if (who.textContent !== firstName(nm)) who.textContent = firstName(nm);
+      if (!pill.querySelector('.w116jcaret')) { var c = document.createElement('span'); c.className = 'w116jcaret'; c.innerHTML = '&#9660;'; pill.appendChild(c); }
+      if (!pill.dataset.w116j) {
+        pill.dataset.w116j = '1';
+        pill.addEventListener('click', function (e) {
+          if (e.target.closest('#w115btn') || e.target.closest('#whoName')) return; /* wave115 handles these */
+          e.stopPropagation(); var b = document.getElementById('w115btn'); if (b) b.click();
+        });
+      }
+    } catch (e) { /* cosmetic */ }
+  }
+
+  /* ---------- 2. the menu: relabel and extend wave115's items ---------- */
+  function menu() {
+    var m = document.getElementById('w115menu'); if (!m || m.dataset.w116j === m.innerHTML.length + '') return;
+    var items = m.querySelectorAll('.w115item'); if (!items.length) return;
+    var mp = m.querySelector('[data-w115act="mypage"]'); if (mp) { mp.textContent = 'My profile'; mp.setAttribute('data-w116j', 'profile'); }
+    var nt = m.querySelector('[data-w115act="notify"]'); if (nt) { nt.textContent = 'Notifications'; nt.setAttribute('data-w116j', 'notifications'); }
+    var ed = m.querySelector('[data-w115act="edit"]'); if (ed) ed.textContent = 'Edit profile and photo';
+    if (!m.querySelector('[data-w116j="settings"]') && staff()) {
+      var after = nt || ed || items[items.length - 1];
+      var s = document.createElement('button'); s.className = 'w115item'; s.type = 'button'; s.setAttribute('data-w116j', 'settings'); s.textContent = 'Settings: Slack, Google Calendar, Drive';
+      var p = document.createElement('button'); p.className = 'w115item'; p.type = 'button'; p.setAttribute('data-w116j', 'password'); p.textContent = 'Change password';
+      after.insertAdjacentElement('afterend', s); s.insertAdjacentElement('afterend', p);
+    }
+    if (mp && mp.parentNode === m && m.firstElementChild && m.firstElementChild.nextElementSibling !== mp) { m.firstElementChild.insertAdjacentElement('afterend', mp); }
+    m.dataset.w116j = m.innerHTML.length + '';
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('#w115menu [data-w116j]'); if (!b) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var what = b.getAttribute('data-w116j');
+    var menuEl = document.getElementById('w115menu'); if (menuEl) menuEl.style.display = 'none';
+    if (what === 'profile') { var m = me(); if (m && m.id) location.hash = '#person/' + m.id; else location.hash = '#mypage'; return; }
+    if (what === 'notifications') { openSettings('notifications'); return; }
+    if (what === 'settings') { openSettings('connections'); return; }
+    if (what === 'password') { openSettings('account'); return; }
+  }, true);
+  try { new MutationObserver(function () { menu(); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  /* ---------- 3. who is active ---------- */
+  function presenceMount() {
+    var st = document.getElementById('cloudStatus'); if (!st) return null;
+    var pill = st.closest('.pill'); if (!pill) return null;
+    pill.classList.add('w116jpill');
+    st.style.display = 'none'; var dot = document.getElementById('cloudDot'); if (dot) dot.style.display = 'none';
+    var box = document.getElementById('w116jpres');
+    if (!box) { box = document.createElement('span'); box.id = 'w116jpres'; box.title = 'Who is on the hub right now'; pill.appendChild(box); box.addEventListener('click', function () { location.hash = '#mypage'; }); }
+    return box;
+  }
+  function renderPresence() {
+    var box = presenceMount(); if (!box) return;
+    var online = []; try { online = typeof waOnlineEmails === 'function' ? waOnlineEmails() : []; } catch (e) { online = []; }
+    var meEm = myEmail();
+    var people = online.map(function (p) { var who = (lower(p.email) === meEm) ? (me() || { name: myName(), email: p.email }) : (personByEmail(p.email) || { name: (typeof waNameForEmail === 'function' ? waNameForEmail(p.email) : p.email), email: p.email }); return { name: who.name, avatar_url: who.avatar_url, email: p.email }; });
+    people.sort(function (a, b) { return (lower(a.email) === meEm ? -1 : 0) - (lower(b.email) === meEm ? -1 : 0); });
+    var inSet = J.checked || {};
+    var shown = people.slice(0, 7);
+    box.innerHTML = '<span class="st">' + shown.map(function (p) { var ci = !!inSet[lower(p.email)]; return '<span title="' + E(p.name) + (ci ? ' (checked in)' : '') + '" style="display:inline-flex">' + av(p, 26, ci ? 'in' : '') + '</span>'; }).join('') + '</span>' +
+      '<span class="n"><b>' + people.length + '</b> active' + (people.length > shown.length ? ' (+' + (people.length - shown.length) + ')' : '') + '</span>';
+    box.title = people.length ? 'On the hub now: ' + people.map(function (p) { return p.name; }).join(', ') : 'Nobody else is on the hub right now';
+  }
+  async function refreshPresence() {
+    try { if (typeof waLoadPresence === 'function') await waLoadPresence(); } catch (e) { /* fine */ }
+    try {
+      var r = await db.from('hub_checkins').select('email').is('ended_at', null);
+      J.checked = {}; ((r && r.data) || []).forEach(function (x) { J.checked[lower(x.email)] = 1; });
+    } catch (e) { /* fine */ }
+    renderPresence();
+  }
+
+  /* ---------- 4. check in / check out ---------- */
+  function ckButton() {
+    var pill = document.querySelector('.wa-toolbar .pill.w115pill'); if (!pill || !staff()) return null;
+    var b = document.getElementById('w116jck');
+    if (!b) {
+      b = document.createElement('button'); b.id = 'w116jck'; b.type = 'button';
+      pill.insertAdjacentElement('beforebegin', b);
+      b.addEventListener('click', function (e) { e.stopPropagation(); toggleCheck(); });
+    }
+    return b;
+  }
+  function renderCk() {
+    var b = ckButton(); if (!b) return;
+    if (J.open) {
+      var mins = (Date.now() - new Date(J.open.started_at).getTime()) / 60000;
+      b.className = 'in'; b.innerHTML = '<span class="dot"></span>Checked in <span class="t">' + E(fmtMins(mins)) + ' &middot; check out</span>'; b.title = 'Checked in since ' + new Date(J.open.started_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '. Click to check out.';
+    } else { b.className = ''; b.innerHTML = '<span class="dot"></span>Check in'; b.title = 'Start counting your hours on the hub'; }
+  }
+  async function loadOpen() {
+    try {
+      var em = myEmail(); if (!em) return;
+      var r = await db.from('hub_checkins').select('*').eq('email', em).is('ended_at', null).order('started_at', { ascending: false }).limit(3);
+      var rows = (r && r.data) || [];
+      /* a session left open closes itself at eight hours */
+      for (var i = 0; i < rows.length; i++) {
+        var age = (Date.now() - new Date(rows[i].started_at).getTime()) / 3600000;
+        if (age > 14 || i > 0) { var end = new Date(new Date(rows[i].started_at).getTime() + Math.min(age, 8) * 3600000).toISOString(); await db.from('hub_checkins').update({ ended_at: end, minutes: Math.round(Math.min(age, 8) * 60), auto_closed: true }).eq('id', rows[i].id); rows[i] = null; }
+      }
+      J.open = rows.filter(Boolean)[0] || null;
+    } catch (e) { J.open = null; }
+    renderCk();
+  }
+  async function toggleCheck() {
+    if (J.busy) return; J.busy = true;
+    try {
+      var em = myEmail(); var m = me();
+      if (J.open) {
+        var mins = Math.round((Date.now() - new Date(J.open.started_at).getTime()) / 60000);
+        var r = await db.from('hub_checkins').update({ ended_at: new Date().toISOString(), minutes: mins }).eq('id', J.open.id);
+        if (r && r.error) throw r.error;
+        toastS('Checked out: ' + fmtMins(mins) + ' on the hub'); J.open = null;
+      } else {
+        var ins = await db.from('hub_checkins').insert({ email: em, name: (m && m.name) || (typeof USER !== 'undefined' && USER && USER.name) || em, department: m ? m.department : null, started_at: new Date().toISOString(), source: 'hub' }).select('*').single();
+        if (ins && ins.error) throw ins.error;
+        J.open = ins.data; toastS('Checked in. Your hours count from now.');
+      }
+      try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: em, field: J.open ? 'in' : 'out', old_value: null, new_value: J.open ? 'checked in' : 'checked out', changed_by: (m && m.name) || em }); } catch (e) { /* audit */ }
+    } catch (e) { toastS('Could not save the check-in'); }
+    J.busy = false; renderCk(); refreshPresence();
+  }
+
+  /* ---------- 5. HR centre: hours checked in on the hub ---------- */
+  async function hoursBlock() {
+    try {
+      var host = document.getElementById('w52hours'); if (!host || document.getElementById('w116jhours')) return;
+      var since = new Date(Date.now() - 35 * 86400000).toISOString();
+      var r = await db.from('hub_checkins').select('email, name, department, started_at, ended_at, minutes').gte('started_at', since).order('started_at', { ascending: false }).limit(2000);
+      var rows = (r && r.data) || [];
+      var now = new Date(); var day = now.getDay(); var monday = new Date(now); monday.setHours(0, 0, 0, 0); monday.setDate(now.getDate() - ((day + 6) % 7));
+      var lastMon = new Date(monday.getTime() - 7 * 86400000);
+      var by = {};
+      rows.forEach(function (x) {
+        var k = lower(x.email); by[k] = by[k] || { name: x.name || k, department: x.department, week: 0, last: 0, total: 0, sessions: 0, open: false };
+        var mins = x.minutes != null ? Number(x.minutes) : (x.ended_at ? (new Date(x.ended_at) - new Date(x.started_at)) / 60000 : (Date.now() - new Date(x.started_at).getTime()) / 60000);
+        var st = new Date(x.started_at);
+        by[k].total += mins; by[k].sessions++;
+        if (st >= monday) by[k].week += mins; else if (st >= lastMon) by[k].last += mins;
+        if (!x.ended_at) by[k].open = true;
+      });
+      var list = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return b.week - a.week || b.total - a.total; });
+      var div = document.createElement('div'); div.id = 'w116jhours'; div.className = 'card';
+      div.innerHTML = '<h2 style="color:' + GREEN + '">Hours checked in on the hub</h2><p class="read">People check in and out from the button at the top of the hub. Sessions left open close themselves at eight hours. Slack check-ins stay in the table above.</p>' +
+        (list.length ? '<div class="g"><span class="h">Person</span><span class="h t">Team</span><span class="h n">This week</span><span class="h n">Last week</span><span class="h n s5">Last 5 weeks</span><span class="h n">Sessions</span>' + list.map(function (p) { return '<span>' + E(p.name) + (p.open ? ' <span style="color:#2A8C7A;font-weight:700;font-size:11px">checked in now</span>' : '') + '</span><span class="t">' + E((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span><span class="n">' + E(fmtMins(p.week)) + '</span><span class="n">' + E(fmtMins(p.last)) + '</span><span class="n s5">' + E(fmtMins(p.total)) + '</span><span class="n">' + p.sessions + '</span>'; }).join('') + '</div>' : '<p style="font-size:13px;color:var(--wa-muted)">Nobody has checked in on the hub yet.</p>');
+      host.appendChild(div);
+    } catch (e) { /* fine */ }
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116j = showPanel;
+    showPanel = function (id) { var r = __sp116j.apply(this, arguments); if (id === 'hrcentre') { [600, 1500, 3000].forEach(function (ms) { setTimeout(hoursBlock, ms); }); } return r; };
+  }
+  document.addEventListener('click', function (e) { var tb = e.target.closest && e.target.closest('.w47tab'); if (tb && tb.getAttribute('data-w47v') === 'hours') { [400, 1200].forEach(function (ms) { setTimeout(hoursBlock, ms); }); } });
+
+  /* ---------- 6. Settings ---------- */
+  var EVENTS = [['request_filed', 'A request is filed for my team'], ['task_reassigned', 'A task is handed to me'], ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'], ['mentioned', 'A meeting mentions me'], ['invited', 'Someone I invited joins the Hub']];
+  var PR = { disabled: [], loaded: false };
+  async function loadPrefs() { try { var r = await db.from('wa_notify_prefs').select('disabled').eq('email', myEmail()).maybeSingle(); PR.disabled = (r && r.data && Array.isArray(r.data.disabled)) ? r.data.disabled : []; PR.loaded = true; } catch (e) { PR.disabled = []; } }
+  async function savePrefs() { try { await db.from('wa_notify_prefs').upsert({ email: myEmail(), disabled: PR.disabled, updated_at: new Date().toISOString() }); toastS('Notification settings saved'); } catch (e) { toastS('Could not save settings'); } }
+  async function loadConn() {
+    try { var r = await fn('hub-connect', { action: 'status' }); J.conn = r.connections || {}; }
+    catch (e) { J.conn = J.conn || {}; J.connErr = String(e.message || e); }
+    window.w116Conn = { calendar: !!(J.conn.google_calendar && J.conn.google_calendar.enabled), drive: !!(J.conn.google_drive && J.conn.google_drive.enabled), slack: !!(J.conn.slack && J.conn.slack.enabled) };
+  }
+  function sw(on, key) { return '<span class="sw' + (on ? ' on' : '') + '" data-jsw="' + key + '" role="switch" aria-checked="' + (on ? 'true' : 'false') + '"><i></i></span>'; }
+  function connRow(icon, color, title, sub, right) { return '<div class="row"><span class="ic" style="background:' + color + '">' + icon + '</span><div><b>' + title + '</b><div class="s' + (sub && sub.cls ? ' ' + sub.cls : '') + '">' + (sub && sub.text != null ? sub.text : sub || '') + '</div></div>' + (right || '') + '</div>'; }
+  function connStatus(c, onText) {
+    if (!c) return { text: 'Not connected yet.' };
+    if (c.enabled === false) return c.last_error ? { text: E(c.last_error), cls: 'err' } : { text: 'Off.' };
+    return { text: onText + (c.last_ok_at ? ' Last checked ' + E(new Date(c.last_ok_at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + '.' : ''), cls: 'ok' };
+  }
+  function settingsHtml() {
+    var m = me() || {}; var c = J.conn || {};
+    var tabs = '<div class="tabs">' + [['connections', 'Connections'], ['notifications', 'Notifications'], ['account', 'Account']].map(function (t) { return '<a data-jtab="' + t[0] + '" class="' + (J.tab === t[0] ? 'on' : '') + '">' + t[1] + '</a>'; }).join('') + '</div>';
+    var body = '';
+    if (J.tab === 'connections') {
+      var slack = c.slack, cal = c.google_calendar, drv = c.google_drive;
+      body += connRow('S', '#4A154B', 'Slack', slack && slack.enabled !== false && slack.external_id ? { text: 'Connected as ' + E(slack.external_name || '') + (slack.meta && slack.meta.handle ? ' (@' + E(slack.meta.handle) + ')' : '') + '. Hub updates, mentions and requests reach your DMs.', cls: 'ok' } : (slack && slack.enabled === false ? { text: 'Off. Hub messages skip your DMs.' } : { text: 'No Slack account matches ' + E(myEmail()) + ' yet. Set your Slack profile email to it, then switch this on.' }), sw(!!(slack && slack.enabled !== false && slack.external_id), 'slack'));
+      body += connRow('C', '#1a73e8', 'Google Calendar', connStatus(cal, 'On. Accept or decline hub meetings from Home; replies land on your calendar' + (cal && cal.external_name ? ' (' + E(cal.external_name) + ')' : '') + '.'), sw(!!(cal && cal.enabled), 'google_calendar'));
+      body += connRow('D', '#188038', 'Google Drive', connStatus(drv, 'On. Your recent files show on your profile and here.'), sw(!!(drv && drv.enabled), 'google_drive'));
+      body += connRow('@', GOLD, 'Email (hub@welfareavenue.com)', 'Cc the hub on anything worth keeping: invoices go to Finance, Loom or Otter summaries through the transcript pipeline, other threads to your team page. No setup needed.', '<span class="lnk" data-jgo="#hubmail">Hub inbox</span>');
+      body += connRow('L', PURPLE, 'Loom, Otter, Plaud', 'Meeting recorders reach the hub through the Transcript Archive upload or by cc\'ing hub@ on the summary email.', '<span class="lnk" data-jgo="#transcripts">Transcripts</span>');
+      if (drv && drv.enabled) body += '<div class="files" id="w116jfiles"><div class="note">Loading your recent Drive files...</div></div>';
+      body += '<div class="note">Google connections use the hub\'s Workspace delegation: the hub acts for you only after you switch a service on here, and only with that service. Switching it off stops it immediately.' + (J.connErr ? ' <span style="color:' + FLAG + '">' + E(J.connErr) + '</span>' : '') + '</div>';
+    } else if (J.tab === 'notifications') {
+      body += '<div class="note" style="margin:0 0 6px">Delivered to your Slack DMs' + (c.slack && c.slack.external_id ? ' (' + E(c.slack.external_name || '') + ')' : ' once Slack is connected') + '.</div>';
+      body += EVENTS.map(function (ev) { return '<label class="chk"><input type="checkbox" data-jev="' + ev[0] + '"' + (PR.disabled.indexOf(ev[0]) < 0 ? ' checked' : '') + ' /> ' + ev[1] + '</label>'; }).join('');
+      body += '<div class="note"><span class="lnk" data-jtest="1">Send me a test message</span> &middot; <span class="lnk" data-jtab2="connections">Slack connection</span></div>';
+    } else {
+      body += '<div class="acct">' + av(m.name ? m : { name: (typeof USER !== 'undefined' && USER && USER.name) || myEmail() }, 52) + '<div><b>' + E(m.name || (typeof USER !== 'undefined' && USER && USER.name) || '') + '</b><div class="s">' + E([m.role, (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[m.department]) || m.department].filter(Boolean).join(' \u00b7 ')) + '</div><div class="s">' + E(myEmail()) + '</div></div></div>' +
+        '<div class="note"><span class="lnk" data-jact="edit">Edit profile and photo</span> &middot; <span class="lnk" data-jact="profile">Open my profile page</span></div>' +
+        '<label class="f">New password</label><input type="password" id="w116jp1" autocomplete="new-password" placeholder="At least 8 characters" />' +
+        '<label class="f">Confirm</label><input type="password" id="w116jp2" autocomplete="new-password" />' +
+        '<div class="note">Staff sign in with Google; a password adds a second way in with the same email. Board viewers use it for the invitation link.</div>' +
+        '<div class="m-foot" style="margin-top:12px"><button class="btn ghost" data-jact="signout">Sign out</button><span style="flex:1"></span><button class="btn" data-jact="setpw">Save the password</button></div>';
+    }
+    return '<div class="w116js"><h3>Settings</h3>' + tabs + body + '</div>';
+  }
+  async function openSettings(tab) {
+    J.tab = tab || 'connections';
+    openModal('<div class="w116js"><h3>Settings</h3><p class="m-sub">Loading...</p></div>');
+    await Promise.all([loadConn(), PR.loaded ? Promise.resolve() : loadPrefs()]);
+    paintSettings();
+  }
+  function paintSettings() {
+    var box = document.getElementById('modalBox'); if (!box) return;
+    box.innerHTML = settingsHtml();
+    if (J.tab === 'connections' && J.conn && J.conn.google_drive && J.conn.google_drive.enabled) loadFiles();
+  }
+  async function loadFiles() {
+    try {
+      var r = await fn('hub-connect', { action: 'drive_recent', limit: 8 });
+      var el = document.getElementById('w116jfiles'); if (!el) return;
+      var files = r.files || [];
+      el.innerHTML = files.length ? '<div class="note" style="margin:0 0 4px">Your recent Drive files</div>' + files.map(function (f) { return '<a href="' + E(f.webViewLink || '#') + '" target="_blank" rel="noopener">' + (f.iconLink ? '<img src="' + E(f.iconLink) + '" alt="" />' : '') + E(f.name) + '<span>' + E(String(f.modifiedTime || '').slice(0, 10)) + '</span></a>'; }).join('') : '<div class="note">No recent files.</div>';
+    } catch (e) { var el2 = document.getElementById('w116jfiles'); if (el2) el2.innerHTML = '<div class="note" style="color:' + FLAG + '">' + E(String(e.message || e)) + '</div>'; }
+  }
+  document.addEventListener('click', async function (e) {
+    var box = document.getElementById('modalBox'); if (!box || !box.querySelector('.w116js')) return;
+    var t = e.target;
+    var tab = t.closest('[data-jtab]') || t.closest('[data-jtab2]');
+    if (tab) { J.tab = tab.getAttribute('data-jtab') || tab.getAttribute('data-jtab2'); paintSettings(); return; }
+    var go = t.closest('[data-jgo]'); if (go) { closeModal(); location.hash = go.getAttribute('data-jgo'); return; }
+    var s = t.closest('[data-jsw]');
+    if (s) {
+      var prov = s.getAttribute('data-jsw'); var on = !s.classList.contains('on');
+      s.classList.add('busy');
+      try {
+        var r = await fn('hub-connect', { action: 'toggle', provider: prov, enabled: on });
+        if (r.ok === true) toastS(on ? 'Connected' : 'Switched off');
+        else toastS(String(r.error || 'The connection service did not answer').slice(0, 160));
+      } catch (err) { toastS('Could not reach the connection service'); }
+      await loadConn(); paintSettings();
+      try { if (window.w116Refresh && document.getElementById('mypage') && document.getElementById('mypage').classList.contains('active') && typeof renderMyPage === 'function') renderMyPage(); } catch (x) { /* fine */ }
+      return;
+    }
+    var test = t.closest('[data-jtest]'); if (test) { try { await db.functions.invoke('notify', { body: { event: 'test' } }); toastS('Test sent, check Slack'); } catch (err) { toastS('Could not send the test'); } return; }
+    var act = t.closest('[data-jact]');
+    if (act) {
+      var a = act.getAttribute('data-jact');
+      if (a === 'signout') { closeModal(); var so = document.getElementById('signOutBtn'); if (so) so.click(); return; }
+      if (a === 'profile') { closeModal(); var m = me(); location.hash = m && m.id ? '#person/' + m.id : '#mypage'; return; }
+      if (a === 'edit') { closeModal(); var b = document.getElementById('w115btn'); if (b) { b.click(); setTimeout(function () { var ed = document.querySelector('#w115menu [data-w115act="edit"]'); if (ed) ed.click(); }, 60); } return; }
+      if (a === 'setpw') {
+        var p1 = (document.getElementById('w116jp1') || {}).value || '', p2 = (document.getElementById('w116jp2') || {}).value || '';
+        if (p1.length < 8) { toastS('Use at least 8 characters'); return; }
+        if (p1 !== p2) { toastS('The two passwords differ'); return; }
+        act.disabled = true;
+        try { var u = await db.auth.updateUser({ password: p1 }); if (u && u.error) throw u.error; toastS('Password saved'); document.getElementById('w116jp1').value = ''; document.getElementById('w116jp2').value = ''; }
+        catch (err) { toastS('Could not save the password: ' + String(err.message || err).slice(0, 80)); }
+        act.disabled = false; return;
+      }
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var c = e.target.closest && e.target.closest('[data-jev]'); if (!c) return;
+    var k = c.getAttribute('data-jev'); PR.disabled = PR.disabled.filter(function (x) { return x !== k; }); if (!c.checked) PR.disabled.push(k); savePrefs();
+  });
+  window.w116Settings = openSettings;
+
+  /* ---------- 7. meeting replies from Home ---------- */
+  document.addEventListener('click', async function (e) {
+    var a = e.target.closest && e.target.closest('.w116rsvpb a[data-r]'); if (!a) return;
+    e.preventDefault(); e.stopPropagation();
+    var wrap = a.closest('[data-w116rsvp]'); var id = wrap && wrap.getAttribute('data-w116rsvp'); var resp = a.getAttribute('data-r');
+    if (!id) return;
+    if (!(window.w116Conn && window.w116Conn.calendar)) { openSettings('connections'); toastS('Turn on Google Calendar to reply from the hub'); return; }
+    a.textContent = '...';
+    try {
+      var r = await fn('hub-connect', { action: 'rsvp', event_id: id, response: resp });
+      if (r.ok === false) throw new Error(r.error || 'failed');
+      toastS(resp === 'accepted' ? 'Accepted' : 'Declined');
+      try { (window.__waEvents || []).forEach(function (ev) { if (String(ev.id) === String(id)) (ev.attendees || []).forEach(function (at) { if (lower(at.email) === myEmail()) at.status = resp; }); }); } catch (x) { /* fine */ }
+      try { if (typeof renderMyPage === 'function') renderMyPage(); } catch (x) { /* fine */ }
+    } catch (err) { toastS('Could not send the reply: ' + String(err.message || err).slice(0, 100)); a.textContent = resp === 'accepted' ? 'Accept' : 'Decline'; }
+  }, true);
+
+  /* ---------- boot ---------- */
+  if (typeof startApp === 'function') {
+    var __sa116j = startApp;
+    startApp = async function () {
+      var r = await __sa116j.apply(this, arguments);
+      try {
+        bubble(); [500, 1500, 4000].forEach(function (ms) { setTimeout(bubble, ms); });
+        if (staff()) { loadOpen(); loadConn().catch(function () { /* fine */ }); }
+        refreshPresence();
+        setInterval(refreshPresence, 60000);
+        setInterval(function () { if (J.open) renderCk(); }, 60000);
+      } catch (e) { console.warn('wave116j boot', e); }
       return r;
     };
   }

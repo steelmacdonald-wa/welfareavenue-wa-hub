@@ -99,6 +99,10 @@
     '.w116addrow{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 0;}' +
     '.w116addrow a{font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
     '.w116addrow a:hover{text-decoration:underline;}' +
+    '.w116rsvpw{display:flex;flex-direction:column;align-items:flex-end;gap:6px;}' +
+    '.w116rsvpb{display:inline-flex;gap:6px;align-items:center;}' +
+    '.w116rsvpb a{font-size:11px;font-weight:700;color:' + GREEN + ';cursor:pointer;background:rgba(16,63,57,.07);border-radius:999px;padding:3px 9px;}' +
+    '.w116rsvpb a:hover{background:rgba(16,63,57,.14);}' +
     '.w116kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 16px;}' +
     '.w116kpi{display:flex;flex-direction:column;align-items:flex-start;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;font-size:12.5px;color:var(--wa-muted);box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);cursor:pointer;min-width:0;}' +
     '.w116kpi:hover{border-color:rgba(16,63,57,.25);}' +
@@ -327,7 +331,10 @@
     var rsvp = '';
     if (opts.mine) {
       var map = { accepted: 'Going', tentative: 'Maybe', declined: 'Declined', needsAction: 'No reply yet' };
-      rsvp = st ? '<a class="w116rsvp ' + E(st) + (isToday && st === 'accepted' ? ' today' : '') + '" href="' + E(e.html_link || '#') + '" target="_blank" rel="noopener" title="Open in Google Calendar to change your reply">' + (map[st] || st) + '</a>' : '<span></span>';
+      /* wave116j: reply from the hub when Google Calendar is connected in Settings; the pill still opens Google Calendar */
+      var can = !!(window.w116Conn && window.w116Conn.calendar);
+      rsvp = '<span class="w116rsvpw">' + (st ? '<a class="w116rsvp ' + E(st) + (isToday && st === 'accepted' ? ' today' : '') + '" href="' + E(e.html_link || '#') + '" target="_blank" rel="noopener" title="Open in Google Calendar">' + (map[st] || st) + '</a>' : '') +
+        (!past ? '<span class="w116rsvpb" data-w116rsvp="' + E(e.id) + '">' + (st !== 'accepted' ? '<a data-r="accepted" title="' + (can ? 'Accept from the hub' : 'Turn on Google Calendar in Settings to reply here') + '">Accept</a>' : '') + (st !== 'declined' ? '<a data-r="declined" title="' + (can ? 'Decline from the hub' : 'Turn on Google Calendar in Settings to reply here') + '">Decline</a>' : '') + '</span>' : '') + '</span>';
     } else rsvp = isToday ? '<span class="w116rsvp today">Today</span>' : '<span></span>';
     return '<div class="w116ev' + (past ? ' past' : '') + '" data-w116ev="' + E(e.id) + '">' +
       '<div class="w116evd"><b>' + E(dayNum(e.start_at)) + '</b><span>' + E(dow(e.start_at)) + '</span></div>' +
@@ -1001,7 +1008,7 @@
     if (!W116.eventsAt) inner = '<p class="mp-empty">Loading the hub calendar...</p>';
     else if (!ev.length) inner = '<p class="mp-empty">No meetings with your name on the hub calendar in the next two months.' + (W116.calState && W116.calState.last_ok ? '' : ' The calendar sync has not run successfully yet.') + '</p>';
     else inner = '<div class="w116evl">' + ev.map(function (e) { return eventRow(e, { mine: true }); }).join('') + '</div>';
-    return inner + '<p class="w116note">From hub@welfareavenue.com\'s calendar. Reply to an invite in Google Calendar and it updates here within 30 minutes.</p>';
+    return inner + '<p class="w116note">From hub@welfareavenue.com\'s calendar. Accept or decline here once Google Calendar is on in Settings (profile menu), or reply in Google Calendar; either way it updates here within 30 minutes.</p>';
   }
   function injectHome() {
     var page = document.getElementById('mypage');
