@@ -295,6 +295,13 @@
       ? '<select data-w40r="' + esc(r.email) + '" data-w113role="' + esc(r.email) + '">' + ROLES113.map(function (x) { return '<option value="' + x + '"' + (x === (r.role || 'member') ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' + (r.founder ? '<div class="w113mut">founder, always admin</div>' : '')
       : '<span class="w113mut">' + (isRemoved(r) ? 'blocked' : 'needs an email') + '</span>';
     var pages = r.email && !isRemoved(r) ? '<a data-w40t="' + esc(r.email) + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline;white-space:nowrap">' + (r.tabs ? esc(r.tabs.length + ' pages') : 'role default') + '</a>' : '';
+    /* wave127: the Access column picks an access profile (or a classic role); Pages says what the profile gives */
+    try {
+      if (window.w127 && r.email && !isRemoved(r)) {
+        if (typeof window.w127.accessCell === 'function') { var ac = window.w127.accessCell(r); if (ac) roleSel = ac + (r.founder ? '<div class="w113mut">founder, always admin</div>' : ''); }
+        if (typeof window.w127.pagesCell === 'function') { var pc = window.w127.pagesCell(r); if (pc) pages = pc; }
+      }
+    } catch (e) { /* the classic cells stay */ }
     var emailCell = r.email ? '<span style="font-size:12px">' + esc(r.email) + '</span>'
       : (r.id ? '<div class="w113em"><input type="text" data-w113emin="' + r.id + '" placeholder="name@welfareavenue.com" /><a data-w113emsave="' + r.id + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline">Save</a></div>' : '');
     var acts = [];

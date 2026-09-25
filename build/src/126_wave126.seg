@@ -880,7 +880,7 @@
     try {
       var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#team/board') !== 0) return;
       var seg = document.querySelector('#team .w116seg'); if (!seg || seg.querySelector('[data-w126go="#committees"]')) return;
-      if (!(isLeaderUI() || (B.me && (B.me.board || B.me.leader)))) return;
+      if (!(isLeaderUI() || (B.me && (B.me.board || B.me.leader))) || !tabOk('governance')) return;
       seg.insertAdjacentHTML('afterbegin', '<a data-w126go="#governance">Board overview</a><a data-w126go="#committees">Committees</a>');
     } catch (e) { /* fine */ }
   }
@@ -907,6 +907,7 @@
   window.addEventListener('click', function (e) {
     var t = e.target; if (!t || !t.closest) return;
     if (!(isLeaderUI() || (B.me && (B.me.board || B.me.leader)))) return;
+    if (!tabOk('governance')) return;
     var b = t.closest('#tabBar .tab[data-tab="board"]');
     var a = !b && t.closest('[data-w116="#team/board"],[data-w116go="#team/board"]');
     if (a && a.hasAttribute('data-w126go')) return;

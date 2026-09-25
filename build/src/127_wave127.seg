@@ -1,0 +1,996 @@
+/* =====================================================================
+   WA v127 access profiles: one profile per team, the board, executives and admins, and a page that
+   says plainly what each one gives access to (25/09/26)
+   =====================================================================
+   Steel: "make a role for a marketing team member, a fundraising team member, ... program development,
+   operations Montreal, Toronto, a board member access profile, and as well as a executive and admin
+   access profile. It's really important that you make it very clear in that page what each role
+   provides access to." And: review the security roles and the Hub training whenever the Hub changes.
+
+   - Nine profiles in hub_access_profiles (Marketing, Fundraising & Finances, Program Development,
+     Operations Montreal, Operations Toronto, HR & People, Board member, Executive, Admin). A team
+     profile has a lead option (hub_roles.role = leader). Each page is open to everyone with the
+     profile, to its leads only, or to nobody.
+   - Admin > Access profiles (#adminpanel/access): a card per profile (who it is for, what it lets you
+     do, its pages, what it leaves out, who has it), every page compared across the profiles (admins
+     click a cell to change it), the proposed profile for each person with what they would gain and
+     lose, and the pages nobody has decided yet (new pages land there after every release).
+   - People and access: the Access column picks a profile (or a classic role).
+   - Your access (the profile menu): your profile, your pages and what you can do.
+   - The database follows the profile for the finances and the board pages (wa_page_ok); other pages
+     are menu only, and their data is shared with the team as before. Nothing changes for anyone
+     until an admin gives them a profile.
+   ===================================================================== */
+(function () {
+  if (window.__wa127) return; window.__wa127 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+  var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
+
+  /* the pages, grouped the way the menu groups them; 'team' is the team-page router and follows the department pages */
+  var GROUPS = [
+    ['Everyday', ['mypage', 'calendar', 'requests', 'overview', 'dashboard', 'create', 'photos', 'brain', 'importantinfo']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
+    ['Board', ['governance', 'committees', 'board']],
+    ['Meetings', ['transcripts', 'agendas', 'hubmail']],
+    ['People', ['orgchart', 'training']],
+    ['More', ['activity', 'adminpanel']]
+  ];
+  var LABEL = {
+    mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
+    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment',
+    opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
+    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
+    governance: 'Board overview', committees: 'Committees', board: 'Board team page',
+    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Training academy',
+    activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
+  };
+  /* what the database enforces on top of the menu */
+  var LOCK = {
+    finances: 'The ledger, budgets and statements follow the profile in the database, not just the menu.',
+    governance: 'Board data follows the profile in the database. Directors always see it.',
+    committees: 'Board data follows the profile in the database. Directors always see it.',
+    adminpanel: 'Only admins can change access, whatever the menu shows.',
+    hrcentre: 'Everyone\'s time off, discipline and policy sign-offs stay with the HR access list.',
+    agendas: 'Each agenda is visible to the person who made it and the people invited.',
+    transcripts: 'Private and leadership transcripts stay limited, whatever the page access.'
+  };
+  var SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
+
+  var P = {
+    x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    chev: '<path d="m9 5 7 7-7 7"/>', lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    shield: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    key: '<circle cx="8" cy="15" r="3.5"/><path d="m10.5 12.5 8-8M16 7l2.5 2.5M14 9l2 2"/>',
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
+    alert: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    minus: '<path d="M6 12h12"/>', undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/>'
+  };
+  function I(n, cls) { return '<svg class="w127i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; } catch (e) { return null; } }
+  function myRole() { var m = mine(); return (m && m.role) || ''; }
+  function amAdmin() { return FOUNDERS.indexOf(myEmail()) >= 0 || myRole() === 'admin'; }
+  function rolesAll() { try { return (typeof WA40_ROLES !== 'undefined' && WA40_ROLES) || []; } catch (e) { return []; } }
+  function listJoin(a) { a = a.filter(Boolean); if (a.length < 2) return a.join(''); return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || LABEL[d] || d || ''; } catch (e) { return LABEL[d] || d || ''; } }
+  function actor() { try { if (typeof who === 'function') return who(); } catch (e) { /* fine */ } try { return (typeof USER !== 'undefined' && USER && USER.email) || 'admin'; } catch (e) { return 'admin'; } }
+  function onAccess() { return (location.hash || '').indexOf('#adminpanel/access') === 0; }
+
+  var css = document.createElement('style');
+  css.id = 'wa127css';
+  css.textContent = ''
+    + 'body.w127nofin #w111don{display:none !important;}'
+    + '#w127,#w127sheet{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '.w127i{width:17px;height:17px;flex:0 0 auto;display:inline-block;vertical-align:middle;}'
+    + '#w127card{background:transparent;border:none;box-shadow:none;padding:0;}'
+    + '.w127btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:' + BODY + ';font-size:13.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:11px;padding:9px 15px;cursor:pointer;text-decoration:none !important;line-height:1.1;white-space:nowrap;}'
+    + '.w127btn:hover{box-shadow:0 6px 16px rgba(16,63,57,.2);}'
+    + '.w127btn[disabled]{opacity:.55;cursor:default;box-shadow:none;}'
+    + '.w127btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w127btn.ghost:hover{background:rgba(16,63,57,.06);box-shadow:none;}'
+    + '.w127btn.sm{font-size:12.5px;padding:7px 11px;border-radius:9px;}'
+    + '.w127btn.gold{background:' + GOLD + ';border-color:' + GOLD + ';color:' + INK + ' !important;}'
+    + '.w127lnk{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}'
+    + '.w127lnk:hover{text-decoration:underline;}'
+    + '.w127box{background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';padding:18px 20px;min-width:0;}'
+    + '.w127sec{display:flex;align-items:flex-end;gap:12px;margin:28px 0 12px;flex-wrap:wrap;}'
+    + '#w127 .w127sec h2{font-family:' + HEAD + ';font-size:25px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1;}'
+    + '#w127 .w127sec h2::after{display:none;}'
+    + '.w127sec span{font-size:13px;color:var(--wa-muted);max-width:760px;line-height:1.45;}'
+    + '.w127sec .sp{flex:1;}'
+    + '.w127empty{font-size:13px;color:var(--wa-muted);line-height:1.5;margin:0;}'
+    /* the opening: how it works, where things stand */
+    + '.w127top{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;}'
+    + '.w127how{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;}'
+    + '.w127how div{background:rgba(16,63,57,.04);border-radius:13px;padding:12px 13px;}'
+    + '.w127how b{display:flex;align-items:center;gap:7px;font-size:13.5px;color:' + GREEN + ';}'
+    + '.w127how span{display:block;font-size:12.5px;color:#5c5a56;line-height:1.45;margin-top:5px;}'
+    + '.w127top p.lead{font-size:14px;line-height:1.55;margin:0;color:' + INK + ';}'
+    + '.w127stat{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '.w127stat .kk{font-size:10.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:' + GOLD + ';margin-bottom:8px;}'
+    + '.w127stat .big{font-family:' + HEAD + ';font-size:40px;font-weight:700;line-height:1;}'
+    + '.w127stat .big small{font-family:' + BODY + ';font-size:14px;font-weight:600;opacity:.85;margin-left:6px;}'
+    + '.w127stat p{font-size:13px;line-height:1.5;color:rgba(255,250,242,.86);margin:10px 0 0;}'
+    + '.w127stat .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}'
+    + '.w127stat .w127btn.ghost{color:' + CREAM + ' !important;border-color:rgba(255,250,242,.35);}'
+    + '.w127stat .w127btn.ghost:hover{background:rgba(255,250,242,.1);}'
+    + '.w127stat label.sw{display:flex;align-items:center;gap:8px;font-size:12.5px;margin-top:12px;color:rgba(255,250,242,.9);cursor:pointer;}'
+    + '.w127stat label.sw input{accent-color:' + GOLD + ';width:16px;height:16px;}'
+    + '.w127banner{display:flex;gap:12px;align-items:flex-start;background:rgba(220,165,39,.16);border:1px solid rgba(220,165,39,.45);border-radius:14px;padding:12px 14px;margin:16px 0 0;font-size:13px;line-height:1.5;}'
+    + '.w127banner .w127i{color:#8a5a0b;margin-top:1px;}'
+    + '.w127banner b{color:' + INK + ';}'
+    + '.w127banner .sp{flex:1;}'
+    /* the profile cards */
+    + '.w127grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:stretch;}'
+    + '.w127pc{position:relative;display:flex;flex-direction:column;padding:0;overflow:hidden;}'
+    + '.w127pc .bar{height:5px;background:var(--c);}'
+    + '.w127pc .in{padding:16px 18px 14px;display:flex;flex-direction:column;gap:10px;flex:1;}'
+    + '.w127pc .hd{display:flex;align-items:flex-start;gap:10px;}'
+    + '#w127 .w127pc h3{font-family:' + HEAD + ';font-size:24px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + INK + ';line-height:1;flex:1;}'
+    + '#w127 .w127pc h3::after{display:none;}'
+    + '.w127tier{display:inline-flex;align-items:center;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:4px 9px;white-space:nowrap;background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w127tier.admin{background:' + INK + ';color:' + CREAM + ';}'
+    + '.w127tier.exec{background:rgba(220,165,39,.24);color:#6b4d05;}'
+    + '.w127tier.board{background:rgba(74,79,87,.12);color:#3a3f46;}'
+    + '.w127pc .sum{font-size:13px;color:#5c5a56;line-height:1.5;margin:0;}'
+    + '.w127nums{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '.w127nums span{font-size:12px;font-weight:600;background:rgba(16,63,57,.06);border-radius:9px;padding:5px 9px;color:' + GREEN + ';}'
+    + '.w127nums span b{font-size:13px;}'
+    + '.w127can{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}'
+    + '.w127can li{display:flex;gap:8px;font-size:13px;line-height:1.45;}'
+    + '.w127can li .w127i{color:var(--c);width:16px;height:16px;margin-top:1px;}'
+    + '.w127out{font-size:12.5px;line-height:1.5;color:#5c5a56;border-top:1px dashed rgba(16,63,57,.14);padding-top:9px;}'
+    + '.w127out b{color:' + INK + ';font-weight:700;}'
+    + '.w127who{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--wa-muted);margin-top:auto;padding-top:4px;}'
+    + '.w127av{width:26px;height:26px;border-radius:50%;background:var(--c);color:' + CREAM + ';display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex:none;margin-right:-8px;border:2px solid var(--wa-card,#fff);}'
+    + '.w127who .n{margin-left:12px;}'
+    + '.w127pc .ft{display:flex;gap:8px;align-items:center;border-top:1px solid rgba(16,63,57,.07);padding:10px 18px;background:rgba(16,63,57,.02);}'
+    + '.w127pc .ft .sp{flex:1;}'
+    /* the comparison */
+    + '.w127mx{overflow:auto;max-height:78vh;border:1px solid rgba(16,63,57,.08);border-radius:16px;background:var(--wa-card,#fff);box-shadow:' + SH1 + ';}'
+    + '.w127tbl{border-collapse:separate;border-spacing:0;width:100%;min-width:980px;font-size:12.8px;}'
+    + '.w127tbl th,.w127tbl td{padding:0;border-bottom:1px solid rgba(16,63,57,.06);text-align:center;}'
+    + '.w127tbl thead th{position:sticky;top:0;z-index:3;background:var(--wa-card,#fff);padding:10px 6px 9px;font-size:11px;font-weight:700;letter-spacing:.3px;color:' + INK + ';vertical-align:bottom;border-bottom:2px solid rgba(16,63,57,.1);}'
+    + '.w127tbl thead th:not(.pg){width:86px;min-width:86px;}'
+    + '.w127tbl thead th i{display:block;width:22px;height:4px;border-radius:2px;background:var(--c);margin:0 auto 6px;}'
+    + '.w127tbl th.pg,.w127tbl td.pg{position:sticky;left:0;z-index:2;background:var(--wa-card,#fff);text-align:left;padding:8px 12px;min-width:230px;box-shadow:1px 0 0 rgba(16,63,57,.08);}'
+    + '.w127tbl thead th.pg{z-index:4;}'
+    + '.w127tbl td.pg b{font-weight:600;}'
+    + '.w127tbl td.pg .lk{color:' + GREEN + ';margin-left:5px;opacity:.75;cursor:help;}'
+    + '.w127tbl td.pg .lk .w127i{width:13px;height:13px;}'
+    + '.w127tbl td.pg em{font-style:normal;font-size:10.5px;font-weight:700;background:' + GOLD + ';color:' + INK + ';border-radius:999px;padding:1px 7px;margin-left:6px;}'
+    + '.w127tbl tr.gp td{background:rgba(16,63,57,.045);font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:' + GREEN + ';text-align:left;padding:7px 12px;}'
+    + '.w127tbl tr.gp td.pg{background:#EEF0EA;}'
+    + '.w127tbl tr.new td.pg{background:#FBF1D7;}'
+    + '.w127c{display:flex;align-items:center;justify-content:center;width:100%;min-height:38px;border:none;background:transparent;cursor:default;font-family:' + BODY + ';padding:0 4px;}'
+    + '.w127c.ed{cursor:pointer;}'
+    + '.w127c.ed:hover{background:rgba(220,165,39,.12);}'
+    + '.w127c .all{width:14px;height:14px;border-radius:50%;background:' + GREEN + ';display:inline-block;}'
+    + '.w127c .lead{font-size:10.5px;font-weight:700;letter-spacing:.3px;background:rgba(220,165,39,.28);color:#6b4d05;border-radius:999px;padding:3px 8px;}'
+    + '.w127c .none{width:12px;height:2px;background:rgba(31,32,30,.22);display:inline-block;border-radius:1px;}'
+    + '.w127c .und{font-size:11px;font-weight:700;color:' + FLAG + ';}'
+    + '.w127c.ch{background:rgba(220,165,39,.22);}'
+    + '.w127leg{display:flex;gap:16px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:#5c5a56;margin:10px 2px 0;}'
+    + '.w127leg span{display:inline-flex;align-items:center;gap:7px;}'
+    + '.w127leg .w127c{width:auto;min-height:0;display:inline-flex;}'
+    + '.w127save{position:sticky;bottom:12px;z-index:5;display:flex;gap:10px;align-items:center;background:' + INK + ';color:' + CREAM + ';border-radius:14px;padding:10px 12px 10px 16px;margin-top:12px;box-shadow:0 14px 40px -10px rgba(0,0,0,.45);font-size:13px;}'
+    + '.w127save .sp{flex:1;}'
+    + '.w127save .w127btn.ghost{color:' + CREAM + ' !important;border-color:rgba(255,250,242,.3);}'
+    /* people */
+    + '.w127chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px;}'
+    + '.w127chips a{font-size:12.5px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.06);border-radius:999px;padding:6px 12px;cursor:pointer;text-decoration:none;}'
+    + '.w127chips a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w127chips a b{margin-left:4px;}'
+    + '.w127ppl{width:100%;border-collapse:collapse;font-size:13px;}'
+    + '.w127ppl th{text-align:left;font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);padding:8px;border-bottom:1px solid rgba(16,63,57,.1);}'
+    + '.w127ppl td{padding:10px 8px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:top;}'
+    + '.w127ppl td b{font-weight:700;}'
+    + '.w127ppl .mut{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;line-height:1.4;}'
+    + '.w127pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;border-radius:999px;padding:4px 10px;background:rgba(16,63,57,.07);color:' + GREEN + ';white-space:nowrap;}'
+    + '.w127pill i{width:8px;height:8px;border-radius:50%;background:var(--c);display:inline-block;}'
+    + '.w127pill.none{background:transparent;border:1px dashed rgba(16,63,57,.25);color:var(--wa-muted);font-weight:600;}'
+    + '.w127diff{font-size:12px;line-height:1.5;}'
+    + '.w127diff .g{color:#1d6b5d;}'
+    + '.w127diff .l{color:' + FLAG + ';}'
+    + '.w127diff .s{color:var(--wa-muted);}'
+    + '.w127warn{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.5;padding:10px 12px;border-radius:12px;background:rgba(179,64,47,.07);margin:0 0 8px;}'
+    + '.w127warn .w127i{color:' + FLAG + ';margin-top:1px;}'
+    + '.w127always{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;}'
+    + '.w127always div{display:flex;gap:9px;font-size:13px;line-height:1.5;}'
+    + '.w127always .w127i{color:' + GREEN + ';margin-top:2px;}'
+    /* the sheet */
+    + '#w127sheet{position:fixed;inset:0;z-index:2147483000;display:none;}'
+    + '#w127sheet.on{display:flex;align-items:center;justify-content:center;}'
+    + '#w127sheet .bk{position:absolute;inset:0;background:rgba(16,32,30,.46);}'
+    + '#w127sheet .pane{position:relative;background:' + CREAM + ';width:min(700px,calc(100vw - 32px));max-height:min(88vh,900px);overflow:auto;border-radius:22px;box-shadow:0 30px 90px -20px rgba(0,0,0,.45);}'
+    + '#w127sheet .ph{display:flex;align-items:flex-start;gap:12px;padding:20px 22px 12px;position:sticky;top:0;background:' + CREAM + ';z-index:1;border-bottom:1px solid rgba(16,63,57,.08);}'
+    + '#w127sheet .ph .kk{font-size:10.5px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:var(--wa-muted);}'
+    + '#w127sheet .ph h2{font-family:' + HEAD + ';font-size:28px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:3px 0 0;color:' + GREEN + ';line-height:1.05;}'
+    + '#w127sheet .ph h2::after{display:none;}'
+    + '#w127sheet .ph .sp{flex:1;}'
+    + '#w127sheet .xb{border:none;background:rgba(16,63,57,.07);width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:' + GREEN + ';flex:none;}'
+    + '#w127sheet .pb{padding:16px 22px 18px;display:flex;flex-direction:column;gap:14px;}'
+    + '#w127sheet .pf{display:flex;gap:8px;align-items:center;padding:12px 22px 18px;position:sticky;bottom:0;background:' + CREAM + ';border-top:1px solid rgba(16,63,57,.08);}'
+    + '#w127sheet .pf .sp{flex:1;}'
+    + '#w127sheet h4{font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 8px;}'
+    + '#w127sheet p{font-size:13.5px;line-height:1.55;margin:0;}'
+    + '#w127sheet .grp{margin:0 0 10px;}'
+    + '#w127sheet .grp small{display:block;font-size:11px;font-weight:700;color:var(--wa-muted);letter-spacing:.6px;text-transform:uppercase;margin:0 0 5px;}'
+    + '.w127tags{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '.w127tags span{font-size:12.5px;border-radius:9px;padding:5px 9px;background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.12);display:inline-flex;align-items:center;gap:5px;}'
+    + '.w127tags span.lead{background:rgba(220,165,39,.16);border-color:rgba(220,165,39,.45);}'
+    + '.w127tags span.off{color:var(--wa-muted);background:transparent;border-style:dashed;}'
+    + '.w127tags span .w127i{width:13px;height:13px;color:' + GREEN + ';}'
+    + '#w127sheet label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:700;color:' + GREEN + ';}'
+    + '#w127sheet input[type=text],#w127sheet textarea{font-family:' + BODY + ';font-size:13.5px;padding:9px 11px;border:1px solid rgba(16,63,57,.2);border-radius:10px;background:#fff;color:' + INK + ';}'
+    + '#w127sheet textarea{min-height:120px;resize:vertical;line-height:1.5;}'
+    + '#w127sheet .err{color:' + FLAG + ';font-size:12.5px;font-weight:600;}'
+    + '#w127sheet .chg{display:flex;flex-direction:column;gap:0;border:1px solid rgba(16,63,57,.1);border-radius:12px;overflow:hidden;background:#fff;}'
+    + '#w127sheet .chg div{padding:9px 12px;border-top:1px solid rgba(16,63,57,.06);font-size:13px;line-height:1.45;}'
+    + '#w127sheet .chg div:first-child{border-top:none;}'
+    + '#w127sheet .chg b{font-weight:700;}'
+    + '#w127sheet .chk{flex-direction:row;align-items:center;gap:9px;font-size:13px;font-weight:600;color:' + INK + ';}'
+    + '#w127sheet .chk input{accent-color:' + GREEN + ';width:16px;height:16px;}'
+    /* the People and access column */
+    + 'select.w127acc{max-width:200px;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .tab,body nav.wa-nav #tabBar .w42d.w127flat > .w116chev{display:none !important;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .w42sub{display:flex !important;flex-direction:column;padding:0 !important;flex:0 0 100%;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .w42sub > :not(.tab){display:none !important;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .w42sub .tab.w116tool{display:flex !important;align-items:center;gap:9px;padding:7px 2px 7px 12px !important;font-size:13.2px;font-weight:500;color:var(--wa-text);border-radius:10px;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .w42sub .tab.w116tool .tabdot{display:inline-block !important;flex:0 0 auto;}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat > .w42sub .tab.w116tool:hover{background:rgba(16,63,57,.05);}'
+    + 'body nav.wa-nav #tabBar .w42d.w127flat:hover{background:none;}'
+    + '.w127mini{font-size:11.5px;color:var(--wa-muted);margin-top:3px;}'
+    + '@media (max-width:1100px){.w127grid{grid-template-columns:repeat(2,minmax(0,1fr));}.w127top{grid-template-columns:1fr;}}'
+    + '@media (max-width:720px){.w127grid{grid-template-columns:1fr;}.w127how{grid-template-columns:1fr;}.w127always{grid-template-columns:1fr;}.w127ppl .hide{display:none;}.w127sec h2{font-size:22px;}#w127sheet .pane{width:calc(100vw - 16px);max-height:92vh;border-radius:18px;}#w127sheet .ph,#w127sheet .pb,#w127sheet .pf{padding-left:16px;padding-right:16px;}.w127tbl th.pg,.w127tbl td.pg{min-width:160px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- state ---------- */
+  var A = { profiles: [], byKey: {}, settings: {}, people: [], loaded: false, loading: null, edits: {}, filter: 'change', open: {}, sheet: null, busy: false };
+
+  function applyProfiles(rows) {
+    A.profiles = (rows || []).slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+    A.byKey = {}; A.profiles.forEach(function (p) { if (!p.pages || typeof p.pages !== 'object') p.pages = {}; if (!Array.isArray(p.can)) p.can = []; A.byKey[p.key] = p; });
+  }
+  async function load(force) {
+    if (A.loading) return A.loading;
+    if (A.loaded && !force) return;
+    A.loading = (async function () {
+      try {
+        var r = await Promise.all([
+          db.from('hub_access_profiles').select('*').order('sort'),
+          db.from('hub_access_settings').select('*').eq('id', 1)
+        ]);
+        if (r[0] && !r[0].error) applyProfiles(r[0].data || []);
+        A.settings = (r[1] && r[1].data && r[1].data[0]) || A.settings || {};
+        A.loaded = true;
+      } catch (e) { /* keep what we had: nobody changes without the profiles */ }
+      A.loading = null;
+    })();
+    return A.loading;
+  }
+  async function loadPeople() {
+    try {
+      var r = await db.from('team_members').select('id,name,email,department,role,active').order('name');
+      A.people = (r && r.data) || [];
+    } catch (e) { A.people = A.people || []; }
+  }
+
+  /* ---------- who has what (the same rules as wa_page_ok in the database) ---------- */
+  function rowOf(email) { email = lower(email); return rolesAll().filter(function (r) { return lower(r.email) === email; })[0] || null; }
+  function handPicked(row) { return !!(row && Array.isArray(row.tabs) && row.tabs.length); }
+  function isTeam(p) { return !!(p && p.tier === 'member'); }
+  function profileOf(row) {
+    if (!row || !row.profile) return null;
+    var p = A.byKey[row.profile]; if (!p) return null;
+    if (row.role === 'admin' || row.role === 'blocked' || handPicked(row)) return null;
+    if ((RANK[row.role] == null ? -1 : RANK[row.role]) < RANK[p.tier]) return null;
+    return p;
+  }
+  /* the profile that shapes my menu: mine, or the board profile for directors signed in without a staff row */
+  function myProfile() {
+    if (!A.loaded) return null;
+    var m = mine(); if (!m) return null;
+    var row = rowOf(myEmail());
+    if (row) return profileOf(row);
+    if (boardMode() && A.byKey.board) return A.byKey.board;
+    return null;
+  }
+  function leadRole(role) { return role === 'leader' || role === 'admin'; }
+  function valueOf(p, tab) { var v = p && p.pages ? p.pages[tab] : undefined; return v === 'all' || v === 'lead' || v === 'none' ? v : undefined; }
+  function pagesFor(p, lead) {
+    var out = [];
+    Object.keys(p.pages || {}).forEach(function (t) { var v = p.pages[t]; if (v === 'all' || (v === 'lead' && lead)) out.push(t); });
+    if (DEPTS.some(function (d) { return out.indexOf(d) >= 0; }) && out.indexOf('team') < 0) out.push('team');
+    return out;
+  }
+  function knownTabs() {
+    var t = [];
+    try { t = (typeof WA40_TABS !== 'undefined' ? WA40_TABS : []).slice(); } catch (e) { t = []; }
+    if (t.indexOf('adminpanel') < 0) t.push('adminpanel');
+    GROUPS.forEach(function (g) { g[1].forEach(function (x) { if (t.indexOf(x) < 0) t.push(x); }); });
+    return t;
+  }
+  /* pages the Hub has that no profile decides yet (a release added them) */
+  function undecided() {
+    return knownTabs().filter(function (t) { return t !== 'team' && A.profiles.some(function (p) { return valueOf(p, t) === undefined; }); });
+  }
+  function boardPerson() { try { var s = window.w126 && window.w126.state ? window.w126.state() : null; return !!(s && s.me && s.me.board); } catch (e) { return false; } }
+
+  /* what a person sees today, without a profile (the classic rules and the additions later waves made) */
+  function defaultsFor(role) { try { return ((typeof WA40_DEFAULTS !== 'undefined' && WA40_DEFAULTS[role]) || (typeof WA40_DEFAULTS !== 'undefined' && WA40_DEFAULTS.member) || []).slice(); } catch (e) { return []; } }
+  function classicPages(row, email) {
+    var role = row ? row.role : (/@welfareavenue\.com$/.test(lower(email)) ? 'member' : 'viewer');
+    if (role === 'blocked') return [];
+    var a = handPicked(row) ? row.tabs.slice() : defaultsFor(role);
+    function add(t) { if (a.indexOf(t) < 0) a.push(t); }
+    if (role !== 'viewer') { add('calendar'); add('photos'); }
+    if (a.indexOf('marketing') >= 0) { add('socialstats'); add('contentcal'); }
+    if (a.indexOf('fundraising') >= 0 || a.indexOf('finances') >= 0) add('fundevents');
+    if (leadRole(role)) { add('governance'); add('committees'); }
+    if (role !== 'admin') a = a.filter(function (t) { return t !== 'adminpanel'; });
+    return a;
+  }
+  function profilePages(key, lead, row, email) {
+    var p = A.byKey[key]; if (!p) return classicPages(row, email);
+    if (p.tier === 'admin') return knownTabs();
+    var out = pagesFor(p, lead || p.tier === 'leader');
+    classicPages(row, email).forEach(function (t) { if (valueOf(p, t) === undefined && out.indexOf(t) < 0 && t !== 'team') out.push(t); });
+    return out;
+  }
+  function roleFor(key, lead) { var p = A.byKey[key]; if (!p) return 'member'; if (p.tier === 'admin') return 'admin'; if (p.tier === 'leader') return 'leader'; if (p.tier === 'viewer') return 'viewer'; return lead ? 'leader' : 'member'; }
+
+  /* ---------- the proposal ---------- */
+  function teamProfile(dept) { return A.profiles.filter(function (p) { return isTeam(p) && p.team === dept; })[0] || null; }
+  function leadTitle(t) { return /\b(lead|co-lead|director|co-director|head|manager|chair)\b/i.test(String(t || '')); }
+  function suggestFor(x) {
+    if (!x.email) return null;
+    var row = x.row, role = row ? row.role : null;
+    if (role === 'blocked') return null;
+    if (FOUNDERS.indexOf(x.email) >= 0 || role === 'admin') return { key: 'admin', lead: false, why: role === 'admin' ? 'Admin today' : 'Founder' };
+    if (x.dept === 'board') return A.byKey.board ? { key: 'board', lead: false, why: 'On the board, not on the staff team' } : null;
+    var tp = teamProfile(x.dept); if (!tp) return null;
+    if (role === 'viewer') return null;
+    return { key: tp.key, lead: role === 'leader', why: (role === 'leader' ? 'Leads today, ' : '') + 'on the ' + deptLabel(x.dept) + ' roster' };
+  }
+  function people() {
+    var out = [], seen = {};
+    (A.people || []).forEach(function (m) {
+      var em = lower(m.email);
+      var x = { id: m.id, name: m.name || em.split('@')[0], title: m.role || '', dept: m.department || '', email: em, active: m.active !== false, row: em ? rowOf(em) : null };
+      if (em) seen[em] = 1;
+      out.push(x);
+    });
+    rolesAll().forEach(function (r) { var em = lower(r.email); if (em && !seen[em]) { seen[em] = 1; out.push({ id: null, name: nameFromEmail(em), title: r.note || '', dept: '', email: em, active: true, row: r, noRoster: true }); } });
+    out.forEach(function (x) {
+      x.role = x.row ? x.row.role : (x.email ? (/@welfareavenue\.com$/.test(x.email) ? 'member' : 'viewer') : '');
+      x.assigned = x.row && x.row.profile && A.byKey[x.row.profile] && !handPicked(x.row) && x.row.role === roleFor(x.row.profile, x.row.role === 'leader') ? A.byKey[x.row.profile] : null;
+      /* an admin is on the Admin profile, unless someone hand-picked their pages */
+      if (!x.assigned && x.row && x.row.role === 'admin' && !handPicked(x.row) && A.byKey.admin) x.assigned = A.byKey.admin;
+      x.current = profileOf(x.row);
+      x.sug = suggestFor(x);
+      x.today = x.email ? classicPages(x.row, x.email) : [];
+      if (x.current) x.today = profilePages(x.current.key, leadRole(x.role), x.row, x.email);
+      x.next = x.sug ? profilePages(x.sug.key, x.sug.lead, x.row, x.email) : null;
+      x.same = !!(x.sug && x.assigned && x.assigned.key === x.sug.key && x.role === roleFor(x.sug.key, x.sug.lead));
+      x.gain = x.next ? x.next.filter(function (t) { return x.today.indexOf(t) < 0 && t !== 'team'; }) : [];
+      x.lose = x.next ? x.today.filter(function (t) { return x.next.indexOf(t) < 0 && t !== 'team' && t !== 'adminpanel'; }) : [];
+      x.hasRow = !!x.row;
+    });
+    return out;
+  }
+  function nameFromEmail(em) { return String(em || '').split('@')[0].split(/[._-]+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
+  function labelOf(t) { return LABEL[t] || (function () { try { var b = document.querySelector('#tabBar .tab[data-tab="' + t + '"]'); return b ? (b.textContent || '').trim() : t; } catch (e) { return t; } })(); }
+  function profileName(key, lead) { var p = A.byKey[key]; if (!p) return key || ''; return p.label + (isTeam(p) && lead ? ' (lead)' : ''); }
+
+  /* ---------- the menu follows my profile ---------- */
+  var MINE_FN = null, MINE_ENF = null;
+  function shape(a) {
+    var p = myProfile(); if (!p) return a;
+    var role = myRole();
+    if (role === 'blocked') return a;
+    var out = pagesFor(p, leadRole(role) || p.tier === 'leader');
+    /* a page no profile decides yet follows its built-in gate until an admin decides */
+    a.forEach(function (t) { if (valueOf(p, t) === undefined && t !== 'team' && out.indexOf(t) < 0) out.push(t); });
+    /* directors keep the board pages whatever their staff profile */
+    if (boardPerson()) ['governance', 'committees'].forEach(function (t) { if (out.indexOf(t) < 0) out.push(t); });
+    return out;
+  }
+  function tabOk(t) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(t) >= 0; } catch (e) { return true; } }
+  /* after every enforcement: with a profile, the HR centre follows the profile (not the old hard-coded list),
+     the donations tile follows the ledger, and empty menu groups close up */
+  function afterEnforce() {
+    var p = myProfile();
+    try { document.body.classList.toggle('w127nofin', !!p && !tabOk('finances')); } catch (e) { /* fine */ }
+    rowsFix();
+    if (!p) return;
+    try {
+      var hr = document.querySelector('#tabBar .tab[data-tab="hrcentre"]');
+      if (hr) { var want = tabOk('hrcentre') ? '' : 'none'; if (hr.style.display !== want) hr.style.display = want; }
+      document.querySelectorAll('#tabBar .tab-group').forEach(function (g) {
+        var any = false; g.querySelectorAll('.tab').forEach(function (b) { if (b.style.display !== 'none') any = true; });
+        var hd = g.querySelector('.tab-group-h'); if (hd) { var w = any ? '' : 'none'; if (hd.style.display !== w) hd.style.display = w; }
+      });
+    } catch (e) { /* fine */ }
+  }
+  /* a team row whose page is hidden: with no visible tool it closes up (it used to leave a lone chevron);
+     with tools inside (the board's Analytics and Content calendar sit in the Marketing row) they show as plain items */
+  function rowsFix() {
+    try {
+      document.querySelectorAll('#tabBar .w42d').forEach(function (row) {
+        var main = row.querySelector(':scope > .tab'); if (!main) return;
+        var tools = Array.prototype.some.call(row.querySelectorAll('.w42sub .tab'), function (b) { return b.style.display !== 'none'; });
+        var hidden = main.style.display === 'none';
+        var flat = hidden && tools;
+        if (row.classList.contains('w127flat') !== flat) row.classList.toggle('w127flat', flat);
+        if (hidden && !tools) { if (row.style.display !== 'none') { row.style.display = 'none'; row.setAttribute('data-w127hid', '1'); } }
+        else if (row.getAttribute('data-w127hid') === '1') { row.style.display = ''; row.removeAttribute('data-w127hid'); }
+      });
+    } catch (e) { /* fine */ }
+  }
+  var rowsT = null;
+  function watchRows() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.__w127rows) return;
+    bar.__w127rows = true;
+    try { new MutationObserver(function () { clearTimeout(rowsT); rowsT = setTimeout(rowsFix, 220); }).observe(bar, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  /* other waves wrap these two after load; keep ours outermost */
+  function wrapAllowed() {
+    try {
+      if (typeof wa40Allowed === 'function' && wa40Allowed !== MINE_FN) {
+        var inner = wa40Allowed;
+        var fn = function () { var a = inner.apply(this, arguments) || []; try { return shape(a); } catch (e) { return a; } };
+        Object.keys(inner).forEach(function (k) { try { fn[k] = inner[k]; } catch (e) { /* fine */ } });
+        MINE_FN = fn; wa40Allowed = fn;
+      }
+      if (typeof wa40Enforce === 'function' && wa40Enforce !== MINE_ENF) {
+        var innerE = wa40Enforce;
+        var fe = function () { var out = innerE.apply(this, arguments); try { afterEnforce(); } catch (e) { /* fine */ } return out; };
+        MINE_ENF = fe; wa40Enforce = fe;
+      }
+    } catch (e) { /* fine */ }
+  }
+  function enforce() {
+    wrapAllowed();
+    try { if (typeof wa40Enforce === 'function') wa40Enforce(); else afterEnforce(); } catch (e) { /* fine */ }
+  }
+  /* a page I no longer have (a bookmark, or the first paint before my profile loaded) goes back to the dashboard */
+  function recheck() {
+    try {
+      var root = decodeURIComponent(location.hash || '').replace(/^#/, '').split('/')[0];
+      if (!root || !myProfile() || root === 'team') return;
+      /* the pages wave40 always lets through stay as they were */
+      if (['needsme', 'personpage', 'projectpage', 'volunteering', 'importantinfo'].indexOf(root) >= 0) return;
+      if (knownTabs().indexOf(root) < 0) return;
+      if (!tabOk(root) && typeof showPanel === 'function') showPanel(root);
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- Admin > Access profiles ---------- */
+  function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function tierChip(p) {
+    if (p.tier === 'admin') return '<span class="w127tier admin">Everything</span>';
+    if (p.tier === 'leader') return '<span class="w127tier exec">All but Admin</span>';
+    if (p.tier === 'viewer') return '<span class="w127tier board">Board</span>';
+    return '<span class="w127tier">Team, lead option</span>';
+  }
+  function cellVal(p, t) { var e = A.edits[p.key]; if (e && e[t] !== undefined) return e[t]; return valueOf(p, t); }
+  function editCount() { var n = 0; Object.keys(A.edits).forEach(function (k) { n += Object.keys(A.edits[k]).length; }); return n; }
+  function effPages(p, lead) {
+    var out = [];
+    knownTabs().forEach(function (t) { if (t === 'team') return; var v = cellVal(p, t); if (v === 'all' || (v === 'lead' && lead)) out.push(t); });
+    return out;
+  }
+  function holders(key) { return (A.cache || []).filter(function (x) { return x.assigned && x.assigned.key === key; }); }
+  function proposed(key) { return (A.cache || []).filter(function (x) { return x.sug && x.sug.key === key && !x.same && x.hasRow; }); }
+  function groupsWithNew() {
+    var seen = {}, gs = GROUPS.map(function (g) { g[1].forEach(function (t) { seen[t] = 1; }); return [g[0], g[1].slice()]; });
+    var extra = knownTabs().filter(function (t) { return !seen[t] && t !== 'team'; });
+    if (extra.length) gs.unshift(['New pages', extra]);
+    return gs;
+  }
+
+  function topHtml() {
+    var all = (A.cache || []).filter(function (x) { return x.email && x.role !== 'blocked' && x.hasRow; });
+    var on = all.filter(function (x) { return !!x.assigned; }).length;
+    var todo = (A.cache || []).filter(function (x) { return x.sug && !x.same && x.hasRow; }).length;
+    var explicit = all.filter(function (x) { return x.row && x.row.profile; }).length;
+    var how = [
+      ['people', 'One profile each', 'Nine profiles: one for each team, the board, executives and admins. Pick it here or in People and access.'],
+      ['key', 'Leads get a little more', 'A team profile has a lead option: Agendas, Activity, the HR centre, the board pages, and inviting people into their own team.'],
+      ['lock', 'The database backs it up', 'The finances and the board pages follow the profile in the database, not only the menu. The rest of the Hub stays open to the team, as it is today.']
+    ];
+    var left = '<div class="w127box"><p class="lead">Everyone on the Hub can have one access profile. It decides which pages they see and, for the finances and the board, what the database lets them read. Each card below says in plain words what a profile gives, and the table compares every page.</p>'
+      + '<div class="w127how">' + how.map(function (h) { return '<div><b>' + I(h[0]) + E(h[1]) + '</b><span>' + E(h[2]) + '</span></div>'; }).join('') + '</div></div>';
+    var s = A.settings || {};
+    var right = '<div class="w127box w127stat"><div class="kk">Where it stands</div>'
+      + '<div class="big">' + on + '<small>of ' + all.length + ' people on a profile</small></div>'
+      + '<p>' + (explicit ? (todo ? plural(todo, 'person still differs', 'people still differ') + ' from the proposal.' : 'Everyone matches the proposal.') : (on ? 'Admins count as the Admin profile (it means everything). ' : '') + 'Nobody else has a profile yet, so nobody\'s access has changed. Check the proposal below, then apply it.') + (s.applied_at ? ' Last applied ' + E(String(s.applied_at).slice(0, 10)) + (s.applied_by ? ' by ' + E(String(s.applied_by).split('@')[0].replace('.', ' ')) : '') + '.' : '') + '</p>'
+      + '<div class="row">' + (todo ? '<a class="w127btn gold sm" data-w127applyall="1">' + I('check') + 'Apply the proposal (' + todo + ')</a>' : '') + '<a class="w127btn ghost sm" data-w127jump="w127people">' + I('people') + 'See who gets what</a></div>'
+      + '<label class="sw"><input type="checkbox" data-w127auto="1"' + (s.auto_profile ? ' checked' : '') + '> New people get their team\'s profile automatically</label></div>';
+    return '<div class="w127top">' + left + right + '</div>';
+  }
+  function bannerHtml() {
+    var u = undecided(); if (!u.length) return '';
+    return '<div class="w127banner">' + I('alert') + '<div><b>' + plural(u.length, 'new page has', 'new pages have') + ' no decision yet:</b> ' + E(listJoin(u.map(labelOf))) + '. Until you decide, ' + (u.length === 1 ? 'it follows its' : 'they follow their') + ' built-in access (everyone, leads or admins). Decide in the table: each profile gets it, its leads do, or nobody.</div><span class="sp"></span><a class="w127btn sm" data-w127jump="w127mxsec">Decide now</a></div>';
+  }
+  function cardHtml(p) {
+    var team = isTeam(p), mem = effPages(p, p.tier === 'leader' || p.tier === 'admin'), lead = team ? effPages(p, true).filter(function (t) { return mem.indexOf(t) < 0; }) : [];
+    var none = knownTabs().filter(function (t) { return t !== 'team' && mem.indexOf(t) < 0 && lead.indexOf(t) < 0 && cellVal(p, t) !== undefined; });
+    var hs = holders(p.key), pr = proposed(p.key);
+    var out = '';
+    if (p.tier === 'admin') out = '<b>Nothing is left out.</b>';
+    else {
+      var nm = none.map(labelOf);
+      out = (nm.length ? '<b>Leaves out:</b> ' + E(nm.length > 7 ? nm.slice(0, 7).join(', ') + ' and ' + (nm.length - 7) + ' more' : listJoin(nm)) + '.' : '<b>Leaves nothing out.</b>')
+        + (lead.length ? '<br><b>Leads also get:</b> ' + E(listJoin(lead.map(labelOf))) + '.' : '');
+    }
+    var who = hs.length
+      ? hs.slice(0, 6).map(function (x) { return '<span class="w127av" title="' + E(x.name) + '">' + E(initials(x.name)) + '</span>'; }).join('') + '<span class="n">' + E(hs.length <= 3 ? listJoin(hs.map(function (x) { return String(x.name).split(' ')[0]; })) : plural(hs.length, 'person', 'people')) + '</span>'
+      : '<span>' + (pr.length ? 'Nobody yet. Proposed for ' + plural(pr.length, 'person', 'people') + '.' : 'Nobody yet.') + '</span>';
+    return '<div class="w127box w127pc" id="w127pc-' + E(p.key) + '" style="--c:' + E(p.color || GREEN) + '"><div class="bar"></div><div class="in">'
+      + '<div class="hd"><h3>' + E(p.label) + '</h3>' + tierChip(p) + '</div>'
+      + '<p class="sum">' + E(p.summary || '') + '</p>'
+      + '<div class="w127nums"><span><b>' + mem.length + '</b> pages</span>' + (lead.length ? '<span><b>+' + lead.length + '</b> for leads</span>' : '') + (hs.length ? '<span><b>' + hs.length + '</b> on it</span>' : '') + '</div>'
+      + '<ul class="w127can">' + (p.can || []).slice(0, 5).map(function (c) { return '<li>' + I('check') + '<span>' + E(c) + '</span></li>'; }).join('') + '</ul>'
+      + '<div class="w127out">' + out + '</div>'
+      + '<div class="w127who">' + who + '</div></div>'
+      + '<div class="ft"><a class="w127lnk" data-w127prof="' + E(p.key) + '">Every page ' + I('chev') + '</a><span class="sp"></span>' + (amAdmin() ? '<a class="w127btn ghost sm" data-w127pedit="' + E(p.key) + '">' + I('pen') + 'Edit the words</a>' : '') + '</div></div>';
+  }
+  function matrixHtml() {
+    var ps = A.profiles, adm = amAdmin(), u = undecided();
+    var h = '<div class="w127mx"><table class="w127tbl"><thead><tr><th class="pg">Page</th>'
+      + ps.map(function (p) { return '<th style="--c:' + E(p.color || GREEN) + '"><i></i>' + E(SHORT[p.key] || p.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    groupsWithNew().forEach(function (g) {
+      h += '<tr class="gp"><td class="pg">' + E(g[0]) + '</td><td colspan="' + ps.length + '"></td></tr>';
+      g[1].forEach(function (t) {
+        var isNew = u.indexOf(t) >= 0;
+        h += '<tr' + (isNew ? ' class="new"' : '') + ' data-w127row="' + E(t) + '"><td class="pg"><b>' + E(labelOf(t)) + '</b>' + (LOCK[t] ? '<span class="lk" title="' + E(LOCK[t]) + '">' + I('lock') + '</span>' : '') + (isNew ? '<em>new</em>' : '') + '</td>';
+        ps.forEach(function (p) {
+          var v = cellVal(p, t), ed = adm && p.tier !== 'admin', ch = A.edits[p.key] && A.edits[p.key][t] !== undefined;
+          var inner = v === 'all' ? '<span class="all" title="Everyone with this profile"></span>' : v === 'lead' ? '<span class="lead">Leads</span>' : v === 'none' ? '<span class="none" title="Nobody with this profile"></span>' : '<span class="und" title="Not decided yet">?</span>';
+          h += '<td><button type="button" class="w127c' + (ed ? ' ed' : '') + (ch ? ' ch' : '') + '"' + (ed ? ' data-w127cell="' + E(p.key) + '|' + E(t) + '"' : ' tabindex="-1"') + ' aria-label="' + E(labelOf(t) + ' for ' + p.label + ': ' + (v === 'all' ? 'everyone' : v === 'lead' ? 'leads only' : v === 'none' ? 'nobody' : 'not decided')) + '">' + inner + '</button></td>';
+        });
+        h += '</tr>';
+      });
+    });
+    h += '</tbody></table></div>';
+    h += '<div class="w127leg"><span><span class="w127c"><span class="all"></span></span>Everyone with the profile</span><span><span class="w127c"><span class="lead">Leads</span></span>Only its leads</span><span><span class="w127c"><span class="none"></span></span>Nobody</span><span>' + I('lock') + 'The database enforces it too</span>' + (adm ? '<span>Admins: click a cell to change it. Admin always has everything.</span>' : '') + '</div>';
+    var n = editCount();
+    if (n) h += '<div class="w127save">' + I('pen') + '<span>' + plural(n, 'change', 'changes') + ' not saved yet. They apply to everyone with those profiles the next time they open the Hub.</span><span class="sp"></span><a class="w127btn ghost sm" data-w127undo="1">' + I('undo') + 'Undo</a><a class="w127btn gold sm" data-w127save="1">' + I('check') + 'Save for everyone</a></div>';
+    return h;
+  }
+  function lookHtml() {
+    var xs = A.cache || [], out = [];
+    var gone = xs.filter(function (x) { return x.row && x.role !== 'blocked' && x.active === false; });
+    if (gone.length) out.push('<b>' + E(listJoin(gone.map(function (x) { return x.name; }))) + '</b> ' + (gone.length === 1 ? 'is' : 'are') + ' marked as no longer active on the roster but still ' + (gone.length === 1 ? 'has' : 'have') + ' Hub access (' + E(listJoin(gone.map(function (x) { return x.role; }).filter(function (v, i, a) { return a.indexOf(v) === i; }))) + '). Remove it in People and access if they have left.');
+    var off = xs.filter(function (x) { return x.noRoster && x.role !== 'blocked'; });
+    if (off.length) out.push('<b>' + E(listJoin(off.map(function (x) { return x.email; }))) + '</b> ' + (off.length === 1 ? 'has' : 'have') + ' Hub access but ' + (off.length === 1 ? 'is' : 'are') + ' not on the roster, so the Hub cannot tell which team ' + (off.length === 1 ? 'they are' : 'they are') + ' on.');
+    var admins = xs.filter(function (x) { return x.role === 'admin' && x.active !== false; });
+    if (admins.length > 5) out.push('<b>' + admins.length + ' people are admins.</b> Admin is for the people who run the Hub itself (access, settings, AI models). Consider Executive, or a team profile with the lead option, for the others: ' + E(listJoin(admins.filter(function (x) { return FOUNDERS.indexOf(x.email) < 0; }).map(function (x) { return String(x.name).split(' ')[0]; }))) + '.');
+    var ld = xs.filter(function (x) { return x.sug && isTeam(A.byKey[x.sug.key]) && !x.sug.lead && leadTitle(x.title) && x.email; });
+    if (ld.length) out.push('<b>' + E(listJoin(ld.map(function (x) { return String(x.name).split(' ')[0]; }))) + '</b> ' + (ld.length === 1 ? 'has a lead title' : 'have lead titles') + ' but ' + (ld.length === 1 ? 'is' : 'are') + ' proposed as team members, because that is their access today. Tick the lead option in People and access if they run their team.');
+    var mis = xs.filter(function (x) { return x.assigned && isTeam(x.assigned) && x.dept && x.assigned.team !== x.dept; });
+    if (mis.length) out.push('<b>' + E(listJoin(mis.map(function (x) { return String(x.name).split(' ')[0]; }))) + '</b>: the profile names a different team from the roster. Check which one is right.');
+    return out.length ? out.map(function (t) { return '<div class="w127warn">' + I('alert') + '<div>' + t + '</div></div>'; }).join('') : '';
+  }
+  function diffHtml(x) {
+    if (!x.email) return '<span class="w127diff s">Needs an email before they can sign in.</span>';
+    if (x.role === 'blocked') return '<span class="w127diff s">Removed from the Hub.</span>';
+    if (!x.sug) return '<span class="w127diff s">No proposal: keep as is.</span>';
+    if (x.same) return '<span class="w127diff s">Already on it.</span>';
+    var g = x.gain.map(labelOf), l = x.lose.map(labelOf);
+    var t = (g.length ? '<span class="g">Gains ' + E(listJoin(g)) + '.</span> ' : '') + (l.length ? '<span class="l">Loses ' + E(listJoin(l)) + '.</span>' : '');
+    if (!g.length && !l.length) t = '<span class="s">Same pages as today.</span>';
+    if (!x.hasRow) t += ' <span class="s">Gets it when they first sign in' + ((A.settings || {}).auto_profile ? '' : ', once new people get their team\'s profile automatically') + '.</span>';
+    return '<span class="w127diff">' + t + '</span>';
+  }
+  function pill(p, lead) { if (!p) return ''; return '<span class="w127pill" style="--c:' + E(p.color || GREEN) + '"><i></i>' + E(p.label + (isTeam(p) && lead ? ' (lead)' : '')) + '</span>'; }
+  function todayHtml(x) {
+    if (!x.email) return '<span class="w127pill none">No access</span>';
+    if (x.role === 'blocked') return '<span class="w127pill none">Removed</span>';
+    if (x.assigned) return pill(x.assigned, x.role === 'leader');
+    var t = x.row ? (handPicked(x.row) ? 'Hand-picked, ' + x.row.tabs.length + ' pages' : 'Classic: ' + x.role) : (x.role === 'member' ? 'Classic: member (not signed in yet)' : 'No access yet');
+    return '<span class="w127pill none">' + E(t) + '</span>';
+  }
+  function peopleHtml() {
+    var xs = (A.cache || []).filter(function (x) { return x.email || x.active; });
+    var C = {
+      change: xs.filter(function (x) { return x.sug && !x.same; }),
+      none: xs.filter(function (x) { return x.email && !x.assigned && x.role !== 'blocked'; }),
+      all: xs
+    };
+    var f = C[A.filter] ? A.filter : 'change';
+    var rows = C[f].slice().sort(function (a, b) { return String(a.dept).localeCompare(String(b.dept)) || String(a.name).localeCompare(String(b.name)); });
+    var chips = [['change', 'Proposed changes'], ['none', 'No profile yet'], ['all', 'Everyone']];
+    var h = '<div class="w127box">' + lookHtml()
+      + '<div class="w127chips">' + chips.map(function (c) { return '<a data-w127f="' + c[0] + '"' + (f === c[0] ? ' class="on"' : '') + '>' + E(c[1]) + '<b>' + C[c[0]].length + '</b></a>'; }).join('') + '</div>';
+    if (!rows.length) return h + '<p class="w127empty">' + (f === 'change' ? 'Everyone already matches the proposal.' : 'Nobody here.') + '</p></div>';
+    h += '<table class="w127ppl"><thead><tr><th>Person</th><th class="hide">Today</th><th>Proposed</th><th>What changes</th><th></th></tr></thead><tbody>';
+    rows.forEach(function (x) {
+      var p = x.sug ? A.byKey[x.sug.key] : null;
+      h += '<tr><td><b>' + E(x.name) + '</b><span class="mut">' + E([x.title, deptLabel(x.dept)].filter(Boolean).join(' \u00b7 ')) + '</span></td>'
+        + '<td class="hide">' + todayHtml(x) + '</td>'
+        + '<td>' + (p ? pill(p, x.sug.lead) + '<span class="mut">' + E(x.sug.why) + '</span>' : '<span class="w127diff s">Keep as is</span>') + '</td>'
+        + '<td>' + diffHtml(x) + '</td>'
+        + '<td>' + (amAdmin() && x.sug && !x.same && x.hasRow ? '<a class="w127btn ghost sm" data-w127apply="' + E(x.email) + '">Apply</a>' : '') + '</td></tr>';
+    });
+    return h + '</tbody></table></div>';
+  }
+  function alwaysHtml() {
+    var hr = []; (A.hrList || []).forEach(function (e) { var x = (A.cache || []).filter(function (y) { return y.email === e; })[0]; var n = x && !x.noRoster ? String(x.name).split(' ')[0] : nameFromEmail(e).split(' ')[0]; if (hr.indexOf(n) < 0) hr.push(n); });
+    var items = [
+      ['shield', 'Admins see everything, and they are the only ones who can change access.'],
+      ['lock', 'Everyone\'s time off, discipline and policy sign-offs stay with the HR access list' + (hr.length ? ' (' + listJoin(hr) + ')' : '') + ', whatever the profile.'],
+      ['eye', 'Private and leadership meeting notes and transcripts stay with the people they name.'],
+      ['people', 'Each agenda is visible to the person who made it and the people invited.'],
+      ['key', 'Directors see the board pages whatever their staff profile. Board items marked confidential stay with the board.'],
+      ['check', 'Everyone sees their own things: their tasks, requests, time off and profile.'],
+      ['pen', 'Hand-picked pages (in People and access) replace the profile for that person, and the database keeps today\'s rules for them.']
+    ];
+    return '<div class="w127box"><div class="w127always">' + items.map(function (i) { return '<div>' + I(i[0]) + '<span>' + E(i[1]) + '</span></div>'; }).join('') + '</div></div>';
+  }
+  function cardEl() {
+    var panel = document.getElementById('adminpanel'); if (!panel) return null;
+    var c = document.getElementById('w127card');
+    if (!c) { c = document.createElement('div'); c.className = 'card'; c.id = 'w127card'; c.innerHTML = '<div id="w127"></div>'; panel.appendChild(c); }
+    return c;
+  }
+  function paint() {
+    var c = cardEl(); if (!c) return;
+    var host = document.getElementById('w127'); if (!host) return;
+    if (!amAdmin()) { host.innerHTML = '<div class="w127box"><p class="w127empty">Access profiles are managed by admins. Open Your access from your profile menu to see yours.</p></div>'; return; }
+    if (!A.loaded) { host.innerHTML = '<div class="w127box"><p class="w127empty">Loading the access profiles\u2026</p></div>'; return; }
+    if (!A.profiles.length) { host.innerHTML = '<div class="w127box"><p class="w127empty">The access profiles are not set up yet.</p></div>'; return; }
+    A.cache = people();
+    var html = topHtml() + bannerHtml()
+      + '<div class="w127sec"><h2>The profiles</h2><span>What each one is for, what it lets you do, the pages it opens and what it leaves out.</span></div>'
+      + '<div class="w127grid">' + A.profiles.map(cardHtml).join('') + '</div>'
+      + '<div class="w127sec" id="w127mxsec"><h2>Every page, profile by profile</h2><span>The pages each profile opens. A lock means the database enforces it too; the other pages are hidden from the menu, and the work on them is shared with the team as today.</span></div>'
+      + matrixHtml()
+      + '<div class="w127sec" id="w127people"><h2>Who gets what</h2><span>The proposal: each person\'s team from the roster, the lead option for today\'s leads, Admin for today\'s admins and the board profile for directors who are not on staff. Nothing changes until you apply it.</span></div>'
+      + peopleHtml()
+      + '<div class="w127sec"><h2>Always true, whatever the profile</h2></div>' + alwaysHtml();
+    if (host.__h !== html) { var y = window.scrollY; host.innerHTML = html; host.__h = html; try { window.scrollTo(0, y); } catch (e) { /* fine */ } }
+  }
+  async function show() {
+    cardEl(); paint();
+    await Promise.all([load(true), loadPeople(), loadHr()]);
+    if (onAccess()) paint();
+  }
+  async function loadHr() { try { var r = await db.from('wa_hr_access').select('email'); A.hrList = ((r && r.data) || []).map(function (x) { return lower(x.email); }); } catch (e) { A.hrList = A.hrList || []; } }
+
+  /* ---------- sheets ---------- */
+  function sheetEl() { var el = document.getElementById('w127sheet'); if (!el) { el = document.createElement('div'); el.id = 'w127sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); document.body.appendChild(el); } return el; }
+  function openSheet(kind, kicker, title, body, foot) {
+    var el = sheetEl();
+    el.innerHTML = '<div class="bk" data-w127close="1"></div><div class="pane"><div class="ph"><div><div class="kk">' + E(kicker) + '</div><h2>' + E(title) + '</h2></div><span class="sp"></span><button type="button" class="xb" data-w127close="1" aria-label="Close">' + I('x') + '</button></div><div class="pb">' + body + '</div>' + (foot ? '<div class="pf">' + foot + '</div>' : '') + '</div>';
+    el.classList.add('on'); A.sheet = kind;
+  }
+  function closeSheet() { var el = document.getElementById('w127sheet'); if (el) { el.classList.remove('on'); el.innerHTML = ''; } A.sheet = null; }
+  function sheetErr(m) { var e = document.querySelector('#w127sheet .err'); if (e) e.textContent = m || ''; }
+  async function logChange(type, id, field, oldV, newV) { try { await db.from('change_log').insert({ entity_type: type, entity_id: String(id), field: field, old_value: oldV == null ? null : String(oldV).slice(0, 500), new_value: newV == null ? null : String(newV).slice(0, 500), changed_by: actor() }); } catch (e) { /* audit only */ } }
+
+  function pagesTags(p, lead) {
+    return groupsWithNew().map(function (g) {
+      var tags = g[1].map(function (t) {
+        var v = valueOf(p, t);
+        if (v === 'all' || p.tier === 'admin') return '<span>' + (LOCK[t] ? I('lock') : '') + E(labelOf(t)) + '</span>';
+        if (v === 'lead') return lead || p.tier === 'leader' ? '<span>' + (LOCK[t] ? I('lock') : '') + E(labelOf(t)) + '</span>' : '<span class="lead" title="Only for the profile\'s leads">' + E(labelOf(t)) + ' (leads)</span>';
+        if (v === undefined) return '<span class="lead" title="Not decided yet">' + E(labelOf(t)) + ' (not decided)</span>';
+        return '<span class="off">' + E(labelOf(t)) + '</span>';
+      }).join('');
+      return '<div class="grp"><small>' + E(g[0]) + '</small><div class="w127tags">' + tags + '</div></div>';
+    }).join('');
+  }
+  function openProfile(key) {
+    var p = A.byKey[key]; if (!p) return;
+    A.cache = A.cache || people();
+    var hs = holders(key), pr = proposed(key), team = isTeam(p);
+    var locks = Object.keys(LOCK).filter(function (t) { var v = valueOf(p, t); return p.tier === 'admin' || v === 'all' || v === 'lead'; });
+    var body = '<p>' + E(p.summary || '') + '</p>'
+      + '<div><h4>What it lets you do</h4><ul class="w127can" style="--c:' + E(p.color || GREEN) + '">' + (p.can || []).map(function (c) { return '<li>' + I('check') + '<span>' + E(c) + '</span></li>'; }).join('') + '</ul>' + (team && p.lead_note ? '<p style="margin-top:10px;color:#5c5a56;font-size:13px">' + E(p.lead_note) + '</p>' : '') + '</div>'
+      + '<div><h4>Its pages</h4>' + pagesTags(p, false) + '<p style="font-size:12.5px;color:#5c5a56">Dashed pages are not included' + (team ? '; gold ones are for the profile\'s leads' : '') + '. ' + I('lock') + ' means the database enforces it too.</p></div>'
+      + (locks.length ? '<div><h4>What the database adds</h4>' + locks.map(function (t) { return '<p style="font-size:13px;margin:0 0 6px"><b>' + E(labelOf(t)) + ':</b> ' + E(LOCK[t]) + '</p>'; }).join('') + '</div>' : '')
+      + '<div><h4>Who has it</h4><p>' + (hs.length ? E(listJoin(hs.map(function (x) { return x.name + (team && x.role === 'leader' ? ' (lead)' : ''); }))) + '.' : 'Nobody yet.') + (pr.length ? ' Proposed for ' + E(listJoin(pr.map(function (x) { return x.name; }))) + '.' : '') + '</p></div>';
+    var foot = (amAdmin() ? '<a class="w127btn ghost sm" data-w127pedit="' + E(key) + '">' + I('pen') + 'Edit the words</a>' : '') + '<span class="sp"></span><a class="w127btn sm" data-w127close="1">Close</a>';
+    openSheet('profile', 'Access profile', p.label, body, foot);
+  }
+  function openEdit(key) {
+    var p = A.byKey[key]; if (!p || !amAdmin()) return;
+    var body = '<form data-w127form="' + E(key) + '" onsubmit="return false">'
+      + '<label>Name<input type="text" name="label" value="' + E(p.label) + '" maxlength="60"></label>'
+      + '<label style="margin-top:12px">Who it is for<input type="text" name="summary" value="' + E(p.summary || '') + '" maxlength="220"></label>'
+      + '<label style="margin-top:12px">What it lets you do <small style="font-weight:500;color:var(--wa-muted)">one line each, the first five show on the card</small><textarea name="can">' + E((p.can || []).join('\n')) + '</textarea></label>'
+      + (isTeam(p) ? '<label style="margin-top:12px">What a lead adds<textarea name="lead_note" style="min-height:80px">' + E(p.lead_note || '') + '</textarea></label>' : '')
+      + '<p style="font-size:12.5px;color:#5c5a56;margin-top:12px">The pages themselves are set in the table: click a cell to change it.</p><div class="err"></div></form>';
+    openSheet('edit', 'Edit the words', p.label, body, '<a class="w127btn ghost sm" data-w127close="1">Cancel</a><span class="sp"></span><a class="w127btn sm" data-w127psave="' + E(key) + '">' + I('check') + 'Save</a>');
+  }
+  async function saveEdit(key) {
+    var f = document.querySelector('#w127sheet form[data-w127form]'); if (!f || A.busy) return;
+    var label = String(f.label.value || '').trim(); if (!label) { sheetErr('Give the profile a name.'); return; }
+    var patch = { label: label, summary: String(f.summary.value || '').trim(), can: String(f.can.value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 12), updated_by: myEmail(), updated_at: new Date().toISOString() };
+    if (f.lead_note) patch.lead_note = String(f.lead_note.value || '').trim();
+    A.busy = true;
+    try {
+      var r = await db.from('hub_access_profiles').update(patch).eq('key', key);
+      if (r && r.error) throw r.error;
+      Object.assign(A.byKey[key], patch);
+      logChange('access_profile', key, 'words', null, label);
+      closeSheet(); toastS('Saved'); await load(true); paint();
+    } catch (e) { sheetErr('Could not save it: ' + ((e && e.message) || 'try again')); }
+    A.busy = false;
+  }
+
+  /* the table: click a cell to cycle it; save for everyone */
+  function cycle(key, tab) {
+    var p = A.byKey[key]; if (!p || !amAdmin() || p.tier === 'admin') return;
+    var cur = cellVal(p, tab), order = isTeam(p) ? ['all', 'lead', 'none'] : ['all', 'none'];
+    var i = order.indexOf(cur), next = cur === undefined ? 'all' : order[(i + 1) % order.length];
+    A.edits[key] = A.edits[key] || {};
+    if (next === valueOf(p, tab)) delete A.edits[key][tab]; else A.edits[key][tab] = next;
+    if (!Object.keys(A.edits[key]).length) delete A.edits[key];
+    paint();
+  }
+  async function saveMatrix() {
+    if (A.busy || !amAdmin()) return;
+    var keys = Object.keys(A.edits); if (!keys.length) return;
+    A.busy = true;
+    try {
+      for (var i = 0; i < keys.length; i++) {
+        var k = keys[i], p = A.byKey[k], ed = A.edits[k], next = Object.assign({}, p.pages, ed);
+        var r = await db.from('hub_access_profiles').update({ pages: next, updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('key', k);
+        if (r && r.error) throw r.error;
+        p.pages = next;
+        logChange('access_profile', k, 'pages', null, Object.keys(ed).map(function (t) { return labelOf(t) + ': ' + (ed[t] === 'all' ? 'everyone' : ed[t] === 'lead' ? 'leads' : 'nobody'); }).join('; '));
+      }
+      A.edits = {};
+      await db.from('hub_access_settings').update({ reviewed_at: new Date().toISOString(), reviewed_by: myEmail(), updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('id', 1);
+      toastS('Saved. People see it the next time they open the Hub.');
+      await load(true); enforce(); paint();
+    } catch (e) { toastS('Could not save the changes'); }
+    A.busy = false;
+  }
+
+  /* apply the proposal to one person or everyone */
+  function openApply(list) {
+    list = (list || []).filter(function (x) { return x && x.sug && x.hasRow && !x.same; });
+    if (!list.length) { toastS('Nothing to apply'); return; }
+    var auto = (A.settings || {}).auto_profile;
+    var body = '<p>' + (list.length === 1 ? E(list[0].name) + ' moves' : plural(list.length, 'person moves', 'people move')) + ' to the proposed profile. They see the change the next time they open the Hub. You can change anyone back in People and access.</p>'
+      + '<div class="chg">' + list.map(function (x) {
+        var g = x.gain.map(labelOf), l = x.lose.map(labelOf);
+        return '<div><b>' + E(x.name) + '</b> \u2192 ' + E(profileName(x.sug.key, x.sug.lead)) + (x.row && handPicked(x.row) ? ' <span style="color:#5c5a56">(replaces hand-picked pages)</span>' : '') + '<br><span class="w127diff">' + (g.length ? '<span class="g">Gains ' + E(listJoin(g)) + '.</span> ' : '') + (l.length ? '<span class="l">Loses ' + E(listJoin(l)) + '.</span>' : '') + (!g.length && !l.length ? '<span class="s">Same pages as today.</span>' : '') + '</span></div>';
+      }).join('') + '</div>'
+      + (auto ? '' : '<label class="chk"><input type="checkbox" name="auto" checked> Also give new people their team\'s profile automatically when they join</label>')
+      + '<div class="err"></div>';
+    A.applyList = list;
+    openSheet('apply', 'Apply the proposal', list.length === 1 ? list[0].name : plural(list.length, 'person', 'people'), body, '<a class="w127btn ghost sm" data-w127close="1">Cancel</a><span class="sp"></span><a class="w127btn gold sm" data-w127doapply="1">' + I('check') + 'Apply to ' + plural(list.length, 'person', 'people') + '</a>');
+  }
+  async function doApply() {
+    var list = A.applyList || []; if (!list.length || A.busy || !amAdmin()) return;
+    var autoBox = document.querySelector('#w127sheet input[name=auto]');
+    var btn = document.querySelector('#w127sheet [data-w127doapply]');
+    A.busy = true; var done = 0, failed = [];
+    for (var i = 0; i < list.length; i++) {
+      var x = list[i], role = roleFor(x.sug.key, x.sug.lead);
+      if (btn) btn.textContent = 'Applying ' + (i + 1) + ' of ' + list.length + '\u2026';
+      try {
+        var r = await db.from('hub_roles').upsert({ email: x.email, role: role, profile: x.sug.key, tabs: null, updated_by: actor(), updated_at: new Date().toISOString() }, { onConflict: 'email' });
+        if (r && r.error) throw r.error;
+        logChange('hub_role', x.email, 'profile', x.assigned ? x.assigned.label : (x.row ? x.row.role : null), profileName(x.sug.key, x.sug.lead));
+        done++;
+      } catch (e) { failed.push(x.name); }
+    }
+    try {
+      var patch = { applied_at: new Date().toISOString(), applied_by: myEmail(), updated_by: myEmail(), updated_at: new Date().toISOString() };
+      if (autoBox && autoBox.checked) patch.auto_profile = true;
+      await db.from('hub_access_settings').update(patch).eq('id', 1);
+    } catch (e) { /* fine */ }
+    A.busy = false;
+    try { if (typeof wa40Load === 'function') await wa40Load(); } catch (e) { /* fine */ }
+    await load(true);
+    closeSheet(); enforce(); paint();
+    try { if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+    toastS(failed.length ? 'Applied to ' + done + '; could not change ' + listJoin(failed) : 'Applied to ' + plural(done, 'person', 'people'));
+  }
+  async function setAuto(on) {
+    if (!amAdmin()) return;
+    try {
+      var r = await db.from('hub_access_settings').update({ auto_profile: !!on, updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('id', 1);
+      if (r && r.error) throw r.error;
+      A.settings.auto_profile = !!on; logChange('access_profile', 'settings', 'auto_profile', String(!on), String(!!on));
+      toastS(on ? 'New people now get their team\'s profile' : 'New people keep the classic access until you pick a profile');
+    } catch (e) { toastS('Could not change it'); }
+    paint();
+  }
+
+  /* People and access: the Access column */
+  function accessCell(r) {
+    if (!A.loaded || !A.profiles.length || !amAdmin()) return null;
+    var row = rowOf(r.email) || { email: r.email, role: r.role || 'member' };
+    var cur = row.profile && A.byKey[row.profile] && !handPicked(row) ? 'p:' + row.profile + (isTeam(A.byKey[row.profile]) && row.role === 'leader' ? ':lead' : '') : 'r:' + (row.role || 'member');
+    var opts = '<optgroup label="Access profiles">';
+    A.profiles.forEach(function (p) {
+      opts += '<option value="p:' + E(p.key) + '"' + (cur === 'p:' + p.key ? ' selected' : '') + '>' + E(p.label) + '</option>';
+      if (isTeam(p)) opts += '<option value="p:' + E(p.key) + ':lead"' + (cur === 'p:' + p.key + ':lead' ? ' selected' : '') + '>' + E(p.label) + ' (lead)</option>';
+    });
+    opts += '</optgroup><optgroup label="Classic roles, no profile">' + ['admin', 'leader', 'member', 'viewer'].map(function (x) { return '<option value="r:' + x + '"' + (cur === 'r:' + x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</optgroup>';
+    return '<select class="w127acc" data-w127acc="' + E(r.email) + '">' + opts + '</select>';
+  }
+  function pagesCell(r) {
+    if (!A.loaded || !A.profiles.length) return null;
+    var row = rowOf(r.email); if (!row) return null;
+    var st = 'font-size:12px;color:#103F39;cursor:pointer;text-decoration:underline;white-space:nowrap';
+    if (handPicked(row)) return '<a data-w40t="' + E(r.email) + '" style="' + st + '">' + row.tabs.length + ' pages, hand-picked</a>' + (row.profile ? '<div class="w127mini">replaces the ' + E((A.byKey[row.profile] || {}).label || row.profile) + ' profile</div>' : '');
+    var p = profileOf(row) || (row.role === 'admin' && row.profile === 'admin' ? A.byKey.admin : null);
+    if (p) return '<a data-w127prof="' + E(p.key) + '" style="' + st + '">' + profilePages(p.key, row.role === 'leader', row, r.email).filter(function (t) { return t !== 'team'; }).length + ' pages</a><div class="w127mini"><a data-w40t="' + E(r.email) + '" style="cursor:pointer;text-decoration:underline">hand-pick instead</a></div>';
+    return null;
+  }
+  async function changeAccess(email, val) {
+    if (!amAdmin()) return;
+    var row = rowOf(email), patch = { email: email, updated_by: actor(), updated_at: new Date().toISOString() };
+    var m = /^p:([a-z0-9_-]+)(:lead)?$/.exec(val), label;
+    if (m) { patch.profile = m[1]; patch.role = roleFor(m[1], !!m[2]); patch.tabs = null; label = profileName(m[1], !!m[2]); }
+    else { patch.profile = null; patch.role = val.replace(/^r:/, ''); label = patch.role + ' (classic)'; }
+    if (FOUNDERS.indexOf(lower(email)) >= 0 && patch.role !== 'admin') { toastS('Founders stay admins'); try { if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ } return; }
+    try {
+      var r = await db.from('hub_roles').upsert(patch, { onConflict: 'email' });
+      if (r && r.error) throw r.error;
+      logChange('hub_role', email, m ? 'profile' : 'role', row ? (row.profile || row.role) : null, label);
+      toastS(email.split('@')[0] + ': ' + label);
+    } catch (e) { toastS('Could not change the access'); }
+    try { if (typeof wa40Load === 'function') await wa40Load(); } catch (e) { /* fine */ }
+    try { if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+    if (lower(email) === myEmail()) enforce();
+  }
+
+  /* Your access (the profile menu) */
+  function openMine() {
+    var p = myProfile(), role = myRole(), lead = leadRole(role);
+    var allowed = []; try { allowed = (wa40Allowed() || []).slice(); } catch (e) { allowed = []; }
+    var title = p ? p.label + (isTeam(p) && role === 'leader' ? ' (lead)' : '') : (role === 'admin' ? 'Admin' : boardMode() ? 'Board member' : 'Classic access: ' + (role || 'member'));
+    var admP = !p && role === 'admin' ? A.byKey.admin : null, show = p || admP;
+    var body = '<p>' + (show ? E(show.summary || '') + ' ' : '') + (p ? 'This is your access profile: it decides the pages you see' + (p.tier !== 'admin' ? ', and the database follows it for the finances and the board pages' : '') + '.' : role === 'admin' ? 'You are an admin: you see every page and manage access for everyone.' : 'You have the classic access for your role. An admin can give you your team\'s profile.') + '</p>'
+      + (show && show.can && show.can.length ? '<div><h4>What you can do</h4><ul class="w127can" style="--c:' + E(show.color || GREEN) + '">' + show.can.map(function (c) { return '<li>' + I('check') + '<span>' + E(c) + '</span></li>'; }).join('') + '</ul>' + (p && isTeam(p) && lead && p.lead_note ? '<p style="margin-top:10px;font-size:13px;color:#5c5a56">As a lead: ' + E(p.lead_note.replace(/^A lead also gets /, '')) + '</p>' : '') + '</div>' : '')
+      + '<div><h4>Your pages</h4>' + groupsWithNew().map(function (g) {
+        var ts = g[1].filter(function (t) { return allowed.indexOf(t) >= 0; });
+        return ts.length ? '<div class="grp"><small>' + E(g[0]) + '</small><div class="w127tags">' + ts.map(function (t) { return '<span>' + (LOCK[t] ? I('lock') : '') + E(labelOf(t)) + '</span>'; }).join('') + '</div></div>' : '';
+      }).join('') + '</div>';
+    var out = p ? knownTabs().filter(function (t) { return t !== 'team' && allowed.indexOf(t) < 0; }) : [];
+    if (out.length) body += '<div><h4>Not in your profile</h4><div class="w127tags">' + out.map(function (t) { return '<span class="off">' + E(labelOf(t)) + '</span>'; }).join('') + '</div></div>';
+    var foot = (staffOk() && role !== 'admin' ? '<a class="w127btn ghost sm" data-w127ask="1">' + I('key') + 'Request more access</a>' : '') + (amAdmin() ? '<a class="w127btn ghost sm" data-w127go="#adminpanel/access">' + I('shield') + 'All the profiles</a>' : '') + '<span class="sp"></span><a class="w127btn sm" data-w127close="1">Close</a>';
+    openSheet('mine', 'Your access', title, body, foot);
+  }
+
+  /* ---------- Admin > Access profiles: a section of its own ---------- */
+  function addSection() {
+    try {
+      var W = window.__wa118; if (!W || !Array.isArray(W.ADMIN)) return;
+      if (!W.ADMIN.some(function (a) { return a[0] === 'access'; })) {
+        var at = 0; W.ADMIN.forEach(function (a, i) { if (a[0] === 'people') at = i + 1; });
+        W.ADMIN.splice(at || W.ADMIN.length, 0, ['access', 'Access profiles', '#w127card', 'What each profile gives access to: the pages, what the database enforces, and who has which profile.']);
+      }
+      if (!document.getElementById('wa127sec')) {
+        var st = document.createElement('style'); st.id = 'wa127sec';
+        st.textContent = '.w118adm[data-sec="access"] ~ .card:not(#w127card){display:none !important;}.w118adm:not([data-sec="access"]) ~ #w127card{display:none !important;}';
+        document.head.appendChild(st);
+      }
+    } catch (e) { /* fine */ }
+  }
+  addSection();
+
+  /* ---------- the profile menu: Your access ---------- */
+  function menuItem() {
+    try {
+      var m = document.getElementById('w115menu'); if (!m || m.style.display === 'none') return;
+      if (m.querySelector('[data-w127mine]')) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'w115item'; b.setAttribute('data-w127mine', '1'); b.textContent = 'Your access';
+      /* the menu stops clicks from bubbling, so the button carries its own */
+      b.addEventListener('click', function (e) { e.preventDefault(); m.style.display = 'none'; load().then(openMine); });
+      var ask = m.querySelector('[data-w115act="access"]'), so = document.getElementById('signOutBtn');
+      if (ask && ask.parentNode === m) m.insertBefore(b, ask); else if (so && so.parentNode === m) m.insertBefore(b, so); else m.appendChild(b);
+    } catch (e) { /* fine */ }
+  }
+  try { new MutationObserver(function () { menuItem(); }).observe(document.body, { childList: true, subtree: false }); } catch (e) { /* fine */ }
+  var menuT = null;
+  function watchMenu() { var m = document.getElementById('w115menu'); if (!m || m.__w127) return; m.__w127 = true; try { new MutationObserver(function () { clearTimeout(menuT); menuT = setTimeout(menuItem, 0); }).observe(m, { childList: true, attributes: true, attributeFilter: ['style'] }); } catch (e) { /* fine */ } }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    var inCard = !!t.closest('#w127'), inSheet = !!t.closest('#w127sheet'), inPeople = !!t.closest('#w113card');
+    if (!inCard && !inSheet && !inPeople) return;
+    if ((el = t.closest('[data-w127close]'))) { closeSheet(); return; }
+    if ((el = t.closest('[data-w127prof]'))) { e.preventDefault(); openProfile(el.getAttribute('data-w127prof')); return; }
+    if ((el = t.closest('[data-w127pedit]'))) { openEdit(el.getAttribute('data-w127pedit')); return; }
+    if ((el = t.closest('[data-w127psave]'))) { saveEdit(el.getAttribute('data-w127psave')); return; }
+    if ((el = t.closest('[data-w127doapply]'))) { doApply(); return; }
+    if ((el = t.closest('[data-w127ask]'))) { closeSheet(); location.hash = '#mypage'; setTimeout(function () { var b = document.getElementById('w110btn'); if (b) b.click(); }, 700); return; }
+    if ((el = t.closest('[data-w127go]'))) { closeSheet(); location.hash = el.getAttribute('data-w127go'); return; }
+    if (inSheet || inPeople) return;
+    if ((el = t.closest('[data-w127cell]'))) { var kv = el.getAttribute('data-w127cell').split('|'); cycle(kv[0], kv[1]); return; }
+    if ((el = t.closest('[data-w127save]'))) { saveMatrix(); return; }
+    if ((el = t.closest('[data-w127undo]'))) { A.edits = {}; paint(); return; }
+    if ((el = t.closest('[data-w127f]'))) { A.filter = el.getAttribute('data-w127f'); paint(); return; }
+    if ((el = t.closest('[data-w127apply]'))) { var em = el.getAttribute('data-w127apply'); openApply((A.cache || []).filter(function (x) { return x.email === em; })); return; }
+    if ((el = t.closest('[data-w127applyall]'))) { openApply((A.cache || []).filter(function (x) { return x.sug && !x.same && x.hasRow; })); return; }
+    if ((el = t.closest('[data-w127jump]'))) { var tg = document.getElementById(el.getAttribute('data-w127jump')); if (tg && tg.scrollIntoView) tg.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.matches && t.matches('select[data-w127acc]')) { changeAccess(t.getAttribute('data-w127acc'), t.value); return; }
+    if (t.matches && t.matches('input[data-w127auto]')) { setAuto(t.checked); return; }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && A.sheet) { e.preventDefault(); closeSheet(); } });
+  window.addEventListener('hashchange', function () {
+    if (A.sheet) closeSheet();
+    if (onAccess()) setTimeout(show, 30);
+    setTimeout(recheck, 60);
+  });
+  if (typeof showPanel === 'function') {
+    var __sp127 = showPanel;
+    showPanel = function (id) {
+      var out = __sp127.apply(this, arguments);
+      try { if (id === 'adminpanel' && onAccess()) setTimeout(show, 30); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+
+  /* ---------- the tours: the Admin tour gets a stop here ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours || !W.tours.adminpanel) return;
+      var st = W.tours.adminpanel.steps || [];
+      if (st.some(function (s) { return s.s === '#w127card'; })) return;
+      var at = 0; st.forEach(function (s, i) { if (s.s === '#w113card') at = i + 1; });
+      st.splice(at || st.length, 0, { s: '#w127card', t: 'Access profiles', p: 'One profile each: a team (with a lead option), the board, executives or admins. Each card says what it gives, the table compares every page, and the proposal shows who would gain or lose what before you apply it.', opt: 1, hash: '#adminpanel/access' });
+      var nav = st.filter(function (s) { return s.s === '#adminpanel nav.w118adm'; })[0];
+      if (nav && nav.p.indexOf('access profiles') < 0) nav.p = nav.p.replace('people and access,', 'people and access, access profiles,');
+    } catch (e) { /* fine */ }
+  }
+  addTours();
+
+  /* ---------- boot ---------- */
+  window.w127 = {
+    state: function () { return A; }, load: load, paint: paint, open: openMine, profile: openProfile,
+    accessCell: accessCell, pagesCell: pagesCell, pages: function () { try { return wa40Allowed(); } catch (e) { return []; } },
+    mine: function () { var p = myProfile(); return p ? p.key : null; },
+    hrOk: function () { var p = myProfile(); if (!p) return null; return tabOk('hrcentre'); }
+  };
+  wrapAllowed();
+  if (typeof startApp === 'function') {
+    var __sa127 = startApp;
+    startApp = async function () {
+      var pre = load();
+      var out = await __sa127.apply(this, arguments);
+      try {
+        await pre;
+        addTours(); watchMenu(); watchRows();
+        enforce(); recheck();
+        [600, 2000].forEach(function (ms) { setTimeout(function () { enforce(); recheck(); }, ms); });
+        if (onAccess()) show();
+        /* the People and access table picks up the profile column once the profiles are in */
+        try { if (amAdmin() && document.getElementById('w113card') && typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+      } catch (e) { console.warn('wave127 boot', e); }
+      return out;
+    };
+  }
+})();

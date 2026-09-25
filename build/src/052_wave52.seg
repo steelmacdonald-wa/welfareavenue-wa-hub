@@ -273,6 +273,8 @@
     'tuna.kaynak@welfareavenue.com'
   ];
   function wa52HrOk() {
+    /* wave127: with an access profile, the HR centre follows the profile; HR records stay with the HR access list in the database */
+    try { if (window.w127 && typeof window.w127.hrOk === 'function') { var v127 = window.w127.hrOk(); if (v127 === true || v127 === false) return v127; } } catch (e) { /* fine */ }
     try {
       return WA52_HR.indexOf(String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase()) >= 0;
     } catch (e) { return false; }
