@@ -61,12 +61,12 @@
     if (t.duration_sec) return Math.max(1, Math.round(t.duration_sec / 60));
     var k = kindOf(t);
     if (k === 'read') return Math.max(2, Math.ceil(String(t.description || '').length / 900));
-    return { video: 5, lesson: 10, doc: 5, tour: 2 }[k] || 5;
+    return { video: 5, lesson: 10, doc: 5, tour: 2, sop: 7 }[k] || 5;
   }
   function xpFor(t) {
     if (t.xp) return t.xp;
     var k = kindOf(t), m = minutesOf(t);
-    if (k === 'lesson') return 60; if (k === 'tour') return 20;
+    if (k === 'lesson') return 60; if (k === 'tour') return 20; if (k === 'sop') return 30;
     if (k === 'video') return Math.min(60, 20 + Math.round(m / 2));
     return 25;
   }

@@ -167,7 +167,7 @@
       (list.length > shown.length ? '<div class="w122more"><button class="w122btn soft" data-w122more="1">Show ' + Math.min(24, list.length - shown.length) + ' more of ' + list.length + '</button></div>' : '');
   }
   function libHtml() {
-    var kinds = [['all', 'All'], ['video', 'Videos'], ['lesson', 'Lessons'], ['read', 'Reading'], ['doc', 'Documents'], ['tour', 'Tours']];
+    var kinds = [['all', 'All'], ['video', 'Videos'], ['lesson', 'Lessons'], ['read', 'Reading'], ['doc', 'Documents'], ['sop', 'SOPs'], ['tour', 'Tours']];
     var groups = {}; A.trainings.forEach(function (t) { if (t.category) groups[t.category] = 1; });
     return '<section class="w122sec" data-sec="library"><div class="w122sech"><div><h2>Library</h2><div class="sub">Every training: videos, lessons, reading and documents.</div></div></div>' +
       '<div class="w122lib"><div class="w122seg">' + kinds.map(function (k) { return '<button data-w122kind="' + k[0] + '" class="' + (A.ui.kind === k[0] ? 'on' : '') + '">' + k[1] + '</button>'; }).join('') + '</div>' +
@@ -222,7 +222,7 @@
     if (!staffOk()) return '<div class="w122none">The Training academy is available to staff accounts.</div>';
     if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
-    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
+    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
   var paintQ = null;
   function paint() {

@@ -119,6 +119,8 @@
       else if (r.sub === 'tour' && r.arg) { try { history.replaceState(null, '', '#training'); } catch (e) { /* fine */ } startTour(r.arg); }
       else if (r.sub === 'cert' && r.arg) openCert(r.arg);
       else if (r.sub === 'onboarding') openOnb();
+      else if (r.sub === 'sopnew') { try { history.replaceState(null, '', '#training'); } catch (e) { /* fine */ } openSopForm(null, r.arg || me().dept || ''); }
+      else if (r.sub === 'sops') { if (sheetOpen()) closeSheet(true); setTimeout(function () { var sec = document.querySelector('#w122 [data-sec="sops"]'); if (sec) sec.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); }, 80); }
       else if (sheetOpen()) closeSheet(true);
     };
     if (A.loaded) go(); else load().then(function () { paint(); after(); go(); });
@@ -244,6 +246,7 @@
     A: A, tours: TOURS, badges: BADGES, levels: LEVELS,
     state: function () { return { R: R, T: T }; },
     load: load, paint: paint, stats: stats, evaluate: evaluate, levelOf: levelOf, resolveStep: resolveStep,
-    startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf
+    startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf,
+    sop: { html: sopHtml, form: openSopForm, card: injectSopCard, fund: sopFundLoad, body: sopBody, phasesIn: phasesIn, phasesOut: phasesOut }
   };
 })();

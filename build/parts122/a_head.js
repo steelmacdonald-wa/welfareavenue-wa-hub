@@ -52,7 +52,8 @@
     lesson: { l: 'Lesson', icon: 'book', c1: '#6F64AB', c2: '#9C8FE0' },
     read: { l: 'Reading', icon: 'doc', c1: '#2B6F55', c2: '#5FA589' },
     doc: { l: 'Document', icon: 'file', c1: '#B9851B', c2: '#E4B84F' },
-    tour: { l: 'Page tour', icon: 'map', c1: '#1F201E', c2: '#3E4A46' }
+    tour: { l: 'Page tour', icon: 'map', c1: '#1F201E', c2: '#3E4A46' },
+    sop: { l: 'SOP', icon: 'list', c1: '#8A5A0B', c2: '#DCA527' }
   };
   var LEVELS = [[0, 'Newcomer'], [100, 'Explorer'], [250, 'Contributor'], [450, 'Practitioner'], [700, 'Specialist'], [1000, 'Expert'], [1400, 'Mentor'], [1900, 'Leader'], [2500, 'Changemaker']];
   var BADGES = [

@@ -39,7 +39,8 @@
     if (p) { var items = pathItems(p); var i = items.indexOf(t); if (i >= 0) idx = ' &middot; ' + (i + 1) + ' of ' + items.length; }
     return '<div class="hd"><div class="hi"><div class="kk">' + kindChip(t) + (p ? '<span>' + E(p.title) + idx + '</span>' : (t.category ? '<span>' + E(t.category) + '</span>' : '')) +
       '<span>' + ic('clock') + ' ' + mins(minutesOf(t)) + '</span><span>' + ic('bolt') + ' ' + xpFor(t) + ' XP</span></div><h2>' + E(sub || t.title) + '</h2></div>' +
-      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' + (kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '') : '') +
+      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '') +
+      (kindOf(t) === 'sop' ? (t.id && canEditSop(t) ? '<button class="w122btn soft sm" data-w122sopedit="1">' + ic('edit') + ' Edit</button>' : '') : (isLeader() && t.id && kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '')) +
       '<button class="xb" data-w122x="1" title="Close (Esc)">' + ic('x') + '</button></div></div>';
   }
   function railPath(t) {
@@ -75,12 +76,14 @@
     if (R.mode === 'onb') return renderOnb(sh);
     if (R.mode === 'cert') return renderCert(sh);
     if (R.mode === 'form') return renderForm(sh);
+    if (R.mode === 'sopform') return renderSopForm(sh);
     var t = R.t;
     if (R.mode === 'assign') return renderAssign(sh, t);
     var k = R.kind, html = '';
     if (k === 'lesson') html = lessonHtml(t);
     else if (k === 'video') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap wide">' + videoHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' I have watched it</button>');
     else if (k === 'doc') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap' + (R.preview ? ' wide' : '') + '">' + docHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' Mark as complete</button>');
+    else if (k === 'sop') html = headHtml(t, sopTitle(t)) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap wide">' + sopHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' I have read it</button>');
     else if (k === 'tour') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap">' + tourIntroHtml(t) + '</div></div></div>' + footHtml(t, '<button class="w122btn" data-w122starttour="' + E(tourKeyOf(t)) + '">' + ic('map') + (isDone(t.id) ? ' Take it again' : ' Start the tour') + '</button>');
     else html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap"><div class="prose">' + articleHtml(t) + '</div></div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' Mark as complete</button>');
     sh.innerHTML = html;

@@ -43,6 +43,7 @@
       S('#w116meet', 'Upcoming meetings', 'The team’s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
       H(/^Projects/i, '.w116card', 'Projects', 'The team’s projects with their open tasks. Add a project here, or open All projects.', OPT),
+      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Training academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
@@ -168,6 +169,7 @@
       S('#w122 .w122hero', 'Your progress', 'Your level, XP, streak, certificates and badges. The rings show onboarding, required learning and your progress to the next level.'),
       S('#w122 [data-sec="next"]', 'Up next', 'What you started, what was assigned to you, and what is recommended for your team.', OPT),
       S('#w122 [data-sec="paths"]', 'Learning paths', 'Short series with a certificate at the end.', OPT),
+      S('#w122 [data-sec="sops"]', 'Our SOPs', 'How we run the things we do again and again, step by step, with what we learned last time. Your team\u2019s come first, and each one links to its events on the events calendar. Leaders and team members can write and update them.', OPT),
       S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Tour them all for the Hub Navigator certificate.', OPT),
       S('#w122 [data-sec="library"]', 'The library', 'Every training: videos, lessons, reading and documents. Filter by type or topic, or search.', OPT),
       S('#w122 [data-sec="trophies"]', 'Trophy case', 'Your certificates and badges. Certificates can be printed or shared with the team.', OPT),

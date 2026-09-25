@@ -38012,7 +38012,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     lesson: { l: 'Lesson', icon: 'book', c1: '#6F64AB', c2: '#9C8FE0' },
     read: { l: 'Reading', icon: 'doc', c1: '#2B6F55', c2: '#5FA589' },
     doc: { l: 'Document', icon: 'file', c1: '#B9851B', c2: '#E4B84F' },
-    tour: { l: 'Page tour', icon: 'map', c1: '#1F201E', c2: '#3E4A46' }
+    tour: { l: 'Page tour', icon: 'map', c1: '#1F201E', c2: '#3E4A46' },
+    sop: { l: 'SOP', icon: 'list', c1: '#8A5A0B', c2: '#DCA527' }
   };
   var LEVELS = [[0, 'Newcomer'], [100, 'Explorer'], [250, 'Contributor'], [450, 'Practitioner'], [700, 'Specialist'], [1000, 'Expert'], [1400, 'Mentor'], [1900, 'Leader'], [2500, 'Changemaker']];
   var BADGES = [
@@ -38350,6 +38351,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w122sheet .hd h2{font-family:' + SF + ';font-size:24px;font-weight:750;letter-spacing:-.5px;line-height:1.15;margin:6px 0 0;color:' + INK + ';text-transform:none;}'
     + '#w122sheet .hd h2::after{display:none;}'
     + '#w122sheet .hd .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}'
+    /* phones: the title gets the full width under the actions */
+    + '@media (max-width:760px){#w122sheet .hd{flex-wrap:wrap;gap:8px;padding:14px 16px 12px;}#w122sheet .hd .acts{order:1;flex-basis:100%;}#w122sheet .hd .hi{order:2;flex-basis:100%;}#w122sheet .hd h2{font-size:21px;}}'
     + '#w122sheet .xb{width:38px;height:38px;border-radius:50%;border:none;background:rgba(16,63,57,.08);color:' + INK + ';display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex:none;}'
     + '#w122sheet .xb:hover{background:rgba(16,63,57,.14);}'
     + '#w122sheet .pr{height:4px;background:rgba(16,63,57,.07);}'
@@ -38606,6 +38609,97 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     /* classic bar */
     + '#w122cbar{display:flex;align-items:center;gap:10px;background:#FFFAF2;border-radius:16px;padding:10px 14px;margin:0 0 12px;box-shadow:' + SH1 + ';font-family:' + SF + ';font-size:13.5px;}'
     + '#training.w122on #w122cbar{display:none;}'
+    /* SOPs (wave125): the reader */
+    + '#w122sheet .w122sop{color:#2b2a27;}'
+    + '#w122sheet .w122sop .chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px;}'
+    + '#w122sheet .w122sop .chips span{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;border-radius:999px;padding:5px 11px;background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    + '#w122sheet .w122sop .chips .tm{background:rgba(220,165,39,.2);color:#6b4d05;}'
+    + '#w122sheet .w122sop .chips .rev{background:rgba(42,140,122,.12);color:#1d6b5d;}'
+    + '#w122sheet .w122sop .chips .w122ic{width:13px;height:13px;}'
+    + '#w122sheet .w122sop .intro{font-size:18.5px;line-height:1.55;color:' + INK + ';margin:0 0 18px;letter-spacing:-.15px;max-width:760px;}'
+    + '#w122sheet .w122sop .toc{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 22px;}'
+    + '#w122sheet .w122sop .toc button{border:none;background:#FFFAF2;box-shadow:' + SH1 + ';border-radius:999px;padding:8px 14px;font:600 13px ' + SF + ';color:' + GREEN + ';cursor:pointer;transition:background .2s ' + EASE + ',color .2s ' + EASE + ';}'
+    + '#w122sheet .w122sop .toc button:hover,#w122sheet .w122sop .toc button:focus-visible{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w122sheet .w122sop .glance{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;margin:0 0 18px;}'
+    + '#w122sheet .w122sop .glance div{background:#FFFAF2;border-radius:18px;padding:15px 17px;box-shadow:' + SH1 + ';}'
+    + '#w122sheet .w122sop .glance b{display:block;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#8a877f;margin-bottom:6px;}'
+    + '#w122sheet .w122sop .glance span{font-size:14.5px;line-height:1.45;color:' + INK + ';}'
+    + '#w122sheet .w122sop .sopnext{background:linear-gradient(135deg,rgba(220,165,39,.16),rgba(220,165,39,.05));border-radius:20px;padding:15px 16px 12px;margin:0 0 8px;}'
+    + '#w122sheet .w122sop .sopnext .lb{font-size:11.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:#6b4d05;display:flex;align-items:center;gap:6px;margin-bottom:4px;}'
+    + '#w122sheet .w122sop .sopnext .ev{display:flex;align-items:center;gap:12px;width:100%;border:none;background:#FFFAF2;border-radius:14px;padding:11px 14px;margin-top:7px;cursor:pointer;text-align:left;font:inherit;color:inherit;box-shadow:0 1px 2px rgba(16,63,57,.06);transition:transform .2s ' + EASE + ';}'
+    + '#w122sheet .w122sop .sopnext .ev:hover{transform:translateX(2px);}'
+    + '#w122sheet .w122sop .sopnext .ev b{font-size:14.5px;white-space:nowrap;}'
+    + '#w122sheet .w122sop .sopnext .ev span{font-size:13px;color:#797773;flex:1;min-width:0;}'
+    + '#w122sheet .w122sop .sopnext .ev.up b{color:' + GREEN + ';}'
+    + '#w122sheet .w122sop .sopnext .ev .w122ic{color:#b8b5ad;}'
+    + '#w122sheet .w122sop section.sops{margin:30px 0 0;}'
+    + '#w122sheet .w122sop h3{font-size:21px;font-weight:700;letter-spacing:-.35px;margin:0 0 12px;color:' + INK + ';text-transform:none;}'
+    + '#w122sheet .w122sop h3::after{display:none;}'
+    + '#w122sheet .w122sop ul{list-style:none;margin:0;padding:0;}'
+    + '#w122sheet .w122sop ul li{position:relative;padding:6px 0 6px 28px;font-size:15.5px;line-height:1.55;}'
+    + '#w122sheet .w122sop ul.bl li::before{content:"";position:absolute;left:9px;top:15px;width:7px;height:7px;border-radius:50%;background:' + GOLD + ';}'
+    + '#w122sheet .w122sop ul.ck li::before{content:"";position:absolute;left:2px;top:10px;width:15px;height:15px;border-radius:5px;border:1.8px solid rgba(16,63,57,.35);box-sizing:border-box;}'
+    + '#w122sheet .w122sop ul.ls li::before{content:"";position:absolute;left:4px;top:11px;width:11px;height:11px;border-radius:50%;border:2.4px solid ' + TEAL + ';box-sizing:border-box;}'
+    + '#w122sheet .w122sop .eds{display:flex;flex-direction:column;gap:10px;}'
+    + '#w122sheet .w122sop .ed{display:grid;grid-template-columns:150px minmax(0,1fr);gap:16px;background:#FFFAF2;border-radius:18px;padding:15px 17px;box-shadow:' + SH1 + ';}'
+    + '#w122sheet .w122sop .ed .yr b{display:block;font-size:17px;font-weight:700;color:' + GREEN + ';letter-spacing:-.2px;}'
+    + '#w122sheet .w122sop .ed .yr span{display:block;font-size:12.5px;color:#797773;margin-top:2px;line-height:1.35;}'
+    + '#w122sheet .w122sop .ed p{margin:0;font-size:15px;line-height:1.58;}'
+    + '#w122sheet .w122sop .roles{background:#FFFAF2;border-radius:18px;box-shadow:' + SH1 + ';overflow:hidden;}'
+    + '#w122sheet .w122sop .ro{display:grid;grid-template-columns:210px minmax(0,1fr);gap:14px;padding:12px 17px;border-top:1px solid rgba(16,63,57,.07);}'
+    + '#w122sheet .w122sop .ro:first-child{border-top:none;}'
+    + '#w122sheet .w122sop .ro b{font-size:14.5px;color:' + INK + ';}'
+    + '#w122sheet .w122sop .ro span{font-size:14.5px;color:#4a4945;line-height:1.5;}'
+    + '#w122sheet .w122sop .phs{display:flex;flex-direction:column;gap:12px;}'
+    + '#w122sheet .w122sop .ph{background:#FFFAF2;border-radius:20px;padding:17px 19px 11px;box-shadow:' + SH1 + ';}'
+    + '#w122sheet .w122sop .phh{display:flex;gap:13px;align-items:flex-start;margin-bottom:6px;}'
+    + '#w122sheet .w122sop .phh .n{flex:none;width:32px;height:32px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;}'
+    + '#w122sheet .w122sop .phh .wh{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:#6b4d05;background:rgba(220,165,39,.2);border-radius:999px;padding:3px 9px;}'
+    + '#w122sheet .w122sop .phh h4{font-size:17.5px;font-weight:700;margin:5px 0 0;color:' + INK + ';letter-spacing:-.25px;}'
+    + '#w122sheet .w122sop .ph ul{margin-left:45px;}'
+    + '#w122sheet .w122sop .todo{background:rgba(179,64,47,.07);border-radius:18px;padding:15px 17px 10px;margin:30px 0 0;}'
+    + '#w122sheet .w122sop .todo > b{display:flex;align-items:center;gap:7px;color:' + FLAG + ';font-size:14px;margin-bottom:2px;}'
+    + '#w122sheet .w122sop .todo li{font-size:14.5px;}'
+    + '#w122sheet .w122sop .lnks{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:8px;}'
+    + '#w122sheet .w122sop .lnks a{display:flex;align-items:center;gap:10px;background:#FFFAF2;border-radius:14px;padding:12px 14px;box-shadow:' + SH1 + ';color:' + INK + ';text-decoration:none;font-size:14px;font-weight:600;transition:transform .2s ' + EASE + ';}'
+    + '#w122sheet .w122sop .lnks a:hover{transform:translateY(-1px);}'
+    + '#w122sheet .w122sop .lnks a span{flex:1;min-width:0;}'
+    + '#w122sheet .w122sop .lnks a .w122ic{width:16px;height:16px;color:' + GREEN + ';}'
+    + '#w122sheet .w122sop .lnks a .w122ic:last-child{color:#b8b5ad;width:14px;height:14px;}'
+    + '#w122sheet .w122sop .src{font-size:13px;color:#8a877f;margin:30px 0 0;}'
+    + '@media (max-width:760px){#w122sheet .w122sop .ed,#w122sheet .w122sop .ro{grid-template-columns:1fr;gap:4px;}#w122sheet .w122sop .intro{font-size:16.5px;}#w122sheet .w122sop .ph ul{margin-left:0;}#w122sheet .w122sop .sopnext .ev b{white-space:normal;}}'
+    /* SOPs: the form */
+    + '#w122sheet .w122sopf label small{display:block;font-weight:400;color:#8a877f;font-size:12.5px;margin:2px 0 5px;text-transform:none;letter-spacing:0;}'
+    + '#w122sheet .w122sopf textarea{line-height:1.5;}'
+    + '#w122sheet .w122sopf .teams{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 16px;}'
+    + '#w122sheet .w122sopf .teams > span{font-size:13px;font-weight:600;color:#4a4945;margin-right:4px;}'
+    + '#w122sheet .w122sopf label.tg{display:inline-flex;flex-direction:row;align-items:center;gap:7px;background:#FFFAF2;border-radius:999px;padding:7px 13px;box-shadow:' + SH1 + ';font-size:13px;font-weight:600;cursor:pointer;margin:0;}'
+    + '#w122sheet .w122sopf label.tg input{width:auto;margin:0;}'
+    /* SOPs: the academy home */
+    + '#w122 .w122sops{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;}'
+    + '.w122sopt{display:flex;flex-direction:column;gap:9px;text-align:left;border:none;background:#FFFAF2;border-radius:22px;padding:18px 18px 16px;box-shadow:' + SH1 + ';cursor:pointer;font:inherit;color:inherit;transition:transform .25s ' + EASE + ',box-shadow .25s ' + EASE + ';min-width:0;}'
+    + '.w122sopt:hover,.w122sopt:focus-visible{transform:translateY(-3px);box-shadow:' + SH2 + ';}'
+    + '.w122sopt .tp{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}'
+    + '.w122sopt .i{width:36px;height:36px;border-radius:12px;background:linear-gradient(135deg,#8A5A0B,' + GOLD + ');color:' + CREAM + ';display:flex;align-items:center;justify-content:center;margin-right:4px;}'
+    + '.w122sopt .i .w122ic{width:19px;height:19px;}'
+    + '.w122sopt.ok .i{background:linear-gradient(135deg,' + GREEN + ',' + TEAL + ');}'
+    + '.w122sopt .tm{font-size:11.5px;font-weight:700;background:rgba(16,63,57,.07);color:' + GREEN + ';border-radius:999px;padding:3px 9px;}'
+    + '.w122sopt .dn{margin-left:auto;font-size:12px;font-weight:700;color:#1d6b5d;display:inline-flex;align-items:center;gap:4px;}'
+    + '.w122sopt .dn .w122ic{stroke-width:3;width:12px;height:12px;}'
+    + '.w122sopt > b{font-size:17.5px;font-weight:700;letter-spacing:-.3px;color:' + INK + ';line-height:1.25;}'
+    + '.w122sopt .ds{font-size:13.5px;color:#6a6862;line-height:1.45;}'
+    + '.w122sopt .ft{font-size:12.5px;color:#8a877f;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:auto;padding-top:2px;}'
+    + '.w122sopt .ft em{font-style:normal;color:#6b4d05;font-weight:600;margin-left:auto;}'
+    /* SOPs: the team card */
+    + '.w122soprows{display:flex;flex-direction:column;gap:2px;margin:0 -6px;}'
+    + '.w122soprow{display:flex;align-items:center;gap:10px;padding:8px 6px;border-radius:12px;cursor:pointer;text-decoration:none;color:inherit;}'
+    + '.w122soprow:hover,.w122soprow:focus-visible{background:rgba(16,63,57,.05);}'
+    + '.w122soprow .i{width:30px;height:30px;border-radius:10px;background:rgba(220,165,39,.2);color:#6b4d05;display:flex;align-items:center;justify-content:center;flex:none;}'
+    + '.w122soprow .i .w122ic{width:16px;height:16px;}'
+    + '.w122soprow .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}'
+    + '.w122soprow .tx b{font-size:13.5px;line-height:1.3;}'
+    + '.w122soprow .tx span{font-size:12px;color:var(--wa-muted,#797773);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '.w122soprow > .w122ic{width:15px;height:15px;color:#a09d96;flex:none;}'
     + 'html.w122lock,html.w122lock body{overflow:hidden !important;}'
     + '#toast{z-index:2147483300 !important;}';
   document.head.appendChild(css);
@@ -38672,12 +38766,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.duration_sec) return Math.max(1, Math.round(t.duration_sec / 60));
     var k = kindOf(t);
     if (k === 'read') return Math.max(2, Math.ceil(String(t.description || '').length / 900));
-    return { video: 5, lesson: 10, doc: 5, tour: 2 }[k] || 5;
+    return { video: 5, lesson: 10, doc: 5, tour: 2, sop: 7 }[k] || 5;
   }
   function xpFor(t) {
     if (t.xp) return t.xp;
     var k = kindOf(t), m = minutesOf(t);
-    if (k === 'lesson') return 60; if (k === 'tour') return 20;
+    if (k === 'lesson') return 60; if (k === 'tour') return 20; if (k === 'sop') return 30;
     if (k === 'video') return Math.min(60, 20 + Math.round(m / 2));
     return 25;
   }
@@ -39086,7 +39180,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       (list.length > shown.length ? '<div class="w122more"><button class="w122btn soft" data-w122more="1">Show ' + Math.min(24, list.length - shown.length) + ' more of ' + list.length + '</button></div>' : '');
   }
   function libHtml() {
-    var kinds = [['all', 'All'], ['video', 'Videos'], ['lesson', 'Lessons'], ['read', 'Reading'], ['doc', 'Documents'], ['tour', 'Tours']];
+    var kinds = [['all', 'All'], ['video', 'Videos'], ['lesson', 'Lessons'], ['read', 'Reading'], ['doc', 'Documents'], ['sop', 'SOPs'], ['tour', 'Tours']];
     var groups = {}; A.trainings.forEach(function (t) { if (t.category) groups[t.category] = 1; });
     return '<section class="w122sec" data-sec="library"><div class="w122sech"><div><h2>Library</h2><div class="sub">Every training: videos, lessons, reading and documents.</div></div></div>' +
       '<div class="w122lib"><div class="w122seg">' + kinds.map(function (k) { return '<button data-w122kind="' + k[0] + '" class="' + (A.ui.kind === k[0] ? 'on' : '') + '">' + k[1] + '</button>'; }).join('') + '</div>' +
@@ -39141,7 +39235,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!staffOk()) return '<div class="w122none">The Training academy is available to staff accounts.</div>';
     if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
-    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
+    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
   var paintQ = null;
   function paint() {
@@ -39206,7 +39300,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (p) { var items = pathItems(p); var i = items.indexOf(t); if (i >= 0) idx = ' &middot; ' + (i + 1) + ' of ' + items.length; }
     return '<div class="hd"><div class="hi"><div class="kk">' + kindChip(t) + (p ? '<span>' + E(p.title) + idx + '</span>' : (t.category ? '<span>' + E(t.category) + '</span>' : '')) +
       '<span>' + ic('clock') + ' ' + mins(minutesOf(t)) + '</span><span>' + ic('bolt') + ' ' + xpFor(t) + ' XP</span></div><h2>' + E(sub || t.title) + '</h2></div>' +
-      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' + (kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '') : '') +
+      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '') +
+      (kindOf(t) === 'sop' ? (t.id && canEditSop(t) ? '<button class="w122btn soft sm" data-w122sopedit="1">' + ic('edit') + ' Edit</button>' : '') : (isLeader() && t.id && kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '')) +
       '<button class="xb" data-w122x="1" title="Close (Esc)">' + ic('x') + '</button></div></div>';
   }
   function railPath(t) {
@@ -39242,12 +39337,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (R.mode === 'onb') return renderOnb(sh);
     if (R.mode === 'cert') return renderCert(sh);
     if (R.mode === 'form') return renderForm(sh);
+    if (R.mode === 'sopform') return renderSopForm(sh);
     var t = R.t;
     if (R.mode === 'assign') return renderAssign(sh, t);
     var k = R.kind, html = '';
     if (k === 'lesson') html = lessonHtml(t);
     else if (k === 'video') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap wide">' + videoHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' I have watched it</button>');
     else if (k === 'doc') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap' + (R.preview ? ' wide' : '') + '">' + docHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' Mark as complete</button>');
+    else if (k === 'sop') html = headHtml(t, sopTitle(t)) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap wide">' + sopHtml(t) + '</div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' I have read it</button>');
     else if (k === 'tour') html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap">' + tourIntroHtml(t) + '</div></div></div>' + footHtml(t, '<button class="w122btn" data-w122starttour="' + E(tourKeyOf(t)) + '">' + ic('map') + (isDone(t.id) ? ' Take it again' : ' Start the tour') + '</button>');
     else html = headHtml(t) + '<div class="pr"><i style="width:' + pctOf(t) + '%"></i></div><div class="bd">' + railPath(t) + '<div class="main"><div class="wrap"><div class="prose">' + articleHtml(t) + '</div></div></div></div>' + footHtml(t, isDone(t.id) ? '' : '<button class="w122btn" data-w122done="1">' + ic('check') + ' Mark as complete</button>');
     sh.innerHTML = html;
@@ -39612,6 +39709,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w116meet', 'Upcoming meetings', 'The team\u2019s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
       H(/^Projects/i, '.w116card', 'Projects', 'The team\u2019s projects with their open tasks. Add a project here, or open All projects.', OPT),
+      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Training academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
@@ -39737,6 +39835,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w122 .w122hero', 'Your progress', 'Your level, XP, streak, certificates and badges. The rings show onboarding, required learning and your progress to the next level.'),
       S('#w122 [data-sec="next"]', 'Up next', 'What you started, what was assigned to you, and what is recommended for your team.', OPT),
       S('#w122 [data-sec="paths"]', 'Learning paths', 'Short series with a certificate at the end.', OPT),
+      S('#w122 [data-sec="sops"]', 'Our SOPs', 'How we run the things we do again and again, step by step, with what we learned last time. Your team\u2019s come first, and each one links to its events on the events calendar. Leaders and team members can write and update them.', OPT),
       S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Tour them all for the Hub Navigator certificate.', OPT),
       S('#w122 [data-sec="library"]', 'The library', 'Every training: videos, lessons, reading and documents. Filter by type or topic, or search.', OPT),
       S('#w122 [data-sec="trophies"]', 'Trophy case', 'Your certificates and badges. Certificates can be printed or shared with the team.', OPT),
@@ -39995,6 +40094,271 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else celebrate(null, { s: stats() });
   }
 
+  /* ---------- SOPs (wave125, 25/09/26) ----------
+     Steel: "If we've done a similar event like the ones listed in the past please provide SOPs. I'm wondering if
+     each department should have SOP on their home page or they should all be hosted in trainings center."
+     Both: SOPs live here (one library, searchable, progress counts like any training), each team's overview
+     shows its own ("Our SOPs"), and the events calendar links each event to its SOP (fund_events.sop_training_id).
+     A trainings row with kind 'sop' carries its content in body: depts, owner, intro, glance [[label, value]],
+     format [], editions [[label, when, text]], roles [[role, what]], phases [{when, title, steps []}], dayof [],
+     money [], lessons [], confirm [], links [[title, url]], reviewed, sources. Leaders, and members of the SOP's
+     teams, edit it in plain text. */
+  var SOP_TEAMS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+  function isSop(t) { return !!t && t.active !== false && kindOf(t) === 'sop'; }
+  function sopBody(t) { var b = t && t.body; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = null; } } return b && typeof b === 'object' ? b : {}; }
+  function sopDepts(t) { var b = sopBody(t), d = Array.isArray(b.depts) ? b.depts : (b.dept ? [b.dept] : []); return d.filter(function (x) { return SOP_TEAMS.indexOf(x) >= 0; }); }
+  function sopTitle(t) { return String((t && t.title) || '').replace(/^SOP:\s*/i, ''); }
+  function teamName(d) { try { return (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || tabLabel(d); } catch (e) { return d; } }
+  function teamShortName(d) { try { return (window.WA_TEAMS && WA_TEAMS.short && WA_TEAMS.short[d]) || teamName(d); } catch (e) { return d; } }
+  function canEditSop(t) {
+    if (!staffOk() || role() === 'board') return false;
+    if (isLeader()) return true;
+    var d = me().dept; if (!d) return false;
+    if (!t) return true;
+    var ds = sopDepts(t); return !ds.length || ds.indexOf(d) >= 0;
+  }
+  function sopSort(a, b) { return (a.sort || 0) - (b.sort || 0) || String(a.title).localeCompare(String(b.title)); }
+  function clip2(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function safeUrl(u) { u = String(u || '').trim(); return /^https?:\/\/[^\s"'<>]+$/i.test(u) ? u : ''; }
+  function ymdToday() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  /* ---------- the events that use an SOP ---------- */
+  var SF = { rows: null, busy: null };
+  function sopFundLoad() {
+    if (SF.rows) return Promise.resolve(SF.rows);
+    if (SF.busy) return SF.busy;
+    SF.busy = Promise.resolve(db.from('fund_events').select('id, title, season, precision, start_date, end_date, timing, status, raised, sop_training_id').not('sop_training_id', 'is', null))
+      .then(function (r) { SF.rows = ((r && r.data) || []).filter(function (f) { return f && f.sop_training_id != null; }); SF.busy = null; return SF.rows; },
+        function () { SF.rows = []; SF.busy = null; return SF.rows; });
+    return SF.busy;
+  }
+  function sopFundFor(t) { return (SF.rows || []).filter(function (f) { return t && String(f.sop_training_id) === String(t.id) && f.status !== 'cancelled'; }).sort(function (a, b) { return String(a.start_date || '9999').localeCompare(String(b.start_date || '9999')); }); }
+  function fundDay(s) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || '')); if (!m) return null; var x = new Date(0); x.setFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3])); x.setHours(12, 0, 0, 0); return x; }
+  function fundWhen2(f) {
+    var s = fundDay(f.start_date), e = fundDay(f.end_date);
+    if (f.precision === 'day' && s) return MONTHS[s.getMonth()].slice(0, 3) + ' ' + s.getDate() + (e && e.getTime() !== s.getTime() ? ' to ' + (e.getMonth() !== s.getMonth() ? MONTHS[e.getMonth()].slice(0, 3) + ' ' : '') + e.getDate() : '') + ', ' + s.getFullYear();
+    if (f.precision === 'month' && s) return MONTHS[s.getMonth()] + ' ' + s.getFullYear();
+    if ((f.precision === 'range' || f.precision === 'season') && s) return String(f.timing || '').replace(/\s*\(.*\)\s*$/, '') + (/\d{4}/.test(f.timing || '') ? '' : ' ' + (e || s).getFullYear());
+    return f.timing || (f.precision === 'flexible' ? 'Flexible' : 'Not yet scheduled');
+  }
+  function fundUpcoming(f) { if (f.status === 'done' || f.status === 'cancelled') return false; var e = fundDay(f.end_date) || fundDay(f.start_date); if (!e) return true; var t = new Date(); t.setHours(0, 0, 0, 0); return e >= t; }
+  function sopNextHtml(t) {
+    var list = sopFundFor(t); if (!list.length) return '';
+    var st = { idea: 'Idea', planned: 'Planned', confirmed: 'Confirmed', done: 'Done', cancelled: 'Cancelled' };
+    return '<div class="sopnext"><div class="lb">' + ic('clock') + ' On the events calendar</div>' + list.map(function (f) {
+      var up = fundUpcoming(f);
+      return '<button class="ev' + (up ? ' up' : '') + '" data-w122sopfund="' + E(f.id) + '"><b>' + E(f.title) + '</b><span>' + E(fundWhen2(f)) + ' \u00b7 ' + E(st[f.status] || f.status || '') + (f.raised != null && f.status === 'done' ? ' \u00b7 raised $' + Number(f.raised).toLocaleString('en-CA') : '') + '</span>' + ic('arrow') + '</button>';
+    }).join('') + '</div>';
+  }
+  function fillSopNext() {
+    var el = document.querySelector('#w122sheet [data-w122sopnext]'); if (!el || !R || !R.t) return;
+    if (String(el.getAttribute('data-w122sopnext')) !== String(R.t.id)) return;
+    var h = sopNextHtml(R.t); if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+  }
+
+  /* ---------- reading an SOP ---------- */
+  function sopUl(items, cls) { return '<ul class="' + (cls || 'bl') + '">' + (items || []).map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>'; }
+  function sopSec(id, title, inner) { return '<section class="sops" id="w122sop-' + id + '"><h3>' + E(title) + '</h3>' + inner + '</section>'; }
+  function sopHtml(t) {
+    var b = sopBody(t), ds = sopDepts(t), toc = [], h = '';
+    if (!SF.rows) sopFundLoad().then(fillSopNext);
+    var has = function (k) { return Array.isArray(b[k]) && b[k].length; };
+    [['format', 'How it works'], ['editions', 'Past editions'], ['roles', 'Who does what'], ['phases', 'Step by step'], ['dayof', 'On the day'], ['money', 'Money'], ['lessons', 'What we learned'], ['links', 'Documents']].forEach(function (x) { if (has(x[0])) toc.push(x); });
+    h += '<div class="w122sop">';
+    h += '<div class="shero"><div class="chips">' + ds.map(function (d) { return '<span class="tm">' + E(teamShortName(d)) + '</span>'; }).join('')
+      + (b.owner ? '<span class="own">' + ic('user') + ' ' + E(b.owner) + '</span>' : '')
+      + (b.reviewed ? '<span class="rev">' + ic('check') + ' Reviewed ' + E(fmtDate(String(b.reviewed).slice(0, 10) + 'T12:00:00')) + '</span>' : '') + '</div>'
+      + '<p class="intro">' + E(b.intro || t.description || '') + '</p>'
+      + (toc.length > 2 ? '<div class="toc">' + toc.map(function (x) { return '<button data-w122sopjump="' + x[0] + '">' + E(x[1]) + '</button>'; }).join('') + '</div>' : '') + '</div>';
+    if (has('glance')) h += '<div class="glance">' + b.glance.map(function (g) { return '<div><b>' + E(g[0]) + '</b><span>' + E(g[1]) + '</span></div>'; }).join('') + '</div>';
+    h += '<div data-w122sopnext="' + E(t.id) + '">' + sopNextHtml(t) + '</div>';
+    if (has('format')) h += sopSec('format', 'How it works', sopUl(b.format));
+    if (has('editions')) h += sopSec('editions', 'Past editions', '<div class="eds">' + b.editions.map(function (e) { return '<div class="ed"><div class="yr"><b>' + E(e[0]) + '</b>' + (e[1] ? '<span>' + E(e[1]) + '</span>' : '') + '</div><p>' + E(e[2] || '') + '</p></div>'; }).join('') + '</div>');
+    if (has('roles')) h += sopSec('roles', 'Who does what', '<div class="roles">' + b.roles.map(function (r) { return '<div class="ro"><b>' + E(r[0]) + '</b><span>' + E(r[1] || '') + '</span></div>'; }).join('') + '</div>');
+    if (has('phases')) h += sopSec('phases', 'Step by step', '<div class="phs">' + b.phases.map(function (p, i) {
+      return '<div class="ph"><div class="phh"><span class="n">' + (i + 1) + '</span><div>' + (p.when ? '<span class="wh">' + E(p.when) + '</span>' : '') + '<h4>' + E(p.title || '') + '</h4></div></div>' + sopUl(p.steps, 'ck') + '</div>';
+    }).join('') + '</div>');
+    if (has('dayof')) h += sopSec('dayof', 'On the day', sopUl(b.dayof, 'ck'));
+    if (has('money')) h += sopSec('money', 'Money', sopUl(b.money));
+    if (has('lessons')) h += sopSec('lessons', 'What we learned', sopUl(b.lessons, 'ls'));
+    if (has('confirm')) h += '<div class="todo"><b>' + ic('flag') + ' Still to confirm</b>' + sopUl(b.confirm) + '</div>';
+    if (has('links')) {
+      var ls = b.links.filter(function (l) { return safeUrl(l[1]); });
+      if (ls.length) h += sopSec('links', 'Documents', '<div class="lnks">' + ls.map(function (l) { return '<a href="' + E(safeUrl(l[1])) + '" target="_blank" rel="noopener">' + ic('file') + '<span>' + E(l[0] || hostOf(l[1])) + '</span>' + ic('ext') + '</a>'; }).join('') + '</div>');
+    }
+    h += '<p class="src">' + E(b.sources || 'Keep this SOP current: update it after every edition.') + (canEditSop(t) ? ' <button class="w122lnk" data-w122sopedit="1">Update it</button>' : '') + '</p>';
+    return h + '</div>';
+  }
+
+  /* ---------- writing and editing an SOP (plain text in, structure out) ---------- */
+  function linesOf(v) { return String(v || '').split(/\r?\n/).map(function (x) { return x.replace(/^\s*(?:[-\u2022*]|\d+[.)])\s+/, '').trim(); }).filter(Boolean); }
+  function pairsIn(v, sep) { return linesOf(v).map(function (l) { var i = l.indexOf(sep); return i > 0 ? [l.slice(0, i).trim(), l.slice(i + sep.length).trim()] : [l, '']; }); }
+  function pairsOut(a, sep) { return (a || []).map(function (x) { return (x[0] || '') + (x[1] ? sep + x[1] : ''); }).join('\n'); }
+  function triplesIn(v) { return linesOf(v).map(function (l) { var p = l.split(' | '); if (p.length >= 3) return [p[0].trim(), p[1].trim(), p.slice(2).join(' | ').trim()]; if (p.length === 2) return [p[0].trim(), '', p[1].trim()]; return ['', '', l]; }); }
+  function triplesOut(a) { return (a || []).map(function (x) { return [x[0] || '', x[1] || '', x[2] || ''].join(' | '); }).join('\n'); }
+  function linksIn(v) { return linesOf(v).map(function (l) { var i = l.lastIndexOf(' | '); var t = i > 0 ? l.slice(0, i).trim() : ''; var u = i > 0 ? l.slice(i + 3).trim() : l.trim(); return [t || hostOf(u), u]; }).filter(function (x) { return safeUrl(x[1]); }); }
+  function linksOut(a) { return (a || []).map(function (x) { return (x[0] ? x[0] + ' | ' : '') + (x[1] || ''); }).join('\n'); }
+  function phasesOut(ps) { return (ps || []).map(function (p) { return '## ' + (p.when ? p.when + ' | ' : '') + (p.title || '') + '\n' + (p.steps || []).map(function (s) { return '- ' + s; }).join('\n'); }).join('\n\n'); }
+  function phasesIn(v) {
+    var out = [], cur = null;
+    String(v || '').split(/\r?\n/).forEach(function (raw) {
+      var l = raw.trim(); if (!l) return;
+      var m = /^#{1,3}\s*(.*)$/.exec(l);
+      if (m) { var parts = m[1].split(' | '); cur = { when: parts.length > 1 ? parts[0].trim() : '', title: (parts.length > 1 ? parts.slice(1).join(' | ') : parts[0]).trim(), steps: [] }; out.push(cur); return; }
+      if (!cur) { cur = { when: '', title: 'Steps', steps: [] }; out.push(cur); }
+      var s = l.replace(/^\s*(?:[-\u2022*]|\d+[.)])\s+/, '').trim(); if (s) cur.steps.push(s);
+    });
+    return out.filter(function (p) { return p.title || p.steps.length; });
+  }
+  function openSopForm(t, dept) { stopTimer(); R = { mode: 'sopform', t: t || null, dept: dept || '', secs: 0, kind: 'sop' }; renderSheet(); }
+  function renderSopForm(sh) {
+    var t = R.t, isNew = !t, b = t ? sopBody(t) : {};
+    var ds = t ? sopDepts(t) : (R.dept && SOP_TEAMS.indexOf(R.dept) >= 0 ? [R.dept] : (me().dept ? [me().dept] : []));
+    var ta = function (key, label, hint, val, rows) { return '<label>' + E(label) + (hint ? '<small>' + E(hint) + '</small>' : '') + '<textarea data-sf="' + key + '" rows="' + (rows || 4) + '">' + E(val || '') + '</textarea></label>'; };
+    sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#8A5A0B,' + GOLD + ')">' + ic(isNew ? 'plus' : 'edit') + (isNew ? ' New SOP' : ' Edit SOP') + '</span></div><h2>' + (isNew ? 'Write an SOP' : E(sopTitle(t))) + '</h2></div><div class="acts"><button class="xb" data-w122x="1" title="Close (Esc)">' + ic('x') + '</button></div></div>'
+      + '<div class="bd"><div class="main"><div class="wrap wide"><div class="form w122sopf">'
+      + '<p class="snote" style="margin-top:0">Write it the way you would explain it to the next person running it. One item per line; the formats are shown under each box.</p>'
+      + '<div class="row2"><label>Title<input type="text" data-sf="title" value="' + E(t ? sopTitle(t) : '') + '" placeholder="For example: Flag Football tournament"></label>'
+      + '<label>Owner<input type="text" data-sf="owner" value="' + E(b.owner || '') + '" placeholder="For example: Fundraising, with Marketing"></label></div>'
+      + '<label>One-line summary<small>Shown on the card in the academy and on the team page.</small><input type="text" data-sf="description" value="' + E((t && t.description) || '') + '"></label>'
+      + '<div class="teams"><span>Teams</span>' + SOP_TEAMS.map(function (d) { return '<label class="tg"><input type="checkbox" data-sfteam="1" value="' + d + '"' + (ds.indexOf(d) >= 0 ? ' checked' : '') + '>' + E(teamShortName(d)) + '</label>'; }).join('') + '</div>'
+      + ta('intro', 'What it is and why we do it', 'A short paragraph.', b.intro, 3)
+      + ta('glance', 'At a glance', 'Label: value, one per line. For example: When: a Saturday in August', pairsOut(b.glance, ': '), 5)
+      + ta('format', 'How it works', 'Optional. One point per line.', (b.format || []).join('\n'), 3)
+      + ta('editions', 'Past editions', 'Year | when | what happened, one per line.', triplesOut(b.editions), 4)
+      + ta('roles', 'Who does what', 'Role: what they do, one per line.', pairsOut(b.roles, ': '), 5)
+      + ta('phases', 'Step by step', 'Start each phase with ## when | title, then one step per line. For example: ## 5 months out | Lock the partner', phasesOut(b.phases), 14)
+      + ta('dayof', 'On the day', 'One step per line.', (b.dayof || []).join('\n'), 5)
+      + '<div class="row2">' + ta('money', 'Money', 'One point per line.', (b.money || []).join('\n'), 4) + ta('lessons', 'What we learned', 'One lesson per line.', (b.lessons || []).join('\n'), 4) + '</div>'
+      + '<div class="row2">' + ta('confirm', 'Still to confirm', 'Optional. One question per line.', (b.confirm || []).join('\n'), 3) + ta('links', 'Documents', 'Title | https://link, one per line.', linksOut(b.links), 3) + '</div>'
+      + '<label style="max-width:180px">Minutes to read<input type="number" min="1" max="120" data-sf="minutes" value="' + E((t && t.minutes) || 6) + '"></label>'
+      + '</div></div></div></div>'
+      + '<div class="ft">' + (!isNew && isLeader() ? '<button class="w122btn ghost" data-w122retire="1">Retire it</button>' : '') + '<span class="sp"></span><button class="w122btn soft" data-w122sopcancel="1">Cancel</button><button class="w122btn" data-w122sopsave="1">' + ic('check') + (isNew ? ' Add the SOP' : ' Save') + '</button></div>';
+    var main = sh.querySelector('.main'); if (main) main.scrollTop = 0;
+    var first = sh.querySelector('[data-sf="title"]'); if (first && isNew) { try { first.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  function slugOf(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'sop'; }
+  var sopSaving = false;
+  async function saveSopForm() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh || !R || sopSaving) return;
+    var f = {}; sh.querySelectorAll('[data-sf]').forEach(function (el) { f[el.getAttribute('data-sf')] = el.value; });
+    var depts = Array.prototype.map.call(sh.querySelectorAll('[data-sfteam]:checked'), function (el) { return el.value; });
+    var title = String(f.title || '').trim().replace(/^SOP:\s*/i, '');
+    if (!title) { toastS('Give the SOP a title'); return; }
+    if (!depts.length) { toastS('Pick at least one team'); return; }
+    var old = R.t ? sopBody(R.t) : {};
+    var body = Object.assign({}, old, {
+      v: 1, depts: depts, owner: String(f.owner || '').trim(), intro: String(f.intro || '').trim(),
+      glance: pairsIn(f.glance, ': '), format: linesOf(f.format), editions: triplesIn(f.editions), roles: pairsIn(f.roles, ': '),
+      phases: phasesIn(f.phases), dayof: linesOf(f.dayof), money: linesOf(f.money), lessons: linesOf(f.lessons), confirm: linesOf(f.confirm),
+      links: linksIn(f.links), reviewed: ymdToday(), edited_by: me().full
+    });
+    var row = { title: 'SOP: ' + title, description: String(f.description || '').trim() || null, kind: 'sop', category: 'Our SOPs', body: body, minutes: f.minutes ? Math.max(1, Math.min(120, Math.round(Number(f.minutes)))) : null, updated_at: nowIso() };
+    sopSaving = true;
+    try {
+      var res;
+      if (R.t) {
+        res = await db.from('trainings').update(row).eq('id', R.t.id).select(); if (res.error) throw res.error;
+        Object.keys(row).forEach(function (k) { R.t[k] = row[k]; }); applyTrainings(A.trainings); toastS('Saved'); var keep = R.t; openTraining(keep.id);
+      } else {
+        row.active = true; row.sort = 900; row.source = 'hub'; row.xp = 30; row.key = 'sop:' + slugOf(title) + '-' + Date.now().toString(36);
+        res = await db.from('trainings').insert(row).select(); if (res.error) throw res.error;
+        var nt = (res.data && res.data[0]) || row; if (!nt.id) nt.id = 'tmp' + Date.now();
+        A.trainings.push(nt); applyTrainings(A.trainings); toastS('Added to Our SOPs');
+        if (location.hash === '#training/t/' + nt.id) openTraining(nt.id); else location.hash = '#training/t/' + nt.id;
+      }
+      SC.rows = null; paintSoon(); setTimeout(function () { injectSopCard(true); }, 50);
+    } catch (e) { toastS('Could not save: ' + String((e && e.message) || e).slice(0, 80)); }
+    finally { sopSaving = false; }
+  }
+
+  /* ---------- the academy home: Our SOPs ---------- */
+  function sopTile(t) {
+    var b = sopBody(t), ds = sopDepts(t), done = isDone(t.id), nx = sopFundFor(t).filter(fundUpcoming)[0];
+    return '<button class="w122sopt' + (done ? ' ok' : '') + '" data-w122open="' + E(t.id) + '"><span class="tp"><span class="i">' + ic('list') + '</span>' + ds.slice(0, 2).map(function (d) { return '<span class="tm">' + E(teamShortName(d)) + '</span>'; }).join('') + (done ? '<span class="dn">' + ic('check') + ' Read</span>' : '') + '</span>'
+      + '<b>' + E(sopTitle(t)) + '</b><span class="ds">' + E(clip2(t.description || b.intro || '', 140)) + '</span>'
+      + '<span class="ft">' + ic('clock') + ' ' + mins(minutesOf(t)) + ((b.phases || []).length ? ' \u00b7 ' + plural(b.phases.length, 'phase') : '') + (nx ? '<em>Next: ' + E(nx.title) + '</em>' : '') + '</span></button>';
+  }
+  function sopsHomeHtml() {
+    var list = A.trainings.filter(isSop).sort(sopSort), canAdd = canEditSop(null);
+    if (!list.length && !canAdd) return '';
+    if (!SF.rows && !SF.busy) sopFundLoad().then(paintSoon);
+    var mine = me().dept;
+    if (mine) list = list.filter(function (t) { return sopDepts(t).indexOf(mine) >= 0; }).concat(list.filter(function (t) { return sopDepts(t).indexOf(mine) < 0; }));
+    return '<section class="w122sec" data-sec="sops"><div class="w122sech"><div><h2>Our SOPs</h2><div class="sub">How we run the things we do again and again: step by step, with what we learned last time. Your team\u2019s come first.</div></div><span class="sp"></span>'
+      + (canAdd ? '<button class="w122btn soft sm" data-w122sopnew="' + E(mine || '') + '">' + ic('plus') + ' Write an SOP</button>' : '') + '</div>'
+      + (list.length ? '<div class="w122sops">' + list.map(sopTile).join('') + '</div>' : '<div class="w122none">No SOPs yet. Write down how your team runs something it does again and again.</div>') + '</section>';
+  }
+
+  /* ---------- each team's overview: Our SOPs ---------- */
+  var SC = { rows: null, busy: null, at: 0 };
+  function sopCardLoad() {
+    if (A.loaded) { SC.rows = A.trainings.filter(isSop); SC.at = Date.now(); return Promise.resolve(SC.rows); }
+    if (SC.rows && Date.now() - SC.at < 120000) return Promise.resolve(SC.rows);
+    if (SC.busy) return SC.busy;
+    SC.busy = Promise.resolve(db.from('trainings').select('id, title, description, kind, body, sort, active, category, minutes, key').eq('kind', 'sop').eq('active', true).order('sort'))
+      .then(function (r) { SC.rows = ((r && r.data) || []).filter(isSop); SC.at = Date.now(); SC.busy = null; return SC.rows; },
+        function () { SC.busy = null; SC.rows = SC.rows || []; return SC.rows; });
+    return SC.busy;
+  }
+  function teamRouteSop() { var h = decodeURIComponent(location.hash || '').replace(/^#/, ''); var p = h.split('/'); if (p[0] !== 'team' || !p[1] || SOP_TEAMS.indexOf(p[1]) < 0) return null; if (p[2] && p[2] !== 'overview') return null; return p[1]; }
+  function sopCardHtml(d) {
+    var list = (SC.rows || []).filter(function (t) { return sopDepts(t).indexOf(d) >= 0; }).sort(sopSort);
+    var body = SC.rows == null ? '<p class="w116empty">Loading\u2026</p>' : list.length
+      ? '<div class="w122soprows">' + list.map(function (t) { return '<a class="w122soprow" data-w122sopgo="' + E(t.id) + '" tabindex="0" role="button"><span class="i">' + ic('list') + '</span><span class="tx"><b>' + E(sopTitle(t)) + '</b><span>' + E(clip2(t.description || '', 88)) + '</span></span>' + ic('chev') + '</a>'; }).join('') + '</div>'
+      : '<p class="w116empty">No SOPs for this team yet. Write down how the team runs the things it does again and again, so the next person starts from what worked.</p>';
+    return '<div class="w116card w122sopcard" id="w122sopcard" data-d="' + d + '"><h3>Our SOPs <span class="lnk" data-w122sopall="1">all SOPs</span></h3>' + body
+      + (canEditSop(null) ? '<div class="w116addrow"><a data-w122sopnew="' + d + '">+ Write an SOP</a></div>' : '') + '</div>';
+  }
+  var sopCardBusy = false;
+  function injectSopCard(force) {
+    if (sopCardBusy) return;
+    var d = teamRouteSop(); if (!d || !staffOk()) return;
+    var host = document.getElementById('w116host'); if (!host) return;
+    var cols = host.querySelectorAll('.w116grid > .w116col'); var col = cols[1] || cols[0]; if (!col) return;
+    var anchor = null;
+    Array.prototype.forEach.call(col.children, function (c) { if (c.id === 'w122sopcard') return; var h3 = c.querySelector('h3'); if (h3 && /^projects/i.test(String(h3.textContent || '').trim())) anchor = c; });
+    var html = sopCardHtml(d), cur = document.getElementById('w122sopcard');
+    var placed = cur && cur.parentNode === col && (anchor ? anchor.nextElementSibling === cur : true);
+    if (cur && !force && placed && cur.__h === html) return;
+    sopCardBusy = true;
+    try {
+      if (cur) cur.remove();
+      if (anchor) anchor.insertAdjacentHTML('afterend', html); else col.insertAdjacentHTML('beforeend', html);
+      var nc = document.getElementById('w122sopcard'); if (nc) nc.__h = html;
+    } finally { sopCardBusy = false; }
+    if (SC.rows == null && !SC.busy) sopCardLoad().then(function () { injectSopCard(true); });
+  }
+  var sopCardT = null;
+  function watchSopTeam() {
+    var sec = document.getElementById('team'); if (!sec || sec.__w122sop) return;
+    sec.__w122sop = true;
+    try { new MutationObserver(function () { if (sopCardBusy) return; clearTimeout(sopCardT); sopCardT = setTimeout(function () { injectSopCard(false); }, 60); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+  window.addEventListener('hashchange', function () { try { if (teamRouteSop()) { watchSopTeam(); setTimeout(function () { injectSopCard(false); }, 120); } } catch (e) { /* fine */ } });
+
+  /* ---------- clicks that work anywhere (team cards, the events calendar, the SOP sheet) ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w122sopgo]'))) { e.preventDefault(); location.hash = '#training/t/' + el.getAttribute('data-w122sopgo'); return; }
+    if ((el = t.closest('[data-w122sopnew]'))) { e.preventDefault(); var dd = el.getAttribute('data-w122sopnew') || ''; if (location.hash === '#training/sopnew/' + dd) { openSopForm(null, dd); } else location.hash = '#training/sopnew/' + dd; return; }
+    if ((el = t.closest('[data-w122sopall]'))) { e.preventDefault(); location.hash = '#training/sops'; return; }
+    if ((el = t.closest('[data-w122sopfund]'))) { e.preventDefault(); location.hash = '#fundevents/' + el.getAttribute('data-w122sopfund'); return; }
+    if (!t.closest('#w122sheet') || !R) return;
+    if ((el = t.closest('[data-w122sopedit]'))) { stopTimer(); R.mode = 'sopform'; renderSheet(); return; }
+    if ((el = t.closest('[data-w122sopsave]'))) { saveSopForm(); return; }
+    if ((el = t.closest('[data-w122sopcancel]'))) { if (R.t) openTraining(R.t.id); else closeSheet(); return; }
+    if ((el = t.closest('[data-w122sopjump]'))) {
+      var sec2 = document.getElementById('w122sop-' + el.getAttribute('data-w122sopjump')), main = document.querySelector('#w122sheet .main');
+      if (sec2 && main) main.scrollTo({ top: sec2.offsetTop - 12, behavior: reduced() ? 'auto' : 'smooth' });
+      return;
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('.w122soprow[data-w122sopgo]')) { e.preventDefault(); e.target.click(); }
+  });
+
   /* ---------- onboarding actions ---------- */
   async function afterChange() {
     var res = await evaluate({ celebrate: true });
@@ -40115,6 +40479,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       else if (r.sub === 'tour' && r.arg) { try { history.replaceState(null, '', '#training'); } catch (e) { /* fine */ } startTour(r.arg); }
       else if (r.sub === 'cert' && r.arg) openCert(r.arg);
       else if (r.sub === 'onboarding') openOnb();
+      else if (r.sub === 'sopnew') { try { history.replaceState(null, '', '#training'); } catch (e) { /* fine */ } openSopForm(null, r.arg || me().dept || ''); }
+      else if (r.sub === 'sops') { if (sheetOpen()) closeSheet(true); setTimeout(function () { var sec = document.querySelector('#w122 [data-sec="sops"]'); if (sec) sec.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); }, 80); }
       else if (sheetOpen()) closeSheet(true);
     };
     if (A.loaded) go(); else load().then(function () { paint(); after(); go(); });
@@ -40240,7 +40606,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     A: A, tours: TOURS, badges: BADGES, levels: LEVELS,
     state: function () { return { R: R, T: T }; },
     load: load, paint: paint, stats: stats, evaluate: evaluate, levelOf: levelOf, resolveStep: resolveStep,
-    startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf
+    startTour: startTour, endTour: endTour, openTraining: openTraining, complete: complete, tourAvail: tourAvail, kindOf: kindOf,
+    sop: { html: sopHtml, form: openSopForm, card: injectSopCard, fund: sopFundLoad, body: sopBody, phasesIn: phasesIn, phasesOut: phasesOut }
   };
 })();
 /* =====================================================================
