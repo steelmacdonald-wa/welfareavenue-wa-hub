@@ -1,3 +1,4 @@
+// v8 (25/09/26): a List-Unsubscribe header alone no longer marks mail as noise (Google Groups add one to real people's mail; bulk senders and mailing services still do); "Invitation with note" is calendar mail; applications match open positions in dept_requests (the table name was wrong). Filed emails now reach the team inbox, where Jev decides whether to ping the team (team-inbox).
 // v6 (25/09/26): classifier routed through the Hub model router (llm, task mail_triage), Jev checks every filing (jevMail), job applications become candidates in Recruitment (fileApplication, label Hub/Recruitment).
 // Welfare Avenue: mail-pull (v5, 25/09/26)
 // v5: the hub@ mailbox shows the trail. Every processed email gets a Gmail
@@ -46,7 +47,10 @@ const DEPT_LABEL: Record<string, string> = {
   fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance',
 };
 const NOISE_SENDERS = /(no-?reply@accounts\.google\.com|mail-noreply@google\.com|chat-noreply@google\.com|calendar-notification@google\.com|drive-shares-noreply@google\.com|mailer-daemon|postmaster@|noreply@google\.com|workspace-noreply@google\.com)/i;
-const CALENDAR_SUBJECT = /^(invitation|updated invitation|accepted|declined|tentatively accepted|canceled event|cancelled event|new event|reminder):/i;
+const CALENDAR_SUBJECT = /^(invitation|invitation with note|updated invitation|updated invitation with note|accepted|declined|tentatively accepted|canceled event|cancelled event|canceled event with note|cancelled event with note|new event|reminder):/i;
+/* bulk senders: a List-Unsubscribe header alone is not enough (Google Groups add one to real people's mail) */
+const BULK_SENDER = /(^|[._-])(no-?reply|newsletters?|mailer|notifications?|news|marketing|campaigns?|updates?|digest)@/i;
+const BULK_ESP = /mailchimp|mcsv\.net|sendgrid|constantcontact|hubspot|klaviyo|substack|campaign-archive|mailerlite|sendinblue|brevo|convertkit|list-manage/i;
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -393,7 +397,7 @@ async function fileApplication(token: string, row: MailRow, site: string): Promi
   /* an open position that matches the role they name */
   let requestId: number | null = null;
   try {
-    const { data: reqs } = await svc.from('requests').select('id, title, done').eq('type_key', 'hiring-request').eq('done', false);
+    const { data: reqs } = await svc.from('dept_requests').select('id, title, done').eq('type_key', 'hiring-request').eq('done', false);
     const words = String(c.role || row.subject || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !/application|position|role|job|apply|applying|for|the|with|your|welfare|avenue/.test(w));
     let best: { id: number; score: number } | null = null;
     for (const r of (reqs || []) as Array<{ id: number; title: string }>) {
@@ -529,7 +533,8 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
       const links = Array.from(new Set((bodyText.match(/https?:\/\/[^\s<>"')\]]+/g) || []).map(l => l.replace(/[.,;:]+$/, '')))).slice(0, 30);
       const base = { gmail_id: id, thread_id: m.threadId, internal_date: internal, from_email: from.email, from_name: from.name, to_list: hdr(m, 'To').slice(0, 1000), cc_list: hdr(m, 'Cc').slice(0, 1000), subject: hdr(m, 'Subject').slice(0, 500), snippet: String(m.snippet || '').slice(0, 300), body_text: bodyText, attachments: parsed.atts, links };
       const listUnsub = !!hdr(m, 'List-Unsubscribe');
-      const isNoise = NOISE_SENDERS.test(from.email) || CALENDAR_SUBJECT.test(base.subject) || from.email === HUB || (listUnsub && !from.email.endsWith('@welfareavenue.com')) || /^(welcome to chat|tips for using your new inbox|get the official gmail app)/i.test(base.subject);
+      const bulk = listUnsub && !from.email.endsWith('@welfareavenue.com') && (BULK_SENDER.test(from.email) || BULK_ESP.test(hdr(m, 'List-Unsubscribe') + ' ' + hdr(m, 'List-Id') + ' ' + hdr(m, 'X-Mailer') + ' ' + hdr(m, 'Return-Path')) || /^bulk$/i.test(hdr(m, 'Precedence')));
+      const isNoise = NOISE_SENDERS.test(from.email) || CALENDAR_SUBJECT.test(base.subject) || from.email === HUB || bulk || /^(welcome to chat|tips for using your new inbox|get the official gmail app)/i.test(base.subject);
       let cls: Cls;
       if (isNoise) cls = { kind: 'noise', department: null, title: base.subject.slice(0, 90), summary: '', amount: null, due_date: null, meeting_date: null, vendor: null, confidence: 1, reason: 'system or calendar mail' };
       else {

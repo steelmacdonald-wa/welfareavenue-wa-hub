@@ -348,6 +348,7 @@
       w105MyRender();
     });
   }
+  window.w105ReqModal = w105ReqModal; /* wave123: the Requests page opens the time off form */
   async function w105MyCards() {
     var panel = document.getElementById('mypage');
     if (!panel || !panel.children.length || document.getElementById('w105my')) return;

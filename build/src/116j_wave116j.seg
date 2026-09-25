@@ -299,7 +299,7 @@
   document.addEventListener('click', function (e) { var tb = e.target.closest && e.target.closest('.w47tab'); if (tb && tb.getAttribute('data-w47v') === 'hours') { [400, 1200].forEach(function (ms) { setTimeout(hoursBlock, ms); }); } });
 
   /* ---------- 6. Settings ---------- */
-  var EVENTS = [['request_filed', 'A request is filed for my team'], ['task_reassigned', 'A task is handed to me'], ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'], ['mentioned', 'A meeting mentions me'], ['invited', 'Someone I invited joins the Hub']];
+  var EVENTS = [['request_filed', 'A request is filed for my team'], ['task_reassigned', 'A task is handed to me'], ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'], ['mentioned', 'A meeting mentions me'], ['invited', 'Someone I invited joins the Hub'], ['request_update', 'A request I asked for is done, or someone adds a note to it']];
   var PR = { disabled: [], loaded: false };
   async function loadPrefs() { try { var r = await db.from('wa_notify_prefs').select('disabled').eq('email', myEmail()).maybeSingle(); PR.disabled = (r && r.data && Array.isArray(r.data.disabled)) ? r.data.disabled : []; PR.loaded = true; } catch (e) { PR.disabled = []; } }
   async function savePrefs() { try { await db.from('wa_notify_prefs').upsert({ email: myEmail(), disabled: PR.disabled, updated_at: new Date().toISOString() }); toastS('Notification settings saved'); } catch (e) { toastS('Could not save settings'); } }

@@ -1646,6 +1646,7 @@
       S('#w116host .w116kpis', 'Key numbers', 'Open and overdue tasks, work finished in the last 30 days, active projects and meetings coming up. Click a number to open the list behind it.', OPT),
       H(/^Where the team is/i, '.w116card', 'Where the team is', 'The pulse score and the high priority list, rebuilt from the latest transcripts. Re-run it after a big meeting.', OPT),
       H(/^Executive decisions for this team/i, '.w116card', 'Decisions for this team', 'Calls waiting on an executive, with who decides and the AI\u2019s recommendation. Decide them on the Executive dashboard.', OPT),
+      S('#w123tcard', 'Team inbox', 'Requests to this team, emails the Hub inbox filed for it (Jev pings the team\u2019s Slack channel only when one needs you soon) and asks spotted in its meetings. Open one to set its status, hand it on or mark it done.', OPT),
       S('#w116updcard', 'Updates', 'What each meeting changed for this team, newest first. Add an update or a task from the bottom of the card.', OPT),
       H(/^Mentions from other teams/i, '.w116card', 'Mentions from other teams', 'Where other teams talked about your people or your work, so nothing falls between teams.', OPT),
       S('#w116meet', 'Upcoming meetings', 'The team\u2019s next meetings, with a link to build or open the agenda.', OPT),
@@ -1721,12 +1722,13 @@
       S('#projectpage .add-row', 'Add a task', 'Quick-add a task straight into the project.', OPT),
       S('#projectpage details.completed', 'Completed', 'Finished tasks keep their history.', OPT)
     ] },
-    requests: { tab: 'requests', icon: 'chat', hash: '#requests', steps: [
-      S('#requests > .w118mast', 'Asking another team', 'How teams ask each other for work, with a form for every kind of ask.'),
-      S('#w50box', 'Suggested from meetings', 'Asks the AI heard in recent transcripts. Nothing is filed until someone accepts it; dismiss the ones that do not apply.', OPT),
-      S('#reqSearch', 'Find the right request', 'Search the request types by what you need.', OPT),
-      S('#reqBody .req-grid', 'Request types', 'Each card is a kind of ask, labelled with the team that actions it. Pick one, fill in the short form, and it lands on that team\u2019s page.', OPT),
-      S('#reqBody .req-row', 'Recent requests', 'Follow your requests through to done. Statuses update live as the other team works on them.', OPT)
+    requests: { tab: 'requests', icon: 'chat', hash: '#requests/new', steps: [
+      S('#requests > .w118mast', 'Asking another team', 'Ask another team for something, follow it through to done, and see what came in for your own team.'),
+      S('#w123 .w123seg', 'Three places', 'New request to ask a team for something. My requests to follow what you asked for. Team inbox for what came in for your team. Leaders also see All requests.'),
+      S('#w123 .w123search', 'Search or pick', 'Type what you need (a flyer, a reimbursement, time off, volunteers) to jump straight to the right form.', OPT),
+      S('#w123 .w123teams', 'Start with the team', 'Each tile says what the team is asked for and the Slack channel where your request is posted. Pick one, then pick what you need or Something else, and fill in the short form.', OPT),
+      S('#w123 .w123list', 'Spotted in meetings', 'Asks the Hub heard in recent meetings. Nothing is filed until someone accepts it; they also wait in the team\u2019s inbox.', OPT),
+      S('#w123 .w123seg a[data-w123go^="#requests/team"]', 'Your team inbox', 'Requests to your team, emails the Hub inbox filed for it, and asks spotted in its meetings, in one list. Open anything to set its status, hand it on, mark it done or add a note; notes go into the Slack thread too.', OPT)
     ] },
     transcripts: { tab: 'transcripts', icon: 'mic', hash: '#transcripts', steps: [
       S('#transcripts > .w118mast', 'Meetings become work', 'Every meeting the Hub has read, and where to add the next one.'),
