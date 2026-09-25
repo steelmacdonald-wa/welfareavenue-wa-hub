@@ -1,4 +1,5 @@
-// Welfare Avenue: hub-invite (v3, 24/09/26)
+// Welfare Avenue: hub-invite (v4, 25/09/26)
+// v4: Program Development (progdev) is a department people can be invited into.
 // v3: when a person already has Hub access and the request does not name
 //   an access level (bulk invites default to "keep each person's current
 //   access"), the existing level is kept instead of being reset to member.
@@ -35,7 +36,7 @@ const CORS: Record<string, string> = {
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 const FALLBACK_ADMINS = ['steel.macdonald', 'suhaib.abdillahi', 'ian.odhiambo', 'valex.sanon', 'tuna.kaynak', 'michael.michailidis'];
-const DEPTS = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+const DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
 const HUB_ROLES = ['admin', 'leader', 'member', 'viewer'];
 
 type Caller = { email: string; level: 'admin' | 'leader'; department: string | null };

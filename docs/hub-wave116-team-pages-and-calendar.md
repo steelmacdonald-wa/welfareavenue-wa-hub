@@ -92,6 +92,14 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 - Job descriptions: the HR shared drive keeps them under *Recruitment* > Job descriptions (J.D. - Operations, Marketing, fundraising, Executive), Board Job Descriptions, Program Development > Job Descriptions, plus "Fundraising Team Structure - JDs" (May 2026, per person). Migration `wa116k_job_descriptions_and_responsibilities` linked a job description for 38 people and wrote three to five responsibilities for 43 (from the document where one exists, from the roster role and project leads otherwise), logged in change_log. No document in the Drive yet for the HR roles (Valex, Natasha, Samson, Tuna), Melvina or Rima; the picker in the editor lists every job description the Drive mirror knows.
 - The profile keeps the older chain alive (wave33 base, wave36 training, wave37 onboarding, wave116c responsibilities) by letting it render into a decoy section and lifting its blocks into the new layout, so every editor and link keeps working.
 
+## The roster follows Google Workspace (`116l_wave116l`, `directory-sync` v1)
+
+- Steel added the read-only directory scope and said go for all three. `directory-sync` reads the welfareavenue.com user list through the delegation (acting as Steel's admin account, the only kind the Directory API answers) once a day (cron `wa-directory-sync`, jobid 15, 06:20 Montreal) and on "Check Workspace now".
+- New accounts that match no roster profile by email wait in **Workspace accounts > Place on the roster** (People and access, admins): name, email, Google title, created, last sign-in. "Add to the roster" opens one modal: link to an existing profile that has no email (the closest first-name match is preselected; keeps their tasks, projects and history) or create a new profile with team (Program Development included; hub-invite v4 and the wave113 list gained `progdev`), role title from the Google title, hub access and the sign-in email; the Google photo is copied. "Not a person" skips shared mailboxes and test accounts (undo under the skipped list); hub@, info@, org@, jobs@ and friends are skipped by rule.
+- An account suspended, archived or deleted in Workspace marks the profile inactive the same day with a change_log line (`team_member/active`, which the Executive dashboard shows as a departure); an account the sync deactivated that comes back is reactivated. A Slack line summarises each pass that changed something.
+- Google profile photos fill in for anyone without a hub photo (avatars bucket, `google/<member_id>`), refreshed when the Google photo changes; a photo uploaded on the hub is never overwritten.
+- Tables `hub_directory` and `hub_directory_state` (migration `wa116l_hub_directory`). The first run needs the **Admin SDK API enabled** in the Google Cloud project (939437859037): the card shows the exact link until it is.
+
 ## Backend
 
 - `public.hub_events` + `public.hub_calendar_state` (migration `wa116_hub_events`), RLS read for staff/board/admin.
@@ -101,7 +109,7 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 
 ## Follow-ups
 
-- Google connections: add the calendar.events and drive.readonly scopes to the delegation entry (see The header above).
+- Google connections: scopes added by Steel (25/09). Enable the Admin SDK API in the Cloud project so the roster sync can run; the Calendar and Drive switches can be tested now.
 - Anthropic credit: the vault key still returns "credit balance too low" (Brain, goal suggestions, transcript processing, the mail classifier and the profile About summary wait on it).
 - Job descriptions for the HR team, Melvina and Rima: none in the Drive; link them from the profile editor once written.
 

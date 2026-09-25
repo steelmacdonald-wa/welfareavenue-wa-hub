@@ -24,6 +24,8 @@ with open(OUT, "r", encoding="utf-8") as f:
 orig = html
 
 REPLACE = [
+    # wave116l: Program Development is a team people can be invited into
+    ("var DEPTS113 = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];", "var DEPTS113 = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];"),
     # wave116k: the profile page help texts
     ("personpage: '<p>One person: their AI bio, fiscal-year stats, current plate, finished work, and training and onboarding progress.</p>'", "personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'"),
     ("fl = ['Read the bio', 'See their plate', 'Check their training'];", "fl = ['Read the responsibilities', 'See their plate and projects', 'Check hours and training'];"),

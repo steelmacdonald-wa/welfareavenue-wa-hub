@@ -1,0 +1,198 @@
+/* =====================================================================
+   WA v116l the roster follows Google Workspace (25/09/26)
+   =====================================================================
+   Steel: "Go for all of them": new @welfareavenue.com accounts land in a
+   "Place on the roster" queue in People and access; an account suspended
+   or deleted in Workspace marks the profile inactive the same day, with
+   a change_log line; Google profile photos fill in for anyone without a
+   hub photo. The edge function directory-sync (daily cron
+   wa-directory-sync, 06:20 Montreal) does the reading and the marking;
+   this segment is the admin card:
+   - "Workspace accounts" sits above People and access (admins): last
+     check, what the last pass did, the queue with "Add to the roster"
+     (a modal: team, role title from the Google title, hub access, the
+     invitation email, or "this is an existing profile without an email"
+     which links the account to that profile) and "Not a person" (shared
+     mailboxes, test accounts), the accounts marked inactive from
+     Workspace this month, and "Check Workspace now".
+   ===================================================================== */
+(function () {
+  if (window.__wa116l) return; window.__wa116l = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var L = { rows: [], state: null, loaded: false, loading: null, busy: false, showDismissed: false };
+
+  var css = document.createElement('style');
+  css.id = 'wa116lcss';
+  css.textContent = '' +
+    '#w116lcard{margin-bottom:16px;font-family:' + BODY + ';}' +
+    '#w116lcard h2{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}' +
+    '#w116lcard h2 .n{font-family:' + HEAD + ';font-size:13px;letter-spacing:.6px;font-weight:600;color:' + CREAM + ';background:' + FLAG + ';border-radius:999px;padding:3px 10px;}' +
+    '#w116lcard .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;}' +
+    '#w116lcard .bar .sp{flex:1;}' +
+    '#w116lcard .err{background:rgba(179,64,47,.08);border-left:4px solid ' + FLAG + ';border-radius:10px;padding:10px 14px;font-size:13px;color:var(--wa-text);margin:0 0 12px;line-height:1.5;}' +
+    '#w116lcard .err code{font-size:12px;background:rgba(16,63,57,.06);padding:1px 5px;border-radius:5px;}' +
+    '#w116lcard h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:14px 0 8px;}' +
+    '#w116lcard .q{display:flex;flex-direction:column;gap:8px;}' +
+    '#w116lcard .q .r{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:12px;align-items:center;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 14px;}' +
+    '#w116lcard .q .r .who b{display:block;font-size:14px;color:var(--wa-text);}' +
+    '#w116lcard .q .r .who span{font-size:12px;color:var(--wa-muted);display:block;margin-top:2px;line-height:1.4;}' +
+    '#w116lcard .q .r .acts{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '#w116lcard .q .r.off{opacity:.7;}' +
+    '#w116lcard .q .r.off .who b{text-decoration:line-through;}' +
+    '#w116lcard .sum{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '#w116lcard .sum span{display:inline-flex;align-items:center;gap:6px;background:rgba(16,63,57,.06);border-radius:999px;padding:5px 12px;font-size:12.5px;color:var(--wa-text);}' +
+    '#w116lcard .sum span b{font-size:14px;color:' + GREEN + ';}' +
+    '#w116lcard .empty{font-size:13px;color:var(--wa-muted);margin:0;}' +
+    '#w116lcard .lnk{font-size:12px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;}' +
+    '#w116lcard .left{font-size:13px;color:var(--wa-text);margin:0;line-height:1.6;}' +
+    '.w116lm .hint{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
+    '.w116lm .res{margin-top:12px;padding:12px;background:rgba(16,63,57,.05);border-radius:10px;font-size:13px;line-height:1.55;}' +
+    '@media (max-width:700px){#w116lcard .q .r{grid-template-columns:36px minmax(0,1fr);}#w116lcard .q .r .acts{grid-column:1 / -1;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function isAdmin() { if (FOUNDERS.indexOf(myEmail()) >= 0) return true; try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function label(d) { try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function depts() { var o = (window.WA_TEAMS && WA_TEAMS.order) ? WA_TEAMS.order.slice() : ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr']; if (o.indexOf('board') < 0) o.push('board'); return o; }
+  function av(p, size) { return window.w116Avatar ? window.w116Avatar(p, size) : ''; }
+  function when(s) { if (!s) return 'never'; try { var d = new Date(s); var diff = (Date.now() - d.getTime()) / 60000; if (diff < 2) return 'just now'; if (diff < 60) return Math.round(diff) + ' min ago'; if (diff < 36 * 60) return Math.round(diff / 60) + ' h ago'; return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(s).slice(0, 10); } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []); }
+  async function fn(name, body) {
+    var r = await db.functions.invoke(name, { body: body });
+    if (r && r.error) { var msg = ''; try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ } throw new Error(msg || r.error.message || 'failed'); }
+    if (!r || !r.data) throw new Error('no reply from the Hub');
+    if (r.data.error && r.data.ok !== true) throw new Error(r.data.error);
+    return r.data;
+  }
+
+  /* ---------- data ---------- */
+  async function load(force) {
+    if (L.loading) return L.loading;
+    if (L.loaded && !force) return Promise.resolve();
+    L.loading = (async function () {
+      try { var r = await fn('directory-sync', { action: 'status' }); L.rows = r.rows || []; L.state = r.state || null; L.loaded = true; L.err = null; }
+      catch (e) { L.err = String(e.message || e); L.loaded = true; }
+      L.loading = null;
+    })();
+    return L.loading;
+  }
+  function queue() { return L.rows.filter(function (r) { return !r.member_id && !r.dismissed && !r.skipped && !r.suspended && !r.archived && !r.deleted_at; }); }
+  function dismissed() { return L.rows.filter(function (r) { return !r.member_id && (r.dismissed || r.skipped) && !r.deleted_at; }); }
+  function leftRecently() { var cut = Date.now() - 31 * 86400000; return L.rows.filter(function (r) { return r.deactivated_at && new Date(r.deactivated_at).getTime() > cut; }); }
+  function memberName(id) { var m = members().filter(function (x) { return String(x.id) === String(id); })[0]; return m ? m.name : null; }
+
+  /* ---------- the card ---------- */
+  function ensureCard() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !isAdmin()) return null;
+    var card = document.getElementById('w116lcard'); if (card) return card;
+    var people = document.getElementById('w113card');
+    card = document.createElement('div'); card.className = 'card'; card.id = 'w116lcard';
+    card.innerHTML = '<h2>Workspace accounts</h2><p class="read">The roster follows Google Workspace: new welfareavenue.com accounts wait here to be placed on a team, accounts suspended or deleted in Workspace go inactive on the hub the same day, and Google profile photos fill in for anyone without a hub photo. Checked once a day.</p><div id="w116lbody"><p class="empty">Loading...</p></div>';
+    if (people && people.parentNode === panel) panel.insertBefore(card, people); else panel.insertBefore(card, panel.firstChild);
+    return card;
+  }
+  function paint() {
+    var body = document.getElementById('w116lbody'); if (!body) return;
+    if (!L.loaded) { body.innerHTML = '<p class="empty">Loading...</p>'; return; }
+    var st = L.state || {}; var res = st.last_result || null; var q = queue(); var dis = dismissed(); var left = leftRecently();
+    var h2 = document.querySelector('#w116lcard h2'); if (h2) { var old = h2.querySelector('.n'); if (old) old.remove(); if (q.length) { var n = document.createElement('span'); n.className = 'n'; n.textContent = q.length + ' to place'; h2.appendChild(n); } }
+    var html = '<div class="bar"><span>Last checked: <b>' + E(when(st.last_sync_at)) + '</b></span>' +
+      (res ? '<span>' + E(res.users || 0) + ' accounts in Workspace, ' + E(res.matched || 0) + ' on the roster' + (res.photos ? ', ' + res.photos + ' photo' + (res.photos === 1 ? '' : 's') + ' filled in' : '') + (res.skipped ? ', ' + res.skipped + ' shared mailbox' + (res.skipped === 1 ? '' : 'es') + ' skipped' : '') + '</span>' : '') +
+      '<span class="sp"></span><button class="w113btn ghost" data-w116l="sync"' + (L.busy ? ' disabled' : '') + '>' + (L.busy ? 'Checking...' : 'Check Workspace now') + '</button></div>';
+    if (L.err) html += '<div class="err">Could not reach the roster sync: ' + E(L.err) + '</div>';
+    if (st.last_error) html += '<div class="err">The last check failed: ' + E(st.last_error).replace(/(https?:\/\/[^\s)]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>') + '</div>';
+    html += '<h4>Place on the roster (' + q.length + ')</h4>';
+    if (!q.length) html += '<p class="empty">' + (st.last_sync_at ? 'Every Workspace account is on the roster.' : 'Nothing yet: the first check has not run.') + '</p>';
+    else html += '<div class="q">' + q.map(function (r) {
+      return '<div class="r" data-w116lrow="' + E(r.email) + '">' + av({ name: r.full_name || r.email }, 36) + '<div class="who"><b>' + E(r.full_name || r.email) + '</b><span>' + E(r.email) + (r.title ? ' &middot; ' + E(r.title) : '') + (r.account_created_at ? ' &middot; account created ' + E(when(r.account_created_at)) : '') + (r.last_login_at ? ' &middot; last sign-in ' + E(when(r.last_login_at)) : ' &middot; never signed in') + '</span></div>' +
+        '<div class="acts"><button class="w113btn" data-w116l="place" data-email="' + E(r.email) + '">Add to the roster</button><button class="w113btn ghost" data-w116l="dismiss" data-email="' + E(r.email) + '">Not a person</button></div></div>';
+    }).join('') + '</div>';
+    if (left.length) html += '<h4>Marked inactive from Workspace this month</h4><p class="left">' + left.map(function (r) { return E(memberName(r.deactivated_member_id) || r.full_name || r.email) + ' <span style="color:var(--wa-muted);font-size:12px">(' + E(r.deleted_at ? 'deleted' : 'suspended') + ', ' + E(when(r.deactivated_at)) + ')</span>'; }).join(', ') + '.</p>';
+    if (dis.length) html += '<p class="empty" style="margin-top:12px"><span class="lnk" data-w116l="toggledis">' + (L.showDismissed ? 'Hide' : 'Show') + ' the ' + dis.length + ' skipped account' + (dis.length === 1 ? '' : 's') + ' (shared mailboxes, not people)</span></p>' +
+      (L.showDismissed ? '<div class="q" style="margin-top:8px">' + dis.map(function (r) { return '<div class="r off">' + av({ name: r.full_name || r.email }, 36) + '<div class="who"><b>' + E(r.full_name || r.email) + '</b><span>' + E(r.email) + (r.dismissed ? ' &middot; marked not a person' : ' &middot; skipped by rule') + '</span></div><div class="acts"><button class="w113btn ghost" data-w116l="undismiss" data-email="' + E(r.email) + '">It is a person</button></div></div>'; }).join('') + '</div>' : '');
+    body.innerHTML = html;
+  }
+
+  /* ---------- placing ---------- */
+  function candidates(r) {
+    var fn0 = lower((r.full_name || '').split(/\s+/)[0]); var last = lower((r.full_name || '').split(/\s+/).slice(-1)[0]);
+    var pool = members().filter(function (m) { return !m.email && m.active !== false; });
+    pool.sort(function (a, b) { return score(b) - score(a) || String(a.name).localeCompare(String(b.name)); });
+    function score(m) { var n = lower(m.name); var s = 0; if (fn0 && n.split(/\s+/)[0] === fn0) s += 2; if (last && n.indexOf(last) >= 0 && last !== fn0) s += 1; return s; }
+    return pool.map(function (m) { return { id: m.id, name: m.name, dept: m.department, role: m.role, score: score(m) }; });
+  }
+  function placeModal(r) {
+    var cands = candidates(r); var best = cands[0] && cands[0].score > 0 ? cands[0] : null;
+    var opts = '<option value="">No, create a new profile</option>' + cands.map(function (c) { return '<option value="' + E(c.id) + '"' + (best && c.id === best.id ? ' selected' : '') + '>' + E(c.name) + (c.role ? ' (' + E(c.role) + ')' : '') + (c.dept ? ', ' + E(label(c.dept)) : '') + '</option>'; }).join('');
+    openModal('<div class="w113modal w116lm"><h3>Add ' + E(r.full_name || r.email) + ' to the roster</h3>' +
+      '<p class="m-sub">' + E(r.email) + (r.title ? ' &middot; Google title: ' + E(r.title) : '') + '</p>' +
+      '<label>Is this an existing profile that has no email yet?</label><select id="w116lex">' + opts + '</select>' +
+      '<div class="hint">' + (best ? 'Looks like <b>' + E(best.name) + '</b>. Linking keeps their tasks, projects and history and adds the email.' : 'Nobody on the roster without an email looks like this account.') + '</div>' +
+      '<div id="w116lnew">' +
+      '<div class="w113two"><div><label>Full name</label><input type="text" id="w116ln" value="' + E(r.full_name || '') + '" /></div><div><label>Team</label><select id="w116ld">' + depts().map(function (d) { return '<option value="' + d + '">' + E(label(d)) + '</option>'; }).join('') + '</select></div></div>' +
+      '<div class="w113two"><div><label>Role title</label><input type="text" id="w116lr" value="' + E(r.title || '') + '" placeholder="e.g. Content developer" /></div><div><label>Hub access</label><select id="w116lh"><option value="member">Member</option><option value="leader">Leader</option><option value="viewer">Viewer (read only)</option><option value="admin">Admin</option></select></div></div>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:8px;margin-top:12px"><input type="checkbox" id="w116lse" checked /> Email them a sign-in invitation now (they can also sign in with Google straight away)</label>' +
+      '<div class="w113acts"><button class="w113btn" id="w116lgo">Add to the roster</button><button class="w113btn ghost" id="w116lc">Cancel</button></div><div id="w116lout"></div></div>');
+    var ex = document.getElementById('w116lex');
+    function syncForm() { var linking = !!ex.value; document.getElementById('w116lnew').style.display = linking ? 'none' : ''; }
+    ex.addEventListener('change', syncForm); syncForm();
+    document.getElementById('w116lc').addEventListener('click', closeModal);
+    document.getElementById('w116lgo').addEventListener('click', async function () {
+      var btn = this; btn.disabled = true; var out = document.getElementById('w116lout');
+      var linking = ex.value ? Number(ex.value) : null; var sendEmail = document.getElementById('w116lse').checked;
+      var name = linking ? (cands.filter(function (c) { return c.id === linking; })[0] || {}).name : document.getElementById('w116ln').value.trim();
+      var dept = linking ? null : document.getElementById('w116ld').value; var role = linking ? null : document.getElementById('w116lr').value.trim(); var hub = linking ? 'member' : document.getElementById('w116lh').value;
+      if (!name) { toastS('A name is needed'); btn.disabled = false; return; }
+      out.innerHTML = '<div class="res">Working...</div>';
+      try {
+        if (linking) { await fn('hub-invite', { action: 'set_email', member_id: linking, email: r.email }); }
+        var inv = await fn('hub-invite', { action: 'invite', name: name, email: r.email, department: dept || undefined, role_title: role || undefined, hub_role: hub, send_email: sendEmail });
+        var pl = await fn('directory-sync', { action: 'place', email: r.email, member_id: linking || inv.member_id || undefined });
+        out.innerHTML = '<div class="res"><b style="color:' + GREEN + '">' + (linking ? 'Linked to ' + E(name) : 'Profile created for ' + E(name)) + '</b> with ' + E(inv.hub_role || hub) + ' access. Sign-in email: ' + (inv.email_sent ? 'sent' : 'not sent' + (inv.note && inv.note !== 'not requested' ? ' (' + E(String(inv.note).slice(0, 100)) + ')' : '')) + '. Slack welcome: ' + E(inv.slack || 'skipped') + '. Photo: ' + E(pl.photo || 'none') + '.</div><div class="w113acts"><button class="w113btn" id="w116ldone">Done</button></div>';
+        document.getElementById('w116ldone').addEventListener('click', closeModal);
+        try { if (typeof loadAll === 'function') await loadAll(); } catch (e) { /* fine */ }
+        await load(true); paint();
+        try { if (window.w113Debug && typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+      } catch (e) { out.innerHTML = '<div class="res" style="color:' + FLAG + '">' + E(String(e.message || e)) + '</div>'; btn.disabled = false; }
+    });
+  }
+
+  document.addEventListener('click', async function (e) {
+    var b = e.target.closest && e.target.closest('#w116lcard [data-w116l]'); if (!b) return;
+    var what = b.getAttribute('data-w116l'); var email = b.getAttribute('data-email');
+    if (what === 'sync') {
+      if (L.busy) return; L.busy = true; paint();
+      try { var r = await fn('directory-sync', { action: 'sync' }); if (r.ok === false) toastS(String(r.error || 'The check failed').slice(0, 160)); else { var res = r.result || {}; toastS('Checked: ' + (res.users || 0) + ' accounts, ' + (res.queued || 0) + ' to place' + (res.deactivated && res.deactivated.length ? ', ' + res.deactivated.length + ' marked inactive' : '') + (res.photos ? ', ' + res.photos + ' photos' : '')); try { if (typeof loadAll === 'function') await loadAll(); } catch (x) { /* fine */ } } }
+      catch (err) { toastS('Could not run the check: ' + String(err.message || err).slice(0, 120)); }
+      L.busy = false; await load(true); paint(); return;
+    }
+    if (what === 'place') { var row = L.rows.filter(function (x) { return x.email === email; })[0]; if (row) placeModal(row); return; }
+    if (what === 'dismiss' || what === 'undismiss') {
+      try { await fn('directory-sync', { action: 'dismiss', email: email, undo: what === 'undismiss' }); toastS(what === 'dismiss' ? 'Skipped: not a person' : 'Back in the queue'); } catch (err) { toastS('Could not save that'); }
+      await load(true); paint(); return;
+    }
+    if (what === 'toggledis') { L.showDismissed = !L.showDismissed; paint(); return; }
+  });
+
+  /* ---------- wiring ---------- */
+  if (typeof wa40Render === 'function') {
+    var __w40r116l = wa40Render;
+    wa40Render = async function () {
+      var out = await __w40r116l.apply(this, arguments);
+      try { if (ensureCard()) { paint(); await load(false); paint(); } } catch (e) { /* non-fatal */ }
+      return out;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116l = showPanel;
+    showPanel = function (id) { var out = __sp116l.apply(this, arguments); try { if (id === 'adminpanel' && isAdmin()) setTimeout(function () { if (ensureCard()) { paint(); load(true).then(paint); } }, 800); } catch (e) { /* fine */ } return out; };
+  }
+  window.w116lDebug = function () { return { rows: L.rows.length, queue: queue().length, state: L.state, err: L.err }; };
+})();
