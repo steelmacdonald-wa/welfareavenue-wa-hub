@@ -35999,6 +35999,413 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w119Debug = function () { return { view: typeof WA_VOL_VIEW !== 'undefined' ? WA_VOL_VIEW : null, event: typeof WA_VOL_EVENT !== 'undefined' ? WA_VOL_EVENT : null, laid: !!document.getElementById('w119'), bench: V.benchRole }; };
 })();
 /* =====================================================================
+   WA v120 Marketing analytics (25/09/26)
+   =====================================================================
+   Steel: "Can the marketing department have a new page that reads
+   analytics from our Meta insights dashboard, TikTok, LinkedIn etc?"
+   One page under Marketing, Branding & Web: a tile per platform
+   (followers with the change over the period, reach, views, engagement,
+   a 90 day sparkline), one chart across platforms, the AI's weekly note,
+   the posts that worked, and a set-up drawer for staff: Meta connects
+   with the system user token in the vault, GA4 with the hub's service
+   account, TikTok and LinkedIn take their CSV exports until their APIs
+   are approved. Data: social_overview() (wa120), social-pull v1.
+   ===================================================================== */
+(function () {
+  if (window.__wa120) return; window.__wa120 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var P = {
+    instagram: { label: 'Instagram', color: '#C13584', mark: 'IG', head: 'followers', stats: ['reach', 'views', 'engagement'] },
+    facebook: { label: 'Facebook', color: '#1877F2', mark: 'f', head: 'followers', stats: ['reach', 'views', 'engagement'] },
+    tiktok: { label: 'TikTok', color: '#111111', mark: 'TT', head: 'followers', stats: ['views', 'likes', 'shares'] },
+    linkedin: { label: 'LinkedIn', color: '#0A66C2', mark: 'in', head: 'followers', stats: ['reach', 'views', 'engagement'] },
+    ga4: { label: 'Website', color: TEAL, mark: 'W', head: 'sessions', stats: ['users', 'pageviews', 'sessions_social'] },
+    youtube: { label: 'YouTube', color: '#FF0000', mark: 'YT', head: 'followers', stats: ['views', 'likes', 'comments'] }
+  };
+  var ORDER = ['instagram', 'facebook', 'tiktok', 'linkedin', 'ga4'];
+  var MLABEL = { followers: 'Followers', new_followers: 'New followers', unfollows: 'Unfollows', reach: 'Reach', views: 'Views', video_views: 'Video views', profile_views: 'Profile visits', engagement: 'Engagement', accounts_engaged: 'Accounts engaged', likes: 'Likes', comments: 'Comments', shares: 'Shares', saves: 'Saves', clicks: 'Clicks', posts: 'Posts', sessions: 'Sessions', users: 'Visitors', new_users: 'New visitors', pageviews: 'Page views', sessions_social: 'From social' };
+  var CHART_METRICS = ['reach', 'views', 'engagement', 'new_followers', 'sessions'];
+  var S = { days: 30, data: null, loading: false, err: null, filter: null, setup: false, status: null, probe: null, csv: null, chart: 'reach', busy: {} };
+
+  var css = document.createElement('style'); css.id = 'wa120css';
+  css.textContent = '' +
+    '#socialstats{font-family:' + BODY + ';}' +
+    '#socialstats .w120wrap{max-width:1180px;}' +
+    '#socialstats .w120ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}' +
+    '#socialstats .w120ctl .meta{font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .w120tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px;margin:0 0 16px;}' +
+    '#socialstats .tile{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:14px 15px 12px;box-shadow:0 12px 28px -22px rgba(16,63,57,.55);position:relative;overflow:hidden;min-height:150px;display:flex;flex-direction:column;}' +
+    '#socialstats .tile .ph{display:flex;align-items:center;gap:8px;margin:0 0 8px;}' +
+    '#socialstats .tile .mk{width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#FFFAF2;letter-spacing:.3px;flex:none;}' +
+    '#socialstats .tile .ph b{font-family:' + HEAD + ';font-size:17px;color:' + GREEN + ';letter-spacing:.3px;}' +
+    '#socialstats .tile .ph .st{margin-left:auto;font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:2px 8px;background:rgba(42,140,122,.14);color:#1c6b5d;white-space:nowrap;}' +
+    '#socialstats .tile .ph .st.csv{background:rgba(220,165,39,.2);color:#6b4d05;}#socialstats .tile .ph .st.off{background:rgba(16,63,57,.08);color:var(--wa-muted);}#socialstats .tile .ph .st.err{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '#socialstats .tile .big{font-family:' + HEAD + ';font-size:36px;line-height:1;color:' + GREEN + ';display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}' +
+    '#socialstats .tile .big small{font-family:' + BODY + ';font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);}' +
+    '#socialstats .d{display:inline-block;font-family:' + BODY + ';font-size:11px;font-weight:800;border-radius:999px;padding:2px 7px;background:rgba(42,140,122,.14);color:#1c6b5d;vertical-align:middle;}' +
+    '#socialstats .d.down{background:rgba(179,64,47,.12);color:' + FLAG + ';}#socialstats .d.flat{background:rgba(16,63,57,.08);color:var(--wa-muted);}' +
+    '#socialstats .tile .row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:10px 0 0;}' +
+    '#socialstats .tile .row div{font-size:11px;color:var(--wa-muted);line-height:1.25;}' +
+    '#socialstats .tile .row b{display:block;font-family:' + HEAD + ';font-size:17px;color:var(--wa-text);}' +
+    '#socialstats .tile svg.sp{width:100%;height:34px;margin:8px 0 0;display:block;}' +
+    '#socialstats .tile .off{font-size:12px;color:var(--wa-muted);margin:6px 0 0;line-height:1.4;}' +
+    '#socialstats .tile .off a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:underline;}' +
+    '#socialstats .cardy{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:16px 18px;margin:0 0 16px;box-shadow:0 12px 28px -22px rgba(16,63,57,.55);}' +
+    '#socialstats .cardy h4{font-family:' + HEAD + ';font-size:21px;margin:0 0 10px;color:' + GREEN + ';display:flex;align-items:center;gap:10px;flex-wrap:wrap;}' +
+    '#socialstats .cardy h4 .w116seg{margin-left:auto;}#socialstats .cardy h4 .w116seg a{padding:5px 11px;font-size:12px;}' +
+    '#socialstats .chart{position:relative;}#socialstats .chart svg{width:100%;height:220px;display:block;}' +
+    '#socialstats .chart .lg{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;color:var(--wa-muted);}' +
+    '#socialstats .chart .lg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}' +
+    '#socialstats .chart .none{font-size:13px;color:var(--wa-muted);padding:40px 0;text-align:center;}' +
+    '#socialstats .note{background:' + GREEN + ';color:' + CREAM + ';border-radius:18px;padding:18px 22px;margin:0 0 16px;position:relative;overflow:hidden;}' +
+    '#socialstats .note:before{content:"";position:absolute;right:-60px;top:-90px;width:260px;height:260px;border-radius:50%;background:radial-gradient(closest-side,rgba(220,165,39,.45),rgba(220,165,39,0));pointer-events:none;}' +
+    '#socialstats .note .k{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 6px;}' +
+    '#socialstats .note p{font-size:15px;line-height:1.55;margin:0;max-width:820px;position:relative;}' +
+    '#socialstats .note .m{font-size:11.5px;color:rgba(255,250,242,.7);margin:8px 0 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}' +
+    '#socialstats .note .btn{background:rgba(255,250,242,.14);color:' + CREAM + ';border:none;}' +
+    '#socialstats .posts{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;}' +
+    '#socialstats .post{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;overflow:hidden;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;text-decoration:none;color:inherit;}' +
+    '#socialstats .post .th{aspect-ratio:16/10;background:rgba(16,63,57,.06);position:relative;display:flex;align-items:center;justify-content:center;}' +
+    '#socialstats .post .th img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#socialstats .post .th .mk{position:absolute;left:10px;top:10px;width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:12px;font-weight:800;color:#FFFAF2;box-shadow:0 2px 6px rgba(0,0,0,.25);}' +
+    '#socialstats .post .th .big{font-family:' + HEAD + ';font-size:30px;color:rgba(16,63,57,.25);}' +
+    '#socialstats .post .bd{padding:10px 12px 12px;display:flex;flex-direction:column;gap:6px;flex:1;}' +
+    '#socialstats .post .cap{font-size:13px;line-height:1.35;color:var(--wa-text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+    '#socialstats .post .when{font-size:11px;color:var(--wa-muted);}' +
+    '#socialstats .post .nums{display:flex;gap:10px;flex-wrap:wrap;margin-top:auto;font-size:11px;color:var(--wa-muted);}' +
+    '#socialstats .post .nums b{font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';margin-right:3px;}' +
+    '#socialstats .fchips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '#socialstats .fchips span{font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;}' +
+    '#socialstats .fchips span.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#socialstats .empty{font-size:13px;color:var(--wa-muted);padding:18px 0;text-align:center;}' +
+    '#socialstats .hero{background:#FFFAF2;border:1px dashed rgba(16,63,57,.25);border-radius:18px;padding:34px 24px;text-align:center;margin:0 0 16px;}' +
+    '#socialstats .hero h3{font-family:' + HEAD + ';font-size:28px;margin:0 0 6px;color:' + GREEN + ';}' +
+    '#socialstats .hero p{font-size:13.5px;color:var(--wa-muted);margin:0 auto 14px;max-width:560px;line-height:1.5;}' +
+    /* set-up drawer */
+    '#socialstats .setup{background:' + CREAM + ';border:1px solid rgba(16,63,57,.14);border-radius:18px;padding:16px 18px;margin:0 0 16px;}' +
+    '#socialstats .setup h4{font-family:' + HEAD + ';font-size:21px;margin:0 0 4px;color:' + GREEN + ';}' +
+    '#socialstats .setup .sub{font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;}' +
+    '#socialstats .setup .sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}' +
+    '#socialstats .sc{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:12px 14px;}' +
+    '#socialstats .sc h5{font-family:' + HEAD + ';font-size:17px;margin:0 0 6px;color:' + GREEN + ';display:flex;align-items:center;gap:8px;}' +
+    '#socialstats .sc p{font-size:12.5px;color:var(--wa-muted);margin:0 0 8px;line-height:1.45;}' +
+    '#socialstats .sc code{font-size:11.5px;background:rgba(16,63,57,.07);border-radius:6px;padding:2px 6px;user-select:all;}' +
+    '#socialstats .sc input[type=text],#socialstats .sc select{padding:7px 10px;border:1px solid rgba(16,63,57,.2);border-radius:10px;font-size:12.5px;font-family:' + BODY + ';margin:0 6px 6px 0;max-width:100%;}' +
+    '#socialstats .sc .acc{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:3px 6px;align-items:center;font-size:12.5px;padding:7px 0;border-top:1px solid rgba(16,63,57,.08);}' +
+    '#socialstats .sc .acc b{font-weight:700;display:block;}#socialstats .sc .acc .s{display:block;font-size:11px;color:var(--wa-muted);}#socialstats .sc .acc .er{grid-column:1 / -1;color:' + FLAG + ';font-size:11px;line-height:1.35;}' +
+    '#socialstats .sc .acc .btn{font-size:11px;padding:4px 9px;}' +
+    '#socialstats .sc .pg{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:6px 0;}' +
+    '#socialstats .sc .pg img{width:28px;height:28px;border-radius:50%;}' +
+    '#socialstats .map{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 10px;align-items:center;font-size:12px;margin:8px 0;}' +
+    '#socialstats .map label{color:var(--wa-muted);font-weight:700;}' +
+    '#socialstats .btn.mini{font-size:11.5px;padding:5px 10px;}' +
+    '#socialstats .btn.ghost{background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '@media (min-width:1120px){#socialstats .w120tiles{grid-template-columns:repeat(5,minmax(0,1fr));}}' +
+    '@media (max-width:700px){#socialstats .tile .big{font-size:30px;}#socialstats .cardy h4 .w116seg{margin-left:0;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function allowed() { return staff() || board(); }
+  function num(v) { v = Number(v); if (!isFinite(v)) return '\u2013'; var a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (a >= 1e4) return Math.round(v / 1e3) + 'k'; if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return String(Math.round(v)); }
+  function delta(cur, prev, abs) {
+    if (cur == null || prev == null) return '';
+    cur = Number(cur); prev = Number(prev);
+    if (abs) { var d = cur - prev; if (!d) return '<span class="d flat">no change</span>'; return '<span class="d' + (d < 0 ? ' down' : '') + '">' + (d > 0 ? '+' : '\u2212') + num(Math.abs(d)) + '</span>'; }
+    if (!prev) return cur ? '<span class="d">new</span>' : '';
+    var pc = Math.round((cur - prev) / prev * 100);
+    if (!pc) return '<span class="d flat">0%</span>';
+    return '<span class="d' + (pc < 0 ? ' down' : '') + '">' + (pc > 0 ? '+' : '\u2212') + Math.abs(pc) + '%</span>';
+  }
+  function ago(iso) { if (!iso) return 'never'; var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
+  function niceDay(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return iso; } }
+  function mark(p, size) { var c = P[p] || { color: GREEN, mark: '?' }; return '<span class="mk" style="background:' + c.color + (size ? ';width:' + size + 'px;height:' + size + 'px' : '') + '">' + E(c.mark) + '</span>'; }
+  function acctOf(p) { var d = S.data; return ((d && d.accounts) || []).filter(function (a) { return a.platform === p; })[0] || null; }
+  function series(p, metric) { var d = S.data; var s = d && d.series && d.series[p] && d.series[p][metric]; return Array.isArray(s) ? s : []; }
+  function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from; }) : pts; }
+  function spark(pts, color) {
+    if (!pts || pts.length < 2) return '';
+    var w = 200, h = 34, vals = pts.map(function (x) { return Number(x[1]) || 0; }); var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals); var span = (mx - mn) || 1;
+    var d = vals.map(function (v, i) { return (i / (vals.length - 1) * w).toFixed(1) + ',' + (h - 3 - (v - mn) / span * (h - 8)).toFixed(1); });
+    return '<svg class="sp" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + d.join(' ') + '"></polyline><circle r="3" cx="' + w + '" cy="' + d[d.length - 1].split(',')[1] + '" fill="' + color + '"></circle></svg>';
+  }
+  function fn(body) {
+    try { return db.functions.invoke('social-pull', { body: body }).then(function (r) { if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
+    catch (e) { return Promise.reject(e); }
+  }
+
+  /* ---------- the panel ---------- */
+  function panel() {
+    var sec = document.getElementById('socialstats');
+    if (!sec) { var main = document.querySelector('main'); if (!main) return null; sec = document.createElement('section'); sec.id = 'socialstats'; sec.className = 'panel'; main.appendChild(sec); }
+    return sec;
+  }
+  async function load(force) {
+    if (S.loading) return;
+    if (!force && S.data && S.at && Date.now() - S.at < 60000 && S.data.days === S.days) { paint(); return; }
+    S.loading = true; S.err = null;
+    if (force || !S.data) paint();
+    try {
+      var r = await db.rpc('social_overview', { p_days: S.days });
+      if (r.error) throw r.error;
+      S.data = r.data || {}; S.at = Date.now();
+    } catch (e) { S.err = e.message || String(e); }
+    S.loading = false;
+    paint();
+  }
+  function header() {
+    var d = S.data; var last = null;
+    ((d && d.accounts) || []).forEach(function (a) { if (a.last_sync_at && (!last || a.last_sync_at > last)) last = a.last_sync_at; });
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Analytics</div>' +
+      '<div class="w116top"><div><h2><span class="dot" style="background:' + PURPLE + '"></span>Marketing analytics</h2><p class="sub">Followers, reach and what worked across Instagram, Facebook, TikTok, LinkedIn and the website. Numbers refresh every morning.</p></div>' +
+      '<div class="w120ctl"><span class="w116seg">' + [7, 30, 90].map(function (n) { return '<a data-w120days="' + n + '" class="' + (S.days === n ? 'on' : '') + '">' + n + ' days</a>'; }).join('') + '</span>' +
+      (staff() ? '<button class="btn mini ghost" data-w120sync="all"' + (S.busy.sync ? ' disabled' : '') + '>' + (S.busy.sync ? 'Syncing\u2026' : 'Sync now') + '</button><button class="btn mini' + (S.setup ? '' : ' ghost') + '" data-w120setup="toggle">' + (S.setup ? 'Close set-up' : 'Set up') + '</button>' : '') +
+      '<span class="meta">' + (last ? 'Last sync ' + E(ago(last)) : '') + '</span></div></div>';
+  }
+  function tile(p) {
+    var c = P[p]; var a = acctOf(p); var d = S.data || {}; var tot = (d.totals || {})[p] || {}; var fol = (d.followers || {})[p];
+    var st = !a ? '<span class="st off">Not connected</span>' : a.status === 'error' ? '<span class="st err" title="' + E(a.last_error || '') + '">Check</span>' : a.status === 'csv' ? '<span class="st csv">CSV</span>' : '<span class="st">Live</span>';
+    var html = '<div class="tile"><div class="ph">' + mark(p) + '<b>' + E(c.label) + (a && a.handle ? ' <span style="font-family:' + BODY + ';font-size:11.5px;font-weight:500;color:var(--wa-muted)">@' + E(a.handle) + '</span>' : '') + '</b>' + st + '</div>';
+    if (!a) {
+      html += '<div class="big" style="color:var(--wa-muted)">\u2013</div><div class="off">' + (staff() ? '<a data-w120setup="1">Connect ' + E(c.label) + '</a>' + (p === 'tiktok' || p === 'linkedin' ? ' (CSV export until the API is approved)' : '') : 'Not connected yet.') + '</div></div>';
+      return html;
+    }
+    if (c.head === 'followers') {
+      html += '<div class="big">' + (fol && fol.now != null ? num(fol.now) : '\u2013') + '<small>followers</small>' + (fol ? delta(fol.now, fol.then, true) : '') + '</div>';
+    } else {
+      var s = tot.sessions || {};
+      html += '<div class="big">' + (s.cur != null ? num(s.cur) : '\u2013') + '<small>sessions</small>' + delta(s.cur, s.prev) + '</div>';
+    }
+    html += '<div class="row">' + c.stats.map(function (m) { var t = tot[m] || {}; return '<div><b>' + (t.cur != null ? num(t.cur) : '\u2013') + '</b>' + E(MLABEL[m] || m) + ' ' + delta(t.cur, t.prev) + '</div>'; }).join('') + '</div>';
+    var sp = c.head === 'followers' ? series(p, 'followers') : series(p, 'sessions');
+    if (sp.length < 2) sp = series(p, c.stats[0]);
+    html += spark(windowed(sp).length > 1 ? windowed(sp) : sp, c.color);
+    html += '<div class="off" style="font-size:11px">' + E(ago(a.last_sync_at)) + (a.status === 'error' && a.last_error ? ' \u00b7 ' + E(String(a.last_error).slice(0, 90)) : '') + '</div></div>';
+    return html;
+  }
+  function chart() {
+    var d = S.data || {}; var m = S.chart;
+    var lines = []; var maxV = 0; var from = d.from || '', to = d.to || '';
+    ORDER.forEach(function (p) { var pts = windowed(series(p, m)); if (pts.length > 1) { lines.push({ p: p, pts: pts }); pts.forEach(function (x) { maxV = Math.max(maxV, Number(x[1]) || 0); }); } });
+    var seg = '<span class="w116seg">' + CHART_METRICS.map(function (k) { return '<a data-w120chart="' + k + '" class="' + (S.chart === k ? 'on' : '') + '">' + E(MLABEL[k] || k) + '</a>'; }).join('') + '</span>';
+    if (!lines.length) return '<div class="cardy chart"><h4>By day' + seg + '</h4><div class="none">No daily ' + E((MLABEL[m] || m).toLowerCase()) + ' numbers in this window yet.</div></div>';
+    var w = 800, h = 220, padL = 36, padB = 22, padT = 10;
+    var t0 = new Date(from + 'T00:00:00Z').getTime(), t1 = new Date(to + 'T00:00:00Z').getTime(); var span = (t1 - t0) || 1;
+    function X(day) { return padL + (new Date(day + 'T00:00:00Z').getTime() - t0) / span * (w - padL - 8); }
+    function Y(v) { return padT + (1 - (Number(v) || 0) / (maxV || 1)) * (h - padT - padB); }
+    var grid = ''; for (var g = 0; g <= 4; g++) { var yv = maxV / 4 * g; grid += '<line x1="' + padL + '" x2="' + w + '" y1="' + Y(yv).toFixed(1) + '" y2="' + Y(yv).toFixed(1) + '" stroke="rgba(16,63,57,.08)"></line><text x="' + (padL - 6) + '" y="' + (Y(yv) + 4).toFixed(1) + '" font-size="10" text-anchor="end" fill="#797773">' + num(yv) + '</text>'; }
+    var ticks = ''; var days = Math.round(span / 86400000) + 1; var step = days > 40 ? 14 : days > 10 ? 7 : 1;
+    for (var i = 0; i < days; i += step) { var dd = new Date(t0 + i * 86400000).toISOString().slice(0, 10); ticks += '<text x="' + X(dd).toFixed(1) + '" y="' + (h - 6) + '" font-size="10" text-anchor="middle" fill="#797773">' + E(niceDay(dd)) + '</text>'; }
+    var paths = lines.map(function (l) { var c = P[l.p].color; return '<polyline fill="none" stroke="' + c + '" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" points="' + l.pts.map(function (x) { return X(x[0]).toFixed(1) + ',' + Y(x[1]).toFixed(1); }).join(' ') + '"></polyline>'; }).join('');
+    var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' \u00b7 ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('');
+    return '<div class="cardy chart"><h4>By day' + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
+  }
+  function noteCard() {
+    var n = S.data && S.data.note; var any = S.data && (S.data.accounts || []).length;
+    if (!n && !staff()) return '';
+    if (!any && !n) return '';
+    return '<div class="note"><div class="k">This week\u2019s note</div>' + (n ? '<p>' + E(n.body) + '</p><div class="m"><span>' + E(ago(n.created_at)) + (n.model ? ' \u00b7 ' + E(String(n.model).split('/').pop()) : '') + '</span>' : '<p>No note yet. It is written every Monday from the week\u2019s numbers.</p><div class="m">') +
+      (staff() ? '<button class="btn mini" data-w120note="1"' + (S.busy.note ? ' disabled' : '') + '>' + (S.busy.note ? 'Writing\u2026' : (n ? 'Write it again' : 'Write it now')) + '</button>' : '') + '</div></div>';
+  }
+  function postsCard() {
+    var d = S.data || {}; var posts = (d.posts || []).filter(function (p) { return p.platform !== 'ga4' && (!S.filter || p.platform === S.filter); });
+    var pages = (d.posts || []).filter(function (p) { return p.platform === 'ga4'; }).sort(function (a, b) { return (Number(b.views) || 0) - (Number(a.views) || 0); }).slice(0, 6);
+    var plats = []; (d.posts || []).forEach(function (p) { if (p.platform !== 'ga4' && plats.indexOf(p.platform) < 0) plats.push(p.platform); });
+    var chips = plats.length > 1 ? '<div class="fchips"><span data-w120f="" class="' + (S.filter ? '' : 'on') + '">All</span>' + plats.map(function (p) { return '<span data-w120f="' + E(p) + '" class="' + (S.filter === p ? 'on' : '') + '">' + E(P[p] ? P[p].label : p) + '</span>'; }).join('') + '</div>' : '';
+    var html = '<div class="cardy"><h4>What worked <span style="font-family:' + BODY + ';font-size:12px;font-weight:500;color:var(--wa-muted)">posts from the last ' + S.days + ' days, best first</span></h4>' + chips;
+    if (!posts.length) html += '<div class="empty">No posts in this window yet.</div>';
+    else html += '<div class="posts">' + posts.slice(0, 12).map(function (p) {
+      var nums = [];
+      if (p.reach != null) nums.push('<span><b>' + num(p.reach) + '</b>reach</span>');
+      if (p.views != null) nums.push('<span><b>' + num(p.views) + '</b>views</span>');
+      if (p.likes != null) nums.push('<span><b>' + num(p.likes) + '</b>likes</span>');
+      if (p.comments != null) nums.push('<span><b>' + num(p.comments) + '</b>comments</span>');
+      if (p.shares != null) nums.push('<span><b>' + num(p.shares) + '</b>shares</span>');
+      if (p.saves != null) nums.push('<span><b>' + num(p.saves) + '</b>saves</span>');
+      return '<a class="post" ' + (p.url ? 'href="' + E(p.url) + '" target="_blank" rel="noopener"' : '') + '><div class="th">' + (p.thumb_url ? '<img src="' + E(p.thumb_url) + '" alt="" loading="lazy" referrerpolicy="no-referrer">' : '<span class="big">' + E(P[p.platform] ? P[p.platform].mark : '') + '</span>') + mark(p.platform) + '</div>' +
+        '<div class="bd"><div class="cap">' + E(p.caption || (p.kind ? p.kind : 'Post')) + '</div><div class="when">' + E(niceDay(p.published_at)) + (p.kind && p.kind !== 'post' ? ' \u00b7 ' + E(p.kind) : '') + '</div><div class="nums">' + nums.join('') + '</div></div></a>';
+    }).join('') + '</div>';
+    if (pages.length) html += '<h4 style="margin-top:16px;font-size:17px">Most read pages on the website</h4><div style="font-size:13px;line-height:1.7">' + pages.map(function (p) { return '<div><b style="font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';margin-right:6px">' + num(p.views) + '</b>' + (p.url ? '<a href="' + E(p.url) + '" target="_blank" rel="noopener" style="color:' + GREEN + '">' + E(p.caption || p.external_id) + '</a>' : E(p.caption || p.external_id)) + ' <span style="color:var(--wa-muted);font-size:11.5px">' + E(p.external_id) + '</span></div>'; }).join('') + '</div>';
+    return html + '</div>';
+  }
+  function setupCard() {
+    if (!S.setup || !staff()) return '';
+    var st = S.status || {}; var accs = (S.data && S.data.accounts) || [];
+    function accRows(p) { return accs.filter(function (a) { return a.platform === p; }).map(function (a) { return '<div class="acc"><div><b>' + E(a.name || a.handle || a.external_id) + '</b><span class="s">' + E(a.status) + ' \u00b7 ' + E(ago(a.last_sync_at)) + '</span></div><button class="btn mini ghost" data-w120sync="' + a.id + '">Sync</button><button class="btn mini ghost" data-w120rm="' + a.id + '" title="Remove this account and its numbers">Remove</button>' + (a.last_error ? '<span class="er" title="' + E(a.last_error) + '">' + E(String(a.last_error).slice(0, 140)) + '</span>' : '') + '</div>'; }).join(''); }
+    var pr = S.probe && S.probe.meta;
+    var metaBody = !st.meta_token ? '<p>Add <code>META_SYSTEM_TOKEN</code> to the Supabase vault first (Business settings &gt; System users &gt; Generate token, permissions pages_show_list, pages_read_engagement, read_insights, instagram_basic, instagram_manage_insights).</p>' :
+      '<p>Token found. Find the Pages the system user can see and connect them; the Instagram account linked to a Page comes with it.</p><button class="btn mini" data-w120probe="1"' + (S.busy.probe ? ' disabled' : '') + '>' + (S.busy.probe ? 'Looking\u2026' : 'Find my pages') + '</button>' +
+      (pr ? (pr.ok ? (pr.pages.length ? pr.pages.map(function (pg) { return '<div class="pg">' + (pg.picture ? '<img src="' + E(pg.picture) + '" alt="">' : '') + '<span><b>' + E(pg.name) + '</b> \u00b7 ' + num(pg.followers) + ' followers' + (pg.instagram ? '<br><span style="color:var(--wa-muted)">Instagram @' + E(pg.instagram.username) + ' \u00b7 ' + num(pg.instagram.followers) + ' followers</span>' : '<br><span style="color:var(--wa-muted)">no Instagram account linked to this Page</span>') + '</span><button class="btn mini" style="margin-left:auto" data-w120connect="' + E(pg.id) + '"' + (S.busy.connect ? ' disabled' : '') + '>Connect</button></div>'; }).join('') : '<p style="color:' + FLAG + '">The token sees no Pages. In Business settings, give the system user the Page under Add assets.</p>') : '<p style="color:' + FLAG + '">' + E(pr.error) + '</p>') : '');
+    var ga = '<p>In GA4: Admin &gt; Property access management &gt; Add users, paste <code>' + E(st.sa_email || 'the hub service account') + '</code> as Viewer. Then the property id (Admin &gt; Property details, the number top right).</p>' +
+      '<input type="text" id="w120gaid" placeholder="Property id, e.g. 123456789" style="width:170px"><input type="text" id="w120gasite" placeholder="https://welfareavenue.com" style="width:200px"><button class="btn mini" data-w120ga="1"' + (S.busy.ga ? ' disabled' : '') + '>' + (S.busy.ga ? 'Checking\u2026' : 'Connect') + '</button>';
+    function csvCard(p, hint) {
+      var c = P[p]; var m = S.csv && S.csv.platform === p ? S.csv : null;
+      return '<div class="sc"><h5>' + mark(p, 22) + E(c.label) + '</h5><p>' + hint + '</p>' +
+        '<select data-w120csvkind="' + p + '"><option value="daily"' + (!m || m.kind === 'daily' ? ' selected' : '') + '>Daily numbers (overview export)</option><option value="posts"' + (m && m.kind === 'posts' ? ' selected' : '') + '>Posts (content export)</option></select>' +
+        '<input type="file" accept=".csv,text/csv" data-w120csv="' + p + '" style="font-size:12px;margin:0 0 6px">' +
+        (m ? mapper(m) : '') + accRows(p) + '</div>';
+    }
+    return '<div class="setup"><h4>Set up the sources</h4><p class="sub">Meta and Google Analytics read themselves every morning. TikTok and LinkedIn need an app approval before their APIs open up; until then, export from their analytics pages and drop the CSV here (it maps the columns and keeps the days you already have).</p><div class="sgrid">' +
+      '<div class="sc"><h5>' + mark('facebook', 22) + mark('instagram', 22) + 'Meta: Facebook Page and Instagram</h5>' + metaBody + accRows('facebook') + accRows('instagram') + '</div>' +
+      '<div class="sc"><h5>' + mark('ga4', 22) + 'Website: Google Analytics 4</h5>' + ga + accRows('ga4') + '</div>' +
+      csvCard('tiktok', 'TikTok Studio &gt; Analytics &gt; Overview, pick the range, Download data (CSV). Columns like Date, Video views, Profile views, Likes, Comments, Shares are matched by name; Followers from the Followers tab export.') +
+      csvCard('linkedin', 'Page admin &gt; Analytics &gt; Followers or Content &gt; Export. LinkedIn gives an .xls: open it in Sheets and download the sheet you want as CSV.') +
+      '</div></div>';
+  }
+  function mapper(m) {
+    var cols = m.cols; var guess = m.guess || {};
+    function sel(name, key, opts) { return '<label>' + E(name) + '</label><select data-w120map="' + E(key) + '"><option value="">(skip)</option>' + cols.map(function (c, i) { return '<option value="' + i + '"' + (guess[key] === i ? ' selected' : '') + '>' + E(c) + '</option>'; }).join('') + '</select>'; }
+    var fields = m.kind === 'posts' ? [['Link or id', 'external_id'], ['Caption', 'caption'], ['Published', 'published_at'], ['Views', 'views'], ['Reach', 'reach'], ['Likes', 'likes'], ['Comments', 'comments'], ['Shares', 'shares'], ['Saves', 'saves']] : [['Date', 'day'], ['Followers (total)', 'followers'], ['New followers', 'new_followers'], ['Views', 'views'], ['Reach', 'reach'], ['Profile visits', 'profile_views'], ['Likes', 'likes'], ['Comments', 'comments'], ['Shares', 'shares'], ['Engagement', 'engagement']];
+    return '<div style="font-size:12px;color:var(--wa-muted);margin:6px 0 0"><b>' + E(m.name) + '</b> \u00b7 ' + m.rows.length + ' rows. Match the columns:</div><div class="map">' + fields.map(function (f) { return sel(f[0], f[1]); }).join('') + '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="text" id="w120handle" placeholder="@handle (optional)" style="width:150px" value="' + E(m.handle || '') + '"><button class="btn mini" data-w120import="1"' + (S.busy.import ? ' disabled' : '') + '>' + (S.busy.import ? 'Importing\u2026' : 'Import') + '</button><button class="btn mini ghost" data-w120csvx="1">Cancel</button></div>';
+  }
+  function paint() {
+    var sec = panel(); if (!sec) return;
+    var d = S.data; var body = '';
+    if (S.err) body = '<div class="hero"><h3>Could not load the numbers</h3><p>' + E(S.err) + '</p></div>';
+    else if (!d) body = '<div class="hero"><h3>Loading\u2026</h3></div>';
+    else {
+      var any = (d.accounts || []).length;
+      body += setupCard();
+      if (!any && !S.setup) body += '<div class="hero"><h3>Nothing connected yet</h3><p>Connect the Facebook Page and Instagram with the Meta token, add the hub\u2019s service account to Google Analytics, and drop TikTok and LinkedIn exports in. Five minutes for the first two.</p>' + (staff() ? '<button class="btn" data-w120setup="1">Set up the sources</button>' : '<span style="font-size:12.5px;color:var(--wa-muted)">The marketing team is connecting the accounts.</span>') + '</div>';
+      body += '<div class="w120tiles">' + ORDER.map(tile).join('') + '</div>';
+      if (any) body += noteCard() + chart() + postsCard();
+    }
+    sec.innerHTML = '<div class="w120wrap">' + header() + body + '</div>';
+  }
+
+  /* ---------- CSV ---------- */
+  function parseCsv(text) {
+    var rows = [], row = [], cur = '', q = false, i, ch;
+    text = String(text || '').replace(/^\ufeff/, '');
+    for (i = 0; i < text.length; i++) {
+      ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ',' || ch === '\t' || ch === ';') { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some(function (c) { return c !== ''; })) rows.push(row); row = []; }
+      else cur += ch;
+    }
+    row.push(cur); if (row.some(function (c) { return c !== ''; })) rows.push(row);
+    return rows;
+  }
+  var GUESS = { day: /^(date|day|time|week|period)/i, followers: /^(followers?( total| count)?|total followers|fans)$/i, new_followers: /(new followers|net followers|follower growth|followers gained)/i, views: /^(video views|views|impressions|post views|total views)$/i, reach: /^(reach|unique|accounts reached)/i, profile_views: /profile (views|visits)/i, likes: /^(likes|reactions)$/i, comments: /^comments$/i, shares: /^(shares|reposts|shared)$/i, engagement: /^(engagements?|interactions|total engagement)/i, external_id: /(link|url|permalink|id)/i, caption: /(caption|title|description|text|post)/i, published_at: /(date|time|published|posted|created)/i, saves: /^(saves|saved|bookmarks?)$/i };
+  function guessMap(cols, kind) { var g = {}; var keys = Object.keys(GUESS); cols.forEach(function (c, i) { keys.forEach(function (k) { if (g[k] == null && GUESS[k].test(String(c).trim())) g[k] = i; }); }); if (kind === 'daily') { delete g.external_id; delete g.caption; delete g.published_at; } else { delete g.day; delete g.followers; delete g.new_followers; } return g; }
+  function toDay(v) { v = String(v || '').trim(); var m = /^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})/.exec(v); if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0'); m = /^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/.exec(v); if (m) return m[3] + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0'); var d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10); }
+  function toNum(v) { v = String(v == null ? '' : v).replace(/[,\s%]/g, '').replace(/^\$/, ''); if (!v) return null; var k = /^([\d.]+)([kKmM])$/.exec(v); var n = k ? Number(k[1]) * (k[2].toLowerCase() === 'k' ? 1e3 : 1e6) : Number(v); return isFinite(n) ? n : null; }
+  function buildImport(m) {
+    var map = {}; document.querySelectorAll('#socialstats [data-w120map]').forEach(function (s) { if (s.value !== '') map[s.getAttribute('data-w120map')] = Number(s.value); });
+    var handle = (document.getElementById('w120handle') || {}).value || '';
+    var body = { action: 'import_csv', platform: m.platform, handle: handle.replace(/^@/, '') || null, rows: [], posts: [] };
+    if (m.kind === 'daily') {
+      if (map.day == null) throw new Error('Pick the date column');
+      m.rows.forEach(function (r) { var day = toDay(r[map.day]); if (!day) return; Object.keys(map).forEach(function (k) { if (k === 'day') return; var v = toNum(r[map[k]]); if (v != null) body.rows.push({ day: day, metric: k, value: v }); }); });
+      if (!body.rows.length) throw new Error('No dated numbers found in those columns');
+    } else {
+      if (map.external_id == null) throw new Error('Pick the link or id column');
+      m.rows.forEach(function (r) { var id = String(r[map.external_id] || '').trim(); if (!id) return; var p = { external_id: id, url: /^https?:/.test(id) ? id : null, caption: map.caption != null ? String(r[map.caption] || '').slice(0, 600) : null, published_at: map.published_at != null ? (toDay(r[map.published_at]) ? toDay(r[map.published_at]) + 'T12:00:00Z' : null) : null }; ['views', 'reach', 'likes', 'comments', 'shares', 'saves'].forEach(function (k) { if (map[k] != null) { var v = toNum(r[map[k]]); if (v != null) p[k] = v; } }); body.posts.push(p); });
+      if (!body.posts.length) throw new Error('No posts found in that column');
+    }
+    return body;
+  }
+
+  /* ---------- wiring ---------- */
+  function openStats() {
+    if (!allowed()) return false;
+    try { showPanel('socialstats'); } catch (e) { /* below */ }
+    try { var sec0 = panel(); if (sec0 && !sec0.classList.contains('active')) { document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); }); sec0.classList.add('active'); window.scrollTo({ top: 0 }); } } catch (e) { /* fine */ }
+    try { document.querySelectorAll('#tabBar .tab.active').forEach(function (t) { t.classList.remove('active'); }); var b = document.querySelector('#tabBar .tab[data-tab="socialstats"]'); if (b) { b.classList.add('active'); var row = b.closest('.w42d'); if (row) { row.classList.add('w116open', 'w116act'); } } } catch (e) { /* fine */ }
+    load(false);
+    return true;
+  }
+  if (typeof applyHash === 'function') {
+    var __ah120 = applyHash;
+    applyHash = function () { var h = decodeURIComponent(location.hash || '').replace(/^#/, ''); if (h === 'socialstats' && openStats()) return; return __ah120.apply(this, arguments); };
+  }
+  window.addEventListener('hashchange', function () { try { var h = decodeURIComponent(location.hash || '').replace(/^#/, ''); if (h === 'socialstats') openStats(); } catch (e) { /* fine */ } });
+
+  /* the tab: inside the Marketing menu, registered with the access model */
+  function enrol() {
+    try {
+      if (typeof WA40_TABS !== 'undefined' && WA40_TABS.indexOf('socialstats') < 0) WA40_TABS.push('socialstats');
+      if (typeof WA40_DEFAULTS !== 'undefined') ['admin', 'leader', 'member'].forEach(function (r) { if (WA40_DEFAULTS[r] && WA40_DEFAULTS[r].indexOf('socialstats') < 0) WA40_DEFAULTS[r].push('socialstats'); });
+      if (typeof wa40Allowed === 'function' && !wa40Allowed.__w120) { var __al = wa40Allowed; wa40Allowed = function () { var a = __al.apply(this, arguments) || []; if ((a.indexOf('marketing') >= 0 || board()) && a.indexOf('socialstats') < 0) a = a.concat(['socialstats']); return a; }; wa40Allowed.__w120 = true; }
+    } catch (e) { /* fine */ }
+  }
+  function placeTab() {
+    try {
+      if (!allowed()) return;
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      var b = bar.querySelector('.tab[data-tab="socialstats"]');
+      if (!b) { b = document.createElement('button'); b.className = 'tab w116tool'; b.dataset.tab = 'socialstats'; b.innerHTML = '<span class="tabdot" style="background:' + PURPLE + '"></span>Analytics'; b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); location.hash = '#socialstats'; }, true); }
+      var mk = bar.querySelector('.tab[data-tab="marketing"]'); var row = mk && mk.closest ? mk.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
+      if (sub) { if (b.parentNode !== sub) sub.appendChild(b); b.classList.add('w116tool'); b.style.display = ''; }
+      else if (!b.parentNode) { b.style.display = 'none'; bar.appendChild(b); }
+    } catch (e) { /* fine */ }
+  }
+  var navT = null;
+  function watch() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.dataset.w120watch) return;
+    bar.dataset.w120watch = '1';
+    new MutationObserver(function () { clearTimeout(navT); navT = setTimeout(placeTab, 140); }).observe(bar, { childList: true, subtree: true });
+    /* the pill row on the Marketing team page gets an Analytics pill */
+    var host = document.getElementById('w116host') || document.getElementById('team');
+    if (host && !host.dataset.w120watch) { host.dataset.w120watch = '1'; new MutationObserver(function () { setTimeout(pill, 60); }).observe(host, { childList: true, subtree: true }); }
+  }
+  function pill() {
+    try {
+      if (!allowed()) return;
+      var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#team/marketing') !== 0) return;
+      var seg = document.querySelector('#team .w116seg'); if (!seg || seg.querySelector('[data-w116go="#socialstats"]')) return;
+      var a = document.createElement('a'); a.setAttribute('data-w116go', '#socialstats'); a.textContent = 'Analytics'; seg.appendChild(a);
+    } catch (e) { /* fine */ }
+  }
+  if (typeof startApp === 'function') {
+    var __sa120 = startApp;
+    startApp = async function () {
+      var r = await __sa120.apply(this, arguments);
+      try { enrol(); panel(); placeTab(); watch(); [300, 1500, 3500].forEach(function (ms) { setTimeout(placeTab, ms); }); if (decodeURIComponent(location.hash || '') === '#socialstats') openStats(); } catch (e) { console.warn('wave120 boot', e); }
+      return r;
+    };
+  }
+
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var sec = t.closest('#socialstats'); if (!sec) return;
+    var el;
+    if ((el = t.closest('[data-w120days]'))) { S.days = Number(el.getAttribute('data-w120days')); S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120chart]'))) { S.chart = el.getAttribute('data-w120chart'); paint(); return; }
+    if ((el = t.closest('[data-w120f]'))) { S.filter = el.getAttribute('data-w120f') || null; paint(); return; }
+    if ((el = t.closest('[data-w120setup]'))) { e.preventDefault(); S.setup = el.getAttribute('data-w120setup') === 'toggle' ? !S.setup : true; paint(); if (S.setup && !S.status) { try { S.status = await fn({ action: 'status' }); } catch (e2) { S.status = { error: e2.message }; } paint(); } return; }
+    if ((el = t.closest('[data-w120sync]'))) { var id = el.getAttribute('data-w120sync'); S.busy.sync = true; paint(); try { var r = await fn(id === 'all' ? { action: 'sync' } : { action: 'sync', account_id: Number(id) }); var bad = (r.results || []).filter(function (x) { return x.error; }); toastS(bad.length ? 'Synced with ' + bad.length + ' problem' + (bad.length > 1 ? 's' : '') + ': ' + bad[0].error : 'Synced ' + (r.results || []).length + ' account' + ((r.results || []).length === 1 ? '' : 's')); } catch (e3) { toastS('Sync failed: ' + e3.message); } S.busy.sync = false; S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120note]'))) { S.busy.note = true; paint(); try { var n = await fn({ action: 'note', days: Math.min(30, S.days) }); toastS(n.note ? 'Note written' : (n.skipped || 'Nothing to write yet')); } catch (e4) { toastS('Could not write it: ' + e4.message); } S.busy.note = false; S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120probe]'))) { S.busy.probe = true; paint(); try { S.probe = await fn({ action: 'probe' }); } catch (e5) { S.probe = { meta: { ok: false, error: e5.message } }; } S.busy.probe = false; paint(); return; }
+    if ((el = t.closest('[data-w120connect]'))) { S.busy.connect = true; paint(); try { var c = await fn({ action: 'connect_meta', page_id: el.getAttribute('data-w120connect') }); var probs = (c.results || []).filter(function (x) { return x.error; }); toastS('Connected ' + (c.added || []).length + ' account' + ((c.added || []).length === 1 ? '' : 's') + (probs.length ? '; first sync had a problem: ' + probs[0].error : ' and pulled the first numbers')); } catch (e6) { toastS('Could not connect: ' + e6.message); } S.busy.connect = false; S.probe = null; S.status = null; S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120ga]'))) { var pid = (document.getElementById('w120gaid') || {}).value || ''; var site = (document.getElementById('w120gasite') || {}).value || ''; if (!pid.replace(/\D/g, '')) { toastS('Property id first'); return; } S.busy.ga = true; paint(); try { var g = await fn({ action: 'connect_ga4', property_id: pid, site: site }); toastS(g.ok ? 'Google Analytics connected' : 'Connected, but the first read failed: ' + ((g.result || {}).error || '')); } catch (e7) { toastS('Could not connect: ' + e7.message); } S.busy.ga = false; S.status = null; S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120rm]'))) { if (!confirm('Remove this account and every number the hub pulled for it?')) return; try { await fn({ action: 'disconnect', account_id: Number(el.getAttribute('data-w120rm')) }); toastS('Removed'); } catch (e8) { toastS('Could not remove: ' + e8.message); } S.data = null; load(true); return; }
+    if ((el = t.closest('[data-w120csvx]'))) { S.csv = null; paint(); return; }
+    if ((el = t.closest('[data-w120import]'))) { if (!S.csv) return; var body; try { body = buildImport(S.csv); } catch (e9) { toastS(e9.message); return; } S.busy.import = true; paint(); try { var im = await fn(body); toastS('Imported ' + (im.rows || 0) + ' numbers and ' + (im.posts || 0) + ' posts'); S.csv = null; } catch (e10) { toastS('Import failed: ' + e10.message); } S.busy.import = false; S.data = null; load(true); return; }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#socialstats')) return;
+    if (t.getAttribute('data-w120csv')) {
+      var p = t.getAttribute('data-w120csv'); var f = t.files && t.files[0]; if (!f) return;
+      var kindSel = document.querySelector('#socialstats [data-w120csvkind="' + p + '"]'); var kind = kindSel ? kindSel.value : 'daily';
+      var rd = new FileReader();
+      rd.onload = function () { var rows = parseCsv(rd.result); if (rows.length < 2) { toastS('That file has no rows'); return; } var cols = rows[0].map(function (c) { return String(c).trim(); }); S.csv = { platform: p, kind: kind, name: f.name, cols: cols, rows: rows.slice(1), guess: guessMap(cols, kind), handle: (acctOf(p) || {}).handle || '' }; paint(); };
+      rd.readAsText(f);
+      return;
+    }
+    if (t.getAttribute('data-w120csvkind') && S.csv && S.csv.platform === t.getAttribute('data-w120csvkind')) { S.csv.kind = t.value; S.csv.guess = guessMap(S.csv.cols, t.value); paint(); }
+  });
+  window.w120Debug = function () { return { days: S.days, loaded: !!S.data, accounts: S.data ? (S.data.accounts || []).length : null, setup: S.setup }; };
+})();
+/* =====================================================================
    WA v117 more of the brand feel (25/09/26)
    =====================================================================
    Steel: "update hub to have more of the brand feel", "add some
