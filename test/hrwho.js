@@ -1,0 +1,30 @@
+const fs = require("fs"); const path = require("path"); const { chromium } = require("playwright");
+const FIXED_TIME = "2026-08-06T12:00:00-04:00";
+(async () => {
+  const html = fs.readFileSync(path.join(__dirname, "../build/live_probe.html"), "utf8");
+  const stub = fs.readFileSync(path.join(__dirname, "stub_supabase.js"), "utf8");
+  const fixture = fs.readFileSync(path.join(__dirname, "fixture.json"), "utf8");
+  const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
+  const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();
+  await page.addInitScript(`(function(){ var FIXED = new Date(${JSON.stringify(FIXED_TIME)}).getTime(); var RealDate = Date; function FDate(a,b,c,d,e,f,g){ if (!(this instanceof FDate)) return new RealDate(FIXED).toString(); switch (arguments.length) { case 0: return new RealDate(FIXED); case 1: return new RealDate(a); default: return new RealDate(a,b,c,d,e,f,g); } } FDate.now = function(){ return FIXED; }; FDate.parse = RealDate.parse; FDate.UTC = RealDate.UTC; FDate.prototype = RealDate.prototype; window.Date = FDate; window.__WA_TEST_ROLE = 'staff'; window.__WA_TEST_EMAIL = 'steel.macdonald@welfareavenue.com'; window.__WA_TEST_NAME = 'Steel MacDonald'; window.confirm = function(){ return false; }; try { localStorage.setItem('wa84tour', '1'); } catch (e) {}
+    window.__WHO = {};
+    var d = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML');
+    Object.defineProperty(Element.prototype, 'innerHTML', { set: function (v) { try { if (this.closest && this.closest('#hrcentre')) { var st = (new Error().stack || '').split('\\n').slice(2, 6).map(function (l) { return l.replace(/\\(.*\\)/, '').replace(/^\\s*at\\s*/, '').trim(); }).join(' < '); var k = ((this.id ? '#' + this.id : '') + '.' + String(this.className || '').split(' ')[0]) + ' <= ' + st; window.__WHO[k] = (window.__WHO[k] || 0) + 1; } } catch (e) {} return d.set.call(this, v); }, get: d.get, configurable: true });
+    var sa = Element.prototype.setAttribute;
+    Element.prototype.setAttribute = function (n, v) { try { if (this.closest && this.closest('#hrcentre') && (n === 'class' || n === 'style')) { var st = (new Error().stack || '').split('\\n').slice(2, 5).map(function (l) { return l.replace(/\\(.*\\)/, '').replace(/^\\s*at\\s*/, '').trim(); }).join(' < '); var k = 'attr:' + n + ' ' + ((this.id ? '#' + this.id : '') + '.' + String(this.className || '').split(' ')[0]) + ' <= ' + st; window.__WHO[k] = (window.__WHO[k] || 0) + 1; } } catch (e) {} return sa.call(this, n, v); };
+    var ap = Node.prototype.appendChild;
+    Node.prototype.appendChild = function (c) { try { if (this.closest && this.closest('#hrcentre')) { var st = (new Error().stack || '').split('\\n').slice(2, 5).map(function (l) { return l.replace(/\\(.*\\)/, '').replace(/^\\s*at\\s*/, '').trim(); }).join(' < '); var k = 'append ' + ((this.id ? '#' + this.id : '') + '.' + String(this.className || '').split(' ')[0]) + ' <= ' + st; window.__WHO[k] = (window.__WHO[k] || 0) + 1; } } catch (e) {} return ap.call(this, c); };
+  })();`);
+  await page.addInitScript("window.__WAFIX = " + fixture + ";");
+  await page.route("**/*", route => { const url = route.request().url(); if (url.startsWith("http://wahub.test/")) return route.fulfill({ contentType: "text/html; charset=utf-8", body: html }); if (url.indexOf("cytoscape") >= 0) return route.fulfill({ contentType: "application/javascript", body: fs.readFileSync(path.join(__dirname, "cytoscape.min.js"), "utf8") }); if (url.indexOf("supabase-js") >= 0 || url.indexOf("@supabase") >= 0) return route.fulfill({ contentType: "application/javascript", body: stub }); return route.abort(); });
+  await page.goto("http://wahub.test/", { waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => { const g = document.getElementById("gate"); return g && g.style.display === "none"; }, null, { timeout: 20000 });
+  await page.waitForTimeout(2500);
+  await page.evaluate(() => { location.hash = '#hrcentre'; });
+  await page.waitForTimeout(2000);
+  await page.evaluate(() => { window.__WHO = {}; });
+  await page.waitForTimeout(4000);
+  const who = await page.evaluate(() => Object.entries(window.__WHO).sort((a, b) => b[1] - a[1]).slice(0, 25));
+  console.log(JSON.stringify(who, null, 1));
+  await browser.close();
+})();

@@ -83,7 +83,9 @@
   }
   function w77Num(region, name, n) {
     var el = region.querySelector('[data-w77="' + name + '"] summary .w77n');
-    if (el) el.textContent = (n === null || n === undefined) ? '' : String(n);
+    var v = (n === null || n === undefined) ? '' : String(n);
+    /* wa116x: only write when it changed; the write itself re-ran the panel observer, seventy times a second across the hidden panels */
+    if (el && el.textContent !== v) el.textContent = v;
   }
 
   function w77TabNames(panel) {

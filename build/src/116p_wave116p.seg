@@ -1,5 +1,5 @@
 /* =====================================================================
-   WA v116p the HR centre, revamped (25/09/26)
+   WA v116p the HR centre (wa116x 25/09/26: idempotent hero and tab counts; the rewrite loop flickered the page), revamped (25/09/26)
    =====================================================================
    Steel: "the HR centre really needs a revamp. Apple kind of branding:
    easy to use, big, and the robustness of ClickUp. Use photos from the
@@ -213,7 +213,7 @@
     var newApps = P.cands.filter(function (c) { return c.status === 'new'; }).length;
     var mid = num('#w46body .w46sec .w44tile', /(\d+)\s*mid-onboarding/) ; if (mid === null) { try { var t = Array.prototype.filter.call(document.querySelectorAll('#w46body .w44tile'), function (x) { return /mid-onboarding/.test(x.textContent); })[0]; mid = t ? Number((t.querySelector('b') || {}).textContent || 0) : 0; } catch (e) { mid = 0; } }
     var outst = 0; try { var t2 = Array.prototype.filter.call(document.querySelectorAll('#w46body .w44tile'), function (x) { return /outstanding/.test(x.textContent); })[0]; outst = t2 ? Number((t2.querySelector('b') || {}).textContent || 0) : 0; } catch (e) { outst = 0; }
-    h.innerHTML = '<h2>HR centre</h2><p>People, hours, hiring, onboarding and training for the whole organisation, in one place. Photos and start dates come from Google Workspace; hours from check-ins on the hub.</p>' +
+    var html = '<p>People, hours, hiring, onboarding and training for the whole organisation, in one place. Photos and start dates come from Google Workspace; hours from check-ins on the hub.</p>' +
       '<div class="tiles">' +
       '<div class="tile" data-w116pv="people"><b>' + ppl.length + '</b><span>people on the roster</span></div>' +
       '<div class="tile" data-w116pv="hours"><b>' + onHub + '</b><span>checked in this week</span></div>' +
@@ -222,6 +222,8 @@
       '<div class="tile" data-w116pv="onboarding"><b>' + (mid || 0) + '</b><span>mid-onboarding</span></div>' +
       '<div class="tile" data-w116pv="training"><b>' + (outst || 0) + '</b><span>trainings outstanding</span></div>' +
       '</div>';
+    /* only touch the DOM when the numbers changed: a rewrite every pass woke the observers below (wa116x) */
+    if (h.getAttribute('data-html') !== html) { h.innerHTML = html; h.setAttribute('data-html', html); }
   }
 
   /* ---------- People ---------- */
@@ -310,9 +312,9 @@
   /* ---------- tab counts and view ---------- */
   function decorateTabs() {
     var tabs = document.querySelector('#w46body .w47tabs'); if (!tabs) return;
-    var t = tabs.querySelector('[data-w47v="people"]'); if (t) t.innerHTML = 'People<span class="n">' + members().length + '</span>';
+    var t = tabs.querySelector('[data-w47v="people"]'); var th = 'People<span class="n">' + members().length + '</span>'; if (t && t.innerHTML !== th) t.innerHTML = th;
     var r = tabs.querySelector('[data-w47v="recruitment"]'); var newApps = P.cands.filter(function (c) { return c.status === 'new'; }).length;
-    if (r) { r.innerHTML = 'Recruitment' + (newApps ? '<span class="n">' + newApps + '</span>' : ''); }
+    var rh = 'Recruitment' + (newApps ? '<span class="n">' + newApps + '</span>' : ''); if (r && r.innerHTML !== rh) r.innerHTML = rh;
     var h = tabs.querySelector('[data-w47v="hours"]'); if (h && h.textContent === 'Commitment') { /* wave55 name kept */ }
   }
   function applyView() {
@@ -331,7 +333,7 @@
   function schedule() { clearTimeout(P.pend); P.pend = setTimeout(function () { try { decorate(); } catch (e) { /* fine */ } }, 150); }
   function watch() {
     var panel = document.getElementById('hrcentre'); if (!panel || panel.dataset.w116pmo) return; panel.dataset.w116pmo = '1';
-    new MutationObserver(function (muts) { for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w116ppeople') || t.closest('#w116pcands') || t.closest('#w116phero'))) continue; schedule(); return; } }).observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+    new MutationObserver(function (muts) { for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w116ppeople') || t.closest('#w116pcands') || t.closest('#w116phero') || (muts[i].type === 'childList' && t.closest('.w47tab')))) continue; schedule(); return; } }).observe(panel, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
     schedule();
   }
   async function boot() {

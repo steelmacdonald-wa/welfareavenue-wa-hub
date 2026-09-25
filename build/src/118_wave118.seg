@@ -98,6 +98,7 @@
   };
   var ADMIN = [
     ["ai", "AI models", "#w116ncard", "Which model answers each job, with fallbacks and spend."],
+    ["adoption", "Adoption", "#w116rcard", "Who uses the hub and how much: sign-ins, hours, tasks closed and AI spend, daily, weekly and monthly."],
     ["accounts", "Workspace accounts", "#w116lcard", "Google Workspace accounts, placed on the roster or set aside."],
     ["people", "People and access", "#w113card, #w113card + .card", "Everyone on the roster, what they can see, their invitations, and the access requests."],
     ["security", "Security and audit trail", "#w86card", "What the Hub enforces, the backups, and every change with who made it."],
@@ -127,7 +128,7 @@
     + '.w118adm a{font-family:' + BODY + ';font-size:13px;font-weight:600;color:' + GREEN + ';padding:7px 13px;border-radius:10px;cursor:pointer;text-decoration:none;line-height:1.2;}'
     + '.w118adm a:hover{background:rgba(16,63,57,.08);}'
     + '.w118adm a.on{background:' + GREEN + ';color:' + CREAM + ';}'
-    + '.w118adm[data-sec="ai"] ~ .card:not(#w116ncard){display:none !important;}.w118adm[data-sec="accounts"] ~ .card:not(#w116lcard){display:none !important;}.w118adm[data-sec="people"] ~ .card:not(#w113card):not(#w113card + .card){display:none !important;}.w118adm[data-sec="security"] ~ .card:not(#w86card){display:none !important;}.w118adm[data-sec="change"] ~ .card:not(#w96card){display:none !important;}'
+    + '.w118adm[data-sec="ai"] ~ .card:not(#w116ncard){display:none !important;}.w118adm[data-sec="adoption"] ~ .card:not(#w116rcard){display:none !important;}.w118adm[data-sec="accounts"] ~ .card:not(#w116lcard){display:none !important;}.w118adm[data-sec="people"] ~ .card:not(#w113card):not(#w113card + .card){display:none !important;}.w118adm[data-sec="security"] ~ .card:not(#w86card){display:none !important;}.w118adm[data-sec="change"] ~ .card:not(#w96card){display:none !important;}'
     + '#adminpanel .w118adm ~ .card{margin-top:0;}'
     + 'nav.wa-nav .w118sub{display:none;padding:2px 0 8px 32px;}'
     + 'nav.wa-nav .tab[data-tab="adminpanel"].active + .w118sub{display:block;}'

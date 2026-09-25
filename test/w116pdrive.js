@@ -103,7 +103,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   await page.click('#w116pcands [data-w116pst="all"]'); await page.waitForTimeout(200);
   out.allCount = await page.evaluate(() => document.querySelectorAll('#w116pcands .c').length);
   /* 2. Adoption card */
-  await go('#adminpanel', 3000);
+  await go('#adminpanel/adoption', 3000);
   out.adoption = await page.evaluate(() => { const c = document.getElementById('w116rcard'); if (!c) return { present: false }; return { present: true, first: c.parentNode.firstElementChild === c, cols: Array.from(c.querySelectorAll('.pc h4')).map(h => h.textContent), big: Array.from(c.querySelectorAll('.pc')).map(p => Array.from(p.querySelectorAll('.big div')).map(d => d.textContent.trim().replace(/\s+/g, ' ')).join(' | ')), bars: c.querySelectorAll('.bars i').length, people: Array.from(c.querySelectorAll('table.pp tbody tr')).map(r => r.textContent.trim().replace(/\s+/g, ' ').slice(0, 120)) }; });
   await shot("4_adoption", true);
   await page.click('#w116rcard [data-w116rser="ai_cost"]'); await page.waitForTimeout(200);
