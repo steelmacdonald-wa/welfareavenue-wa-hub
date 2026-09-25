@@ -12276,7 +12276,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',
     adminpanel: '<p>Who sees what. Set each person&#39;s role: admins manage everything, leaders see every page, members see the work surfaces, viewers see the overview only.</p><p>Tab overrides win over the role default. Changes apply the next time the person loads the Hub.</p>',
     projectpage: '<p>One project&#39;s tasks and details. Tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
-    personpage: '<p>One person: their AI bio, fiscal-year stats, current plate, finished work, and training and onboarding progress.</p>'
+    personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'
   };
   function wa43Key(id) {
     if (typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(id) >= 0) return 'dept';
@@ -16478,7 +16478,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       ];
     } else if (k === 'personpage') {
       sub = 'One person, in full.';
-      fl = ['Read the bio', 'See their plate', 'Check their training'];
+      fl = ['Read the responsibilities', 'See their plate and projects', 'Check hours and training'];
       cards = [
         card(mTask([['3 open', 'gold']]), 'Their current plate'),
         card(mBar(75), 'Training progress')
@@ -16739,9 +16739,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           'These are the department&#39;s real tasks filtered to this project; ticking here completes them everywhere. Move sends a task to another project or back to General.');
     } else if (k === 'personpage') {
       sub = 'One person, in full.';
-      fl = ['Read the bio', 'See their plate', 'Check their training'];
+      fl = ['Read the responsibilities', 'See their plate and projects', 'Check hours and training'];
       secs = sec(mBar(75), 'Live, not a profile form',
-          'The bio, plate, stats and training progress all come from real Hub data, so the page is always current.');
+          'Responsibilities and the job description link come from the HR drive; tasks, projects, hours, meetings and training come from live Hub data, so the page is always current.');
     } else if (k === 'hrcentre') {
       sub = 'People operations, in four dashboards.';
       fl = ['Pick a tab', 'Act', 'Check Commitment'];
@@ -33006,6 +33006,380 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return r;
     };
   }
+})();
+/* =====================================================================
+   WA v116k the profile page (25/09/26)
+   =====================================================================
+   Steel: "My page under my logo links to Home; instead make an actual
+   profile page that shows role, responsibilities, tasks completed, a
+   link to the job description (Human Resources folder in the Drive),
+   and what projects one is leading."
+   - #person/<id> is rebuilt in the wave116 look: a header (photo, name,
+     role, team, email, onboarding bar), a KPI strip (open now, finished
+     this fiscal year, finished all time, hours on the hub this month,
+     projects led), then two columns: Main responsibilities (the wave116c
+     block, with the job-description link and its editor), Projects they
+     lead, On their plate, Finished this fiscal year; About (the AI job
+     summary when there is one), Hours on the hub (hub_checkins), Their
+     meetings (hub@ calendar), Training (wave36), Team.
+   - The older profile chain (wave33 base, wave36 training, wave37
+     onboarding, wave116c responsibilities) still runs, into a decoy
+     section, and its blocks are lifted into the new layout, so every
+     editor and link keeps working.
+   - Every active team member now has a job description link (from the
+     HR shared drive) and three to five responsibilities (wa116k
+     migration); HR roles have no job description in the Drive yet.
+   ===================================================================== */
+(function () {
+  if (window.__wa116k) return; window.__wa116k = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var T = window.WA_TEAMS || null;
+
+  var css = document.createElement('style');
+  css.id = 'wa116kcss';
+  css.textContent = '' +
+    '#personpage .w116k{font-family:' + BODY + ';}' +
+    '#personpage .w116k .crumbs{font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;display:flex;gap:14px;flex-wrap:wrap;}' +
+    '#personpage .w116k .crumbs a{color:' + GREEN + ';font-weight:700;text-decoration:none;cursor:pointer;}' +
+    '#personpage .w116k .crumbs a:hover{text-decoration:underline;}' +
+    '.w116khead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:18px;align-items:center;margin:0 0 16px;}' +
+    '.w116khead .w116av{border:3px solid var(--wa-card);box-shadow:0 0 0 2px rgba(16,63,57,.12);}' +
+    '.w116khead h2{font-family:' + HEAD + ';font-weight:600;font-size:34px;line-height:1;letter-spacing:.5px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 6px;}' +
+    '.w116khead .role{font-size:14px;color:var(--wa-text);font-weight:600;}' +
+    '.w116khead .meta{font-size:12.5px;color:var(--wa-muted);margin:4px 0 0;display:flex;gap:12px;flex-wrap:wrap;align-items:center;}' +
+    '.w116khead .meta a{color:' + GREEN + ';text-decoration:none;font-weight:600;}' +
+    '.w116khead .meta a:hover{text-decoration:underline;}' +
+    '.w116khead .meta .pill{display:inline-flex;align-items:center;gap:6px;background:rgba(16,63,57,.06);border-radius:999px;padding:3px 10px;font-size:11.5px;font-weight:700;color:' + GREEN + ';}' +
+    '.w116khead .meta .pill i{width:7px;height:7px;border-radius:50%;background:' + TEAL + ';display:inline-block;}' +
+    '.w116khead .acts{display:flex;flex-direction:column;gap:8px;align-items:flex-end;}' +
+    '.w116khead .acts a{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.06);border-radius:12px;padding:7px 12px;cursor:pointer;text-decoration:none;white-space:nowrap;}' +
+    '.w116khead .acts a:hover{background:rgba(16,63,57,.12);}' +
+    '.w116khead .w37profbar{margin:8px 0 0 !important;}' +
+    '.w116k .w116kpi{cursor:default;}' +
+    '.w116k .w116kpi.go{cursor:pointer;}' +
+    '.w116k .w116kpi small{font-size:11px;color:var(--wa-muted);}' +
+    /* responsibilities block (wave116c) inside the card */
+    '.w116k .w116resp{margin:0;background:none;padding:0;border-radius:0;}' +
+    '.w116k .w116resp h3.block{display:none;}' +
+    '.w116k .w116resp ol{padding-left:18px;}' +
+    '.w116k .w116resp li{font-size:13.5px;}' +
+    '.w116k .w116resp .jd{background:rgba(220,165,39,.12);border-radius:10px;padding:8px 12px;margin:10px 0 0;font-size:12.5px;}' +
+    '.w116k .w116resp .jd a{font-weight:700;}' +
+    '.w116k #w33stats{display:none;}' +
+    /* task rows */
+    '.w116ktasks{display:flex;flex-direction:column;gap:6px;}' +
+    '.w116ktasks .t{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;font-size:13px;color:var(--wa-text);background:rgba(16,63,57,.04);border-radius:10px;padding:8px 12px;cursor:pointer;line-height:1.35;}' +
+    '.w116ktasks .t:hover{background:rgba(16,63,57,.09);}' +
+    '.w116ktasks .t .r{display:inline-flex;gap:6px;align-items:center;font-size:11px;color:var(--wa-muted);white-space:nowrap;}' +
+    '.w116ktasks .t .r .pl{display:inline-block;border-radius:999px;padding:2px 8px;color:' + CREAM + ';font-weight:700;letter-spacing:.3px;}' +
+    '.w116ktasks .t.over .r .due{color:' + FLAG + ';font-weight:700;}' +
+    '.w116ktasks .t.done{text-decoration:none;}' +
+    '.w116ktasks .t.done .r .when{color:' + TEAL + ';font-weight:700;}' +
+    '.w116k .empty{font-size:13px;color:var(--wa-muted);margin:0;}' +
+    '.w116k .more{display:inline-block;margin:8px 0 0;font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;}' +
+    '.w116k .more:hover{text-decoration:underline;}' +
+    /* projects led */
+    '.w116kpro .p{background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;}' +
+    '.w116kpro .p .n{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;font-weight:700;color:var(--wa-text);cursor:pointer;}' +
+    '.w116kpro .p .n:hover{color:' + GREEN + ';}' +
+    '.w116kpro .p .n .pl{display:inline-block;border-radius:999px;padding:2px 8px;color:' + CREAM + ';font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;white-space:nowrap;}' +
+    '.w116kpro .p .s{font-size:12px;color:var(--wa-muted);margin:3px 0 0;display:flex;gap:10px;flex-wrap:wrap;}' +
+    '.w116kpro .p .bar{height:5px;background:rgba(16,63,57,.10);border-radius:3px;overflow:hidden;margin-top:7px;}' +
+    '.w116kpro .p .bar i{display:block;height:100%;background:' + GREEN + ';border-radius:3px;}' +
+    '.w116kpro .p.paused .bar i{background:' + GOLD + ';}' +
+    /* hours */
+    '.w116khours{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}' +
+    '.w116khours div{background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;font-size:11.5px;color:var(--wa-muted);}' +
+    '.w116khours div b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:24px;line-height:1;color:' + GREEN + ';margin:0 0 5px;}' +
+    '.w116khours div.now b{color:' + TEAL + ';}' +
+    '.w116ksess{margin:10px 0 0;font-size:12px;color:var(--wa-muted);line-height:1.6;}' +
+    '.w116ksess span{display:inline-block;margin-right:10px;white-space:nowrap;}' +
+    /* about */
+    '.w116kabout{font-size:13.5px;line-height:1.55;color:var(--wa-text);}' +
+    '.w116kabout p{margin:0 0 6px;}' +
+    /* team */
+    '.w116kteam{display:flex;flex-wrap:wrap;gap:8px;}' +
+    '.w116kteam a{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;color:var(--wa-text);background:rgba(16,63,57,.05);border-radius:999px;padding:4px 12px 4px 4px;cursor:pointer;text-decoration:none;}' +
+    '.w116kteam a:hover{background:rgba(16,63,57,.11);}' +
+    /* training block (wave36) */
+    '.w116k .w36prof h3.block{display:none;}' +
+    '.w116k .w36prof{margin:0;}' +
+    '.w116k .w36prog-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 8px;font-size:13px;padding:6px 0;border-top:1px solid rgba(16,63,57,.06);}' +
+    '.w116k .w36prog-row a{margin-left:auto;}' +
+    '.w116k .w36prog-row:first-of-type{border-top:none;}' +
+    '.w116k .w116ev .t{font-size:13px;}' +
+    '@media (max-width:820px){.w116khead{grid-template-columns:auto minmax(0,1fr);}.w116khead .acts{grid-column:1 / -1;flex-direction:row;flex-wrap:wrap;align-items:flex-start;}.w116khead h2{font-size:28px;}.w116khours{grid-template-columns:repeat(3,minmax(0,1fr));}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member'; } catch (e) { return 'member'; } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function label(d) { return (T && T.label && T.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
+  function shortLabel(d) { return (T && T.short && T.short[d]) || label(d); }
+  function color(d) { try { if (T && T.color && T.color[d]) return T.color[d]; } catch (e) { /* fine */ } try { var tab = document.querySelector('.tab[data-tab="' + d + '"] .tabdot'); if (tab) return tab.style.background || GREEN; } catch (e) { /* fine */ } return GREEN; }
+  function av(p, size, cls) { return window.w116Avatar ? window.w116Avatar(p, size, cls) : '<span class="w116av" style="width:' + size + 'px;height:' + size + 'px">' + E(String((p && p.name) || '?').slice(0, 1)) + '</span>'; }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []); }
+  function firstName(n) { return lower(String(n || '').split(/\s+/)[0]); }
+  function fmtMins(m) { m = Math.max(0, Math.round(m)); var h = Math.floor(m / 60), r = m % 60; return h ? h + 'h ' + (r < 10 ? '0' : '') + r + 'm' : r + 'm'; }
+  function fyStart() { var now = new Date(); var y = now.getMonth() + 1 >= 10 ? now.getFullYear() : now.getFullYear() - 1; return y + '-10-01'; }
+  function fyLabel() { return 'FY' + (Number(fyStart().slice(0, 4)) + 1); }
+  function dateShort(s) { try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(s || '').slice(0, 10); } }
+  function isSelf(m) { return !!(m && m.email && lower(m.email) === myEmail()); }
+  function canEdit(m) { var r = role(); return r === 'admin' || r === 'leader' || isSelf(m); }
+
+  /* ---------- who owns what ---------- */
+  function personOwns(t, m) {
+    try {
+      var ids = (typeof DB_ASSIGN !== 'undefined' ? DB_ASSIGN : []).filter(function (a) { return Number(a.task_id) === Number(t.id); }).map(function (a) { return Number(a.member_id); });
+      if (ids.length) { if (ids.indexOf(Number(m.id)) >= 0) return true; }
+      var own = lower(t.owner); if (!own) return false;
+      var full = lower(m.name); var fn = firstName(m.name);
+      if (own.indexOf(full) >= 0) return true;
+      var parts = own.split(/[,&\/+]| and /).map(function (x) { return lower(x); });
+      return parts.some(function (p) { return p === fn || p.split(/\s+/)[0] === fn; });
+    } catch (e) { return false; }
+  }
+  function tasksOf(m) { return (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return personOwns(t, m); }); }
+  function leadsOf(p) { var v = p && p.leads; if (Array.isArray(v)) return v.filter(Boolean).map(String); if (typeof v === 'string' && v.trim()) { try { var a = JSON.parse(v); return Array.isArray(a) ? a.filter(Boolean).map(String) : []; } catch (e) { return v.split(',').map(function (x) { return x.trim(); }).filter(Boolean); } } return []; }
+  function projectsLed(m) {
+    var all = (window.w116Projects ? window.w116Projects() : (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : [])) || [];
+    var full = lower(m.name), fn = firstName(m.name);
+    return all.filter(function (p) { return leadsOf(p).some(function (l) { var ll = lower(l); return ll === full || ll === fn || ll.split(/\s+/)[0] === fn; }); });
+  }
+  function pstatus(p) { var s = lower(p.status || 'active'); if (s.indexOf('pause') >= 0 || s.indexOf('hold') >= 0) return 'paused'; if (s.indexOf('done') >= 0 || s.indexOf('complete') >= 0 || s.indexOf('closed') >= 0 || s.indexOf('archiv') >= 0) return 'done'; return 'active'; }
+  function pcounts(p) { var ts = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) { return Number(t.project_id) === Number(p.id); }); var done = ts.filter(function (t) { return t.done; }).length; return { total: ts.length, done: done, open: ts.length - done, pct: ts.length ? Math.round(done / ts.length * 100) : 0 }; }
+
+  /* ---------- pieces ---------- */
+  function taskRow(t, done) {
+    var over = !done && t.due_date && new Date(t.due_date) < new Date(new Date().toDateString());
+    return '<div class="t' + (done ? ' done' : '') + (over ? ' over' : '') + '" data-w116kt="' + E(t.id) + '"><span>' + E(t.title) + '</span><span class="r">' +
+      (t.department ? '<span class="pl" style="background:' + color(t.department) + '">' + E(shortLabel(t.department)) + '</span>' : '') +
+      (done ? (t.closed_at ? '<span class="when">' + E(dateShort(t.closed_at)) + '</span>' : '') : (t.due_date ? '<span class="due">' + (over ? 'overdue ' : 'due ') + E(dateShort(t.due_date)) + '</span>' : '')) +
+      '</span></div>';
+  }
+  function taskList(list, done, id, limit) {
+    if (!list.length) return '<p class="empty">' + (done ? 'Nothing finished yet this fiscal year.' : 'Nothing assigned right now.') + '</p>';
+    var shown = list.slice(0, limit);
+    return '<div class="w116ktasks" id="' + id + '">' + shown.map(function (t) { return taskRow(t, done); }).join('') + '</div>' +
+      (list.length > limit ? '<a class="more" data-w116kmore="' + id + '">Show all ' + list.length + '</a>' : '');
+  }
+  function projectsHtml(list) {
+    if (!list.length) return '<p class="empty">Not leading a project right now. Leads are set on the Projects page.</p>';
+    return '<div class="w116kpro">' + list.map(function (p) {
+      var c = pcounts(p), st = pstatus(p);
+      return '<div class="p ' + st + '"><div class="n" data-w116kp="' + E(p.id) + '"><span>' + E(p.name) + '</span>' + (p.department ? '<span class="pl" style="background:' + color(p.department) + '">' + E(shortLabel(p.department)) + '</span>' : '') + '</div>' +
+        '<div class="s"><span>' + (st === 'active' ? 'Active' : st === 'paused' ? 'Paused' : 'Done') + '</span><span>' + c.done + ' of ' + c.total + ' tasks done</span>' + (p.due_date || p.target_date ? '<span>Target ' + E(dateShort(p.due_date || p.target_date)) + '</span>' : '') + (leadsOf(p).length > 1 ? '<span>With ' + E(leadsOf(p).join(', ')) + '</span>' : '') + '</div>' +
+        '<div class="bar"><i style="width:' + c.pct + '%"></i></div></div>';
+    }).join('') + '</div>';
+  }
+  function hoursHtml(h) {
+    if (!h) return '<p class="empty">No hub check-ins yet. The Check in button at the top of the hub starts the clock.</p>';
+    return '<div class="w116khours"><div' + (h.open ? ' class="now"' : '') + '><b>' + E(fmtMins(h.month)) + '</b>this month' + (h.open ? ' (checked in now)' : '') + '</div><div><b>' + E(fmtMins(h.last)) + '</b>last month</div><div><b>' + h.sessions + '</b>sessions in 60 days</div></div>' +
+      (h.recent.length ? '<div class="w116ksess">' + h.recent.map(function (s) { return '<span>' + E(dateShort(s.started_at)) + ' &middot; ' + E(fmtMins(s.mins)) + (s.open ? ' (open)' : '') + '</span>'; }).join('') + '</div>' : '');
+  }
+  function teamHtml(m) {
+    var mates = members().filter(function (x) { return x.department === m.department && Number(x.id) !== Number(m.id); }).slice(0, 14);
+    if (!mates.length) return '<p class="empty">Nobody else on this team yet.</p>';
+    return '<div class="w116kteam">' + mates.map(function (x) { return '<a href="#person/' + E(x.id) + '">' + av(x, 24) + E(x.name) + '</a>'; }).join('') + '</div>';
+  }
+
+  /* ---------- data ---------- */
+  async function loadHours(m) {
+    try {
+      if (!m.email) return null;
+      var since = new Date(Date.now() - 60 * 86400000).toISOString();
+      var r = await db.from('hub_checkins').select('started_at, ended_at, minutes').eq('email', lower(m.email)).gte('started_at', since).order('started_at', { ascending: false }).limit(400);
+      var rows = (r && r.data) || [];
+      if (!rows.length) return null;
+      var now = new Date(); var m0 = new Date(now.getTime()); m0.setDate(1); m0.setHours(0, 0, 0, 0); var l0 = new Date(m0.getTime()); l0.setMonth(l0.getMonth() - 1);
+      var h = { month: 0, last: 0, sessions: rows.length, open: false, recent: [] };
+      rows.forEach(function (x) {
+        var mins = x.minutes != null ? Number(x.minutes) : (x.ended_at ? (new Date(x.ended_at) - new Date(x.started_at)) / 60000 : (Date.now() - new Date(x.started_at).getTime()) / 60000);
+        var st = new Date(x.started_at);
+        if (st >= m0) h.month += mins; else if (st >= l0) h.last += mins;
+        if (!x.ended_at) h.open = true;
+        if (h.recent.length < 6) h.recent.push({ started_at: x.started_at, mins: mins, open: !x.ended_at });
+      });
+      return h;
+    } catch (e) { return null; }
+  }
+  async function loadMeetings(m) {
+    try {
+      if (!window.w116LoadEvents || !m.email) return [];
+      var ev = await window.w116LoadEvents(false) || [];
+      var em = lower(m.email); var now = Date.now();
+      return ev.filter(function (e) { return Date.parse(e.end_at || e.start_at) >= now && ((e.attendees || []).some(function (a) { return lower(a.email) === em; }) || lower(e.organizer) === em); }).sort(function (a, b) { return Date.parse(a.start_at) - Date.parse(b.start_at); }).slice(0, 5);
+    } catch (e) { return []; }
+  }
+  async function loadMember(mid) {
+    var m = members().filter(function (x) { return String(x.id) === String(mid); })[0] || null;
+    try {
+      var q = await db.from('team_members').select('*').eq('id', Number(mid)).maybeSingle();
+      if (q && q.data) m = Object.assign({}, m || {}, q.data);
+    } catch (e) { /* fine */ }
+    return m;
+  }
+
+  /* ---------- the page ---------- */
+  var CUR = { id: null, building: null, open: [], done: [] };
+  function meaningfulBio(bio, m) {
+    bio = String(bio || '').trim();
+    if (!bio || /^Writing the job description/i.test(bio) || /^Opening the profile/i.test(bio)) return '';
+    var fallback = ((m.role || 'Team member') + ', ' + label(m.department) + '.').trim();
+    return bio === fallback ? '' : bio;
+  }
+  async function build(sec, mid, lifted) {
+    var m = await loadMember(mid);
+    if (String(CUR.building) !== String(mid)) return;
+    if (!m) { sec.innerHTML = '<div class="w116k"><div class="w116card"><p class="empty">Person not found.</p></div></div>'; return; }
+    var mine = tasksOf(m);
+    var fy = fyStart();
+    var today = new Date(new Date().toDateString());
+    var open = mine.filter(function (t) { return !t.done; }).sort(function (a, b) { return (b.flag ? 1 : 0) - (a.flag ? 1 : 0) || (b.priority ? 1 : 0) - (a.priority ? 1 : 0) || String(a.due_date || '9').localeCompare(String(b.due_date || '9')); });
+    var overdue = open.filter(function (t) { return t.due_date && new Date(t.due_date) < today; }).length;
+    var doneAll = mine.filter(function (t) { return t.done; });
+    var doneFy = doneAll.filter(function (t) { return (t.closed_at || t.updated_at || '') >= fy; }).sort(function (a, b) { return String(b.closed_at || '').localeCompare(String(a.closed_at || '')); });
+    CUR.open = open; CUR.done = doneFy;
+    var led = projectsLed(m);
+    var hours = staff() ? await loadHours(m) : null;
+    var meetings = await loadMeetings(m);
+    if (String(CUR.building) !== String(mid)) return;
+    var self = isSelf(m);
+    var bio = meaningfulBio(lifted && lifted.bio, m);
+    var checked = !!(hours && hours.open);
+    var teamPage = !!(m.department && T && T.order && T.order.indexOf(m.department) >= 0);
+    var hasResp = !!(m.jd_url || (Array.isArray(m.responsibilities) && m.responsibilities.length));
+
+    var html = '<div class="w116k">' +
+      '<div class="crumbs"><a href="#orgchart">&larr; Org chart</a>' + (teamPage ? '<a href="#team/' + E(m.department) + '">' + E(label(m.department)) + ' team page</a>' : '') + (self ? '<a href="#mypage">Home</a>' : '') + '<span style="flex:1"></span><button class="w43help" data-w43help="personpage" style="float:none">&#63; How this page works</button></div>' +
+      '<div class="w116card"><div class="w116khead">' + av(m, 72) +
+        '<div><h2>' + E(m.name) + '</h2><div class="role">' + E(m.role || 'Team member') + '</div>' +
+          '<div class="meta">' + (m.department ? '<span class="pill" style="color:' + CREAM + ';background:' + color(m.department) + '">' + E(label(m.department)) + '</span>' : '') + (m.email ? '<a href="mailto:' + E(m.email) + '">' + E(m.email) + '</a>' : '') + (checked ? '<span class="pill"><i></i>On the hub now</span>' : '') + '</div>' +
+          '<div id="w116konb"></div></div>' +
+        '<div class="acts">' + (self ? '<a data-w116ka="edit">Edit profile and photo</a><a data-w116ka="settings">Settings</a>' : '') + (canEdit(m) ? '<a data-w116ka="resp">' + (hasResp ? 'Edit responsibilities' : 'Add responsibilities') + '</a>' : '') + '</div>' +
+      '</div></div>' +
+      '<div class="w116kpis" style="margin-top:16px">' +
+        '<div class="w116kpi go" data-w116kgo="open"><b>' + open.length + '</b>open now' + (overdue ? '<small>' + overdue + ' overdue</small>' : '') + '</div>' +
+        '<div class="w116kpi go" data-w116kgo="done"><b>' + doneFy.length + '</b>finished in ' + E(fyLabel()) + '<small>' + doneAll.length + ' all time</small></div>' +
+        (staff() ? '<div class="w116kpi"><b>' + E(hours ? fmtMins(hours.month).replace(/ 00m$/, '') : '0m') + '</b>on the hub this month' + (hours ? '<small>' + E(fmtMins(hours.last)) + ' last month</small>' : '<small>no check-ins yet</small>') + '</div>' : '') +
+        '<div class="w116kpi go" data-w116kgo="projects"><b>' + led.length + '</b>' + (led.length === 1 ? 'project' : 'projects') + ' leading</div>' +
+      '</div>' +
+      '<div class="w116grid">' +
+        '<div class="w116col">' +
+          '<div class="w116card" id="w116krespcard"><h3>Main responsibilities' + (m.jd_url ? '<a class="lnk" href="' + E(m.jd_url) + '" target="_blank" rel="noopener">Open the job description</a>' : '') + '</h3><div id="w33stats"></div><div id="w116krespslot"><p class="empty">Loading...</p></div></div>' +
+          '<div class="w116card" id="w116kprojects"><h3>Projects they lead<a class="lnk" href="#projects">All projects</a></h3>' + projectsHtml(led) + '</div>' +
+          '<div class="w116card" id="w116kopen"><h3>On their plate (' + open.length + ')' + (teamPage ? '<a class="lnk" href="#team/' + E(m.department) + '/tasks">Team board</a>' : '') + '</h3>' + taskList(open, false, 'w116kopenlist', 10) + '</div>' +
+          '<div class="w116card" id="w116kdone"><h3>Finished this fiscal year (' + doneFy.length + ')</h3>' + taskList(doneFy, true, 'w116kdonelist', 8) + '</div>' +
+        '</div>' +
+        '<div class="w116col" id="w116kright">' +
+          (bio ? aboutCard(m, bio) : '') +
+          (staff() ? '<div class="w116card" id="w116khours"><h3>Hours on the hub' + (self ? '<span class="lnk" data-w116ka="ck">' + (checked ? 'Check out' : 'Check in') + '</span>' : '') + '</h3>' + hoursHtml(hours) + '</div>' : '') +
+          '<div class="w116card" id="w116kmeet"><h3>Their meetings' + (self ? '<a class="lnk" href="#mypage">Reply from Home</a>' : '') + '</h3>' + (meetings.length && window.w116EventRow ? meetings.map(function (e) { return window.w116EventRow(e, { mine: false }); }).join('') : '<p class="empty">No upcoming meetings on the hub calendar.</p>') + '</div>' +
+          '<div class="w116card" id="w116ktrain"><h3><span id="w116ktrainh">Training</span></h3><div id="w116ktrainslot"><p class="empty">No training assigned yet.</p></div></div>' +
+          '<div class="w116card" id="w116kteam"><h3>' + E(label(m.department) || 'Team') + (teamPage ? '<a class="lnk" href="#team/' + E(m.department) + '">Team page</a>' : '') + '</h3>' + teamHtml(m) + '</div>' +
+        '</div>' +
+      '</div></div>';
+    sec.innerHTML = html;
+    place(lifted, m);
+    try { if (window.w116Onboard && window.w116Onboard.tick) window.w116Onboard.tick('profile'); } catch (e) { /* fine */ }
+  }
+  function aboutCard(m, bio) { return '<div class="w116card" id="w116kabout"><h3>About<a class="lnk" data-w33bref="' + E(m.id) + '">Rewrite from the latest work</a></h3><div class="w116kabout" id="w33bio"><p>' + E(bio) + '</p></div></div>'; }
+  /* blocks the older chain rendered: lift them into the new layout */
+  function place(lifted, m) {
+    if (!lifted) return;
+    try {
+      var slot = document.getElementById('w116krespslot');
+      if (slot && lifted.resp) { slot.innerHTML = ''; slot.appendChild(lifted.resp); }
+      else if (slot && lifted.final && !slot.querySelector('#w116resp')) slot.innerHTML = '<p class="empty">No responsibilities listed yet.</p>';
+      var ts = document.getElementById('w116ktrainslot');
+      if (ts && lifted.train) { ts.innerHTML = ''; ts.appendChild(lifted.train); var th = lifted.train.querySelector('h3'); var hh = document.getElementById('w116ktrainh'); if (th && hh) hh.textContent = th.textContent; }
+      var ob = document.getElementById('w116konb'); if (ob && lifted.onb) { ob.innerHTML = ''; ob.appendChild(lifted.onb); }
+      if (m && lifted.bio && !document.getElementById('w116kabout')) {
+        var bio = meaningfulBio(lifted.bio, m); var col = document.getElementById('w116kright');
+        if (bio && col) { var box = document.createElement('div'); box.innerHTML = aboutCard(m, bio); col.insertBefore(box.firstChild, col.firstChild); }
+      }
+    } catch (e) { /* cosmetic */ }
+  }
+  function lift(decoy, final) {
+    var out = { resp: null, train: null, onb: null, bio: '', final: !!final };
+    try {
+      var r = decoy.querySelector('#w116resp'); if (r) { r.parentNode.removeChild(r); out.resp = r; }
+      var t = decoy.querySelector('.w36prof'); if (t) { t.parentNode.removeChild(t); out.train = t; }
+      var o = decoy.querySelector('.w37profbar'); if (o) { o.parentNode.removeChild(o); out.onb = o; }
+      var b = decoy.querySelector('#w33bio'); if (b) out.bio = b.textContent || '';
+    } catch (e) { /* fine */ }
+    return out;
+  }
+  function waitFor(test, ms) { return new Promise(function (res) { var t0 = Date.now(); (function tick() { var ok = false; try { ok = !!test(); } catch (e) { ok = false; } if (ok || Date.now() - t0 > ms) res(ok); else setTimeout(tick, 80); })(); }); }
+
+  if (typeof wa33Person === 'function') {
+    var __pp116k = wa33Person;
+    wa33Person = async function (mid) {
+      CUR.id = String(mid); CUR.building = String(mid);
+      await Promise.resolve(); /* let wave33's showPanel('personpage') act on the real section first */
+      var real = document.querySelector('section#personpage:not([data-w116kdecoy])'); if (!real) return __pp116k.apply(this, arguments);
+      real.innerHTML = '<div class="w116k"><div class="w116card"><p class="empty">Opening the profile...</p></div></div>';
+      /* the older chain renders into a decoy that sits ahead of the real section in the DOM */
+      document.querySelectorAll('[data-w116kdecoy]').forEach(function (d) { try { d.parentNode.removeChild(d); } catch (e) { /* fine */ } });
+      var decoy = document.createElement('section'); decoy.id = 'personpage'; decoy.className = 'panel'; decoy.style.display = 'none'; decoy.setAttribute('data-w116kdecoy', '1');
+      var main = real.parentNode || document.querySelector('main') || document.body; main.insertBefore(decoy, main.firstChild);
+      var lifted = null, done = false;
+      var chain = (async function () { try { await __pp116k.apply(null, [mid]); } catch (e) { /* older layout failed: fine */ } lifted = lift(decoy, true); done = true; try { decoy.parentNode.removeChild(decoy); } catch (e) { /* fine */ } })();
+      try {
+        /* the base wave33 paint is quick; the AI summary and the training block can take longer, so paint once the base is in */
+        await waitFor(function () { return done || decoy.querySelector('#w33stats'); }, 4000);
+        if (String(CUR.building) !== String(mid)) return;
+        if (done) { await build(real, mid, lifted); }
+        else {
+          await build(real, mid, lift(decoy, false));
+          chain.then(function () { try { if (String(CUR.building) === String(mid)) { var m = members().filter(function (x) { return String(x.id) === String(mid); })[0] || { id: mid, role: '', department: '' }; place(lifted, m); } } catch (e) { /* fine */ } });
+        }
+      } catch (e) { console.warn('wave116k profile', e); try { if (decoy.parentNode) decoy.parentNode.removeChild(decoy); } catch (x) { /* fine */ } }
+    };
+  }
+  window.w116Person = function (mid) { try { wa33Person(mid || CUR.id); } catch (e) { /* fine */ } };
+  /* keep the job-description link in the card header in step with the wave116c block after an edit */
+  try {
+    new MutationObserver(function (muts) {
+      var hit = false;
+      muts.forEach(function (mu) { Array.prototype.forEach.call(mu.addedNodes || [], function (n) { if (n.nodeType === 1 && (n.id === 'w116resp' || (n.querySelector && n.querySelector('#w116resp')))) hit = true; }); });
+      if (!hit) return;
+      var card = document.getElementById('w116krespcard'); var blk = document.getElementById('w116resp'); if (!card || !blk) return;
+      var slot = document.getElementById('w116krespslot'); if (slot && blk.parentNode !== slot) { slot.innerHTML = ''; slot.appendChild(blk); }
+      var jd = blk.querySelector('.jd a'); var h3 = card.querySelector('h3'); if (!h3) return;
+      var lnk = h3.querySelector('a.lnk');
+      if (jd) { if (!lnk) { lnk = document.createElement('a'); lnk.className = 'lnk'; lnk.target = '_blank'; lnk.rel = 'noopener'; lnk.textContent = 'Open the job description'; h3.appendChild(lnk); } lnk.href = jd.getAttribute('href'); }
+      else if (lnk) lnk.remove();
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+
+  /* ---------- clicks ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t.closest) return;
+    var sec = t.closest('#personpage'); if (!sec) return;
+    var tr = t.closest('[data-w116kt]'); if (tr) { location.hash = '#task/' + tr.getAttribute('data-w116kt'); return; }
+    var pr = t.closest('[data-w116kp]'); if (pr) { location.hash = '#project/' + pr.getAttribute('data-w116kp'); return; }
+    var more = t.closest('[data-w116kmore]');
+    if (more) {
+      var id = more.getAttribute('data-w116kmore'); var box = document.getElementById(id); if (!box) return;
+      var list = id === 'w116kopenlist' ? CUR.open : CUR.done; var done = id === 'w116kdonelist';
+      box.innerHTML = list.map(function (x) { return taskRow(x, done); }).join(''); more.remove(); return;
+    }
+    var go = t.closest('[data-w116kgo]');
+    if (go) { var target = { open: 'w116kopen', done: 'w116kdone', projects: 'w116kprojects' }[go.getAttribute('data-w116kgo')]; var el = target && document.getElementById(target); if (el) { try { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (x) { el.scrollIntoView(); } } return; }
+    var a = t.closest('[data-w116ka]');
+    if (a) {
+      var what = a.getAttribute('data-w116ka');
+      if (what === 'edit') { var b = document.getElementById('w115btn'); if (b) { b.click(); setTimeout(function () { var ed = document.querySelector('#w115menu [data-w115act="edit"]'); if (ed) ed.click(); }, 60); } return; }
+      if (what === 'settings') { if (window.w116Settings) window.w116Settings('connections'); return; }
+      if (what === 'resp') { var link = document.querySelector('#personpage #w116resp [data-w116r="edit"]'); if (link) link.click(); else { try { toast('Responsibilities are edited from the block below'); } catch (x) { /* fine */ } } return; }
+      if (what === 'ck') { var ck = document.getElementById('w116jck'); if (ck) { ck.click(); setTimeout(function () { window.w116Person(CUR.id); }, 1500); } return; }
+    }
+  });
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)

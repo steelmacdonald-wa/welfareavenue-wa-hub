@@ -24,6 +24,10 @@ with open(OUT, "r", encoding="utf-8") as f:
 orig = html
 
 REPLACE = [
+    # wave116k: the profile page help texts
+    ("personpage: '<p>One person: their AI bio, fiscal-year stats, current plate, finished work, and training and onboarding progress.</p>'", "personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'"),
+    ("fl = ['Read the bio', 'See their plate', 'Check their training'];", "fl = ['Read the responsibilities', 'See their plate and projects', 'Check hours and training'];"),
+    ("secs = sec(mBar(75), 'Live, not a profile form',\n          'The bio, plate, stats and training progress all come from real Hub data, so the page is always current.');", "secs = sec(mBar(75), 'Live, not a profile form',\n          'Responsibilities and the job description link come from the HR drive; tasks, projects, hours, meetings and training come from live Hub data, so the page is always current.');"),
     # tab buttons and selects in the base
     ("Ops &amp; Program Dev &middot; Montreal", "Operations Montreal"),
     ("Ops &amp; Program Dev &middot; Toronto", "Operations Toronto"),

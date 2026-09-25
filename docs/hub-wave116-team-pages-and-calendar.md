@@ -69,6 +69,29 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 - First sync: 8 messages, all noise (Google welcome and security notices, the two calendar invitations). Test invoice and test update filed correctly through the rules fallback and were undone.
 - **Blocker for the model path**: the vault `ANTHROPIC_API_KEY` returns "credit balance too low", which also stops `process-transcript`, goal suggestions and the Brain. Top up the Anthropic console balance; nothing else changes.
 
+## Classic department page retired (`116i_wave116i`)
+
+- Steel: "We don't need this page anymore for all departments because of the reorganising we did... as long as we aren't losing functionality." Everything the classic page did now lives on the team pages: the Overview gained "Where the team is" (progress this period, the high-priority list, the team pulse, re-run from transcripts), the team's executive decisions with the AI recommendation button, "+ Add an update" (a modal, no browser prompt), "+ Add a task", "+ Add a project", "+ Invite", all updates, mentions and the tools row; the Tasks page already had list, board, calendar, workstreams and (new) "move to another team" in the drawer.
+- Routes: `#dept/<team>` and `#<team>` land on the team Overview; `#task/<id>` opens the team board with that task's drawer; `showPanel(<team>)` and `renderSection(<team>)` from older code route to the team page. The classic panels stay in the DOM, hidden.
+- Projects aligned everywhere: one shared store (`window.w116Projects()`, `w116LoadProjects`, `w116ProjectsChanged`) feeds the Projects page, the team Overview, the task board grouping, the goal pages and the alignment map, so an edit on the Projects page repaints the rest live. Boards: `projects.workstream` decides which sub-team board a project belongs to (Grants, Fundraising events, Donor program) instead of a static id list; the project editors pick it. Data fixes (`wa116i_projects_workstream_and_alignment`, `wa116i_project_leads_from_task_ownership`): workstreams set, projects linked to their goals, department goals rolled up to org goal 45, leads filled from who owns the open tasks.
+
+## The header (`116j_wave116j`)
+
+- Steel: one bubble with the photo and name; the cloud pill replaced by who is active; a check in / check out for hours; a Settings tab to connect Slack, Google Calendar and Google Drive.
+- The identity pill is one bubble (photo + first name + caret). The menu: My profile (the person page), Edit profile and photo, Notifications, Settings: Slack, Google Calendar, Drive, Change password, Request more access, Sign out. "Signed in:" is gone.
+- The "Cloud connected" pill is now the active bubbles: everyone seen in the last ten minutes (`user_state` heartbeat), a green ring for people checked in, hover for the names.
+- Check in / Check out (staff): `hub_checkins` rows with minutes; sessions left open close themselves at eight hours; a change_log line per check-in. The HR centre hours tab gained "Hours checked in on the hub" (this week, last week, five weeks, sessions); the profile page shows the month.
+- Settings (modal): Connections (Slack by profile email, Google Calendar, Google Drive through the new `hub-connect` function, plus hub@ and Loom/Otter as info), Notifications (the wave89 switches and a test), Account (photo/profile links, password via Supabase auth, sign out). Home meeting rows gained Accept / Decline once Calendar is on (`hub-connect rsvp`); the pill still opens Google Calendar.
+- `hub-connect` v1 (`status`, `toggle`, `rsvp`, `drive_recent`): the delegated service account acts for the signed-in person only after they switch a service on. **To finish**: add `https://www.googleapis.com/auth/calendar.events` and `https://www.googleapis.com/auth/drive.readonly` to the domain-wide delegation entry for client id 107460787452614031265 (Admin console > Security > API controls > Domain-wide delegation); until then the switches return a clear error. Slack shows "connected" only when the person's Slack profile email matches their hub email.
+- Migration `wa116j_checkins_connections_prefs`: `hub_checkins`, `hub_connections`, `wa_notify_prefs.prefs`.
+
+## The profile page (`116k_wave116k`)
+
+- Steel: "make an actual profile page that shows role, responsibilities, tasks completed, a link to the job description (Human Resources folder in the Drive), and what projects one is leading."
+- `#person/<id>` rebuilt in the wave116 look: header (photo, name, role, team, email, onboarding bar, "On the hub now"), KPIs (open now with overdue, finished this fiscal year with the all-time count, hours on the hub this month, projects leading), then Main responsibilities (the wave116c block with the job-description link and its editor), Projects they lead (`projects.leads`, click through to the project page), On their plate (click opens the task on the team board), Finished this fiscal year; on the right About (the AI summary when the model is available), Hours on the hub (`hub_checkins`: this month, last month, sessions), Their meetings (hub@ calendar), Training (wave36) and the team. Admins, leaders and the person edit responsibilities; the person edits photo and settings from the header.
+- Job descriptions: the HR shared drive keeps them under *Recruitment* > Job descriptions (J.D. - Operations, Marketing, fundraising, Executive), Board Job Descriptions, Program Development > Job Descriptions, plus "Fundraising Team Structure - JDs" (May 2026, per person). Migration `wa116k_job_descriptions_and_responsibilities` linked a job description for 38 people and wrote three to five responsibilities for 43 (from the document where one exists, from the roster role and project leads otherwise), logged in change_log. No document in the Drive yet for the HR roles (Valex, Natasha, Samson, Tuna), Melvina or Rima; the picker in the editor lists every job description the Drive mirror knows.
+- The profile keeps the older chain alive (wave33 base, wave36 training, wave37 onboarding, wave116c responsibilities) by letting it render into a decoy section and lifting its blocks into the new layout, so every editor and link keeps working.
+
 ## Backend
 
 - `public.hub_events` + `public.hub_calendar_state` (migration `wa116_hub_events`), RLS read for staff/board/admin.
@@ -77,6 +100,10 @@ Live build: `417a5ed4d31c8225b4972428cf3c90ef` (1,891,546 bytes), deployed 24/09
 - `apply_transcript_result` RPC and `process-transcript` v7 map "Program Development" uploads to `progdev` (old combined labels still map to Ops Montreal); Slack notices link to `#team/<dept>`.
 
 ## Follow-ups
+
+- Google connections: add the calendar.events and drive.readonly scopes to the delegation entry (see The header above).
+- Anthropic credit: the vault key still returns "credit balance too low" (Brain, goal suggestions, transcript processing, the mail classifier and the profile About summary wait on it).
+- Job descriptions for the HR team, Melvina and Rima: none in the Drive; link them from the profile editor once written.
 
 - Invite hub@welfareavenue.com to the Marketing and Program Development meeting series (only Fundraising, Operations and HR are on its calendar so far).
 - Consider dropping the calendar share from "Make changes and manage sharing" to "Make changes to events".
