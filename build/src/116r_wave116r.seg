@@ -1,0 +1,176 @@
+/* =====================================================================
+   WA v116r adoption: who uses the hub, and how much (25/09/26)
+   =====================================================================
+   Steel: "I want to know the last 3 times each member logged in to the
+   dashboard. I'd also like an adoption board in admin settings that
+   shows AI usage numbers from OpenRouter, time spent on the hub, tasks
+   being closed, all daily, weekly and monthly."
+   - Every time the hub opens, it writes one row to hub_visits (at most
+     once per six hours per browser). Older sign-ins come from the auth
+     sessions Supabase keeps.
+   - Admin > Adoption (top of the Admin panel): Today / 7 days / 30 days
+     side by side: people who came, visits, hours checked in, tasks
+     closed (and opened), AI calls and what they cost, Jev checks,
+     questions to the Brain, transcripts, emails filed, shout-outs; a
+     30-day strip per measure; and the people table with the last three
+     sign-ins, last activity, hours, tasks closed and questions this
+     month. Numbers come from hub_adoption() (admins only).
+   ===================================================================== */
+(function () {
+  if (window.__wa116r) return; window.__wa116r = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var R = { data: null, at: 0, loading: null, err: null, series: 'visitors', sort: 'last_active', team: '' };
+
+  var css = document.createElement('style');
+  css.id = 'wa116rcss';
+  css.textContent = '' +
+    '#w116rcard{margin-bottom:16px;font-family:' + BODY + ';}' +
+    '#w116rcard .per{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:0 0 14px;}' +
+    '#w116rcard .pc{background:rgba(16,63,57,.05);border-radius:16px;padding:12px 14px;}' +
+    '#w116rcard .pc h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:0 0 8px;}' +
+    '#w116rcard .pc .big{display:flex;gap:14px;flex-wrap:wrap;margin:0 0 8px;}' +
+    '#w116rcard .pc .big div b{display:block;font-family:' + HEAD + ';font-size:30px;line-height:1;color:' + GREEN + ';}' +
+    '#w116rcard .pc .big div span{display:block;font-size:11px;color:var(--wa-muted);margin-top:3px;}' +
+    '#w116rcard .pc table{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    '#w116rcard .pc td{padding:3px 0;border-top:1px solid rgba(16,63,57,.07);color:var(--wa-text);}' +
+    '#w116rcard .pc td:last-child{text-align:right;font-weight:700;color:' + GREEN + ';}' +
+    '#w116rcard .strip{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 6px;}' +
+    '#w116rcard .strip .sf{font-size:12px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.07);border:none;border-radius:999px;padding:6px 12px;cursor:pointer;}' +
+    '#w116rcard .strip .sf.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w116rcard .bars{display:flex;align-items:flex-end;gap:3px;height:70px;padding:6px 0 0;border-bottom:1px solid rgba(16,63,57,.12);margin:0 0 4px;}' +
+    '#w116rcard .bars i{flex:1;background:' + TEAL + ';border-radius:3px 3px 0 0;min-height:2px;position:relative;opacity:.9;}' +
+    '#w116rcard .bars i:hover{background:' + GOLD + ';}' +
+    '#w116rcard .bars i[title]:hover:after{content:attr(title);position:absolute;bottom:100%;left:50%;transform:translateX(-50%);background:' + GREEN + ';color:' + CREAM + ';font-size:11px;padding:3px 7px;border-radius:6px;white-space:nowrap;z-index:2;}' +
+    '#w116rcard .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--wa-muted);margin:0 0 14px;}' +
+    '#w116rcard .tb{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0 8px;}' +
+    '#w116rcard .tb select{padding:6px 10px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:12.5px;font-family:' + BODY + ';}' +
+    '#w116rcard table.pp{width:100%;border-collapse:collapse;font-size:12.5px;}' +
+    '#w116rcard table.pp th{text-align:left;font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);padding:6px 8px;border-bottom:1px solid rgba(16,63,57,.12);cursor:pointer;white-space:nowrap;}' +
+    '#w116rcard table.pp th.on{color:' + GREEN + ';}' +
+    '#w116rcard table.pp td{padding:7px 8px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:middle;}' +
+    '#w116rcard table.pp td.who{display:flex;align-items:center;gap:8px;}' +
+    '#w116rcard table.pp td.who b{display:block;font-size:13px;}' +
+    '#w116rcard table.pp td.who span{display:block;font-size:11px;color:var(--wa-muted);}' +
+    '#w116rcard table.pp td .si{display:block;font-size:11.5px;color:var(--wa-text);white-space:nowrap;}' +
+    '#w116rcard table.pp td .si.old{color:var(--wa-muted);}' +
+    '#w116rcard table.pp td.num{text-align:right;font-weight:700;color:' + GREEN + ';}' +
+    '#w116rcard table.pp tr.quiet td{opacity:.6;}' +
+    '#w116rcard .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:1px;}' +
+    '#w116rcard .err{background:rgba(179,64,47,.08);border-left:4px solid ' + FLAG + ';border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 12px;}' +
+    '#w116rcard .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--wa-muted);margin:0 0 12px;}' +
+    '#w116rcard .bar .sp{flex:1;}' +
+    '@media (max-width:760px){#w116rcard .per{grid-template-columns:1fr;}#w116rcard table.pp th:nth-child(4),#w116rcard table.pp td:nth-child(4){display:none;}}';
+  document.head.appendChild(css);
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function isAdmin() { if (FOUNDERS.indexOf(myEmail()) >= 0) return true; try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function label(d) { try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function av(p, size) { return window.w116Avatar ? window.w116Avatar(p, size) : ''; }
+  function member(email) { try { return (DB_MEMBERS || []).filter(function (m) { return lower(m.email) === lower(email); })[0] || null; } catch (e) { return null; } }
+  function money(v) { v = Number(v || 0); if (!v) return '$0'; if (v < 0.01) return '<$0.01'; return '$' + (v < 10 ? v.toFixed(2) : Math.round(v)); }
+  function ago(s) { if (!s) return 'never'; var d = new Date(s); var diff = (Date.now() - d.getTime()) / 60000; if (diff < 2) return 'just now'; if (diff < 60) return Math.round(diff) + ' min ago'; if (diff < 36 * 60) return Math.round(diff / 60) + ' h ago'; if (diff < 30 * 1440) return Math.round(diff / 1440) + ' d ago'; return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); }
+  function stamp(s) { var d = new Date(s); return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); }
+
+  /* ---------- 1. the visit ---------- */
+  function logVisit() {
+    try {
+      var em = myEmail(); if (!em || typeof db === 'undefined') return;
+      var key = 'wa116r_visit'; var last = Number(localStorage.getItem(key) || 0);
+      if (Date.now() - last < 6 * 3600000) return;
+      localStorage.setItem(key, String(Date.now()));
+      var name = (function () { var m = member(em); return (m && m.name) || (typeof USER !== 'undefined' && USER && USER.name) || null; })();
+      db.from('hub_visits').insert({ email: em, name: name, ua: String(navigator.userAgent || '').slice(0, 200), source: /Mobi|Android/i.test(navigator.userAgent) ? 'phone' : 'hub' }).then(function () { /* logged */ }, function () { /* fine */ });
+    } catch (e) { /* fine */ }
+  }
+  setTimeout(logVisit, 4000);
+
+  /* ---------- 2. the card ---------- */
+  function load(force) {
+    if (R.loading) return R.loading;
+    if (R.data && !force && Date.now() - R.at < 120000) return Promise.resolve();
+    R.loading = db.rpc('hub_adoption').then(function (r) {
+      if (r && r.error) throw r.error;
+      R.data = r.data; R.at = Date.now(); R.err = null;
+    }).catch(function (e) { R.err = String((e && e.message) || e); }).then(function () { R.loading = null; });
+    return R.loading;
+  }
+  function ensureCard() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !isAdmin()) return null;
+    var card = document.getElementById('w116rcard'); if (card) return card;
+    card = document.createElement('div'); card.className = 'card'; card.id = 'w116rcard';
+    card.innerHTML = '<h2>Adoption</h2><p class="read">Who uses the hub and how much: sign-ins, hours checked in, tasks closed, and what the AI does and costs. Today, the last 7 days and the last 30 days side by side.</p><div id="w116rbody">Loading...</div>';
+    panel.insertBefore(card, panel.firstChild);
+    return card;
+  }
+  function pcol(title, p) {
+    if (!p) return '<div class="pc"><h4>' + title + '</h4><p class="empty">No data</p></div>';
+    return '<div class="pc"><h4>' + title + '</h4>' +
+      '<div class="big"><div><b>' + Number(p.visitors) + '</b><span>people came</span></div><div><b>' + Number(p.hours) + 'h</b><span>checked in</span></div><div><b>' + Number(p.tasks_closed) + '</b><span>tasks closed</span></div><div><b>' + money(p.ai_cost) + '</b><span>AI spend</span></div></div>' +
+      '<table>' +
+      '<tr><td>Visits</td><td>' + Number(p.visits) + '</td></tr>' +
+      '<tr><td>People who checked in</td><td>' + Number(p.people_checked_in) + ' (' + Number(p.checkins) + ' check-ins)</td></tr>' +
+      '<tr><td>Tasks opened</td><td>' + Number(p.tasks_opened) + '</td></tr>' +
+      '<tr><td>AI calls (models)</td><td>' + Number(p.ai_calls) + '</td></tr>' +
+      '<tr><td>Jev checks and picks</td><td>' + Number(p.jev_calls) + '</td></tr>' +
+      '<tr><td>Questions to the Brain</td><td>' + Number(p.questions) + '</td></tr>' +
+      '<tr><td>Transcripts processed</td><td>' + Number(p.transcripts) + '</td></tr>' +
+      '<tr><td>Emails filed</td><td>' + Number(p.emails_filed) + '</td></tr>' +
+      '<tr><td>Shout-outs</td><td>' + Number(p.shoutouts) + '</td></tr>' +
+      '</table></div>';
+  }
+  var SERIES = [['visitors', 'People per day'], ['hours', 'Hours checked in'], ['tasks_closed', 'Tasks closed'], ['ai_calls', 'AI calls'], ['ai_cost', 'AI spend ($)']];
+  function bars(days) {
+    var k = R.series; var vals = days.map(function (d) { return Number(d[k] || 0); }); var max = Math.max.apply(null, vals.concat([1]));
+    return '<div class="bars">' + days.map(function (d, i) { var v = vals[i]; var h = Math.max(2, Math.round(v / max * 64)); return '<i style="height:' + h + 'px" title="' + E(d.day) + ': ' + (k === 'ai_cost' ? money(v) : v + (k === 'hours' ? 'h' : '')) + '"></i>'; }).join('') + '</div>' +
+      '<div class="axis"><span>' + E(days[0] ? days[0].day : '') + '</span><span>' + E(days[days.length - 1] ? days[days.length - 1].day : '') + '</span></div>';
+  }
+  function people(rows) {
+    var team = R.team; var list = rows.filter(function (p) { return !team || p.department === team; });
+    var k = R.sort;
+    list.sort(function (a, b) { if (k === 'name') return String(a.name).localeCompare(String(b.name)); var av2 = a[k] == null ? -1 : (typeof a[k] === 'string' ? new Date(a[k]).getTime() : Number(a[k])); var bv = b[k] == null ? -1 : (typeof b[k] === 'string' ? new Date(b[k]).getTime() : Number(b[k])); return bv - av2; });
+    var teams = {}; rows.forEach(function (p) { teams[p.department] = (teams[p.department] || 0) + 1; });
+    var th = function (key, t) { return '<th data-w116rs="' + key + '" class="' + (k === key ? 'on' : '') + '">' + t + (k === key ? ' &#9662;' : '') + '</th>'; };
+    return '<div class="tb"><b style="font-size:13px">People</b><select id="w116rteam"><option value="">All teams</option>' + Object.keys(teams).map(function (d) { return '<option value="' + E(d) + '"' + (team === d ? ' selected' : '') + '>' + E(label(d)) + ' (' + teams[d] + ')</option>'; }).join('') + '</select><span style="font-size:12px;color:var(--wa-muted)">Sign-ins: hub visits since today, plus the sessions Supabase remembers. Hours, tasks and questions: last 30 days.</span></div>' +
+      '<table class="pp"><thead><tr>' + th('name', 'Person') + th('last_active', 'Last active') + '<th>Last 3 sign-ins</th>' + th('visits_30d', 'Visits') + th('hours_30d', 'Hours') + th('tasks_closed_30d', 'Tasks closed') + th('questions_30d', 'Questions') + '</tr></thead><tbody>' +
+      list.map(function (p) {
+        var m = member(p.email) || { name: p.name };
+        var quiet = !p.last_active || (Date.now() - new Date(p.last_active).getTime()) > 14 * 86400000;
+        var sis = (p.sign_ins || []).map(function (s, i) { return '<span class="si' + (i ? ' old' : '') + '">' + E(stamp(s)) + '</span>'; }).join('') || '<span class="si old">' + (p.has_account ? 'no sign-in on record' : 'no hub account yet') + '</span>';
+        var dot = !p.last_active ? '#cccccc' : quiet ? FLAG : (Date.now() - new Date(p.last_active).getTime()) < 2 * 86400000 ? TEAL : GOLD;
+        return '<tr class="' + (quiet ? 'quiet' : '') + '"><td class="who">' + av(m, 30) + '<div><b>' + E(p.name) + '</b><span>' + E(label(p.department)) + (p.role ? ' &middot; ' + E(p.role) : '') + '</span></div></td>' +
+          '<td><span class="dot" style="background:' + dot + '"></span>' + E(ago(p.last_active)) + '</td><td>' + sis + '</td><td class="num">' + Number(p.visits_30d || 0) + '</td><td class="num">' + Number(p.hours_30d || 0) + 'h</td><td class="num">' + Number(p.tasks_closed_30d || 0) + '</td><td class="num">' + Number(p.questions_30d || 0) + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  function paint() {
+    var body = document.getElementById('w116rbody'); if (!body) return;
+    if (R.err && !R.data) { body.innerHTML = '<div class="err">' + E(R.err) + '</div><div class="bar"><span class="sp"></span><button class="btn" data-w116r="reload">Try again</button></div>'; return; }
+    if (!R.data) { body.innerHTML = 'Loading...'; return; }
+    var d = R.data;
+    body.innerHTML = '<div class="per">' + pcol('Today', d.today) + pcol('Last 7 days', d.week) + pcol('Last 30 days', d.month) + '</div>' +
+      '<div class="strip">' + SERIES.map(function (s) { return '<button class="sf' + (R.series === s[0] ? ' on' : '') + '" data-w116rser="' + s[0] + '">' + s[1] + '</button>'; }).join('') + '<span style="flex:1"></span><span style="font-size:12px;color:var(--wa-muted)">Last 30 days, one bar a day</span></div>' + bars(d.days || []) +
+      people(d.people || []) +
+      '<div class="bar" style="margin-top:10px"><span>Visits count once per person per six hours per browser. AI numbers come from the router log (Admin &gt; AI models has the detail per job).</span><span class="sp"></span><button class="btn" data-w116r="reload">Refresh</button></div>';
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('#w116rcard [data-w116r]'); if (b) { load(true).then(paint); return; }
+    var s = t.closest('#w116rcard [data-w116rser]'); if (s) { R.series = s.getAttribute('data-w116rser'); paint(); return; }
+    var h = t.closest('#w116rcard th[data-w116rs]'); if (h) { R.sort = h.getAttribute('data-w116rs'); paint(); return; }
+  });
+  document.addEventListener('change', function (e) { if (e.target && e.target.id === 'w116rteam') { R.team = e.target.value; paint(); } });
+
+  if (typeof wa40Render === 'function') {
+    var __w40r116r = wa40Render;
+    wa40Render = async function () { var out = await __w40r116r.apply(this, arguments); try { if (ensureCard()) { paint(); await load(false); paint(); } } catch (e) { /* non-fatal */ } return out; };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp116r = showPanel;
+    showPanel = function (id) { var out = __sp116r.apply(this, arguments); try { if (id === 'adminpanel' && isAdmin()) setTimeout(function () { if (ensureCard()) { paint(); load(false).then(paint); } }, 950); } catch (e) { /* fine */ } return out; };
+  }
+  window.w116rDebug = function () { return { loaded: !!R.data, err: R.err, people: R.data ? (R.data.people || []).length : 0 }; };
+})();

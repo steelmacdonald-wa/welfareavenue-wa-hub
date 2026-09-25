@@ -369,6 +369,7 @@ const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-po
 You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
 
 Always finish by calling answer_question.`;
+let ASK_WHO = ''; // who is asking (email), for the AI usage log (Admin > Adoption)
 async function anthropicCall(key, messages, tools, toolChoice) {
   let lastErr = '';
   for (const model of MODELS){
@@ -377,7 +378,7 @@ async function anthropicCall(key, messages, tools, toolChoice) {
       headers: {
         'Authorization': 'Bearer ' + SERVICE_KEY,
         'x-wa-task': 'brain',
-        'x-wa-caller': 'ask',
+        'x-wa-caller': 'ask' + (ASK_WHO ? ':' + ASK_WHO : ''),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -1038,6 +1039,7 @@ Deno.serve(async (req)=>{
     headers: CORS
   });
   const auth = await authorize(req);
+  ASK_WHO = (auth && auth.ok && auth.who) ? String(auth.who).toLowerCase().slice(0, 80) : '';
   if (!auth.ok) return json({
     error: 'unauthorized'
   }, 401);
