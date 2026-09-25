@@ -1,6 +1,6 @@
 # 25/09/26 - waves 116w, 119 and 120: the mentions fix, the volunteering command centre, Marketing analytics
 
-Shipped on 25/09/26 in two deploys on top of wave118b from Steel's other session. Live at the end: `b8ec216524e6458df98bf16cd2915776` (2,419,709 bytes). Repo: steelmacdonald-wa/welfareavenue-wa-hub, pushes 34f718a7 (119 + 116w) and de039c52 (120).
+Shipped on 25/09/26 in three deploys on top of wave118b from Steel's other session. Live at the end: `f5109bf484f7b09cd62920d37234538b` (2,456,903 bytes). Repo: steelmacdonald-wa/welfareavenue-wa-hub, pushes 34f718a7 (119 + 116w), de039c52 (120) and 4e558b1a (119b).
 
 ## What Steel asked for
 
@@ -23,7 +23,15 @@ The event page is regrouped into `#w119` after wave20/26/28/31/59 paint it; ever
 - Calendar: a month grid (‹ Today, Next event ›) beside the list; each event chip carries two dots (checklist, roster) and opens the event; the upcoming cards get gap pills ("5 to confirm", "10 steps left", "roster confirmed", "checklist done").
 - The month view keys on a data-key so the body MutationObserver never loops; own insertions (`#w119`, `#w119cal`, `.w119gaps`) are ignored by it.
 
-Not yet (cuts 1b and 2, plan sent): Volunteers page cards with reliability and a merge for duplicates; AI roster planning from past events, Jev ranking of who to text first, the event recap to Slack, Ask the Hub roster commands; then inventory stock bars, recipe scaling and the shopping list.
+## wave119b: MTL Volunteering, cut 2 (the Volunteers page, planning, the recap)
+
+- Volunteers: cards instead of the table. Initials avatar, name, organisation or car, roles and tags as chips, phone as a tel: link plus a Text (sms:) link, email, notes, and the reliability line from `volunteer_history()` ("5 of 6 events confirmed, last Jul 12" with a bar). Badges: Reliable (3+ events, 80%+), New, Quiet n mo, Often unavailable, Review (the wave26 flag). Sort by most reliable, most recent or name; the stats strip (volunteers, active in 90 days, confirm rate, have served, need a review); search (name, phone digits, email, role, tag) and the role chips as before; edit still opens wave26's modal.
+- Duplicates: people sharing a phone (last 10 digits), an email or a normalised full name are grouped (union-find); each card in a group says who it looks like and why, "Possible duplicates (n)" filters to them, and Merge X into this calls `volunteer_merge(keep, drop)`: event_roster and quo_messages rows move, phones/emails/roles/tags are unioned, address/car/organisation/notes kept, the copy deleted, a change_log row written.
+- Plan the roster (event masthead, staff): for every role short of its target, the people not on the event ranked by 0.55 x confirm rate (Laplace prior) + 0.25 x recency of the last confirmed event + 0.2 x role fit (on file, tagged, none), minus 0.15 when they were unavailable half the time; each person is pre-ticked for one role only. Jev (router task `decide`, four parallel workers, at most 24 calls, about 0.002 cents each) answers "if asked today, will this volunteer confirm and show up?" per candidate and the score becomes half history, half Jev's odds; ticks survive the re-sort once touched. Add the ticked people inserts them as Waiting For Response and repaints the event.
+- Recap (event masthead, staff): the router (task `draft`) writes a Slack recap from the roster by role, meals, checklist progress and the meeting extras (a plain template if the model fails); edit it, pick the channel (checkin-post v2 `channels`, #operations-mtl remembered per browser), Post to Slack (`say`: the bot joins a public channel it is not in yet; a private one needs the bot added) or Copy.
+- The two body MutationObservers (119, 119b) are throttles, not debounces: the hub repaints small things constantly, so a reset timer never fired.
+
+Not yet (cut 3): Ask the Hub roster commands ("add Mary as a cook on Oct 4"), inventory stock bars, recipe scaling and the shopping list.
 
 ## wave120: Marketing analytics
 
@@ -40,6 +48,8 @@ Not yet (cuts 1b and 2, plan sent): Volunteers page cards with reliability and a
 - Migration `wa120_social`: `social_accounts`, `social_daily` (platform, account, day, metric, value; unique), `social_posts` (platform, external_id unique; reach, views, likes, comments, shares, saves, clicks, engagement), `social_notes`; read for staff and board; writes only through the function. `social_overview(p_days)` returns accounts, totals per metric for the window and the previous one, followers now/then, 90-day series, the top 24 posts and the latest note.
 - Edge function `social-pull` v1 (verify_jwt off; staff JWT, service key or `x-wa-secret`): `status`, `probe`, `connect_meta {page_id}`, `connect_ga4 {property_id, site}`, `disconnect`, `sync {account_id?, days?}`, `import_csv {platform, rows, posts, handle}`, `note {days}`. Meta: `/me/accounts` (pages with `instagram_business_account`), the Page token from `/{page}?fields=access_token`, Page insights tried metric by metric (`page_follows`, `page_daily_follows_unique`, `page_daily_unfollows_unique`, `page_post_engagements`, `page_views_total`, `page_total_media_view_unique`, `page_media_view`, `page_video_views`, then `page_impressions_unique` as the fallback; whichever Meta still serves is stored), `followers_count` for today, `published_posts` with reactions, comments, shares and post insights. Instagram: `reach` and `follower_count` as daily series, the `total_value` metrics (views, profile_views, accounts_engaged, total_interactions, likes, comments, shares, saves) one call per missing day, media with per-media insights. GA4: `runReport` by date (sessions, users, new users, page views), Organic Social sessions, top pages; the service account (`GOOGLE_SA_KEY`, no delegation) must be a Viewer on the property.
 - Cron: `wa-social-pull` 06:20 UTC daily (`sync`), `wa-social-note` Mondays 12:20 UTC (`note`).
+- checkin-post v2: `channels` and `say {channel, text}` for the recap (and anything else that wants to post as the bot).
+- Migration `wa119b_volunteer_merge_history`: `volunteer_history()`, `volunteer_merge(bigint, bigint)`.
 - Secrets: `META_SYSTEM_TOKEN` (system user token from Business settings with pages_show_list, pages_read_engagement, read_insights, instagram_basic, instagram_manage_insights, business_management), `GOOGLE_SA_KEY` (existing).
 
 ### Meta set-up (sent to Steel)
@@ -49,6 +59,7 @@ Create a Business app at developers.facebook.com (use case Other, connected to t
 ## Tests
 
 - `test/w119drive.js`: Home Got it, the month grid (prev/Today/Next event, stable across mutations), the event page (masthead, rings, next, columns, cards, rail), tick, status, drag (synthetic HTML5 events; Playwright's mouse drag does not raise drag events in headless Chromium), the bench with search and Add, the move select, remove, narrow viewport.
+- `test/w119bdrive.js`: the Volunteers cards, badges, sort, search, role chip, duplicates filter and merge, plan the roster (roles short, candidates, one pre-tick per person, Jev odds, the inserts), the recap (draft, channel list, post).
 - `test/w120drive.js`: nav placement, the team pill, tiles and deltas, sparklines, chart lines and metric toggle, note, posts and filter, period switch, sync and note calls, the set-up drawer (probe, Connect, GA4 form), TikTok overview CSV and a LinkedIn posts CSV through the mapper.
 - Harness: 34 pages x 3 identities, only the expected `ERR_FAILED` resource loads.
 
