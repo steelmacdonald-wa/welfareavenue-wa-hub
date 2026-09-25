@@ -1,6 +1,6 @@
 # 25/09/26 - waves 116w, 119 and 120: the mentions fix, the volunteering command centre, Marketing analytics
 
-Shipped on 25/09/26 in three deploys on top of wave118b from Steel's other session. Live at the end: `f5109bf484f7b09cd62920d37234538b` (2,456,903 bytes). Repo: steelmacdonald-wa/welfareavenue-wa-hub, pushes 34f718a7 (119 + 116w), de039c52 (120) and 4e558b1a (119b).
+Shipped on 25/09/26 in four deploys on top of wave118b from Steel's other session. Live at the end: `7859d524b4edc8f68bf2ac5892eb1b1a` (2,457,713 bytes). Repo: steelmacdonald-wa/welfareavenue-wa-hub, pushes 34f718a7 (119 + 116w), de039c52 (120), 4e558b1a (119b), 3c216c2b (social-pull v1.1) and e4259e45 (wa116x).
 
 ## What Steel asked for
 
@@ -55,6 +55,10 @@ Not yet (cut 3): Ask the Hub roster commands ("add Mary as a cook on Oct 4"), in
 ### Meta set-up (sent to Steel)
 
 Create a Business app at developers.facebook.com (use case Other, connected to the Welfare Avenue portfolio, stays in Development mode); Business settings > Users > System users > Add (`hub-analytics`, Admin); Add assets: the app (full control), the Page (full control), the Instagram account (insights); Generate new token (never expires) with the permissions above; store as `META_SYSTEM_TOKEN` in the Supabase vault, never in chat. Meta retired impressions and the fan metrics in November 2025 and most reach breakdowns in June 2026, so the Facebook tiles show views, followers and engagement; Instagram carries the richer set.
+
+## wa116x: "HR centre is glitching"
+
+Traced with `test/hrprobe.js` and `test/hrwho.js` (which functions write to the panel): 104 mutations every 4 seconds inside #hrcentre, all from wave116p's `decorateTabs` and `hero`. The tab-count painter rewrote the tab buttons' innerHTML on every pass, which woke its own observer (150 ms), so `decorate()` ran forever; each pass also rebuilt the hero with an `<h2>HR centre</h2>` that wave118's masthead code hid again 60 ms later, so the heading flashed six times a second and hover and click states on the tiles kept resetting. Fix: the hero and the tab counts only write when the markup changed (`data-html`), the hero lost its duplicate heading (wave118's masthead carries the title), and the watcher ignores childList changes inside the tab strip. `test/churn.js` then measured every page: a second loop in wave77 (`w77Num` assigning `textContent` on every pass across the hidden department panels) ran at about seventy mutations a second on every page since wave77; now idempotent, all pages sit at zero background mutations. While there: wave118's admin sections had no home for the Adoption board (`#w116rcard` was hidden in every section), so Admin now has an Adoption section (`#adminpanel/adoption`) and `test/w116pdrive.js` goes there.
 
 ## Tests
 
