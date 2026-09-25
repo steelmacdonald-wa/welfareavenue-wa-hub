@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.1, 25/09/26: a Page token from the Graph API Explorer works too; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.2, 25/09/26: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -15,6 +15,7 @@
 //   {action:'sync', account_id?, days?}        pull the numbers                 (staff or x-wa-secret, cron wa-social-pull)
 //   {action:'import_csv', platform, rows, posts?, handle?}  CSV rows            (staff)
 //   {action:'note', days?}                     the AI note                      (staff or x-wa-secret, cron wa-social-note)
+//   {action:'insights', evidence[], days?}      3 to 5 directional recommendations from the evidence the page computed (staff or automation)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -327,6 +328,28 @@ async function writeNote(days: number): Promise<Any> {
   return { note: data };
 }
 
+/* ---------- the insights ---------- */
+type Evidence = { key: string; title: string; detail: string; confidence?: string; n?: number };
+async function writeInsights(evidence: Evidence[], days: number): Promise<Any> {
+  const ev = evidence.filter(e => e && e.title).slice(0, 12).map(e => ({ key: String(e.key || '').slice(0, 40), title: String(e.title).slice(0, 160), detail: String(e.detail || '').slice(0, 400), confidence: String(e.confidence || '').slice(0, 20), n: Number(e.n) || 0 }));
+  if (!ev.length) return { skipped: 'no evidence yet' };
+  const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'digest', 'x-wa-caller': 'social-pull', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ max_tokens: 1200, temperature: 0.4,
+      system: 'You advise the small marketing team of Welfare Avenue, a charity in Montreal and Toronto that serves meals and builds community. From the evidence, give three to five directional recommendations for the next few weeks: each has a short title, one sentence of why (citing the evidence numbers), and one concrete action. Plain, specific, warm, no em dashes, no hashtags, no exclamation marks. Say when the evidence is thin (few posts) and keep those recommendations tentative. Only use the numbers given; never invent.',
+      messages: [{ role: 'user', content: 'Window: last ' + days + ' days.\nEVIDENCE:\n' + ev.map(e => '- [' + e.key + '] ' + e.title + ': ' + e.detail + (e.n ? ' (n=' + e.n + ')' : '') + (e.confidence ? ' [' + e.confidence + ' confidence]' : '')).join('\n') }],
+      tools: [{ name: 'recommend', description: 'The recommendations.', input_schema: { type: 'object', properties: { recommendations: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, why: { type: 'string' }, action: { type: 'string' }, evidence: { type: 'string', description: 'the evidence key this rests on' }, confidence: { type: 'string', enum: ['high', 'medium', 'low'] } }, required: ['title', 'why', 'action'] } }, summary: { type: 'string', description: 'one sentence on the overall direction' } }, required: ['recommendations', 'summary'] } }], tool_choice: { type: 'tool', name: 'recommend' } })
+  });
+  const body = await res.json().catch(() => ({}));
+  const tu = (body.content || []).find((c: Any) => c.type === 'tool_use');
+  const recs = tu && tu.input && Array.isArray(tu.input.recommendations) ? tu.input.recommendations.slice(0, 5).map((r: Any) => ({ title: String(r.title || '').replace(/\u2014/g, ',').slice(0, 120), why: String(r.why || '').replace(/\u2014/g, ',').slice(0, 400), action: String(r.action || '').replace(/\u2014/g, ',').slice(0, 300), evidence: String(r.evidence || '').slice(0, 40), confidence: ['high', 'medium', 'low'].indexOf(r.confidence) >= 0 ? r.confidence : 'medium' })) : [];
+  const summary = tu && tu.input && tu.input.summary ? String(tu.input.summary).replace(/\u2014/g, ',').slice(0, 400) : '';
+  if (!recs.length) return { skipped: 'model gave nothing', status: res.status };
+  const { data, error } = await svc.from('social_notes').insert({ week_start: monday(), platform: null, kind: 'insights', body: summary || recs[0].title, data: { days, evidence: ev, recommendations: recs }, model: (body._wa && body._wa.model) || body.model || null }).select('*').single();
+  if (error) throw new Error(error.message);
+  return { insights: data };
+}
+
 /* ---------- CSV rows ---------- */
 async function importCsv(body: Any, me: Me): Promise<Any> {
   const platform = String(body.platform || '');
@@ -411,10 +434,13 @@ Deno.serve(async (req: Request) => {
       const { data } = await q;
       const results: Any[] = [];
       for (const a of ((data || []) as Account[])) results.push(await syncAccount(a, days));
-      return json({ ok: true, results });
+      let confirmed: Any = null;
+      try { const r = await fetch(SUPABASE_URL + '/functions/v1/social-publish', { method: 'POST', headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', days: 60 }) }); confirmed = await r.json(); } catch (_) { /* the calendar catches up on the next run */ }
+      return json({ ok: true, results, confirmed });
     }
     if (action === 'import_csv') return json(await importCsv(body, me));
     if (action === 'note') return json({ ok: true, ...(await writeNote(Math.max(7, Math.min(30, Number(body.days) || 7)))) });
+    if (action === 'insights') return json({ ok: true, ...(await writeInsights(Array.isArray(body.evidence) ? body.evidence : [], Number(body.days) || 30)) });
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
     return json({ error: String((e as Error).message || e) }, 500);

@@ -1,0 +1,962 @@
+/* =====================================================================
+   WA v121 Marketing: the content calendar (25/09/26)
+   =====================================================================
+   Steel: "The marketing department should have a content calendar module
+   that is capable of posting content to Instagram and Facebook using the
+   Meta Business Suite APIs. Only if we are given enough functionality to
+   upload posts; if not, keep it to a highly functional content calendar
+   with confirmations of posts going up on social media based on the
+   connections we are getting."
+   - Month, week and list views; drag a post to another day (the time
+     stays), drag an undated idea onto a day, drag back to the tray to
+     unschedule; Undo on every move. Filters by platform and state,
+     search, the week at a glance, what needs attention.
+   - The composer (a side panel): Instagram and Facebook, photos (turned
+     into JPEG, checked against Instagram's 4:5 to 1.91:1, one-click crop),
+     a video for a reel, caption counts (2,200 characters, 30 hashtags),
+     AI help (write, shorten, hashtags; English, French or both), link,
+     date and time with the best slot from the insights, owner, campaign,
+     notes, live Instagram and Facebook previews.
+   - Publishing follows the connection (social-publish capabilities):
+     when the Meta token carries pages_manage_posts and
+     instagram_content_publish, Publish now and Schedule to publish send
+     the post (a cron every 5 minutes); when it does not, the calendar
+     plans, reminds when a post is due, and confirms it anyway: every
+     morning's analytics pull matches what went up (by id, link or
+     caption) and the post shows Live with its reach and likes.
+   - Optional Slack confirmations to a channel (Settings on the page).
+   Data: content_posts (wa121), social-publish v2, social-pull v1.2.
+   ===================================================================== */
+(function () {
+  if (window.__wa121) return; window.__wa121 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var PL = { instagram: { label: 'Instagram', short: 'IG', color: '#C13584' }, facebook: { label: 'Facebook', short: 'f', color: '#1877F2' } };
+  var ST = {
+    draft: { label: 'Draft', cls: 'draft' }, scheduled: { label: 'Scheduled', cls: 'sched' }, publishing: { label: 'Publishing', cls: 'pub' },
+    published: { label: 'Published', cls: 'live' }, posted: { label: 'Posted', cls: 'live' }, failed: { label: 'Failed', cls: 'bad' }, cancelled: { label: 'Cancelled', cls: 'draft' }
+  };
+  var WD = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  var C = { view: null, anchor: null, posts: [], loaded: false, loading: false, at: 0, cap: null, capBusy: false, filter: { pl: '', st: '', q: '' }, drag: null, edit: null, perf: null, perfBusy: false, undo: null, settingsOpen: false, channels: null, err: null };
+
+  var css = document.createElement('style'); css.id = 'wa121css';
+  css.textContent = '' +
+    '#contentcal{font-family:' + BODY + ';}' +
+    '#contentcal .w121wrap{max-width:1240px;}' +
+    '#contentcal .ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
+    '#contentcal .ctl .nav{display:inline-flex;align-items:center;gap:4px;}' +
+    '#contentcal .ctl .nav b{font-family:' + HEAD + ';font-size:24px;color:' + GREEN + ';min-width:170px;text-align:center;letter-spacing:.3px;}' +
+    '#contentcal .ctl .nav button{width:32px;height:32px;border-radius:10px;border:1px solid rgba(16,63,57,.15);background:#fff;color:' + GREEN + ';font-size:16px;cursor:pointer;}' +
+    '#contentcal .ctl .sp{flex:1;}' +
+    '#contentcal .ctl input[type=search]{padding:8px 13px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';min-width:180px;}' +
+    '#contentcal .chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px;align-items:center;}' +
+    '#contentcal .chips span{font-size:12px;font-weight:700;border-radius:999px;padding:5px 12px;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;user-select:none;}' +
+    '#contentcal .chips span.on{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#contentcal .chips i{width:1px;height:18px;background:rgba(16,63,57,.15);margin:0 4px;}' +
+    '#contentcal .cap{display:flex;gap:12px;align-items:flex-start;border-radius:16px;padding:12px 16px;margin:0 0 14px;font-size:13px;line-height:1.5;background:rgba(220,165,39,.12);color:#5a430c;}' +
+    '#contentcal .cap.on{background:rgba(42,140,122,.12);color:#155a4d;}' +
+    '#contentcal .cap b{display:block;font-size:13.5px;}' +
+    '#contentcal .cap a{color:inherit;font-weight:700;cursor:pointer;text-decoration:underline;}' +
+    '#contentcal .glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:0 0 14px;}' +
+    '#contentcal .glance div{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:10px 14px;box-shadow:0 10px 22px -20px rgba(16,63,57,.6);cursor:default;}' +
+    '#contentcal .glance div[data-w121jump]{cursor:pointer;}' +
+    '#contentcal .glance b{display:block;font-family:' + HEAD + ';font-size:26px;line-height:1;color:' + GREEN + ';}' +
+    '#contentcal .glance b.warn{color:' + FLAG + ';}' +
+    '#contentcal .glance span{display:block;font-size:11px;color:var(--wa-muted);letter-spacing:.4px;text-transform:uppercase;font-weight:700;margin-top:4px;}' +
+    '#contentcal .glance em{display:block;font-style:normal;font-size:12px;color:var(--wa-text);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#contentcal .lay{display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:14px;align-items:start;}' +
+    '#contentcal .lay.list{grid-template-columns:minmax(0,1fr);}' +
+    /* month */
+    '#contentcal .mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;}' +
+    '#contentcal .mg .dow{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;text-align:center;padding:2px 0 3px;}' +
+    '#contentcal .d{min-height:104px;border-radius:12px;background:#fff;border:1px solid rgba(16,63,57,.08);padding:5px 5px 6px;position:relative;transition:background .12s,box-shadow .12s;}' +
+    '#contentcal .d.out{background:rgba(16,63,57,.025);border-color:transparent;}#contentcal .d.out .dn{opacity:.4;}' +
+    '#contentcal .d.past{background:rgba(16,63,57,.02);}' +
+    '#contentcal .d.today{box-shadow:inset 0 0 0 2px ' + GOLD + ';}' +
+    '#contentcal .d.best:after{content:"";position:absolute;right:6px;top:8px;width:6px;height:6px;border-radius:50%;background:' + GOLD + ';}' +
+    '#contentcal .d.over,#contentcal .wc.over,#contentcal .tray.over{background:rgba(220,165,39,.16);box-shadow:inset 0 0 0 2px ' + GOLD + ';}' +
+    '#contentcal .dh{display:flex;align-items:center;gap:4px;margin:0 0 4px;padding:0 2px;}' +
+    '#contentcal .dn{font-size:12px;font-weight:700;color:var(--wa-text);}' +
+    '#contentcal .d .add,#contentcal .wc .add{margin-left:auto;width:20px;height:20px;border-radius:50%;border:none;background:rgba(16,63,57,.08);color:' + GREEN + ';font-size:14px;line-height:1;cursor:pointer;opacity:0;transition:opacity .12s;}' +
+    '#contentcal .d:hover .add,#contentcal .wc:hover .add{opacity:1;}' +
+    '#contentcal .d .more{font-size:10.5px;color:var(--wa-muted);padding:1px 4px;cursor:pointer;}' +
+    /* chips on the grid */
+    '#contentcal .ch{display:flex;align-items:center;gap:4px;border-radius:8px;padding:3px 5px;margin:0 0 3px;font-size:11px;line-height:1.25;cursor:pointer;background:rgba(16,63,57,.06);color:var(--wa-text);border-left:3px solid rgba(16,63,57,.25);overflow:hidden;}' +
+    '#contentcal .ch[draggable=true]{cursor:grab;}' +
+    '#contentcal .ch.dragging,#contentcal .wk.dragging,#contentcal .tr.dragging{opacity:.4;}' +
+    '#contentcal .ch .tm{font-weight:800;color:' + GREEN + ';flex:none;}' +
+    '#contentcal .ch .tt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1;}' +
+    '#contentcal .ch img,#contentcal .wk img,#contentcal .tr img,#contentcal .lr img{object-fit:cover;flex:none;background:rgba(16,63,57,.08);}' +
+    '#contentcal .ch img{width:18px;height:18px;border-radius:4px;}' +
+    '#contentcal .pm{display:inline-flex;gap:2px;flex:none;}' +
+    '#contentcal .pm i{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:4px;font-style:normal;font-family:' + HEAD + ';font-size:8.5px;font-weight:800;color:#fff;}' +
+    '#contentcal .pm i.ok{box-shadow:0 0 0 1.5px #fff,0 0 0 3px ' + TEAL + ';}' +
+    '#contentcal .st-draft{border-left-color:rgba(16,63,57,.3);}#contentcal .st-draft .tt{color:var(--wa-muted);}' +
+    '#contentcal .st-sched{border-left-color:' + GOLD + ';background:rgba(220,165,39,.12);}' +
+    '#contentcal .st-pub{border-left-color:' + PURPLE + ';background:rgba(111,100,171,.12);}' +
+    '#contentcal .st-live{border-left-color:' + TEAL + ';background:rgba(42,140,122,.12);}' +
+    '#contentcal .st-bad,#contentcal .st-due{border-left-color:' + FLAG + ';background:rgba(179,64,47,.10);}' +
+    /* week */
+    '#contentcal .wg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;}' +
+    '#contentcal .wc{background:#fff;border:1px solid rgba(16,63,57,.08);border-radius:14px;padding:8px;min-height:360px;}' +
+    '#contentcal .wc.today{box-shadow:inset 0 0 0 2px ' + GOLD + ';}' +
+    '#contentcal .wc .wh{display:flex;align-items:center;gap:6px;margin:0 0 8px;}' +
+    '#contentcal .wc .wh b{font-family:' + HEAD + ';font-size:16px;color:' + GREEN + ';}' +
+    '#contentcal .wc .wh span{font-size:11px;color:var(--wa-muted);}' +
+    '#contentcal .wk{border-radius:12px;padding:8px;margin:0 0 6px;background:rgba(16,63,57,.05);border-left:3px solid rgba(16,63,57,.25);cursor:pointer;font-size:12px;}' +
+    '#contentcal .wk[draggable=true]{cursor:grab;}' +
+    '#contentcal .wk img{width:100%;height:84px;border-radius:8px;margin:0 0 6px;display:block;}' +
+    '#contentcal .wk .row{display:flex;align-items:center;gap:5px;}' +
+    '#contentcal .wk .tm{font-weight:800;color:' + GREEN + ';}' +
+    '#contentcal .wk b{display:block;font-size:12.5px;line-height:1.3;margin:4px 0 2px;color:var(--wa-text);}' +
+    '#contentcal .wk .cap2{font-size:11.5px;color:var(--wa-muted);line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}' +
+    '#contentcal .wk .cf,#contentcal .lr .cf{font-size:10.5px;margin-top:5px;font-weight:700;}' +
+    '#contentcal .cf.ok{color:#1c6b5d;}#contentcal .cf.warn{color:#8a5a00;}#contentcal .cf.bad{color:' + FLAG + ';}#contentcal .cf.muted{color:var(--wa-muted);font-weight:500;}' +
+    /* tray */
+    '#contentcal .tray{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:12px;position:sticky;top:12px;min-height:160px;transition:background .12s;}' +
+    '#contentcal .tray h4{font-family:' + HEAD + ';font-size:18px;margin:0 0 2px;color:' + GREEN + ';}' +
+    '#contentcal .tray p{font-size:11.5px;color:var(--wa-muted);margin:0 0 10px;line-height:1.4;}' +
+    '#contentcal .tr{display:flex;gap:8px;align-items:center;border-radius:10px;padding:7px 8px;margin:0 0 5px;background:rgba(16,63,57,.05);font-size:12px;cursor:pointer;}' +
+    '#contentcal .tr[draggable=true]{cursor:grab;}' +
+    '#contentcal .tr img{width:30px;height:30px;border-radius:6px;}' +
+    '#contentcal .tr b{display:block;font-size:12px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#contentcal .tr span{display:block;font-size:10.5px;color:var(--wa-muted);}' +
+    '#contentcal .tray .empty{font-size:12px;color:var(--wa-muted);text-align:center;padding:16px 6px;border:1px dashed rgba(16,63,57,.2);border-radius:10px;}' +
+    /* list */
+    '#contentcal .lg h4{font-family:' + HEAD + ';font-size:18px;color:' + GREEN + ';margin:14px 0 8px;display:flex;gap:8px;align-items:baseline;}' +
+    '#contentcal .lg h4 small{font-family:' + BODY + ';font-size:11.5px;color:var(--wa-muted);font-weight:500;}' +
+    '#contentcal .lr{display:grid;grid-template-columns:92px 44px minmax(0,1fr) auto;gap:12px;align-items:center;background:#fff;border:1px solid rgba(16,63,57,.08);border-radius:14px;padding:9px 12px;margin:0 0 6px;cursor:pointer;}' +
+    '#contentcal .lr:hover{border-color:rgba(16,63,57,.25);}' +
+    '#contentcal .lr .when{font-size:12px;color:var(--wa-text);font-weight:700;line-height:1.3;}' +
+    '#contentcal .lr .when span{display:block;font-weight:500;color:var(--wa-muted);font-size:11px;}' +
+    '#contentcal .lr img{width:44px;height:44px;border-radius:9px;}' +
+    '#contentcal .lr .ph{width:44px;height:44px;border-radius:9px;background:rgba(16,63,57,.07);display:flex;align-items:center;justify-content:center;font-size:18px;color:rgba(16,63,57,.35);}' +
+    '#contentcal .lr b{display:block;font-size:13px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#contentcal .lr .cap2{font-size:12px;color:var(--wa-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#contentcal .lr .rt{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}' +
+    '#contentcal .pill{display:inline-block;font-size:10px;letter-spacing:.6px;text-transform:uppercase;font-weight:800;border-radius:999px;padding:2px 8px;white-space:nowrap;}' +
+    '#contentcal .pill.draft,#w121dr .pill.draft{background:rgba(16,63,57,.08);color:var(--wa-muted);}' +
+    '#contentcal .pill.sched,#w121dr .pill.sched{background:rgba(220,165,39,.22);color:#6b4d05;}' +
+    '#contentcal .pill.pub,#w121dr .pill.pub{background:rgba(111,100,171,.18);color:' + PURPLE + ';}' +
+    '#contentcal .pill.live,#w121dr .pill.live{background:rgba(42,140,122,.16);color:#1c6b5d;}' +
+    '#contentcal .pill.bad,#contentcal .pill.due,#w121dr .pill.bad,#w121dr .pill.due{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
+    '#contentcal .undo{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:' + GREEN + ';color:' + CREAM + ';border-radius:999px;padding:10px 18px;font-size:13px;box-shadow:0 12px 30px -10px rgba(0,0,0,.4);z-index:60;display:flex;gap:14px;align-items:center;}' +
+    '#contentcal .undo a{color:' + GOLD + ';font-weight:800;cursor:pointer;}' +
+    '#contentcal .setp{background:#fff;border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px 14px;margin:0 0 14px;font-size:12.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}' +
+    '#contentcal .setp select{padding:6px 10px;border:1px solid rgba(16,63,57,.2);border-radius:10px;font-size:12.5px;font-family:' + BODY + ';}' +
+    '#contentcal .loading{font-size:13px;color:var(--wa-muted);padding:40px 0;text-align:center;}' +
+    /* the composer */
+    '#w121dr{position:fixed;inset:0;z-index:80;display:flex;justify-content:flex-end;font-family:' + BODY + ';}' +
+    '#w121dr .bk{position:absolute;inset:0;background:rgba(16,32,30,.38);}' +
+    '#w121dr .pn{position:relative;width:min(620px,100vw);height:100%;background:' + CREAM + ';box-shadow:-20px 0 50px -20px rgba(0,0,0,.35);display:flex;flex-direction:column;animation:w121in .18s ease-out;}' +
+    '@keyframes w121in{from{transform:translateX(24px);opacity:.6;}to{transform:none;opacity:1;}}' +
+    '#w121dr header{display:flex;align-items:center;gap:10px;padding:16px 20px 12px;border-bottom:1px solid rgba(16,63,57,.10);}' +
+    '#w121dr header .ttl{flex:1;min-width:0;font-family:' + HEAD + ';font-size:24px;color:' + GREEN + ';border:none;background:transparent;padding:2px 0;outline:none;}' +
+    '#w121dr header .ttl::placeholder{color:rgba(16,63,57,.35);}' +
+    '#w121dr header .x{width:32px;height:32px;border-radius:50%;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';font-size:16px;cursor:pointer;flex:none;}' +
+    '#w121dr .bd{flex:1;overflow:auto;padding:14px 20px 20px;}' +
+    '#w121dr .sec{margin:0 0 16px;}' +
+    '#w121dr .sec > label,#w121dr .lbl{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted);font-weight:800;margin:0 0 6px;}' +
+    '#w121dr .pls{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '#w121dr .tg{display:inline-flex;align-items:center;gap:8px;border-radius:12px;padding:8px 12px;border:1.5px solid rgba(16,63,57,.15);background:#fff;font-size:13px;font-weight:700;color:var(--wa-muted);cursor:pointer;user-select:none;}' +
+    '#w121dr .tg i{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:7px;font-style:normal;font-family:' + HEAD + ';font-size:11px;font-weight:800;color:#fff;opacity:.45;}' +
+    '#w121dr .tg.on{border-color:' + GREEN + ';color:' + GREEN + ';}#w121dr .tg.on i{opacity:1;}' +
+    '#w121dr .val{font-size:12px;line-height:1.45;margin:8px 0 0;}' +
+    '#w121dr .val div{padding:2px 0;}#w121dr .val .e{color:' + FLAG + ';}#w121dr .val .w{color:#8a5a00;}#w121dr .val .k{color:#1c6b5d;}' +
+    '#w121dr .drop{border:1.5px dashed rgba(16,63,57,.28);border-radius:14px;padding:16px;text-align:center;font-size:12.5px;color:var(--wa-muted);background:#fff;transition:background .12s,border-color .12s;}' +
+    '#w121dr .drop.over{background:rgba(220,165,39,.12);border-color:' + GOLD + ';}' +
+    '#w121dr .drop a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:underline;}' +
+    '#w121dr .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 0;}' +
+    '#w121dr .th{position:relative;width:104px;border-radius:12px;overflow:hidden;background:#fff;border:1px solid rgba(16,63,57,.12);cursor:grab;}' +
+    '#w121dr .th.dragging{opacity:.4;}' +
+    '#w121dr .th img,#w121dr .th video{width:104px;height:104px;object-fit:cover;display:block;background:rgba(16,63,57,.08);}' +
+    '#w121dr .th .rt{position:absolute;left:6px;top:6px;font-size:10px;font-weight:800;border-radius:999px;padding:1px 6px;background:rgba(255,255,255,.92);color:#1c6b5d;}' +
+    '#w121dr .th .rt.bad{color:' + FLAG + ';}' +
+    '#w121dr .th .rm{position:absolute;right:5px;top:5px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(16,32,30,.65);color:#fff;font-size:11px;cursor:pointer;line-height:1;}' +
+    '#w121dr .th .n1{position:absolute;left:6px;bottom:30px;font-size:9.5px;font-weight:800;border-radius:999px;padding:1px 6px;background:' + GOLD + ';color:' + GREEN + ';}' +
+    '#w121dr .th .crop{display:flex;gap:2px;padding:4px;flex-wrap:wrap;background:#fff;}' +
+    '#w121dr .th .crop button{flex:1;font-size:9.5px;font-weight:800;border:none;border-radius:6px;padding:3px 0;background:rgba(16,63,57,.08);color:' + GREEN + ';cursor:pointer;}' +
+    '#w121dr .th .up{position:absolute;inset:0;background:rgba(255,250,242,.75);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:' + GREEN + ';}' +
+    '#w121dr .th .meta{font-size:10px;color:var(--wa-muted);padding:3px 6px 5px;}' +
+    '#w121dr textarea,#w121dr input[type=text],#w121dr input[type=url],#w121dr input[type=date],#w121dr input[type=time],#w121dr select{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;font-size:13.5px;font-family:' + BODY + ';background:#fff;color:var(--wa-text);}' +
+    '#w121dr textarea{min-height:150px;line-height:1.5;resize:vertical;}' +
+    '#w121dr .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
+    '#w121dr .cc{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:var(--wa-muted);margin:6px 0 0;}' +
+    '#w121dr .cc b.bad{color:' + FLAG + ';}' +
+    '#w121dr .ai{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0 0;}' +
+    '#w121dr .ai button{font-size:12px;font-weight:700;border-radius:999px;border:1px solid rgba(111,100,171,.35);background:rgba(111,100,171,.08);color:' + PURPLE + ';padding:5px 12px;cursor:pointer;}' +
+    '#w121dr .ai select{width:auto;padding:5px 10px;font-size:12px;border-radius:999px;}' +
+    '#w121dr .aio{margin:8px 0 0;display:flex;flex-direction:column;gap:6px;}' +
+    '#w121dr .aio div{background:#fff;border:1px solid rgba(111,100,171,.25);border-radius:12px;padding:9px 11px;font-size:12.5px;line-height:1.45;white-space:pre-wrap;cursor:pointer;}' +
+    '#w121dr .aio div:hover{border-color:' + PURPLE + ';}' +
+    '#w121dr .aio div small{display:block;color:' + PURPLE + ';font-weight:700;margin-top:4px;white-space:normal;}' +
+    '#w121dr .aio .tags span{display:inline-block;background:rgba(111,100,171,.1);color:' + PURPLE + ';border-radius:999px;padding:2px 8px;margin:2px;font-size:11.5px;cursor:pointer;}' +
+    '#w121dr .qk{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 0;}' +
+    '#w121dr .qk button{font-size:11.5px;font-weight:700;border-radius:999px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';padding:5px 11px;cursor:pointer;}' +
+    '#w121dr .qk button.best{background:rgba(220,165,39,.2);color:#6b4d05;}' +
+    '#w121dr .tz{font-size:11px;color:var(--wa-muted);margin:6px 0 0;}' +
+    '#w121dr .pvt{display:inline-flex;background:rgba(16,63,57,.07);border-radius:10px;padding:3px;gap:2px;margin:0 0 10px;}' +
+    '#w121dr .pvt a{font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;cursor:pointer;color:' + GREEN + ';}' +
+    '#w121dr .pvt a.on{background:#fff;box-shadow:0 1px 2px rgba(16,63,57,.15);}' +
+    '#w121dr .mock{background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:14px;overflow:hidden;max-width:380px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:#111;}' +
+    '#w121dr .mock .mh{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:13px;}' +
+    '#w121dr .mock .av{width:30px;height:30px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:none;}' +
+    '#w121dr .mock .mh span{display:block;font-size:11px;color:#65676b;}' +
+    '#w121dr .mock .mm{background:#efefef;position:relative;overflow:hidden;}' +
+    '#w121dr .mock .mm img,#w121dr .mock .mm video{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#w121dr .mock .dots{position:absolute;left:0;right:0;bottom:8px;display:flex;justify-content:center;gap:4px;}' +
+    '#w121dr .mock .dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.6);}#w121dr .mock .dots i:first-child{background:#fff;}' +
+    '#w121dr .mock .mc{padding:10px 12px 12px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;}' +
+    '#w121dr .mock .mc .more{color:#8e8e8e;}' +
+    '#w121dr .mock .mc .ht{color:#00376b;}' +
+    '#w121dr .mock .fbg{display:grid;gap:2px;}' +
+    '#w121dr .mock .fbg img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#w121dr .mock .lk{border-top:1px solid rgba(0,0,0,.08);background:#f0f2f5;padding:10px 12px;font-size:12px;color:#65676b;}' +
+    '#w121dr .mock .lk b{display:block;color:#050505;font-size:13.5px;margin-top:2px;word-break:break-all;}' +
+    '#w121dr .res{background:#fff;border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px 14px;font-size:12.5px;line-height:1.5;}' +
+    '#w121dr .res .r{display:flex;gap:8px;align-items:flex-start;padding:4px 0;}' +
+    '#w121dr .res .r i{flex:none;display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;font-style:normal;font-family:' + HEAD + ';font-size:9px;font-weight:800;color:#fff;margin-top:1px;}' +
+    '#w121dr .res a{color:' + GREEN + ';font-weight:700;}' +
+    '#w121dr .res .err{color:' + FLAG + ';margin:6px 0 0;}' +
+    '#w121dr .res .man{margin:10px 0 0;padding:10px 0 0;border-top:1px dashed rgba(16,63,57,.15);display:flex;flex-direction:column;gap:6px;}' +
+    '#w121dr footer{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px 16px;border-top:1px solid rgba(16,63,57,.10);background:#fff;}' +
+    '#w121dr footer .sp{flex:1;}' +
+    '#w121dr footer .btn.go{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w121dr footer .btn.pub{background:' + GOLD + ';color:' + GREEN + ';border:none;}' +
+    '#w121dr footer .lnk{font-size:12px;color:var(--wa-muted);cursor:pointer;text-decoration:underline;background:none;border:none;padding:4px;}' +
+    '#w121dr footer .lnk.del{color:' + FLAG + ';}' +
+    '#w121dr .ro{font-size:12px;color:var(--wa-muted);}' +
+    '@media (max-width:980px){#contentcal .lay{grid-template-columns:minmax(0,1fr);}#contentcal .tray{position:static;}#contentcal .wg{grid-template-columns:repeat(2,minmax(0,1fr));}}' +
+    '@media (max-width:640px){#contentcal .mg{gap:2px;}#contentcal .d{min-height:64px;padding:3px;}#contentcal .ch .tt,#contentcal .ch img{display:none;}#contentcal .wg{grid-template-columns:minmax(0,1fr);}#contentcal .lr{grid-template-columns:70px 40px minmax(0,1fr);}#contentcal .lr .rt{grid-column:1 / -1;flex-direction:row;justify-content:flex-start;}#w121dr .row2{grid-template-columns:1fr;}#contentcal .ctl .nav b{min-width:120px;font-size:20px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function board() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function allowed() { return staff() || board(); }
+  function me() { try { return (typeof USER !== 'undefined' && USER && USER.name) || ''; } catch (e) { return ''; } }
+  function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function today() { return ymd(new Date()); }
+  function addDays(ds, n) { var d = new Date(ds + 'T12:00:00'); return ymd(new Date(d.getTime() + n * 86400000)); }
+  function dowOf(ds) { return (new Date(ds + 'T12:00:00').getDay() + 6) % 7; }
+  function mondayOf(ds) { return addDays(ds, -dowOf(ds)); }
+  function addMonths(ds, n) { var y = Number(ds.slice(0, 4)), m = Number(ds.slice(5, 7)) - 1 + n; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; return y + '-' + String(m + 1).padStart(2, '0') + '-01'; }
+  function dayOf(iso) { return iso ? ymd(new Date(iso)) : null; }
+  function hm(iso) { if (!iso) return ''; var d = new Date(iso); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  function niceDate(ds, opts) { try { return new Date(ds + 'T12:00:00').toLocaleDateString('en-CA', opts || { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return ds; } }
+  function niceWhen(iso) { if (!iso) return 'No date'; return niceDate(dayOf(iso)) + ', ' + hm(iso); }
+  function isoOf(ds, t) { return new Date(ds + 'T' + (t || '18:00') + ':00').toISOString(); }
+  function num(v) { v = Number(v); if (!isFinite(v)) return '\u2013'; var a = Math.abs(v); if (a >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'; if (a >= 1e4) return Math.round(v / 1e3) + 'k'; if (a >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'k'; return String(Math.round(v)); }
+  function tz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { return ''; } }
+  function marks(pls, liveMap) { return '<span class="pm">' + (pls || []).map(function (p) { var c = PL[p]; if (!c) return ''; return '<i class="' + (liveMap && liveMap[p] ? 'ok' : '') + '" style="background:' + c.color + '" title="' + E(c.label) + (liveMap && liveMap[p] ? ': live' : '') + '">' + E(c.short) + '</i>'; }).join('') + '</span>'; }
+  function thumbOf(p) { var m = (p.media || []).filter(function (x) { return x && x.url && String(x.kind || x.mime || '').indexOf('video') < 0; })[0]; return m ? m.url : null; }
+  function hasVideo(p) { return (p.media || []).some(function (x) { return x && String(x.kind || x.mime || '').indexOf('video') >= 0; }); }
+  function titleOf(p) { var t = String(p.title || '').trim(); if (t) return t; var c = String(p.caption || '').replace(/\s+/g, ' ').trim(); return c ? (c.length > 60 ? c.slice(0, 57) + '\u2026' : c) : 'Untitled post'; }
+  function fn(name, body) { return db.functions.invoke(name, { body: body }).then(function (r) { if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
+  function canPublish(pls) { var c = C.cap; if (!c || !c.token) return false; return (pls || []).length > 0 && (pls || []).every(function (p) { return c.can && c.can[p] === true; }); }
+  function anyPublish() { var c = C.cap; return !!(c && c.token && c.can && (c.can.instagram || c.can.facebook)); }
+
+  /* the state a post is really in, including what the analytics confirmed */
+  function stateOf(p) {
+    var now = Date.now(); var due = p.scheduled_at ? new Date(p.scheduled_at).getTime() : null;
+    var liveMap = {}; Object.keys(p.live || {}).forEach(function (k) { if (p.live[k] && (p.live[k].external_id || p.live[k].url)) liveMap[k] = p.live[k]; });
+    var results = p.results || {};
+    var up = Object.keys(results).filter(function (k) { return results[k] && (results[k].id || results[k].url); });
+    var s = p.status || 'draft'; var cls = (ST[s] || ST.draft).cls; var label = (ST[s] || ST.draft).label; var attn = false; var note = '';
+    if (s === 'scheduled' && due && due < now - 15 * 60000) { cls = 'due'; label = 'Due'; attn = true; note = canPublish(p.platforms) ? 'Was due at ' + hm(p.scheduled_at) + '; publishing did not run' : 'Due: post it in Meta Business Suite; the hub confirms it when it shows up'; }
+    else if (s === 'scheduled') note = canPublish(p.platforms) ? 'Publishes automatically at ' + hm(p.scheduled_at) : 'Planned for ' + niceWhen(p.scheduled_at) + '; post it by hand (publishing is off)';
+    else if (s === 'failed') { attn = true; if (up.length) { label = 'Partly published'; } note = p.error || 'Publishing failed'; }
+    else if (s === 'publishing') { var pend = Object.keys(results).some(function (k) { return results[k] && results[k].pending; }); note = pend ? 'Instagram is processing the video; it goes up within a few minutes' : 'Publishing now'; if (now - new Date(p.updated_at || p.created_at || now).getTime() > 15 * 60000) attn = true; }
+    else if (s === 'published' || s === 'posted') {
+      var missing = (p.platforms || []).filter(function (k) { return !liveMap[k]; });
+      var ago = p.published_at ? (now - new Date(p.published_at).getTime()) / 3600000 : 0;
+      var connected = function (k) { return ((C.cap && C.cap.accounts) || []).some(function (a) { return a.platform === k; }); };
+      if (!missing.length) note = 'Live on ' + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and ');
+      else if (ago > 36 && missing.some(connected)) { note = 'Not seen in the analytics yet on ' + missing.filter(connected).map(function (k) { return PL[k].label; }).join(' and '); attn = true; }
+      else note = s === 'posted' ? 'Marked posted; the numbers arrive with the next morning pull' : 'Published; the numbers arrive with the next morning pull';
+    }
+    return { cls: cls, label: label, attn: attn, note: note, live: liveMap, up: up };
+  }
+  function draggable(p) { return staff() && ['draft', 'scheduled', 'failed'].indexOf(p.status || 'draft') >= 0 && !(p.status === 'failed' && stateOf(p).up.length); }
+  function matches(p) {
+    var f = C.filter;
+    if (f.pl && (p.platforms || []).indexOf(f.pl) < 0) return false;
+    if (f.st) {
+      var s = stateOf(p);
+      if (f.st === 'planned' && ['draft', 'scheduled'].indexOf(p.status) < 0) return false;
+      if (f.st === 'live' && ['published', 'posted'].indexOf(p.status) < 0) return false;
+      if (f.st === 'attn' && !s.attn) return false;
+      if (f.st === 'drafts' && p.status !== 'draft') return false;
+    }
+    if (f.q) { var q = f.q.toLowerCase(); if ([p.title, p.caption, p.campaign, p.owner, p.notes].join(' ').toLowerCase().indexOf(q) < 0) return false; }
+    return true;
+  }
+  function dated() { return C.posts.filter(function (p) { return p.scheduled_at && p.status !== 'cancelled' && matches(p); }); }
+  function undated() { return C.posts.filter(function (p) { return !p.scheduled_at && p.status !== 'cancelled' && matches(p); }); }
+  function byDay() { var m = {}; dated().forEach(function (p) { var d = dayOf(p.scheduled_at); (m[d] = m[d] || []).push(p); }); Object.keys(m).forEach(function (k) { m[k].sort(function (a, b) { return String(a.scheduled_at).localeCompare(String(b.scheduled_at)); }); }); return m; }
+
+  /* ---------- data ---------- */
+  async function load(force) {
+    if (C.loading) return;
+    if (!force && C.loaded && Date.now() - C.at < 30000) { paint(); return; }
+    C.loading = true; C.err = null; if (!C.loaded) paint();
+    try {
+      var r = await db.from('content_posts').select('*').order('scheduled_at', { ascending: true }).limit(1500);
+      if (r.error) throw r.error;
+      C.posts = (r.data || []).map(function (p) { p.platforms = p.platforms || []; p.media = p.media || []; p.results = p.results || {}; p.live = p.live || {}; return p; });
+      C.loaded = true; C.at = Date.now();
+    } catch (e) { C.err = e.message || String(e); }
+    C.loading = false; paint();
+    if (!C.cap && staff() && !C.capBusy) loadCap();
+    if (!C.perf && !C.perfBusy) loadPerf();
+  }
+  async function loadCap() {
+    C.capBusy = true;
+    try { C.cap = await fn('social-publish', { action: 'capabilities' }); } catch (e) { C.cap = { token: false, error: e.message || String(e), can: {}, accounts: [] }; }
+    C.capBusy = false; paint(); if (C.edit) paintDrawer();
+  }
+  /* the analytics (90 days) for the best slot and the handle */
+  async function loadPerf() {
+    C.perfBusy = true;
+    try {
+      var d = window.w120Data ? window.w120Data() : null;
+      if (!d || !d.posts_all) { var r = await db.rpc('social_overview', { p_days: 90 }); if (r && !r.error) d = r.data; }
+      C.perf = d || {};
+    } catch (e) { C.perf = {}; }
+    C.perfBusy = false; paint();
+  }
+  function bestSlot() { try { return C.perf && window.w120BestSlot ? window.w120BestSlot(C.perf) : null; } catch (e) { return null; } }
+  function igHandle() { var a = ((C.perf && C.perf.accounts) || []).filter(function (x) { return x.platform === 'instagram'; })[0] || ((C.cap && C.cap.accounts) || []).filter(function (x) { return x.platform === 'instagram'; })[0]; return (a && a.handle) || 'welfareavenue'; }
+  function nextSlotDate(slot) {
+    var t = today(); var h = slot && slot.h != null ? String(slot.h).padStart(2, '0') + ':00' : '18:00';
+    if (!slot || !slot.wd) { var d0 = addDays(t, 1); return { date: d0, time: h }; }
+    var want = WD.indexOf(slot.wd); for (var i = 1; i <= 7; i++) { var d = addDays(t, i); if (dowOf(d) === want) return { date: d, time: h }; }
+    return { date: addDays(t, 1), time: h };
+  }
+  async function saveRow(id, patch) {
+    patch.updated_at = new Date().toISOString(); patch.updated_by = me() || 'staff';
+    var r = await db.from('content_posts').update(patch).eq('id', id).select('*');
+    if (r.error) throw r.error;
+    var row = (r.data && r.data[0]) || null;
+    C.posts = C.posts.map(function (p) { if (String(p.id) !== String(id)) return p; var n = Object.assign({}, p, patch, row || {}); n.platforms = n.platforms || []; n.media = n.media || []; n.results = n.results || {}; n.live = n.live || {}; return n; });
+    return row;
+  }
+  async function insertRow(row) {
+    row.created_by = me() || 'staff'; row.updated_by = row.created_by;
+    var r = await db.from('content_posts').insert(row).select('*').single();
+    if (r.error) throw r.error;
+    var n = Object.assign({}, row, r.data || {}); if (n.id == null) n.id = 'tmp' + Date.now();
+    n.platforms = n.platforms || []; n.media = n.media || []; n.results = n.results || {}; n.live = n.live || {};
+    C.posts.push(n); return n;
+  }
+  function logIt(id, field, oldV, newV) { try { logChange('content_post', id, field, oldV, newV); } catch (e) { /* fine */ } }
+
+  /* ---------- the page ---------- */
+  function panel() {
+    var sec = document.getElementById('contentcal');
+    if (!sec) { var main = document.querySelector('main'); if (!main) return null; sec = document.createElement('section'); sec.id = 'contentcal'; sec.className = 'panel'; main.appendChild(sec); }
+    return sec;
+  }
+  function capBanner() {
+    if (!staff()) return '';
+    var c = C.cap;
+    if (!c) return '<div class="cap"><div><b>Checking the Meta connection\u2026</b></div></div>';
+    if (c.token && c.can && c.can.instagram && c.can.facebook) return '<div class="cap on"><div><b>Publishing is on for Instagram and Facebook.</b>Scheduled posts go out within five minutes of their time, and each one is confirmed live when it shows up in the analytics.</div></div>';
+    var parts = [];
+    if (!c.token) parts.push('The Meta token is not in the vault yet, so the calendar plans posts and confirms them when they show up in the analytics. To publish from here, generate the token with <b style="display:inline">pages_manage_posts</b> and <b style="display:inline">instagram_content_publish</b> ticked as well (<a data-w121go="#socialstats">Analytics &gt; Set up</a>).');
+    else {
+      var on = ['instagram', 'facebook'].filter(function (k) { return c.can && c.can[k]; }).map(function (k) { return PL[k].label; });
+      if (on.length) parts.push('Publishing is on for ' + on.join(' and ') + '.');
+      if ((c.missing || []).length) parts.push('The token is missing ' + c.missing.join(' and ') + '; generate it again with ' + (c.missing.length > 1 ? 'those' : 'that') + ' ticked to publish everywhere.');
+      if ((c.accounts_missing || []).length) parts.push('Connect ' + c.accounts_missing.map(function (k) { return PL[k] ? PL[k].label : k; }).join(' and ') + ' in <a data-w121go="#socialstats">Analytics &gt; Set up</a>.');
+      if (!on.length && !(c.missing || []).length && !(c.accounts_missing || []).length) parts.push('Publishing is off.');
+      parts.push('Until then, posts are planned here and confirmed from the analytics.');
+    }
+    return '<div class="cap"><div><b>' + (c.token ? 'Publishing is partly on' : 'Plan and confirm mode') + '</b>' + parts.join(' ') + '</div></div>';
+  }
+  function glance() {
+    var now = Date.now(); var t = today(); var mon = mondayOf(t), sun = addDays(mon, 6);
+    var wk = C.posts.filter(function (p) { var d = dayOf(p.scheduled_at || p.published_at); return d && d >= mon && d <= sun && p.status !== 'cancelled'; });
+    var planned = wk.filter(function (p) { return ['draft', 'scheduled', 'publishing'].indexOf(p.status) >= 0; }).length;
+    var live = wk.filter(function (p) { return ['published', 'posted'].indexOf(p.status) >= 0; }).length;
+    var next = C.posts.filter(function (p) { return p.scheduled_at && new Date(p.scheduled_at).getTime() > now && ['draft', 'scheduled'].indexOf(p.status) >= 0; }).sort(function (a, b) { return String(a.scheduled_at).localeCompare(String(b.scheduled_at)); })[0];
+    var attn = C.posts.filter(function (p) { return p.status !== 'cancelled' && stateOf(p).attn; }).length;
+    var ideas = C.posts.filter(function (p) { return !p.scheduled_at && p.status === 'draft'; }).length;
+    var reach = 0; C.posts.forEach(function (p) { var d = dayOf(p.published_at); if (!d || (now - new Date(p.published_at).getTime()) > 30 * 86400000) return; Object.keys(p.live || {}).forEach(function (k) { reach += Number((p.live[k] || {}).reach || 0); }); });
+    var slot = bestSlot();
+    return '<div class="glance">' +
+      '<div><b>' + planned + '</b><span>planned this week</span></div>' +
+      '<div><b>' + live + '</b><span>live this week</span></div>' +
+      '<div' + (next ? ' data-w121open="' + next.id + '"' + ' data-w121jump="1"' : '') + '><b>' + (next ? E(niceDate(dayOf(next.scheduled_at), { weekday: 'short' }) + ' ' + hm(next.scheduled_at)) : '\u2013') + '</b><span>next post</span>' + (next ? '<em>' + E(titleOf(next)) + '</em>' : '') + '</div>' +
+      '<div data-w121jump="attn"><b class="' + (attn ? 'warn' : '') + '">' + attn + '</b><span>need attention</span></div>' +
+      '<div><b>' + ideas + '</b><span>ideas without a date</span></div>' +
+      '<div><b>' + (reach ? num(reach) : '\u2013') + '</b><span>reach from calendar posts, 30 days</span></div>' +
+      (slot ? '<div title="From the analytics insights"><b style="font-size:20px">' + E(slot.label) + '</b><span>best slot to post</span></div>' : '') +
+      '</div>';
+  }
+  function header() {
+    var a = C.anchor, v = C.view; var label = v === 'month' ? niceDate(a, { month: 'long', year: 'numeric' }) : v === 'week' ? (function () { var m = mondayOf(a); return niceDate(m, { month: 'short', day: 'numeric' }) + ' to ' + niceDate(addDays(m, 6), { month: 'short', day: 'numeric' }); })() : 'All posts';
+    return '<div class="w116crumb"><a data-w116go="#mypage">Home</a> &middot; Departments &middot; <a data-w116go="#team/marketing">Marketing, Branding &amp; Web</a> &middot; Content calendar</div>' +
+      '<div class="w116top"><div><h2><span class="dot" style="background:#6F64AB"></span>Content calendar</h2><p class="sub">Plan, publish and confirm Instagram and Facebook posts. Drag a post to move it; drop an idea on a day to plan it.</p></div>' +
+      '<div class="w120ctl" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' + (staff() ? '<button class="btn" data-w121new="1">New post</button><button class="btn mini ghost" data-w121set="1" title="Slack confirmations">Settings</button>' : '') + '<a class="btn mini ghost" data-w121go="#socialstats">Analytics</a></div></div>' +
+      '<div class="ctl"><span class="w116seg">' + [['month', 'Month'], ['week', 'Week'], ['list', 'List']].map(function (x) { return '<a data-w121view="' + x[0] + '" class="' + (v === x[0] ? 'on' : '') + '">' + x[1] + '</a>'; }).join('') + '</span>' +
+      (v !== 'list' ? '<span class="nav"><button data-w121nav="-1" title="Back">&lsaquo;</button><b>' + E(label) + '</b><button data-w121nav="1" title="Forward">&rsaquo;</button></span><button class="btn mini ghost" data-w121nav="0">Today</button>' : '') +
+      '<span class="sp"></span><input type="search" id="w121q" placeholder="Search posts" value="' + E(C.filter.q) + '"></div>' +
+      '<div class="chips">' + [['', 'All platforms'], ['instagram', 'Instagram'], ['facebook', 'Facebook']].map(function (x) { return '<span data-w121fpl="' + x[0] + '" class="' + (C.filter.pl === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') + '<i></i>' +
+      [['', 'Everything'], ['planned', 'Planned'], ['live', 'Live'], ['attn', 'Needs attention'], ['drafts', 'Drafts']].map(function (x) { return '<span data-w121fst="' + x[0] + '" class="' + (C.filter.st === x[0] ? 'on' : '') + '">' + x[1] + '</span>'; }).join('') + '</div>';
+  }
+  function settingsPanel() {
+    if (!C.settingsOpen || !staff()) return '';
+    var s = (C.cap && C.cap.settings) || {}; var chans = C.channels || [];
+    var cur = s.slack_channel || 'social-media';
+    var opts = (chans.length ? chans : [{ name: cur, member: true }]).map(function (c) { return '<option value="' + E(c.name) + '"' + (c.name === cur ? ' selected' : '') + '>#' + E(c.name) + (c.member === false ? ' (bot not in it yet)' : '') + '</option>'; }).join('');
+    return '<div class="setp"><label style="display:flex;gap:8px;align-items:center;font-weight:700"><input type="checkbox" id="w121slack"' + (s.slack_confirm ? ' checked' : '') + '> Confirm in Slack when a post goes live</label><select id="w121chan">' + opts + '</select><button class="btn mini" data-w121saveset="1">Save</button><span style="color:var(--wa-muted)">One message per post and platform: published from here, or seen in the analytics.</span></div>';
+  }
+  function chip(p) {
+    var s = stateOf(p); var th = thumbOf(p);
+    return '<div class="ch st-' + s.cls + '" data-w121open="' + p.id + '" draggable="' + (draggable(p) ? 'true' : 'false') + '" data-w121card="' + p.id + '" title="' + E(titleOf(p) + ' \u00b7 ' + s.label + (s.note ? ' \u00b7 ' + s.note : '')) + '">' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '') + '<span class="tm">' + hm(p.scheduled_at) + '</span>' + marks(p.platforms, s.live) + '<span class="tt">' + E(titleOf(p)) + '</span></div>';
+  }
+  function monthView() {
+    var a = C.anchor; var first = a.slice(0, 8) + '01'; var start = mondayOf(first); var m = byDay(); var t = today(); var slot = bestSlot();
+    var html = '<div class="mg">' + WD.map(function (d) { return '<div class="dow">' + d + '</div>'; }).join('');
+    var monthNo = first.slice(5, 7);
+    for (var i = 0; i < 42; i++) {
+      var d = addDays(start, i); if (i >= 35 && d.slice(5, 7) !== monthNo) break;
+      var list = m[d] || []; var shown = list.slice(0, 4);
+      var cls = 'd' + (d.slice(5, 7) !== monthNo ? ' out' : '') + (d === t ? ' today' : '') + (d < t ? ' past' : '') + (slot && slot.wd && WD[dowOf(d)] === slot.wd && d >= t ? ' best' : '');
+      html += '<div class="' + cls + '" data-w121day="' + d + '"' + (slot && slot.wd && WD[dowOf(d)] === slot.wd ? ' title="Best day to post, from the insights"' : '') + '><div class="dh"><span class="dn">' + Number(d.slice(8, 10)) + '</span>' + (staff() && d >= t ? '<button class="add" data-w121new="' + d + '" title="New post on this day">+</button>' : '') + '</div>' + shown.map(chip).join('') + (list.length > shown.length ? '<div class="more" data-w121more="' + d + '">+' + (list.length - shown.length) + ' more</div>' : '') + '</div>';
+    }
+    return html + '</div>';
+  }
+  function weekCard(p) {
+    var s = stateOf(p); var th = thumbOf(p);
+    return '<div class="wk st-' + s.cls + '" data-w121open="' + p.id + '" draggable="' + (draggable(p) ? 'true' : 'false') + '" data-w121card="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '') + '<div class="row"><span class="tm">' + hm(p.scheduled_at) + '</span>' + marks(p.platforms, s.live) + '<span style="flex:1"></span><span class="pill ' + s.cls + '">' + E(s.label) + '</span></div><b>' + E(titleOf(p)) + '</b>' + (p.caption ? '<div class="cap2">' + E(p.caption) + '</div>' : '') + confLine(p, s) + '</div>';
+  }
+  function confLine(p, s) {
+    s = s || stateOf(p);
+    var bits = Object.keys(s.live).map(function (k) { var l = s.live[k]; var n = []; if (l.reach != null) n.push(num(l.reach) + ' reach'); else if (l.views != null) n.push(num(l.views) + ' views'); if (l.likes != null) n.push(num(l.likes) + ' likes'); return (PL[k] ? PL[k].label : k) + (n.length ? ' ' + n.join(', ') : ' live'); });
+    if (bits.length) return '<div class="cf ok">\u2713 ' + E(bits.join(' \u00b7 ')) + '</div>';
+    if (s.note) return '<div class="cf ' + (s.attn ? 'bad' : s.cls === 'sched' ? 'warn' : 'muted') + '">' + E(s.note) + '</div>';
+    return '';
+  }
+  function weekView() {
+    var mon = mondayOf(C.anchor); var m = byDay(); var t = today();
+    var html = '<div class="wg">';
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(mon, i); var list = m[d] || [];
+      html += '<div class="wc' + (d === t ? ' today' : '') + '" data-w121day="' + d + '"><div class="wh"><b>' + WD[i] + ' ' + Number(d.slice(8, 10)) + '</b><span>' + list.length + ' post' + (list.length === 1 ? '' : 's') + '</span>' + (staff() && d >= t ? '<button class="add" data-w121new="' + d + '" title="New post on this day">+</button>' : '') + '</div>' + list.map(weekCard).join('') + '</div>';
+    }
+    return html + '</div>';
+  }
+  function listRow(p) {
+    var s = stateOf(p); var th = thumbOf(p);
+    return '<div class="lr" data-w121open="' + p.id + '"><div class="when">' + (p.scheduled_at ? E(niceDate(dayOf(p.scheduled_at))) + '<span>' + hm(p.scheduled_at) + '</span>' : 'No date<span>idea</span>') + '</div>' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '<div class="ph">' + (hasVideo(p) ? '\u25b6' : '\u270e') + '</div>') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><div class="cap2">' + E(p.caption || p.notes || '') + '</div>' + confLine(p, s) + '</div><div class="rt"><span class="pill ' + s.cls + '">' + E(s.label) + '</span>' + marks(p.platforms, s.live) + (p.owner ? '<span style="font-size:11px;color:var(--wa-muted)">' + E(p.owner) + '</span>' : '') + '</div></div>';
+  }
+  function listView() {
+    var all = C.posts.filter(function (p) { return p.status !== 'cancelled' && matches(p); }); var now = Date.now();
+    var attn = all.filter(function (p) { return stateOf(p).attn; });
+    var up = all.filter(function (p) { return p.scheduled_at && new Date(p.scheduled_at).getTime() >= now - 15 * 60000 && !stateOf(p).attn && ['draft', 'scheduled', 'publishing'].indexOf(p.status) >= 0; }).sort(function (a, b) { return String(a.scheduled_at).localeCompare(String(b.scheduled_at)); });
+    var ideas = all.filter(function (p) { return !p.scheduled_at && !stateOf(p).attn; });
+    var past = all.filter(function (p) { return attn.indexOf(p) < 0 && up.indexOf(p) < 0 && ideas.indexOf(p) < 0; }).sort(function (a, b) { return String(b.published_at || b.scheduled_at || '').localeCompare(String(a.published_at || a.scheduled_at || '')); });
+    function grp(title, sub, rows) { if (!rows.length) return ''; return '<h4>' + E(title) + ' <small>' + E(sub) + '</small></h4>' + rows.map(listRow).join(''); }
+    var html = '<div class="lg">' + grp('Needs attention', attn.length + ' post' + (attn.length === 1 ? '' : 's'), attn) + grp('Coming up', up.length + ' planned', up) + grp('Ideas and drafts without a date', ideas.length + '', ideas) + grp('Posted', past.length + ' in the calendar', past.slice(0, 80)) + '</div>';
+    if (!all.length) html = '<div class="loading">' + (C.filter.q || C.filter.pl || C.filter.st ? 'Nothing matches the filters.' : 'Nothing planned yet. ' + (staff() ? 'Start with New post, or plan one from the insights on the Analytics page.' : '')) + '</div>';
+    return html;
+  }
+  function tray() {
+    var list = undated();
+    return '<div class="tray" data-w121tray="1"><h4>Ideas</h4><p>Posts without a date. Drag one onto a day to plan it; drag a planned post here to take it off the calendar.</p>' + (list.length ? list.map(function (p) { var th = thumbOf(p); return '<div class="tr" draggable="' + (draggable(p) ? 'true' : 'false') + '" data-w121card="' + p.id + '" data-w121open="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="">' : '') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><span>' + (p.campaign ? E(p.campaign) + ' \u00b7 ' : '') + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(', ') + '</span></div></div>'; }).join('') : '<div class="empty">No ideas waiting.</div>') + (staff() ? '<button class="btn mini ghost" style="width:100%;margin-top:6px" data-w121new="idea">New idea</button>' : '') + '</div>';
+  }
+  function paint() {
+    var sec = panel(); if (!sec) return;
+    if (!C.view) C.view = (window.innerWidth || 1200) < 700 ? 'list' : 'month';
+    if (!C.anchor) C.anchor = today();
+    var body;
+    if (C.err) body = '<div class="loading">Could not load the calendar: ' + E(C.err) + '</div>';
+    else if (!C.loaded) body = '<div class="loading">Loading the calendar\u2026</div>';
+    else body = capBanner() + settingsPanel() + glance() + '<div class="lay' + (C.view === 'list' ? ' list' : '') + '"><div>' + (C.view === 'month' ? monthView() : C.view === 'week' ? weekView() : listView()) + '</div>' + (C.view !== 'list' ? tray() : '') + '</div>';
+    var q = document.getElementById('w121q'); var hadFocus = q && document.activeElement === q; var pos = hadFocus ? q.selectionStart : 0;
+    sec.innerHTML = '<div class="w121wrap">' + header() + body + '</div>' + (C.undo ? '<div class="undo"><span>' + E(C.undo.text) + '</span><a data-w121undo="1">Undo</a></div>' : '');
+    if (hadFocus) { var q2 = document.getElementById('w121q'); if (q2) { q2.focus(); try { q2.setSelectionRange(pos, pos); } catch (e) { /* fine */ } } }
+  }
+
+  /* ---------- moves (drag and drop), with Undo ---------- */
+  async function move(id, day) {
+    var p = C.posts.filter(function (x) { return String(x.id) === String(id); })[0]; if (!p || !draggable(p)) return;
+    var before = { scheduled_at: p.scheduled_at, status: p.status };
+    var patch;
+    if (!day) patch = { scheduled_at: null, status: 'draft' };
+    else {
+      var t = p.scheduled_at ? hm(p.scheduled_at) : (function () { var s = bestSlot(); return s && s.h != null ? String(s.h).padStart(2, '0') + ':00' : '18:00'; })();
+      patch = { scheduled_at: isoOf(day, t) };
+      if (p.status === 'failed') patch.status = 'scheduled';
+      if (dayOf(p.scheduled_at) === day) return;
+    }
+    try {
+      await saveRow(p.id, patch);
+      logIt(p.id, 'scheduled_at', before.scheduled_at, patch.scheduled_at);
+      C.undo = { id: p.id, patch: before, text: day ? 'Moved to ' + niceDate(day) + ', ' + hm(patch.scheduled_at) : 'Taken off the calendar' };
+      clearTimeout(C.undoT); C.undoT = setTimeout(function () { C.undo = null; paint(); }, 7000);
+      paint();
+    } catch (e) { toastS('Could not move it: ' + (e.message || e)); }
+  }
+  document.addEventListener('dragstart', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var c = t.closest('#contentcal [data-w121card]'); if (!c || c.getAttribute('draggable') !== 'true') return;
+    C.drag = c.getAttribute('data-w121card'); c.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'w121:' + C.drag); } catch (e2) { /* fine */ }
+  });
+  document.addEventListener('dragend', function () { C.drag = null; document.querySelectorAll('#contentcal .dragging').forEach(function (x) { x.classList.remove('dragging'); }); document.querySelectorAll('#contentcal .over').forEach(function (x) { x.classList.remove('over'); }); });
+  document.addEventListener('dragover', function (e) {
+    if (!C.drag) return; var t = e.target; if (!t || !t.closest) return;
+    var z = t.closest('#contentcal [data-w121day]') || t.closest('#contentcal [data-w121tray]'); if (!z) return;
+    e.preventDefault(); document.querySelectorAll('#contentcal .over').forEach(function (x) { if (x !== z) x.classList.remove('over'); }); z.classList.add('over');
+  });
+  document.addEventListener('drop', async function (e) {
+    if (!C.drag) return; var t = e.target; if (!t || !t.closest) return;
+    var z = t.closest('#contentcal [data-w121day]') || t.closest('#contentcal [data-w121tray]'); if (!z) return;
+    e.preventDefault(); e.stopPropagation(); var id = C.drag; C.drag = null; z.classList.remove('over');
+    var day = z.getAttribute('data-w121day'); if (day && day < today()) { toastS('That day has passed; pick today or later'); return; }
+    await move(id, day || null);
+  }, true);
+
+  /* ---------- the composer ---------- */
+  function blank(day) {
+    var slot = bestSlot(); var ns = day && day !== '1' && day !== 'idea' ? { date: day, time: slot && slot.h != null ? String(slot.h).padStart(2, '0') + ':00' : '18:00' } : (day === 'idea' ? { date: '', time: '' } : nextSlotDate(slot));
+    return { id: null, title: '', platforms: ['instagram', 'facebook'], caption: '', link_url: '', media: [], date: ns.date, time: ns.time, owner: me(), campaign: '', notes: '', status: 'draft', results: {}, live: {}, error: null, dirty: false, tab: 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false };
+  }
+  function fromPost(p) {
+    return { id: p.id, title: p.title || '', platforms: (p.platforms || []).slice(), caption: p.caption || '', link_url: p.link_url || '', media: (p.media || []).map(function (m) { return Object.assign({}, m); }), date: p.scheduled_at ? dayOf(p.scheduled_at) : '', time: p.scheduled_at ? hm(p.scheduled_at) : '', owner: p.owner || '', campaign: p.campaign || '', notes: p.notes || '', status: p.status || 'draft', results: p.results || {}, live: p.live || {}, error: p.error || null, published_at: p.published_at || null, dirty: false, tab: (p.platforms || [])[0] || 'instagram', ai: null, aiBusy: false, lang: 'en', manual: false };
+  }
+  function openComposer(pOrDay, prefill) {
+    if (!allowed()) return;
+    var p = pOrDay && typeof pOrDay === 'object' ? pOrDay : null;
+    C.edit = p ? fromPost(p) : blank(pOrDay);
+    if (prefill) { if (prefill.title) C.edit.title = prefill.title; if (prefill.notes) C.edit.notes = prefill.notes; if (prefill.campaign) C.edit.campaign = prefill.campaign; if (prefill.slot) { var ns = nextSlotDate(prefill.slot); C.edit.date = ns.date; C.edit.time = ns.time; } C.edit.dirty = true; }
+    paintDrawer();
+    if (!C.cap && staff() && !C.capBusy) loadCap();
+    if (!C.perf && !C.perfBusy) loadPerf();
+    setTimeout(function () { var t = document.getElementById(C.edit && C.edit.id ? 'w121cap' : 'w121title'); if (t && staff() && !readOnly()) t.focus(); }, 60);
+  }
+  function readOnly() { var e = C.edit; if (!e) return true; if (!staff()) return true; return ['publishing', 'published', 'posted'].indexOf(e.status) >= 0; }
+  function closeComposer(force) {
+    if (!C.edit) return;
+    if (!force && C.edit.dirty && !readOnly() && !confirm('Close without saving the changes?')) return;
+    C.edit = null; var d = document.getElementById('w121dr'); if (d) d.remove();
+    try { if (/^#contentcal\/./.test(location.hash)) history.replaceState(null, '', '#contentcal'); } catch (e) { /* fine */ }
+  }
+  function imgs(e) { return (e.media || []).filter(function (m) { return String(m.kind || m.mime || '').indexOf('video') < 0; }); }
+  function vids(e) { return (e.media || []).filter(function (m) { return String(m.kind || m.mime || '').indexOf('video') >= 0; }); }
+  function ratioOf(m) { return m && m.w && m.h ? m.w / m.h : null; }
+  function ratioLabel(r) { if (!r) return ''; var known = [[1, '1:1'], [0.8, '4:5'], [1.91, '1.91:1'], [0.5625, '9:16'], [1.7778, '16:9'], [0.6667, '2:3'], [1.5, '3:2'], [0.75, '3:4'], [1.3333, '4:3']]; for (var i = 0; i < known.length; i++) if (Math.abs(known[i][0] - r) < 0.02) return known[i][1]; return r.toFixed(2) + ':1'; }
+  function igRatioOk(r) { return r != null && r >= 0.795 && r <= 1.915; }
+  function tagsOf(s) { return (String(s || '').match(/#[\w\u00c0-\u024f]+/g) || []); }
+  function validate(e) {
+    var out = { ig: [], fb: [], all: [], errors: 0 };
+    function err(list, t) { list.push({ t: t, k: 'e' }); out.errors++; } function warn(list, t) { list.push({ t: t, k: 'w' }); } function ok(list, t) { list.push({ t: t, k: 'k' }); }
+    var im = imgs(e), vi = vids(e);
+    if (!e.platforms.length) err(out.all, 'Pick Instagram, Facebook or both.');
+    if ((e.media || []).some(function (m) { return m.uploading; })) err(out.all, 'Wait for the uploads to finish.');
+    if (e.platforms.indexOf('instagram') >= 0) {
+      if (!im.length && !vi.length) err(out.ig, 'Instagram needs a photo or a video.');
+      if (vi.length) { if (im.length) warn(out.ig, 'A reel uses the video only; the photos stay off Instagram.'); var dur = vi[0].dur; if (dur != null && (dur < 3 || dur > 900)) err(out.ig, 'Reels run from 3 seconds to 15 minutes; this video is ' + Math.round(dur) + ' seconds.'); else ok(out.ig, 'Instagram: a reel' + (dur ? ' (' + Math.round(dur) + ' s)' : '') + '.'); }
+      else if (im.length) {
+        if (im.length > 10) err(out.ig, 'Instagram takes up to 10 photos in a carousel.');
+        var r0 = ratioOf(im[0]);
+        if (r0 != null && !igRatioOk(r0)) err(out.ig, 'The first photo is ' + ratioLabel(r0) + '; Instagram takes 4:5 to 1.91:1. Crop it below.');
+        else if (im.length > 1 && im.some(function (m) { var r = ratioOf(m); return r != null && Math.abs(r - r0) > 0.03; })) warn(out.ig, 'Instagram crops every photo in a carousel to the first one\u2019s shape (' + ratioLabel(r0) + ').');
+        if (!out.ig.filter(function (x) { return x.k === 'e'; }).length) ok(out.ig, 'Instagram: ' + (im.length > 1 ? 'a carousel of ' + im.length : 'one photo') + (r0 ? ', ' + ratioLabel(r0) : '') + '.');
+      }
+      if (e.caption.length > 2200) err(out.ig, 'Instagram captions stop at 2,200 characters (' + e.caption.length + ' now).');
+      if (tagsOf(e.caption).length > 30) err(out.ig, 'Instagram allows 30 hashtags (' + tagsOf(e.caption).length + ' now).');
+      if (e.link_url && e.caption.indexOf('bio') < 0) warn(out.ig, 'Links in Instagram captions are not clickable; say \u201clink in bio\u201d.');
+    }
+    if (e.platforms.indexOf('facebook') >= 0) {
+      if (!e.caption.trim() && !e.link_url && !im.length && !vi.length) err(out.fb, 'Facebook needs words, a link or media.');
+      else ok(out.fb, 'Facebook: ' + (vi.length ? 'a video' : im.length > 1 ? im.length + ' photos' : im.length ? 'a photo' : e.link_url ? 'a link post' : 'a text post') + (e.link_url && (im.length || vi.length) ? ' with the link in the text' : '') + '.');
+      if (im.length > 10) warn(out.fb, 'Facebook gets the first 10 photos.');
+    }
+    return out;
+  }
+  function valHtml(v) {
+    var rows = v.all.concat(v.ig).concat(v.fb);
+    return rows.length ? '<div class="val">' + rows.map(function (x) { return '<div class="' + x.k + '">' + (x.k === 'e' ? '\u2715 ' : x.k === 'w' ? '! ' : '\u2713 ') + E(x.t) + '</div>'; }).join('') + '</div>' : '';
+  }
+  function thumbHtml(m, i) {
+    var r = ratioOf(m); var isV = String(m.kind || m.mime || '').indexOf('video') >= 0; var bad = !isV && r != null && !igRatioOk(r) && C.edit && C.edit.platforms.indexOf('instagram') >= 0;
+    return '<div class="th" draggable="' + (readOnly() ? 'false' : 'true') + '" data-w121mi="' + i + '">' + (isV ? '<video src="' + E(m.local || m.url || '') + '" muted preload="metadata"></video>' : '<img src="' + E(m.local || m.url || '') + '" alt="">') +
+      (r ? '<span class="rt' + (bad ? ' bad' : '') + '">' + E(isV ? (m.dur ? Math.round(m.dur) + ' s' : 'video') : ratioLabel(r)) + '</span>' : '') + (i === 0 && C.edit && C.edit.media.length > 1 ? '<span class="n1">cover</span>' : '') +
+      (readOnly() ? '' : '<button class="rm" data-w121mrm="' + i + '" title="Remove">\u2715</button>') + (m.uploading ? '<div class="up">Uploading\u2026</div>' : '') +
+      (!isV && !readOnly() && !m.uploading ? '<div class="crop">' + [['0.8', '4:5'], ['1', '1:1'], ['1.91', '1.91']].map(function (c) { return '<button data-w121crop="' + i + '" data-r="' + c[0] + '" title="Crop to ' + c[1] + '">' + c[1] + '</button>'; }).join('') + '</div>' : '<div class="meta">' + (m.size ? num(m.size / 1024) + ' KB' : '') + '</div>') + '</div>';
+  }
+  function linkify(s) { return E(s).replace(/(#[\w\u00c0-\u024f]+)/g, '<span class="ht">$1</span>'); }
+  function previewHtml(e) {
+    var im = imgs(e), vi = vids(e); var tab = e.tab === 'facebook' && e.platforms.indexOf('facebook') >= 0 ? 'facebook' : e.platforms.indexOf('instagram') >= 0 ? 'instagram' : 'facebook';
+    var tabs = '<div class="pvt">' + ['instagram', 'facebook'].filter(function (k) { return e.platforms.indexOf(k) >= 0; }).map(function (k) { return '<a data-w121tab="' + k + '" class="' + (tab === k ? 'on' : '') + '">' + PL[k].label + '</a>'; }).join('') + '</div>';
+    if (!e.platforms.length) return '';
+    var html = '';
+    if (tab === 'instagram') {
+      var r0 = vi.length ? 0.5625 : (ratioOf(im[0]) || 1); r0 = Math.max(0.8, Math.min(1.91, r0)); if (vi.length) r0 = 0.5625;
+      var cap = e.caption || ''; var short = cap.length > 125 ? cap.slice(0, 125) : cap;
+      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>' + E(igHandle()) + '</b></div></div>' +
+        (vi.length || im.length ? '<div class="mm" style="aspect-ratio:' + r0.toFixed(3) + ';' + (vi.length ? 'max-height:420px;' : '') + '">' + (vi.length ? '<video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video>' : '<img src="' + E(im[0].local || im[0].url || '') + '" alt="">') + (!vi.length && im.length > 1 ? '<div class="dots">' + im.slice(0, 10).map(function () { return '<i></i>'; }).join('') + '</div>' : '') + '</div>' : '<div class="mm" style="aspect-ratio:1;display:flex;align-items:center;justify-content:center;color:#999;font-size:12px">A photo or video goes here</div>') +
+        '<div class="mc"><b>' + E(igHandle()) + '</b> ' + linkify(short) + (cap.length > 125 ? '<span class="more">\u2026 more</span>' : '') + '</div></div>';
+    } else {
+      var txt = (e.caption || '') + (e.link_url && (im.length || vi.length) && (e.caption || '').indexOf(e.link_url) < 0 ? '\n\n' + e.link_url : '');
+      var grid = '';
+      if (vi.length) grid = '<div class="mm" style="aspect-ratio:1.7778"><video src="' + E(vi[0].local || vi[0].url || '') + '" muted playsinline></video></div>';
+      else if (im.length === 1) grid = '<div class="mm" style="aspect-ratio:' + Math.max(0.8, Math.min(1.91, ratioOf(im[0]) || 1)).toFixed(3) + '"><img src="' + E(im[0].local || im[0].url || '') + '" alt=""></div>';
+      else if (im.length > 1) { var shown = im.slice(0, im.length >= 3 ? 3 : 2); grid = '<div class="fbg" style="grid-template-columns:' + (shown.length === 2 ? '1fr 1fr' : '2fr 1fr') + ';' + (shown.length === 3 ? 'grid-template-rows:1fr 1fr;' : '') + 'aspect-ratio:1.2">' + shown.map(function (m, i) { return '<div style="' + (shown.length === 3 && i === 0 ? 'grid-row:1 / 3;' : '') + 'overflow:hidden;position:relative"><img src="' + E(m.local || m.url || '') + '" alt="">' + (i === shown.length - 1 && im.length > shown.length ? '<div style="position:absolute;inset:0;background:rgba(0,0,0,.45);color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700">+' + (im.length - shown.length) + '</div>' : '') + '</div>'; }).join('') + '</div>'; }
+      html = '<div class="mock"><div class="mh"><span class="av">WA</span><div><b>Welfare Avenue</b><span>' + E(e.date ? niceDate(e.date) + ' at ' + (e.time || '') : 'Just now') + ' \u00b7 Public</span></div></div><div class="mc">' + E(txt) + '</div>' + grid + (e.link_url && !im.length && !vi.length ? '<div class="lk">' + E((e.link_url.match(/^https?:\/\/([^\/]+)/) || [])[1] || '') + '<b>' + E(e.link_url) + '</b></div>' : '') + '</div>';
+    }
+    return tabs + html;
+  }
+  function resultHtml(e) {
+    if (!e.id) return '';
+    var rows = []; var p = C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] || {};
+    var s = stateOf(Object.assign({}, p, { status: e.status, results: e.results, live: e.live }));
+    (e.platforms || []).forEach(function (k) {
+      var r = (e.results || {})[k], l = (e.live || {})[k]; var c = PL[k]; if (!c) return;
+      var t;
+      if (l && (l.external_id || l.url)) { var n = []; ['reach', 'views', 'likes', 'comments', 'shares', 'saves'].forEach(function (m) { if (l[m] != null) n.push(num(l[m]) + ' ' + m); }); t = '\u2713 Live' + (l.url ? ' (<a href="' + E(l.url) + '" target="_blank" rel="noopener">open</a>)' : '') + (n.length ? ': ' + E(n.join(', ')) : '') + '<br><span style="color:var(--wa-muted)">' + (l.matched === 'caption' ? 'Matched in the analytics by its caption' : 'Matched in the analytics') + ', ' + E(niceWhen(l.published_at)) + '</span>'; }
+      else if (r && r.pending) t = 'Instagram is processing the video; it goes up within a few minutes.';
+      else if (r && (r.id || r.url)) t = (r.manual ? 'Marked posted' : 'Published') + (r.url ? ' (<a href="' + E(r.url) + '" target="_blank" rel="noopener">open</a>)' : '') + '<br><span style="color:var(--wa-muted)">Waiting for the analytics to confirm it (the morning pull).</span>';
+      else if (e.status === 'published' || e.status === 'posted') t = '<span style="color:var(--wa-muted)">Not seen on ' + c.label + ' yet.</span>';
+      else t = '<span style="color:var(--wa-muted)">' + (e.status === 'failed' ? 'Not published.' : 'Not posted yet.') + '</span>';
+      rows.push('<div class="r"><i style="background:' + c.color + '">' + E(c.short) + '</i><div>' + t + '</div></div>');
+    });
+    var man = '';
+    if (staff() && e.manual) man = '<div class="man"><span class="lbl">Mark as posted</span><span class="ro">Posted it from Meta Business Suite or the app? Paste the links if you have them; the hub matches the post in the analytics either way.</span>' + (e.platforms || []).map(function (k) { return '<input type="url" data-w121manurl="' + k + '" placeholder="' + E(PL[k].label) + ' link (optional)">'; }).join('') + '<div style="display:flex;gap:8px"><button class="btn mini" data-w121mandone="1">Mark as posted</button><button class="btn mini ghost" data-w121man="0">Cancel</button></div></div>';
+    return '<div class="sec"><span class="lbl">Where it stands</span><div class="res"><div style="margin:0 0 6px"><span class="pill ' + s.cls + '">' + E(s.label) + '</span> <span class="ro">' + E(s.note || '') + '</span></div>' + rows.join('') + (e.error && e.status === 'failed' ? '<div class="err">' + E(e.error) + '</div>' : '') + man + '</div></div>';
+  }
+  function ownerOpts(cur) {
+    var ms = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); });
+    ms.sort(function (a, b) { var am = a.department === 'marketing' ? 0 : 1, bm = b.department === 'marketing' ? 0 : 1; return am - bm || String(a.name).localeCompare(String(b.name)); });
+    var html = '<option value="">No owner</option>'; var seen = false;
+    ms.forEach(function (m) { if (m.name === cur) seen = true; html += '<option' + (m.name === cur ? ' selected' : '') + '>' + E(m.name) + '</option>'; });
+    if (cur && !seen) html += '<option selected>' + E(cur) + '</option>';
+    return html;
+  }
+  function campaigns() { var s = {}; C.posts.forEach(function (p) { if (p.campaign) s[p.campaign] = 1; }); return Object.keys(s).sort(); }
+  function paintDrawer() {
+    var e = C.edit; var old = document.getElementById('w121dr');
+    if (!e) { if (old) old.remove(); return; }
+    var ro = readOnly(); var v = validate(e); var slot = bestSlot(); var pubOk = canPublish(e.platforms);
+    var scroll = old ? (old.querySelector('.bd') || {}).scrollTop : 0;
+    var aiHtml = '';
+    if (e.aiBusy) aiHtml = '<div class="aio"><div style="cursor:default;color:var(--wa-muted)">Writing\u2026</div></div>';
+    else if (e.ai && e.ai.options) aiHtml = '<div class="aio">' + e.ai.options.map(function (o, i) { return '<div data-w121aipick="' + i + '" title="Use this caption">' + E(o.caption) + (o.note ? '<small>' + E(o.note) + '</small>' : '') + '</div>'; }).join('') + (e.ai.hashtags && e.ai.hashtags.length ? '<div class="tags" style="cursor:default;border-style:dashed">Hashtags (click to add): ' + e.ai.hashtags.map(function (h) { return '<span data-w121tag="' + E(h) + '">' + E(h) + '</span>'; }).join('') + '</div>' : '') + '</div>';
+    var chars = e.caption.length, tags = tagsOf(e.caption).length;
+    var html = '<div class="bk" data-w121close="1"></div><aside class="pn" role="dialog" aria-label="Post">' +
+      '<header><input class="ttl" id="w121title" placeholder="Name this post (only the team sees it)" value="' + E(e.title) + '"' + (ro ? ' disabled' : '') + '>' + (function () { var hs = stateOf(Object.assign({}, C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] || {}, { status: e.status, results: e.results, live: e.live, platforms: e.platforms })); return '<span class="pill ' + hs.cls + '">' + E(e.id ? hs.label : 'New') + '</span>'; })() + '<button class="x" data-w121close="1" title="Close">\u2715</button></header>' +
+      '<div class="bd">' + resultHtml(e) +
+      '<div class="sec"><label>Where</label><div class="pls">' + ['instagram', 'facebook'].map(function (k) { return '<span class="tg' + (e.platforms.indexOf(k) >= 0 ? ' on' : '') + '" data-w121pl="' + k + '"><i style="background:' + PL[k].color + '">' + PL[k].short + '</i>' + PL[k].label + '</span>'; }).join('') + '</div>' + valHtml(v) + '</div>' +
+      '<div class="sec"><label>Photos or a video</label>' + (ro ? '' : '<div class="drop" id="w121drop">Drop photos or a video here, <a data-w121pick="1">choose files</a>, or paste. Photos become JPEGs for Instagram.<input type="file" id="w121file" multiple accept="image/*,video/mp4,video/quicktime" style="display:none"></div>') + '<div class="thumbs" id="w121thumbs">' + e.media.map(thumbHtml).join('') + '</div></div>' +
+      '<div class="sec"><label>Caption</label><textarea id="w121cap" placeholder="What is this post about? Start with the line people see first."' + (ro ? ' disabled' : '') + '>' + E(e.caption) + '</textarea><div class="cc"><span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span></div>' +
+      (ro ? '' : '<div class="ai"><button data-w121ai="write">Write it with AI</button><button data-w121ai="shorten">Shorten</button><button data-w121ai="hashtags">Hashtags</button><select id="w121lang"><option value="en"' + (e.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (e.lang === 'fr' ? ' selected' : '') + '>Fran\u00e7ais</option><option value="both"' + (e.lang === 'both' ? ' selected' : '') + '>Both</option></select></div>' + aiHtml) + '</div>' +
+      '<div class="sec"><label>Link (optional)</label><input type="url" id="w121link" placeholder="https://" value="' + E(e.link_url) + '"' + (ro ? ' disabled' : '') + '></div>' +
+      '<div class="sec"><label>When</label><div class="row2"><input type="date" id="w121date" value="' + E(e.date) + '"' + (ro ? ' disabled' : '') + '><input type="time" id="w121time" value="' + E(e.time) + '"' + (ro ? ' disabled' : '') + '></div>' + (ro ? '' : '<div class="qk">' + (slot ? '<button class="best" data-w121best="1" title="From the analytics insights">Best: ' + E(slot.label) + '</button>' : '') + '<button data-w121quick="tomorrow">Tomorrow 12:00</button><button data-w121quick="nodate">No date yet</button></div>') + '<div class="tz">Times are in your time zone' + (tz() ? ' (' + E(tz()) + ')' : '') + '.' + (e.date ? ' ' + (pubOk ? 'Publishes automatically at this time once scheduled.' : 'Publishing is off: the hub reminds you when it is due and confirms it once it is up.') : '') + '</div></div>' +
+      '<div class="sec row2"><div><span class="lbl">Owner</span><select id="w121owner"' + (ro ? ' disabled' : '') + '>' + ownerOpts(e.owner) + '</select></div><div><span class="lbl">Campaign</span><input type="text" id="w121camp" list="w121camps" value="' + E(e.campaign) + '" placeholder="e.g. Rally Paper 2026"' + (ro ? ' disabled' : '') + '><datalist id="w121camps">' + campaigns().map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></div></div>' +
+      '<div class="sec"><label>Notes for the team</label><textarea id="w121notes" style="min-height:70px" placeholder="Brief, sources, who to tag, the photo credit"' + (ro ? ' disabled' : '') + '>' + E(e.notes) + '</textarea></div>' +
+      '<div class="sec"><label>Preview</label>' + previewHtml(e) + '</div>' +
+      '</div>' + footerHtml(e, v, pubOk, ro) + '</aside>';
+    var d = old; if (!d) { d = document.createElement('div'); d.id = 'w121dr'; document.body.appendChild(d); }
+    var focusId = document.activeElement && d.contains(document.activeElement) ? document.activeElement.id : null; var selS = null, selE = null;
+    try { if (focusId) { selS = document.activeElement.selectionStart; selE = document.activeElement.selectionEnd; } } catch (x) { /* fine */ }
+    d.innerHTML = html;
+    var bd = d.querySelector('.bd'); if (bd && scroll) bd.scrollTop = scroll;
+    if (focusId) { var f = document.getElementById(focusId); if (f) { f.focus(); try { if (selS != null) f.setSelectionRange(selS, selE); } catch (x) { /* fine */ } } }
+  }
+  function footerHtml(e, v, pubOk, ro) {
+    if (!staff()) return '<footer><span class="ro">Read only.</span><span class="sp"></span><button class="btn mini ghost" data-w121close="1">Close</button></footer>';
+    if (ro) return '<footer>' + (e.id ? '<button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' + (e.status === 'posted' || e.status === 'published' ? '<button class="lnk" data-w121reopen="1" title="Back to a draft (does not remove the post from Instagram or Facebook)">Back to draft</button>' : '') + '<button class="btn mini ghost" data-w121close="1">Close</button></footer>';
+    var bad = v.errors > 0; var hasDate = !!(e.date && e.time);
+    var parts = '<footer>' + (e.id ? '<button class="lnk del" data-w121del="1">Delete</button><button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' +
+      '<button class="btn mini ghost" data-w121save="draft">Save draft</button>';
+    if (hasDate) parts += '<button class="btn mini go" data-w121save="schedule"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (pubOk ? 'Schedule to publish' : 'Plan it') + '</button>';
+    if (pubOk) parts += '<button class="btn mini pub" data-w121save="publish"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (e.status === 'failed' ? 'Try again now' : 'Publish now') + '</button>';
+    if (e.status !== 'draft' || hasDate || !pubOk) parts += '<button class="lnk" data-w121man="1">Mark as posted</button>';
+    return parts + '</footer>';
+  }
+  function readForm() {
+    var e = C.edit; if (!e) return;
+    var g = function (id) { var x = document.getElementById(id); return x ? x.value : null; };
+    var v;
+    if ((v = g('w121title')) != null) e.title = v;
+    if ((v = g('w121cap')) != null) e.caption = v;
+    if ((v = g('w121link')) != null) e.link_url = v.trim();
+    if ((v = g('w121date')) != null) e.date = v;
+    if ((v = g('w121time')) != null) e.time = v;
+    if ((v = g('w121owner')) != null) e.owner = v;
+    if ((v = g('w121camp')) != null) e.campaign = v.trim();
+    if ((v = g('w121notes')) != null) e.notes = v;
+  }
+  function rowFromEdit(e) {
+    return { title: e.title.trim() || null, platforms: e.platforms.slice(), format: vids(e).length ? 'reel' : imgs(e).length > 1 ? 'carousel' : imgs(e).length ? 'post' : e.link_url ? 'link' : 'post', caption: e.caption || null, link_url: e.link_url || null, media: e.media.filter(function (m) { return m.url && !m.uploading; }).map(function (m) { return { path: m.path || null, url: m.url, mime: m.mime || null, kind: m.kind || (String(m.mime || '').indexOf('video') >= 0 ? 'video' : 'image'), w: m.w || null, h: m.h || null, size: m.size || null, dur: m.dur || null }; }), scheduled_at: e.date && e.time ? isoOf(e.date, e.time) : (e.date ? isoOf(e.date, '18:00') : null), owner: e.owner || null, campaign: e.campaign || null, notes: e.notes || null };
+  }
+  async function saveEdit(mode) {
+    readForm(); var e = C.edit; if (!e) return;
+    var v = validate(e);
+    if (mode !== 'draft' && v.errors) { toastS('Fix the items marked \u2715 first'); paintDrawer(); return; }
+    if (mode === 'schedule' && !(e.date && e.time)) { toastS('Pick a date and a time'); return; }
+    if (mode === 'schedule' && isoOf(e.date, e.time) < new Date().toISOString()) { if (!confirm('That time has passed. Plan it anyway?')) return; }
+    if (mode === 'publish' && !confirm('Publish to ' + e.platforms.map(function (k) { return PL[k].label; }).join(' and ') + ' now?')) return;
+    var row = rowFromEdit(e);
+    if (mode === 'draft') row.status = e.status === 'scheduled' ? 'scheduled' : (e.status === 'failed' ? 'failed' : 'draft');
+    if (mode === 'schedule') row.status = 'scheduled';
+    if (mode === 'publish') row.status = e.status === 'failed' ? 'failed' : 'draft';
+    if (mode === 'schedule' || row.status !== 'failed') row.error = null;
+    C.busy = true;
+    try {
+      var saved;
+      if (e.id) { saved = await saveRow(e.id, row); logIt(e.id, 'status', e.status, row.status); }
+      else { saved = await insertRow(row); e.id = saved.id; logIt(saved.id, 'created', null, (row.title || row.caption || '').slice(0, 80)); }
+      e.status = row.status; e.dirty = false;
+      if (mode === 'publish') {
+        toastS('Publishing\u2026'); paintDrawer();
+        var r = await fn('social-publish', { action: 'publish', post_id: e.id });
+        var errs = (r.errors || []).length;
+        toastS(r.status === 'published' ? 'Published' : r.status === 'publishing' ? 'Instagram is processing the video; it goes up in a few minutes' : 'Publishing failed' + (errs ? ': ' + r.errors[0] : ''));
+        await load(true);
+        var p2 = C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0]; if (p2) { C.edit = fromPost(p2); paintDrawer(); } else closeComposer(true);
+        return;
+      }
+      toastS(mode === 'schedule' ? (canPublish(e.platforms) ? 'Scheduled: it publishes at ' + e.time : 'Planned for ' + niceDate(e.date) + ' at ' + e.time) : 'Saved');
+      closeComposer(true); paint();
+    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
+    C.busy = false;
+  }
+  async function markPosted() {
+    var e = C.edit; if (!e) return; readForm();
+    var results = Object.assign({}, e.results || {});
+    document.querySelectorAll('#w121dr [data-w121manurl]').forEach(function (inp) { var k = inp.getAttribute('data-w121manurl'); var u = String(inp.value || '').trim(); results[k] = Object.assign({}, results[k] || {}, { manual: true, url: u || null, at: new Date().toISOString() }); });
+    var row = rowFromEdit(e); row.status = 'posted'; row.results = results; row.published_at = e.published_at || (e.date && e.time && isoOf(e.date, e.time) < new Date().toISOString() ? isoOf(e.date, e.time) : new Date().toISOString()); row.error = null;
+    try {
+      if (e.id) await saveRow(e.id, row); else { var n = await insertRow(row); e.id = n.id; }
+      logIt(e.id, 'status', e.status, 'posted (by hand)');
+      toastS('Marked posted; the analytics confirm it on the next pull');
+      closeComposer(true); paint();
+      try { fn('social-publish', { action: 'confirm', days: 30 }).then(function () { load(true); }); } catch (x) { /* next run */ }
+    } catch (x) { toastS('Could not save: ' + (x.message || x)); }
+  }
+
+  /* media: upload as it arrives (photos become JPEGs), crop, reorder */
+  function loadImg(src, cors) { return new Promise(function (res, rej) { var i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = function () { res(i); }; i.onerror = function () { rej(new Error('Could not read that image')); }; i.src = src; }); }
+  async function toJpeg(src, ratio, cors) {
+    var img = await loadImg(src, cors); var w = img.naturalWidth, h = img.naturalHeight; var sx = 0, sy = 0, sw = w, sh = h;
+    if (ratio) { if (w / h > ratio) { sw = Math.round(h * ratio); sx = Math.round((w - sw) / 2); } else { sh = Math.round(w / ratio); sy = Math.round((h - sh) / 2); } }
+    var scale = Math.min(1, 1440 / sw); var cw = Math.max(1, Math.round(sw * scale)), ch = Math.max(1, Math.round(sh * scale));
+    var c = document.createElement('canvas'); c.width = cw; c.height = ch; var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cw, ch); ctx.drawImage(img, sx, sy, sw, sh, 0, 0, cw, ch);
+    var blob = await new Promise(function (res) { c.toBlob(function (b) { res(b); }, 'image/jpeg', 0.9); });
+    if (!blob) throw new Error('Could not convert the image');
+    return { blob: blob, w: cw, h: ch };
+  }
+  function videoMeta(url) { return new Promise(function (res) { var v = document.createElement('video'); v.preload = 'metadata'; v.muted = true; var done = false; var fin = function (x) { if (!done) { done = true; res(x); } }; v.onloadedmetadata = function () { fin({ w: v.videoWidth, h: v.videoHeight, dur: v.duration }); }; v.onerror = function () { fin({}); }; setTimeout(function () { fin({}); }, 6000); v.src = url; }); }
+  function rid() { return Math.random().toString(36).slice(2, 10); }
+  async function upload(blob, ext, mime) {
+    var path = 'calendar/' + today().slice(0, 7) + '/' + Date.now().toString(36) + '-' + rid() + '.' + ext;
+    var r = await db.storage.from('content-images').upload(path, blob, { contentType: mime, upsert: false });
+    if (r && r.error) throw r.error;
+    var pub = db.storage.from('content-images').getPublicUrl(path);
+    return { path: path, url: pub && pub.data ? pub.data.publicUrl : null };
+  }
+  async function addFiles(files) {
+    var e = C.edit; if (!e || readOnly()) return;
+    var list = Array.prototype.slice.call(files || []).filter(function (f) { return /^image\//.test(f.type) || /^video\//.test(f.type); });
+    if (!list.length) { toastS('Photos (JPEG, PNG, HEIC as JPEG) or an MP4 video'); return; }
+    for (var i = 0; i < list.length; i++) {
+      var f = list[i]; var isV = /^video\//.test(f.type); var local = URL.createObjectURL(f);
+      if (isV && f.size > 50 * 1024 * 1024) { toastS(f.name + ' is over 50 MB; trim or compress it first'); continue; }
+      var m = { local: local, uploading: true, kind: isV ? 'video' : 'image', mime: isV ? f.type : 'image/jpeg', size: f.size, name: f.name };
+      e.media.push(m); e.dirty = true; paintDrawer();
+      try {
+        if (isV) { var meta = await videoMeta(local); m.w = meta.w; m.h = meta.h; m.dur = meta.dur; var up = await upload(f, (f.name.split('.').pop() || 'mp4').toLowerCase(), f.type || 'video/mp4'); m.path = up.path; m.url = up.url; }
+        else { var j = await toJpeg(local, null, false); m.w = j.w; m.h = j.h; m.size = j.blob.size; var up2 = await upload(j.blob, 'jpg', 'image/jpeg'); m.path = up2.path; m.url = up2.url; m.local = URL.createObjectURL(j.blob); m.file = j.blob; }
+        m.uploading = false;
+      } catch (x) { e.media = e.media.filter(function (y) { return y !== m; }); toastS('Could not add ' + f.name + ': ' + (x.message || x)); }
+      if (C.edit === e) paintDrawer();
+    }
+  }
+  async function cropAt(i, ratio) {
+    var e = C.edit; if (!e) return; var m = e.media[i]; if (!m) return;
+    m.uploading = true; paintDrawer();
+    try {
+      var src = m.file ? URL.createObjectURL(m.file) : (m.local || m.url);
+      var j = await toJpeg(src, ratio, !m.file && !m.local);
+      var up = await upload(j.blob, 'jpg', 'image/jpeg');
+      Object.assign(m, { path: up.path, url: up.url, w: j.w, h: j.h, size: j.blob.size, local: URL.createObjectURL(j.blob), file: j.blob, uploading: false }); e.dirty = true;
+    } catch (x) { m.uploading = false; toastS('Could not crop it: ' + (x.message || x)); }
+    paintDrawer();
+  }
+
+  /* AI help through the router (task draft) */
+  var CAPTION_SYSTEM = 'You write social media captions for Welfare Avenue, a youth-powered charity in Montreal and Toronto that serves meals every other Sunday and builds community around them. Voice: warm, specific, dignified and plain. Say people we serve, community, neighbours; never beneficiaries, never the homeless, never the less fortunate. No charity boilerplate (making a difference together, in these challenging times). No em dashes. At most two emojis, only when natural. Never invent numbers, names, dates or quotes: use only what the brief gives, and leave a [confirm: ...] placeholder where a fact is needed. Instagram: the first line must hook within 125 characters; put hashtags at the end; links are not clickable, so say link in bio. Facebook: the link can sit in the text. When asked for French, write natural Quebec French; when asked for both, English first, then French after a blank line.';
+  async function ai(mode) {
+    readForm(); var e = C.edit; if (!e) return;
+    var lang = (document.getElementById('w121lang') || {}).value || e.lang || 'en'; e.lang = lang;
+    var brief = { mode: mode, language: lang === 'fr' ? 'French' : lang === 'both' ? 'English then French' : 'English', title: e.title, notes: e.notes, current_caption: e.caption, platforms: e.platforms, campaign: e.campaign, link: e.link_url, when: e.date ? niceDate(e.date) + ' ' + e.time : null, media: imgs(e).length ? imgs(e).length + ' photo(s)' : vids(e).length ? 'a video (reel)' : 'none' };
+    var ask = mode === 'write' ? 'Write three different caption options from the brief (and the current caption if there is one). Vary the opening line.' : mode === 'shorten' ? 'Shorten the current caption into three tighter options (under 300 characters each), keeping the facts and the ask.' : 'Suggest 8 to 12 relevant hashtags for Montreal or Toronto community, food and volunteering, and one option of the current caption with the best 3 to 6 of them at the end.';
+    if (mode !== 'write' && !e.caption.trim()) { toastS('Write or generate a caption first'); return; }
+    e.aiBusy = true; e.ai = null; paintDrawer();
+    try {
+      var r = await db.functions.invoke('llm', { body: { task: 'draft', caller: 'content-calendar', max_tokens: 1400, temperature: 0.7, system: CAPTION_SYSTEM, messages: [{ role: 'user', content: ask + '\n\nBRIEF:\n' + JSON.stringify(brief, null, 1) }], tools: [{ name: 'captions', description: 'Caption options and hashtags.', input_schema: { type: 'object', properties: { options: { type: 'array', items: { type: 'object', properties: { caption: { type: 'string' }, note: { type: 'string', description: 'what this option does differently, a few words' } }, required: ['caption'] } }, hashtags: { type: 'array', items: { type: 'string' } } }, required: ['options'] } }], tool_choice: { type: 'tool', name: 'captions' } } });
+      if (r.error) throw r.error;
+      var tu = ((r.data && r.data.content) || []).filter(function (c) { return c.type === 'tool_use'; })[0];
+      var inp = (tu && tu.input) || {};
+      var opts = (inp.options || []).map(function (o) { return { caption: String(o.caption || '').replace(/\u2014/g, ',').trim(), note: String(o.note || '').trim() }; }).filter(function (o) { return o.caption; }).slice(0, 3);
+      var tags = (inp.hashtags || []).map(function (h) { h = String(h || '').trim().replace(/\s+/g, ''); return h ? (h.charAt(0) === '#' ? h : '#' + h) : ''; }).filter(Boolean).slice(0, 14);
+      if (!opts.length && !tags.length) throw new Error('nothing came back');
+      if (C.edit === e) { e.ai = { options: opts, hashtags: tags }; }
+    } catch (x) { toastS('AI help failed: ' + (x.message || x)); }
+    e.aiBusy = false; if (C.edit === e) paintDrawer();
+  }
+
+  /* ---------- routing, nav ---------- */
+  function openCal(sub) {
+    if (!allowed()) return false;
+    try { showPanel('contentcal'); } catch (e) { /* below */ }
+    try { var sec0 = panel(); if (sec0 && !sec0.classList.contains('active')) { document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); }); sec0.classList.add('active'); window.scrollTo({ top: 0 }); } } catch (e) { /* fine */ }
+    try { document.querySelectorAll('#tabBar .tab.active').forEach(function (t) { t.classList.remove('active'); }); var b = document.querySelector('#tabBar .tab[data-tab="contentcal"]'); if (b) { b.classList.add('active'); var row = b.closest('.w42d'); if (row) row.classList.add('w116open', 'w116act'); } } catch (e) { /* fine */ }
+    try { document.title = 'Content calendar \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    load(false).then(function () {
+      var pre = window.__w121prefill; if (pre && staff()) { window.__w121prefill = null; openComposer(null, pre); return; }
+      if (sub === 'new' && staff()) { openComposer(null); return; }
+      if (sub && /^\d+$/.test(sub)) { var p = C.posts.filter(function (x) { return String(x.id) === sub; })[0]; if (p) openComposer(p); else toastS('That post is not in the calendar any more'); }
+    });
+    return true;
+  }
+  function route() { var h = decodeURIComponent(location.hash || '').replace(/^#/, ''); if (h === 'contentcal' || h.indexOf('contentcal/') === 0) { return openCal(h.split('/')[1] || ''); } return false; }
+  if (typeof applyHash === 'function') { var __ah121 = applyHash; applyHash = function () { if (route()) return; return __ah121.apply(this, arguments); }; }
+  window.addEventListener('hashchange', function () { try { var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#contentcal') !== 0 && C.edit) closeComposer(true); route(); } catch (e) { /* fine */ } });
+  function enrol() {
+    try {
+      if (typeof WA40_TABS !== 'undefined' && WA40_TABS.indexOf('contentcal') < 0) WA40_TABS.push('contentcal');
+      if (typeof WA40_DEFAULTS !== 'undefined') ['admin', 'leader', 'member'].forEach(function (r) { if (WA40_DEFAULTS[r] && WA40_DEFAULTS[r].indexOf('contentcal') < 0) WA40_DEFAULTS[r].push('contentcal'); });
+      if (typeof wa40Allowed === 'function' && !wa40Allowed.__w121) { var __al = wa40Allowed; wa40Allowed = function () { var a = __al.apply(this, arguments) || []; if ((a.indexOf('marketing') >= 0 || board()) && a.indexOf('contentcal') < 0) a = a.concat(['contentcal']); return a; }; wa40Allowed.__w121 = true; wa40Allowed.__w120 = true; }
+    } catch (e) { /* fine */ }
+  }
+  function placeTab() {
+    try {
+      if (!allowed()) return;
+      var bar = document.getElementById('tabBar'); if (!bar) return;
+      var b = bar.querySelector('.tab[data-tab="contentcal"]');
+      if (!b) { b = document.createElement('button'); b.className = 'tab w116tool'; b.dataset.tab = 'contentcal'; b.innerHTML = '<span class="tabdot" style="background:' + PURPLE + '"></span>Content calendar'; b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); location.hash = '#contentcal'; }, true); }
+      var mk = bar.querySelector('.tab[data-tab="marketing"]'); var row = mk && mk.closest ? mk.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
+      if (sub) { var an = sub.querySelector('.tab[data-tab="socialstats"]'); if (b.parentNode !== sub || (an && b.nextSibling !== an && an.previousSibling !== b)) { if (an) sub.insertBefore(b, an); else sub.appendChild(b); } b.classList.add('w116tool'); b.style.display = ''; }
+      else if (!b.parentNode) { b.style.display = 'none'; bar.appendChild(b); }
+    } catch (e) { /* fine */ }
+  }
+  var navT = null;
+  function watch() {
+    var bar = document.getElementById('tabBar'); if (!bar || bar.dataset.w121watch) return;
+    bar.dataset.w121watch = '1';
+    new MutationObserver(function () { if (navT) return; navT = setTimeout(function () { navT = null; placeTab(); }, 140); }).observe(bar, { childList: true, subtree: true });
+    var host = document.getElementById('w116host') || document.getElementById('team');
+    if (host && !host.dataset.w121watch) { host.dataset.w121watch = '1'; new MutationObserver(function () { setTimeout(pill, 60); }).observe(host, { childList: true, subtree: true }); }
+  }
+  function pill() {
+    try {
+      if (!allowed()) return;
+      var h = decodeURIComponent(location.hash || ''); if (h.indexOf('#team/marketing') !== 0) return;
+      var seg = document.querySelector('#team .w116seg'); if (!seg || seg.querySelector('[data-w116go="#contentcal"]')) return;
+      var a = document.createElement('a'); a.setAttribute('data-w116go', '#contentcal'); a.textContent = 'Content calendar';
+      var an = seg.querySelector('[data-w116go="#socialstats"]'); if (an) seg.insertBefore(a, an); else seg.appendChild(a);
+    } catch (e) { /* fine */ }
+  }
+  if (typeof startApp === 'function') {
+    var __sa121 = startApp;
+    startApp = async function () {
+      var r = await __sa121.apply(this, arguments);
+      try { enrol(); panel(); placeTab(); watch(); [300, 1500, 3500].forEach(function (ms) { setTimeout(placeTab, ms); }); route(); } catch (e) { console.warn('wave121 boot', e); }
+      return r;
+    };
+  }
+  window.w121Compose = function (prefill) { window.__w121prefill = prefill || null; location.hash = '#contentcal'; };
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    var inCal = t.closest('#contentcal'), inDr = t.closest('#w121dr');
+    if (!inCal && !inDr) return;
+    if ((el = t.closest('[data-w121go]'))) { e.preventDefault(); location.hash = el.getAttribute('data-w121go'); return; }
+    if (inCal) {
+      if ((el = t.closest('[data-w121undo]'))) { e.preventDefault(); var u = C.undo; C.undo = null; if (u) { try { await saveRow(u.id, u.patch); toastS('Undone'); } catch (x) { toastS('Could not undo: ' + (x.message || x)); } } paint(); return; }
+      if ((el = t.closest('[data-w121view]'))) { C.view = el.getAttribute('data-w121view'); paint(); return; }
+      if ((el = t.closest('[data-w121nav]'))) { var n = Number(el.getAttribute('data-w121nav')); if (n === 0) C.anchor = today(); else C.anchor = C.view === 'month' ? addMonths(C.anchor, n) : addDays(C.anchor, 7 * n); paint(); return; }
+      if ((el = t.closest('[data-w121fpl]'))) { C.filter.pl = el.getAttribute('data-w121fpl'); paint(); return; }
+      if ((el = t.closest('[data-w121fst]'))) { C.filter.st = el.getAttribute('data-w121fst'); paint(); return; }
+      if ((el = t.closest('[data-w121jump]')) && el.getAttribute('data-w121jump') === 'attn') { C.filter.st = 'attn'; C.view = 'list'; paint(); return; }
+      if ((el = t.closest('[data-w121more]'))) { C.anchor = el.getAttribute('data-w121more'); C.view = 'week'; paint(); return; }
+      if ((el = t.closest('[data-w121set]'))) { C.settingsOpen = !C.settingsOpen; paint(); if (C.settingsOpen && !C.channels) { try { var ch = await fn('checkin-post', { action: 'channels' }); C.channels = ch.channels || []; } catch (x) { C.channels = []; } paint(); } return; }
+      if ((el = t.closest('[data-w121saveset]'))) { var on = !!(document.getElementById('w121slack') || {}).checked; var chn = (document.getElementById('w121chan') || {}).value || 'social-media'; try { var sres = await fn('social-publish', { action: 'settings', value: { slack_confirm: on, slack_channel: chn } }); if (C.cap) C.cap.settings = sres.settings; toastS(on ? 'Slack confirmations on in #' + chn : 'Slack confirmations off'); C.settingsOpen = false; } catch (x) { toastS('Could not save: ' + (x.message || x)); } paint(); return; }
+      if ((el = t.closest('[data-w121new]'))) { e.preventDefault(); e.stopPropagation(); var dv = el.getAttribute('data-w121new'); openComposer(dv === '1' ? null : dv); return; }
+      if ((el = t.closest('[data-w121open]'))) { var id = el.getAttribute('data-w121open'); var p = C.posts.filter(function (x) { return String(x.id) === String(id); })[0]; if (p) { openComposer(p); try { history.replaceState(null, '', '#contentcal/' + p.id); } catch (x) { /* fine */ } } return; }
+      return;
+    }
+    /* the composer */
+    var ed = C.edit; if (!ed) return;
+    if ((el = t.closest('[data-w121close]'))) { e.preventDefault(); closeComposer(false); return; }
+    if (readOnly() && !t.closest('[data-w121dup]') && !t.closest('[data-w121reopen]') && !t.closest('[data-w121tab]')) return;
+    if ((el = t.closest('[data-w121tab]'))) { ed.tab = el.getAttribute('data-w121tab'); readForm(); paintDrawer(); return; }
+    if ((el = t.closest('[data-w121pl]'))) { readForm(); var k = el.getAttribute('data-w121pl'); var i = ed.platforms.indexOf(k); if (i >= 0) ed.platforms.splice(i, 1); else ed.platforms.push(k); ed.platforms.sort(); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w121pick]'))) { e.preventDefault(); var fi = document.getElementById('w121file'); if (fi) fi.click(); return; }
+    if ((el = t.closest('[data-w121mrm]'))) { e.preventDefault(); readForm(); ed.media.splice(Number(el.getAttribute('data-w121mrm')), 1); ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w121crop]'))) { e.preventDefault(); readForm(); await cropAt(Number(el.getAttribute('data-w121crop')), Number(el.getAttribute('data-r'))); return; }
+    if ((el = t.closest('[data-w121ai]'))) { e.preventDefault(); await ai(el.getAttribute('data-w121ai')); return; }
+    if ((el = t.closest('[data-w121aipick]'))) { readForm(); var o = ed.ai && ed.ai.options[Number(el.getAttribute('data-w121aipick'))]; if (o) { ed.caption = o.caption; ed.dirty = true; ed.ai = null; paintDrawer(); } return; }
+    if ((el = t.closest('[data-w121tag]'))) { readForm(); var tg = el.getAttribute('data-w121tag'); if (ed.caption.indexOf(tg) < 0) { ed.caption = ed.caption.replace(/\s+$/, '') + (/(#[\w\u00c0-\u024f]+\s*)$/.test(ed.caption.trim()) ? ' ' : '\n\n') + tg; ed.dirty = true; } el.remove(); var ta = document.getElementById('w121cap'); if (ta) ta.value = ed.caption; return; }
+    if ((el = t.closest('[data-w121best]'))) { readForm(); var ns = nextSlotDate(bestSlot()); ed.date = ns.date; ed.time = ns.time; ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w121quick]'))) { readForm(); var q = el.getAttribute('data-w121quick'); if (q === 'nodate') { ed.date = ''; ed.time = ''; } else { ed.date = addDays(today(), 1); ed.time = '12:00'; } ed.dirty = true; paintDrawer(); return; }
+    if ((el = t.closest('[data-w121save]'))) { e.preventDefault(); await saveEdit(el.getAttribute('data-w121save')); return; }
+    if ((el = t.closest('[data-w121man]'))) { e.preventDefault(); readForm(); ed.manual = el.getAttribute('data-w121man') === '1'; paintDrawer(); var bd = document.querySelector('#w121dr .bd'); if (bd && ed.manual) bd.scrollTop = 0; return; }
+    if ((el = t.closest('[data-w121mandone]'))) { e.preventDefault(); await markPosted(); return; }
+    if ((el = t.closest('[data-w121dup]'))) { e.preventDefault(); readForm(); try { var row = rowFromEdit(ed); row.title = (row.title || titleOf(ed)) + ' (copy)'; row.scheduled_at = null; row.status = 'draft'; var n2 = await insertRow(row); logIt(n2.id, 'created', null, 'copy of #' + ed.id); toastS('Copied to the ideas tray'); closeComposer(true); paint(); } catch (x) { toastS('Could not copy: ' + (x.message || x)); } return; }
+    if ((el = t.closest('[data-w121reopen]'))) { e.preventDefault(); if (!confirm('Back to a draft? This does not take it down from Instagram or Facebook.')) return; try { await saveRow(ed.id, { status: 'draft', results: {}, live: {}, published_at: null, error: null }); logIt(ed.id, 'status', ed.status, 'draft'); toastS('Back to a draft'); closeComposer(true); paint(); } catch (x) { toastS('Could not change it: ' + (x.message || x)); } return; }
+    if ((el = t.closest('[data-w121del]'))) { e.preventDefault(); if (!confirm('Delete this post from the calendar?')) return; try { var r = await db.from('content_posts').delete().eq('id', ed.id); if (r.error) throw r.error; logIt(ed.id, 'deleted', titleOf(ed), null); C.posts = C.posts.filter(function (x) { return String(x.id) !== String(ed.id); }); toastS('Deleted'); closeComposer(true); paint(); } catch (x) { toastS('Could not delete: ' + (x.message || x)); } return; }
+  }, true);
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w121q') { C.filter.q = t.value; clearTimeout(C.qT); C.qT = setTimeout(paint, 180); return; }
+    if (!C.edit || !t.closest || !t.closest('#w121dr')) return;
+    C.edit.dirty = true;
+    if (t.id === 'w121cap') { readForm(); var cc = document.querySelector('#w121dr .cc'); if (cc) { var chars = C.edit.caption.length, tags = tagsOf(C.edit.caption).length; cc.innerHTML = '<span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span>'; } clearTimeout(C.pvT); C.pvT = setTimeout(function () { if (!C.edit) return; readForm(); var pv = document.querySelector('#w121dr .sec:last-child'); var box = pv ? pv : null; if (box) box.innerHTML = '<label>Preview</label>' + previewHtml(C.edit); var val = document.querySelector('#w121dr .pls + .val, #w121dr .pls'); var sec = document.querySelector('#w121dr [data-w121pl]'); if (sec) { var host = sec.closest('.sec'); var v = validate(C.edit); var old = host.querySelector('.val'); var nv = valHtml(v); if (old) old.outerHTML = nv || '<div class="val"></div>'; else host.insertAdjacentHTML('beforeend', nv); } var f = document.querySelector('#w121dr footer'); if (f) f.outerHTML = footerHtml(C.edit, validate(C.edit), canPublish(C.edit.platforms), readOnly()); }, 350); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !C.edit || !t.closest || !t.closest('#w121dr')) return;
+    if (t.id === 'w121file') { addFiles(t.files); t.value = ''; return; }
+    if (t.id === 'w121lang') { C.edit.lang = t.value; return; }
+    if (t.id === 'w121date' || t.id === 'w121time' || t.id === 'w121link') { readForm(); C.edit.dirty = true; paintDrawer(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!C.edit) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeComposer(false); return; }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !readOnly()) { e.preventDefault(); saveEdit('draft'); }
+  });
+  document.addEventListener('paste', function (e) {
+    if (!C.edit || readOnly()) return; var t = e.target; if (!t || !t.closest || !t.closest('#w121dr')) return;
+    var items = (e.clipboardData && e.clipboardData.files) || []; if (!items.length) return;
+    e.preventDefault(); addFiles(items);
+  });
+  /* dropping files on the composer, and reordering the thumbnails */
+  var mdrag = null;
+  document.addEventListener('dragstart', function (e) { var th = e.target && e.target.closest && e.target.closest('#w121dr [data-w121mi]'); if (!th || th.getAttribute('draggable') !== 'true') return; mdrag = Number(th.getAttribute('data-w121mi')); th.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'w121m'); } catch (x) { /* fine */ } });
+  document.addEventListener('dragover', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w121dr')) return;
+    if (mdrag != null) { if (t.closest('[data-w121mi]')) e.preventDefault(); return; }
+    var types = (e.dataTransfer && e.dataTransfer.types) || []; if (Array.prototype.indexOf.call(types, 'Files') < 0) return;
+    e.preventDefault(); var d = document.getElementById('w121drop'); if (d) d.classList.add('over');
+  });
+  document.addEventListener('dragleave', function (e) { var d = document.getElementById('w121drop'); if (d && e.target === d) d.classList.remove('over'); });
+  document.addEventListener('drop', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w121dr') || !C.edit) return;
+    var d = document.getElementById('w121drop'); if (d) d.classList.remove('over');
+    if (mdrag != null) { var tgt = t.closest('[data-w121mi]'); var from = mdrag; mdrag = null; if (!tgt) return; e.preventDefault(); var to = Number(tgt.getAttribute('data-w121mi')); if (from === to) return; readForm(); var m = C.edit.media.splice(from, 1)[0]; C.edit.media.splice(to, 0, m); C.edit.dirty = true; paintDrawer(); return; }
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) { e.preventDefault(); readForm(); addFiles(e.dataTransfer.files); }
+  });
+  document.addEventListener('dragend', function () { mdrag = null; document.querySelectorAll('#w121dr .dragging').forEach(function (x) { x.classList.remove('dragging'); }); });
+  window.w121Debug = function () { return { view: C.view, anchor: C.anchor, posts: C.posts.length, loaded: C.loaded, cap: C.cap ? { token: C.cap.token, can: C.cap.can } : null, edit: C.edit ? { id: C.edit.id, status: C.edit.status, platforms: C.edit.platforms, media: C.edit.media.length } : null, best: bestSlot() }; };
+})();

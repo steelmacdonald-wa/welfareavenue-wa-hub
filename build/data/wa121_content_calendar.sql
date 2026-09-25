@@ -1,0 +1,6 @@
+-- applied 25/09/26 as migration wa121_content_calendar (full text in Supabase migrations):
+-- content_posts (title, platforms[], format, caption, link_url, media jsonb, scheduled_at, status draft|scheduled|publishing|published|failed|posted|cancelled,
+--   results jsonb per platform {id,url,at | pending,container | manual,url}, live jsonb per platform (matched social_posts numbers), error, owner, campaign, notes, published_at)
+-- RLS: read staff and board; insert, update, delete staff. content-images bucket: staff update policy added (calendar/ uploads).
+-- social_notes gains kind (note | insights) and data jsonb; social_overview v2 adds posts_all (90 days) and insights.
+-- cron wa-social-publish every 5 minutes: social-publish {action:'run'} (due posts, pending reels, stuck posts, confirmations).
