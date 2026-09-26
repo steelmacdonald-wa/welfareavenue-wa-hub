@@ -6,7 +6,7 @@
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.calendar) W.tours.calendar = { tab: 'calendar', icon: 'clock', hash: '#calendar', steps: [
-        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays.'),
+        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays, and for the board and the executives, the board\u2019s dates.'),
         S('#w124cal .w124bar', 'Move around', 'Step through the months, jump back to today, and switch between the month grid and the agenda list.', OPT),
         S('#w124cal .w124layers', 'Layers', 'Switch each layer on or off; the Hub remembers your choice. My meetings are only the meetings you are invited to.', OPT),
         S('#w124cal .w124band', 'All month long', 'Fundraising events that run all month or all season sit above the grid.', OPT),

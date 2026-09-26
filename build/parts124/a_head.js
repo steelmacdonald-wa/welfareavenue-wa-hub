@@ -38,6 +38,8 @@
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var LAYERS = [
     { k: 'fund', l: 'Fundraising events', c: '#C8961F', bg: 'rgba(220,165,39,.18)', ink: '#6b4d05', icon: 'heart' },
+    /* wave130: the board's dates (board meetings, the committees' week before, the fiscal year-end); only for those who can read the board */
+    { k: 'board', l: 'Board', c: '#4a4944', bg: 'rgba(31,32,30,.09)', ink: INK, icon: 'seat' },
     { k: 'meet', l: 'My meetings', c: GREEN, bg: 'rgba(16,63,57,.10)', ink: GREEN, icon: 'people' },
     { k: 'post', l: 'Marketing posts', c: PURPLE, bg: 'rgba(111,100,171,.14)', ink: '#4a4180', icon: 'megaphone' },
     { k: 'vol', l: 'Volunteering', c: TEAL, bg: 'rgba(42,140,122,.14)', ink: '#1d6b5d', icon: 'pot' },
@@ -70,7 +72,8 @@
     plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
     list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
-    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
+    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
   };
   function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }

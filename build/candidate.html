@@ -829,7 +829,7 @@ const SECTIONS = {
   fundraising: {
     title: "Fundraising &amp; Finances",
     color: "var(--c-fund)",
-    read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in and he has signaled he needs to step back. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
+    read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
     progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
     priorities: [
       "Finalize Rami's title and job description",
@@ -2752,9 +2752,12 @@ async function waGetRecommendation(id, deptId, btn) {
     if (!rec) throw new Error(data && data.error || "empty");
     var row = (typeof DB_DECISIONS !== "undefined" ? DB_DECISIONS : []).find(function (d) { return d.id === id; });
     if (row) row.recommendation = rec;
-    var slot = document.getElementById("rec-" + deptId + "-" + id);
-    if (slot) slot.innerHTML = '<div class="rec-box">' + esc(rec) + '</div>';
-    btn.innerHTML = "&#8635; Refresh recommendation";
+    /* wave130: every copy of the card (the classic department card and the team page), and the one next to the button */
+    var slots = Array.prototype.slice.call(document.querySelectorAll('[id="rec-' + deptId + '-' + id + '"], [id="w116rec-' + deptId + '-' + id + '"]'));
+    var near = btn.closest && btn.closest("[data-dec]"), nearSlot = near && near.querySelector(".exec-rec");
+    if (nearSlot && slots.indexOf(nearSlot) < 0) slots.push(nearSlot);
+    slots.forEach(function (slot) { slot.innerHTML = '<div class="rec-box">' + esc(rec) + '</div>'; });
+    btn.innerHTML = /the recommendation|a recommendation/.test(prior) ? "&#8635; Refresh the recommendation" : "&#8635; Refresh recommendation";
     toast("Recommendation ready");
   } catch (e) {
     btn.innerHTML = prior;
@@ -25788,7 +25791,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (can) can.addEventListener('click', function () {
         openModal(
           '<h3>Cancel this event?</h3>' +
-          '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ev.code || 'The event') + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
+          '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ('This serving' + (ev.code ? ' (' + ev.code + ')' : ''))) + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
           '<label class="w101lbl">Reason (kept in the event notes)</label>' +
           '<input type="text" id="w106why" maxlength="200" style="width:100%;box-sizing:border-box" />' +
           '<div style="margin-top:12px"><button class="btn" id="w106go">Cancel the event</button> <button class="btn ghost" id="w106no">Keep it</button></div>'
@@ -29155,7 +29158,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return '<div class="d" data-dec="' + E(x.id) + '"><b>' + E(x.title) + '</b>' +
         '<div class="m"><span class="ex">' + E(ex) + ' decides</span>' + (x.reason_category ? '<span>' + E(x.reason_category) + '</span>' : '') + (x.opened_at ? '<span>open since ' + E(String(x.opened_at).slice(0, 10)) + '</span>' : '') + '</div>' +
         (x.suggested_move ? '<div class="mv">Suggested move: ' + E(x.suggested_move) + '</div>' : '') +
-        '<div class="exec-rec" id="rec-' + E(d) + '-' + E(x.id) + '">' + (x.recommendation ? '<div class="rec-box">' + E(x.recommendation) + '</div>' : '') + '</div>' +
+        '<div class="exec-rec" id="w116rec-' + E(d) + '-' + E(x.id) + '">' + (x.recommendation ? '<div class="rec-box">' + E(x.recommendation) + '</div>' : '') + '</div>' +
         '<div class="acts">' + (staff() ? '<button data-rec="' + E(x.id) + '" data-w116act="rec" data-d="' + E(d) + '">' + (x.recommendation ? '&#8635; Refresh the recommendation' : '&#10024; Get a recommendation') + '</button>' : '') + '<a data-w116go="#decision/' + E(x.id) + '">Open on the dashboard &rarr;</a></div></div>';
     }).join('') + '</div></div>';
   }
@@ -32212,7 +32215,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.entity_type === 'volunteer_event' && c.field === 'status' && /^cancelled/.test(String(c.new_value || '')); }).forEach(function (c) { reasons[String(c.entity_id)] = { why: String(c.new_value).replace(/^cancelled:?\s*/, ''), when: c.changed_at }; });
       ((v && v.data) || []).filter(function (ev) { return ev.status === 'cancelled' && String(ev.event_date || '') >= since; }).forEach(function (ev) {
         var r = reasons[String(ev.id)] || {};
-        items.push({ id: 'v' + ev.id, kind: 'event', title: (ev.title || ev.code || 'Serving event') + ' cancelled', body: [ev.event_date ? 'Was planned for ' + fmtDate(ev.event_date) : '', ev.location, r.why].filter(Boolean).join(' \u00b7 '), when: r.when || ev.event_date, link: '#volunteering' });
+        items.push({ id: 'v' + ev.id, kind: 'event', title: (ev.title || (/^\d{4}-\d{2}-\d{2}/.test(String(ev.event_date || '')) && new Date(String(ev.event_date).slice(0, 10) + 'T12:00:00').getDay() === 0 ? 'Sunday serving' : 'Serving event')) + ' cancelled', body: [ev.event_date ? 'Was planned for ' + fmtDate(ev.event_date) : '', ev.location, r.why].filter(Boolean).join(' \u00b7 '), when: r.when || ev.event_date, link: '#volunteering' });
       });
     } catch (e) { /* fine */ }
     items.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.when || 0) - new Date(a.when || 0); });
@@ -42252,6 +42255,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var LAYERS = [
     { k: 'fund', l: 'Fundraising events', c: '#C8961F', bg: 'rgba(220,165,39,.18)', ink: '#6b4d05', icon: 'heart' },
+    /* wave130: the board's dates (board meetings, the committees' week before, the fiscal year-end); only for those who can read the board */
+    { k: 'board', l: 'Board', c: '#4a4944', bg: 'rgba(31,32,30,.09)', ink: INK, icon: 'seat' },
     { k: 'meet', l: 'My meetings', c: GREEN, bg: 'rgba(16,63,57,.10)', ink: GREEN, icon: 'people' },
     { k: 'post', l: 'Marketing posts', c: PURPLE, bg: 'rgba(111,100,171,.14)', ink: '#4a4180', icon: 'megaphone' },
     { k: 'vol', l: 'Volunteering', c: TEAL, bg: 'rgba(42,140,122,.14)', ink: '#1d6b5d', icon: 'pot' },
@@ -42284,7 +42289,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
     list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
-    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
+    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
   };
   function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -42470,7 +42476,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var C = {
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
-    fund: [], goals: null, bdays: [], projects: [], loadedBase: 0, loadingBase: null,
+    fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
     range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
@@ -42498,16 +42504,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         q(db.from('fund_events').select('*').order('sort').order('start_date')),
         q(db.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle()),
         staffOk() ? q(db.from('hub_birthdays').select('*')) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] })
+        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] }),
+        staffOk() || boardOk() ? q(db.from('board_meetings').select('id, meets_at, kind, title, status, agenda_url, notes_url, note').order('meets_at')) : Promise.resolve({ data: [] })
       ]);
       if (a[0].data) C.fund = a[0].data;
       C.goals = (a[1].data && a[1].data.value) || C.goals || { minimum: 10000, healthy: 15000, target: 20000, notes: [], planning: [] };
       if (a[2].data) C.bdays = a[2].data;
       if (a[3].data) C.projects = a[3].data;
+      if (Array.isArray(a[4].data)) C.boardMeets = a[4].data.filter(function (m) { return m && m.meets_at && lower(m.status) !== 'cancelled'; });
       C.loadedBase = Date.now();
     })();
     try { await C.loadingBase; } finally { C.loadingBase = null; }
   }
+  function hasBoard() { return C.boardMeets.length > 0; }
   function myBirthday() { var em = me().email; return C.bdays.filter(function (b) { return lower(b.email) === em; })[0] || null; }
 
   /* ---------- the range data: meetings, posts, servings ---------- */
@@ -42584,8 +42593,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? 'Serving' : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
     });
+    if (L.board && hasBoard()) {
+      C.boardMeets.forEach(function (m) {
+        var s = new Date(m.meets_at); if (isNaN(s.getTime())) return;
+        var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12);
+        if (local >= from && local < to) out.push({ k: 'board', id: 'bm' + m.id, ref: m, day: ymd(local), at: s, time: fmtTime(s), title: m.title || 'Board meeting', sub: lower(m.status) === 'tentative' ? 'Tentative' : '', past: s < new Date() });
+        /* the committees meet the week before a board meeting that is still ahead */
+        var due = addDays(local, -7);
+        if (local >= t0 && due >= from && due < to) out.push({ k: 'board', id: 'bc' + m.id, ref: m, cm: true, day: ymd(due), allDay: true, title: 'Committee meetings due', sub: 'A week before the ' + (m.title || 'board meeting'), past: due < t0 });
+      });
+      /* the fiscal year ends on September 30 */
+      for (var fy = from.getFullYear(); fy <= to.getFullYear(); fy++) {
+        var fe = mk(fy, 8, 30, 12);
+        if (fe >= from && fe < to) out.push({ k: 'board', id: 'fy' + fy, fy: fy, day: ymd(fe), allDay: true, title: 'Fiscal year ends', sub: 'FY' + fy + ' closes', past: fe < t0 });
+      }
+    }
     if (L.bday) C.bdays.forEach(function (b) {
       for (var y = from.getFullYear(); y <= to.getFullYear(); y++) {
         var d = mk(y, b.month - 1, b.day, 12); if (d.getMonth() !== b.month - 1) continue;
@@ -42619,7 +42643,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('calendar'); if (!sec) return null;
     /* the board has no Home: the calendar sits in Strategy, without the volunteering and birthday layers */
     var bv = boardOk() && !staffOk();
-    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? 'Fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings, marketing posts, volunteering and birthdays, in one place.');
+    var hb = hasBoard();
+    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? (hb ? 'Board meetings, fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings and marketing posts, in one place.') : 'Fundraising events, ' + (hb ? 'board dates, ' : '') + 'your meetings, marketing posts, volunteering and birthdays, in one place.');
     var h = document.getElementById('w124cal');
     if (!h) { h = document.createElement('div'); h.id = 'w124cal'; sec.appendChild(h); }
     return h;
@@ -42692,7 +42717,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     C.idx = {}; list.forEach(function (it) { C.idx[it.id] = it; });
     var monthOnly = list.filter(function (it) { var d = parseDay(it.day); return d.getMonth() === C.anchor.getMonth(); });
     var cnt = chipCounts(monthOnly);
-    var chips = LAYERS.filter(function (x) { return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
+    var chips = LAYERS.filter(function (x) { if (x.k === 'board') return hasBoard(); return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
@@ -42857,6 +42882,28 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
       acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+    } else if (it.k === 'board') {
+      if (it.fy) {
+        rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));
+        rows.push(kv('doc', 'The last day of FY' + it.fy + ' (October 1, ' + (it.fy - 1) + ' to September 30, ' + it.fy + '). The books close and the year-end review starts.'));
+        if (staffOk()) acts.push('<a class="w124btn ghost" data-w124go="#finances">Finances</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
+      } else if (it.cm) {
+        var bm = new Date(r.meets_at);
+        rows.push(kv('clock', 'By ' + E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
+        rows.push(kv('people', 'Each committee meets before the ' + E(r.title || 'board meeting') + ' on ' + E(fmtDate(bm, { weekday: 'long', month: 'long', day: 'numeric' })) + ', so everyone arrives informed.'));
+        acts.push('<a class="w124btn" data-w124go="#committees">Committees</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      } else {
+        var ms = new Date(r.meets_at);
+        rows.push(kv('clock', E(fmtDate(ms, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })) + ', ' + E(fmtTime(ms))));
+        var stw = { tentative: 'Tentative', scheduled: 'Scheduled', confirmed: 'Confirmed', held: 'Held' }[lower(r.status)] || '';
+        if (stw) rows.push(kv('spark', E(stw)));
+        if (r.note) html += '<div class="note">' + E(clip(r.note, 500)) + '</div>';
+        if (r.agenda_url) acts.push('<a class="w124btn" href="' + E(r.agenda_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>');
+        if (r.notes_url) acts.push('<a class="w124btn ghost" href="' + E(r.notes_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Minutes</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      }
     } else if (it.k === 'bday') {
       rows.push(kv('cake', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
       if (it.person) acts.push('<a class="w124btn ghost" data-w124go="#person/' + E(it.person.id) + '">Open their profile</a>');
@@ -42998,7 +43045,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.calendar) W.tours.calendar = { tab: 'calendar', icon: 'clock', hash: '#calendar', steps: [
-        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays.'),
+        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays, and for the board and the executives, the board\u2019s dates.'),
         S('#w124cal .w124bar', 'Move around', 'Step through the months, jump back to today, and switch between the month grid and the agenda list.', OPT),
         S('#w124cal .w124layers', 'Layers', 'Switch each layer on or off; the Hub remembers your choice. My meetings are only the meetings you are invited to.', OPT),
         S('#w124cal .w124band', 'All month long', 'Fundraising events that run all month or all season sit above the grid.', OPT),
@@ -43800,8 +43847,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<div class="w126cyc">' + I('clock') + '<span>' + (ce ? 'This cycle runs from the <b>' + E(fmtDay(cs)) + '</b> meeting to the <b>' + E(fmtDay(ce)) + '</b> meeting. Committees meet by <b>' + E(fmtDay(due)) + '</b>: once with the team, once with an outside professional.' : 'Committees meet twice between board meetings: once with the team, once with an outside professional.') + '</span></div>';
   }
   function stratHtml() {
-    var s = strategySession(), chair = directors().filter(function (m) { return /incoming chair/i.test(m.seat || ''); })[0];
-    return '<div class="w126strat"><div class="w126card dark"><h3>Strategy: the whole board</h3><p>Strategy stays with the full board, everyone\u2019s job, run as a dedicated block at every meeting' + (chair ? ', chaired by the incoming board chair (' + E(chair.name) + ')' : '') + '.</p><p>' + (s ? 'Next: ' + E(s.title) + (s.meets_at ? ', ' + E(fmtDay(dayOfIso(s.meets_at), true)) : ' (to schedule)') + '. ' : '') + '<a class="w126lnk" data-w126go="#governance/strategy">Where strategy stands</a></p></div>'
+    var s = strategySession(), chair = directors().filter(function (m) { return /^chair\b/i.test(String(m.seat || '').trim()); })[0];
+    return '<div class="w126strat"><div class="w126card dark"><h3>Strategy: the whole board</h3><p>Strategy stays with the full board, everyone\u2019s job, run as a dedicated block at every meeting' + (chair ? ', led by the board chair (' + E(chair.name) + ')' : '') + '.</p><p>' + (s ? 'Next: ' + E(s.title) + (s.meets_at ? ', ' + E(fmtDay(dayOfIso(s.meets_at), true)) : ' (to schedule)') + '. ' : '') + '<a class="w126lnk" data-w126go="#governance/strategy">Where strategy stands</a></p></div>'
       + '<div class="w126card"><h3>Cadence</h3><ul><li>4 board meetings a year, plus an AGM</li><li>Each committee meets twice between board meetings: once with the team, once with an outside professional</li><li>Monthly for committees chasing a target</li><li>An October fiscal year-end strategy session</li></ul></div>'
       + '<div class="w126card"><h3>Recruiting beyond the board</h3><ul><li>Our networks: the fastest yes</li><li>Donors, past and standout volunteers</li><li>Professors: public policy, Indigenous studies, IT</li><li>Director networks (ICD) and working groups as on-ramps</li></ul></div></div>';
   }
@@ -44966,6 +45013,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w118ck b i{display:inline-block;width:8px;height:8px;border-radius:50%;background:' + GOLD + ';margin-right:8px;vertical-align:2px;}'
     + '#w118ck p{margin:0 0 10px;color:rgba(255,250,242,.86);}'
     + '#w118ck .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}'
+    + '#w118ck .row .why{font-size:12px;color:rgba(255,250,242,.82);margin-right:auto;}'
+    + '#w118ck[data-kind="in"]{padding:10px 14px 10px;}#w118ck[data-kind="in"] b{margin:0 0 6px;}'
     + '#w118ck button{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:.8px;text-transform:uppercase;border-radius:9px;padding:7px 11px;border:none;cursor:pointer;line-height:1.2;}'
     + '#w118ck button.go{background:' + GOLD + ';color:' + GREEN + ';}'
     + '#w118ck button.ghost{background:transparent;color:' + CREAM + ';border:1.5px solid rgba(255,250,242,.55);}'
@@ -45020,7 +45069,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (open() || !pill() || gateUp()) return false;
     if (num(K.snooze) > Date.now()) return false;
     if (last && Date.now() - last < AWAY_MS) return false;
-    show('in', '<b><i></i>Starting a session?</b><p>Check in so your hours on the hub count from now.</p><div class="row"><button class="go" data-w118b="in">Check in</button><button class="link" data-w118b="later">Not now</button></div>');
+    /* wave130: two short lines, so the note under the pill stays clear of the page (the tiles on Home sit 90 px below the pill) */
+    show('in', '<b><i></i>Starting a session?</b><div class="row"><button class="go" data-w118b="in">Check in</button><span class="why">so your hours count</span><button class="link" data-w118b="later">Not now</button></div>');
     return true;
   }
   function nudgeBack(row, leftAt) {
@@ -47576,6 +47626,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
   function words(n) { return ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n); }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  /* wave130: a serving with no title reads "Sunday serving, Montreal", never its code */
+  function servName(v) {
+    if (v && v.title && String(v.title).trim()) return String(v.title).trim();
+    var kind = String((v && v.kind) || 'service').toLowerCase(), d = v ? parseDay(v.event_date) : null;
+    var base = kind === 'service' ? (d && d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1);
+    return base + (v && v.location ? ', ' + v.location : '');
+  }
   function tabOk(t) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(t) >= 0; } catch (e) { return true; } }
   function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
   function deptColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }
@@ -47819,7 +47876,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var fe = (X.fund || []).filter(function (f) { var d = parseDay(f.start_date); return d && d >= t && f.status !== 'idea' && f.status !== 'cancelled' && f.status !== 'done'; })[0];
     if (fe) out.push({ k: 'Fundraising', d: parseDay(fe.start_date), t: fe.title, go: '#fundevents', month: fe.precision === 'month' });
     var ve = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d >= t && v.status !== 'cancelled'; })[0];
-    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: ve.title || ve.code || 'Serving', go: '#volunteering' });
+    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: servName(ve), go: '#volunteering' });
     return out;
   }
   function briefHtml() {
@@ -47933,7 +47990,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     boardMeetings().filter(function (x) { return inWin(x.d); }).forEach(function (x) { rows.push({ d: x.d, k: 'Board', t: x.m.title || 'Board meeting', go: '#governance' }); });
     try { var cy = X.board && X.board.cycle; if (cy && cy.next) { var due = addDays(dayOfIso(cy.next.meets_at) || t, -7); if (inWin(due)) rows.push({ d: due, k: 'Committees', t: 'Committees meet by this date', go: '#committees' }); } } catch (e) { /* fine */ }
     (X.fund || []).filter(function (f) { return inWin(parseDay(f.start_date)) && f.status !== 'idea' && f.status !== 'cancelled'; }).forEach(function (f) { rows.push({ d: parseDay(f.start_date), k: 'Fundraising', t: f.title + (f.precision === 'month' ? ' (all month)' : ''), go: '#fundevents' }); });
-    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: v.title || v.code || 'Serving', go: '#volunteering' }); });
+    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: servName(v), go: '#volunteering' }); });
     return rows.sort(function (a, b) { return a.d - b.d; }).slice(0, 8);
   }
   function nextHtml() {
@@ -48471,6 +48528,368 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     startApp = async function () { var out = await __sa129.apply(this, arguments); try { tour(); watch(); } catch (e) { /* fine */ } return out; };
   }
   window.w129 = { paint: paint, state: function () { return X; }, rows: function () { var d = data(); return d ? explorerRows(d) : []; } };
+})();
+/* =====================================================================
+   WA v130 the browser test fixes (26/09/26)
+   =====================================================================
+   Steel, on the browser test (#43): "For the bugs worth fixing first,
+   feel free to fix them all." What this wave changes, by the numbers in
+   the findings doc (docs/26-09-26 - hub browser test):
+   1.  Phones: menus never wider than the screen (Activity, The Brain,
+       the audit trail) and the onboarding row on a person page wraps.
+   5.  Hub inbox: one header (the masthead), with the fuller purpose line.
+   6.  Board view: a page the board cannot open says so, on the Executive
+       dashboard where the viewer lands, with the pages the board view
+       does open; links to staff pages stop being links for directors.
+       Staff sent back from a page outside their access profile get the
+       same notice, pointing to Request more access.
+   7.  Board view: no tick boxes on the executive decisions, and the
+       intro no longer says "Tick an item".
+   8.  Calendar: a Board layer (board meetings, the committees' week
+       before, the fiscal year-end) lives in wave124's parts.
+   9.  Servings without a title read "Sunday serving, Montreal" (waves
+       124 and 128, and the cancelled-serving notes in 116g and 106).
+   10. Ask the Hub: a round button that opens its label on hover or
+       focus, and steps aside while you type (on phones the bottom bar
+       does too).
+   11. First visit: one coach mark at a time. The check-in note is two
+       short lines (edited in 118b) so it stays clear of the tiles; Meet
+       Ask the Hub waits
+       until the check-in note is gone and never shows beside the Get
+       started card (which already has "Ask the Hub a question").
+   12. Request more access: never for admins, and no flash before the
+       role is known.
+   13. Policies: Open and read and the sign-off sit apart (stacked on a
+       phone), the signed pill stays on one line, and the sign-off only
+       works once the document has been opened.
+   14. Refresh the recommendation (waves 3 and 116, edited in place).
+   15. Goal page footnotes sit inside their card.
+   Bugs 2 to 4 (People and access, access requests on a phone, the
+   Access profiles matrix) are fixed by the People and access redesign
+   that follows this wave.
+   ===================================================================== */
+(function () {
+  if (window.__wa130) return; window.__wa130 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+
+  var css = ''
+    /* 1. phones: nothing wider than the screen */
+    + '@media (max-width:760px){'
+    + 'select{max-width:100%;}'
+    + '#activity .filters select,.w86bar select,.w86bar input,.w87bar select{min-width:0;max-width:100%;}'
+    + '.w37profbar{flex-wrap:wrap;max-width:100% !important;}'
+    + '.w37profbar .w37bar{min-width:60px;flex:1 1 60px;}'
+    + '}'
+    /* 5. Hub inbox: the masthead is the header */
+    + '#hubmail > .w116ptop{display:none !important;}'
+    /* 6 and 7. the board view */
+    + 'body.w130board #decisionList input[type=checkbox],body.w130board #decisionDoneList input[type=checkbox]{display:none !important;}'
+    + 'body.w130board [data-w130off="text"]{color:inherit !important;text-decoration:none !important;cursor:default !important;font-weight:inherit;}'
+    + 'body.w130board [data-w130off="hide"]{display:none !important;}'
+    + 'body.w130board [data-w130off="text"] > svg:last-child{display:none !important;}'
+    + '.w130deny{position:relative;display:flex;gap:14px;align-items:flex-start;background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.12);border-left:4px solid ' + GOLD + ';border-radius:16px;padding:14px 46px 14px 16px;margin:0 0 16px;box-shadow:0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06);font-family:' + BODY + ';}'
+    + '.w130deny .ic{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(220,165,39,.2);color:' + GREEN + ';display:flex;align-items:center;justify-content:center;}'
+    + '.w130deny .ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}'
+    + '.w130deny b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:19px;line-height:1.15;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:2px 0 4px;}'
+    + '.w130deny p{margin:0 0 9px;font-size:13px;line-height:1.5;color:var(--wa-muted,#797773);}'
+    + '.w130deny .lk{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '.w130deny .lk a{font-size:12.5px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.07);border-radius:999px;padding:7px 13px;text-decoration:none;cursor:pointer;line-height:1.2;}'
+    + '.w130deny .lk a:hover{background:rgba(16,63,57,.13);}'
+    + '.w130deny .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;background:none;border-radius:9px;cursor:pointer;color:var(--wa-muted,#797773);font-size:20px;line-height:1;}'
+    + '.w130deny .x:hover{background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    /* 10. Ask the Hub: round, the label opens on hover or focus */
+    + '#waChatBtn{transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease,padding .28s ease !important;}'
+    + '@media (min-width:901px){'
+    + 'html body #waChatBtn{min-width:56px;height:56px !important;padding:0 13px !important;gap:0 !important;justify-content:center;right:20px;bottom:20px;}'
+    + 'html body #waChatBtn .w117ei{margin:0 !important;}'
+    + '#waChatBtn .w130lbl{display:inline-block;max-width:0;opacity:0;overflow:hidden;white-space:nowrap;transition:max-width .28s ease,opacity .2s ease,margin .28s ease;}'
+    + 'html body #waChatBtn:hover,html body #waChatBtn:focus-visible{padding:0 20px 0 15px !important;}'
+    + '#waChatBtn:hover .w130lbl,#waChatBtn:focus-visible .w130lbl{max-width:170px;opacity:1;margin-left:8px;}'
+    + '#w75nudge{right:20px !important;bottom:90px !important;}'
+    + '#w75nudge:after{right:41px !important;}'
+    + '}'
+    + 'body.w130typing #waChatBtn{opacity:0 !important;pointer-events:none !important;transform:translateY(12px) scale(.9) !important;}'
+    + '@media (max-width:900px){body.w130typing #w114bar{display:none !important;}}'
+    /* 11. one coach mark at a time */
+    + 'body.w130typing #w75nudge,body.w130wait #w75nudge{display:none !important;}'
+    /* 12. Request more access: only once the role is known, never for admins */
+    + 'body:not(.w130canreq) #w110btn{display:none !important;}'
+    /* 13. policies */
+    + '.w105sign > div{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}'
+    + '.w105ok{white-space:nowrap;}'
+    + '[data-w130lock]{opacity:.5;cursor:not-allowed !important;}'
+    + '@keyframes w130hint{0%{box-shadow:0 0 0 0 rgba(220,165,39,.75);}100%{box-shadow:0 0 0 10px rgba(220,165,39,0);}}'
+    + '.w130hint{animation:w130hint .9s ease-out 2;}'
+    + '@media (max-width:640px){'
+    + '.w105sign > div{flex-direction:column;align-items:stretch;gap:12px;}'
+    + '.w105sign > div > .btn{justify-content:center;text-align:center;min-height:40px;}'
+    + '#w122 .w122trk .it .ia{flex-direction:column;align-items:stretch;gap:12px;}'
+    + '#w122 .w122trk .it .ia .go{text-align:center;padding:9px 14px;}'
+    + '}'
+    /* 15. goal page footnotes inside their card */
+    + '.w116g > p.note{margin:12px 0 0 !important;padding:0 18px 16px !important;}';
+
+  (function () {
+    var st = document.getElementById('w130css');
+    if (!st) { st = document.createElement('style'); st.id = 'w130css'; (document.head || document.documentElement).appendChild(st); }
+    st.textContent = css;
+  })();
+
+  /* ---------- helpers ---------- */
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function staffUser() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || null; } catch (e) { return null; } }
+  function allowedList() { try { return (typeof wa40Allowed === 'function' && wa40Allowed()) || []; } catch (e) { return []; } }
+  function knownTabs() { try { return (typeof WA40_TABS !== 'undefined' && WA40_TABS) || []; } catch (e) { return []; } }
+  function rootOf(h) { var s = String(h || ''); try { s = decodeURIComponent(s); } catch (e) { /* keep */ } return s.replace(/^#/, '').split('/')[0]; }
+  function activeId() { var a = document.querySelector('.panel.active'); return a ? a.id : ''; }
+  var SVG = {
+    lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+    key: '<circle cx="8" cy="15" r="3.6"/><path d="M10.6 12.4 19 4M16 7l2.5 2.5M14 9l2 2"/>'
+  };
+  function svg(n) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (SVG[n] || '') + '</svg>'; }
+
+  /* ---------- 6. the pages the board view opens, and the notice ---------- */
+  /* roots that are the Executive dashboard itself */
+  var OV = ['', 'overview', 'decisions', 'decision'];
+  var TEAM_LABEL = (window.WA_TEAMS && window.WA_TEAMS.labels) || {};
+  var LABEL = {
+    dashboard: ['Delivery numbers', 1], needsme: ['Needs me', 1], 'needs-me': ['Needs me', 1], activity: ['Activity', 1],
+    transcripts: ['The transcript archive', 1], tx: ['Transcripts', 0], requests: ['Requests', 0], agendas: ['Agendas', 0],
+    mypage: ['My page', 1], orgchart: ['The org chart', 1], goals: ['Department goals', 0], projects: ['Projects', 0],
+    project: ['Project pages', 0], goalmap: ['Goal alignment', 1], orggoals: ['Organizational goals', 0], create: ['The Create studio', 1],
+    volunteering: ['Volunteering', 1], finances: ['Finances', 0], training: ['The training academy', 1], adminpanel: ['Admin', 1],
+    brain: ['The Brain', 1], hubmail: ['The Hub inbox', 1], hrcentre: ['The HR centre', 1], team: ['Team pages', 0], dept: ['Team pages', 0],
+    person: ['People pages', 0], personpage: ['People pages', 0], task: ['Tasks', 0], importantinfo: ['Important info', 1]
+  };
+  /* the pages a director can open, in menu order */
+  var BOARD_PAGES = [['governance', 'Board overview'], ['committees', 'Committees'], ['overview', 'Executive dashboard'], ['calendar', 'Calendar'], ['fundevents', 'Events calendar'], ['socialstats', 'Marketing analytics'], ['contentcal', 'Content calendar'], ['photos', 'Photo library']];
+  function labelOf(root) {
+    if (LABEL[root]) return LABEL[root];
+    if (TEAM_LABEL[root]) return [TEAM_LABEL[root], 1];
+    var tab = document.querySelector('nav .tab[data-tab="' + String(root).replace(/"/g, '') + '"]');
+    var t = tab ? String(tab.textContent || '').replace(/\s+/g, ' ').trim() : '';
+    return t ? [t, 1] : ['That page', 1];
+  }
+  function sentence(root, rest) { var l = labelOf(root); return l[0] + (l[1] ? ' is ' : ' are ') + rest; }
+  function itThem(root) { return labelOf(root)[1] ? 'it' : 'them'; }
+  function boardOk(root) {
+    if (OV.indexOf(root) >= 0) return true;
+    if (/[=&]/.test(root)) return true;
+    return allowedList().indexOf(root) >= 0 || root === 'importantinfo';
+  }
+  /* staff: a menu page their access profile leaves out */
+  function staffDenied(root) {
+    if (!root || OV.indexOf(root) >= 0 || /[=&]/.test(root)) return false;
+    if (['needsme', 'needs-me', 'personpage', 'projectpage', 'volunteering', 'importantinfo', 'person', 'project', 'task', 'tx', 'team', 'dept'].indexOf(root) >= 0) return false;
+    if (knownTabs().indexOf(root) < 0) return false;
+    return !!mine() && allowedList().indexOf(root) < 0;
+  }
+  var DENY = { req: rootOf(location.hash), t: null, closed: null };
+  function hideDeny() { var el = document.getElementById('w130deny'); if (el && el.parentNode) el.parentNode.removeChild(el); }
+  function showDeny(root, kind) {
+    var panel = document.getElementById('overview'); if (!panel) return;
+    var el = document.getElementById('w130deny');
+    if (!el) { el = document.createElement('div'); el.id = 'w130deny'; el.className = 'w130deny'; el.setAttribute('role', 'status'); }
+    var mast = panel.querySelector(':scope > .w118mast');
+    if (mast) { if (mast.nextElementSibling !== el) mast.insertAdjacentElement('afterend', el); }
+    else if (panel.firstElementChild !== el) panel.insertBefore(el, panel.firstChild);
+    var html;
+    if (kind === 'board') {
+      var al = allowedList();
+      var pages = BOARD_PAGES.filter(function (p) { return p[0] !== 'overview' && al.indexOf(p[0]) >= 0; });
+      html = '<span class="ic">' + svg('lock') + '</span><div><b>' + E(sentence(root, 'for staff accounts')) + '</b>'
+        + '<p>The board view does not open ' + itThem(root) + ', so you are on the Executive dashboard. The board view opens these pages:</p>'
+        + '<div class="lk">' + pages.map(function (p) { return '<a href="#' + p[0] + '">' + E(p[1]) + '</a>'; }).join('') + '</div></div>';
+    } else {
+      var m = mine(), prof = m && m.profile ? String(m.profile) : '';
+      html = '<span class="ic">' + svg('key') + '</span><div><b>' + E(sentence(root, 'not in your access profile')) + '</b>'
+        + '<p>' + (prof ? 'Your profile (' + E(prof.replace(/^lead:/, '').replace(/^team:/, '')) + ') opens the pages in your menu. ' : 'Your access opens the pages in your menu. ')
+        + 'Ask an admin to add it, or send a request from My page.</p>'
+        + (allowedList().indexOf('mypage') >= 0 ? '<div class="lk"><a href="#mypage">My page</a></div>' : '') + '</div>';
+    }
+    el.innerHTML = html + '<button type="button" class="x" data-w130x aria-label="Close">&times;</button>';
+    /* the address matches the page the viewer is on */
+    try { if (history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#overview'); } catch (e) { /* fine */ }
+  }
+  function denyCheck() {
+    clearTimeout(DENY.t);
+    DENY.t = setTimeout(function () {
+      try {
+        var gate = document.getElementById('gate'); if (gate && gate.style.display !== 'none') return;
+        if (activeId() !== 'overview') { hideDeny(); return; }
+        var root = DENY.req;
+        if (DENY.closed !== null && DENY.closed === root) { hideDeny(); return; }
+        if (boardMode()) { if (!boardOk(root)) showDeny(root, 'board'); else hideDeny(); return; }
+        if (staffUser() && staffDenied(root)) { showDeny(root, 'staff'); return; }
+        hideDeny();
+      } catch (e) { /* fine */ }
+    }, 180);
+  }
+  window.addEventListener('hashchange', function () { DENY.req = rootOf(location.hash); DENY.closed = null; denyCheck(); });
+
+  /* the board view: links to staff pages stop being links (a toast says why) */
+  var GO_ATTRS = ['data-w116go', 'data-w123go', 'data-w124go', 'data-w128go', 'data-w126go', 'data-w116tgo', 'data-w121go', 'data-w116kgo', 'data-w116pgo', 'data-w114go', 'data-jgo', 'data-w93go', 'data-w87go', 'data-w80go', 'data-w73go', 'data-w56go', 'data-w38go', 'data-w127go', 'data-w118cgo', 'data-w112go', 'data-mpgo'];
+  var GO_SEL = 'a[href^="#"],' + GO_ATTRS.map(function (a) { return '[' + a + '^="#"]'; }).join(',');
+  function navHash(el) {
+    for (var n = el, i = 0; n && n.nodeType === 1 && n !== document.body && i < 8; n = n.parentElement, i++) {
+      if (n.tagName === 'A') { var hr = n.getAttribute('href'); if (hr && hr.charAt(0) === '#') return { el: n, h: hr }; }
+      for (var j = 0; j < GO_ATTRS.length; j++) { var v = n.getAttribute(GO_ATTRS[j]); if (v && v.charAt(0) === '#') return { el: n, h: v }; }
+    }
+    return null;
+  }
+  document.addEventListener('click', function (e) {
+    if (!boardMode()) return;
+    var t = e.target; if (!t || !t.closest || t.closest('#w130deny')) return;
+    var nh = navHash(t); if (!nh) return;
+    var root = rootOf(nh.h);
+    if (boardOk(root)) return;
+    e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    toastS(sentence(root, 'for staff accounts.') + ' The board view does not open ' + itThem(root) + '.');
+  }, true);
+  var OFF = [];
+  function boardScan() {
+    if (!boardMode()) return;
+    var root = document.querySelector('.panel.active'); if (!root) return;
+    var list; try { list = root.querySelectorAll(GO_SEL); } catch (e) { return; }
+    for (var i = 0; i < list.length; i++) {
+      var el = list[i], nh = navHash(el); if (!nh || nh.el !== el) continue;
+      var bad = !boardOk(rootOf(nh.h));
+      var want = '';
+      if (bad) {
+        var cls = ' ' + String(el.className && el.className.baseVal != null ? el.className.baseVal : el.className || '') + ' ';
+        var inText = el.tagName === 'A' && el.parentElement && /^(P|LI|SMALL)$/.test(el.parentElement.tagName) && /\S/.test(String(el.parentElement.textContent || '').replace(el.textContent || '', ''));
+        want = inText ? 'text' : (/ (lnk|lk|more|w\d+lnk|w\d+go|go|chev) /.test(cls) || el.tagName === 'BUTTON' || /\u2192|\u203a/.test(el.textContent || '') ? 'hide' : 'text');
+      }
+      var cur = el.getAttribute('data-w130off') || '';
+      if (want !== cur) { if (want) { el.setAttribute('data-w130off', want); el.setAttribute('tabindex', '-1'); if (OFF.indexOf(el) < 0) OFF.push(el); } else { el.removeAttribute('data-w130off'); } }
+    }
+  }
+  /* 7. decisions: the board reads them, the executives record them */
+  var DEC_BOARD = 'The calls that need an executive. Each one names who decides, a reason category and a one line rationale. The executives record each outcome here.';
+  function boardDecText() {
+    if (!boardMode()) return;
+    var p = document.querySelector('#overview p.read[data-w116g="1"]');
+    if (p && p.textContent !== DEC_BOARD) p.textContent = DEC_BOARD;
+  }
+
+  /* ---------- 5. Hub inbox: one header, the fuller line ---------- */
+  var HUBMAIL = 'What the team copies to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries to the transcript archive, everything else as team updates. Each filing can be undone here.';
+  function hubmailMast() {
+    var p = document.querySelector('#hubmail > .w118mast > p');
+    if (p && p.textContent !== HUBMAIL) p.textContent = HUBMAIL;
+  }
+
+  /* ---------- 10. Ask the Hub: the label in its own span; out of the way while typing ---------- */
+  function fab() {
+    var b = document.getElementById('waChatBtn'); if (!b) return;
+    if (b.getAttribute('aria-label') !== 'Ask the Hub') b.setAttribute('aria-label', 'Ask the Hub');
+    if (b.querySelector('.w130lbl')) return;
+    for (var i = 0; i < b.childNodes.length; i++) {
+      var n = b.childNodes[i];
+      if (n.nodeType === 3 && String(n.textContent).trim()) { var s = document.createElement('span'); s.className = 'w130lbl'; s.textContent = String(n.textContent).trim(); b.replaceChild(s, n); break; }
+    }
+  }
+  function isField(el) {
+    if (!el || !el.tagName) return false;
+    if (el.closest && el.closest('#waChatPanel')) return false;
+    var t = el.tagName;
+    if (t === 'TEXTAREA') return true;
+    if (t === 'INPUT') return ['text', 'search', 'email', 'url', 'tel', 'number', 'password', ''].indexOf(String(el.getAttribute('type') || '').toLowerCase()) >= 0;
+    return !!el.isContentEditable;
+  }
+  document.addEventListener('focusin', function (e) { if (isField(e.target)) document.body.classList.add('w130typing'); });
+  document.addEventListener('focusout', function () { setTimeout(function () { if (!isField(document.activeElement)) document.body.classList.remove('w130typing'); }, 80); });
+
+  /* ---------- 11. one coach mark at a time ---------- */
+  function nudgeWait() {
+    var ck = document.getElementById('w118ck');
+    var gs = document.getElementById('w112card');
+    var wait = !!ck || !!(gs && gs.offsetParent !== null);
+    if (document.body.classList.contains('w130wait') !== wait) document.body.classList.toggle('w130wait', wait);
+  }
+
+  /* ---------- 12. Request more access: staff who are not admins, once the role is known ---------- */
+  function reqClass() {
+    var m = mine();
+    var ok = !!(m && staffUser() && String(m.role || '') !== 'admin' && String(m.role || '') !== 'blocked');
+    if (document.body.classList.contains('w130canreq') !== ok) document.body.classList.toggle('w130canreq', ok);
+  }
+
+  /* ---------- 13. policies: open it before signing it ---------- */
+  function polKey() { var em = ''; try { em = String((USER && USER.email) || '').toLowerCase(); } catch (e) { em = ''; } return 'w130pol:' + em; }
+  function polOpened() { try { return JSON.parse(localStorage.getItem(polKey()) || '{}') || {}; } catch (e) { return {}; } }
+  function polMark(k) { if (!k) return; var o = polOpened(); o[k] = Date.now(); try { localStorage.setItem(polKey(), JSON.stringify(o)); } catch (e) { POL_MEM[k] = 1; } }
+  var POL_MEM = {};
+  function polKeyOf(b) { return b.getAttribute('data-w105sk') || b.getAttribute('data-w122sign') || ''; }
+  function polRow(el) { return (el.closest && (el.closest('.w105sign') || el.closest('.w122trk .it'))) || null; }
+  function polLink(el) { var row = polRow(el); var a = row ? row.querySelector('a[href]') : null; return a && !/^#/.test(a.getAttribute('href') || '') ? a : null; }
+  function polScan() {
+    var btns = document.querySelectorAll('[data-w105sk],[data-w122sign]'); if (!btns.length) return;
+    var o = polOpened();
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i], k = polKeyOf(b), lock = !!(k && !o[k] && !POL_MEM[k] && polLink(b));
+      if (lock && !b.hasAttribute('data-w130lock')) { b.setAttribute('data-w130lock', '1'); b.setAttribute('title', 'Open and read it first'); b.setAttribute('aria-disabled', 'true'); }
+      else if (!lock && b.hasAttribute('data-w130lock')) { b.removeAttribute('data-w130lock'); b.removeAttribute('title'); b.removeAttribute('aria-disabled'); }
+    }
+  }
+  function polOpen(e) {
+    var t = e.target; if (!t || !t.closest) return false;
+    var a = t.closest('.w105sign a[href], .w122trk .it a[href]');
+    if (!a || /^#/.test(a.getAttribute('href') || '')) return false;
+    var row = polRow(a), b = row && row.querySelector('[data-w105sk],[data-w122sign]');
+    if (b) { polMark(polKeyOf(b)); setTimeout(polScan, 30); }
+    return true;
+  }
+  document.addEventListener('click', function (e) {
+    if (polOpen(e)) return;
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w105sk],[data-w122sign]');
+    if (!b || !b.hasAttribute('data-w130lock')) return;
+    e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+    toastS('Open and read it first, then sign it off.');
+    var l = polLink(b); if (l) { l.classList.remove('w130hint'); void l.offsetWidth; l.classList.add('w130hint'); }
+  }, true);
+  document.addEventListener('auxclick', function (e) { polOpen(e); }, true);
+
+  /* ---------- the paint: cheap, idempotent, run after navigation and DOM changes ---------- */
+  function paint() {
+    try { fab(); } catch (e) { /* fine */ }
+    try { hubmailMast(); } catch (e) { /* fine */ }
+    try { if (boardMode()) { if (!document.body.classList.contains('w130board')) document.body.classList.add('w130board'); boardDecText(); boardScan(); } } catch (e) { /* fine */ }
+    try { reqClass(); } catch (e) { /* fine */ }
+    try { nudgeWait(); } catch (e) { /* fine */ }
+    try { polScan(); } catch (e) { /* fine */ }
+  }
+  var pT = null;
+  function soon(ms) { clearTimeout(pT); pT = setTimeout(paint, ms == null ? 200 : ms); }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (t.closest('[data-w130x]')) { DENY.closed = DENY.req; hideDeny(); }
+  });
+  try { new MutationObserver(function () { soon(250); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  if (typeof showPanel === 'function') {
+    var __sp130 = showPanel;
+    showPanel = function (id) {
+      var out = __sp130.apply(this, arguments);
+      try { denyCheck(); soon(60); setTimeout(paint, 700); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa130 = startApp;
+    startApp = async function () {
+      var out = await __sa130.apply(this, arguments);
+      try { paint(); denyCheck(); setTimeout(paint, 900); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  window.w130 = { paint: paint, deny: function () { return DENY; }, off: function () { return OFF.filter(function (x) { return x.isConnected; }).map(function (x) { return x.getAttribute('data-w130off') + ' ' + x.tagName + ' ' + String(x.textContent || '').trim().slice(0, 40); }); }, boardOk: boardOk };
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)

@@ -202,7 +202,7 @@ grant execute on function public.is_wa_leader(), public.is_wa_admin(), public.my
 -- the directors (seats from the board circle; renewals from the July 22 deck and minutes)
 insert into public.board_members (name, full_name, emails, seat, renewal, renewal_due, status, note, sort) values
   ('Kellian', 'Kellian Debargis', array['kellian.debargis@welfareavenue.com'], 'Chair', 'Q3 2026', '2026-09-30', 'active', 'Chaired the July 22, 2026 meeting.', 10),
-  ('Steel', 'Steel MacDonald', array['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com'], 'Vice chair, incoming chair', 'Q3 2026', '2026-09-30', 'active', 'Founder. Left the executive team to serve on the board (announced July 22, 2026).', 20),
+  ('Steel', 'Steel MacDonald', array['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com'], 'Vice chair', 'Q3 2026', '2026-09-30', 'active', 'Founder.', 20),
   ('Daniela', 'Daniela Nita', array['daniela.nita@welfareavenue.com'], 'Treasurer', 'Q1 2027', '2027-03-31', 'active', null, 30),
   ('Tamara', 'Tamara Angeline Medford Williams', array['consult.tamaraangeline@gmail.com', 'tamara.medfordw@welfareavenue.com'], 'Director', 'Q1 2027', '2027-03-31', 'active', null, 40),
   ('Mohamed', 'Mohamed Ashr', array['mai307@nyu.edu'], 'Director', 'Q2 2027', '2027-06-30', 'active', 'Renewed for a year on July 22, 2026 (4 in favour, 0 against).', 50),
@@ -239,8 +239,6 @@ insert into public.board_items (job, committee, title, detail, status, owner, du
 select * from (values
   ('steward', null, 'Term limits and staggered renewals', 'First term one year, renewals up to two. Mohamed to Q2 2027 (renewed July 22), Steel and Kellian Q3 2026, Daniela and Tamara Q1 2027.', 'done', 'Board', null, null::bigint, 'July 22 deck', 10),
   ('steward', null, 'Renewals due: Steel and Kellian (Q3 2026)', 'Vote the renewals at the next board meeting.', 'todo', 'Board', 'Q3 board meeting', null, 'July 22 deck', 20),
-  ('steward', null, 'The founder moves from the executive team to the board', 'Announced July 22. The transition timeline is confirmed at the fiscal year-end strategy session.', 'in_progress', 'Steel', 'Strategy session', null, 'July 22 minutes', 30),
-  ('steward', null, 'ED and co-ED roles and succession', 'Job descriptions, internal conversations first, then an external search if needed, with the board helping on referrals and interviews. Details stay with the board.', 'in_progress', 'Steel and Suhaib', null, null, 'July 22 deck', 40),
   ('steward', 'people', 'Fill the open director seat (HR & People)', 'Recruit beyond the board: our networks, donors, past and standout volunteers, professors, director networks, working groups.', 'todo', 'Board', null, null, 'July 22 deck', 50),
   ('steward', null, 'Suhaib joined the board as Member at Large', 'The co-ED is now a director.', 'done', 'Board', null, null, 'July 22 deck', 60),
   ('fiduciary', null, 'Signing officers defined', 'Banking authority set to the President and Treasurer.', 'done', 'Board', null, null, 'July 22 deck', 10),
@@ -249,12 +247,12 @@ select * from (values
   ('fiduciary', null, 'Publish the required financial disclosures on the website', 'Compliance: the financials go on welfareavenue.com.', 'at_risk', 'Fiduciary committee', null, null, 'July 22 deck', 40),
   ('fiduciary', 'fiduciary', 'A hard quarter: high costs, little summer revenue', 'From the July 22 financial overview. Watch spending against the budget and the fall events.', 'watch', 'Daniela', null, null, 'July 22 minutes', 50),
   ('fiduciary', 'fundraising', 'Ontario Trillium application (deadline August 19)', 'Confirm it was submitted; the preparation tasks are still open.', 'watch', 'Suhaib', 'August 19', 440, 'Tasks 436 to 440', 60),
-  ('strategy', null, 'Fiscal year-end strategy session with operations', 'The deep dive on direction and assumptions, chaired by the incoming chair.', 'todo', 'Steel', 'To schedule', null, 'July 22 deck', 10),
+  ('strategy', null, 'Fiscal year-end strategy session with operations', 'The deep dive on direction and assumptions.', 'todo', 'Steel', 'To schedule', null, 'July 22 deck', 10),
   ('strategy', null, 'Step 1: align on assumptions', 'Agree what we believe about the next three years: demand, demographics, climate, government funding.', 'todo', 'Board', null, null, 'July 22 deck', 20),
   ('strategy', null, 'Step 2: decide who we serve', 'Our sweet spot, and the referral partners for the people we are not built to serve.', 'todo', 'Board', null, null, 'July 22 deck', 30),
   ('strategy', null, 'Step 3: revise the plan together', 'Refresh November''s strategy with the board and operations, then measure against it; revisit every two to three years.', 'todo', 'Board', null, null, 'July 22 deck', 40),
   ('strategy', null, 'Revisit the organizational goals and the meeting cadence', null, 'in_progress', 'Steel', 'October 10', 107, 'Board task 107', 50),
-  ('strategy', null, 'A strategy block at every board meeting', 'Everyone''s job, chaired by the incoming board chair.', 'standing', 'Steel', null, null, 'July 22 deck', 60)
+  ('strategy', null, 'A strategy block at every board meeting', 'Everyone''s job, a standing block on every agenda.', 'standing', 'Steel', null, null, 'July 22 deck', 60)
 ) as v(job, committee, title, detail, status, owner, due, task_id, source, sort)
 where not exists (select 1 from public.board_items);
 

@@ -11,7 +11,8 @@
     var sec = document.getElementById('calendar'); if (!sec) return null;
     /* the board has no Home: the calendar sits in Strategy, without the volunteering and birthday layers */
     var bv = boardOk() && !staffOk();
-    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? 'Fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings, marketing posts, volunteering and birthdays, in one place.');
+    var hb = hasBoard();
+    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? (hb ? 'Board meetings, fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings and marketing posts, in one place.') : 'Fundraising events, ' + (hb ? 'board dates, ' : '') + 'your meetings, marketing posts, volunteering and birthdays, in one place.');
     var h = document.getElementById('w124cal');
     if (!h) { h = document.createElement('div'); h.id = 'w124cal'; sec.appendChild(h); }
     return h;
@@ -84,7 +85,7 @@
     C.idx = {}; list.forEach(function (it) { C.idx[it.id] = it; });
     var monthOnly = list.filter(function (it) { var d = parseDay(it.day); return d.getMonth() === C.anchor.getMonth(); });
     var cnt = chipCounts(monthOnly);
-    var chips = LAYERS.filter(function (x) { return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
+    var chips = LAYERS.filter(function (x) { if (x.k === 'board') return hasBoard(); return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'

@@ -829,7 +829,7 @@ const SECTIONS = {
   fundraising: {
     title: "Fundraising &amp; Grants",
     color: "var(--c-fund)",
-    read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in and he has signaled he needs to step back. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
+    read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
     progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
     priorities: [
       "Finalize Rami's title and job description",

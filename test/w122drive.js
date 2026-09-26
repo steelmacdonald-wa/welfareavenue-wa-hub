@@ -181,6 +181,13 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   } else check("Hub first steps present", false, hubBefore);
   const signBtn = await page.$('#w122 [data-w122sign]');
   if (signBtn) {
+    /* wave130: the sign-off only works once the policy has been opened */
+    const locked = await signBtn.evaluate(b => b.hasAttribute('data-w130lock'));
+    check("the sign-off waits until the policy is opened", locked);
+    const pop = page.context().waitForEvent('page', { timeout: 3000 }).catch(() => null);
+    await signBtn.evaluate(b => { const a = b.closest('.it').querySelector('a.go[href]'); if (a) a.click(); });
+    const pg = await pop; if (pg) { try { await pg.close(); } catch (e) { /* fine */ } }
+    await page.waitForTimeout(300);
     await signBtn.click(); await page.waitForTimeout(900);
     const so = await writes("wa_policy_signoffs");
     check("signing a policy records the sign-off", so.length === 1 && !!so[0].payload.policy_key, so.map(w => w.payload));

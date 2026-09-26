@@ -5,7 +5,7 @@ P = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'test',
 f = json.load(open(P))
 M = [
     (1, 'Kellian', 'Kellian Debargis', ['kellian.debargis@welfareavenue.com'], 'Chair', 'Q3 2026', '2026-09-30', 'active', None, 10),
-    (2, 'Steel', 'Steel MacDonald', ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com'], 'Vice chair, incoming chair', 'Q3 2026', '2026-09-30', 'active', 'Founder.', 20),
+    (2, 'Steel', 'Steel MacDonald', ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com'], 'Vice chair', 'Q3 2026', '2026-09-30', 'active', 'Founder.', 20),
     (3, 'Daniela', 'Daniela Nita', ['daniela.nita@welfareavenue.com'], 'Treasurer', 'Q1 2027', '2027-03-31', 'active', None, 30),
     (4, 'Tamara', 'Tamara Angeline Medford Williams', ['consult.tamaraangeline@gmail.com'], 'Director', 'Q1 2027', '2027-03-31', 'active', None, 40),
     (5, 'Mohamed', 'Mohamed Ashr', ['mai307@nyu.edu'], 'Director', 'Q2 2027', '2027-06-30', 'active', 'Renewed July 22.', 50),
@@ -31,7 +31,6 @@ f['board_meetings'] = [
 I = [
     ('steward', None, 'Term limits and staggered renewals', 'First term one year, renewals up to two.', 'done', 'Board', None, None, 10),
     ('steward', None, 'Renewals due: Steel and Kellian (Q3 2026)', 'Vote the renewals at the next board meeting.', 'todo', 'Board', 'Q3 board meeting', None, 20),
-    ('steward', None, 'ED and co-ED roles and succession', 'Details stay with the board.', 'in_progress', 'Steel and Suhaib', None, None, 40),
     ('fiduciary', None, 'Signing officers defined', 'President and Treasurer.', 'done', 'Board', None, None, 10),
     ('fiduciary', None, 'Board and organization insurance (D&O)', 'Directors and officers cover.', 'todo', 'Steel', None, 54, 30),
     ('fiduciary', None, 'Publish the required financial disclosures on the website', 'Compliance.', 'at_risk', 'Fiduciary committee', None, None, 40),

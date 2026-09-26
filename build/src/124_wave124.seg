@@ -38,6 +38,8 @@
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var LAYERS = [
     { k: 'fund', l: 'Fundraising events', c: '#C8961F', bg: 'rgba(220,165,39,.18)', ink: '#6b4d05', icon: 'heart' },
+    /* wave130: the board's dates (board meetings, the committees' week before, the fiscal year-end); only for those who can read the board */
+    { k: 'board', l: 'Board', c: '#4a4944', bg: 'rgba(31,32,30,.09)', ink: INK, icon: 'seat' },
     { k: 'meet', l: 'My meetings', c: GREEN, bg: 'rgba(16,63,57,.10)', ink: GREEN, icon: 'people' },
     { k: 'post', l: 'Marketing posts', c: PURPLE, bg: 'rgba(111,100,171,.14)', ink: '#4a4180', icon: 'megaphone' },
     { k: 'vol', l: 'Volunteering', c: TEAL, bg: 'rgba(42,140,122,.14)', ink: '#1d6b5d', icon: 'pot' },
@@ -70,7 +72,8 @@
     plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
     list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>', grid: '<rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9.5h17M8 3v3M16 3v3"/>',
     target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
-    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
+    doc: '<path d="M6.5 3.5h7L18 8v12.5h-11.5z"/><path d="M13.5 3.5V8H18M9 12.5h6M9 16h6"/>',
+    seat: '<path d="M4 9.5 12 5l8 4.5"/><path d="M5.5 10v7.5M10 10v7.5M14 10v7.5M18.5 10v7.5M3.5 20h17"/>', board: '<rect x="3.5" y="4" width="17" height="16" rx="2.5"/><path d="M9 4v16M15 4v9"/>'
   };
   function I(n, cls) { return '<svg class="w124i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -256,7 +259,7 @@
   var C = {
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
-    fund: [], goals: null, bdays: [], projects: [], loadedBase: 0, loadingBase: null,
+    fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
     range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
@@ -284,16 +287,19 @@
         q(db.from('fund_events').select('*').order('sort').order('start_date')),
         q(db.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle()),
         staffOk() ? q(db.from('hub_birthdays').select('*')) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] })
+        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] }),
+        staffOk() || boardOk() ? q(db.from('board_meetings').select('id, meets_at, kind, title, status, agenda_url, notes_url, note').order('meets_at')) : Promise.resolve({ data: [] })
       ]);
       if (a[0].data) C.fund = a[0].data;
       C.goals = (a[1].data && a[1].data.value) || C.goals || { minimum: 10000, healthy: 15000, target: 20000, notes: [], planning: [] };
       if (a[2].data) C.bdays = a[2].data;
       if (a[3].data) C.projects = a[3].data;
+      if (Array.isArray(a[4].data)) C.boardMeets = a[4].data.filter(function (m) { return m && m.meets_at && lower(m.status) !== 'cancelled'; });
       C.loadedBase = Date.now();
     })();
     try { await C.loadingBase; } finally { C.loadingBase = null; }
   }
+  function hasBoard() { return C.boardMeets.length > 0; }
   function myBirthday() { var em = me().email; return C.bdays.filter(function (b) { return lower(b.email) === em; })[0] || null; }
 
   /* ---------- the range data: meetings, posts, servings ---------- */
@@ -370,8 +376,23 @@
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? 'Serving' : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
     });
+    if (L.board && hasBoard()) {
+      C.boardMeets.forEach(function (m) {
+        var s = new Date(m.meets_at); if (isNaN(s.getTime())) return;
+        var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12);
+        if (local >= from && local < to) out.push({ k: 'board', id: 'bm' + m.id, ref: m, day: ymd(local), at: s, time: fmtTime(s), title: m.title || 'Board meeting', sub: lower(m.status) === 'tentative' ? 'Tentative' : '', past: s < new Date() });
+        /* the committees meet the week before a board meeting that is still ahead */
+        var due = addDays(local, -7);
+        if (local >= t0 && due >= from && due < to) out.push({ k: 'board', id: 'bc' + m.id, ref: m, cm: true, day: ymd(due), allDay: true, title: 'Committee meetings due', sub: 'A week before the ' + (m.title || 'board meeting'), past: due < t0 });
+      });
+      /* the fiscal year ends on September 30 */
+      for (var fy = from.getFullYear(); fy <= to.getFullYear(); fy++) {
+        var fe = mk(fy, 8, 30, 12);
+        if (fe >= from && fe < to) out.push({ k: 'board', id: 'fy' + fy, fy: fy, day: ymd(fe), allDay: true, title: 'Fiscal year ends', sub: 'FY' + fy + ' closes', past: fe < t0 });
+      }
+    }
     if (L.bday) C.bdays.forEach(function (b) {
       for (var y = from.getFullYear(); y <= to.getFullYear(); y++) {
         var d = mk(y, b.month - 1, b.day, 12); if (d.getMonth() !== b.month - 1) continue;
@@ -405,7 +426,8 @@
     var sec = document.getElementById('calendar'); if (!sec) return null;
     /* the board has no Home: the calendar sits in Strategy, without the volunteering and birthday layers */
     var bv = boardOk() && !staffOk();
-    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? 'Fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings, marketing posts, volunteering and birthdays, in one place.');
+    var hb = hasBoard();
+    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? (hb ? 'Board meetings, fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings and marketing posts, in one place.') : 'Fundraising events, ' + (hb ? 'board dates, ' : '') + 'your meetings, marketing posts, volunteering and birthdays, in one place.');
     var h = document.getElementById('w124cal');
     if (!h) { h = document.createElement('div'); h.id = 'w124cal'; sec.appendChild(h); }
     return h;
@@ -478,7 +500,7 @@
     C.idx = {}; list.forEach(function (it) { C.idx[it.id] = it; });
     var monthOnly = list.filter(function (it) { var d = parseDay(it.day); return d.getMonth() === C.anchor.getMonth(); });
     var cnt = chipCounts(monthOnly);
-    var chips = LAYERS.filter(function (x) { return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
+    var chips = LAYERS.filter(function (x) { if (x.k === 'board') return hasBoard(); return (x.k !== 'vol' && x.k !== 'bday') || staffOk(); }).map(function (x) { var on = C.layers[x.k]; return '<a class="w124chip' + (on ? '' : ' off') + '" data-w124layer="' + x.k + '" style="--c:' + x.c + ';--bg:' + x.bg + ';--ink:' + x.ink + '" role="switch" aria-checked="' + on + '" tabindex="0"><i></i>' + E(x.l) + (on && cnt[x.k] ? ' <span class="n">' + cnt[x.k] + '</span>' : '') + '</a>'; }).join('');
     var title = MONTHS[C.anchor.getMonth()] + ' ' + C.anchor.getFullYear();
     var html = '<div class="w124bar"><button type="button" class="w124btn ghost icon" data-w124nav="-1" aria-label="Previous month">' + I('chevl') + '</button><button type="button" class="w124btn ghost sm" data-w124nav="0">Today</button><button type="button" class="w124btn ghost icon" data-w124nav="1" aria-label="Next month">' + I('chevr') + '</button><h2>' + E(title) + '</h2><span class="sp"></span>'
       + '<span class="w124seg"><a data-w124view="month" class="' + (grid ? 'on' : '') + '">' + I('grid') + 'Month</a><a data-w124view="agenda" class="' + (!grid ? 'on' : '') + '">' + I('list') + 'Agenda</a></span></div>'
@@ -643,6 +665,28 @@
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
       acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+    } else if (it.k === 'board') {
+      if (it.fy) {
+        rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));
+        rows.push(kv('doc', 'The last day of FY' + it.fy + ' (October 1, ' + (it.fy - 1) + ' to September 30, ' + it.fy + '). The books close and the year-end review starts.'));
+        if (staffOk()) acts.push('<a class="w124btn ghost" data-w124go="#finances">Finances</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
+      } else if (it.cm) {
+        var bm = new Date(r.meets_at);
+        rows.push(kv('clock', 'By ' + E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
+        rows.push(kv('people', 'Each committee meets before the ' + E(r.title || 'board meeting') + ' on ' + E(fmtDate(bm, { weekday: 'long', month: 'long', day: 'numeric' })) + ', so everyone arrives informed.'));
+        acts.push('<a class="w124btn" data-w124go="#committees">Committees</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      } else {
+        var ms = new Date(r.meets_at);
+        rows.push(kv('clock', E(fmtDate(ms, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })) + ', ' + E(fmtTime(ms))));
+        var stw = { tentative: 'Tentative', scheduled: 'Scheduled', confirmed: 'Confirmed', held: 'Held' }[lower(r.status)] || '';
+        if (stw) rows.push(kv('spark', E(stw)));
+        if (r.note) html += '<div class="note">' + E(clip(r.note, 500)) + '</div>';
+        if (r.agenda_url) acts.push('<a class="w124btn" href="' + E(r.agenda_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>');
+        if (r.notes_url) acts.push('<a class="w124btn ghost" href="' + E(r.notes_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Minutes</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      }
     } else if (it.k === 'bday') {
       rows.push(kv('cake', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
       if (it.person) acts.push('<a class="w124btn ghost" data-w124go="#person/' + E(it.person.id) + '">Open their profile</a>');
@@ -784,7 +828,7 @@
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.calendar) W.tours.calendar = { tab: 'calendar', icon: 'clock', hash: '#calendar', steps: [
-        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays.'),
+        S('#calendar > .w118mast', 'Calendar', 'Everything with a date in one place: fundraising events, your meetings, marketing posts, volunteering and birthdays, and for the board and the executives, the board\u2019s dates.'),
         S('#w124cal .w124bar', 'Move around', 'Step through the months, jump back to today, and switch between the month grid and the agenda list.', OPT),
         S('#w124cal .w124layers', 'Layers', 'Switch each layer on or off; the Hub remembers your choice. My meetings are only the meetings you are invited to.', OPT),
         S('#w124cal .w124band', 'All month long', 'Fundraising events that run all month or all season sit above the grid.', OPT),

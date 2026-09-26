@@ -247,7 +247,7 @@
       (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.entity_type === 'volunteer_event' && c.field === 'status' && /^cancelled/.test(String(c.new_value || '')); }).forEach(function (c) { reasons[String(c.entity_id)] = { why: String(c.new_value).replace(/^cancelled:?\s*/, ''), when: c.changed_at }; });
       ((v && v.data) || []).filter(function (ev) { return ev.status === 'cancelled' && String(ev.event_date || '') >= since; }).forEach(function (ev) {
         var r = reasons[String(ev.id)] || {};
-        items.push({ id: 'v' + ev.id, kind: 'event', title: (ev.title || ev.code || 'Serving event') + ' cancelled', body: [ev.event_date ? 'Was planned for ' + fmtDate(ev.event_date) : '', ev.location, r.why].filter(Boolean).join(' \u00b7 '), when: r.when || ev.event_date, link: '#volunteering' });
+        items.push({ id: 'v' + ev.id, kind: 'event', title: (ev.title || (/^\d{4}-\d{2}-\d{2}/.test(String(ev.event_date || '')) && new Date(String(ev.event_date).slice(0, 10) + 'T12:00:00').getDay() === 0 ? 'Sunday serving' : 'Serving event')) + ' cancelled', body: [ev.event_date ? 'Was planned for ' + fmtDate(ev.event_date) : '', ev.location, r.why].filter(Boolean).join(' \u00b7 '), when: r.when || ev.event_date, link: '#volunteering' });
       });
     } catch (e) { /* fine */ }
     items.sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || new Date(b.when || 0) - new Date(a.when || 0); });

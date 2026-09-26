@@ -31,7 +31,8 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
   const c1 = await ev(() => ({ active: document.querySelector('.panel.active').id, title: (document.querySelector('#w124cal .w124bar h2') || {}).textContent, cells: document.querySelectorAll('#w124cal .w124cell').length, chips: document.querySelectorAll('#w124cal .w124chip').length, today: !!document.querySelector('#w124cal .w124cell.today'), mast: (document.querySelector('#calendar > .w118mast h1') || {}).textContent }));
   ok("calendar opens on this month", c1.active === 'calendar' && c1.title === 'August 2026' && (c1.cells === 35 || c1.cells === 42) && c1.today, JSON.stringify(c1));
   ok("masthead", c1.mast === 'Calendar', c1.mast);
-  ok(staff ? "five layers for staff" : "three layers for board viewers", c1.chips === (staff ? 5 : 3), c1.chips);
+  /* wave130 adds the Board layer for anyone who can read the board (the fixture has board meetings) */
+  ok(staff ? "six layers for staff (Board included)" : "four layers for board viewers (Board included)", c1.chips === (staff ? 6 : 4), c1.chips);
   const meets = await ev(() => w124.state().meetings.map(m => m.summary + '|' + m.id));
   if (EMAIL.startsWith('steel')) ok("only my meetings (Steel)", meets.length === 3 && !meets.some(x => /Marketing Meeting/.test(x)) && !meets.some(x => /w124meet2/.test(x)), JSON.stringify(meets));
   if (EMAIL.startsWith('amanda')) ok("only my meetings (Amanda)", meets.length === 2 && meets.some(x => /w124meet2/.test(x)), JSON.stringify(meets));

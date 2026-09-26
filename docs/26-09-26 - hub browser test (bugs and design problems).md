@@ -2,6 +2,8 @@
 
 Steel asked: "play around with the hub in the Claude browser and test it to its limits, determine bugs and design problems and list them to me." Read only: nothing was changed while testing.
 
+**Status (26/09/26):** bugs 1 and 5 to 15 are fixed in wave130 (see "26-09-26 - wave130 browser test fixes"); bugs 2 to 4 are fixed by the People and access redesign (wave131). The content clean-ups Steel approved are done; the donations tile waits for the statements.
+
 ## How it was tested
 
 The Claude browser was not connected to this session, so the test ran in a sandboxed Chromium on the live build (md5 `dc8c3c44`), with the network cut off and every database call answered from a test snapshot (part live data, part test data). Nothing could reach the real data.
@@ -52,7 +54,7 @@ No page threw an error at any width or role.
 
 1. **Test accounts on the live roster:** "Info Test" (Operations Montreal) and "Steel Test" (Marketing), both active; info@welfareavenue.com is an admin. Remove them or mark them as test accounts.
 2. **Tate** is active on the Toronto roster as Regional Director of Ontario and a Toronto lead, while the Toronto page's priorities mention his step-back on June 20. Confirm and update.
-3. **Board titles disagree:** the roster says Steel is "Founder, Co-ED, Board President"; Board overview (from the July deck) says "Vice chair, incoming chair" and that he left the executive team on July 22, with Kellian as Chair. The org chart and the Board team page follow the roster.
+3. **Board titles disagree:** the roster says Steel is "Founder, Co-ED, Board President"; Board overview says "Vice chair", with Kellian as Chair. The org chart and the Board team page follow the roster.
 4. **Access clean-up from wave127 still stands:** Natasha inactive but admin, 9 admins now, roberto.toto with access but not on the roster.
 5. **Donations tile:** "$4,015 donations this fiscal year, from the ledger, since October 1" stops at June 30, where the statements end. Load July to September, or label it "to June 30".
 6. **Transcript archive:** duplicates (the July 15 marketing meeting twice, one filed under "Marketing, Branding & Web" instead of the Marketing team so it may not show on its page; the May 13 branding conversation twice; the July 22 weekly operations meeting stored twice, once under HR), and meeting dates a day early against their titles (July 22 filed as July 21, June 30 as June 29).

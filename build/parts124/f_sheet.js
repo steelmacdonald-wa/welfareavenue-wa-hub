@@ -57,6 +57,28 @@
       if (r.location) rows.push(kv('pin', E(r.location)));
       if (r.planned_meals) rows.push(kv('pot', E(r.planned_meals) + ' meals planned'));
       acts.push('<a class="w124btn" data-w124go="#volunteering/e/' + E(r.id) + '">Open the event</a>');
+    } else if (it.k === 'board') {
+      if (it.fy) {
+        rows.push(kv('clock', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))));
+        rows.push(kv('doc', 'The last day of FY' + it.fy + ' (October 1, ' + (it.fy - 1) + ' to September 30, ' + it.fy + '). The books close and the year-end review starts.'));
+        if (staffOk()) acts.push('<a class="w124btn ghost" data-w124go="#finances">Finances</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
+      } else if (it.cm) {
+        var bm = new Date(r.meets_at);
+        rows.push(kv('clock', 'By ' + E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
+        rows.push(kv('people', 'Each committee meets before the ' + E(r.title || 'board meeting') + ' on ' + E(fmtDate(bm, { weekday: 'long', month: 'long', day: 'numeric' })) + ', so everyone arrives informed.'));
+        acts.push('<a class="w124btn" data-w124go="#committees">Committees</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      } else {
+        var ms = new Date(r.meets_at);
+        rows.push(kv('clock', E(fmtDate(ms, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })) + ', ' + E(fmtTime(ms))));
+        var stw = { tentative: 'Tentative', scheduled: 'Scheduled', confirmed: 'Confirmed', held: 'Held' }[lower(r.status)] || '';
+        if (stw) rows.push(kv('spark', E(stw)));
+        if (r.note) html += '<div class="note">' + E(clip(r.note, 500)) + '</div>';
+        if (r.agenda_url) acts.push('<a class="w124btn" href="' + E(r.agenda_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>');
+        if (r.notes_url) acts.push('<a class="w124btn ghost" href="' + E(r.notes_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Minutes</a>');
+        acts.push('<a class="w124btn ghost" data-w124go="#governance">Board overview</a>');
+      }
     } else if (it.k === 'bday') {
       rows.push(kv('cake', E(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))));
       if (it.person) acts.push('<a class="w124btn ghost" data-w124go="#person/' + E(it.person.id) + '">Open their profile</a>');

@@ -63,6 +63,13 @@
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
   function words(n) { return ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n); }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  /* wave130: a serving with no title reads "Sunday serving, Montreal", never its code */
+  function servName(v) {
+    if (v && v.title && String(v.title).trim()) return String(v.title).trim();
+    var kind = String((v && v.kind) || 'service').toLowerCase(), d = v ? parseDay(v.event_date) : null;
+    var base = kind === 'service' ? (d && d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1);
+    return base + (v && v.location ? ', ' + v.location : '');
+  }
   function tabOk(t) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(t) >= 0; } catch (e) { return true; } }
   function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
   function deptColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }
@@ -306,7 +313,7 @@
     var fe = (X.fund || []).filter(function (f) { var d = parseDay(f.start_date); return d && d >= t && f.status !== 'idea' && f.status !== 'cancelled' && f.status !== 'done'; })[0];
     if (fe) out.push({ k: 'Fundraising', d: parseDay(fe.start_date), t: fe.title, go: '#fundevents', month: fe.precision === 'month' });
     var ve = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d >= t && v.status !== 'cancelled'; })[0];
-    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: ve.title || ve.code || 'Serving', go: '#volunteering' });
+    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: servName(ve), go: '#volunteering' });
     return out;
   }
   function briefHtml() {
@@ -420,7 +427,7 @@
     boardMeetings().filter(function (x) { return inWin(x.d); }).forEach(function (x) { rows.push({ d: x.d, k: 'Board', t: x.m.title || 'Board meeting', go: '#governance' }); });
     try { var cy = X.board && X.board.cycle; if (cy && cy.next) { var due = addDays(dayOfIso(cy.next.meets_at) || t, -7); if (inWin(due)) rows.push({ d: due, k: 'Committees', t: 'Committees meet by this date', go: '#committees' }); } } catch (e) { /* fine */ }
     (X.fund || []).filter(function (f) { return inWin(parseDay(f.start_date)) && f.status !== 'idea' && f.status !== 'cancelled'; }).forEach(function (f) { rows.push({ d: parseDay(f.start_date), k: 'Fundraising', t: f.title + (f.precision === 'month' ? ' (all month)' : ''), go: '#fundevents' }); });
-    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: v.title || v.code || 'Serving', go: '#volunteering' }); });
+    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: servName(v), go: '#volunteering' }); });
     return rows.sort(function (a, b) { return a.d - b.d; }).slice(0, 8);
   }
   function nextHtml() {

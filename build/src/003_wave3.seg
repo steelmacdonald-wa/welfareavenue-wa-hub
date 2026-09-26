@@ -80,9 +80,12 @@ async function waGetRecommendation(id, deptId, btn) {
     if (!rec) throw new Error(data && data.error || "empty");
     var row = (typeof DB_DECISIONS !== "undefined" ? DB_DECISIONS : []).find(function (d) { return d.id === id; });
     if (row) row.recommendation = rec;
-    var slot = document.getElementById("rec-" + deptId + "-" + id);
-    if (slot) slot.innerHTML = '<div class="rec-box">' + esc(rec) + '</div>';
-    btn.innerHTML = "&#8635; Refresh recommendation";
+    /* wave130: every copy of the card (the classic department card and the team page), and the one next to the button */
+    var slots = Array.prototype.slice.call(document.querySelectorAll('[id="rec-' + deptId + '-' + id + '"], [id="w116rec-' + deptId + '-' + id + '"]'));
+    var near = btn.closest && btn.closest("[data-dec]"), nearSlot = near && near.querySelector(".exec-rec");
+    if (nearSlot && slots.indexOf(nearSlot) < 0) slots.push(nearSlot);
+    slots.forEach(function (slot) { slot.innerHTML = '<div class="rec-box">' + esc(rec) + '</div>'; });
+    btn.innerHTML = /the recommendation|a recommendation/.test(prior) ? "&#8635; Refresh the recommendation" : "&#8635; Refresh recommendation";
     toast("Recommendation ready");
   } catch (e) {
     btn.innerHTML = prior;

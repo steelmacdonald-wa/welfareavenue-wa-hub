@@ -112,7 +112,7 @@
       if (can) can.addEventListener('click', function () {
         openModal(
           '<h3>Cancel this event?</h3>' +
-          '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ev.code || 'The event') + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
+          '<p class="read" style="margin:4px 0 8px">' + esc(ev.title || ('This serving' + (ev.code ? ' (' + ev.code + ')' : ''))) + ' on ' + esc(ev.event_date) + ' will be marked cancelled. It stays in the calendar history and can be restored.</p>' +
           '<label class="w101lbl">Reason (kept in the event notes)</label>' +
           '<input type="text" id="w106why" maxlength="200" style="width:100%;box-sizing:border-box" />' +
           '<div style="margin-top:12px"><button class="btn" id="w106go">Cancel the event</button> <button class="btn ghost" id="w106no">Keep it</button></div>'

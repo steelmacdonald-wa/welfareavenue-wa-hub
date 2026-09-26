@@ -650,7 +650,7 @@
       return '<div class="d" data-dec="' + E(x.id) + '"><b>' + E(x.title) + '</b>' +
         '<div class="m"><span class="ex">' + E(ex) + ' decides</span>' + (x.reason_category ? '<span>' + E(x.reason_category) + '</span>' : '') + (x.opened_at ? '<span>open since ' + E(String(x.opened_at).slice(0, 10)) + '</span>' : '') + '</div>' +
         (x.suggested_move ? '<div class="mv">Suggested move: ' + E(x.suggested_move) + '</div>' : '') +
-        '<div class="exec-rec" id="rec-' + E(d) + '-' + E(x.id) + '">' + (x.recommendation ? '<div class="rec-box">' + E(x.recommendation) + '</div>' : '') + '</div>' +
+        '<div class="exec-rec" id="w116rec-' + E(d) + '-' + E(x.id) + '">' + (x.recommendation ? '<div class="rec-box">' + E(x.recommendation) + '</div>' : '') + '</div>' +
         '<div class="acts">' + (staff() ? '<button data-rec="' + E(x.id) + '" data-w116act="rec" data-d="' + E(d) + '">' + (x.recommendation ? '&#8635; Refresh the recommendation' : '&#10024; Get a recommendation') + '</button>' : '') + '<a data-w116go="#decision/' + E(x.id) + '">Open on the dashboard &rarr;</a></div></div>';
     }).join('') + '</div></div>';
   }

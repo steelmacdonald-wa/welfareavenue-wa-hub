@@ -22,7 +22,7 @@
     var fe = (X.fund || []).filter(function (f) { var d = parseDay(f.start_date); return d && d >= t && f.status !== 'idea' && f.status !== 'cancelled' && f.status !== 'done'; })[0];
     if (fe) out.push({ k: 'Fundraising', d: parseDay(fe.start_date), t: fe.title, go: '#fundevents', month: fe.precision === 'month' });
     var ve = (X.vol || []).filter(function (v) { var d = parseDay(v.event_date); return d && d >= t && v.status !== 'cancelled'; })[0];
-    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: ve.title || ve.code || 'Serving', go: '#volunteering' });
+    if (ve) out.push({ k: 'Serving', d: parseDay(ve.event_date), t: servName(ve), go: '#volunteering' });
     return out;
   }
   function briefHtml() {
@@ -136,7 +136,7 @@
     boardMeetings().filter(function (x) { return inWin(x.d); }).forEach(function (x) { rows.push({ d: x.d, k: 'Board', t: x.m.title || 'Board meeting', go: '#governance' }); });
     try { var cy = X.board && X.board.cycle; if (cy && cy.next) { var due = addDays(dayOfIso(cy.next.meets_at) || t, -7); if (inWin(due)) rows.push({ d: due, k: 'Committees', t: 'Committees meet by this date', go: '#committees' }); } } catch (e) { /* fine */ }
     (X.fund || []).filter(function (f) { return inWin(parseDay(f.start_date)) && f.status !== 'idea' && f.status !== 'cancelled'; }).forEach(function (f) { rows.push({ d: parseDay(f.start_date), k: 'Fundraising', t: f.title + (f.precision === 'month' ? ' (all month)' : ''), go: '#fundevents' }); });
-    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: v.title || v.code || 'Serving', go: '#volunteering' }); });
+    (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: servName(v), go: '#volunteering' }); });
     return rows.sort(function (a, b) { return a.d - b.d; }).slice(0, 8);
   }
   function nextHtml() {

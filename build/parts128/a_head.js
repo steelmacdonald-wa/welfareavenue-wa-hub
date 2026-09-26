@@ -63,6 +63,13 @@
   function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
   function words(n) { return ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'][n] || String(n); }
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  /* wave130: a serving with no title reads "Sunday serving, Montreal", never its code */
+  function servName(v) {
+    if (v && v.title && String(v.title).trim()) return String(v.title).trim();
+    var kind = String((v && v.kind) || 'service').toLowerCase(), d = v ? parseDay(v.event_date) : null;
+    var base = kind === 'service' ? (d && d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1);
+    return base + (v && v.location ? ', ' + v.location : '');
+  }
   function tabOk(t) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(t) >= 0; } catch (e) { return true; } }
   function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
   function deptColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }

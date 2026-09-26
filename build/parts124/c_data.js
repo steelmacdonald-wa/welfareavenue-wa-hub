@@ -3,7 +3,7 @@
   var C = {
     view: lsGet('w124view') === 'agenda' ? 'agenda' : 'month', anchor: monthStart(today()),
     layers: (function () { var o = {}; LAYERS.forEach(function (x) { o[x.k] = true; }); try { var s = JSON.parse(lsGet('w124layers') || 'null'); if (s && typeof s === 'object') Object.keys(s).forEach(function (k) { if (k in o) o[k] = !!s[k]; }); } catch (e) { /* fine */ } return o; })(),
-    fund: [], goals: null, bdays: [], projects: [], loadedBase: 0, loadingBase: null,
+    fund: [], goals: null, bdays: [], projects: [], boardMeets: [], loadedBase: 0, loadingBase: null,
     range: {}, meetings: [], posts: [], planned: [], vol: [], rangeKey: '', loadingRange: null,
     sheet: null, mine: null, idx: {}, scrollOnce: true
   };
@@ -31,16 +31,19 @@
         q(db.from('fund_events').select('*').order('sort').order('start_date')),
         q(db.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle()),
         staffOk() ? q(db.from('hub_birthdays').select('*')) : Promise.resolve({ data: [] }),
-        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] })
+        staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] }),
+        staffOk() || boardOk() ? q(db.from('board_meetings').select('id, meets_at, kind, title, status, agenda_url, notes_url, note').order('meets_at')) : Promise.resolve({ data: [] })
       ]);
       if (a[0].data) C.fund = a[0].data;
       C.goals = (a[1].data && a[1].data.value) || C.goals || { minimum: 10000, healthy: 15000, target: 20000, notes: [], planning: [] };
       if (a[2].data) C.bdays = a[2].data;
       if (a[3].data) C.projects = a[3].data;
+      if (Array.isArray(a[4].data)) C.boardMeets = a[4].data.filter(function (m) { return m && m.meets_at && lower(m.status) !== 'cancelled'; });
       C.loadedBase = Date.now();
     })();
     try { await C.loadingBase; } finally { C.loadingBase = null; }
   }
+  function hasBoard() { return C.boardMeets.length > 0; }
   function myBirthday() { var em = me().email; return C.bdays.filter(function (b) { return lower(b.email) === em; })[0] || null; }
 
   /* ---------- the range data: meetings, posts, servings ---------- */
@@ -117,8 +120,23 @@
     if (L.vol) C.vol.forEach(function (v) {
       var d = parseDay(v.event_date); if (!d || d < from || d >= to) return;
       var kind = lower(v.kind || 'service');
-      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? 'Serving' : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
+      out.push({ k: 'vol', id: 'v' + v.id, ref: v, day: ymd(d), allDay: true, title: v.title || (kind === 'service' ? (d.getDay() === 0 ? 'Sunday serving' : 'Serving') : kind.charAt(0).toUpperCase() + kind.slice(1)) + (v.location ? ', ' + v.location : ''), sub: v.location || '', cancelled: lower(v.status) === 'cancelled', past: d < t0 });
     });
+    if (L.board && hasBoard()) {
+      C.boardMeets.forEach(function (m) {
+        var s = new Date(m.meets_at); if (isNaN(s.getTime())) return;
+        var local = mk(s.getFullYear(), s.getMonth(), s.getDate(), 12);
+        if (local >= from && local < to) out.push({ k: 'board', id: 'bm' + m.id, ref: m, day: ymd(local), at: s, time: fmtTime(s), title: m.title || 'Board meeting', sub: lower(m.status) === 'tentative' ? 'Tentative' : '', past: s < new Date() });
+        /* the committees meet the week before a board meeting that is still ahead */
+        var due = addDays(local, -7);
+        if (local >= t0 && due >= from && due < to) out.push({ k: 'board', id: 'bc' + m.id, ref: m, cm: true, day: ymd(due), allDay: true, title: 'Committee meetings due', sub: 'A week before the ' + (m.title || 'board meeting'), past: due < t0 });
+      });
+      /* the fiscal year ends on September 30 */
+      for (var fy = from.getFullYear(); fy <= to.getFullYear(); fy++) {
+        var fe = mk(fy, 8, 30, 12);
+        if (fe >= from && fe < to) out.push({ k: 'board', id: 'fy' + fy, fy: fy, day: ymd(fe), allDay: true, title: 'Fiscal year ends', sub: 'FY' + fy + ' closes', past: fe < t0 });
+      }
+    }
     if (L.bday) C.bdays.forEach(function (b) {
       for (var y = from.getFullYear(); y <= to.getFullYear(); y++) {
         var d = mk(y, b.month - 1, b.day, 12); if (d.getMonth() !== b.month - 1) continue;
