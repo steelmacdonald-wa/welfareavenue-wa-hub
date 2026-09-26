@@ -143,23 +143,23 @@
         "type": "stats",
         "items": [
          {
-          "n": "25,000+",
-          "l": "meals delivered"
-         },
-         {
-          "n": "600+",
-          "l": "volunteers engaged"
+          "n": "10,000+",
+          "l": "meals served at our Sunday servings"
          },
          {
           "n": "3,000+",
           "l": "holiday gifts delivered"
          },
          {
+          "n": "201",
+          "l": "active volunteers in 2025"
+         },
+         {
           "n": "$40,000+",
           "l": "raised since our founding"
          }
         ],
-        "note": "From our 2026 brand guide and recent grant applications."
+        "note": "From our 2025 Impact Report."
        }
       ]
      },
@@ -1545,7 +1545,7 @@
    "id": 1025,
    "category": "Hub tours",
    "title": "Page tour: Marketing analytics",
-   "description": "Followers, reach, what worked, and what to try next.",
+   "description": "Followers, reach and what worked over any range back to the start, every post with its numbers, who follows us, and how far back each platform goes.",
    "source": "hub",
    "path_group": "Hub page tours",
    "sort": 23,
@@ -1556,7 +1556,7 @@
     "tour": "socialstats",
     "tab": "socialstats"
    },
-   "minutes": 2,
+   "minutes": 3,
    "xp": 20,
    "resource_url": null,
    "ext_id": null,

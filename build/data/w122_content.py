@@ -28,11 +28,11 @@ ACTIVITIES = {
             {"type": "p", "text": "Our charitable purposes are the **relief of poverty** and the **advancement of education**. The eight activities are how we carry out those purposes, day to day."},
             {"type": "quote", "text": "Welfare Avenue is a youth-powered non-profit dedicated to fighting food insecurity and poverty through direct community action, delivering meals and essential support directly to people where they are.", "by": "Our mission"},
             {"type": "stats", "items": [
-                {"n": "25,000+", "l": "meals delivered"},
-                {"n": "600+", "l": "volunteers engaged"},
+                {"n": "10,000+", "l": "meals served at our Sunday servings"},
                 {"n": "3,000+", "l": "holiday gifts delivered"},
+                {"n": "201", "l": "active volunteers in 2025"},
                 {"n": "$40,000+", "l": "raised since our founding"}
-            ], "note": "From our 2026 brand guide and recent grant applications."}
+            ], "note": "From our 2025 Impact Report."}
         ]},
         {"id": "eight", "t": "The eight activities", "blocks": [
             {"type": "p", "text": "Tap an activity to open it. Each one has a purpose, the way we carry it out, and the teams involved."},
