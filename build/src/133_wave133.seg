@@ -1,0 +1,835 @@
+/* =====================================================================
+   WA v133 the org chart, interactive (26/09/26)
+   =====================================================================
+   Steel: "I want the org chart to be more interactive where we can choose direct reports and move
+   things around as executives. Executives should also be able to visualize empty positions."
+
+   - The chart (#orgchart) reads the reporting lines: the board, the executive directors, then each
+     team with its lead and everyone under them, nested by who reports to whom. Empty positions show
+     as dashed cards (open, hiring or on hold, with a note). Search, a team filter and a switch for the
+     open positions. Anyone on staff reads it; click anyone to see who they report to and who reports
+     to them, and open their profile.
+   - Executives and admins: Rearrange (drag someone onto the person they report to, or onto a team to
+     make them its lead, with an Undo), choose a person's direct reports, retitle a seat, add an empty
+     position under anyone, fill it, take someone off a seat, remove an empty position, and place
+     anyone who is not on the chart yet. The database checks each change and keeps it in the audit
+     trail; the roster keeps the chart in step (a new person gets a seat, someone who leaves leaves an
+     open position).
+   - A person's page says who they report to and who reports to them.
+   Data: wa133_org (org_positions, wa_org_editor(), org_move(), org_set_reports(), org_add_opening(),
+   org_update(), org_fill(), org_place(), org_vacate(), org_remove(), the roster trigger).
+   ===================================================================== */
+(function () {
+  if (window.__wa133) return; window.__wa133 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E', PURPLE = '#6F64AB';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var STATUS = { open: ['Open', 'rgba(16,63,57,.08)', GREEN], hiring: ['Hiring', 'rgba(220,165,39,.22)', '#6b4d05'], on_hold: ['On hold', 'rgba(121,119,115,.16)', '#5c5a56'] };
+
+  var P = {
+    x: '<path d="M6 6l12 12M18 6 6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>', move: '<path d="M12 3v18M3 12h18M12 3 9 6M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/>',
+    seat: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.8-3.6 3.6-5.8 7-5.8s6.2 2.2 7 5.8"/>', open: '<circle cx="12" cy="8" r="3.5" stroke-dasharray="3 2.2"/><path d="M5 20c.8-3.6 3.6-5.8 7-5.8s6.2 2.2 7 5.8" stroke-dasharray="3 2.2"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', up: '<path d="M12 19V5M6 11l6-6 6 6"/>', undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/>',
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>', out: '<path d="M14 4.5h5.5v15H14M10 8l-4 4 4 4M6 12h10"/>',
+    trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>', mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/>',
+    crown: '<path d="M4 17.5h16M5 17.5 4 7.5l4.5 4L12 5l3.5 6.5L20 7.5l-1 10"/>', spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>'
+  };
+  function I(n, cls) { return '<svg class="w133i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function tabOk(id) { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf(id) >= 0; } catch (e) { return true; } }
+  function teams() { try { return ((window.WA_TEAMS && WA_TEAMS.order) || (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : [])).filter(function (d) { return d !== 'board'; }); } catch (e) { return []; } }
+  function teamLabel(d) { try { return (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function teamShort(d) { try { return (window.WA_TEAMS && WA_TEAMS.short && WA_TEAMS.short[d]) || teamLabel(d); } catch (e) { return d || ''; } }
+  function teamColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }
+  function members() { try { return ((typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []).filter(function (m) { return m.active !== false; }); } catch (e) { return []; } }
+  function memberById(id) { if (id == null) return null; return members().filter(function (m) { return String(m.id) === String(id); })[0] || null; }
+  function avatar(m, size) { try { if (window.w116Avatar) return window.w116Avatar(m, size); } catch (e) { /* fine */ } return '<span class="w133ini" style="width:' + size + 'px;height:' + size + 'px">' + E(String((m && m.name) || '?').slice(0, 1)) + '</span>'; }
+
+  var O = { pos: null, loading: null, at: 0, err: '', canEdit: false, arrange: false, q: '', team: '', showOpen: true, sheet: null, drag: null, online: {}, snackT: null, ver: 0 };
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'w133css';
+  css.textContent = ''
+    + '#w133,#w133sheet,#w133snack,.w133pline{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '.w133i{width:17px;height:17px;flex:none;display:inline-block;vertical-align:middle;}'
+    + '#orgchart .card.w133old{display:none !important;}'
+    + '#w133{display:flex;flex-direction:column;gap:14px;max-width:1240px;width:100%;box-sizing:border-box;min-width:0;}'
+    /* the bar */
+    + '#w133 .w133bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    + '#w133 .w133stats{font-size:13px;color:var(--wa-muted,#5c6b66);flex:1 1 260px;min-width:0;}'
+    + '#w133 .w133stats b{color:' + GREEN + ';}'
+    + '#w133 .w133q{position:relative;flex:0 1 240px;min-width:170px;}'
+    + '#w133 .w133q .w133i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--wa-muted,#5c6b66);width:16px;height:16px;pointer-events:none;}'
+    + '#w133 .w133q input{width:100%;box-sizing:border-box;padding:9px 12px 9px 34px !important;border:1px solid rgba(16,63,57,.16);border-radius:12px;font-family:' + BODY + ';font-size:13.5px;background:var(--wa-card,#fff);}'
+    + '#w133 .w133tog{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;user-select:none;}'
+    + '#w133 .w133tog input{width:17px;height:17px;accent-color:' + GREEN + ';margin:0;}'
+    + '#w133 .w133btn,#w133sheet .w133btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:11px;padding:9px 13px;font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;background:rgba(16,63,57,.08);color:' + GREEN + ';white-space:nowrap;}'
+    + '#w133 .w133btn:hover,#w133sheet .w133btn:hover{background:rgba(16,63,57,.14);}'
+    + '#w133 .w133btn.pri,#w133sheet .w133btn.pri{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w133 .w133btn.pri:hover,#w133sheet .w133btn.pri:hover{background:#0b2f2a;}'
+    + '#w133sheet .w133btn.warn{background:rgba(179,64,47,.10);color:' + FLAG + ';}'
+    + '#w133 .w133btn .w133i,#w133sheet .w133btn .w133i{width:15px;height:15px;}'
+    + '#w133 .w133btn[disabled],#w133sheet .w133btn[disabled]{opacity:.55;cursor:default;}'
+    + '#w133 .w133chips{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '#w133 .w133chip{border:1px solid rgba(16,63,57,.16);background:var(--wa-card,#fff);color:' + INK + ';border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:' + BODY + ';display:inline-flex;align-items:center;gap:6px;}'
+    + '#w133 .w133chip i{width:8px;height:8px;border-radius:50%;display:inline-block;}'
+    + '#w133 .w133chip.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '#w133 .w133arr{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:rgba(220,165,39,.12);border:1px solid rgba(220,165,39,.4);border-radius:14px;padding:10px 14px;font-size:13.5px;line-height:1.45;}'
+    + '#w133 .w133arr .t{flex:1 1 320px;}'
+    /* the levels */
+    + '#w133 .w133lv{background:var(--wa-card,#fff);border-radius:18px;box-shadow:' + SH1 + ';padding:14px 16px;}'
+    + '#w133 .w133lv h3,#w133 .w133team h3{font-family:' + HEAD + ';font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';margin:0 0 10px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}'
+    + '#w133 .w133lv h3 span,#w133 .w133team h3 span{font-family:' + BODY + ';font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--wa-muted,#5c6b66);}'
+    + '#w133 .w133lv h3 a{font-family:' + BODY + ';font-size:12px;font-weight:700;text-transform:none;letter-spacing:0;color:' + GREEN + ';cursor:pointer;margin-left:auto;}'
+    + '#w133 .w133board .w133row{display:flex;gap:8px;flex-wrap:wrap;}'
+    + '#w133 .w133bchip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 5px;border-radius:999px;background:rgba(16,63,57,.05);font-size:13px;cursor:pointer;border:none;font-family:' + BODY + ';color:' + INK + ';text-align:left;}'
+    + '#w133 .w133bchip:hover{background:rgba(16,63,57,.1);}'
+    + '#w133 .w133bchip b{font-weight:700;}'
+    + '#w133 .w133bchip span.r{color:var(--wa-muted,#5c6b66);font-size:12px;}'
+    + '#w133 .w133link{width:2px;height:16px;background:rgba(16,63,57,.2);margin:-8px auto;}'
+    + '#w133 .w133exec .w133row{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;}'
+    + '#w133 .w133exec .w133c{padding:12px 14px;background:rgba(16,63,57,.04);}'
+    + '#w133 .w133exec .w133c b{font-size:15.5px;}'
+    + '#w133 .w133grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:14px;align-items:start;}'
+    + '#w133 .w133team{background:var(--wa-card,#fff);border-radius:18px;box-shadow:' + SH1 + ';padding:12px 12px 14px;border-top:4px solid var(--tc,' + GREEN + ');min-width:0;}'
+    + '#w133 .w133team h3{font-size:19px;margin:2px 4px 8px;color:var(--tc,' + GREEN + ');}'
+    + '#w133 .w133team .empty{font-size:13px;color:var(--wa-muted,#5c6b66);padding:6px 6px 2px;}'
+    + '#w133 .w133team .addrow{margin:8px 4px 0;}'
+    /* a seat */
+    + '#w133 .w133node{position:relative;}'
+    + '#w133 .w133c{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;cursor:pointer;position:relative;border:1.5px solid transparent;background:transparent;width:100%;box-sizing:border-box;text-align:left;font-family:' + BODY + ';color:' + INK + ';}'
+    + '#w133 .w133c:hover{background:rgba(16,63,57,.05);}'
+    + '#w133 .w133c:focus-visible{outline:2px solid ' + GREEN + ';outline-offset:1px;}'
+    + '#w133 .w133c .avw{position:relative;flex:none;}'
+    + '#w133 .w133c .avw .w133on{position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-radius:50%;background:' + TEAL + ';border:2px solid #fff;}'
+    + '#w133 .w133c .tx{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px;}'
+    + '#w133 .w133c .tx b{font-size:14px;font-weight:700;line-height:1.25;}'
+    + '#w133 .w133c .tx span{font-size:12px;color:var(--wa-muted,#5c6b66);line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}'
+    + '#w133 .w133c .tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}'
+    + '#w133 .w133tag{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;letter-spacing:.2px;border-radius:6px;padding:2px 6px;background:rgba(16,63,57,.07);color:' + GREEN + ';white-space:nowrap;}'
+    + '#w133 .w133tag.tm{color:#fff;}'
+    + '#w133 .w133c .cnt{font-size:11px;font-weight:700;color:var(--wa-muted,#5c6b66);white-space:nowrap;align-self:flex-start;margin-top:2px;}'
+    + '#w133 .w133c.open{border:1.5px dashed rgba(140,106,46,.55);background:rgba(220,165,39,.06);}'
+    + '#w133 .w133c.open:hover{background:rgba(220,165,39,.12);}'
+    + '#w133 .w133c.open .oic{width:34px;height:34px;border-radius:50%;border:1.5px dashed rgba(140,106,46,.7);display:flex;align-items:center;justify-content:center;color:#8C6A2E;flex:none;}'
+    + '#w133 .w133c.open .kk{font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:#8C6A2E;}'
+    + '#w133 .w133st{display:inline-block;font-size:10.5px;font-weight:700;border-radius:6px;padding:2px 6px;}'
+    + '#w133 .w133kids{margin-left:17px;padding-left:10px;border-left:2px solid rgba(16,63,57,.12);}'
+    + '#w133 .w133kids > .w133node::before{content:"";position:absolute;left:-10px;top:24px;width:9px;height:2px;background:rgba(16,63,57,.12);}'
+    + '#w133 .w133more{background:none;border:none;color:' + GREEN + ';font-weight:700;font-size:12px;cursor:pointer;padding:4px 10px;font-family:' + BODY + ';}'
+    /* search and filter */
+    + '#w133.searching .w133c{opacity:.32;}'
+    + '#w133.searching .w133c.hit{opacity:1;box-shadow:0 0 0 2px ' + GOLD + ';background:rgba(220,165,39,.10);}'
+    + '#w133.searching .w133bchip{opacity:.32;}'
+    + '#w133.searching .w133bchip.hit{opacity:1;box-shadow:0 0 0 2px ' + GOLD + ';}'
+    /* not on the chart yet */
+    + '#w133 .w133tray{background:var(--wa-card,#fff);border-radius:18px;box-shadow:' + SH1 + ';padding:12px 16px;}'
+    + '#w133 .w133tray h3{font-family:' + HEAD + ';font-size:18px;font-weight:600;text-transform:uppercase;color:' + GREEN + ';margin:0 0 8px;}'
+    + '#w133 .w133tray p{font-size:12.5px;color:var(--wa-muted,#5c6b66);margin:0 0 8px;}'
+    + '#w133 .w133tray .w133row{display:flex;gap:8px;flex-wrap:wrap;}'
+    /* rearranging */
+    + '#w133.arr .w133c[draggable="true"],#w133.arr .w133bchip[draggable="true"]{cursor:grab;}'
+    + '#w133.arr .w133c.dragging,#w133.arr .w133bchip.dragging{opacity:.4;}'
+    + '#w133.arr .over{box-shadow:0 0 0 2px ' + GREEN + ' inset !important;background:rgba(42,140,122,.10) !important;}'
+    + '#w133.arr .w133team h3,#w133.arr .w133exec h3{border-radius:10px;padding:2px 6px;margin-left:-2px;}'
+    + '#w133 .w133c .addk{display:none;margin-left:auto;flex:none;width:26px;height:26px;border-radius:8px;border:none;background:rgba(16,63,57,.08);color:' + GREEN + ';cursor:pointer;align-items:center;justify-content:center;}'
+    + '#w133.arr .w133c .addk{display:inline-flex;}'
+    + '#w133 .w133c .addk .w133i{width:14px;height:14px;}'
+    + '#w133 .w133err{font-size:13px;color:' + FLAG + ';}'
+    + '#w133 .w133load{height:140px;border-radius:18px;background:linear-gradient(90deg,rgba(16,63,57,.05),rgba(16,63,57,.09),rgba(16,63,57,.05));background-size:200% 100%;animation:w133sh 1.4s linear infinite;}'
+    + '@keyframes w133sh{0%{background-position:200% 0}100%{background-position:-200% 0}}'
+    + '@media (prefers-reduced-motion:reduce){#w133 .w133load{animation:none;}}'
+    /* the sheet */
+    + '#w133sheet{position:fixed;inset:0;z-index:130;display:none;}'
+    + '#w133sheet.on{display:block;}'
+    + '#w133sheet .bk{position:absolute;inset:0;background:rgba(16,63,57,.30);}'
+    + '#w133sheet .pane{position:absolute;top:0;right:0;bottom:0;width:min(480px,100vw);background:' + CREAM + ';box-shadow:-24px 0 60px rgba(16,63,57,.22);display:flex;flex-direction:column;animation:w133in .26s cubic-bezier(.16,1,.3,1);}'
+    + '@keyframes w133in{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}'
+    + '@media (prefers-reduced-motion:reduce){#w133sheet .pane{animation:none;}}'
+    + '#w133sheet .ph{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid rgba(16,63,57,.08);}'
+    + '#w133sheet .ph .kk{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--wa-muted,#5c6b66);margin:0 0 4px;}'
+    + '#w133sheet .ph h2{font-family:' + HEAD + ';font-size:26px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1.05;}'
+    + '#w133sheet .ph h2::after{display:none !important;}'
+    + '#w133sheet .ph .sub{font-size:13px;color:var(--wa-muted,#5c6b66);margin-top:4px;}'
+    + '#w133sheet .ph .sp{flex:1;}'
+    + '#w133sheet .xb{flex:none;width:38px;height:38px;border-radius:10px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;display:flex;align-items:center;justify-content:center;}'
+    + '#w133sheet .bd{flex:1;overflow:auto;padding:16px 20px 24px;display:flex;flex-direction:column;gap:16px;}'
+    + '#w133sheet .sec{background:var(--wa-card,#fff);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;}'
+    + '#w133sheet h4{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--wa-muted,#5c6b66);margin:0 0 8px;}'
+    + '#w133sheet .sec p{font-size:13.5px;line-height:1.5;margin:0 0 8px;}'
+    + '#w133sheet .sec p:last-child{margin-bottom:0;}'
+    + '#w133sheet .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
+    + '#w133sheet select,#w133sheet input[type=text],#w133sheet input[type=search],#w133sheet textarea{font-family:' + BODY + ';font-size:14px;padding:9px 11px;border:1px solid rgba(16,63,57,.2);border-radius:10px;background:#fff;box-sizing:border-box;width:100%;}'
+    + '#w133sheet textarea{min-height:70px;resize:vertical;}'
+    + '#w133sheet label.f{display:block;font-size:12.5px;font-weight:600;margin:0 0 10px;}'
+    + '#w133sheet label.f > select,#w133sheet label.f > input,#w133sheet label.f > textarea{margin-top:5px;}'
+    + '#w133sheet .who{display:flex;align-items:center;gap:10px;padding:6px 4px;border-radius:10px;cursor:pointer;}'
+    + '#w133sheet .who:hover{background:rgba(16,63,57,.05);}'
+    + '#w133sheet .who b{font-size:13.5px;}'
+    + '#w133sheet .who span{font-size:12px;color:var(--wa-muted,#5c6b66);}'
+    + '#w133sheet .picks{max-height:320px;overflow:auto;display:flex;flex-direction:column;gap:2px;margin-top:8px;}'
+    + '#w133sheet .picks label{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:5px 6px;border-radius:9px;cursor:pointer;}'
+    + '#w133sheet .picks label:hover{background:rgba(16,63,57,.05);}'
+    + '#w133sheet .picks label input{width:17px;height:17px;accent-color:' + GREEN + ';margin:0;flex:none;}'
+    + '#w133sheet .picks label em{font-style:normal;font-size:12px;color:var(--wa-muted,#5c6b66);margin-left:auto;text-align:right;}'
+    + '#w133sheet .picks .gh{font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,#5c6b66);margin:8px 6px 2px;}'
+    + '#w133sheet .sts{display:flex;gap:6px;flex-wrap:wrap;}'
+    + '#w133sheet .sts button{border:1.5px solid rgba(16,63,57,.16);background:#fff;border-radius:10px;padding:7px 11px;font-family:' + BODY + ';font-size:13px;font-weight:600;cursor:pointer;}'
+    + '#w133sheet .sts button.on{border-color:' + GREEN + ';background:rgba(16,63,57,.07);box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
+    + '#w133sheet .err{font-size:12.5px;color:' + FLAG + ';}'
+    + '#w133sheet .err:empty{display:none;}'
+    + '#w133sheet .note{font-size:12.5px;color:var(--wa-muted,#5c6b66);line-height:1.45;}'
+    /* the undo bar */
+    + '#w133snack{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:150;background:' + GREEN + ';color:' + CREAM + ';border-radius:14px;box-shadow:0 16px 40px rgba(16,63,57,.35);padding:10px 12px 10px 16px;display:none;align-items:center;gap:12px;max-width:calc(100vw - 32px);font-size:13.5px;}'
+    + '#w133snack.on{display:flex;}'
+    + '#w133snack .t{flex:1;min-width:0;line-height:1.4;}'
+    + '#w133snack button{border:none;background:rgba(255,250,242,.12);color:' + GOLD + ';font-family:' + BODY + ';font-weight:700;font-size:13px;border-radius:9px;padding:7px 10px;cursor:pointer;white-space:nowrap;}'
+    + '#w133snack .x{color:' + CREAM + ';}'
+    /* a person's page */
+    + '.w133pline{font-size:13px;color:var(--wa-muted,#5c6b66);margin-top:8px;line-height:1.5;}'
+    + '.w133pline a{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;}'
+    + '.w133pline a:hover{text-decoration:underline;}'
+    /* phones */
+    + '@media (max-width:760px){'
+    + '#w133 .w133grid{grid-template-columns:1fr;}'
+    + '#w133 .w133q{flex:1 1 100%;}'
+    + '#w133 .w133kids{margin-left:12px;}'
+    + '#w133snack{bottom:calc(76px + env(safe-area-inset-bottom));}'
+    + '}';
+  document.head.appendChild(css);
+
+  /* ---------- the data: org_positions and who may change them ---------- */
+  function rpc(fn, args) {
+    return Promise.resolve(db.rpc(fn, args || {})).then(function (r) { if (r && r.error) throw r.error; return r ? r.data : null; });
+  }
+  function load(force) {
+    if (O.loading) return O.loading;
+    if (!force && O.pos && Date.now() - O.at < 30000) return Promise.resolve(O.pos);
+    O.loading = Promise.all([
+      Promise.resolve(db.from('org_positions').select('*').order('sort').order('id')),
+      rpc('wa_org_editor').catch(function () { return false; })
+    ]).then(function (res) {
+      var r = res[0];
+      if (r && r.error) throw r.error;
+      O.pos = (r && r.data) || [];
+      O.canEdit = res[1] === true;
+      O.at = Date.now(); O.err = ''; O.loading = null; O.ver++;
+      return O.pos;
+    }).catch(function (e) { O.loading = null; O.err = errText(e); if (!O.pos) O.pos = null; throw e; });
+    return O.loading;
+  }
+  function errText(e) {
+    var m = String((e && (e.message || e.details || e.hint)) || e || '').replace(/^.*?ERROR:\s*/, '');
+    if (/only executives and admins/i.test(m)) return 'Only executives and admins can change the chart.';
+    if (/reports to them/i.test(m)) return 'Someone cannot report to a person who reports to them.';
+    if (/stay at the top/i.test(m)) return 'The executive directors stay at the top of the chart.';
+    if (/already filled/i.test(m)) return 'That position is already filled.';
+    if (/already on the chart/i.test(m)) return 'They are already on the chart.';
+    if (/off the seat first/i.test(m)) return 'Take the person off the seat first.';
+    if (/give the position a title/i.test(m)) return 'Give the position a title.';
+    if (/fetch|network|Failed to/i.test(m)) return 'Could not reach the Hub. Nothing changed. Try again.';
+    return m || 'Something went wrong. Nothing changed.';
+  }
+
+  /* ---------- reading the chart ---------- */
+  function ix() {
+    var byId = {}, kids = {}, seatOf = {};
+    (O.pos || []).forEach(function (p) { byId[p.id] = p; if (p.member_id != null) seatOf[p.member_id] = p; });
+    (O.pos || []).forEach(function (p) { var k = p.reports_to == null ? 'top' : String(p.reports_to); (kids[k] = kids[k] || []).push(p); });
+    Object.keys(kids).forEach(function (k) { kids[k].sort(seatOrder); });
+    return { byId: byId, kids: kids, seatOf: seatOf };
+  }
+  function holder(p) { return p && p.member_id != null ? memberById(p.member_id) : null; }
+  function isOpen(p) { return !holder(p); }
+  function seatName(p) { var m = holder(p); return m ? m.name : 'Open position'; }
+  function seatTeam(p) { var m = holder(p); return (m && m.department) || p.department || ''; }
+  function seatOrder(a, b) {
+    var oa = isOpen(a) ? 1 : 0, ob = isOpen(b) ? 1 : 0;
+    if (oa !== ob) return oa - ob;
+    if ((a.sort || 100) !== (b.sort || 100)) return (a.sort || 100) - (b.sort || 100);
+    return lower(seatName(a) + a.title).localeCompare(lower(seatName(b) + b.title));
+  }
+  function execs(X) { return (O.pos || []).filter(function (p) { return p.kind === 'exec'; }).sort(seatOrder); }
+  function isExec(p) { return !!p && p.kind === 'exec'; }
+  /* the seats at the head of the teams: reporting to both executive directors, or to one of them */
+  function heads(X) { return (O.pos || []).filter(function (p) { return p.kind !== 'exec' && (p.reports_to == null || isExec(X.byId[p.reports_to])); }).sort(seatOrder); }
+  function kidsOf(X, p) { return (X.kids[String(p.id)] || []).filter(function (k) { return O.showOpen || !isOpen(k); }); }
+  /* is node inside root's part of the chart (root included) */
+  function isUnder(X, node, root) { var seen = {}, cur = X.byId[node]; while (cur && !seen[cur.id]) { if (String(cur.id) === String(root)) return true; seen[cur.id] = 1; cur = cur.reports_to == null ? null : X.byId[cur.reports_to]; } return false; }
+  function managerLabel(X, p) {
+    if (!p) return '';
+    if (p.kind === 'exec') return 'the board';
+    if (p.reports_to == null) return 'the executive directors';
+    var g = X.byId[p.reports_to]; return g ? (holder(g) ? holder(g).name : 'an open position (' + g.title + ')') : 'the executive directors';
+  }
+  function mgrShort(X, p) {
+    if (!p) return '';
+    if (p.kind === 'exec') return 'the board';
+    if (p.reports_to == null) return 'the co-EDs';
+    var g = X.byId[p.reports_to]; return g ? (holder(g) ? first(holder(g).name) : 'an open position') : 'the co-EDs';
+  }
+  function countUnder(X, p) { var n = 0, st = (X.kids[String(p.id)] || []).slice(), seen = {}; while (st.length) { var k = st.pop(); if (seen[k.id]) continue; seen[k.id] = 1; n++; (X.kids[String(k.id)] || []).forEach(function (c) { st.push(c); }); } return n; }
+  function unplaced(X) { return members().filter(function (m) { return m.department !== 'board' && !X.seatOf[m.id]; }).sort(function (a, b) { return lower(a.name).localeCompare(lower(b.name)); }); }
+  function boardPeople(X) { return members().filter(function (m) { return m.department === 'board' && !X.seatOf[m.id]; }).sort(function (a, b) { return lower(a.name).localeCompare(lower(b.name)); }); }
+
+  /* ---------- the changes (the database checks each one and logs it) ---------- */
+  async function after(msg, undo) {
+    await load(true);
+    paint();
+    try { if (O.sheet) renderSheet(); } catch (e) { /* fine */ }
+    if (msg) snack(msg, undo ? [['Undo', undo]] : []);
+  }
+  async function move(p, toId, dept, quiet) {
+    var X = ix(), was = p.reports_to;
+    await rpc('org_move', { p_id: Number(p.id), p_reports_to: toId == null ? null : Number(toId), p_department: dept || null });
+    var nm = seatName(p), to = toId == null ? 'the executive directors' + (dept ? ' (' + teamShort(dept) + ')' : '') : seatName(X.byId[toId]);
+    if (!quiet) await after(nm + ' now reports to ' + to + '.', function () { return move(p, was, null, true).then(function () { toastS('Moved back'); hideSnack(); }).catch(function (e) { toastS(errText(e)); }); });
+    else await after(null);
+  }
+  async function setReports(p, ids) {
+    var res = await rpc('org_set_reports', { p_id: Number(p.id), p_reports: ids.map(Number) });
+    await after(null);
+    toastS('Direct reports saved' + (res && res.moved_up ? ' (' + plural(res.moved_up, 'person moves', 'people move') + ' up a level)' : ''));
+  }
+  async function addOpening(toId, f) {
+    var res = await rpc('org_add_opening', { p_reports_to: toId == null ? null : Number(toId), p_title: f.title, p_department: f.dept || null, p_status: f.status || 'open', p_note: f.note || null });
+    await after(null);
+    toastS('Open position added');
+    return res;
+  }
+  async function updateSeat(p, f) {
+    await rpc('org_update', { p_id: Number(p.id), p_title: f.title, p_status: f.status || null, p_note: f.note == null ? null : f.note, p_department: f.dept || null });
+    var m = holder(p); if (m && f.title) m.role = f.title;
+    await after(null);
+    toastS('Saved');
+  }
+  async function fill(p, memberId) {
+    var m = memberById(memberId);
+    var res = await rpc('org_fill', { p_id: Number(p.id), p_member_id: Number(memberId) });
+    if (m && p.title) m.role = p.title;
+    await after((m ? m.name : 'They') + ' now holds ' + p.title + '.' + (res && res.left_open ? ' Their old seat is an open position now.' : ''), null);
+  }
+  async function place(memberId, toId, dept) {
+    var m = memberById(memberId);
+    var res = await rpc('org_place', { p_member_id: Number(memberId), p_reports_to: toId == null ? null : Number(toId) });
+    var X = ix();
+    await after((m ? m.name : 'They') + ' is on the chart, reporting to ' + (toId == null ? 'the executive directors' : seatName(X.byId[toId])) + '.', null);
+    return res;
+  }
+  async function vacate(p) {
+    var nm = seatName(p);
+    await rpc('org_vacate', { p_id: Number(p.id) });
+    await after(nm + ' is off the seat. ' + p.title + ' is an open position now.', null);
+  }
+  async function removeSeat(p) {
+    var res = await rpc('org_remove', { p_id: Number(p.id) });
+    O.sheet = null; closeSheet();
+    await after('The open position is removed' + (res && res.moved_up ? '; ' + plural(res.moved_up, 'person moves', 'people move') + ' up a level' : '') + '.', null);
+  }
+
+  /* ---------- the undo bar ---------- */
+  var SN = { acts: [] };
+  function snackEl() { var el = document.getElementById('w133snack'); if (!el) { el = document.createElement('div'); el.id = 'w133snack'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); } return el; }
+  function snack(text, acts) {
+    var el = snackEl(); SN.acts = acts || [];
+    el.innerHTML = '<span class="t">' + E(text) + '</span>' + SN.acts.map(function (a, i) { return '<button type="button" data-w133sn="' + i + '">' + E(a[0]) + '</button>'; }).join('') + '<button type="button" class="x" data-w133sn="x" aria-label="Dismiss">' + I('x') + '</button>';
+    el.classList.add('on');
+    clearTimeout(O.snackT); O.snackT = setTimeout(hideSnack, 10000);
+  }
+  function hideSnack() { var el = document.getElementById('w133snack'); if (el) el.classList.remove('on'); clearTimeout(O.snackT); }
+
+  /* ---------- the chart ---------- */
+  var MAX_KIDS = 12;
+  function hostEl() {
+    var sec = document.getElementById('orgchart'); if (!sec) return null;
+    var h = document.getElementById('w133');
+    if (!h) {
+      h = document.createElement('div'); h.id = 'w133';
+      var m = sec.querySelector(':scope > .w118mast');
+      if (m && m.nextSibling) sec.insertBefore(h, m.nextSibling); else sec.appendChild(h);
+    }
+    return h;
+  }
+  function oldCard(on) {
+    try { var b = document.getElementById('ocBody'); var c = b && b.closest('.card'); if (c) c.classList.toggle('w133old', !!on); } catch (e) { /* fine */ }
+  }
+  function statusChip(p) { var s = STATUS[p.status] || STATUS.open; return '<span class="w133st" style="background:' + s[1] + ';color:' + s[2] + '">' + E(s[0]) + '</span>'; }
+  function online(m) { return !!(m && m.email && O.online[lower(m.email)]); }
+  function cardHtml(X, p, colTeam) {
+    var m = holder(p), n = (X.kids[String(p.id)] || []).length, drag = O.arrange && O.canEdit && p.kind !== 'exec';
+    var tags = [];
+    if (p.kind !== 'exec' && p.reports_to != null && isExec(X.byId[p.reports_to])) tags.push('<span class="w133tag">reports to ' + E(first(seatName(X.byId[p.reports_to]))) + '</span>');
+    var tm = seatTeam(p);
+    if (colTeam && tm && tm !== colTeam && tm !== 'board') tags.push('<span class="w133tag tm" style="background:' + E(teamColor(tm)) + '">' + E(teamShort(tm)) + '</span>');
+    var attrs = ' data-w133p="' + E(p.id) + '" data-w133drop="pos:' + E(p.id) + '"' + (drag ? ' draggable="true" data-w133drag="pos:' + E(p.id) + '"' : '') + ' role="button" tabindex="0"';
+    var add = O.canEdit ? '<button type="button" class="addk" data-w133addunder="' + E(p.id) + '" title="Add an empty position under ' + E(m ? first(m.name) : p.title) + '" aria-label="Add an empty position">' + I('plus') + '</button>' : '';
+    if (!m) {
+      return '<div class="w133c open"' + attrs + ' aria-label="Open position: ' + E(p.title) + '"><span class="oic">' + I('open') + '</span><div class="tx"><span class="kk">Open position</span><b>' + E(p.title || 'Untitled') + '</b>'
+        + '<div class="tags">' + statusChip(p) + tags.join('') + '</div>' + (p.note ? '<span>' + E(clip(p.note, 90)) + '</span>' : '') + '</div>' + (n ? '<span class="cnt">' + n + '</span>' : '') + add + '</div>';
+    }
+    return '<div class="w133c' + (p.kind === 'exec' ? ' ex' : '') + '"' + attrs + ' data-w133m="' + E(m.id) + '" aria-label="' + E(m.name + ', ' + (p.title || m.role || '')) + '"><span class="avw">' + avatar(m, p.kind === 'exec' ? 44 : 34) + (online(m) ? '<span class="w133on" title="On the Hub now"></span>' : '') + '</span>'
+      + '<div class="tx"><b>' + E(m.name) + '</b><span>' + E(p.title || m.role || 'Team member') + '</span>' + (tags.length ? '<div class="tags">' + tags.join('') + '</div>' : '') + '</div>'
+      + (n ? '<span class="cnt" title="' + plural(n, 'direct report', 'direct reports') + '">' + n + '</span>' : '') + add + '</div>';
+  }
+  function nodeHtml(X, p, colTeam, seen, depth) {
+    if (seen[p.id] || depth > 14) return ''; seen[p.id] = 1;
+    var ks = kidsOf(X, p), key = String(p.id), open = !!O.expand[key] || !!O.q || O.arrange;
+    /* open positions always show; a long list of people folds after twelve */
+    var shown = open ? ks : ks.filter(function (k, i) { return isOpen(k) || ks.filter(function (x, j) { return j <= i && !isOpen(x); }).length <= MAX_KIDS; });
+    var html = '<div class="w133node" data-n="' + E(p.id) + '">' + cardHtml(X, p, colTeam);
+    if (ks.length) {
+      html += '<div class="w133kids">' + shown.map(function (k) { return nodeHtml(X, k, colTeam, seen, depth + 1); }).join('')
+        + (ks.length > shown.length ? '<button type="button" class="w133more" data-w133exp="' + E(key) + '">Show ' + (ks.length - shown.length) + ' more</button>' : '') + '</div>';
+    }
+    return html + '</div>';
+  }
+  function teamCol(X, d, hs) {
+    var seen = {}, list = hs.filter(function (p) { return seatTeam(p) === d && (O.showOpen || !isOpen(p)); });
+    var ppl = 0, open = 0;
+    list.forEach(function (p) { [p].concat(allUnder(X, p)).forEach(function (s) { if (isOpen(s)) open++; else ppl++; }); });
+    var head = '<h3 data-w133drop="team:' + E(d) + '">' + E(teamLabel(d)) + ' <span>' + plural(ppl, 'person', 'people') + (open ? ', ' + plural(open, 'open position', 'open positions') : '') + '</span></h3>';
+    var body = list.length ? list.map(function (p) { return nodeHtml(X, p, d, seen, 0); }).join('') : '<p class="empty">No one on this team yet.</p>';
+    var add = O.canEdit && O.arrange ? '<div class="addrow"><button type="button" class="w133btn" data-w133addteam="' + E(d) + '">' + I('plus') + 'Add a position to lead ' + E(teamShort(d)) + '</button></div>' : '';
+    return '<div class="w133team" data-team="' + E(d) + '" style="--tc:' + E(teamColor(d)) + '">' + head + body + add + '</div>';
+  }
+  function allUnder(X, p) { var out = [], st = (X.kids[String(p.id)] || []).slice(), seen = {}; while (st.length) { var k = st.shift(); if (seen[k.id]) continue; seen[k.id] = 1; out.push(k); (X.kids[String(k.id)] || []).forEach(function (c) { st.push(c); }); } return out; }
+  function barHtml(X) {
+    var filled = (O.pos || []).filter(function (p) { return !isOpen(p); }).length, open = (O.pos || []).filter(isOpen).length, up = unplaced(X).length;
+    var chips = '<button type="button" class="w133chip' + (!O.team ? ' on' : '') + '" data-w133team="">All teams</button>' + teams().map(function (d) { return '<button type="button" class="w133chip' + (O.team === d ? ' on' : '') + '" data-w133team="' + E(d) + '"><i style="background:' + E(teamColor(d)) + '"></i>' + E(teamShort(d)) + '</button>'; }).join('');
+    return '<div class="w133bar"><div class="w133stats"><b>' + filled + '</b> people on the chart' + (open ? ' \u00b7 <b>' + open + '</b> open ' + (open === 1 ? 'position' : 'positions') : '') + (up ? ' \u00b7 <b>' + up + '</b> not placed yet' : '') + ' \u00b7 ' + teams().length + ' teams</div>'
+      + '<label class="w133q">' + I('search') + '<input type="search" id="w133q" placeholder="Find someone" value="' + E(O.q) + '" aria-label="Find someone on the chart"></label>'
+      + '<label class="w133tog"><input type="checkbox" id="w133open"' + (O.showOpen ? ' checked' : '') + '> Open positions</label>'
+      + (O.canEdit ? '<button type="button" class="w133btn' + (O.arrange ? ' pri' : '') + '" data-w133arr="1">' + I(O.arrange ? 'check' : 'move') + (O.arrange ? 'Done' : 'Rearrange') + '</button><button type="button" class="w133btn" data-w133addteam="">' + I('plus') + 'Add an open position</button>' : '')
+      + '</div><div class="w133chips" role="group" aria-label="Teams">' + chips + '</div>'
+      + (O.arrange ? '<div class="w133arr"><span class="t"><b>Rearranging.</b> Drag someone onto the person they report to, or onto a team\u2019s name to make them one of its leads. Use + on any card to add an empty position under it. Every move can be undone.</span><button type="button" class="w133btn pri" data-w133arr="1">' + I('check') + 'Done</button></div>' : '');
+  }
+  function paint() {
+    var h = hostEl(); if (!h) return;
+    if (!O.pos) { h.innerHTML = '<div class="w133load"></div>'; return; }
+    oldCard(true);
+    var X = ix(), hs = heads(X), ex = execs(X), board = boardPeople(X), up = unplaced(X);
+    var focus = document.activeElement && document.activeElement.id === 'w133q', caret = focus ? document.activeElement.selectionStart : null;
+    var html = barHtml(X) + (O.err ? '<div class="w133err">' + E(O.err) + '</div>' : '');
+    if (!O.team) {
+      html += '<div class="w133lv w133board"><h3>Board of directors <span>governance, with the co-executive directors reporting to it</span>' + (tabOk('governance') ? '<a data-w133go="#governance">Board overview</a>' : '') + '</h3><div class="w133row">'
+        + (board.length ? board.map(function (m) { return '<button type="button" class="w133bchip" data-w133m="' + E(m.id) + '">' + avatar(m, 26) + '<b>' + E(m.name) + '</b><span class="r">' + E(clip(m.role || 'Board member', 40)) + '</span></button>'; }).join('') : '<p class="note">No directors on the roster.</p>') + '</div></div>'
+        + '<div class="w133link"></div>'
+        + '<div class="w133lv w133exec"><h3 data-w133drop="team:">Executive directors <span>day-to-day leadership; the team leads report to them</span></h3><div class="w133row">' + ex.map(function (p) { return cardHtml(X, p, ''); }).join('') + '</div></div>'
+        + '<div class="w133link"></div>';
+    }
+    var cols = O.team ? [O.team] : teams();
+    html += '<div class="w133grid">' + cols.map(function (d) { return teamCol(X, d, hs); }).join('') + '</div>';
+    var other = hs.filter(function (p) { var t = seatTeam(p); return cols.indexOf(t) < 0 && (!O.team) && (O.showOpen || !isOpen(p)); });
+    if (other.length) html += '<div class="w133team" style="--tc:' + GREEN + '"><h3>Other seats</h3>' + other.map(function (p) { return nodeHtml(X, p, '', {}, 0); }).join('') + '</div>';
+    if (up.length && (!O.team || up.some(function (m) { return m.department === O.team; }))) {
+      var list = O.team ? up.filter(function (m) { return m.department === O.team; }) : up;
+      html += '<div class="w133tray"><h3>Not on the chart yet</h3><p>' + (O.canEdit ? 'On the roster but not placed. Open someone to choose who they report to' + (O.arrange ? ', or drag them onto a card.' : '.') : 'On the roster but not placed on the chart yet.') + '</p><div class="w133row">'
+        + list.map(function (m) { return '<button type="button" class="w133bchip" data-w133m="' + E(m.id) + '"' + (O.arrange && O.canEdit ? ' draggable="true" data-w133drag="member:' + E(m.id) + '"' : '') + '>' + avatar(m, 26) + '<b>' + E(m.name) + '</b><span class="r">' + E(teamShort(m.department)) + '</span></button>'; }).join('') + '</div></div>';
+    }
+    h.innerHTML = html;
+    h.classList.toggle('arr', !!O.arrange);
+    applySearch();
+    if (focus) { var q = document.getElementById('w133q'); if (q) { q.focus(); try { q.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
+  }
+  function applySearch() {
+    var h = document.getElementById('w133'); if (!h) return;
+    var q = lower(O.q); h.classList.toggle('searching', !!q);
+    if (!q) return;
+    var first0 = null;
+    h.querySelectorAll('.w133c, .w133bchip').forEach(function (el) {
+      var hit = lower(el.textContent).indexOf(q) >= 0;
+      el.classList.toggle('hit', hit);
+      if (hit && !first0) first0 = el;
+    });
+    if (first0 && O.scrollHit) { O.scrollHit = false; try { first0.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ } }
+  }
+  O.expand = {};
+
+  /* ---------- the sheet: a seat, a person, a new open position ---------- */
+  var lastFocus = null;
+  function sheetEl() { var el = document.getElementById('w133sheet'); if (!el) { el = document.createElement('div'); el.id = 'w133sheet'; document.body.appendChild(el); } return el; }
+  function openSheet(s) { if (!O.sheet) lastFocus = document.activeElement; O.sheet = s; renderSheet(true); }
+  function closeSheet() {
+    var el = document.getElementById('w133sheet'); if (el) { el.classList.remove('on'); el.innerHTML = ''; }
+    O.sheet = null;
+    if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    lastFocus = null;
+  }
+  function whoRow(X, p) {
+    var m = holder(p);
+    return '<div class="who" data-w133p="' + E(p.id) + '" role="button" tabindex="0">' + (m ? avatar(m, 30) : '<span style="width:30px;height:30px;border-radius:50%;border:1.5px dashed rgba(140,106,46,.7);display:inline-flex;align-items:center;justify-content:center;color:#8C6A2E;flex:none">' + I('open') + '</span>') + '<div style="min-width:0"><b>' + E(m ? m.name : 'Open position') + '</b><br><span>' + E(p.title || (m && m.role) || '') + (m && seatTeam(p) ? ' \u00b7 ' + E(teamShort(seatTeam(p))) : '') + '</span></div></div>';
+  }
+  function seatLabel(X, s) { var m = holder(s); return (m ? m.name : 'Open position') + (s.title ? ' (' + clip(s.title, 40) + ')' : ''); }
+  function mgrOptions(X, p, cur) {
+    var out = '<option value=""' + (cur == null ? ' selected' : '') + '>The executive directors (both)</option>';
+    execs(X).forEach(function (e) { out += '<option value="' + E(e.id) + '"' + (String(cur) === String(e.id) ? ' selected' : '') + '>' + E(seatName(e)) + ' (executive director)</option>'; });
+    teams().concat(['']).forEach(function (d) {
+      var seats = (O.pos || []).filter(function (s) { return s.kind !== 'exec' && (d ? seatTeam(s) === d : teams().indexOf(seatTeam(s)) < 0) && (!p || !isUnder(X, s.id, p.id)); }).sort(seatOrder);
+      if (!seats.length) return;
+      out += '<optgroup label="' + E(d ? teamLabel(d) : 'Other') + '">' + seats.map(function (s) { return '<option value="' + E(s.id) + '"' + (String(cur) === String(s.id) ? ' selected' : '') + '>' + E(seatLabel(X, s)) + '</option>'; }).join('') + '</optgroup>';
+    });
+    return out;
+  }
+  function teamOptions(cur) { return teams().map(function (d) { return '<option value="' + E(d) + '"' + (cur === d ? ' selected' : '') + '>' + E(teamLabel(d)) + '</option>'; }).join(''); }
+  function pickList(X, p) {
+    var q = lower(O.sheet.pq || ''), mine = [], by = {};
+    (O.pos || []).forEach(function (s) {
+      if (String(s.id) === String(p.id) || s.kind === 'exec' || isUnder(X, p.id, s.id)) return;
+      var hay = lower(seatName(s) + ' ' + s.title + ' ' + teamShort(seatTeam(s)));
+      if (q && hay.indexOf(q) < 0) return;
+      if (String(s.reports_to) === String(p.id)) mine.push(s); else (by[seatTeam(s)] = by[seatTeam(s)] || []).push(s);
+    });
+    var sel = O.sheet.sel || {};
+    var ticked = function (s, dflt) { return Object.prototype.hasOwnProperty.call(sel, String(s.id)) ? sel[String(s.id)] : dflt; };
+    var row = function (s, on0) { var on = ticked(s, on0); return '<label><input type="checkbox" data-w133pick="' + E(s.id) + '"' + (on ? ' checked' : '') + '><span>' + E(seatName(s)) + '</span><em>' + E(clip(s.title, 34)) + (on0 ? '' : ' \u00b7 now under ' + E(mgrShort(X, s))) + '</em></label>'; };
+    var html = mine.length ? '<div class="gh">Report to ' + E(first(seatName(p))) + ' now</div>' + mine.sort(seatOrder).map(function (s) { return row(s, true); }).join('') : '';
+    teams().concat(Object.keys(by).filter(function (k) { return teams().indexOf(k) < 0; })).forEach(function (d) { var l = by[d]; if (!l || !l.length) return; html += '<div class="gh">' + E(d ? teamLabel(d) : 'Other') + '</div>' + l.sort(seatOrder).map(function (s) { return row(s, false); }).join(''); });
+    return html || '<p class="note">No one matches.</p>';
+  }
+  function view() {
+    var s = O.sheet, X = ix();
+    if (s.kind === 'new') {
+      var under = s.under == null ? null : X.byId[s.under];
+      return { kicker: 'The org chart', title: 'Add an open position', sub: under ? 'Reporting to ' + seatName(under) : (s.dept ? 'Leading ' + teamLabel(s.dept) : ''), body:
+        '<div class="sec"><label class="f">Title<input type="text" id="w133ntitle" maxlength="120" placeholder="For example: Volunteer coordinator, Toronto" value="' + E(s.title || '') + '"></label>'
+        + '<label class="f">Team<select id="w133nteam">' + teamOptions(s.dept || (under ? seatTeam(under) : teams()[0])) + '</select></label>'
+        + '<label class="f">Reports to<select id="w133nmgr">' + mgrOptions(X, null, s.under) + '</select></label>'
+        + '<h4>Where it stands</h4><div class="sts">' + ['open', 'hiring', 'on_hold'].map(function (k) { return '<button type="button" data-w133sts="' + k + '" class="' + ((s.status || 'open') === k ? 'on' : '') + '">' + STATUS[k][0] + '</button>'; }).join('') + '</div>'
+        + '<label class="f" style="margin-top:12px">Note<textarea id="w133nnote" maxlength="300" placeholder="For example: recruiting now, or once the fall budget is set">' + E(s.note || '') + '</textarea></label><div class="err" id="w133err">' + E(s.err || '') + '</div></div>',
+        foot: '<span style="flex:1"></span><button type="button" class="w133btn" data-w133close="1">Cancel</button><button type="button" class="w133btn pri" data-w133do="create">' + I('plus') + 'Add the position</button>' };
+    }
+    if (s.kind === 'member') {
+      var m = memberById(s.mid); if (!m) return null;
+      var isBoard = m.department === 'board';
+      var body = '<div class="sec"><p>' + (isBoard ? 'On the board of directors.' : (X.seatOf[m.id] ? '' : 'On the roster, not placed on the chart yet.')) + '</p>' + (isBoard && tabOk('governance') ? '<p><a class="w133lnk" data-w133go="#governance" style="color:' + GREEN + ';font-weight:700;cursor:pointer">Open the Board overview</a></p>' : '') + '</div>';
+      if (!isBoard && !X.seatOf[m.id] && O.canEdit) body += '<div class="sec"><h4>Place them on the chart</h4><label class="f">Reports to<select id="w133pmgr">' + mgrOptions(X, null, headOf(X, m.department)) + '</select></label><div class="err" id="w133err">' + E(s.err || '') + '</div><button type="button" class="w133btn pri" data-w133do="place">' + I('check') + 'Place ' + E(first(m.name)) + '</button></div>';
+      return { kicker: isBoard ? 'Board of directors' : teamLabel(m.department), title: m.name, sub: m.role || '', body: body, foot: '<button type="button" class="w133btn" data-w133go="#person/' + E(m.id) + '">' + I('seat') + 'Open their profile</button><span style="flex:1"></span><button type="button" class="w133btn" data-w133close="1">Close</button>' };
+    }
+    var p = X.byId[s.id]; if (!p) return null;
+    var mm = holder(p), ks = (X.kids[String(p.id)] || []).slice().sort(seatOrder), ed = O.canEdit;
+    var html = '';
+    /* reports to */
+    if (p.kind === 'exec') html += '<div class="sec"><h4>Reports to</h4><p>The board of directors.</p></div>';
+    else if (ed) html += '<div class="sec"><h4>Reports to</h4><select id="w133mgr">' + mgrOptions(X, p, p.reports_to) + '</select><div class="row" style="margin-top:10px"><button type="button" class="w133btn pri" data-w133do="mgr">' + I('check') + 'Save</button></div></div>';
+    else { var g = p.reports_to == null ? null : X.byId[p.reports_to]; html += '<div class="sec"><h4>Reports to</h4>' + (g ? whoRow(X, g) : '<p>The executive directors.</p>') + '</div>'; }
+    /* direct reports */
+    if (ed) html += '<div class="sec"><h4>Direct reports' + (ks.length ? ' (' + ks.length + ')' : '') + '</h4><p class="note">Tick who reports to ' + E(mm ? first(mm.name) : 'this position') + '. Anyone you untick moves up to ' + E(mgrShort(X, p)) + '.</p>'
+      + '<input type="search" id="w133pq" placeholder="Find someone" value="' + E(s.pq || '') + '" aria-label="Find someone"><div class="picks" id="w133picks">' + pickList(X, p) + '</div><div class="row" style="margin-top:10px"><button type="button" class="w133btn pri" data-w133do="reports">' + I('check') + 'Save direct reports</button></div></div>';
+    else html += '<div class="sec"><h4>Direct reports' + (ks.length ? ' (' + ks.length + ')' : '') + '</h4>' + (ks.length ? ks.map(function (k) { return whoRow(X, k); }).join('') : '<p>No one reports to ' + E(mm ? first(mm.name) : 'this position') + '.</p>') + '</div>';
+    /* the seat */
+    if (!mm) {
+      if (ed) html += '<div class="sec"><h4>The position</h4><label class="f">Title<input type="text" id="w133title" maxlength="120" value="' + E(p.title || '') + '"></label><label class="f">Team<select id="w133team">' + teamOptions(p.department || '') + '</select></label>'
+        + '<h4>Where it stands</h4><div class="sts">' + ['open', 'hiring', 'on_hold'].map(function (k) { return '<button type="button" data-w133sts="' + k + '" class="' + ((s.status || p.status) === k ? 'on' : '') + '">' + STATUS[k][0] + '</button>'; }).join('') + '</div>'
+        + '<label class="f" style="margin-top:12px">Note<textarea id="w133note" maxlength="300">' + E(p.note || '') + '</textarea></label><div class="row"><button type="button" class="w133btn pri" data-w133do="save">' + I('check') + 'Save</button></div></div>'
+        + '<div class="sec"><h4>Fill it</h4><select id="w133fill">' + fillOptions(X) + '</select><p class="note" style="margin-top:6px">Someone who already has a seat moves here, and their old seat stays on the chart as an open position.</p><div class="row"><button type="button" class="w133btn pri" data-w133do="fill">' + I('seat') + 'Put them in this position</button></div></div>';
+      else html += '<div class="sec"><h4>The position</h4><p>' + statusChip(p) + ' ' + E(teamLabel(p.department)) + '</p>' + (p.note ? '<p>' + E(p.note) + '</p>' : '') + '</div>';
+    } else if (ed) {
+      html += '<div class="sec"><h4>The seat</h4><label class="f">Title (their role everywhere in the Hub)<input type="text" id="w133title" maxlength="120" value="' + E(p.title || mm.role || '') + '"></label><div class="row"><button type="button" class="w133btn pri" data-w133do="save">' + I('check') + 'Save the title</button></div></div>';
+    }
+    if (ed) {
+      html += '<div class="sec"><h4>More</h4><div class="row"><button type="button" class="w133btn" data-w133addunder="' + E(p.id) + '">' + I('plus') + 'Add an open position under ' + E(mm ? first(mm.name) : 'it') + '</button>'
+        + (mm && p.kind !== 'exec' ? '<button type="button" class="w133btn warn" data-w133do="vacate">' + I('out') + 'Take ' + E(first(mm.name)) + ' off this seat</button>' : '')
+        + (!mm ? '<button type="button" class="w133btn warn" data-w133do="remove">' + I('trash') + 'Remove this position</button>' : '') + '</div><div class="err" id="w133err">' + E(s.err || '') + '</div></div>';
+    }
+    var foot = (mm ? '<button type="button" class="w133btn" data-w133go="#person/' + E(mm.id) + '">' + I('seat') + 'Open their profile</button>' : '<button type="button" class="w133btn" data-w133go="#requests/new/hr/hiring-request">' + I('mail') + 'Ask HR to recruit</button>') + '<span style="flex:1"></span><button type="button" class="w133btn" data-w133close="1">Close</button>';
+    return { kicker: p.kind === 'exec' ? 'Executive director' : (mm ? teamLabel(seatTeam(p)) : 'Open position \u00b7 ' + teamLabel(p.department)), title: mm ? mm.name : (p.title || 'Open position'), sub: mm ? (p.title || mm.role || '') : (STATUS[p.status] || STATUS.open)[0] + (p.note ? ' \u00b7 ' + clip(p.note, 60) : ''), body: html, foot: foot };
+  }
+  function headOf(X, d) { var h = heads(X).filter(function (p) { return seatTeam(p) === d && !isOpen(p); })[0]; return h ? h.id : null; }
+  function fillOptions(X) {
+    var out = '<option value="">Pick someone</option>', up = unplaced(X);
+    if (up.length) out += '<optgroup label="Not on the chart yet">' + up.map(function (m) { return '<option value="' + E(m.id) + '">' + E(m.name) + ' (' + E(teamShort(m.department)) + ')</option>'; }).join('') + '</optgroup>';
+    teams().forEach(function (d) {
+      var ms = members().filter(function (m) { return m.department === d && X.seatOf[m.id]; }).sort(function (a, b) { return lower(a.name).localeCompare(lower(b.name)); });
+      if (ms.length) out += '<optgroup label="' + E(teamLabel(d)) + '">' + ms.map(function (m) { return '<option value="' + E(m.id) + '">' + E(m.name) + ' (now ' + E(clip(X.seatOf[m.id].title, 30)) + ')</option>'; }).join('') + '</optgroup>';
+    });
+    return out;
+  }
+  function renderSheet(first0) {
+    var s = O.sheet; if (!s) { closeSheet(); return; }
+    var v = view(); if (!v) { closeSheet(); return; }
+    var el = sheetEl(), wasOn = el.classList.contains('on');
+    if (!wasOn || !el.querySelector('.pane')) el.innerHTML = '<div class="bk" data-w133close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(16,63,57,.08);background:var(--wa-card,#fff)"></div></div>';
+    var bd = el.querySelector('.bd'), st = bd.scrollTop;
+    el.querySelector('.pane').setAttribute('aria-label', v.title);
+    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + E(v.kicker) + '</div><h2>' + E(v.title) + '</h2>' + (v.sub ? '<div class="sub">' + E(v.sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w133close="1" aria-label="Close">' + I('x') + '</button>';
+    bd.innerHTML = v.body; el.querySelector('.ft').innerHTML = v.foot;
+    if (wasOn && !first0) bd.scrollTop = st;
+    el.classList.add('on');
+    if (first0) setTimeout(function () { var f = el.querySelector(s.kind === 'new' ? '#w133ntitle' : '.xb'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }, 40);
+  }
+  function sheetErr(msg) { if (!O.sheet) return; O.sheet.err = msg; O.sheet.busy = false; var e = document.getElementById('w133err'); if (e) e.textContent = msg; else renderSheet(false); }
+  function val(id) { var el = document.getElementById(id); return el ? el.value : null; }
+  async function sheetDo(what) {
+    var s = O.sheet; if (!s || s.busy) return;
+    var X = ix(), p = s.id != null ? X.byId[s.id] : null;
+    s.busy = true; s.err = '';
+    try {
+      if (what === 'create') {
+        var t = String(val('w133ntitle') || '').trim(); if (!t) { sheetErr('Give the position a title.'); return; }
+        var mg = val('w133nmgr'); var res = await addOpening(mg ? Number(mg) : null, { title: t, dept: val('w133nteam'), status: s.status || 'open', note: val('w133nnote') });
+        O.sheet = { kind: 'seat', id: res && res.id }; if (res && res.id) renderSheet(true); else closeSheet();
+      } else if (what === 'place') {
+        var pm = val('w133pmgr'); await place(s.mid, pm ? Number(pm) : null); var X2 = ix(); var seat = X2.seatOf[s.mid]; if (seat) { O.sheet = { kind: 'seat', id: seat.id }; renderSheet(true); } else closeSheet();
+      } else if (what === 'mgr' && p) {
+        var to = val('w133mgr'); var toId = to ? Number(to) : null;
+        if (String(toId) === String(p.reports_to)) { s.busy = false; toastS('No change'); return; }
+        await move(p, toId, null, false);
+      } else if (what === 'reports' && p) {
+        /* every tick, including the ones hidden by the search */
+        var sel = s.sel || {}, ids = [];
+        (O.pos || []).forEach(function (x) { var k = String(x.id); var on = Object.prototype.hasOwnProperty.call(sel, k) ? sel[k] : String(x.reports_to) === String(p.id); if (on && String(x.id) !== String(p.id)) ids.push(Number(x.id)); });
+        await setReports(p, ids);
+      } else if (what === 'save' && p) {
+        var tt = String(val('w133title') || '').trim(); if (!tt) { sheetErr('Give the position a title.'); return; }
+        await updateSeat(p, { title: tt, status: s.status || p.status, note: val('w133note'), dept: val('w133team') });
+      } else if (what === 'fill' && p) {
+        var who = val('w133fill'); if (!who) { sheetErr('Pick someone first.'); return; }
+        await fill(p, Number(who));
+      } else if (what === 'vacate' && p) {
+        if (!confirm('Take ' + seatName(p) + ' off this seat? They stay on the roster, and ' + p.title + ' becomes an open position.')) { s.busy = false; return; }
+        await vacate(p);
+      } else if (what === 'remove' && p) {
+        if (!confirm('Remove this open position?' + ((X.kids[String(p.id)] || []).length ? ' Whoever reports to it moves up a level.' : ''))) { s.busy = false; return; }
+        await removeSeat(p);
+      }
+      if (O.sheet) { O.sheet.busy = false; }
+    } catch (e) { sheetErr(errText(e)); }
+  }
+
+  /* ---------- rearranging: drag a card onto the person it reports to, or onto a team ---------- */
+  function dragInfo(el) { var v = el && el.getAttribute('data-w133drag'); if (!v) return null; var i = v.indexOf(':'); return { kind: v.slice(0, i), id: v.slice(i + 1) }; }
+  function dropInfo(el) { var v = el && el.getAttribute('data-w133drop'); if (v == null) return null; var i = v.indexOf(':'); return { kind: v.slice(0, i), id: v.slice(i + 1) }; }
+  /* what a drop would do, or why it cannot */
+  function plan(d, t) {
+    var X = ix();
+    if (!d || !t) return null;
+    if (d.kind === 'pos') {
+      var p = X.byId[d.id]; if (!p) return null;
+      if (t.kind === 'pos') {
+        if (String(t.id) === String(d.id)) return null;
+        if (isUnder(X, t.id, d.id)) return { no: 'Someone cannot report to a person who reports to them.' };
+        if (String(p.reports_to) === String(t.id)) return null;
+        return { act: 'move', p: p, to: Number(t.id) };
+      }
+      if (t.kind === 'team') {
+        if (!t.id) return p.reports_to == null ? null : { act: 'move', p: p, to: null };
+        if (!isOpen(p) && seatTeam(p) !== t.id) return { no: seatName(p) + ' is on ' + teamShort(seatTeam(p)) + '. To change their team, use People and access; here you can have them report to anyone on ' + teamShort(t.id) + '.' };
+        if (p.reports_to == null && seatTeam(p) === t.id) return null;
+        return { act: 'move', p: p, to: null, dept: t.id };
+      }
+    }
+    if (d.kind === 'member') {
+      if (t.kind === 'pos') { var s = X.byId[t.id]; if (!s) return null; return isOpen(s) ? { act: 'fill', p: s, mid: Number(d.id) } : { act: 'place', mid: Number(d.id), to: Number(t.id) }; }
+      if (t.kind === 'team') return { act: 'place', mid: Number(d.id), to: null };
+    }
+    return null;
+  }
+  function clearOver() { document.querySelectorAll('#w133 .over').forEach(function (x) { x.classList.remove('over'); }); }
+  document.addEventListener('dragstart', function (e) {
+    var el = e.target && e.target.closest && e.target.closest('#w133 [data-w133drag]');
+    if (!el || !O.arrange || !O.canEdit) return;
+    O.drag = dragInfo(el); el.classList.add('dragging');
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', el.getAttribute('data-w133drag')); } catch (x) { /* fine */ }
+  });
+  document.addEventListener('dragend', function () { O.drag = null; clearOver(); document.querySelectorAll('#w133 .dragging').forEach(function (x) { x.classList.remove('dragging'); }); });
+  document.addEventListener('dragover', function (e) {
+    if (!O.drag) return;
+    var el = e.target && e.target.closest && e.target.closest('#w133 [data-w133drop]'); if (!el) { clearOver(); return; }
+    var pl = plan(O.drag, dropInfo(el));
+    if (!pl) { clearOver(); return; }
+    e.preventDefault();
+    if (pl.no) { clearOver(); return; }
+    if (!el.classList.contains('over')) { clearOver(); el.classList.add('over'); }
+  });
+  document.addEventListener('drop', function (e) {
+    if (!O.drag) return;
+    var el = e.target && e.target.closest && e.target.closest('#w133 [data-w133drop]');
+    var d = O.drag; O.drag = null; clearOver();
+    if (!el) return;
+    e.preventDefault();
+    doPlan(plan(d, dropInfo(el)));
+  });
+  async function doPlan(pl) {
+    if (!pl) return;
+    if (pl.no) { toastS(pl.no); return; }
+    try {
+      if (pl.act === 'move') await move(pl.p, pl.to, pl.dept || null, false);
+      else if (pl.act === 'fill') await fill(pl.p, pl.mid);
+      else if (pl.act === 'place') await place(pl.mid, pl.to);
+    } catch (x) { toastS(errText(x)); }
+  }
+
+  /* ---------- who is on the Hub now (wave12's presence) ---------- */
+  function loadOnline() {
+    try {
+      if (typeof waLoadPresence !== 'function' || typeof waOnlineEmails !== 'function') return Promise.resolve();
+      return Promise.resolve(waLoadPresence()).then(function () { var on = {}; (waOnlineEmails() || []).forEach(function (r) { if (r && r.email) on[lower(r.email)] = 1; }); O.online = on; }).catch(function () { /* fine */ });
+    } catch (e) { return Promise.resolve(); }
+  }
+
+  /* ---------- showing the chart ---------- */
+  function onPage() { var s = document.getElementById('orgchart'); return !!(s && s.classList.contains('active')); }
+  var pendingOpen = null;
+  function show() {
+    if (!staffOk()) return;
+    hostEl();
+    if (!O.pos) paint();
+    load(!O.pos || Date.now() - O.at > 30000).then(function () {
+      paint();
+      loadOnline().then(function () { if (onPage()) paint(); });
+      if (pendingOpen != null) { var mid = pendingOpen; pendingOpen = null; openFor(mid); }
+    }).catch(function () {
+      /* the chart could not load: the roster view stays */
+      var h = document.getElementById('w133'); if (h) h.innerHTML = '<div class="w133err">' + E(O.err || 'The chart could not load.') + ' The team list below is the roster.</div>';
+      oldCard(false);
+    });
+  }
+  function openFor(mid) {
+    var X = ix(), seat = X.seatOf[mid];
+    if (seat) openSheet({ kind: 'seat', id: seat.id }); else if (memberById(mid)) openSheet({ kind: 'member', mid: Number(mid) });
+    try { var el = document.querySelector('#w133 [data-w133m="' + mid + '"]'); if (el) el.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ }
+  }
+  if (typeof renderOrgChart === 'function') {
+    var __roc133 = renderOrgChart;
+    renderOrgChart = async function () {
+      var out;
+      try { out = await __roc133.apply(this, arguments); } catch (e) { /* the old chart is only the fallback */ }
+      try { show(); } catch (e) { console.warn('wave133 chart', e); }
+      return out;
+    };
+  }
+  if (typeof applyHash === 'function') {
+    var __ah133 = applyHash;
+    applyHash = function () {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, '');
+      var m = /^orgchart\/(\d+)$/.exec(h);
+      if (m) { pendingOpen = Number(m[1]); try { showPanel('orgchart'); renderOrgChart(); } catch (e) { /* fine */ } return; }
+      return __ah133.apply(this, arguments);
+    };
+  }
+
+  /* ---------- a person's page: who they report to ---------- */
+  function personLine() {
+    try {
+      var h = decodeURIComponent(location.hash || '').replace(/^#/, ''), mm = /^person\/(\d+)/.exec(h); if (!mm) return;
+      var head = document.querySelector('#personpage .w116khead'); if (!head) return;
+      var mid = Number(mm[1]);
+      var cur = head.querySelector('.w133pline');
+      if (cur && cur.getAttribute('data-m') === String(mid) && cur.getAttribute('data-v') === String(O.ver)) return;
+      if (!O.pos) { if (!O.loading && staffOk()) load(false).then(personLine).catch(function () { /* fine */ }); return; }
+      var X = ix(), seat = X.seatOf[mid], m = memberById(mid);
+      if (!m || m.department === 'board' && !seat) { if (cur) cur.remove(); return; }
+      var bits = [];
+      if (seat) {
+        if (seat.kind === 'exec') bits.push('Reports to the board');
+        else if (seat.reports_to == null) bits.push('Reports to the executive directors');
+        else { var g = X.byId[seat.reports_to], gm = holder(g); bits.push('Reports to ' + (gm ? '<a data-w133go="#person/' + E(gm.id) + '">' + E(gm.name) + '</a>' : 'an open position (' + E(g ? g.title : '') + ')')); }
+        var ks = (X.kids[String(seat.id)] || []).slice().sort(seatOrder);
+        var ppl = ks.filter(function (k) { return !isOpen(k); }), op = ks.length - ppl.length;
+        if (ppl.length) bits.push(plural(ppl.length, 'direct report', 'direct reports') + ': ' + ppl.slice(0, 5).map(function (k) { var km = holder(k); return '<a data-w133go="#person/' + E(km.id) + '">' + E(km.name) + '</a>'; }).join(', ') + (ppl.length > 5 ? ' and ' + (ppl.length - 5) + ' more' : ''));
+        if (op) bits.push(plural(op, 'open position', 'open positions') + ' under them');
+      } else bits.push('Not placed on the org chart yet');
+      bits.push('<a data-w133go="#orgchart/' + E(mid) + '">See on the org chart</a>');
+      var html = bits.join(' \u00b7 ');
+      if (!cur) { cur = document.createElement('div'); cur.className = 'w133pline'; var onb = head.querySelector('#w116konb'); if (onb) onb.insertAdjacentElement('afterend', cur); else { var tx = head.children[1] || head; tx.appendChild(cur); } }
+      cur.setAttribute('data-m', String(mid)); cur.setAttribute('data-v', String(O.ver)); cur.innerHTML = html;
+    } catch (e) { /* fine */ }
+  }
+  var plT = null;
+  function watchPerson() {
+    var sec = document.getElementById('personpage'); if (!sec || sec.__w133) return;
+    sec.__w133 = true;
+    try { new MutationObserver(function () { clearTimeout(plT); plT = setTimeout(personLine, 80); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- events ---------- */
+  function go(h) { closeSheet(); if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('#w133snack [data-w133sn]'))) { var k = el.getAttribute('data-w133sn'); if (k === 'x') { hideSnack(); return; } var a = SN.acts[Number(k)]; hideSnack(); if (a && a[1]) a[1](); return; }
+    if ((el = t.closest('.w133pline [data-w133go]'))) { e.preventDefault(); go(el.getAttribute('data-w133go')); return; }
+    var inSheet = !!t.closest('#w133sheet'), inPage = !!t.closest('#w133');
+    if (!inSheet && !inPage) return;
+    if ((el = t.closest('[data-w133go]'))) { e.preventDefault(); go(el.getAttribute('data-w133go')); return; }
+    if (inSheet) {
+      if ((el = t.closest('[data-w133close]'))) { closeSheet(); return; }
+      if ((el = t.closest('[data-w133sts]'))) { O.sheet.status = el.getAttribute('data-w133sts'); el.parentNode.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b === el); }); return; }
+      if ((el = t.closest('[data-w133do]'))) { sheetDo(el.getAttribute('data-w133do')); return; }
+      if ((el = t.closest('[data-w133addunder]'))) { var X0 = ix(), up0 = X0.byId[el.getAttribute('data-w133addunder')]; O.sheet = { kind: 'new', under: Number(el.getAttribute('data-w133addunder')), dept: up0 ? (seatTeam(up0) === 'board' ? '' : seatTeam(up0)) : '' }; renderSheet(true); return; }
+      if ((el = t.closest('.who[data-w133p]'))) { O.sheet = { kind: 'seat', id: Number(el.getAttribute('data-w133p')) }; renderSheet(true); return; }
+      return;
+    }
+    /* the page */
+    if ((el = t.closest('[data-w133arr]'))) { O.arrange = !O.arrange; paint(); if (!O.arrange) hideSnack(); return; }
+    if ((el = t.closest('[data-w133team]'))) { O.team = el.getAttribute('data-w133team'); paint(); return; }
+    if ((el = t.closest('[data-w133exp]'))) { O.expand[el.getAttribute('data-w133exp')] = 1; paint(); return; }
+    if ((el = t.closest('[data-w133addunder]'))) { e.stopPropagation(); var X1 = ix(), up1 = X1.byId[el.getAttribute('data-w133addunder')]; openSheet({ kind: 'new', under: Number(el.getAttribute('data-w133addunder')), dept: up1 ? (seatTeam(up1) === 'board' ? '' : seatTeam(up1)) : '' }); return; }
+    if ((el = t.closest('[data-w133addteam]'))) { var d = el.getAttribute('data-w133addteam'); openSheet({ kind: 'new', under: null, dept: d || O.team || '' }); return; }
+    if ((el = t.closest('.w133c[data-w133p]'))) { openSheet({ kind: 'seat', id: Number(el.getAttribute('data-w133p')) }); return; }
+    if ((el = t.closest('.w133bchip[data-w133m]'))) { openSheet({ kind: 'member', mid: Number(el.getAttribute('data-w133m')) }); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && O.sheet) { e.preventDefault(); closeSheet(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#w133 .w133c[role=button], #w133sheet .who[role=button]')) { e.preventDefault(); e.target.click(); }
+  });
+  var qT = null;
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w133q') { O.q = t.value; clearTimeout(qT); qT = setTimeout(function () { O.scrollHit = true; paint(); }, 160); return; }
+    if (t.id === 'w133pq' && O.sheet) { O.sheet.pq = t.value; var X = ix(), p = X.byId[O.sheet.id]; var box = document.getElementById('w133picks'); if (p && box) box.innerHTML = pickList(X, p); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w133open') { O.showOpen = !!t.checked; paint(); return; }
+    if (t.matches && t.matches('#w133picks input[data-w133pick]') && O.sheet) { O.sheet.sel = O.sheet.sel || {}; O.sheet.sel[t.getAttribute('data-w133pick')] = !!t.checked; }
+  });
+  window.addEventListener('hashchange', function () {
+    if (O.sheet) closeSheet();
+    if (O.arrange && !/^#orgchart/.test(location.hash || '')) { O.arrange = false; hideSnack(); }
+    setTimeout(personLine, 200);
+  });
+  if (typeof showPanel === 'function') {
+    var __sp133 = showPanel;
+    showPanel = function (id) { var out = __sp133.apply(this, arguments); try { if (id === 'personpage') { watchPerson(); setTimeout(personLine, 250); } } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof startApp === 'function') {
+    var __sa133 = startApp;
+    startApp = async function () {
+      var out = await __sa133.apply(this, arguments);
+      try { watchPerson(); var h = decodeURIComponent(location.hash || '').replace(/^#/, ''); if (/^orgchart\/\d+$/.test(h)) applyHash(); if (/^person\//.test(h)) setTimeout(personLine, 600); } catch (e) { console.warn('wave133 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- the page tour (wave122's engine; trainings row tour:orgchart) ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours) return;
+      var OPT = { opt: 1 };
+      var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.orgchart = { tab: 'orgchart', icon: 'people', hash: '#orgchart', steps: [
+        S('#orgchart > .w118mast', 'Who reports to whom', 'The live chart: the board, the executive directors, then every team with its leads and the people who report to them.'),
+        S('#w133 .w133bar', 'Find anyone', 'Search for a name, show one team, and show or hide the open positions.', OPT),
+        S('#w133 .w133board', 'The board', 'The directors. The executive directors report to the board.', OPT),
+        S('#w133 .w133exec', 'The executive directors', 'Day-to-day leadership. Each team\u2019s leads report to them.', OPT),
+        S('#w133 .w133team', 'A team', 'Its leads first, then everyone nested under the person they report to. The number on a card is how many report to that person. Click anyone for their reporting line and profile.', OPT),
+        S('#w133 .w133c.open', 'An open position', 'A seat waiting for someone: open, hiring or on hold, with a note. Ask HR to recruit from it.', OPT),
+        S('#w133 [data-w133arr]', 'Rearrange', 'Executives and admins drag people onto the person they report to, choose direct reports, add open positions and fill them. Every move can be undone.', OPT)
+      ] };
+    } catch (e) { /* fine */ }
+  }
+  addTours();
+
+  /* ---------- test hook ---------- */
+  window.w133 = { state: function () { return O; }, load: load, paint: paint, open: openSheet, close: closeSheet, ix: ix, plan: plan, doPlan: doPlan, line: personLine };
+})();

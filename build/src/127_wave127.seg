@@ -61,7 +61,8 @@
     hrcentre: 'Everyone\'s time off, discipline and policy sign-offs stay with the HR access list.',
     agendas: 'Each agenda is visible to the person who made it and the people invited.',
     transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
-    bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project\u2019s lead or a leader for a whole project.'
+    bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project\u2019s lead or a leader for a whole project.',
+    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.'
   };
   var SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
 

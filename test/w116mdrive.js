@@ -65,9 +65,10 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
 
   /* 1. org chart */
   await go('#orgchart', 1800);
-  const oc = await page.$('#orgchart [data-ocp]');
-  out.orgPerson = oc ? await oc.getAttribute('data-ocp') : null;
-  if (oc) { await oc.click(); await page.waitForTimeout(2500); out.fromOrgChart = await where(); }
+  /* wave133: the chart opens a person's card, and the card opens their profile */
+  const oc = await page.$('#w133 [data-w133m]');
+  out.orgPerson = oc ? await page.evaluate(el => (el.querySelector('b') || el).textContent.trim(), oc) : null;
+  if (oc) { await oc.click(); await page.waitForTimeout(800); const pb = await page.$('#w133sheet [data-w133go^="#person/"]'); if (pb) { await pb.click(); await page.waitForTimeout(2500); } out.fromOrgChart = await where(); }
   /* 2. task board avatar */
   await go('#team/fundraising/tasks', 2000);
   const avRow = await page.$('#w116tasks .w116r .w116av[title]');
