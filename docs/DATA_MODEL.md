@@ -417,7 +417,7 @@ Staff and board roster; id is the key other tables should use for a person (task
 
 - `name`: Display name, usually a first name. Many tables store this text instead of the id; it is unique in practice but not by constraint.
 - `email`: Lower-case Workspace email; NULL for roster entries without an account.
-- `department`: Team code.
+- `department`: Team code (the dept_meta codes), or exec for the co-executive directors (the executive team: a label with no team page, so their shared meetings do not count as any team's). Board directors are listed in board_members whatever their team.
 - `role`: Job title as free text (not the Hub access role; see hub_roles.role).
 - `active`: False for people who left. Readers usually filter active = true.
 - `ai_bio`: Short AI-written job description from person-profile; ai_bio_at is when.
@@ -556,7 +556,7 @@ Per-person "first steps in the Hub" checklist (profile, task, team page and more
 Org chart seats (wave133): one seat per person or open position, with a reporting line. Read by staff; changed only through the org_* functions (executives and admins). New active staff are added automatically by wa133_roster_sync.
 
 - `member_id`: team_members.id holding the seat; NULL for an open position. Unique when set.
-- `department`: Team code of the seat.
+- `department`: Team code of the seat, or exec for the co-executive directors' seats.
 - `reports_to`: org_positions.id of the manager seat; NULL means it reports to the executive directors.
 - `kind`: exec or staff (CHECK). Exec seats stay at the top.
 - `status`: filled, open, hiring or on_hold (CHECK).
@@ -1183,6 +1183,24 @@ Who may see which password on the Important info page (info_links rows with kind
 - `note`: Why the person needs it (optional, from the request).
 - `decided_by`: Email of the admin who decided, or 'added it' for the person who added the login.
 
+### `slack_links`
+
+People who connected their Slack account to the Hub (slack-connect), so their @mentions are sent as them. The user token is in the vault as slack_user_token:<email>, never in this table. People read their own row; admins read all; only the service role writes.
+
+- `email`: Hub email (lower case) of the person.
+- `slack_user_id`: Their Slack user id, checked against their Hub email when they connected.
+- `scopes`: User token scopes granted (chat:write, im:write).
+
+### `hub_mentions`
+
+Every @mention people write in the Hub (task comments and descriptions, goal comments, request notes, team updates, decisions, committee notes, project descriptions, Content calendar posts), who wrote it, who it names and whether the Slack DM went out (notify, event comment_mention). Written only by the mention triggers (wa_mention_notify); people read the mentions they wrote or received, admins all.
+
+- `kind`: Where the mention was written: task, goal, request, update, decision, committee, project or content.
+- `url`: The Hub address of what was commented on (such as #task/123), linked in the DM.
+- `private`: True when the item is confidential, board only or restricted: the DM names the item kind and links to it, without the text.
+- `dm_status`: pending, sent, skipped (no Slack account, opted out, or no longer active) or failed (dm_error says why).
+- `dm_via`: user: sent as the writer (they connected Slack); bot: from the Hub bot with their name.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1196,4 +1214,10 @@ Functions:
 - `bank_unbank(text, bigint, text)`: Brings a banked task, project or content idea back now, with a reason. Checks wa_can_bank(), visibility, and project lead rights. Called by the page. Access: authenticated.
 - `bank_redate(text, bigint, date)`: Changes the return date of a banked task (p_kind task), project (project) or content idea (idea). Projects need their lead or a leader. Called by the page. Access: authenticated.
 - `bank_undo(text, bigint)`: Undoes a bank action (a task, project or content idea) within 30 minutes of banking. Called by the page. Access: authenticated.
+- `slack_link_save(text, text, text, text, text)`: slack-connect stores a person's Slack user token in the vault (slack_user_token:<email>) and records the link in slack_links. Logged. Access: service role only.
+- `slack_link_drop(text)`: slack-connect removes a person's Slack token and link (Disconnect). Logged. Access: service role only.
+- `wa_mentioned_members(text)`: The active roster members a text @mentions: after each @ (not part of an email address), the longest team_members.name that follows, ending on a word boundary (not @joy.dumansi, which is a handle), case-insensitive; each person once. Used by the mention triggers. Access: service role and the triggers (it returns roster emails).
+- `wa_mention_notify(text, text, text, bigint, text, text, boolean, text, bigint)`: Called by the mention triggers: files a hub_mentions row for each person the new text @mentions who was not already mentioned in the old text, as the signed-in writer (nobody when the writer is a job or the AI). Access: triggers only.
+- `trg_hub_mention_dm()`: Trigger on hub_mentions insert: asks notify (event comment_mention) to send the Slack DM. Access: trigger only.
+- `mention_seen(bigint[])`: Marks the caller's own mentions seen (Home). Access: authenticated.
 

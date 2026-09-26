@@ -516,7 +516,7 @@
       (cmts.length ? cmts.map(function (c) {
         var mine = staff() && typeof waFirstTok === 'function' && waFirstTok(c.author || '') === waFirstTok(who0() || '');
         return '<div class="gl-cmt" data-glc="' + E(c.id) + '">' + (mine ? '<span class="ops"><button data-glce="' + E(c.id) + '">edit</button><button data-glcx="' + E(c.id) + '">delete</button></span>' : '') +
-          '<span class="who">' + E(c.author || 'someone') + '</span><span class="when">' + (typeof fmtDay === 'function' ? fmtDay(c.created_at) : E(String(c.created_at || '').slice(0, 10))) + (c.updated_at ? ' (edited)' : '') + '</span><div data-glcb="' + E(c.id) + '">' + E(c.body) + '</div></div>';
+          '<span class="who">' + E(c.author || 'someone') + '</span><span class="when">' + (typeof fmtDay === 'function' ? fmtDay(c.created_at) : E(String(c.created_at || '').slice(0, 10))) + (c.updated_at ? ' (edited)' : '') + '</span><div data-glcb="' + E(c.id) + '">' + (window.w138Mark ? window.w138Mark(E(c.body)) : E(c.body)) + '</div></div>';
       }).join('') : '<div class="mp-empty">No comments yet.</div>') +
       (staff() ? '<div class="gl-addc"><input data-glci="' + E(g.id) + '" placeholder="Add a comment" /><button data-glca="' + E(g.id) + '">Post</button></div>' : '') + '</div></div>' };
   }

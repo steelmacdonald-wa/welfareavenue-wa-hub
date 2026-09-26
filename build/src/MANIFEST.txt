@@ -160,6 +160,8 @@
 133_wave133
 # 134_wave134: the menu layout (WA_NAV.layout); after every wave that creates or moves a menu button.
 134_wave134
+# 138_wave138: @mentions (the picker, the hint, Settings' Send @mentions as you); it hooks into 116j and the comment renderers.
+138_wave138
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

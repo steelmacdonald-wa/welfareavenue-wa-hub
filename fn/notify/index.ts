@@ -1,3 +1,13 @@
+// Welfare Avenue: notify (v11, 26/09/26)
+// v10 (wave138): a task description saves as the person types, so a mention there waits 20 seconds in the
+// background (EdgeRuntime.waitUntil) and quotes the description as it stands then; a mention removed meanwhile
+// is skipped. Comments, notes and the rest are sent at once. v11: that skip is logged like the others; the log says notify.
+// v9 (wave138): the quoted text of a mention reads as Slack formatting (bold, links, bullets and headings
+// written in the Hub's editor), and the DM quotes the part of a long text around the mention (hub_mentions.snippet).
+// v8 (wave138): comment_mention. When someone @mentions a person anywhere in the Hub (hub_mentions, filed by
+// the mention triggers), the DM goes out automatically: as the writer when they have connected Slack
+// (slack-connect keeps their user token in the vault as slack_user_token:<email>), else from the Hub bot with
+// their name. A confidential, board-only or restricted item is named without its text. The row records the result.
 // Welfare Avenue: notify (v7 deploy, 08/08/26)
 // v7: adds change_request_text (staff JWT callable): posts an arbitrary
 // short staff-authored line to the Slack channel (used by wave110 access
@@ -41,7 +51,7 @@ async function log(event: string, target: string, outcome: string) {
   try {
     await svc.from('change_log').insert({
       entity_type: 'notify', entity_id: event, field: 'delivery',
-      old_value: null, new_value: target + ': ' + outcome, changed_by: 'notify v7'
+      old_value: null, new_value: target + ': ' + outcome, changed_by: 'notify'
     });
   } catch (_) { /* audit only */ }
 }
@@ -154,6 +164,98 @@ async function dm(slackId: string, text: string): Promise<{ ok: boolean; err?: s
   } catch (e) {
     return { ok: false, err: String(e).slice(0, 120) };
   }
+}
+
+/* v8: a DM sent as the person who wrote the mention (their own Slack token), when they have connected Slack */
+async function dmAsUser(fromEmail: string, slackId: string, text: string): Promise<{ ok: boolean; err?: string }> {
+  let token = '';
+  try { token = await getSecret('slack_user_token:' + fromEmail); } catch (_) { return { ok: false, err: 'not_connected' }; }
+  try {
+    const open = await fetch('https://slack.com/api/conversations.open', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ users: slackId })
+    });
+    const oBody = await open.json();
+    if (!oBody.ok) return { ok: false, err: oBody.error };
+    const post = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: oBody.channel.id, text, unfurl_links: false, unfurl_media: false })
+    });
+    const pBody = await post.json();
+    return pBody.ok ? { ok: true } : { ok: false, err: pBody.error };
+  } catch (e) { return { ok: false, err: String(e).slice(0, 120) }; }
+}
+
+const MENTION_KIND: Record<string, string> = {
+  task: 'the task', goal: 'the goal', request: 'the request', update: 'a team update', decision: 'the decision',
+  committee: 'a committee note', project: 'the project', content: 'the post'
+};
+function slackEsc(s: string): string { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+/* v9: the Hub's editor writes markdown; Slack reads its own mrkdwn */
+function slackText(s: string): string {
+  return slackEsc(s).split('\n').map(line => line
+    .replace(/^\s*#{1,6}\s+(.+)$/, '*$1*')
+    .replace(/^(\s*)[-*]\s+/, '$1\u2022 ')
+    .replace(/\*\*(.+?)\*\*/g, '*$1*')
+    .replace(/__(.+?)__/g, '_$1_')
+    .replace(/~~(.+?)~~/g, '~$1~')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<$2|$1>')).join('\n');
+}
+
+/* v10: the part of a text around a mention, as wa_mention_notify quotes it */
+function around(text: string, name: string): string {
+  const t = String(text || '').trim().replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
+  if (t.length <= 600) return t;
+  const p = t.toLowerCase().indexOf(('@' + name).toLowerCase()) + 1;
+  if (p <= 400) return t.slice(0, 597) + '...';
+  const start = p - 200;
+  return '...' + t.slice(start - 1, start - 1 + 594) + (start - 1 + 594 < t.length ? '...' : '');
+}
+function stillMentions(text: string, name: string): boolean {
+  const t = String(text || '').toLowerCase(), n = '@' + String(name || '').toLowerCase();
+  let i = t.indexOf(n);
+  while (i >= 0) {
+    const before = i > 0 ? t.charAt(i - 1) : '', after = t.charAt(i + n.length), after2 = t.charAt(i + n.length + 1);
+    const word = (c: string) => /[0-9a-z_\u00c0-\u024f]/.test(c);
+    if (!(before && (word(before) || before === '.')) && !(after && word(after)) && !(after === '.' && after2 && word(after2))) return true;
+    i = t.indexOf(n, i + 1);
+  }
+  return false;
+}
+
+async function commentMention(id: number): Promise<Record<string, unknown>> {
+  const { data: m } = await svc.from('hub_mentions').select('*').eq('id', id).maybeSingle();
+  if (!m) return { error: 'mention not found' };
+  if (m.dm_status !== 'pending') return { event: 'comment_mention', outcome: 'already ' + m.dm_status };
+  const done = async (status: string, via: string | null, err: string | null) => {
+    await svc.from('hub_mentions').update({ dm_status: status, dm_via: via, dm_error: err, dm_at: new Date().toISOString() }).eq('id', id);
+    await log('comment_mention', String(m.to_email || m.to_name || '?'), status + (via ? ' as ' + via : '') + (err ? ': ' + err : ''));
+    return { event: 'comment_mention', outcome: status, via, error: err };
+  };
+  /* v10: a task description saves while the person is still typing: wait, then quote what it says now */
+  if (m.source_table === 'dept_tasks' && m.source_id) {
+    await new Promise(r => setTimeout(r, 20000));
+    const { data: t } = await svc.from('dept_tasks').select('description').eq('id', m.source_id).maybeSingle();
+    const desc = String(t?.description || '');
+    if (!stillMentions(desc, String(m.to_name || ''))) return done('skipped', null, 'the mention was removed before sending');
+    m.snippet = around(desc, String(m.to_name || ''));
+    await svc.from('hub_mentions').update({ snippet: m.snippet }).eq('id', id);
+  }
+  if (!m.to_email) return done('skipped', null, 'no email on the roster');
+  if (await optedOut(String(m.to_email), 'comment_mention')) return done('skipped', null, 'opted out');
+  const sid = await slackIdFor(String(m.to_email), m.to_name ? String(m.to_name) : null);
+  if (!sid) return done('skipped', null, 'no Slack account found');
+  const link = siteLink(String(m.url || ''));
+  const where = (MENTION_KIND[String(m.kind)] || 'something') + (m.ref_title && !m.private ? ' ' + String.fromCharCode(8220) + slackEsc(String(m.ref_title)) + String.fromCharCode(8221) : '');
+  const snippet = m.private ? '' : slackText(String(m.snippet || '').slice(0, 610));
+  /* as the writer: their words, then where */
+  const asUser = (snippet ? snippet + '\n' : 'I mentioned you on ' + where + ' in the Hub (it is confidential, so the text stays there).\n') + '<' + link + '|Open ' + where + ' in the Hub>';
+  const r1 = await dmAsUser(String(m.from_email), sid, asUser);
+  if (r1.ok) return done('sent', 'user', null);
+  /* from the Hub bot, with their name */
+  const asBot = ':speech_balloon: *' + slackEsc(String(m.from_name || m.from_email)) + '* mentioned you on ' + where + (snippet ? ':\n> ' + snippet.replace(/\n/g, '\n> ') : ' (confidential, so the text stays in the Hub).') + '\n<' + link + '|Open it in the Hub>';
+  const r2 = await dm(sid, asBot);
+  if (r2.ok) return done('sent', 'bot', r1.err && r1.err !== 'not_connected' ? 'as the writer failed: ' + r1.err : null);
+  return done('failed', null, (r2.err || 'unknown') + (r1.err && r1.err !== 'not_connected' ? '; as the writer: ' + r1.err : ''));
 }
 
 async function deliver(event: string, personName: string | null, email: string | null, text: string): Promise<string> {
@@ -284,6 +386,14 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     if (!recipient) { await log(event, s.department || 'unknown', 'skipped: no recipient'); return { event, outcome: 'no_recipient' }; }
     const out = await deliver(event, String(recipient), null, text);
     return { event, outcome: out };
+  }
+
+  if (event === 'comment_mention') {
+    /* v10: answer the database at once; a task description's mention finishes in the background */
+    const job = commentMention(Number(body.mention_id));
+    const rt = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    if (rt && typeof rt.waitUntil === 'function') { rt.waitUntil(job.catch(() => null)); return { event, outcome: 'queued' }; }
+    return await job;
   }
 
   if (event === 'mentioned') {

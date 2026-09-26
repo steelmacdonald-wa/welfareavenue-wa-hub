@@ -1,0 +1,566 @@
+/* =====================================================================
+   WA v138 @mentions: bring someone in, and they hear about it on Slack (26/09/26)
+   =====================================================================
+   Steel: "I want the ability to @ someone anywhere in the hub and it will send them a direct message
+   from me in Slack - no asking this is done automatically. I'd like the same capabilities for
+   everyone at the charity. So if Ian comments @joy on a content task on slack Ian will have sent
+   her a message of the comment and link to the task on the hub"
+
+   - Type @ in a task comment or description, a goal comment, a request note, a team update, a
+     decision, a committee note, a project description or a Content calendar post's notes: a list of
+     people opens (the roster, with photos and teams); pick one with the keys or the mouse.
+   - Under the field, a line says who will get a Slack message and how (as you, or from the Hub with
+     your name until you connect Slack). Nothing to confirm: saving is sending.
+   - The database does the sending (wa138_mentions): a trigger on each of those places files the new
+     mentions in hub_mentions, and notify (comment_mention) sends the DM with the text and a link.
+   - Settings, Connections: "Send @mentions as you" connects your own Slack account (slack-connect,
+     Slack's sign-in page), and lists your recent mentions with what happened to each. Settings,
+     Notifications: "Someone @mentions me in the Hub" can be switched off.
+   - Mentions show as a highlighted name in task comments, goal comments and request notes.
+   ===================================================================== */
+(function () {
+  if (window.__wa138) return; window.__wa138 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', INK = '#1F201E', MUTED = '#797773', SLACK = '#4A154B';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var PAL = [['#103F39', '#FFFAF2'], ['#DCA527', '#1F201E'], ['#2A8C7A', '#FFFAF2'], ['#E9DCC4', '#103F39'], ['#8C6A2E', '#FFFAF2'], ['#B3402F', '#FFFAF2']];
+
+  /* the places people write that send @mentions (each has a trigger in wa138_mentions) */
+  var FIELDS = [
+    { sel: '#w116cmtx', kind: 'comment' },                               /* task drawer comment -> task_comments */
+    { sel: '#w51new', kind: 'comment' },                                 /* task comments window -> task_comments */
+    { sel: '#w116ted', kind: 'desc' },                                   /* task description (rich) -> dept_tasks */
+    { sel: 'input[data-glci]', kind: 'comment' },                        /* goal comment -> goal_comments */
+    { sel: 'textarea[data-w123note]', kind: 'comment' },                 /* request note -> request_notes */
+    { sel: '#w116ut', kind: 'save' },                                    /* team update -> dept_updates */
+    { sel: '#dmMove', kind: 'save' }, { sel: '#ddNote', kind: 'save' },  /* decision -> decisions */
+    { sel: '#w116pd', kind: 'save' }, { sel: '#w116ed', kind: 'save' },  /* project description -> projects */
+    { sel: '#w121notes', kind: 'save' },                                 /* Content calendar notes for the team -> content_posts */
+    { sel: '#w126sheet textarea[name="summary"]', kind: 'save', priv: true },          /* committee note -> board_touchpoints */
+    { sel: '#w126sheet textarea[name="recommendation"]', kind: 'save', priv: true }
+  ];
+  var FIELD_SEL = FIELDS.map(function (f) { return f.sel; }).join(',');
+  function fieldOf(el) {
+    if (!el || !el.matches) return null;
+    for (var i = 0; i < FIELDS.length; i++) { try { if (el.matches(FIELDS[i].sel)) return FIELDS[i]; } catch (e) { /* fine */ } }
+    return null;
+  }
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  /* anyone signed in can mention (directors write committee notes too); connecting Slack is for staff (slack-connect checks) */
+  function signedIn() { return !!myEmail(); }
+  function teamShort(d) {
+    try { return (window.WA_TEAMS && WA_TEAMS.short && WA_TEAMS.short[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || ''; } catch (e) { return ''; }
+  }
+
+  /* ---------- the roster the page already holds (team_members, active) ---------- */
+  var R = { src: null, list: [], byLen: [] };
+  function roster() {
+    var src = null;
+    try { src = (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || null; } catch (e) { src = null; }
+    if (src !== R.src) {
+      R.src = src;
+      R.list = (src || []).filter(function (m) { return m && m.active !== false && String(m.name || '').trim(); });
+      /* the database picks the longest name after the @ (then the lowest id): the page does the same */
+      R.byLen = R.list.slice().sort(function (a, b) { return String(b.name).trim().length - String(a.name).trim().length || Number(a.id) - Number(b.id); });
+    }
+    return R.list;
+  }
+  function meRow() { var em = myEmail(); return roster().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function initials(name) { var p = String(name || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function palette(name) { var h = 0, s = String(name || ''); for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return PAL[h % PAL.length]; }
+  function avatar(m, size) {
+    var st = 'width:' + size + 'px;height:' + size + 'px;font-size:' + Math.round(size * 0.4) + 'px;';
+    if (m && m.avatar_url) return '<span class="w138av" style="' + st + '"><img src="' + E(m.avatar_url) + '" alt="" loading="lazy" /></span>';
+    var p = palette(m && m.name);
+    return '<span class="w138av" style="' + st + 'background:' + p[0] + ';color:' + p[1] + '">' + E(initials(m && m.name)) + '</span>';
+  }
+
+  /* who a text @mentions, exactly as the database reads it (wa_mentioned_members): after each @ that is not part of an
+     email address, the longest roster name that follows and ends on a word boundary (@joy.dumansi is a handle) */
+  var WORD = /[0-9A-Za-z_\u00c0-\u024f]/;
+  function mentioned(text) {
+    var t = String(text || ''), low = t.toLowerCase(), out = [], seen = {};
+    roster();
+    if (t.indexOf('@') < 0) return out;
+    for (var i = 0; i < t.length && i < 8000; i++) {
+      if (t.charAt(i) !== '@') continue;
+      if (i > 0 && (WORD.test(t.charAt(i - 1)) || t.charAt(i - 1) === '.')) continue;
+      var rest = low.slice(i + 1, i + 61);
+      for (var j = 0; j < R.byLen.length; j++) {
+        var m = R.byLen[j], n = String(m.name).trim().toLowerCase();
+        if (rest.indexOf(n) !== 0) continue;
+        var nx = rest.charAt(n.length), nx2 = rest.charAt(n.length + 1);
+        if (nx && WORD.test(nx)) continue;
+        if (nx === '.' && nx2 && WORD.test(nx2)) continue;
+        if (!seen[m.id]) { seen[m.id] = 1; out.push(m); }
+        break;
+      }
+    }
+    return out;
+  }
+  function names(list) {
+    var n = list.map(function (m) { return String(m.name).trim(); });
+    if (n.length <= 1) return n.join('');
+    return n.slice(0, -1).join(', ') + ' and ' + n[n.length - 1];
+  }
+
+  /* ---------- styles ---------- */
+  var css = document.createElement('style');
+  css.id = 'w138css';
+  css.textContent =
+    '#w138pick{position:fixed;z-index:2147483400;width:280px;max-width:calc(100vw - 16px);background:' + CREAM + ';border:1px solid rgba(16,63,57,.16);border-radius:14px;box-shadow:0 2px 6px rgba(16,63,57,.10),0 14px 34px rgba(16,63,57,.18);padding:6px;font-family:' + BODY + ';display:none;box-sizing:border-box;}' +
+    '#w138pick.on{display:block;animation:w138in .12s ease-out;}' +
+    '@keyframes w138in{from{opacity:0;transform:translateY(-3px);}to{opacity:1;transform:none;}}' +
+    '#w138pick .hd{font-family:' + HEAD + ';font-size:11.5px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';padding:4px 8px 6px;}' +
+    '#w138pick .it{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:10px;cursor:pointer;color:' + INK + ';}' +
+    '#w138pick .it.on{background:rgba(220,165,39,.18);}' +
+    '#w138pick .it b{display:block;font-size:13.5px;font-weight:600;line-height:1.2;}' +
+    '#w138pick .it small{display:block;font-size:11.5px;color:' + MUTED + ';line-height:1.3;}' +
+    '#w138pick .it .nomail{color:' + FLAG + ';}' +
+    '#w138pick .ft{font-size:11px;color:' + MUTED + ';padding:6px 8px 3px;border-top:1px solid rgba(16,63,57,.08);margin-top:4px;}' +
+    '.w138av{display:inline-flex;align-items:center;justify-content:center;border-radius:50%;overflow:hidden;flex:0 0 auto;font-family:' + HEAD + ';font-weight:600;}' +
+    '.w138av img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '.w138hint{display:flex;align-items:flex-start;gap:7px;font-family:' + BODY + ';font-size:12px;line-height:1.45;color:' + GREEN + ';background:rgba(16,63,57,.05);border-radius:9px;padding:6px 9px;margin:6px 0 2px;text-transform:none;letter-spacing:0;font-weight:400;}' +
+    '.w138hint svg{width:14px;height:14px;flex:0 0 auto;margin-top:2px;}' +
+    '.w138hint .lnk{font-weight:700;text-decoration:underline;cursor:pointer;white-space:nowrap;}' +
+    '.w138hint .warn{color:' + FLAG + ';}' +
+    '.w138at{color:' + GREEN + ';background:rgba(220,165,39,.16);border-radius:5px;padding:0 3px;font-weight:600;white-space:nowrap;}' +
+    '.w116js .w138row .ic{font-size:19px;}' +
+    '.w116js .w138btn{font-family:' + BODY + ';font-size:12.5px;font-weight:700;border:none;border-radius:10px;padding:8px 12px;cursor:pointer;background:' + GREEN + ';color:' + CREAM + ';white-space:nowrap;}' +
+    '.w116js .w138btn.ghost{background:transparent;color:' + GREEN + ';border:1px solid rgba(16,63,57,.25);}' +
+    '.w116js .w138btn[disabled]{opacity:.55;cursor:default;}' +
+    '.w116js .w138rec{margin:0 0 4px 52px;}' +
+    '.w116js .w138rec .t{font-family:' + HEAD + ';font-size:11.5px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';margin:2px 0 4px;}' +
+    '.w116js .w138rec .r{display:flex;gap:8px;align-items:baseline;font-size:12.5px;color:' + INK + ';padding:4px 0;border-top:1px solid rgba(16,63,57,.06);}' +
+    '.w116js .w138rec .r:first-of-type{border-top:none;}' +
+    '.w116js .w138rec .r span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '.w116js .w138rec .r em{font-style:normal;font-size:11.5px;white-space:nowrap;color:#1f6b5d;}' +
+    '.w116js .w138rec .r em.no{color:' + FLAG + ';}' +
+    '.w116js .w138rec .r em.wait{color:' + MUTED + ';}' +
+    '.w116js .w138banner{font-size:12.5px;line-height:1.45;border-radius:10px;padding:8px 11px;margin:0 0 10px;background:rgba(42,140,122,.12);color:#1f6b5d;}' +
+    '.w116js .w138banner.err{background:rgba(179,64,47,.10);color:' + FLAG + ';}' +
+    '.w116js #w138conn .row{border-top:1px solid rgba(16,63,57,.08);}' +
+    '@media (pointer:coarse){#w138pick .ft{display:none;}}' +
+    '@media (max-width:640px){.w116js .w138rec{margin-left:0;}#w138pick{width:calc(100vw - 16px);}.w116js .w138row{grid-template-columns:40px minmax(0,1fr);}.w116js .w138row .w138btn{grid-column:2;justify-self:start;}}';
+  document.head.appendChild(css);
+  var SLACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12.5a7.5 7.5 0 0 1-11 6.6L4 20l1-4.3A7.5 7.5 0 1 1 20 12.5z"/><circle cx="12.3" cy="12.3" r="2.6"/><path d="M14.9 12.3v.9a1.6 1.6 0 0 0 3.2 0v-.9"/></svg>';
+
+  /* ---------- the picker: type @ and choose someone ---------- */
+  var P = { open: false, el: null, ce: false, node: null, at: 0, caret: 0, q: '', list: [], idx: 0, box: null };
+  function pickBox() {
+    if (P.box && document.body.contains(P.box)) return P.box;
+    var b = document.createElement('div');
+    b.id = 'w138pick'; b.setAttribute('role', 'listbox'); b.setAttribute('aria-label', 'Mention someone');
+    document.body.appendChild(b);
+    /* mousedown, not click: the field keeps its focus (the task description saves when it loses it) */
+    b.addEventListener('mousedown', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var it = e.target.closest && e.target.closest('[data-w138i]');
+      if (it) choose(Number(it.getAttribute('data-w138i')));
+    });
+    b.addEventListener('mousemove', function (e) {
+      var it = e.target.closest && e.target.closest('[data-w138i]'); if (!it) return;
+      var i = Number(it.getAttribute('data-w138i')); if (i !== P.idx) { P.idx = i; paintPick(); }
+    });
+    P.box = b; return b;
+  }
+
+  /* what is typed after the @ right before the caret, if it can be a mention */
+  function tokenIn(text, caret) {
+    var before = String(text || '').slice(0, caret);
+    var at = before.lastIndexOf('@');
+    if (at < 0 || caret - at > 32) return null;
+    var prev = at > 0 ? before.charAt(at - 1) : '';
+    if (prev && (WORD.test(prev) || prev === '.')) return null;          /* an email address */
+    var q = before.slice(at + 1);
+    if (/[\n\r@]/.test(q) || /^\s/.test(q)) return null;
+    return { at: at, q: q };
+  }
+  /* the team the field is about: the task in the drawer, else the team page, else mine */
+  function contextTeam(el) {
+    try {
+      if (el && el.closest && el.closest('#w116dr')) {
+        var m = /#(\d+)/.exec(((document.querySelector('#w116dr .w116drh') || {}).textContent) || '');
+        var t = m && (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (x) { return String(x.id) === m[1]; })[0];
+        if (t && t.department) return t.department;
+      }
+      var h = /^#team\/([a-z]+)/.exec(location.hash || ''); if (h) return h[1];
+    } catch (e) { /* fine */ }
+    return (meRow() || {}).department || '';
+  }
+  function candidates(q, el) {
+    q = String(q || '').toLowerCase().replace(/\u00a0/g, ' ');
+    var me = myEmail(), mine = contextTeam(el), out = [];
+    roster().forEach(function (m) {
+      if (me && lower(m.email) === me) return;
+      var n = String(m.name).trim().toLowerCase(), local = lower(m.email).split('@')[0], s = -1;
+      if (!q) s = 3;
+      else if (n.indexOf(q) === 0) s = 0;
+      else if (n.split(/\s+/).some(function (w) { return w.indexOf(q) === 0; })) s = 1;
+      else if (q.length >= 2 && local && (local.indexOf(q) === 0 || local.split(/[._-]/).some(function (w) { return w.indexOf(q) === 0; }))) s = 2;
+      if (s >= 0) out.push({ m: m, s: s });
+    });
+    out.sort(function (a, b) {
+      /* people Slack can reach (an email on the roster) before those it cannot, then the team the field is about */
+      return a.s - b.s || ((a.m.email ? 0 : 1) - (b.m.email ? 0 : 1)) || ((a.m.department === mine ? 0 : 1) - (b.m.department === mine ? 0 : 1)) || String(a.m.name).localeCompare(String(b.m.name));
+    });
+    return out.slice(0, 6).map(function (x) { return x.m; });
+  }
+
+  /* where the caret is on screen */
+  function caretRect(el, pos) {
+    var r = el.getBoundingClientRect();
+    try {
+      var cs = getComputedStyle(el), div = document.createElement('div'), st = div.style, isInput = el.tagName === 'INPUT';
+      ['boxSizing', 'width', 'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth', 'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft',
+        'fontStyle', 'fontVariant', 'fontWeight', 'fontStretch', 'fontSize', 'lineHeight', 'fontFamily', 'textAlign', 'textTransform', 'textIndent', 'letterSpacing', 'wordSpacing', 'tabSize'
+      ].forEach(function (p) { st[p] = cs[p]; });
+      st.position = 'absolute'; st.visibility = 'hidden'; st.top = '0'; st.left = '-9999px'; st.overflow = 'hidden';
+      st.whiteSpace = isInput ? 'pre' : 'pre-wrap'; st.wordWrap = 'break-word'; st.height = 'auto';
+      div.textContent = el.value.slice(0, pos);
+      var sp = document.createElement('span'); sp.textContent = el.value.slice(pos, pos + 1) || '.'; div.appendChild(sp);
+      document.body.appendChild(div);
+      var lh = parseFloat(cs.lineHeight); if (!(lh > 0)) lh = (parseFloat(cs.fontSize) || 14) * 1.35;
+      var x = r.left + (parseFloat(cs.borderLeftWidth) || 0) + sp.offsetLeft - el.scrollLeft, y = r.top + (parseFloat(cs.borderTopWidth) || 0) + sp.offsetTop - el.scrollTop;
+      document.body.removeChild(div);
+      x = Math.max(r.left, Math.min(x, r.right - 12)); y = Math.max(r.top, Math.min(y, r.bottom - lh));
+      return { left: x, top: y, bottom: y + lh };
+    } catch (e) { return { left: r.left, top: r.top, bottom: r.bottom }; }
+  }
+  function rangeRect(range, el) {
+    try {
+      var rs = range.getClientRects(); if (rs && rs.length) return rs[rs.length - 1];
+      var b = range.getBoundingClientRect(); if (b && (b.top || b.left)) return b;
+    } catch (e) { /* fine */ }
+    return el.getBoundingClientRect();
+  }
+
+  function refresh(el) {
+    if (!el || !signedIn()) { closePick(); return; }
+    var tok = null;
+    if (el.isContentEditable) {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) { closePick(); return; }
+      var rg = sel.getRangeAt(0), node = rg.startContainer;
+      if (!node || node.nodeType !== 3 || !el.contains(node)) { closePick(); return; }
+      tok = tokenIn(node.data, rg.startOffset);
+      if (!tok) { closePick(); return; }
+      P.ce = true; P.node = node; P.caret = rg.startOffset;
+    } else {
+      if (typeof el.selectionStart !== 'number' || el.selectionStart !== el.selectionEnd) { closePick(); return; }
+      tok = tokenIn(el.value, el.selectionStart);
+      if (!tok) { closePick(); return; }
+      P.ce = false; P.node = null; P.caret = el.selectionStart;
+    }
+    var list = candidates(tok.q, el);
+    if (!list.length) { closePick(); return; }
+    var same = P.open && P.el === el && P.q === tok.q;
+    P.el = el; P.at = tok.at; P.q = tok.q; P.list = list;
+    if (!same) P.idx = 0;
+    P.open = true;
+    paintPick();
+    placePick();
+  }
+  function paintPick() {
+    var b = pickBox();
+    b.innerHTML = '<div class="hd">Mention someone</div>' + P.list.map(function (m, i) {
+      var team = teamShort(m.department) || m.role || '';
+      return '<div class="it' + (i === P.idx ? ' on' : '') + '" role="option" aria-selected="' + (i === P.idx ? 'true' : 'false') + '" data-w138i="' + i + '">' + avatar(m, 28) +
+        '<div><b>' + E(String(m.name).trim()) + '</b><small>' + E(team) + (m.email ? '' : (team ? ' \u00b7 ' : '') + '<span class="nomail">no email, so no Slack message</span>') + '</small></div></div>';
+    }).join('') + '<div class="ft">\u2191 \u2193 to choose, Enter to mention, Esc to close</div>';
+    b.classList.add('on');
+  }
+  function placePick() {
+    var b = pickBox(), el = P.el; if (!el) return;
+    var c;
+    if (P.ce) { var r = document.createRange(); try { r.setStart(P.node, P.caret); r.collapse(true); } catch (e) { /* fine */ } c = rangeRect(r, el); }
+    else c = caretRect(el, P.at);
+    var w = b.offsetWidth || 280, h = b.offsetHeight || 240, vw = window.innerWidth, vh = window.innerHeight;
+    var left = Math.max(8, Math.min(c.left - 10, vw - w - 8));
+    var top = c.bottom + 6;
+    if (top + h > vh - 8 && c.top - h - 6 > 8) top = c.top - h - 6;
+    b.style.left = Math.round(left) + 'px'; b.style.top = Math.round(Math.max(8, top)) + 'px';
+  }
+  function closePick() {
+    P.open = false; P.list = []; P.node = null;
+    if (P.box) { P.box.classList.remove('on'); P.box.innerHTML = ''; }
+  }
+  function choose(i) {
+    var m = P.list[i]; if (!m || !P.el) { closePick(); return; }
+    var el = P.el, name = String(m.name).trim(), ok = false;
+    if (P.ce) {
+      var node = P.node; if (!node || !el.contains(node)) { closePick(); return; }
+      var text = '@' + name + ' ';
+      if (document.activeElement !== el) el.focus();
+      var r = document.createRange(); r.setStart(node, P.at); r.setEnd(node, Math.min(P.caret, node.data.length));
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      try { ok = document.execCommand('insertText', false, text); } catch (e) { ok = false; }
+      if (!ok) {
+        r.deleteContents(); var tn = document.createTextNode('@' + name + '\u00a0'); r.insertNode(tn);
+        var r2 = document.createRange(); r2.setStartAfter(tn); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    } else {
+      var v = el.value, after = v.slice(P.caret);
+      var ins = '@' + name + (/^\s/.test(after) ? '' : ' ');
+      el.focus();
+      try { el.setSelectionRange(P.at, P.caret); ok = document.execCommand('insertText', false, ins); } catch (e2) { ok = false; }
+      if (!ok || el.value.slice(P.at, P.at + ins.length) !== ins) {
+        el.value = v.slice(0, P.at) + ins + after;
+        var p = P.at + ins.length; try { el.setSelectionRange(p, p); } catch (e3) { /* fine */ }
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+    closePick();
+    hintSoon(el, 0);
+  }
+
+  /* ---------- the line under a field: who gets a Slack message, and from whom ---------- */
+  var C = { at: 0, connected: null, loading: null };   /* my own slack_links row: have I connected Slack? */
+  function loadLink(force) {
+    if (!signedIn()) return Promise.resolve(null);
+    if (C.loading) return C.loading;
+    if (!force && C.at && Date.now() - C.at < 120000) return Promise.resolve(C.connected);
+    C.loading = Promise.resolve(db.from('slack_links').select('slack_user_id, connected_at').eq('email', myEmail()).maybeSingle()).then(function (r) {
+      C.loading = null; C.at = Date.now(); C.connected = !!(r && r.data && r.data.slack_user_id); return C.connected;
+    }, function () { C.loading = null; C.at = Date.now(); C.connected = false; return false; });
+    return C.loading;
+  }
+  function textOf(el) { return el.isContentEditable ? (el.innerText || el.textContent || '') : String(el.value == null ? '' : el.value); }
+  /* the hint sits under the field, or under its row when the field shares a row with its Post button */
+  function hintHost(el) {
+    var p = el.parentElement; if (!p) return el;
+    for (var i = 0; i < p.children.length; i++) { var c = p.children[i]; if (c !== el && c.tagName === 'BUTTON') return p; }
+    return el;
+  }
+  function hintText(list, f) {
+    var withMail = list.filter(function (m) { return !!m.email; }), noMail = list.filter(function (m) { return !m.email; });
+    var when = f.kind === 'comment' ? 'when you post it' : (f.kind === 'desc' ? 'once it saves' : 'when you save');
+    var s = '';
+    if (withMail.length) {
+      var who = E(names(withMail)), verb = withMail.length === 1 ? ' gets' : ' get';
+      if (C.connected === true) s = who + verb + ' a Slack message from you ' + when + (f.priv ? ', saying where to look (the note itself stays in the Hub).' : ', with what you wrote and a link back here.');
+      else if (C.connected === false) s = who + verb + ' a Slack message ' + when + ', from the Hub with your name' + (f.priv ? ' (the note itself stays in the Hub)' : '') + '.' + (staffOk() ? ' To send it as you, connect Slack in Settings.' : '');
+      else s = who + verb + ' a Slack message ' + when + '.';
+    }
+    if (noMail.length) s += (s ? ' ' : '') + '<span class="warn">' + E(names(noMail)) + (noMail.length === 1 ? ' has' : ' have') + ' no email on the Hub, so no Slack message.</span>';
+    return SLACK_SVG + '<div>' + s + '</div>';
+  }
+  function dropHint(el) {
+    var h = el.__w138hint; if (h && h.parentNode) h.parentNode.removeChild(h);
+    el.__w138hint = null;
+    if (el.__w138w) { clearInterval(el.__w138w); el.__w138w = null; }
+  }
+  function hint(el) {
+    if (!el) return;
+    if (!document.body.contains(el)) { dropHint(el); return; }
+    var f = fieldOf(el);
+    var list = f && signedIn() ? mentioned(textOf(el)) : [];
+    if (list.length) {
+      var me = myEmail(), before = el.__w138base ? mentioned(el.__w138base).map(function (m) { return m.id; }) : [];
+      list = list.filter(function (m) { return lower(m.email) !== me && before.indexOf(m.id) < 0; });
+    }
+    if (!list.length) { dropHint(el); return; }
+    if (C.connected === null && !C.loading) loadLink().then(function () { hint(el); });
+    var html = hintText(list, f), h = el.__w138hint;
+    if (!h || !document.body.contains(h)) {
+      h = document.createElement('div'); h.className = 'w138hint'; h.setAttribute('aria-live', 'polite');
+      hintHost(el).insertAdjacentElement('afterend', h); el.__w138hint = h;
+    }
+    if (h.__html !== html) { h.innerHTML = html; h.__html = html; }
+    /* a posted comment empties its field without an input event: look again now and then while the line shows */
+    if (!el.__w138w) el.__w138w = setInterval(function () { hint(el); }, 900);
+  }
+  function hintSoon(el, ms) { clearTimeout(el.__w138t); el.__w138t = setTimeout(function () { hint(el); }, ms == null ? 250 : ms); }
+
+  /* ---------- Settings, Connections: Send @mentions as you ---------- */
+  var S = { status: null, at: 0, busy: '', recent: null, banner: null };
+  function slackFn(body) {
+    return Promise.resolve(db.functions.invoke('slack-connect', { body: body })).then(function (r) {
+      if (r && r.error) throw new Error(String(r.error.message || r.error));
+      return (r && r.data) || {};
+    });
+  }
+  function loadStatus(force) {
+    if (!force && S.status && !S.status.error && Date.now() - S.at < 60000) return Promise.resolve(S.status);
+    return slackFn({ action: 'status' }).then(function (d) {
+      S.status = d && typeof d === 'object' ? d : {}; S.at = Date.now();
+      if ('connected' in S.status) { C.connected = !!S.status.connected; C.at = Date.now(); }
+      return S.status;
+    }, function (e) { S.status = { error: String((e && e.message) || e || 'no answer') }; S.at = Date.now(); return S.status; });
+  }
+  function loadRecent() {
+    return Promise.resolve(db.from('hub_mentions').select('id, created_at, to_name, kind, ref_title, private, dm_status, dm_via, dm_error')
+      .eq('from_email', myEmail()).order('created_at', { ascending: false }).limit(5)).then(function (r) { S.recent = (r && r.data) || []; return S.recent; }, function () { S.recent = []; return S.recent; });
+  }
+  var KIND = { task: 'a task', goal: 'a goal', request: 'a request', update: 'a team update', decision: 'a decision', committee: 'a committee note', project: 'a project', content: 'a post' };
+  function day(iso) { try { return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }); } catch (e) { return String(iso || '').slice(0, 10); } }
+  function outcome(m) {
+    if (m.dm_status === 'sent') return '<em>' + (m.dm_via === 'user' ? 'Sent as you' : 'Sent from the Hub') + '</em>';
+    if (m.dm_status === 'pending') return '<em class="wait">Sending</em>';
+    var why = String(m.dm_error || '');
+    if (/opted out/.test(why)) return '<em class="wait">They turned these off</em>';
+    if (/removed/.test(why)) return '<em class="wait">You took it out</em>';
+    if (/no Slack account/.test(why)) return '<em class="no">Not sent: no Slack account found</em>';
+    if (/no email/.test(why)) return '<em class="no">Not sent: no email on the Hub</em>';
+    return '<em class="no">Not sent' + (m.dm_status === 'failed' ? ': Slack refused it' : '') + '</em>';
+  }
+  function connInner() {
+    var st = S.status, on = !!(st && st.connected), sub, cls = '', right = '';
+    if (!st) sub = 'Checking your Slack connection...';
+    else if (st.error) { sub = 'Could not check the connection. ' + E(String(st.error).slice(0, 120)); cls = ' err'; right = '<button class="w138btn ghost" data-w138c="retry">Try again</button>'; }
+    else if (on) { sub = 'On. People you @mention in the Hub get a Slack message from you, like any message you send.' + (st.since ? ' Connected ' + E(day(st.since)) + '.' : ''); cls = ' ok'; right = '<button class="w138btn ghost" data-w138c="disconnect"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'disconnect' ? 'Disconnecting...' : 'Disconnect') + '</button>'; }
+    else if (st.ready === false) sub = 'People you @mention in the Hub get a Slack message from the Hub with your name. Sending it as you is not set up yet.';
+    else { sub = 'People you @mention in the Hub get a Slack message. Connect your Slack account and it comes from you; until then, it comes from the Hub with your name.'; right = '<button class="w138btn" data-w138c="start"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'start' ? 'Opening Slack...' : 'Connect Slack') + '</button>'; }
+    var out = '';
+    if (S.banner) out += '<div class="w138banner' + (S.banner.ok ? '' : ' err') + '">' + E(S.banner.text) + '</div>';
+    out += '<div class="row w138row"><span class="ic" style="background:' + SLACK + '">@</span><div><b>Send @mentions as you</b><div class="s' + cls + '">' + sub + '</div></div>' + right + '</div>';
+    var rec = S.recent || [];
+    if (rec.length) {
+      out += '<div class="w138rec"><div class="t">Your latest @mentions</div>' + rec.map(function (m) {
+        var what = (KIND[m.kind] || 'something') + (m.ref_title && !m.private ? ': ' + m.ref_title : '');
+        return '<div class="r"><span>' + E(String(m.to_name || 'Someone')) + ', on ' + E(what) + ' \u00b7 ' + E(day(m.created_at)) + '</span>' + outcome(m) + '</div>';
+      }).join('') + '</div>';
+    }
+    return out;
+  }
+  function connRow() { return staffOk() ? '<div id="w138conn">' + connInner() + '</div>' : ''; }
+  function repaintConn() { var box = document.getElementById('w138conn'); if (box) box.innerHTML = connInner(); }
+  function afterPaint(tab) {
+    if (tab !== 'connections' || !document.getElementById('w138conn')) return;
+    var stale = !S.status || S.status.error || Date.now() - S.at > 60000;
+    if (stale) loadStatus(true).then(repaintConn);
+    loadRecent().then(repaintConn);
+  }
+  function act(el) {
+    var a = el.getAttribute('data-w138c');
+    if (a === 'retry') { S.status = null; repaintConn(); loadStatus(true).then(repaintConn); return; }
+    if (a === 'start') {
+      if (S.busy) return; S.busy = 'start'; S.banner = null; repaintConn();
+      slackFn({ action: 'start' }).then(function (d) {
+        if (d && d.url && /^https:\/\/slack\.com\//.test(d.url)) { location.href = d.url; return; }
+        S.busy = ''; repaintConn(); toastS(String((d && d.error) || 'Slack did not answer. Try again.').slice(0, 160));
+      }, function () { S.busy = ''; repaintConn(); toastS('Could not reach the Hub. Try again.'); });
+      return;
+    }
+    if (a === 'disconnect') {
+      if (S.busy) return; S.busy = 'disconnect'; S.banner = null; repaintConn();
+      slackFn({ action: 'disconnect' }).then(function (d) {
+        S.busy = '';
+        if (d && d.ok) { toastS('Disconnected. Your @mentions come from the Hub with your name again.'); C.connected = false; C.at = Date.now(); }
+        else toastS(String((d && d.error) || 'Could not disconnect. Try again.').slice(0, 160));
+        return loadStatus(true);
+      }, function () { S.busy = ''; toastS('Could not reach the Hub. Try again.'); }).then(repaintConn);
+    }
+  }
+
+  /* back from Slack's page: slack-connect sends the browser to /?slack=connected (or error, cancelled) */
+  var BACK = (function () {
+    try {
+      var q = new URLSearchParams(location.search || ''), v = q.get('slack'); if (!v) return null;
+      var why = q.get('why') || ''; q.delete('slack'); q.delete('why');
+      var rest = q.toString();
+      history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+      return { result: v, why: why };
+    } catch (e) { return null; }
+  })();
+  if (BACK) {
+    var tries = 0;
+    (function wait() {
+      var ready = document.documentElement.classList.contains('wa-ready') && typeof window.w116Settings === 'function' && myEmail() && staffOk();
+      if (!ready) { if (++tries < 120) setTimeout(wait, 500); return; }
+      if (BACK.result === 'connected') S.banner = { ok: true, text: 'Slack is connected. From now on, the people you @mention get a Slack message from you.' };
+      else if (BACK.result === 'cancelled') S.banner = { ok: false, text: 'Slack was not connected: you cancelled on Slack\u2019s page. Your @mentions still reach people, from the Hub with your name.' };
+      else S.banner = { ok: false, text: 'Slack was not connected. ' + (BACK.why || 'Something went wrong on the way back from Slack.') };
+      S.status = null; C.connected = null; C.at = 0;
+      setTimeout(function () { S.banner = null; }, 45000);
+      toastS(BACK.result === 'connected' ? 'Slack connected: your @mentions now come from you' : 'Slack was not connected');
+      try { window.w116Settings('connections'); } catch (e) { /* fine */ }
+    })();
+  }
+
+  /* ---------- names shown as mentions in comments and notes (the renderers call this on escaped text) ---------- */
+  function markText(t) {
+    var low = t.toLowerCase(), out = '', last = 0;
+    for (var i = 0; i < t.length; i++) {
+      if (t.charAt(i) !== '@') continue;
+      if (i > 0 && (WORD.test(t.charAt(i - 1)) || t.charAt(i - 1) === '.')) continue;
+      var rest = low.slice(i + 1, i + 91);
+      for (var j = 0; j < R.byLen.length; j++) {
+        var n = E(String(R.byLen[j].name).trim()).toLowerCase();
+        if (!n || rest.indexOf(n) !== 0) continue;
+        var nx = rest.charAt(n.length), nx2 = rest.charAt(n.length + 1);
+        if (nx && WORD.test(nx)) continue;
+        if (nx === '.' && nx2 && WORD.test(nx2)) continue;
+        out += t.slice(last, i) + '<span class="w138at">' + t.slice(i, i + 1 + n.length) + '</span>';
+        last = i + 1 + n.length; i = last - 1;
+        break;
+      }
+    }
+    return out + t.slice(last);
+  }
+  function mark(html) {
+    var s = String(html == null ? '' : html);
+    if (s.indexOf('@') < 0) return s;
+    roster(); if (!R.byLen.length) return s;
+    return s.split(/(<[^>]*>)/).map(function (part) { return !part || part.charAt(0) === '<' ? part : markText(part); }).join('');
+  }
+
+  /* ---------- wiring ---------- */
+  function stop(e) { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+  function isField(el) { return !!(el && el.matches && fieldOf(el)); }
+  document.addEventListener('input', function (e) {
+    var el = e.target;
+    if (!isField(el)) { if (P.open && P.el !== el) closePick(); return; }
+    refresh(el); hintSoon(el);
+  });
+  document.addEventListener('focusin', function (e) {
+    var el = e.target; if (!isField(el)) return;
+    if (el.__w138base == null) el.__w138base = textOf(el);
+    if (C.connected === null && signedIn()) loadLink();
+  });
+  document.addEventListener('focusout', function (e) {
+    var el = e.target; if (!P.open || P.el !== el) return;
+    setTimeout(function () { if (document.activeElement !== el) closePick(); }, 150);
+  });
+  document.addEventListener('keyup', function (e) {
+    if (!isField(e.target)) return;
+    if (/^(ArrowLeft|ArrowRight|Home|End)$/.test(e.key)) refresh(e.target);
+  });
+  document.addEventListener('click', function (e) {
+    var el = e.target; if (!el) return;
+    if (isField(el)) { setTimeout(function () { if (P.open || tokenish(el)) refresh(el); }, 0); return; }
+    var c = el.closest && el.closest('[data-w138c]'); if (c) { e.preventDefault(); act(c); }
+  });
+  function tokenish(el) { try { return el.isContentEditable || String(el.value || '').indexOf('@') >= 0; } catch (x) { return false; } }
+  document.addEventListener('mousedown', function (e) {
+    if (!P.open) return;
+    var t = e.target;
+    if (P.box && P.box.contains(t)) return;
+    if (P.el && (t === P.el || (P.el.contains && P.el.contains(t)))) return;
+    closePick();
+  }, true);
+  /* the list's keys run before anything else on the page (the drawers close on Escape; some fields post on Enter) */
+  window.addEventListener('keydown', function (e) {
+    if (!P.open || e.isComposing) return;
+    if (document.activeElement !== P.el) { closePick(); return; }
+    var k = e.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') { stop(e); P.idx = (P.idx + (k === 'ArrowDown' ? 1 : -1) + P.list.length) % P.list.length; paintPick(); return; }
+    if (k === 'Enter' || k === 'Tab') { if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) { closePick(); return; } stop(e); choose(P.idx); return; }
+    if (k === 'Escape') { stop(e); closePick(); }
+  }, true);
+  window.addEventListener('scroll', function () { if (P.open) placePick(); }, true);
+  window.addEventListener('resize', function () { if (P.open) closePick(); });
+  window.addEventListener('hashchange', function () { closePick(); });
+
+  window.w138Mark = mark;
+  window.w138ConnRow = connRow;
+  window.w138AfterPaint = afterPaint;
+  window.w138Debug = function () { return { roster: roster().length, connected: C.connected, pick: P.open ? P.list.map(function (m) { return m.name; }) : [], status: S.status, recent: (S.recent || []).length }; };
+  window.w138Mentioned = function (text) { return mentioned(text).map(function (m) { return String(m.name).trim(); }); };
+})();

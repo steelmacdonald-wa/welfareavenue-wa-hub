@@ -49,7 +49,7 @@
     tasks: { tab: 'dept', icon: 'list', hash: function () { return '#team/' + deptTab() + '/tasks'; }, steps: [
       S('#w116tasks .w116tb', 'Pick your view', 'See the team’s work as a List, a Board, a Calendar or a Tree, grouped by project, workstream, status or owner.'),
       S('#w116tasks .w116g', 'Groups', 'Each group folds open. Use + Add task inside a group to add a task straight into it.', OPT),
-      S('#w116tasks .w116note', 'Working with tasks', 'Click a task for its details, comments and history. Drag to reorder it or move it to another group.', OPT),
+      S('#w116tasks .w116note', 'Working with tasks', 'Click a task for its details, comments and history. Type @ and a name in a comment to bring someone in: they get a Slack message with a link. Drag to reorder a task or move it to another group.', OPT),
       S('#w116agHost || #w116host .w116agnote', 'The team agenda', 'Agendas for this team’s meetings, drafted from transcripts and open work. Tick items off during the meeting.', { opt: 1, hash: function () { return '#team/' + deptTab() + '/agenda'; } })
     ] },
     overview: { tab: 'overview', icon: 'target', hash: '#overview', steps: [

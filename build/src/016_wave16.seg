@@ -76,7 +76,7 @@ waGoalRow = function (g) {
         return '<div class="gl-cmt" data-glc="' + c.id + '">'
           + (mine ? '<span class="ops"><button data-glce="' + c.id + '">edit</button><button data-glcx="' + c.id + '">delete</button></span>' : '')
           + '<span class="who">' + esc(c.author || 'someone') + '</span><span class="when">' + fmtDay(c.created_at) + (c.updated_at ? ' (edited)' : '') + '</span>'
-          + '<div data-glcb="' + c.id + '">' + esc(c.body) + '</div></div>';
+          + '<div data-glcb="' + c.id + '">' + (window.w138Mark ? window.w138Mark(esc(c.body)) : esc(c.body)) + '</div></div>';
       }).join('') : '<div class="mp-empty">No comments yet.</div>')
     + (isStaff() ? '<div class="gl-addc"><input data-glci="' + g.id + '" placeholder="Add a comment" /><button data-glca="' + g.id + '">Post</button></div>' : '')
     + '</div>'

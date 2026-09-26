@@ -110,7 +110,7 @@
         + '<b>' + esc(c.author || 'someone') + '</b>'
         + '<span class="dt">' + wa51Day(c.created_at) + '</span>'
         + (c.source_ref && c.source !== 'manual' ? '<a href="#tx/' + esc(String(c.source_ref)) + '" onclick="closeModal()">' + esc(c.source_label || 'open the meeting') + '</a>' : '')
-        + '</div><div class="bd">' + esc(c.body) + '</div>'
+        + '</div><div class="bd">' + (window.w138Mark ? window.w138Mark(esc(c.body)) : esc(c.body)) + '</div>'
         + (c.quote ? '<div class="qt">&quot;' + esc(c.quote) + '&quot;</div>' : '')
         + '</div>';
     }).join('') : '<p class="m-sub">No comments yet. Start the thread below.</p>';

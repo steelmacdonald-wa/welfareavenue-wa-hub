@@ -299,7 +299,7 @@
   document.addEventListener('click', function (e) { var tb = e.target.closest && e.target.closest('.w47tab'); if (tb && tb.getAttribute('data-w47v') === 'hours') { [400, 1200].forEach(function (ms) { setTimeout(hoursBlock, ms); }); } });
 
   /* ---------- 6. Settings ---------- */
-  var EVENTS = [['request_filed', 'A request is filed for my team'], ['task_reassigned', 'A task is handed to me'], ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'], ['mentioned', 'A meeting mentions me'], ['invited', 'Someone I invited joins the Hub'], ['request_update', 'A request I asked for is done, or someone adds a note to it']];
+  var EVENTS = [['request_filed', 'A request is filed for my team'], ['task_reassigned', 'A task is handed to me'], ['suggestion_accepted', 'A meeting suggestion becomes a request for my team'], ['mentioned', 'A meeting mentions me'], ['invited', 'Someone I invited joins the Hub'], ['request_update', 'A request I asked for is done, or someone adds a note to it'], ['comment_mention', 'Someone @mentions me in the Hub (a Slack message with what they wrote)']];
   var PR = { disabled: [], loaded: false };
   async function loadPrefs() { try { var r = await db.from('wa_notify_prefs').select('disabled').eq('email', myEmail()).maybeSingle(); PR.disabled = (r && r.data && Array.isArray(r.data.disabled)) ? r.data.disabled : []; PR.loaded = true; } catch (e) { PR.disabled = []; } }
   async function savePrefs() { try { await db.from('wa_notify_prefs').upsert({ email: myEmail(), disabled: PR.disabled, updated_at: new Date().toISOString() }); toastS('Notification settings saved'); } catch (e) { toastS('Could not save settings'); } }
@@ -329,6 +329,7 @@
           (J.slackUsers === null ? '<div class="note">Loading the workspace...</div>' : (list.length ? '<div class="list">' + list.map(function (u) { return '<a data-jslackid="' + E(u.id) + '"><b>' + E(u.name) + '</b><span>@' + E(u.handle) + (u.title ? ' &middot; ' + E(u.title) : '') + '</span></a>'; }).join('') + '</div>' : '<div class="note">Nobody matches that.</div>')) +
           '<div class="note"><span class="lnk" data-jslackpick="0">Close</span></div></div>';
       }
+      body += (window.w138ConnRow ? window.w138ConnRow() : ''); /* wave138: Send @mentions as you */
       body += connRow('C', '#1a73e8', 'Google Calendar', connStatus(cal, 'On. Accept or decline hub meetings from Home; replies land on your calendar' + (cal && cal.external_name ? ' (' + E(cal.external_name) + ')' : '') + '.'), sw(!!(cal && cal.enabled), 'google_calendar'));
       body += connRow('D', '#188038', 'Google Drive', connStatus(drv, 'On. Your recent files show on your profile and here.'), sw(!!(drv && drv.enabled), 'google_drive'));
       body += connRow('@', GOLD, 'Email (hub@welfareavenue.com)', 'Cc the hub on anything worth keeping: invoices go to Finance, Loom or Otter summaries through the transcript pipeline, other threads to your team page. No setup needed.', '<span class="lnk" data-jgo="#hubmail">Hub inbox</span>');
@@ -358,6 +359,7 @@
   function paintSettings() {
     var box = document.getElementById('modalBox'); if (!box) return;
     box.innerHTML = settingsHtml();
+    try { if (window.w138AfterPaint) window.w138AfterPaint(J.tab); } catch (x) { /* fine */ }
     if (J.tab === 'connections' && J.conn && J.conn.google_drive && J.conn.google_drive.enabled) loadFiles();
   }
   async function loadFiles() {

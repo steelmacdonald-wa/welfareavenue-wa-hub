@@ -102,7 +102,7 @@
     var ev = [];
     ev.push({ at: r.created_at, first: 1, h: '<b>' + E(whoAsked(r)) + '</b> asked ' + E(teamLabel(r.department)) + (r.source === 'email' ? ' (from an email)' : r.source === 'meeting' ? ' (from a meeting)' : '') });
     (R.logs['r' + r.id] || []).forEach(function (l) { var f = LOGTXT[l.field]; if (!f) return; ev.push({ at: l.changed_at, h: f(l) + (l.changed_by && l.field !== 'slack' ? ' <span class="w">by ' + E(l.changed_by) + '</span>' : '') }); });
-    (R.notes[r.id] || []).forEach(function (n) { ev.push({ at: n.created_at, note: true, h: '<b>' + E(n.author) + '</b> <span class="w">added a note</span><div class="bd">' + linkify(n.body) + '</div>' }); });
+    (R.notes[r.id] || []).forEach(function (n) { ev.push({ at: n.created_at, note: true, h: '<b>' + E(n.author) + '</b> <span class="w">added a note</span><div class="bd">' + (window.w138Mark ? window.w138Mark(linkify(n.body)) : linkify(n.body)) + '</div>' }); });
     ev.sort(function (a, b) { if (a.first || b.first) return a.first ? -1 : 1; return String(a.at || '').localeCompare(String(b.at || '')); });
     return '<ol class="w123tl">' + ev.map(function (e) { return '<li' + (e.note ? ' class="note"' : '') + '>' + e.h + ' <span class="w">' + E(fmtWhen(e.at)) + '</span></li>'; }).join('') + '</ol>';
   }

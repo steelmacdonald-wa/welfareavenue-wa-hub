@@ -542,7 +542,7 @@
       var rows = (r && r.data) || [];
       var el = document.getElementById('w116cm'); if (!el || B.drawer !== t.id) return;
       el.innerHTML = rows.length ? rows.map(function (c) {
-        return '<div class="w116cmt"><div class="hd"><b>' + E(c.author || 'someone') + '</b><span>' + E(String(c.created_at || '').slice(0, 10)) + '</span>' + (c.source && c.source !== 'manual' ? '<span class="w116tag ws">' + E(c.source === 'transcript' ? 'meeting' : c.source) + '</span>' : '') + (c.source_ref && c.source !== 'manual' ? '<a data-w116go="#tx/' + E(c.source_ref) + '" style="color:' + GREEN + ';cursor:pointer;font-weight:600">' + E(c.source_label || 'open the meeting') + '</a>' : '') + '</div><div class="bd">' + E(c.body) + '</div>' + (c.quote ? '<div class="qt">&quot;' + E(c.quote) + '&quot;</div>' : '') + '</div>';
+        return '<div class="w116cmt"><div class="hd"><b>' + E(c.author || 'someone') + '</b><span>' + E(String(c.created_at || '').slice(0, 10)) + '</span>' + (c.source && c.source !== 'manual' ? '<span class="w116tag ws">' + E(c.source === 'transcript' ? 'meeting' : c.source) + '</span>' : '') + (c.source_ref && c.source !== 'manual' ? '<a data-w116go="#tx/' + E(c.source_ref) + '" style="color:' + GREEN + ';cursor:pointer;font-weight:600">' + E(c.source_label || 'open the meeting') + '</a>' : '') + '</div><div class="bd">' + (window.w138Mark ? window.w138Mark(E(c.body)) : E(c.body)) + '</div>' + (c.quote ? '<div class="qt">&quot;' + E(c.quote) + '&quot;</div>' : '') + '</div>';
       }).join('') : '<p class="w116note">No comments yet.</p>';
       window.__w116cm = window.__w116cm || {}; window.__w116cm[String(t.id)] = rows.length;
     } catch (e) { /* fine */ }
