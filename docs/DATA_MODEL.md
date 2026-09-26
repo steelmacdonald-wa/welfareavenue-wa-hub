@@ -424,6 +424,7 @@ Staff and board roster; id is the key other tables should use for a person (task
 - `responsibilities`: JSON array of 3 to 5 responsibility lines (strings).
 - `jd_url`: Link to the job description document; jd_name is its title.
 - `start_source`: Where start_date came from: google (Workspace account creation) or manual (set by HR).
+- `avatar_url`: Profile photo URL in the public avatars bucket: u/<email> is a photo the person uploaded on the Hub (always kept); slack/<member_id> is their Slack photo and google/<member_id> their Google Workspace photo, both filled in and refreshed by directory-sync (Slack wins over Google). Empty text means the person removed their photo on the Hub, so nothing fills it in again; null means no photo yet.
 
 ### `hub_directory`
 

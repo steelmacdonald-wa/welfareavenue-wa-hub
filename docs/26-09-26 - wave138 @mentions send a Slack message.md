@@ -52,3 +52,9 @@ A confidential, board-only or restricted item (and every committee note) names o
 
 - Click **Connect Slack** in Settings, Connections (Send @mentions as you). It is the first real test of the Slack app settings you updated. If Slack shows an error about the redirect or the scopes, the app needs the redirect URL `https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/slack-connect` and the user token scopes chat:write and im:write.
 - Everyone else connects the same way. Until they do, their mentions still go out, from the Hub with their name.
+
+## After release (26/09/26)
+
+- **The Slack app** needed the redirect URL added (Steel's first Connect showed "redirect_uri did not match"); after that, Steel connected.
+- **The first real mention** (Steel, "@Ian" in a task description) went out as Steel 21 seconds later, to Ian's work account (ian.odhiambo@welfareavenue.com, U0A7DF871FS), the account the Hub delivers to for Ian, in the same DM as the weekly marketing briefs. It is not in the DM with his personal account.
+- **slack-connect v3**: Slack gives a person the same user token each time they authorize the app, so Steel's mention token is also `SLACK_USER_TOKEN`, which hours-pull (daily) and slack-pull read. Disconnect used to revoke the token at Slack, which would have stopped the hours job; it now forgets the token for mentions and only revokes it when no Hub job uses it. The same guard covers a refused connection.

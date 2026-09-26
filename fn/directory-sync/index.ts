@@ -1,3 +1,8 @@
+// Welfare Avenue: directory-sync (v1.5, 26/09/26, wave139: Slack photos. Everyone's Slack profile photo becomes their Hub photo,
+//   matched by work email (or a Workspace alias, or the Slack account they connected in Settings); a photo someone uploaded on
+//   the Hub is kept (and so is removing one: avatar_url '' means no photo by choice), and a Slack default avatar is not used. The photos are copied to the avatars bucket (slack/<member_id>)
+//   and refreshed when the Slack photo changes (avatar_hash). They run after the Google pass, so a Slack photo wins over the
+//   Google one, and the Google pass leaves slack/ photos alone. Action {action:'slack_photos', dry_run?}.)
 // Welfare Avenue: directory-sync (v1.4, 25/09/26: keeps each account's aliases for the master calendar's own-meetings filter; v1.3, 25/09/26): probe action (which delegated scopes work), start dates from Workspace account creation dates
 // v1.1: shared mailboxes recognised by name (Welfare Avenue, Hub Avenue) and
 //   by more local parts (donors, support, media...).
@@ -19,6 +24,10 @@
 //   {action:'place', email, member_id?}   after People and access created or linked the
 //                                         profile: match the account, copy the photo
 //   {action:'dismiss', email, undo?}      "Not a person" (shared mailbox, test account)
+//   {action:'slack_photos', dry_run?, member_id?}  v1.5: Slack profile photos onto the roster now (the daily
+//                                         pass runs it too); dry_run lists who would change
+// Reads Slack users.list with the bot token (SLACK_BOT_TOKEN: users:read, users:read.email); writes team_members.avatar_url,
+// the avatars bucket (google/ and slack/) and change_log.
 // Scope the delegation entry (client id 107460787452614031265) must carry:
 //   https://www.googleapis.com/auth/admin.directory.user.readonly
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -134,8 +143,9 @@ function memberByEmail(all: Row[], email: string): Row | null { return all.filte
 
 /* ---- photos ---- */
 async function applyPhoto(tok: string, dir: Row, member: Row): Promise<'applied' | 'kept' | 'none' | 'skipped'> {
+  if (member.avatar_url === '') return 'skipped'; /* v1.5: the person removed their photo on the Hub: no photo is their choice */
   const own = member.avatar_url && !(String(member.avatar_url).indexOf('/' + BUCKET + '/google/') >= 0);
-  if (own) return 'skipped'; /* the person uploaded their own photo on the hub */
+  if (own) return 'skipped'; /* the person uploaded their own photo on the hub (or it is their Slack photo) */
   const r = await gapi(tok, 'https://admin.googleapis.com/admin/directory/v1/users/' + encodeURIComponent(dir.email) + '/photos/thumbnail');
   if (r.status === 404 || !r.body?.photoData) return 'none';
   const etag = String(r.body.etag || r.body.photoData.length);
@@ -156,6 +166,72 @@ async function applyPhoto(tok: string, dir: Row, member: Row): Promise<'applied'
   await svc.from('hub_directory').update({ photo_etag: etag, photo_url: url, photo_applied_at: new Date().toISOString() }).eq('email', dir.email);
   member.avatar_url = url;
   return 'applied';
+}
+
+/* ---- v1.5: Slack photos ---- */
+function shortHash(text: string): string { let h = 5381; for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0; return h.toString(36); }
+async function slackPeople(): Promise<{ byEmail: Record<string, Row>; byId: Record<string, Row> }> {
+  const bot = await getSecret('SLACK_BOT_TOKEN');
+  const byEmail: Record<string, Row> = {}, byId: Record<string, Row> = {};
+  let cursor = '';
+  for (let page = 0; page < 20; page++) {
+    const r = await fetch('https://slack.com/api/users.list?limit=200' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : ''), { headers: { Authorization: 'Bearer ' + bot } });
+    const b = await r.json().catch(() => ({}));
+    if (!b.ok) throw new Error('Slack users.list: ' + String(b.error || r.status));
+    for (const u of (b.members || []) as Row[]) {
+      if (u.deleted || u.is_bot || u.is_app_user || u.id === 'USLACKBOT') continue;
+      byId[String(u.id)] = u;
+      const em = lower(u.profile?.email);
+      if (em && !byEmail[em]) byEmail[em] = u;
+    }
+    cursor = String(b.response_metadata?.next_cursor || '');
+    if (!cursor) break;
+  }
+  return { byEmail, byId };
+}
+async function slackPhotos(dryRun: boolean, onlyMemberId: number | null = null) {
+  const res: Row = { applied: [] as string[], kept: 0, own: [] as string[], removed: [] as string[], no_slack: [] as string[], default_photo: [] as string[], no_email: [] as string[], errors: [] as string[] };
+  const { byEmail, byId } = await slackPeople();
+  const all = (await members()).filter((m) => m.active !== false && (onlyMemberId == null || Number(m.id) === Number(onlyMemberId)));
+  const aliases: Record<string, string[]> = {};
+  try { const { data } = await svc.from('hub_directory').select('email, aliases'); (data || []).forEach((d: Row) => { aliases[lower(d.email)] = ((d.aliases || []) as string[]).map(lower); }); } catch (_) { /* fine */ }
+  const linked: Record<string, string> = {};   /* the Slack account a person connected in Settings (slack-connect checked its email) */
+  try { const { data } = await svc.from('slack_links').select('email, slack_user_id'); (data || []).forEach((d: Row) => { linked[lower(d.email)] = String(d.slack_user_id || ''); }); } catch (_) { /* fine */ }
+  for (const m of all) {
+    const email = lower(m.email);
+    if (!email) { res.no_email.push(m.name); continue; }
+    const u = [email].concat(aliases[email] || []).map((e) => byEmail[e]).filter(Boolean)[0] || (linked[email] ? byId[linked[email]] : null);
+    if (!u) { res.no_slack.push(m.name); continue; }
+    if (m.avatar_url === '') { res.removed.push(m.name); continue; }   /* removed on the Hub by the person: stays without a photo */
+    const cur = String(m.avatar_url || '');
+    if (cur && cur.indexOf('/' + BUCKET + '/google/') < 0 && cur.indexOf('/' + BUCKET + '/slack/') < 0) { res.own.push(m.name); continue; }   /* uploaded on the Hub: theirs */
+    const p = (u.profile || {}) as Row;
+    const src = String(p.image_512 || p.image_original || p.image_192 || '');
+    const custom = p.is_custom_image === true || (p.is_custom_image === undefined && /avatars\.slack-edge\.com/.test(src));
+    if (!src || !custom) { res.default_photo.push(m.name); continue; }
+    const key = shortHash(String(p.avatar_hash || '') + '|' + src);
+    if (cur.indexOf('/' + BUCKET + '/slack/') >= 0 && cur.endsWith('?v=' + key)) { res.kept++; continue; }
+    if (dryRun) { res.applied.push(m.name + (cur ? ' (instead of the Google photo)' : '')); continue; }
+    try {
+      const img = await fetch(src);
+      if (!img.ok) throw new Error('download ' + img.status);
+      const mime = String(img.headers.get('content-type') || 'image/jpeg').split(';')[0];
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(mime)) throw new Error('not a photo: ' + mime);
+      const bytes = new Uint8Array(await img.arrayBuffer());
+      if (!bytes.length || bytes.length > 3000000) throw new Error('size ' + bytes.length);
+      const ext = mime === 'image/png' ? 'png' : (mime === 'image/gif' ? 'gif' : (mime === 'image/webp' ? 'webp' : 'jpg'));
+      const path = 'slack/' + m.id + '.' + ext;
+      const { error } = await svc.storage.from(BUCKET).upload(path, bytes, { upsert: true, contentType: mime, cacheControl: '3600' });
+      if (error) throw new Error('upload: ' + error.message);
+      const { data: pub } = svc.storage.from(BUCKET).getPublicUrl(path);
+      const url = pub.publicUrl + '?v=' + key;
+      await svc.from('team_members').update({ avatar_url: url }).eq('id', m.id);
+      await log('team_member', String(m.id), 'avatar_url', cur ? 'Google photo' : null, 'Slack photo', 'hub (Slack photos)');
+      m.avatar_url = url;
+      res.applied.push(m.name);
+    } catch (e) { res.errors.push(m.name + ': ' + String((e as Error).message || e).slice(0, 120)); }
+  }
+  return res;
 }
 
 /* ---- the pass ---- */
@@ -260,6 +336,9 @@ async function sync(trigger: string) {
       result.deactivated.push(member.name);
     }
   }
+  /* v1.5: Slack photos after the Google ones (a Slack photo wins; the Google pass leaves slack/ photos alone) */
+  try { const sp = await slackPhotos(false); result.slack_photos = sp.applied.length; result.photos += sp.applied.length; if (sp.errors.length) result.slack_photo_errors = sp.errors; }
+  catch (e) { result.slack_photo_errors = [String((e as Error).message || e).slice(0, 200)]; }
   await svc.from('hub_directory_state').update({ last_sync_at: now, last_result: { ...result, trigger, started_at: startedAt }, last_error: null, updated_at: now }).eq('id', 1);
   if (result.new_in_queue.length || result.deactivated.length || result.reactivated.length) {
     const site = 'https://wa-exec-dashboard.netlify.app';
@@ -283,6 +362,7 @@ async function place(email: string, memberId: number | null, by: string) {
   await svc.from('hub_directory').update({ member_id: member.id, placed_at: now, placed_by: by, dismissed: false, skipped: false }).eq('email', email);
   let photo = 'none';
   try { const tok = await token(); photo = await applyPhoto(tok, { email, photo_etag: null }, member); } catch (e) { photo = 'error: ' + String((e as Error).message || e).slice(0, 120); }
+  try { const sp = await slackPhotos(false, Number(member.id)); if (sp.applied.length) photo = 'slack'; } catch (_) { /* the Google photo (or none) stays */ }
   await log('hub_directory', email, 'placed', null, member.name + ' (#' + member.id + ')', by);
   return { ok: true, member_id: member.id, name: member.name, photo };
 }
@@ -328,6 +408,10 @@ Deno.serve(async (req: Request) => {
         await svc.from('hub_directory_state').update({ last_error: msg, updated_at: new Date().toISOString() }).eq('id', 1);
         return json({ ok: false, error: msg });
       }
+    }
+    if (action === 'slack_photos') {
+      const r = await slackPhotos(!!body.dry_run, body.member_id ? Number(body.member_id) : null);
+      return json({ ok: true, dry_run: !!body.dry_run, result: r });
     }
     if (action === 'place') {
       const r = await place(String(body.email || ''), body.member_id ? Number(body.member_id) : null, who);

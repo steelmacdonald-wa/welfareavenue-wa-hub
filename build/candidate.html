@@ -28370,7 +28370,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var dept = '';
     try { dept = me.department ? ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[me.department]) || me.department) : 'No department set'; } catch (e) { dept = me.department || ''; }
     openModal('<div class="w115edit"><h3>Your profile</h3>'
-      + '<p class="m-sub">Your photo shows next to your name across the Hub. Department and email are managed in People and access.</p>'
+      + '<p class="m-sub">Your photo shows next to your name across the Hub. Until you choose one, the Hub uses your Slack photo (or your Google one). Department and email are managed in People and access.</p>'
       + '<div class="w115photo"><div id="w115prev">' + avatarHtml(me, 84) + '</div>'
       + '<div class="w115acts"><label class="w115choose">Choose a photo<input type="file" id="w115file" accept="image/jpeg,image/png,image/webp" /></label>'
       + ((me.avatar_url || W115.preview) ? '<span class="w115rm" data-w115rm="1">Remove the photo</span>' : '')
@@ -28399,7 +28399,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (rm) rm.addEventListener('click', function () {
       W115.remove = true; W115.pending = null;
       document.getElementById('w115prev').innerHTML = avatarHtml({ name: me.name }, 84);
-      setMsg('The photo will be removed when you save.');
+      setMsg('The photo will be removed when you save, and the Hub will not fill one in from Slack or Google again.');
     });
     document.getElementById('w115cancel').addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
     document.getElementById('w115save').addEventListener('click', save);
@@ -28426,7 +28426,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         patch.avatar_url = ((pub && pub.data && pub.data.publicUrl) || '') + '?v=' + Date.now();
         try { W115.preview = URL.createObjectURL(W115.pending); } catch (e) { W115.preview = null; }
       } else if (W115.remove) {
-        patch.avatar_url = null;
+        patch.avatar_url = ''; /* wave139: '' is no photo by choice, so the daily sync does not bring the Slack or Google photo back */
         W115.preview = null;
         try { await db.storage.from(BUCKET).remove([path]); } catch (e) { /* the row is what matters */ }
       }

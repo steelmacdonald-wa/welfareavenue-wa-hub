@@ -1,0 +1,4 @@
+-- wave139 (26/09/26): Slack photos as Hub profile photos (directory-sync v1.5). Steel: "Can you grab everyone's Slack photo for their profile photo on the Hub?"
+comment on column public.team_members.avatar_url is 'Profile photo URL in the public avatars bucket: u/<email> is a photo the person uploaded on the Hub (always kept); slack/<member_id> is their Slack photo and google/<member_id> their Google Workspace photo, both filled in and refreshed by directory-sync (Slack wins over Google). Empty text means the person removed their photo on the Hub, so nothing fills it in again; null means no photo yet.';
+insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by) values
+  ('hub', 'wave139', 'profile photos', null, 'Slack profile photos fill in Hub photos (17 people); a photo uploaded on the Hub is kept, and removing one is respected', 'Hub release (wave139)');

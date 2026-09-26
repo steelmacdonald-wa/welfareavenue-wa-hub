@@ -1,4 +1,7 @@
-// Welfare Avenue: slack-connect (v1, 26/09/26, wave138)
+// Welfare Avenue: slack-connect (v3, 26/09/26, wave138)
+// v3: never revokes a token the Hub's jobs also use. Slack gives a person the same user token each time they authorize
+//   the app, so Steel's mention token is also SLACK_USER_TOKEN (hours-pull, slack-pull): Disconnect (and a refused
+//   connection) forgets the token for mentions but only revokes it at Slack when no job uses it.
 // Purpose: connect a person's own Slack account to the Hub, so the @mentions they write in the Hub reach the
 //   person they mention as a DM from them (notify, event comment_mention), not from the Hub bot.
 // Triggered by: the Hub's Settings (Connections, "Send @mentions as you") and Slack's OAuth redirect.
@@ -10,7 +13,7 @@
 //                                 keeps the user token in the vault (slack_link_save), then sends the browser back
 //                                 to the Hub with ?slack=connected (or ?slack=error&why=...)
 //   POST {action:'status'}     -> {connected, slack_user_id, since, ready}
-//   POST {action:'disconnect'} -> revokes the token at Slack and forgets it (slack_link_drop)
+//   POST {action:'disconnect'} -> forgets the token (slack_link_drop) and revokes it at Slack unless a Hub job uses it (v3)
 // Reads: app_config slack_client_id and site_url; vault SLACK_CLIENT_SECRET, SLACK_BOT_TOKEN, WA_TRIGGER_SECRET.
 // Writes: vault slack_user_token:<email>, slack_links, wa_slack_ids (the person's Slack id), change_log.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -38,6 +41,16 @@ async function config(key: string): Promise<string> {
   return String(data?.value || '');
 }
 async function siteUrl(): Promise<string> { return (await config('site_url')) || 'https://wa-exec-dashboard.netlify.app'; }
+/* v3: a token the Hub's own jobs use (the same person authorizing the same app gets the same token) is never revoked here */
+const SHARED_TOKENS = ['SLACK_USER_TOKEN'];
+async function sharedToken(token: string): Promise<boolean> {
+  for (const n of SHARED_TOKENS) { try { if ((await getSecret(n)) === token) return true; } catch (_) { /* not set */ } }
+  return false;
+}
+async function revoke(token: string): Promise<'revoked' | 'kept' | 'failed'> {
+  if (await sharedToken(token)) return 'kept';
+  try { await fetch('https://slack.com/api/auth.revoke', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }); return 'revoked'; } catch (_) { return 'failed'; }
+}
 
 /* the signed-in Hub person: staff, and not blocked */
 async function who(req: Request): Promise<string | null> {
@@ -103,7 +116,7 @@ async function redirected(url: URL): Promise<Response> {
   const aliases = new Set([email]);
   try { const { data: d } = await svc.from('hub_directory').select('email, aliases').ilike('email', email).maybeSingle(); ((d?.aliases || []) as string[]).forEach(a => aliases.add(String(a).toLowerCase())); } catch (_) { /* fine */ }
   if (!slackEmail || !aliases.has(slackEmail)) {
-    try { await fetch('https://slack.com/api/auth.revoke', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }); } catch (_) { /* fine */ }
+    await revoke(token);
     return back('error', 'That Slack account is ' + (slackEmail || 'not a Welfare Avenue account') + ', not ' + email + '.');
   }
   if (scopes.indexOf('chat:write') < 0 || scopes.indexOf('im:write') < 0) return back('error', 'Slack did not grant chat:write and im:write. Ask Steel to add them to the app.');
@@ -137,7 +150,7 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, url: u });
   }
   if (action === 'disconnect') {
-    try { const t = await getSecret('slack_user_token:' + email); await fetch('https://slack.com/api/auth.revoke', { method: 'POST', headers: { Authorization: 'Bearer ' + t } }); } catch (_) { /* already gone */ }
+    try { const t = await getSecret('slack_user_token:' + email); await revoke(t); } catch (_) { /* already gone */ }
     const { error } = await svc.rpc('slack_link_drop', { p_email: email });
     return json(error ? { ok: false, error: 'Could not forget the connection.' } : { ok: true });
   }
