@@ -75,7 +75,7 @@ Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` f
 - The client is `db` (a supabase-js v2 client). Queries are written inline: `await db.from('table').select(...)`, `db.rpc('name', args)`, `db.functions.invoke('name', { body })`.
 - `loadAll()` in `000_head_base` fills the shared caches once per boot: `DB_DECISIONS`, `DB_META`, `DB_UPDATES`, `DB_TASKS`, `DB_MEMBERS` (active only, plus `MEMBER_BY_ID`), `DB_ASSIGN`, `DB_SENTIMENT`, `DB_HOURS`, `DB_CHANGES` (staff only; `DB_CLICKUP` stays empty since the audit, nothing reads it). Write paths call `loadAll()` again and re-render.
 - Almost every later wave keeps its own cache in a private object (`W116`, `WA37`, `W115`, `B` in the bank, `O` in the org chart) and loads its own tables. The same table is often loaded several times at boot (`team_members` 18 times); reuse `DB_MEMBERS` and the other caches where they fit.
-- Edge functions: 37 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`, `board-pack`, `meet-attendance`, `forms-flow`, `security-check`). All 60 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
+- Edge functions: 38 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`, `board-pack`, `meet-attendance`, `forms-flow`, `security-check`, `search-console`). All 61 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
 - Errors: most code wraps work in `try { } catch (e) { /* fine */ }`. When debugging, remove the empty catch locally first.
 
 ## 8. Routing
@@ -125,7 +125,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#team/<team>/...` | each team in Departments (Meeting attendance under Upcoming meetings from 144) | Departments | 116, 116b, 116i, 116t, 122, 123, 124, 126, 132, 144 |
 | `#volunteering/...` | MTL volunteering (the volunteer survey, the event audit and the sign-ups from 145) | Operations Montreal row | 020, 023 to 026, 031, 106, 119, 119b, 145 |
 | `#contentcal` | Content calendar | Marketing row | 121, 118c |
-| `#socialstats` | Analytics | Marketing row | 120, 129 |
+| `#socialstats` | Analytics (with Google Search from 147) | Marketing row | 120, 129, 147 |
 | `#fundevents` | Events calendar | Fundraising row | 124 |
 | `#finances` | Finances | Fundraising row | 022, 090 to 094 |
 | `#hrcentre/...` | HR centre (Meeting attendance for the admins and the Executive profile from 144; the onboarding quizzes from 145) | Human Resources row | 046, 047, 049, 052, 054 to 057, 065, 075, 103, 105, 106, 116p, 144, 145 |

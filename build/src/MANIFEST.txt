@@ -172,6 +172,8 @@
 145_wave145
 # 146_wave146: the monthly security check in Admin, Security and audit trail (security-check edge function).
 146_wave146
+# 147_wave147: Google Search in Analytics (search-console edge function; connects itself once Search Console access is given).
+147_wave147
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

@@ -1280,6 +1280,18 @@ Forms flows (wave145): the router's summary of the volunteer survey for one even
 
 The monthly security check (wave146, security-check): one row per run. summary holds the counts compared month to month (active accounts, without 2-step verification, admins and admins without it, unused 60 days, files anyone with the link can open and the sensitive-looking ones, sharing outside Welfare Avenue in the period, sign-in failures and warnings, apps authorised, admin changes). findings is the list shown in Admin, Security: key, level (high, medium, low, info, ok), title, detail, count, items and the fix. Admins only.
 
+### `search_sites`
+
+Google Search Console (wave147): the site the Hub reads (siteUrl as Search Console names it: https://welfareavenue.com/ or sc-domain:welfareavenue.com), how (via: the Hub's service account added as a user, or Steel's account through domain-wide delegation), and the last read. Connected by search-console on its own as soon as a site is visible.
+
+### `search_daily`
+
+Google Search Console (wave147): per day, clicks, impressions, click-through rate and average position for the site in Google Search (web). Google reports about three days late.
+
+### `search_top`
+
+Google Search Console (wave147): the top searches (kind query) and pages (kind page) over the last 28 days of data, replaced at each read.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).

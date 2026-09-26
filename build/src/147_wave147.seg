@@ -1,0 +1,166 @@
+/* =====================================================================
+   WA v147 Google Search in Analytics (26/09/26)
+   =====================================================================
+   Steel approved Search Console in Analytics with the other Google projects ("go for all the above", 26/09/26). The
+   search-console edge function reads Google Search Console once a day and connects on its own as soon as the Hub's service
+   account (or Steel's account) can see the Welfare Avenue property. On the Analytics page, under the platform tiles, a
+   Google Search card: clicks, impressions, click-through rate and average position over the last 28 days of data against
+   the 28 days before, the clicks day by day, and the top searches and pages. Until Search Console is connected, staff see
+   the one step that connects it; directors see nothing.
+   ===================================================================== */
+(function () {
+  if (window.__wa147) return; window.__wa147 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', BLUE = '#4285F4';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+
+  var st = document.createElement('style'); st.id = 'w147css';
+  st.textContent = ''
+    + '#w147{background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.1);border-radius:16px;padding:16px 18px;margin:0 0 16px;font-family:' + BODY + ';}'
+    + '#w147 .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}'
+    + '#w147 .hd .g{width:30px;height:30px;border-radius:9px;background:' + BLUE + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex:0 0 auto;}'
+    + '#w147 .hd h4{margin:0;font:700 12px ' + BODY + ';letter-spacing:1.3px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w147 .hd p{margin:2px 0 0;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w147 .tl{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin:12px 0;}'
+    + '#w147 .t{border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:9px 11px;}'
+    + '#w147 .t b{display:block;font-size:21px;color:' + GREEN + ';line-height:1.1;}'
+    + '#w147 .t span{display:block;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:3px;}'
+    + '#w147 .t i{font-style:normal;font-weight:700;font-size:11px;margin-left:4px;}'
+    + '#w147 .t i.up{color:' + TEAL + ';}#w147 .t i.down{color:' + FLAG + ';}'
+    + '#w147 svg.sp{width:100%;height:64px;display:block;margin:4px 0 10px;}'
+    + '#w147 .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;}'
+    + '#w147 h5{margin:0 0 6px;font:700 11px ' + BODY + ';letter-spacing:1.1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w147 table{width:100%;border-collapse:collapse;font-size:12.5px;}'
+    + '#w147 td{padding:5px 4px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:top;}'
+    + '#w147 td.k{overflow-wrap:anywhere;color:var(--wa-text,' + INK + ');}'
+    + '#w147 td.n{text-align:right;white-space:nowrap;font-weight:700;color:' + GREEN + ';}'
+    + '#w147 td.m{text-align:right;white-space:nowrap;color:var(--wa-muted,' + MUTED + ');font-size:11.5px;}'
+    + '#w147 .ft{font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:10px;}'
+    + '#w147 .ft b{color:var(--wa-text,' + INK + ');}'
+    + '#w147 code{font-size:11.5px;background:rgba(16,63,57,.07);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere;}'
+    + '#w147 .err{color:' + FLAG + ';font-size:12px;margin-top:6px;}';
+  document.head.appendChild(st);
+
+  var G = { site: null, daily: [], top: [], ok: false, at: 0, busy: null, sa: null, asked: false };
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function staff() { var r = mine(); return !!r.role && r.role !== 'viewer' && r.role !== 'blocked'; }
+  function load(force) {
+    if (!force && G.ok && Date.now() - G.at < 10 * 60000) return Promise.resolve(G);
+    if (G.busy) return G.busy;
+    G.busy = (async function () {
+      try {
+        var s = await db.from('search_sites').select('*').limit(1);
+        G.site = (s && s.data && s.data[0]) || null;
+        if (G.site) {
+          var since = new Date(Date.now() - 130 * 86400000).toISOString().slice(0, 10);
+          var d = await db.from('search_daily').select('day,clicks,impressions,ctr,position').eq('site_url', G.site.site_url).gte('day', since).order('day', { ascending: true }).limit(400);
+          G.daily = (d && d.data) || [];
+          var t = await db.from('search_top').select('kind,key,clicks,impressions,ctr,position,period_start,period_end').eq('site_url', G.site.site_url).order('clicks', { ascending: false }).limit(60);
+          G.top = (t && t.data) || [];
+        }
+        G.ok = true; G.at = Date.now();
+      } catch (e) { G.ok = false; }
+      G.busy = null; return G;
+    })();
+    return G.busy;
+  }
+  function num(n) { n = Number(n) || 0; return n >= 100000 ? Math.round(n / 1000) + 'k' : n >= 1000 ? (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(n)); }
+  function pct(n) { return (Math.round((Number(n) || 0) * 1000) / 10) + '%'; }
+  function dshort(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch (e) { return d; } }
+  /* the last 28 days that have data, and the 28 before */
+  function windows() {
+    var days = G.daily; if (!days.length) return null;
+    var last = days[days.length - 1].day, lastT = new Date(last + 'T12:00:00Z').getTime();
+    var cur = days.filter(function (r) { var t = new Date(r.day + 'T12:00:00Z').getTime(); return t > lastT - 28 * 86400000; });
+    var prev = days.filter(function (r) { var t = new Date(r.day + 'T12:00:00Z').getTime(); return t <= lastT - 28 * 86400000 && t > lastT - 56 * 86400000; });
+    function agg(list) { var c = 0, i = 0, pw = 0; list.forEach(function (r) { c += Number(r.clicks) || 0; i += Number(r.impressions) || 0; pw += (Number(r.position) || 0) * (Number(r.impressions) || 0); }); return { clicks: c, imps: i, ctr: i ? c / i : 0, pos: i ? pw / i : null, n: list.length }; }
+    return { cur: agg(cur), prev: prev.length >= 14 ? agg(prev) : null, from: cur.length ? cur[0].day : last, to: last, series: cur };
+  }
+  function chg(a, b, lowerBetter, asPct) {
+    if (b == null || a == null) return '';
+    var d = asPct ? (a - b) * 100 : b ? (a - b) / b * 100 : null;
+    if (d == null || !isFinite(d)) return '';
+    if (Math.abs(d) < (asPct ? 0.1 : 1)) return '<i>same</i>';
+    var good = lowerBetter ? d < 0 : d > 0;
+    return '<i class="' + (good ? 'up' : 'down') + '">' + (d > 0 ? '+' : '') + (asPct ? d.toFixed(1) + ' pts' : Math.round(d) + '%') + '</i>';
+  }
+  function spark(series) {
+    if (series.length < 2) return '';
+    var max = Math.max.apply(null, series.map(function (r) { return Number(r.clicks) || 0; })) || 1, W = 600, H = 60;
+    var pts = series.map(function (r, i) { return (i / (series.length - 1) * W).toFixed(1) + ',' + (H - 4 - (Number(r.clicks) || 0) / max * (H - 10)).toFixed(1); }).join(' ');
+    return '<svg class="sp" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Clicks from Google, day by day"><polyline points="' + pts + '" fill="none" stroke="' + BLUE + '" stroke-width="2.2" vector-effect="non-scaling-stroke"/></svg>';
+  }
+  function rows(kind) {
+    var list = G.top.filter(function (r) { return r.kind === kind; }).slice(0, 10);
+    if (!list.length) return '<p class="ft">Nothing yet.</p>';
+    return '<table>' + list.map(function (r) {
+      var k = kind === 'page' ? String(r.key).replace(/^https?:\/\/(www\.)?welfareavenue\.com/i, '') || '/' : r.key;
+      return '<tr><td class="k">' + (kind === 'page' ? '<a href="' + E(r.key) + '" target="_blank" rel="noopener" style="color:inherit">' + E(k) + '</a>' : E(k)) + '</td><td class="n">' + num(r.clicks) + '</td><td class="m">' + num(r.impressions) + ' seen' + (r.position ? ' · #' + Math.round(r.position) : '') + '</td></tr>';
+    }).join('') + '</table>';
+  }
+  function html() {
+    var head = '<div class="hd"><span class="g">G</span><div><h4>Google Search</h4><p>How people find welfareavenue.com on Google.</p></div></div>';
+    if (!G.site) {
+      return head + '<p class="ft" style="margin-top:10px">Not connected yet. In Google Search Console, open the Welfare Avenue property, Settings, Users and permissions, Add user, and add <code>' + E(G.sa || 'the Hub’s service account (the same one Google Analytics uses)') + '</code> with Restricted permission. The Hub connects on its own within a day.</p>';
+    }
+    var w = windows();
+    if (!w) return head + '<p class="ft" style="margin-top:10px">Connected to <b>' + E(G.site.site_url) + '</b>. The first numbers arrive with the next daily read.' + (G.site.last_error ? '</p><p class="err">' + E(G.site.last_error) + '</p>' : '</p>');
+    var c = w.cur, p = w.prev;
+    return head
+      + '<div class="tl">'
+      + '<div class="t"><b>' + num(c.clicks) + chg(c.clicks, p && p.clicks) + '</b><span>clicks from Google</span></div>'
+      + '<div class="t"><b>' + num(c.imps) + chg(c.imps, p && p.imps) + '</b><span>times we appeared in results</span></div>'
+      + '<div class="t"><b>' + pct(c.ctr) + chg(c.ctr, p && p.ctr, false, true) + '</b><span>of those who saw us clicked</span></div>'
+      + '<div class="t"><b>' + (c.pos ? '#' + c.pos.toFixed(1) : '–') + (c.pos && p && p.pos ? chg(c.pos, p.pos, true) : '') + '</b><span>average position</span></div>'
+      + '</div>' + spark(w.series)
+      + '<div class="cols"><div><h5>What people searched</h5>' + rows('query') + '</div><div><h5>The pages they opened</h5>' + rows('page') + '</div></div>'
+      + '<p class="ft">The last 28 days of data, ' + E(dshort(w.from)) + ' to ' + E(dshort(w.to)) + (p ? ', against the 28 days before' : '') + '. Google reports about three days late. Read ' + E(G.site.last_sync_at ? new Date(G.site.last_sync_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '') + ' from ' + E(G.site.site_url) + '.</p>'
+      + (G.site.last_error ? '<p class="err">The last read failed: ' + E(G.site.last_error) + '</p>' : '');
+  }
+  function paint() {
+    var sec = document.getElementById('socialstats'); if (!sec) return;
+    var tiles = sec.querySelector('.w120tiles'); if (!tiles) return;
+    if (!G.ok) { (G.busy || load()).then(function () { if (G.ok) paint(); }); return; }
+    var el = document.getElementById('w147');
+    if (!G.site && !staff()) { if (el) el.remove(); return; }
+    if (!G.site && staff() && !G.asked) {
+      G.asked = true;
+      var again = function () { if (G.retried) return; G.retried = true; setTimeout(function () { G.asked = false; paint(); }, 3000); };
+      db.functions.invoke('search-console', { body: { action: 'status' } }).then(function (r) {
+        if (r && r.data && r.data.sa_email) { G.sa = r.data.sa_email; var x = document.getElementById('w147'); if (x) { x.__h = ''; paint(); } }
+        else again();
+      }).catch(again);
+    }
+    if (!el) { el = document.createElement('div'); el.id = 'w147'; el.__h = ''; tiles.insertAdjacentElement('afterend', el); }
+    var h = html();
+    if (el.__h !== h) { el.innerHTML = h; el.__h = h; }
+  }
+  var mo = null;
+  function watch() {
+    var sec = document.getElementById('socialstats'); if (!sec || mo) return;
+    var pending = false;
+    mo = new MutationObserver(function () { if (pending || !G.ok || document.getElementById('w147') || !sec.querySelector('.w120tiles') || (!G.site && !staff())) return; pending = true; setTimeout(function () { pending = false; paint(); }, 60); });
+    mo.observe(sec, { childList: true, subtree: true });
+  }
+  window.addEventListener('hashchange', function () { setTimeout(function () { watch(); paint(); }, 150); });
+  if (typeof startApp === 'function') {
+    var __sa147 = startApp;
+    startApp = async function () { var out = await __sa147.apply(this, arguments); try { watch(); paint(); } catch (e) { /* fine */ } return out; };
+  }
+  /* the Analytics tour: a step for Google Search, after the tiles */
+  function addStep() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T) return;
+      Object.keys(T).forEach(function (k) {
+        var x = T[k]; if (!x || !x.steps || x.__w147) return;
+        var s = x.steps.map(function (y) { return y.s; }), i = -1;
+        s.forEach(function (sel, j) { if (/w120tiles/.test(sel)) i = j; });
+        if (i < 0) return;
+        x.steps.splice(i + 1, 0, { s: '#w147', t: 'Google Search', p: 'How people find the website on Google: clicks, how often we appear, the searches that bring people and the pages they open, from Search Console.', opt: 1 });
+        x.__w147 = true;
+      });
+    } catch (e) { /* fine */ }
+  }
+  addStep(); setTimeout(addStep, 1500);
+  window.w147 = { load: load, state: function () { return G; }, paint: paint, html: html };
+})();
