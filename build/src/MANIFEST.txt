@@ -164,6 +164,8 @@
 138_wave138
 # 140_wave140: Our story, Partners and the Document finder (the Drive mining, framed); registers three Resources pages.
 140_wave140
+# 143_wave143: the board pack on the Board overview (board-pack edge function: agenda, notes and deck in the Board drive).
+143_wave143
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

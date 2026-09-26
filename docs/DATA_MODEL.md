@@ -386,6 +386,8 @@ Register of board meetings with agenda and notes links. Board leaders write; eve
 
 - `kind`: board, special, agm or strategy (CHECK).
 - `status`: held, scheduled, tentative, to schedule or cancelled (CHECK).
+- `deck_url`: The board pack deck (Google Slides) the Hub built for this meeting (board-pack, wave143).
+- `pack`: The board pack the Hub built: folder_id, folder_url, agenda_id, notes_id, deck_id, built_at, built_by, as_of, and refreshed_at, refreshed_by after a refresh of the deck numbers. Written by the board-pack edge function.
 
 ### `board_touchpoints`
 
@@ -1272,4 +1274,5 @@ Functions:
 - `drive_mine_claim(text, int)`: Hands a drive-mine worker up to p_n documents waiting at a stage (or held more than 5 minutes by a worker that stopped); a document that failed three times at a stage is marked failed instead. Access: service role only.
 - `drive_mine_seed()`: Queues every gold or ore document (not a duplicate, not trashed, a type drive-mine can read) that is not queued yet: Drive files start at extract, Canva designs and social posts (text already there) at mine. Returns how many were added. Access: service role only.
 - `drive_mine_pump(boolean)`: Schedules (true) or removes (false) the cron job wa-drive-mine-pump, six drive-mine workers a minute; drive-mine turns it on at start and off when a run is done, paused or stopped (wave140). Access: service role only.
+- `wa_story_article_refresh()`: Rebuilds hub_knowledge wa-our-story (the story article the assistant reads) from the published everyone rows of wa_history and the year lines in wa_history_years; triggers on both tables call it after every change (wave142). Access: owner only.
 

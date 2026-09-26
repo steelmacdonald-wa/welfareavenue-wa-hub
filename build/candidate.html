@@ -54287,6 +54287,147 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate };
 })();
 /* =====================================================================
+   WA v143 the board pack (26/09/26)
+   =====================================================================
+   Steel: the Hub writes documents for him, starting with "the quarterly board deck and agenda, filled from department
+   updates and numbers". Under the next board meeting on the Board overview (#governance), a Board pack card:
+   - before it is built: what the pack holds, and (admins and the Executive profile) Build the board pack, which asks the
+     board-pack edge function to create the agenda, the meeting notes and the deck in the Board of Directors drive;
+   - once built: links to the agenda, the notes, the deck and the folder, who built it and the date of its numbers, and
+     (admins and the Executive profile) Refresh the deck numbers, which rewrites only the Hub's own slides.
+   Directors and leaders who can see the board page see the links. The Board overview tour gains a step.
+   ===================================================================== */
+(function () {
+  if (window.__wa143) return; window.__wa143 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  var P = {
+    doc: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 16.5h5"/>',
+    deck: '<rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M12 16v4M8 20h8"/>',
+    folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>'
+  };
+  function I(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+
+  var st = document.createElement('style'); st.id = 'w143css';
+  st.textContent = ''
+    + '.w143pack{margin:12px 0 4px;background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.1);border-radius:16px;padding:14px 16px;display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap;font-family:' + BODY + ';}'
+    + '.w143pack .ic{width:40px;height:40px;border-radius:12px;background:rgba(220,165,39,.16);color:#7a5a12;display:flex;align-items:center;justify-content:center;flex:0 0 auto;}'
+    + '.w143pack .ic svg{width:21px;height:21px;}'
+    + '.w143pack .tx{flex:1 1 320px;min-width:0;}'
+    + '.w143pack .tx b{display:block;font-family:' + HEAD + ';font-size:19px;font-weight:600;color:' + GREEN + ';text-transform:uppercase;letter-spacing:.3px;}'
+    + '.w143pack .tx p{margin:3px 0 0;font-size:13px;line-height:1.5;color:var(--wa-text,' + INK + ');}'
+    + '.w143pack .tx .meta{font-size:12px;color:var(--wa-muted,' + MUTED + ');margin-top:6px;}'
+    + '.w143pack .links{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}'
+    + '.w143pack .links a{display:inline-flex;align-items:center;gap:6px;padding:7px 11px;border-radius:999px;background:rgba(16,63,57,.07);color:' + GREEN + ';font-size:13px;font-weight:600;text-decoration:none;}'
+    + '.w143pack .links a:hover{background:rgba(16,63,57,.13);}'
+    + '.w143pack .links svg{width:15px;height:15px;}'
+    + '.w143pack .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}'
+    + '.w143btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:9px 15px;background:' + GREEN + ';color:' + CREAM + ';font:600 13px ' + BODY + ';cursor:pointer;}'
+    + '.w143btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w143btn[disabled]{opacity:.55;cursor:progress;}'
+    + '.w143btn svg{width:15px;height:15px;}'
+    + '.w143pack .err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin-top:6px;}'
+    + '@media (max-width:700px){.w143pack{padding:12px;}.w143pack .acts{width:100%;}.w143btn{flex:1 1 auto;justify-content:center;}}';
+  document.head.appendChild(st);
+
+  /* ---------- who and what ---------- */
+  function state() { try { return window.w126 && typeof w126.state === 'function' ? w126.state() : null; } catch (e) { return null; } }
+  function meetings() { var B = state(); return (B && B.data && Array.isArray(B.data.meetings)) ? B.data.meetings : []; }
+  function nextMeeting() {
+    var now = Date.now();
+    return meetings().filter(function (m) { return m.meets_at && m.kind !== 'strategy' && new Date(m.meets_at).getTime() >= now - 3 * 3600000 && m.status !== 'cancelled' && m.status !== 'held'; })
+      .sort(function (a, b) { return new Date(a.meets_at) - new Date(b.meets_at); })[0] || null;
+  }
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function canBuild() { var r = mine(); return r.role === 'admin' || r.profile === 'executive'; }
+  function dayOf(iso) { try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Toronto', day: 'numeric', month: 'long', year: 'numeric' }); } catch (e) { return String(iso || '').slice(0, 10); } }
+  var BUSY = {}, ERR = {};
+
+  function cardHtml(m) {
+    var pk = m.pack || {}, built = !!(pk.deck_ok || m.deck_url), busy = BUSY[m.id], err = ERR[m.id];
+    var who = canBuild();
+    var html = '<div class="ic">' + I('deck') + '</div><div class="tx"><b>Board pack</b>';
+    if (!built) {
+      html += '<p>The agenda, the meeting notes to fill in, and a deck of each team’s update, the numbers, the finances as totals, the three jobs and the committees, made from the Hub and saved in the Board of Directors drive. Everything can be edited after.</p>';
+      if (!who) html += '<div class="meta">The executive directors build it before the meeting.</div>';
+    } else {
+      html += '<p>For the ' + E(m.title || 'board meeting') + ', ready in the Board of Directors drive. People updates stay out of it: the HR slide shows counts only.</p>'
+        + '<div class="links">'
+        + (m.agenda_url ? '<a href="' + E(m.agenda_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>' : '')
+        + (m.notes_url ? '<a href="' + E(m.notes_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Meeting notes</a>' : '')
+        + (m.deck_url ? '<a href="' + E(m.deck_url) + '" target="_blank" rel="noopener">' + I('deck') + 'Deck</a>' : '')
+        + (pk.folder_url ? '<a href="' + E(pk.folder_url) + '" target="_blank" rel="noopener">' + I('folder') + 'Folder</a>' : '')
+        + '</div><div class="meta">' + (pk.built_at ? 'Built ' + E(dayOf(pk.built_at)) + (pk.built_by && pk.built_by !== 'automation' ? ' by ' + E(pk.built_by) : '') : '')
+        + (pk.as_of ? ' · numbers as of ' + E(pk.as_of) : '') + '</div>';
+    }
+    if (err) html += '<div class="err">' + E(err) + '</div>';
+    html += '</div>';
+    if (who) {
+      html += '<div class="acts">' + (!built
+        ? '<button class="w143btn" data-w143build="' + m.id + '"' + (busy ? ' disabled' : '') + '>' + I('spark') + (busy ? ' Building… about half a minute' : ' Build the board pack') + '</button>'
+        : '<button class="w143btn soft" data-w143refresh="' + m.id + '"' + (busy ? ' disabled' : '') + ' title="Rewrites the Hub’s own slides with today’s updates and numbers; slides you added and the two documents stay as they are">' + I('refresh') + (busy ? ' Refreshing…' : ' Refresh the deck numbers') + '</button>') + '</div>';
+    }
+    return html;
+  }
+  function paint() {
+    var host = document.getElementById('w126gov'); if (!host) return;
+    var meet = host.querySelector('.w126meet'), el = host.querySelector('.w143pack'), m = nextMeeting();
+    if (!meet || !m) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.className = 'w143pack'; meet.insertAdjacentElement('afterend', el); }
+    var html = cardHtml(m);
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; el.setAttribute('data-meeting', m.id); }
+  }
+  /* the board page repaints itself; the card follows it */
+  var mo = null;
+  function watch() {
+    var sec = document.getElementById('governance'); if (!sec || mo) return;
+    mo = new MutationObserver(function () { if (!document.querySelector('#w126gov .w143pack') && document.querySelector('#w126gov .w126meet')) paint(); });
+    mo.observe(sec, { childList: true, subtree: true });
+  }
+
+  async function run(action, id) {
+    BUSY[id] = true; ERR[id] = ''; paint();
+    try {
+      var r = await db.functions.invoke('board-pack', { body: { action: action, meeting_id: Number(id) } });
+      var d = (r && r.data) || {};
+      if (r && r.error) { var msg = ''; try { msg = (await r.error.context.json()).error; } catch (e) { msg = String(r.error.message || r.error); } throw new Error(msg || 'The Hub could not build the pack'); }
+      if (d.error) throw new Error(d.error);
+      var m = meetings().filter(function (x) { return String(x.id) === String(id); })[0];
+      if (m && d.pack) { m.pack = d.pack; if (d.pack.agenda_url) m.agenda_url = d.pack.agenda_url; if (d.pack.notes_url) m.notes_url = d.pack.notes_url; if (d.pack.deck_url) m.deck_url = d.pack.deck_url; }
+      toastS(action === 'build' ? 'The board pack is ready in the Board of Directors drive' : 'The deck has today’s updates and numbers');
+    } catch (e) { ERR[id] = String((e && e.message) || e).slice(0, 220); }
+    BUSY[id] = false; paint();
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w143build]'); if (b) { e.preventDefault(); if (!b.disabled) run('build', b.getAttribute('data-w143build')); return; }
+    var r = t.closest('[data-w143refresh]'); if (r) { e.preventDefault(); if (!r.disabled) run('refresh', r.getAttribute('data-w143refresh')); return; }
+  });
+  window.addEventListener('hashchange', function () { setTimeout(function () { watch(); paint(); }, 60); });
+  if (typeof startApp === 'function') {
+    var __sa143 = startApp;
+    startApp = async function () { var out = await __sa143.apply(this, arguments); try { watch(); paint(); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* the Board overview tour: a step for the pack, after the next meeting */
+  function addStep() {
+    try {
+      var T = window.w122 && window.w122.tours && window.w122.tours.governance; if (!T || T.__w143) return;
+      var i = T.steps.map(function (s) { return s.s; }).indexOf('#w126gov .w126meet');
+      T.steps.splice(i >= 0 ? i + 1 : 2, 0, { s: '#w126gov .w143pack', t: 'The board pack', p: 'The agenda, the meeting notes and a deck of the teams’ updates and numbers, built from the Hub into the Board of Directors drive. The executive directors build it and refresh the numbers before the meeting.', opt: 1 });
+      T.__w143 = true;
+    } catch (e) { /* fine */ }
+  }
+  addStep(); setTimeout(addStep, 1500);
+
+  window.w143 = { paint: paint, next: nextMeeting, card: cardHtml, run: run };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
