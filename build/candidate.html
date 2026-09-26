@@ -54831,6 +54831,321 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w144 = { load: load, state: function () { return M; }, team: paintTeam, hr: paintHR, board: paintBoard, teamHtml: teamCardHtml, hrHtml: hrCardHtml, people: people, rate: rate };
 })();
 /* =====================================================================
+   WA v145 Forms flows (26/09/26)
+   =====================================================================
+   Steel approved Forms flows with the other Google projects ("go for all the above", 26/09/26). The forms-flow edge function
+   reads the Google Forms the Hub knows (form_sources) every six hours and files each answer (form_responses). Here:
+   - the Volunteering manager: on each serving, What volunteers said (the survey volunteers fill in after the serving: how
+     it went, what beneficiaries needed, what slowed service, suggestions, the router's summary) and the Event audit (the
+     lead's audit and restock form), with the survey link to send volunteers; on the calendar, the latest servings'
+     feedback and the new sign-ups from the recurrent volunteers form waiting for review;
+   - the HR centre (HR, the executive directors and admins): the onboarding quizzes (the policy quiz and the 30 day quiz):
+     who took them, their score, whether the Hub ticked the step in their onboarding, and what new members said about the
+     onboarding. Leaders, HR and admins can read the forms again now (Sync now).
+   ===================================================================== */
+(function () {
+  if (window.__wa145) return; window.__wa145 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var TZ = 'America/Toronto';
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  var P = {
+    form: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 10h7M9 14h7M9 18h4"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>'
+  };
+  function I(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.form) + '</svg>'; }
+
+  var st = document.createElement('style'); st.id = 'w145css';
+  st.textContent = ''
+    + '.w145 h4{display:flex;align-items:center;justify-content:space-between;gap:8px;}'
+    + '.w145 .sub{font-size:12px;color:var(--wa-muted,' + MUTED + ');margin:-2px 0 8px;line-height:1.45;}'
+    + '.w145 .sum{font-size:13px;line-height:1.55;background:rgba(42,140,122,.08);border-radius:10px;padding:8px 10px;margin:6px 0 10px;color:var(--wa-text,' + INK + ');}'
+    + '.w145 .sum b{display:flex;align-items:center;gap:5px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + TEAL + ';margin-bottom:3px;}'
+    + '.w145 .sum b svg{width:13px;height:13px;}'
+    + '.w145 .q{margin:8px 0 2px;font-size:11.5px;font-weight:700;color:' + GREEN + ';line-height:1.35;}'
+    + '.w145 .chips{display:flex;flex-wrap:wrap;gap:5px;}'
+    + '.w145 .chips span{font-size:12px;padding:3px 8px;border-radius:999px;background:rgba(16,63,57,.07);color:var(--wa-text,' + INK + ');}'
+    + '.w145 .chips span i{font-style:normal;font-weight:700;color:' + GREEN + ';margin-left:4px;}'
+    + '.w145 ul.tx{margin:4px 0 0;padding-left:16px;font-size:12.5px;line-height:1.5;color:var(--wa-text,' + INK + ');}'
+    + '.w145 ul.tx li{margin:2px 0;}'
+    + '.w145 .kv{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:4px 10px;font-size:12.5px;line-height:1.45;}'
+    + '.w145 .kv dt{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w145 .kv dd{margin:0;color:var(--wa-text,' + INK + ');font-weight:600;overflow-wrap:anywhere;}'
+    + '.w145 .kv dd.no{color:' + FLAG + ';}'
+    + '.w145 .foot{font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:8px;line-height:1.5;}'
+    + '.w145 .foot a,.w145 a.lk{color:' + GREEN + ';font-weight:600;cursor:pointer;text-decoration:none;}'
+    + '.w145 .send{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;margin-top:6px;}'
+    + '.w145 .send svg{width:14px;height:14px;flex:0 0 auto;color:' + GREEN + ';}'
+    + '.w145btn{display:inline-flex;align-items:center;gap:5px;border:none;border-radius:999px;padding:6px 11px;background:rgba(16,63,57,.08);color:' + GREEN + ';font:600 12px ' + BODY + ';cursor:pointer;}'
+    + '.w145btn[disabled]{opacity:.55;cursor:progress;}'
+    + '.w145btn svg{width:13px;height:13px;}'
+    + '#w145home{margin-top:14px;background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.1);border-radius:16px;padding:14px 16px;}'
+    + '#w145home h4{margin:0 0 4px;font:700 12px ' + BODY + ';letter-spacing:1.3px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w145home .evs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin:8px 0;}'
+    + '#w145home .ev{border:1px solid rgba(16,63,57,.1);border-radius:12px;padding:10px 12px;cursor:pointer;background:var(--wa-card,' + CREAM + ');}'
+    + '#w145home .ev:hover{border-color:rgba(16,63,57,.3);}'
+    + '#w145home .ev b{display:block;font-size:13.5px;color:' + GREEN + ';}'
+    + '#w145home .ev small{display:block;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin:2px 0 6px;}'
+    + '#w145home .ev p{margin:0;font-size:12.5px;line-height:1.5;color:var(--wa-text,' + INK + ');}'
+    + '#w145home .new{font-size:13px;background:rgba(220,165,39,.14);border-radius:10px;padding:8px 10px;margin-top:6px;}'
+    + '.w145tbl{width:100%;border-collapse:collapse;font-size:13px;margin:4px 0 8px;}'
+    + '.w145tbl th{font:700 10.5px ' + BODY + ';letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');text-align:left;padding:6px;border-bottom:1px solid rgba(16,63,57,.1);}'
+    + '.w145tbl td{padding:6px;border-bottom:1px solid rgba(16,63,57,.06);vertical-align:top;}'
+    + '.w145tbl td.num{font-weight:700;color:' + GREEN + ';white-space:nowrap;}'
+    + '.w145tbl .ok{color:' + TEAL + ';font-weight:600;font-size:12px;}'
+    + '.w145tbl .muted{color:var(--wa-muted,' + MUTED + ');font-size:12px;}'
+    + '.w145top{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:4px;}'
+    + '.w145top .read{flex:1 1 320px;margin:0;}'
+    + '.w145quote{font-size:12.5px;line-height:1.5;border-left:3px solid ' + GOLD + ';padding:2px 0 2px 10px;margin:6px 0;color:var(--wa-text,' + INK + ');}'
+    + '.w145quote small{display:block;color:var(--wa-muted,' + MUTED + ');font-size:11px;}'
+    + '@media (max-width:700px){.w145 .kv{grid-template-columns:1fr;}.w145 .kv dt{margin-top:4px;}.w145tbl .opt{display:none;}}';
+  document.head.appendChild(st);
+
+  /* ---------- the data (the database decides what each person reads) ---------- */
+  var F = { sources: [], rows: [], sums: [], ok: false, at: 0, busy: null, syncing: false };
+  async function all(q) {
+    var out = [], from = 0;
+    for (var i = 0; i < 20; i++) { var r = await q().range(from, from + 999); if (r.error) throw r.error; out = out.concat(r.data || []); if (!r.data || r.data.length < 1000) break; from += 1000; }
+    return out;
+  }
+  function load(force) {
+    if (!force && F.ok && Date.now() - F.at < 5 * 60000) return Promise.resolve(F);
+    if (F.busy) return F.busy;
+    F.busy = (async function () {
+      try {
+        var s = await db.from('form_sources').select('form_id,kind,label,title,quiz_step,responder_url,edit_url,questions,responses_n,last_response_at,last_synced_at,last_note').order('sort');
+        F.sources = (s && s.data) || [];
+        F.rows = await all(function () { return db.from('form_responses').select('response_id,form_id,kind,submitted_at,name,answers,score,max_score,event_id,member_id,volunteer_id,done').order('submitted_at', { ascending: false }); });
+        var m = await db.from('form_summaries').select('form_id,scope,n,summary,created_at');
+        F.sums = (m && m.data) || [];
+        F.ok = true; F.at = Date.now();
+      } catch (e) { F.ok = false; }
+      F.busy = null; return F;
+    })();
+    return F.busy;
+  }
+
+  /* ---------- who ---------- */
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function canSync() { var r = mine(); return r.role === 'admin' || r.role === 'leader' || r.profile === 'executive'; }
+  function isHRView() { var r = mine(); return r.role === 'admin' || r.profile === 'executive' || r.profile === 'hr'; }
+  function members() { try { return typeof DB_MEMBERS !== 'undefined' && Array.isArray(DB_MEMBERS) ? DB_MEMBERS : []; } catch (e) { return []; } }
+  function memberName(id) { var m = members().filter(function (x) { return String(x.id) === String(id); })[0]; return m ? m.name : ''; }
+
+  /* ---------- helpers ---------- */
+  function dshort(iso) { try { return new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }); } catch (e) { return String(iso || '').slice(5, 10); } }
+  function dday(d) { try { return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return d; } }
+  function source(kind) { return F.sources.filter(function (s) { return s.kind === kind; }); }
+  function ofKind(kind) { return F.rows.filter(function (r) { return r.kind === kind; }); }
+  function qType(src, title) { var q = ((src && src.questions) || []).filter(function (x) { return x.title === title; })[0]; return q ? q.type : ''; }
+  function isChoice(t) { return /choice|scale|rating|grid/i.test(t || ''); }
+  function quiet(a) {
+    var t = String(a || '').trim();
+    if (/^nothing in particular/i.test(t)) return true;
+    return t.length < 60 && /^(no|non|none|n\/?a|nothing|nope|rien|-|\.|not really|all good|no major|everything (was|is|seemed) (great|good|perfect|fine))\b/i.test(t) && !/\bbut\b|however/i.test(t);
+  }
+  function shortQ(q) { return String(q || '').replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function events() { try { return typeof WA_VOL_EVENTS !== 'undefined' && Array.isArray(WA_VOL_EVENTS) ? WA_VOL_EVENTS : []; } catch (e) { return []; } }
+  function eventDate(id) { var e = events().filter(function (x) { return String(x.id) === String(id); })[0]; return e ? e.event_date : ''; }
+  function summaryOf(eid) { var s = F.sums.filter(function (x) { return x.scope === 'event:' + eid; })[0]; return s || null; }
+
+  /* ---------- the event: what volunteers said, and the audit ---------- */
+  function feedbackHtml(eid) {
+    var src = source('volunteer_feedback')[0];
+    var rows = ofKind('volunteer_feedback').filter(function (r) { return String(r.event_id) === String(eid); });
+    var send = src && src.responder_url ? '<div class="send">' + I('link') + '<span>Send volunteers the survey after the serving:</span><a class="lk" href="' + E(src.responder_url) + '" target="_blank" rel="noopener">open it</a><a class="lk" data-w145copy="' + E(src.responder_url) + '">copy the link</a></div>' : '';
+    if (!rows.length) return '<h4>What volunteers said</h4><p class="sub">No survey answers for this serving yet.</p>' + send;
+    var html = '<h4>What volunteers said <span class="sub" style="margin:0">' + rows.length + ' answer' + (rows.length === 1 ? '' : 's') + '</span></h4>';
+    var s = summaryOf(eid);
+    if (s && s.summary) html += '<div class="sum"><b>' + I('spark') + 'In short</b>' + E(s.summary) + '</div>';
+    /* each question in the form's order: choices as counts, words as a list */
+    var order = [], by = {};
+    rows.forEach(function (r) { (r.answers || []).forEach(function (x) { if (!by[x.q]) { by[x.q] = []; order.push(x.q); } by[x.q].push(x.a); }); });
+    order.forEach(function (q) {
+      if (/contact|e-?mail|phone|cell/i.test(q)) return;
+      var vals = by[q], t = qType(src, q);
+      if (isChoice(t) || (!t && vals.every(function (v) { return String(v).length < 40; }) && new Set(vals).size < vals.length)) {
+        var c = {}; vals.forEach(function (v) { String(v).split('; ').forEach(function (p) { if (p) c[p] = (c[p] || 0) + 1; }); });
+        var keys = Object.keys(c).sort(function (a, b) { return c[b] - c[a]; });
+        html += '<div class="q">' + E(shortQ(q)) + '</div><div class="chips">' + keys.map(function (k) { return '<span>' + E(k) + '<i>' + c[k] + '</i></span>'; }).join('') + '</div>';
+      } else {
+        var words = vals.filter(function (v) { return !quiet(v); });
+        if (words.length) html += '<div class="q">' + E(shortQ(q)) + '</div><ul class="tx">' + words.map(function (v) { return '<li>' + E(v) + '</li>'; }).join('') + '</ul>';
+      }
+    });
+    var contacts = order.filter(function (q) { return /contact|e-?mail|phone|cell/i.test(q); }).reduce(function (a, q) { return a.concat(by[q].filter(function (v) { return !quiet(v); })); }, []);
+    if (contacts.length) html += '<div class="q">Left a contact for future opportunities</div><ul class="tx">' + contacts.map(function (v) { return '<li>' + E(v) + '</li>'; }).join('') + '</ul>';
+    return html + send + foot(src);
+  }
+  function auditHtml(eid) {
+    var src = source('event_audit')[0];
+    var rows = ofKind('event_audit').filter(function (r) { return String(r.event_id) === String(eid); });
+    if (!rows.length) return '';
+    var cap = function (q) { q = shortQ(q); if (q === q.toUpperCase()) q = q.charAt(0) + q.slice(1).toLowerCase(); return q.length > 70 ? q.slice(0, 68).replace(/\s+\S*$/, '') + '…' : q; };
+    return '<h4>Event audit</h4>' + rows.map(function (r) {
+      var grid = [], rest = [];
+      (r.answers || []).forEach(function (x) { if (/full name|event date/i.test(x.q)) return; (qType(src, x.q) === 'grid' ? grid : rest).push(x); });
+      var html = '<p class="sub">' + E(r.name || 'The event lead') + ', ' + E(dshort(r.submitted_at)) + '</p><dl class="kv">';
+      if (grid.length) {
+        var met = grid.filter(function (x) { return /^(yes|oui)\b/i.test(x.a); }), not = grid.filter(function (x) { return !/^(yes|oui)\b/i.test(x.a); });
+        html += '<dt>Standards met</dt><dd>' + met.length + ' of ' + grid.length + '</dd>';
+        if (not.length) html += '<dt>Not met</dt><dd class="no">' + not.map(function (x) { return E((String(x.q).split(': ').slice(1).join(': ') || x.q).replace(/[.\s]+$/, '')) + (/^no\b/i.test(x.a) ? '' : ' (' + E(x.a) + ')'); }).join('; ') + '</dd>';
+      }
+      html += rest.map(function (x) { return '<dt>' + E(cap(x.q)) + '</dt><dd' + (/^no\b/i.test(x.a) && /dropped|spacious/i.test(x.q) ? ' class="no"' : '') + '>' + E(x.a) + '</dd>'; }).join('');
+      return html + '</dl>';
+    }).join('') + foot(src);
+  }
+  function foot(src) {
+    if (!src) return '';
+    return '<div class="foot">From the Google Form ' + E(String(src.title || src.label).trim()) + (src.last_synced_at ? ', read ' + E(dshort(src.last_synced_at)) : '') + '.' + (canSync() ? ' <a data-w145sync="1">' + (F.syncing ? 'Reading the forms…' : 'Read the forms now') + '</a>' : '') + '</div>';
+  }
+  function curEventId() { try { return typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'event' && typeof WA_VOL_EVENT !== 'undefined' ? WA_VOL_EVENT : null; } catch (e) { return null; } }
+  function put(host, id, html, first) {
+    var el = document.getElementById(id);
+    if (!html) { if (el) el.remove(); return; }
+    if (!el) { el = document.createElement('div'); el.id = id; el.className = 'cardy w145'; el.__h = ''; if (first && host.firstChild) host.insertBefore(el, host.firstChild.nextSibling || null); else host.appendChild(el); }
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function paintEvent() {
+    var eid = curEventId(); var rail = document.getElementById('w119rail');
+    if (!eid || !rail) return;
+    if (!F.ok) { (F.busy || load()).then(function () { if (F.ok) paintEvent(); }); return; }
+    if (!F.sources.length) return;
+    put(rail, 'w145fb', feedbackHtml(eid), true);
+    put(rail, 'w145au', auditHtml(eid), false);
+  }
+
+  /* ---------- the calendar: the latest feedback and the new sign-ups ---------- */
+  function homeHtml() {
+    var fb = ofKind('volunteer_feedback').filter(function (r) { return r.event_id; });
+    var by = {}; fb.forEach(function (r) { (by[r.event_id] = by[r.event_id] || []).push(r); });
+    var ids = Object.keys(by).sort(function (a, b) { return String(by[b][0].submitted_at).localeCompare(String(by[a][0].submitted_at)); }).slice(0, 4);
+    var src = source('volunteer_feedback')[0];
+    var html = '<h4>What volunteers said</h4><p class="sub">The survey volunteers fill in after each serving, by event. Open one for everything they said.</p>';
+    if (ids.length) html += '<div class="evs">' + ids.map(function (id) {
+      var rs = by[id], s = summaryOf(id), d = eventDate(id) || String(rs[0].submitted_at).slice(0, 10);
+      var first = s && s.summary ? String(s.summary).split('. ')[0].replace(/\.?$/, '.') : '';
+      return '<div class="ev" data-w145ev="' + E(id) + '"><b>' + E(dday(d)) + '</b><small>' + rs.length + ' volunteer' + (rs.length === 1 ? '' : 's') + ' answered</small>' + (first ? '<p>' + E(first) + '</p>' : '') + '</div>';
+    }).join('') + '</div>';
+    else html += '<p class="sub">No answers yet.</p>';
+    var fresh = ofKind('volunteer_signup').filter(function (r) { return r.done && r.done.volunteer === 'created'; });
+    if (fresh.length) html += '<div class="new"><b>' + fresh.length + ' new ' + (fresh.length === 1 ? 'volunteer' : 'volunteers') + '</b> from the recurrent volunteers form, added to the volunteer list for review (look for the review flag under Volunteers): ' + fresh.slice(0, 6).map(function (r) { return E(r.name || 'someone'); }).join(', ') + '.</div>';
+    if (src && src.responder_url) html += '<div class="send">' + I('link') + '<span>The survey to send after a serving:</span><a class="lk" href="' + E(src.responder_url) + '" target="_blank" rel="noopener">open it</a><a class="lk" data-w145copy="' + E(src.responder_url) + '">copy the link</a></div>';
+    return html + foot(src);
+  }
+  function paintHome() {
+    var cal = document.getElementById('w119cal'); if (!cal) return;
+    try { if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW !== 'calendar') return; } catch (e) { /* fine */ }
+    if (!F.ok) { (F.busy || load()).then(function () { if (F.ok) paintHome(); }); return; }
+    if (!F.sources.length) return;
+    var el = document.getElementById('w145home'), html = homeHtml();
+    if (!el) { el = document.createElement('div'); el.id = 'w145home'; el.className = 'w145 w145box'; el.__h = ''; cal.insertAdjacentElement('afterend', el); }
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+
+  /* ---------- the HR centre: the onboarding quizzes ---------- */
+  function hrHtml() {
+    var rows = ofKind('onboarding_quiz'), srcs = source('onboarding_quiz');
+    var label = {}; srcs.forEach(function (s) { label[s.form_id] = s.label; });
+    var html = '<h2>Onboarding quizzes</h2><div class="w145top"><p class="read">The policy quiz and the 30 day quiz from the onboarding, read from their Google Forms. When someone with an onboarding in progress takes one, the Hub ticks that step for them with their score.</p>'
+      + (canSync() ? '<button type="button" class="w145btn" data-w145sync="1"' + (F.syncing ? ' disabled' : '') + '>' + I('refresh') + (F.syncing ? ' Reading…' : ' Sync now') + '</button>' : '') + '</div>';
+    if (!rows.length) {
+      var any = srcs.some(function (x) { return Number(x.responses_n) > 0; });
+      return html + '<p class="read">' + (any ? 'The results are kept for the HR access list, the executive directors and the person who took the quiz.' : 'No quiz answers yet.') + '</p>';
+    }
+    html += '<table class="w145tbl"><thead><tr><th>When</th><th>Who</th><th>Quiz</th><th>Graded score</th><th class="opt">Onboarding</th></tr></thead><tbody>'
+      + rows.slice(0, 12).map(function (r) {
+        var who = r.member_id != null ? (memberName(r.member_id) || r.name || '') : (r.name || '');
+        var go = r.member_id != null ? ' data-w145person="' + E(r.member_id) + '"' : '';
+        var on = r.done && r.done.onboarding === 'ticked' ? '<span class="ok">Step ticked</span>' : '<span class="muted">' + (r.member_id == null ? 'Not matched to anyone on the roster' : 'No onboarding in progress') + '</span>';
+        return '<tr><td>' + E(dshort(r.submitted_at)) + '</td><td>' + (go ? '<a class="lk"' + go + '>' + E(who) + '</a>' : E(who || 'Unknown')) + '</td><td>' + E(label[r.form_id] || '') + '</td><td class="num">' + (r.score != null ? E(r.score) + (r.max_score ? ' of ' + E(r.max_score) : '') : '–') + '</td><td class="opt">' + on + '</td></tr>';
+      }).join('') + '</tbody></table><p class="w145 foot" style="margin-top:0">The score counts the questions the form grades itself (five on the 30 day quiz); HR reads the written answers in the form.</p>';
+    /* what new members said about the onboarding (the 30 day quiz asks) */
+    var said = [];
+    rows.forEach(function (r) { (r.answers || []).forEach(function (x) { if (/feedback|anything to add/i.test(x.q) && !quiet(x.a) && String(x.a).length > 3) said.push({ a: x.a, at: r.submitted_at, who: r.member_id != null ? memberName(r.member_id) : r.name }); }); });
+    if (said.length) html += '<div class="w145 q" style="margin-top:10px">What new members said about the onboarding</div>' + said.slice(0, 5).map(function (x) { return '<div class="w145quote">' + E(x.a) + '<small>' + E(x.who || 'Someone') + ', ' + E(dshort(x.at)) + '</small></div>'; }).join('');
+    var s = srcs[0];
+    return html + '<p class="w145 foot">Read every six hours' + (s && s.last_synced_at ? ', last ' + E(dshort(s.last_synced_at)) : '') + '. Answers stay with HR, the executive directors and the person who took the quiz.</p>';
+  }
+  function paintHR() {
+    var host = document.getElementById('hrcentre'); if (!host || !isHRView()) return;
+    var el = document.getElementById('w145quiz');
+    if (!F.ok) { (F.busy || load()).then(function () { if (F.ok) paintHR(); }); return; }
+    if (!source('onboarding_quiz').length) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div'); el.className = 'card w145'; el.id = 'w145quiz'; el.__h = '';
+      var after = document.getElementById('w144hr') || document.getElementById('w103scope') || document.getElementById('w116jhours');
+      if (after && after.parentNode) after.insertAdjacentElement('afterend', el); else host.appendChild(el);
+    }
+    var html = hrHtml();
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+
+  /* ---------- wiring ---------- */
+  function paintAll() { try { paintEvent(); } catch (e) { /* fine */ } try { paintHome(); } catch (e) { /* fine */ } try { paintHR(); } catch (e) { /* fine */ } }
+  var obs = {};
+  function watch(id, fn, test) {
+    var sec = document.getElementById(id); if (!sec || obs[id]) return;
+    var pending = false;
+    obs[id] = new MutationObserver(function () { if (pending || !test()) return; pending = true; setTimeout(function () { pending = false; if (test()) fn(); }, 60); });
+    obs[id].observe(sec, { childList: true, subtree: true });
+  }
+  function watchAll() {
+    watch('volunteering', function () { paintEvent(); paintHome(); }, function () {
+      if (!F.ok || !F.sources.length) return false;
+      if (curEventId() && document.getElementById('w119rail') && !document.getElementById('w145fb')) return true;
+      return !!(document.getElementById('w119cal') && !document.getElementById('w145home'));
+    });
+    watch('hrcentre', paintHR, function () { return F.ok && isHRView() && source('onboarding_quiz').length > 0 && !document.getElementById('w145quiz'); });
+  }
+  document.addEventListener('click', function (e) {
+    var x = e.target; if (!x || !x.closest) return;
+    var el;
+    if ((el = x.closest('[data-w145ev]'))) { e.preventDefault(); location.hash = '#volunteering/e/' + el.getAttribute('data-w145ev'); return; }
+    if ((el = x.closest('[data-w145person]'))) { e.preventDefault(); location.hash = '#person/' + el.getAttribute('data-w145person'); return; }
+    if ((el = x.closest('[data-w145copy]'))) {
+      e.preventDefault(); var u = el.getAttribute('data-w145copy');
+      try { navigator.clipboard.writeText(u).then(function () { toastS('The survey link is copied'); }, function () { toastS(u); }); } catch (er) { toastS(u); }
+      return;
+    }
+    if ((el = x.closest('[data-w145sync]'))) {
+      e.preventDefault(); if (F.syncing || el.disabled) return;
+      F.syncing = true; paintAll();
+      db.functions.invoke('forms-flow', { body: { action: 'sync' } }).then(async function (r) {
+        var ok = r && !r.error && r.data && r.data.ok;
+        F.syncing = false; await load(true); paintAll();
+        toastS(ok ? 'The forms are read and filed' : 'The Hub could not read the forms just now');
+      }).catch(function () { F.syncing = false; paintAll(); toastS('The Hub could not read the forms just now'); });
+    }
+  });
+  window.addEventListener('hashchange', function () { setTimeout(function () { watchAll(); paintAll(); }, 120); });
+  if (typeof startApp === 'function') {
+    var __sa145 = startApp;
+    startApp = async function () { var out = await __sa145.apply(this, arguments); try { watchAll(); paintAll(); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* ---------- tours: the volunteering page and the HR centre ---------- */
+  function addSteps() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T) return;
+      var putStep = function (tour, after, step, flag) {
+        var x = T[tour]; if (!x || x[flag]) return;
+        var i = x.steps.map(function (s) { return s.s; }).indexOf(after);
+        x.steps.splice(i >= 0 ? i + 1 : x.steps.length, 0, step); x[flag] = true;
+      };
+      putStep('volunteering', '#w119cal', { s: '#w145home', t: 'What volunteers said', p: 'The survey volunteers fill in after each serving, event by event, with a short summary. New sign-ups from the recurrent volunteers form wait for review in the volunteer list.', opt: 1 }, '__w145a');
+      putStep('volunteering', '#w119rail', { s: '#w145fb', t: 'Volunteer feedback', p: 'Everything the volunteers said about this serving, and the link to send them the survey. The lead’s event audit sits below it once it is filled in.', opt: 1 }, '__w145b');
+      putStep('hrcentre', '#w144hr', { s: '#w145quiz', t: 'Onboarding quizzes', p: 'Who took the policy quiz and the 30 day quiz, their score, and whether the Hub ticked the step in their onboarding.', opt: 1 }, '__w145');
+    } catch (e) { /* fine */ }
+  }
+  addSteps(); setTimeout(addSteps, 1500);
+
+  window.w145 = { load: load, state: function () { return F; }, event: paintEvent, home: paintHome, hr: paintHR, feedbackHtml: feedbackHtml, hrHtml: hrHtml };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is

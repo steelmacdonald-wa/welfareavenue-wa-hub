@@ -1264,6 +1264,18 @@ Meet attendance (wave144): one row per expected person (invited, or an active di
 
 The last meet-attendance run: when, whether it worked, the window and the counts.
 
+### `form_sources`
+
+Forms flows (wave145): the Google Forms the Hub reads (forms-flow) and what each one feeds: volunteer_feedback (the survey volunteers fill in after a serving, shown on the event), event_audit (the event lead's audit and restock form, shown on the event), volunteer_signup (the recurrent volunteers form, into volunteer_people for review), onboarding_quiz (ticks quiz_step, an onboarding_template id, in the person's onboarding). questions is the form's questions as last read.
+
+### `form_responses`
+
+Forms flows (wave145): each answer to a form in form_sources, as question and answer text in form order (answers), with the score for a quiz and what the Hub matched it to: event_id (volunteer_events), member_id (team_members), volunteer_id (volunteer_people). done says what the Hub did with it (volunteer created or updated, onboarding step ticked). The volunteering forms are read by staff; a quiz by HR, the executive directors and the person who took it.
+
+### `form_summaries`
+
+Forms flows (wave145): the router's summary of the volunteer survey for one event (scope event:<id>), with the counts it was written from (stats) and how many answers (n).
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
