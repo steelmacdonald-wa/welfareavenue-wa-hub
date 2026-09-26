@@ -48,6 +48,9 @@ function wa38FieldLines(p) {
     if (i.detail) lines.push(String(i.detail));
   } else if (p.name === 'set_request_status') {
     lines.push('New status: ' + i.status);
+  } else if (p.name === 'bank_task') {
+    if (i.bank_until) lines.push('Comes back: ' + i.bank_until);
+    if (i.reason) lines.push('Why it waits: ' + i.reason);
   } else if (p.name === 'close_task' && i.note) {
     lines.push('Note: ' + i.note);
   }

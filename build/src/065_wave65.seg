@@ -148,7 +148,7 @@
     h += '<div class="w65sec"><h4>New tasks (' + (p.new_tasks || []).length + ')</h4>'
       + w65PlanRows(p.new_tasks, function (t) {
         return '<div class="w65row"><span class="w65dep" style="background:' + w65Col(t.department) + '">' + w65Esc(w65Lab(t.department)) + '</span>'
-          + '<span>' + w65Esc(t.title) + '</span><span class="w65mut" style="margin-left:auto">' + w65Esc(t.owner || '') + '</span></div>';
+          + '<span>' + w65Esc(t.title) + (t.bank_until ? ' <span class="w65mut">(to the bank until ' + w65Esc(t.bank_until) + ')</span>' : '') + '</span><span class="w65mut" style="margin-left:auto">' + w65Esc(t.owner || '') + '</span></div>';
       }) + '</div>';
     var closes = p.close_tasks || [];
     h += '<div class="w65sec"><h4>Tasks it will close (' + closes.length + ')</h4>';

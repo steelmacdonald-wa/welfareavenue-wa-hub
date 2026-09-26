@@ -84,6 +84,9 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   if (hn) { await hn.click(); await page.waitForTimeout(2500); out.fromHome = await where(); }
   /* 5. People and access name */
   await go('#adminpanel', 2500);
+  /* wave131: the old people table lives behind the classic view */
+  await page.evaluate(() => { document.body.classList.add('w131classic'); try { if (window.w131 && window.w131.classic) window.w131.classic(true); } catch (e) { } });
+  await go('#adminpanel/people', 2500);
   const pa = await page.$('#w113tbl td:nth-child(2) b');
   out.paName = pa ? await pa.textContent() : null;
   if (pa) { await pa.click(); await page.waitForTimeout(2500); out.fromPeople = await where(); }

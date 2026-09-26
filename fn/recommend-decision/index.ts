@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // v3 (25/09/26): routed through the Hub model router (llm, task decision; Jev picks the model) and Jev scores the recommended approach against the alternatives (jevScore).
 // Welfare Avenue: recommend-decision (v2, 25/07/26)
 // v2: board_only confidentiality tier. The target decision's board_only flag
@@ -247,7 +248,7 @@ Deno.serve(async (req)=>{
     if (recent && recent.length) {
       parts.push('RECENT ' + dept.toUpperCase() + ' MEETINGS:\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 500)).join('\n'));
     }
-    let tasksQ = svc.from('dept_tasks').select('title, owner, status, subsection').eq('department', dept).eq('done', false);
+    let tasksQ = svc.from('dept_tasks').select('title, owner, status, subsection').is('banked_at', null).eq('department', dept).eq('done', false);
     if (!boardOnly) tasksQ = tasksQ.eq('board_only', false);
     const { data: tasks } = await tasksQ.limit(15);
     if (tasks && tasks.length) {

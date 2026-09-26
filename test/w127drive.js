@@ -126,7 +126,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
 
   if (CASE === 'opsto') {
     const a = await allowed();
-    const want = ['calendar', 'create', 'dashboard', 'fundevents', 'fundraising', 'goalmap', 'goals', 'hr', 'importantinfo', 'marketing', 'mypage', 'opsmtl', 'opsto', 'orgchart', 'orggoals', 'overview', 'photos', 'progdev', 'projects', 'requests', 'team', 'training', 'transcripts', 'volunteering', 'brain'].sort();
+    const want = ['calendar', 'create', 'dashboard', 'fundevents', 'fundraising', 'goalmap', 'goals', 'hr', 'importantinfo', 'marketing', 'mypage', 'opsmtl', 'opsto', 'orgchart', 'orggoals', 'overview', 'photos', 'progdev', 'projects', 'requests', 'team', 'training', 'transcripts', 'volunteering', 'brain', 'bank'].sort();
     ok("Operations Toronto: exactly the profile's pages", JSON.stringify(a) === JSON.stringify(want), JSON.stringify(a));
     const s = await shown();
     ok("the menu hides what the profile leaves out", ['finances', 'contentcal', 'socialstats', 'agendas', 'hubmail', 'activity', 'hrcentre', 'governance', 'committees', 'board', 'adminpanel'].every(t => s.indexOf(t) < 0) && s.indexOf('opsto') >= 0 && s.indexOf('calendar') >= 0, JSON.stringify(s));

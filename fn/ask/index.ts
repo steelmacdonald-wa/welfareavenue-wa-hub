@@ -1,3 +1,6 @@
+// v12 (26/09/26): the bank. bank_task proposes moving an open task to the bank (out of every board until a date three months or more
+// away); it runs as the signed-in person through the bank_task database function, so the Hub's own checks apply. Open task
+// lists leave banked work out, and an IN THE BANK block lets it answer what is parked and when it comes back.
 // v9 (25/09/26): routed through the Hub model router (llm, task brain; Jev picks the model); create_task accepts project_id and priority from the editable confirmation card (wave116o); Program Development added to the departments.
 // Welfare Avenue: ask (v8, 09/09/26)
 // v8: open-model fallback. callModel tries the Anthropic chain first; if the
@@ -347,8 +350,37 @@ const CREATE_TASK_TOOL = {
     ]
   }
 };
+const BANK_TASK_TOOL = {
+  name: 'bank_task',
+  description: 'PROPOSE moving one open task to the bank: it leaves every board, list and count and comes back on bank_until. Use ONLY when the latest user message asks to park, bank, shelve or put off a task for three months or more. task_id must be a numeric id from the OPEN TASKS list. The user will confirm (and can change the date) before it happens.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      task_id: {
+        type: 'integer'
+      },
+      title: {
+        type: 'string',
+        description: 'The task title, copied from the OPEN TASKS list.'
+      },
+      bank_until: {
+        type: 'string',
+        description: 'YYYY-MM-DD, the day it should come back: the first day of the month or season the user named, or three months from today when they did not say. At least a month away.'
+      },
+      reason: {
+        type: 'string',
+        description: 'One short line on why it waits, from what the user said (for example "After the March gala"). Empty if they gave no reason.'
+      }
+    },
+    required: [
+      'task_id',
+      'bank_until'
+    ]
+  }
+};
 const ACTION_TOOLS = [
   CLOSE_TASK_TOOL,
+  BANK_TASK_TOOL,
   COMPLETE_REQUEST_TOOL,
   SET_REQUEST_STATUS_TOOL,
   CREATE_REQUEST_TOOL,
@@ -366,9 +398,10 @@ const OR_MODELS = [
 ];
 const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only.
 
-You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
+You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: for work the user wants to park for three months or more; it comes back on its date), complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
 
 Always finish by calling answer_question.`;
+let ASK_AUTH = ''; // the caller's Authorization header, for actions that run as them (bank_task)
 let ASK_WHO = ''; // who is asking (email), for the AI usage log (Admin > Adoption)
 async function anthropicCall(key, messages, tools, toolChoice) {
   let lastErr = '';
@@ -546,6 +579,7 @@ function summarize(name, input) {
   if (name === 'create_request') return 'File a request to ' + (DEPT_LABELS[String(input.department)] || input.department) + ': ' + input.title + (input.assignee ? ' (for ' + input.assignee + ')' : '');
   if (name === 'create_task') return 'Add a task to ' + (DEPT_LABELS[String(input.department)] || input.department) + ': ' + input.title + (input.owner ? ' (owner: ' + input.owner + ')' : '') + (input.due_date ? ', due ' + input.due_date : '');
   if (name === 'close_task') return 'Close task #' + input.task_id;
+  if (name === 'bank_task') return 'Move to the bank: ' + (input.title || 'task #' + input.task_id) + (input.bank_until ? ' (back ' + input.bank_until + ')' : '');
   if (name === 'complete_request') return 'Mark request #' + input.request_id + ' as done';
   if (name === 'set_request_status') return 'Set request #' + input.request_id + ' to "' + input.status + '"';
   return name;
@@ -734,7 +768,7 @@ async function doCreateTask(input, caller) {
   // wave116o: the confirmation card can set a project and priority
   let projectId = null;
   if (input?.project_id && Number.isInteger(Number(input.project_id))) {
-    const { data: pr } = await svc.from('projects').select('id, department').eq('id', Number(input.project_id)).maybeSingle();
+    const { data: pr } = await svc.from('projects').select('id, department').is('banked_at', null).eq('id', Number(input.project_id)).maybeSingle();
     if (pr && (!pr.department || pr.department === department)) projectId = pr.id;
   }
   const priority = input?.priority === true;
@@ -771,9 +805,46 @@ async function doCreateTask(input, caller) {
     detail: 'Added task #' + ins.id + ' to ' + (DEPT_LABELS[department] || department) + ': ' + title + (owner ? ' (owner: ' + owner + ')' : '')
   };
 }
+async function doBankTask(input) {
+  const taskId = Number(input?.task_id);
+  if (!Number.isInteger(taskId) || taskId <= 0) return {
+    error: 'invalid task_id'
+  };
+  const until = typeof input?.bank_until === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.bank_until.trim()) ? input.bank_until.trim() : '';
+  if (!until) return {
+    error: 'pick the day it should come back'
+  };
+  if (!ASK_AUTH.startsWith('Bearer ')) return {
+    error: 'sign in to the Hub to bank a task'
+  };
+  const reason = typeof input?.reason === 'string' ? input.reason.trim().slice(0, 280) : '';
+  // as the signed-in person: the database checks they can bank it and can see it
+  const asUser = createClient(SUPABASE_URL, ANON_KEY, {
+    global: {
+      headers: {
+        Authorization: ASK_AUTH
+      }
+    }
+  });
+  const { data: t } = await svc.from('dept_tasks').select('id, title').eq('id', taskId).maybeSingle();
+  const { data, error } = await asUser.rpc('bank_task', {
+    p_id: taskId,
+    p_until: until,
+    p_note: reason || null
+  });
+  if (error) return {
+    error: error.message
+  };
+  const n = Number(data?.banked || 1);
+  return {
+    ok: true,
+    detail: 'In the bank until ' + until + ': ' + (t?.title || 'task #' + taskId) + (n > 1 ? ' (with ' + (n - 1) + ' subtask' + (n === 2 ? '' : 's') + ')' : '') + '. It comes back on its date; find it under Strategy, The bank.'
+  };
+}
 async function execAction(name, input, caller, isBoard) {
   try {
     if (name === 'close_task') return await doCloseTask(input, caller, isBoard);
+    if (name === 'bank_task') return await doBankTask(input);
     if (name === 'complete_request') return await doCompleteRequest(input, caller);
     if (name === 'set_request_status') return await doSetRequestStatus(input, caller);
     if (name === 'create_request') return await doCreateRequest(input, caller);
@@ -943,7 +1014,7 @@ async function buildContext(question, isBoard) {
     }
   } catch (_) {}
   try {
-    let openQ = svc.from('dept_tasks').select('department,flag').eq('done', false).or(OPEN_VIS);
+    let openQ = svc.from('dept_tasks').select('department,flag').is('banked_at', null).eq('done', false).or(OPEN_VIS);
     if (!isBoard) openQ = openQ.eq('board_only', false);
     const { data: openTasks } = await openQ.limit(1000);
     if (openTasks && openTasks.length) {
@@ -957,15 +1028,28 @@ async function buildContext(question, isBoard) {
     }
     if (kws.length) {
       const orFilter = kws.map((k)=>'title.ilike.%' + k + '%').join(',');
-      let matchedQ = svc.from('dept_tasks').select('id,department,subsection,title,owner,status,flag,priority,due_date').eq('done', false).or(OPEN_VIS).or(orFilter);
+      let matchedQ = svc.from('dept_tasks').select('id,department,subsection,title,owner,status,flag,priority,due_date').is('banked_at', null).eq('done', false).or(OPEN_VIS).or(orFilter);
       if (!isBoard) matchedQ = matchedQ.eq('board_only', false);
       const { data: matched } = await matchedQ.order('id', {
         ascending: false
       }).limit(8);
       if (matched && matched.length) {
-        parts.push('OPEN TASKS MATCHING THE QUESTION (numeric ids usable with close_task):\n' + matched.map((t)=>t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', owner: ' + (t.owner || 'unowned') + ', status: ' + (t.status || 'open') + ')').join('\n'));
+        parts.push('OPEN TASKS MATCHING THE QUESTION (numeric ids usable with close_task and bank_task):\n' + matched.map((t)=>t.id + '. ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', owner: ' + (t.owner || 'unowned') + ', status: ' + (t.status || 'open') + ')').join('\n'));
       }
     }
+  } catch (_) {}
+  try {
+    let bankQ = svc.from('dept_tasks').select('title,department,bank_until,bank_note').not('banked_at', 'is', null).is('bank_project_id', null).eq('done', false).or(OPEN_VIS);
+    if (!isBoard) bankQ = bankQ.eq('board_only', false);
+    const [{ data: banked }, { data: bprojs }] = await Promise.all([
+      bankQ.order('bank_until').limit(25),
+      svc.from('projects').select('name,department,bank_until,bank_note').not('banked_at', 'is', null).is('parent_id', null).order('bank_until').limit(10)
+    ]);
+    const lines = [
+      ...(bprojs || []).map((p)=>'- Project: ' + p.name + ' (' + (DEPT_LABELS[p.department] || p.department) + ', back ' + p.bank_until + (p.bank_note ? ': ' + String(p.bank_note).slice(0, 120) : '') + ')'),
+      ...(banked || []).map((t)=>'- ' + t.title + ' (' + (DEPT_LABELS[t.department] || t.department) + ', back ' + t.bank_until + (t.bank_note ? ': ' + String(t.bank_note).slice(0, 120) : '') + ')')
+    ];
+    if (lines.length) parts.push('IN THE BANK (work parked until a date, out of every board; it comes back by itself on that date; not open tasks, so never propose closing or banking these):\n' + lines.join('\n'));
   } catch (_) {}
   try {
     const { data: reqs } = await svc.from('dept_requests').select('id,title,department,status,type_key,requested_by,created_at').eq('done', false).order('created_at', {
@@ -1039,6 +1123,7 @@ Deno.serve(async (req)=>{
     headers: CORS
   });
   const auth = await authorize(req);
+  ASK_AUTH = req.headers.get('Authorization') || '';
   ASK_WHO = (auth && auth.ok && auth.who) ? String(auth.who).toLowerCase().slice(0, 80) : '';
   if (!auth.ok) return json({
     error: 'unauthorized'

@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'goals') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: goal-suggest (v1)
 // Gap analysis for one quarterly goal: given the goal, its linked projects and
@@ -170,14 +171,14 @@ Deno.serve(async (req)=>{
   if (gErr || !goal) return json({
     error: 'goal not found'
   }, 404);
-  const { data: projects } = await svc.from('projects').select('id, name, description, department').eq('goal_id', goalId).eq('status', 'active');
+  const { data: projects } = await svc.from('projects').select('id, name, description, department').is('banked_at', null).eq('goal_id', goalId).eq('status', 'active');
   const projIds = (projects || []).map((p)=>p.id);
   const [projTasksQ, deptOpenQ, legacyQ] = await Promise.all([
-    projIds.length ? svc.from('dept_tasks').select('id, title, done, owner, project_id').in('project_id', projIds) : Promise.resolve({
+    projIds.length ? svc.from('dept_tasks').select('id, title, done, owner, project_id').is('banked_at', null).in('project_id', projIds) : Promise.resolve({
       data: []
     }),
-    svc.from('dept_tasks').select('id, title, done, owner').eq('department', goal.department).eq('done', false).is('project_id', null),
-    Array.isArray(goal.task_ids) && goal.task_ids.length ? svc.from('dept_tasks').select('id, title, done, owner').in('id', goal.task_ids) : Promise.resolve({
+    svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).eq('department', goal.department).eq('done', false).is('project_id', null),
+    Array.isArray(goal.task_ids) && goal.task_ids.length ? svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).in('id', goal.task_ids) : Promise.resolve({
       data: []
     })
   ]);

@@ -45,7 +45,7 @@
   var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
   var GROUPS = [
     ['Everyday', ['mypage', 'calendar', 'requests', 'overview', 'dashboard', 'create', 'photos', 'brain', 'importantinfo']],
-    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap', 'bank']],
     ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
     ['Board', ['governance', 'committees', 'board']],
     ['Meetings', ['transcripts', 'agendas', 'hubmail']],
@@ -55,7 +55,7 @@
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
@@ -70,7 +70,8 @@
     adminpanel: 'Only admins can change access, whatever the menu shows.',
     hrcentre: 'Everyone’s time off, discipline and policy sign-offs stay with the HR access list.',
     agendas: 'Each agenda is visible to the person who made it and the people invited.',
-    transcripts: 'Private and leadership transcripts stay limited, whatever the page access.'
+    transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
+    bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project’s lead or a leader for a whole project.'
   };
   var P = {
     x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',

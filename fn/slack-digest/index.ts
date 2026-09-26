@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Welfare Avenue: slack-digest (v1, 07/08/26)
 // Weekly per-department digest posted into each department's Slack
 // channel: flagged work first, then due-soon, then open tasks by owner
@@ -139,7 +140,7 @@ function visible(t) {
 async function composeDept(dept, token) {
   const since = new Date(Date.now() - 7 * 86400000).toISOString();
   const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-  const { data: rows } = await svc.from('dept_tasks').select('id, title, owner, due_date, flag, closed_at, done, confidential, board_only, visibility, project_id').eq('department', dept);
+  const { data: rows } = await svc.from('dept_tasks').select('id, title, owner, due_date, flag, closed_at, done, confidential, board_only, visibility, project_id').is('banked_at', null).eq('department', dept);
   const all = (rows || []).filter(visible);
   const open = all.filter((t)=>!t.done);
   const doneWeek = all.filter((t)=>t.done && t.closed_at && t.closed_at >= since);

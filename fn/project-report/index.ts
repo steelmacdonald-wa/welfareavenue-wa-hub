@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: project-report (v1, 07/08/26)
 // Builds the narrative for a downloadable project report: what each
@@ -144,7 +145,7 @@ Deno.serve(async (req)=>{
   }, 400);
   const [projQ, tasksQ] = await Promise.all([
     svc.from('projects').select('*').eq('id', pid).maybeSingle(),
-    svc.from('dept_tasks').select('id, title, department, owner, due_date, done, closed_at, status, flag').eq('project_id', pid).order('done').order('due_date', {
+    svc.from('dept_tasks').select('id, title, department, owner, due_date, done, closed_at, status, flag').is('banked_at', null).eq('project_id', pid).order('done').order('due_date', {
       ascending: true,
       nullsFirst: false
     }).limit(300)

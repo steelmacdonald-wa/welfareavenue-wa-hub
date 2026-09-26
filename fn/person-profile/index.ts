@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'profile') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: person-profile (v1)
 // Builds a short AI job description for one team member from what they
@@ -143,7 +144,7 @@ Deno.serve(async (req)=>{
   }, 404);
   const pat = '%' + String(m.name).trim().split(/\s+/)[0] + '%';
   const [openQ, doneQ, sopQ] = await Promise.all([
-    svc.from('dept_tasks').select('id, title, department, status, project_id').eq('done', false).ilike('owner', pat).limit(120),
+    svc.from('dept_tasks').select('id, title, department, status, project_id').is('banked_at', null).eq('done', false).ilike('owner', pat).limit(120),
     svc.from('dept_tasks').select('id, title, department, closed_at').eq('done', true).gte('closed_at', fyStart()).ilike('owner', pat).limit(200),
     svc.from('sop_event_steps').select('id, template_id, event_id, owner, volunteer_events!inner(status, event_date)').ilike('owner', pat).eq('volunteer_events.status', 'planned').gte('volunteer_events.event_date', new Date().toISOString().slice(0, 10)).limit(300)
   ]);

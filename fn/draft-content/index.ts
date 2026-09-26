@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: draft-content (v5, 08/08/26)
 // v5: the Welfare Avenue writing style (Steel's wa-writing guide, adapted
@@ -354,7 +355,7 @@ Deno.serve(async (req)=>{
       if (recent && recent.length) {
         parts.push('RECENT ' + dept.toUpperCase() + ' MEETING SUMMARIES (context, use only what is relevant):\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 500)).join('\n'));
       }
-      const { data: tasks } = await svc.from('dept_tasks').select('title, owner').eq('department', dept).eq('done', false).eq('board_only', false).limit(12);
+      const { data: tasks } = await svc.from('dept_tasks').select('title, owner').is('banked_at', null).eq('department', dept).eq('done', false).eq('board_only', false).limit(12);
       if (tasks && tasks.length) {
         parts.push('OPEN ' + dept.toUpperCase() + ' TASKS:\n' + tasks.map((t)=>'- ' + t.title + ' (' + (t.owner || 'unowned') + ')').join('\n'));
       }

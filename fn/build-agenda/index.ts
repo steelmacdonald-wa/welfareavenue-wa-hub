@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: build-agenda (v6, 03/08/26)
 // v6: restricted meetings. Transcripts with visibility 'leadership' or
@@ -234,7 +235,7 @@ Deno.serve(async (req)=>{
       ascending: false
     }).limit(5);
     if (tx && tx.length) parts.push('RECENT MEETINGS:\n' + tx.map((t)=>'- ' + (t.title || 'Untitled') + ' (' + (t.meeting_date || '') + '): ' + (t.ai_summary || '').slice(0, 700)).join('\n'));
-    const { data: tasks } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date').eq('department', dept).eq('done', false).eq('board_only', false).or(OPEN_VIS).order('subsection').limit(40);
+    const { data: tasks } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date').is('banked_at', null).eq('department', dept).eq('done', false).eq('board_only', false).or(OPEN_VIS).order('subsection').limit(40);
     (tasks || []).forEach((t)=>taskIds.add(t.id));
     if (tasks && tasks.length) parts.push('OPEN TASKS (use these ids):\n' + fmtTasks(tasks));
     const { data: decs } = await svc.from('decisions').select('title, area, owner').eq('done', false).eq('board_only', false).or(OPEN_VIS);
@@ -276,7 +277,7 @@ Deno.serve(async (req)=>{
     dept = depts.length === 1 ? depts[0] : null;
     parts.push('Draft the agenda for a ' + (scope === 'oneonone' ? '1 on 1' : 'meeting') + ' between: ' + members.map((m)=>m.name + ' (' + (m.role || 'team member') + ', ' + (DEPT_LABEL[m.department] || m.department) + ')').join('; ') + (execImplied ? '. The other side of this 1 on 1 is the executive directors Steel and Suhaib.' : '') + ' Meeting date: ' + meetingDate + '.');
     const firsts = members.map((m)=>m.name.split(' ')[0]);
-    const { data: tasks } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date, department').eq('done', false).eq('board_only', false).or(OPEN_VIS).or(firsts.map((f)=>'owner.ilike.%' + f + '%').join(',')).limit(40);
+    const { data: tasks } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date, department').is('banked_at', null).eq('done', false).eq('board_only', false).or(OPEN_VIS).or(firsts.map((f)=>'owner.ilike.%' + f + '%').join(',')).limit(40);
     (tasks || []).forEach((t)=>taskIds.add(t.id));
     if (tasks && tasks.length) parts.push('OPEN TASKS OWNED BY THE ATTENDEES (use these ids):\n' + fmtTasks(tasks));
     for (const d of depts.slice(0, 4)){
@@ -307,7 +308,7 @@ Deno.serve(async (req)=>{
     parts.push('Draft the leaders team meeting agenda. Meeting date: ' + meetingDate + '. Attendees: department leaders plus Steel and Suhaib.');
     const { data: metas } = await svc.from('dept_meta').select('department, progress, priorities');
     if (metas && metas.length) parts.push('DEPARTMENT STATES:\n' + metas.map((x)=>'- ' + (DEPT_LABEL[x.department] || x.department) + ': ' + (x.progress || '').slice(0, 200) + ' Priorities: ' + JSON.stringify(x.priorities || [])).join('\n'));
-    const { data: flagged } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date, department').eq('done', false).eq('flag', true).eq('board_only', false).or(OPEN_VIS).limit(20);
+    const { data: flagged } = await svc.from('dept_tasks').select('id, title, owner, subsection, flag, due_date, department').is('banked_at', null).eq('done', false).eq('flag', true).eq('board_only', false).or(OPEN_VIS).limit(20);
     (flagged || []).forEach((t)=>taskIds.add(t.id));
     if (flagged && flagged.length) parts.push('FLAGGED TASKS ACROSS DEPARTMENTS (use these ids):\n' + fmtTasks(flagged));
     const { data: decs } = await svc.from('decisions').select('title, area').eq('done', false).eq('board_only', false).or(OPEN_VIS);

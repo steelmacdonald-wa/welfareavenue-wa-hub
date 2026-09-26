@@ -62,6 +62,13 @@
     var two = new Date(now.getTime()); two.setDate(two.getDate() + 14);
     return [{ t: 'This Friday', v: iso(fri) }, { t: 'In a week', v: iso(week) }, { t: 'Two weeks', v: iso(two) }, { t: 'End of month', v: iso(eom) }];
   }
+  /* wave132: when a banked task comes back */
+  function bankDates() {
+    var now = new Date(); now.setHours(12, 0, 0, 0);
+    var m3 = new Date(now.getTime()); m3.setMonth(m3.getMonth() + 3);
+    var m6 = new Date(now.getTime()); m6.setMonth(m6.getMonth() + 6);
+    return [{ t: 'In 3 months', v: iso(m3) }, { t: 'In 6 months', v: iso(m6) }];
+  }
   function score(text, keys) { var t = lower(text); return keys.reduce(function (a, k) { return a + (t.indexOf(k) >= 0 ? 1 : 0); }, 0); }
   function peopleFor(title, dept) {
     var keys = words(title); if (!keys.length) return [];
@@ -111,6 +118,7 @@
         '<label class="wide">Details<textarea data-f="details">' + E(i.details || '') + '</textarea></label>' +
         '</div>';
     }
+    if (p.name === 'bank_task') return '<div class="w116oed"><label>Comes back<input type="date" data-f="bank_until" value="' + E(i.bank_until || '') + '"></label><label class="wide">Why it waits<input type="text" data-f="reason" value="' + E(i.reason || '') + '" placeholder="One line, for when it comes back"></label></div>';
     if (p.name === 'close_task') return '<div class="w116oed"><label class="wide">Closing note<input type="text" data-f="note" value="' + E(i.note || '') + '" placeholder="Optional: what settled it"></label></div>';
     if (p.name === 'set_request_status') return '<div class="w116oed"><label class="wide">New status<input type="text" data-f="status" value="' + E(i.status || '') + '" list="w116ost"></label><datalist id="w116ost"><option value="new"><option value="in progress"><option value="waiting"><option value="interviewing"><option value="offer accepted"><option value="done"></datalist></div>';
     return '';
@@ -132,6 +140,7 @@
   function localChips(p, card) {
     var i = readForm(card, p); var out = [];
     var title = i.title || '';
+    if (p.name === 'bank_task') bankDates().forEach(function (q) { out.push({ f: 'bank_until', v: q.v, t: q.t, why: q.v }); });
     if (p.name === 'create_task' || p.name === 'create_request') {
       var fld = p.name === 'create_task' ? 'owner' : 'assignee';
       peopleFor(title, i.department).forEach(function (x) { out.push({ f: fld, v: x.m.name, t: x.m.name.split(' ')[0], why: x.why || x.m.role || '' }); });
@@ -214,7 +223,7 @@
         if ((p.name === 'create_task' || p.name === 'create_request') && !edited.title) { var res = card.querySelector('.w116osug'); if (res) { res.style.display = ''; res.innerHTML = '<div class="tip" style="color:#b3402f">Give it a title first.</div>'; } return; }
         p.input = edited;
         /* keep a plain summary of what was confirmed */
-        var b = card.querySelector('b'); if (b) b.textContent = (p.name === 'create_task' ? 'Add a task to ' + label(edited.department) + ': ' : p.name === 'create_request' ? 'File a request to ' + label(edited.department) + ': ' : '') + (edited.title || b.textContent);
+        var b = card.querySelector('b'); if (b) b.textContent = p.name === 'bank_task' ? 'Move to the bank: ' + (edited.title || ('task #' + edited.task_id)) + (edited.bank_until ? ' (back ' + edited.bank_until + ')' : '') : (p.name === 'create_task' ? 'Add a task to ' + label(edited.department) + ': ' : p.name === 'create_request' ? 'File a request to ' + label(edited.department) + ': ' : '') + (edited.title || b.textContent);
         card.querySelectorAll('[data-f]').forEach(function (el) { el.disabled = true; });
         var sug = card.querySelector('.w116osug'); if (sug) sug.remove();
       }

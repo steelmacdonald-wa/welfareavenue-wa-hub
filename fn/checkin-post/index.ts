@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Welfare Avenue: checkin-post (v2, 25/09/26: channels + say, for the volunteering recap; v1 25/09/26)
 // Steel: "Check in should send a message in Slack channel
 // #check-in-out-wa and checking out should do the same with bullet points
@@ -92,7 +93,7 @@ async function myTasks(m: { id: number; name: string; department: string | null 
   const name = (m ? m.name : fallbackName) || '';
   const first = name.split(' ')[0];
   if (!first) return [];
-  const { data } = await svc.from('dept_tasks').select('id, title, owner, department, subsection, due_date, project_id').eq('done', false).or('owner.ilike.%' + first.replace(/[%,]/g, '') + '%' + (m && m.department ? ',department.eq.' + m.department : '')).order('updated_at', { ascending: false }).limit(60);
+  const { data } = await svc.from('dept_tasks').select('id, title, owner, department, subsection, due_date, project_id').is('banked_at', null).eq('done', false).or('owner.ilike.%' + first.replace(/[%,]/g, '') + '%' + (m && m.department ? ',department.eq.' + m.department : '')).order('updated_at', { ascending: false }).limit(60);
   const rows = (data || []) as Task[];
   /* the person's own first, then their team's */
   const own = rows.filter(t => (t.owner || '').toLowerCase().includes(first.toLowerCase()));

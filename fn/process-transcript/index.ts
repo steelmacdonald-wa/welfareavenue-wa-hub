@@ -2,6 +2,7 @@
 // (the date it should come back) and bank_reason: apply_transcript_result puts it straight in the bank, out of every board and
 // count, and the daily job brings it back on its date. Banked tasks are marked in the open task list so the model does not add
 // them again; unbank_task_ids brings one back when the meeting starts it now. The Slack line counts what was banked.
+// Projects in the bank are left out of the project list (a new task never lands in one out of sight).
 // v10 (25/09/26): every new task carries a description and a priority, relative due dates resolve from the meeting date, Jev checks the project each task landed in. v8: routed through the Hub model router (llm, task transcript_extract; Sonnet 5 first) and every extracted item gets a Jev second opinion (jevCheck).
 // Welfare Avenue: process-transcript (v7, 24/09/26)
 // v7: Program Development is its own team (key 'progdev'). Labels renamed:
@@ -398,7 +399,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag, banked_at, bank_until').eq('department', dept).eq('done', false),
     svc.from('decisions').select('id, title, area, owner').eq('done', false),
     svc.from('team_members').select('name, role').eq('department', dept).eq('active', true),
-    svc.from('projects').select('id, name, description, department, parent_id, goal_id').eq('status', 'active').order('department').order('sort'),
+    svc.from('projects').select('id, name, description, department, parent_id, goal_id').is('banked_at', null).eq('status', 'active').order('department').order('sort'),
   ]);
   const subsections = [...new Set((tasksQ.data || []).map(t => t.subsection).filter(Boolean))];
 

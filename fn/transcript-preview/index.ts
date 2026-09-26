@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'transcript_preview') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: transcript-preview (v1, 04/08/26)
 // Dry run before upload: the Hub sends the transcript text BEFORE saving
@@ -64,7 +65,7 @@ async function authorize(req) {
   }
   return false;
 }
-const SYSTEM = 'You PREVIEW what the Welfare Avenue transcript pipeline will do with a meeting transcript, before it is uploaded, so the uploader can approve. Read the transcript against the current board state and predict, conservatively and factually, what will be filed. Route each item to the department that owns it (a leadership meeting spreads across all departments; a department meeting mostly stays in its own). Closures need clear completion evidence. Requests are only explicit cross team asks; when an ask matches an open request, mark it refine. Goal wins are concrete completed or measurable progress on a listed goal. Mentions are roster members who did not speak but had work discussed or assigned. Never invent people, dates, or ids. No em dashes anywhere in your text.';
+const SYSTEM = 'You PREVIEW what the Welfare Avenue transcript pipeline will do with a meeting transcript, before it is uploaded, so the uploader can approve. Read the transcript against the current board state and predict, conservatively and factually, what will be filed. Route each item to the department that owns it (a leadership meeting spreads across all departments; a department meeting mostly stays in its own). Closures need clear completion evidence. Requests are only explicit cross team asks; when an ask matches an open request, mark it refine. Goal wins are concrete completed or measurable progress on a listed goal. Mentions are roster members who did not speak but had work discussed or assigned. Work the meeting clearly puts off by three months or more is still a new task, with bank_until set to the ISO date it should come back: the pipeline parks it in the bank until then. Never invent people, dates, or ids. No em dashes anywhere in your text.';
 const TOOL = {
   name: 'preview_actions',
   description: 'Return the actions the pipeline is expected to take for this transcript.',
@@ -109,6 +110,13 @@ const TOOL = {
             },
             owner: {
               type: 'string'
+            },
+            bank_until: {
+              type: [
+                'string',
+                'null'
+              ],
+              description: 'Only when the meeting puts this work off by three months or more: the ISO date it should come back. Null otherwise.'
             }
           },
           required: [
@@ -226,7 +234,7 @@ Deno.serve(async (req)=>{
   const dept = String(body.department || '');
   const isLead = body.visibility === 'leadership' || /leadership/i.test(dept);
   const [tasksQ, typesQ, reqsQ, goalsQ, rosterQ, decQ] = await Promise.all([
-    svc.from('dept_tasks').select('id,title,department,owner').eq('done', false).limit(400),
+    svc.from('dept_tasks').select('id,title,department,owner').is('banked_at', null).eq('done', false).limit(400),
     svc.from('request_types').select('key,label,department,description').eq('enabled', true),
     svc.from('dept_requests').select('id,title,department').eq('done', false).limit(50),
     svc.from('goals').select('id,department,quarter,title,measure,status').limit(60),

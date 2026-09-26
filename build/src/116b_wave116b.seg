@@ -388,6 +388,7 @@
       (t.confidential ? '<span class="w116tag conf">confidential</span>' : '') +
       (showP ? '<span class="w116tag" title="Project">' + E(p.name) + '</span>' : '') +
       (showW ? '<span class="w116tag ws">' + E(t.subsection) + '</span>' : '') +
+      (window.w132Back && window.w132Back(t) ? '<span class="w116tag bank" title="Waited in the bank; back on the board for two weeks now">back from the bank</span>' : '') +
       (comments(t) ? '<span class="w116tag cm">&#128172; ' + comments(t) + '</span>' : '') + '</span>' +
       '<span class="w116as" data-act="owner" title="' + E(t.owner ? 'Owner: ' + t.owner : 'Set an owner') + '">' + (t.owner ? av({ name: t.owner, avatar_url: ((DB_MEMBERS || []).filter(function (m) { return lower(m.name) === lower(t.owner); })[0] || {}).avatar_url }, 22) : '<span class="none">+</span>') + as.filter(function (m) { return lower(m.name) !== lower(t.owner); }).slice(0, 3).map(function (m) { return av(m, 22); }).join('') + '</span>' +
       '<span class="w116due ' + du.cls + '" data-act="due" title="' + E(t.due_date || 'Set a due date') + '">' + (du.txt || '&#8212;') + '</span>' +

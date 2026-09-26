@@ -287,7 +287,8 @@
     if (mastEl.getAttribute('data-w118cur') !== d[0]) { mastEl.innerHTML = want; mastEl.setAttribute('data-w118cur', d[0]); }
     var sub = document.querySelector('nav.wa-nav .w118sub');
     if (sub) sub.querySelectorAll('a').forEach(function (a) { a.classList.toggle('on', a.getAttribute('data-w118sec') === d[0]); });
-    try { document.title = d[1] + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    /* wave132: only while Admin is the page on screen (it used to rename whatever page was open) */
+    try { if (panel.classList.contains('active')) document.title = d[1] + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
   }
   function admNav() {
     var tab = document.querySelector('nav.wa-nav .tab[data-tab="adminpanel"]');

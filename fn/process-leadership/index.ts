@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'leadership') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: process-leadership (v2, 04/08/26)
 // v2: leadership meetings can now be OPEN. The transcript's visibility
@@ -342,10 +343,10 @@ async function processLeadership(transcriptId) {
   const stampPeople = stampVis === 'private' && Array.isArray(tx.allowed_people) ? tx.allowed_people : null;
   const restricted = stampVis !== null;
   const [tasksQ, decQ, rosterQ, projQ] = await Promise.all([
-    svc.from('dept_tasks').select('id, title, department, owner, due_date').eq('done', false),
+    svc.from('dept_tasks').select('id, title, department, owner, due_date').is('banked_at', null).eq('done', false),
     svc.from('decisions').select('id, title, area, owner').eq('done', false),
     svc.from('team_members').select('name, role, department').eq('active', true),
-    svc.from('projects').select('id, name, description, department, parent_id').eq('status', 'active').order('department').order('sort')
+    svc.from('projects').select('id, name, description, department, parent_id').is('banked_at', null).eq('status', 'active').order('department').order('sort')
   ]);
   const openTasksNumbered = (tasksQ.data || []).map((t, i)=>i + 1 + '. task_id ' + t.id + ': ' + t.title + ' (' + t.department + ', owner: ' + (t.owner || 'unassigned') + ')').join('\n');
   const projRows = projQ.data || [];

@@ -1,3 +1,4 @@
+// wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'goals') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: goal-propose (v1)
 // Suggests quarterly goals for ONE department from its transcripts,
@@ -173,8 +174,8 @@ Deno.serve(async (req)=>{
     svc.from('dept_updates').select('entry_label, text').eq('department', dept).order('id', {
       ascending: false
     }).limit(10),
-    svc.from('dept_tasks').select('title, status').eq('department', dept).eq('done', false).limit(60),
-    svc.from('projects').select('name, description, status').eq('department', dept),
+    svc.from('dept_tasks').select('title, status').is('banked_at', null).eq('department', dept).eq('done', false).limit(60),
+    svc.from('projects').select('name, description, status').is('banked_at', null).eq('department', dept),
     svc.from('goals').select('title, detail, measure, quarter, status, department').or('department.eq.' + dept + ',department.eq.org')
   ]);
   const context = {
