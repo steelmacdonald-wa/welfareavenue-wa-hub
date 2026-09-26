@@ -1,3 +1,5 @@
+// Welfare Avenue: directory-sync (v1.6, 26/09/26: a Slack account pinned for a person in wa_slack_ids (source 'pinned...', such as
+//   Ian's personal account) is the one their photo comes from.)
 // Welfare Avenue: directory-sync (v1.5, 26/09/26, wave139: Slack photos. Everyone's Slack profile photo becomes their Hub photo,
 //   matched by work email (or a Workspace alias, or the Slack account they connected in Settings); a photo someone uploaded on
 //   the Hub is kept (and so is removing one: avatar_url '' means no photo by choice), and a Slack default avatar is not used. The photos are copied to the avatars bucket (slack/<member_id>)
@@ -195,12 +197,14 @@ async function slackPhotos(dryRun: boolean, onlyMemberId: number | null = null) 
   const all = (await members()).filter((m) => m.active !== false && (onlyMemberId == null || Number(m.id) === Number(onlyMemberId)));
   const aliases: Record<string, string[]> = {};
   try { const { data } = await svc.from('hub_directory').select('email, aliases'); (data || []).forEach((d: Row) => { aliases[lower(d.email)] = ((d.aliases || []) as string[]).map(lower); }); } catch (_) { /* fine */ }
+  const pins: Record<string, string> = {};     /* v1.6: a Slack account an admin pinned for the person comes first */
+  try { const { data } = await svc.from('wa_slack_ids').select('email, slack_id, source'); (data || []).forEach((d: Row) => { if (/^pinned/i.test(String(d.source || ''))) pins[lower(d.email)] = String(d.slack_id || ''); }); } catch (_) { /* fine */ }
   const linked: Record<string, string> = {};   /* the Slack account a person connected in Settings (slack-connect checked its email) */
   try { const { data } = await svc.from('slack_links').select('email, slack_user_id'); (data || []).forEach((d: Row) => { linked[lower(d.email)] = String(d.slack_user_id || ''); }); } catch (_) { /* fine */ }
   for (const m of all) {
     const email = lower(m.email);
     if (!email) { res.no_email.push(m.name); continue; }
-    const u = [email].concat(aliases[email] || []).map((e) => byEmail[e]).filter(Boolean)[0] || (linked[email] ? byId[linked[email]] : null);
+    const u = (pins[email] ? byId[pins[email]] : null) || [email].concat(aliases[email] || []).map((e) => byEmail[e]).filter(Boolean)[0] || (linked[email] ? byId[linked[email]] : null);
     if (!u) { res.no_slack.push(m.name); continue; }
     if (m.avatar_url === '') { res.removed.push(m.name); continue; }   /* removed on the Hub by the person: stays without a photo */
     const cur = String(m.avatar_url || '');
@@ -211,7 +215,8 @@ async function slackPhotos(dryRun: boolean, onlyMemberId: number | null = null) 
     if (!src || !custom) { res.default_photo.push(m.name); continue; }
     const key = shortHash(String(p.avatar_hash || '') + '|' + src);
     if (cur.indexOf('/' + BUCKET + '/slack/') >= 0 && cur.endsWith('?v=' + key)) { res.kept++; continue; }
-    if (dryRun) { res.applied.push(m.name + (cur ? ' (instead of the Google photo)' : '')); continue; }
+    const was = !cur ? null : (cur.indexOf('/' + BUCKET + '/slack/') >= 0 ? 'Slack photo' : 'Google photo');
+    if (dryRun) { res.applied.push(m.name + (was ? ' (instead of the ' + was + ')' : '')); continue; }
     try {
       const img = await fetch(src);
       if (!img.ok) throw new Error('download ' + img.status);
@@ -226,7 +231,7 @@ async function slackPhotos(dryRun: boolean, onlyMemberId: number | null = null) 
       const { data: pub } = svc.storage.from(BUCKET).getPublicUrl(path);
       const url = pub.publicUrl + '?v=' + key;
       await svc.from('team_members').update({ avatar_url: url }).eq('id', m.id);
-      await log('team_member', String(m.id), 'avatar_url', cur ? 'Google photo' : null, 'Slack photo', 'hub (Slack photos)');
+      await log('team_member', String(m.id), 'avatar_url', was, 'Slack photo', 'hub (Slack photos)');
       m.avatar_url = url;
       res.applied.push(m.name);
     } catch (e) { res.errors.push(m.name + ': ' + String((e as Error).message || e).slice(0, 120)); }

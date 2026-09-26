@@ -14,7 +14,7 @@
 //   {action:'channels'}                       -> list channels the bot can see
 //   {action:'preview', project_id, note?}     -> composed text + mention coverage
 //   {action:'send', project_id, channel_id, channel_name?, note?} -> chat.postMessage
-// Mention resolution: wa_slack_names cache (Ian PINNED U0A7DF871FS) ->
+// Mention resolution: wa_slack_names cache (Ian pinned to his personal account U057BRKP1R9 since 26/09/26) ->
 // users.list exact-name match -> unique first-name match; unresolved
 // names appear as plain text, listed in the preview. Sends change_logged.
 import { createClient } from 'jsr:@supabase/supabase-js@2';

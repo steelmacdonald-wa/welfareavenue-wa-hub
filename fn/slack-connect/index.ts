@@ -1,4 +1,6 @@
-// Welfare Avenue: slack-connect (v3, 26/09/26, wave138)
+// Welfare Avenue: slack-connect (v4, 26/09/26, wave138)
+// v4: a Slack account an admin pinned for the person (wa_slack_ids source 'pinned...', such as Ian's personal account,
+//   his welfareavenue.com one being inactive) counts as theirs, and connecting never replaces a pinned id.
 // v3: never revokes a token the Hub's jobs also use. Slack gives a person the same user token each time they authorize
 //   the app, so Steel's mention token is also SLACK_USER_TOKEN (hours-pull, slack-pull): Disconnect (and a refused
 //   connection) forgets the token for mentions but only revokes it at Slack when no job uses it.
@@ -115,14 +117,17 @@ async function redirected(url: URL): Promise<Response> {
   const slackEmail = await slackEmailOf(slackId).catch(() => '');
   const aliases = new Set([email]);
   try { const { data: d } = await svc.from('hub_directory').select('email, aliases').ilike('email', email).maybeSingle(); ((d?.aliases || []) as string[]).forEach(a => aliases.add(String(a).toLowerCase())); } catch (_) { /* fine */ }
-  if (!slackEmail || !aliases.has(slackEmail)) {
+  /* v4: the Slack account pinned for this person counts as theirs whatever email it carries */
+  let pinned = '';
+  try { const { data: pin } = await svc.from('wa_slack_ids').select('slack_id, source').eq('email', email).maybeSingle(); if (pin && /^pinned/i.test(String(pin.source || ''))) pinned = String(pin.slack_id || ''); } catch (_) { /* none */ }
+  if (!(pinned && slackId === pinned) && (!slackEmail || !aliases.has(slackEmail))) {
     await revoke(token);
     return back('error', 'That Slack account is ' + (slackEmail || 'not a Welfare Avenue account') + ', not ' + email + '.');
   }
   if (scopes.indexOf('chat:write') < 0 || scopes.indexOf('im:write') < 0) return back('error', 'Slack did not grant chat:write and im:write. Ask Steel to add them to the app.');
   const { error } = await svc.rpc('slack_link_save', { p_email: email, p_user_id: slackId, p_team_id: String(out.team?.id || ''), p_scopes: scopes, p_token: token });
   if (error) return back('error', 'Could not save the connection.');
-  try { await svc.from('wa_slack_ids').upsert({ email, slack_id: slackId, source: 'slack-connect', updated_at: new Date().toISOString() }); } catch (_) { /* fine */ }
+  if (!pinned) { try { await svc.from('wa_slack_ids').upsert({ email, slack_id: slackId, source: 'slack-connect', updated_at: new Date().toISOString() }); } catch (_) { /* fine */ } }   /* v4: a pin stays */
   return back('connected');
 }
 

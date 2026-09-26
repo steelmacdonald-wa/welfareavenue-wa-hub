@@ -13,6 +13,7 @@ Live md5 `b4dea6b36c172a9fb3c0be6ba0eec82b` (3,884,752 bytes), deployed through 
 - **Removing a photo is respected**: the profile editor now saves "no photo by choice", and the daily sync does not bring a Slack or Google photo back. The editor says where the photo comes from until you choose one.
 - **It keeps itself current**: the daily roster sync (directory-sync) refreshes a Slack photo when the person changes it, and fills one in for someone who adds a photo to Slack or joins later. Placing a new person on the roster copies their photo at once.
 - The photos are copies in the Hub's avatars bucket (`slack/<member_id>`), like the Google ones, so the Hub never shows a Slack link.
+- **Ian's photo comes from his personal Slack account**, the one the Hub now delivers to (pinned in `wa_slack_ids`; directory-sync v1.6 takes a pinned account before the email match).
 
 ## Who is still on initials
 

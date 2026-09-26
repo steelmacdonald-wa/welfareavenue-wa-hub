@@ -17,7 +17,7 @@
 // events + welcome_kit + decision_raised + test. Delivery ladder: true
 // Slack DM when the bot has chat:write+im:write (granted 07/08/26),
 // channel ping fallback otherwise. Slack ids resolve from wa_slack_ids
-// (Ian PINNED U0A7DF871FS), then users.lookupByEmail, then users.list
+// (Ian pinned to his personal account U057BRKP1R9 since 26/09/26), then users.lookupByEmail, then users.list
 // name match, cached. Every outcome is change_logged.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
