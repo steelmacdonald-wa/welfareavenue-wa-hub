@@ -1276,6 +1276,10 @@ Forms flows (wave145): each answer to a form in form_sources, as question and an
 
 Forms flows (wave145): the router's summary of the volunteer survey for one event (scope event:<id>), with the counts it was written from (stats) and how many answers (n).
 
+### `security_checks`
+
+The monthly security check (wave146, security-check): one row per run. summary holds the counts compared month to month (active accounts, without 2-step verification, admins and admins without it, unused 60 days, files anyone with the link can open and the sensitive-looking ones, sharing outside Welfare Avenue in the period, sign-in failures and warnings, apps authorised, admin changes). findings is the list shown in Admin, Security: key, level (high, medium, low, info, ok), title, detail, count, items and the fix. Admins only.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).

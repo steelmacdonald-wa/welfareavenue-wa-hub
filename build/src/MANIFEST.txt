@@ -170,6 +170,8 @@
 144_wave144
 # 145_wave145: Forms flows in the Volunteering manager (volunteer survey, event audit, sign-ups) and the HR centre (onboarding quizzes).
 145_wave145
+# 146_wave146: the monthly security check in Admin, Security and audit trail (security-check edge function).
+146_wave146
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

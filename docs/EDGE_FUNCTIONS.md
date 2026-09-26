@@ -1,6 +1,6 @@
 # Welfare Avenue Hub: edge functions
 
-Every edge function, what it does, what runs it and who may call it. The source of each is in `fn/<name>/index.ts` with its `meta.json` (all 59 live functions are in the repo; forms-flow joined with wave145). Deploy with `python3 build/fn.py deploy <name>`. The detailed audit, with evidence and the open questions, is `docs/audit/fn_findings.md`.
+Every edge function, what it does, what runs it and who may call it. The source of each is in `fn/<name>/index.ts` with its `meta.json` (all 60 live functions are in the repo; security-check joined with wave146). Deploy with `python3 build/fn.py deploy <name>`. The detailed audit, with evidence and the open questions, is `docs/audit/fn_findings.md`.
 
 Rules for a new or changed function:
 
@@ -56,6 +56,7 @@ Rules for a new or changed function:
 | `quo-sync` | One-off: linked volunteer records to Quo contacts by phone | Nothing | Staff | Status: legacy. |
 | `recommend-decision` | AI recommendation for an executive decision, with Jev odds | Front end decision card | Staff (no gateway JWT check) | Status: keep. |
 | `repo-sync` | Build tool: GitHub probe, tree, read blob, create blobs, commit, with the vault GitHub token | `build/repo_push.py`, `build/repo_pull.py` | Secret, or ANY staff JWT (no gateway JWT check) | Trigger secret only since 26/09/26 (a staff sign-in no longer reaches GitHub). Status: keep (build tool). |
+| `security-check` | The monthly security check (wave146): reads the Workspace directory (every account: 2-step verification, last sign-in, admins), the Drive (files anyone with the link can open, as Steel's account sees them: sensitive-looking names, folders) and the Google audit logs for the period (Drive sharing outside Welfare Avenue and files made public, sign-in warnings, failures and unusual sign-ins, apps authorised, admin changes), and keeps the findings, each with what to do and the Admin console page, in `security_checks` (admins only). Changes nothing in Google. Actions `run {days}` and `latest` | Cron `wa-security-check` (the first of each month); front end Admin, Security and audit trail (Run the check now) | The trigger secret or an admin | Status: keep. |
 | `shoutouts` | Daily AI shout-outs into `hub_shoutouts`; staff add and remove | Cron 17 (daily); front end HR centre | Secret or admin for refresh; staff for add | Status: keep. |
 | `site` | Old host: served index.html from `site_files` for a Netlify proxy | Nothing (host-sync now deploys straight to Netlify; no `_redirects`) | None, public (no gateway JWT check) | Status: legacy. |
 | `slack-command` | The `/hub` slash command (tasks, project, request) | Slack (external webhook) | Slack signing secret (HMAC v0, 5-minute window, constant-time compare) (no gateway JWT check) | Status: unknown (finish or retire). |

@@ -55146,6 +55146,179 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w145 = { load: load, state: function () { return F; }, event: paintEvent, home: paintHome, hr: paintHR, feedbackHtml: feedbackHtml, hrHtml: hrHtml };
 })();
 /* =====================================================================
+   WA v146 the monthly security check (26/09/26)
+   =====================================================================
+   Steel approved a monthly security check with the other Google projects ("go for all the above", 26/09/26). The
+   security-check edge function reads the Workspace directory, the Drive and the Google audit logs on the first of each month
+   (and when an admin asks) and keeps what it found in security_checks (admins only). In Admin, Security and audit trail, at
+   the top of the card: the latest check (the headline numbers against the check before), each finding with what to do and
+   a link to the right Admin console page, the earlier checks, and Run the check now.
+   ===================================================================== */
+(function () {
+  if (window.__wa146) return; window.__wa146 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var TZ = 'America/Toronto';
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  var P = {
+    shield: '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6z"/><path d="m9 12 2 2 4-4"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
+    out: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+    chev: '<path d="m9 6 6 6-6 6"/>'
+  };
+  function I(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.shield) + '</svg>'; }
+  var LV = { high: ['Fix now', FLAG, 'rgba(179,64,47,.12)'], medium: ['Plan it', '#8a6414', 'rgba(220,165,39,.18)'], low: ['Worth a look', GREEN, 'rgba(16,63,57,.08)'], info: ['For the record', MUTED, 'rgba(121,119,115,.12)'], ok: ['Good', TEAL, 'rgba(42,140,122,.12)'] };
+
+  var st = document.createElement('style'); st.id = 'w146css';
+  st.textContent = ''
+    + '#w146sec{border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:14px 16px;margin:4px 0 16px;background:rgba(16,63,57,.025);font-family:' + BODY + ';}'
+    + '#w146sec .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}'
+    + '#w146sec .hd h3{margin:0;display:flex;align-items:center;gap:7px;font:700 12px ' + BODY + ';letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w146sec .hd h3 svg{width:17px;height:17px;}'
+    + '#w146sec .when{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');margin:4px 0 0;}'
+    + '#w146sec .when b{color:var(--wa-text,' + INK + ');}'
+    + '.w146btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:7px 12px;background:' + GREEN + ';color:' + CREAM + ';font:600 12.5px ' + BODY + ';cursor:pointer;}'
+    + '.w146btn[disabled]{opacity:.55;cursor:progress;}'
+    + '.w146btn svg{width:14px;height:14px;}'
+    + '#w146sec .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:12px 0;}'
+    + '#w146sec .tile{background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:9px 11px;}'
+    + '#w146sec .tile b{display:block;font-size:20px;font-weight:700;color:' + GREEN + ';line-height:1.1;}'
+    + '#w146sec .tile b.bad{color:' + FLAG + ';}'
+    + '#w146sec .tile span{display:block;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:3px;line-height:1.35;}'
+    + '#w146sec .tile i{font-style:normal;font-size:11px;font-weight:700;}'
+    + '#w146sec .tile i.up{color:' + FLAG + ';}#w146sec .tile i.down{color:' + TEAL + ';}'
+    + '#w146sec .f{border-top:1px solid rgba(16,63,57,.08);}'
+    + '#w146sec .f > button{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:9px;padding:9px 2px;cursor:pointer;font-size:13.5px;color:var(--wa-text,' + INK + ');}'
+    + '#w146sec .f > button:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;border-radius:6px;}'
+    + '#w146sec .f > button .ch{width:14px;height:14px;flex:0 0 auto;transition:transform .15s;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w146sec .f.open > button .ch{transform:rotate(90deg);}'
+    + '#w146sec .lv{flex:0 0 auto;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;padding:3px 8px;border-radius:999px;}'
+    + '#w146sec .f .body{display:none;padding:0 2px 12px 23px;font-size:13px;line-height:1.55;color:var(--wa-text,' + INK + ');}'
+    + '#w146sec .f.open .body{display:block;}'
+    + '#w146sec .f .fix{background:rgba(220,165,39,.13);border-radius:10px;padding:8px 10px;margin:8px 0;}'
+    + '#w146sec .f .fix b{color:' + GREEN + ';}'
+    + '#w146sec .f ul{margin:6px 0 0;padding-left:16px;max-height:280px;overflow:auto;}'
+    + '#w146sec .f li{margin:3px 0;font-size:12.5px;}'
+    + '#w146sec .f li small{color:var(--wa-muted,' + MUTED + ');}'
+    + '#w146sec .f a{color:' + GREEN + ';font-weight:600;text-decoration:none;}'
+    + '#w146sec .f a.out{display:inline-flex;align-items:center;gap:4px;}'
+    + '#w146sec .f a.out svg{width:13px;height:13px;}'
+    + '#w146sec .hist{margin-top:10px;font-size:12px;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w146sec .hist table{border-collapse:collapse;margin-top:4px;}'
+    + '#w146sec .hist td,#w146sec .hist th{padding:3px 10px 3px 0;text-align:left;font-size:12px;}'
+    + '#w146sec .hist th{font-weight:700;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w146sec .note{font-size:12px;color:' + FLAG + ';margin-top:6px;}'
+    + '@media (max-width:700px){#w146sec{padding:12px;}#w146sec .f .body{padding-left:4px;}#w146sec .hist .opt{display:none;}}';
+  document.head.appendChild(st);
+
+  var S = { rows: [], ok: false, at: 0, busy: null, running: false, open: {} };
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function isAdmin() { return mine().role === 'admin'; }
+  function load(force) {
+    if (!force && S.ok && Date.now() - S.at < 5 * 60000) return Promise.resolve(S);
+    if (S.busy) return S.busy;
+    S.busy = (async function () {
+      try { var r = await db.from('security_checks').select('*').order('ran_at', { ascending: false }).limit(12); S.rows = (r && r.data) || []; S.ok = !(r && r.error); S.at = Date.now(); }
+      catch (e) { S.ok = false; }
+      S.busy = null; return S;
+    })();
+    return S.busy;
+  }
+  function dlong(iso) { try { return new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, month: 'long', day: 'numeric', year: 'numeric' }); } catch (e) { return String(iso || '').slice(0, 10); } }
+  function dshort(iso) { try { return new Date(iso).toLocaleDateString('en-US', { timeZone: TZ, month: 'short', day: 'numeric' }); } catch (e) { return String(iso || '').slice(5, 10); } }
+  function nextFirst() { var d = new Date(); var n = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1, 16)); return dlong(n.toISOString()); }
+  function delta(cur, prev, key, goodDown) {
+    if (!prev || prev.summary == null || prev.summary[key] == null || cur[key] == null) return '';
+    var d = Number(cur[key]) - Number(prev.summary[key]); if (!d) return ' <i>same</i>';
+    var worse = goodDown ? d > 0 : d < 0;
+    return ' <i class="' + (worse ? 'up' : 'down') + '">' + (d > 0 ? '+' : '') + d + '</i>';
+  }
+  function tile(n, label, bad, dl) { return '<div class="tile"><b' + (bad ? ' class="bad"' : '') + '>' + E(n) + '</b><span>' + label + dl + '</span></div>'; }
+
+  function html() {
+    var c = S.rows[0], prev = S.rows[1];
+    var h = '<div class="hd"><div><h3>' + I('shield') + 'Monthly security check</h3>';
+    if (!c) return h + '<p class="when">No check yet. It runs on the first of each month; run it now to see where Welfare Avenue stands.</p></div>' + btn() + '</div>';
+    var s = c.summary || {};
+    h += '<p class="when">Last run <b>' + E(dlong(c.ran_at)) + '</b>' + (c.ran_by && c.ran_by !== 'automation' ? ' by ' + E(c.ran_by) : '') + ', covering the ' + E(s.days || 30) + ' days before. <b>' + (s.high || 0) + '</b> to fix now, <b>' + (s.medium || 0) + '</b> to plan. Next on ' + E(nextFirst()) + '.</p></div>' + btn() + '</div>';
+    h += '<div class="tiles">'
+      + tile((s.with_2sv != null ? s.with_2sv : '–') + ' of ' + (s.active != null ? s.active : '–'), 'accounts with 2-step verification', (s.without_2sv || 0) > 0, delta(s, prev, 'with_2sv', false))
+      + tile(s.unused_60 != null ? s.unused_60 : '–', 'active accounts unused for 60 days', (s.unused_60 || 0) > 0, delta(s, prev, 'unused_60', true))
+      + tile(s.public_files != null ? s.public_files : '–', 'files open to anyone with the link' + (s.public_sensitive ? ', ' + s.public_sensitive + ' sensitive-looking' : ''), (s.public_sensitive || 0) > 0, delta(s, prev, 'public_files', true))
+      + tile(s.shared_outside != null ? s.shared_outside : '–', 'files shared outside Welfare Avenue in ' + (s.days || 30) + ' days', false, '')
+      + tile((s.sign_in_alarms || 0) + (s.sign_in_unusual || 0), 'sign-in warnings and unusual sign-ins', (s.sign_in_alarms || 0) > 0, '')
+      + tile(s.apps_wide != null ? s.apps_wide : '–', 'apps with full Drive or Gmail access' + (s.apps ? ' (of ' + s.apps + ')' : ''), false, '')
+      + '</div>';
+    h += (c.findings || []).map(function (f, i) {
+      var lv = LV[f.level] || LV.info, open = S.open[c.id + ':' + f.key];
+      var items = (f.items || []).length ? '<ul>' + f.items.map(function (x) { return '<li>' + (x.url ? '<a href="' + E(x.url) + '" target="_blank" rel="noopener">' + E(x.label) + '</a>' : E(x.label)) + (x.sub ? ' <small>' + E(x.sub) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : '';
+      return '<div class="f' + (open ? ' open' : '') + '"><button type="button" data-w146f="' + E(c.id + ':' + f.key) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P.chev + '</svg><span class="lv" style="color:' + lv[1] + ';background:' + lv[2] + '">' + lv[0] + '</span><span>' + E(f.title) + '</span></button>'
+        + '<div class="body">' + E(f.detail || '') + (f.fix && f.level !== 'ok' ? '<div class="fix"><b>What to do:</b> ' + E(f.fix) + (f.link ? ' <a class="out" href="' + E(f.link) + '" target="_blank" rel="noopener">Open ' + (/admin\.google/.test(f.link) ? 'the Admin console' : 'Drive') + I('out') + '</a>' : '') + '</div>' : '') + items + '</div></div>';
+    }).join('');
+    if (c.note) h += '<p class="note">Some sources could not be read this time: ' + E(c.note) + '</p>';
+    if (S.rows.length > 1) h += '<div class="hist">Earlier checks<table><thead><tr><th>Run</th><th>Without 2-step</th><th>Unused</th><th class="opt">Public files</th><th>To fix</th></tr></thead><tbody>' + S.rows.slice(1, 7).map(function (r) { var x = r.summary || {}; return '<tr><td>' + E(dshort(r.ran_at)) + '</td><td>' + E(x.without_2sv != null ? x.without_2sv : '–') + '</td><td>' + E(x.unused_60 != null ? x.unused_60 : '–') + '</td><td class="opt">' + E(x.public_files != null ? x.public_files : '–') + '</td><td>' + E(x.high || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>';
+    return h;
+  }
+  function btn() { return '<button type="button" class="w146btn" data-w146run="1"' + (S.running ? ' disabled' : '') + '>' + I('refresh') + (S.running ? ' Checking… about a minute' : ' Run the check now') + '</button>'; }
+
+  function paint() {
+    var card = document.getElementById('w86card'); if (!card || !isAdmin()) return;
+    if (!S.ok) { (S.busy || load()).then(function () { if (S.ok) paint(); }); return; }
+    var el = document.getElementById('w146sec');
+    if (!el) { el = document.createElement('div'); el.id = 'w146sec'; el.__h = ''; var h2 = card.querySelector('h2'); if (h2) h2.insertAdjacentElement('afterend', el); else card.insertBefore(el, card.firstChild); }
+    var x = html();
+    if (el.__h !== x) { el.innerHTML = x; el.__h = x; }
+  }
+  var mo = null;
+  function watch() {
+    var p = document.getElementById('adminpanel'); if (!p || mo) return;
+    var pending = false;
+    mo = new MutationObserver(function () { if (pending || !S.ok || !isAdmin() || !document.getElementById('w86card') || document.getElementById('w146sec')) return; pending = true; setTimeout(function () { pending = false; paint(); }, 60); });
+    mo.observe(p, { childList: true, subtree: true });
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w146f]'))) { e.preventDefault(); var k = el.getAttribute('data-w146f'); S.open[k] = !S.open[k]; paint(); return; }
+    if ((el = t.closest('[data-w146run]'))) {
+      e.preventDefault(); if (S.running || el.disabled) return;
+      S.running = true; paint();
+      db.functions.invoke('security-check', { body: { action: 'run' } }).then(async function (r) {
+        var ok = r && !r.error && r.data && r.data.ok;
+        S.running = false; await load(true); paint();
+        toastS(ok ? 'The security check is done' : 'The security check could not run just now');
+      }).catch(function () { S.running = false; paint(); toastS('The security check could not run just now'); });
+    }
+  });
+  window.addEventListener('hashchange', function () { setTimeout(function () { watch(); paint(); }, 100); });
+  if (typeof startApp === 'function') {
+    var __sa146 = startApp;
+    startApp = async function () { var out = await __sa146.apply(this, arguments); try { watch(); paint(); } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof wa40Render === 'function') {
+    var __ar146 = wa40Render;
+    wa40Render = async function () { var out = await __ar146.apply(this, arguments); try { watch(); paint(); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* the admin tour: a step for the check, before the audit trail */
+  function addStep() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T) return;
+      Object.keys(T).forEach(function (k) {
+        var x = T[k]; if (!x || !x.steps || x.__w146) return;
+        var i = x.steps.map(function (s) { return s.s; }).indexOf('#w86card');
+        if (i < 0) return;
+        x.steps.splice(i + 1, 0, { s: '#w146sec', t: 'Monthly security check', p: 'On the first of each month the Hub checks the Workspace: 2-step verification, unused accounts, files anyone with the link can open, sharing outside Welfare Avenue, unusual sign-ins and connected apps. Each finding says what to do.', opt: 1 });
+        x.__w146 = true;
+      });
+    } catch (e) { /* fine */ }
+  }
+  addStep(); setTimeout(addStep, 1500);
+
+  window.w146 = { load: load, state: function () { return S; }, paint: paint, html: html };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
