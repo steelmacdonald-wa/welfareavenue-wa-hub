@@ -15,12 +15,12 @@
   var css = ''
     + '.ag-share{display:none;margin-top:10px;border:1px solid #d9ccff;border-radius:10px;padding:12px;background:#f7f5ff;}'
     + '.ag-share.open{display:block;}'
-    + '.ag-share h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#8455ff;}'
-    + '.ag-share input,.ag-share textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--wa-line);border-radius:7px;font-size:12.5px;font-family:inherit;background:#fff;color:var(--wa-ink);}'
+    + '.ag-share h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#6F64AB;}'
+    + '.ag-share input,.ag-share textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid var(--wa-line);border-radius:7px;font-size:12.5px;font-family:inherit;background:#FFFAF2;color:var(--wa-ink);}'
     + '.ag-share textarea{min-height:150px;resize:vertical;line-height:1.5;}'
     + '.ag-share .row{display:flex;gap:7px;flex-wrap:wrap;margin:7px 0 12px;align-items:center;}'
     + '.ag-share .hint{font-size:11.5px;color:var(--wa-muted);margin-top:5px;}'
-    + '.ag-from{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#8455ff;color:#fff;margin-left:7px;vertical-align:middle;}'
+    + '.ag-from{display:inline-block;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#6F64AB;color:#FFFAF2;margin-left:7px;vertical-align:middle;}'
     + '.ag-only{background:#f2eeff;border:1px solid #d9ccff;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
     /* public share page */
     + 'body.wa-shared > *:not(#agShare){display:none !important;}'
@@ -29,21 +29,21 @@
     + '.as-wrap{max-width:660px;margin:0 auto;}'
     + '.as-brand{display:flex;align-items:center;gap:10px;margin-bottom:16px;}'
     + '.as-brand .n{font-weight:800;font-size:14px;letter-spacing:.3px;color:var(--wa-ink);}'
-    + '.as-card{background:#fff;border:1px solid var(--wa-line);border-radius:14px;padding:22px 22px 24px;box-shadow:0 2px 14px rgba(20,48,43,.06);}'
+    + '.as-card{background:#FFFAF2;border:1px solid var(--wa-line);border-radius:14px;padding:22px 22px 24px;box-shadow:0 2px 14px rgba(16,63,57,.06);}'
     + '.as-card h1{margin:0;font-size:23px;line-height:1.25;color:var(--wa-ink);}'
-    + '.as-date{font-size:13px;color:#8455ff;font-weight:700;margin-top:6px;}'
+    + '.as-date{font-size:13px;color:#6F64AB;font-weight:700;margin-top:6px;}'
     + '.as-sum{font-size:14.5px;line-height:1.6;color:var(--wa-ink);margin:14px 0 4px;}'
     + '.as-h{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-muted);font-weight:700;margin:22px 0 8px;}'
-    + '.as-item{border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;margin:8px 0;background:#faf9f4;}'
+    + '.as-item{border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;margin:8px 0;background:#F4F2EA;}'
     + '.as-item .t{font-weight:700;font-size:14px;color:var(--wa-ink);}'
     + '.as-item .n{font-size:13px;color:var(--wa-muted);margin-top:4px;line-height:1.5;}'
     + '.as-item.mine{border-color:#d9ccff;background:#f7f5ff;}'
     + '.as-add{margin-top:24px;border-top:1px solid var(--wa-line);padding-top:18px;}'
-    + '.as-add input,.as-add textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--wa-line);border-radius:9px;font-size:14px;font-family:inherit;margin-top:8px;background:#fff;color:var(--wa-ink);}'
+    + '.as-add input,.as-add textarea{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--wa-line);border-radius:9px;font-size:14px;font-family:inherit;margin-top:8px;background:#FFFAF2;color:var(--wa-ink);}'
     + '.as-add textarea{min-height:74px;resize:vertical;}'
-    + '.as-go{margin-top:11px;background:var(--wa-green,#4a7c59);color:#fff;border:none;border-radius:9px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;}'
+    + '.as-go{margin-top:11px;background:var(--wa-green,#103F39);color:#FFFAF2;border:none;border-radius:9px;padding:12px 20px;font-size:14px;font-weight:700;cursor:pointer;}'
     + '.as-go[disabled]{opacity:.55;cursor:default;}'
-    + '.as-msg{font-size:13.5px;margin-top:11px;color:#4a7c59;font-weight:600;}'
+    + '.as-msg{font-size:13.5px;margin-top:11px;color:#103F39;font-weight:600;}'
     + '.as-msg.bad{color:#b3402f;}'
     + '.as-foot{text-align:center;font-size:12px;color:var(--wa-muted);margin-top:18px;}'
     + '@media(max-width:560px){.as-card{padding:18px 15px 20px;}.as-card h1{font-size:20px;}}';
@@ -73,8 +73,8 @@ waAgendaRowHtml = function (a) {
   var shared = items.filter(function (i) { return i.source === 'shared'; }).length;
   var openCls = WA_AG_OPEN[a.id] ? ' open' : '';
   var chip = (a.scope || 'department') === 'department'
-    ? '<span class="ag-dep" style="background:' + (DEPT_COLOR[a.department] || '#6f6b64') + '">' + (DEPT_LABEL[a.department] || a.department || '') + '</span>'
-    : '<span class="ag-dep" style="background:#8455ff">' + (a.scope === 'leaders' ? 'Leaders' : esc(a.with_person || 'Executive')) + '</span>';
+    ? '<span class="ag-dep" style="background:' + (DEPT_COLOR[a.department] || '#797773') + '">' + (DEPT_LABEL[a.department] || a.department || '') + '</span>'
+    : '<span class="ag-dep" style="background:#6F64AB">' + (a.scope === 'leaders' ? 'Leaders' : esc(a.with_person || 'Executive')) + '</span>';
   return '<div class="ag-row' + openCls + '" data-ag="' + a.id + '">'
     + '<div class="ag-head" data-agtog="' + a.id + '">' + chip + '<span class="t">' + esc(a.title) + '</span>'
     + '<span class="ag-st ' + esc(a.status) + '">' + esc(a.status) + '</span>'
@@ -85,7 +85,7 @@ waAgendaRowHtml = function (a) {
     + items.map(function (i) {
         var tasks = (i.task_ids || []).map(waTaskById).filter(Boolean);
         return '<div class="ag-item' + (i.source === 'shared' ? ' shared' : '') + '" data-agi="' + i.id + '">'
-          + '<span class="k" style="background:' + (AG_KIND_COLOR[i.kind] || '#6f6b64') + '">' + esc(i.kind) + '</span>'
+          + '<span class="k" style="background:' + (AG_KIND_COLOR[i.kind] || '#797773') + '">' + esc(i.kind) + '</span>'
           + '<span class="it">' + esc(i.title) + '</span>'
           + (i.source === 'shared' && i.created_by ? '<span class="ag-from">' + esc(i.created_by) + '</span>' : '')
           + (i.notes ? '<div class="nts">' + esc(i.notes) + '</div>' : '')
@@ -97,7 +97,7 @@ waAgendaRowHtml = function (a) {
       }).join('')
     + '<div class="ag-add"><input data-agnt="' + a.id + '" placeholder="New item title" /><input data-agnn="' + a.id + '" placeholder="Notes (optional)" /><button class="btn ghost mini" data-agadd="' + a.id + '">Add item</button></div>'
     + '<div class="ag-foot">'
-    + '<button class="btn ghost mini" data-agshare="' + a.id + '" style="color:#8455ff;font-weight:700;">&#128279; ' + (a.share_token ? 'Share link' : 'Get a share link') + '</button>'
+    + '<button class="btn ghost mini" data-agshare="' + a.id + '" style="color:#6F64AB;font-weight:700;">&#128279; ' + (a.share_token ? 'Share link' : 'Get a share link') + '</button>'
     + (a.status === 'draft' ? '<button class="btn ghost mini" data-agfin="' + a.id + '">Mark final</button>' : '<button class="btn ghost mini" data-agdraft="' + a.id + '">Back to draft</button>')
     + (a.status === 'done' ? '' : '<button class="btn ghost mini" data-agdone="' + a.id + '">Archive (done)</button>')
     + '<button class="btn ghost mini" data-agkill="' + a.id + '" style="color:#b3402f;">Delete</button>'

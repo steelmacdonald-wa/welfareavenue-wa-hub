@@ -12,11 +12,11 @@
     + '.gl-row:first-of-type{border-top:none;}'
     + '.gl-row .t{font-weight:700;}'
     + '.gl-row .m{color:var(--wa-muted);font-size:12px;margin-top:2px;}'
-    + '.gl-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#e8efe9;color:#2c5a44;margin-left:8px;}'
+    + '.gl-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;background:#ECEBE3;color:#2c5a44;margin-left:8px;}'
     + '.gl-bar{height:6px;background:var(--wa-paper);border-radius:4px;margin-top:6px;overflow:hidden;}'
     + '.gl-bar i{display:block;height:100%;background:var(--wa-green);border-radius:4px;}'
     + '.gl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}'
-    + '.gl-dept{background:#fff;border:1px solid var(--wa-line);border-top:3px solid var(--wa-muted);border-radius:11px;padding:12px 14px;}'
+    + '.gl-dept{background:#FFFAF2;border:1px solid var(--wa-line);border-top:3px solid var(--wa-muted);border-radius:11px;padding:12px 14px;}'
     + '.gl-dept h4{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}';
   var st = document.createElement('style');
   st.textContent = css;
@@ -73,7 +73,7 @@ function renderDeptGoalsCards() { /* superseded: wave43 reset without capture; s
           var b = document.createElement('button');
           b.className = 'tab';
           b.dataset.tab = 'goals';
-          b.innerHTML = '<span class="tabdot" style="background:#d4a13c"></span>Goals';
+          b.innerHTML = '<span class="tabdot" style="background:#DCA527"></span>Goals';
           bar.insertBefore(b, bar.querySelector('.tab-group') || null);
         }
         await waLoadGoals();

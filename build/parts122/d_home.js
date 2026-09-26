@@ -96,7 +96,7 @@
   }
   function ringArc(c, r, w, pct, color) {
     var cir = 2 * Math.PI * r, p = Math.max(0, Math.min(100, pct || 0));
-    return '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="' + w + '"/>' +
+    return '<circle cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="rgba(255,250,242,.12)" stroke-width="' + w + '"/>' +
       '<circle class="arc" cx="' + c + '" cy="' + c + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="' + w + '" stroke-linecap="round" stroke-dasharray="' + cir.toFixed(2) + '" stroke-dashoffset="' + (cir * (1 - p / 100)).toFixed(2) + '" transform="rotate(-90 ' + c + ' ' + c + ')" style="transition:stroke-dashoffset 1.1s ' + EASE + '"/>';
   }
   function upNext(s) {

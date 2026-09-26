@@ -30,13 +30,13 @@
     '#w119b{font-family:' + BODY + ';}' +
     '#w119b .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px;}' +
     '#w119b .bar input[type=search]{flex:1;min-width:200px;padding:9px 14px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:13px;font-family:' + BODY + ';}' +
-    '#w119b .bar select{padding:8px 12px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';background:#fff;}' +
+    '#w119b .bar select{padding:8px 12px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font-size:12.5px;font-family:' + BODY + ';background:#FFFAF2;}' +
     '#w119b .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 14px;}' +
-    '#w119b .stats div{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:10px 14px;}' +
+    '#w119b .stats div{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:10px 14px;}' +
     '#w119b .stats b{display:block;font-family:' + HEAD + ';font-size:26px;line-height:1;color:' + GREEN + ';}' +
     '#w119b .stats span{font-size:11px;color:var(--wa-muted);letter-spacing:.5px;text-transform:uppercase;font-weight:700;}' +
     '#w119b .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}' +
-    '#w119b .pc{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:12px 14px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;gap:7px;position:relative;}' +
+    '#w119b .pc{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:12px 14px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);display:flex;flex-direction:column;gap:7px;position:relative;}' +
     '#w119b .pc.dup{border-color:rgba(220,165,39,.7);}' +
     '#w119b .pc .hd{display:flex;align-items:center;gap:10px;}' +
     '#w119b .av{width:40px;height:40px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:15px;font-weight:700;color:' + CREAM + ';flex:none;letter-spacing:.5px;}' +

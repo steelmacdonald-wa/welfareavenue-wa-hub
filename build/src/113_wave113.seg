@@ -30,59 +30,59 @@
   css.textContent =
     '#w113card{margin-bottom:16px;}' +
     '#w113card .w113sum{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 12px;}' +
-    '#w113card .w113chip{display:inline-flex;align-items:center;gap:6px;background:#eef4f1;border-radius:999px;padding:5px 12px;font-size:12.5px;color:#14302b;cursor:pointer;border:1px solid transparent;}' +
+    '#w113card .w113chip{display:inline-flex;align-items:center;gap:6px;background:#ECEBE3;border-radius:999px;padding:5px 12px;font-size:12.5px;color:#103F39;cursor:pointer;border:1px solid transparent;}' +
     '#w113card .w113chip b{font-size:14px;}' +
-    '#w113card .w113chip.on{border-color:#2c7a66;background:#dcebe5;}' +
+    '#w113card .w113chip.on{border-color:#103F39;background:#ECEBE3;}' +
     '#w113card .w113bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}' +
-    '#w113card .w113bar input[type=text],#w113card .w113bar select{padding:7px 10px;border:1px solid #d8e6e0;border-radius:9px;font-size:13px;}' +
+    '#w113card .w113bar input[type=text],#w113card .w113bar select{padding:7px 10px;border:1px solid #DEE0D8;border-radius:9px;font-size:13px;}' +
     '#w113card .w113bar input[type=text]{min-width:220px;flex:1 1 220px;}' +
     '#w113card .w113bar .w113right{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;}' +
-    '.w113btn{background:#2c7a66;color:#fff;border:none;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;}' +
-    '.w113btn.ghost{background:#eef4f1;color:#1f5f4f;}' +
-    '.w113btn.warn{background:#fff;color:#b3402f;border:1px solid #e7c3bd;}' +
+    '.w113btn{background:#103F39;color:#FFFAF2;border:none;border-radius:999px;padding:8px 14px;font-size:12.5px;font-weight:700;cursor:pointer;white-space:nowrap;}' +
+    '.w113btn.ghost{background:#ECEBE3;color:#103F39;}' +
+    '.w113btn.warn{background:#FFFAF2;color:#b3402f;border:1px solid #e7c3bd;}' +
     '.w113btn:disabled{opacity:.55;cursor:default;}' +
     '#w113tbl{width:100%;border-collapse:collapse;font-size:13px;}' +
-    '#w113tbl th{text-align:left;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:#7b8a86;padding:6px 6px;border-bottom:1px solid #d8e6e0;}' +
+    '#w113tbl th{text-align:left;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:#797773;padding:6px 6px;border-bottom:1px solid #DEE0D8;}' +
     '#w113tbl td{padding:8px 6px;border-top:1px solid #f0f4f2;vertical-align:middle;}' +
     '#w113tbl tr.w113sel td{background:#f5faf8;}' +
-    '#w113tbl .w113mut{font-size:11.5px;color:#7b8a86;}' +
-    '#w113tbl input[type=checkbox]{accent-color:#2c7a66;width:16px;height:16px;cursor:pointer;}' +
-    '#w113tbl select{padding:4px 6px;border:1px solid #d8e6e0;border-radius:7px;font-size:12px;}' +
+    '#w113tbl .w113mut{font-size:11.5px;color:#797773;}' +
+    '#w113tbl input[type=checkbox]{accent-color:#103F39;width:16px;height:16px;cursor:pointer;}' +
+    '#w113tbl select{padding:4px 6px;border:1px solid #DEE0D8;border-radius:7px;font-size:12px;}' +
     '#w113tbl .w113st{display:inline-block;border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:700;white-space:nowrap;}' +
-    '.w113st.active{background:#dcebe5;color:#1f5f4f;}' +
+    '.w113st.active{background:#ECEBE3;color:#103F39;}' +
     '.w113st.invited{background:#fdf1d6;color:#8a5a12;}' +
     '.w113st.notinvited{background:#e9eef5;color:#3a4a6b;}' +
-    '.w113st.noemail{background:#f4f4f4;color:#6b7670;}' +
+    '.w113st.noemail{background:#f4f4f4;color:#797773;}' +
     '.w113st.removed,.w113st.blocked{background:#f9e3df;color:#8f2f22;}' +
     '#w113tbl .w113act{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}' +
-    '#w113tbl .w113act a{font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    '#w113tbl .w113act a{font-size:12px;color:#103F39;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
     '#w113tbl .w113act a.rm{color:#b3402f;}' +
     '#w113tbl .w113em{display:flex;gap:4px;align-items:center;}' +
-    '#w113tbl .w113em input{padding:4px 7px;border:1px solid #d8e6e0;border-radius:7px;font-size:12px;width:200px;}' +
+    '#w113tbl .w113em input{padding:4px 7px;border:1px solid #DEE0D8;border-radius:7px;font-size:12px;width:200px;}' +
     '#w113card details{margin-top:12px;}' +
-    '#w113card summary{cursor:pointer;font-size:13px;color:#5c6b66;}' +
-    '.w113modal label{display:block;font-size:12px;color:#5c6b66;margin:10px 0 4px;}' +
-    '.w113modal input[type=text],.w113modal select,.w113modal textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d8e6e0;border-radius:9px;font-size:13px;}' +
+    '#w113card summary{cursor:pointer;font-size:13px;color:#797773;}' +
+    '.w113modal label{display:block;font-size:12px;color:#797773;margin:10px 0 4px;}' +
+    '.w113modal input[type=text],.w113modal select,.w113modal textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #DEE0D8;border-radius:9px;font-size:13px;}' +
     '.w113modal textarea{min-height:110px;font-family:inherit;}' +
     '.w113modal .w113two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}' +
-    '.w113modal .w113lock{padding:8px 10px;background:#f4f7f5;border-radius:9px;font-size:13px;color:#14302b;}' +
+    '.w113modal .w113lock{padding:8px 10px;background:#f4f7f5;border-radius:9px;font-size:13px;color:#103F39;}' +
     '.w113modal .w113res{margin-top:12px;padding:12px;background:#f4f7f5;border-radius:10px;font-size:13px;line-height:1.55;}' +
-    '.w113modal .w113res b.ok{color:#1f5f4f;}' +
+    '.w113modal .w113res b.ok{color:#103F39;}' +
     '.w113modal .w113res b.no{color:#8a5a12;}' +
     '.w113modal .w113acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}' +
-    '.w113modal .w113rows{max-height:260px;overflow:auto;border:1px solid #eef2f0;border-radius:9px;margin-top:8px;}' +
+    '.w113modal .w113rows{max-height:260px;overflow:auto;border:1px solid #ECEBE3;border-radius:9px;margin-top:8px;}' +
     '.w113modal .w113rows div{padding:6px 10px;border-top:1px solid #f0f4f2;font-size:12.5px;display:flex;gap:8px;}' +
     '.w113modal .w113rows div:first-child{border-top:none;}' +
-    '.w113modal .w113rows .ok{color:#1f5f4f;font-weight:700;}' +
+    '.w113modal .w113rows .ok{color:#103F39;font-weight:700;}' +
     '.w113modal .w113rows .no{color:#b3402f;font-weight:700;}' +
-    '.w113modal .w113rows .mut{color:#7b8a86;margin-left:auto;text-align:right;}' +
-    '.w113modal .w113ok{font-size:12px;color:#5c6b66;margin-top:6px;}' +
-    '.wa24-links button.w113dept{background:#eef4f1;color:#1f5f4f;}' +
+    '.w113modal .w113rows .mut{color:#797773;margin-left:auto;text-align:right;}' +
+    '.w113modal .w113ok{font-size:12px;color:#797773;margin-top:6px;}' +
+    '.wa24-links button.w113dept{background:#ECEBE3;color:#103F39;}' +
     '@media (max-width:700px){#w113tbl .w113hide{display:none;}.w113modal .w113two{grid-template-columns:1fr;}}';
   document.head.appendChild(css);
 
   var FOUNDERS113 = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
-  var DEPTS113 = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+  var DEPTS113 = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
   var ROLES113 = ['admin', 'leader', 'member', 'viewer'];
   var ROLE_HELP = { member: 'Member (the work surfaces)', leader: 'Leader (every page)', viewer: 'Viewer (overview only)', admin: 'Admin (manages everything)' };
   var STATUS_LABEL = { active: 'Active', invited: 'Invited, not signed in', notinvited: 'Not invited yet', noemail: 'No email yet', removed: 'Removed', blocked: 'Removed' };
@@ -226,7 +226,7 @@
           if (body) body.style.display = 'none';
           var a = document.createElement('a');
           a.setAttribute('data-w113fold', '1');
-          a.style.cssText = 'font-size:12px;font-weight:400;margin-left:12px;color:#2c7a66;cursor:pointer;text-decoration:underline;';
+          a.style.cssText = 'font-size:12px;font-weight:400;margin-left:12px;color:#103F39;cursor:pointer;text-decoration:underline;';
           a.textContent = 'Show the classic roles table';
           a.addEventListener('click', function () {
             var open = body && body.style.display !== 'none';
@@ -294,7 +294,7 @@
     var roleSel = r.email && !isRemoved(r)
       ? '<select data-w40r="' + esc(r.email) + '" data-w113role="' + esc(r.email) + '">' + ROLES113.map(function (x) { return '<option value="' + x + '"' + (x === (r.role || 'member') ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select>' + (r.founder ? '<div class="w113mut">founder, always admin</div>' : '')
       : '<span class="w113mut">' + (isRemoved(r) ? 'blocked' : 'needs an email') + '</span>';
-    var pages = r.email && !isRemoved(r) ? '<a data-w40t="' + esc(r.email) + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline;white-space:nowrap">' + (r.tabs ? esc(r.tabs.length + ' pages') : 'role default') + '</a>' : '';
+    var pages = r.email && !isRemoved(r) ? '<a data-w40t="' + esc(r.email) + '" style="font-size:12px;color:#103F39;cursor:pointer;text-decoration:underline;white-space:nowrap">' + (r.tabs ? esc(r.tabs.length + ' pages') : 'role default') + '</a>' : '';
     /* wave127: the Access column picks an access profile (or a classic role); Pages says what the profile gives */
     try {
       if (window.w127 && r.email && !isRemoved(r)) {
@@ -303,7 +303,7 @@
       }
     } catch (e) { /* the classic cells stay */ }
     var emailCell = r.email ? '<span style="font-size:12px">' + esc(r.email) + '</span>'
-      : (r.id ? '<div class="w113em"><input type="text" data-w113emin="' + r.id + '" placeholder="name@welfareavenue.com" /><a data-w113emsave="' + r.id + '" style="font-size:12px;color:#1f5f4f;cursor:pointer;text-decoration:underline">Save</a></div>' : '');
+      : (r.id ? '<div class="w113em"><input type="text" data-w113emin="' + r.id + '" placeholder="name@welfareavenue.com" /><a data-w113emsave="' + r.id + '" style="font-size:12px;color:#103F39;cursor:pointer;text-decoration:underline">Save</a></div>' : '');
     var acts = [];
     if (isRemoved(r)) {
       if (r.email) acts.push('<a data-w113again="' + esc(r.email) + '">Invite again</a>');

@@ -25,22 +25,22 @@
   css.textContent =
     '#w87cy{height:66vh;min-height:420px;background:#fbfcfc;border:1px solid var(--wa-line);border-radius:14px;}' +
     '.w87bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 10px;}' +
-    '.w87bar select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:9px;font-size:12.5px;background:#fff;}' +
-    '.w87m{background:#eef4f1;border:1px solid #cfe0d8;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;color:#14302b;cursor:pointer;}' +
-    '.w87m.on{background:#2c7a66;border-color:#2c7a66;color:#fff;}' +
-    '.w87leg{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#5b6b66;margin:8px 0 0;}' +
+    '.w87bar select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:9px;font-size:12.5px;background:#FFFAF2;}' +
+    '.w87m{background:#ECEBE3;border:1px solid #cfe0d8;border-radius:999px;padding:7px 14px;font-size:12.5px;font-weight:700;color:#103F39;cursor:pointer;}' +
+    '.w87m.on{background:#103F39;border-color:#103F39;color:#FFFAF2;}' +
+    '.w87leg{display:flex;gap:10px;flex-wrap:wrap;font-size:11.5px;color:#797773;margin:8px 0 0;}' +
     '.w87leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}' +
-    '#w87info{position:absolute;right:14px;top:14px;width:250px;background:#fff;border:1px solid var(--wa-line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:12px 14px;font-size:12.5px;display:none;z-index:5;}' +
-    '#w87info b{display:block;font-size:13px;color:#14302b;margin-bottom:4px;}' +
-    '#w87info .k{color:#7b8a86;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}' +
-    '#w87info a{color:#2c7a66;text-decoration:underline;cursor:pointer;}' +
+    '#w87info{position:absolute;right:14px;top:14px;width:250px;background:#FFFAF2;border:1px solid var(--wa-line);border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:12px 14px;font-size:12.5px;display:none;z-index:5;}' +
+    '#w87info b{display:block;font-size:13px;color:#103F39;margin-bottom:4px;}' +
+    '#w87info .k{color:#797773;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}' +
+    '#w87info a{color:#103F39;text-decoration:underline;cursor:pointer;}' +
     '.w87wrap{position:relative;}' +
-    '#w87lapse{font-size:12.5px;color:#5b6b66;font-weight:700;display:none;}' +
+    '#w87lapse{font-size:12.5px;color:#797773;font-weight:700;display:none;}' +
     '@media (max-width:760px){#w87cy{height:56vh;}#w87info{width:82vw;left:9vw;right:auto;}}';
   document.head.appendChild(css);
 
   var W87 = { cy: null, lib: false, built: false, mode: 'month', mentions: [], txcom: [], timer: null };
-  var COLORS = { person: '#2c7a66', meeting: '#8455ff', task: '#5c7fc4', project: '#c87a2f', goal: '#a87f2c', decision: '#b3402f' };
+  var COLORS = { person: '#103F39', meeting: '#6F64AB', task: '#5c7fc4', project: '#c87a2f', goal: '#a87f2c', decision: '#b3402f' };
   var SHAPES = { person: 'ellipse', meeting: 'diamond', task: 'round-rectangle', project: 'hexagon', goal: 'star', decision: 'triangle' };
 
   function w87Panel() {
@@ -48,7 +48,7 @@
     if (!sec || sec.dataset.w87) return;
     sec.dataset.w87 = '1';
     sec.innerHTML =
-      '<div class="card"><h2 style="color:#8455ff">The Brain</h2>' +
+      '<div class="card"><h2 style="color:#6F64AB">The Brain</h2>' +
       '<p class="w85p">How work flows through Welfare Avenue: from a conversation to a task to a project to a goal. Click anything to pull its chain forward.</p>' +
       '<div class="w87bar">' +
       '<button class="w87m" data-w87mode="month">This month</button>' +
@@ -207,9 +207,9 @@
       wheelSensitivity: 0.2,
       style: [
         { selector: 'node', style: {
-          'label': 'data(label)', 'font-size': 8, 'color': '#3d4642',
+          'label': 'data(label)', 'font-size': 8, 'color': '#1F201E',
           'text-valign': 'bottom', 'text-margin-y': 3, 'text-wrap': 'ellipsis', 'text-max-width': 90,
-          'width': 16, 'height': 16, 'border-width': 1, 'border-color': '#ffffff'
+          'width': 16, 'height': 16, 'border-width': 1, 'border-color': '#FFFAF2'
         } },
         { selector: 'node[type="person"]', style: { 'background-color': COLORS.person, 'shape': SHAPES.person, 'width': 22, 'height': 22, 'font-size': 9 } },
         { selector: 'node[type="meeting"]', style: { 'background-color': COLORS.meeting, 'shape': SHAPES.meeting } },
@@ -219,7 +219,7 @@
         { selector: 'node[type="decision"]', style: { 'background-color': COLORS.decision, 'shape': SHAPES.decision } },
         { selector: 'edge', style: { 'width': 1, 'line-color': '#cdd9d4', 'curve-style': 'haystack', 'haystack-radius': 0.4 } },
         { selector: '.w87dim', style: { 'opacity': 0.12 } },
-        { selector: '.w87hot', style: { 'border-color': '#14302b', 'border-width': 2 } }
+        { selector: '.w87hot', style: { 'border-color': '#103F39', 'border-width': 2 } }
       ],
       layout: { name: 'cose', animate: false, nodeOverlap: 8, idealEdgeLength: 60, padding: 20 }
     });
@@ -242,7 +242,7 @@
     var d = node.data();
     var deg = node.degree();
     el.innerHTML = '<span class="k">' + esc(d.type) + '</span><b>' + esc(node.data('label')) + '</b>' +
-      '<span style="color:#7b8a86">' + deg + ' connection' + (deg === 1 ? '' : 's') + '</span><br/>' +
+      '<span style="color:#797773">' + deg + ' connection' + (deg === 1 ? '' : 's') + '</span><br/>' +
       (d.open ? '<a data-w87go="' + esc(d.open) + '">Open</a>' : '');
     el.style.display = 'block';
     var a = el.querySelector('[data-w87go]');
@@ -328,7 +328,7 @@
 
   function w87Register() {
     if (window.WA_NAV && typeof WA_NAV.register === 'function') {
-      WA_NAV.register({ id: 'brain', label: 'The Brain', group: 'more', dot: '#8455ff', gate: 'member', onShow: function () { w87Show(); } });
+      WA_NAV.register({ id: 'brain', label: 'The Brain', group: 'more', dot: '#6F64AB', gate: 'member', onShow: function () { w87Show(); } });
     }
   }
   if (typeof startApp === 'function') {

@@ -23,29 +23,29 @@
   var st = document.createElement('style');
   st.id = 'wa44css';
   st.textContent = '' +
-    '.w44me,.w44hr{background:#f6f8f7;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
-    '.w44me h3,.w44hr h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
+    '.w44me,.w44hr{background:#F4F2EA;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
+    '.w44me h3,.w44hr h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#103F39;}' +
     '.w44tiles{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px;}' +
-    '.w44tile{background:#fff;border-radius:14px;padding:10px 16px;min-width:96px;box-shadow:0 1px 2px rgba(20,40,30,.04);}' +
-    '.w44tile b{display:block;font-size:20px;color:#14302b;line-height:1.2;}' +
-    '.w44tile span{font-size:11.5px;color:#7b8a86;font-weight:600;}' +
+    '.w44tile{background:#FFFAF2;border-radius:14px;padding:10px 16px;min-width:96px;box-shadow:0 1px 2px rgba(16,63,57,.04);}' +
+    '.w44tile b{display:block;font-size:20px;color:#103F39;line-height:1.2;}' +
+    '.w44tile span{font-size:11.5px;color:#797773;font-weight:600;}' +
     '.w44tile.warn b{color:#b3402f;}' +
     '.w44bar{display:inline-block;flex:1;height:8px;background:#e3e9e6;border-radius:999px;overflow:hidden;min-width:120px;}' +
-    '.w44bar i{display:block;height:100%;background:#2c7a66;border-radius:999px;}' +
+    '.w44bar i{display:block;height:100%;background:#103F39;border-radius:999px;}' +
     '.w44row{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e8edea;font-size:13px;}' +
     '.w44row:first-of-type{border-top:none;}' +
-    '.w44row .t{flex:1;font-weight:600;color:#14302b;}' +
-    '.w44row a.go{font-size:12px;color:#2c7a66;text-decoration:none;font-weight:600;}' +
+    '.w44row .t{flex:1;font-weight:600;color:#103F39;}' +
+    '.w44row a.go{font-size:12px;color:#103F39;text-decoration:none;font-weight:600;}' +
     '.w44tbl{width:100%;border-collapse:collapse;font-size:12.5px;}' +
-    '.w44tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#7b8a86;padding:4px 8px;}' +
+    '.w44tbl th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#797773;padding:4px 8px;}' +
     '.w44tbl td{padding:5px 8px;border-top:1px solid #e8edea;}' +
-    '.w44wrap{max-height:340px;overflow:auto;background:#fff;border-radius:12px;padding:4px 8px;}' +
-    '.w44due{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:rgba(212,161,60,.16);color:#8a6414;}' +
+    '.w44wrap{max-height:340px;overflow:auto;background:#FFFAF2;border-radius:12px;padding:4px 8px;}' +
+    '.w44due{display:inline-block;margin-left:8px;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:rgba(220,165,39,.16);color:#8a6414;}' +
     '.w44due.late{background:rgba(179,64,47,.12);color:#b3402f;}' +
-    '[data-w44as],[data-w44mark]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;' +
-    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    '[data-w44as]:hover,[data-w44mark]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
-    '.w44cat{margin:6px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#7b8a86;font-weight:700;}';
+    '[data-w44as],[data-w44mark]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 11px;' +
+    'font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w44as]:hover,[data-w44mark]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
+    '.w44cat{margin:6px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#797773;font-weight:700;}';
   document.head.appendChild(st);
 
   function wa44CanEdit() {
@@ -79,7 +79,7 @@
         var d = wkSteps.filter(function (t) { return m[t.id].done; }).length;
         html += '<details class="w37week"' + (i === 0 && d < wkSteps.length ? ' open' : '') + '><summary>' + esc(wk.name)
           + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / wkSteps.length) + '%"></i></span>'
-          + '<span style="font-size:11.5px;color:#7b8a86;font-weight:500">' + d + ' of ' + wkSteps.length + '</span></summary><div class="w37wbody">';
+          + '<span style="font-size:11.5px;color:#797773;font-weight:500">' + d + ' of ' + wkSteps.length + '</span></summary><div class="w37wbody">';
         wkSteps.forEach(function (t) {
           var s = m[t.id];
           var due = '';
@@ -246,7 +246,7 @@
         + '</div>';
       if (mp.rows.length) {
         html += '<div style="display:flex;gap:10px;align-items:center;margin:0 0 8px"><span class="w44bar"><i style="width:' + pct + '%"></i></span>'
-          + '<span style="font-size:12px;color:#7b8a86;font-weight:600">' + pct + '% of your trainings done</span></div>';
+          + '<span style="font-size:12px;color:#797773;font-weight:600">' + pct + '% of your trainings done</span></div>';
       }
       if (todo.length) {
         html += todo.slice(0, 12).map(function (p) {
@@ -295,7 +295,7 @@
         people.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
         var rows = people.map(function (p) {
           var s = byPerson[String(p.name).toLowerCase()] || { a: 0, d: 0 };
-          return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(p.department || '') + '</span></td>'
+          return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#797773;font-size:11px">' + esc(p.department || '') + '</span></td>'
             + '<td>' + s.a + '</td><td>' + s.d + '</td><td>' + (s.a - s.d) + '</td>'
             + '<td><a data-w44as="' + esc(p.name) + '">Assign trainings</a></td></tr>';
         }).join('');
@@ -326,7 +326,7 @@
       + '<p class="m-sub">Tick to assign, untick to remove. Completed trainings stay on their record.</p>'
       + '<div style="max-height:320px;overflow:auto">';
     Object.keys(cats).forEach(function (c) {
-      html += '<div style="font-weight:700;font-size:12px;color:#1f5f4f;margin:8px 0 2px">' + esc(c) + '</div>';
+      html += '<div style="font-weight:700;font-size:12px;color:#103F39;margin:8px 0 2px">' + esc(c) + '</div>';
       cats[c].forEach(function (t) {
         var stt = have[String(t.id)];
         html += '<label style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px">'

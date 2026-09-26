@@ -25,36 +25,36 @@
   st.id = 'wa68css';
   st.textContent = '' +
     '#w68tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;}' +
-    '.w68tab{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#3d4642;cursor:pointer;}' +
-    '.w68tab.on{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w68tab{border:1px solid var(--wa-line);background:#FFFAF2;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#1F201E;cursor:pointer;}' +
+    '.w68tab.on{background:#103F39;border-color:#103F39;color:#FFFAF2;}' +
     '.w68sub{font-size:12.5px;color:#6b7a75;margin:0 0 10px;}' +
     '.w68pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;align-items:start;}' +
     '.w68pdept{margin:0 0 16px;}' +
     '.w68pdept h4{margin:0 0 8px;font-size:13px;}' +
-    '.w68proj{background:#fff;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:12px;padding:11px 13px;}' +
-    '.w68proj b{font-size:13px;color:#14302b;display:block;margin-bottom:3px;}' +
-    '.w68proj .d{font-size:12px;color:#5b6b66;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;}' +
-    '.w68pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:0 4px 4px 0;background:#eef2f0;color:#3d4642;}' +
-    '.w68pill.goal{background:rgba(212,161,60,.15);color:#8a6414;}' +
-    '.w68pill.none{background:#f2f2f0;color:#9aa5a1;}' +
-    '.w68open{font-size:11.5px;color:#1f5f4f;font-weight:700;cursor:pointer;}' +
+    '.w68proj{background:#FFFAF2;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:12px;padding:11px 13px;}' +
+    '.w68proj b{font-size:13px;color:#103F39;display:block;margin-bottom:3px;}' +
+    '.w68proj .d{font-size:12px;color:#797773;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:6px;}' +
+    '.w68pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:0 4px 4px 0;background:#ECEBE3;color:#1F201E;}' +
+    '.w68pill.goal{background:rgba(220,165,39,.15);color:#8a6414;}' +
+    '.w68pill.none{background:#f2f2f0;color:#797773;}' +
+    '.w68open{font-size:11.5px;color:#103F39;font-weight:700;cursor:pointer;}' +
     '#w68map{position:relative;}' +
     '#w68map svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}' +
     '.w68cols{position:relative;display:grid;grid-template-columns:1fr 1fr 1fr;gap:70px;z-index:1;}' +
-    '.w68col h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#1f5f4f;}' +
-    '.w68col .hint{font-size:11px;color:#8b968f;margin:0 0 10px;}' +
-    '.w68node{background:#fff;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:10px;padding:7px 10px;font-size:12px;color:#14302b;margin:0 0 8px;cursor:default;line-height:1.35;}' +
-    '.w68node .m{font-size:10.5px;color:#8b968f;}' +
-    '.w68node.hl{box-shadow:0 0 0 2px rgba(31,95,79,.55);}' +
+    '.w68col h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#103F39;}' +
+    '.w68col .hint{font-size:11px;color:#797773;margin:0 0 10px;}' +
+    '.w68node{background:#FFFAF2;border:1px solid var(--wa-line);border-left:4px solid #ccc;border-radius:10px;padding:7px 10px;font-size:12px;color:#103F39;margin:0 0 8px;cursor:default;line-height:1.35;}' +
+    '.w68node .m{font-size:10.5px;color:#797773;}' +
+    '.w68node.hl{box-shadow:0 0 0 2px rgba(16,63,57,.55);}' +
     '.w68node.dim{opacity:.32;}' +
     'path.w68e{fill:none;stroke:#c9d4cf;stroke-width:1.6;}' +
-    'path.w68e.hl{stroke:#1f5f4f;stroke-width:2.4;}' +
+    'path.w68e.hl{stroke:#103F39;stroke-width:2.4;}' +
     'path.w68e.dim{opacity:.15;}' +
     '@media (max-width:800px){.w68cols{gap:26px;}}';
   document.head.appendChild(st);
 
   var WA68 = { view: 'dept', edges: [], projects: null };
-  function w68Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w68Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function w68Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
 
   async function w68Projects() {
@@ -296,7 +296,7 @@
       body.appendChild(mapView);
 
       var head = document.querySelector('#goals .card h2');
-      if (head) head.textContent = 'Strategy';
+      if (head) head.textContent = 'Department goals';
       var intro = document.querySelector('#goals .card p.read');
       if (intro) intro.textContent = 'Projects flow into department quarterly goals; both roll up into the long term organizational goals. Browse each tier, or open the map to see how everything links.';
 
@@ -319,13 +319,13 @@
       if (bar) {
         bar.querySelectorAll('button, a').forEach(function (el) {
           if ((el.textContent || '').trim() === 'Goals') {
-            el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');
+            el.innerHTML = el.innerHTML.replace('Goals', 'Department goals');
           }
         });
       }
       document.querySelectorAll('.w39tool').forEach(function (el) {
         if ((el.textContent || '').trim() === 'Goals') {
-          el.innerHTML = el.innerHTML.replace('Goals', 'Strategy');
+          el.innerHTML = el.innerHTML.replace('Goals', 'Department goals');
         }
       });
     } catch (e) { /* non-fatal */ }

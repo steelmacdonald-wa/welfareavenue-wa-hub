@@ -138,7 +138,7 @@
     '.w116men .m .q{color:var(--wa-muted);font-size:12.5px;font-style:italic;margin-top:2px;}' +
     '.w116men .m .w{font-size:11.5px;color:var(--wa-muted);margin-top:2px;}' +
     '.w116men .m .w a{color:' + GREEN + ';cursor:pointer;text-decoration:none;font-weight:600;}' +
-    '.w116pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 8px;color:#fff;white-space:nowrap;}' +
+    '.w116pill{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 8px;color:#FFFAF2;white-space:nowrap;}' +
     /* events */
     '.w116evl{display:flex;flex-direction:column;gap:8px;}' +
     '.w116ev{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;align-items:center;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;}' +
@@ -156,7 +156,7 @@
     '.w116rsvp.declined{background:rgba(179,64,47,.12);color:' + FLAG + ';}' +
     '.w116rsvp.needsAction{background:rgba(121,119,115,.14);color:var(--wa-muted);}' +
     '.w116rsvp.today{background:' + GOLD + ';color:' + GREEN + ';}' +
-    '.w116av.st-accepted{box-shadow:0 0 0 2px #2c7a66;}' +
+    '.w116av.st-accepted{box-shadow:0 0 0 2px #103F39;}' +
     '.w116av.st-declined{box-shadow:0 0 0 2px ' + FLAG + ';opacity:.6;}' +
     '.w116av.st-tentative{box-shadow:0 0 0 2px ' + GOLD + ';}' +
     '.w116empty{color:var(--wa-muted);font-size:13px;margin:0;}' +
@@ -234,7 +234,7 @@
   function who0() { try { return who(); } catch (e) { return 'staff'; } }
   function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
   function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || T.labels[d] || d; }
-  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function members(d) { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m.department === d && m.active !== false; }); }
   function allowedDept(d) {
     try { var a = (typeof wa40Allowed === 'function') ? wa40Allowed() : null; return !a || a.indexOf(d) >= 0; } catch (e) { return true; }

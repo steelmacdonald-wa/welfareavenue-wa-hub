@@ -15,17 +15,17 @@
   var css = document.createElement('style');
   css.textContent =
     '#w88back{position:fixed;inset:0;background:rgba(10,25,20,.6);z-index:410;display:flex;align-items:center;justify-content:center;padding:16px;}' +
-    '#w88card{background:#fff;border-radius:16px;max-width:560px;width:100%;padding:20px 22px 16px;box-shadow:0 24px 70px rgba(0,0,0,.35);}' +
-    '#w88card h3{margin:0 0 4px;font-size:17px;color:#14302b;}' +
-    '#w88cap{font-size:13.5px;line-height:1.5;color:#3d4642;min-height:42px;margin:6px 0 8px;}' +
-    '#w88svg{width:100%;height:auto;background:#f6f8f7;border-radius:12px;}' +
+    '#w88card{background:#FFFAF2;border-radius:16px;max-width:560px;width:100%;padding:20px 22px 16px;box-shadow:0 24px 70px rgba(0,0,0,.35);}' +
+    '#w88card h3{margin:0 0 4px;font-size:17px;color:#103F39;}' +
+    '#w88cap{font-size:13.5px;line-height:1.5;color:#1F201E;min-height:42px;margin:6px 0 8px;}' +
+    '#w88svg{width:100%;height:auto;background:#F4F2EA;border-radius:12px;}' +
     '.w88dots{display:flex;gap:5px;margin:10px 0;}' +
-    '.w88dots i{width:8px;height:8px;border-radius:50%;background:#d8e6e0;}' +
-    '.w88dots i.on{background:#8455ff;}' +
+    '.w88dots i{width:8px;height:8px;border-radius:50%;background:#DEE0D8;}' +
+    '.w88dots i.on{background:#6F64AB;}' +
     '.w88row{display:flex;gap:8px;justify-content:flex-end;align-items:center;}' +
-    '.w88row .skip{margin-right:auto;background:none;border:none;color:#7b8a86;font-size:12px;cursor:pointer;text-decoration:underline;}' +
-    '.w88btn{background:#8455ff;color:#fff;border:none;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;}' +
-    '.w88btn.ghost{background:#eef4f1;color:#14302b;}' +
+    '.w88row .skip{margin-right:auto;background:none;border:none;color:#797773;font-size:12px;cursor:pointer;text-decoration:underline;}' +
+    '.w88btn{background:#6F64AB;color:#FFFAF2;border:none;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;}' +
+    '.w88btn.ghost{background:#ECEBE3;color:#103F39;}' +
     '#w88svg .st{opacity:.18;transition:opacity .5s;}' +
     '#w88svg .st.on{opacity:1;}' +
     '#w88svg .ar{stroke-dasharray:60;stroke-dashoffset:60;transition:stroke-dashoffset .9s ease;}' +
@@ -42,20 +42,20 @@
 
   var SVG =
     '<svg id="w88svg" viewBox="0 0 520 190" xmlns="http://www.w3.org/2000/svg">' +
-    '<g class="st" data-st="0"><rect x="18" y="70" width="76" height="50" rx="9" fill="#8455ff"/><text x="56" y="92" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">Meeting</text><text x="56" y="107" text-anchor="middle" fill="#e6dcff" font-size="8">transcript</text></g>' +
-    '<path class="ar" data-ar="1" d="M96 95 L136 95" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<g class="st" data-st="1"><circle cx="163" cy="95" r="24" fill="#14302b"/><text x="163" y="91" text-anchor="middle" fill="#ffd76d" font-size="13">&#10024;</text><text x="163" y="105" text-anchor="middle" fill="#fff" font-size="8" font-weight="700">the Hub</text></g>' +
-    '<path class="ar" data-ar="2" d="M189 82 L232 48" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<path class="ar" data-ar="2" d="M191 95 L232 95" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<path class="ar" data-ar="2" d="M189 108 L232 142" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<g class="st" data-st="2"><rect x="236" y="28" width="72" height="34" rx="8" fill="#5c7fc4"/><text x="272" y="49" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Tasks</text>' +
-    '<rect x="236" y="78" width="72" height="34" rx="8" fill="#2c7a66"/><text x="272" y="99" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Updates</text>' +
-    '<rect x="236" y="128" width="72" height="34" rx="8" fill="#b3402f"/><text x="272" y="149" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Decisions</text></g>' +
-    '<path class="ar" data-ar="3" d="M310 45 L352 74" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<g class="st" data-st="3"><rect x="356" y="70" width="76" height="46" rx="9" fill="#c87a2f"/><text x="394" y="90" text-anchor="middle" fill="#fff" font-size="10" font-weight="700">Projects</text><text x="394" y="104" text-anchor="middle" fill="#ffe9d2" font-size="8">the work, grouped</text></g>' +
-    '<path class="ar" data-ar="4" d="M434 93 L468 93" stroke="#7b8a86" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
-    '<g class="st" data-st="4"><path d="M492 62 l7 16 17 2 -12 12 3 17 -15 -8 -15 8 3 -17 -12 -12 17 -2 z" fill="#a87f2c"/><text x="492" y="130" text-anchor="middle" fill="#3d4642" font-size="10" font-weight="700">Goals</text></g>' +
-    '<defs><marker id="w88a" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#7b8a86"/></marker></defs>' +
+    '<g class="st" data-st="0"><rect x="18" y="70" width="76" height="50" rx="9" fill="#6F64AB"/><text x="56" y="92" text-anchor="middle" fill="#FFFAF2" font-size="11" font-weight="700">Meeting</text><text x="56" y="107" text-anchor="middle" fill="#e6dcff" font-size="8">transcript</text></g>' +
+    '<path class="ar" data-ar="1" d="M96 95 L136 95" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<g class="st" data-st="1"><circle cx="163" cy="95" r="24" fill="#103F39"/><text x="163" y="91" text-anchor="middle" fill="#ffd76d" font-size="13">&#10024;</text><text x="163" y="105" text-anchor="middle" fill="#FFFAF2" font-size="8" font-weight="700">the Hub</text></g>' +
+    '<path class="ar" data-ar="2" d="M189 82 L232 48" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<path class="ar" data-ar="2" d="M191 95 L232 95" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<path class="ar" data-ar="2" d="M189 108 L232 142" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<g class="st" data-st="2"><rect x="236" y="28" width="72" height="34" rx="8" fill="#5c7fc4"/><text x="272" y="49" text-anchor="middle" fill="#FFFAF2" font-size="10" font-weight="700">Tasks</text>' +
+    '<rect x="236" y="78" width="72" height="34" rx="8" fill="#103F39"/><text x="272" y="99" text-anchor="middle" fill="#FFFAF2" font-size="10" font-weight="700">Updates</text>' +
+    '<rect x="236" y="128" width="72" height="34" rx="8" fill="#b3402f"/><text x="272" y="149" text-anchor="middle" fill="#FFFAF2" font-size="10" font-weight="700">Decisions</text></g>' +
+    '<path class="ar" data-ar="3" d="M310 45 L352 74" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<g class="st" data-st="3"><rect x="356" y="70" width="76" height="46" rx="9" fill="#c87a2f"/><text x="394" y="90" text-anchor="middle" fill="#FFFAF2" font-size="10" font-weight="700">Projects</text><text x="394" y="104" text-anchor="middle" fill="#ffe9d2" font-size="8">the work, grouped</text></g>' +
+    '<path class="ar" data-ar="4" d="M434 93 L468 93" stroke="#797773" stroke-width="2" fill="none" marker-end="url(#w88a)"/>' +
+    '<g class="st" data-st="4"><path d="M492 62 l7 16 17 2 -12 12 3 17 -15 -8 -15 8 3 -17 -12 -12 17 -2 z" fill="#a87f2c"/><text x="492" y="130" text-anchor="middle" fill="#1F201E" font-size="10" font-weight="700">Goals</text></g>' +
+    '<defs><marker id="w88a" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0 0 L7 3.5 L0 7 z" fill="#797773"/></marker></defs>' +
     '</svg>';
 
   function w88Show(auto) {

@@ -31,36 +31,36 @@
   var st = document.createElement('style');
   st.id = 'wa65css';
   st.textContent = '' +
-    '#w65leadnote{background:rgba(132,85,255,.1);border-radius:10px;padding:7px 11px;font-size:12px;color:#5b32c7;margin:6px 0 0;}' +
+    '#w65leadnote{background:rgba(111,100,171,.1);border-radius:10px;padding:7px 11px;font-size:12px;color:#6F64AB;margin:6px 0 0;}' +
     '.w65sec{margin:0 0 10px;}' +
-    '.w65sec h4{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#1f5f4f;}' +
-    '.w65row{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-top:1px dashed #e3e7e5;font-size:12.5px;}' +
+    '.w65sec h4{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:#103F39;}' +
+    '.w65row{display:flex;gap:8px;align-items:baseline;padding:4px 0;border-top:1px dashed #DEE0D8;font-size:12.5px;}' +
     '.w65row:first-of-type{border-top:none;}' +
-    '.w65dep{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;color:#fff;flex:0 0 auto;}' +
-    '.w65mut{color:#7b8a86;font-size:11.5px;}' +
+    '.w65dep{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;color:#FFFAF2;flex:0 0 auto;}' +
+    '.w65mut{color:#797773;font-size:11.5px;}' +
     '.w65wrap{max-height:56vh;overflow-y:auto;padding-right:6px;}' +
     '.w65warn{background:rgba(179,64,47,.08);border-radius:10px;padding:6px 10px;font-size:12px;color:#8c2c1c;}' +
     '.w65wins{margin-top:5px;}' +
-    '.w65win{display:flex;gap:7px;align-items:baseline;font-size:12px;color:#5b6b66;padding:2px 0;}' +
+    '.w65win{display:flex;gap:7px;align-items:baseline;font-size:12px;color:#797773;padding:2px 0;}' +
     '.w65win .st{color:#8a6414;font-weight:800;flex:0 0 auto;}' +
-    '.w65win .dt{color:#9aa5a1;font-size:10.5px;flex:0 0 auto;}' +
+    '.w65win .dt{color:#797773;font-size:10.5px;flex:0 0 auto;}' +
     '.w65men{padding:7px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;}' +
     '.w65men:first-of-type{border-top:none;}' +
     '.w65men.seen{opacity:.55;}' +
     '.w65men .mt{font-weight:700;}' +
-    '.w65men .mq{color:#7b8a86;font-size:11.5px;font-style:italic;}' +
-    '.w65new{display:inline-block;background:#d4a13c;color:#fff;border-radius:999px;padding:0 7px;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-left:6px;vertical-align:middle;}' +
-    '.w65got{font-size:11.5px;color:#1f5f4f;cursor:pointer;font-weight:700;}' +
-    '.w65ref{background:rgba(212,161,60,.13);border-radius:8px;padding:4px 9px;font-size:11.5px;color:#8a6414;margin:4px 0;}' +
-    '.w65h{cursor:grab;color:#9aa5a1;font-weight:800;user-select:none;flex:0 0 auto;padding:0 2px;}' +
+    '.w65men .mq{color:#797773;font-size:11.5px;font-style:italic;}' +
+    '.w65new{display:inline-block;background:#DCA527;color:#FFFAF2;border-radius:999px;padding:0 7px;font-size:9.5px;font-weight:800;text-transform:uppercase;margin-left:6px;vertical-align:middle;}' +
+    '.w65got{font-size:11.5px;color:#103F39;cursor:pointer;font-weight:700;}' +
+    '.w65ref{background:rgba(220,165,39,.13);border-radius:8px;padding:4px 9px;font-size:11.5px;color:#8a6414;margin:4px 0;}' +
+    '.w65h{cursor:grab;color:#797773;font-weight:800;user-select:none;flex:0 0 auto;padding:0 2px;}' +
     '.w65dragging{opacity:.35;}' +
-    '.w65before{box-shadow:inset 0 2px 0 0 #1f5f4f;}' +
-    '.w65after{box-shadow:inset 0 -2px 0 0 #1f5f4f;}' +
-    '.w65hint{font-size:11.5px;color:#7b8a86;background:#f6f8f7;border-radius:8px;padding:5px 10px;margin:4px 0 8px;}';
+    '.w65before{box-shadow:inset 0 2px 0 0 #103F39;}' +
+    '.w65after{box-shadow:inset 0 -2px 0 0 #103F39;}' +
+    '.w65hint{font-size:11.5px;color:#797773;background:#F4F2EA;border-radius:8px;padding:5px 10px;margin:4px 0 8px;}';
   document.head.appendChild(st);
 
   function w65Esc(s) { return (typeof esc === 'function') ? esc(s) : String(s || ''); }
-  function w65Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w65Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function w65Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
   function w65Date(s) {
     if (!s) return '';
@@ -397,26 +397,26 @@
     return '<div class="w61sec"><div class="v">' + vis + '</div><div class="t"><b>' + title + '</b><span>' + text + '</span></div></div>';
   }
   function w65TxGuide() {
-    var pill = function (t, c) { return '<span style="display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:1px 3px 1px 0;background:' + (c || '#eef2f0') + ';color:' + (c ? '#fff' : '#14302b') + '">' + t + '</span>'; };
+    var pill = function (t, c) { return '<span style="display:inline-block;border-radius:999px;padding:1px 9px;font-size:10px;font-weight:800;margin:1px 3px 1px 0;background:' + (c || '#ECEBE3') + ';color:' + (c ? '#FFFAF2' : '#103F39') + '">' + t + '</span>'; };
     return '<h3>Transcript archive</h3>'
       + '<p class="w60sub">Drop in any meeting; the Hub reads it and runs the boards.</p>'
       + w65Pipe(['Paste the transcript', 'Preview the actions', 'Approve', 'AI files everything'], 3)
       + '<div class="w61wrap">'
       + w65Sec(w65Pipe(['transcript', 'preview', 'approve'], 1), 'You approve before anything saves',
         'Saving first shows a popup of every action the system intends to take: new tasks, closures, updates, decisions, suggested requests, goal wins and mentions. Nothing is stored until you approve it.')
-      + w65Sec(pill('summary') + pill('updates') + pill('tasks', '#1f5f4f'), 'What the AI files on the boards',
+      + w65Sec(pill('summary') + pill('updates') + pill('tasks', '#103F39'), 'What the AI files on the boards',
         'A one line summary (posted to Slack), 1 to 3 update entries, and new tasks with owners from the roster and due dates when the meeting states them. It never edits or deletes existing content, it only adds or closes.')
       + w65Sec(pill('close', '#b3402f') + pill('evidence'), 'Closing needs proof',
         'A task is closed only when the meeting clearly says the work is done, shipped, or dropped, and every closure carries a quote as evidence. Merely discussing a task adds a comment instead, which also stops duplicate tasks.')
-      + w65Sec(pill('projects', '#2c7a66') + pill('serving events'), 'Tasks land in the right place',
+      + w65Sec(pill('projects', '#103F39') + pill('serving events'), 'Tasks land in the right place',
         'Each new task is routed to the project it belongs to (project descriptions carry routing rules), and operations tasks for a serving Sunday attach to that event&#39;s checklist. Everything else sits in the department&#39;s General list.')
-      + w65Sec(pill('requests', '#d4a13c') + pill('due dates') + pill('comments'), 'Suggestions wait for a human',
+      + w65Sec(pill('requests', '#DCA527') + pill('due dates') + pill('comments'), 'Suggestions wait for a human',
         'Cross team asks become request suggestions routed to the team that actions them; if the ask matches an open request it becomes an update on that request, not a duplicate. Due dates and task comments are suggested the same confirm-first way, always with a quote.')
       + w65Sec(pill('&#10038; goal wins', '#8a6414'), 'Progress shows up under the goals',
         'Concrete progress on a quarterly goal (something shipped, raised, signed or measured) is recorded as a win and appears under that goal on the department page.')
-      + w65Sec(pill('mentions', '#5b32c7'), 'Absent people stay in the loop',
+      + w65Sec(pill('mentions', '#6F64AB'), 'Absent people stay in the loop',
         'If someone on the roster is discussed in a meeting they were not in, a Mentions card appears on their My page with the context and a Got it button.')
-      + w65Sec(pill('department') + pill('leadership', '#5b32c7') + pill('confidential', '#b3402f'), 'Meeting visibility',
+      + w65Sec(pill('department') + pill('leadership', '#6F64AB') + pill('confidential', '#b3402f'), 'Meeting visibility',
         'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick. Restricted meetings never leak into the chat assistant, agendas or shared suggestions.')
       + '</div>'
       + '<div class="m-actions"><button class="btn ghost" id="w65gc">Close</button></div>';

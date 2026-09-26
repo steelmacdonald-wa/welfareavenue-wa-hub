@@ -26,12 +26,12 @@
   var css = document.createElement('style');
   css.textContent =
     '.mp-task.w109{align-items:center;}' +
-    '.mp-task.w109 input[type=checkbox]{accent-color:#2c7a66;width:17px;height:17px;cursor:pointer;flex:0 0 auto;margin:0;}' +
+    '.mp-task.w109 input[type=checkbox]{accent-color:#103F39;width:17px;height:17px;cursor:pointer;flex:0 0 auto;margin:0;}' +
     '.mp-task.w109 .w109t{cursor:pointer;}' +
-    '.mp-task.w109 .w109t:hover{text-decoration:underline;color:#1f5f4f;}' +
+    '.mp-task.w109 .w109t:hover{text-decoration:underline;color:#103F39;}' +
     '.mp-task.w109.w109done{opacity:.55;}' +
     '.mp-task.w109.w109done .w109t{text-decoration:line-through;}' +
-    '.w109undo{font-size:11px;color:#2c7a66;cursor:pointer;margin-left:6px;font-weight:700;}';
+    '.w109undo{font-size:11px;color:#103F39;cursor:pointer;margin-left:6px;font-weight:700;}';
   document.head.appendChild(css);
 
   var WA109_MY = false;

@@ -22,19 +22,19 @@
   css.textContent =
     '#w104{margin:10px 0 14px;padding:12px 14px;background:#fbfbfd;border:1px solid #eef0f4;border-radius:10px;}' +
     '#w104 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:7px 0;}' +
-    '#w104 .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--wa-muted,#8592a3);min-width:96px;}' +
-    '.w104track{flex:1;min-width:160px;max-width:420px;height:8px;background:#e7e9f0;border-radius:999px;overflow:hidden;}' +
-    '.w104fill{height:100%;background:linear-gradient(90deg,#2c7a66,#1baf7a);border-radius:999px;transition:width .4s;}' +
-    '.w104pct{font-size:12.5px;font-weight:700;color:#1f5f4f;white-space:nowrap;}' +
-    '.w104done .w104fill{background:linear-gradient(90deg,#1baf7a,#1baf7a);}' +
+    '#w104 .lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:var(--wa-muted,#797773);min-width:96px;}' +
+    '.w104track{flex:1;min-width:160px;max-width:420px;height:8px;background:#DEE0D8;border-radius:999px;overflow:hidden;}' +
+    '.w104fill{height:100%;background:linear-gradient(90deg,#103F39,#103F39);border-radius:999px;transition:width .4s;}' +
+    '.w104pct{font-size:12.5px;font-weight:700;color:#103F39;white-space:nowrap;}' +
+    '.w104done .w104fill{background:linear-gradient(90deg,#103F39,#103F39);}' +
     '#w104 .as-chip{margin:2px 4px 2px 0;}' +
     '.w104lead{background:rgba(255,171,0,.16)!important;color:#7a5800!important;border:1px solid rgba(255,171,0,.35);}' +
     '.w104lead:before{content:"\\2605  ";font-size:10px;}' +
-    '.w104n{font-size:10.5px;color:var(--wa-muted,#8592a3);margin-left:3px;}' +
-    '.w104edit{font-size:11.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;}' +
-    '#w104pick{max-height:260px;overflow-y:auto;border:1px solid #e7e9f0;border-radius:8px;padding:8px 10px;margin:8px 0;}' +
+    '.w104n{font-size:10.5px;color:var(--wa-muted,#797773);margin-left:3px;}' +
+    '.w104edit{font-size:11.5px;color:#103F39;cursor:pointer;text-decoration:underline;}' +
+    '#w104pick{max-height:260px;overflow-y:auto;border:1px solid #DEE0D8;border-radius:8px;padding:8px 10px;margin:8px 0;}' +
     '#w104pick label{display:block;font-size:13px;padding:3px 2px;cursor:pointer;}' +
-    '#w104pick input{margin-right:7px;accent-color:#2c7a66;}';
+    '#w104pick input{margin-right:7px;accent-color:#103F39;}';
   document.head.appendChild(css);
 
   function w104Names(v) {

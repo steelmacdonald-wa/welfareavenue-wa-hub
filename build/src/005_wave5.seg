@@ -9,11 +9,11 @@
   var css = ''
     + '.req-search{width:100%;max-width:420px;padding:9px 13px;border:1px solid var(--wa-line);border-radius:10px;font-size:13px;margin:6px 0 14px;}'
     + '.req-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;}'
-    + '.req-type{background:#faf9f4;border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;cursor:pointer;}'
+    + '.req-type{background:#F4F2EA;border:1px solid var(--wa-line);border-radius:10px;padding:11px 13px;cursor:pointer;}'
     + '.req-type:hover{border-color:var(--wa-green);box-shadow:0 3px 10px rgba(0,0,0,.05);}'
     + '.req-type .t{font-weight:700;font-size:13px;}'
     + '.req-type .d{font-size:12px;color:var(--wa-muted);margin-top:3px;}'
-    + '.req-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;display:inline-block;margin-bottom:5px;}'
+    + '.req-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#FFFAF2;display:inline-block;margin-bottom:5px;}'
     + '.req-form{max-width:560px;}'
     + '.req-form label{display:block;font-size:12px;color:var(--wa-muted);margin:10px 0 3px;}'
     + '.req-form input,.req-form textarea,.req-form select{width:100%;padding:8px 10px;border:1px solid var(--wa-line);border-radius:8px;font-size:13px;box-sizing:border-box;}'
@@ -65,7 +65,7 @@ function renderRequestsModule(q) {
   body.innerHTML = '<input class="req-search" id="reqSearch" placeholder="Search request types, e.g. post, email, reimbursement" value="' + esc(q || '') + '" />'
     + '<div class="req-grid">' + (types.length ? types.map(function (t) {
         return '<div class="req-type" data-rt="' + esc(t.key) + '">'
-          + '<span class="req-dep" style="background:' + (DEPT_COLOR[t.department] || '#6f6b64') + '">' + (DEPT_LABEL[t.department] || t.department) + '</span>'
+          + '<span class="req-dep" style="background:' + (DEPT_COLOR[t.department] || '#797773') + '">' + (DEPT_LABEL[t.department] || t.department) + '</span>'
           + '<div class="t">' + esc(t.label) + '</div>'
           + '<div class="d">' + esc(t.description || '') + '</div></div>';
       }).join('') : '<p class="read">No request type matches that search.</p>') + '</div>'
@@ -96,7 +96,7 @@ function renderRequestForm(key) {
           : '<input id="rq-f' + i + '" type="' + (f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : f.type === 'url' ? 'url' : 'text') + '" />';
         return '<label>' + esc(f.label) + (f.required ? ' *' : '') + '</label>' + inp;
       }).join('')
-    + '<div style="margin-top:14px;"><button class="btn mini" id="rq-send" style="background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:700;">Submit request</button></div></div>';
+    + '<div style="margin-top:14px;"><button class="btn mini" id="rq-send" style="background:var(--wa-green);color:#FFFAF2;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;font-weight:700;">Submit request</button></div></div>';
   document.getElementById('reqBack').addEventListener('click', function () { renderRequestsModule(''); });
   document.getElementById('rq-send').addEventListener('click', async function () {
     var title = (document.getElementById('rq-title').value || '').trim();
@@ -204,7 +204,7 @@ function renderDeptRequestCards() {
           var b = document.createElement('button');
           b.className = 'tab';
           b.dataset.tab = 'requests';
-          b.innerHTML = '<span class="tabdot" style="background:#4a7c59"></span>Requests';
+          b.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Requests';
           var info = bar.querySelector('[data-tab="importantinfo"]');
           var act = document.getElementById('actTabBtn');
           bar.insertBefore(b, info || act || null);

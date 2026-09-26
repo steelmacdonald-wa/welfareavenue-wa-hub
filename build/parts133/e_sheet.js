@@ -102,7 +102,7 @@
     var s = O.sheet; if (!s) { closeSheet(); return; }
     var v = view(); if (!v) { closeSheet(); return; }
     var el = sheetEl(), wasOn = el.classList.contains('on');
-    if (!wasOn || !el.querySelector('.pane')) el.innerHTML = '<div class="bk" data-w133close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(16,63,57,.08);background:var(--wa-card,#fff)"></div></div>';
+    if (!wasOn || !el.querySelector('.pane')) el.innerHTML = '<div class="bk" data-w133close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(16,63,57,.08);background:var(--wa-card,#FFFAF2)"></div></div>';
     var bd = el.querySelector('.bd'), st = bd.scrollTop;
     el.querySelector('.pane').setAttribute('aria-label', v.title);
     el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + E(v.kicker) + '</div><h2>' + E(v.title) + '</h2>' + (v.sub ? '<div class="sub">' + E(v.sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w133close="1" aria-label="Close">' + I('x') + '</button>';

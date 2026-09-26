@@ -79,7 +79,7 @@
   function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || (staff() ? 'member' : 'viewer'); } catch (e) { return 'viewer'; } }
   function canAct() { var r = role(); return r === 'admin' || r === 'leader'; }
   function label(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || (T.labels && T.labels[d]) || d || ''; }
-  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function color(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function fmt(d) { if (!d) return ''; try { return new Date(d).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }); } catch (e) { return String(d); } }
   function ago(d) { if (!d) return 'never'; var m = Math.round((Date.now() - new Date(d).getTime()) / 60000); if (m < 1) return 'just now'; if (m < 60) return m + ' min ago'; var h = Math.round(m / 60); if (h < 36) return h + ' h ago'; return Math.round(h / 24) + ' days ago'; }
   function money(n) { return '$' + Number(n || 0).toLocaleString('en-CA', { maximumFractionDigits: 2 }); }

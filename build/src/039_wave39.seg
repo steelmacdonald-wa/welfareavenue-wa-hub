@@ -21,40 +21,40 @@
   st.id = 'wa39css';
   st.textContent = '' +
     /* slick decisions dropdown */
-    '.w39dd{background:#fff;border-radius:18px;margin:0 0 14px;box-shadow:0 1px 2px rgba(20,40,30,.02),0 16px 40px -28px rgba(20,48,43,.2);overflow:hidden;}' +
-    '.w39dd > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 20px;font-weight:700;font-size:14px;color:var(--wa-ink,#14302b);}' +
+    '.w39dd{background:#FFFAF2;border-radius:18px;margin:0 0 14px;box-shadow:0 1px 2px rgba(16,63,57,.02),0 16px 40px -28px rgba(16,63,57,.2);overflow:hidden;}' +
+    '.w39dd > summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:14px 20px;font-weight:700;font-size:14px;color:var(--wa-ink,#103F39);}' +
     '.w39dd > summary::-webkit-details-marker{display:none;}' +
     '.w39dd > summary .chev{margin-left:auto;transition:transform .25s;color:#8a958f;font-size:13px;}' +
     '.w39dd[open] > summary .chev{transform:rotate(180deg);}' +
-    '.w39dd > summary .cnt{background:rgba(212,161,60,.16);color:#8a6414;border-radius:999px;padding:2px 11px;font-size:11.5px;font-weight:700;}' +
+    '.w39dd > summary .cnt{background:rgba(220,165,39,.16);color:#8a6414;border-radius:999px;padding:2px 11px;font-size:11.5px;font-weight:700;}' +
     '.w39dd .bd{padding:2px 20px 14px;}' +
-    '.w39dec{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid #f2f4f3;font-size:13px;}' +
+    '.w39dec{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid #F4F2EA;font-size:13px;}' +
     '.w39dec:first-child{border-top:none;}' +
-    '.w39dec .fl{color:#d4a13c;flex:none;}' +
+    '.w39dec .fl{color:#DCA527;flex:none;}' +
     /* goals block */
-    '.w39goals{background:#fff;border-radius:18px;margin:0 0 14px;padding:16px 20px;box-shadow:0 1px 2px rgba(20,40,30,.02),0 16px 40px -28px rgba(20,48,43,.2);}' +
+    '.w39goals{background:#FFFAF2;border-radius:18px;margin:0 0 14px;padding:16px 20px;box-shadow:0 1px 2px rgba(16,63,57,.02),0 16px 40px -28px rgba(16,63,57,.2);}' +
     '.w39goals h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;font-weight:700;}' +
-    '.w39goal{padding:9px 0;border-top:1px solid #f2f4f3;}' +
+    '.w39goal{padding:9px 0;border-top:1px solid #F4F2EA;}' +
     '.w39goal:first-of-type{border-top:none;}' +
-    '.w39goal .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:600;color:var(--wa-ink,#14302b);}' +
-    '.w39q{font-size:10.5px;border:1px solid rgba(44,122,102,.4);color:#2c7a66;border-radius:999px;padding:1px 9px;font-weight:700;}' +
-    '.w39goal .m{font-size:12px;color:#7b8a86;margin-top:2px;}' +
-    '.w39pchip{display:inline-block;font-size:11px;background:rgba(31,95,79,.08);color:#1f5f4f;border-radius:999px;padding:2px 10px;margin:3px 5px 0 0;cursor:pointer;font-weight:600;}' +
-    '.w39pchip:hover{background:rgba(31,95,79,.14);}' +
+    '.w39goal .t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:600;color:var(--wa-ink,#103F39);}' +
+    '.w39q{font-size:10.5px;border:1px solid rgba(16,63,57,.4);color:#103F39;border-radius:999px;padding:1px 9px;font-weight:700;}' +
+    '.w39goal .m{font-size:12px;color:#797773;margin-top:2px;}' +
+    '.w39pchip{display:inline-block;font-size:11px;background:rgba(16,63,57,.08);color:#103F39;border-radius:999px;padding:2px 10px;margin:3px 5px 0 0;cursor:pointer;font-weight:600;}' +
+    '.w39pchip:hover{background:rgba(16,63,57,.14);}' +
     /* tools row */
     '.w39tools{display:flex;gap:9px;flex-wrap:wrap;margin:0 0 14px;}' +
-    '.w39tool{background:#fff;border:none;border-radius:14px;padding:10px 16px;font-size:12.5px;font-weight:700;color:#1f5f4f;cursor:pointer;box-shadow:0 1px 2px rgba(20,40,30,.03),0 12px 30px -24px rgba(20,48,43,.25);transition:transform .12s;}' +
-    '.w39tool:hover{transform:translateY(-1px);background:rgba(31,95,79,.05);}' +
+    '.w39tool{background:#FFFAF2;border:none;border-radius:14px;padding:10px 16px;font-size:12.5px;font-weight:700;color:#103F39;cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.03),0 12px 30px -24px rgba(16,63,57,.25);transition:transform .12s;}' +
+    '.w39tool:hover{transform:translateY(-1px);background:rgba(16,63,57,.05);}' +
     '.w39tool .ic{margin-right:6px;}' +
     /* everything that pretended to be a link becomes a button */
-    '.w37edit,[data-w33bref],[data-w30a],[data-w30r],[data-w26e],[data-w31re],[data-w27sg],[data-w33pp]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    '.w37edit:hover,[data-w33bref]:hover,[data-w26e]:hover,[data-w31re]:hover,[data-w27sg]:hover{background:rgba(31,95,79,.07);border-color:rgba(31,95,79,.35);}' +
+    '.w37edit,[data-w33bref],[data-w30a],[data-w30r],[data-w26e],[data-w31re],[data-w27sg],[data-w33pp]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 11px;font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '.w37edit:hover,[data-w33bref]:hover,[data-w26e]:hover,[data-w31re]:hover,[data-w27sg]:hover{background:rgba(16,63,57,.07);border-color:rgba(16,63,57,.35);}' +
     '.btn.mini{border-radius:999px;}' +
     /* cleaner task rows with the reassign right there */
     '.checklist li{list-style:none;background:#fafbfa;border:1px solid #f0f2f1;border-radius:12px;padding:9px 12px;margin:7px 0;transition:background .15s;}' +
     '.checklist li:hover{background:#f3f6f4;}' +
     '.checklist{padding-left:0;}' +
-    '.checklist li .w28sel{border-radius:999px;background:#fff;}' +
+    '.checklist li .w28sel{border-radius:999px;background:#FFFAF2;}' +
     '.subsection{border-left:none;padding-left:0;}' +
     '.subhead{font-size:13px;}';
   document.head.appendChild(st);
@@ -72,7 +72,7 @@ function wa39DeptDecisions(id) {
     + '<span class="cnt">' + list.length + ' open</span><span class="chev">&#9662;</span></summary><div class="bd">'
     + list.map(function (d) {
       return '<div class="w39dec"><span class="fl">&#9873;</span><span style="flex:1">' + esc(d.title || '')
-        + (d.owner ? ' <span style="font-size:11px;color:#7b8a86">(' + esc(d.owner) + ')</span>' : '') + '</span>'
+        + (d.owner ? ' <span style="font-size:11px;color:#797773">(' + esc(d.owner) + ')</span>' : '') + '</span>'
         + '<a class="w37edit" href="#decision/' + d.id + '">open</a></div>';
     }).join('') + '</div></details>';
 }
@@ -87,7 +87,7 @@ function wa39DeptGoals(id) {
     var ac = a.quarter === nowQ ? 0 : 1, bc = b.quarter === nowQ ? 0 : 1;
     return ac - bc || String(a.quarter).localeCompare(String(b.quarter));
   });
-  var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#2c7a66';
+  var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#103F39';
   var projs = (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []);
   var html = '<div class="w39goals w39top"><h3 style="color:' + col + '">Quarterly goals</h3>';
   goals.slice(0, 6).forEach(function (g) {
@@ -97,7 +97,7 @@ function wa39DeptGoals(id) {
       + (g.measure ? '<div class="m">Measured by: ' + esc(g.measure) + '</div>' : '')
       + '<div>' + (linked.length
         ? linked.map(function (p) { return '<span class="w39pchip" data-w39pp="' + p.id + '">' + esc(p.name) + '</span>'; }).join('')
-        : '<span style="font-size:11.5px;color:#9aa5a1">No projects linked yet.</span>') + '</div>'
+        : '<span style="font-size:11.5px;color:#797773">No projects linked yet.</span>') + '</div>'
       + '</div>';
   });
   html += '<div style="margin-top:8px"><a class="w37edit" href="#goals">Open the full goals page &raquo;</a></div></div>';
@@ -153,9 +153,9 @@ function wa39Pace(o) {
   var days = Math.max(0, (Date.now() - new Date(String(o.started_at) + 'T12:00:00').getTime()) / 86400000);
   var expected = Math.min(100, Math.round(days / 60 * 100));
   var p = wa37Pct(o.id).pct;
-  if (p >= Math.min(99, expected + 10)) return ['ahead', '#2c7a66'];
+  if (p >= Math.min(99, expected + 10)) return ['ahead', '#103F39'];
   if (p + 15 < expected) return ['falling behind', '#b3402f'];
-  return ['on track', '#7b8a86'];
+  return ['on track', '#797773'];
 }
 
 async function wa39OnbAugment() {
@@ -184,7 +184,7 @@ async function wa39OnbAugment() {
     var hrDone = hrMine.filter(function (x) { return x.done; }).length;
     var bits = '';
     if (pace) bits += '<span class="w39pace" style="font-size:10.5px;border:1px solid ' + pace[1] + ';color:' + pace[1] + ';border-radius:999px;padding:1px 9px;font-weight:700">' + pace[0] + '</span>';
-    if (helpN) bits += '<span class="w39pace" style="font-size:10.5px;background:#b3402f;color:#fff;border-radius:999px;padding:2px 9px;font-weight:700">' + helpN + ' asking for help</span>';
+    if (helpN) bits += '<span class="w39pace" style="font-size:10.5px;background:#b3402f;color:#FFFAF2;border-radius:999px;padding:2px 9px;font-weight:700">' + helpN + ' asking for help</span>';
     bits += '<a class="w37edit w39pace" data-w39hr="' + oid + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>';
     bits += '<a class="w37edit w39pace" style="color:#b3402f !important" data-w39del="' + oid + '">remove</a>';
     open.insertAdjacentHTML('beforebegin', bits);
@@ -228,11 +228,11 @@ function wa39HrModal(onbId) {
   var html = '<h3>HR setup for ' + esc(o.person_name) + '</h3>'
     + '<p class="m-sub">The end to end setup from the Onboarding SOP 2025/26: accounts, invites, the onboarding call, and the manager follow-through.</p>';
   phases.forEach(function (ph) {
-    html += '<div style="margin:10px 0 2px;font-weight:700;color:#1f5f4f;font-size:13px">' + esc(ph) + '</div>';
+    html += '<div style="margin:10px 0 2px;font-weight:700;color:#103F39;font-size:13px">' + esc(ph) + '</div>';
     WA39_HRT.filter(function (t) { return t.phase === ph; }).forEach(function (t) {
       var s = mine[t.id];
       if (!s) return;
-      html += '<div class="w37step' + (s.done ? ' done' : '') + '" style="border-bottom:1px solid #f2f4f3">'
+      html += '<div class="w37step' + (s.done ? ' done' : '') + '" style="border-bottom:1px solid #F4F2EA">'
         + '<input type="checkbox" data-w39hrchk="' + s.id + '"' + (s.done ? ' checked' : '') + ' />'
         + '<div style="flex:1"><div class="nm">' + esc(t.name) + '</div>'
         + (t.description ? '<div class="ds">' + esc(t.description) + '</div>' : '')

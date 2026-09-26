@@ -27,11 +27,11 @@
     '#w110btn{margin-left:8px;}' +
     '#w110ar table{width:100%;border-collapse:collapse;font-size:12.5px;}' +
     '#w110ar td{padding:6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:top;}' +
-    '#w110ar .mut{color:var(--wa-muted,#8592a3);font-size:11px;}' +
+    '#w110ar .mut{color:var(--wa-muted,#797773);font-size:11px;}' +
     '.w110st{font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 8px;}' +
     '.w110st.new{background:rgba(255,171,0,.16);color:#a06f00;}' +
-    '.w110st.granted{background:rgba(44,122,102,.14);color:#1f5f4f;}' +
-    '.w110st.declined{background:rgba(133,146,163,.16);color:#566a7f;}';
+    '.w110st.granted{background:rgba(16,63,57,.14);color:#103F39;}' +
+    '.w110st.declined{background:rgba(133,146,163,.16);color:#103F39;}';
   document.head.appendChild(css);
 
   /* wave131: today's pages, named as the menu names them */

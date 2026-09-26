@@ -28,11 +28,11 @@
     try {
       var t = document.querySelector('#tabBar .tab[data-tab="training"]');
       if (t && t.textContent.indexOf('Training academy') < 0) {
-        t.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Training academy';
+        t.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Training academy';
       }
       var v = document.querySelector('#tabBar .tab[data-tab="volunteering"]');
       if (v && v.textContent.indexOf('MTL volunteering') < 0) {
-        v.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>MTL volunteering';
+        v.innerHTML = '<span class="tabdot" style="background:#103F39"></span>MTL volunteering';
       }
       var th = document.querySelector('#training .card > h2');
       if (th && th.textContent.trim() === 'Training') th.textContent = 'My trainings';

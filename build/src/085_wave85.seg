@@ -15,16 +15,16 @@
   if (window.__wa85) return; window.__wa85 = true;
 
   var css = document.createElement('style');
-  css.textContent = '.w85p{font-size:12.5px;color:#7b8a86;margin:-6px 0 12px;}';
+  css.textContent = '.w85p{font-size:12.5px;color:#797773;margin:-6px 0 12px;}';
   document.head.appendChild(css);
 
   /* ---------- 1. purpose lines ---------- */
   var W85_PURPOSE = {
-    overview: 'Decisions across Welfare Avenue: what is open, what was decided, and your part in it.',
+    overview: 'The executive view: the numbers, major announcements, and the decisions that sit with Ian, Shima, Suhaib and Steel.',
     dashboard: 'The numbers behind the work: task movement, hours and momentum per team.',
     transcripts: 'Upload a meeting and the Hub turns it into tasks, updates and decisions automatically.',
     agendas: 'Meeting agendas, drafted from live work and shared before the meeting.',
-    goals: 'Projects, quarterly goals and the map of how they connect.',
+    goals: 'Every team\'s quarterly goals, SMART, with tasks and comments.',
     requests: 'How teams ask each other for work, with a form for every kind of ask.',
     importantinfo: 'Logins, links and documents the team reaches for most.',
     finances: 'Statements, the ledger and budgets per team.',
@@ -93,7 +93,7 @@
         sec('Everything else folds', 'Requests, quarterly goals, projects, updates and source transcripts sit in collapsible sections below the tasks. The Hub remembers which ones you keep open.') +
         '</div><div style="text-align:right;margin-top:8px"><button id="w61c" class="btn ghost mini">Got it</button></div>';
     } else if (k === 'goals') {
-      wrap = '<h2>How Strategy works</h2><div class="w61wrap">' +
+      wrap = '<h2>How Department goals work</h2><div class="w61wrap">' +
         sec('Four tabs', 'Projects (the work), Department goals (quarterly targets), Organizational goals (the direction) and The map (how they all connect).') +
         sec('Quarters are picked, not typed', 'Goals use one quarter format, like Q1 FY2027 (the fiscal year runs Oct 1 to Sep 30). Empty far-off quarters stay collapsed until you need them.') +
         sec('The map answers "why"', 'Projects link to goals, department goals roll up to organizational ones. Click any node to pull its whole chain into focus.') +

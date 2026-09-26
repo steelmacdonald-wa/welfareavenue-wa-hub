@@ -21,9 +21,9 @@
   st.textContent = '' +
     '#w53purpose{width:100%;min-height:52px;margin-top:8px;padding:8px 10px;border:1px solid rgba(127,127,127,.35);' +
     'border-radius:10px;font-size:12.5px;font-family:inherit;resize:vertical;box-sizing:border-box;}' +
-    '.w53pl{font-size:12px;color:#7b8a86;background:rgba(132,85,255,.07);border-radius:8px;padding:6px 10px;margin:2px 0 8px;}' +
-    '.w53pl b{color:#5b32c7;}' +
-    '.w53note{font-size:11.5px;color:#9aa5a1;margin:4px 0 0;}';
+    '.w53pl{font-size:12px;color:#797773;background:rgba(111,100,171,.07);border-radius:8px;padding:6px 10px;margin:2px 0 8px;}' +
+    '.w53pl b{color:#6F64AB;}' +
+    '.w53note{font-size:11.5px;color:#797773;margin:4px 0 0;}';
   document.head.appendChild(st);
 
   var WA53_LEAD = /\b(lead|leader|director|manager|chair|co-)/i;

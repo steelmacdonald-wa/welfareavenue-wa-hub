@@ -30,20 +30,20 @@
   var st = document.createElement('style');
   st.id = 'wa49css';
   st.textContent = '' +
-    '.w49pb{background:#fff;border-radius:12px;padding:12px 16px;margin-top:12px;}' +
-    '.w49pb h4{margin:0 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#7b8a86;}' +
+    '.w49pb{background:#FFFAF2;border-radius:12px;padding:12px 16px;margin-top:12px;}' +
+    '.w49pb h4{margin:0 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#797773;}' +
     '.w49phil{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;}' +
-    '.w49phil span{background:rgba(31,95,79,.08);color:#1f5f4f;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;}' +
+    '.w49phil span{background:rgba(16,63,57,.08);color:#103F39;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;}' +
     '.w49tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin:0 0 10px;}' +
-    '.w49tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#7b8a86;padding:3px 8px;}' +
+    '.w49tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:#797773;padding:3px 8px;}' +
     '.w49tbl td{padding:5px 8px;border-top:1px solid #f0f2f1;vertical-align:top;}' +
-    '.w49links a{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;' +
-    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    '.w49links a:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
-    '.w49dg{background:#f6f8f7;border-radius:12px;margin:6px 0;padding:2px 12px;}' +
-    '.w49dg > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 2px;font-weight:700;font-size:13px;color:#14302b;}' +
+    '.w49links a{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 11px;' +
+    'font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '.w49links a:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
+    '.w49dg{background:#F4F2EA;border-radius:12px;margin:6px 0;padding:2px 12px;}' +
+    '.w49dg > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 2px;font-weight:700;font-size:13px;color:#103F39;}' +
     '.w49dg > summary::-webkit-details-marker{display:none;}' +
-    '.w49dg > summary:before{content:"\\25B8";color:#1f5f4f;font-size:13px;font-weight:700;}' +
+    '.w49dg > summary:before{content:"\\25B8";color:#103F39;font-size:13px;font-weight:700;}' +
     '.w49dg[open] > summary:before{content:"\\25BE";}' +
     '.w49dg img{width:100%;border-radius:10px;margin:4px 0 10px;}';
   document.head.appendChild(st);
@@ -58,7 +58,7 @@
       + '<span>Referrals over experience</span>'
       + '<span>Second in commands can be taught</span>'
       + '</div>'
-      + '<p style="font-size:12.5px;color:#3d4642;margin:0 0 10px">Recruit critical thinkers for top level roles, let high energy people be second in command, and keep every team lean. Target structure: 3 levels, 5 divisions, 26 positions.</p>'
+      + '<p style="font-size:12.5px;color:#1F201E;margin:0 0 10px">Recruit critical thinkers for top level roles, let high energy people be second in command, and keep every team lean. Target structure: 3 levels, 5 divisions, 26 positions.</p>'
       + '<table class="w49tbl"><thead><tr><th>Level</th><th>What they do</th><th>Screen hardest for</th></tr></thead><tbody>'
       + '<tr><td><b>Board of Directors</b></td><td>Supporting cast to the executive team; help implement the vision</td><td>Vision, integrity, referrals</td></tr>'
       + '<tr><td><b>Executive (C-suite)</b></td><td>Report to the ED; cultivate the next generation of leaders</td><td>Quick learning, self starting, problem solving</td></tr>'
@@ -66,7 +66,7 @@
       + '<tr><td><b>Chapter VP / Director</b></td><td>Supports the president; develops next year&#39;s team</td><td>Self starting, energy, integrity</td></tr>'
       + '<tr><td><b>Brand Ambassador</b></td><td>Networks on campus and spreads the mission</td><td>Energy, integrity</td></tr>'
       + '</tbody></table>'
-      + '<p style="font-size:12.5px;color:#3d4642;margin:0 0 10px">After a candidate reaches <b>offer accepted</b> in the pipeline above: send the offer letter, and once they accept, the onboarding email and account setup (the Welcome kit on the Onboarding dashboard has both prefilled).</p>'
+      + '<p style="font-size:12.5px;color:#1F201E;margin:0 0 10px">After a candidate reaches <b>offer accepted</b> in the pipeline above: send the offer letter, and once they accept, the onboarding email and account setup (the Welcome kit on the Onboarding dashboard has both prefilled).</p>'
       + '<h4>Templates and references</h4>'
       + '<div class="w49links">' + LINKS.map(function (l) {
         return '<a href="' + l[1] + '" target="_blank" rel="noopener">' + l[0] + '</a>';

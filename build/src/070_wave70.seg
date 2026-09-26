@@ -18,7 +18,7 @@
   var st = document.createElement('style');
   st.id = 'wa70css';
   st.textContent = '' +
-    '.w70row{margin-top:5px;font-size:10px;color:#8b968f;}' +
+    '.w70row{margin-top:5px;font-size:10px;color:#797773;}' +
     '.w70chip{display:inline-block;border-radius:999px;padding:1px 8px;font-size:9.5px;font-weight:800;margin:2px 3px 0 0;}' +
     '.w70chip.x{box-shadow:0 0 0 1px currentColor inset;}' +
     '.w70dots{margin-top:3px;line-height:1;}' +
@@ -41,7 +41,7 @@
     } catch (e) { WA70.by = {}; }
     return WA70.by;
   }
-  function w70Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function w70Col(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function w70Lab(d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
 
   async function w70Decorate() {

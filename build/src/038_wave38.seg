@@ -15,17 +15,17 @@
   var st = document.createElement('style');
   st.id = 'wa38css';
   st.textContent = '' +
-    '.wac-card{background:#fff;border:1px solid rgba(44,122,102,.4);border-left:4px solid #2c7a66;border-radius:12px;padding:10px 12px;margin:7px 0;font-size:12.5px;box-shadow:0 8px 20px -14px rgba(20,48,43,.3);}' +
-    '.wac-card b{color:#1f5f4f;font-size:12.5px;}' +
-    '.wac-card .f{margin:3px 0 0;color:#5b6b66;white-space:pre-wrap;}' +
+    '.wac-card{background:#FFFAF2;border:1px solid rgba(16,63,57,.4);border-left:4px solid #103F39;border-radius:12px;padding:10px 12px;margin:7px 0;font-size:12.5px;box-shadow:0 8px 20px -14px rgba(16,63,57,.3);}' +
+    '.wac-card b{color:#103F39;font-size:12.5px;}' +
+    '.wac-card .f{margin:3px 0 0;color:#797773;white-space:pre-wrap;}' +
     '.wac-card .act{display:flex;gap:7px;margin-top:8px;}' +
     '.wac-card button{border:none;border-radius:999px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer;}' +
-    '.wac-card .go{background:#1f5f4f;color:#fff;}' +
-    '.wac-card .no{background:#f1f3f2;color:#5b6b66;}' +
-    '.wac-card.decided{opacity:.75;border-left-color:#9aa5a1;}' +
-    '.wac-card .res{margin-top:7px;font-size:12px;font-weight:600;color:#1f5f4f;}' +
+    '.wac-card .go{background:#103F39;color:#FFFAF2;}' +
+    '.wac-card .no{background:#f1f3f2;color:#797773;}' +
+    '.wac-card.decided{opacity:.75;border-left-color:#797773;}' +
+    '.wac-card .res{margin-top:7px;font-size:12px;font-weight:600;color:#103F39;}' +
     '.wac-card .res.err{color:#b3402f;}' +
-    '#waChatBtn{background:#1f5f4f;}';
+    '#waChatBtn{background:#103F39;}';
   document.head.appendChild(st);
 })();
 
@@ -35,7 +35,7 @@ var WA38_N = 0;
 function wa38FieldLines(p) {
   var i = p.input || {};
   var lines = [];
-  var L = { opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Grants', hr: 'Human Resources', board: 'Board' };
+  var L = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Finances', hr: 'Human Resources', board: 'Board' };
   if (p.name === 'create_request') {
     lines.push('To: ' + (L[i.department] || i.department));
     if (i.type_key) lines.push('Type: ' + i.type_key);
@@ -116,7 +116,7 @@ function wa38Cancel(key) {
     if (act) act.remove();
     var res = document.createElement('div');
     res.className = 'res';
-    res.style.color = '#7b8a86';
+    res.style.color = '#797773';
     res.textContent = 'Cancelled. Nothing was filed.';
     card.appendChild(res);
   }

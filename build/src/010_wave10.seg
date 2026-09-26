@@ -9,8 +9,8 @@
 (function () {
   var css = ''
     + '.fr-toggle{display:flex;gap:6px;margin:0 0 12px;}'
-    + '.fr-toggle button{padding:7px 15px;border:1px solid var(--wa-line);background:#fff;border-radius:18px;cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);}'
-    + '.fr-toggle button.on{background:#c87a2f;color:#fff;border-color:#c87a2f;}';
+    + '.fr-toggle button{padding:7px 15px;border:1px solid var(--wa-line);background:#FFFAF2;border-radius:18px;cursor:pointer;font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);}'
+    + '.fr-toggle button.on{background:#c87a2f;color:#FFFAF2;border-color:#c87a2f;}';
   var st = document.createElement('style');
   st.textContent = css;
   document.head.appendChild(st);

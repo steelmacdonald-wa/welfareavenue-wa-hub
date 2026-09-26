@@ -27,11 +27,11 @@
   var st = document.createElement('style');
   st.id = 'wa72css';
   st.textContent = '' +
-    '#w72bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#f6f8f7;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:12.5px;color:#3d4642;}' +
-    '#w72bar button{border:none;background:#1f5f4f;color:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;cursor:pointer;}' +
+    '#w72bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#F4F2EA;border-radius:12px;padding:10px 14px;margin:0 0 12px;font-size:12.5px;color:#1F201E;}' +
+    '#w72bar button{border:none;background:#103F39;color:#FFFAF2;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;cursor:pointer;}' +
     '[data-w72rm]{color:#b3402f !important;font-size:12px;cursor:pointer;font-weight:700;}' +
-    '.w72grp{margin:8px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#1f5f4f;font-weight:800;}' +
-    '.w72preset{display:inline-block;border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#1f5f4f;cursor:pointer;margin:0 6px 8px 0;}' +
+    '.w72grp{margin:8px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#103F39;font-weight:800;}' +
+    '.w72preset{display:inline-block;border:1px solid var(--wa-line);background:#FFFAF2;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#103F39;cursor:pointer;margin:0 6px 8px 0;}' +
     /* hide ClickUp remnants */
     '.info-chip[title*="ClickUp"]{display:none !important;}' +
     'a[href*="clickup.com"]{display:none !important;}';
@@ -55,9 +55,9 @@
 
   /* ---- friendly page names for the access modal ---- */
   var W72_LABELS = {
-    mypage: 'My page', overview: 'Decisions', dashboard: 'Dashboard', goals: 'Strategy',
+    mypage: 'My page', overview: 'Decisions', dashboard: 'Dashboard', goals: 'Department goals',
     agendas: 'Agendas', requests: 'Requests', importantinfo: 'Important info',
-    opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing',
+    opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing',
     fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
     volunteering: 'Volunteering', training: 'Training', hrcentre: 'HR centre',
     orgchart: 'Org chart', transcripts: 'Transcript archive', activity: 'Activity',
@@ -75,7 +75,7 @@
     var all = (typeof WA40_TABS !== 'undefined' ? WA40_TABS : []).concat(['adminpanel']);
     function box(t) {
       if (all.indexOf(t) < 0) return '';
-      return '<label style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px 3px 6px;font-size:12.5px;border:1px solid var(--wa-line);border-radius:999px;margin:0 6px 6px 0;cursor:pointer;background:#fff">'
+      return '<label style="display:inline-flex;gap:6px;align-items:center;padding:3px 10px 3px 6px;font-size:12.5px;border:1px solid var(--wa-line);border-radius:999px;margin:0 6px 6px 0;cursor:pointer;background:#FFFAF2">'
         + '<input type="checkbox" class="w40cb" value="' + t + '"' + (cur.indexOf(t) >= 0 ? ' checked' : '') + ' style="width:14px;height:14px" /> '
         + esc(W72_LABELS[t] || t) + '</label>';
     }
@@ -198,7 +198,7 @@
       var table = body.querySelector('table.wa-tbl');
       if (!table) return;
       body.insertAdjacentHTML('afterbegin',
-        '<div id="w72bar"><b style="color:#1f5f4f">People</b> Invite someone new, change what each person sees, or remove access.'
+        '<div id="w72bar"><b style="color:#103F39">People</b> Invite someone new, change what each person sees, or remove access.'
         + '<button id="w72inv" style="margin-left:auto">+ Invite someone</button></div>');
       var headRow = table.querySelector('thead tr');
       if (headRow && headRow.children.length === 4) headRow.insertAdjacentHTML('beforeend', '<th></th>');
@@ -209,7 +209,7 @@
         if (!em) { tr.insertAdjacentHTML('beforeend', '<td></td>'); return; }
         tr.insertAdjacentHTML('beforeend',
           FOUNDERS.indexOf(em) >= 0
-            ? '<td><span style="font-size:11px;color:#9aa5a1">founder</span></td>'
+            ? '<td><span style="font-size:11px;color:#797773">founder</span></td>'
             : '<td><a data-w72rm="' + esc(em) + '">Remove</a></td>');
       });
     } catch (e) { /* non-fatal */ }

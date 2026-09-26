@@ -45,7 +45,7 @@
       if (!card || card.getAttribute('data-w78') === '1') return;
       card.setAttribute('data-w78', '1');
       var name = (h.textContent || '').replace('Your plate,', '').trim();
-      card.innerHTML = '<h2 style="color:#2c7a66">Your plate' + (name ? ', ' + esc(name) : '') + '</h2>' +
+      card.innerHTML = '<h2 style="color:#103F39">Your plate' + (name ? ', ' + esc(name) : '') + '</h2>' +
         '<p class="read">Everything that needs you personally now lives in one queue on Home.</p>' +
         '<div class="wa24-links"><button data-w78home>Open your Home queue</button></div>';
     });

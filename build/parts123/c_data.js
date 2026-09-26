@@ -27,7 +27,7 @@
   function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return T.order.filter(function (d) { return !a || a.indexOf(d) >= 0; }); }
   function teamLabel(d) { return (T.labels && T.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
   function teamShort(d) { return (T.short && T.short[d]) || teamLabel(d); }
-  function teamColor(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64'; }
+  function teamColor(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
   function tint(hex, a) { var h = String(hex || '').replace('#', ''); if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join(''); var n = parseInt(h, 16); if (h.length !== 6 || isNaN(n)) return 'rgba(16,63,57,' + a + ')'; return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')'; }
   function cv(hex) { return '--c:' + hex + ';--cb:' + tint(hex, 0.13); }
   function homeTeam() { var ds = allowedTeams(); var mine = me().dept; if (R.tm.d && ds.indexOf(R.tm.d) >= 0) return R.tm.d; if (mine && ds.indexOf(mine) >= 0) return mine; return ds[0] || T.order[0]; }

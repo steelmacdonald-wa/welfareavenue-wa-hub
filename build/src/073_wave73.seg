@@ -27,8 +27,8 @@
   var st = document.createElement('style');
   st.id = 'wa73css';
   st.textContent = '' +
-    '#w73dash{display:inline-flex;gap:8px;align-items:center;background:#f6f8f7;border-radius:999px;padding:5px 14px;font-size:12px;color:#3d4642;margin:0 0 10px;}' +
-    '#w73dash a{color:#1f5f4f;font-weight:700;cursor:pointer;}';
+    '#w73dash{display:inline-flex;gap:8px;align-items:center;background:#F4F2EA;border-radius:999px;padding:5px 14px;font-size:12px;color:#1F201E;margin:0 0 10px;}' +
+    '#w73dash a{color:#103F39;font-weight:700;cursor:pointer;}';
   document.head.appendChild(st);
 
   function w73Group(key, label, tabs) {

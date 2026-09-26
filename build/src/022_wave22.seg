@@ -30,50 +30,50 @@ var WA_FIN_CATS_EX = ['5020 Purchases - COS', 'Supplies and materials - COS', '6
   var css = '' +
     '#finances .fin-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px;}' +
     '#finances .fin-head h2{margin:0;}' +
-    '#finances .fin-fy{font-size:11.5px;color:var(--wa-muted,#7b8a86);}' +
+    '#finances .fin-fy{font-size:11.5px;color:var(--wa-muted,#797773);}' +
     '#finances .fin-actions{margin-left:auto;display:flex;gap:8px;}' +
     '.fin-kpis{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0;}' +
     '.fin-kpi{background:rgba(127,127,127,.10);border-radius:10px;padding:9px 14px;min-width:130px;}' +
-    '.fin-kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);}' +
+    '.fin-kpi .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);}' +
     '.fin-kpi .v{font-size:18px;font-weight:700;margin-top:2px;}' +
-    '.fin-kpi .v.pos{color:#3f9c7f;}.fin-kpi .v.neg{color:#c96b5f;}' +
+    '.fin-kpi .v.pos{color:#103F39;}.fin-kpi .v.neg{color:#c96b5f;}' +
     '.fin-wrap{overflow-x:auto;}' +
     'table.fin-tab{width:100%;border-collapse:collapse;font-size:12px;}' +
-    '.fin-tab th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 7px;white-space:nowrap;}' +
+    '.fin-tab th{text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);padding:4px 7px;white-space:nowrap;}' +
     '.fin-tab th:first-child{text-align:left;}' +
     '.fin-tab td{padding:5px 7px;border-top:1px solid rgba(127,127,127,.2);text-align:right;white-space:nowrap;}' +
     '.fin-tab td:first-child{text-align:left;white-space:normal;font-weight:600;}' +
     '.fin-tab tr.tot td{font-weight:700;border-top:2px solid rgba(127,127,127,.4);}' +
-    '.fin-tab .a{color:var(--wa-muted,#7b8a86);font-size:11px;}' +
+    '.fin-tab .a{color:var(--wa-muted,#797773);font-size:11px;}' +
     '.fin-tab .over{color:#c96b5f;font-weight:700;}' +
     'input.fin-bud{width:74px;font-size:11.5px;text-align:right;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;}' +
-    'input.fin-bud.chg{border-color:#2c7a66;}' +
+    'input.fin-bud.chg{border-color:#103F39;}' +
     '.fin-bar{height:5px;border-radius:3px;background:rgba(127,127,127,.25);overflow:hidden;min-width:70px;}' +
-    '.fin-bar i{display:block;height:100%;background:#2c7a66;}' +
+    '.fin-bar i{display:block;height:100%;background:#103F39;}' +
     '.fin-bar i.over{background:#c96b5f;}' +
     '.fin-dept{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 4px;}' +
     '.fin-dcard{background:rgba(127,127,127,.10);border-radius:9px;padding:8px 12px;min-width:118px;}' +
     '.fin-dcard .n{font-size:11px;font-weight:700;}' +
     '.fin-dcard .s{font-size:15px;font-weight:700;margin-top:1px;}' +
-    '.fin-dcard .q{font-size:10px;color:var(--wa-muted,#7b8a86);}' +
+    '.fin-dcard .q{font-size:10px;color:var(--wa-muted,#797773);}' +
     '.fin-ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0 8px;}' +
     '.fin-ctl select,.fin-ctl input{font-size:12px;padding:4px 8px;border-radius:7px;border:1px solid rgba(127,127,127,.35);background:transparent;color:inherit;}' +
-    '.fin-ctl option{color:#1c2b27;}' +
+    '.fin-ctl option{color:#103F39;}' +
     'table.fin-led{width:100%;border-collapse:collapse;font-size:12px;}' +
-    '.fin-led th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);padding:4px 6px;}' +
+    '.fin-led th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);padding:4px 6px;}' +
     '.fin-led td{padding:5px 6px;border-top:1px solid rgba(127,127,127,.18);vertical-align:middle;}' +
     '.fin-led td.amt{text-align:right;font-weight:700;white-space:nowrap;}' +
-    '.fin-led td.amt.pos{color:#3f9c7f;}.fin-led td.amt.neg{color:#c96b5f;}' +
+    '.fin-led td.amt.pos{color:#103F39;}.fin-led td.amt.neg{color:#c96b5f;}' +
     '.fin-led select{font-size:11px;padding:2px 4px;border-radius:5px;border:1px solid rgba(127,127,127,.3);background:transparent;color:inherit;max-width:132px;}' +
-    '.fin-led option{color:#1c2b27;}' +
+    '.fin-led option{color:#103F39;}' +
     '.fin-led tr.dup td{opacity:.55;}' +
     '.fin-led tr.dup td.desc{text-decoration:line-through;}' +
-    '.fin-badge{font-size:9.5px;border:1px solid rgba(127,127,127,.4);border-radius:7px;padding:1px 6px;color:var(--wa-muted,#7b8a86);white-space:nowrap;}' +
+    '.fin-badge{font-size:9.5px;border:1px solid rgba(127,127,127,.4);border-radius:7px;padding:1px 6px;color:var(--wa-muted,#797773);white-space:nowrap;}' +
     '.fin-badge.dup{border-color:#c96b5f;color:#c96b5f;}' +
-    'a.fin-lnk{font-size:10.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
-    '.fin-stmts{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:10px;}' +
+    'a.fin-lnk{font-size:10.5px;color:#103F39;cursor:pointer;text-decoration:underline;white-space:nowrap;}' +
+    '.fin-stmts{font-size:11.5px;color:var(--wa-muted,#797773);margin-top:10px;}' +
     '.fin-stmts li{margin:2px 0;}' +
-    '.fin-note{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin:6px 0;}' +
+    '.fin-note{font-size:11.5px;color:var(--wa-muted,#797773);margin:6px 0;}' +
     '@media (max-width:640px){.fin-kpi{min-width:100px;}.fin-led select{max-width:96px;}}';
   var st = document.createElement('style');
   st.id = 'wa22css';
@@ -274,17 +274,17 @@ function waFinRender() {
       }).join('') + '</ul></details>'
     : '';
 
-  sec.innerHTML = '<div class="card" style="border-top-color:#2c7a66">' +
-    '<div class="fin-head"><h2 style="color:#2c7a66">Finances and budgeting</h2>' +
+  sec.innerHTML = '<div class="card" style="border-top-color:#103F39">' +
+    '<div class="fin-head"><h2 style="color:#103F39">Finances and budgeting</h2>' +
     '<span class="fin-fy">' + waFinFYLabel() + ': Oct 1 to Sep 30 &middot; budgets from the Budget 2025-2026 sheet</span>' +
     (isStaff() ? '<span class="fin-actions"><button class="btn mini" data-fimp="1">Import bank statement</button><button class="btn ghost mini" data-fexp="1">Log an expense</button></span>' : '') +
     '</div>' +
     kpis +
-    '<h3 class="block" style="color:#2c7a66">Budget vs actual: income</h3>' + waFinBudTable(WA_FIN_CATS_IN, true, 'Income line') +
-    '<h3 class="block" style="color:#2c7a66">Budget vs actual: expenses' + saveBtn + '</h3>' + waFinBudTable(WA_FIN_CATS_EX, false, 'Expense line') +
-    '<h3 class="block" style="color:#2c7a66">Spending by department</h3>' +
+    '<h3 class="block" style="color:#103F39">Budget vs actual: income</h3>' + waFinBudTable(WA_FIN_CATS_IN, true, 'Income line') +
+    '<h3 class="block" style="color:#103F39">Budget vs actual: expenses' + saveBtn + '</h3>' + waFinBudTable(WA_FIN_CATS_EX, false, 'Expense line') +
+    '<h3 class="block" style="color:#103F39">Spending by department</h3>' +
     '<div class="fin-note">Where the money goes when each transaction is allocated. Duplicates excluded.</div>' + deptCards +
-    '<h3 class="block" style="color:#2c7a66">Transactions</h3>' +
+    '<h3 class="block" style="color:#103F39">Transactions</h3>' +
     '<div class="fin-ctl"><select data-fq="1">' + qOpts + '</select><select data-fd="1">' + dOpts + '</select>' +
     '<input type="text" data-fs="1" placeholder="Search description or category" value="' + esc(WA_FIN_SEARCH) + '" /></div>' +
     waFinLedger() + stmts + '</div>';

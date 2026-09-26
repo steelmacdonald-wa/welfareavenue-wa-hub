@@ -31,13 +31,19 @@
     fundraising: [
       ['Fundraising events', 'Flag Football, Rally Paper, the Gift Basket Drive and friends.'],
       ['Donor program', 'Donor relationships, stewardship, Keela, recurring giving.'],
-      ['Grants', 'Applications, reports, and funder relationships.']
+      ['Grants', 'Applications, reports, and funder relationships.'],
+      ['Finance', 'Bookkeeping, statements, budgets and forecasts.']
     ],
     opsmtl: [
       ['General', 'Day to day operations work.'],
       ['Logistics', 'Transport, pickups, equipment and event logistics.'],
-      ['Inventory', 'Supplies, storage, and reordering.'],
-      ['Program development', "Shima's team: new programs and partnerships."]
+      ['Inventory', 'Supplies, storage, and reordering.']
+    ],
+    progdev: [
+      ['General', 'Work that is not tied to one programme.'],
+      ['Beneficiary programs', 'Programmes for the people we serve: employment, feedback, referrals.'],
+      ['Research and data', 'Surveys, evaluation and the numbers behind the programmes.'],
+      ['Community team', 'Community leads, partnerships and outreach.']
     ],
     opsto: [
       ['General', 'Day to day Toronto operations.'],
@@ -55,12 +61,12 @@
   st.id = 'wa71css';
   st.textContent = '' +
     '.w71tabs{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 10px;}' +
-    '.w71tab{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;color:#3d4642;cursor:pointer;line-height:1.4;}' +
+    '.w71tab{border:1px solid var(--wa-line);background:#FFFAF2;border-radius:999px;padding:5px 14px;font-size:12px;font-weight:700;color:#1F201E;cursor:pointer;line-height:1.4;}' +
     '.w71tab .n{font-size:10px;font-weight:800;opacity:.55;margin-left:4px;}' +
-    '.w71tab.on{color:#fff;border-color:transparent;}' +
+    '.w71tab.on{color:#FFFAF2;border-color:transparent;}' +
     /* task rows: a calmer card look, same functionality */
-    '.checklist li{background:#fff;border:1px solid var(--wa-line);border-radius:10px;padding:9px 12px;margin:0 0 7px;list-style:none;transition:box-shadow .12s;}' +
-    '.checklist li:hover{box-shadow:0 3px 10px rgba(20,48,43,.08);}' +
+    '.checklist li{background:#FFFAF2;border:1px solid var(--wa-line);border-radius:10px;padding:9px 12px;margin:0 0 7px;list-style:none;transition:box-shadow .12s;}' +
+    '.checklist li:hover{box-shadow:0 3px 10px rgba(16,63,57,.08);}' +
     '.checklist{padding-left:0;}' +
     '.subsection{margin:0 0 14px;}' +
     '.subsection .subhead{margin-bottom:2px;}';
@@ -71,7 +77,7 @@
     if (typeof SECTIONS !== 'undefined') {
       Object.keys(W71_WS).forEach(function (d) {
         if (!SECTIONS[d]) return;
-        var col = SECTIONS[d].color || '#2c7a66';
+        var col = SECTIONS[d].color || '#103F39';
         var existing = (SECTIONS[d].subsections || []).map(function (s) { return s.title; });
         var subs = W71_WS[d].map(function (w) {
           return { title: w[0], color: col, summary: w[1] };
@@ -122,7 +128,7 @@
       var el = document.getElementById(id);
       var card = el ? el.querySelector('.dept-card') : null;
       if (!card || card.querySelector('.w71tabs')) return;
-      var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#2c7a66';
+      var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[id]) || '#103F39';
       var cur = WA71_WS[id] || 'All';
       var open = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).filter(function (t) {
         return t.department === id && !t.done;

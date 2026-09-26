@@ -19,9 +19,9 @@
   var css = document.createElement('style');
   css.textContent =
     '.sr .sr-type.w107d{background:rgba(66,133,244,.12);color:#3367d6;}' +
-    '.w107src{margin:2px 0 10px;font-size:12px;color:var(--wa-muted,#8592a3);}' +
-    '.w107src a{color:#2c7a66;font-weight:600;text-decoration:none;border:1px solid rgba(44,122,102,.35);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;display:inline-block;background:#fff;}' +
-    '.w107src a:hover{background:rgba(44,122,102,.08);}';
+    '.w107src{margin:2px 0 10px;font-size:12px;color:var(--wa-muted,#797773);}' +
+    '.w107src a{color:#103F39;font-weight:600;text-decoration:none;border:1px solid rgba(16,63,57,.35);border-radius:999px;padding:2px 10px;margin:2px 4px 2px 0;display:inline-block;background:#FFFAF2;}' +
+    '.w107src a:hover{background:rgba(16,63,57,.08);}';
   document.head.appendChild(css);
 
   /* ---------- 1. Drive results in search everything ---------- */

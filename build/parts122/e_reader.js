@@ -268,7 +268,7 @@
     var a = A.myAwards[award]; if (!a) return;
     var w = window.open('', '_blank'); if (!w) { toastS('Allow pop-ups for the Hub to print the certificate'); return; }
     var certCss = (document.getElementById('wa122css') || {}).textContent || '';
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + E(a.title) + ' certificate</title><style>@page{size:A4 landscape;margin:12mm;}body{margin:0;background:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;}.w122cert{width:260mm;max-width:100%;}' +
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + E(a.title) + ' certificate</title><style>@page{size:A4 landscape;margin:12mm;}body{margin:0;background:#FFFAF2;display:flex;align-items:center;justify-content:center;min-height:100vh;}.w122cert{width:260mm;max-width:100%;}' +
       certCss + '</style></head><body>' + certHtml(a) + '<script>setTimeout(function(){window.print();},350);<\/script></body></html>');
     w.document.close();
   }
@@ -292,7 +292,7 @@
     var ppl = people().slice().sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }).filter(function (p) { return !q || String(p.name + ' ' + (p.role || '') + ' ' + (p.department || '')).toLowerCase().indexOf(q) >= 0; });
     R.pick = R.pick || {};
     sh.innerHTML = headHtml(t, 'Assign: ' + t.title) + '<div class="bd"><div class="main"><div class="wrap"><div class="prose"><p>Pick the people who should take this training. It shows up in their Up next with your name on it, and HR sees it on the training board.</p></div>' +
-      '<label class="w122srch" style="max-width:none;background:#fff">' + ic('search') + '<input type="search" data-w122aq="1" placeholder="Search people" value="' + E(R.q || '') + '"></label><div class="ppl">' + ppl.map(function (p) {
+      '<label class="w122srch" style="max-width:none;background:#FFFAF2">' + ic('search') + '<input type="search" data-w122aq="1" placeholder="Search people" value="' + E(R.q || '') + '"></label><div class="ppl">' + ppl.map(function (p) {
         var r = rowFor(t.id, p.name), st = r ? (r.status === 'done' ? 'done ' + fmtShort(r.done_at) : (r.assigned_by ? 'assigned' : 'started')) : '';
         return '<label><input type="checkbox" data-w122pick="' + E(p.name) + '"' + (R.pick[p.name] ? ' checked' : '') + (r && r.status === 'done' ? ' disabled' : '') + '><span>' + E(p.name) + ' <em>' + E(p.role || '') + '</em></span><em>' + E(st) + '</em></label>';
       }).join('') + '</div></div></div></div><div class="ft"><button class="w122btn soft" data-w122assignx="1">' + ic('back') + ' Back</button><span class="sp"></span><button class="w122btn" data-w122assigngo="1">' + ic('check') + ' Assign to ' + Object.keys(R.pick).filter(function (k) { return R.pick[k]; }).length + '</button></div>';
@@ -393,7 +393,7 @@
   function confetti(cv, n) {
     if (!cv || !cv.getContext) return;
     var ctx = cv.getContext('2d'), W = cv.width = innerWidth, H = cv.height = innerHeight;
-    var cols = [GOLD, TEAL, PURPLE, '#F4D27A', '#5CD6B8', '#fff', FLAG];
+    var cols = [GOLD, TEAL, PURPLE, '#F4D27A', '#5CD6B8', '#FFFAF2', FLAG];
     var ps = []; for (var i = 0; i < n; i++) ps.push({ x: W / 2 + (Math.random() - 0.5) * 120, y: H * 0.42, vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 15 - 5, r: Math.random() * 6 + 3, c: cols[i % cols.length], a: Math.random() * 6, va: (Math.random() - 0.5) * 0.3, life: 0 });
     var t0 = performance.now();
     (function frame(now) {

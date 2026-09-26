@@ -23,16 +23,16 @@
     '.w90grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin:8px 0 4px;}' +
     '.w90box{background:rgba(127,127,127,.07);border-radius:10px;padding:10px 12px;min-width:0;}' +
     '.w90box.wide{grid-column:1/-1;}' +
-    '.w90t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);margin-bottom:6px;}' +
+    '.w90t{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);margin-bottom:6px;}' +
     '.w90box svg{width:100%;height:auto;display:block;}' +
-    '.w90ax{font-size:9.5px;fill:var(--wa-muted,#7b8a86);}' +
+    '.w90ax{font-size:9.5px;fill:var(--wa-muted,#797773);}' +
     '.w90row{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:11.5px;}' +
     '.w90row .l{flex:0 0 126px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
     '.w90row .b{flex:1;height:9px;border-radius:5px;background:rgba(127,127,127,.16);overflow:visible;position:relative;min-width:40px;}' +
     '.w90row .b i{display:block;height:100%;border-radius:5px;}' +
     '.w90row .b s{position:absolute;top:-3px;bottom:-3px;width:2px;background:currentColor;opacity:.5;text-decoration:none;}' +
     '.w90row .v{flex:0 0 auto;font-weight:700;font-size:11px;min-width:54px;text-align:right;}' +
-    '.w90leg{display:flex;gap:14px;font-size:10.5px;color:var(--wa-muted,#7b8a86);margin-top:5px;flex-wrap:wrap;}' +
+    '.w90leg{display:flex;gap:14px;font-size:10.5px;color:var(--wa-muted,#797773);margin-top:5px;flex-wrap:wrap;}' +
     '.w90leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px;}' +
     '@media (max-width:640px){.w90row .l{flex-basis:96px;}}';
   document.head.appendChild(css);
@@ -131,18 +131,18 @@
     M.forEach(function (m, i) {
       var cx = padL + iw * i + iw / 2;
       var hi = ih * m.inc / max, hs = ih * m.spd / max;
-      if (m.inc > 0) s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - hi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hi.toFixed(1) + '" rx="1.5" fill="#3f9c7f"><title>' + m.label + ' income: ' + waFinMoney(m.inc, true) + '</title></rect>';
+      if (m.inc > 0) s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - hi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hi.toFixed(1) + '" rx="1.5" fill="#103F39"><title>' + m.label + ' income: ' + waFinMoney(m.inc, true) + '</title></rect>';
       if (m.spd > 0) s += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - padB - hs).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + hs.toFixed(1) + '" rx="1.5" fill="#c96b5f"><title>' + m.label + ' spending: ' + waFinMoney(m.spd, true) + '</title></rect>';
       if (m.pinc) {
         var phi = ih * m.pinc / max, phs = ih * (m.pspd || 0) / max;
-        s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - phi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + phi.toFixed(1) + '" rx="1.5" fill="#3f9c7f" fill-opacity="0.35" stroke="#3f9c7f" stroke-dasharray="3,2" stroke-width="1"><title>' + m.label + ' PROJECTED income: about ' + waFinMoney(m.pinc) + '</title></rect>';
+        s += '<rect x="' + (cx - bw - 1).toFixed(1) + '" y="' + (H - padB - phi).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + phi.toFixed(1) + '" rx="1.5" fill="#103F39" fill-opacity="0.35" stroke="#103F39" stroke-dasharray="3,2" stroke-width="1"><title>' + m.label + ' PROJECTED income: about ' + waFinMoney(m.pinc) + '</title></rect>';
         s += '<rect x="' + (cx + 1).toFixed(1) + '" y="' + (H - padB - phs).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + phs.toFixed(1) + '" rx="1.5" fill="#c96b5f" fill-opacity="0.35" stroke="#c96b5f" stroke-dasharray="3,2" stroke-width="1"><title>' + m.label + ' PROJECTED spending: about ' + waFinMoney(m.pspd || 0) + '</title></rect>';
       }
       s += '<text x="' + cx.toFixed(1) + '" y="' + (H - padB + 13) + '" text-anchor="middle" class="w90ax">' + m.label + '</text>';
     });
     return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Income and spending by month">' + s + '</svg>' +
-      '<div class="w90leg"><span><i style="background:#3f9c7f"></i>Income</span><span><i style="background:#c96b5f"></i>Spending</span>' +
-      (proj ? '<span><i style="background:rgba(63,156,127,.35);border:1px dashed #3f9c7f"></i>Projected (average of the last ' + proj.months + ' months with data)</span>' : '<span>Hover a bar for the exact amount</span>') +
+      '<div class="w90leg"><span><i style="background:#103F39"></i>Income</span><span><i style="background:#c96b5f"></i>Spending</span>' +
+      (proj ? '<span><i style="background:rgba(63,156,127,.35);border:1px dashed #103F39"></i>Projected (average of the last ' + proj.months + ' months with data)</span>' : '<span>Hover a bar for the exact amount</span>') +
       '</div>';
   }
 
@@ -170,7 +170,7 @@
     s += '<text x="' + (padL - 6) + '" y="' + (y0 + 3).toFixed(1) + '" text-anchor="end" class="w90ax">$0</text>';
     var pts = cum.map(function (v, j) { return X(j).toFixed(1) + ',' + Y(v).toFixed(1); }).join(' ');
     var last = cum[cum.length - 1];
-    var col = last >= 0 ? '#3f9c7f' : '#c96b5f';
+    var col = last >= 0 ? '#103F39' : '#c96b5f';
     s += '<polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
     cum.forEach(function (v, j) {
       s += '<circle cx="' + X(j).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" fill="' + col + '"><title>End of ' + M[j].label + ': ' + waFinMoney(v, true) + ' net</title></circle>';
@@ -183,7 +183,7 @@
       var ppts = [X(cum.length - 1).toFixed(1) + ',' + Y(last).toFixed(1)].concat(pcum.map(function (v, j) {
         return X(proj.from + j).toFixed(1) + ',' + Y(v).toFixed(1);
       })).join(' ');
-      var pcol = pcum[pcum.length - 1] >= 0 ? '#3f9c7f' : '#c96b5f';
+      var pcol = pcum[pcum.length - 1] >= 0 ? '#103F39' : '#c96b5f';
       s += '<polyline points="' + ppts + '" fill="none" stroke="' + pcol + '" stroke-width="2" stroke-dasharray="5,4" stroke-linejoin="round" stroke-linecap="round" opacity="0.75"/>';
       pcum.forEach(function (v, j) {
         s += '<circle cx="' + X(proj.from + j).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3" fill="none" stroke="' + pcol + '" stroke-width="1.5"><title>End of ' + M[proj.from + j].label + ' PROJECTED: about ' + waFinMoney(v) + ' net</title></circle>';
@@ -207,7 +207,7 @@
       return '<div class="w90row" title="' + esc(x.label) + ': ' + waFinMoney(x.value, true) + (total > 0 ? ' (' + share + '% of total)' : '') + '">' +
         '<span class="l">' + esc(x.label) + '</span>' +
         '<span class="b"><i style="width:' + pct + '%;background:' + color + '"></i></span>' +
-        '<span class="v">' + w90K(x.value) + (total > 0 ? ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">' + share + '%</span>' : '') + '</span></div>';
+        '<span class="v">' + w90K(x.value) + (total > 0 ? ' <span style="font-weight:400;color:var(--wa-muted,#797773)">' + share + '%</span>' : '') + '</span></div>';
     }).join('');
   }
 
@@ -230,10 +230,10 @@
       var tip = esc(r.c) + ': spent ' + waFinMoney(r.act, true) + ' of ' + waFinMoney(r.bud) + ' FY budget' + (over ? ' (over budget)' : '');
       return '<div class="w90row" title="' + tip + '">' +
         '<span class="l">' + esc(r.c) + '</span>' +
-        '<span class="b"><i style="width:' + wAct + '%;background:' + (over ? '#c96b5f' : '#2c7a66') + '"></i>' +
+        '<span class="b"><i style="width:' + wAct + '%;background:' + (over ? '#c96b5f' : '#103F39') + '"></i>' +
         (r.bud > 0 ? '<s style="left:' + wBud + '%"></s>' : '') + '</span>' +
-        '<span class="v' + (over ? '" style="color:#c96b5f' : '') + '">' + w90K(r.act) + ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">/ ' + w90K(r.bud) + '</span></span></div>';
-    }).join('') + '<div class="w90leg"><span><i style="background:#2c7a66"></i>Spent</span><span><i style="background:#c96b5f"></i>Over budget</span><span>| marks the FY budget</span></div>';
+        '<span class="v' + (over ? '" style="color:#c96b5f' : '') + '">' + w90K(r.act) + ' <span style="font-weight:400;color:var(--wa-muted,#797773)">/ ' + w90K(r.bud) + '</span></span></div>';
+    }).join('') + '<div class="w90leg"><span><i style="background:#103F39"></i>Spent</span><span><i style="background:#c96b5f"></i>Over budget</span><span>| marks the FY budget</span></div>';
   }
 
   function w90Charts() {
@@ -244,7 +244,7 @@
     var d = w90Data();
     var html;
     if (!d.any) {
-      html = '<div id="w90charts"><h3 class="block" style="color:#2c7a66">Charts</h3>' +
+      html = '<div id="w90charts"><h3 class="block" style="color:#103F39">Charts</h3>' +
         '<div class="fin-note">Charts appear once transactions are imported.</div></div>';
     } else {
       var ex = w90Sorted(d.byCatEx), inn = w90Sorted(d.byCatIn), dep = w90Sorted(d.byDept);
@@ -253,14 +253,14 @@
       var deptName = {};
       WA_FIN_DEPTS.forEach(function (x) { deptName[x[0]] = x[1]; });
       dep.forEach(function (x) { x.label = deptName[x.label] || x.label; });
-      html = '<div id="w90charts"><h3 class="block" style="color:#2c7a66">Charts</h3>' +
+      html = '<div id="w90charts"><h3 class="block" style="color:#103F39">Charts</h3>' +
         '<div class="fin-note">The ' + waFinFYLabel() + ' picture at a glance. Duplicates excluded, same as the tables. Hover anything for exact amounts.</div>' +
         '<div class="w90grid">' +
         '<div class="w90box wide"><div class="w90t">Income vs spending by month' + (d.proj ? ' (with forecast)' : '') + '</div>' + w90ChartMonthly(d.M, d.proj) + '</div>' +
         '<div class="w90box wide"><div class="w90t">Net position over the year' + (d.proj ? ' (with forecast)' : '') + '</div>' + w90ChartNet(d.M, d.cut, d.proj) + '</div>' +
         '<div class="w90box"><div class="w90t">Where the money goes</div>' + w90HBars(ex, '#c96b5f', totEx) + '</div>' +
-        '<div class="w90box"><div class="w90t">Where the money comes from</div>' + (inn.length ? w90HBars(inn, '#3f9c7f', totIn) : '<div class="fin-note">No income recorded yet this year.</div>') + '</div>' +
-        '<div class="w90box"><div class="w90t">Department share of spending</div>' + w90HBars(dep, '#2c7a66', totEx) + '</div>' +
+        '<div class="w90box"><div class="w90t">Where the money comes from</div>' + (inn.length ? w90HBars(inn, '#103F39', totIn) : '<div class="fin-note">No income recorded yet this year.</div>') + '</div>' +
+        '<div class="w90box"><div class="w90t">Department share of spending</div>' + w90HBars(dep, '#103F39', totEx) + '</div>' +
         '<div class="w90box"><div class="w90t">Budget vs actual (FY, expenses)</div>' + w90Bullets() + '</div>' +
         '</div></div>';
     }

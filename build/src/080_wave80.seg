@@ -16,9 +16,9 @@
   var css = document.createElement('style');
   css.textContent =
     '.w80act{font-size:12px;margin-top:4px;}' +
-    '.w80act a{cursor:pointer;text-decoration:underline;color:#2c7a66;margin-right:12px;}' +
-    '.w80chip{display:inline-block;background:#eef4f1;border:1px solid #cfe0d8;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;color:#14302b;}' +
-    '.w80note{font-size:10.5px;color:#7b8a86;display:block;margin-top:2px;}';
+    '.w80act a{cursor:pointer;text-decoration:underline;color:#103F39;margin-right:12px;}' +
+    '.w80chip{display:inline-block;background:#ECEBE3;border:1px solid #cfe0d8;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;color:#103F39;}' +
+    '.w80note{font-size:10.5px;color:#797773;display:block;margin-top:2px;}';
   document.head.appendChild(css);
 
   /* ---------- 1. actionable empty states ---------- */
@@ -38,7 +38,7 @@
       host.parentNode.insertBefore(act, host.nextSibling);
     });
     /* empty folds (wave77) */
-    var folds = { goals: ['No quarterly goals here yet.', '#goals', 'Set one on the Strategy page'],
+    var folds = { goals: ['No quarterly goals here yet.', '#goals', 'Set one on the Department goals page'],
                   requests: ['Nothing waiting on this team.', '#requests', 'File a request'],
                   updates: ['Updates arrive automatically from meeting transcripts.', '#transcripts', 'Upload a transcript'] };
     Object.keys(folds).forEach(function (k) {

@@ -23,22 +23,22 @@ var WA27_LOADED = false;
   st.id = 'wa27css';
   st.textContent = '' +
     '.w27-chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 2px;}' +
-    '.w27-chip{border:1px solid rgba(127,127,127,.35);border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer;background:rgba(44,122,102,.06);}' +
+    '.w27-chip{border:1px solid rgba(127,127,127,.35);border-radius:9px;padding:7px 12px;font-size:12.5px;cursor:pointer;background:rgba(16,63,57,.06);}' +
     '.w27-chip b{font-weight:600;}' +
     '.w27-chip .n{opacity:.65;margin-left:5px;}' +
     '.w27-chip.gen{background:transparent;}' +
-    '.w27-desc{font-size:13.5px;color:var(--wa-muted,#7b8a86);margin:4px 0 12px;max-width:720px;}' +
+    '.w27-desc{font-size:13.5px;color:var(--wa-muted,#797773);margin:4px 0 12px;max-width:720px;}' +
     '.w27-goal{font-size:12.5px;border:1px solid rgba(168,127,44,.4);background:rgba(168,127,44,.07);border-radius:9px;padding:8px 12px;margin:0 0 14px;max-width:720px;}' +
     '.w27-task{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-bottom:1px solid rgba(127,127,127,.15);font-size:13.5px;}' +
     '.w27-task input[type=checkbox]{width:16px;height:16px;margin-top:2px;flex:0 0 auto;cursor:pointer;}' +
     '.w27-task.done .tt{text-decoration:line-through;opacity:.6;}' +
-    '.w27-task .meta{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:2px;}' +
-    '.w27-task a.mv{color:#2c7a66;cursor:pointer;text-decoration:underline;font-size:11.5px;}' +
+    '.w27-task .meta{font-size:11.5px;color:var(--wa-muted,#797773);margin-top:2px;}' +
+    '.w27-task a.mv{color:#103F39;cursor:pointer;text-decoration:underline;font-size:11.5px;}' +
     '.w27gp{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 10px;font-size:11.5px;}' +
-    '.w27gp .pj{border:1px solid rgba(44,122,102,.45);color:#2c7a66;border-radius:8px;padding:1px 8px;cursor:pointer;}' +
+    '.w27gp .pj{border:1px solid rgba(16,63,57,.45);color:#103F39;border-radius:8px;padding:1px 8px;cursor:pointer;}' +
     '.w27gp a.sg{color:#a87f2c;cursor:pointer;text-decoration:underline;}' +
     '.w27-sug{border-top:1px solid rgba(127,127,127,.2);padding:8px 0;font-size:13px;}' +
-    '.w27-sug .why{font-size:12px;color:var(--wa-muted,#7b8a86);margin-top:2px;}';
+    '.w27-sug .why{font-size:12px;color:var(--wa-muted,#797773);margin-top:2px;}';
   document.head.appendChild(st);
 })();
 
@@ -92,7 +92,7 @@ function wa27DeptCard(id) {
     chips += '<span class="w27-chip" data-w27o="' + p.id + '"><b>' + esc(wa27Name(p)) + '</b><span class="n">' + (WA27_COUNTS['p' + p.id] || 0) + ' open</span></span>';
   });
   var staff = typeof isStaff === 'function' && isStaff();
-  card.innerHTML = '<h2 style="color:#2c7a66">Projects</h2>'
+  card.innerHTML = '<h2 style="color:#103F39">Projects</h2>'
     + '<p class="read" style="margin:0 0 4px">Tasks from transcripts file themselves into these projects; everything else sits in General tasks. Projects roll up into the quarterly goals.</p>'
     + '<div class="w27-chips">' + chips + '</div>'
     + (staff ? '<div class="wa24-links" style="margin-top:10px"><button data-w27add="' + id + '">Add a project</button></div>' : '');
@@ -137,10 +137,10 @@ async function wa27RenderProject(ref, deptForGeneral) {
 
   var html = '<div class="card">'
     + '<button class="vl-back" data-w27back="' + dept + '">&larr; ' + esc(label) + '</button>'
-    + '<h2 style="color:#2c7a66">' + esc(isGen ? 'General tasks' : wa27Name(p)) + '<span class="deptchip" style="background:#2c7a66">' + esc(label) + '</span></h2>'
+    + '<h2 style="color:#103F39">' + esc(isGen ? 'General tasks' : wa27Name(p)) + '<span class="deptchip" style="background:#103F39">' + esc(label) + '</span></h2>'
     + (isGen
       ? '<p class="w27-desc">Open tasks with no project yet. Move one into a project with its move link.</p>'
-      : '<p class="w27-desc">' + esc(p.description || 'No description yet.') + (staff ? ' <a class="mv" data-w27edit="' + p.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">edit project</a>' : '') + '</p>')
+      : '<p class="w27-desc">' + esc(p.description || 'No description yet.') + (staff ? ' <a class="mv" data-w27edit="' + p.id + '" style="color:#103F39;cursor:pointer;text-decoration:underline">edit project</a>' : '') + '</p>')
     + (g ? '<div class="w27-goal">Rolls up to the goal: <b>' + esc(g.title) + '</b>' + (g.status ? ' <span style="opacity:.7">(' + esc(g.status) + ')</span>' : '') + '</div>' : '')
     + '<h3 class="block">Open (' + open.length + ')</h3>'
     + (open.length ? open.map(row).join('') : '<p class="read">Nothing open here right now.</p>')

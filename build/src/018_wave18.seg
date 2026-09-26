@@ -16,7 +16,7 @@
     + '.gfx-card.f-land .gfx-head{margin-bottom:8px;}'
     + '.gfx-card.f-land .gfx-cta{margin-top:12px;}'
     + '.gfx-card.f-land .gfx-foot{margin-top:12px;}'
-    + '#cdGfxOpts input[type=file]{border:1px dashed var(--wa-line);border-radius:8px;padding:8px;background:#fff;}';
+    + '#cdGfxOpts input[type=file]{border:1px dashed var(--wa-line);border-radius:8px;padding:8px;background:#FFFAF2;}';
   document.head.appendChild(st);
   var goBtn = document.getElementById('cdGo');
   if (goBtn && !document.getElementById('cdGfxOpts')) {
@@ -53,12 +53,12 @@ waCdGraphicHtml = function (d) {
   var wide = (d.format === 'story') ? 'width:min(50vmin,460px);' : 'width:min(88vmin,720px);';
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<title>' + esc(d.title || 'Welfare Avenue graphic') + '</title>'
-    + '<style>body{margin:0;background:#f2ebe3;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}'
+    + '<style>body{margin:0;background:#F4F2EA;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}'
     + '.gfx-card{' + wide + '}'
     + WA_GFX_CSS
     + '.gfx-card.f-story{aspect-ratio:9/16;}.gfx-card.f-land{aspect-ratio:1.91/1;}'
     + '.gfx-card.f-land .gfx-rule{margin:8px 0 12px;}.gfx-card.f-land .gfx-head{margin-bottom:8px;}.gfx-card.f-land .gfx-cta{margin-top:12px;}.gfx-card.f-land .gfx-foot{margin-top:12px;}'
-    + '@media print{body{background:#fff;}}'
+    + '@media print{body{background:#FFFAF2;}}'
     + '</style></head><body>'
     + '<div class="' + waGfxClass(d) + '" style="' + waGfxCardStyle(d) + '">' + waCdGfxInner(d) + '</div>'
     + bodyEnd + htmlEnd;

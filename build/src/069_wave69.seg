@@ -23,10 +23,10 @@
   var st = document.createElement('style');
   st.id = 'wa69css';
   st.textContent = '' +
-    '.w69c{display:block;font-size:10px;color:#5b6b66;margin-top:2px;}' +
-    '.w69c b{color:#1f5f4f;}' +
-    '#w69bar{display:flex;gap:10px;align-items:center;background:rgba(31,95,79,.07);border-radius:10px;padding:7px 12px;margin:0 0 10px;font-size:12.5px;color:#14302b;}' +
-    '#w69bar button{border:1px solid var(--wa-line);background:#fff;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#1f5f4f;cursor:pointer;margin-left:auto;}' +
+    '.w69c{display:block;font-size:10px;color:#797773;margin-top:2px;}' +
+    '.w69c b{color:#103F39;}' +
+    '#w69bar{display:flex;gap:10px;align-items:center;background:rgba(16,63,57,.07);border-radius:10px;padding:7px 12px;margin:0 0 10px;font-size:12.5px;color:#103F39;}' +
+    '#w69bar button{border:1px solid var(--wa-line);background:#FFFAF2;border-radius:999px;padding:3px 12px;font-size:11.5px;font-weight:700;color:#103F39;cursor:pointer;margin-left:auto;}' +
     '.w68node{cursor:pointer;}';
   document.head.appendChild(st);
 

@@ -65,7 +65,7 @@
     '#w116ppeople .bar .tf{font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.07);border:none;border-radius:999px;padding:8px 13px;cursor:pointer;}' +
     '#w116ppeople .bar .tf.on{background:' + GREEN + ';color:' + CREAM + ';}' +
     '#w116ppeople .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;}' +
-    '#w116ppeople .pp{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);transition:transform .12s,box-shadow .12s;}' +
+    '#w116ppeople .pp{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 24px -20px rgba(16,63,57,.5);transition:transform .12s,box-shadow .12s;}' +
     '#w116ppeople .pp:hover{transform:translateY(-2px);box-shadow:0 16px 30px -18px rgba(16,63,57,.55);}' +
     '#w116ppeople .pp .top{display:flex;gap:12px;align-items:center;cursor:pointer;}' +
     '#w116ppeople .pp .top .w116av{flex:none;border:3px solid ' + CREAM + ';box-shadow:0 0 0 2px rgba(16,63,57,.12);}' +
@@ -91,18 +91,18 @@
     '#w116pshouts .l .rm{font-size:11px;color:var(--wa-muted);cursor:pointer;background:none;border:none;}' +
     '#w116pshouts .l .rm:hover{color:' + FLAG + ';}' +
     '#w116pshouts form{display:grid;grid-template-columns:minmax(140px,1fr) minmax(200px,3fr) auto;gap:8px;margin-top:12px;}' +
-    '#w116pshouts form select,#w116pshouts form input{padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:10px;font-size:13px;font-family:' + BODY + ';background:#fff;}' +
+    '#w116pshouts form select,#w116pshouts form input{padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:10px;font-size:13px;font-family:' + BODY + ';background:#FFFAF2;}' +
     /* applications */
     '#w116pcands .bar{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;align-items:center;}' +
     '#w116pcands .sf{font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.07);border:none;border-radius:999px;padding:8px 13px;cursor:pointer;}' +
     '#w116pcands .sf.on{background:' + GREEN + ';color:' + CREAM + ';}' +
-    '#w116pcands .c{background:#fff;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 16px;margin:0 0 10px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px 16px;font-family:' + BODY + ';}' +
+    '#w116pcands .c{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 16px;margin:0 0 10px;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:10px 16px;font-family:' + BODY + ';}' +
     '#w116pcands .c .who b{font-size:16px;display:block;}' +
     '#w116pcands .c .who span{display:block;font-size:12.5px;color:var(--wa-muted);margin-top:2px;line-height:1.4;}' +
     '#w116pcands .c .who a{color:' + GREEN + ';}' +
     '#w116pcands .c .ctl{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;}' +
     '#w116pcands .c .ctl label{display:flex;flex-direction:column;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--wa-muted);}' +
-    '#w116pcands .c .ctl select,#w116pcands .c textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:12.5px;font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-weight:500;background:#fff;}' +
+    '#w116pcands .c .ctl select,#w116pcands .c textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid rgba(16,63,57,.2);border-radius:8px;font-size:12.5px;font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-weight:500;background:#FFFAF2;}' +
     '#w116pcands .c textarea{min-height:44px;resize:vertical;grid-column:1 / -1;}' +
     '#w116pcands .c .st{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:rgba(16,63,57,.08);color:' + GREEN + ';margin-right:6px;}' +
     '#w116pcands .c .st.hired{background:rgba(42,140,122,.18);color:#1c6b5d;}' +

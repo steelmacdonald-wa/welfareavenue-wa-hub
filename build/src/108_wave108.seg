@@ -8,7 +8,7 @@
    WA email, sender). One button renders BOTH:
    - the plain-text email into the kit's existing textarea (so the
      existing Copy and mail-app buttons keep working, mailto refreshed),
-   - a Welfare Avenue branded HTML email (green #003F38 header with the
+   - a Welfare Avenue branded HTML email (green #103F39 header with the
      wordmark, white card, green step numbers) with Copy as rich text
      (paste straight into Gmail) and Download .html.
    Body copy comes from app_config 'onboarding_email_template' (Steel's
@@ -23,10 +23,10 @@
   css.textContent =
     '#w108f{background:#fbfbfd;border:1px solid #eef0f4;border-radius:10px;padding:10px 12px;margin:0 0 10px;}' +
     '#w108f .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
-    '#w108f label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#8592a3);margin:0 0 2px;}' +
+    '#w108f label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);margin:0 0 2px;}' +
     '#w108f input{width:100%;box-sizing:border-box;padding:6px 9px;font-size:12.5px;}' +
     '#w108f .wide{grid-column:1 / -1;}' +
-    '#w108prev{border:1px solid #e7e9f0;border-radius:10px;margin-top:10px;max-height:280px;overflow-y:auto;}';
+    '#w108prev{border:1px solid #DEE0D8;border-radius:10px;margin-top:10px;max-height:280px;overflow-y:auto;}';
   document.head.appendChild(css);
 
   var W108_TPL = null;
@@ -60,26 +60,26 @@
   }
   /* branded HTML email: table layout + inline styles for mail clients */
   function w108Html(v) {
-    var G = '#003F38', ACC = '#2c7a66';
+    var G = '#103F39', ACC = '#103F39';
     var step = function (n, title, body) {
       return '<tr><td style="vertical-align:top;padding:10px 12px 10px 0;width:34px">'
-        + '<div style="width:28px;height:28px;border-radius:999px;background:' + ACC + ';color:#ffffff;font-weight:bold;text-align:center;line-height:28px;font-family:Arial,sans-serif;font-size:14px">' + n + '</div></td>'
-        + '<td style="padding:8px 0"><p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:14px;color:#243029"><b>' + title + '</b></p>'
+        + '<div style="width:28px;height:28px;border-radius:999px;background:' + ACC + ';color:#FFFAF2;font-weight:bold;text-align:center;line-height:28px;font-family:Arial,sans-serif;font-size:14px">' + n + '</div></td>'
+        + '<td style="padding:8px 0"><p style="margin:0 0 4px;font-family:Arial,sans-serif;font-size:14px;color:#1F201E"><b>' + title + '</b></p>'
         + '<p style="margin:0;font-family:Arial,sans-serif;font-size:13px;line-height:1.6;color:#4a5551">' + body + '</p></td></tr>';
     };
     var a = function (url, label) { return '<a href="' + url + '" style="color:' + ACC + '">' + label + '</a>'; };
-    return '<!doctype html><html><body style="margin:0;padding:0;background:#f5f5f9">'
-      + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f9;padding:24px 0"><tr><td align="center">'
+    return '<!doctype html><html><body style="margin:0;padding:0;background:#F4F2EA">'
+      + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F2EA;padding:24px 0"><tr><td align="center">'
       + '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%">'
       + '<tr><td style="background:' + G + ';border-radius:12px 12px 0 0;padding:26px 32px;text-align:center">'
       + '<div style="font-family:Arial Black,Arial,sans-serif;font-weight:900;font-size:26px;letter-spacing:2px;color:#f5f5f3;line-height:1.15">WELFARE<br>AVENUE</div></td></tr>'
-      + '<tr><td style="background:#ffffff;padding:28px 32px;border-radius:0 0 12px 12px">'
-      + '<p style="font-family:Arial,sans-serif;font-size:15px;color:#243029;margin:0 0 14px">Dear <b>' + esc(v.first || '[FIRST NAME]') + '</b>,</p>'
-      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#243029;margin:0 0 12px">Congratulations and welcome to the team at <b>Welfare Avenue</b>! We are excited you have accepted the <b>' + esc(v.title || '[JOB TITLE]') + '</b> role within our organization.</p>'
-      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#243029;margin:0 0 6px">Your official start date is <b>' + esc(v.start || '[START DATE]') + '</b>. Before then, we will meet on <b>' + esc(v.prep || '[PREP DAY]') + '</b> for two short sessions:</p>'
-      + '<ul style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.7;color:#243029;margin:0 0 16px 0;padding-left:22px">'
+      + '<tr><td style="background:#FFFAF2;padding:28px 32px;border-radius:0 0 12px 12px">'
+      + '<p style="font-family:Arial,sans-serif;font-size:15px;color:#1F201E;margin:0 0 14px">Dear <b>' + esc(v.first || '[FIRST NAME]') + '</b>,</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#1F201E;margin:0 0 12px">Congratulations and welcome to the team at <b>Welfare Avenue</b>! We are excited you have accepted the <b>' + esc(v.title || '[JOB TITLE]') + '</b> role within our organization.</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;line-height:1.65;color:#1F201E;margin:0 0 6px">Your official start date is <b>' + esc(v.start || '[START DATE]') + '</b>. Before then, we will meet on <b>' + esc(v.prep || '[PREP DAY]') + '</b> for two short sessions:</p>'
+      + '<ul style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.7;color:#1F201E;margin:0 0 16px 0;padding-left:22px">'
       + '<li>' + esc(v.s1 || '[SESSION 1]') + '</li><li>' + esc(v.s2 || '[SESSION 2]') + '</li></ul>'
-      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:0 0 6px"><b>To get started, please complete these steps:</b></p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:0 0 6px"><b>To get started, please complete these steps:</b></p>'
       + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%">'
       + step(1, 'Activate your Welfare Avenue Google account',
           a('https://www.loom.com/share/welfare-avenue-google-setup', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
@@ -95,10 +95,10 @@
       + step(4, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
       + '</table>'
       + '<p style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.65;color:#4a5551;margin:14px 0 0">If you run into any technical issues or have questions, please reach out; we are here to make your onboarding smooth and welcoming.</p>'
-      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:16px 0 0">Looking forward to seeing all the great work you will do with us!</p>'
-      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#243029;margin:14px 0 0">Warmly,<br><b>' + esc(v.sender || 'The Welfare Avenue team') + '</b><br>Welfare Avenue</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:16px 0 0">Looking forward to seeing all the great work you will do with us!</p>'
+      + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:14px 0 0">Warmly,<br><b>' + esc(v.sender || 'The Welfare Avenue team') + '</b><br>Welfare Avenue</p>'
       + '</td></tr>'
-      + '<tr><td style="padding:14px 8px;text-align:center;font-family:Arial,sans-serif;font-size:11px;color:#8592a3">Welfare Avenue, Montreal and Toronto &middot; welfareavenue.com</td></tr>'
+      + '<tr><td style="padding:14px 8px;text-align:center;font-family:Arial,sans-serif;font-size:11px;color:#797773">Welfare Avenue, Montreal and Toronto &middot; welfareavenue.com</td></tr>'
       + '</table></td></tr></table></body></html>';
   }
   function w108Vals() {
@@ -177,7 +177,7 @@
     var box = document.createElement('div');
     box.id = 'w108f';
     box.innerHTML =
-      '<label style="font-size:11px;color:#1f5f4f;margin-bottom:6px">Fill the form, press Build: the plain email below updates and a branded version appears.</label>' +
+      '<label style="font-size:11px;color:#103F39;margin-bottom:6px">Fill the form, press Build: the plain email below updates and a branded version appears.</label>' +
       '<div class="grid">' +
       '<div><label>First name</label><input id="w108first" value="' + esc(first) + '" /></div>' +
       '<div><label>Last name</label><input id="w108last" value="' + esc(last) + '" /></div>' +

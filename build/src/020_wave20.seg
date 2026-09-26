@@ -19,29 +19,29 @@
   var css = ''
     + '#volunteering .vl-sub{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 16px;}'
     + '.vl-sub .fchip{cursor:pointer;}'
-    + '.vl-hero{border:1px solid var(--wa-line);border-radius:12px;padding:16px 18px;background:linear-gradient(180deg,#f7fbf8,#fff);margin-bottom:18px;}'
+    + '.vl-hero{border:1px solid var(--wa-line);border-radius:12px;padding:16px 18px;background:linear-gradient(180deg,#f7fbf8,#FFFAF2);margin-bottom:18px;}'
     + '.vl-hero h3{margin:0 0 4px;font-size:17px;color:var(--wa-ink);}'
     + '.vl-hero .vl-when{font-size:12.5px;color:var(--wa-muted);}'
     + '.vl-month{margin:0 0 6px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--wa-muted);border-bottom:1px solid var(--wa-line);padding-bottom:5px;}'
     + '.vl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:12px;margin:0 0 20px;}'
-    + '.vl-ev{border:1px solid var(--wa-line);border-radius:11px;padding:13px 14px;background:#fff;cursor:pointer;transition:box-shadow .15s,transform .15s;}'
+    + '.vl-ev{border:1px solid var(--wa-line);border-radius:11px;padding:13px 14px;background:#FFFAF2;cursor:pointer;transition:box-shadow .15s,transform .15s;}'
     + '.vl-ev:hover{box-shadow:0 3px 14px rgba(0,0,0,.09);transform:translateY(-1px);}'
     + '.vl-ev.past{opacity:.62;}'
     + '.vl-ev.next{border-color:var(--wa-green);box-shadow:0 0 0 2px rgba(74,124,89,.14);}'
     + '.vl-ev h4{margin:0 0 3px;font-size:14px;color:var(--wa-ink);}'
     + '.vl-ev .vl-code{font-size:11px;color:var(--wa-muted);letter-spacing:.4px;}'
-    + '.vl-pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;letter-spacing:.3px;color:#fff;vertical-align:middle;}'
-    + '.vl-pill.grey{background:#8b8f96;}.vl-pill.green{background:#4a7c59;}.vl-pill.amber{background:#c87a2f;}'
-    + '.vl-pill.red{background:#b3402f;}.vl-pill.blue{background:#3a6ea5;}.vl-pill.purple{background:#8455ff;}'
+    + '.vl-pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;letter-spacing:.3px;color:#FFFAF2;vertical-align:middle;}'
+    + '.vl-pill.grey{background:#797773;}.vl-pill.green{background:#103F39;}.vl-pill.amber{background:#c87a2f;}'
+    + '.vl-pill.red{background:#b3402f;}.vl-pill.blue{background:#3a6ea5;}.vl-pill.purple{background:#6F64AB;}'
     + '.vl-bar{height:6px;border-radius:6px;background:#e8e3dc;overflow:hidden;margin:9px 0 5px;}'
     + '.vl-bar i{display:block;height:100%;background:var(--wa-green);}'
     + '.vl-nums{font-size:11.5px;color:var(--wa-muted);}'
     + '.vl-bub{display:inline-block;padding:2px 8px;margin:2px 4px 2px 0;border-radius:20px;font-size:11px;background:#eef3ef;color:#2f5c43;border:1px solid #dbe6de;}'
     + '.vl-bub.warn{background:#fdf3e6;color:#8a5417;border-color:#f0dcc0;}'
-    + '.vl-bub.off{background:#f3f0ee;color:#8b8f96;border-color:#e6e0da;}'
+    + '.vl-bub.off{background:#f3f0ee;color:#797773;border-color:#e6e0da;}'
     + '.vl-back{background:none;border:0;color:var(--wa-green);font:inherit;font-size:12.5px;cursor:pointer;padding:0;margin:0 0 10px;}'
     + '.vl-back:hover{text-decoration:underline;}'
-    + '.vl-phase{border:1px solid var(--wa-line);border-radius:11px;margin:0 0 12px;background:#fff;}'
+    + '.vl-phase{border:1px solid var(--wa-line);border-radius:11px;margin:0 0 12px;background:#FFFAF2;}'
     + '.vl-phase>summary{cursor:pointer;padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--wa-ink);list-style:none;display:flex;align-items:center;gap:9px;}'
     + '.vl-phase>summary::-webkit-details-marker{display:none;}'
     + '.vl-phase>summary:before{content:"\\25B8";color:var(--wa-muted);font-size:11px;}'
@@ -67,10 +67,10 @@
     + '.vl-h:first-child{margin-top:0;}'
     + '.vl-h1{font-size:14.5px;}.vl-h2{font-size:13.5px;}.vl-h3{font-size:12.5px;}'
     + '.vl-h4{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--wa-muted);}'
-    + '.vl-mimg{display:block;max-width:100%;width:440px;margin:9px 0;border:1px solid var(--wa-line);border-radius:8px;cursor:zoom-in;background:#fff;}'
-    + '.vl-noimg{color:#8b8f96;font-style:italic;}'
+    + '.vl-mimg{display:block;max-width:100%;width:440px;margin:9px 0;border:1px solid var(--wa-line);border-radius:8px;cursor:zoom-in;background:#FFFAF2;}'
+    + '.vl-noimg{color:#797773;font-style:italic;}'
     + '.vl-shots{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px;}'
-    + '.vl-shots img{width:104px;height:70px;object-fit:cover;border:1px solid var(--wa-line);border-radius:7px;cursor:zoom-in;background:#fff;}'
+    + '.vl-shots img{width:104px;height:70px;object-fit:cover;border:1px solid var(--wa-line);border-radius:7px;cursor:zoom-in;background:#FFFAF2;}'
     + '.vl-flag{margin-top:8px;padding:8px 10px;border-radius:7px;font-size:12px;background:#fdf3e6;color:#7a4a12;border:1px solid #f0dcc0;}'
     + '.vl-flag.lock{background:#f4f1fb;color:#4a3a7a;border-color:#ded4f5;}'
     + '.vl-role{margin:0 0 14px;}'
@@ -79,8 +79,8 @@
     + '.vl-per:last-child{border-bottom:0;}'
     + '.vl-per b{font-weight:600;color:var(--wa-ink);}'
     + '.vl-per .vl-c{font-size:11.5px;color:var(--wa-muted);}'
-    + '.vl-per select{font:inherit;font-size:11.5px;padding:2px 5px;border:1px solid var(--wa-line);border-radius:6px;background:#fff;color:var(--wa-text);}'
-    + '.vl-in{font:inherit;font-size:11.5px;padding:2px 6px;border:1px solid var(--wa-line);border-radius:6px;background:#fff;color:var(--wa-text);}'
+    + '.vl-per select{font:inherit;font-size:11.5px;padding:2px 5px;border:1px solid var(--wa-line);border-radius:6px;background:#FFFAF2;color:var(--wa-text);}'
+    + '.vl-in{font:inherit;font-size:11.5px;padding:2px 6px;border:1px solid var(--wa-line);border-radius:6px;background:#FFFAF2;color:var(--wa-text);}'
     + '.vl-in.w90{width:96px;}'
     + '.vl-tblwrap{overflow-x:auto;}'
     + '#volunteering table.wa-tbl td{vertical-align:top;}'
@@ -284,7 +284,7 @@ function waVolShell(inner) {
     return '<span class="fchip' + (WA_VOL_VIEW === t[0] ? ' on' : '') + '" data-vl="' + t[0] + '">' + t[1] + '</span>';
   }).join('');
   return '<div class="card">'
-    + '<h2 style="color:#2c7a66">Volunteering<span class="deptchip" style="background:#2c7a66">Montreal</span></h2>'
+    + '<h2 style="color:#103F39">Volunteering<span class="deptchip" style="background:#103F39">Montreal</span></h2>'
     + '<p class="read">The biweekly Sunday serving programme. Every event runs the same 94 step checklist, pulled from the ClickUp SOP with its original wording, links and screenshots. Tick steps here and the whole team sees it.</p>'
     + '<div class="vl-sub">' + chips + '</div>'
     + inner + '</div>';
@@ -345,7 +345,7 @@ function waVolStepHtml(t, s) {
   var det = '';
   if (hasDet) {
     det = '<div class="vl-det" id="vld-' + esc(t.id) + '">'
-      + (t.description ? waVolMd(t.description) : '<p style="color:#8b8f96">No description in ClickUp for this step.</p>')
+      + (t.description ? waVolMd(t.description) : '<p style="color:#797773">No description in ClickUp for this step.</p>')
       + (shots.length ? '<div class="vl-shots">' + shots.map(function (x) {
         return '<img src="' + esc(x.public_url) + '" alt="' + esc(x.title || 'Screenshot') + '" data-vlshot="' + esc(x.public_url) + '" loading="lazy" />';
       }).join('') + '</div>' : '')
@@ -423,7 +423,7 @@ function waVolRenderEvent() {
   else {
     html += '<ul class="checklist">' + D.extras.map(function (x) {
       return '<li><input type="checkbox" data-vlxchk="' + x.id + '"' + (x.done ? ' checked' : '') + (isStaff() ? '' : ' disabled') + ' />'
-        + '<div class="ci-body"><div class="ci-title"' + (x.done ? ' style="text-decoration:line-through;color:#8b8f96"' : '') + '>' + esc(x.title || '') + '</div>'
+        + '<div class="ci-body"><div class="ci-title"' + (x.done ? ' style="text-decoration:line-through;color:#797773"' : '') + '>' + esc(x.title || '') + '</div>'
         + (x.detail ? '<div class="ci-sub">' + esc(x.detail) + '</div>' : '')
         + '<div class="ci-meta">' + esc(x.owner || 'unassigned') + (x.due_date ? ' &middot; due ' + esc(x.due_date) : '') + ' &middot; from ' + esc(x.source || 'manual') + '</div></div></li>';
     }).join('') + '</ul>';
@@ -666,7 +666,7 @@ document.addEventListener('change', function (e) {
         var b = document.createElement('button');
         b.className = 'tab';
         b.dataset.tab = 'volunteering';
-        b.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Volunteering';
+        b.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Volunteering';
         bar.insertBefore(b, bar.querySelector('.tab-group') || null);
       }
       var h0 = decodeURIComponent(location.hash || '').replace(/^#/, '');

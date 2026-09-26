@@ -12,9 +12,9 @@
 (function () {
   var css = ''
     + '.ag-new,.ag-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0;}'
-    + '.ag-new select,.ag-new input,.ag-filters select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:8px;font-size:12.5px;background:#fff;}'
-    + '.ag-new .go{background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:8px 15px;cursor:pointer;font-weight:700;font-size:12.5px;}'
-    + '.ag-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;}'
+    + '.ag-new select,.ag-new input,.ag-filters select{padding:7px 10px;border:1px solid var(--wa-line);border-radius:8px;font-size:12.5px;background:#FFFAF2;}'
+    + '.ag-new .go{background:var(--wa-green);color:#FFFAF2;border:none;border-radius:8px;padding:8px 15px;cursor:pointer;font-weight:700;font-size:12.5px;}'
+    + '.ag-dep{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#FFFAF2;}'
     + '.ag-count{font-size:12px;color:var(--wa-muted);margin-left:auto;}';
   var st = document.createElement('style');
   st.textContent = css;
@@ -26,7 +26,7 @@
     sec.id = 'agendas';
     sec.className = 'panel';
     sec.innerHTML = '<div class="card agenda-card ag-page-card">'
-      + '<h2 style="color:#8455ff;">&#128203; Agendas</h2>'
+      + '<h2 style="color:#6F64AB;">&#128203; Agendas</h2>'
       + '<p class="read" style="margin-top:2px;">Every meeting agenda in one place, drafted by AI from transcripts, projects and open work. Checking a task off inside an agenda completes the real task on its department page.</p>'
       + '<div class="ag-new">'
       + '<select id="agNewType"><option value="department">Department meeting</option><option value="leaders">Leaders team meeting</option><option value="people">1on1 or group (pick attendees)</option></select>'
@@ -183,7 +183,7 @@ var waRenderAgendasPage = async function () {
           var b = document.createElement('button');
           b.className = 'tab';
           b.dataset.tab = 'agendas';
-          b.innerHTML = '<span class="tabdot" style="background:#8455ff"></span>Agendas';
+          b.innerHTML = '<span class="tabdot" style="background:#6F64AB"></span>Agendas';
           var req = bar.querySelector('[data-tab="requests"]');
           var info = bar.querySelector('[data-tab="importantinfo"]');
           bar.insertBefore(b, req || info || document.getElementById('actTabBtn') || null);

@@ -18,15 +18,15 @@
   st.id = 'wa61css';
   st.textContent = '' +
     '.w61wrap{max-height:58vh;overflow-y:auto;padding-right:8px;margin-top:4px;}' +
-    '.w61h{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;font-weight:800;margin:14px 0 6px;}' +
-    '.w61sec{display:flex;gap:12px;align-items:flex-start;background:#f6f8f7;border-radius:12px;padding:10px 12px;margin:0 0 8px;}' +
+    '.w61h{font-size:11px;text-transform:uppercase;letter-spacing:.7px;color:#103F39;font-weight:800;margin:14px 0 6px;}' +
+    '.w61sec{display:flex;gap:12px;align-items:flex-start;background:#F4F2EA;border-radius:12px;padding:10px 12px;margin:0 0 8px;}' +
     '.w61sec .v{flex:0 0 168px;display:flex;flex-direction:column;gap:5px;justify-content:center;min-height:30px;}' +
     '.w61sec .t{flex:1;min-width:0;}' +
-    '.w61sec .t b{display:block;font-size:12.5px;color:#14302b;margin-bottom:2px;}' +
-    '.w61sec .t span{font-size:12px;color:#5b6b66;line-height:1.5;}' +
+    '.w61sec .t b{display:block;font-size:12.5px;color:#103F39;margin-bottom:2px;}' +
+    '.w61sec .t span{font-size:12px;color:#797773;line-height:1.5;}' +
     '.w61pipe{display:flex;gap:4px;align-items:center;flex-wrap:wrap;}' +
-    '.w61pipe .bx{background:#fff;border:1px solid #dde5e1;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:800;color:#14302b;white-space:nowrap;}' +
-    '.w61pipe .bx.grn{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
+    '.w61pipe .bx{background:#FFFAF2;border:1px solid #DEE0D8;border-radius:8px;padding:3px 9px;font-size:10px;font-weight:800;color:#103F39;white-space:nowrap;}' +
+    '.w61pipe .bx.grn{background:#103F39;border-color:#103F39;color:#FFFAF2;}' +
     '.w61pipe .ar{color:#9ab3ab;font-weight:800;font-size:11px;}' +
     '@media (max-width:640px){.w61sec{flex-direction:column;}.w61sec .v{flex:none;width:100%;}}';
   document.head.appendChild(st);
@@ -216,9 +216,9 @@
           'These are the department&#39;s real tasks filtered to this project; ticking here completes them everywhere. Move sends a task to another project or back to General.');
     } else if (k === 'personpage') {
       sub = 'One person, in full.';
-      fl = ['Read the bio', 'See their plate', 'Check their training'];
+      fl = ['Read the responsibilities', 'See their plate and projects', 'Check hours and training'];
       secs = sec(mBar(75), 'Live, not a profile form',
-          'The bio, plate, stats and training progress all come from real Hub data, so the page is always current.');
+          'Responsibilities and the job description link come from the HR drive; tasks, projects, hours, meetings and training come from live Hub data, so the page is always current.');
     } else if (k === 'hrcentre') {
       sub = 'People operations, in four dashboards.';
       fl = ['Pick a tab', 'Act', 'Check Commitment'];

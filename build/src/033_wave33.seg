@@ -22,14 +22,14 @@ var WA33_STORAGE = '888 Rue Saint-Antoine W, Montreal, QC H3C 4G3';
   var st = document.createElement('style');
   st.id = 'wa33css';
   st.textContent = '' +
-    '.w33plan{border-bottom:1px solid rgba(44,122,102,.25);padding:2px 0 8px;margin:0 0 6px;font-size:13px;}' +
+    '.w33plan{border-bottom:1px solid rgba(16,63,57,.25);padding:2px 0 8px;margin:0 0 6px;font-size:13px;}' +
     '.w33plan input{margin:0 4px;}' +
     '.w33qr-r{border-top:1px solid rgba(127,127,127,.15);padding:5px 0;font-size:12.5px;}' +
-    '.w33qr-r b{color:#2c7a66;}' +
+    '.w33qr-r b{color:#103F39;}' +
     '.w33head{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:4px;}' +
     '.w33dot{display:inline-block;width:14px;height:14px;border-radius:50%;}' +
-    '.w33chip{display:inline-block;border:1px solid rgba(44,122,102,.45);color:#2c7a66;border-radius:9px;padding:2px 10px;font-size:12px;margin:2px 6px 2px 0;}' +
-    '.w33bio{background:rgba(44,122,102,.06);border-radius:10px;padding:10px 13px;font-size:13.5px;line-height:1.5;}' +
+    '.w33chip{display:inline-block;border:1px solid rgba(16,63,57,.45);color:#103F39;border-radius:9px;padding:2px 10px;font-size:12px;margin:2px 6px 2px 0;}' +
+    '.w33bio{background:rgba(16,63,57,.06);border-radius:10px;padding:10px 13px;font-size:13.5px;line-height:1.5;}' +
     '.w33task{border-bottom:1px solid rgba(127,127,127,.15);padding:5px 0;font-size:13px;}';
   document.head.appendChild(st);
 })();
@@ -225,22 +225,22 @@ async function wa33Person(mid) {
   var doneRows = (doneQ && doneQ.data) || [];
   var fyLabel = 'FY' + (Number(fy.slice(0, 4)) + 1);
   var html = '<div class="card">'
-    + '<p class="read" style="margin:0 0 8px"><a href="#orgchart" style="color:#2c7a66">&larr; Back to the org chart</a></p>'
-    + '<div class="w33head"><span class="w33dot" style="background:' + esc(m.color || '#8a8f85') + '"></span>'
+    + '<p class="read" style="margin:0 0 8px"><a href="#orgchart" style="color:#103F39">&larr; Back to the org chart</a></p>'
+    + '<div class="w33head"><span class="w33dot" style="background:' + esc(m.color || '#797773') + '"></span>'
     + '<h2 style="margin:0">' + esc(m.name) + '</h2>'
     + '<span class="read" style="margin:0">' + esc(m.role || 'Team member') + ' &middot; ' + esc(label(m.department)) + (m.email ? ' &middot; ' + esc(m.email) : '') + '</span></div>'
     + '<div id="w33stats" style="margin:6px 0 10px"><span class="w33chip">' + open.length + ' open now</span><span class="w33chip">' + doneRows.length + ' finished in ' + esc(fyLabel) + '</span></div>'
-    + '<h3 class="block" style="color:#2c7a66">What they do here</h3>'
+    + '<h3 class="block" style="color:#103F39">What they do here</h3>'
     + '<div class="w33bio" id="w33bio">' + (m.ai_bio ? esc(m.ai_bio) : 'Writing the job description from their actual work...') + '</div>'
-    + '<p class="m-sub" style="margin:4px 0 0"><a data-w33bref="' + m.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">Rewrite it from the latest work</a></p>'
-    + '<h3 class="block" style="color:#2c7a66;margin-top:14px">On their plate (' + open.length + ')</h3>'
+    + '<p class="m-sub" style="margin:4px 0 0"><a data-w33bref="' + m.id + '" style="color:#103F39;cursor:pointer;text-decoration:underline">Rewrite it from the latest work</a></p>'
+    + '<h3 class="block" style="color:#103F39;margin-top:14px">On their plate (' + open.length + ')</h3>'
     + (open.slice(0, 15).map(function (t) {
-      return '<div class="w33task">' + esc(t.title) + ' <span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;color:#7b8a86">' + esc(label(t.department)) + '</span></div>';
+      return '<div class="w33task">' + esc(t.title) + ' <span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;color:#797773">' + esc(label(t.department)) + '</span></div>';
     }).join('') || '<p class="m-sub">Nothing assigned right now.</p>')
     + (open.length > 15 ? '<p class="m-sub">plus ' + (open.length - 15) + ' more.</p>' : '')
-    + '<h3 class="block" style="color:#2c7a66;margin-top:14px">Finished this fiscal year (' + doneRows.length + ')</h3>'
+    + '<h3 class="block" style="color:#103F39;margin-top:14px">Finished this fiscal year (' + doneRows.length + ')</h3>'
     + (doneRows.slice(0, 15).map(function (t) {
-      return '<div class="w33task">' + esc(t.title) + (t.closed_at ? ' <span style="font-size:11px;color:#7b8a86">' + esc(String(t.closed_at).slice(0, 10)) + '</span>' : '') + '</div>';
+      return '<div class="w33task">' + esc(t.title) + (t.closed_at ? ' <span style="font-size:11px;color:#797773">' + esc(String(t.closed_at).slice(0, 10)) + '</span>' : '') + '</div>';
     }).join('') || '<p class="m-sub">Nothing closed out yet this fiscal year.</p>')
     + (doneRows.length > 15 ? '<p class="m-sub">plus ' + (doneRows.length - 15) + ' more.</p>' : '')
     + '</div>';

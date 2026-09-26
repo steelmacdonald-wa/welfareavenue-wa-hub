@@ -9,18 +9,18 @@
    ===================================================================== */
 (function () {
   var css = ''
-    + '.agenda-card{border-left:4px solid #8455ff;}'
+    + '.agenda-card{border-left:4px solid #6F64AB;}'
     + '.ag-row{padding:9px 0;border-top:1px dashed var(--wa-line);font-size:13px;}'
     + '.ag-row:first-of-type{border-top:none;}'
     + '.ag-head{cursor:pointer;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}'
     + '.ag-head .t{font-weight:700;}'
-    + '.ag-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#fff;background:var(--wa-muted);}'
-    + '.ag-st.draft{background:#8455ff;}'
-    + '.ag-st.final{background:#4a7c59;}'
+    + '.ag-st{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:1px 7px;border-radius:9px;color:#FFFAF2;background:var(--wa-muted);}'
+    + '.ag-st.draft{background:#6F64AB;}'
+    + '.ag-st.final{background:#103F39;}'
     + '.ag-body{display:none;margin-top:8px;}'
     + '.ag-row.open .ag-body{display:block;}'
-    + '.ag-item{border:1px solid var(--wa-line);border-radius:9px;padding:9px 11px;margin:7px 0;background:#faf9f4;}'
-    + '.ag-item .k{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:1px 6px;border-radius:8px;color:#fff;margin-right:7px;}'
+    + '.ag-item{border:1px solid var(--wa-line);border-radius:9px;padding:9px 11px;margin:7px 0;background:#F4F2EA;}'
+    + '.ag-item .k{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:1px 6px;border-radius:8px;color:#FFFAF2;margin-right:7px;}'
     + '.ag-item .it{font-weight:700;font-size:13px;}'
     + '.ag-item .nts{font-size:12px;color:var(--wa-muted);margin-top:3px;}'
     + '.ag-task{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-top:5px;}'
@@ -36,7 +36,7 @@
 })();
 
 var AGENDAS_CACHE = [], AG_ITEMS_CACHE = [], WA_AG_OPEN = {};
-var AG_KIND_COLOR = { project: '#4a7c59', decision: '#a87f2c', update: '#3a6ea5', topic: '#6f6b64' };
+var AG_KIND_COLOR = { project: '#103F39', decision: '#a87f2c', update: '#3a6ea5', topic: '#797773' };
 
 async function waLoadAgendas() { /* superseded: wave7 reset without capture; superseded; body removed in Phase 0 compaction */ }
 

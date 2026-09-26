@@ -37,18 +37,18 @@
   css.textContent = '' +
     '#w111folds{margin:2px 0 16px;}' +
     '.w111row{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 10px;}' +
-    '.w111btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--wa-line,#e3e8e5);background:#fff;border-radius:14px;padding:10px 16px;font-size:13px;font-weight:700;color:#3d4642;cursor:pointer;box-shadow:0 1px 2px rgba(20,40,30,.04);}' +
-    '.w111btn:hover{border-color:#2c7a66;color:#1f5f4f;}' +
-    '.w111btn.on{border-color:#2c7a66;color:#1f5f4f;background:rgba(44,122,102,.07);}' +
+    '.w111btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--wa-line,#e3e8e5);background:#FFFAF2;border-radius:14px;padding:10px 16px;font-size:13px;font-weight:700;color:#1F201E;cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.04);}' +
+    '.w111btn:hover{border-color:#103F39;color:#103F39;}' +
+    '.w111btn.on{border-color:#103F39;color:#103F39;background:rgba(16,63,57,.07);}' +
     '.w111btn b{background:#f2f5f3;border-radius:999px;padding:2px 9px;font-size:12px;}' +
-    '.w111btn.on b{background:rgba(44,122,102,.14);}' +
+    '.w111btn.on b{background:rgba(16,63,57,.14);}' +
     '#w111body{margin:0 0 6px;}' +
     '#w111body .wa-tbl td{vertical-align:middle;}' +
-    '.w111cb{accent-color:#2c7a66;width:16px;height:16px;cursor:pointer;margin:0;}' +
+    '.w111cb{accent-color:#103F39;width:16px;height:16px;cursor:pointer;margin:0;}' +
     'tr.w111done td{opacity:.55;}' +
     'tr.w111done .w111t{text-decoration:line-through;}' +
-    '.w111undo{font-size:11px;color:#2c7a66;cursor:pointer;margin-left:8px;font-weight:700;}' +
-    '.w111note{font-size:12px;color:var(--wa-muted,#8592a3);margin:8px 0 0;}';
+    '.w111undo{font-size:11px;color:#103F39;cursor:pointer;margin-left:8px;font-weight:700;}' +
+    '.w111note{font-size:12px;color:var(--wa-muted,#797773);margin:8px 0 0;}';
   document.head.appendChild(css);
 
   var W111_OPEN = null;   /* null | aging | overdue | numbers */
@@ -130,7 +130,7 @@
         '<td><a class="w111t" href="#decision/' + x.d.ref + '">' + esc(x.d.title) + '</a>' + (typeof catTag === 'function' ? catTag(x.d.cat) : '') + '</td>' +
         '<td>' + esc(x.d.owner || 'Both') + '</td><td>' + x.age + 'd</td></tr>';
     }).join('');
-    return '<div class="card dept-card" style="border-top-color:var(--wa-gold,#d4a13c)">' +
+    return '<div class="card dept-card" style="border-top-color:var(--wa-gold,#DCA527)">' +
       '<h2 style="color:#a87f2c">Decisions waiting</h2>' +
       '<p class="read">Every open executive decision, oldest first. ' + (staff ? 'Tick a box to record what was decided, right here. ' : '') + 'Aging decisions also surface in Slack automatically at 14 and 30 days.</p>' +
       (rows.length

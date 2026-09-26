@@ -15,16 +15,16 @@
   var css = document.createElement('style');
   css.textContent =
     '#w84back{position:fixed;inset:0;background:rgba(10,25,20,.55);z-index:400;display:flex;align-items:center;justify-content:center;padding:18px;}' +
-    '#w84card{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:22px 22px 16px;box-shadow:0 24px 70px rgba(0,0,0,.35);}' +
-    '#w84card h3{margin:0 0 8px;font-size:17px;color:#14302b;}' +
-    '#w84card p{margin:0 0 14px;font-size:13.5px;line-height:1.55;color:#3d4642;}' +
+    '#w84card{background:#FFFAF2;border-radius:16px;max-width:420px;width:100%;padding:22px 22px 16px;box-shadow:0 24px 70px rgba(0,0,0,.35);}' +
+    '#w84card h3{margin:0 0 8px;font-size:17px;color:#103F39;}' +
+    '#w84card p{margin:0 0 14px;font-size:13.5px;line-height:1.55;color:#1F201E;}' +
     '.w84dots{display:flex;gap:5px;margin-bottom:12px;}' +
-    '.w84dots i{width:8px;height:8px;border-radius:50%;background:#d8e6e0;}' +
-    '.w84dots i.on{background:#2c7a66;}' +
+    '.w84dots i{width:8px;height:8px;border-radius:50%;background:#DEE0D8;}' +
+    '.w84dots i.on{background:#103F39;}' +
     '.w84row{display:flex;gap:8px;justify-content:flex-end;align-items:center;}' +
-    '.w84row .skip{margin-right:auto;background:none;border:none;color:#7b8a86;font-size:12px;cursor:pointer;text-decoration:underline;}' +
-    '.w84btn{background:#2c7a66;color:#fff;border:none;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;}' +
-    '.w84btn.ghost{background:#eef4f1;color:#14302b;}';
+    '.w84row .skip{margin-right:auto;background:none;border:none;color:#797773;font-size:12px;cursor:pointer;text-decoration:underline;}' +
+    '.w84btn{background:#103F39;color:#FFFAF2;border:none;border-radius:999px;padding:9px 18px;font-weight:700;font-size:13px;cursor:pointer;}' +
+    '.w84btn.ghost{background:#ECEBE3;color:#103F39;}';
   document.head.appendChild(css);
 
   function w84Role() {
@@ -100,7 +100,7 @@
     var a = document.createElement('div');
     a.setAttribute('data-w84t', '1');
     a.style.cssText = 'font-size:12px;margin-top:10px;';
-    a.innerHTML = '<a style="cursor:pointer;text-decoration:underline;color:#2c7a66">New here? Take the 60 second tour</a>';
+    a.innerHTML = '<a style="cursor:pointer;text-decoration:underline;color:#103F39">New here? Take the 60 second tour</a>';
     a.firstChild.addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } w84Show(true); });
     box.appendChild(a);
   }

@@ -23,10 +23,10 @@ var WA26_Q = '';
   st.id = 'wa26css';
   st.textContent = '' +
     '.w26search{width:100%;max-width:340px;padding:8px 11px;border:1px solid rgba(127,127,127,.35);border-radius:9px;font-size:13px;margin:0 0 10px;}' +
-    '.w26c{border:0;background:none;cursor:pointer;font-size:11px;padding:0 5px 0 0;color:var(--wa-muted,#7b8a86);}' +
-    '.w26n{display:inline-block;margin-left:6px;font-size:10.5px;color:var(--wa-muted,#7b8a86);border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;}' +
+    '.w26c{border:0;background:none;cursor:pointer;font-size:11px;padding:0 5px 0 0;color:var(--wa-muted,#797773);}' +
+    '.w26n{display:inline-block;margin-left:6px;font-size:10.5px;color:var(--wa-muted,#797773);border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;}' +
     '.w26hide{display:none !important;}' +
-    '.vl-d1,.vl-d2,.vl-d3{border-left:2px solid rgba(44,122,102,.14);padding-left:10px;}' +
+    '.vl-d1,.vl-d2,.vl-d3{border-left:2px solid rgba(16,63,57,.14);padding-left:10px;}' +
     '.w26p > .vl-t > .vl-name{font-weight:600;}' +
     '.vl-ev.past{opacity:.82;}';
   document.head.appendChild(st);
@@ -58,7 +58,7 @@ if (typeof waVolRenderCalendar === 'function') {
     past.sort(function (a, b) { return a.event_date < b.event_date ? 1 : -1; });
     var month = '';
     if (up.length) {
-      html += '<h3 class="block" style="color:#2c7a66">Upcoming</h3>';
+      html += '<h3 class="block" style="color:#103F39">Upcoming</h3>';
       up.forEach(function (e) {
         var m = waVolMonth(e.event_date);
         if (m !== month) {
@@ -147,7 +147,7 @@ if (typeof waVolRenderPeople === 'function') {
           + (showAddr ? '<td style="max-width:220px">' + esc(p.address || '') + '</td>' : '')
           + (showCar ? '<td>' + esc(p.car_type || '') + '</td>' : '')
           + '<td style="max-width:220px">' + esc((p.notes || '').slice(0, 120)) + '</td>'
-          + (staff ? '<td><a class="ed" data-w26e="' + p.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline;font-size:12px">edit</a></td>' : '')
+          + (staff ? '<td><a class="ed" data-w26e="' + p.id + '" style="color:#103F39;cursor:pointer;text-decoration:underline;font-size:12px">edit</a></td>' : '')
           + '</tr>';
       }).join('') + '</tbody></table></div>';
     waVolPaint(html);
@@ -218,7 +218,7 @@ if (typeof waVolStepHtml === 'function') {
         }
         /* texting shortcut on event checklists for steps about contacting people */
         if (!WA24_EDIT && staff && s && String(s.id).indexOf('tmpl-') !== 0 && WA26_TXT_RE.test(t.name || '')) {
-          html += '<div class="wa24-sx"><a class="ed" data-w26tx="1" style="color:#2c7a66;cursor:pointer;text-decoration:underline">Text volunteers for this step</a></div>';
+          html += '<div class="wa24-sx"><a class="ed" data-w26tx="1" style="color:#103F39;cursor:pointer;text-decoration:underline">Text volunteers for this step</a></div>';
         }
       } catch (e) { /* non-fatal */ }
       return html;

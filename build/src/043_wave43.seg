@@ -32,21 +32,21 @@
   var st = document.createElement('style');
   st.id = 'wa43css';
   st.textContent = '' +
-    PILL + '{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
-    'padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;' +
+    PILL + '{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;' +
+    'padding:3px 11px;font-size:11.5px;color:#103F39 !important;text-decoration:none !important;' +
     'cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    PILL.split(',').join(':hover,') + ':hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);color:#14302b !important;}' +
+    PILL.split(',').join(':hover,') + ':hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);color:#103F39 !important;}' +
     '.btn:hover{filter:brightness(.96);}' +
-    '.w39tool:hover,.wa24-links a:hover{background:rgba(31,95,79,.1);}' +
+    '.w39tool:hover,.wa24-links a:hover{background:rgba(16,63,57,.1);}' +
     /* decisions card docked inside the dropdown */
     '.w39dd .exec-card{box-shadow:none;border-left:none;margin:0;padding:0;background:transparent;}' +
     '.w39dd .exec-card > h2,.w39dd .exec-card > p.read{display:none;}' +
     /* page help */
-    '.w43help{float:right;display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
-    'padding:2px 11px;font-size:11.5px;font-weight:600;color:#1f5f4f;cursor:pointer;line-height:1.6;margin-left:8px;}' +
-    '.w43help:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w43help{float:right;display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;' +
+    'padding:2px 11px;font-size:11.5px;font-weight:600;color:#103F39;cursor:pointer;line-height:1.6;margin-left:8px;}' +
+    '.w43help:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '.w43helprow{text-align:right;margin:0 0 6px;}' +
-    '.w43hm p{font-size:13px;line-height:1.55;color:#3d4642;margin:8px 0;}';
+    '.w43hm p{font-size:13px;line-height:1.55;color:#1F201E;margin:8px 0;}';
   document.head.appendChild(st);
 
   /* ---- 2. department pages: one decisions surface, one goals surface ---- */
@@ -126,8 +126,8 @@
   };
   var WA43_HELP = {
     mypage: '<p>Your personal view: your open tasks across every department, your check-in hours, and who is online right now.</p><p>Click any task to jump to it on its department page. Use the chips at the top to jump to your department or the decisions list.</p>',
-    overview: '<p>The organization at a glance: stat tiles, your plate, requests waiting on you or your department, and the open executive decisions list.</p><p>Tick a decision to record what was decided (you will be asked for a note). Use + Add decision for a new one. Decided items stay in the Decided list below.</p>',
-    dashboard: '<p>How work is moving: task completion and cycle times, decision aging, overdue tasks, Slack check-in hours and ClickUp movement per department.</p><p>Everything links: click a decision or task row to open it.</p>',
+    overview: '<p>The organization at a glance: stat tiles, major announcements, your plate, requests waiting on you or your department, and the executive decisions list.</p><p>Tick a decision to record what was decided (you will be asked for a note). Use + Add decision for a new one. Decided items stay in the Decided list below.</p>',
+    dashboard: '<p>How work is moving: task completion and cycle times, decision aging, overdue tasks and the workload per department.</p><p>Everything links: click a decision or task row to open it.</p>',
     dept: '<p>Everything one department is doing, in one place.</p><p>Top: the Decisions dropdown (executive calls for this department, with AI recommendations), the Quarterly goals block, and quick tools.</p><p>Below: updates from recent meetings (grouped by meeting, with speakers), workstreams and tasks. Switch the task view between List, Board and Calendar, or filter by assignee. Staff can add updates and tasks, and edit, reassign or move any task. Incoming requests and the Projects card sit at the bottom.</p>',
     requests: '<p>The catalogue of things you can ask another department for. Pick a request type, fill the short form, and it routes to the right team.</p><p>Track status here or on the receiving department page; assignees and statuses update live.</p>',
     agendas: '<p>Build an agenda for any meeting: pick the type, department and attendees, then Generate to draft one from recent transcripts and live tasks.</p><p>Items linked to real tasks carry live checkboxes. Reorder, add your own items, mark the agenda final, and share a private link with people outside the Hub.</p>',
@@ -142,7 +142,7 @@
     activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',
     adminpanel: '<p>Who sees what. Set each person&#39;s role: admins manage everything, leaders see every page, members see the work surfaces, viewers see the overview only.</p><p>Tab overrides win over the role default. Changes apply the next time the person loads the Hub.</p>',
     projectpage: '<p>One project&#39;s tasks and details. Tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
-    personpage: '<p>One person: their AI bio, fiscal-year stats, current plate, finished work, and training and onboarding progress.</p>'
+    personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'
   };
   function wa43Key(id) {
     if (typeof DEPT_ORDER !== 'undefined' && DEPT_ORDER.indexOf(id) >= 0) return 'dept';

@@ -17,19 +17,19 @@
   var st = document.createElement('style');
   st.id = 'wa50css';
   st.textContent = '' +
-    '.w50box{background:#f6f8f7;border-radius:14px;padding:12px 16px;margin:0 0 14px;}' +
-    '.w50box h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
-    '.w50row{background:#fff;border-radius:12px;padding:10px 14px;margin:8px 0;}' +
-    '.w50t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:700;color:#14302b;}' +
-    '.w50dep{font-size:10.5px;font-weight:700;color:#fff;border-radius:999px;padding:2px 10px;}' +
-    '.w50conf{font-size:10.5px;font-weight:700;color:#8a6414;background:rgba(212,161,60,.16);border-radius:999px;padding:2px 9px;}' +
-    '.w50q{font-size:12px;color:#7b8a86;font-style:italic;margin:4px 0 2px;}' +
-    '.w50d{font-size:12.5px;color:#3d4642;margin:2px 0 6px;}' +
-    '[data-w50a],[data-w50x],[data-w50tx]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 12px;' +
-    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:700;line-height:1.5;margin:1px 4px 1px 0;}' +
-    '[data-w50a]{background:#1f5f4f;color:#fff !important;border-color:#1f5f4f;}' +
-    '[data-w50a]:hover{background:#2c7a66;}' +
-    '[data-w50x]:hover,[data-w50tx]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w50box{background:#F4F2EA;border-radius:14px;padding:12px 16px;margin:0 0 14px;}' +
+    '.w50box h3{margin:0 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#103F39;}' +
+    '.w50row{background:#FFFAF2;border-radius:12px;padding:10px 14px;margin:8px 0;}' +
+    '.w50t{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13.5px;font-weight:700;color:#103F39;}' +
+    '.w50dep{font-size:10.5px;font-weight:700;color:#FFFAF2;border-radius:999px;padding:2px 10px;}' +
+    '.w50conf{font-size:10.5px;font-weight:700;color:#8a6414;background:rgba(220,165,39,.16);border-radius:999px;padding:2px 9px;}' +
+    '.w50q{font-size:12px;color:#797773;font-style:italic;margin:4px 0 2px;}' +
+    '.w50d{font-size:12.5px;color:#1F201E;margin:2px 0 6px;}' +
+    '[data-w50a],[data-w50x],[data-w50tx]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 12px;' +
+    'font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:700;line-height:1.5;margin:1px 4px 1px 0;}' +
+    '[data-w50a]{background:#103F39;color:#FFFAF2 !important;border-color:#103F39;}' +
+    '[data-w50a]:hover{background:#103F39;}' +
+    '[data-w50x]:hover,[data-w50tx]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '[data-w50x]{color:#b3402f !important;}';
   document.head.appendChild(st);
 
@@ -50,7 +50,7 @@
       + '<p class="m-sub" style="margin:0 0 4px">The AI spotted these asks in recent transcripts. Nothing is filed until you accept it.</p>';
     WA50.rows.forEach(function (s) {
       html += '<div class="w50row">'
-        + '<div class="w50t"><span class="w50dep" style="background:' + (dc[s.department] || '#6f6b64') + '">' + esc(dl[s.department] || s.department) + '</span>'
+        + '<div class="w50t"><span class="w50dep" style="background:' + (dc[s.department] || '#797773') + '">' + esc(dl[s.department] || s.department) + '</span>'
         + esc(s.title)
         + '<span class="w50conf">confidence ' + (s.confidence || '?') + '/10</span></div>'
         + (s.quote ? '<div class="w50q">&quot;' + esc(s.quote) + '&quot;</div>' : '')
@@ -58,7 +58,7 @@
         + '<div><a data-w50a="' + s.id + '">Accept and file it</a>'
         + '<a data-w50x="' + s.id + '">Dismiss</a>'
         + '<a data-w50tx="' + s.transcript_id + '">Open the meeting</a>'
-        + (s.assignee ? '<span style="font-size:11.5px;color:#7b8a86">suggested assignee: ' + esc(s.assignee) + '</span>' : '')
+        + (s.assignee ? '<span style="font-size:11.5px;color:#797773">suggested assignee: ' + esc(s.assignee) + '</span>' : '')
         + '</div></div>';
     });
     html += '</div>';

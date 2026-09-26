@@ -24,10 +24,10 @@
   var css = document.createElement('style');
   css.textContent =
     '.w89row{display:flex;align-items:center;gap:8px;font-size:12.5px;padding:4px 0;}' +
-    '.w89row input{accent-color:#2c7a66;}' +
-    '.w89note{font-size:11px;color:#7b8a86;margin-top:6px;}' +
-    '.w89test{font-size:11.5px;color:#2c7a66;text-decoration:underline;cursor:pointer;}' +
-    '[data-w89kit]{background:#2c7a66;color:#fff;border:none;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;margin-left:6px;}' +
+    '.w89row input{accent-color:#103F39;}' +
+    '.w89note{font-size:11px;color:#797773;margin-top:6px;}' +
+    '.w89test{font-size:11.5px;color:#103F39;text-decoration:underline;cursor:pointer;}' +
+    '[data-w89kit]{background:#103F39;color:#FFFAF2;border:none;border-radius:999px;padding:7px 14px;font-weight:700;font-size:12px;cursor:pointer;margin-left:6px;}' +
     '.w89out{font-size:11.5px;margin-left:8px;font-weight:700;}';
   document.head.appendChild(css);
 
@@ -58,7 +58,7 @@
     var d = document.createElement('details');
     d.className = 'mp-sec';
     d.id = 'w89box';
-    d.innerHTML = '<summary style="cursor:pointer;font-weight:800;font-size:13px;color:#14302b;list-style:none">Slack notifications</summary>' +
+    d.innerHTML = '<summary style="cursor:pointer;font-weight:800;font-size:13px;color:#103F39;list-style:none">Slack notifications</summary>' +
       '<div style="margin-top:6px">' +
       EVENTS.map(function (ev) {
         var on = W89.disabled.indexOf(ev[0]) < 0;
@@ -122,7 +122,7 @@
         var oc = r && r.data && r.data.outcome;
         if (oc === 'sent' || oc === 'sent_channel') {
           out.textContent = oc === 'sent' ? 'Sent as a DM' : 'Sent (channel ping until DMs are enabled)';
-          out.style.color = '#2c7a66';
+          out.style.color = '#103F39';
         } else {
           out.textContent = 'Not delivered: ' + (oc || 'error') + ' (copy button still works)';
           out.style.color = '#b3402f';

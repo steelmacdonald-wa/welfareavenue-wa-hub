@@ -22,22 +22,22 @@
 <style>
   :root {
     /* Welfare Avenue palette (swap these for the official brand hex if different) */
-    --wa-ink: #14302b;
-    --wa-green: #1f5f4f;
-    --wa-green-soft: #2c7a66;
-    --wa-gold: #d4a13c;
-    --wa-gold-soft: #f0d9a8;
-    --wa-paper: #f7f5ef;
-    --wa-card: #ffffff;
-    --wa-line: #e3ded2;
-    --wa-text: #243029;
-    --wa-muted: #6b7670;
+    --wa-ink: #103F39;
+    --wa-green: #103F39;
+    --wa-green-soft: #103F39;
+    --wa-gold: #DCA527;
+    --wa-gold-soft: #F5E1B5;
+    --wa-paper: #F4F2EA;
+    --wa-card: #FFFAF2;
+    --wa-line: #DEE0D8;
+    --wa-text: #1F201E;
+    --wa-muted: #797773;
     --wa-flag: #b3402f;
 
     /* department colour chips */
-    --c-opsmtl: #2c7a66;
+    --c-opsmtl: #103F39;
     --c-opsto: #3a6ea5;
-    --c-mkt: #8a5cc4;
+    --c-mkt: #6F64AB;
     --c-fund: #c87a2f;
     --c-grants: #b8902f;
     --c-hr: #b3402f;
@@ -60,7 +60,7 @@
   /* ---------- Header ---------- */
   header.wa-header {
     background: linear-gradient(135deg, var(--wa-ink), var(--wa-green));
-    color: #fff;
+    color: #FFFAF2;
     padding: 26px 24px 22px;
   }
   .wa-wrap { max-width: 1080px; margin: 0 auto; }
@@ -84,7 +84,7 @@
 
   /* identity + status pills */
   .wa-toolbar {
-    background: var(--wa-ink); color: #e8efe9;
+    background: var(--wa-ink); color: #ECEBE3;
     font-size: 12.5px; padding: 8px 24px;
   }
   .wa-toolbar .wa-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; justify-content: space-between; }
@@ -93,10 +93,10 @@
   .dot.ok { background: #57c98b; }
   .dot.local { background: var(--wa-gold); }
   .who-btn {
-    background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.25);
+    background: rgba(255,250,242,.12); color: #FFFAF2; border: 1px solid rgba(255,250,242,.25);
     border-radius: 20px; padding: 3px 12px; cursor: pointer; font-size: 12.5px;
   }
-  .who-btn:hover { background: rgba(255,255,255,.22); }
+  .who-btn:hover { background: rgba(255,250,242,.22); }
 
   /* ---------- Nav ---------- */
   nav.wa-nav {
@@ -129,7 +129,7 @@
   .card {
     background: var(--wa-card); border: 1px solid var(--wa-line);
     border-radius: 14px; padding: 20px 22px; margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(20,40,30,.04);
+    box-shadow: 0 1px 3px rgba(16,63,57,.04);
   }
   .card > h2 { margin: 0 0 4px; font-size: 18px; color: var(--wa-ink); }
   .card .read {
@@ -139,7 +139,7 @@
   h3.block { font-size: 12px; text-transform: uppercase; letter-spacing: .9px; color: var(--wa-muted); margin: 18px 0 8px; }
 
   .deptchip {
-    display: inline-block; font-size: 11px; font-weight: 700; color: #fff;
+    display: inline-block; font-size: 11px; font-weight: 700; color: #FFFAF2;
     padding: 2px 9px; border-radius: 20px; vertical-align: middle; margin-left: 8px;
   }
 
@@ -167,7 +167,7 @@
   .tabdot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
   .dept-card { border-top: 5px solid var(--wa-green); }
   .progress-box {
-    background: #faf9f4; border-left: 4px solid var(--wa-gold);
+    background: #F4F2EA; border-left: 4px solid var(--wa-gold);
     border-radius: 8px; padding: 11px 15px; margin: 6px 0 16px;
   }
   .progress-box p { margin: 5px 0 0; font-size: 13.5px; }
@@ -180,7 +180,7 @@
   ul.prio li::before { content: "\2605"; color: var(--wa-flag); flex: 0 0 auto; }
   .subsection {
     border: 1px solid var(--wa-line); border-radius: 11px; padding: 13px 17px; margin: 12px 0;
-    border-left: 5px solid var(--sc, #999); background: #fff;
+    border-left: 5px solid var(--sc, #999); background: #FFFAF2;
   }
   .subhead { font-size: 14.5px; font-weight: 700; margin: 0 0 3px; color: var(--sc, #333); }
   .sub-sum { font-size: 13px; color: var(--wa-muted); margin: 0 0 10px; }
@@ -197,7 +197,7 @@
   .dash-row { display: flex; align-items: center; gap: 12px; margin-bottom: 9px; font-size: 12.5px; }
   .dash-label { width: 150px; flex: 0 0 auto; }
   .dash-bar-wrap { flex: 1; background: #eef1ee; border-radius: 6px; min-height: 22px; display: flex; align-items: center; }
-  .dash-bar { min-width: 30px; padding: 3px 9px; color: #fff; font-weight: 700; border-radius: 6px; white-space: nowrap; font-size: 12px; }
+  .dash-bar { min-width: 30px; padding: 3px 9px; color: #FFFAF2; font-weight: 700; border-radius: 6px; white-space: nowrap; font-size: 12px; }
   .dash-none { color: var(--wa-muted); font-size: 11.5px; padding-left: 8px; }
   .dash-nums { width: 130px; flex: 0 0 auto; color: var(--wa-muted); text-align: right; }
   @media (max-width: 640px) { .dash-label { width: 96px; } .dash-nums { display: none; } }
@@ -217,24 +217,24 @@
   /* ---------- Transcripts ---------- */
   .tx-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
   select, input[type=text], input[type=date], textarea {
-    font: inherit; padding: 9px 11px; border: 1px solid var(--wa-line); border-radius: 9px; background: #fff; color: var(--wa-text);
+    font: inherit; padding: 9px 11px; border: 1px solid var(--wa-line); border-radius: 9px; background: #FFFAF2; color: var(--wa-text);
   }
   textarea { width: 100%; min-height: 150px; resize: vertical; }
   .btn {
-    background: var(--wa-green); color: #fff; border: none; border-radius: 9px;
+    background: var(--wa-green); color: #FFFAF2; border: none; border-radius: 9px;
     padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 14px;
   }
   .btn:hover { background: var(--wa-green-soft); }
-  .btn.ghost { background: #fff; color: var(--wa-green); border: 1px solid var(--wa-green); }
+  .btn.ghost { background: #FFFAF2; color: var(--wa-green); border: 1px solid var(--wa-green); }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
 
   .tx-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
   .tx-form-grid .full { grid-column: 1 / -1; }
   @media (max-width: 640px) { .tx-form-grid { grid-template-columns: 1fr; } }
 
-  .tx-item { border: 1px solid var(--wa-line); border-radius: 12px; margin-bottom: 12px; background: #fff; overflow: hidden; }
+  .tx-item { border: 1px solid var(--wa-line); border-radius: 12px; margin-bottom: 12px; background: #FFFAF2; overflow: hidden; }
   .tx-head { display: flex; gap: 12px; align-items: center; padding: 13px 16px; cursor: pointer; }
-  .tx-head:hover { background: #faf9f4; }
+  .tx-head:hover { background: #F4F2EA; }
   .tx-head .tx-title { font-weight: 600; flex: 1; }
   .tx-head .tx-date { font-size: 12.5px; color: var(--wa-muted); }
   .tx-body { padding: 0 16px 16px; display: none; white-space: pre-wrap; font-size: 13.5px; color: #333; border-top: 1px solid var(--wa-line); padding-top: 14px; }
@@ -244,7 +244,7 @@
   .footer { max-width: 1080px; margin: 0 auto; padding: 20px 24px 50px; font-size: 12px; color: var(--wa-muted); }
   .toast {
     position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
-    background: var(--wa-ink); color: #fff; padding: 11px 20px; border-radius: 24px;
+    background: var(--wa-ink); color: #FFFAF2; padding: 11px 20px; border-radius: 24px;
     font-size: 13.5px; opacity: 0; pointer-events: none; transition: opacity .25s; z-index: 50;
   }
   .toast.show { opacity: 1; }
@@ -271,10 +271,10 @@
   /* sign-in gate */
   .btn-google {
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; background: #fff; color: #3c4043; border: 1px solid #dadce0;
+    width: 100%; background: #FFFAF2; color: #3c4043; border: 1px solid #dadce0;
     border-radius: 9px; padding: 11px 16px; font-weight: 600; font-size: 14.5px; cursor: pointer;
   }
-  .btn-google:hover { background: #f6f8f7; }
+  .btn-google:hover { background: #F4F2EA; }
   .gate-foot { font-size: 11.5px; color: var(--wa-muted); margin: 16px 0 0; }
   .gate-note { font-size: 12px; color: #8a6414; background: #fdf0d4; border-radius: 8px; padding: 8px 10px; margin-top: 12px; display: none; text-align: left; }
 
@@ -287,8 +287,8 @@
   /* department banner photos */
   .dept-banner { position: relative; height: 175px; margin: -20px -22px 18px; border-radius: 13px 13px 0 0; overflow: hidden; background: var(--wa-ink); }
   .dept-banner img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .dept-banner .shade { position: absolute; inset: 0; background: linear-gradient(165deg, rgba(20,48,43,.78) 0%, rgba(31,95,79,.38) 55%, rgba(20,48,43,.22) 100%); }
-  .dept-banner h2 { position: absolute; left: 22px; right: 22px; bottom: 12px; margin: 0; color: #fff; font-size: 20px; text-shadow: 0 1px 10px rgba(0,0,0,.45); }
+  .dept-banner .shade { position: absolute; inset: 0; background: linear-gradient(165deg, rgba(16,63,57,.78) 0%, rgba(16,63,57,.38) 55%, rgba(16,63,57,.22) 100%); }
+  .dept-banner h2 { position: absolute; left: 22px; right: 22px; bottom: 12px; margin: 0; color: #FFFAF2; font-size: 20px; text-shadow: 0 1px 10px rgba(0,0,0,.45); }
   .dept-banner .deptchip { box-shadow: 0 1px 6px rgba(0,0,0,.3); }
 
   /* meeting chip band */
@@ -307,7 +307,7 @@
   .due-badge.amber { background: #fdf0d4; color: #8a6414; border: 1px solid #ecd9a0; }
   .due-badge.red { background: #fbe3de; color: #8f2a1c; border: 1px solid #eebbb0; }
   .as-chip { display: inline-block; font-size: 11px; font-weight: 600; background: #e7efe9; color: var(--wa-green); border-radius: 10px; padding: 1px 8px; margin: 3px 4px 0 0; }
-  .cat-tag { display: inline-block; font-size: 10.5px; font-weight: 700; color: #fff; border-radius: 10px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
+  .cat-tag { display: inline-block; font-size: 10.5px; font-weight: 700; color: #FFFAF2; border-radius: 10px; padding: 1px 8px; margin-left: 6px; vertical-align: middle; white-space: nowrap; }
   .lock-tag { font-size: 10.5px; color: var(--wa-muted); border: 1px dashed var(--wa-line); border-radius: 10px; padding: 0 7px; margin-left: 6px; white-space: nowrap; }
   .edit-btn { background: none; border: none; color: var(--wa-green); font-size: 11.5px; cursor: pointer; text-decoration: underline; padding: 0 0 0 4px; }
   .edit-btn:hover { color: var(--wa-green-soft); }
@@ -316,7 +316,7 @@
   .whatsnew { background: var(--wa-card); border: 1px solid var(--wa-line); border-radius: 12px; padding: 12px 16px 8px; margin-bottom: 22px; }
   .whatsnew h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .8px; color: var(--wa-muted); }
   .wn-list { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; }
-  .wn-item { flex: 0 0 auto; width: 265px; background: #faf9f4; border: 1px solid var(--wa-line); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; cursor: pointer; }
+  .wn-item { flex: 0 0 auto; width: 265px; background: #F4F2EA; border: 1px solid var(--wa-line); border-radius: 10px; padding: 9px 12px; font-size: 12.5px; cursor: pointer; }
   .wn-item:hover { border-color: var(--wa-green-soft); }
   .wn-dept { font-weight: 700; font-size: 11px; margin-bottom: 2px; }
   .wn-text { color: var(--wa-text); max-height: 57px; overflow: hidden; }
@@ -325,17 +325,17 @@
 
   /* toolbar search */
   .search-wrap { position: relative; flex: 1; min-width: 150px; max-width: 340px; }
-  .search-wrap input { width: 100%; padding: 6px 11px; border-radius: 18px; border: 1px solid rgba(255,255,255,.25); background: rgba(255,255,255,.12); color: #fff; font-size: 12.5px; }
+  .search-wrap input { width: 100%; padding: 6px 11px; border-radius: 18px; border: 1px solid rgba(255,250,242,.25); background: rgba(255,250,242,.12); color: #FFFAF2; font-size: 12.5px; }
   .search-wrap input::placeholder { color: #b9c6c0; }
-  .search-pop { position: absolute; top: 115%; left: 0; right: 0; background: #fff; color: var(--wa-text); border: 1px solid var(--wa-line); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.18); max-height: 350px; overflow: auto; z-index: 80; }
+  .search-pop { position: absolute; top: 115%; left: 0; right: 0; background: #FFFAF2; color: var(--wa-text); border: 1px solid var(--wa-line); border-radius: 10px; box-shadow: 0 12px 34px rgba(0,0,0,.18); max-height: 350px; overflow: auto; z-index: 80; }
   .search-pop .sr { padding: 9px 13px; border-bottom: 1px solid var(--wa-line); cursor: pointer; font-size: 13px; }
   .search-pop .sr:last-child { border-bottom: none; }
-  .search-pop .sr:hover { background: #faf9f4; }
+  .search-pop .sr:hover { background: #F4F2EA; }
   .sr-type { font-size: 10px; font-weight: 700; color: var(--wa-muted); text-transform: uppercase; letter-spacing: .5px; margin-right: 6px; }
 
   /* modal */
-  .modal-back { position: fixed; inset: 0; background: rgba(20,48,43,.5); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 18px; }
-  .modal { background: #fff; border-radius: 14px; max-width: 540px; width: 100%; max-height: 92vh; overflow: auto; padding: 24px; box-shadow: 0 18px 60px rgba(0,0,0,.3); }
+  .modal-back { position: fixed; inset: 0; background: rgba(16,63,57,.5); z-index: 90; display: flex; align-items: center; justify-content: center; padding: 18px; }
+  .modal { background: #FFFAF2; border-radius: 14px; max-width: 540px; width: 100%; max-height: 92vh; overflow: auto; padding: 24px; box-shadow: 0 18px 60px rgba(0,0,0,.3); }
   .modal h3 { margin: 0 0 6px; color: var(--wa-ink); font-size: 18px; }
   .modal .m-sub { font-size: 12.5px; color: var(--wa-muted); margin: 0 0 14px; }
   .modal label { font-size: 12px; color: var(--wa-muted); display: block; margin: 12px 0 4px; font-weight: 600; }
@@ -349,13 +349,13 @@
 
   /* filters */
   .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; align-items: center; }
-  .fchip { border: 1px solid var(--wa-line); background: #fff; border-radius: 18px; padding: 5px 13px; font-size: 12px; font-weight: 600; color: var(--wa-muted); cursor: pointer; }
-  .fchip.on { background: var(--wa-green); border-color: var(--wa-green); color: #fff; }
+  .fchip { border: 1px solid var(--wa-line); background: #FFFAF2; border-radius: 18px; padding: 5px 13px; font-size: 12px; font-weight: 600; color: var(--wa-muted); cursor: pointer; }
+  .fchip.on { background: var(--wa-green); border-color: var(--wa-green); color: #FFFAF2; }
 
   /* transcript status */
   .tx-status { font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 9px; white-space: nowrap; }
   .tx-status.proc { background: #fdf0d4; color: #8a6414; }
-  .tx-status.done { background: #e2f0e7; color: #1f5f4f; }
+  .tx-status.done { background: #e2f0e7; color: #103F39; }
   .tx-status.fail { background: #fbe3de; color: #8f2a1c; }
   .tx-status.none { background: #eef1ee; color: var(--wa-muted); }
   .tx-sum { font-size: 12px; color: var(--wa-muted); padding: 0 16px 10px; font-style: italic; }
@@ -368,7 +368,7 @@
   /* needs-me and activity */
   .nm-group { margin-bottom: 6px; }
   .act-old { color: #8f2a1c; }
-  .act-new { color: #1f5f4f; }
+  .act-new { color: #103F39; }
   .act-cell-what { max-width: 420px; }
 
   /* mobile pass */
@@ -469,7 +469,7 @@
       <div id="searchResults" class="search-pop" style="display:none;"></div>
     </span>
     <button id="needsMeBtn" class="who-btn" style="display:none;">&#9873; Needs me</button>
-    <span class="pill">Signed in: <b id="whoName" style="color:#fff;">...</b>
+    <span class="pill">Signed in: <b id="whoName" style="color:#FFFAF2;">...</b>
       <button id="signOutBtn" class="who-btn">Sign out</button>
     </span>
   </div>
@@ -479,16 +479,16 @@
 
 <nav class="wa-nav">
   <div class="wa-wrap" id="tabBar">
-    <button class="tab active" data-tab="overview"><span class="tabdot" style="background:#d4a13c"></span>Open Decisions</button>
-    <button class="tab" data-tab="dashboard"><span class="tabdot" style="background:#1f5f4f"></span>Dashboard</button>
-    <button class="tab" data-tab="opsmtl"><span class="tabdot" style="background:#2c7a66"></span>Ops &amp; Program Dev &middot; Montreal</button>
-    <button class="tab" data-tab="opsto"><span class="tabdot" style="background:#3a6ea5"></span>Ops &amp; Program Dev &middot; Toronto</button>
-    <button class="tab" data-tab="marketing"><span class="tabdot" style="background:#8a5cc4"></span>Marketing, Branding &amp; Web</button>
+    <button class="tab active" data-tab="overview"><span class="tabdot" style="background:#DCA527"></span>Open Decisions</button>
+    <button class="tab" data-tab="dashboard"><span class="tabdot" style="background:#103F39"></span>Dashboard</button>
+    <button class="tab" data-tab="opsmtl"><span class="tabdot" style="background:#103F39"></span>Operations Montreal</button>
+    <button class="tab" data-tab="opsto"><span class="tabdot" style="background:#3a6ea5"></span>Operations Toronto</button>
+    <button class="tab" data-tab="marketing"><span class="tabdot" style="background:#6F64AB"></span>Marketing, Branding &amp; Web</button>
     <button class="tab" data-tab="fundraising"><span class="tabdot" style="background:#c87a2f"></span>Fundraising &amp; Grants</button>
     <button class="tab" data-tab="hr"><span class="tabdot" style="background:#b3402f"></span>Human Resources</button>
     <button class="tab" data-tab="board"><span class="tabdot" style="background:#4a4f57"></span>Board &amp; Governance</button>
-    <button class="tab" data-tab="transcripts" id="txTabBtn"><span class="tabdot" style="background:#6b7670"></span>Transcript Archive</button>
-    <button class="tab" data-tab="activity" id="actTabBtn"><span class="tabdot" style="background:#8a8f85"></span>Activity</button>
+    <button class="tab" data-tab="transcripts" id="txTabBtn"><span class="tabdot" style="background:#797773"></span>Transcript Archive</button>
+    <button class="tab" data-tab="activity" id="actTabBtn"><span class="tabdot" style="background:#797773"></span>Activity</button>
   </div>
 </nav>
 
@@ -536,10 +536,10 @@
         <div>
           <label style="font-size:12.5px;color:var(--wa-muted);">Department</label><br/>
           <select id="txDept" style="width:100%;margin-top:4px;">
-            <option value="opsmtl">Ops &amp; Program Dev - Montreal</option>
-            <option value="opsto">Ops &amp; Program Dev - Toronto</option>
+            <option value="opsmtl">Operations Montreal</option>
+            <option value="opsto">Operations Toronto</option>
             <option value="marketing">Marketing, Branding &amp; Web</option>
-            <option value="fundraising">Fundraising &amp; Grants</option>
+            <option value="fundraising">Fundraising &amp; Finances</option>
             <option value="hr">Human Resources</option>
             <option value="board">Board &amp; Governance</option>
           </select>
@@ -569,10 +569,10 @@
       <div class="tx-controls">
         <select id="txFilter">
           <option value="">All departments</option>
-          <option value="Ops &amp; Program Dev - Montreal">Ops &amp; Program Dev - Montreal</option>
-          <option value="Ops &amp; Program Dev - Toronto">Ops &amp; Program Dev - Toronto</option>
+          <option value="Operations Montreal">Operations Montreal</option>
+          <option value="Operations Toronto">Operations Toronto</option>
           <option value="Marketing, Branding &amp; Web">Marketing, Branding &amp; Web</option>
-          <option value="Fundraising &amp; Grants">Fundraising &amp; Grants</option>
+          <option value="Fundraising &amp; Finances">Fundraising &amp; Finances</option>
           <option value="Human Resources">Human Resources</option>
           <option value="Board &amp; Governance">Board &amp; Governance</option>
         </select>
@@ -687,7 +687,7 @@
    ===================================================================== */
 
 const AREA_COLORS = {
-  "Ops MTL": "#2c7a66", "Ops TO": "#3a6ea5", "Marketing": "#8a5cc4",
+  "Ops MTL": "#103F39", "Ops TO": "#3a6ea5", "Marketing": "#6F64AB",
   "Fundraising": "#c87a2f", "Grants": "#b8902f", "HR": "#b3402f", "Board": "#4a4f57"
 };
 
@@ -709,7 +709,7 @@ const DECISIONS = [
 
 const SECTIONS = {
   opsmtl: {
-    title: "Operations &amp; Program Development - Montreal",
+    title: "Operations Montreal",
     color: "var(--c-opsmtl)",
     read: "Capable and committed but stretched thin at the top, too few leaders for a fast-growing volunteer base. Runs on roughly $250 biweekly servings and a self-sufficient team. New Otter meetings show the program-dev engine running well week to week.",
     progress: "The program development engine is running steadily week to week. Desta community kitchen is secured long term on Crescent St; AIDS Community Care kits and a community-gardens produce partnership are in motion. Ola is onboarded, the bi-weekly serving process (cooks, Instacart, logistics) is now documented with Mary, and an August beneficiary event plus a volunteer-recognition badge idea are in planning.",
@@ -743,7 +743,7 @@ const SECTIONS = {
   },
 
   opsto: {
-    title: "Operations &amp; Program Development - Toronto / Ontario",
+    title: "Operations Toronto",
     color: "var(--c-opsto)",
     read: "Energetic and ambitious but fragile, over-centralized on one stretched leader (Tate). Large upside if succession and structure land first. No new Toronto-specific meeting this run.",
     progress: "The June 14 serving drew about 60 volunteers alongside Ernestine's Women's Shelter and Youth Without Shelter, and the ACT for Food $1,000 grant is tied to a TMU event. Food Not Bombs trust is warming and Gabe is onboarded for the Community Closet. Structure and succession remain the watch items given how much sits on Tate, who is away from Jun 20.",
@@ -796,7 +796,7 @@ const SECTIONS = {
     ],
     subsections: [
       {
-        title: "Branding project", color: "#8a5cc4",
+        title: "Branding project", color: "#6F64AB",
         summary: "Refresh is near complete and entering launch (internal reveal, external teaser, downtown hype video). Assets are moving into Canva for self-serve and business cards are queued. The guideline book continues in parallel with Eduardo and Robert.",
         items: [
           {k:"mkt-2", t:"Sponsorship package + impact-report rebrand (urgent: Rally Paper)", owner:"Alejandra", flag:true, status:"In progress, proceed without guideline book"},
@@ -827,7 +827,7 @@ const SECTIONS = {
   },
 
   fundraising: {
-    title: "Fundraising &amp; Grants",
+    title: "Fundraising &amp; Finances",
     color: "var(--c-fund)",
     read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
     progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
@@ -969,13 +969,13 @@ let SESSION = null;
 
 const DEPT_ORDER = ["opsmtl", "opsto", "marketing", "fundraising", "hr", "board"];
 const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising & Grants", hr: "Human Resources", board: "Board" };
-const DEPT_COLOR = { opsmtl: "#2c7a66", opsto: "#3a6ea5", marketing: "#8a5cc4", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57" };
+const DEPT_COLOR = { opsmtl: "#103F39", opsto: "#3a6ea5", marketing: "#6F64AB", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57" };
 const CATEGORIES = ["Budget or purchase", "Hiring or people", "Legal, risk, or governance", "Strategy or direction", "Partnership or external", "Ethics or policy"];
-const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#1f5f4f", "Partnership or external": "#3a6ea5", "Ethics or policy": "#8a5cc4" };
+const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#103F39", "Partnership or external": "#3a6ea5", "Ethics or policy": "#6F64AB" };
 
 function isStaff() { return MODE === "staff"; }
 function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
-function catTag(cat) { if (!cat) return ""; return '<span class="cat-tag" style="background:' + (CAT_COLORS[cat] || "#6b7670") + '">' + esc(cat) + "</span>"; }
+function catTag(cat) { if (!cat) return ""; return '<span class="cat-tag" style="background:' + (CAT_COLORS[cat] || "#797773") + '">' + esc(cat) + "</span>"; }
 
 function initCloud() {
   const dot = document.getElementById("cloudDot");
@@ -1840,8 +1840,8 @@ function clickupCardHtml() {
     return "<tr><td>" + (DEPT_LABEL[id] || id) + "</td><td>" + Number(c.closed_n || 0) + "</td><td>" + Number(c.created_n || 0) + "</td><td>" + openN + (delta != null ? " (" + (delta >= 0 ? "+" : "") + delta + " vs last wk)" : "") + "</td></tr>";
   }).join("");
   if (!tr) return "";
-  return '<div class="card dept-card" style="border-top-color:#8a5cc4">' +
-    '<h2 style="color:#8a5cc4">ClickUp movement</h2>' +
+  return '<div class="card dept-card" style="border-top-color:#6F64AB">' +
+    '<h2 style="color:#6F64AB">ClickUp movement</h2>' +
     '<p class="read">Task status movement per department from the weekly ClickUp snapshot: closed and created this week, plus how the open pile is trending.</p>' +
     '<table class="wa-tbl"><thead><tr><th>Department</th><th>Closed this wk</th><th>Created</th><th>Open tasks</th></tr></thead><tbody>' + tr + "</tbody></table></div>";
 }
@@ -2090,7 +2090,7 @@ function renderActivity() {
   };
   const typeOpts = [["", "All types"], ["dept_task", "Tasks"], ["decision", "Decisions"], ["dept_update", "Updates"], ["dept_meta", "Overviews"], ["transcript", "Transcripts"]];
   el.innerHTML =
-    '<div class="card dept-card" style="border-top-color:#8a8f85">' +
+    '<div class="card dept-card" style="border-top-color:#797773">' +
     "<h2>Activity</h2>" +
     '<p class="read">Every change to the board, human or AI, newest first: the audit trail and the undo reference. Prior text is preserved in the old value column.</p>' +
     '<div class="filters">' +

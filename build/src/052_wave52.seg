@@ -22,19 +22,19 @@
   var st = document.createElement('style');
   st.id = 'wa52css';
   st.textContent = '' +
-    '.w52late{background:rgba(212,161,60,.14) !important;border-radius:10px;}' +
+    '.w52late{background:rgba(220,165,39,.14) !important;border-radius:10px;}' +
     '.w52row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:3px;font-size:11.5px;}' +
     'span.w52row{display:inline-flex;margin:0 0 0 8px;}' +
-    '[data-w52p],[data-w52d]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:1px 9px;' +
-    'font-size:10.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.6;text-decoration:none !important;}' +
-    '[data-w52p]:hover,[data-w52d]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
-    '.w52sug{display:inline-flex;gap:7px;align-items:center;background:rgba(212,161,60,.16);color:#8a6414;border-radius:999px;padding:1px 10px;font-size:10.5px;font-weight:700;}' +
-    '.w52sug a{cursor:pointer;color:#1f5f4f;font-weight:800;}' +
+    '[data-w52p],[data-w52d]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:1px 9px;' +
+    'font-size:10.5px;color:#103F39 !important;cursor:pointer;font-weight:700;line-height:1.6;text-decoration:none !important;}' +
+    '[data-w52p]:hover,[data-w52d]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
+    '.w52sug{display:inline-flex;gap:7px;align-items:center;background:rgba(220,165,39,.16);color:#8a6414;border-radius:999px;padding:1px 10px;font-size:10.5px;font-weight:700;}' +
+    '.w52sug a{cursor:pointer;color:#103F39;font-weight:800;}' +
     '.w52sug a:hover{text-decoration:underline;}' +
     '.w52sug [data-w52no]{color:#b3402f;}' +
     '.w52quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}' +
-    '.w52quick a{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:2px 11px;font-size:11px;color:#1f5f4f;cursor:pointer;font-weight:700;}' +
-    '.w52quick a:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w52quick a{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:2px 11px;font-size:11px;color:#103F39;cursor:pointer;font-weight:700;}' +
+    '.w52quick a:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '.w52flags{display:flex;gap:8px;flex-wrap:wrap;}' +
     '.w52flag{background:rgba(179,64,47,.1);color:#b3402f;border-radius:999px;padding:4px 13px;font-size:12px;font-weight:700;}' +
     '.w52flag small{font-weight:600;opacity:.75;}';

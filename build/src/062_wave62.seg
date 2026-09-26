@@ -24,9 +24,9 @@
   st.id = 'wa62css';
   st.textContent = '' +
     '.w62chip{display:inline-block;border-radius:999px;padding:1px 10px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle;}' +
-    '.w62chip.lead{background:rgba(132,85,255,.14);color:#5b32c7;}' +
+    '.w62chip.lead{background:rgba(111,100,171,.14);color:#6F64AB;}' +
     '.w62chip.priv{background:rgba(179,64,47,.12);color:#b3402f;}' +
-    '#w62people{max-height:150px;overflow:auto;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px;margin-top:6px;}' +
+    '#w62people{max-height:150px;overflow:auto;border:1px solid #ECEBE3;border-radius:10px;padding:6px 10px;margin-top:6px;}' +
     '#w62people label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}';
   document.head.appendChild(st);
 
@@ -103,7 +103,7 @@
         + '<div id="w62people" style="display:none">'
         + people.map(function (p) {
           return '<label><input type="checkbox" class="w62pcb" value="' + esc(p.name) + '" style="width:15px;height:15px" /> '
-            + esc(p.name) + ' <span style="color:#9aa5a1;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
+            + esc(p.name) + ' <span style="color:#797773;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
         }).join('')
         + '</div>'
         + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) will see this meeting and the updates, tasks and decisions it creates. It stays out of the chat assistant, agendas and AI suggestions.</p>'

@@ -26,14 +26,14 @@
   var css = document.createElement('style');
   css.textContent =
     '.w92pills{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:2px 0 10px;}' +
-    '.w92pills .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);margin-right:2px;}' +
+    '.w92pills .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);margin-right:2px;}' +
     '.w92pill{border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;}' +
-    '.w92pill.on{background:#2c7a66;border-color:#2c7a66;color:#fff;}' +
+    '.w92pill.on{background:#103F39;border-color:#103F39;color:#FFFAF2;}' +
     '.w92pill.fc{border-style:dashed;}' +
     '.w92pill.fc.on{background:#b07b2e;border-color:#b07b2e;}' +
-    '.w92note{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin:-4px 0 8px;}' +
+    '.w92note{font-size:11.5px;color:var(--wa-muted,#797773);margin:-4px 0 8px;}' +
     '.w92can .l{cursor:pointer;}' +
-    '.w92can .l:before{content:"\\25B8 ";font-size:9px;color:var(--wa-muted,#7b8a86);}' +
+    '.w92can .l:before{content:"\\25B8 ";font-size:9px;color:var(--wa-muted,#797773);}' +
     '.w92can.open .l:before{content:"\\25BE ";}' +
     '.w92sub{margin:2px 0 6px 18px;padding-left:8px;border-left:2px solid rgba(127,127,127,.25);}' +
     '.w92sub .w90row{margin:2px 0;font-size:11px;}' +
@@ -43,13 +43,13 @@
     '#w92health h3{margin-bottom:2px;}' +
     '.w92hgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:8px 0;}' +
     '.w92hcard{background:rgba(127,127,127,.07);border-radius:10px;padding:10px 12px;cursor:help;}' +
-    '.w92hcard .t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#7b8a86);}' +
+    '.w92hcard .t{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--wa-muted,#797773);}' +
     '.w92hcard .v{font-size:17px;font-weight:800;margin:2px 0;}' +
-    '.w92hcard .b{font-size:11px;color:var(--wa-muted,#7b8a86);}' +
+    '.w92hcard .b{font-size:11px;color:var(--wa-muted,#797773);}' +
     '.w92dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:0;}' +
-    '.w92dot.ok{background:#3f9c7f;}.w92dot.warn{background:#b07b2e;}.w92dot.bad{background:#c96b5f;}.w92dot.na{background:rgba(127,127,127,.4);}' +
+    '.w92dot.ok{background:#103F39;}.w92dot.warn{background:#b07b2e;}.w92dot.bad{background:#c96b5f;}.w92dot.na{background:rgba(127,127,127,.4);}' +
     '#w92guide{font-size:12px;margin-top:4px;}' +
-    '#w92guide summary{cursor:pointer;font-weight:700;color:#2c7a66;font-size:12.5px;}' +
+    '#w92guide summary{cursor:pointer;font-weight:700;color:#103F39;font-size:12.5px;}' +
     '#w92guide p{margin:6px 0;font-size:12px;}';
   document.head.appendChild(css);
 
@@ -166,8 +166,8 @@
       var pct = total > 0 ? Math.round(x.v / total * 100) : 0;
       return '<div class="w90row" title="' + esc(w92Pretty(x.k)) + ': ' + waFinMoney(x.v, true) + ' (' + pct + '% of ' + esc(cat) + ')">' +
         '<span class="l">' + esc(w92Pretty(x.k)) + '</span>' +
-        '<span class="b"><i style="width:' + Math.max(1, Math.round(x.v / max * 100)) + '%;background:' + (income ? '#3f9c7f' : '#c96b5f') + ';opacity:.7"></i></span>' +
-        '<span class="v">' + waFinMoney(x.v) + ' <span style="font-weight:400;color:var(--wa-muted,#7b8a86)">' + pct + '%</span></span></div>';
+        '<span class="b"><i style="width:' + Math.max(1, Math.round(x.v / max * 100)) + '%;background:' + (income ? '#103F39' : '#c96b5f') + ';opacity:.7"></i></span>' +
+        '<span class="v">' + waFinMoney(x.v) + ' <span style="font-weight:400;color:var(--wa-muted,#797773)">' + pct + '%</span></span></div>';
     }).join('');
   }
   function w92Drill() {
@@ -279,7 +279,7 @@
     });
     var d = document.createElement('div');
     d.id = 'w92health';
-    d.innerHTML = '<h3 class="block" style="color:#2c7a66">Nonprofit health</h3>' +
+    d.innerHTML = '<h3 class="block" style="color:#103F39">Nonprofit health</h3>' +
       '<div class="fin-note">Standard charity-sector measures computed from this time frame. Hover any card for the formula and benchmark. Department mapping: Ops = program, Fundraising + Marketing = fundraising, HR + Board + Org-wide = admin.</div>' +
       '<div class="w92hgrid">' + cards.map(function (c) {
         return '<div class="w92hcard" title="' + esc(c.tip) + '"><div class="t">' + c.t + '</div><div class="v">' + c.v + '</div><div class="b">' + c.b + '</div></div>';

@@ -18,27 +18,27 @@
   st.id = 'wa67css';
   st.textContent = '' +
     '.w67bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 10px;}' +
-    '.w67q{flex:1;min-width:180px;max-width:320px;padding:7px 12px;border:1px solid var(--wa-line);border-radius:999px;font-size:13px;background:#fff;}' +
+    '.w67q{flex:1;min-width:180px;max-width:320px;padding:7px 12px;border:1px solid var(--wa-line);border-radius:999px;font-size:13px;background:#FFFAF2;}' +
     '.w67chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}' +
     '.w67chip{display:inline-block;border-radius:999px;padding:3px 12px;font-size:11px;font-weight:800;cursor:pointer;border:1px solid transparent;user-select:none;}' +
-    '.w67chip.path{background:#fff;border-color:var(--wa-line);color:#3d4642;font-weight:700;}' +
-    '.w67chip.on{outline:2px solid rgba(31,95,79,.55);outline-offset:1px;}' +
+    '.w67chip.path{background:#FFFAF2;border-color:var(--wa-line);color:#1F201E;font-weight:700;}' +
+    '.w67chip.on{outline:2px solid rgba(16,63,57,.55);outline-offset:1px;}' +
     '.w67rowwrap{margin:0 0 16px;}' +
     '.w67rh{display:flex;gap:10px;align-items:baseline;margin:0 0 6px;}' +
-    '.w67rh b{font-size:13.5px;color:#14302b;}' +
-    '.w67rh .n{font-size:11px;color:#8b968f;}' +
+    '.w67rh b{font-size:13.5px;color:#103F39;}' +
+    '.w67rh .n{font-size:11px;color:#797773;}' +
     '.w67rh .nav{margin-left:auto;display:flex;gap:4px;}' +
-    '.w67rh .nav button{border:1px solid var(--wa-line);background:#fff;border-radius:999px;width:26px;height:26px;cursor:pointer;color:#1f5f4f;font-weight:800;line-height:1;}' +
+    '.w67rh .nav button{border:1px solid var(--wa-line);background:#FFFAF2;border-radius:999px;width:26px;height:26px;cursor:pointer;color:#103F39;font-weight:800;line-height:1;}' +
     '.w67row{display:flex;gap:10px;overflow-x:auto;padding:4px 2px 10px;scroll-behavior:smooth;scrollbar-width:thin;}' +
-    '.w67card{flex:0 0 205px;max-width:205px;background:#fff;border:1px solid var(--wa-line);border-radius:12px;padding:11px 12px;cursor:pointer;transition:box-shadow .12s, transform .12s;}' +
-    '.w67card:hover{box-shadow:0 4px 14px rgba(20,48,43,.12);transform:translateY(-2px);}' +
-    '.w67card h5{margin:0 0 5px;font-size:12.8px;line-height:1.35;color:#14302b;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}' +
-    '.w67meta{font-size:10.5px;color:#8b968f;margin:0 0 6px;}' +
+    '.w67card{flex:0 0 205px;max-width:205px;background:#FFFAF2;border:1px solid var(--wa-line);border-radius:12px;padding:11px 12px;cursor:pointer;transition:box-shadow .12s, transform .12s;}' +
+    '.w67card:hover{box-shadow:0 4px 14px rgba(16,63,57,.12);transform:translateY(-2px);}' +
+    '.w67card h5{margin:0 0 5px;font-size:12.8px;line-height:1.35;color:#103F39;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:34px;}' +
+    '.w67meta{font-size:10.5px;color:#797773;margin:0 0 6px;}' +
     '.w67tag{display:inline-block;border-radius:999px;padding:1px 9px;font-size:9.5px;font-weight:800;margin:0 4px 4px 0;}' +
-    '.w67done{display:inline-block;border-radius:999px;padding:1px 9px;font-size:9.5px;font-weight:800;background:#e8efe9;color:#2c5a44;}' +
+    '.w67done{display:inline-block;border-radius:999px;padding:1px 9px;font-size:9.5px;font-weight:800;background:#ECEBE3;color:#2c5a44;}' +
     '.w67done.todo{background:#f6ecd2;color:#7a5a12;}' +
-    '.w67empty{font-size:12.5px;color:#8b968f;padding:6px 0;}' +
-    '#w67m .w67desc{max-height:44vh;overflow-y:auto;font-size:13px;line-height:1.55;color:#3d4642;margin:8px 0;}' +
+    '.w67empty{font-size:12.5px;color:#797773;padding:6px 0;}' +
+    '#w67m .w67desc{max-height:44vh;overflow-y:auto;font-size:13px;line-height:1.55;color:#1F201E;margin:8px 0;}' +
     '#w67m .w67desc p{margin:0 0 8px;}';
   document.head.appendChild(st);
 
@@ -55,7 +55,7 @@
   function w67Dept(cat) { return (WA67.cats && WA67.cats[cat]) || null; }
   function w67Color(cat) {
     var d = w67Dept(cat);
-    return (d && typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64';
+    return (d && typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773';
   }
   function w67Tag(cat) {
     var c = w67Color(cat);
@@ -109,7 +109,7 @@
     /* chips cover every category, including ones only seen inside paths */
     var chipCats = {};
     all.forEach(function (t) { chipCats[t.category || 'General'] = 1; });
-    var chips = '<span class="w67chip path on" data-w67c="all" style="background:#1f5f4f;color:#fff;border-color:#1f5f4f">All</span>';
+    var chips = '<span class="w67chip path on" data-w67c="all" style="background:#103F39;color:#FFFAF2;border-color:#103F39">All</span>';
     Object.keys(chipCats).sort().forEach(function (c) {
       var col = w67Color(c);
       chips += '<span class="w67chip" data-w67c="cat:' + esc(c) + '" style="background:' + col + '1f;color:' + col + '">' + esc(c) + '</span>';
@@ -177,12 +177,12 @@
     try { canEdit = typeof WA40_MINE !== 'undefined' && WA40_MINE && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader'); } catch (e) { /* no */ }
     var desc = t.description
       ? ((typeof waVolMd === 'function') ? waVolMd(t.description) : '<p>' + esc(t.description) + '</p>')
-      : '<p style="color:#8b968f">No description yet.</p>';
+      : '<p style="color:#797773">No description yet.</p>';
     openModal('<div id="w67m"><h3 style="margin-bottom:2px">' + esc(t.title) + '</h3>'
       + '<div style="margin:4px 0 2px">' + w67Tag(t.category)
-      + (t.path_group ? '<span class="w67tag" style="background:#eef2f0;color:#3d4642">' + esc(t.path_group) + '</span>' : '')
-      + (t.duration_sec && typeof wa36Dur === 'function' ? '<span class="w67tag" style="background:#eef2f0;color:#3d4642">' + wa36Dur(t.duration_sec) + '</span>' : '')
-      + (doneN ? '<span class="w67tag" style="background:#e8efe9;color:#2c5a44">' + doneN + ' people done</span>' : '')
+      + (t.path_group ? '<span class="w67tag" style="background:#ECEBE3;color:#1F201E">' + esc(t.path_group) + '</span>' : '')
+      + (t.duration_sec && typeof wa36Dur === 'function' ? '<span class="w67tag" style="background:#ECEBE3;color:#1F201E">' + wa36Dur(t.duration_sec) + '</span>' : '')
+      + (doneN ? '<span class="w67tag" style="background:#ECEBE3;color:#2c5a44">' + doneN + ' people done</span>' : '')
       + '</div>'
       + '<div class="w67desc">' + desc + '</div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">'
@@ -281,7 +281,7 @@
       if (!html) return;
       var tiles = sec.querySelector('.w44tiles');
       var host = document.createElement('div');
-      host.innerHTML = '<div style="margin:10px 0 4px;font-weight:700;color:#1f5f4f;font-size:13px">Browse the catalog</div>' + html;
+      host.innerHTML = '<div style="margin:10px 0 4px;font-weight:700;color:#103F39;font-size:13px">Browse the catalog</div>' + html;
       if (tiles) tiles.insertAdjacentElement('afterend', host);
       else sec.appendChild(host);
     } catch (e) { /* non-fatal */ }

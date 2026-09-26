@@ -76,7 +76,7 @@
     '.w116js .row .s.err{color:' + FLAG + ';}' +
     '.w116js .row .s.ok{color:#1f6b5d;}' +
     '.w116js .sw{position:relative;width:44px;height:26px;border-radius:999px;background:rgba(16,63,57,.18);cursor:pointer;flex:0 0 auto;transition:background .15s;}' +
-    '.w116js .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s;}' +
+    '.w116js .sw i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#FFFAF2;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s;}' +
     '.w116js .sw.on{background:#2A8C7A;}' +
     '.w116js .sw.on i{left:21px;}' +
     '.w116js .sw.busy{opacity:.5;pointer-events:none;}' +

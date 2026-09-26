@@ -14,10 +14,10 @@
   var st = document.createElement('style');
   st.id = 'wa56css';
   st.textContent = '' +
-    '.w56bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#7b8a86;margin:0 0 8px;}' +
-    '[data-w56go]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 13px;' +
-    'font-size:11.5px;color:#1f5f4f;cursor:pointer;font-weight:700;line-height:1.5;}' +
-    '[data-w56go]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w56bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:12px;color:#797773;margin:0 0 8px;}' +
+    '[data-w56go]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 13px;' +
+    'font-size:11.5px;color:#103F39;cursor:pointer;font-weight:700;line-height:1.5;}' +
+    '[data-w56go]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '[data-w56go][disabled]{opacity:.6;cursor:default;}';
   document.head.appendChild(st);
 
@@ -42,7 +42,7 @@
       var sec = document.getElementById('w52hours');
       if (!sec || document.getElementById('w56bar')) return;
       sec.insertAdjacentHTML('afterbegin',
-        '<div class="w56bar" id="w56bar"><span>Hours last gathered from Slack: <b style="color:#3d4642">' + wa56When(wa56MaxUpd()) + '</b></span>'
+        '<div class="w56bar" id="w56bar"><span>Hours last gathered from Slack: <b style="color:#1F201E">' + wa56When(wa56MaxUpd()) + '</b></span>'
         + '<button data-w56go="1">Update hours from Slack</button>'
         + '<span style="font-size:11px">also runs automatically on the schedule</span></div>');
     } catch (e) { /* non-fatal */ }

@@ -33,13 +33,13 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
   var st = document.createElement('style');
   st.id = 'wa31css';
   st.textContent = '' +
-    '.w31sum{border:1px solid rgba(44,122,102,.4);background:rgba(44,122,102,.05);border-radius:11px;padding:10px 14px;margin:12px 0;}' +
-    '.w31sum h4{margin:0 0 6px;color:#2c7a66;font-size:14px;}' +
+    '.w31sum{border:1px solid rgba(16,63,57,.4);background:rgba(16,63,57,.05);border-radius:11px;padding:10px 14px;margin:12px 0;}' +
+    '.w31sum h4{margin:0 0 6px;color:#103F39;font-size:14px;}' +
     '.w31sum .row{font-size:12.5px;margin:3px 0;}' +
     '.w31sum .b{display:inline-block;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:1px 8px;font-size:11.5px;margin:1px 3px 1px 0;}' +
-    '.w31sum .ok{border-color:#2c7a66;color:#2c7a66;}' +
+    '.w31sum .ok{border-color:#103F39;color:#103F39;}' +
     '.w31sum .no{border-color:#b3402f;color:#b3402f;}' +
-    '.w31sum a{color:#2c7a66;}' +
+    '.w31sum a{color:#103F39;}' +
     '.w31cook{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:4px 0;border-top:1px solid rgba(127,127,127,.15);font-size:12.5px;}' +
     '.w31req{border-top:1px solid rgba(127,127,127,.15);padding:6px 0;font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
     '.w31rec{border-bottom:1px solid rgba(127,127,127,.15);padding:8px 0;font-size:13.5px;}' +
@@ -77,8 +77,8 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
   }
   var wrap = document.createElement('div');
   wrap.id = 'wa31c';
-  wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#f4f7f6;overflow:auto;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1c2b27;';
-  wrap.innerHTML = '<div style="max-width:460px;margin:0 auto;padding:28px 18px"><img src="' + WA31_LOGO + '" alt="Welfare Avenue" style="height:66px;display:block;margin:0 0 8px"><div style="font-weight:800;color:#1f5f4f;font-size:19px;margin-bottom:4px">Welfare Avenue</div><div id="wa31body" style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 14px rgba(20,48,43,.08)">Loading your invitation...</div></div>';
+  wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#f4f7f6;overflow:auto;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#103F39;';
+  wrap.innerHTML = '<div style="max-width:460px;margin:0 auto;padding:28px 18px"><img src="' + WA31_LOGO + '" alt="Welfare Avenue" style="height:66px;display:block;margin:0 0 8px"><div style="font-weight:800;color:#103F39;font-size:19px;margin-bottom:4px">Welfare Avenue</div><div id="wa31body" style="background:#FFFAF2;border-radius:14px;padding:18px;box-shadow:0 2px 14px rgba(16,63,57,.08)">Loading your invitation...</div></div>';
   function mount() { if (document.body) { document.body.appendChild(wrap); } else { setTimeout(mount, 30); } }
   mount();
 
@@ -96,13 +96,13 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
     var d = new Date(String(info.event_date) + 'T12:00:00');
     var dateStr = isNaN(d) ? String(info.event_date) : d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
     var html = '<h2 style="margin:0 0 4px;font-size:18px">Hi ' + esc31(String(info.name || '').split(' ')[0]) + '!</h2>'
-      + '<p style="margin:0 0 12px;font-size:14px;color:#5b6b66">You are on the volunteer list as a <b>' + esc31(info.role || 'volunteer') + '</b> for our serving event on <b>' + esc31(dateStr) + '</b> in ' + esc31(info.location || 'Montreal') + '.</p>';
-    if (info.already) html += '<p style="font-size:12.5px;background:rgba(44,122,102,.08);border-radius:8px;padding:7px 10px">You already answered (' + esc31(info.already) + '). You can update your answer below.</p>';
+      + '<p style="margin:0 0 12px;font-size:14px;color:#797773">You are on the volunteer list as a <b>' + esc31(info.role || 'volunteer') + '</b> for our serving event on <b>' + esc31(dateStr) + '</b> in ' + esc31(info.location || 'Montreal') + '.</p>';
+    if (info.already) html += '<p style="font-size:12.5px;background:rgba(16,63,57,.08);border-radius:8px;padding:7px 10px">You already answered (' + esc31(info.already) + '). You can update your answer below.</p>';
     var radio = function (name, v, label, cur) {
       return '<label style="display:flex;gap:8px;align-items:center;padding:7px 0;font-size:14.5px;cursor:pointer"><input type="radio" name="' + name + '" value="' + v + '"' + (cur === v ? ' checked' : '') + ' style="width:17px;height:17px" /> ' + label + '</label>';
     };
     var input = function (id, label, cur, ph) {
-      return '<label style="display:block;font-size:12.5px;color:#5b6b66;margin-top:10px">' + label + '</label><input id="' + id + '" value="' + esc31(cur || '') + '" placeholder="' + (ph || '') + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #cdd8d4;border-radius:9px;font-size:14px" />';
+      return '<label style="display:block;font-size:12.5px;color:#797773;margin-top:10px">' + label + '</label><input id="' + id + '" value="' + esc31(cur || '') + '" placeholder="' + (ph || '') + '" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #cdd8d4;border-radius:9px;font-size:14px" />';
     };
     html += '<div style="border-top:1px solid #e4ebe8;margin-top:6px;padding-top:6px"><b style="font-size:14px">Can you make it?</b>'
       + radio('att', 'yes', 'Yes, I will be there', a.attending || '')
@@ -121,7 +121,7 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
         + radio('cont', 'needs containers', 'I need containers for the food', a.containers || '')
         + radio('cont', 'has containers', 'I have my own containers', a.containers || '') + '</div>';
     } else if (role.indexOf('driver') === 0) {
-      html += '<label style="display:block;font-size:12.5px;color:#5b6b66;margin-top:10px">What type of car will you drive?</label>'
+      html += '<label style="display:block;font-size:12.5px;color:#797773;margin-top:10px">What type of car will you drive?</label>'
         + '<select id="x_vehicle" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #cdd8d4;border-radius:9px;font-size:14px">'
         + ['', 'Sedan', 'Hatchback', 'SUV', 'Truck', 'Van'].map(function (v) {
           return '<option value="' + v + '"' + ((a.vehicle || '') === v ? ' selected' : '') + '>' + (v || 'Pick one') + '</option>';
@@ -132,7 +132,7 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
     }
     html += input('x_note', 'Anything else we should know? (optional)', a.note, '');
     html += '</div>';
-    html += '<button id="wa31go" style="margin-top:16px;width:100%;padding:12px;background:#1f5f4f;color:#fff;border:0;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Send my answer</button>'
+    html += '<button id="wa31go" style="margin-top:16px;width:100%;padding:12px;background:#103F39;color:#FFFAF2;border:0;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer">Send my answer</button>'
       + '<p style="font-size:11px;color:#8b9a95;margin-top:10px">Questions? Text the Welfare Phone: 438 808 7754.</p>';
     el('wa31body').innerHTML = html;
     el('wa31go').addEventListener('click', async function () {
@@ -153,7 +153,7 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
         var r = await db.rpc('volunteer_confirm_submit', { p_token: token, p: p });
         if (r.error || !(r.data && r.data.ok)) throw new Error('save failed');
         el('wa31body').innerHTML = '<h2 style="margin:0 0 6px;font-size:18px">' + (att === 'yes' ? 'You are confirmed. Thank you!' : 'Thanks for letting us know.') + '</h2>'
-          + '<p style="font-size:14px;color:#5b6b66">' + (att === 'yes' ? 'We have everything we need. See you at the event, and watch for the itinerary text a couple of days before.' : 'No worries at all. We hope to see you at a future serving event.') + '</p>';
+          + '<p style="font-size:14px;color:#797773">' + (att === 'yes' ? 'We have everything we need. See you at the event, and watch for the itinerary text a couple of days before.' : 'No worries at all. We hope to see you at a future serving event.') + '</p>';
       } catch (e) {
         el('wa31go').disabled = false;
         el('wa31go').textContent = 'Try again';
@@ -172,7 +172,7 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
     try {
       var r = await db.rpc('volunteer_confirm_get', { p_token: token });
       if (r.error || !r.data) {
-        el('wa31body').innerHTML = '<b>This link is not valid.</b><p style="font-size:13px;color:#5b6b66">It may have been replaced by a newer text. Reply to our message and we will sort it out.</p>';
+        el('wa31body').innerHTML = '<b>This link is not valid.</b><p style="font-size:13px;color:#797773">It may have been replaced by a newer text. Reply to our message and we will sort it out.</p>';
         return;
       }
       form(r.data);
@@ -391,9 +391,9 @@ async function wa31Recipes() {
   var html = '<p class="vl-empty" style="padding:0 0 12px">The recipe library, linked to the Google Drive recipes folder. Assign one to each cook from any event page summary.</p>';
   WA31_RECIPES.forEach(function (x) {
     html += '<div class="w31rec"><b>' + esc(x.name) + '</b>'
-      + (x.drive_url ? ' <a href="' + esc(x.drive_url) + '" target="_blank" rel="noopener" style="color:#2c7a66">open in Drive</a>' : '')
-      + (x.notes ? '<div style="font-size:12px;color:var(--wa-muted,#7b8a86)">' + esc(x.notes) + '</div>' : '')
-      + (staff ? '<div style="font-size:11.5px;margin-top:3px"><a data-w31re="' + x.id + '" style="color:#2c7a66;cursor:pointer;text-decoration:underline">edit</a></div>' : '')
+      + (x.drive_url ? ' <a href="' + esc(x.drive_url) + '" target="_blank" rel="noopener" style="color:#103F39">open in Drive</a>' : '')
+      + (x.notes ? '<div style="font-size:12px;color:var(--wa-muted,#797773)">' + esc(x.notes) + '</div>' : '')
+      + (staff ? '<div style="font-size:11.5px;margin-top:3px"><a data-w31re="' + x.id + '" style="color:#103F39;cursor:pointer;text-decoration:underline">edit</a></div>' : '')
       + '</div>';
   });
   if (staff) html += '<div class="wa24-links" style="margin-top:12px"><button data-w31ra2="1">Add a recipe</button></div>';
@@ -445,11 +445,11 @@ async function wa31Reqs() {
     });
     if (!reqs.length) return;
     var staff = typeof isStaff === 'function' && isStaff();
-    var html = '<h3 class="block" style="margin-top:14px;color:#2c7a66">Requests for you and your department (' + reqs.length + ')</h3>';
+    var html = '<h3 class="block" style="margin-top:14px;color:#103F39">Requests for you and your department (' + reqs.length + ')</h3>';
     reqs.slice(0, 8).forEach(function (q) {
       html += '<div class="w31req"><span style="flex:1;min-width:0"><b>' + esc(q.title || q.type_key || 'Request') + '</b>'
         + ' <span style="font-size:11px;opacity:.6">' + esc(q.status || '') + '</span></span>'
-        + '<span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 7px;color:#7b8a86">' + esc(q.department || '') + '</span>'
+        + '<span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 7px;color:#797773">' + esc(q.department || '') + '</span>'
         + (staff ? '<select class="w28sel" data-w31ra="' + q.id + '"><option value="">' + (q.assignee ? esc(q.assignee) : 'Assign to...') + '</option>'
           + (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).map(function (p) {
             return '<option value="' + esc(p.name) + '">' + esc(p.name) + '</option>';

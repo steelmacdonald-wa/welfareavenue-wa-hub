@@ -21,12 +21,12 @@ var WA30_IDEAS = {};
   st.textContent = '' +
     '.w30org{border:1px solid rgba(168,127,44,.5);background:rgba(168,127,44,.05);border-radius:11px;padding:10px 14px;margin:0 0 16px;}' +
     '.w30org>h3{margin:2px 0 4px;color:#a87f2c;font-size:15px;}' +
-    '.w30org .sub{font-size:12.5px;color:var(--wa-muted,#7b8a86);margin:0 0 8px;}' +
+    '.w30org .sub{font-size:12.5px;color:var(--wa-muted,#797773);margin:0 0 8px;}' +
     '.w30kids{display:inline-block;font-size:11px;border:1px solid rgba(168,127,44,.4);color:#a87f2c;border-radius:8px;padding:1px 8px;margin:2px 0 8px;}' +
     '.w30i{margin:6px 0 10px;border:1px dashed rgba(168,127,44,.5);border-radius:9px;padding:2px 12px 8px;background:rgba(168,127,44,.04);}' +
     '.w30i>summary{cursor:pointer;font-size:12px;color:#a87f2c;padding:6px 0;}' +
     '.w30sug{border-top:1px solid rgba(127,127,127,.18);padding:7px 0;font-size:13px;}' +
-    '.w30sug .m{font-size:11.5px;color:var(--wa-muted,#7b8a86);margin-top:2px;}' +
+    '.w30sug .m{font-size:11.5px;color:var(--wa-muted,#797773);margin-top:2px;}' +
     '.w30sug .why{font-size:11.5px;color:#a87f2c;margin-top:2px;}' +
     '.w30qr{font-weight:400;font-size:11.5px;opacity:.6;margin-left:8px;}';
   document.head.appendChild(st);
@@ -137,7 +137,7 @@ if (typeof renderGoalsPage === 'function') {
         if (!gs.length && !isUpcoming) return;
         if (!gs.length && !here.length && qi !== 0 && !isUpcoming) return;
         var label = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d;
-        var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#6f6b64';
+        var col = (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773';
         html += '<details class="w29d" style="border-left-color:' + col + '"><summary style="color:' + col + '">' + esc(label) + '<span class="n">' + gs.length + (gs.length === 1 ? ' goal' : ' goals') + (here.length ? ' &middot; ' + here.length + ' suggested' : '') + '</span></summary>';
         gs.forEach(function (g) {
           html += waGoalRow(g);

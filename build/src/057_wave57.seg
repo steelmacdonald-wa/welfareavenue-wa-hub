@@ -20,14 +20,14 @@
   var st = document.createElement('style');
   st.id = 'wa57css';
   st.textContent = '' +
-    '.w57tg{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:0 9px;margin-left:8px;' +
-    'font-size:10.5px;color:#1f5f4f !important;cursor:pointer;font-weight:700;line-height:1.7;vertical-align:middle;text-decoration:none !important;}' +
-    '.w57tg:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
-    '[data-w57bulk]{display:inline-block;background:#1f5f4f;color:#fff !important;border-radius:999px;padding:3px 13px;margin-left:8px;' +
+    '.w57tg{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:0 9px;margin-left:8px;' +
+    'font-size:10.5px;color:#103F39 !important;cursor:pointer;font-weight:700;line-height:1.7;vertical-align:middle;text-decoration:none !important;}' +
+    '.w57tg:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
+    '[data-w57bulk]{display:inline-block;background:#103F39;color:#FFFAF2 !important;border-radius:999px;padding:3px 13px;margin-left:8px;' +
     'font-size:11.5px;cursor:pointer;font-weight:700;line-height:1.5;text-decoration:none !important;}' +
-    '[data-w57bulk]:hover{background:#2c7a66;}' +
+    '[data-w57bulk]:hover{background:#103F39;}' +
     '.w57who label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}' +
-    '.w57cnt{font-size:11.5px;color:#7b8a86;margin-left:6px;}';
+    '.w57cnt{font-size:11.5px;color:#797773;margin-left:6px;}';
   document.head.appendChild(st);
 
   /* ================= folded subtasks ================= */
@@ -110,19 +110,19 @@
       + '<select id="w57dept" style="display:none;margin-top:6px">'
       + wa57Depts().map(function (d) { return '<option value="' + esc(d) + '">' + esc(dl[d] || d) + '</option>'; }).join('')
       + '</select>'
-      + '<div id="w57people" class="w57who" style="max-height:170px;overflow:auto;margin-top:6px;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px">'
+      + '<div id="w57people" class="w57who" style="max-height:170px;overflow:auto;margin-top:6px;border:1px solid #ECEBE3;border-radius:10px;padding:6px 10px">'
       + people.map(function (p) {
         return '<label><input type="checkbox" class="w57pcb" value="' + esc(p.name) + '" style="width:15px;height:15px" /> '
-          + esc(p.name) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(dl[p.department] || p.department || '') + '</span></label>';
+          + esc(p.name) + ' <span style="color:#797773;font-size:11px">' + esc(dl[p.department] || p.department || '') + '</span></label>';
       }).join('')
       + '</div>'
       + '<label style="margin-top:10px">Trainings to assign</label>'
       + '<input type="search" id="w57q" placeholder="Search trainings..." style="width:100%;margin:2px 0 6px" />'
-      + '<div style="max-height:190px;overflow:auto;border:1px solid #eef2f0;border-radius:10px;padding:6px 10px" class="w57who">'
+      + '<div style="max-height:190px;overflow:auto;border:1px solid #ECEBE3;border-radius:10px;padding:6px 10px" class="w57who">'
       + trainings.map(function (t) {
         return '<label data-w57tr="1" data-search="' + esc((t.title + ' ' + (t.category || '')).toLowerCase()) + '">'
           + '<input type="checkbox" class="w57tcb" value="' + t.id + '" style="width:15px;height:15px" /> '
-          + esc(t.title) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span></label>';
+          + esc(t.title) + ' <span style="color:#797773;font-size:11px">' + esc(t.category || '') + '</span></label>';
       }).join('')
       + '</div>'
       + '<div class="m-actions"><button class="btn" id="w57go">Assign them</button> <button class="btn ghost" id="w57cx">Cancel</button></div>';

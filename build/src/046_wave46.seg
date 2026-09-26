@@ -34,28 +34,28 @@
   var st = document.createElement('style');
   st.id = 'wa46css';
   st.textContent = '' +
-    '.w46sec{background:#f6f8f7;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
-    '.w46sec > h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#1f5f4f;}' +
-    '.w46wk{background:#fff;border-radius:12px;margin:6px 0;padding:2px 12px;}' +
-    '.w46wk > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 2px;font-weight:700;font-size:13px;color:#14302b;}' +
+    '.w46sec{background:#F4F2EA;border-radius:16px;padding:14px 16px;margin:0 0 14px;}' +
+    '.w46sec > h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#103F39;}' +
+    '.w46wk{background:#FFFAF2;border-radius:12px;margin:6px 0;padding:2px 12px;}' +
+    '.w46wk > summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:center;padding:9px 2px;font-weight:700;font-size:13px;color:#103F39;}' +
     '.w46wk > summary::-webkit-details-marker{display:none;}' +
     '.w46wk > summary .chev{margin-left:auto;transition:transform .25s;color:#8a958f;font-size:12px;}' +
     '.w46wk[open] > summary .chev{transform:rotate(180deg);}' +
-    '.w46st{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f2f4f3;font-size:12.8px;}' +
-    '.w46st.sub{margin-left:22px;font-size:12.3px;color:#3d4642;}' +
+    '.w46st{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #F4F2EA;font-size:12.8px;}' +
+    '.w46st.sub{margin-left:22px;font-size:12.3px;color:#1F201E;}' +
     '.w46st .nm{flex:1;min-width:0;}' +
     '.w46st .pr{font-size:10px;font-weight:800;color:#b3402f;border:1px solid #b3402f;border-radius:999px;padding:0 7px;margin-left:6px;}' +
-    '[data-w46kit],[data-w46sub],[data-w46addtr]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;padding:3px 11px;' +
-    'font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    '[data-w46kit]:hover,[data-w46sub]:hover,[data-w46addtr]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '[data-w46kit],[data-w46sub],[data-w46addtr]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;padding:3px 11px;' +
+    'font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w46kit]:hover,[data-w46sub]:hover,[data-w46addtr]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '.w46row{display:flex;gap:10px;align-items:center;padding:7px 0;border-top:1px solid #e8edea;font-size:13px;flex-wrap:wrap;}' +
     '.w46row:first-of-type{border-top:none;}' +
-    '.w46stage{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 10px;background:rgba(31,95,79,.1);color:#1f5f4f;}' +
-    '.w46days{font-size:11.5px;color:#7b8a86;}' +
+    '.w46stage{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 10px;background:rgba(16,63,57,.1);color:#103F39;}' +
+    '.w46days{font-size:11.5px;color:#797773;}' +
     '.w46days.late{color:#b3402f;font-weight:700;}' +
-    '.w46kittxt{width:100%;min-height:110px;font-size:12px;font-family:inherit;border:1px solid #e3e7e5;border-radius:10px;padding:8px;}' +
-    '.w46tl{display:flex;gap:4px;flex-wrap:wrap;font-size:10.5px;color:#7b8a86;margin-top:2px;}' +
-    '.w46tl span{background:#eef2f0;border-radius:999px;padding:1px 8px;}';
+    '.w46kittxt{width:100%;min-height:110px;font-size:12px;font-family:inherit;border:1px solid #DEE0D8;border-radius:10px;padding:8px;}' +
+    '.w46tl{display:flex;gap:4px;flex-wrap:wrap;font-size:10.5px;color:#797773;margin-top:2px;}' +
+    '.w46tl span{background:#ECEBE3;border-radius:999px;padding:1px 8px;}';
   document.head.appendChild(st);
 
   function wa46IsHr() {
@@ -129,7 +129,7 @@
     var subj = 'Welcome to Welfare Avenue! Your Next Steps';
     var body = wa46EmailBody(first);
     openModal('<h3>Welcome kit for ' + esc(name) + '</h3>'
-      + '<p class="m-sub">Everything from the HR SOP for a new assignment: send the email once they have accepted, set up their accounts, then post the channel message. <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#2c7a66">Open the full HR SOP</a>.</p>'
+      + '<p class="m-sub">Everything from the HR SOP for a new assignment: send the email once they have accepted, set up their accounts, then post the channel message. <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">Open the full HR SOP</a>.</p>'
       + '<details open><summary style="font-weight:700;font-size:13px;cursor:pointer">1. Onboarding email</summary>'
       + '<p class="m-sub" style="margin:4px 0">Subject: ' + esc(subj) + '</p>'
       + '<textarea class="w46kittxt" id="w46em">' + esc(body) + '</textarea>'
@@ -141,7 +141,7 @@
       + '<li>Send the Slack invitation to their WA Gmail</li>'
       + '<li>Create their onboarding channel: #onboarding-' + esc(first.toLowerCase()) + '</li>'
       + '<li>Post the channel message below, then assign week 1</li>'
-      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#2c7a66">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva and Keela invites, drives, weekly meeting)</li>'
+      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva and Keela invites, drives, weekly meeting)</li>'
       + '</ul></details>'
       + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">3. Onboarding channel message</summary>'
       + '<textarea class="w46kittxt" id="w46sm">' + esc(wa46SlackMsg(first)) + '</textarea>'
@@ -211,9 +211,9 @@
       var hrDone = hrMine.filter(function (x) { return x.done; }).length;
       html += '<div class="w46row"><b>' + esc(o.person_name) + '</b>'
         + '<span class="w37bar" style="max-width:150px"><i style="width:' + p.pct + '%"></i></span>'
-        + '<span style="font-size:12px;color:#1f5f4f;font-weight:700">' + p.pct + '%</span>'
+        + '<span style="font-size:12px;color:#103F39;font-weight:700">' + p.pct + '%</span>'
         + '<span class="w46days' + (isLate ? ' late' : '') + '">day ' + wa46Days(o.started_at) + (isLate ? ' &middot; behind pace' : '') + '</span>'
-        + (helpN ? '<span class="w46stage" style="background:#b3402f;color:#fff">' + helpN + ' asking for help</span>' : '')
+        + (helpN ? '<span class="w46stage" style="background:#b3402f;color:#FFFAF2">' + helpN + ' asking for help</span>' : '')
         + '<a class="w37edit" data-w37open="' + o.id + '">checklist</a>'
         + (hrMine.length ? '<a class="w37edit" data-w39hr="' + o.id + '">HR setup ' + hrDone + ' of ' + hrMine.length + '</a>' : '')
         + '<a data-w46kit="' + esc(o.person_name) + '">Welcome kit</a>'
@@ -236,7 +236,7 @@
     var html = '';
     wa37Weeks().forEach(function (wk) {
       html += '<details class="w46wk"><summary>' + esc(wk.name)
-        + '<span style="font-size:11px;color:#7b8a86;font-weight:600">' + wk.steps.length + ' steps</span>'
+        + '<span style="font-size:11px;color:#797773;font-weight:600">' + wk.steps.length + ' steps</span>'
         + '<a class="w37edit" data-w37add="' + esc(wk.name) + '" style="margin-left:8px">+ add a step</a>'
         + '<span class="chev">&#9662;</span></summary>';
       wk.steps.forEach(function (t) {
@@ -277,14 +277,14 @@
       + '<div class="w44wrap"><table class="w44tbl"><thead><tr><th>Person</th><th>Assigned</th><th>Done</th><th>To do</th><th></th></tr></thead><tbody>'
       + people.map(function (p) {
         var s = byPerson[String(p.name).toLowerCase()] || { a: 0, d: 0 };
-        return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(p.department || '') + '</span></td>'
+        return '<tr><td><b>' + esc(p.name) + '</b> <span style="color:#797773;font-size:11px">' + esc(p.department || '') + '</span></td>'
           + '<td>' + s.a + '</td><td>' + s.d + '</td><td>' + (s.a - s.d) + '</td>'
           + '<td><a data-w44as="' + esc(p.name) + '">Assign trainings</a></td></tr>';
       }).join('')
       + '</tbody></table></div>'
-      + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#1f5f4f">Edit the catalog (' + trainings.length + ')</summary><div style="max-height:260px;overflow:auto;margin-top:4px">'
+      + '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:12.5px;font-weight:700;color:#103F39">Edit the catalog (' + trainings.length + ')</summary><div style="max-height:260px;overflow:auto;margin-top:4px">'
       + trainings.map(function (t) {
-        return '<div class="w46row"><span style="flex:1;font-size:12.5px"><b>' + esc(t.title) + '</b> <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span></span>'
+        return '<div class="w46row"><span style="flex:1;font-size:12.5px"><b>' + esc(t.title) + '</b> <span style="color:#797773;font-size:11px">' + esc(t.category || '') + '</span></span>'
           + '<a data-w43te="' + t.id + '">Edit</a></div>';
       }).join('')
       + '</div></details></div>';

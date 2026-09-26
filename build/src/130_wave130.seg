@@ -62,11 +62,11 @@
     + '.w130deny .ic{flex:none;width:36px;height:36px;border-radius:50%;background:rgba(220,165,39,.2);color:' + GREEN + ';display:flex;align-items:center;justify-content:center;}'
     + '.w130deny .ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}'
     + '.w130deny b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:19px;line-height:1.15;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:2px 0 4px;}'
-    + '.w130deny p{margin:0 0 9px;font-size:13px;line-height:1.5;color:var(--wa-muted,#5c6b66);}'
+    + '.w130deny p{margin:0 0 9px;font-size:13px;line-height:1.5;color:var(--wa-muted,#797773);}'
     + '.w130deny .lk{display:flex;flex-wrap:wrap;gap:6px;}'
     + '.w130deny .lk a{font-size:12.5px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.07);border-radius:999px;padding:7px 13px;text-decoration:none;cursor:pointer;line-height:1.2;}'
     + '.w130deny .lk a:hover{background:rgba(16,63,57,.13);}'
-    + '.w130deny .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;background:none;border-radius:9px;cursor:pointer;color:var(--wa-muted,#5c6b66);font-size:20px;line-height:1;}'
+    + '.w130deny .x{position:absolute;top:8px;right:8px;width:34px;height:34px;border:none;background:none;border-radius:9px;cursor:pointer;color:var(--wa-muted,#797773);font-size:20px;line-height:1;}'
     + '.w130deny .x:hover{background:rgba(16,63,57,.07);color:' + GREEN + ';}'
     /* 10. Ask the Hub: round, the label opens on hover or focus */
     + '#waChatBtn{transition:transform .18s ease,box-shadow .18s ease,opacity .18s ease,padding .28s ease !important;}'

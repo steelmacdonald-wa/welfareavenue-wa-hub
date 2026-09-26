@@ -19,19 +19,19 @@
   var st = document.createElement('style');
   st.id = 'wa58css';
   st.textContent = '' +
-    '#w58bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#fff;border-radius:12px;padding:10px 14px;margin:6px 0 4px;}' +
-    '#w58bar b{color:#1f5f4f;font-size:13.5px;}' +
-    '#w58bar a{cursor:pointer;color:#2c7a66;font-size:12px;font-weight:600;}' +
-    '.w58upd{background:rgba(212,161,60,.1);border:1px solid rgba(212,161,60,.35);border-radius:12px;padding:10px 14px;margin:8px 0 4px;}' +
+    '#w58bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:#FFFAF2;border-radius:12px;padding:10px 14px;margin:6px 0 4px;}' +
+    '#w58bar b{color:#103F39;font-size:13.5px;}' +
+    '#w58bar a{cursor:pointer;color:#103F39;font-size:12px;font-weight:600;}' +
+    '.w58upd{background:rgba(220,165,39,.1);border:1px solid rgba(220,165,39,.35);border-radius:12px;padding:10px 14px;margin:8px 0 4px;}' +
     '.w58upd h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#8a6414;}' +
-    '.w58st{padding:7px 0;border-top:1px solid rgba(212,161,60,.25);}' +
+    '.w58st{padding:7px 0;border-top:1px solid rgba(220,165,39,.25);}' +
     '.w58st:first-of-type{border-top:none;}' +
-    '.w58st .nm{font-size:13.5px;font-weight:700;color:#14302b;}' +
+    '.w58st .nm{font-size:13.5px;font-weight:700;color:#103F39;}' +
     '.w58st .sec{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#8a6414;margin-left:8px;}' +
-    '.w58st .ds{font-size:12.5px;color:#5b6b66;margin:3px 0 6px;line-height:1.5;}' +
-    '[data-w58ack]{display:inline-block;background:#1f5f4f;color:#fff !important;border-radius:999px;padding:3px 13px;' +
+    '.w58st .ds{font-size:12.5px;color:#797773;margin:3px 0 6px;line-height:1.5;}' +
+    '[data-w58ack]{display:inline-block;background:#103F39;color:#FFFAF2 !important;border-radius:999px;padding:3px 13px;' +
     'font-size:11.5px;cursor:pointer;font-weight:700;line-height:1.5;border:none;}' +
-    '[data-w58ack]:hover{background:#2c7a66;}' +
+    '[data-w58ack]:hover{background:#103F39;}' +
     '.w58hid{display:none !important;}';
   document.head.appendChild(st);
 
@@ -94,7 +94,7 @@
       });
       var pend = wa58Pending(mine);
       var html = '<div id="w58bar"><b>Onboarding complete</b>'
-        + '<span style="font-size:12px;color:#7b8a86">finished ' + esc(String(mine.completed_at || '').slice(0, 10)) + '</span>'
+        + '<span style="font-size:12px;color:#797773">finished ' + esc(String(mine.completed_at || '').slice(0, 10)) + '</span>'
         + '<a data-w58show="1">View the checklist</a></div>';
       if (pend.length) {
         html += '<div class="w58upd"><h4>Updated since you finished (' + pend.length + ')</h4>'

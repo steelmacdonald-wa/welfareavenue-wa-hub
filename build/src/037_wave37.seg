@@ -21,9 +21,9 @@ var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 
   st.id = 'wa37css';
   st.textContent = '' +
     '.w37bar{height:9px;border-radius:999px;background:#eef1ef;overflow:hidden;flex:1;min-width:120px;}' +
-    '.w37bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#2c7a66,#1f5f4f);transition:width .3s;}' +
-    '.w37week{background:#fff;border-radius:16px;margin:8px 0;box-shadow:0 1px 2px rgba(20,40,30,.03),0 14px 34px -26px rgba(20,48,43,.22);}' +
-    '.w37week > summary{cursor:pointer;padding:12px 16px;font-weight:700;color:#1f5f4f;font-size:14px;display:flex;gap:10px;align-items:center;list-style:none;}' +
+    '.w37bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#103F39,#103F39);transition:width .3s;}' +
+    '.w37week{background:#FFFAF2;border-radius:16px;margin:8px 0;box-shadow:0 1px 2px rgba(16,63,57,.03),0 14px 34px -26px rgba(16,63,57,.22);}' +
+    '.w37week > summary{cursor:pointer;padding:12px 16px;font-weight:700;color:#103F39;font-size:14px;display:flex;gap:10px;align-items:center;list-style:none;}' +
     '.w37week > summary::-webkit-details-marker{display:none;}' +
     '.w37week[open] > summary{border-bottom:1px solid #f0f2f1;}' +
     '.w37wbody{padding:6px 16px 12px;}' +
@@ -31,15 +31,15 @@ var WA37_WEEK_ORDER = { 'WEEK 1': 1, 'WEEK 2': 2, 'WEEK 3': 3, 'WEEK 4': 4, '60 
     '.w37step:last-child{border-bottom:none;}' +
     '.w37step input[type=checkbox]{width:17px;height:17px;margin-top:2px;flex:none;}' +
     '.w37step.child{margin-left:26px;}' +
-    '.w37step .nm{font-size:13.5px;font-weight:600;color:var(--wa-ink,#14302b);}' +
+    '.w37step .nm{font-size:13.5px;font-weight:600;color:var(--wa-ink,#103F39);}' +
     '.w37step .nm .pr{font-size:10px;border:1px solid #c87a2f;color:#c87a2f;border-radius:999px;padding:0 7px;margin-left:6px;vertical-align:middle;}' +
-    '.w37step .ds{font-size:12.5px;color:#5b6b66;line-height:1.5;margin-top:2px;}' +
-    '.w37step .ds a{color:#2c7a66;}' +
-    '.w37step.done .nm{color:#9aa5a1;text-decoration:line-through;}' +
-    '.w37hr-row{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #f2f4f3;font-size:13px;flex-wrap:wrap;}' +
+    '.w37step .ds{font-size:12.5px;color:#797773;line-height:1.5;margin-top:2px;}' +
+    '.w37step .ds a{color:#103F39;}' +
+    '.w37step.done .nm{color:#797773;text-decoration:line-through;}' +
+    '.w37hr-row{display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid #F4F2EA;font-size:13px;flex-wrap:wrap;}' +
     '.w37hr-row b{min-width:110px;}' +
-    '.w37hr-row .mini{font-size:11px;color:#7b8a86;}' +
-    '.w37edit{font-size:11.5px;color:#2c7a66;cursor:pointer;text-decoration:underline;}';
+    '.w37hr-row .mini{font-size:11px;color:#797773;}' +
+    '.w37edit{font-size:11.5px;color:#103F39;cursor:pointer;text-decoration:underline;}';
   document.head.appendChild(st);
 })();
 
@@ -101,19 +101,19 @@ async function wa37Mount() {
     var p = wa37Pct(mine.id);
     html += '<h3>' + (mine.status === 'completed' ? 'Your onboarding: complete!' : 'Your onboarding') + '</h3>'
       + '<div style="display:flex;gap:10px;align-items:center;margin:4px 0 10px"><span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
-      + '<b style="font-size:13px;color:#1f5f4f">' + p.pct + '%</b><span style="font-size:12px;color:#7b8a86">' + p.done + ' of ' + p.total + ' steps</span></div>'
+      + '<b style="font-size:13px;color:#103F39">' + p.pct + '%</b><span style="font-size:12px;color:#797773">' + p.done + ' of ' + p.total + ' steps</span></div>'
       + '<p class="read" style="margin:0 0 8px">Each module below opens up. Work top to bottom, tick things off as you go, and lean on your onboarding channel whenever something is unclear. The '
-      + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a> is the companion doc.</p>'
+      + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#103F39">Onboarding SOP</a> is the companion doc.</p>'
       + wa37Checklist(mine, true);
   } else {
     html += '<h3>New here? Start with onboarding</h3>'
-      + '<p class="read" style="margin:0 0 6px">Follow the <a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a>, then work through the training path for your team below.</p>';
+      + '<p class="read" style="margin:0 0 6px">Follow the <a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#103F39">Onboarding SOP</a>, then work through the training path for your team below.</p>';
   }
 
   if (staff) {
     var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []);
     var activeNames = WA37.onbs.filter(function (o) { return o.status === 'active'; }).map(function (o) { return o.person_name.toLowerCase(); });
-    html += '<div style="border-top:1px solid rgba(31,95,79,.15);margin-top:12px;padding-top:10px">'
+    html += '<div style="border-top:1px solid rgba(16,63,57,.15);margin-top:12px;padding-top:10px">'
       + '<h3 style="font-size:13.5px">Onboarding board (HR)</h3>'
       + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:4px 0 8px">'
       + '<select class="w36sel" id="w37assign"><option value="">Assign an onboarding to...</option>'
@@ -128,7 +128,7 @@ async function wa37Mount() {
       var p = wa37Pct(o.id);
       html += '<div class="w37hr-row"><b>' + esc(o.person_name) + '</b>'
         + '<span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
-        + '<span style="font-size:12px;color:#1f5f4f;font-weight:700">' + p.pct + '%</span>'
+        + '<span style="font-size:12px;color:#103F39;font-weight:700">' + p.pct + '%</span>'
         + '<span class="mini">' + p.done + ' of ' + p.total + ' &middot; started ' + esc(String(o.started_at)) + '</span>'
         + '<a class="w37edit" data-w37open="' + o.id + '">open their checklist</a></div>';
     });
@@ -171,9 +171,9 @@ async function wa37Profile(mid) {
     var p = wa37Pct(o.id);
     var stats = document.getElementById('w33stats');
     var html = '<div class="w37profbar" style="display:flex;gap:10px;align-items:center;margin:2px 0 10px;max-width:520px">'
-      + '<span style="font-size:12px;font-weight:700;color:#1f5f4f;white-space:nowrap">Onboarding' + (o.status === 'completed' ? ': complete' : '') + '</span>'
+      + '<span style="font-size:12px;font-weight:700;color:#103F39;white-space:nowrap">Onboarding' + (o.status === 'completed' ? ': complete' : '') + '</span>'
       + '<span class="w37bar"><i style="width:' + p.pct + '%"></i></span>'
-      + '<span style="font-size:12px;color:#7b8a86;white-space:nowrap">' + p.done + ' of ' + p.total + '</span></div>';
+      + '<span style="font-size:12px;color:#797773;white-space:nowrap">' + p.done + ' of ' + p.total + '</span></div>';
     if (stats) stats.insertAdjacentHTML('afterend', html);
     else card.insertAdjacentHTML('afterbegin', html);
   } catch (e) { /* non-fatal */ }

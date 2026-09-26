@@ -2,7 +2,7 @@
    WA v102 tab icon (07/08/26)
    =====================================================================
    The Hub gets the Welfare Avenue favicon: the AV monogram from the
-   wordmark on brand green (#003F38) for the browser tab, and the larger
+   wordmark on brand green (#103F39) for the browser tab, and the larger
    AV-bars mark for iOS home-screen bookmarks. Embedded as data URLs so
    host-sync (which deploys index.html + _headers only) needs no change;
    the site CSP already allows img-src data:.

@@ -120,8 +120,8 @@ async function waTxtSend() {
         var s = document.createElement('span');
         s.className = 'fchip';
         s.setAttribute('data-vtxt', '1');
-        s.style.background = '#2c7a66';
-        s.style.color = '#fff';
+        s.style.background = '#103F39';
+        s.style.color = '#FFFAF2';
         s.textContent = 'Text volunteers';
         sub.appendChild(s);
       }

@@ -22,20 +22,20 @@ var WA36_LOADED = false;
   var st = document.createElement('style');
   st.id = 'wa36css';
   st.textContent = '' +
-    '#training .w36cat{margin:18px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#2c7a66;font-weight:700;}' +
+    '#training .w36cat{margin:18px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:#103F39;font-weight:700;}' +
     '.w36grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:8px;}' +
-    '.w36card{background:#fff;border-radius:16px;padding:13px 15px;box-shadow:0 1px 2px rgba(20,40,30,.03),0 14px 34px -26px rgba(20,48,43,.22);display:flex;flex-direction:column;gap:6px;}' +
-    '.w36card h4{margin:0;font-size:14px;color:var(--wa-ink,#14302b);line-height:1.3;}' +
-    '.w36card .w36meta{font-size:11.5px;color:#7b8a86;}' +
+    '.w36card{background:#FFFAF2;border-radius:16px;padding:13px 15px;box-shadow:0 1px 2px rgba(16,63,57,.03),0 14px 34px -26px rgba(16,63,57,.22);display:flex;flex-direction:column;gap:6px;}' +
+    '.w36card h4{margin:0;font-size:14px;color:var(--wa-ink,#103F39);line-height:1.3;}' +
+    '.w36card .w36meta{font-size:11.5px;color:#797773;}' +
     '.w36card .w36row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:2px;}' +
-    '.w36card a.w36watch{font-size:12.5px;color:#2c7a66;font-weight:600;text-decoration:none;}' +
+    '.w36card a.w36watch{font-size:12.5px;color:#103F39;font-weight:600;text-decoration:none;}' +
     '.w36card a.w36watch:hover{text-decoration:underline;}' +
-    '.w36pill{font-size:10.5px;border:1px solid rgba(44,122,102,.4);color:#2c7a66;border-radius:999px;padding:1px 8px;}' +
-    '.w36pill.done{background:#2c7a66;color:#fff;border-color:#2c7a66;}' +
+    '.w36pill{font-size:10.5px;border:1px solid rgba(16,63,57,.4);color:#103F39;border-radius:999px;padding:1px 8px;}' +
+    '.w36pill.done{background:#103F39;color:#FFFAF2;border-color:#103F39;}' +
     '.w36pill.prog{border-color:#c87a2f;color:#c87a2f;}' +
     '.w36sel{font-size:11.5px;border:1px solid #e0e4e2;border-radius:8px;padding:2px 6px;background:#f4f6f5;}' +
-    '.w36onb{background:linear-gradient(135deg,rgba(31,95,79,.06),rgba(212,161,60,.06));border-radius:18px;padding:16px 18px;margin-bottom:6px;}' +
-    '.w36onb h3{margin:0 0 4px;font-size:15px;color:#1f5f4f;}' +
+    '.w36onb{background:linear-gradient(135deg,rgba(16,63,57,.06),rgba(220,165,39,.06));border-radius:18px;padding:16px 18px;margin-bottom:6px;}' +
+    '.w36onb h3{margin:0 0 4px;font-size:15px;color:#103F39;}' +
     '.w36prof{border-top:1px solid rgba(127,127,127,.15);margin-top:10px;padding-top:8px;}' +
     '.w36prog-row{display:flex;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;flex-wrap:wrap;}';
   document.head.appendChild(st);
@@ -58,7 +58,7 @@ var WA36_LOADED = false;
     var btn = document.createElement('button');
     btn.className = 'tab';
     btn.setAttribute('data-tab', 'training');
-    btn.innerHTML = '<span class="tabdot" style="background:#2c7a66"></span>Training';
+    btn.innerHTML = '<span class="tabdot" style="background:#103F39"></span>Training';
     var before = document.getElementById('txTabBtn');
     if (before) bar.insertBefore(btn, before); else bar.appendChild(btn);
     btn.addEventListener('click', function () {
@@ -98,7 +98,7 @@ async function wa36Render() {
 
   var onb = '<div class="w36onb"><h3>New here? Start with onboarding</h3>'
     + '<p class="read" style="margin:0 0 6px">Follow the '
-    + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#2c7a66">Onboarding SOP</a>'
+    + '<a href="https://docs.google.com/document/d/1OWeVlCHCSLPMCDD7DbfpO_OidcuBvPRvRNE5VueqWpg/edit" target="_blank" rel="noopener" style="color:#103F39">Onboarding SOP</a>'
     + ', then work through the training path for your team below. Mark each item done as you go.</p>'
     + '<div class="w36row">' + (me ? '<span class="w36pill">You are signed in as ' + esc(me.name) + '</span>' : '') + '</div></div>';
 
@@ -169,11 +169,11 @@ async function wa36ProfileBlock(mid) {
     var card = sec.querySelector('.card');
     if (!card || card.querySelector('.w36prof')) return;
     var done = mine.filter(function (m) { return m.status === 'done'; });
-    var html = '<div class="w36prof"><h3 class="block" style="color:#2c7a66">Training (' + done.length + ' of ' + mine.length + ' done)</h3>';
+    var html = '<div class="w36prof"><h3 class="block" style="color:#103F39">Training (' + done.length + ' of ' + mine.length + ' done)</h3>';
     if (!mine.length) html += '<p class="m-sub">No training assigned yet. Assign some from the Training tab.</p>';
     mine.forEach(function (m) {
       var t = byId[String(m.training_id)];
-      html += '<div class="w36prog-row"><span class="w36pill ' + (m.status === 'done' ? 'done' : 'prog') + '">' + esc(m.status) + '</span> ' + esc(t ? t.title : 'Training') + (t && t.resource_url ? ' <a href="' + esc(t.resource_url) + '" target="_blank" rel="noopener" style="color:#2c7a66;font-size:12px">open</a>' : '') + '</div>';
+      html += '<div class="w36prog-row"><span class="w36pill ' + (m.status === 'done' ? 'done' : 'prog') + '">' + esc(m.status) + '</span> ' + esc(t ? t.title : 'Training') + (t && t.resource_url ? ' <a href="' + esc(t.resource_url) + '" target="_blank" rel="noopener" style="color:#103F39;font-size:12px">open</a>' : '') + '</div>';
     });
     html += '</div>';
     card.insertAdjacentHTML('beforeend', html);

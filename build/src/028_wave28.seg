@@ -24,17 +24,17 @@ var WA28_LOADED = false;
   var st = document.createElement('style');
   st.id = 'wa28css';
   st.textContent = '' +
-    '.w28sel{border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:2px 6px;font-size:11.5px;background:#fff;color:#333;max-width:150px;cursor:pointer;border-left-width:4px;}' +
-    '.w28st-Open{border-left-color:#8a8f85 !important;}' +
+    '.w28sel{border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:2px 6px;font-size:11.5px;background:#FFFAF2;color:#333;max-width:150px;cursor:pointer;border-left-width:4px;}' +
+    '.w28st-Open{border-left-color:#797773 !important;}' +
     '.w28st-Inprogress{border-left-color:#3a6ea5 !important;background:rgba(58,110,165,.08) !important;}' +
     '.w28st-Blocked{border-left-color:#b3402f !important;background:rgba(179,64,47,.08) !important;}' +
-    '.w28st-Done{border-left-color:#2c7a66 !important;background:rgba(44,122,102,.1) !important;}' +
+    '.w28st-Done{border-left-color:#103F39 !important;background:rgba(16,63,57,.1) !important;}' +
     '.w28row{display:flex;gap:7px;align-items:center;margin-top:4px;flex-wrap:wrap;}' +
     '.team-tag{cursor:pointer;}' +
     '.w28dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:baseline;}' +
-    '.w28my{border-top:4px solid #2c7a66;}' +
+    '.w28my{border-top:4px solid #103F39;}' +
     '.w28my .t{font-size:13.5px;padding:6px 0;border-bottom:1px solid rgba(127,127,127,.15);display:flex;gap:8px;align-items:center;flex-wrap:wrap;}' +
-    '.w28my .dep{font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 7px;color:var(--wa-muted,#7b8a86);}';
+    '.w28my .dep{font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 7px;color:var(--wa-muted,#797773);}';
   document.head.appendChild(st);
 })();
 
@@ -80,7 +80,7 @@ function wa28OwnSel(current, tid) {
   var cur = String(current || '');
   var p = wa28Person(cur);
   var inList = !!p;
-  var html = '<select class="w28sel" data-w28own="' + tid + '" style="border-left-color:' + esc((p && p.color) || '#8a8f85') + '">';
+  var html = '<select class="w28sel" data-w28own="' + tid + '" style="border-left-color:' + esc((p && p.color) || '#797773') + '">';
   html += '<option value=""' + (cur ? '' : ' selected') + '>Unassigned</option>';
   WA28_PEOPLE.forEach(function (x) {
     html += '<option value="' + esc(x.name) + '"' + (x.name === cur ? ' selected' : '') + '>' + esc(x.name) + ' (' + esc(x.department) + ')</option>';
@@ -106,7 +106,7 @@ function wa28SwapInput(el, keepAttr) {
   var p = wa28Person(cur);
   var sel = document.createElement('select');
   sel.className = (el.className || '') + ' w28sel';
-  sel.style.borderLeftColor = (p && p.color) || '#8a8f85';
+  sel.style.borderLeftColor = (p && p.color) || '#797773';
   if (el.id) sel.id = el.id;
   (keepAttr || []).forEach(function (a) { if (el.hasAttribute(a)) sel.setAttribute(a, el.getAttribute(a)); });
   if (el.disabled) sel.disabled = true;
@@ -127,7 +127,7 @@ function wa28SwapInput(el, keepAttr) {
   }
   sel.addEventListener('change', function () {
     var np = wa28Person(sel.value);
-    sel.style.borderLeftColor = (np && np.color) || '#8a8f85';
+    sel.style.borderLeftColor = (np && np.color) || '#797773';
   });
   el.parentNode.replaceChild(sel, el);
 }
@@ -140,10 +140,10 @@ function wa28Profile(name) {
   var label = function (d) { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d; };
   var rows = mine.slice(0, 12).map(function (t) {
     return '<div class="w28my-r" style="padding:5px 0;border-bottom:1px solid rgba(127,127,127,.15);font-size:13px">' + esc(t.title)
-      + ' <span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;color:#7b8a86">' + esc(label(t.department)) + '</span>'
-      + (t.due_date ? ' <span style="font-size:11px;color:#7b8a86">due ' + esc(t.due_date) + '</span>' : '') + '</div>';
+      + ' <span class="dep" style="font-size:10.5px;border:1px solid rgba(127,127,127,.35);border-radius:8px;padding:0 6px;color:#797773">' + esc(label(t.department)) + '</span>'
+      + (t.due_date ? ' <span style="font-size:11px;color:#797773">due ' + esc(t.due_date) + '</span>' : '') + '</div>';
   }).join('');
-  openModal('<h3><span class="w28dot" style="background:' + esc(p.color || '#8a8f85') + '"></span>' + esc(p.name) + '</h3>' +
+  openModal('<h3><span class="w28dot" style="background:' + esc(p.color || '#797773') + '"></span>' + esc(p.name) + '</h3>' +
     '<p class="m-sub">' + esc(p.role || '') + ' &middot; ' + esc(label(p.department)) + (p.email ? ' &middot; ' + esc(p.email) : ' &middot; no login email on file yet') + '</p>' +
     '<h4 style="margin:10px 0 2px">Open tasks across the organization (' + mine.length + ')</h4>' +
     (rows || '<p class="m-sub">Nothing assigned right now.</p>') +
@@ -173,7 +173,7 @@ function wa28MyCard() {
   }).join('');
   var card = document.createElement('div');
   card.className = 'card w28my';
-  card.innerHTML = '<h2 style="color:#2c7a66"><span class="w28dot" style="background:' + esc(me.color || '#2c7a66') + '"></span>Your plate, ' + esc(me.name) + '</h2>'
+  card.innerHTML = '<h2 style="color:#103F39"><span class="w28dot" style="background:' + esc(me.color || '#103F39') + '"></span>Your plate, ' + esc(me.name) + '</h2>'
     + '<p class="read" style="margin:0 0 6px">' + mine.length + (mine.length === 1 ? ' open task' : ' open tasks') + ' assigned to you across the organization, soonest due first. Change a status right here.</p>'
     + (rows || '<p class="read">Nothing on your plate. Enjoy it.</p>')
     + (mine.length > 10 ? '<p class="read" style="margin-top:6px">plus ' + (mine.length - 10) + ' more on the department pages.</p>' : '');
@@ -241,7 +241,7 @@ function wa28EventDate() {
   var back = sec.querySelector('.vl-back');
   if (!back) return;
   var wrap = document.createElement('span');
-  wrap.style.cssText = 'margin-left:12px;font-size:12px;color:var(--wa-muted,#7b8a86)';
+  wrap.style.cssText = 'margin-left:12px;font-size:12px;color:var(--wa-muted,#797773)';
   wrap.innerHTML = 'Event date: <input type="date" class="vl-in w90" value="' + esc(ev.event_date) + '" data-w28evd="' + ev.id + '" /> <span style="opacity:.8">moving it re-anchors every step due date</span>';
   back.insertAdjacentElement('afterend', wrap);
 }

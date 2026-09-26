@@ -12,28 +12,28 @@
     + '.cd-grid{display:grid;grid-template-columns:minmax(280px,400px) 1fr;gap:14px;align-items:start;}'
     + '@media (max-width:860px){.cd-grid{grid-template-columns:1fr;}}'
     + '.cd-form label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--wa-muted);margin:10px 0 3px;}'
-    + '.cd-form select,.cd-form textarea{width:100%;box-sizing:border-box;border:1px solid var(--wa-line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;background:#fff;}'
+    + '.cd-form select,.cd-form textarea{width:100%;box-sizing:border-box;border:1px solid var(--wa-line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:inherit;background:#FFFAF2;}'
     + '.cd-form textarea{min-height:110px;resize:vertical;}'
-    + '.cd-go{margin-top:12px;width:100%;background:#8455ff;color:#fff;border:none;border-radius:9px;padding:10px 14px;font-weight:800;font-size:13.5px;cursor:pointer;}'
+    + '.cd-go{margin-top:12px;width:100%;background:#6F64AB;color:#FFFAF2;border:none;border-radius:9px;padding:10px 14px;font-weight:800;font-size:13.5px;cursor:pointer;}'
     + '.cd-go:disabled{opacity:.55;cursor:wait;}'
     + '.cd-hint{font-size:11px;color:var(--wa-muted);margin-top:3px;}'
-    + '.cd-prev-head{background:#4a7c59;color:#fff;border-radius:10px 10px 0 0;padding:12px 16px;}'
+    + '.cd-prev-head{background:#103F39;color:#FFFAF2;border-radius:10px 10px 0 0;padding:12px 16px;}'
     + '.cd-prev-head .brand{font-weight:900;letter-spacing:2px;font-size:13px;text-transform:uppercase;}'
     + '.cd-prev-head .tag{font-size:11px;opacity:.85;margin-top:2px;}'
-    + '.cd-prev-body{background:#f2ebe3;border:1px solid var(--wa-line);border-top:none;border-radius:0 0 10px 10px;padding:16px 18px;color:#191615;}'
+    + '.cd-prev-body{background:#F4F2EA;border:1px solid var(--wa-line);border-top:none;border-radius:0 0 10px 10px;padding:16px 18px;color:#1F201E;}'
     + '.cd-subject{font-weight:800;font-size:15px;margin-bottom:10px;}'
-    + '.cd-doc{background:#fff;border-radius:9px;padding:14px 16px;font-size:13.5px;line-height:1.55;}'
-    + '.cd-doc h2{font-size:15px;color:#4a7c59;margin:14px 0 6px;}'
-    + '.cd-doc h3{font-size:13.5px;color:#4a7c59;margin:12px 0 4px;}'
+    + '.cd-doc{background:#FFFAF2;border-radius:9px;padding:14px 16px;font-size:13.5px;line-height:1.55;}'
+    + '.cd-doc h2{font-size:15px;color:#103F39;margin:14px 0 6px;}'
+    + '.cd-doc h3{font-size:13.5px;color:#103F39;margin:12px 0 4px;}'
     + '.cd-doc p{margin:0 0 10px;}'
     + '.cd-doc ul,.cd-doc ol{margin:0 0 10px;padding-left:20px;}'
-    + '.cd-sub{background:#fff;border-left:3px solid #8455ff;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12.5px;}'
-    + '.cd-notes{background:#fdf6e3;border-left:3px solid #d4a13c;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12px;}'
+    + '.cd-sub{background:#FFFAF2;border-left:3px solid #6F64AB;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12.5px;}'
+    + '.cd-notes{background:#fdf6e3;border-left:3px solid #DCA527;border-radius:7px;padding:9px 12px;margin-top:10px;font-size:12px;}'
     + '.cd-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;}'
-    + '.cd-acts button{background:#fff;border:1px solid var(--wa-line);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;}'
+    + '.cd-acts button{background:#FFFAF2;border:1px solid var(--wa-line);border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer;}'
     + '.cd-refine{display:flex;gap:6px;margin-top:10px;}'
     + '.cd-refine input{flex:1;border:1px solid var(--wa-line);border-radius:8px;padding:7px 10px;font-size:12.5px;}'
-    + '.cd-refine button{background:var(--wa-green);color:#fff;border:none;border-radius:8px;padding:7px 13px;font-weight:700;font-size:12px;cursor:pointer;}'
+    + '.cd-refine button{background:var(--wa-green);color:#FFFAF2;border:none;border-radius:8px;padding:7px 13px;font-weight:700;font-size:12px;cursor:pointer;}'
     + '.cd-item{padding:7px 0;border-top:1px dashed var(--wa-line);font-size:12.5px;cursor:pointer;}'
     + '.cd-item:first-of-type{border-top:none;}'
     + '.cd-item .m{color:var(--wa-muted);font-size:11px;}'
@@ -98,12 +98,12 @@ function waMd(md) {
 }
 
 var WA_GFX_CSS = ''
-  + '.gfx-card{background:#4a7c59;color:#f2ebe3;aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:7%;box-sizing:border-box;border-radius:14px;font-family:Arial,Helvetica,sans-serif;}'
+  + '.gfx-card{background:#103F39;color:#F4F2EA;aspect-ratio:1/1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:7%;box-sizing:border-box;border-radius:14px;font-family:Arial,Helvetica,sans-serif;}'
   + '.gfx-brand{font-weight:900;letter-spacing:4px;font-size:13px;}'
-  + '.gfx-rule{width:56px;height:5px;background:#8455ff;border-radius:3px;margin:14px 0 22px;}'
+  + '.gfx-rule{width:56px;height:5px;background:#6F64AB;border-radius:3px;margin:14px 0 22px;}'
   + '.gfx-head{font-weight:900;text-transform:uppercase;font-size:clamp(20px,5.5vmin,36px);line-height:1.12;letter-spacing:.5px;margin-bottom:16px;}'
   + '.gfx-line{font-size:clamp(12px,2.4vmin,17px);line-height:1.5;opacity:.94;}'
-  + '.gfx-cta{margin-top:22px;background:#8455ff;color:#fff;font-weight:800;padding:10px 22px;border-radius:999px;font-size:clamp(12px,2.2vmin,15px);}'
+  + '.gfx-cta{margin-top:22px;background:#6F64AB;color:#FFFAF2;font-weight:800;padding:10px 22px;border-radius:999px;font-size:clamp(12px,2.2vmin,15px);}'
   + '.gfx-foot{margin-top:26px;font-size:11px;opacity:.8;}'
   + '.gfx-foot .tag{font-style:italic;}';
 function waCdGfxInner(d) {
@@ -122,16 +122,16 @@ function waCdBrandHtml(d) {
   var bodyEnd = '</bo' + 'dy>', htmlEnd = '</ht' + 'ml>';
   return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
     + '<title>' + esc(d.title || 'Welfare Avenue') + '</title>'
-    + '<style>body{margin:0;background:#f2ebe3;font-family:Georgia,\'Times New Roman\',serif;color:#191615;}'
+    + '<style>body{margin:0;background:#F4F2EA;font-family:Georgia,\'Times New Roman\',serif;color:#1F201E;}'
     + '.wrap{max-width:680px;margin:0 auto;padding:28px 20px;}'
-    + '.head{background:#4a7c59;color:#fff;padding:22px 26px;border-radius:12px 12px 0 0;}'
+    + '.head{background:#103F39;color:#FFFAF2;padding:22px 26px;border-radius:12px 12px 0 0;}'
     + '.head .b{font-family:Arial,Helvetica,sans-serif;font-weight:900;letter-spacing:3px;font-size:15px;text-transform:uppercase;}'
     + '.head .t{font-size:12px;opacity:.85;margin-top:4px;font-style:italic;}'
-    + '.paper{background:#fff;padding:26px 30px;border-radius:0 0 12px 12px;font-size:15px;line-height:1.65;}'
-    + '.paper h2,.paper h3{font-family:Arial,Helvetica,sans-serif;color:#4a7c59;}'
-    + '.subj{font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:17px;margin-bottom:14px;border-bottom:3px solid #8455ff;padding-bottom:8px;}'
-    + '.foot{text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#6f6b64;padding:16px 0;}'
-    + '@media print{body{background:#fff;}.wrap{padding:0;}}'
+    + '.paper{background:#FFFAF2;padding:26px 30px;border-radius:0 0 12px 12px;font-size:15px;line-height:1.65;}'
+    + '.paper h2,.paper h3{font-family:Arial,Helvetica,sans-serif;color:#103F39;}'
+    + '.subj{font-family:Arial,Helvetica,sans-serif;font-weight:800;font-size:17px;margin-bottom:14px;border-bottom:3px solid #6F64AB;padding-bottom:8px;}'
+    + '.foot{text-align:center;font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#797773;padding:16px 0;}'
+    + '@media print{body{background:#FFFAF2;}.wrap{padding:0;}}'
     + '</style></head><body><div class="wrap">'
     + '<div class="head"><div class="b">Welfare Avenue</div><div class="t">Service is solidarity, not charity.</div></div>'
     + '<div class="paper">'
@@ -275,7 +275,7 @@ document.addEventListener('keydown', function (e) {
           var b = document.createElement('button');
           b.className = 'tab';
           b.dataset.tab = 'create';
-          b.innerHTML = '<span class="tabdot" style="background:#8455ff"></span>Create';
+          b.innerHTML = '<span class="tabdot" style="background:#6F64AB"></span>Create';
           bar.insertBefore(b, bar.querySelector('.tab-group') || null);
         }
       }

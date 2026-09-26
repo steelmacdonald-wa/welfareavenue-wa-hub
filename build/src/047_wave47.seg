@@ -32,26 +32,26 @@
   st.id = 'wa47css';
   st.textContent = '' +
     '.w47tabs{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;}' +
-    '.w47tab{border:1px solid #e3e7e5;background:#fff;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#3d4642;cursor:pointer;}' +
-    '.w47tab.on{background:#1f5f4f;border-color:#1f5f4f;color:#fff;}' +
-    '.w47tab:hover{border-color:rgba(31,95,79,.4);}' +
-    '.w47chart{background:#fff;border-radius:12px;padding:10px 14px;margin:10px 0 4px;}' +
-    '.w47chart h4{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#7b8a86;}' +
-    '.w47bar{display:flex;gap:10px;align-items:center;margin:5px 0;font-size:12px;color:#3d4642;}' +
+    '.w47tab{border:1px solid #DEE0D8;background:#FFFAF2;border-radius:999px;padding:6px 16px;font-size:12.5px;font-weight:700;color:#1F201E;cursor:pointer;}' +
+    '.w47tab.on{background:#103F39;border-color:#103F39;color:#FFFAF2;}' +
+    '.w47tab:hover{border-color:rgba(16,63,57,.4);}' +
+    '.w47chart{background:#FFFAF2;border-radius:12px;padding:10px 14px;margin:10px 0 4px;}' +
+    '.w47chart h4{margin:0 0 8px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#797773;}' +
+    '.w47bar{display:flex;gap:10px;align-items:center;margin:5px 0;font-size:12px;color:#1F201E;}' +
     '.w47bar .lb{width:170px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
-    '.w47bar .tr{flex:1;height:10px;background:#eef2f0;border-radius:0 4px 4px 0;position:relative;}' +
-    '.w47bar .tr i{display:block;height:100%;background:#2c7a66;border-radius:0 4px 4px 0;min-width:2px;}' +
+    '.w47bar .tr{flex:1;height:10px;background:#ECEBE3;border-radius:0 4px 4px 0;position:relative;}' +
+    '.w47bar .tr i{display:block;height:100%;background:#103F39;border-radius:0 4px 4px 0;min-width:2px;}' +
     '.w47bar.warn .tr i{background:#b3402f;}' +
-    '.w47bar .vl{flex:none;font-size:11.5px;font-weight:700;color:#14302b;min-width:44px;}' +
-    '[data-w47open],[data-w47as],[data-w47sec],[data-w47ra],[data-w47re],[data-w47rd]{display:inline-block;background:#fff;border:1px solid #e3e7e5;border-radius:999px;' +
-    'padding:3px 11px;font-size:11.5px;color:#1f5f4f !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
-    '[data-w47open]:hover,[data-w47as]:hover,[data-w47sec]:hover,[data-w47ra]:hover,[data-w47re]:hover,[data-w47rd]:hover{background:rgba(31,95,79,.1);border-color:rgba(31,95,79,.4);}' +
+    '.w47bar .vl{flex:none;font-size:11.5px;font-weight:700;color:#103F39;min-width:44px;}' +
+    '[data-w47open],[data-w47as],[data-w47sec],[data-w47ra],[data-w47re],[data-w47rd]{display:inline-block;background:#FFFAF2;border:1px solid #DEE0D8;border-radius:999px;' +
+    'padding:3px 11px;font-size:11.5px;color:#103F39 !important;text-decoration:none !important;cursor:pointer;font-weight:600;line-height:1.5;margin:1px 2px;}' +
+    '[data-w47open]:hover,[data-w47as]:hover,[data-w47sec]:hover,[data-w47ra]:hover,[data-w47re]:hover,[data-w47rd]:hover{background:rgba(16,63,57,.1);border-color:rgba(16,63,57,.4);}' +
     '[data-w47rd]{color:#b3402f !important;}' +
-    '.w47cand{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #f2f4f3;font-size:12.5px;flex-wrap:wrap;}' +
-    '.w47cnum{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(132,85,255,.12);color:#5b32c7;}' +
-    '.w47roles{background:#f6f8f7;border-radius:14px;padding:12px 14px;margin:0 0 12px;}' +
-    '.w47roles h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#1f5f4f;}' +
-    '.w47agh{display:flex;gap:8px;align-items:center;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#fff;border-radius:999px;padding:4px 14px;margin:14px 0 6px;width:fit-content;}';
+    '.w47cand{display:flex;gap:8px;align-items:center;padding:5px 0;border-top:1px solid #F4F2EA;font-size:12.5px;flex-wrap:wrap;}' +
+    '.w47cnum{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(111,100,171,.12);color:#6F64AB;}' +
+    '.w47roles{background:#F4F2EA;border-radius:14px;padding:12px 14px;margin:0 0 12px;}' +
+    '.w47roles h4{margin:0 0 4px;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:#103F39;}' +
+    '.w47agh{display:flex;gap:8px;align-items:center;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#FFFAF2;border-radius:999px;padding:4px 14px;margin:14px 0 6px;width:fit-content;}';
   document.head.appendChild(st);
 
   function wa47IsHr() {
@@ -301,7 +301,7 @@
     var tasks = (typeof DB_TASKS !== 'undefined' ? DB_TASKS : []);
     host.innerHTML = WA47_TASKS.length ? WA47_TASKS.map(function (ref, i) {
       var t = tasks.filter(function (x) { return String(x.ref) === String(ref); })[0];
-      return '<div class="w47cand"><a href="#task/' + esc(String(ref)) + '" style="flex:1;color:#2c7a66;text-decoration:none;font-weight:600" onclick="closeModal()">'
+      return '<div class="w47cand"><a href="#task/' + esc(String(ref)) + '" style="flex:1;color:#103F39;text-decoration:none;font-weight:600" onclick="closeModal()">'
         + esc(t ? t.title : 'Task ' + ref) + '</a>'
         + (t && t.done ? '<span class="w46stage">done</span>' : '')
         + '<a class="w37edit" style="color:#b3402f !important" data-w47tx="' + i + '">unlink</a></div>';
@@ -317,7 +317,7 @@
     openModal('<h3>' + esc(r.title) + '</h3>'
       + '<p class="m-sub">Stage: ' + esc(r.status) + ' &middot; opened ' + wa47Days(r.created_at) + ' days ago</p>'
       + '<label>Job description link</label><input type="text" id="w47jd" value="' + esc(det.jd_url) + '" placeholder="https://docs.google.com/..." />'
-      + (det.jd_url ? '<p class="m-sub" style="margin:2px 0"><a href="' + esc(det.jd_url) + '" target="_blank" rel="noopener" style="color:#2c7a66">Open the job description</a></p>' : '')
+      + (det.jd_url ? '<p class="m-sub" style="margin:2px 0"><a href="' + esc(det.jd_url) + '" target="_blank" rel="noopener" style="color:#103F39">Open the job description</a></p>' : '')
       + '<h4 style="margin:12px 0 2px;font-size:12.5px">Candidates</h4><div id="w47cl"></div>'
       + '<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap">'
       + '<input type="text" id="w47cn" placeholder="Candidate name" style="flex:1;min-width:130px" />'
@@ -399,7 +399,7 @@
       var stt = have[String(t.id)];
       html += '<label data-w47tr="1" data-search="' + esc((t.title + ' ' + (t.category || '')).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center;padding:3px 0;font-size:13px">'
         + '<input type="checkbox" class="w47cb" value="' + t.id + '"' + (stt ? ' checked' : '') + (stt === 'done' ? ' disabled' : '') + ' style="width:15px;height:15px" /> '
-        + esc(t.title) + ' <span style="color:#9aa5a1;font-size:11px">' + esc(t.category || '') + '</span>'
+        + esc(t.title) + ' <span style="color:#797773;font-size:11px">' + esc(t.category || '') + '</span>'
         + (stt === 'done' ? ' <span class="w36pill done">done</span>' : '') + '</label>';
     });
     html += '</div><div class="m-actions"><button class="btn" id="w47asv">Save</button> <button class="btn ghost" id="w47acx">Cancel</button></div>';
@@ -509,7 +509,7 @@
     steps.forEach(function (t) {
       html += '<label data-w47sr="1" data-search="' + esc(((t.section || '') + ' ' + t.name).toLowerCase()) + '" style="display:flex;gap:8px;align-items:center;padding:2px 0;font-size:12.5px">'
         + '<input type="checkbox" class="w47rcb" value="' + esc(t.id) + '"' + (ids.indexOf(t.id) >= 0 ? ' checked' : '') + ' style="width:14px;height:14px;flex:none" /> '
-        + '<span style="color:#9aa5a1;font-size:10.5px;flex:none">' + esc(t.section || '') + '</span> ' + esc(t.name) + '</label>';
+        + '<span style="color:#797773;font-size:10.5px;flex:none">' + esc(t.section || '') + '</span> ' + esc(t.name) + '</label>';
     });
     html += '</div><div class="m-actions"><button class="btn" id="w47rsv">Save</button> <button class="btn ghost" id="w47rcx">Cancel</button></div>';
     openModal(html);
@@ -564,7 +564,7 @@
         order.forEach(function (g) {
           if (!groups[g] || !groups[g].length) return;
           var label = g === '__exec' ? 'Executive and leaders meetings' : g === '__other' ? 'Other' : ((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[g]) || g);
-          var color = g === '__exec' ? '#8455ff' : ((typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[g]) || '#6f6b64');
+          var color = g === '__exec' ? '#6F64AB' : ((typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[g]) || '#797773');
           var h = document.createElement('div');
           h.className = 'w47agh';
           h.style.background = color;

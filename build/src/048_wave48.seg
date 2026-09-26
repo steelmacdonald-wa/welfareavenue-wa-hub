@@ -18,27 +18,27 @@
   st.textContent = '' +
     /* subtask toggle: caret pill + clickable count pill */
     '.w26c{display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:24px;' +
-    'border:1px solid #cfe0da;background:#fff;border-radius:999px;font-size:13px;color:#1f5f4f;' +
+    'border:1px solid #cfe0da;background:#FFFAF2;border-radius:999px;font-size:13px;color:#103F39;' +
     'margin:0 8px 0 0;padding:0;cursor:pointer;flex:none;}' +
-    '.w26c:hover{background:rgba(31,95,79,.12);border-color:rgba(31,95,79,.45);}' +
+    '.w26c:hover{background:rgba(16,63,57,.12);border-color:rgba(16,63,57,.45);}' +
     '.w26n{display:inline-flex;align-items:center;margin-left:8px;font-size:11px;font-weight:700;' +
-    'color:#1f5f4f;border:1px solid #cfe0da;background:#fff;border-radius:999px;padding:2px 11px;cursor:pointer;}' +
-    '.w26n:hover{background:rgba(31,95,79,.12);border-color:rgba(31,95,79,.45);}' +
+    'color:#103F39;border:1px solid #cfe0da;background:#FFFAF2;border-radius:999px;padding:2px 11px;cursor:pointer;}' +
+    '.w26n:hover{background:rgba(16,63,57,.12);border-color:rgba(16,63,57,.45);}' +
     /* volunteering phase sections: bigger caret, hover */
-    '.vl-phase>summary:before{font-size:15px;color:#1f5f4f;font-weight:700;}' +
-    '.vl-phase>summary:hover{background:rgba(31,95,79,.05);}' +
+    '.vl-phase>summary:before{font-size:15px;color:#103F39;font-weight:700;}' +
+    '.vl-phase>summary:hover{background:rgba(16,63,57,.05);}' +
     '.vl-phase>summary{border-radius:11px;}' +
     '.vl-phase[open]>summary{border-radius:11px 11px 0 0;}' +
     /* onboarding weeks had no caret at all */
-    '.w37week>summary:before{content:"\\25B8";color:#1f5f4f;font-size:14px;font-weight:700;flex:none;}' +
+    '.w37week>summary:before{content:"\\25B8";color:#103F39;font-size:14px;font-weight:700;flex:none;}' +
     '.w37week[open]>summary:before{content:"\\25BE";}' +
-    '.w37week>summary:hover{background:rgba(31,95,79,.05);border-radius:16px;}' +
+    '.w37week>summary:hover{background:rgba(16,63,57,.05);border-radius:16px;}' +
     '.w37week[open]>summary:hover{border-radius:16px 16px 0 0;}' +
     /* master onboarding weeks, decisions dropdowns: hover + louder chev */
-    '.w46wk>summary:hover,.w39dd>summary:hover{background:rgba(31,95,79,.05);border-radius:12px;}' +
-    '.w46wk>summary .chev,.w39dd>summary .chev{font-size:15px;color:#1f5f4f;font-weight:700;}' +
+    '.w46wk>summary:hover,.w39dd>summary:hover{background:rgba(16,63,57,.05);border-radius:12px;}' +
+    '.w46wk>summary .chev,.w39dd>summary .chev{font-size:15px;color:#103F39;font-weight:700;}' +
     /* goals quarters and departments, meeting updates, decided list: hover */
-    '.w29q>summary:hover,.w29d>summary:hover,.wa21-upd>summary:hover,details.completed summary:hover{background:rgba(31,95,79,.06);border-radius:9px;}' +
+    '.w29q>summary:hover,.w29d>summary:hover,.wa21-upd>summary:hover,details.completed summary:hover{background:rgba(16,63,57,.06);border-radius:9px;}' +
     '.w29q>summary,.w29d>summary,.wa21-upd>summary{padding-left:4px;padding-right:4px;}';
   document.head.appendChild(st);
 

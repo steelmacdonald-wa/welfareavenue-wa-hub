@@ -56,12 +56,12 @@
       '.tab-group-h{border-radius:999px;padding:10px 14px;}' +
       '.w42d{position:relative;display:block;}' +
       '.w42d > .tab{display:block;width:100%;text-align:left;}' +
-      '.w42sub{display:none;position:absolute;left:100%;top:0;background:#fff;border-radius:12px;' +
-      'box-shadow:0 18px 50px -12px rgba(20,48,43,.3);min-width:200px;padding:5px;z-index:230;}' +
+      '.w42sub{display:none;position:absolute;left:100%;top:0;background:#FFFAF2;border-radius:12px;' +
+      'box-shadow:0 18px 50px -12px rgba(16,63,57,.3);min-width:200px;padding:5px;z-index:230;}' +
       '.w42d:hover > .w42sub{display:block;}' +
       '.w42sub a{display:block;padding:8px 12px;border-radius:9px;font-size:12.8px;font-weight:600;' +
       'color:var(--wa-text);cursor:pointer;text-decoration:none;}' +
-      '.w42sub a:hover{background:rgba(31,95,79,.08);color:#1f5f4f;}' +
+      '.w42sub a:hover{background:rgba(16,63,57,.08);color:#103F39;}' +
       '@media (max-width:740px){.w42sub{display:none !important;}.w42d > .tab{padding:12px 14px;}}';
     document.head.appendChild(st);
   }
@@ -71,7 +71,7 @@
     var b = document.createElement('button');
     b.className = 'tab';
     b.setAttribute('data-tab', id);
-    b.innerHTML = '<span class="tabdot" style="background:' + (dot || '#1f5f4f') + '"></span>' + label;
+    b.innerHTML = '<span class="tabdot" style="background:' + (dot || '#103F39') + '"></span>' + label;
     return b;
   }
   function wa42Label(btn, label) {
@@ -208,9 +208,9 @@
     });
     order.push(wa42Group('departments', 'Departments', depts));
     order.push(wa42Group('work', 'Work', [grab('dashboard'), grab('goals'),
-      need('create', 'Create studio', '#8455ff'), need('finances', 'Finances', '#c87a2f')]));
+      need('create', 'Create studio', '#6F64AB'), need('finances', 'Finances', '#c87a2f')]));
     order.push(wa42Group('people', 'People', [grab('orgchart'), grab('training')]));
-    order.push(need('volunteering', 'Volunteering', '#2c7a66'));
+    order.push(need('volunteering', 'Volunteering', '#103F39'));
     order.push(wa42Group('archive', 'Archive', [grab('transcripts'), grab('activity')]));
     var adm = grab('adminpanel');
     if (adm) order.push(adm);
