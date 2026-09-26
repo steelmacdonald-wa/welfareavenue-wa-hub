@@ -36,7 +36,7 @@
       { key: 'meetings', label: 'Meetings', items: ['agendas', 'transcripts'] },
       { key: 'inbox', label: 'Requests and inbox', items: ['requests', 'hubmail'] },
       { key: 'people', label: 'People', items: ['orgchart', 'training'] },
-      { key: 'resources', label: 'Resources', items: ['importantinfo', 'photos'] },
+      { key: 'resources', label: 'Resources', items: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: Our story, Partners, Document finder */
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
     ],

@@ -25,17 +25,21 @@
 //   (gold 0.1, ore 0.35); PDFs up to 16 MB.
 // v2.3: Sheets through the Sheets API again (Steel switched it on, 26/09/26): values as people see them, dates as
 //   dates; the Excel export stays as the fallback.
+// v2.5 (26/09/26): the Welfare Avenue Hub label on the important files (action labels), and the Google check also asks
+//   for Drive labels and shows the storage limit (which tells the Workspace edition apart).
 // v2.4: Jev straight to OpenRouter (its Decisions API), logged to ai_calls here: calls from one function to another
 //   share a trace, and Supabase was refusing the many small Jev calls ("Rate limit exceeded for trace"); the
 //   extraction still goes through the llm router, and waits when Supabase says to retry.
 // Workers: {action:'work'} claims documents (drive_mine_claim) for up to about 105 seconds and stops; the cron job
-//   wa-drive-mine-pump starts three a minute while drive_mine_state.status is 'mining'. A run stops by itself at
+//   wa-drive-mine-pump starts six a minute while drive_mine_state.status is 'mining' (v2.5: the job exists only during a run). A run stops by itself at
 //   15 dollars of AI spend (status 'paused').
 // Auth: the trigger secret (x-wa-secret), the service role (its own workers) or an admin's JWT.
 // Reads Drive through the service account's domain-wide delegation as steel.macdonald@welfareavenue.com (scope
 //   drive; this function only reads). Writes drive_inventory (triage of private finds), drive_text, drive_mined,
 //   drive_mine_state, change_log.
-// Actions: status, inventory, start (queue and run), work, stop, requeue {file_ids, stage}.
+// Actions: status, inventory, start (queue and run), work, stop, requeue {file_ids, stage}, google_check (which Google APIs
+//   and delegated scopes answer, for building on them), labels {dry, offset} (v2.5: the Welfare Avenue Hub label on the
+//   important files; the only action that writes to Drive, and only label values).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { unzipSync, strFromU8 } from 'npm:fflate@0.8.2';
@@ -90,6 +94,146 @@ async function token(): Promise<string> {
   if (!body.access_token) throw new Error('Google refused the delegated token: ' + String(body.error_description || body.error || res.status).slice(0, 200));
   TOKEN = { v: body.access_token, exp: Date.now() + 3500 * 1000 };
   return TOKEN.v;
+}
+/* the pump (cron wa-drive-mine-pump, six workers a minute) runs only while a run is on: start schedules it, done, paused and
+   stopped take it off (drive_mine_pump) */
+async function pump(on: boolean): Promise<void> { try { await svc.rpc('drive_mine_pump', { p_on: on }); } catch (_) { /* the job's own status check still guards it */ } }
+
+/* ---------- the Welfare Avenue Hub label on the important files (v2.5; Steel, 26/09/26: "only on the important ones") ----------
+   Important: an organization file in a shared drive that the Document finder marks as a guide or template to reuse, or the
+   source of one of Our story's milestones. One label, Welfare Avenue Hub, with four fields: Kind, Team, Year and Why it matters
+   (Reuse it, Our story), so the team can find these files by label in Drive too. Needs Drive labels in the Workspace edition
+   (Business Standard or higher), the Drive Labels API and the scope drive.admin.labels delegated to the service account.
+   {action:'labels', dry:true} lists what it would label; without dry it creates and publishes the label once, then sets the
+   fields file by file (setting the same values again changes nothing, so a run can be repeated). */
+const LABELS_API = 'https://drivelabels.googleapis.com/v2';
+const HUB_LABEL = 'Welfare Avenue Hub';
+const L_KIND: [string, string][] = [['guide', 'Guide'], ['plan', 'Plan'], ['report', 'Report'], ['meeting notes', 'Meeting notes'], ['presentation', 'Presentation'], ['proposal', 'Proposal'],
+  ['letter', 'Letter'], ['newsletter', 'Newsletter'], ['application', 'Application'], ['list', 'List'], ['posts', 'Post or poster'], ['other', 'Other']];
+const L_TEAM: [string, string][] = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
+  ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
+const L_WHY: [string, string][] = [['reuse', 'Reuse it'], ['story', 'Our story']];
+type Important = { file_id: string; title: string; kind: string | null; team: string | null; year: number | null; why: string[] };
+async function importantFiles(): Promise<Important[]> {
+  const [{ data: docs }, { data: hist }] = await Promise.all([
+    svc.from('wa_documents').select('file_id,title,kind,team,year,reusable,source').eq('source', 'shared_drive').limit(5000),
+    svc.from('wa_history').select('sources').eq('highlight', true).eq('status', 'published').limit(500)
+  ]);
+  const story = new Set<string>();
+  for (const h of hist || []) for (const s of ((h as Row).sources as Row[] || [])) if (s && s.file_id) story.add(String(s.file_id));
+  return (docs || []).filter((d: Row) => d.reusable || story.has(String(d.file_id))).map((d: Row) => ({
+    file_id: String(d.file_id), title: String(d.title || ''), kind: (d.kind as string) || null, team: (d.team as string) || null, year: (d.year as number) || null,
+    why: [d.reusable ? 'reuse' : '', story.has(String(d.file_id)) ? 'story' : ''].filter(Boolean)
+  }));
+}
+async function labelsCall(tk: string, path: string, method = 'GET', body?: unknown): Promise<Row> {
+  const res = await fetch(LABELS_API + path, { method, headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const txt = await res.text();
+  let j: Row = {}; try { j = JSON.parse(txt || '{}'); } catch (_) { j = { raw: txt.slice(0, 200) }; }
+  if (!res.ok) throw new Error('labels ' + res.status + ': ' + String((j.error as Row)?.message || txt).slice(0, 220));
+  return j;
+}
+/* the label, created and published once; field and choice ids by their display names */
+async function hubLabel(tk: string): Promise<{ id: string; fields: Record<string, { id: string; choices: Record<string, string> }> }> {
+  const list = await labelsCall(tk, '/labels?useAdminAccess=true&view=LABEL_VIEW_FULL&pageSize=200');
+  let label = ((list.labels as Row[]) || []).find((l) => (l.properties as Row)?.title === HUB_LABEL && (l.lifecycle as Row)?.state !== 'DISABLED') as Row | undefined;
+  if (!label) {
+    const sel = (name: string, list: [string, string][], max = 1) => ({ properties: { displayName: name }, selectionOptions: { ...(max > 1 ? { listOptions: { maxEntries: max } } : {}), choices: list.map((c) => ({ properties: { displayName: c[1] } })) } });
+    label = await labelsCall(tk, '/labels?useAdminAccess=true', 'POST', {
+      labelType: 'ADMIN',
+      properties: { title: HUB_LABEL, description: 'Set by the Welfare Avenue Hub on the files that matter most: guides and templates to reuse, and the records behind Our story. The Hub\'s Document finder has every document.' },
+      fields: [sel('Kind', L_KIND), sel('Team', L_TEAM), { properties: { displayName: 'Year' }, integerOptions: { minValue: '2019', maxValue: '2035' } }, sel('Why it matters', L_WHY, 2)]
+    });
+    try { await labelsCall(tk, '/' + label.name + '/permissions?useAdminAccess=true', 'POST', { audience: 'audiences/default', role: 'READER' }); } catch (_) { /* the Labels manager can share it */ }
+  }
+  if ((label.lifecycle as Row)?.state !== 'PUBLISHED') label = await labelsCall(tk, '/' + label.name + ':publish', 'POST', { useAdminAccess: true });
+  const fields: Record<string, { id: string; choices: Record<string, string> }> = {};
+  for (const f of (label.fields as Row[]) || []) {
+    const choices: Record<string, string> = {};
+    for (const c of (((f.selectionOptions as Row)?.choices as Row[]) || [])) choices[String((c.properties as Row)?.displayName)] = String(c.id);
+    fields[String((f.properties as Row)?.displayName)] = { id: String(f.id), choices };
+  }
+  return { id: String(label.id), fields };
+}
+async function applyLabels(dry: boolean, offset: number, who: string): Promise<Row> {
+  const files = await importantFiles();
+  const reuse = files.filter((f) => f.why.includes('reuse')).length, story = files.filter((f) => f.why.includes('story')).length;
+  if (dry) return { ok: true, dry: true, files: files.length, reuse, story, sample: files.slice(0, 12).map((f) => f.title + ' (' + f.why.join(', ') + ')') };
+  let adminTk = '';
+  try { adminTk = await tokenFor('https://www.googleapis.com/auth/drive.admin.labels'); }
+  catch (e) { return { ok: false, blocked: 'The scope drive.admin.labels is not delegated to the Hub service account (or Drive labels are not in this Workspace edition): ' + String((e as Error).message || e).slice(0, 160) }; }
+  const L = await hubLabel(adminTk);
+  const tk = await tokenFor(SCOPE);
+  const kindName: Record<string, string> = Object.fromEntries(L_KIND), teamName: Record<string, string> = Object.fromEntries(L_TEAM), whyName: Record<string, string> = Object.fromEntries(L_WHY);
+  const t0 = Date.now();
+  let done = 0, failed = 0, i = Math.max(0, offset || 0);
+  const errors: string[] = [];
+  for (; i < files.length && Date.now() - t0 < 100000; i++) {
+    const f = files[i], mods: Row[] = [];
+    const ch = (field: string, names: string[]) => { const F = L.fields[field]; if (!F) return; const ids = names.map((n) => F.choices[n]).filter(Boolean); if (ids.length) mods.push({ fieldId: F.id, setSelectionValues: ids }); };
+    ch('Kind', [kindName[f.kind || 'other'] || 'Other']);
+    if (f.team && teamName[f.team]) ch('Team', [teamName[f.team]]);
+    if (f.year && L.fields.Year) mods.push({ fieldId: L.fields.Year.id, setIntegerValues: [String(f.year)] });
+    ch('Why it matters', f.why.map((w) => whyName[w]).filter(Boolean));
+    try {
+      const res = await fetch(API + '/files/' + encodeURIComponent(f.file_id) + '/modifyLabels', { method: 'POST', headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'drive#modifyLabelsRequest', labelModifications: [{ labelId: L.id, fieldModifications: mods }] }) });
+      if (res.ok) done++;
+      else { failed++; const txt = await res.text(); if (errors.length < 8) errors.push(f.title.slice(0, 60) + ': ' + res.status + ' ' + txt.replace(/\s+/g, ' ').slice(0, 140)); }
+    } catch (e) { failed++; if (errors.length < 8) errors.push(f.title.slice(0, 60) + ': ' + String((e as Error).message || e).slice(0, 140)); }
+  }
+  const more = i < files.length;
+  try { await svc.from('change_log').insert({ entity_type: 'drive_labels', entity_id: HUB_LABEL, field: 'applied', old_value: null, new_value: done + ' files labelled, ' + failed + ' failed (' + (offset || 0) + ' to ' + i + ' of ' + files.length + ')', changed_by: who }); } catch (_) { /* audit */ }
+  return { ok: true, label: L.id, files: files.length, labelled: done, failed, errors, next: more ? i : null };
+}
+
+/* a delegated token for any scope, for the Google API check (wave140) */
+async function tokenFor(scope: string, sub = ACTOR): Promise<string> {
+  const sa = JSON.parse(await getSecret('GOOGLE_SA_KEY'));
+  const now = Math.floor(Date.now() / 1000), enc = new TextEncoder();
+  const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub, scope, aud: sa.token_uri, iat: now, exp: now + 600 })));
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(header + '.' + claims)));
+  const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: header + '.' + claims + '.' + b64url(sig) }) });
+  const body = await res.json();
+  if (!body.access_token) throw new Error('token refused: ' + String(body.error_description || body.error || res.status).slice(0, 160));
+  return body.access_token;
+}
+async function googleCheck(): Promise<Row[]> {
+  const pick = async (mime: string) => { const { data } = await svc.from('drive_inventory').select('file_id').eq('mime', mime).eq('trashed', false).limit(1); return data && data[0] ? String(data[0].file_id) : ''; };
+  const doc = await pick(GDOC), slides = await pick(GSLIDES), sheet = await pick(GSHEET), form = await pick('application/vnd.google-apps.form');
+  const tests: { api: string; scope: string; url: string }[] = [
+    { api: 'Drive', scope: 'https://www.googleapis.com/auth/drive', url: API + '/about?fields=user(emailAddress),storageQuota(limit)' },
+    { api: 'Docs', scope: 'https://www.googleapis.com/auth/drive', url: 'https://docs.googleapis.com/v1/documents/' + doc + '?fields=title' },
+    { api: 'Slides', scope: 'https://www.googleapis.com/auth/drive', url: 'https://slides.googleapis.com/v1/presentations/' + slides + '?fields=title' },
+    { api: 'Sheets', scope: 'https://www.googleapis.com/auth/drive', url: SHEETS + sheet + '?fields=properties.title' },
+    { api: 'Forms', scope: 'https://www.googleapis.com/auth/drive', url: 'https://forms.googleapis.com/v1/forms/' + form + '?fields=info.title' },
+    { api: 'Meet REST', scope: 'https://www.googleapis.com/auth/meetings.space.readonly', url: 'https://meet.googleapis.com/v2/conferenceRecords?pageSize=1' },
+    { api: 'Search Console', scope: 'https://www.googleapis.com/auth/webmasters.readonly', url: 'https://www.googleapis.com/webmasters/v3/sites' },
+    { api: 'Admin Reports', scope: 'https://www.googleapis.com/auth/admin.reports.audit.readonly', url: 'https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login?maxResults=1' },
+    { api: 'Directory groups', scope: 'https://www.googleapis.com/auth/admin.directory.group', url: 'https://admin.googleapis.com/admin/directory/v1/groups?customer=my_customer&maxResults=1' },
+    { api: 'Tasks', scope: 'https://www.googleapis.com/auth/tasks', url: 'https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=1' },
+    { api: 'Calendar', scope: 'https://www.googleapis.com/auth/calendar.events', url: 'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1' },
+    { api: 'Drive labels (read)', scope: 'https://www.googleapis.com/auth/drive.labels.readonly', url: 'https://drivelabels.googleapis.com/v2/labels?view=LABEL_VIEW_BASIC&pageSize=5' },
+    { api: 'Drive labels (admin)', scope: 'https://www.googleapis.com/auth/drive.admin.labels', url: 'https://drivelabels.googleapis.com/v2/labels?useAdminAccess=true&view=LABEL_VIEW_BASIC&pageSize=5' },
+  ];
+  const out: Row[] = [];
+  for (const t of tests) {
+    const row: Row = { api: t.api, scope: t.scope.replace('https://www.googleapis.com/auth/', '') };
+    try {
+      const tk = await tokenFor(t.scope);
+      row.delegated = true;
+      if (/\/(documents|presentations|spreadsheets|forms)\/(\?|$)/.test(t.url)) { row.ok = null; row.note = 'no file of that type to test with'; out.push(row); continue; }
+      const res = await fetch(t.url, { headers: { Authorization: 'Bearer ' + tk } });
+      const txt = await res.text();
+      row.status = res.status; row.ok = res.ok;
+      if (!res.ok) { let m = txt; try { m = JSON.parse(txt)?.error?.message || txt; } catch (_) { /* text */ } row.note = String(m).slice(0, 220); }
+      else { let n = ''; try { const j = JSON.parse(txt); n = j.title || j.info?.title || j.properties?.title || (j.siteEntry ? j.siteEntry.length + ' site(s)' : '') || (j.items ? j.items.length + ' item(s)' : '') || (j.conferenceRecords ? j.conferenceRecords.length + ' meeting record(s)' : '') || (j.labels ? j.labels.length + ' label(s)' : '') || (j.user?.emailAddress ? j.user.emailAddress + (j.storageQuota?.limit ? ', storage limit ' + Math.round(Number(j.storageQuota.limit) / 1099511627776) + ' TB' : ', no storage limit') : ''); } catch (_) { n = ''; } row.note = n ? String(n).slice(0, 80) : 'answered'; }
+    } catch (e) { row.delegated = false; row.ok = false; row.note = String((e as Error).message || e).slice(0, 220); }
+    out.push(row);
+  }
+  return out;
 }
 async function gget(url: string): Promise<Row> {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -665,7 +809,7 @@ async function work() {
   const { data: st } = await svc.from('drive_mine_state').select('status,started_at').eq('id', 1).maybeSingle();
   if (!st || st.status !== 'mining') return;
   const usd = await spent(st.started_at);
-  if (usd > BUDGET_USD) { await state({ status: 'paused', error: 'Stopped at $' + usd.toFixed(2) + ' of AI spend (limit $' + BUDGET_USD + ').' }); return; }
+  if (usd > BUDGET_USD) { await state({ status: 'paused', error: 'Stopped at $' + usd.toFixed(2) + ' of AI spend (limit $' + BUDGET_USD + ').' }); await pump(false); return; }
   let did = 0;
   for (let round = 0; round < 60; round++) {
     const left = HOP_MS - (Date.now() - t0);
@@ -689,6 +833,7 @@ async function work() {
       if (s3 && s3.status === 'mining') {
         const total = await spent(st.started_at);
         await state({ status: 'done', finished_at: new Date().toISOString(), progress: { counts: c, cost_usd: Math.round(total * 100) / 100 } });
+        await pump(false);
         await svc.from('change_log').insert({ entity_type: 'drive_mine', entity_id: 'mining', field: 'ran', old_value: null, new_value: JSON.stringify(c).slice(0, 400) + ' ($' + total.toFixed(2) + ')', changed_by: 'drive-mine' });
       }
     }
@@ -733,6 +878,7 @@ Deno.serve(async (req: Request) => {
     const { data: st } = await svc.from('drive_mine_state').select('status,started_at').eq('id', 1).maybeSingle();
     const fresh = !st || st.status !== 'mining';
     await state({ status: 'mining', error: null, finished_at: null, ...(fresh && body.keep_clock !== true ? { started_at: new Date().toISOString() } : {}), progress: { seeded, by: who } });
+    await pump(true);
     await svc.from('change_log').insert({ entity_type: 'drive_mine', entity_id: 'mining', field: 'started', old_value: null, new_value: seeded + ' documents queued', changed_by: who });
     background(kick(Math.min(6, Math.max(1, Number(body.workers) || 3))));
     return json({ ok: true, queued: seeded, counts: await counts() });
@@ -742,8 +888,17 @@ Deno.serve(async (req: Request) => {
     if (background(job)) return json({ ok: true, working: true });
     await job; return json({ ok: true });
   }
+  if (action === 'google_check') {
+    const rows = await googleCheck();
+    try { await svc.from('change_log').insert({ entity_type: 'google', entity_id: 'api_check', field: 'ran', old_value: null, new_value: rows.map(r => r.api + ': ' + (r.ok ? 'ok' : r.ok === null ? 'untested' : 'no')).join(', ').slice(0, 480), changed_by: who }); } catch (_) { /* audit */ }
+    return json({ ok: true, checks: rows });
+  }
+  if (action === 'labels') {
+    return json(await applyLabels(body.dry === true, Number(body.offset) || 0, who));
+  }
   if (action === 'stop') {
     await state({ status: 'stopped', error: 'stopped by ' + who });
+    await pump(false);
     return json({ ok: true });
   }
   if (action === 'requeue') {

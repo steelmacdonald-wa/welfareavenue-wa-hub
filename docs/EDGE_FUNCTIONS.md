@@ -1,6 +1,6 @@
 # Welfare Avenue Hub: edge functions
 
-Every edge function, what it does, what runs it and who may call it. The source of each is in `fn/<name>/index.ts` with its `meta.json` (all 55 live functions are in the repo; slack-connect joined with wave138). Deploy with `python3 build/fn.py deploy <name>`. The detailed audit, with evidence and the open questions, is `docs/audit/fn_findings.md`.
+Every edge function, what it does, what runs it and who may call it. The source of each is in `fn/<name>/index.ts` with its `meta.json` (all 56 live functions are in the repo; drive-mine joined with wave140). Deploy with `python3 build/fn.py deploy <name>`. The detailed audit, with evidence and the open questions, is `docs/audit/fn_findings.md`.
 
 Rules for a new or changed function:
 
@@ -12,7 +12,7 @@ Rules for a new or changed function:
 | Function | What it does | Run by | Who may call it | Notes |
 |---|---|---|---|---|
 | `agenda-share` | Shareable agenda link: staff create, revoke and post it to Slack; anyone with the link reads that agenda and adds items | Front end agenda card (create_link, revoke_link, post_slack); public link page (get, add) | Public token for get and add (random, no expiry, no rate limit); staff for the rest (no gateway JWT check) | Status: unknown (keep and harden, or retire). |
-| `ask` | Ask the Hub (the Brain): answers from a fixed context, proposes confirm-first actions | Front end chat | Staff; `board_circle` decides board access | Status: keep. |
+| `ask` | Ask the Hub (the Brain): answers from a fixed context, proposes confirm-first actions. v13 (wave140): an OUR STORY block from `wa_story_context` (moments, year lines, partners, lessons, documents matching the question) and organization knowledge picked by relevance, key facts first | Front end chat | Staff; `board_circle` decides board access; leaders and directors see leadership story items, leaders see leadership documents | Status: keep. |
 | `attach-rehost` | One-off: copied ClickUp attachments into the sop-shots bucket | Nothing (manual, July) | Staff (no gateway JWT check) | Status: legacy. |
 | `build-agenda` | AI agenda builder (department, 1:1, group, leaders) | Front end agenda card | Staff | Status: keep. |
 | `calendar-sync` | Mirrors the hub@ Google Calendar into `hub_events` | Cron 13 (every 30 min) | Staff | Status: keep. |
@@ -25,6 +25,7 @@ Rules for a new or changed function:
 | `directory-sync` | Mirrors the Workspace directory: roster queue, deactivations, profile photos (Slack photos first, since wave139, then Google ones; a photo uploaded on the Hub, or removing one, is respected) | Cron 15 (daily); front end People and access | Secret, or admin (hub_roles, plus a hard-coded fallback list) | Reads Slack users.list with the bot token for the photos (`{action:'slack_photos', dry_run?, member_id?}` runs them now); a Slack account pinned in `wa_slack_ids` comes before the email match. Status: keep. |
 | `draft-content` | Create page: AI drafts in the house style, review routing to Slack | Front end Create page | Staff (no gateway JWT check) | Status: keep. |
 | `drive-pull` | Indexes Drive files the service account can see (and Google Doc text) into `wa_drive_docs` | Cron 11 (daily) | Staff | Status: keep. |
+| `drive-mine` | The Drive mining (wave140): lists every shared drive, My Drive, shared-with-me and Canva; extracts text; Jev screens (keep, private); the llm router mines events, partners, lessons, resources and facts with quotes; Jev checks them. Also `google_check` (which Google APIs and delegated scopes answer) and `labels` (the Welfare Avenue Hub Drive label on the important files; needs Drive labels in the Workspace edition, not in the free Nonprofits edition) | Admin, on demand; cron `wa-drive-mine-pump` exists only during a run (`drive_mine_pump`) | Trigger secret, service key or an admin | Status: keep (re-run to mine new documents). |
 | `finance-import` | Bank statement (text or PDF) to categorised transactions via AI | Front end Finance | Staff | Through the llm router (route finance_import, Claude models for PDF statements) since 26/09/26; the 25 Sep statement needs uploading again. Status: keep. |
 | `fn-deploy` | Build tool: list, get and deploy functions through the Management API with a personal access token from the vault | `build/fn.py` | Trigger secret only | Status: keep (build tool). |
 | `goal-propose` | AI proposes quarterly goals for one department | Front end goals page | Staff | Status: merge candidate (with goal-suggest). |

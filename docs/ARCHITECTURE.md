@@ -75,7 +75,7 @@ Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` f
 - The client is `db` (a supabase-js v2 client). Queries are written inline: `await db.from('table').select(...)`, `db.rpc('name', args)`, `db.functions.invoke('name', { body })`.
 - `loadAll()` in `000_head_base` fills the shared caches once per boot: `DB_DECISIONS`, `DB_META`, `DB_UPDATES`, `DB_TASKS`, `DB_MEMBERS` (active only, plus `MEMBER_BY_ID`), `DB_ASSIGN`, `DB_SENTIMENT`, `DB_HOURS`, `DB_CHANGES` (staff only; `DB_CLICKUP` stays empty since the audit, nothing reads it). Write paths call `loadAll()` again and re-render.
 - Almost every later wave keeps its own cache in a private object (`W116`, `WA37`, `W115`, `B` in the bank, `O` in the org chart) and loads its own tables. The same table is often loaded several times at boot (`team_members` 18 times); reuse `DB_MEMBERS` and the other caches where they fit.
-- Edge functions: 33 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`). All 55 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
+- Edge functions: 33 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`). All 56 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
 - Errors: most code wraps work in `try { } catch (e) { /* fine */ }`. When debugging, remove the empty catch locally first.
 
 ## 8. Routing
@@ -83,7 +83,7 @@ Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` f
 - Clicking a menu button sets `location.hash` (`setupTabs` in the base: `overview` becomes `#decisions`, a team becomes `#dept/<team>`, other ids `#<id>`). `116_wave116` intercepts team buttons in the capture phase and goes to `#team/<team>`.
 - `hashchange` runs `applyHash()`. The base handles `dept/`, `decisions`, `overview`, `needs-me`, `task/`, `decision/`, `tx/`, `dashboard`, `transcripts`, `activity`. 21 wrappers add their own routes; the one from `042` dispatches every `WA_NAV.pages` id. 25 more `hashchange` listeners react to their own hashes.
 - `showPanel(id)` removes `.active` from every panel and tab and adds it to the target. Its wrappers render the page, apply the role gate and redirect aliases: team ids go to `#team/<id>` (116i), `dashboard` opens the Executive dashboard (111).
-- Parameterised routes: `#team/<team>/<page>`, `#project/<id>` (panel `projectpage`), `#person/<name>` (panel `personpage`), `#orgchart/<id>`, `#hrcentre/<tab>`, `#adminpanel/<section>`, `#training/...`, `#requests/...`, `#volunteering/e/<id>`, `#bank/<team>`, `#photos/<id>`, and the public `#confirm/<token>`.
+- Parameterised routes: `#team/<team>/<page>`, `#project/<id>` (panel `projectpage`), `#person/<name>` (panel `personpage`), `#orgchart/<id>`, `#hrcentre/<tab>`, `#adminpanel/<section>`, `#training/...`, `#requests/...`, `#volunteering/e/<id>`, `#bank/<team>`, `#photos/<id>`, `#ourstory/...`, `#partners/<id>`, `#documents/q/<words>`, and the public `#confirm/<token>`.
 
 ## 9. Navigation
 
@@ -145,6 +145,9 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#adminpanel/<section>` | Admin sections | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131 |
 | `#importantinfo` | Important info | Resources | 004, 134 (passwords by request) |
 | `#photos` | Photo library | Resources | 118c |
+| `#ourstory`, `#ourstory/lessons`, `#ourstory/e/<id>`, `#ourstory/<year>` | Our story (timeline and Lessons learned) | Resources | 140 |
+| `#partners`, `#partners/<id>` | Partners | Resources | 140 |
+| `#documents`, `#documents/q/<words>` | Document finder | Resources | 140 |
 | `#create` | Create studio (hidden tab) | team tools | 017, 018 |
 | `#dashboard` | alias of the Executive dashboard numbers | hidden tab | 000, 111 |
 | `#person/<name>` | none | links | 033, 036, 116c, 116k, 133 |

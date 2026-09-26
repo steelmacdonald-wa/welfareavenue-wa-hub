@@ -1202,6 +1202,49 @@ Every @mention people write in the Hub (task comments and descriptions, goal com
 - `dm_status`: pending, sent, skipped (no Slack account, opted out, or no longer active) or failed (dm_error says why).
 - `dm_via`: user: sent as the writer (they connected Slack); bot: from the Hub bot with their name.
 
+### `drive_inventory`
+
+Every Google Drive file Steel's welfareavenue.com account can see (his My Drive, files shared with him, the shared drives he belongs to), metadata only, listed by drive-mine for the wave140 mining (history, partners, learnings, resources). triage says what the mining did with each file. File names can be sensitive: admins read, only the service role writes.
+
+- `path`: Where the file sits: the shared drive (or My Drive, Shared with me) and its folders, from drive_inventory_paths().
+- `triage`: gold: mined; ore: worth a later look; waste: nothing to mine (photos, templates, duplicates, forms); private: left out on purpose (personal, HR, donor details, board-only, Steel's transition).
+- `sensitivity`: Why a file is private or restricted: staff, leadership, board, hr, donor, personal, transition.
+- `source`: Where the item was found: shared_drive, my_drive, shared_with_me (Steel's welfareavenue.com view through drive-mine), connector (legacy files), canva (a Canva design, read on 26/09/26), social (the charity's own posts, grouped by quarter from social_posts).
+
+### `drive_mine_state`
+
+One row: the last drive-mine inventory pass (status, progress by shared drive, error). Admins read; the service role writes.
+
+### `wa_history`
+
+Our story (page #ourstory): what Welfare Avenue has done since March 2020, refined from its Drive, Canva designs and posts (wave140). sources lists the documents and the words each entry came from. Staff read everyone rows, directors and leaders read all published rows, leaders also see hidden ones and write.
+
+- `visibility`: everyone: all staff and directors. leadership: leaders (admin or leader role) and directors only, for entries from board and leadership documents that are not public.
+- `highlight`: One of the milestones shown at the top of Our story and in the Welfare Avenue foundations reading.
+- `sources`: Array of {file_id, name, url, quote}: where the entry came from.
+
+### `wa_partners`
+
+Partners (page #partners): every organisation Welfare Avenue has worked with, sponsored by or approached, refined from its Drive, Canva designs and posts (wave140), with what they did, the years and the sources. Leaders correct and add.
+
+- `status`: active: working together now; past: worked together before; prospect: approached or planned, nothing yet; declined: said no.
+
+### `wa_lessons`
+
+Lessons learned (Our story, Lessons): what Welfare Avenue learned, as advice the team can act on, with what happened and the sources (wave140). Leaders correct and add.
+
+### `wa_documents`
+
+The document finder (page #documents): every useful Drive file, Canva design and quarter of posts the wave140 mining read, with a summary, the date it covers, the team, the kind and the organisations and topics in it, so the Hub finds documents by meaning. Private files are never here. leadership rows (board, management, HR and finance drives, Steel's own drive) are for leaders. The mining writes it (service role).
+
+### `drive_text`
+
+The plain text of each candidate document for the wave140 mining (Google Docs and Slides exported as text, Sheets through the Sheets API, Word, PowerPoint and Excel files unzipped; PDFs are read by the model itself and have no row text). Text of a document later found private is deleted. hash (md5 of the normalised text) finds copies. No policies: only the service role reads or writes.
+
+### `drive_mined`
+
+One row per document in the wave140 mining. stage: extract (read the text), screen (Jev: keep, skip or private), mine (an OpenRouter model records events, partners, lessons, resources and facts, each with a quote), check (Jev checks each item against the source), then done, skipped, private or failed. screen holds Jev's answers, result the extraction, checked Jev's check per item; model and cost are the extraction's. Admins read; the service role writes.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1221,4 +1264,12 @@ Functions:
 - `wa_mention_notify(text, text, text, bigint, text, text, boolean, text, bigint)`: Called by the mention triggers: files a hub_mentions row for each person the new text @mentions who was not already mentioned in the old text, as the signed-in writer (nobody when the writer is a job or the AI). Access: triggers only.
 - `trg_hub_mention_dm()`: Trigger on hub_mentions insert: asks notify (event comment_mention) to send the Slack DM. Access: trigger only.
 - `mention_seen(bigint[])`: Marks the caller's own mentions seen (Home). Access: authenticated.
+- `wa_fold(text)`: Lower case without accents (Émilie finds emilie), for matching in wa_story_context (wave140).
+- `wa_story_context(text[], int[], boolean, boolean, boolean, boolean, int)`: What the Hub assistant (ask v13) reads about Welfare Avenue's past: the moments, year lines, partners, lessons and documents that match a question's folded terms or years, as one jsonb. The caller says what the asker may see (p_lead: leadership moments, partners, lessons and sources; p_docs_lead: leadership documents). Access: service role only.
+- `drive_inventory_paths()`: Fills drive_inventory.path from the folder rows (shared drive or My Drive, then the folders). Called by drive-mine after each inventory. Access: service role only.
+- `wa_documents_fts()`: Keeps wa_documents.fts (the search words: title, summary, date, kind, place, organisations, topics, resource) current on every write.
+- `wa_story_search(text, int)`: Searches Our story, Partners, Lessons and the document finder for words in a question (websearch syntax) and returns the best matches of each as JSON; used by Ask the Hub. Security invoker: callers see only what the tables' policies allow.
+- `drive_mine_claim(text, int)`: Hands a drive-mine worker up to p_n documents waiting at a stage (or held more than 5 minutes by a worker that stopped); a document that failed three times at a stage is marked failed instead. Access: service role only.
+- `drive_mine_seed()`: Queues every gold or ore document (not a duplicate, not trashed, a type drive-mine can read) that is not queued yet: Drive files start at extract, Canva designs and social posts (text already there) at mine. Returns how many were added. Access: service role only.
+- `drive_mine_pump(boolean)`: Schedules (true) or removes (false) the cron job wa-drive-mine-pump, six drive-mine workers a minute; drive-mine turns it on at start and off when a run is done, paused or stopped (wave140). Access: service role only.
 

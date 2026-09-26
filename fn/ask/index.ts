@@ -1,3 +1,7 @@
+// v13 (26/09/26): our story (wave140, the Drive mining). An OUR STORY block from wa_story_context: the moments, year lines,
+// partners, lessons learned and documents that match the question (accents and word endings forgiven), or the year it names;
+// the asker's access decides what it holds (leaders and directors: leadership moments and sources; leaders only: leadership
+// documents). Organization knowledge is picked by relevance, a section at a time, and always opens with the key facts.
 // v12 (26/09/26): the bank. bank_task proposes moving an open task to the bank (out of every board until a date three months or more
 // away); it runs as the signed-in person through the bank_task database function, so the Hub's own checks apply. Open task
 // lists leave banked work out, and an IN THE BANK block lets it answer what is parked and when it comes back.
@@ -397,7 +401,7 @@ const OR_MODELS = [
   'deepseek/deepseek-v4-pro-0813',
   'qwen/qwen3.8-27b'
 ];
-const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only.
+const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. For Welfare Avenue's past (what happened when, where, with whom, how many), use the OUR STORY blocks and KEY FACTS: give dates, say so when two sources disagree, include a source or document link when one is listed, and point to the Our story, Partners or Document finder pages (Resources menu) for more. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only.
 
 You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: for work the user wants to park for three months or more; it comes back on its date), complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
 
@@ -979,9 +983,121 @@ function cleanHistory(raw) {
   while(turns.length && turns[0].role !== 'user')turns.shift();
   return turns;
 }
-async function buildContext(question, isBoard) {
+/* ---------- our story (wave140) ---------- */
+const STORY_SKIP = ['welfare', 'avenue', 'hub', 'give', 'show', 'list', 'find', 'want', 'need', 'just', 'like', 'also', 'ever', 'thing', 'things', 'stuff', 'someone', 'people'];
+const STEM_SUFFIXES = ['ations', 'ships', 'ation', 'ings', 'ship', 'ies', 'ers', 'ing', 'ed', 'es', 'er', 's'];
+function fold(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+/* the question's words, folded and cut to a stem so plurals and endings still match (charities finds charity, registration finds
+   registered): a common ending comes off, then a long word keeps its first six letters */
+function storyTerms(question) {
+  const out = [];
+  for (const w of fold(question).replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)) {
+    if (w.length < 3 || /^\d+$/.test(w) || STOPWORDS.indexOf(w) >= 0 || STORY_SKIP.indexOf(w) >= 0) continue;
+    let s = w;
+    for (const suf of STEM_SUFFIXES){ if (s.endsWith(suf) && s.length - suf.length >= 4 && !(suf === 's' && s.endsWith('ss'))) { s = s.slice(0, -suf.length); break; } }
+    if (s.length >= 7) s = s.slice(0, 6);
+    if (out.indexOf(s) < 0) out.push(s);
+  }
+  return out.slice(0, 10);
+}
+async function storyAccess(email, isBoard) {
+  let leader = false;
+  try {
+    if (email) {
+      const { data } = await svc.from('hub_roles').select('role').eq('email', email).maybeSingle();
+      leader = !!data && (data.role === 'admin' || data.role === 'leader');
+    }
+  } catch (_) {}
+  return { lead: leader || !!isBoard, docsLead: leader };
+}
+function whenText(date, prec) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(date || ''));
+  if (!m) return '';
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  if (prec === 'year') return m[1];
+  if (prec === 'month' || prec === 'season') return MON[Number(m[2]) - 1] + ' ' + m[1];
+  return Number(m[3]) + ' ' + MON[Number(m[2]) - 1] + ' ' + m[1];
+}
+function numbersLine(n) {
+  if (!n || typeof n !== 'object') return '';
+  const f = (v)=>Number(v).toLocaleString('en-CA');
+  const out = [];
+  if (n.meals) out.push(f(n.meals) + ' meals');
+  if (n.people_helped) out.push(f(n.people_helped) + ' people helped');
+  if (n.volunteers) out.push(f(n.volunteers) + ' volunteers');
+  if (n.attendees) out.push(f(n.attendees) + ' attendees');
+  if (n.raised_cad) out.push('$' + f(n.raised_cad) + ' raised');
+  return out.join(', ');
+}
+const REL_WORDS = /\b(partner|partners|partnership|partnerships|sponsor|sponsors|sponsored|funder|funders|donor|donors|collaborat\w*|organi[sz]ations?)\b/;
+const STORY_WORDS = /\b(story|history|historic\w*|timeline|founded|founding|founder|began|begin|beginning|beginnings|origin|origins|milestones?|achievements?|anniversary|journey|since 2020|so far|over the years|past years)\b/;
+async function storyBlock(question, acc) {
+  const q = fold(question);
+  const terms = storyTerms(question);
+  const years = Array.from(new Set((q.match(/\b20(19|2[0-7])\b/g) || []).map(Number)));
+  const story = STORY_WORDS.test(q), partnersAsked = REL_WORDS.test(q);
+  if (!terms.length && !years.length && !story) return '';
+  const { data, error } = await svc.rpc('wa_story_context', { p_terms: terms, p_years: years, p_story: story, p_partners: partnersAsked, p_lead: !!acc.lead, p_docs_lead: !!acc.docsLead, p_limit: years.length ? 16 : 10 });
+  if (error || !data) return '';
+  const out = [];
+  const ms = data.moments || [];
+  if (ms.length) {
+    out.push('OUR STORY: MOMENTS (from our documents and posts since 2020; the date shows how precise it is):\n' + ms.map((m)=>{
+      const when = whenText(m.date, m.precision) + (m.end ? ' to ' + whenText(m.end, m.end_precision || m.precision) : '');
+      const bits = [m.city, (m.partners || []).length ? 'with ' + m.partners.slice(0, 6).join(', ') : '', numbersLine(m.numbers)].filter(Boolean).join('; ');
+      const src = (m.sources || []).filter((s)=>s && (s.name || s.url)).map((s)=>(s.name || 'source') + (s.url ? ' (' + s.url + ')' : '')).join('; ');
+      return '- ' + when + ' [' + m.kind + '] ' + m.title + (bits ? ' (' + bits + ')' : '') + (m.summary ? ': ' + m.summary : '') + (src ? ' Sources: ' + src : '');
+    }).join('\n'));
+  }
+  const ys = data.years || [];
+  if (ys.length) out.push('OUR STORY: THE YEARS:\n' + ys.map((y)=>'- ' + y.year + ': ' + y.summary).join('\n'));
+  const ps = data.partners || [];
+  if (ps.length) {
+    out.push('OUR STORY: PARTNERS (organizations we worked with or approached; status active = working with us now, past = before, prospect = approached with nothing yet, declined = said no):\n' + ps.map((p)=>{
+      const yrs = p.first_year && p.last_year && p.first_year !== p.last_year ? p.first_year + ' to ' + p.last_year : (p.first_year || p.last_year || '');
+      return '- ' + p.name + ((p.aka || []).length ? ' (also ' + p.aka.slice(0, 3).join(', ') + ')' : '') + ': ' + [p.status, p.relationship, p.kind, p.city, yrs].filter(Boolean).join(', ') + (p.summary ? '. ' + p.summary : '') + (p.notes ? ' Note: ' + p.notes : '');
+    }).join('\n'));
+  }
+  const ls = data.lessons || [];
+  if (ls.length) out.push('OUR STORY: LESSONS LEARNED (from our own events and programs):\n' + ls.map((l)=>'- [' + l.area + (l.topic ? ', ' + l.topic : '') + (l.years ? ', ' + l.years : '') + '] ' + l.lesson + (l.context ? ' (What happened: ' + l.context + ')' : '')).join('\n'));
+  const ds = data.documents || [];
+  if (ds.length) out.push('OUR STORY: DOCUMENT FINDER (files in our shared drives and Canva; include the link when one informs your answer):\n' + ds.map((d)=>'- ' + d.title + ' (' + [d.kind, d.date || d.year].filter(Boolean).join(', ') + ')' + (d.summary ? ': ' + d.summary : '') + (d.reuse ? ' Reusable: ' + d.reuse + '.' : '') + (d.url ? ' Link: ' + d.url : '')).join('\n'));
+  return out.join('\n\n');
+}
+/* organization knowledge, a piece at a time: a section's opening lines and each of its list items are pieces; the pieces that
+   share the most words with the question are kept, under their headings, in the order they were written */
+function bestSections(body, terms, max) {
+  const score = (s)=>{
+    const l = fold(s);
+    let sc = 0;
+    for (const k of terms){ let at = l.indexOf(k); while(at >= 0){ sc++; at = l.indexOf(k, at + k.length); } }
+    return sc;
+  };
+  const pieces = [];
+  String(body || '').split(/\n(?=#{2,3} )/).forEach((sec)=>{
+    const lines = sec.split('\n');
+    const head = /^#{2,3} /.test(lines[0]) ? lines[0] : '';
+    let cur = [];
+    const flush = ()=>{ const txt = cur.join('\n').trim(); if (txt) pieces.push({ j: pieces.length, head, s: txt, sc: score(txt) }); cur = []; };
+    for (const ln of lines.slice(head ? 1 : 0)){ if (/^- /.test(ln)) flush(); cur.push(ln); }
+    flush();
+  });
+  const pick = pieces.filter((x)=>x.sc > 0).sort((a, b)=>b.sc - a.sc || a.j - b.j);
+  const keep = [];
+  let n = 0;
+  for (const x of pick){ const len = x.s.length + 1; if (n + len > max) continue; keep.push(x); n += len; }
+  keep.sort((a, b)=>a.j - b.j);
+  let text = '', last = null;
+  for (const x of keep){ if (x.head && x.head !== last) { text += (text ? '\n' : '') + x.head; last = x.head; } text += (text ? '\n' : '') + x.s; }
+  return { text, score: pick.reduce((a, x)=>a + x.sc, 0) };
+}
+async function buildContext(question, isBoard, acc) {
   const kws = keywords(question);
   const parts = [];
+  try {
+    const story = await storyBlock(question, acc || { lead: false, docsLead: false });
+    if (story) parts.push(story);
+  } catch (_) {}
   try {
     if (kws.length) {
       let ftsQ = svc.from('transcripts').select('id,title,meeting_date,department,ai_summary').or(OPEN_VIS).textSearch('fts', kws.join(' '), {
@@ -1110,14 +1226,17 @@ async function buildContext(question, isBoard) {
     }
   } catch (_) {}
   try {
-    const { data: kb } = await svc.from('hub_knowledge').select('title,body').order('updated_at', {
+    const { data: kb } = await svc.from('hub_knowledge').select('slug,title,body').order('updated_at', {
       ascending: false
-    }).limit(4);
+    }).limit(20);
     if (kb && kb.length) {
-      parts.push('ORGANIZATION KNOWLEDGE (strategy and reference documents):\n' + kb.map((k)=>'## ' + (k.title || '') + '\n' + (k.body || '').slice(0, 7000)).join('\n\n'));
+      const terms = storyTerms(question);
+      const picked = kb.map((k)=>({ k, b: bestSections(k.body, terms, k.slug === 'wa-key-facts' ? 5000 : 4500) })).filter((x)=>x.b.score > 0 || x.k.slug === 'wa-key-facts').sort((a, b)=>(a.k.slug === 'wa-key-facts' ? -1 : 0) - (b.k.slug === 'wa-key-facts' ? -1 : 0) || b.b.score - a.b.score).slice(0, 3);
+      const txt = picked.map((x)=>'## ' + (x.k.title || '') + '\n' + (x.b.text || (x.k.slug === 'wa-key-facts' ? String(x.k.body || '').slice(0, 2500) : ''))).filter((s)=>s.length > 40);
+      if (txt.length) parts.push('ORGANIZATION KNOWLEDGE (KEY FACTS and reference documents, the sections that match the question):\n' + txt.join('\n\n'));
     }
   } catch (_) {}
-  return parts.join('\n\n').slice(0, 30000);
+  return parts.join('\n\n').slice(0, 32000);
 }
 Deno.serve(async (req)=>{
   if (req.method === 'OPTIONS') return new Response('ok', {
@@ -1153,7 +1272,8 @@ Deno.serve(async (req)=>{
   }, 400);
   const history = cleanHistory(body.history);
   try {
-    const context = await buildContext(question, isBoard);
+    const acc = await storyAccess(auth.email, isBoard);
+    const context = await buildContext(question, isBoard, acc);
     const out = await runAgent(history, context || 'No matching data was found in the dashboard database for this question.', question);
     return json({
       answer: out.answer,

@@ -162,6 +162,8 @@
 134_wave134
 # 138_wave138: @mentions (the picker, the hint, Settings' Send @mentions as you); it hooks into 116j and the comment renderers.
 138_wave138
+# 140_wave140: Our story, Partners and the Document finder (the Drive mining, framed); registers three Resources pages.
+140_wave140
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

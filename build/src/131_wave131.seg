@@ -51,12 +51,12 @@
     ['Meetings', ['agendas', 'transcripts']],
     ['Requests and inbox', ['requests', 'hubmail']],
     ['People', ['orgchart', 'training']],
-    ['Resources', ['importantinfo', 'photos', 'create']],
+    ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
-    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info',
+    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
