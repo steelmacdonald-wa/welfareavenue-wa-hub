@@ -72,7 +72,7 @@ async function wa36Load(force) {
   if (WA36_LOADED && !force) return;
   try {
     var t = await db.from('trainings').select('*').eq('active', true).order('category').order('sort').order('id');
-    WA36_TRAININGS = (t && t.data) || [];
+    WA36_TRAININGS = ((t && t.data) || []).filter(function (x) { return !(x && x.body && x.body.planned); }); /* wave141: planned trainings stay in the Academy, for leaders */
     var p = await db.from('training_progress').select('*');
     WA36_PROG = (p && p.data) || [];
     WA36_LOADED = true;

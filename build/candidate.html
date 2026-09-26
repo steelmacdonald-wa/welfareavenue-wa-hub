@@ -10676,7 +10676,7 @@ async function wa36Load(force) {
   if (WA36_LOADED && !force) return;
   try {
     var t = await db.from('trainings').select('*').eq('active', true).order('category').order('sort').order('id');
-    WA36_TRAININGS = (t && t.data) || [];
+    WA36_TRAININGS = ((t && t.data) || []).filter(function (x) { return !(x && x.body && x.body.planned); }); /* wave141: planned trainings stay in the Academy, for leaders */
     var p = await db.from('training_progress').select('*');
     WA36_PROG = (p && p.data) || [];
     WA36_LOADED = true;
@@ -38465,6 +38465,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w122card .cv .dn{position:absolute;right:12px;bottom:12px;width:28px;height:28px;border-radius:50%;background:#FFFAF2;color:' + TEAL + ';display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.18);}'
     + '.w122card .cv .dn .w122ic{stroke-width:3;width:15px;height:15px;}'
     + '.w122card .cv img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55;mix-blend-mode:luminosity;}'
+    + '.w141plan{margin-top:26px;padding:14px 16px;border:1px dashed rgba(127,127,127,.45);border-radius:14px;background:rgba(220,165,39,.07);}'
+    + '.w141plan h3{font-size:16px;margin:0 0 4px;display:flex;gap:8px;align-items:center;}.w141plan h3 i{font-style:normal;font-size:12px;background:#DCA527;color:#1F201E;border-radius:10px;padding:1px 8px;}'
+    + '.w141pl{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(127,127,127,.18);}.w141pl .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(220,165,39,.2);flex:none;}'
+    + '.w141pl .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}.w141pl .tx span{font-size:12.5px;opacity:.75;}'
+    + '@media (max-width:560px){.w141pl{flex-wrap:wrap;}.w141pl .w122btn{width:100%;justify-content:center;}}'
     + '.w122card .bd{padding:13px 15px 15px;display:flex;flex-direction:column;gap:6px;flex:1;}'
     + '.w122card .bd b{font-size:15px;font-weight:650;line-height:1.3;letter-spacing:-.1px;color:' + INK + ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}'
     + '.w122card .bd .m{font-size:12.5px;color:#797773;line-height:1.4;}'
@@ -38940,6 +38945,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return 'member';
   }
   function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
+  /* planned trainings (wave141): listed in the Slack training lists but never made, or whose link did not come across; leaders fill them in */
+  function plannedIn(p) { return (A.trainings || []).filter(function (t) { return t.path_group === p.name && t.active !== false && t.body && t.body.planned; }).sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); }); }
+  function plannedHtml(p) {
+    if (!isLeader()) return '';
+    var items = plannedIn(p); if (!items.length) return '';
+    return '<div class="w141plan" data-w141plan="' + E(p.key) + '"><h3>Planned trainings <i>' + items.length + '</i></h3><p class="snote">Only leaders see these: trainings the team listed in Slack but never made, or whose link did not come across. Add the content and it joins this Learning Avenue for everyone.</p>' +
+      items.map(function (t) { return '<div class="w141pl"><span class="n">' + ic('plus') + '</span><span class="tx"><b>' + E(t.title) + '</b><span>' + E((t.body && t.body.note) || t.description || 'No content yet.') + '</span></span><button class="w122btn soft sm" data-w141fill="' + E(t.id) + '">' + ic('edit') + ' Add the content</button></div>'; }).join('') + '</div>';
+  }
   function tabVisible(id) { var b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); return !!b && b.style.display !== 'none'; }
   function tabLabel(id) { var b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); var t = b ? String(b.textContent || '').replace(/\s+/g, ' ').trim() : ''; if (!t) { try { t = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[id]) || id; } catch (e) { t = id; } } return t; }
   function deptTab() { var d = me().dept; if (d && tabVisible(d)) return d; for (var i = 0; i < DEPTS.length; i++) if (tabVisible(DEPTS[i])) return DEPTS[i]; return null; }
@@ -38983,7 +38996,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return 25;
   }
   function tourKeyOf(t) { var k = String(t && t.key || ''); return k.indexOf('tour:') === 0 ? k.slice(5) : null; }
-  function visibleT(t) { if (!t || t.active === false) return false; var tk = tourKeyOf(t); if (kindOf(t) === 'tour') return !!(tk && TOURS[tk] && tourAvail(tk)); return true; }
+  function visibleT(t) { if (!t || t.active === false) return false; if (t.body && t.body.planned) return false; var tk = tourKeyOf(t); if (kindOf(t) === 'tour') return !!(tk && TOURS[tk] && tourAvail(tk)); return true; }
   function embedOf(t) {
     var lid = loomId(t); if (lid) return 'https://www.loom.com/embed/' + lid + '?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true';
     var u = String(t.resource_url || ''), m;
@@ -39698,7 +39711,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="pitems">' + ps.items.map(function (t, i) {
         var ok = isDone(t.id), k = KIND[kindOf(t)] || KIND.read;
         return '<button class="pitem' + (ok ? ' ok' : '') + '" data-w122pitem="' + E(t.id) + '"><span class="n">' + (ok ? ic('check') : (i + 1)) + '</span><span class="tx"><b>' + E(String(t.title).replace(/^Page tour:\s*/, '')) + '</b><span>' + E(k.l) + ' &middot; ' + mins(minutesOf(t)) + (ok ? ' &middot; done' : '') + '</span></span>' + ic('chev') + '</button>';
-      }).join('') + '</div></div></div></div>' +
+      }).join('') + '</div>' + plannedHtml(p) + '</div></div></div>' +
       '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Learning Avenue complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
     sh.innerHTML = html;
   }
@@ -39801,6 +39814,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!row.source) row.source = 'hub';
     try {
       var res;
+      if (R.t && R.t.body && R.t.body.planned && (row.resource_url || (row.description && row.description !== (R.t.description || null)))) row.body = Object.assign({}, R.t.body, { planned: false, filled_at: nowIso(), filled_by: me().name });
       if (R.t) { res = await db.from('trainings').update(row).eq('id', R.t.id).select(); if (res.error) throw res.error; Object.keys(row).forEach(function (k) { R.t[k] = row[k]; }); toastS('Saved'); var keep = R.t; applyTrainings(A.trainings); openTraining(keep.id); }
       else {
         row.active = true; row.sort = 900;
@@ -40780,6 +40794,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w122assignx]'))) { R.mode = 'view'; renderSheet(); return; }
     if ((el = t.closest('[data-w122assigngo]'))) { el.disabled = true; doAssign(); return; }
     if ((el = t.closest('[data-w122edit]'))) { openForm(R.t); return; }
+    if ((el = t.closest('[data-w141fill]'))) { var pt = A.byId[String(el.getAttribute('data-w141fill'))]; if (pt) openForm(pt); return; }
     if ((el = t.closest('[data-w122save]'))) { saveForm(); return; }
     if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the Avenue Academy, and progress already recorded is kept.')) retire(); return; }
     if ((el = t.closest('[data-w122share]'))) { shareAward(el.getAttribute('data-w122share')); return; }
