@@ -95,7 +95,7 @@
     if (!list.length) return '<p class="ft">Nothing yet.</p>';
     return '<table>' + list.map(function (r) {
       var k = kind === 'page' ? String(r.key).replace(/^https?:\/\/(www\.)?welfareavenue\.com/i, '') || '/' : r.key;
-      return '<tr><td class="k">' + (kind === 'page' ? '<a href="' + E(r.key) + '" target="_blank" rel="noopener" style="color:inherit">' + E(k) + '</a>' : E(k)) + '</td><td class="n">' + num(r.clicks) + '</td><td class="m">' + num(r.impressions) + ' seen' + (r.position ? ' · #' + Math.round(r.position) : '') + '</td></tr>';
+      return '<tr><td class="k">' + (kind === 'page' && /^https?:\/\//i.test(String(r.key)) ? '<a href="' + E(r.key) + '" target="_blank" rel="noopener" style="color:inherit">' + E(k) + '</a>' : E(k)) + '</td><td class="n">' + num(r.clicks) + '</td><td class="m">' + num(r.impressions) + ' seen' + (r.position ? ' · #' + Math.round(r.position) : '') + '</td></tr>';
     }).join('') + '</table>';
   }
   function html() {

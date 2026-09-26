@@ -1292,6 +1292,10 @@ Google Search Console (wave147): per day, clicks, impressions, click-through rat
 
 Google Search Console (wave147): the top searches (kind query) and pages (kind page) over the last 28 days of data, replaced at each read.
 
+### `forms_flow_lease`
+
+One row: while locked_until is in the future a forms-flow run is filing answers, and another run waits for the next turn.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1323,4 +1327,5 @@ Functions:
 - `wa_leads_team(text)`: True when the signed-in person is a Hub leader for that team (their profile or their roster team).
 - `wa_in_team(text)`: True when the signed-in person is on that team (the roster, or a Hub profile for it).
 - `wa_meet_people_ok(text)`: True when the signed-in person may read everyone's attendance for that meeting.
+- `wa_board_pack_guard()`: Keeps board_meetings.pack for the board-pack function (service role): anyone else's insert or update leaves it as it was.
 

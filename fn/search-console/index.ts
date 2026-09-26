@@ -20,12 +20,15 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 type Row = Record<string, any>;
 
 async function getSecret(name: string): Promise<string> { const { data, error } = await svc.rpc('get_secret', { secret_name: name }); if (error || !data) throw new Error('secret ' + name + ' unavailable'); return data as string; }
+let IS_ADMIN = false;
 async function caller(req: Request): Promise<string | null> {
-  try { const s = req.headers.get('x-wa-secret'); if (s && s === (await getSecret('WA_TRIGGER_SECRET'))) return 'automation'; } catch (_) { /* no */ }
+  IS_ADMIN = false;
+  try { const s = req.headers.get('x-wa-secret'); if (s && s === (await getSecret('WA_TRIGGER_SECRET'))) { IS_ADMIN = true; return 'automation'; } } catch (_) { /* no */ }
   const auth = req.headers.get('Authorization') || '';
   if (!auth.startsWith('Bearer ')) return null;
   const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: auth } } });
   try { const r = await asUser.rpc('is_wa_staff'); if (r.data !== true) return null; } catch (_) { return null; }
+  try { const a = await asUser.rpc('is_hub_admin'); IS_ADMIN = a.data === true; } catch (_) { IS_ADMIN = false; }
   const { data } = await asUser.auth.getUser();
   return (data?.user?.email || '').toLowerCase() || null;
 }
@@ -62,10 +65,11 @@ async function sites(via: 'sa' | 'steel'): Promise<Row[]> {
   const j = await call(via, '/sites');
   return ((j.siteEntry || []) as Row[]).filter((s) => s.permissionLevel && s.permissionLevel !== 'siteUnverifiedUser');
 }
-/* the Welfare Avenue property: a domain property first, then the https site */
+/* the Welfare Avenue property, exactly: the domain property first, then the website */
+const OURS = ['sc-domain:welfareavenue.com', 'https://welfareavenue.com/', 'https://www.welfareavenue.com/', 'http://welfareavenue.com/', 'http://www.welfareavenue.com/'];
 function pick(list: Row[]): Row | null {
-  const wa = list.filter((s) => /welfareavenue/i.test(String(s.siteUrl)));
-  return wa.find((s) => /^sc-domain:/.test(s.siteUrl)) || wa.find((s) => /^https:/.test(s.siteUrl)) || wa[0] || null;
+  for (const u of OURS) { const s = list.find((x) => String(x.siteUrl).toLowerCase() === u); if (s) return s; }
+  return null;
 }
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -76,7 +80,8 @@ async function status() {
     catch (e) { out[via] = { ok: false, error: String((e as Error).message).slice(0, 200) }; }
   }
   const { data } = await svc.from('search_sites').select('*');
-  return { ok: true, sa_email: SA_EMAIL || null, visible: out, connected: data || [] };
+  /* which properties each identity sees is for admins and the automation; staff get the email for the setup line */
+  return IS_ADMIN ? { ok: true, sa_email: SA_EMAIL || null, visible: out, connected: data || [] } : { ok: true, sa_email: SA_EMAIL || null, connected: (data || []).map((x: Row) => ({ site_url: x.site_url, last_sync_at: x.last_sync_at })) };
 }
 
 async function sync(days: number) {

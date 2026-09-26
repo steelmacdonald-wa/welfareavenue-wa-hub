@@ -290,7 +290,8 @@ function buildMeeting(m: Meeting, ctx: Row) {
 
 async function sync(days: number, dry: boolean) {
   const now = Date.now();
-  const from = new Date(now - days * 86400000), wide = new Date(Math.max(from.getTime() - 86400000, now - 179.5 * 86400000));
+  /* the window never reaches past what the Meet log keeps (Google keeps 180 days; a day of margin for the calls around it) */
+  const from = new Date(Math.max(now - days * 86400000, now - 178 * 86400000)), wide = new Date(Math.max(from.getTime() - 86400000, now - 179.5 * 86400000));
   const R = await roster();
   const ctx: Row = { R, unmatched: dry ? {} : null };
   const [{ hits, oldest }, cal, known, boards] = await Promise.all([
@@ -299,6 +300,9 @@ async function sync(days: number, dry: boolean) {
     svc.from('meet_meetings').select('meeting_code,kind,department,title,organizer,series_id').in('kind', ['team', 'leadership']).not('meeting_code', 'is', null).order('scheduled_start', { ascending: false }).limit(2000),
     svc.from('board_meetings').select('id,title,meets_at,status,kind').not('meets_at', 'is', null)
   ]);
+  /* a read that failed must not look like an empty window: the sync stops before it deletes anything */
+  if (known.error) throw new Error('meet_meetings: ' + known.error.message);
+  if (boards.error) throw new Error('board_meetings: ' + boards.error.message);
   const deptOf = (title: string) => { const t = lower(title); for (const d of R.depts) if (d.pats.some((p: string) => t.indexOf(p) >= 0)) return d.department; return null; };
 
   /* the scheduled meetings on the hub@ calendar */
@@ -414,9 +418,10 @@ async function sync(days: number, dry: boolean) {
   for (let i = 0; i < ids.length; i += 100) { const { error } = await svc.from('meet_attendance').delete().in('meeting_id', ids.slice(i, i + 100)); if (error) throw new Error('meet_attendance delete: ' + error.message); }
   for (let i = 0; i < rowsA.length; i += 300) { const { error } = await svc.from('meet_attendance').insert(rowsA.slice(i, i + 300)); if (error) throw new Error('meet_attendance: ' + error.message); }
   /* a scheduled meeting in the window that the calendar no longer has (moved or cancelled) goes */
-  const { data: old } = await svc.from('meet_meetings').select('id,scheduled_start,started_at,kind').gte('scheduled_start', from.toISOString()).lte('scheduled_start', new Date(now).toISOString());
+  const { data: old, error: e1 } = await svc.from('meet_meetings').select('id,scheduled_start,started_at,kind').gte('scheduled_start', from.toISOString()).lte('scheduled_start', new Date(now).toISOString());
+  const { data: oldConf, error: e2 } = await svc.from('meet_meetings').select('id').is('scheduled_start', null).gte('started_at', from.toISOString());
+  if (e1 || e2) throw new Error('meet_meetings: ' + ((e1 || e2) as Row).message);
   const stale = (old || []).map((r: Row) => r.id).filter((id: string) => !ids.includes(id));
-  const { data: oldConf } = await svc.from('meet_meetings').select('id').is('scheduled_start', null).gte('started_at', from.toISOString());
   stale.push(...(oldConf || []).map((r: Row) => r.id).filter((id: string) => !ids.includes(id)));
   for (let i = 0; i < stale.length; i += 100) await svc.from('meet_meetings').delete().in('id', stale.slice(i, i + 100));
   return { ok: true, summary: { ...summary, removed: stale.length } };

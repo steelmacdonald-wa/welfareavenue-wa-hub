@@ -16,6 +16,8 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  /* a link is drawn only for a web address (the meeting's links can be edited by leaders) */
+  function U(u) { u = String(u || '').trim(); return /^https:\/\//i.test(u) ? u : ''; }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
   var P = {
     doc: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5M9 13h7M9 16.5h5"/>',
@@ -71,10 +73,10 @@
     } else {
       html += '<p>For the ' + E(m.title || 'board meeting') + ', ready in the Board of Directors drive. People updates stay out of it: the HR slide shows counts only.</p>'
         + '<div class="links">'
-        + (m.agenda_url ? '<a href="' + E(m.agenda_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>' : '')
-        + (m.notes_url ? '<a href="' + E(m.notes_url) + '" target="_blank" rel="noopener">' + I('doc') + 'Meeting notes</a>' : '')
-        + (m.deck_url ? '<a href="' + E(m.deck_url) + '" target="_blank" rel="noopener">' + I('deck') + 'Deck</a>' : '')
-        + (pk.folder_url ? '<a href="' + E(pk.folder_url) + '" target="_blank" rel="noopener">' + I('folder') + 'Folder</a>' : '')
+        + (U(m.agenda_url) ? '<a href="' + E(U(m.agenda_url)) + '" target="_blank" rel="noopener">' + I('doc') + 'Agenda</a>' : '')
+        + (U(m.notes_url) ? '<a href="' + E(U(m.notes_url)) + '" target="_blank" rel="noopener">' + I('doc') + 'Meeting notes</a>' : '')
+        + (U(m.deck_url) ? '<a href="' + E(U(m.deck_url)) + '" target="_blank" rel="noopener">' + I('deck') + 'Deck</a>' : '')
+        + (U(pk.folder_url) ? '<a href="' + E(U(pk.folder_url)) + '" target="_blank" rel="noopener">' + I('folder') + 'Folder</a>' : '')
         + '</div><div class="meta">' + (pk.built_at ? 'Built ' + E(dayOf(pk.built_at)) + (pk.built_by && pk.built_by !== 'automation' ? ' by ' + E(pk.built_by) : '') : '')
         + (pk.as_of ? ' · numbers as of ' + E(pk.as_of) : '') + '</div>';
     }

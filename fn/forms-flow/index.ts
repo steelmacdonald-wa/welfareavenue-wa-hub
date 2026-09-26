@@ -106,12 +106,13 @@ function tDay(iso: string): string { return new Intl.DateTimeFormat('en-CA', { t
 function addDays(day: string, n: number): string { const d = new Date(day + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
 function norm(s: unknown): string { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z\s]/g, ' ').replace(/\s+/g, ' ').trim(); }
 /* a written name to one person: the full name, the first name with the last name or its initial, or a first name only one has */
-function nameMatch(written: string, people: { id: number; names: string[] }[]): number | null {
+function nameMatch(written: string, people: { id: number; names: string[] }[], strict = false): number | null {
   const d = norm(written); if (!d) return null;
-  const exact = people.filter((p) => p.names.some((n) => norm(n) === d));
+  const exact = people.filter((p) => p.names.some((n) => norm(n) === d && (!strict || norm(n).includes(' '))));
   if (exact.length === 1) return exact[0].id;
   if (exact.length > 1) return null;
   const dt = d.split(' ');
+  if (strict && dt.length < 2) return null;
   const hits = people.filter((p) => p.names.some((n) => { const t = norm(n).split(' '); if (!t[0] || t[0] !== dt[0]) return false; if (dt.length === 1) return true; const last = t[t.length - 1], dl = dt[dt.length - 1]; return t.length > 1 && (last === dl || (dl.length === 1 && last[0] === dl)); }));
   return hits.length === 1 ? hits[0].id : null;
 }
@@ -131,6 +132,19 @@ async function summarize(eventLabel: string, answers: { q: string; a: string }[]
   const tu = (body.content || []).find((c: Row) => c.type === 'tool_use');
   const text = tu && tu.input && tu.input.body ? String(tu.input.body).replace(/—/g, ',').trim() : '';
   return { text, model: (body._wa && body._wa.model) || body.model || null };
+}
+
+/* a read past PostgREST's 1,000-row cap, page by page */
+// deno-lint-ignore no-explicit-any
+async function all(q: () => any): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let from = 0; from < 100000; from += 1000) {
+    const { data, error } = await q().range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
 }
 
 /* ---------- the sync ---------- */
@@ -161,8 +175,8 @@ async function sync(onlyId: string | null, dry: boolean) {
       const maxScore = qs.reduce((s, q) => s + q.points, 0) || null;
       const resps: Row[] = []; let pt = '';
       for (let i = 0; i < 20; i++) { const j = await g('https://forms.googleapis.com/v1/forms/' + src.form_id + '/responses?pageSize=5000' + (pt ? '&pageToken=' + pt : '')); resps.push(...(j.responses || [])); pt = j.nextPageToken || ''; if (!pt) break; }
-      const { data: have } = await svc.from('form_responses').select('response_id,done,volunteer_id,member_id,event_id').eq('form_id', src.form_id);
-      const haveMap = new Map<string, Row>(((have || []) as Row[]).map((r) => [r.response_id, r]));
+      const have = await all(() => svc.from('form_responses').select('response_id,done,volunteer_id,member_id,event_id').eq('form_id', src.form_id).order('response_id'));
+      const haveMap = new Map<string, Row>(have.map((r) => [r.response_id, r]));
       const rows: Row[] = [];
       for (const r of resps) {
         const at = r.lastSubmittedTime || r.createTime; if (!at) continue;
@@ -182,7 +196,7 @@ async function sync(onlyId: string | null, dry: boolean) {
         /* the person who took a quiz */
         if (src.kind === 'onboarding_quiz') {
           const em = row.respondent_email || emailIn(pick(ans, /e-?mail/i));
-          row.member_id = (em && byEmail.get(em)) || (row.name ? nameMatch(row.name, people) : null) || null;
+          row.member_id = (em && byEmail.get(em)) || (row.name ? nameMatch(row.name, people, true) : null) || null;
         }
         rows.push(row);
       }
@@ -215,8 +229,7 @@ async function sync(onlyId: string | null, dry: boolean) {
 
 /* the recurrent volunteers form: into the volunteer list */
 async function signups(todo: Row[], src: Row, dry: boolean) {
-  const { data: vp } = await svc.from('volunteer_people').select('id,full_name,emails,phones,roles,last_applied');
-  const list = (vp || []) as Row[];
+  const list = await all(() => svc.from('volunteer_people').select('id,full_name,emails,phones,roles,last_applied').order('id'));
   const out = { updated: 0, created: 0, skipped_old: 0 };
   const yearAgo = new Date(Date.now() - 365 * 86400000).toISOString();
   for (const r of todo) {
@@ -227,7 +240,7 @@ async function signups(todo: Row[], src: Row, dry: boolean) {
     const position = pick(ans, /position|role/i), often = pick(ans, /how often|frequen/i);
     const roles = ROLE.filter(([re]) => re.test(position)).map(([, k]) => k);
     const day = tDay(r.submitted_at);
-    const found = list.find((p) => (email && (p.emails || []).some((e: string) => lower(e) === email)) || (phone && (p.phones || []).some((x: string) => digits(x) === phone)));
+    const found = (email ? list.find((p) => (p.emails || []).some((e: string) => lower(e) === email)) : null) || (phone ? list.find((p) => (p.phones || []).some((x: string) => digits(x) === phone)) : null);
     let done: Row;
     if (found) {
       const patch: Row = {};
@@ -326,7 +339,12 @@ Deno.serve(async (req) => {
     }
     if (action === 'sync') {
       const dry = body.dry === true && who === 'automation';
-      const report = await sync(body.form_id ? String(body.form_id) : null, dry);
+      /* one run at a time: the six-hourly run and Sync now never file the same answers twice */
+      const holder = who + ':' + crypto.randomUUID().slice(0, 8);
+      if (!dry) { const { data: got } = await svc.rpc('forms_flow_lease', { p_seconds: 170, p_holder: holder }); if (got !== true) return json({ ok: true, skipped: 'Another run is filing the answers right now; they will be there in a minute.' }); }
+      let report: Row[] = [];
+      try { report = await sync(body.form_id ? String(body.form_id) : null, dry); }
+      finally { if (!dry) await svc.rpc('forms_flow_release', { p_holder: holder }); }
       const acted = report.some((r) => r.new || r.error || (r.did && Object.values(r.did).some((v) => Number(v) > 0 && !('kept' in r.did && Object.keys(r.did).length === 2 && r.did.written === 0))));
       if (!dry && (acted || who !== 'automation')) await svc.from('change_log').insert({ entity_type: 'forms', entity_id: body.form_id ? String(body.form_id) : 'all', field: 'sync', old_value: null, new_value: JSON.stringify(report).slice(0, 900), changed_by: who === 'automation' ? 'forms-flow' : who });
       return json({ ok: true, dry, report });

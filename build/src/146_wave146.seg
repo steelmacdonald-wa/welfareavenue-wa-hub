@@ -14,6 +14,7 @@
   var TZ = 'America/Toronto';
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function U(u) { u = String(u || '').trim(); return /^https:\/\//i.test(u) ? u : ''; }
   var P = {
     shield: '<path d="M12 3 5 6v5c0 4.4 3 8.3 7 9.5 4-1.2 7-5.1 7-9.5V6z"/><path d="m9 12 2 2 4-4"/>',
     refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
@@ -105,9 +106,9 @@
       + '</div>';
     h += (c.findings || []).map(function (f, i) {
       var lv = LV[f.level] || LV.info, open = S.open[c.id + ':' + f.key];
-      var items = (f.items || []).length ? '<ul>' + f.items.map(function (x) { return '<li>' + (x.url ? '<a href="' + E(x.url) + '" target="_blank" rel="noopener">' + E(x.label) + '</a>' : E(x.label)) + (x.sub ? ' <small>' + E(x.sub) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : '';
+      var items = (f.items || []).length ? '<ul>' + f.items.map(function (x) { return '<li>' + (U(x.url) ? '<a href="' + E(U(x.url)) + '" target="_blank" rel="noopener">' + E(x.label) + '</a>' : E(x.label)) + (x.sub ? ' <small>' + E(x.sub) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : '';
       return '<div class="f' + (open ? ' open' : '') + '"><button type="button" data-w146f="' + E(c.id + ':' + f.key) + '" aria-expanded="' + (open ? 'true' : 'false') + '"><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + P.chev + '</svg><span class="lv" style="color:' + lv[1] + ';background:' + lv[2] + '">' + lv[0] + '</span><span>' + E(f.title) + '</span></button>'
-        + '<div class="body">' + E(f.detail || '') + (f.fix && f.level !== 'ok' ? '<div class="fix"><b>What to do:</b> ' + E(f.fix) + (f.link ? ' <a class="out" href="' + E(f.link) + '" target="_blank" rel="noopener">Open ' + (/admin\.google/.test(f.link) ? 'the Admin console' : 'Drive') + I('out') + '</a>' : '') + '</div>' : '') + items + '</div></div>';
+        + '<div class="body">' + E(f.detail || '') + (f.fix && f.level !== 'ok' ? '<div class="fix"><b>What to do:</b> ' + E(f.fix) + (U(f.link) ? ' <a class="out" href="' + E(U(f.link)) + '" target="_blank" rel="noopener">Open ' + (/admin\.google/.test(f.link) ? 'the Admin console' : 'Drive') + I('out') + '</a>' : '') + '</div>' : '') + items + '</div></div>';
     }).join('');
     if (c.note) h += '<p class="note">Some sources could not be read this time: ' + E(c.note) + '</p>';
     if (S.rows.length > 1) h += '<div class="hist">Earlier checks<table><thead><tr><th>Run</th><th>Without 2-step</th><th>Unused</th><th class="opt">Public files</th><th>To fix</th></tr></thead><tbody>' + S.rows.slice(1, 7).map(function (r) { var x = r.summary || {}; return '<tr><td>' + E(dshort(r.ran_at)) + '</td><td>' + E(x.without_2sv != null ? x.without_2sv : '–') + '</td><td>' + E(x.unused_60 != null ? x.unused_60 : '–') + '</td><td class="opt">' + E(x.public_files != null ? x.public_files : '–') + '</td><td>' + E(x.high || 0) + '</td></tr>'; }).join('') + '</tbody></table></div>';

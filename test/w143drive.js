@@ -64,6 +64,14 @@ const card = f => f.ev(() => {
   ok('no page errors (director)', f.errs.length === 0, f.errs);
   await f.close();
 
+  /* a link that is not a web address is not drawn (the meeting's links can be edited by leaders) */
+  const fxBad = fixture(true); const mb = (fxBad.board_meetings || []).filter(x => x.id === 4)[0]; if (mb) mb.agenda_url = 'javascript:alert(1)';
+  f = await fresh(browser, { who: 'board', hash: '#governance', fixture: fxBad, init: MOCK, wait: 5000 });
+  await f.page.waitForTimeout(900);
+  c = await card(f);
+  ok('a link that is not a web address is left out', c && c.links.length === 3 && !c.links.some(l => /javascript/i.test(l)), c && c.links);
+  await f.close();
+
   /* a team leader who is not on the Executive profile: the card, no buttons */
   f = await fresh(browser, { who: 'leader', hash: '#governance', fixture: fixture(false, 'opsmtl'), init: MOCK, wait: 5000 });
   await f.page.waitForTimeout(900);

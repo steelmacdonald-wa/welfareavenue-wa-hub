@@ -152,7 +152,7 @@ async function gather(meetingId: number): Promise<Row> {
     svc.from('dept_tasks').select('department,due_date,done,confidential,banked_at').eq('done', false).is('banked_at', null),
     svc.from('fund_events').select('title,start_date,end_date,timing,status,raised,target_min,target_max').order('start_date'),
     svc.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle(),
-    svc.from('finance_transactions').select('txn_date,amount').is('duplicate_of', null).gte('txn_date', (cq.fy - 3) + '-10-01').lt('txn_date', fyEnd),
+    allRows(() => svc.from('finance_transactions').select('txn_date,amount').is('duplicate_of', null).gte('txn_date', (cq.fy - 3) + '-10-01').lt('txn_date', fyEnd).order('txn_date')),
     svc.from('finance_statements').select('period_end').not('period_end', 'is', null).order('period_end', { ascending: false }).limit(1)
   ]);
   const name = (id: number) => { const m = (members.data || []).find((x: Row) => String(x.id) === String(id)); return m ? m.name : ''; };
@@ -169,8 +169,8 @@ async function gather(meetingId: number): Promise<Row> {
     const lastQ = gl.filter((x: Row) => x.quarter === pq.label), thisQ = gl.filter((x: Row) => x.quarter === cq.label);
     const ot = openTasks.filter((t: Row) => t.department === k);
     const base = { key: k, label: labels[k].label || k, people: staff.filter((t: Row) => t.department === k).length, updated: labels[k].updated_at ? dayShort(labels[k].updated_at) : '',
-      last_q: { label: pq.label, total: lastQ.length, done: lastQ.filter((x: Row) => DONE.test(String(x.status || ''))).length, risk: lastQ.filter((x: Row) => RISK.test(String(x.status || ''))).map((x: Row) => clip(x.title, 60)) },
-      this_q: { label: cq.label, titles: thisQ.map((x: Row) => clip(x.title, 70)) },
+      last_q: { label: pq.label, total: lastQ.length, done: lastQ.filter((x: Row) => DONE.test(String(x.status || ''))).length, risk: k === 'hr' ? [] : lastQ.filter((x: Row) => RISK.test(String(x.status || ''))).map((x: Row) => clip(safe(String(x.title || ''), 200), 60)).filter(Boolean), risk_n: lastQ.filter((x: Row) => RISK.test(String(x.status || ''))).length },
+      this_q: { label: cq.label, titles: k === 'hr' ? [] : thisQ.map((x: Row) => clip(safe(String(x.title || ''), 200), 70)).filter(Boolean), total: thisQ.length },
       open_tasks: ot.length, overdue: ot.filter((t: Row) => t.due_date && t.due_date < ymd(now)).length };
     if (k === 'hr') return { ...base, progress: '', priorities: [], wins: [], note: 'People matters are for the HR & People committee; this slide shows the counts only.' };
     const pr = Array.isArray(labels[k].priorities) ? labels[k].priorities : [];
@@ -194,15 +194,15 @@ async function gather(meetingId: number): Promise<Row> {
   const byJob: Record<string, Row[]> = {};
   const rank: Record<string, number> = { at_risk: 0, in_progress: 1, todo: 2, watch: 3, standing: 4, done: 5 };
   for (const j of JOBS) byJob[j[0]] = (items.data || []).filter((i: Row) => i.job === j[0]).sort((a: Row, b: Row) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || (a.sort || 0) - (b.sort || 0))
-    .map((i: Row) => ({ title: clip(i.title, 90), status: STATUS[i.status] || i.status, owner: i.owner || '', due: i.due || '' }));
+    .map((i: Row) => ({ title: clip(safe(String(i.title || ''), 200), 90), status: STATUS[i.status] || i.status, owner: i.owner || '', due: i.due || '' })).filter((x: Row) => x.title);
   const committees = (comms.data || []).map((c: Row) => {
     const tp = (touch.data || []).filter((t: Row) => t.committee === c.key);
     const latest = tp[0] ? safe(tp[0].summary || '', 160) : '';
     return { name: c.name, chair: name(c.chair_id), members: (c.member_ids || []).map(name).filter(Boolean), leads: c.internal_leads || [], touchpoints: tp.length, latest };
   });
   const decisions = (decs.data || []).filter((d: Row) => (d.board_only || /board/i.test(String(d.area || ''))) && !d.confidential && (!d.visibility || d.visibility === 'department'))
-    .map((d: Row) => ({ title: clip(d.title, 110), move: clip(d.suggested_move || '', 160), owner: d.owner || '' }));
-  const atRisk = (items.data || []).filter((i: Row) => i.status === 'at_risk').map((i: Row) => clip(i.title, 110));
+    .map((d: Row) => ({ title: clip(safe(String(d.title || ''), 200), 110), move: clip(safe(String(d.suggested_move || ''), 300), 160), owner: d.owner || '' })).filter((d: Row) => d.title);
+  const atRisk = (items.data || []).filter((i: Row) => i.status === 'at_risk').map((i: Row) => clip(safe(String(i.title || ''), 200), 110)).filter(Boolean);
   const yr = String(parts(M.meets_at).y);
   const renewals = directors.filter((m: Row) => m.renewal && String(m.renewal).includes(yr)).map((m: Row) => m.name + ' (' + m.renewal + ')');
   const org = (goals.data || []).filter((x: Row) => x.department === 'org').map((x: Row) => ({ title: clip(x.title, 100), status: x.status || '', progress: x.progress }));
@@ -401,7 +401,7 @@ function deckRequests(c: Row, tag: string): Row[] {
   /* 4. each team */
   for (const t of c.depts) {
     s = d.frame('State of Welfare Avenue', t.label);
-    const lq = t.last_q, goalsLine = lq.total ? lq.done + ' of ' + lq.total + ' goals done in ' + lq.label + (lq.risk.length ? '; behind: ' + lq.risk.slice(0, 2).join('; ') : '') + '.' : 'No goals recorded for ' + lq.label + '.';
+    const lq = t.last_q, goalsLine = lq.total ? lq.done + ' of ' + lq.total + ' goals done in ' + lq.label + (lq.risk.length ? '; behind: ' + lq.risk.slice(0, 2).join('; ') : lq.risk_n ? '; ' + lq.risk_n + ' behind' : '') + '.' : 'No goals recorded for ' + lq.label + '.';
     const left: Run[] = t.key === 'hr'
       ? [{ t: t.note + '\n\n', size: 11 }, { t: t.people + ' people in the team', bold: true, size: 11 }]
       : [{ t: 'Where we are\n', bold: true, color: GREEN, size: 11 }, { t: (t.progress || 'No update in the Hub yet.') + '\n\n', size: 10.5 },
@@ -411,7 +411,7 @@ function deckRequests(c: Row, tag: string): Row[] {
     const pri: string[] = []; let room = 420 - goalsLine.length - (t.this_q.titles.slice(0, 2).join('; ').length);
     for (const x of t.priorities) { if (x.length > room && pri.length) break; pri.push(x); room -= x.length; }
     const right: Run[] = [{ t: 'Goals\n', bold: true, color: GREEN, size: 11 }, { t: goalsLine + '\n', size: 9.5 },
-      { t: t.this_q.titles.length ? t.this_q.label + ': ' + t.this_q.titles.slice(0, 2).join('; ') + '\n\n' : '\n', size: 9.5 },
+      { t: t.this_q.titles.length ? t.this_q.label + ': ' + t.this_q.titles.slice(0, 2).join('; ') + '\n\n' : t.this_q.total ? t.this_q.label + ': ' + t.this_q.total + ' goals\n\n' : '\n', size: 9.5 },
       { t: 'Next\n', bold: true, color: GREEN, size: 11 }, { t: (pri.length ? pri.join('\n') : 'No priorities in the Hub yet.') + '\n\n', size: 9.5, color: pri.length ? INK : MUTED },
       { t: t.open_tasks + ' open tasks' + (t.overdue ? ', ' + t.overdue + ' overdue' : '') + '  ·  ' + t.people + ' people' + (t.updated && t.key !== 'hr' ? '\nTeam update of ' + t.updated : ''), size: 9, color: MUTED }];
     d.put(s, 6, 1.3, 3.5, 3.8, right, { space: 3, fill: TILE });
@@ -457,10 +457,42 @@ function deckRequests(c: Row, tag: string): Row[] {
 }
 
 /* ---------- Drive: the folder, and files in it ---------- */
-async function boardFolder(m: Row): Promise<{ id: string; url: string }> {
+/* a read past PostgREST's 1,000-row cap, page by page */
+// deno-lint-ignore no-explicit-any
+async function allRows(q: () => any): Promise<{ data: Row[]; error: unknown }> {
+  const out: Row[] = [];
+  for (let from = 0; from < 50000; from += 1000) {
+    const { data, error } = await q().range(from, from + 999);
+    if (error) return { data: out, error };
+    out.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return { data: out, error: null };
+}
+let BOARD_DRIVE = '';
+async function boardDrive(): Promise<string> {
+  if (BOARD_DRIVE) return BOARD_DRIVE;
   const drives = await g(DRIVE + '/drives?pageSize=100&q=' + encodeURIComponent("name = 'Board of Directors'"));
   const drive = (drives.drives || [])[0];
   if (!drive) throw new Error('The Board of Directors shared drive is not visible to the Hub');
+  BOARD_DRIVE = drive.id;
+  return BOARD_DRIVE;
+}
+const PACK_FILES: [string, string][] = [['folder', 'application/vnd.google-apps.folder'], ['agenda', 'application/vnd.google-apps.document'], ['notes', 'application/vnd.google-apps.document'], ['deck', 'application/vnd.google-apps.presentation']];
+async function checkPack(pack: Row): Promise<string[]> {
+  const dropped: string[] = [];
+  const driveId = await boardDrive();
+  for (const [k, mime] of PACK_FILES) {
+    const id = pack[k + '_id']; if (!id) continue;
+    let ok = false;
+    try { const f = await g(DRIVE + '/files/' + encodeURIComponent(String(id)) + '?supportsAllDrives=true&fields=id,driveId,mimeType,trashed'); ok = f.driveId === driveId && f.mimeType === mime && !f.trashed; } catch (_) { ok = false; }
+    if (!ok) { dropped.push(k); delete pack[k + '_id']; delete pack[k + '_url']; delete pack[k + '_ok']; }
+  }
+  if (dropped.includes('folder')) for (const k of ['agenda', 'notes', 'deck']) if (pack[k + '_id'] && !dropped.includes(k)) { /* files stay where they are; only a new folder is made */ }
+  return dropped;
+}
+async function boardFolder(m: Row): Promise<{ id: string; url: string }> {
+  const drive = { id: await boardDrive() };
   const year = parts(m.meets_at).y;
   const inDrive = '&corpora=drive&driveId=' + drive.id + '&includeItemsFromAllDrives=true&supportsAllDrives=true';
   const find = async (name: string, parent: string) => {
@@ -486,7 +518,7 @@ async function writeDeck(deckId: string, c: Row) {
   const tag = Date.now().toString(36).slice(-5);
   const reqs = deckRequests(c, tag);
   /* the Hub's own slides go first; on a first build the empty default slide goes, on a refresh the Hub's old slides go */
-  const drop = old.filter((id: string) => fresh || id.startsWith('wagen')).map((id: string) => ({ deleteObject: { objectId: id } }));
+  const drop = old.filter((id: string) => (fresh && old.length === 1) || id.startsWith('wagen')).map((id: string) => ({ deleteObject: { objectId: id } }));
   for (let i = 0; i < reqs.length; i += 400) await g(SLIDES + deckId + ':batchUpdate', 'POST', { requests: reqs.slice(i, i + 400) });
   if (drop.length) await g(SLIDES + deckId + ':batchUpdate', 'POST', { requests: drop });
   return reqs.filter((r) => r.createSlide).length;
@@ -501,6 +533,12 @@ async function build(meetingId: number, who: string, refreshOnly: boolean, rewri
   const c = await gather(meetingId);
   const { data: M } = await svc.from('board_meetings').select('*').eq('id', meetingId).maybeSingle();
   const pack: Row = (M && M.pack) || {};
+  /* the pack's files must be the Hub's own, in the Board of Directors drive; anything else is forgotten, never written to */
+  const dropped = await checkPack(pack);
+  if (dropped.length) {
+    await svc.from('board_meetings').update({ pack }).eq('id', meetingId);
+    await svc.from('change_log').insert({ entity_type: 'board_pack', entity_id: String(meetingId), field: 'pack', old_value: dropped.join(', '), new_value: 'forgotten: not a Hub file in the Board of Directors drive', changed_by: who });
+  }
   if (refreshOnly) {
     if (!pack.deck_id) throw new Error('Build the board pack first');
     const n = await writeDeck(pack.deck_id, c);
