@@ -1,8 +1,9 @@
 /* =====================================================================
    WA v143 the board pack (26/09/26)
    =====================================================================
-   Steel: the Hub writes documents for him, starting with "the quarterly board deck and agenda, filled from department
-   updates and numbers". Under the next board meeting on the Board overview (#governance), a Board pack card:
+   The first of the Google projects Steel approved ("go for all the above", 26/09/26): the board pack from Docs and Slides,
+   the quarterly board deck and agenda filled from the teams' updates and numbers. Under the next board meeting on the Board
+   overview (#governance), a Board pack card:
    - before it is built: what the pack holds, and (admins and the Executive profile) Build the board pack, which asks the
      board-pack edge function to create the agenda, the meeting notes and the deck in the Board of Directors drive;
    - once built: links to the agenda, the notes, the deck and the folder, who built it and the date of its numbers, and

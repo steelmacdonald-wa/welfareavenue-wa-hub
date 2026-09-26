@@ -166,6 +166,8 @@
 140_wave140
 # 143_wave143: the board pack on the Board overview (board-pack edge function: agenda, notes and deck in the Board drive).
 143_wave143
+# 144_wave144: Meet attendance on the team pages, in the HR centre and on the Board overview (meet-attendance edge function).
+144_wave144
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

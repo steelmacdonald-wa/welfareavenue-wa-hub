@@ -1247,6 +1247,23 @@ The plain text of each candidate document for the wave140 mining (Google Docs an
 
 One row per document in the wave140 mining. stage: extract (read the text), screen (Jev: keep, skip or private), mine (an OpenRouter model records events, partners, lessons, resources and facts, each with a quote), check (Jev checks each item against the source), then done, skipped, private or failed. screen holds Jev's answers, result the extraction, checked Jev's check per item; model and cost are the extraction's. Admins read; the service role writes.
 
+### `meet_meetings`
+
+Meet attendance (wave144): one row per team meeting, leadership meeting or board meeting that was scheduled on the hub@ calendar (or in board_meetings) or held on a team's Meet link. id is cal:<calendar instance id>, conf:<conference id> (a call on the team's link with no scheduled meeting) or board:<board_meetings.id>. Counts: expected (invited people, or the active directors), came, team (the team's own roster among the invited), visitors (came without an invitation), guests (not identified: signed out, phone). Written by meet-attendance only.
+
+- `held`: Someone stayed three minutes or more on a call matched to this meeting (meeting notetakers are not counted).
+- `conference_ids`: The Meet conferences (Reports API conference_id) matched to this meeting; a meeting restarted on the same link has two.
+
+### `meet_attendance`
+
+Meet attendance (wave144): one row per expected person (invited, or an active director for a board meeting) and per identified person who came without an invitation. person is the canonical email (aliases folded) or director:<id>. came: three minutes or more on the call. Read by the person themselves, the admins and the Executive profile, the person who runs a team meeting and the team's leader, and for board meetings whoever sees the board.
+
+- `late_min`: Minutes between the scheduled start and the first join, when positive.
+
+### `meet_sync_state`
+
+The last meet-attendance run: when, whether it worked, the window and the counts.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1275,4 +1292,7 @@ Functions:
 - `drive_mine_seed()`: Queues every gold or ore document (not a duplicate, not trashed, a type drive-mine can read) that is not queued yet: Drive files start at extract, Canva designs and social posts (text already there) at mine. Returns how many were added. Access: service role only.
 - `drive_mine_pump(boolean)`: Schedules (true) or removes (false) the cron job wa-drive-mine-pump, six drive-mine workers a minute; drive-mine turns it on at start and off when a run is done, paused or stopped (wave140). Access: service role only.
 - `wa_story_article_refresh()`: Rebuilds hub_knowledge wa-our-story (the story article the assistant reads) from the published everyone rows of wa_history and the year lines in wa_history_years; triggers on both tables call it after every change (wave142). Access: owner only.
+- `wa_leads_team(text)`: True when the signed-in person is a Hub leader for that team (their profile or their roster team).
+- `wa_in_team(text)`: True when the signed-in person is on that team (the roster, or a Hub profile for it).
+- `wa_meet_people_ok(text)`: True when the signed-in person may read everyone's attendance for that meeting.
 
