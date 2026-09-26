@@ -6,7 +6,7 @@
    what's good out of it), and frame it (put it in current or new pages on the hub)."
 
    What the mining found, framed in three new pages under Resources:
-   - Our story (#ourstory): what Welfare Avenue has done since March 2020, year by year, with the
+   - Our story (#ourstory): what Welfare Avenue has done since April 2020, year by year, with the
      milestones at the top; every moment shows where it came from (the document, the post, the words).
      A second tab, Lessons learned (#ourstory/lessons), holds what the team learned, by area.
    - Partners (#partners): every organization WA has worked with (and the ones it approached), with

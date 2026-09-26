@@ -92,7 +92,7 @@
       var OPT = { opt: 1 };
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.ourstory) W.tours.ourstory = { tab: 'ourstory', icon: 'book', hash: '#ourstory', steps: [
-        T('#ourstory > .w118mast', 'Our story', 'What Welfare Avenue has done since March 2020, read from our own documents, posts and designs.'),
+        T('#ourstory > .w118mast', 'Our story', 'What Welfare Avenue has done since April 2020, read from our own documents, posts and designs.'),
         T('#ourstory .w140stats', 'At a glance', 'The years, the moments, the organizations we have worked with and the lessons. The numbers open their page.', OPT),
         T('#ourstory .w140hl', 'Milestones', 'The moments that shaped us. Click one to find it in the timeline.', OPT),
         T('#ourstory .w140bar', 'Find a moment', 'Show one kind of moment or one city, search for a word, or read newest first.', OPT),

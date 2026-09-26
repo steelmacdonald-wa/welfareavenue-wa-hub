@@ -1,5 +1,5 @@
   /* ======================= Our story (#ourstory) ======================= */
-  var BLURB_S = 'What Welfare Avenue has done since March 2020, from our own documents, posts and designs. Every moment shows where it came from.';
+  var BLURB_S = 'What Welfare Avenue has done since April 2020, from our own documents, posts and designs. Every moment shows where it came from.';
   function visibleHist() {
     var lead = isLeaderUI();
     return (S.hist || []).filter(function (h) { return h.status !== 'hidden' || (lead && S.ui.hidden); });

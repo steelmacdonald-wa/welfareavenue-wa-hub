@@ -25,6 +25,8 @@
 //   (gold 0.1, ore 0.35); PDFs up to 16 MB.
 // v2.3: Sheets through the Sheets API again (Steel switched it on, 26/09/26): values as people see them, dates as
 //   dates; the Excel export stays as the fallback.
+// v2.6 (26/09/26): action describe, a one-line Hub description on the important files whose description is empty (their
+//   modified time kept); the second and last kind of write to Drive, metadata only.
 // v2.5 (26/09/26): the Welfare Avenue Hub label on the important files (action labels), and the Google check also asks
 //   for Drive labels and shows the storage limit (which tells the Workspace edition apart).
 // v2.4: Jev straight to OpenRouter (its Decisions API), logged to ai_calls here: calls from one function to another
@@ -39,7 +41,7 @@
 //   drive_mine_state, change_log.
 // Actions: status, inventory, start (queue and run), work, stop, requeue {file_ids, stage}, google_check (which Google APIs
 //   and delegated scopes answer, for building on them), labels {dry, offset} (v2.5: the Welfare Avenue Hub label on the
-//   important files; the only action that writes to Drive, and only label values).
+//   important files) and describe {dry, offset} (v2.6: their description); the only actions that write to Drive, metadata only.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { encodeBase64 } from 'jsr:@std/encoding@1/base64';
 import { unzipSync, strFromU8 } from 'npm:fflate@0.8.2';
@@ -113,17 +115,18 @@ const L_KIND: [string, string][] = [['guide', 'Guide'], ['plan', 'Plan'], ['repo
 const L_TEAM: [string, string][] = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
   ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
 const L_WHY: [string, string][] = [['reuse', 'Reuse it'], ['story', 'Our story']];
-type Important = { file_id: string; title: string; kind: string | null; team: string | null; year: number | null; why: string[] };
+type Important = { file_id: string; title: string; kind: string | null; team: string | null; year: number | null; why: string[]; summary: string; resource_title: string; resource_what: string };
 async function importantFiles(): Promise<Important[]> {
   const [{ data: docs }, { data: hist }] = await Promise.all([
-    svc.from('wa_documents').select('file_id,title,kind,team,year,reusable,source').eq('source', 'shared_drive').limit(5000),
+    svc.from('wa_documents').select('file_id,title,kind,team,year,reusable,source,summary,resource_title,resource_what').eq('source', 'shared_drive').limit(5000),
     svc.from('wa_history').select('sources').eq('highlight', true).eq('status', 'published').limit(500)
   ]);
   const story = new Set<string>();
   for (const h of hist || []) for (const s of ((h as Row).sources as Row[] || [])) if (s && s.file_id) story.add(String(s.file_id));
   return (docs || []).filter((d: Row) => d.reusable || story.has(String(d.file_id))).map((d: Row) => ({
     file_id: String(d.file_id), title: String(d.title || ''), kind: (d.kind as string) || null, team: (d.team as string) || null, year: (d.year as number) || null,
-    why: [d.reusable ? 'reuse' : '', story.has(String(d.file_id)) ? 'story' : ''].filter(Boolean)
+    why: [d.reusable ? 'reuse' : '', story.has(String(d.file_id)) ? 'story' : ''].filter(Boolean),
+    summary: String(d.summary || ''), resource_title: String(d.resource_title || ''), resource_what: String(d.resource_what || '')
   }));
 }
 async function labelsCall(tk: string, path: string, method = 'GET', body?: unknown): Promise<Row> {
@@ -185,6 +188,66 @@ async function applyLabels(dry: boolean, offset: number, who: string): Promise<R
   const more = i < files.length;
   try { await svc.from('change_log').insert({ entity_type: 'drive_labels', entity_id: HUB_LABEL, field: 'applied', old_value: null, new_value: done + ' files labelled, ' + failed + ' failed (' + (offset || 0) + ' to ' + i + ' of ' + files.length + ')', changed_by: who }); } catch (_) { /* audit */ }
   return { ok: true, label: L.id, files: files.length, labelled: done, failed, errors, next: more ? i : null };
+}
+
+/* ---------- a one-line Hub description on the same important files (v2.6; Steel, 26/09/26: yes, "as long as it doesn't cost me
+   too much") ----------
+   Drive labels are not in WA's Workspace edition, and Drive search reads a file's description, so each important file whose
+   description is empty gets one, written from the Document finder's summary (no AI, nothing to pay): the summary, what to reuse,
+   then (Welfare Avenue Hub: kind, team, year). A description someone wrote is never replaced. The file's modified time is set back
+   to what it was, so nothing jumps to the top of anyone's Recent list. {action:'describe', dry:true} lists what it would write. */
+const K_ONE: Record<string, string> = { guide: 'Guide', plan: 'Plan', report: 'Report', 'meeting notes': 'Meeting notes', presentation: 'Presentation', proposal: 'Proposal',
+  letter: 'Letter', newsletter: 'Newsletter', application: 'Application', list: 'List', posts: 'Post or poster', other: 'Document' };
+function plain(s: string): string { return String(s || '').replace(/\s*[\u2014\u2013]\s*/g, ', ').replace(/\s+/g, ' ').trim(); }
+/* the first sentence of a summary (what the file is), not the Hub's notes about what it shows */
+function firstSentence(s: string): string {
+  const re = /([.!?])\s+(?=[A-Z])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const last = s.slice(0, m.index).split(/\s/).pop() || '';
+    if (last.length <= 3 && /^[A-Z]/.test(last)) continue;
+    return s.slice(0, m.index + 1);
+  }
+  return s;
+}
+function describeText(f: Important): string {
+  const team: Record<string, string> = Object.fromEntries(L_TEAM);
+  const bits = [K_ONE[f.kind || 'other'] || 'Document', team[f.team || ''] || '', f.year ? String(f.year) : ''].filter(Boolean).join(', ');
+  let s = firstSentence(plain(f.summary));
+  if (s.length > 280) s = s.slice(0, 280).replace(/\s+\S*$/, '') + '...';
+  if (s && !/[.!?]$/.test(s)) s += '.';
+  const what = plain(f.resource_what).replace(/[.\s]+$/, '');
+  const reuse = f.why.includes('reuse') && what ? ' Reuse it: ' + what.charAt(0).toLowerCase() + what.slice(1) + '.' : '';
+  return (s + reuse + ' (Welfare Avenue Hub: ' + bits + ')').trim().slice(0, 600);
+}
+async function describeFiles(dry: boolean, offset: number, who: string, limit = 0): Promise<Row> {
+  const all = await importantFiles();
+  const files = limit > 0 ? all.slice(0, Math.max(0, offset || 0) + limit) : all;
+  const tk = await tokenFor(SCOPE);
+  const t0 = Date.now();
+  let written = 0, kept = 0, cannot = 0, failed = 0, moved = 0, i = Math.max(0, offset || 0);
+  const errors: string[] = [], sample: string[] = [];
+  for (; i < files.length && Date.now() - t0 < 100000; i++) {
+    const f = files[i], id = encodeURIComponent(f.file_id);
+    try {
+      const r = await fetch(API + '/files/' + id + '?supportsAllDrives=true&fields=description,modifiedTime,trashed,capabilities(canEdit)', { headers: { Authorization: 'Bearer ' + tk } });
+      if (!r.ok) { failed++; if (errors.length < 8) errors.push(f.title.slice(0, 60) + ': read ' + r.status); continue; }
+      const m = await r.json();
+      if (m.trashed) { cannot++; continue; }
+      if (String(m.description || '').trim()) { kept++; continue; }
+      if (!m.capabilities?.canEdit) { cannot++; continue; }
+      const text = describeText(f);
+      if (dry) { written++; if (sample.length < 6) sample.push(f.title + ': ' + text); continue; }
+      const u = await fetch(API + '/files/' + id + '?supportsAllDrives=true&fields=id,modifiedTime', { method: 'PATCH', headers: { Authorization: 'Bearer ' + tk, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: text, modifiedTime: m.modifiedTime }) });
+      if (!u.ok) { failed++; if (errors.length < 8) errors.push(f.title.slice(0, 60) + ': write ' + u.status + ' ' + (await u.text()).replace(/\s+/g, ' ').slice(0, 120)); continue; }
+      const j = await u.json();
+      written++; if (j.modifiedTime && m.modifiedTime && new Date(j.modifiedTime).getTime() !== new Date(m.modifiedTime).getTime()) moved++;
+    } catch (e) { failed++; if (errors.length < 8) errors.push(f.title.slice(0, 60) + ': ' + String((e as Error).message || e).slice(0, 120)); }
+  }
+  const next = i < files.length ? i : null;
+  if (!dry) { try { await svc.from('change_log').insert({ entity_type: 'drive_describe', entity_id: 'important files', field: 'description', old_value: null, new_value: written + ' written, ' + kept + ' already described, ' + cannot + ' not editable, ' + failed + ' failed (' + (offset || 0) + ' to ' + i + ' of ' + files.length + ')', changed_by: who }); } catch (_) { /* audit */ } }
+  return { ok: true, dry, files: files.length, written, kept, not_editable: cannot, failed, modified_time_changed: moved, errors, sample, next };
 }
 
 /* a delegated token for any scope, for the Google API check (wave140) */
@@ -892,6 +955,9 @@ Deno.serve(async (req: Request) => {
     const rows = await googleCheck();
     try { await svc.from('change_log').insert({ entity_type: 'google', entity_id: 'api_check', field: 'ran', old_value: null, new_value: rows.map(r => r.api + ': ' + (r.ok ? 'ok' : r.ok === null ? 'untested' : 'no')).join(', ').slice(0, 480), changed_by: who }); } catch (_) { /* audit */ }
     return json({ ok: true, checks: rows });
+  }
+  if (action === 'describe') {
+    return json(await describeFiles(body.dry === true, Number(body.offset) || 0, who, Number(body.limit) || 0));
   }
   if (action === 'labels') {
     return json(await applyLabels(body.dry === true, Number(body.offset) || 0, who));
