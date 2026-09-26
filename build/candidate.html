@@ -2424,6 +2424,8 @@ async function startApp() {
     labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance' },
     short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising & Finances', hr: 'HR', board: 'Board' }
   };
+  /* wave137: the executive team (the co-executive directors) has a name but no team page: it is not in order or pages */
+  window.WA_TEAMS.labels.exec = 'Executive team'; window.WA_TEAMS.short.exec = 'Executive';
   try {
     if (DEPT_ORDER.indexOf(PD) < 0) DEPT_ORDER.splice(DEPT_ORDER.indexOf('opsmtl') + 1, 0, PD);
     DEPT_LABEL.opsmtl = 'Operations Montreal';
@@ -2431,6 +2433,7 @@ async function startApp() {
     DEPT_LABEL.fundraising = 'Fundraising & Finances';
     DEPT_LABEL[PD] = PD_LABEL;
     DEPT_COLOR[PD] = PD_COLOR;
+    DEPT_LABEL.exec = 'Executive team'; DEPT_COLOR.exec = '#103F39'; /* wave137 */
     document.documentElement.style.setProperty('--c-progdev', PD_COLOR);
   } catch (e) { /* base constants missing: nothing to extend */ }
   try {

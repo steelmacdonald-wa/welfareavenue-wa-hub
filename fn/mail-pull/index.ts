@@ -232,10 +232,10 @@ function rulesClassify(m: { from_email: string; subject: string; body_text: stri
   const attNames = m.attachments.map(a => a.filename.toLowerCase()).join(' ');
   let department: string | null = null;
   const senderRow = roster.find(r => r.email && r.email.toLowerCase() === m.from_email);
-  if (senderRow && senderRow.department) department = senderRow.department;
+  if (senderRow && senderRow.department && DEPT_KEYS.includes(senderRow.department)) department = senderRow.department; /* wave137: exec (the co-executive directors) is not a team */
   if (!department) {
     const addrs = (m.to_list + ',' + m.cc_list).toLowerCase();
-    const hit = roster.find(r => r.email && addrs.includes(r.email.toLowerCase()) && r.department);
+    const hit = roster.find(r => r.email && addrs.includes(r.email.toLowerCase()) && r.department && DEPT_KEYS.includes(r.department));
     if (hit) department = hit.department;
   }
   const kw: Array<[string, RegExp]> = [
