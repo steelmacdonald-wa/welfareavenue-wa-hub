@@ -61,6 +61,8 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   await page.goto("http://wahub.test/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => { const g = document.getElementById("gate"); return g && g.style.display === "none"; }, null, { timeout: 20000 });
   await page.waitForTimeout(1500);
+  /* wave131: the old People and access table lives behind the classic view */
+  await page.evaluate(() => { document.body.classList.add('w131classic'); });
 
   /* stub hub-invite in the page: record calls, answer like v2 */
   await page.evaluate(() => {
@@ -89,7 +91,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
     return { card: !!card, chips, rows, removed, statuses, classicHidden: (document.getElementById("w40body") || {}).style ? document.getElementById("w40body").style.display === 'none' : null, ar: !!document.getElementById("w110ar") };
   });
 
-  await page.evaluate(() => { location.hash = "#adminpanel"; });
+  await page.evaluate(() => { location.hash = "#adminpanel/people"; });
   await page.waitForTimeout(1500);
   out.admin = await state();
   await page.screenshot({ path: path.join(shots, TAG + "_1_admin.png") });

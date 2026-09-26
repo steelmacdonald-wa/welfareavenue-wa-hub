@@ -48892,6 +48892,1449 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w130 = { paint: paint, deny: function () { return DENY; }, off: function () { return OFF.filter(function (x) { return x.isConnected; }).map(function (x) { return x.getAttribute('data-w130off') + ' ' + x.tagName + ' ' + String(x.textContent || '').trim().slice(0, 40); }); }, boardOk: boardOk };
 })();
 /* =====================================================================
+   WA v131 People and access, one place (26/09/26)
+   =====================================================================
+   Steel: "In the admin panel 'People and access' and 'access profiles'
+   need to make more sense. Please review, I need setting up and managing
+   profiles to be more seamless."
+
+   What was confusing: two sections for one job; a wide table with a
+   classic role (admin, leader, member, viewer) and an access profile side
+   by side; invites that set a classic role, with the profile picked
+   somewhere else; hand-picked pages behind a link; the requests in a
+   third card; a comparison table in a box with its own scroll.
+
+   Now one section, Admin > People and access, with three tabs:
+   - People: what needs doing first (access requests, people without a
+     profile, people not invited, missing emails, inactive people who
+     can still sign in), then everyone by team: their sign-in status and
+     their profile. Click anyone for their sheet: pick the profile (the
+     team's own comes first, with a Lead switch), see the pages it opens
+     and what changes, invite, resend, copy a sign-in link, add an email,
+     remove. Invite someone (or a whole list) with the profile chosen up
+     front, from the team.
+   - Profiles: the nine profiles as cards; open one to set its pages
+     (Everyone, Leads, Nobody), its words and see who has it; new pages
+     to decide; every profile compared, full height; the automatic
+     profile for new people.
+   - Requests: grant a page (on top of the profile), the lead option or
+     Admin in one click, or decline.
+   The role is never picked by hand any more: it follows the profile
+   (team profile = member, with Lead = leader; Executive = leader; Board
+   member = viewer; Admin = admin). The classic view (the old table, the
+   roles table and the hand-picked pages) stays one link away.
+   Data: hub_roles, team_members, wa_hub_logins(), hub_access_profiles,
+   hub_access_settings, wa_access_requests; actions through hub-invite
+   (invite, bulk_invite, link, set_email, remove). No schema change.
+   ===================================================================== */
+(function () {
+  if (window.__wa131) return; window.__wa131 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var TEAMS = (window.WA_TEAMS && window.WA_TEAMS.order) || ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+  var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
+  var GROUPS = [
+    ['Everyday', ['mypage', 'calendar', 'requests', 'overview', 'dashboard', 'create', 'photos', 'brain', 'importantinfo']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
+    ['Board', ['governance', 'committees', 'board']],
+    ['Meetings', ['transcripts', 'agendas', 'hubmail']],
+    ['People', ['orgchart', 'training']],
+    ['More', ['activity', 'adminpanel']]
+  ];
+  var LABEL = {
+    mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
+    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment',
+    opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
+    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
+    governance: 'Board overview', committees: 'Committees', board: 'Board team page',
+    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Training academy',
+    activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
+  };
+  var LOCK = {
+    finances: 'The ledger, budgets and statements follow the profile in the database, not just the menu.',
+    governance: 'Board data follows the profile in the database. Directors always see it.',
+    committees: 'Board data follows the profile in the database. Directors always see it.',
+    adminpanel: 'Only admins can change access, whatever the menu shows.',
+    hrcentre: 'Everyone\u2019s time off, discipline and policy sign-offs stay with the HR access list.',
+    agendas: 'Each agenda is visible to the person who made it and the people invited.',
+    transcripts: 'Private and leadership transcripts stay limited, whatever the page access.'
+  };
+  var P = {
+    x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    chev: '<path d="m9 5 7 7-7 7"/>', lock: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    shield: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    key: '<circle cx="8" cy="15" r="3.5"/><path d="m10.5 12.5 8-8M16 7l2.5 2.5M14 9l2 2"/>',
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    alert: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    inbox: '<path d="M3.5 13.5 6 5.5h12l2.5 8v5h-17z"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5"/>', grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>', out: '<path d="M14 4.5h5.5v15H14M10 8l-4 4 4 4M6 12h10"/>',
+    user: '<circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.9-3.8 3.7-6 7-6s6.1 2.2 7 6"/>', list: '<path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.5M4.5 12h.5M4.5 17.5h.5"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/>'
+  };
+  function I(n, cls) { return '<svg class="w131i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function listJoin(a) { a = (a || []).filter(Boolean); if (a.length <= 1) return a.join(''); return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+  function initials(n) { var p = String(n || '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function nameFromEmail(em) { return String(em || '').split('@')[0].split(/[._-]+/).filter(Boolean).map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1); }).join(' '); }
+  function ago(ts) {
+    if (!ts) return '';
+    var d = new Date(ts).getTime(); if (isNaN(d)) return '';
+    var s = Math.max(0, (Date.now() - d) / 1000);
+    if (s < 3600) return 'just now';
+    if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    var days = Math.round(s / 86400);
+    if (days === 1) return 'yesterday';
+    if (days < 45) return days + ' days ago';
+    return new Date(d).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  function myEmail() { try { return lower((USER && USER.email) || ''); } catch (e) { return ''; } }
+  function actor() { try { return (typeof who === 'function' && who()) || myEmail(); } catch (e) { return myEmail(); } }
+  function amAdmin() { try { return FOUNDERS.indexOf(myEmail()) >= 0 || !!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function teamLabel(d) { try { return (window.WA_TEAMS && window.WA_TEAMS.labels && window.WA_TEAMS.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function teamColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || GREEN; } catch (e) { return GREEN; } }
+  function labelOf(t) { return LABEL[t] || (function () { try { var b = document.querySelector('#tabBar .tab[data-tab="' + t + '"]'); return b ? String(b.textContent || '').trim() : t; } catch (e) { return t; } })(); }
+  async function logChange(type, id, field, oldV, newV) {
+    try { await db.from('change_log').insert({ entity_type: type, entity_id: String(id), field: field, old_value: oldV == null ? null : String(oldV).slice(0, 500), new_value: newV == null ? null : String(newV).slice(0, 500), changed_by: actor() }); } catch (e) { /* the audit trail is best effort */ }
+  }
+  async function invoke(body) {
+    var r = await db.functions.invoke('hub-invite', { body: body });
+    if (r && r.error) {
+      var msg = '';
+      try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ }
+      throw new Error(msg || r.error.message || 'failed');
+    }
+    if (!r || !r.data) throw new Error('no reply from the Hub');
+    if (r.data.error) throw new Error(r.data.error);
+    return r.data;
+  }
+  function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text).then(function () { return true; }, function () { return fallbackCopy(text); });
+    } catch (e) { /* fall through */ }
+    return Promise.resolve(fallbackCopy(text));
+  }
+  function fallbackCopy(text) {
+    try { var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select(); var ok = document.execCommand('copy'); ta.remove(); return !!ok; } catch (e) { return false; }
+  }
+  /* the same words as wave113's message, so both views send one message */
+  function inviteMessage(name) {
+    return 'Hi ' + (first(name) || 'there') + ', you have been added to the Welfare Avenue Hub, the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves.\n\nSign in with your Welfare Avenue Google account at https://wa-exec-dashboard.netlify.app/\n\nThe 60 second tour starts on your first visit, and a short getting-started checklist on your home page walks you through the rest.';
+  }
+
+  /* ---------- styles ---------- */
+  var css = ''
+    + '#w131card,#w131sheet{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '#w131card{margin:0 0 18px;}'
+    + '.w131i{width:17px;height:17px;flex:0 0 auto;display:inline-block;vertical-align:middle;}'
+    + '.w131btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;font-family:' + BODY + ';font-size:13.5px;font-weight:700;background:' + GREEN + ';color:' + CREAM + ' !important;border:1px solid ' + GREEN + ';border-radius:11px;padding:9px 15px;cursor:pointer;text-decoration:none !important;line-height:1.15;white-space:nowrap;}'
+    + '.w131btn:hover{box-shadow:0 6px 16px rgba(16,63,57,.2);}'
+    + '.w131btn[disabled],.w131btn.off{opacity:.5;cursor:default;box-shadow:none;pointer-events:none;}'
+    + '.w131btn.ghost{background:transparent;color:' + GREEN + ' !important;border-color:rgba(16,63,57,.22);}'
+    + '.w131btn.ghost:hover{background:rgba(16,63,57,.06);box-shadow:none;}'
+    + '.w131btn.gold{background:' + GOLD + ';border-color:' + GOLD + ';color:' + INK + ' !important;}'
+    + '.w131btn.danger{background:transparent;color:' + FLAG + ' !important;border-color:rgba(179,64,47,.4);}'
+    + '.w131btn.danger:hover{background:rgba(179,64,47,.07);box-shadow:none;}'
+    + '.w131btn.danger.solid{background:' + FLAG + ';color:' + CREAM + ' !important;border-color:' + FLAG + ';}'
+    + '.w131btn.sm{font-size:12.5px;padding:7px 11px;border-radius:9px;}'
+    + '.w131lnk{color:' + GREEN + ';font-weight:700;cursor:pointer;text-decoration:none;background:none;border:none;padding:0;font:inherit;font-size:inherit;}'
+    + '.w131lnk:hover{text-decoration:underline;}'
+    + '.w131mut{color:var(--wa-muted,#797773);}'
+    + '.w131box{background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.07);border-radius:18px;box-shadow:' + SH1 + ';padding:16px 18px;min-width:0;}'
+    /* the tabs */
+    + '.w131top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;}'
+    + '.w131tabs{display:flex;gap:4px;padding:4px;background:rgba(16,63,57,.06);border-radius:14px;flex-wrap:wrap;}'
+    + '.w131tabs a{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:' + GREEN + ';padding:8px 14px;border-radius:10px;cursor:pointer;text-decoration:none;line-height:1.2;}'
+    + '.w131tabs a:hover{background:rgba(16,63,57,.07);}'
+    + '.w131tabs a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w131tabs a b{font-size:11.5px;font-weight:700;background:rgba(16,63,57,.1);border-radius:999px;padding:1px 8px;}'
+    + '.w131tabs a.on b{background:rgba(255,250,242,.18);}'
+    + '.w131tabs a b.hot{background:' + GOLD + ';color:' + INK + ';}'
+    + '.w131top .sp{flex:1;}'
+    /* what needs doing */
+    + '.w131todo{display:flex;flex-direction:column;gap:0;margin:0 0 16px;padding:6px 0;}'
+    + '.w131todo .hd{display:flex;align-items:center;gap:8px;padding:6px 18px 8px;font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--wa-muted,#797773);}'
+    + '.w131do{display:flex;align-items:center;gap:12px;padding:10px 18px;border-top:1px solid rgba(16,63,57,.06);}'
+    + '.w131do .ic{flex:none;width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    + '.w131do.warn .ic{background:rgba(220,165,39,.2);color:#6b4d05;}'
+    + '.w131do.risk .ic{background:rgba(179,64,47,.12);color:' + FLAG + ';}'
+    + '.w131do .tx{flex:1;min-width:0;font-size:13.5px;line-height:1.45;}'
+    + '.w131do .tx small{display:block;font-size:12px;color:var(--wa-muted,#797773);margin-top:2px;}'
+    + '.w131do .ac{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}'
+    + '.w131alldone{display:flex;align-items:center;gap:10px;font-size:13.5px;color:' + GREEN + ';padding:12px 18px;margin:0 0 16px;}'
+    /* filters */
+    + '.w131bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px;}'
+    + '.w131q{position:relative;flex:1 1 240px;min-width:0;max-width:420px;}'
+    + '.w131q .w131i{position:absolute;left:11px;top:50%;margin-top:-8px;color:var(--wa-muted,#797773);}'
+    + '#w131card .w131q input{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:13.5px;padding:9px 12px 9px 36px !important;border:1px solid rgba(16,63,57,.16);border-radius:11px;background:var(--wa-card,#FFFAF2);}'
+    + '#w131card .w131q .w131i{z-index:1;pointer-events:none;}'
+    + '.w131bar select{font-family:' + BODY + ';font-size:13px;padding:8px 10px;border:1px solid rgba(16,63,57,.16);border-radius:11px;background:var(--wa-card,#FFFAF2);max-width:100%;}'
+    + '.w131chips{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;}'
+    + '.w131chips a{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:' + GREEN + ';background:rgba(16,63,57,.06);border:1px solid transparent;border-radius:999px;padding:6px 12px;cursor:pointer;text-decoration:none;}'
+    + '.w131chips a b{font-size:11px;opacity:.75;}'
+    + '.w131chips a:hover{border-color:rgba(16,63,57,.25);}'
+    + '.w131chips a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    /* the people, by team */
+    + '.w131team{padding:4px 0 6px;margin:0 0 14px;}'
+    + '.w131team > .th{display:flex;align-items:center;gap:10px;padding:10px 18px 8px;}'
+    + '.w131team > .th i{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none;}'
+    + '.w131team > .th h3{font-family:' + HEAD + ';font-size:19px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;margin:0;color:' + INK + ';line-height:1.1;}'
+    + '.w131team > .th h3::after{display:none !important;}'
+    + '.w131team > .th .n{font-size:12px;font-weight:700;color:var(--wa-muted,#797773);}'
+    + '.w131team > .th .sp{flex:1;}'
+    + '.w131p{display:grid;grid-template-columns:40px minmax(0,1.4fr) minmax(0,1fr) minmax(0,1.1fr) 20px;gap:12px;align-items:center;padding:10px 18px;border-top:1px solid rgba(16,63,57,.06);cursor:pointer;text-align:left;width:100%;background:none;border-left:none;border-right:none;border-bottom:none;font:inherit;color:inherit;}'
+    + '.w131p:hover,.w131p:focus-visible{background:rgba(16,63,57,.035);outline:none;}'
+    + '.w131av{width:36px;height:36px;border-radius:50%;background:var(--c,' + GREEN + ');color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;letter-spacing:.3px;overflow:hidden;flex:none;}'
+    + '.w131av img{width:100%;height:100%;object-fit:cover;}'
+    + '.w131p .nm{min-width:0;}'
+    + '.w131p .nm b{display:block;font-size:14px;font-weight:700;color:' + INK + ';overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.w131p .nm span{display:block;font-size:12px;color:var(--wa-muted,#797773);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.w131p .chv{color:var(--wa-muted,#797773);}'
+    + '.w131st{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:' + INK + ';min-width:0;}'
+    + '.w131st i{width:8px;height:8px;border-radius:50%;background:#9aa39f;flex:none;}'
+    + '.w131st.active i{background:' + TEAL + ';}'
+    + '.w131st.invited i{background:' + GOLD + ';}'
+    + '.w131st.notinvited i{background:#7d8fb3;}'
+    + '.w131st.removed i{background:' + FLAG + ';}'
+    + '.w131st small{display:block;font-size:11.5px;font-weight:500;color:var(--wa-muted,#797773);}'
+    + '.w131chip{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:' + INK + ';background:rgba(16,63,57,.05);border-radius:999px;padding:5px 11px;max-width:100%;min-width:0;}'
+    + '.w131chip i{width:9px;height:9px;border-radius:3px;background:var(--c,' + GREEN + ');flex:none;}'
+    + '.w131chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.w131chip.none{background:transparent;border:1px dashed rgba(16,63,57,.25);color:var(--wa-muted,#797773);}'
+    + '.w131chip.hand{background:rgba(220,165,39,.16);}'
+    + '.w131chip.gone{background:rgba(179,64,47,.08);color:' + FLAG + ';}'
+    + '.w131empty{font-size:13.5px;color:var(--wa-muted,#797773);padding:14px 18px;margin:0;line-height:1.5;}'
+    + '.w131foot{font-size:12.5px;color:var(--wa-muted,#797773);margin:6px 2px 0;line-height:1.5;}'
+    /* the sheet */
+    + '#w131sheet{position:fixed;inset:0;z-index:120;display:none;}'
+    + '#w131sheet.on{display:block;}'
+    + '#w131sheet .bk{position:absolute;inset:0;background:rgba(16,63,57,.32);}'
+    + '#w131sheet .pane{position:absolute;top:0;right:0;bottom:0;width:min(600px,100vw);background:' + CREAM + ';box-shadow:-24px 0 60px rgba(16,63,57,.22);display:flex;flex-direction:column;animation:w131in .28s cubic-bezier(.16,1,.3,1);}'
+    + '@keyframes w131in{from{transform:translateX(40px);opacity:.4;}to{transform:none;opacity:1;}}'
+    + '@media (prefers-reduced-motion:reduce){#w131sheet .pane{animation:none;}}'
+    + '#w131sheet .ph{display:flex;align-items:flex-start;gap:12px;padding:18px 20px 14px;border-bottom:1px solid rgba(16,63,57,.08);}'
+    + '#w131sheet .ph .kk{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--wa-muted,#797773);margin:0 0 4px;}'
+    + '#w131sheet .ph h2{font-family:' + HEAD + ';font-size:28px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1.05;}'
+    + '#w131sheet .ph h2::after{display:none !important;}'
+    + '#w131sheet .ph .sub{font-size:13px;color:var(--wa-muted,#797773);margin-top:4px;word-break:break-word;}'
+    + '#w131sheet .ph .sp{flex:1;}'
+    + '#w131sheet .xb{flex:none;width:38px;height:38px;border-radius:10px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';cursor:pointer;display:flex;align-items:center;justify-content:center;}'
+    + '#w131sheet .xb:hover{background:rgba(16,63,57,.13);}'
+    + '#w131sheet .bd{flex:1;overflow:auto;padding:16px 20px 24px;display:flex;flex-direction:column;gap:18px;}'
+    + '#w131sheet .ft{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 20px calc(14px + env(safe-area-inset-bottom));border-top:1px solid rgba(16,63,57,.08);background:var(--wa-card,#FFFAF2);}'
+    + '#w131sheet .ft .sp{flex:1;}'
+    + '#w131sheet h4{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--wa-muted,#797773);margin:0 0 8px;}'
+    + '#w131sheet .sec{background:var(--wa-card,#FFFAF2);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;}'
+    + '#w131sheet .sec p{font-size:13.5px;line-height:1.5;margin:0 0 8px;}'
+    + '#w131sheet .sec p:last-child{margin-bottom:0;}'
+    + '#w131sheet .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
+    + '#w131sheet label.f{display:block;font-size:12.5px;font-weight:600;color:' + INK + ';margin:0 0 10px;}'
+    + '#w131sheet label.f input,#w131sheet label.f select,#w131sheet label.f textarea{display:block;width:100%;box-sizing:border-box;margin-top:5px;font-family:' + BODY + ';font-size:14px;padding:9px 11px;border:1px solid rgba(16,63,57,.18);border-radius:10px;background:#FFFAF2;}'
+    + '#w131sheet label.f textarea{min-height:110px;resize:vertical;}'
+    + '#w131sheet .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}'
+    + '#w131sheet label.ck{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;line-height:1.45;cursor:pointer;}'
+    + '#w131sheet label.ck input{width:18px;height:18px;margin:1px 0 0;accent-color:' + GREEN + ';flex:none;}'
+    + '#w131sheet .err{font-size:12.5px;color:' + FLAG + ';min-height:0;}'
+    + '#w131sheet .err:empty{display:none;}'
+    + '#w131sheet .note{font-size:12.5px;line-height:1.5;color:#5c5a56;background:rgba(220,165,39,.12);border-radius:12px;padding:10px 12px;}'
+    + '#w131sheet .res{font-size:13.5px;line-height:1.6;}'
+    + '#w131sheet .res b.ok{color:' + TEAL + ';}#w131sheet .res b.no{color:#8a5a12;}'
+    + '#w131sheet textarea.msg{width:100%;box-sizing:border-box;min-height:120px;font-family:' + BODY + ';font-size:13px;padding:10px;border:1px solid rgba(16,63,57,.16);border-radius:10px;background:#FFFAF2;}'
+    /* the profile picker */
+    + '.w131pick{display:grid;grid-template-columns:1fr 1fr;gap:8px;}'
+    + '.w131pick .gl{grid-column:1/-1;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted,#797773);margin:6px 0 0;}'
+    + '.w131opt{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid rgba(16,63,57,.12);border-radius:12px;background:#FFFAF2;cursor:pointer;text-align:left;font:inherit;color:inherit;min-width:0;}'
+    + '.w131opt:hover{border-color:rgba(16,63,57,.3);}'
+    + '.w131opt i{width:12px;height:12px;border-radius:4px;background:var(--c,' + GREEN + ');flex:none;}'
+    + '.w131opt span{flex:1;min-width:0;font-size:13.5px;font-weight:600;line-height:1.25;}'
+    + '.w131opt small{display:block;font-size:11.5px;font-weight:500;color:var(--wa-muted,#797773);}'
+    + '.w131opt em{font-style:normal;font-size:10.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#6b4d05;background:rgba(220,165,39,.22);border-radius:999px;padding:2px 7px;flex:none;}'
+    + '.w131opt.on{border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}'
+    + '.w131opt.on::after{content:"";width:18px;height:18px;border-radius:50%;background:' + GREEN + ' url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27m6 12.5 4 4L18 8.5%27 fill=%27none%27 stroke=%27%23FFFAF2%27 stroke-width=%272.6%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E") center/14px no-repeat;flex:none;}'
+    + '.w131opt[disabled]{opacity:.45;cursor:not-allowed;}'
+    + '.w131lead{display:flex;align-items:flex-start;gap:12px;margin-top:10px;padding:12px 14px;border-radius:12px;background:rgba(16,63,57,.05);}'
+    + '.w131sw{position:relative;flex:none;width:42px;height:24px;border-radius:999px;background:rgba(16,63,57,.22);border:none;cursor:pointer;transition:background .18s ease;padding:0;}'
+    + '.w131sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#FFFAF2;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s ease;}'
+    + '.w131sw.on{background:' + GREEN + ';}'
+    + '.w131sw.on::after{transform:translateX(18px);}'
+    + '.w131lead b{display:block;font-size:13.5px;}'
+    + '.w131lead span{display:block;font-size:12.5px;color:var(--wa-muted,#797773);line-height:1.45;margin-top:2px;}'
+    /* pages */
+    + '.w131grp{margin:0 0 10px;}'
+    + '.w131grp:last-child{margin-bottom:0;}'
+    + '.w131grp small{display:block;font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted,#797773);margin:0 0 5px;}'
+    + '.w131tags{display:flex;flex-wrap:wrap;gap:5px;}'
+    + '.w131tags span{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;background:rgba(16,63,57,.07);color:' + GREEN + ';border-radius:8px;padding:4px 8px;}'
+    + '.w131tags span .w131i{width:12px;height:12px;}'
+    + '.w131tags span.off{background:transparent;border:1px dashed rgba(16,63,57,.2);color:#9a9893;font-weight:500;}'
+    + '.w131tags span.new{background:rgba(42,140,122,.16);color:#1d6b5d;}'
+    + '.w131tags span.gone{background:rgba(179,64,47,.1);color:' + FLAG + ';text-decoration:line-through;text-decoration-color:rgba(179,64,47,.5);}'
+    + '.w131diff{font-size:13px;line-height:1.5;}'
+    + '.w131diff .g{color:#1d6b5d;font-weight:600;}.w131diff .l{color:' + FLAG + ';font-weight:600;}'
+    /* profiles tab */
+    + '.w131intro{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 16px;}'
+    + '.w131intro p{flex:1 1 380px;margin:0;font-size:13.5px;line-height:1.55;}'
+    + '.w131intro label{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;cursor:pointer;}'
+    + '.w131pgrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 20px;}'
+    + '.w131pc{display:flex;flex-direction:column;padding:0;overflow:hidden;cursor:pointer;text-align:left;font:inherit;color:inherit;}'
+    + '.w131pc:hover{box-shadow:0 2px 4px rgba(16,63,57,.06),0 14px 30px rgba(16,63,57,.1);}'
+    + '.w131pc .bar{height:5px;background:var(--c);}'
+    + '.w131pc .in{padding:14px 16px;display:flex;flex-direction:column;gap:8px;flex:1;}'
+    + '.w131pc .hd{display:flex;align-items:center;gap:8px;}'
+    + '.w131pc h3{font-family:' + HEAD + ';font-size:22px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + INK + ';line-height:1;flex:1;}'
+    + '.w131pc h3::after{display:none !important;}'
+    + '.w131pc p{font-size:12.5px;line-height:1.5;color:#5c5a56;margin:0;}'
+    + '.w131pc .nums{display:flex;gap:6px;flex-wrap:wrap;margin-top:auto;}'
+    + '.w131pc .nums span{font-size:12px;font-weight:600;background:rgba(16,63,57,.06);border-radius:9px;padding:4px 9px;color:' + GREEN + ';}'
+    + '.w131tier{font-size:10px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;border-radius:999px;padding:3px 8px;white-space:nowrap;background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w131tier.admin{background:' + INK + ';color:' + CREAM + ';}.w131tier.exec{background:rgba(220,165,39,.24);color:#6b4d05;}.w131tier.board{background:rgba(74,79,87,.12);color:#3a3f46;}'
+    + '.w131sec{display:flex;align-items:flex-end;gap:12px;margin:22px 0 10px;flex-wrap:wrap;}'
+    + '.w131sec h2{font-family:' + HEAD + ';font-size:24px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin:0;color:' + GREEN + ';line-height:1;}'
+    + '.w131sec h2::after{display:none !important;}'
+    + '.w131sec span{font-size:13px;color:var(--wa-muted,#797773);max-width:760px;line-height:1.45;}'
+    + '.w131mx{overflow-x:auto;border:1px solid rgba(16,63,57,.08);border-radius:16px;background:var(--wa-card,#FFFAF2);box-shadow:' + SH1 + ';}'
+    + '.w131mx table{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px;}'
+    + '.w131mx th,.w131mx td{padding:7px 8px;border-bottom:1px solid rgba(16,63,57,.06);text-align:center;white-space:nowrap;}'
+    + '.w131mx thead th{position:sticky;top:0;background:var(--wa-card,#FFFAF2);z-index:2;font-size:11px;font-weight:700;letter-spacing:.3px;color:' + INK + ';}'
+    + '.w131mx thead th i{display:block;width:22px;height:4px;border-radius:2px;background:var(--c);margin:0 auto 5px;}'
+    + '.w131mx .pg{text-align:left;position:sticky;left:0;background:var(--wa-card,#FFFAF2);z-index:1;min-width:190px;}'
+    + '.w131mx thead .pg{z-index:3;}'
+    + '.w131mx tr.gp td{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted,#797773);background:rgba(16,63,57,.035);text-align:left;}'
+    + '.w131mx .all{display:inline-block;width:14px;height:14px;border-radius:50%;background:' + GREEN + ';}'
+    + '.w131mx .lead{display:inline-block;font-size:10.5px;font-weight:700;color:#6b4d05;background:rgba(220,165,39,.24);border-radius:999px;padding:2px 7px;}'
+    + '.w131mx .none{display:inline-block;width:12px;height:2px;background:rgba(16,63,57,.2);vertical-align:middle;}'
+    + '.w131mx .und{font-weight:700;color:#8a5a0b;}'
+    + '.w131mx .lk{color:var(--wa-muted,#797773);margin-left:4px;}'
+    + '.w131mx .lk .w131i{width:12px;height:12px;}'
+    + '.w131phone{display:none;}'
+    /* the page editor */
+    + '.w131ed{display:flex;flex-direction:column;}'
+    + '.w131ed .gl{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted,#797773);margin:12px 0 4px;}'
+    + '.w131ed .gl:first-child{margin-top:0;}'
+    + '.w131er{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid rgba(16,63,57,.06);}'
+    + '.w131er .lb{flex:1;min-width:0;font-size:13.5px;font-weight:600;}'
+    + '.w131er .lb small{display:block;font-size:11.5px;font-weight:500;color:var(--wa-muted,#797773);}'
+    + '.w131er.ch .lb{color:#6b4d05;}'
+    + '.w131seg3{display:inline-flex;padding:3px;background:rgba(16,63,57,.07);border-radius:10px;flex:none;}'
+    + '.w131seg3 button{font-family:' + BODY + ';font-size:12px;font-weight:700;border:none;background:none;color:' + GREEN + ';padding:6px 10px;border-radius:8px;cursor:pointer;}'
+    + '.w131seg3 button.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w131seg3 button.on.lead{background:' + GOLD + ';color:' + INK + ';}'
+    + '.w131seg3 button.on.none{background:#8b8d88;color:#FFFAF2;}'
+    + '.w131stabs{display:flex;gap:4px;padding:3px;background:rgba(16,63,57,.06);border-radius:12px;align-self:flex-start;}'
+    + '.w131stabs a{font-size:13px;font-weight:700;color:' + GREEN + ';padding:7px 12px;border-radius:9px;cursor:pointer;text-decoration:none;}'
+    + '.w131stabs a.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    /* requests */
+    + '.w131rq{display:grid;grid-template-columns:40px minmax(0,1fr) auto;gap:12px;align-items:start;padding:14px 18px;border-top:1px solid rgba(16,63,57,.06);}'
+    + '.w131rq:first-child{border-top:none;}'
+    + '.w131rq .tx b{font-size:14px;}'
+    + '.w131rq .tx p{margin:3px 0 0;font-size:13px;line-height:1.5;}'
+    + '.w131rq .tx small{display:block;font-size:12px;color:var(--wa-muted,#797773);margin-top:4px;}'
+    + '.w131rq .ac{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}'
+    + '.w131rq .what{display:flex;width:max-content;max-width:100%;align-items:center;gap:6px;font-size:12.5px;font-weight:700;background:rgba(220,165,39,.2);color:#6b4d05;border-radius:999px;padding:3px 10px;margin-top:6px;}'
+    + '.w131rqst{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;border-radius:999px;padding:3px 9px;background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w131rqst.declined{background:rgba(179,64,47,.1);color:' + FLAG + ';}'
+    + '.w131back{display:flex;align-items:center;gap:10px;font-size:13px;margin:0 0 14px;padding:10px 14px;border-radius:12px;background:rgba(220,165,39,.16);}'
+    /* phones */
+    + '@media (max-width:900px){.w131pgrid{grid-template-columns:repeat(2,minmax(0,1fr));}}'
+    + '@media (max-width:700px){'
+    + '.w131p{grid-template-columns:40px minmax(0,1fr) 16px;grid-template-areas:"av nm ch" "av st ch" "av ac ch";row-gap:6px;padding:12px 14px;}'
+    + '.w131p .w131av{grid-area:av;align-self:start;}.w131p .nm{grid-area:nm;}.w131p .w131st{grid-area:st;}.w131p .acc{grid-area:ac;min-width:0;}.w131p .chv{grid-area:ch;align-self:center;}'
+    + '.w131do{flex-wrap:wrap;padding:12px 14px;}.w131do .ac{width:100%;justify-content:flex-start;padding-left:44px;}'
+    + '.w131team > .th{padding:10px 14px 8px;}.w131team > .th h3{font-size:17px;}.w131team > .th .t{display:none;}'
+    + '.w131pgrid{grid-template-columns:1fr;}'
+    + '.w131pick{grid-template-columns:1fr;}'
+    + '#w131sheet .two{grid-template-columns:1fr;}'
+    + '#w131sheet .bd{padding:14px 14px 22px;}#w131sheet .ph{padding:14px 14px 12px;}#w131sheet .ft{padding:10px 14px calc(12px + env(safe-area-inset-bottom));}'
+    + '.w131mx{display:none;}.w131phone{display:block;}'
+    + '.w131rq{grid-template-columns:40px minmax(0,1fr);padding:14px;}.w131rq .ac{grid-column:1/-1;justify-content:flex-start;}'
+    + '.w131er{flex-wrap:wrap;}.w131er .lb{flex-basis:100%;}'
+    + '.w131tabs a{padding:8px 11px;}'
+    + '}';
+  (function () {
+    var st = document.getElementById('w131css');
+    if (!st) { st = document.createElement('style'); st.id = 'w131css'; (document.head || document.documentElement).appendChild(st); }
+    st.textContent = css
+      /* the section: this card shows for People and access (and the old Access profiles address); the old cards wait behind the classic view */
+      + '.w118adm:not([data-sec="people"]):not([data-sec="access"]) ~ #w131card{display:none !important;}'
+      + 'body:not(.w131classic) #w113card,body:not(.w131classic) #w113card + .card,body:not(.w131classic) #w127card{display:none !important;}'
+      + 'body.w131classic #w131card{display:none !important;}'
+      + 'body:not(.w131classic) .w118adm a[data-w118sec="access"],body:not(.w131classic) nav.wa-nav .w118sub a[data-w118sec="access"]{display:none !important;}'
+      + 'body:not(.w131classic) .w118adm[data-sec="access"] a[data-w118sec="people"]{background:' + GREEN + ';color:' + CREAM + ';}'
+      + 'nav.wa-nav .w118sub.w131acc a[data-w118sec="people"]{color:' + GREEN + ';font-weight:700;}';
+  })();
+
+  /* ---------- state ---------- */
+  var S = {
+    loaded: false, loading: null, members: [], roles: {}, logins: {}, profiles: [], byKey: {}, settings: {}, requests: [], hr: [],
+    tab: 'people', q: '', team: '', status: '', sheet: null, busy: false, cache: null, pedits: {}, ptab: 'pages', res: null
+  };
+  async function load(force) {
+    if (S.loading) return S.loading;
+    if (S.loaded && !force) return;
+    S.loading = (async function () {
+      try {
+        var r = await Promise.all([
+          db.from('team_members').select('id,name,email,department,role,active,avatar_url').order('name'),
+          db.from('hub_roles').select('*'),
+          db.rpc('wa_hub_logins'),
+          db.from('hub_access_profiles').select('*').order('sort'),
+          db.from('hub_access_settings').select('*').eq('id', 1),
+          db.from('wa_access_requests').select('*').order('id', { ascending: false }).limit(80)
+        ]);
+        S.members = (r[0] && r[0].data) || [];
+        S.roles = {}; ((r[1] && r[1].data) || []).forEach(function (x) { if (x && x.email) S.roles[lower(x.email)] = x; });
+        S.logins = {}; ((r[2] && r[2].data) || []).forEach(function (l) { if (l && l.email) S.logins[lower(l.email)] = l; });
+        S.profiles = ((r[3] && r[3].data) || []).slice().sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); });
+        S.byKey = {}; S.profiles.forEach(function (p) { if (!p.pages || typeof p.pages !== 'object') p.pages = {}; if (!Array.isArray(p.can)) p.can = []; S.byKey[p.key] = p; });
+        S.settings = (r[4] && r[4].data && r[4].data[0]) || S.settings || {};
+        S.requests = (r[5] && r[5].data) || [];
+        S.loaded = true;
+      } catch (e) { /* keep what we had */ }
+      S.cache = null;
+      S.loading = null;
+    })();
+    return S.loading;
+  }
+
+  /* ---------- the access rules (the same as wave127 and wa_page_ok) ---------- */
+  function isTeamP(p) { return !!(p && p.tier === 'member'); }
+  function handPicked(row) { return !!(row && Array.isArray(row.tabs) && row.tabs.length); }
+  function valueOf(p, tab) { var v = p && p.pages ? p.pages[tab] : undefined; return v === 'all' || v === 'lead' || v === 'none' ? v : undefined; }
+  function knownTabs() {
+    var t = [];
+    try { t = (typeof WA40_TABS !== 'undefined' ? WA40_TABS : []).slice(); } catch (e) { t = []; }
+    if (t.indexOf('adminpanel') < 0) t.push('adminpanel');
+    GROUPS.forEach(function (g) { g[1].forEach(function (x) { if (t.indexOf(x) < 0) t.push(x); }); });
+    return t.filter(function (x) { return x !== 'team' && x !== 'needsme' && x !== 'personpage' && x !== 'projectpage'; });
+  }
+  function groupsWithNew() {
+    var seen = {}, gs = GROUPS.map(function (g) { g[1].forEach(function (t) { seen[t] = 1; }); return [g[0], g[1].slice()]; });
+    var extra = knownTabs().filter(function (t) { return !seen[t]; });
+    if (extra.length) gs.unshift(['New pages', extra]);
+    return gs;
+  }
+  function undecided() { return knownTabs().filter(function (t) { return S.profiles.some(function (p) { return p.tier !== 'admin' && valueOf(p, t) === undefined; }); }); }
+  function defaultsFor(role) { try { return ((typeof WA40_DEFAULTS !== 'undefined' && WA40_DEFAULTS[role]) || (typeof WA40_DEFAULTS !== 'undefined' && WA40_DEFAULTS.member) || []).slice(); } catch (e) { return []; } }
+  function leadRole(role) { return role === 'leader' || role === 'admin'; }
+  function classicPages(row, email) {
+    var role = row ? row.role : (/@welfareavenue\.com$/.test(lower(email)) ? 'member' : 'viewer');
+    if (role === 'blocked') return [];
+    var a = handPicked(row) ? row.tabs.slice() : defaultsFor(role);
+    function add(t) { if (a.indexOf(t) < 0) a.push(t); }
+    if (role !== 'viewer') { add('calendar'); add('photos'); }
+    if (a.indexOf('marketing') >= 0) { add('socialstats'); add('contentcal'); }
+    if (a.indexOf('fundraising') >= 0 || a.indexOf('finances') >= 0) add('fundevents');
+    if (leadRole(role)) { add('governance'); add('committees'); }
+    if (role !== 'admin') a = a.filter(function (t) { return t !== 'adminpanel'; });
+    if (role === 'admin') a = knownTabs();
+    return a.filter(function (t) { return t !== 'team'; });
+  }
+  function pagesOfProfile(key, lead, row, email) {
+    var p = S.byKey[key]; if (!p) return classicPages(row, email);
+    if (p.tier === 'admin') return knownTabs();
+    var ld = !!lead || p.tier === 'leader', out = [];
+    knownTabs().forEach(function (t) { var v = valueOf(p, t); if (v === 'all' || (v === 'lead' && ld)) out.push(t); });
+    /* a page this profile has not decided follows its built-in gate */
+    classicPages(row, email).forEach(function (t) { if (valueOf(p, t) === undefined && out.indexOf(t) < 0) out.push(t); });
+    return out;
+  }
+  function roleFor(key, lead) { var p = S.byKey[key]; if (!p) return 'member'; if (p.tier === 'admin') return 'admin'; if (p.tier === 'leader') return 'leader'; if (p.tier === 'viewer') return 'viewer'; return lead ? 'leader' : 'member'; }
+  function profileName(key, lead) { var p = S.byKey[key]; if (!p) return key || ''; return p.label + (isTeamP(p) && lead ? ' (lead)' : ''); }
+  function teamProfile(dept) { return S.profiles.filter(function (p) { return isTeamP(p) && p.team === dept; })[0] || null; }
+  /* the profile someone is on, as the menu and the database read it */
+  function assignedOf(row) {
+    if (!row || row.role === 'blocked' || handPicked(row)) return null;
+    if (row.role === 'admin') return S.byKey.admin || null;
+    var p = row.profile ? S.byKey[row.profile] : null; if (!p) return null;
+    if ((RANK[row.role] == null ? -1 : RANK[row.role]) < RANK[p.tier]) return null;
+    return p;
+  }
+
+  /* ---------- the people ---------- */
+  function statusOf(m, row, login, email) {
+    if (row && row.role === 'blocked') return 'removed';
+    if (m && m.active === false) return 'removed';
+    if (!email) return 'noemail';
+    if (login && login.last_sign_in_at) return 'active';
+    if (login || row) return 'invited';
+    return 'notinvited';
+  }
+  function suggest(x) {
+    if (!x.email || x.status === 'removed') return null;
+    var role = x.row ? x.row.role : null;
+    if (x.founder || role === 'admin') return { key: 'admin', lead: false, why: x.founder ? 'Founder' : 'Admin today' };
+    if (x.dept === 'board') return S.byKey.board ? { key: 'board', lead: false, why: 'On the board, not on the staff team' } : null;
+    var tp = teamProfile(x.dept); if (!tp) return null;
+    return { key: tp.key, lead: role === 'leader', why: 'On the ' + teamLabel(x.dept) + ' roster' + (role === 'leader' ? ', leads today' : '') };
+  }
+  function people() {
+    if (S.cache) return S.cache;
+    var out = [], seen = {};
+    function mk(m, em) {
+      var row = em ? S.roles[em] || null : null, login = em ? S.logins[em] || null : null;
+      var x = {
+        id: m ? m.id : null, name: m ? (m.name || nameFromEmail(em)) : ((row && row.note) || nameFromEmail(em)),
+        title: m ? (m.role || '') : '', dept: m ? (m.department || '') : '', email: em, avatar: m ? m.avatar_url : null,
+        roster: !!m, active: m ? m.active !== false : true, row: row, login: login, founder: FOUNDERS.indexOf(em) >= 0
+      };
+      x.status = statusOf(m, row, login, em);
+      x.role = row ? row.role : '';
+      x.hand = handPicked(row);
+      x.assigned = assignedOf(row);
+      x.lead = !!(x.assigned && isTeamP(x.assigned) && x.role === 'leader');
+      x.pages = row ? (x.assigned ? pagesOfProfile(x.assigned.key, x.lead, row, em) : classicPages(row, em)) : [];
+      x.sug = suggest(x);
+      x.same = !!(x.sug && x.assigned && x.assigned.key === x.sug.key && (!isTeamP(x.assigned) || x.lead === !!x.sug.lead));
+      return x;
+    }
+    S.members.forEach(function (m) { var em = lower(m.email); if (em) seen[em] = 1; out.push(mk(m, em)); });
+    Object.keys(S.roles).forEach(function (em) { if (!seen[em]) out.push(mk(null, em)); });
+    S.cache = out;
+    return out;
+  }
+  function personBy(key) {
+    key = String(key || '');
+    return people().filter(function (x) { return (x.email && x.email === lower(key)) || (x.id != null && 'id:' + x.id === key); })[0] || null;
+  }
+  function pkey(x) { return x.email || ('id:' + x.id); }
+  function openRequests() { return (S.requests || []).filter(function (q) { return q.status === 'new'; }); }
+  function accessChip(x) {
+    if (x.status === 'removed') return '<span class="w131chip gone"><span>Removed</span></span>';
+    if (x.hand) return '<span class="w131chip hand" title="Hand-picked pages replace the profile"><i style="--c:' + GOLD + '"></i><span>Hand-picked, ' + x.row.tabs.length + ' pages</span></span>';
+    if (x.assigned) return '<span class="w131chip" style="--c:' + E(x.assigned.color || GREEN) + '"><i></i><span>' + E(x.assigned.label + (x.lead ? ', lead' : '')) + '</span></span>';
+    if (x.row) return '<span class="w131chip none"><span>No profile (classic ' + E(x.role || 'member') + ')</span></span>';
+    if (!x.email) return '<span class="w131chip none"><span>Needs an email</span></span>';
+    return x.sug && S.byKey[x.sug.key] ? '<span class="w131chip none" title="The profile they get when invited"><span>Will get ' + E(profileName(x.sug.key, x.sug.lead)) + '</span></span>' : '<span class="w131chip none"><span>No access</span></span>';
+  }
+  function statusHtml(x) {
+    var t = { active: 'Signed in', invited: 'Invited', notinvited: 'Not invited', noemail: 'No email', removed: 'Removed' }[x.status] || x.status;
+    var sub = '';
+    if (x.status === 'active' && x.login) sub = 'last ' + ago(x.login.last_sign_in_at);
+    else if (x.status === 'invited') sub = x.login && x.login.account_created ? 'not signed in yet' : 'has access, not signed in';
+    else if (x.status === 'notinvited') sub = 'on the roster';
+    else if (x.status === 'noemail') sub = 'add one to invite';
+    return '<span class="w131st ' + E(x.status) + '"><i></i><span>' + E(t) + (sub ? '<small>' + E(sub) + '</small>' : '') + '</span></span>';
+  }
+  function avatar(x) {
+    var c = x.dept ? teamColor(x.dept) : '#6b7b77';
+    return '<span class="w131av" style="--c:' + E(c) + '">' + (x.avatar ? '<img src="' + E(x.avatar) + '" alt="" loading="lazy" onerror="this.remove()">' : '') + E(initials(x.name)) + '</span>';
+  }
+  function pagesHtml(list, cmp) {
+    return groupsWithNew().map(function (g) {
+      var ts = g[1].filter(function (t) { return list.indexOf(t) >= 0 || (cmp && cmp.indexOf(t) >= 0); });
+      if (!ts.length) return '';
+      return '<div class="w131grp"><small>' + E(g[0]) + '</small><div class="w131tags">' + ts.map(function (t) {
+        var inNew = list.indexOf(t) >= 0, inOld = cmp ? cmp.indexOf(t) >= 0 : inNew;
+        var cls = cmp ? (inNew && !inOld ? 'new' : (!inNew && inOld ? 'gone' : '')) : '';
+        return '<span' + (cls ? ' class="' + cls + '"' : '') + (LOCK[t] ? ' title="' + E(LOCK[t]) + '"' : '') + '>' + (LOCK[t] ? I('lock') : '') + E(labelOf(t)) + '</span>';
+      }).join('') + '</div></div>';
+    }).join('');
+  }
+  function diffText(next, today) {
+    var g = next.filter(function (t) { return today.indexOf(t) < 0; }).map(labelOf), l = today.filter(function (t) { return next.indexOf(t) < 0 && t !== 'adminpanel'; }).map(labelOf);
+    if (!g.length && !l.length) return '<span class="w131mut">The same pages as today.</span>';
+    return (g.length ? '<span class="g">Gains ' + E(listJoin(g)) + '.</span> ' : '') + (l.length ? '<span class="l">Loses ' + E(listJoin(l)) + '.</span>' : '');
+  }
+
+  /* ---------- what needs doing ---------- */
+  function todos() {
+    var xs = people(), out = [];
+    var rq = openRequests();
+    if (rq.length) out.push({ k: 'req', cls: 'warn', ic: 'inbox', t: '<b>' + plural(rq.length, 'access request is', 'access requests are') + ' waiting</b>', s: listJoin(rq.slice(0, 4).map(function (q) { return (q.name || q.email) + ' (' + reqWhat(q) + ')'; })), a: '<a class="w131btn sm gold" data-w131tab="requests">Review</a>' });
+    var nop = xs.filter(function (x) { return x.row && x.status !== 'removed' && !x.assigned && !x.hand && x.sug && S.byKey[x.sug.key]; });
+    if (nop.length) out.push({ k: 'noprof', cls: 'warn', ic: 'key', t: '<b>' + plural(nop.length, 'person has', 'people have') + ' no access profile</b>', s: listJoin(nop.slice(0, 5).map(function (x) { return first(x.name) + ' \u2192 ' + profileName(x.sug.key, x.sug.lead); })) + (nop.length > 5 ? ' and ' + (nop.length - 5) + ' more' : ''), a: '<a class="w131btn sm" data-w131apply="noprof">' + I('check') + 'Give ' + (nop.length === 1 ? 'it' : 'them their team\u2019s profile') + '</a>' });
+    var mis = xs.filter(function (x) { return x.assigned && isTeamP(x.assigned) && x.dept && TEAMS.indexOf(x.dept) >= 0 && x.dept !== 'board' && x.assigned.team !== x.dept && x.status !== 'removed'; });
+    if (mis.length) out.push({ k: 'mis', cls: 'warn', ic: 'alert', t: '<b>' + plural(mis.length, 'profile names', 'profiles name') + ' a different team from the roster</b>', s: listJoin(mis.map(function (x) { return first(x.name) + ': ' + x.assigned.label + ', roster says ' + teamLabel(x.dept); })), a: '<a class="w131btn sm ghost" data-w131filter="mis">Show them</a>' });
+    var ni = xs.filter(function (x) { return x.status === 'notinvited' && x.roster; });
+    if (ni.length) out.push({ k: 'ni', cls: '', ic: 'mail', t: '<b>' + plural(ni.length, 'person on the roster is', 'people on the roster are') + ' not invited yet</b>', s: listJoin(ni.slice(0, 5).map(function (x) { return x.name; })) + (ni.length > 5 ? ' and ' + (ni.length - 5) + ' more' : ''), a: '<a class="w131btn sm ghost" data-w131filter="notinvited">Show them</a><a class="w131btn sm" data-w131invall="1">' + I('mail') + 'Invite ' + (ni.length === 1 ? 'them' : 'all ' + ni.length) + '</a>' });
+    var ne = xs.filter(function (x) { return x.status === 'noemail'; });
+    if (ne.length) out.push({ k: 'ne', cls: '', ic: 'user', t: '<b>' + plural(ne.length, 'person has', 'people have') + ' no email yet</b>', s: 'Add an email to invite them: ' + listJoin(ne.slice(0, 5).map(function (x) { return x.name; })) + (ne.length > 5 ? ' and ' + (ne.length - 5) + ' more' : ''), a: '<a class="w131btn sm ghost" data-w131filter="noemail">Show them</a>' });
+    var gone = xs.filter(function (x) { return x.roster && x.active === false && x.row && x.row.role !== 'blocked'; });
+    if (gone.length) out.push({ k: 'gone', cls: 'risk', ic: 'out', t: '<b>' + plural(gone.length, 'person is', 'people are') + ' marked inactive but can still sign in</b>', s: listJoin(gone.map(function (x) { return x.name; })), a: gone.length === 1 ? '<a class="w131btn sm danger" data-w131open="' + E(pkey(gone[0])) + '">Review</a>' : '<a class="w131btn sm ghost" data-w131filter="gone">Show them</a>' });
+    var adm = xs.filter(function (x) { return x.role === 'admin' && x.status !== 'removed' && x.roster; });
+    if (adm.length > 5) out.push({ k: 'adm', cls: '', ic: 'shield', t: '<b>' + adm.length + ' people are admins</b>', s: 'Admin is for the people who run the Hub itself. Executive gives every page but Admin: ' + listJoin(adm.filter(function (x) { return !x.founder; }).map(function (x) { return first(x.name); })) + '.', a: '<a class="w131btn sm ghost" data-w131filter="admin">Show them</a>' });
+    return out;
+  }
+  function reqWhat(q) {
+    var w = String(q.wanted || '');
+    if (w.indexOf('tab:') === 0) return labelOf(w.slice(4));
+    if (w === 'role:leader') return 'lead access';
+    if (w === 'role:admin') return 'Admin';
+    return 'something else';
+  }
+
+  /* ---------- People: what needs doing, then everyone by team ---------- */
+  var FILTERS = [['', 'Everyone'], ['active', 'Signed in'], ['invited', 'Invited'], ['notinvited', 'Not invited'], ['noemail', 'No email'], ['noprof', 'No profile'], ['removed', 'Removed']];
+  var SPECIAL = { mis: 'Profile and roster disagree', gone: 'Inactive but can sign in', admin: 'Admins' };
+  function matchStatus(x, f) {
+    if (f === 'removed') return x.status === 'removed';
+    if (f === 'gone') return x.roster && x.active === false && x.row && x.row.role !== 'blocked';
+    if (x.status === 'removed') return false;
+    if (!f) return true;
+    if (f === 'noprof') return !!x.row && !x.assigned && !x.hand;
+    if (f === 'mis') return !!(x.assigned && isTeamP(x.assigned) && x.dept && x.dept !== 'board' && x.assigned.team !== x.dept);
+    if (f === 'admin') return x.role === 'admin';
+    return x.status === f;
+  }
+  function matchQuery(x) {
+    if (S.team && (S.team === 'none' ? (x.dept && TEAMS.indexOf(x.dept) >= 0) : x.dept !== S.team)) return false;
+    if (!S.q) return true;
+    var q = lower(S.q);
+    return lower([x.name, x.email, x.title, teamLabel(x.dept), x.assigned ? x.assigned.label : ''].join(' ')).indexOf(q) >= 0;
+  }
+  function rowHtml(x) {
+    return '<button type="button" class="w131p" data-w131open="' + E(pkey(x)) + '">' + avatar(x)
+      + '<span class="nm"><b>' + E(x.name) + '</b><span>' + E(x.title || (x.roster ? '' : 'Not on the roster')) + (x.email ? (x.title || !x.roster ? ' \u00b7 ' : '') + E(x.email) : '') + '</span></span>'
+      + statusHtml(x) + '<span class="acc">' + accessChip(x) + '</span><span class="chv">' + I('chev') + '</span></button>';
+  }
+  function peopleHtml() {
+    var xs = people(), td = todos(), h = '';
+    if (td.length) {
+      h += '<div class="w131box w131todo"><div class="hd">' + I('spark') + 'What needs doing</div>' + td.map(function (t) {
+        return '<div class="w131do ' + t.cls + '" data-w131do="' + t.k + '"><span class="ic">' + I(t.ic) + '</span><div class="tx">' + t.t + (t.s ? '<small>' + E(t.s) + '</small>' : '') + '</div><div class="ac">' + t.a + '</div></div>';
+      }).join('') + '</div>';
+    } else h += '<div class="w131box w131alldone">' + I('check') + '<span>Everyone is set up: each person with access has a profile, and no request is waiting.</span></div>';
+    var base = xs.filter(matchQuery);
+    var counts = {}; FILTERS.forEach(function (f) { counts[f[0]] = base.filter(function (x) { return matchStatus(x, f[0]); }).length; });
+    h += '<div class="w131bar"><label class="w131q">' + I('search') + '<input type="search" id="w131q" placeholder="Search a name, email, title or profile" value="' + E(S.q) + '" aria-label="Search people"></label>'
+      + '<select id="w131team" aria-label="Team"><option value="">Every team</option>' + TEAMS.map(function (d) { return '<option value="' + d + '"' + (S.team === d ? ' selected' : '') + '>' + E(teamLabel(d)) + '</option>'; }).join('') + '<option value="none"' + (S.team === 'none' ? ' selected' : '') + '>No team</option></select></div>'
+      + '<div class="w131chips" role="group" aria-label="Show">' + FILTERS.map(function (f) { return '<a data-w131st="' + f[0] + '"' + (S.status === f[0] ? ' class="on"' : '') + '>' + E(f[1]) + ' <b>' + counts[f[0]] + '</b></a>'; }).join('')
+      + (SPECIAL[S.status] ? '<a class="on" data-w131st="">' + E(SPECIAL[S.status]) + ' <b>' + base.filter(function (x) { return matchStatus(x, S.status); }).length + '</b> \u00d7</a>' : '') + '</div>';
+    var list = base.filter(function (x) { return matchStatus(x, S.status); });
+    if (!list.length) return h + '<div class="w131box"><p class="w131empty">Nobody matches. Clear the search or pick another filter.</p></div>' + footHtml();
+    var groups = TEAMS.map(function (d) { return [d, teamLabel(d), teamColor(d)]; }).concat([['', 'No team', '#8b8d88']]);
+    groups.forEach(function (g) {
+      var inG = list.filter(function (x) { return g[0] ? x.dept === g[0] : !(x.dept && TEAMS.indexOf(x.dept) >= 0); });
+      if (!inG.length) return;
+      inG.sort(function (a, b) { var la = a.lead || a.role === 'admin' ? 0 : 1, lb = b.lead || b.role === 'admin' ? 0 : 1; return (la - lb) || String(a.name).localeCompare(String(b.name)); });
+      h += '<section class="w131box w131team" style="padding:4px 0 2px;--c:' + E(g[2]) + '"><div class="th"><i></i><h3>' + E(g[1]) + '</h3><span class="n">' + inG.length + '</span><span class="sp"></span>'
+        + (g[0] ? '<a class="w131lnk" data-w131newin="' + E(g[0]) + '" style="font-size:12.5px;white-space:nowrap" aria-label="Invite someone to ' + E(g[1]) + '">' + I('plus') + ' Invite<span class="t"> to this team</span></a>' : '') + '</div>'
+        + inG.map(rowHtml).join('') + '</section>';
+    });
+    return h + footHtml();
+  }
+  function footHtml() {
+    return '<p class="w131foot">A person\u2019s access profile decides the pages they see and, for the finances and the board, what the database lets them read. Their role follows the profile. '
+      + '<a class="w131lnk" data-w131classic="1">Open the classic view</a> for the old table, the roles and hand-picked pages.</p>';
+  }
+
+  /* ---------- the person sheet ---------- */
+  function openPerson(key) { S.sheet = { kind: 'person', key: key, pick: null, lead: null, rm: false, email: '', res: null, link: null }; renderSheet(); }
+  function sheetPick(x) {
+    var sh = S.sheet;
+    var key = sh.pick || (x.assigned ? x.assigned.key : (x.sug ? x.sug.key : null));
+    var lead = sh.lead != null ? sh.lead : (sh.pick ? false : (x.assigned ? x.lead : !!(x.sug && x.sug.lead)));
+    if (key && !isTeamP(S.byKey[key])) lead = false;
+    return { key: key, lead: lead };
+  }
+  function tierText(p) { return p.tier === 'admin' ? 'Everything, and Admin' : p.tier === 'leader' ? 'Every page but Admin' : p.tier === 'viewer' ? 'Directors, not on staff' : 'Team, lead option'; }
+  function pickerHtml(sel, lead, dept, lockedAdmin) {
+    var teamPs = S.profiles.filter(isTeamP).slice().sort(function (a, b) { return (a.team === dept ? -1 : 0) - (b.team === dept ? -1 : 0) || (a.sort || 0) - (b.sort || 0); });
+    var others = S.profiles.filter(function (p) { return !isTeamP(p); });
+    function opt(p) {
+      var dis = lockedAdmin && p.key !== 'admin';
+      return '<button type="button" class="w131opt' + (sel === p.key ? ' on' : '') + '" data-w131pick="' + E(p.key) + '"' + (dis ? ' disabled' : '') + ' style="--c:' + E(p.color || GREEN) + '" aria-pressed="' + (sel === p.key) + '"><i></i><span>' + E(p.label) + '<small>' + E(tierText(p)) + '</small></span>' + (p.team && p.team === dept ? '<em>their team</em>' : '') + '</button>';
+    }
+    var h = '<div class="w131pick"><div class="gl">Team profiles</div>' + teamPs.map(opt).join('') + '<div class="gl">Everything else</div>' + others.map(opt).join('') + '</div>';
+    var sp = S.byKey[sel];
+    if (sp && isTeamP(sp)) h += '<div class="w131lead"><button type="button" class="w131sw' + (lead ? ' on' : '') + '" data-w131lead="1" role="switch" aria-checked="' + !!lead + '" aria-label="Lead of the team"></button><div><b>Lead of ' + E(teamLabel(sp.team) || sp.label) + '</b><span>' + E(sp.lead_note || 'A lead also gets Agendas, Activity, the HR centre for their team and the board pages.') + '</span></div></div>';
+    return h;
+  }
+  function personSheet(x) {
+    var sh = S.sheet, pk = sheetPick(x), p = pk.key ? S.byKey[pk.key] : null;
+    var next = p ? pagesOfProfile(p.key, pk.lead, x.row, x.email) : [];
+    var changed = !!p && (!x.assigned || x.assigned.key !== p.key || (isTeamP(p) && x.lead !== pk.lead) || x.hand);
+    var body = '';
+    /* sign-in */
+    var sign = '';
+    if (x.status === 'active') sign = '<p>Signed in ' + E(ago(x.login && x.login.last_sign_in_at)) + '.</p><div class="row"><a class="w131btn sm ghost" data-w131link="1">' + I('link') + 'Copy a sign-in link</a></div>';
+    else if (x.status === 'invited') sign = '<p>Has access but has not signed in yet' + (x.login && x.login.account_created ? ' (account made ' + E(ago(x.login.account_created)) + ')' : '') + '.</p><div class="row"><a class="w131btn sm" data-w131resend="1">' + I('mail') + 'Send the invitation again</a><a class="w131btn sm ghost" data-w131link="1">' + I('link') + 'Copy a sign-in link</a></div>';
+    else if (x.status === 'notinvited') sign = '<p>On the roster, not invited yet. Pick the profile below, then invite them: the Hub emails a sign-in invitation from hub@ and sends a Slack welcome when it can find them.</p>';
+    else if (x.status === 'noemail') sign = '<p>No email yet, so they cannot be invited.</p><label class="f">Their Welfare Avenue email<input type="email" id="w131em" placeholder="name@welfareavenue.com" value="' + E(sh.email || '') + '"></label><div class="row"><a class="w131btn sm" data-w131setem="1">' + I('check') + 'Save the email</a></div>';
+    else if (x.status === 'removed') sign = '<p>' + (x.row && x.row.role === 'blocked' ? 'Removed from the Hub: they cannot sign in.' : 'Marked as no longer active on the roster.') + ' Their work and history stay.</p>';
+    if (sh.link) sign += '<div class="note" style="margin-top:8px">' + sh.link + '</div>';
+    if (sh.res) sign += '<div class="res" style="margin-top:10px">' + sh.res + '</div>';
+    body += '<div class="sec"><h4>Sign-in</h4>' + sign + '</div>';
+    /* access */
+    var acc = '';
+    if (x.status === 'noemail') acc = '<p class="w131mut" style="font-size:13px">Add their email first; then pick a profile and invite them.</p>';
+    else {
+      acc += '<p style="font-size:13px">' + (x.founder ? 'Founders always keep Admin.' : x.hand ? 'Today: <b>hand-picked pages</b> (' + x.row.tabs.length + '), which replace any profile.' : x.assigned ? 'Today: <b>' + E(profileName(x.assigned.key, x.lead)) + '</b>.' : x.row ? 'Today: <b>no profile</b>; the classic ' + E(x.role || 'member') + ' pages apply.' : 'They get this profile when they are invited.') + (x.sug && S.byKey[x.sug.key] && !x.same && !x.founder && x.status !== 'removed' ? ' Suggested: <b>' + E(profileName(x.sug.key, x.sug.lead)) + '</b> (' + E(x.sug.why) + ').' : '') + '</p>';
+      acc += pickerHtml(pk.key, pk.lead, x.dept, x.founder);
+      if (p) {
+        acc += '<div style="margin-top:14px"><h4>' + (x.row && x.status !== 'removed' ? 'What they will see' : 'What they get') + ' \u00b7 ' + next.length + ' pages</h4>'
+          + (x.row && x.status !== 'removed' && changed ? '<p class="w131diff">' + diffText(next, x.pages) + '</p>' : '')
+          + pagesHtml(next, x.row && x.status !== 'removed' && changed ? x.pages : null) + '</div>';
+      }
+      if (x.hand && !x.founder) acc += '<div class="note" style="margin-top:12px">Saving a profile replaces the ' + x.row.tabs.length + ' hand-picked pages. <a class="w131lnk" data-w131hand="1">Edit the hand-picked pages instead</a></div>';
+    }
+    body += '<div class="sec"><h4>Access profile</h4>' + acc + '<div class="err" id="w131err"></div></div>';
+    /* remove */
+    if (x.email && x.status !== 'removed' && !x.founder && x.email !== myEmail()) {
+      body += '<div class="sec"><h4>Remove</h4>' + (sh.rm
+        ? '<p>Remove <b>' + E(x.name) + '</b> from the Hub? Their access is blocked, their sign-in is revoked and they are marked inactive on the roster. Their tasks, updates and history stay, and you can invite them again later.</p><div class="row"><a class="w131btn sm danger solid" data-w131rmgo="1">Remove them</a><a class="w131btn sm ghost" data-w131rm="0">Cancel</a></div>'
+        : '<p class="w131mut" style="font-size:13px">Takes away their access and signs them out everywhere.</p><div class="row"><a class="w131btn sm danger" data-w131rm="1">' + I('out') + 'Remove from the Hub</a></div>') + '</div>';
+    }
+    /* the footer: the one thing to do */
+    var foot = '';
+    if (x.status === 'notinvited' || x.status === 'removed') {
+      foot = '<label class="ck" style="font-size:13px"><input type="checkbox" id="w131send" checked> Email the invitation</label><span class="sp"></span><a class="w131btn' + (p ? '' : ' off') + '" data-w131invite="1">' + I('mail') + (x.status === 'removed' ? 'Invite again' : 'Invite') + (p ? ' as ' + E(profileName(p.key, pk.lead)) : '') + '</a>';
+    } else if (x.status !== 'noemail') {
+      foot = (x.id ? '<a class="w131btn sm ghost" data-w131go="#person/' + E(x.id) + '">' + I('user') + 'Their page</a>' : '') + '<span class="sp"></span><a class="w131btn' + (changed && !x.founder ? '' : ' off') + '" data-w131save="1">' + I('check') + (changed ? 'Save: ' + E(p ? profileName(p.key, pk.lead) : '') : 'Saved') + '</a>';
+    } else foot = '<span class="sp"></span><a class="w131btn ghost" data-w131close="1">Close</a>';
+    return { kicker: x.roster ? teamLabel(x.dept) || 'No team' : 'Not on the roster', title: x.name, sub: [x.title, x.email].filter(Boolean).join(' \u00b7 '), body: body, foot: foot };
+  }
+
+  /* ---------- person actions ---------- */
+  function sheetErr(m) { var e = document.getElementById('w131err'); if (e) e.textContent = m || ''; }
+  async function afterChange(email) {
+    await load(true);
+    try { if (typeof wa40Load === 'function') await wa40Load(); } catch (e) { /* fine */ }
+    try { if (lower(email) === myEmail() && typeof wa40Enforce === 'function') wa40Enforce(); } catch (e) { /* fine */ }
+    try { if (window.w127 && window.w127.load) window.w127.load(true); } catch (e) { /* fine */ }
+    paint(); if (S.sheet) renderSheet();
+  }
+  async function saveProfile(x, key, lead, why) {
+    var p = S.byKey[key]; if (!p || !x.email) return false;
+    if (x.founder && key !== 'admin') { sheetErr('Founders always keep Admin.'); return false; }
+    if (x.email === myEmail() && x.role === 'admin' && key !== 'admin') { sheetErr('You cannot take Admin away from yourself here. Ask another admin.'); return false; }
+    var role = roleFor(key, lead);
+    var r = await db.from('hub_roles').upsert({ email: x.email, role: role, profile: key, tabs: null, updated_by: actor(), updated_at: new Date().toISOString() }, { onConflict: 'email' });
+    if (r && r.error) { sheetErr('Could not save it: ' + (r.error.message || 'try again')); return false; }
+    logChange('hub_role', x.email, 'profile', x.hand ? 'hand-picked pages' : x.assigned ? profileName(x.assigned.key, x.lead) : (x.row ? x.row.role + ' (classic)' : null), profileName(key, lead) + (why ? ' (' + why + ')' : ''));
+    return true;
+  }
+  async function doSave() {
+    var x = personBy(S.sheet.key); if (!x || S.busy) return;
+    var pk = sheetPick(x); if (!pk.key) return;
+    S.busy = true;
+    var ok = await saveProfile(x, pk.key, pk.lead);
+    S.busy = false;
+    if (ok) { toastS(first(x.name) + ': ' + profileName(pk.key, pk.lead)); S.sheet.pick = null; S.sheet.lead = null; await afterChange(x.email); }
+  }
+  function resultHtml(res, name) {
+    return (res.email_sent ? '<b class="ok">Invitation emailed</b>' + (res.note && /Supabase/.test(res.note) ? ' <span class="w131mut">(by Supabase; the hub@ send failed)</span>' : ' <span class="w131mut">from hub@welfareavenue.com</span>') : '<b class="no">No email sent</b>' + (res.note && res.note !== 'not requested' ? ' <span class="w131mut">(' + E(String(res.note).slice(0, 110)) + ')</span>' : ' <span class="w131mut">(you chose not to)</span>'))
+      + '<br>Slack welcome: ' + (res.slack === 'sent' || res.slack === 'sent_channel' ? '<b class="ok">sent</b>' : '<b class="no">not sent</b> <span class="w131mut">(' + E(res.slack === 'no_slack' ? 'not in the WA Slack yet' : (res.slack || 'skipped')) + ')</span>')
+      + '<div style="margin-top:10px"><textarea class="msg" readonly id="w131msg">' + E(inviteMessage(name)) + '</textarea></div><div class="row" style="margin-top:8px"><a class="w131btn sm ghost" data-w131copymsg="1">Copy the message</a><a class="w131btn sm ghost" data-w131link="1">' + I('link') + 'Copy a sign-in link</a></div>';
+  }
+  async function doInvite(x, key, lead, send) {
+    var body = { action: 'invite', name: x.name, email: x.email, role_title: x.title || '', hub_role: roleFor(key, lead), send_email: !!send };
+    if (x.dept && TEAMS.indexOf(x.dept) >= 0) body.department = x.dept;
+    var res = await invoke(body);
+    var r = await db.from('hub_roles').upsert({ email: x.email, role: roleFor(key, lead), profile: key, tabs: null, updated_by: actor(), updated_at: new Date().toISOString() }, { onConflict: 'email' });
+    if (r && r.error) throw new Error('invited, but the profile did not save: ' + (r.error.message || ''));
+    logChange('hub_role', x.email, 'profile', null, profileName(key, lead) + ' (with the invitation)');
+    return res;
+  }
+  async function inviteFromSheet() {
+    var x = personBy(S.sheet.key); if (!x || S.busy) return;
+    var pk = sheetPick(x); if (!pk.key) { sheetErr('Pick a profile first.'); return; }
+    var send = !!(document.getElementById('w131send') || {}).checked;
+    S.busy = true; var btn = document.querySelector('#w131sheet [data-w131invite]'); if (btn) { btn.classList.add('off'); btn.textContent = 'Inviting\u2026'; }
+    try {
+      var res = await doInvite(x, pk.key, pk.lead, send);
+      S.sheet.res = resultHtml(res, x.name); S.sheet.pick = null; S.sheet.lead = null;
+      toastS(res.email_sent ? 'Invitation emailed to ' + first(x.name) : first(x.name) + ' can sign in now; share the message or a link');
+      S.busy = false; await afterChange(x.email);
+    } catch (e) { S.busy = false; sheetErr('Could not invite: ' + String((e && e.message) || e).slice(0, 140)); renderSheetKeepErr(); }
+  }
+  async function resend() {
+    var x = personBy(S.sheet.key); if (!x || S.busy) return;
+    S.busy = true;
+    try {
+      var body = { action: 'invite', name: x.name, email: x.email, role_title: x.title || '', hub_role: x.role && x.role !== 'blocked' ? x.role : 'member', send_email: true };
+      if (x.dept && TEAMS.indexOf(x.dept) >= 0) body.department = x.dept;
+      var res = await invoke(body);
+      S.sheet.res = resultHtml(res, x.name);
+      toastS(res.email_sent ? 'Invitation sent again' : 'The email did not go; copy a sign-in link instead');
+    } catch (e) { toastS('Could not send it: ' + String((e && e.message) || e).slice(0, 90)); }
+    S.busy = false; renderSheet();
+  }
+  async function signLink() {
+    var x = personBy(S.sheet.key); if (!x || !x.email) return;
+    S.sheet.link = 'Making a one-time sign-in link\u2026'; renderSheet();
+    try {
+      var res = await invoke({ action: 'link', email: x.email });
+      var ok = await copyText(res.link);
+      S.sheet.link = (ok ? '<b>Copied.</b> ' : 'Here it is: ') + 'A one-time link that signs ' + E(first(x.name)) + ' straight in' + (res.existing_account ? '' : ' and sets up their account') + '. Send it only to them.<input type="text" readonly value="' + E(res.link) + '" style="width:100%;box-sizing:border-box;margin-top:6px;font-size:11.5px;padding:6px 8px;border:1px solid rgba(16,63,57,.2);border-radius:8px" onclick="this.select()">';
+      toastS(ok ? 'Sign-in link copied' : 'Link ready to copy');
+    } catch (e) { S.sheet.link = 'Could not make a link: ' + E(String((e && e.message) || e).slice(0, 110)); }
+    renderSheet();
+  }
+  async function setEmail() {
+    var x = personBy(S.sheet.key); if (!x || !x.id || S.busy) return;
+    var inp = document.getElementById('w131em'); var em = lower(inp && inp.value);
+    S.sheet.email = em;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) { sheetErr('Type a valid email.'); return; }
+    S.busy = true;
+    try {
+      await invoke({ action: 'set_email', member_id: Number(x.id), email: em });
+      toastS('Email saved; ' + first(x.name) + ' can be invited now');
+      S.sheet.key = em; S.sheet.email = ''; S.busy = false;
+      await afterChange(em);
+    } catch (e) { S.busy = false; sheetErr('Could not save it: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  async function removeGo() {
+    var x = personBy(S.sheet.key); if (!x || S.busy) return;
+    S.busy = true;
+    try {
+      var res = await invoke({ action: 'remove', email: x.email });
+      toastS('Removed from the Hub' + (res.auth_deleted ? ' and signed out everywhere' : ''));
+      S.sheet.rm = false; S.busy = false;
+      await afterChange(x.email);
+    } catch (e) { S.busy = false; sheetErr('Could not remove them: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  function renderSheetKeepErr() { var e = document.getElementById('w131err'); var m = e ? e.textContent : ''; renderSheet(); if (m) sheetErr(m); }
+
+  /* ---------- Profiles: the nine profiles, what each opens, who has it ---------- */
+  function tierChip(p) {
+    if (p.tier === 'admin') return '<span class="w131tier admin">Everything</span>';
+    if (p.tier === 'leader') return '<span class="w131tier exec">All but Admin</span>';
+    if (p.tier === 'viewer') return '<span class="w131tier board">Board</span>';
+    return '<span class="w131tier">Team, lead option</span>';
+  }
+  function holders(key) { return people().filter(function (x) { return x.assigned && x.assigned.key === key && x.status !== 'removed'; }); }
+  function pagesCount(p) {
+    var mem = pagesOfProfile(p.key, false, null, 'x@welfareavenue.com'), lead = isTeamP(p) ? pagesOfProfile(p.key, true, null, 'x@welfareavenue.com').filter(function (t) { return mem.indexOf(t) < 0; }) : [];
+    return { mem: mem.length, lead: lead.length };
+  }
+  function profilesHtml() {
+    var u = undecided(), s = S.settings || {};
+    var h = '<div class="w131intro"><p>A profile is a set of pages. Everyone on the Hub has one: their team\u2019s (with a <b>Lead</b> switch for team leads), <b>Board member</b> for directors, <b>Executive</b> for the leadership team or <b>Admin</b> for the people who run the Hub. Open a profile to change its pages; everyone on it sees the change the next time they open the Hub.</p>'
+      + '<label><button type="button" class="w131sw' + (s.auto_profile ? ' on' : '') + '" data-w131auto="1" role="switch" aria-checked="' + !!s.auto_profile + '" aria-label="New people get their team\u2019s profile"></button>New people get their team\u2019s profile automatically</label></div>';
+    if (u.length) h += '<div class="w131box w131todo" style="margin-bottom:16px"><div class="w131do warn"><span class="ic">' + I('alert') + '</span><div class="tx"><b>' + plural(u.length, 'page has', 'pages have') + ' no decision yet</b><small>' + E(listJoin(u.map(labelOf))) + '. Until you decide, ' + (u.length === 1 ? 'it follows its' : 'they follow their') + ' built-in access.</small></div><div class="ac"><a class="w131btn sm gold" data-w131decide="1">Decide</a></div></div></div>';
+    h += '<div class="w131pgrid">' + S.profiles.map(function (p) {
+      var hs = holders(p.key), n = pagesCount(p);
+      return '<button type="button" class="w131box w131pc" data-w131prof="' + E(p.key) + '" style="--c:' + E(p.color || GREEN) + '"><span class="bar"></span><span class="in"><span class="hd"><h3>' + E(p.label) + '</h3>' + tierChip(p) + '</span>'
+        + '<p>' + E(p.summary || '') + '</p>'
+        + '<span class="nums"><span>' + (p.tier === 'admin' ? 'Every page' : n.mem + ' pages') + '</span>' + (n.lead ? '<span>+' + n.lead + ' for leads</span>' : '') + '<span>' + plural(hs.length, 'person', 'people') + '</span></span></span></button>';
+    }).join('') + '</div>';
+    h += '<div class="w131sec"><h2>Compare the profiles</h2><span>Every page, profile by profile. A lock means the database enforces it too. Open a profile above to change it.</span></div>' + matrixHtml()
+      + '<div class="w131box w131phone"><p class="w131empty">The comparison needs a wider screen. Open a profile above to see and change its pages.</p></div>';
+    return h;
+  }
+  function matrixHtml() {
+    var ps = S.profiles, SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
+    var h = '<div class="w131mx"><table><thead><tr><th class="pg">Page</th>' + ps.map(function (p) { return '<th style="--c:' + E(p.color || GREEN) + '"><i></i>' + E(SHORT[p.key] || p.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
+    groupsWithNew().forEach(function (g) {
+      h += '<tr class="gp"><td class="pg" colspan="' + (ps.length + 1) + '">' + E(g[0]) + '</td></tr>';
+      g[1].forEach(function (t) {
+        h += '<tr><td class="pg">' + E(labelOf(t)) + (LOCK[t] ? '<span class="lk" title="' + E(LOCK[t]) + '">' + I('lock') + '</span>' : '') + '</td>' + ps.map(function (p) {
+          var v = p.tier === 'admin' ? 'all' : valueOf(p, t);
+          return '<td>' + (v === 'all' ? '<span class="all" title="Everyone on it"></span>' : v === 'lead' ? '<span class="lead">Leads</span>' : v === 'none' ? '<span class="none" title="Nobody"></span>' : '<span class="und" title="Not decided yet">?</span>') + '</td>';
+        }).join('') + '</tr>';
+      });
+    });
+    return h + '</tbody></table></div>';
+  }
+
+  /* ---------- the profile sheet: its pages, its people, its words ---------- */
+  function openProfile(key) { S.sheet = { kind: 'profile', key: key }; S.ptab = 'pages'; S.pedits = {}; renderSheet(); }
+  function editVal(p, t) { var e = S.pedits[t]; return e !== undefined ? e : (p.tier === 'admin' ? 'all' : valueOf(p, t)); }
+  function profileSheet() {
+    var p = S.byKey[S.sheet.key]; if (!p) return null;
+    var team = isTeamP(p), hs = holders(p.key), n = Object.keys(S.pedits).length, body = '';
+    body += '<div class="w131stabs" role="tablist">' + [['pages', 'Pages'], ['people', 'People (' + hs.length + ')'], ['words', 'What it says']].map(function (t) { return '<a data-w131ptab="' + t[0] + '"' + (S.ptab === t[0] ? ' class="on"' : '') + '>' + E(t[1]) + '</a>'; }).join('') + '</div>';
+    if (S.ptab === 'pages') {
+      if (p.tier === 'admin') body += '<div class="sec"><p>Admin opens every page, including Admin itself, and only admins can change access. There is nothing to set here.</p></div>';
+      else {
+        body += '<div class="sec"><p style="font-size:13px">For each page: <b>Everyone</b> on the profile' + (team ? ', only its <b>Leads</b>' : '') + ', or <b>Nobody</b>. A lock means the database enforces it too.</p><div class="w131ed">' + groupsWithNew().map(function (g) {
+          var rows = g[1].filter(function (t) { return t !== 'adminpanel'; }).map(function (t) {
+            var v = editVal(p, t), ch = S.pedits[t] !== undefined;
+            var opts = team ? [['all', 'Everyone'], ['lead', 'Leads'], ['none', 'Nobody']] : [['all', 'Everyone'], ['none', 'Nobody']];
+            return '<div class="w131er' + (ch ? ' ch' : '') + '"><span class="lb">' + E(labelOf(t)) + (LOCK[t] ? ' ' + I('lock') : '') + (v === undefined ? '<small>Not decided yet: follows its built-in access</small>' : (LOCK[t] ? '<small>' + E(LOCK[t]) + '</small>' : '')) + '</span><span class="w131seg3" role="group" aria-label="' + E(labelOf(t)) + '">'
+              + opts.map(function (o) { return '<button type="button" data-w131cell="' + E(t) + '|' + o[0] + '" class="' + (v === o[0] ? 'on ' + o[0] : '') + '" aria-pressed="' + (v === o[0]) + '">' + o[1] + '</button>'; }).join('') + '</span></div>';
+          }).join('');
+          return rows ? '<div class="gl">' + E(g[0]) + '</div>' + rows : '';
+        }).join('') + '</div></div>';
+      }
+    } else if (S.ptab === 'people') {
+      body += '<div class="sec">' + (hs.length ? hs.map(function (x) { return '<button type="button" class="w131p" data-w131open="' + E(pkey(x)) + '" style="padding:8px 0;grid-template-columns:40px minmax(0,1fr) auto 20px">' + avatar(x) + '<span class="nm"><b>' + E(x.name) + '</b><span>' + E([x.title, teamLabel(x.dept)].filter(Boolean).join(' \u00b7 ')) + '</span></span><span>' + (x.lead ? '<span class="w131tier exec">Lead</span>' : '') + '</span><span class="chv">' + I('chev') + '</span></button>'; }).join('') : '<p class="w131mut">Nobody has it yet.</p>') + '</div>';
+      var sug = people().filter(function (x) { return x.sug && x.sug.key === p.key && !x.same && x.row && x.status !== 'removed'; });
+      if (sug.length) body += '<div class="sec"><h4>Suggested for</h4><p>' + E(listJoin(sug.map(function (x) { return x.name; }))) + '</p><div class="row"><a class="w131btn sm" data-w131apply="prof:' + E(p.key) + '">' + I('check') + 'Give it to ' + (sug.length === 1 ? first(sug[0].name) : 'all ' + sug.length) + '</a></div></div>';
+    } else {
+      body += '<div class="sec"><form data-w131words="1" onsubmit="return false"><label class="f">Name<input type="text" name="label" maxlength="60" value="' + E(p.label) + '"></label>'
+        + '<label class="f">Who it is for<input type="text" name="summary" maxlength="220" value="' + E(p.summary || '') + '"></label>'
+        + '<label class="f">What it lets you do (one line each)<textarea name="can">' + E((p.can || []).join('\n')) + '</textarea></label>'
+        + (team ? '<label class="f">What a lead adds<textarea name="lead_note" style="min-height:80px">' + E(p.lead_note || '') + '</textarea></label>' : '') + '</form></div>';
+    }
+    body += '<div class="err" id="w131err"></div>';
+    var foot = S.ptab === 'pages' && p.tier !== 'admin'
+      ? (n ? '<a class="w131btn sm ghost" data-w131pundo="1">' + I('undo') + 'Undo</a>' : '') + '<span class="sp"></span><a class="w131btn' + (n ? '' : ' off') + '" data-w131psave="1">' + I('check') + (n ? 'Save ' + plural(n, 'change', 'changes') : 'No changes') + '</a>'
+      : S.ptab === 'words' ? '<span class="sp"></span><a class="w131btn" data-w131wsave="1">' + I('check') + 'Save the words</a>' : '<span class="sp"></span><a class="w131btn ghost" data-w131close="1">Close</a>';
+    return { kicker: 'Access profile', title: p.label, sub: p.summary || '', body: body, foot: foot };
+  }
+  function cell(t, v) {
+    var p = S.byKey[S.sheet && S.sheet.key]; if (!p || p.tier === 'admin') return;
+    if (v === valueOf(p, t)) delete S.pedits[t]; else S.pedits[t] = v;
+    renderSheet();
+  }
+  async function savePages() {
+    var p = S.byKey[S.sheet && S.sheet.key]; if (!p || S.busy) return;
+    var ed = S.pedits, keys = Object.keys(ed); if (!keys.length) return;
+    S.busy = true;
+    try {
+      var next = Object.assign({}, p.pages, ed);
+      var r = await db.from('hub_access_profiles').update({ pages: next, updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('key', p.key);
+      if (r && r.error) throw r.error;
+      logChange('access_profile', p.key, 'pages', null, keys.map(function (t) { return labelOf(t) + ': ' + (ed[t] === 'all' ? 'everyone' : ed[t] === 'lead' ? 'leads' : 'nobody'); }).join('; '));
+      try { await db.from('hub_access_settings').update({ reviewed_at: new Date().toISOString(), reviewed_by: myEmail(), updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('id', 1); } catch (e) { /* fine */ }
+      S.pedits = {}; S.busy = false;
+      toastS('Saved. Everyone on ' + p.label + ' sees it the next time they open the Hub.');
+      await afterChange(myEmail());
+    } catch (e) { S.busy = false; sheetErr('Could not save it: ' + ((e && e.message) || 'try again')); }
+  }
+  async function saveWords() {
+    var p = S.byKey[S.sheet && S.sheet.key], f = document.querySelector('#w131sheet form[data-w131words]'); if (!p || !f || S.busy) return;
+    var label = String(f.label.value || '').trim(); if (!label) { sheetErr('Give the profile a name.'); return; }
+    var patch = { label: label, summary: String(f.summary.value || '').trim(), can: String(f.can.value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 12), updated_by: myEmail(), updated_at: new Date().toISOString() };
+    if (f.lead_note) patch.lead_note = String(f.lead_note.value || '').trim();
+    S.busy = true;
+    try {
+      var r = await db.from('hub_access_profiles').update(patch).eq('key', p.key);
+      if (r && r.error) throw r.error;
+      logChange('access_profile', p.key, 'words', p.label, label);
+      S.busy = false; toastS('Saved'); await afterChange(myEmail());
+    } catch (e) { S.busy = false; sheetErr('Could not save it: ' + ((e && e.message) || 'try again')); }
+  }
+  async function setAuto(on) {
+    try {
+      var r = await db.from('hub_access_settings').update({ auto_profile: !!on, updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('id', 1);
+      if (r && r.error) throw r.error;
+      S.settings.auto_profile = !!on; logChange('access_profile', 'settings', 'auto_profile', String(!on), String(!!on));
+      toastS(on ? 'New people now get their team\u2019s profile' : 'New people wait for you to pick a profile');
+    } catch (e) { toastS('Could not change it'); }
+    paint();
+  }
+
+  /* ---------- new pages to decide: one sheet, every profile ---------- */
+  function openDecide() { S.sheet = { kind: 'decide' }; S.dedits = {}; renderSheet(); }
+  function decideSheet() {
+    var u = undecided(); if (!u.length && !Object.keys(S.dedits || {}).length) return { kicker: 'New pages', title: 'Nothing to decide', sub: '', body: '<div class="sec"><p>Every page has a decision in every profile.</p></div>', foot: '<span class="sp"></span><a class="w131btn ghost" data-w131close="1">Close</a>' };
+    var body = '<div class="sec"><p style="font-size:13px">A release added ' + (u.length === 1 ? 'this page' : 'these pages') + '. Decide who sees ' + (u.length === 1 ? 'it' : 'them') + ' in each profile; until then ' + (u.length === 1 ? 'it follows its' : 'they follow their') + ' built-in access.</p></div>';
+    u.forEach(function (t) {
+      body += '<div class="sec"><h4>' + E(labelOf(t)) + '</h4><div class="w131ed">' + S.profiles.filter(function (p) { return p.tier !== 'admin'; }).map(function (p) {
+        var k = p.key + '|' + t, v = (S.dedits || {})[k] !== undefined ? S.dedits[k] : valueOf(p, t), team = isTeamP(p);
+        var opts = team ? [['all', 'Everyone'], ['lead', 'Leads'], ['none', 'Nobody']] : [['all', 'Everyone'], ['none', 'Nobody']];
+        return '<div class="w131er"><span class="lb">' + E(p.label) + '</span><span class="w131seg3">' + opts.map(function (o) { return '<button type="button" data-w131dcell="' + E(k) + '|' + o[0] + '" class="' + (v === o[0] ? 'on ' + o[0] : '') + '">' + o[1] + '</button>'; }).join('') + '</span></div>';
+      }).join('') + '</div></div>';
+    });
+    var n = Object.keys(S.dedits || {}).length;
+    return { kicker: 'New pages', title: plural(u.length, 'page to decide', 'pages to decide'), sub: '', body: body + '<div class="err" id="w131err"></div>', foot: '<span class="sp"></span><a class="w131btn' + (n ? '' : ' off') + '" data-w131dsave="1">' + I('check') + (n ? 'Save ' + plural(n, 'decision', 'decisions') : 'Pick above') + '</a>' };
+  }
+  async function saveDecide() {
+    var ed = S.dedits || {}, keys = Object.keys(ed); if (!keys.length || S.busy) return;
+    var byP = {}; keys.forEach(function (k) { var a = k.split('|'); (byP[a[0]] = byP[a[0]] || {})[a[1]] = ed[k]; });
+    S.busy = true;
+    try {
+      for (var pk in byP) {
+        var p = S.byKey[pk]; if (!p) continue;
+        var r = await db.from('hub_access_profiles').update({ pages: Object.assign({}, p.pages, byP[pk]), updated_by: myEmail(), updated_at: new Date().toISOString() }).eq('key', pk);
+        if (r && r.error) throw r.error;
+        logChange('access_profile', pk, 'pages', null, Object.keys(byP[pk]).map(function (t) { return labelOf(t) + ': ' + byP[pk][t]; }).join('; '));
+      }
+      S.dedits = {}; S.busy = false; toastS('Saved'); closeSheet(); await afterChange(myEmail());
+    } catch (e) { S.busy = false; sheetErr('Could not save it: ' + ((e && e.message) || 'try again')); }
+  }
+
+  /* ---------- give many people their suggested profile ---------- */
+  function applyList(which) {
+    var xs = people().filter(function (x) { return x.row && x.status !== 'removed' && x.sug && S.byKey[x.sug.key] && !x.same && !x.founder; });
+    if (which === 'noprof') xs = xs.filter(function (x) { return !x.assigned && !x.hand; });
+    else if (String(which).indexOf('prof:') === 0) { var k = which.slice(5); xs = xs.filter(function (x) { return x.sug.key === k; }); }
+    return xs;
+  }
+  function openApply(which) {
+    var xs = applyList(which); if (!xs.length) { toastS('Nothing to change'); return; }
+    S.sheet = { kind: 'apply', which: which }; renderSheet();
+  }
+  function applySheet() {
+    var xs = applyList(S.sheet.which);
+    var body = '<div class="sec"><p>' + (xs.length === 1 ? E(xs[0].name) + ' gets' : plural(xs.length, 'person gets', 'people get')) + ' the profile suggested from the roster. They see the change the next time they open the Hub, and you can change anyone afterwards.</p></div>'
+      + '<div class="sec">' + xs.map(function (x) { var nx = pagesOfProfile(x.sug.key, x.sug.lead, x.row, x.email); return '<p><b>' + E(x.name) + '</b> \u2192 ' + E(profileName(x.sug.key, x.sug.lead)) + (x.hand ? ' <span class="w131mut">(replaces hand-picked pages)</span>' : '') + '<br><span class="w131diff">' + diffText(nx, x.pages) + '</span></p>'; }).join('') + '</div>'
+      + (!(S.settings || {}).auto_profile ? '<div class="sec"><label class="ck"><input type="checkbox" id="w131autoalso" checked> Also give new people their team\u2019s profile automatically</label></div>' : '') + '<div class="err" id="w131err"></div>';
+    return { kicker: 'Give the suggested profile', title: xs.length === 1 ? xs[0].name : plural(xs.length, 'person', 'people'), sub: '', body: body, foot: '<a class="w131btn ghost" data-w131close="1">Cancel</a><span class="sp"></span><a class="w131btn gold" data-w131applygo="1">' + I('check') + 'Apply to ' + plural(xs.length, 'person', 'people') + '</a>' };
+  }
+  async function applyGo() {
+    var xs = applyList(S.sheet.which); if (!xs.length || S.busy) return;
+    var also = document.getElementById('w131autoalso'), btn = document.querySelector('#w131sheet [data-w131applygo]');
+    S.busy = true; var done = 0, failed = [];
+    for (var i = 0; i < xs.length; i++) {
+      if (btn) btn.textContent = 'Applying ' + (i + 1) + ' of ' + xs.length + '\u2026';
+      try { if (await saveProfile(xs[i], xs[i].sug.key, xs[i].sug.lead, 'suggested from the roster')) done++; else failed.push(xs[i].name); } catch (e) { failed.push(xs[i].name); }
+    }
+    try {
+      var patch = { applied_at: new Date().toISOString(), applied_by: myEmail(), updated_by: myEmail(), updated_at: new Date().toISOString() };
+      if (also && also.checked) patch.auto_profile = true;
+      await db.from('hub_access_settings').update(patch).eq('id', 1);
+    } catch (e) { /* fine */ }
+    S.busy = false; closeSheet();
+    toastS(failed.length ? 'Done for ' + done + '; could not change ' + listJoin(failed) : 'Done for ' + plural(done, 'person', 'people'));
+    await afterChange(myEmail());
+  }
+
+  /* ---------- Requests: grant or decline, in one click ---------- */
+  function reqPerson(q) { return personBy(q.email) || { name: q.name || nameFromEmail(q.email), email: lower(q.email), dept: '', row: S.roles[lower(q.email)] || null, pages: [], status: 'invited' }; }
+  /* what Grant does for this request, in words, and the change it makes */
+  function grantPlan(q) {
+    var x = reqPerson(q), w = String(q.wanted || '');
+    if (x.status === 'removed') return { ok: false, why: 'They were removed from the Hub; invite them again first.' };
+    if (w.indexOf('tab:') === 0) {
+      var t = w.slice(4);
+      if (x.founder || x.role === 'admin') return { ok: false, why: 'Admins already see every page.' };
+      if ((x.pages || []).indexOf(t) >= 0) return { ok: true, noop: true, say: 'They can already open ' + labelOf(t) + '; granting closes the request.' };
+      var base = (x.pages || []).slice(); base.push(t);
+      return { ok: true, say: 'Adds ' + labelOf(t) + ' to their pages' + (x.assigned ? ' on top of ' + profileName(x.assigned.key, x.lead) + ' (their pages become hand-picked; pick a profile later to go back)' : '') + '.', patch: { tabs: base, role: x.row ? (x.row.role === 'blocked' ? 'member' : x.row.role) : 'member', profile: x.row ? x.row.profile || null : null } };
+    }
+    if (w === 'role:leader') {
+      var tp = x.assigned && isTeamP(x.assigned) ? x.assigned : teamProfile(x.dept);
+      if (x.role === 'leader' || x.role === 'admin') return { ok: true, noop: true, say: 'They already lead; granting closes the request.' };
+      if (tp) return { ok: true, say: 'Makes them a lead on ' + tp.label + ': ' + (tp.lead_note || 'Agendas, Activity, the HR centre for their team and the board pages') + '.', profile: tp.key, lead: true };
+      return { ok: true, say: 'Gives them the classic leader role (every page but Admin). No team profile fits their roster team.', patch: { role: 'leader', tabs: null, profile: null } };
+    }
+    if (w === 'role:admin') {
+      if (x.role === 'admin') return { ok: true, noop: true, say: 'They are already an admin; granting closes the request.' };
+      return { ok: true, say: 'Moves them to Admin: every page, and they can change anyone\u2019s access.', profile: 'admin', lead: false };
+    }
+    return { ok: false, why: 'A free-text request: open their access, make the change, then mark it done.' };
+  }
+  function requestsHtml() {
+    var open = openRequests(), done = (S.requests || []).filter(function (q) { return q.status !== 'new'; });
+    var h = '<div class="w131box" style="padding:0">';
+    if (!open.length) h += '<p class="w131empty">No request is waiting. People ask from My page (Request more access) or from Your access in their profile menu.</p>';
+    open.forEach(function (q) {
+      var x = reqPerson(q), plan = grantPlan(q);
+      h += '<div class="w131rq" data-w131rq="' + q.id + '">' + avatar(x) + '<div class="tx"><b>' + E(x.name) + '</b> <span class="w131mut" style="font-size:12.5px">' + E(q.email) + '</span>'
+        + '<div class="what">' + I('key') + E(reqWhat(q)) + '</div>'
+        + (q.reason ? '<p>\u201c' + E(q.reason) + '\u201d</p>' : '')
+        + '<small>Asked ' + E(ago(q.created_at)) + '. Today: ' + (x.assigned ? E(profileName(x.assigned.key, x.lead)) : x.hand ? 'hand-picked pages' : E((x.row && x.row.role) || q.role_now || 'member')) + '. ' + E(plan.ok ? plan.say : plan.why) + '</small></div>'
+        + '<div class="ac">' + (plan.ok ? '<a class="w131btn sm" data-w131grant="' + q.id + '">' + I('check') + 'Grant</a>' : '<a class="w131btn sm" data-w131open="' + E(pkey(x)) + '">Open their access</a><a class="w131btn sm ghost" data-w131done="' + q.id + '">Mark done</a>')
+        + '<a class="w131btn sm ghost" data-w131decline="' + q.id + '">Decline</a></div></div>';
+    });
+    h += '</div>';
+    if (done.length) {
+      h += '<div class="w131sec"><h2>Decided</h2><span>The last ' + Math.min(done.length, 20) + '.</span></div><div class="w131box" style="padding:0">' + done.slice(0, 20).map(function (q) {
+        var x = reqPerson(q);
+        return '<div class="w131rq">' + avatar(x) + '<div class="tx"><b>' + E(x.name) + '</b> <span class="w131mut" style="font-size:12.5px">' + E(reqWhat(q)) + '</span><small>' + E(q.status === 'granted' ? 'Granted' : q.status === 'declined' ? 'Declined' : q.status) + (q.decided_by ? ' by ' + E(String(q.decided_by).split('@')[0].replace(/[._]/g, ' ')) : '') + (q.decided_at ? ', ' + E(ago(q.decided_at)) : '') + '</small></div><div class="ac"><span class="w131rqst ' + E(q.status) + '">' + E(q.status) + '</span></div></div>';
+      }).join('') + '</div>';
+    }
+    return h;
+  }
+  async function decide(id, grant, manual) {
+    var q = (S.requests || []).filter(function (r) { return String(r.id) === String(id); })[0]; if (!q || S.busy) return;
+    S.busy = true;
+    try {
+      if (grant && !manual) {
+        var plan = grantPlan(q), x = reqPerson(q);
+        if (!plan.ok) throw new Error(plan.why);
+        if (!plan.noop) {
+          if (plan.profile) {
+            var ok = await saveProfile(x.email ? x : { email: lower(q.email), name: q.name, row: S.roles[lower(q.email)] || null }, plan.profile, plan.lead, 'access request #' + q.id);
+            if (!ok) throw new Error('could not change the profile');
+          } else if (plan.patch) {
+            var r = await db.from('hub_roles').upsert(Object.assign({ email: lower(q.email), updated_by: actor(), updated_at: new Date().toISOString() }, plan.patch), { onConflict: 'email' });
+            if (r && r.error) throw r.error;
+            logChange('hub_role', lower(q.email), plan.patch.tabs ? 'tabs' : 'role', null, q.wanted + ' (access request #' + q.id + ')');
+          }
+        }
+      }
+      var up = await db.from('wa_access_requests').update({ status: grant ? 'granted' : 'declined', decided_by: myEmail(), decided_at: new Date().toISOString() }).eq('id', q.id);
+      if (up && up.error) throw up.error;
+      toastS(grant ? (manual ? 'Marked done' : 'Granted: ' + first(q.name || q.email) + ' sees it the next time they open the Hub') : 'Declined');
+      S.busy = false;
+      await afterChange(lower(q.email));
+    } catch (e) { S.busy = false; toastS('Could not do it: ' + String((e && e.message) || e).slice(0, 100)); }
+  }
+
+  /* ---------- Invite: one person, a list, or everyone not invited yet ---------- */
+  function openInvite(team) { S.sheet = { kind: 'invite', f: { name: '', email: '', dept: team || '', title: '' }, pick: null, lead: false, res: null }; renderSheet(); }
+  function invPick() {
+    var sh = S.sheet, tp = sh.f.dept ? teamProfile(sh.f.dept) : null;
+    var key = sh.pick || (sh.f.dept === 'board' && S.byKey.board ? 'board' : (tp ? tp.key : null));
+    var lead = key && isTeamP(S.byKey[key]) ? !!sh.lead : false;
+    return { key: key, lead: lead };
+  }
+  function readInviteForm() {
+    var f = S.sheet && S.sheet.f; if (!f) return;
+    ['name', 'email', 'title'].forEach(function (k) { var el = document.getElementById('w131f_' + k); if (el) f[k] = el.value; });
+    var d = document.getElementById('w131f_dept'); if (d) f.dept = d.value;
+  }
+  function inviteSheet() {
+    var sh = S.sheet, f = sh.f, pk = invPick();
+    if (sh.res) return { kicker: 'Invited', title: f.name, sub: f.email, body: '<div class="sec res">' + sh.res + '</div>', foot: '<a class="w131btn ghost" data-w131invnext="1">' + I('plus') + 'Invite someone else</a><span class="sp"></span><a class="w131btn" data-w131open="' + E(lower(f.email)) + '">Open their sheet</a>' };
+    var body = '<div class="sec"><div class="two"><label class="f">Full name<input type="text" id="w131f_name" placeholder="First Last" value="' + E(f.name) + '" autocomplete="off"></label>'
+      + '<label class="f">Email<input type="email" id="w131f_email" placeholder="name@welfareavenue.com" value="' + E(f.email) + '" autocomplete="off"></label></div>'
+      + '<div class="two"><label class="f">Team<select id="w131f_dept"><option value="">Pick a team</option>' + TEAMS.map(function (d) { return '<option value="' + d + '"' + (f.dept === d ? ' selected' : '') + '>' + E(teamLabel(d)) + '</option>'; }).join('') + '</select></label>'
+      + '<label class="f">Title<input type="text" id="w131f_title" placeholder="e.g. Content manager" value="' + E(f.title) + '"></label></div></div>'
+      + '<div class="sec"><h4>Access profile</h4><p style="font-size:13px">' + (f.dept ? 'Their team\u2019s profile is picked for you. Change it if they need something else.' : 'Pick their team first; their team\u2019s profile is picked for you.') + '</p>' + pickerHtml(pk.key, pk.lead, f.dept, false)
+      + (pk.key ? '<div style="margin-top:12px"><h4>What they get \u00b7 ' + pagesOfProfile(pk.key, pk.lead, null, f.email || 'x@welfareavenue.com').length + ' pages</h4>' + pagesHtml(pagesOfProfile(pk.key, pk.lead, null, f.email || 'x@welfareavenue.com'), null) + '</div>' : '') + '</div>'
+      + '<div class="sec"><label class="ck"><input type="checkbox" id="w131send" checked> Email them a sign-in invitation now (from hub@welfareavenue.com). They can also sign in with Google using this email straight away.</label></div><div class="err" id="w131err"></div>';
+    return { kicker: 'People and access', title: 'Invite someone', sub: 'They join the roster, get the profile and a welcome.', body: body, foot: '<a class="w131btn ghost" data-w131list="1">' + I('list') + 'Invite a list instead</a><span class="sp"></span><a class="w131btn' + (pk.key ? '' : ' off') + '" data-w131invgo="1">' + I('mail') + 'Invite' + (pk.key ? ' as ' + E(profileName(pk.key, pk.lead)) : '') + '</a>' };
+  }
+  async function inviteGo() {
+    if (S.busy) return; readInviteForm();
+    var f = S.sheet.f, pk = invPick();
+    var name = String(f.name || '').trim(), email = lower(f.email);
+    if (!name) { sheetErr('Type their name.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { sheetErr('Type a valid email.'); return; }
+    if (!f.dept) { sheetErr('Pick their team.'); return; }
+    if (!pk.key) { sheetErr('Pick a profile.'); return; }
+    var send = !!(document.getElementById('w131send') || {}).checked;
+    S.busy = true; var btn = document.querySelector('#w131sheet [data-w131invgo]'); if (btn) { btn.classList.add('off'); btn.textContent = 'Inviting\u2026'; }
+    try {
+      var res = await doInvite({ name: name, email: email, title: String(f.title || '').trim(), dept: f.dept }, pk.key, pk.lead, send);
+      f.name = name; f.email = email;
+      S.sheet.res = '<b>' + E(name) + '</b> is on the Hub as <b>' + E(profileName(pk.key, pk.lead)) + '</b>' + (res.existed ? ' (they were already on the roster)' : '') + '.<br>' + resultHtml(res, name);
+      toastS(res.email_sent ? 'Invitation emailed to ' + first(name) : first(name) + ' can sign in now; share the message or a link');
+      S.busy = false; await afterChange(email);
+    } catch (e) { S.busy = false; if (btn) { btn.classList.remove('off'); btn.textContent = 'Invite'; } sheetErr('Could not invite: ' + String((e && e.message) || e).slice(0, 140)); }
+  }
+
+  /* a list: paste it, check it, invite them all */
+  function parseList(text) {
+    var out = [], seen = {};
+    String(text || '').split(/\n|;/).forEach(function (line) {
+      line = line.trim(); if (!line) return;
+      var em = '', name = '', m = /<([^>]+@[^>]+)>/.exec(line);
+      if (m) { em = lower(m[1]); name = line.replace(m[0], '').replace(/[",]/g, ' ').trim(); }
+      else {
+        var parts = line.split(/[,\t]/).map(function (s) { return s.trim(); });
+        var hit = parts.filter(function (s) { return s.indexOf('@') > 0; })[0];
+        if (hit) { em = lower(hit.split(/\s+/).filter(function (s) { return s.indexOf('@') > 0; })[0]); name = parts.filter(function (s) { return s !== hit; }).join(' ').trim(); }
+      }
+      if (!em || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em) || seen[em]) return;
+      seen[em] = 1;
+      out.push({ email: em, name: name || nameFromEmail(em) });
+    });
+    return out;
+  }
+  function openList() { S.sheet = { kind: 'list', step: 'paste', text: '', dept: '', rows: [], results: null }; renderSheet(); }
+  function openInviteAll() {
+    var ni = people().filter(function (x) { return x.status === 'notinvited' && x.roster; });
+    if (!ni.length) { toastS('Everyone on the roster is invited'); return; }
+    S.sheet = { kind: 'list', step: 'review', text: '', dept: '', results: null, fromRoster: true, rows: ni.map(function (x) { return { email: x.email, name: x.name, dept: x.dept, title: x.title, key: x.sug ? x.sug.key : (teamProfile(x.dept) || {}).key || '', lead: false }; }) };
+    renderSheet();
+  }
+  function listSheet() {
+    var sh = S.sheet;
+    if (sh.results) {
+      var okN = sh.results.filter(function (r) { return r.ok; }).length;
+      return { kicker: 'Invited', title: okN + ' of ' + sh.results.length + ' invited', sub: '', body: '<div class="sec">' + sh.results.map(function (r) { return '<p><b>' + E(r.name || r.email) + '</b> ' + (r.ok ? '<span style="color:' + TEAL + ';font-weight:700">invited</span>' + (r.email_sent ? ', email sent' : ', no email') + (r.profile ? ', ' + E(r.profile) : '') : '<span style="color:' + FLAG + ';font-weight:700">not invited</span>: ' + E(r.error || 'failed')) + '</p>'; }).join('') + '</div>', foot: '<span class="sp"></span><a class="w131btn" data-w131close="1">Done</a>' };
+    }
+    if (sh.step === 'paste') {
+      return { kicker: 'People and access', title: 'Invite a list', sub: 'One person per line: "Name, email", "Name <email>" or just the email.', body: '<div class="sec"><label class="f">The list<textarea id="w131paste" placeholder="Amina Diallo, amina.diallo@welfareavenue.com&#10;Jordan Lee <jordan.lee@welfareavenue.com>&#10;sam.ortiz@welfareavenue.com">' + E(sh.text) + '</textarea></label>'
+        + '<label class="f">Their team<select id="w131ldept"><option value="">Pick a team</option>' + TEAMS.map(function (d) { return '<option value="' + d + '"' + (sh.dept === d ? ' selected' : '') + '>' + E(teamLabel(d)) + '</option>'; }).join('') + '</select></label><p class="w131mut" style="font-size:12.5px">You can change the team and profile for each person on the next step.</p></div><div class="err" id="w131err"></div>',
+        foot: '<a class="w131btn ghost" data-w131new="1">Just one person</a><span class="sp"></span><a class="w131btn" data-w131lreview="1">' + I('arrow') + 'Check the list</a>' };
+    }
+    var body = '<div class="sec"><p style="font-size:13px">' + (sh.fromRoster ? 'Everyone on the roster who is not invited yet, with the profile of their team.' : 'Check each person\u2019s team and profile.') + '</p>' + sh.rows.map(function (r, i) {
+      var opts = '<option value="">No profile</option>' + S.profiles.map(function (p) { return '<option value="' + E(p.key) + '"' + (r.key === p.key && !r.lead ? ' selected' : '') + '>' + E(p.label) + '</option>' + (isTeamP(p) ? '<option value="' + E(p.key) + ':lead"' + (r.key === p.key && r.lead ? ' selected' : '') + '>' + E(p.label) + ' (lead)</option>' : ''); }).join('');
+      return '<div class="w131er" style="flex-wrap:wrap"><span class="lb">' + E(r.name) + '<small>' + E(r.email) + '</small></span>'
+        + '<select data-w131lrow="' + i + '|dept" style="font-size:12.5px;padding:6px 8px;border-radius:9px;border:1px solid rgba(16,63,57,.18);max-width:100%">' + '<option value="">Team</option>' + TEAMS.map(function (d) { return '<option value="' + d + '"' + (r.dept === d ? ' selected' : '') + '>' + E(teamLabel(d)) + '</option>'; }).join('') + '</select>'
+        + '<select data-w131lrow="' + i + '|key" style="font-size:12.5px;padding:6px 8px;border-radius:9px;border:1px solid rgba(16,63,57,.18);max-width:100%">' + opts + '</select></div>';
+    }).join('') + '</div><div class="sec"><label class="ck"><input type="checkbox" id="w131send" checked> Email each of them a sign-in invitation now</label></div><div class="err" id="w131err"></div>';
+    var ready = sh.rows.filter(function (r) { return r.dept && r.key; }).length;
+    return { kicker: 'People and access', title: plural(sh.rows.length, 'person to invite', 'people to invite'), sub: '', body: body, foot: (sh.fromRoster ? '' : '<a class="w131btn ghost" data-w131lback="1">Back</a>') + '<span class="sp"></span><a class="w131btn' + (ready ? '' : ' off') + '" data-w131lgo="1">' + I('mail') + 'Invite ' + (ready === sh.rows.length ? plural(ready, 'person', 'people') : ready + ' of ' + sh.rows.length) + '</a>' };
+  }
+  function listReview() {
+    var ta = document.getElementById('w131paste'), dsel = document.getElementById('w131ldept');
+    var sh = S.sheet; sh.text = ta ? ta.value : sh.text; sh.dept = dsel ? dsel.value : sh.dept;
+    var ppl = parseList(sh.text);
+    if (!ppl.length) { sheetErr('No emails found in the list.'); return; }
+    var tp = sh.dept ? teamProfile(sh.dept) : null;
+    sh.rows = ppl.map(function (p) {
+      var x = personBy(p.email), d = (x && x.dept) || sh.dept, t = d ? teamProfile(d) : tp;
+      return { email: p.email, name: (x && x.name) || p.name, dept: d, title: x ? x.title : '', key: d === 'board' && S.byKey.board ? 'board' : (t ? t.key : ''), lead: false };
+    });
+    sh.step = 'review'; renderSheet();
+  }
+  async function listGo() {
+    var sh = S.sheet; if (S.busy) return;
+    var rows = sh.rows.filter(function (r) { return r.dept && r.key; }); if (!rows.length) return;
+    var send = !!(document.getElementById('w131send') || {}).checked, btn = document.querySelector('#w131sheet [data-w131lgo]');
+    S.busy = true; if (btn) { btn.classList.add('off'); btn.textContent = 'Inviting ' + rows.length + '\u2026'; }
+    var results = [];
+    try {
+      var res = await invoke({ action: 'bulk_invite', people: rows.map(function (r) { return { name: r.name, email: r.email, department: r.dept, role_title: r.title || '', hub_role: roleFor(r.key, r.lead), send_email: send }; }) });
+      var list = Array.isArray(res.results) ? res.results : [];
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], out = list.filter(function (o) { return lower(o.email) === r.email; })[0] || { ok: false, email: r.email, error: 'no result' };
+        if (out.ok) {
+          try {
+            var u = await db.from('hub_roles').upsert({ email: r.email, role: roleFor(r.key, r.lead), profile: r.key, tabs: null, updated_by: actor(), updated_at: new Date().toISOString() }, { onConflict: 'email' });
+            if (u && u.error) throw u.error;
+            logChange('hub_role', r.email, 'profile', null, profileName(r.key, r.lead) + ' (invited in a list)');
+            out.profile = profileName(r.key, r.lead);
+          } catch (e) { out.profile = 'profile not saved'; }
+        }
+        out.name = r.name; results.push(out);
+      }
+    } catch (e) { S.busy = false; if (btn) { btn.classList.remove('off'); btn.textContent = 'Invite'; } sheetErr('Could not invite them: ' + String((e && e.message) || e).slice(0, 140)); return; }
+    S.busy = false; sh.results = results;
+    toastS(results.filter(function (r) { return r.ok; }).length + ' invited');
+    await afterChange(myEmail());
+  }
+
+  /* ---------- the sheet ---------- */
+  var lastFocus = null;
+  function sheetEl() {
+    var el = document.getElementById('w131sheet');
+    if (!el) { el = document.createElement('div'); el.id = 'w131sheet'; document.body.appendChild(el); }
+    return el;
+  }
+  function sheetView() {
+    var sh = S.sheet; if (!sh) return null;
+    if (sh.kind === 'person') { var x = personBy(sh.key); return x ? personSheet(x) : null; }
+    if (sh.kind === 'profile') return profileSheet();
+    if (sh.kind === 'invite') return inviteSheet();
+    if (sh.kind === 'list') return listSheet();
+    if (sh.kind === 'apply') return applySheet();
+    if (sh.kind === 'decide') return decideSheet();
+    return null;
+  }
+  function renderSheet() {
+    var el = sheetEl(), wasOn = el.classList.contains('on');
+    if (wasOn && S.sheet && S.sheet.kind === 'invite' && !S.sheet.res) readInviteForm();
+    var v = sheetView(); if (!v) { closeSheet(); return; }
+    var head = '<div style="min-width:0"><div class="kk">' + E(v.kicker) + '</div><h2>' + E(v.title) + '</h2>' + (v.sub ? '<div class="sub">' + E(v.sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w131close="1" aria-label="Close">' + I('x') + '</button>';
+    if (!wasOn || !el.querySelector('.pane')) {
+      lastFocus = document.activeElement;
+      el.innerHTML = '<div class="bk" data-w131close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft"></div></div>';
+    }
+    var pane = el.querySelector('.pane'), bd = el.querySelector('.bd'), st = bd.scrollTop;
+    pane.setAttribute('aria-label', v.title);
+    el.querySelector('.ph').innerHTML = head; bd.innerHTML = v.body; el.querySelector('.ft').innerHTML = v.foot;
+    if (wasOn) bd.scrollTop = st;
+    el.classList.add('on');
+    if (!wasOn) setTimeout(function () { var f = el.querySelector('.bd input:not([type=checkbox]), .xb'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }, 40);
+  }
+  function closeSheet() {
+    var el = document.getElementById('w131sheet'); if (el) { el.classList.remove('on'); el.innerHTML = ''; }
+    S.sheet = null;
+    if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    lastFocus = null;
+  }
+
+  /* ---------- the card and the section ---------- */
+  var HREF = { people: '#adminpanel/people', profiles: '#adminpanel/access', requests: '#adminpanel/people/requests' };
+  function tabFromHash() {
+    var p = String(location.hash || '').replace(/^#/, '').split('/');
+    if (p[0] !== 'adminpanel') return null;
+    if (p[1] === 'access') return 'profiles';
+    if (p[1] === 'people') return p[2] === 'requests' ? 'requests' : p[2] === 'profiles' ? 'profiles' : 'people';
+    return null;
+  }
+  /* the sections stay as wave118 and wave127 made them (the classic view needs them); the new card stands in for both */
+  var MAST_D = 'Everyone who can sign in: their access profile, their invitations and the access requests, in one place.';
+  function sectionFix() {
+    try {
+      var W = window.__wa118;
+      if (W && Array.isArray(W.ADMIN)) W.ADMIN.forEach(function (a) { if (a[0] === 'people') a[3] = MAST_D; });
+      var sub = document.querySelector('nav.wa-nav .w118sub'); if (sub) sub.classList.toggle('w131acc', /^#adminpanel\/access/.test(location.hash || ''));
+    } catch (e) { /* fine */ }
+  }
+  function mastFix() {
+    if (document.body.classList.contains('w131classic')) return;
+    var m = document.querySelector('#adminpanel > .w118mast'); if (!m || !tabFromHash()) return;
+    var h = m.querySelector('h1'), p = m.querySelector('p');
+    if (h && h.textContent !== 'People and access') h.textContent = 'People and access';
+    if (p && p.textContent !== MAST_D) p.textContent = MAST_D;
+  }
+  function cardEl() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !amAdmin()) return null;
+    var c = document.getElementById('w131card');
+    if (!c) { c = document.createElement('div'); c.id = 'w131card'; c.className = 'w131wrap'; c.innerHTML = '<div id="w131"></div>'; }
+    var sw = panel.querySelector(':scope > .w118adm');
+    if (sw) { if (sw.nextElementSibling !== c) sw.insertAdjacentElement('afterend', c); }
+    else if (c.parentNode !== panel) panel.insertBefore(c, panel.firstChild);
+    return c;
+  }
+  function paint() {
+    var c = cardEl(); if (!c) return;
+    var host = document.getElementById('w131'); if (!host) return;
+    var t = tabFromHash(); if (t) S.tab = t;
+    var html;
+    if (!S.loaded) html = '<div class="w131box"><p class="w131empty">Loading people and access\u2026</p></div>';
+    else {
+      var rq = openRequests().length, n = people().filter(function (x) { return x.status !== 'removed'; }).length;
+      html = '<div class="w131top"><nav class="w131tabs" aria-label="People and access">'
+        + [['people', 'People', n], ['profiles', 'Profiles', S.profiles.length], ['requests', 'Requests', rq]].map(function (x) { return '<a href="' + HREF[x[0]] + '" data-w131tab="' + x[0] + '"' + (S.tab === x[0] ? ' class="on" aria-current="page"' : '') + '>' + x[1] + ' <b' + (x[0] === 'requests' && rq ? ' class="hot"' : '') + '>' + x[2] + '</b></a>'; }).join('')
+        + '</nav><span class="sp"></span><a class="w131btn ghost sm" data-w131list="1">' + I('list') + 'Invite a list</a><a class="w131btn" data-w131new="1">' + I('plus') + 'Invite someone</a></div>'
+        + (S.tab === 'profiles' ? profilesHtml() : S.tab === 'requests' ? requestsHtml() : peopleHtml());
+    }
+    mastFix();
+    if (host.__h === html) return;
+    var q = document.activeElement && document.activeElement.id === 'w131q' ? document.activeElement : null, pos = q ? q.selectionStart : 0;
+    host.innerHTML = html; host.__h = html;
+    if (q) { var q2 = document.getElementById('w131q'); if (q2) { try { q2.focus({ preventScroll: true }); q2.setSelectionRange(pos, pos); } catch (e) { /* fine */ } } }
+  }
+  var showing = null;
+  async function show() {
+    if (!amAdmin() || !tabFromHash()) return;
+    sectionFix(); cardEl(); paint();
+    if (showing) return showing;
+    showing = (async function () { await load(true); paint(); if (S.sheet) renderSheet(); })();
+    try { await showing; } finally { showing = null; }
+    openFromHash();
+  }
+  function openFromHash() {
+    var p = String(location.hash || '').replace(/^#/, '').split('/');
+    if (p[0] === 'adminpanel' && p[1] === 'people' && p[2] === 'p' && p[3]) { var x = personBy(decodeURIComponent(p[3])); if (x && (!S.sheet || S.sheet.key !== pkey(x))) openPerson(pkey(x)); }
+  }
+  function setClassic(on) {
+    document.body.classList.toggle('w131classic', !!on);
+    var panel = document.getElementById('adminpanel'), b = document.getElementById('w131back');
+    if (on && panel) {
+      if (!b) { b = document.createElement('div'); b.id = 'w131back'; b.className = 'w131back'; b.innerHTML = I('undo') + '<span>This is the classic view: the old table, the roles and hand-picked pages. <a class="w131lnk" data-w131classic="0">Back to People and access</a></span>'; }
+      var sw = panel.querySelector(':scope > .w118adm'); if (sw) sw.insertAdjacentElement('afterend', b); else panel.insertBefore(b, panel.firstChild);
+      try { if (typeof wa40Render === 'function') wa40Render(); } catch (e) { /* fine */ }
+      try { if (window.w127 && window.w127.paint) window.w127.paint(); } catch (e) { /* fine */ }
+    } else if (b) b.remove();
+    if (!on) paint();
+    else { try { var W = window.__wa118; if (W && W.admin) { var m = document.querySelector('#adminpanel > .w118mast'); if (m) m.removeAttribute('data-w118cur'); W.admin(); } } catch (e) { /* fine */ } }
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    /* admins inviting from a team page get the new invite, with the team's profile */
+    var di = t.closest('[data-w113deptinv]');
+    if (di && amAdmin() && S.profiles.length) { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); openInvite(di.getAttribute('data-w113deptinv')); return; }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    if (!t.closest('#w131card, #w131sheet, #w131back')) return;
+    var el, v;
+    function a(n) { el = t.closest('[' + n + ']'); v = el ? el.getAttribute(n) : null; return !!el; }
+    if (a('data-w131close')) { closeSheet(); return; }
+    if (a('data-w131tab')) { if (el.tagName !== 'A' || !el.getAttribute('href')) { e.preventDefault(); location.hash = HREF[v] || HREF.people; } return; }
+    if (a('data-w131open')) { e.preventDefault(); openPerson(v); return; }
+    if (a('data-w131new')) { openInvite(''); return; }
+    if (a('data-w131newin')) { openInvite(v); return; }
+    if (a('data-w131list')) { openList(); return; }
+    if (a('data-w131invall')) { openInviteAll(); return; }
+    if (a('data-w131filter')) { S.status = v; S.q = ''; S.team = ''; if (S.tab !== 'people') location.hash = HREF.people; paint(); var l = document.querySelector('#w131card .w131chips'); if (l && l.scrollIntoView) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
+    if (a('data-w131st')) { S.status = (S.status === v ? '' : v); paint(); return; }
+    if (a('data-w131apply')) { openApply(v); return; }
+    if (a('data-w131classic')) { setClassic(v !== '0'); return; }
+    if (a('data-w131pick')) { if (el.disabled) return; if (S.sheet.kind === 'invite') readInviteForm(); S.sheet.pick = v; S.sheet.lead = false; renderSheet(); return; }
+    if (a('data-w131lead')) { var x0 = S.sheet.kind === 'person' ? personBy(S.sheet.key) : null; var cur = x0 ? sheetPick(x0) : invPick(); if (S.sheet.kind === 'invite') readInviteForm(); if (!S.sheet.pick && cur.key) S.sheet.pick = cur.key; S.sheet.lead = !cur.lead; renderSheet(); return; }
+    if (a('data-w131save')) { doSave(); return; }
+    if (a('data-w131invite')) { inviteFromSheet(); return; }
+    if (a('data-w131resend')) { resend(); return; }
+    if (a('data-w131link')) { signLink(); return; }
+    if (a('data-w131copymsg')) { var ta = document.getElementById('w131msg'); if (ta) copyText(ta.value).then(function (ok) { toastS(ok ? 'Message copied' : 'Select the text and copy it'); }); return; }
+    if (a('data-w131setem')) { setEmail(); return; }
+    if (a('data-w131rm')) { S.sheet.rm = v === '1'; renderSheet(); return; }
+    if (a('data-w131rmgo')) { removeGo(); return; }
+    if (a('data-w131hand')) { var xh = personBy(S.sheet.key); closeSheet(); if (xh && typeof wa40TabModal === 'function') { try { wa40TabModal(xh.email); } catch (x) { /* fine */ } } return; }
+    if (a('data-w131go')) { closeSheet(); location.hash = v; return; }
+    if (a('data-w131prof')) { openProfile(v); return; }
+    if (a('data-w131ptab')) { S.ptab = v; renderSheet(); return; }
+    if (a('data-w131cell')) { var cv = v.split('|'); cell(cv[0], cv[1]); return; }
+    if (a('data-w131psave')) { savePages(); return; }
+    if (a('data-w131pundo')) { S.pedits = {}; renderSheet(); return; }
+    if (a('data-w131wsave')) { saveWords(); return; }
+    if (a('data-w131auto')) { setAuto(!(S.settings || {}).auto_profile); return; }
+    if (a('data-w131decide')) { openDecide(); return; }
+    if (a('data-w131dcell')) { var dv = v.split('|'), dk = dv[0] + '|' + dv[1], p0 = S.byKey[dv[0]]; S.dedits = S.dedits || {}; if (p0 && valueOf(p0, dv[1]) === dv[2]) delete S.dedits[dk]; else S.dedits[dk] = dv[2]; renderSheet(); return; }
+    if (a('data-w131dsave')) { saveDecide(); return; }
+    if (a('data-w131applygo')) { applyGo(); return; }
+    if (a('data-w131invgo')) { inviteGo(); return; }
+    if (a('data-w131invnext')) { openInvite(S.sheet && S.sheet.f ? S.sheet.f.dept : ''); return; }
+    if (a('data-w131lreview')) { listReview(); return; }
+    if (a('data-w131lback')) { S.sheet.step = 'paste'; S.sheet.rows = []; renderSheet(); return; }
+    if (a('data-w131lgo')) { listGo(); return; }
+    if (a('data-w131grant')) { decide(v, true); return; }
+    if (a('data-w131decline')) { decide(v, false); return; }
+    if (a('data-w131done')) { decide(v, true, true); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w131team') { S.team = t.value; paint(); return; }
+    if (t.id === 'w131f_dept') { readInviteForm(); S.sheet.pick = null; S.sheet.lead = false; renderSheet(); return; }
+    if (t.id === 'w131ldept' && S.sheet) { S.sheet.dept = t.value; return; }
+    var lr = t.getAttribute && t.getAttribute('data-w131lrow');
+    if (lr && S.sheet && S.sheet.rows) {
+      var parts = lr.split('|'), r = S.sheet.rows[Number(parts[0])]; if (!r) return;
+      if (parts[1] === 'dept') { var oldT = teamProfile(r.dept); r.dept = t.value; if (!r.key || (oldT && r.key === oldT.key)) { var nt = t.value === 'board' && S.byKey.board ? S.byKey.board : teamProfile(t.value); r.key = nt ? nt.key : ''; r.lead = false; } }
+      else { var m = /^([a-z0-9_-]*)(:lead)?$/.exec(t.value) || []; r.key = m[1] || ''; r.lead = !!m[2]; }
+      renderSheet();
+    }
+  });
+  var qT = null;
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w131q') { S.q = t.value; clearTimeout(qT); qT = setTimeout(paint, 220); return; }
+    if (t.id === 'w131em' && S.sheet) { S.sheet.email = t.value; return; }
+    if (t.id === 'w131paste' && S.sheet) { S.sheet.text = t.value; return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S.sheet && document.getElementById('w131sheet') && document.getElementById('w131sheet').classList.contains('on')) { e.preventDefault(); closeSheet(); }
+  });
+  window.addEventListener('hashchange', function () {
+    sectionFix();
+    if (tabFromHash()) { S.status = S.tab === tabFromHash() ? S.status : S.status; setTimeout(show, 0); }
+    else if (S.sheet) closeSheet();
+  });
+
+  /* ---------- the tour and the Admin lesson ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours || !W.tours.adminpanel) return;
+      var st = W.tours.adminpanel.steps || [];
+      /* the old cards' steps go, every time (wave127 adds its step back at boot) */
+      var at = -1;
+      for (var i = st.length - 1; i >= 0; i--) { var sel = String(st[i].s || ''); if (sel === '#w113card' || sel === '#w127card' || sel.indexOf('#w113card') === 0 || sel.indexOf('#w127card') === 0 || sel.indexOf('#w110ar') >= 0) { if (at < 0 || i < at) at = i; st.splice(i, 1); } }
+      if (st.some(function (s) { return s.s && String(s.s).indexOf('#w131card') === 0; })) return;
+      var add = [
+        { s: '#w131card .w131tabs', t: 'People and access', p: 'One place for access: People (everyone and their profile), Profiles (what each profile opens) and Requests (people asking for more).', opt: 1, hash: '#adminpanel/people' },
+        { s: '#w131card .w131todo || #w131card .w131alldone', t: 'What needs doing', p: 'Access requests, people without a profile, people not invited yet, missing emails and inactive people who can still sign in, each with the button that fixes it.', opt: 1 },
+        { s: '#w131card .w131team', t: 'Everyone, by team', p: 'Each person\u2019s sign-in status and profile. Click anyone to pick their profile (their team\u2019s comes first, with a Lead switch), see the pages it opens, invite them, copy a sign-in link or remove them.', opt: 1 },
+        { s: '#w131card [data-w131new]', t: 'Invite someone', p: 'Name, email and team: their team\u2019s profile is picked for you, and the Hub emails the invitation from hub@. Invite a list the same way.', opt: 1 },
+        { s: '#w131card .w131pgrid', t: 'Profiles', p: 'Open a profile to set its pages (everyone, leads or nobody), its words and see who has it. Every profile is compared below.', opt: 1, hash: '#adminpanel/access' }
+      ];
+      Array.prototype.splice.apply(st, [at < 0 ? st.length : at, 0].concat(add));
+      var nav = st.filter(function (s) { return s.s === '#adminpanel nav.w118adm'; })[0];
+      if (nav && nav.p) nav.p = nav.p.replace('people and access, access profiles,', 'people and access,');
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- boot ---------- */
+  sectionFix(); addTours();
+  if (typeof showPanel === 'function') {
+    var __sp131 = showPanel;
+    showPanel = function (id) {
+      var out = __sp131.apply(this, arguments);
+      try { if (id === 'adminpanel') setTimeout(show, 40); else if (S.sheet) closeSheet(); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa131 = startApp;
+    startApp = async function () {
+      var out = await __sa131.apply(this, arguments);
+      try { sectionFix(); addTours(); if (tabFromHash()) show(); } catch (e) { console.warn('wave131 boot', e); }
+      return out;
+    };
+  }
+  window.w131 = {
+    state: function () { return S; }, paint: paint, show: show, load: load, open: openPerson, profile: openProfile, invite: openInvite,
+    people: function () { return people(); }, todos: function () { return todos().map(function (t) { return t.k; }); }, pages: function (key, lead) { return pagesOfProfile(key, lead, null, 'x@welfareavenue.com'); }
+  };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
@@ -48927,11 +50370,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w110st.declined{background:rgba(133,146,163,.16);color:#103F39;}';
   document.head.appendChild(css);
 
+  /* wave131: today's pages, named as the menu names them */
   var TAB_LABEL = {
-    dashboard: 'Dashboard', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing',
-    fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance',
-    training: 'Training academy', transcripts: 'Transcript archive', activity: 'Activity',
-    adminpanel: 'Admin', finances: 'Finances', brain: 'The Brain', hrcentre: 'HR centre'
+    dashboard: 'Delivery numbers and donations', opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
+    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
+    governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
+    activity: 'Activity', training: 'Training academy', brain: 'The Brain', orgchart: 'Org chart', adminpanel: 'Admin'
   };
   function me() {
     return {
@@ -48968,15 +50413,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function w110Modal() {
     var m = me();
     var role = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member';
-    var pages = Object.keys(TAB_LABEL).filter(function (k) { return k !== 'adminpanel'; });
+    /* wave131: say it in profiles, and only offer the pages they do not have */
+    var have = []; try { have = (typeof wa40Allowed === 'function' && wa40Allowed()) || []; } catch (e) { have = []; }
+    var pages = Object.keys(TAB_LABEL).filter(function (k) { return k !== 'adminpanel' && have.indexOf(k) < 0; });
+    var prof = ''; try { var pk = window.w127 && window.w127.mine ? window.w127.mine() : null; var st = pk && window.w127.state ? window.w127.state() : null; if (st && st.byKey && st.byKey[pk]) prof = st.byKey[pk].label + (role === 'leader' && st.byKey[pk].tier === 'member' ? ' (lead)' : ''); } catch (e) { prof = ''; }
     openModal(
       '<h3>Request more access</h3>' +
-      '<p class="read" style="margin:4px 0 8px">You are a <b>' + esc(role) + '</b>. Ask for a bigger role or specific pages; an admin reviews it and you will see the result on your page.</p>' +
+      '<p class="read" style="margin:4px 0 8px">' + (prof ? 'Your access profile is <b>' + esc(prof) + '</b>.' : 'You have the classic <b>' + esc(role) + '</b> access.') + ' Ask for a page you are missing, the lead option for your team, or Admin; an admin reviews it and you will see the answer on this page.</p>' +
       '<label class="w101lbl">What do you need?</label>' +
       '<select id="w110want" style="width:100%;box-sizing:border-box">' +
-      '<option value="role:leader">Leader role (every page, edit rights on team boards)</option>' +
-      '<option value="role:admin">Admin role (roles, settings, HR centre)</option>' +
       pages.map(function (k) { return '<option value="tab:' + k + '">Page: ' + esc(TAB_LABEL[k]) + '</option>'; }).join('') +
+      (role === 'leader' || role === 'admin' ? '' : '<option value="role:leader">Lead access for my team (Agendas, Activity, the HR centre for my team, the board pages)</option>') +
+      (role === 'admin' ? '' : '<option value="role:admin">Admin (people and access, settings, AI models)</option>') +
       '<option value="other">Something else (describe below)</option>' +
       '</select>' +
       '<label class="w101lbl">Why (one or two lines)</label>' +

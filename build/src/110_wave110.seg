@@ -34,11 +34,13 @@
     '.w110st.declined{background:rgba(133,146,163,.16);color:#566a7f;}';
   document.head.appendChild(css);
 
+  /* wave131: today's pages, named as the menu names them */
   var TAB_LABEL = {
-    dashboard: 'Dashboard', opsmtl: 'Ops Montreal', opsto: 'Ops Toronto', marketing: 'Marketing',
-    fundraising: 'Fundraising & Grants', hr: 'Human Resources', board: 'Board & Governance',
-    training: 'Training academy', transcripts: 'Transcript archive', activity: 'Activity',
-    adminpanel: 'Admin', finances: 'Finances', brain: 'The Brain', hrcentre: 'HR centre'
+    dashboard: 'Delivery numbers and donations', opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
+    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
+    governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
+    activity: 'Activity', training: 'Training academy', brain: 'The Brain', orgchart: 'Org chart', adminpanel: 'Admin'
   };
   function me() {
     return {
@@ -75,15 +77,18 @@
   function w110Modal() {
     var m = me();
     var role = (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || 'member';
-    var pages = Object.keys(TAB_LABEL).filter(function (k) { return k !== 'adminpanel'; });
+    /* wave131: say it in profiles, and only offer the pages they do not have */
+    var have = []; try { have = (typeof wa40Allowed === 'function' && wa40Allowed()) || []; } catch (e) { have = []; }
+    var pages = Object.keys(TAB_LABEL).filter(function (k) { return k !== 'adminpanel' && have.indexOf(k) < 0; });
+    var prof = ''; try { var pk = window.w127 && window.w127.mine ? window.w127.mine() : null; var st = pk && window.w127.state ? window.w127.state() : null; if (st && st.byKey && st.byKey[pk]) prof = st.byKey[pk].label + (role === 'leader' && st.byKey[pk].tier === 'member' ? ' (lead)' : ''); } catch (e) { prof = ''; }
     openModal(
       '<h3>Request more access</h3>' +
-      '<p class="read" style="margin:4px 0 8px">You are a <b>' + esc(role) + '</b>. Ask for a bigger role or specific pages; an admin reviews it and you will see the result on your page.</p>' +
+      '<p class="read" style="margin:4px 0 8px">' + (prof ? 'Your access profile is <b>' + esc(prof) + '</b>.' : 'You have the classic <b>' + esc(role) + '</b> access.') + ' Ask for a page you are missing, the lead option for your team, or Admin; an admin reviews it and you will see the answer on this page.</p>' +
       '<label class="w101lbl">What do you need?</label>' +
       '<select id="w110want" style="width:100%;box-sizing:border-box">' +
-      '<option value="role:leader">Leader role (every page, edit rights on team boards)</option>' +
-      '<option value="role:admin">Admin role (roles, settings, HR centre)</option>' +
       pages.map(function (k) { return '<option value="tab:' + k + '">Page: ' + esc(TAB_LABEL[k]) + '</option>'; }).join('') +
+      (role === 'leader' || role === 'admin' ? '' : '<option value="role:leader">Lead access for my team (Agendas, Activity, the HR centre for my team, the board pages)</option>') +
+      (role === 'admin' ? '' : '<option value="role:admin">Admin (people and access, settings, AI models)</option>') +
       '<option value="other">Something else (describe below)</option>' +
       '</select>' +
       '<label class="w101lbl">Why (one or two lines)</label>' +

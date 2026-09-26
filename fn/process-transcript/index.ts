@@ -1,3 +1,7 @@
+// v13 (26/09/26): the bank. A task the meeting puts off by three months or more still comes out of the meeting, with bank_until
+// (the date it should come back) and bank_reason: apply_transcript_result puts it straight in the bank, out of every board and
+// count, and the daily job brings it back on its date. Banked tasks are marked in the open task list so the model does not add
+// them again; unbank_task_ids brings one back when the meeting starts it now. The Slack line counts what was banked.
 // v10 (25/09/26): every new task carries a description and a priority, relative due dates resolve from the meeting date, Jev checks the project each task landed in. v8: routed through the Hub model router (llm, task transcript_extract; Sonnet 5 first) and every extracted item gets a Jev second opinion (jevCheck).
 // Welfare Avenue: process-transcript (v7, 24/09/26)
 // v7: Program Development is its own team (key 'progdev'). Labels renamed:
@@ -107,7 +111,8 @@ Rules:
 12. summary: one line, under 25 words, stating what changed, counting closures.
 13. board_sensitive: set true when the transcript contains board only content: leadership departures or succession (for example a founder or co executive director stepping back or leaving), personnel performance or discipline, individual compensation, legal disputes, or anything explicitly marked board only or for the board only. When unsure, err toward true.
 14. Event routing (Ops Montreal and Ops Toronto only): give every new task an event_routing value. Use "event" when the task is preparation or follow up for one of the regular biweekly Sunday serving events: volunteer confirmations and recruitment for that Sunday, cooking, groceries and supplies, packing, distribution day logistics, standard operating procedure steps. Use "adhoc" for everything else, including special one off or corporate volunteering events, partnerships, admin, marketing, and anything not tied to a regular serving Sunday. When the transcript states which serving date a task is for, set event_date to that ISO date, preferring a date listed in upcoming_serving_events; otherwise leave event_date null and the task attaches to the next serving event. For all other departments use "adhoc".
-15. Project routing: the context lists the organization's projects with descriptions. Give every new task a project_id when the task clearly belongs to that project based on the project's name and description. Prefer projects from this department, but use another department's project when the task is clearly part of that named initiative (for example a marketing task promoting the flag football tournament belongs to the Flag Football 2026 project). When no project fits, use null: the task lands in the department's general list. Never invent a project_id that is not in the list. Event routed tasks (rule 14) do not need a project_id.`;
+15. Project routing: the context lists the organization's projects with descriptions. Give every new task a project_id when the task clearly belongs to that project based on the project's name and description. Prefer projects from this department, but use another department's project when the task is clearly part of that named initiative (for example a marketing task promoting the flag football tournament belongs to the Flag Football 2026 project). When no project fits, use null: the task lands in the department's general list. Never invent a project_id that is not in the list. Event routed tasks (rule 14) do not need a project_id.
+16. The bank: when the meeting clearly puts a piece of work off by three months or more ("in the spring", "next year", "after the gala in March", "park it until the new fiscal year", "not before January"), still add it as a new task, but set bank_until to the ISO date it should come back (the first day of the month or season named; three to six months after the meeting when the timing is vague) and bank_reason to one short line saying why it waits. It goes to the bank instead of the board and comes back on that date. Work for the next three months is never banked, and a date alone is not a reason to bank. Tasks marked "(in the bank until ...)" in the numbered open task list are already banked: never add them again; close one only with the same evidence rule; list its task_id in unbank_task_ids only when the meeting says to start it now.`;
 
 const TOOL = {
   name: 'apply_department_update',
@@ -128,7 +133,10 @@ const TOOL = {
         status: { type: 'string' }, confidential: { type: 'boolean' },
         event_routing: { type: 'string', enum: ['event', 'adhoc'], description: 'For operations departments: "event" when the task belongs to a regular biweekly Sunday serving event, "adhoc" otherwise (including special or corporate volunteering events). Other departments: "adhoc".' },
         event_date: { type: ['string', 'null'], description: 'ISO date of the specific serving event this task is for, only when the transcript states it. Prefer a date from upcoming_serving_events. Null when unstated.' },
-        project_id: { type: ['integer', 'null'], description: 'Id from the projects list this task belongs to, or null for the department general list. Only use ids from the provided projects list.' } }, required: ['title', 'owner', 'flag', 'description', 'priority'] } },
+        project_id: { type: ['integer', 'null'], description: 'Id from the projects list this task belongs to, or null for the department general list. Only use ids from the provided projects list.' },
+        bank_until: { type: ['string', 'null'], description: 'Rule 16: only when the meeting puts this work off by three months or more. The ISO date it should come back. Null for everything else.' },
+        bank_reason: { type: ['string', 'null'], description: 'Rule 16: one short line on why it waits (for example "After the March gala"). Null when not banked.' } }, required: ['title', 'owner', 'flag', 'description', 'priority'] } },
+      unbank_task_ids: { type: 'array', items: { type: 'integer' }, description: 'Rule 16: task_ids of tasks marked "(in the bank until ...)" that the meeting says to start now. Usually empty.' },
       close_tasks: { type: 'array', description: 'Open tasks the transcript proves are complete or no longer needed. Be conservative: when in doubt, leave the task open.', items: { type: 'object', properties: {
         task_id: { type: 'integer', description: 'The task_id from the numbered open task list.' },
         evidence: { type: 'string', description: 'A short quote or close paraphrase from the transcript proving the task is done or no longer needed.' } },
@@ -387,7 +395,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
 
   const [metaQ, tasksQ, decQ, rosterQ, projQ] = await Promise.all([
     svc.from('dept_meta').select('read, progress, priorities').eq('department', dept).maybeSingle(),
-    svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag').eq('department', dept).eq('done', false),
+    svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag, banked_at, bank_until').eq('department', dept).eq('done', false),
     svc.from('decisions').select('id, title, area, owner').eq('done', false),
     svc.from('team_members').select('name, role').eq('department', dept).eq('active', true),
     svc.from('projects').select('id, name, description, department, parent_id, goal_id').eq('status', 'active').order('department').order('sort'),
@@ -396,7 +404,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
 
   const openTasksNumbered = (tasksQ.data || []).map((t, i) =>
     (i + 1) + '. task_id ' + t.id + ': ' + t.title +
-    ' (owner: ' + (t.owner || 'unassigned') + (t.subsection ? ', workstream: ' + t.subsection : '') + ')'
+    ' (owner: ' + (t.owner || 'unassigned') + (t.subsection ? ', workstream: ' + t.subsection : '') + ')' +
+    (t.banked_at ? ' (in the bank until ' + (t.bank_until || 'later') + ')' : '')
   ).join('\n');
 
   const upcomingEvents = (dept === 'opsmtl' || dept === 'opsto')
@@ -495,6 +504,16 @@ async function processTranscript(transcriptId: number, dryRun = false) {
 
   const closed = await applyCloseTasks(result, dept, changedBy, effectiveBoardOnly);
 
+  // v13: banked tasks the meeting starts now come back on the board
+  const bankedIds = new Set((tasksQ.data || []).filter(t => t.banked_at).map(t => Number(t.id)));
+  const unbanked: number[] = [];
+  for (const raw of (Array.isArray(result.unbank_task_ids) ? result.unbank_task_ids as unknown[] : []).slice(0, 10)) {
+    const id = Number(raw);
+    if (!Number.isInteger(id) || !bankedIds.has(id) || closed.some(c => c.id === id)) continue;
+    const { error: ubErr } = await svc.rpc('bank_unbank_do', { p_kind: 'task', p_id: id, p_why: 'the meeting started it again (' + (tx.title || 'meeting') + ')', p_by: changedBy });
+    if (ubErr) console.error('unbank failed', id, ubErr); else unbanked.push(id);
+  }
+
   // v6: count how many of this run's kept tasks landed in projects.
   const projectedCount = remainingNew.filter(t => Number.isInteger(t.project_id as number) && (t.project_id as number) > 0).length;
 
@@ -503,6 +522,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   const r = applied as Record<string, number>;
   const parts: string[] = [];
   if (r.tasks_added) parts.push(r.tasks_added + (r.tasks_added === 1 ? ' new task' : ' new tasks') + (projectedCount ? ' (' + projectedCount + ' into projects)' : ''));
+  if (r.tasks_banked) parts.push(r.tasks_banked + ' banked for later');
+  if (unbanked.length) parts.push(unbanked.length + ' back from the bank');
   if (routed.length) parts.push(routed.length + (routed.length === 1 ? ' serving event task' : ' serving event tasks'));
   if (closed.length) parts.push(closed.length + ' closed');
   const newDecs = (result.new_decisions as Array<Record<string, string>>) || [];
@@ -537,7 +558,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   if (!isTest) {
     await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + jevLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
   }
-  return { ...(applied as Record<string, unknown>), tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, jev: jevRep };
+  return { ...(applied as Record<string, unknown>), tasks_unbanked: unbanked.length, tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, jev: jevRep };
 }
 
 Deno.serve(async (req: Request) => {

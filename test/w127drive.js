@@ -24,6 +24,8 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
   await page.goto("http://wahub.test/", { waitUntil: "domcontentloaded" });
   await page.waitForFunction(() => { const g = document.getElementById("gate"); return g && g.style.display === "none"; }, null, { timeout: 20000 });
   await page.waitForTimeout(3200);
+  /* wave131 moved Access profiles into People and access; the old card lives behind the classic view */
+  if (process.env.CLASSIC) await page.evaluate(() => { document.body.classList.add('w131classic'); });
   const ev = (f, a) => page.evaluate(f, a);
   const hash = async h => { await page.evaluate(x => { location.hash = x; }, h); await page.waitForTimeout(1200); };
   const click = async sel => { const el = await page.$(sel); if (!el) return false; await el.click(); await page.waitForTimeout(450); return true; };
@@ -118,7 +120,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
     ok("People and access: the Access column picks a profile", pa.n > 5 && pa.classic === 0 && pa.s === 'r:admin' && pa.k === 'r:leader' && pa.groups[0] === 'Access profiles', JSON.stringify(pa));
     await shot('people');
     /* the admin tour stops at the profiles */
-    ok("the Admin tour has a stop for access profiles", await ev(() => { const t = window.w122 && w122.tours && w122.tours.adminpanel; return !!t && t.steps.some(s => s.s === '#w127card' && s.hash === '#adminpanel/access'); }));
+    ok("the Admin tour has a stop for access profiles", await ev(() => { const t = window.w122 && w122.tours && w122.tours.adminpanel; return !!t && t.steps.some(s => (s.s === '#w127card' || s.s === '#w131card .w131pgrid') && s.hash === '#adminpanel/access'); }));
     await mine('Admin');
   }
 
