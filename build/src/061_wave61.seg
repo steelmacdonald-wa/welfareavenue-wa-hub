@@ -65,9 +65,9 @@
   }
 
   var T = {
-    mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
-    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training',
+    mypage: 'Home', overview: 'Executive dashboard', dashboard: 'Delivery numbers', dept: 'Department pages',
+    requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Department goals',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
   };
@@ -146,10 +146,10 @@
         + sec(mPills([['draft', 'gold'], ['final', 'grn'], ['share link']]), 'Finalize and share',
           'Reorder, add items, mark final, and share a private link with people outside the Hub.');
     } else if (k === 'importantinfo') {
-      sub = 'Shared links, tools and credentials.';
-      fl = ['Find it', 'Reveal if masked', 'Add your own'];
-      secs = sec('<div class="w60task"><span class="w60p">Canva login</span><span class="w60mask">&bull;&bull;&bull;&bull;&bull;&bull;</span><span class="w60p grn">reveal</span></div>', 'Secrets stay masked',
-          'Credentials show as dots until you click reveal. Add entries with the form at the bottom.');
+      sub = 'Shared links, tools and team logins.';
+      fl = ['Find it', 'Request a password', 'Add your own'];
+      secs = sec('<div class="w60task"><span class="w60p">Canva login</span><span class="w60mask">&bull;&bull;&bull;&bull;&bull;&bull;</span><span class="w60p grn">request access</span></div>', 'Passwords by request',
+          'Everyone sees the list; a password stays hidden until an admin approves your request. Whoever adds a login can always see it, and every view is in the audit trail. Add entries with the form at the bottom.');
     } else if (k === 'goals') {
       sub = 'Quarterly goals, rolling up to the organization.';
       fl = ['Pick the quarter', 'Open a department', 'Link the work'];

@@ -8,7 +8,7 @@
    them to change the check-out time so it's logged properly."
    Three notes, one at a time, anchored under the wave116j pill (#w116jck):
    1. Not checked in, and the hub has not been open for 3 hours (or ever
-      on this device): "Starting a session? Check in so your hours count."
+      on this device): "Don't forget to check in" (the wording since 26/09/26).
       Check in goes through the pill (wave116q posts to Slack). Not now
       snoozes it for 4 hours.
    2. Checked in and back after being away 20 minutes or more (the tab or
@@ -102,7 +102,8 @@
     if (num(K.snooze) > Date.now()) return false;
     if (last && Date.now() - last < AWAY_MS) return false;
     /* wave130: two short lines, so the note under the pill stays clear of the page (the tiles on Home sit 90 px below the pill) */
-    show('in', '<b><i></i>Starting a session?</b><div class="row"><button class="go" data-w118b="in">Check in</button><span class="why">so your hours count</span><button class="link" data-w118b="later">Not now</button></div>');
+    /* Steel (26/09/26): "instead it should say don't forget to check-in" */
+    show('in', '<b><i></i>Don\u2019t forget to check in</b><div class="row"><button class="go" data-w118b="in">Check in</button><button class="link" data-w118b="later">Not now</button></div>');
     return true;
   }
   function nudgeBack(row, leftAt) {

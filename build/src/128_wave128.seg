@@ -428,8 +428,12 @@
     try { var cy = X.board && X.board.cycle; if (cy && cy.next) { var due = addDays(dayOfIso(cy.next.meets_at) || t, -7); if (inWin(due)) rows.push({ d: due, k: 'Committees', t: 'Committees meet by this date', go: '#committees' }); } } catch (e) { /* fine */ }
     (X.fund || []).filter(function (f) { return inWin(parseDay(f.start_date)) && f.status !== 'idea' && f.status !== 'cancelled'; }).forEach(function (f) { rows.push({ d: parseDay(f.start_date), k: 'Fundraising', t: f.title + (f.precision === 'month' ? ' (all month)' : ''), go: '#fundevents' }); });
     (X.vol || []).filter(function (v) { return inWin(parseDay(v.event_date)) && v.status !== 'cancelled'; }).slice(0, 4).forEach(function (v) { rows.push({ d: parseDay(v.event_date), k: 'Serving', t: servName(v), go: '#volunteering' }); });
+    /* audit 26/09/26: skip what the brief's Next up already shows (the next board meeting, event and serving) */
+    var shown = nextItems().map(function (x) { return x.k + '|' + ymdOf(x.d) + '|' + String(x.t || '').toLowerCase(); });
+    rows = rows.filter(function (r) { return shown.indexOf(r.k + '|' + ymdOf(r.d) + '|' + String(r.t || '').replace(/ \(all month\)$/, '').toLowerCase()) < 0; });
     return rows.sort(function (a, b) { return a.d - b.d; }).slice(0, 8);
   }
+  function ymdOf(d) { try { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); } catch (e) { return ''; } }
   function nextHtml() {
     var rows = nextRows();
     return '<section class="w128box w128next"><div class="hd"><h3>' + I('cal') + 'Coming up</h3><span class="sp"></span><a class="w128lnk" data-w128go="#calendar">Calendar ' + I('chev') + '</a></div>'

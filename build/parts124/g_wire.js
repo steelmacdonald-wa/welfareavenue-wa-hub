@@ -29,18 +29,19 @@
   function placeTabs() {
     try {
       var bar = document.getElementById('tabBar'); if (!bar) return;
+      var LAY = !!(window.WA_NAV && WA_NAV.layout); /* wave134: the menu layout places the calendar; this keeps the Events calendar in the Fundraising row */
       /* after Home; the board has no Home, so after Overview */
       var cal = bar.querySelector('.tab[data-tab="calendar"]'), home = bar.querySelector('.tab[data-tab="mypage"]');
       /* for the board (no Home): after the board pages (wave126 puts them right after Overview), else after Overview */
       var ov0 = bar.querySelector('.tab[data-tab="overview"]'), cm0 = bar.querySelector('.tab[data-tab="committees"]');
       var anchor = home && home.style.display !== 'none' ? home : (cm0 && ov0 && cm0.parentNode === ov0.parentNode && cm0.style.display !== 'none' ? cm0 : (ov0 || home));
-      if (cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
+      if (!LAY && cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
       var fe = bar.querySelector('.tab[data-tab="fundevents"]');
       if (fe) {
         /* inside Fundraising & Finances when that page is yours; otherwise (the board) right after the calendar */
         var fr = bar.querySelector('.tab[data-tab="fundraising"]'); var row = fr && fr.closest ? fr.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
         if (sub && tabOk('fundraising')) { if (fe.parentNode !== sub) { var fin = sub.querySelector('.tab[data-tab="finances"]'); if (fin) sub.insertBefore(fe, fin); else sub.appendChild(fe); } fe.classList.add('w116tool'); }
-        else if (cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }
+        else if (!LAY && cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }
         fe.style.display = tabOk('fundevents') ? '' : 'none';
       }
       if (cal) cal.style.display = tabOk('calendar') ? '' : 'none';

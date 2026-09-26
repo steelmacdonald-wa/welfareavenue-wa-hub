@@ -31,6 +31,7 @@ const json = (b, s = 200)=>new Response(JSON.stringify(b), {
   });
 const DEPTS = [
   'opsmtl',
+  'progdev',
   'opsto',
   'marketing',
   'fundraising',
@@ -39,9 +40,10 @@ const DEPTS = [
 ];
 const DEPT_LABEL = {
   opsmtl: 'Ops Montreal',
+  progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Grants',
+  fundraising: 'Fundraising and Finances',
   hr: 'Human Resources',
   board: 'Board and Governance'
 };
@@ -97,7 +99,7 @@ async function siteUrl() {
   const { data } = await svc.from('app_config').select('value').eq('key', 'site_url').maybeSingle();
   return data?.value || 'https://wa-exec-dashboard.netlify.app';
 }
-const SYSTEM = `You maintain the Welfare Avenue executive status board. You are reading a LEADERSHIP MEETING transcript: the leaders of every department are present, so what the meeting produces must be SPREAD ACROSS DEPARTMENTS. Route every new update and every new task to the single department that will own it (opsmtl, opsto, marketing, fundraising, hr, board), based on who is doing the work and which team it belongs to. Do not funnel everything into one department.
+const SYSTEM = `You maintain the Welfare Avenue executive status board. You are reading a LEADERSHIP MEETING transcript: the leaders of every department are present, so what the meeting produces must be SPREAD ACROSS DEPARTMENTS. Route every new update and every new task to the single department that will own it (opsmtl, progdev, opsto, marketing, fundraising, hr, board), based on who is doing the work and which team it belongs to. Do not funnel everything into one department.
 
 Rules:
 1. Never use em dashes in any text you produce. Use commas, colons, parentheses, or the word "to" for ranges.

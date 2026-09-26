@@ -2,7 +2,7 @@
 // Pushes hub source files to GitHub through the Git Data API using the vault
 // GITHUB_TOKEN (fine-grained PAT, Contents read/write on the hub repo). Lives
 // here because the build sandbox cannot talk to GitHub with its own
-// credentials; Supabase can. Auth: x-wa-secret (WA_TRIGGER_SECRET) or staff JWT.
+// credentials; Supabase can. Auth: x-wa-secret (WA_TRIGGER_SECRET) only (since 26/09/26).
 // Actions:
 //   {action:'probe'}                       token identity + repositories it can reach
 //   {action:'blobs', repo, files:[{path, content_b64}]}  create blobs, returns [{path, sha}]
@@ -54,10 +54,9 @@ function repoPath(repo: string): string {
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
-  let caller = await staffEmail(req);
-  if (!caller) {
-    try { const g = req.headers.get('x-wa-secret'); if (g && g === (await getSecret('WA_TRIGGER_SECRET'))) caller = 'automation'; } catch (_) { /* no */ }
-  }
+  /* audit 26/09/26: the build pipeline only (the trigger secret); a staff sign-in no longer reaches GitHub */
+  let caller: string | null = null;
+  try { const g = req.headers.get('x-wa-secret'); if (g && g === (await getSecret('WA_TRIGGER_SECRET'))) caller = 'automation'; } catch (_) { /* no */ }
   if (!caller) return json({ error: 'unauthorized' }, 401);
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || 'probe');

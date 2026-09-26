@@ -57,8 +57,9 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
       ok("Ask the Hub is a round 56 px button", s.w <= 60 && s.h === 56, s);
       ok("its label is kept (for hover and screen readers)", s.lbl === 'Ask the Hub' && s.lblW <= 1 && s.aria === 'Ask the Hub', s);
       await f.page.hover('#waChatBtn'); await f.page.waitForTimeout(500);
-      const h = await f.ev(() => { const b = document.getElementById('waChatBtn'); return { w: Math.round(b.getBoundingClientRect().width), lblW: Math.round(b.querySelector('.w130lbl').getBoundingClientRect().width) }; });
-      ok("hover opens the label", h.w > 120 && h.lblW > 60, h);
+      /* wave134: the words open around the brand E ("ASK TH" + E + "HUB"), so the E is the E of THE */
+      const h = await f.ev(() => { const b = document.getElementById('waChatBtn'); const w = s => { const el = b.querySelector(s); return el ? Math.round(el.getBoundingClientRect().width) : 0; }; return { w: Math.round(b.getBoundingClientRect().width), a: w('.w134a'), b: w('.w134b'), eIn: !!b.querySelector('.w134e .w117ei'), a1: (b.querySelector('.w134a') || {}).textContent, b1: (b.querySelector('.w134b') || {}).textContent }; });
+      ok("hover opens the label around the E of THE", h.w > 120 && h.a > 30 && h.b > 20 && h.eIn && h.a1 === 'Ask th' && h.b1 === 'Hub', h);
       await f.page.mouse.move(400, 400); await f.page.waitForTimeout(400);
       const inp = await f.page.$('#mypage input[type=text], #mypage textarea, input[type=search], .wa-toolbar input');
       if (inp) { await inp.focus(); await f.page.waitForTimeout(400); }

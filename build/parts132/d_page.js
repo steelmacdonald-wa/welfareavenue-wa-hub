@@ -5,7 +5,7 @@
     var sec = document.getElementById('bank'); if (!sec) return;
     var m = sec.querySelector(':scope > .w118mast');
     if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w132', 'bank'); sec.insertBefore(m, sec.firstChild); }
-    var html = '<div class="crumb">Strategy</div><h1>The bank</h1><p>' + E(BLURB) + '</p>';
+    var html = '<div class="crumb">Goals and projects</div><h1>The bank</h1><p>' + E(BLURB) + '</p>';
     if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
   }
   function host() {

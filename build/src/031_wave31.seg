@@ -164,7 +164,7 @@ var WA31_LOGO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAHsAAACgCAMAAAAb4
   var tries = 0;
   var iv = setInterval(async function () {
     tries += 1;
-    if (typeof window.db === 'undefined' || !window.db || !window.db.rpc) {
+    if (typeof db === 'undefined' || !db || !db.rpc) { /* audit 26/09/26: db is a script-level let, never on window */
       if (tries > 100) { clearInterval(iv); el('wa31body').innerHTML = 'Could not load. Refresh the page.'; }
       return;
     }

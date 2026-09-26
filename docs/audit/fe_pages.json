@@ -1,0 +1,5084 @@
+[
+ {
+  "id": "mypage",
+  "route": "#mypage",
+  "panel": "mypage",
+  "nav_label": "Home",
+  "nav_group": "top level",
+  "nav_placed_by": "009_wave9 creates, 073_wave73 orders",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "115_wave115",
+    "074_wave74",
+    "112_wave112",
+    "116_wave116",
+    "075_wave75",
+    "089_wave89",
+    "114_wave114"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "009_wave9 (applyHash)",
+    "009_wave9 (hashchange)",
+    "124_wave124 (hashchange)"
+   ],
+   "static_references": [
+    "009_wave9:8",
+    "115_wave115:8",
+    "116j_wave116j:5",
+    "116_wave116:3",
+    "078_wave78:2",
+    "105_wave105:2",
+    "114_wave114:2",
+    "116k_wave116k:2",
+    "122_wave122:2",
+    "124_wave124:2",
+    "110_wave110:2",
+    "000_head_base:1",
+    "060_wave60:1",
+    "061_wave61:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:mentions <074_wave74>",
+    "from:slack_hours <074_wave74>",
+    "from:user_state <012_wave12>",
+    "from:wa_notify_prefs <089_wave89>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "mentions": [
+      "select"
+     ],
+     "slack_hours": [
+      "select"
+     ],
+     "wa_notify_prefs": [
+      "select",
+      "upsert"
+     ],
+     "wa_onboarding": [
+      "upsert",
+      "select"
+     ],
+     "team_members": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "notify"
+    ]
+   }
+  },
+  "tour": "home",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61",
+   "085_wave85"
+  ],
+  "notes": null
+ },
+ {
+  "id": "calendar",
+  "route": "#calendar",
+  "panel": "calendar",
+  "nav_label": "Calendar",
+  "nav_group": "top level",
+  "nav_placed_by": "124_wave124 placeTabs (after Home; board: in Strategy)",
+  "access_gate": "role default: viewer and up; WA_NAV gate: viewer",
+  "access": {
+   "role_default_min": "viewer",
+   "wa_nav_gate": "viewer",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 9,
+    "lead": 0,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "124_wave124"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "124_wave124 (showPanel)",
+    "124_wave124 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "124_wave124:13",
+    "020_wave20:1",
+    "119_wave119:1",
+    "128_wave128:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:content_posts <124_wave124>",
+    "from:hub_events <124_wave124>",
+    "from:social_posts <124_wave124>",
+    "from:volunteer_events <124_wave124>",
+    "rpc:calendar_my_meetings <124_wave124>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "fund_events": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "hub_settings": [
+      "select"
+     ],
+     "hub_birthdays": [
+      "select",
+      "upsert",
+      "delete"
+     ],
+     "projects": [
+      "select"
+     ],
+     "board_meetings": [
+      "select"
+     ],
+     "social_posts": [
+      "select"
+     ],
+     "content_posts": [
+      "select"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "hub_events": [
+      "select"
+     ],
+     "change_log": [
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "calendar_my_meetings"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "calendar",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "team",
+  "route": "#team/<team>[/overview|/agenda|/tasks[/<workstream>]|/grants|/events|/donors|/finance]",
+  "panel": "team",
+  "nav_label": "Team pages (opened from each team in Departments)",
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "122_wave122",
+    "116b_wave116b",
+    "123_wave123",
+    "116t_wave116t",
+    "124_wave124",
+    "007_wave7",
+    "126_wave126"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "116_wave116 (hashchange)",
+    "124_wave124 (hashchange)",
+    "126_wave126 (hashchange)",
+    "123_wave123 (showPanel)",
+    "124_wave124 (showPanel)",
+    "126_wave126 (showPanel)",
+    "132_wave132 (showPanel)",
+    "116_wave116 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116_wave116:27",
+    "126_wave126:14",
+    "123_wave123:12",
+    "127_wave127:11",
+    "132_wave132:7",
+    "116i_wave116i:6",
+    "124_wave124:6",
+    "122_wave122:5",
+    "120_wave120:4",
+    "121_wave121:4",
+    "116k_wave116k:3",
+    "116t_wave116t:3",
+    "128_wave128:3",
+    "057_wave57:2"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:hub_checkins <116j_wave116j>",
+    "from:mentions <116_wave116>",
+    "from:metrics <116_wave116>",
+    "from:projects <116_wave116>",
+    "from:task_comments <116b_wave116b>",
+    "from:trainings <122_wave122>",
+    "from:user_state <012_wave12>",
+    "from:volunteer_events <116_wave116>",
+    "rpc:wa_usage_beat <093_wave93>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "agendas": [
+      "select"
+     ],
+     "agenda_items": [
+      "select"
+     ],
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "dept_tasks": [
+      "update",
+      "insert",
+      "delete",
+      "select"
+     ],
+     "task_assignees": [
+      "insert",
+      "delete"
+     ],
+     "task_comments": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ],
+     "task_files": [
+      "select",
+      "insert",
+      "delete"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "hub_birthdays": [
+      "select",
+      "upsert",
+      "delete"
+     ],
+     "board_meetings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "social_posts": [
+      "select"
+     ],
+     "content_posts": [
+      "select"
+     ],
+     "board_members": [
+      "select",
+      "update"
+     ],
+     "board_committees": [
+      "select",
+      "update"
+     ],
+     "board_items": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "board_touchpoints": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "goals": [
+      "select"
+     ],
+     "finance_transactions": [
+      "select"
+     ],
+     "finance_statements": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail",
+     "calendar_my_meetings",
+     "board_me",
+     "board_home"
+    ],
+    "functions": [
+     "build-agenda",
+     "hub-connect",
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team (and tasks)",
+  "help_popup_writers": null,
+  "notes": "One panel (#team) hosts every team page. #team alone falls back to Home. The seven team ids below are menu entries that open #team/<team>."
+ },
+ {
+  "id": "opsmtl",
+  "route": "#opsmtl or #dept/opsmtl (both redirect to #team/opsmtl)",
+  "panel": "team (the classic #opsmtl panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Operations Montreal",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 042/073 group; 116_wave116 row and flyout",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "122_wave122",
+    "123_wave123"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "000_head_base:2",
+    "001_wave116a:2",
+    "116_wave116:2",
+    "009_wave9:1",
+    "011_wave11:1",
+    "039_wave39:1",
+    "092_wave92:1",
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:mentions <116_wave116>",
+    "from:metrics <116_wave116>",
+    "from:projects <116_wave116>",
+    "from:trainings <122_wave122>",
+    "from:volunteer_events <116_wave116>"
+   ],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections (000_head_base plus 8 wrappers), twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #opsmtl is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "progdev",
+  "route": "#progdev or #dept/progdev (both redirect to #team/progdev)",
+  "panel": "team (the classic #progdev panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Program Development",
+  "nav_group": "Departments",
+  "nav_placed_by": "001_wave116a creates; 116_wave116 row and flyout",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "122_wave122"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #progdev is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "opsto",
+  "route": "#opsto or #dept/opsto (both redirect to #team/opsto)",
+  "panel": "team (the classic #opsto panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Operations Toronto",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 116_wave116 row",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "122_wave122"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "000_head_base:2",
+    "001_wave116a:1",
+    "039_wave39:1",
+    "092_wave92:1",
+    "116_wave116:1",
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #opsto is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "marketing",
+  "route": "#marketing or #dept/marketing (both redirect to #team/marketing)",
+  "panel": "team (the classic #marketing panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Marketing, Branding & Web",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 116_wave116 row",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "120_wave120",
+    "121_wave121",
+    "122_wave122",
+    "118c_wave118c"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "121_wave121:3",
+    "000_head_base:1",
+    "039_wave39:1",
+    "073_wave73:1",
+    "092_wave92:1",
+    "116_wave116:1",
+    "120_wave120:1",
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "content_posts": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ],
+     "wa_photos_list": [
+      "select"
+     ],
+     "wa_photos": [
+      "update",
+      "insert",
+      "delete"
+     ]
+    },
+    "rpcs": [
+     "social_range",
+     "social_overview",
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "social-pull",
+     "llm",
+     "team-inbox",
+     "social-publish",
+     "checkin-post"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #marketing is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "fundraising",
+  "route": "#fundraising or #dept/fundraising (both redirect to #team/fundraising)",
+  "panel": "team (the classic #fundraising panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Fundraising & Finances",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 116_wave116 row",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "122_wave122",
+    "124_wave124",
+    "118c_wave118c"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "010_wave10:3",
+    "022_wave22:2",
+    "116_wave116:2",
+    "116b_wave116b:2",
+    "124_wave124:2",
+    "000_head_base:1",
+    "001_wave116a:1",
+    "092_wave92:1",
+    "093_wave93:1",
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ],
+     "hub_birthdays": [
+      "select",
+      "upsert",
+      "delete"
+     ],
+     "board_meetings": [
+      "select"
+     ],
+     "social_posts": [
+      "select"
+     ],
+     "content_posts": [
+      "select"
+     ],
+     "wa_photos_list": [
+      "select"
+     ],
+     "wa_photos": [
+      "update",
+      "insert",
+      "delete"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail",
+     "calendar_my_meetings"
+    ],
+    "functions": [
+     "team-inbox",
+     "llm"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #fundraising is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "hr",
+  "route": "#hr or #dept/hr (both redirect to #team/hr)",
+  "panel": "team (the classic #hr panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Human Resources",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 116_wave116 row",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "122_wave122"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "116_wave116:3",
+    "000_head_base:2",
+    "123_wave123:2",
+    "003_wave3:1",
+    "039_wave39:1",
+    "047_wave47:1",
+    "118_wave118:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:hub_checkins <116j_wave116j>",
+    "from:user_state <012_wave12>",
+    "rpc:wa_usage_beat <093_wave93>"
+   ],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #hr is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "board",
+  "route": "#board or #dept/board (both redirect to #team/board)",
+  "panel": "team (the classic #board panel is hidden by 116i_wave116i but still rendered)",
+  "nav_label": "Board & Governance",
+  "nav_group": "Departments",
+  "nav_placed_by": "base markup; 116_wave116 row; 126_wave126 opens the overview",
+  "access_gate": "role default: leader and up",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 2,
+    "lead": 6,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116_wave116",
+    "123_wave123",
+    "122_wave122",
+    "126_wave126"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "133_wave133:8",
+    "131_wave131:6",
+    "126_wave126:4",
+    "000_head_base:3",
+    "011_wave11:3",
+    "084_wave84:3",
+    "116b_wave116b:3",
+    "124_wave124:3",
+    "054_wave54:2",
+    "075_wave75:2",
+    "116_wave116:2",
+    "116f_wave116f:2",
+    "122_wave122:2",
+    "127_wave127:2"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:dept_requests <123_wave123>",
+    "from:hub_mail <123_wave123>",
+    "from:hub_settings <123_wave123>",
+    "from:request_suggestions <123_wave123>",
+    "from:request_types <123_wave123>"
+   ],
+   "at_boot": "rendered at boot into the hidden classic panel: renderAllSections, twice",
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "mentions": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ],
+     "board_members": [
+      "select",
+      "update"
+     ],
+     "board_committees": [
+      "select",
+      "update"
+     ],
+     "board_meetings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "board_items": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "board_touchpoints": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "dept_tasks": [
+      "select"
+     ],
+     "goals": [
+      "select"
+     ],
+     "finance_transactions": [
+      "select"
+     ],
+     "finance_statements": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail",
+     "board_me",
+     "board_home"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "team",
+  "help_popup_writers": null,
+  "notes": "Classic department panel #board is display:none !important since wave116i yet still rendered at boot by renderSection (000_head_base plus 16 wrappers)."
+ },
+ {
+  "id": "volunteering",
+  "route": "#volunteering[/e/<eventId>|/people|/recipes]",
+  "panel": "volunteering",
+  "nav_label": "MTL volunteering",
+  "nav_group": "Departments > opsmtl row",
+  "nav_placed_by": "116_wave116 adopt() into the opsmtl row",
+  "access_gate": "role default: member and up; always allowed by wave40",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": true,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "020_wave20",
+    "023_wave23",
+    "106_wave106",
+    "085_wave85",
+    "119_wave119"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "020_wave20 (hashchange)",
+    "040_wave40 (showPanel)"
+   ],
+   "static_references": [
+    "020_wave20:14",
+    "116_wave116:9",
+    "122_wave122:8",
+    "025_wave25:7",
+    "119_wave119:5",
+    "128_wave128:4",
+    "026_wave26:3",
+    "106_wave106:3",
+    "023_wave23:2",
+    "024_wave24:2",
+    "028_wave28:2",
+    "039_wave39:2",
+    "047_wave47:2",
+    "083_wave83:2"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:sop_shots <020_wave20>",
+    "from:sop_template <020_wave20>",
+    "from:volunteer_event_summary <020_wave20>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "volunteer_event_summary": [
+      "select"
+     ],
+     "sop_template": [
+      "select"
+     ],
+     "sop_shots": [
+      "select"
+     ],
+     "event_roster": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "sop_event_steps": [
+      "select",
+      "update"
+     ],
+     "sop_event_extras": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "volunteer_people": [
+      "select"
+     ],
+     "volunteer_inventory": [
+      "select"
+     ],
+     "volunteer_events": [
+      "update",
+      "insert"
+     ],
+     "change_log": [
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "quo-send"
+    ]
+   }
+  },
+  "tour": "volunteering",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "Tool button inside the Operations Montreal row. #team/opsmtl/volunteering lands here. Always allowed by wave40."
+ },
+ {
+  "id": "contentcal",
+  "route": "#contentcal[/<date>]",
+  "panel": "contentcal",
+  "nav_label": "Content calendar",
+  "nav_group": "Departments > marketing row",
+  "nav_placed_by": "121_wave121 placeTab",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 4,
+    "lead": 5,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "121_wave121"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "121_wave121 (hashchange)",
+    "118c_wave118c (hashchange)"
+   ],
+   "static_references": [
+    "121_wave121:149",
+    "122_wave122:9",
+    "120_wave120:1",
+    "124_wave124:1",
+    "118c_wave118c:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "fn:social-publish <121_wave121>",
+    "from:content_posts <121_wave121>",
+    "rpc:social_overview <121_wave121>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "content_posts": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ]
+    },
+    "rpcs": [
+     "social_overview"
+    ],
+    "functions": [
+     "llm",
+     "social-publish",
+     "checkin-post"
+    ]
+   }
+  },
+  "tour": "contentcal",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "socialstats",
+  "route": "#socialstats",
+  "panel": "socialstats",
+  "nav_label": "Analytics",
+  "nav_group": "Departments > marketing row",
+  "nav_placed_by": "120_wave120 placeTab",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 5,
+    "lead": 4,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "120_wave120"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "120_wave120 (applyHash)",
+    "120_wave120 (hashchange)",
+    "129_wave129 (showPanel)"
+   ],
+   "static_references": [
+    "120_wave120:137",
+    "122_wave122:8",
+    "129_wave129:6",
+    "121_wave121:5",
+    "124_wave124:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "rpc:social_range <120_wave120>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {},
+    "rpcs": [
+     "social_range",
+     "social_overview"
+    ],
+    "functions": [
+     "social-pull"
+    ]
+   }
+  },
+  "tour": "socialstats",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "fundevents",
+  "route": "#fundevents",
+  "panel": "fundevents",
+  "nav_label": "Events calendar",
+  "nav_group": "Departments > fundraising row",
+  "nav_placed_by": "124_wave124 placeTabs",
+  "access_gate": "role default: viewer and up; WA_NAV gate: viewer",
+  "access": {
+   "role_default_min": "viewer",
+   "wa_nav_gate": "viewer",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 9,
+    "lead": 0,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "124_wave124"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "124_wave124 (showPanel)",
+    "124_wave124 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "124_wave124:18",
+    "128_wave128:8",
+    "122_wave122:1",
+    "126_wave126:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "fund_events": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "hub_settings": [
+      "select"
+     ],
+     "hub_birthdays": [
+      "select",
+      "upsert",
+      "delete"
+     ],
+     "projects": [
+      "select"
+     ],
+     "board_meetings": [
+      "select"
+     ],
+     "social_posts": [
+      "select"
+     ],
+     "content_posts": [
+      "select"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "hub_events": [
+      "select"
+     ],
+     "change_log": [
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "calendar_my_meetings"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "fundevents",
+  "help_popup_writers": null,
+  "notes": "Placed by 124_wave124 placeTabs: inside Fundraising & Finances for staff, after Calendar in Strategy for the board view."
+ },
+ {
+  "id": "finances",
+  "route": "#finances",
+  "panel": "finances",
+  "nav_label": "Finances",
+  "nav_group": "Departments > fundraising row",
+  "nav_placed_by": "042_wave42 creates (need()); 116_wave116 adopt() into the fundraising row",
+  "access_gate": "role default: leader and up; database: the ledger, budgets and statements follow the profile (wa_page_ok)",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 3,
+    "lead": 0,
+    "none": [
+     "marketing",
+     "progdev",
+     "opsmtl",
+     "opsto",
+     "hr",
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: the ledger, budgets and statements follow the profile (wa_page_ok)"
+  },
+  "segments": {
+   "render_on_open": [
+    "094_wave94",
+    "090_wave90",
+    "092_wave92",
+    "093_wave93",
+    "022_wave22",
+    "085_wave85"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "022_wave22 (hashchange)"
+   ],
+   "static_references": [
+    "022_wave22:12",
+    "122_wave122:4",
+    "091_wave91:3",
+    "094_wave94:3",
+    "124_wave124:3",
+    "128_wave128:3",
+    "090_wave90:2",
+    "092_wave92:2",
+    "116_wave116:2",
+    "024_wave24:1",
+    "042_wave42:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "093_wave93:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:dept_tasks <093_wave93>",
+    "from:finance_budgets <022_wave22>",
+    "from:finance_statements <022_wave22>",
+    "from:finance_transactions <022_wave22, 092_wave92>",
+    "from:transcripts <093_wave93>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "finance_budgets": [
+      "select",
+      "upsert"
+     ],
+     "finance_transactions": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "finance_statements": [
+      "select"
+     ],
+     "app_config": [
+      "select",
+      "upsert"
+     ],
+     "wa_usage": [
+      "select"
+     ],
+     "hub_roles": [
+      "select"
+     ],
+     "dept_tasks": [
+      "select"
+     ],
+     "transcripts": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "wa_usage_visit",
+     "wa_usage_beat",
+     "wa_hub_logins"
+    ],
+    "functions": [
+     "finance-import"
+    ]
+   }
+  },
+  "tour": "finances",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": null
+ },
+ {
+  "id": "hrcentre",
+  "route": "#hrcentre[/people|/training|/onboarding]",
+  "panel": "hrcentre",
+  "nav_label": "HR centre",
+  "nav_group": "Departments > hr row",
+  "nav_placed_by": "042 register into People, then 116_wave116 adopt() into the hr row",
+  "access_gate": "role default: leader and up; WA_NAV gate: leader; database: time off, discipline and policy sign-offs follow the HR access list",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": "leader",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 3,
+    "lead": 5,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: time off, discipline and policy sign-offs follow the HR access list"
+  },
+  "segments": {
+   "render_on_open": [
+    "065_wave65",
+    "116p_wave116p",
+    "075_wave75",
+    "105_wave105",
+    "052_wave52",
+    "057_wave57",
+    "046_wave46",
+    "054_wave54",
+    "056_wave56",
+    "076_wave76",
+    "047_wave47",
+    "103_wave103",
+    "106_wave106",
+    "093_wave93",
+    "085_wave85",
+    "049_wave49",
+    "116j_wave116j"
+   ],
+   "page_chrome_on_open": [
+    "118_wave118"
+   ],
+   "routing": [
+    "049_wave49 (showPanel)",
+    "052_wave52 (showPanel)",
+    "054_wave54 (showPanel)",
+    "055_wave55 (showPanel)",
+    "056_wave56 (showPanel)",
+    "057_wave57 (showPanel)",
+    "116j_wave116j (showPanel)",
+    "116p_wave116p (showPanel)",
+    "046_wave46 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116p_wave116p:14",
+    "047_wave47:8",
+    "122_wave122:7",
+    "052_wave52:5",
+    "055_wave55:3",
+    "057_wave57:3",
+    "106_wave106:3",
+    "046_wave46:2",
+    "049_wave49:2",
+    "054_wave54:2",
+    "056_wave56:2",
+    "093_wave93:2",
+    "103_wave103:2",
+    "105_wave105:2"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:change_log <046_wave46>",
+    "from:dept_requests <046_wave46>",
+    "from:hr_setup_steps <039_wave39>",
+    "from:hr_setup_template <039_wave39>",
+    "from:hub_candidates <116p_wave116p>",
+    "from:hub_checkins <116j_wave116j, 116p_wave116p>",
+    "from:hub_roles <093_wave93>",
+    "from:hub_shoutouts <116p_wave116p>",
+    "from:onboarding_help <039_wave39>",
+    "from:onboarding_steps <037_wave37>",
+    "from:onboarding_template <037_wave37>",
+    "from:onboardings <037_wave37>",
+    "from:request_types <046_wave46>",
+    "from:team_members <105_wave105>",
+    "from:training_progress <036_wave36>",
+    "from:trainings <036_wave36>",
+    "from:wa_checkin_scope <103_wave103>",
+    "from:wa_discipline <105_wave105>",
+    "from:wa_policies <105_wave105>",
+    "from:wa_policy_signoffs <105_wave105>",
+    "from:wa_timeoff <105_wave105>",
+    "from:wa_usage <093_wave93>",
+    "rpc:wa_hub_logins <093_wave93>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "dept_requests": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "task_due_suggestions": [
+      "select",
+      "update"
+     ],
+     "dept_tasks": [
+      "update"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "training_progress": [
+      "upsert"
+     ],
+     "goal_wins": [
+      "select"
+     ],
+     "mentions": [
+      "select",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "onboarding_template": [
+      "update"
+     ],
+     "sop_template": [
+      "update"
+     ],
+     "wa_hr_access": [
+      "select"
+     ],
+     "wa_timeoff": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "team_members": [
+      "select",
+      "update"
+     ],
+     "wa_policies": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "wa_discipline": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "select"
+     ],
+     "hub_candidates": [
+      "select",
+      "update"
+     ],
+     "hub_checkins": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "onboarding_assign"
+    ],
+    "functions": [
+     "transcript-preview",
+     "shoutouts"
+    ]
+   }
+  },
+  "tour": "hrcentre",
+  "help_popup_writers": null,
+  "notes": "Extra visibility rule for the HR access list (127_wave127 afterEnforce) on top of the role gate."
+ },
+ {
+  "id": "governance",
+  "route": "#governance",
+  "panel": "governance",
+  "nav_label": "Board overview",
+  "nav_group": "Departments > board row",
+  "nav_placed_by": "126_wave126 placeTabs",
+  "access_gate": "role default: leader and up; WA_NAV gate: leader; database: board data follows the profile (can_see_board); directors always see it",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": "leader",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 3,
+    "lead": 6,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": "database: board data follows the profile (can_see_board); directors always see it"
+  },
+  "segments": {
+   "render_on_open": [
+    "126_wave126"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "126_wave126 (showPanel)",
+    "126_wave126 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "126_wave126:15",
+    "128_wave128:3",
+    "124_wave124:2",
+    "133_wave133:2"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:board_committees <126_wave126>",
+    "from:board_items <126_wave126>",
+    "from:board_meetings <126_wave126>",
+    "from:board_members <126_wave126>",
+    "from:board_touchpoints <126_wave126>",
+    "from:dept_tasks <126_wave126>",
+    "from:finance_statements <126_wave126>",
+    "from:finance_transactions <126_wave126>",
+    "from:fund_events <126_wave126>",
+    "from:goals <126_wave126>",
+    "from:hub_settings <126_wave126>",
+    "rpc:board_home <126_wave126>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "board_members": [
+      "select",
+      "update"
+     ],
+     "board_committees": [
+      "select",
+      "update"
+     ],
+     "board_meetings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "board_items": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "board_touchpoints": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "dept_tasks": [
+      "select"
+     ],
+     "goals": [
+      "select"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "hub_settings": [
+      "select"
+     ],
+     "finance_transactions": [
+      "select"
+     ],
+     "finance_statements": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "board_me",
+     "board_home"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "governance",
+  "help_popup_writers": null,
+  "notes": "Board view: placed in Strategy after the Executive dashboard (126_wave126 placeTabs)."
+ },
+ {
+  "id": "committees",
+  "route": "#committees",
+  "panel": "committees",
+  "nav_label": "Committees",
+  "nav_group": "Departments > board row",
+  "nav_placed_by": "126_wave126 placeTabs",
+  "access_gate": "role default: leader and up; WA_NAV gate: leader; database: board data follows the profile (can_see_board); directors always see it",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": "leader",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 3,
+    "lead": 6,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": "database: board data follows the profile (can_see_board); directors always see it"
+  },
+  "segments": {
+   "render_on_open": [
+    "126_wave126"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "126_wave126 (showPanel)",
+    "126_wave126 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "126_wave126:13",
+    "124_wave124:2",
+    "128_wave128:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "board_members": [
+      "select",
+      "update"
+     ],
+     "board_committees": [
+      "select",
+      "update"
+     ],
+     "board_meetings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "board_items": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "board_touchpoints": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "dept_tasks": [
+      "select"
+     ],
+     "goals": [
+      "select"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "hub_settings": [
+      "select"
+     ],
+     "finance_transactions": [
+      "select"
+     ],
+     "finance_statements": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "board_me",
+     "board_home"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "committees",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "transcripts",
+  "route": "#transcripts, #tx/<id>",
+  "panel": "transcripts",
+  "nav_label": "Transcript Archive",
+  "nav_group": "Meetings",
+  "nav_placed_by": "base markup; 073_wave73 Meetings",
+  "access_gate": "role default: member and up; database: private and leadership transcripts stay limited",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: private and leadership transcripts stay limited"
+  },
+  "segments": {
+   "render_on_open": [],
+   "page_chrome_on_open": [
+    "043_wave43"
+   ],
+   "routing": [
+    "000_head_base (applyHash)",
+    "062_wave62 (showPanel)",
+    "065_wave65 (showPanel)",
+    "066_wave66 (showPanel)"
+   ],
+   "static_references": [
+    "000_head_base:3",
+    "062_wave62:2",
+    "065_wave65:2",
+    "080_wave80:2",
+    "116_wave116:2",
+    "122_wave122:2",
+    "004_wave4:1",
+    "042_wave42:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "066_wave66:1",
+    "093_wave93:1",
+    "116h_wave116h:1",
+    "116j_wave116j:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot: 000_head_base loadTranscripts/loadTranscriptsData (transcripts), 021_wave21 wa21LoadTx (transcripts again), renderTranscripts from 002_wave2 wrapped by 062_wave62",
+   "referenced_by_render_segments": {
+    "tables": {},
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "transcripts",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61",
+   "065_wave65"
+  ],
+  "notes": null
+ },
+ {
+  "id": "agendas",
+  "route": "#agendas",
+  "panel": "agendas",
+  "nav_label": "Agendas",
+  "nav_group": "Meetings",
+  "nav_placed_by": "007_wave7 creates; 073_wave73 Meetings",
+  "access_gate": "role default: admin and up; database: each agenda is visible to its author and invitees",
+  "access": {
+   "role_default_min": "admin",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 2,
+    "lead": 6,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: each agenda is visible to its author and invitees"
+  },
+  "segments": {
+   "render_on_open": [
+    "007_wave7",
+    "047_wave47"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "007_wave7 (applyHash)",
+    "019_wave19 (applyHash)",
+    "007_wave7 (hashchange)",
+    "053_wave53 (showPanel)"
+   ],
+   "static_references": [
+    "007_wave7:6",
+    "019_wave19:4",
+    "122_wave122:4",
+    "116_wave116:3",
+    "004_wave4:1",
+    "042_wave42:1",
+    "053_wave53:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "082_wave82:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "boot: 007_wave7 waLoadAgendas (agendas, agenda_items)",
+   "referenced_by_render_segments": {
+    "tables": {
+     "agendas": [
+      "select"
+     ],
+     "agenda_items": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "onboarding_template": [
+      "insert"
+     ],
+     "training_progress": [
+      "upsert",
+      "delete"
+     ],
+     "sop_roles": [
+      "select",
+      "update",
+      "insert",
+      "delete"
+     ],
+     "sop_template": [
+      "update"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "build-agenda"
+    ]
+   }
+  },
+  "tour": "agendas",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "Master agenda page is admins only since wave116 (team agendas live on #team/<team>/agenda)."
+ },
+ {
+  "id": "hubmail",
+  "route": "#hubmail",
+  "panel": "hubmail",
+  "nav_label": "Hub inbox",
+  "nav_group": "Meetings",
+  "nav_placed_by": "116h_wave116h place (WA_NAV.register group meetings)",
+  "access_gate": "role default: leader and up; WA_NAV gate: leader",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": "leader",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 2,
+    "lead": 0,
+    "none": [
+     "marketing",
+     "fundraising",
+     "progdev",
+     "opsmtl",
+     "opsto",
+     "hr",
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "123_wave123",
+    "116h_wave116h"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "123_wave123 (showPanel)",
+    "116h_wave116h (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116h_wave116h:6",
+    "122_wave122:3",
+    "123_wave123:3",
+    "130_wave130:2",
+    "116j_wave116j:1",
+    "116p_wave116p:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:hub_mail <116h_wave116h, 123_wave123>",
+    "from:hub_mail_state <116h_wave116h>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_mail": [
+      "select"
+     ],
+     "hub_mail_state": [
+      "select"
+     ],
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "mail-pull",
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "hubmail",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "overview",
+  "route": "#overview, #decisions, #decision/<id>, #overview/decisions",
+  "panel": "overview",
+  "nav_label": "Executive dashboard",
+  "nav_group": "Strategy",
+  "nav_placed_by": "base markup; 116d_wave116d strategyGroup (relabelled Executive dashboard)",
+  "access_gate": "role default: viewer and up",
+  "access": {
+   "role_default_min": "viewer",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 9,
+    "lead": 0,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "128_wave128",
+    "111_wave111",
+    "116m_wave116m"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43"
+   ],
+   "routing": [
+    "000_head_base (applyHash)",
+    "007_wave7 (showPanel)",
+    "073_wave73 (showPanel)",
+    "111_wave111 (showPanel)",
+    "128_wave128 (showPanel)"
+   ],
+   "static_references": [
+    "128_wave128:16",
+    "000_head_base:14",
+    "122_wave122:6",
+    "130_wave130:5",
+    "116_wave116:4",
+    "007_wave7:3",
+    "078_wave78:3",
+    "111_wave111:3",
+    "073_wave73:2",
+    "116g_wave116g:2",
+    "004_wave4:1",
+    "028_wave28:1",
+    "031_wave31:1",
+    "035_wave35:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:finance_transactions <128_wave128>",
+    "from:fund_events <128_wave128>",
+    "from:goal_wins <128_wave128>",
+    "from:goals <128_wave128>",
+    "from:hub_settings <128_wave128>",
+    "from:hub_shoutouts <128_wave128>",
+    "from:volunteer_events <128_wave128>"
+   ],
+   "at_boot": "boot caches: DB_DECISIONS, DB_TASKS, DB_MEMBERS from 000_head_base loadAll; 000 renderDecisions runs at boot",
+   "referenced_by_render_segments": {
+    "tables": {
+     "finance_transactions": [
+      "select"
+     ],
+     "fund_events": [
+      "select"
+     ],
+     "goals": [
+      "select"
+     ],
+     "hub_shoutouts": [
+      "select"
+     ],
+     "goal_wins": [
+      "select"
+     ],
+     "volunteer_events": [
+      "select"
+     ],
+     "hub_settings": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "overview",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "Id says overview, label says Executive dashboard; the help popup (wave61) still calls it Decisions."
+ },
+ {
+  "id": "orggoals",
+  "route": "#orggoals",
+  "panel": "orggoals",
+  "nav_label": "Organizational goals",
+  "nav_group": "Strategy",
+  "nav_placed_by": "116d_wave116d strategyGroup creates",
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116f_wave116f"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "116f_wave116f (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116f_wave116f:6",
+    "128_wave128:3",
+    "122_wave122:2",
+    "126_wave126:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:goal_comments <016_wave16>",
+    "from:goal_ideas <030_wave30>",
+    "from:goals <015_wave15>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "projects": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "goals": [
+      "update",
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "goal-sync"
+    ]
+   }
+  },
+  "tour": "orggoals",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "goals",
+  "route": "#goals",
+  "panel": "goals",
+  "nav_label": "Department goals",
+  "nav_group": "Strategy",
+  "nav_placed_by": "015_wave15 creates; 116d_wave116d strategyGroup",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "068_wave68",
+    "030_wave30",
+    "034_wave34",
+    "079_wave79",
+    "116f_wave116f"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "015_wave15 (applyHash)",
+    "015_wave15 (hashchange)"
+   ],
+   "static_references": [
+    "116f_wave116f:8",
+    "015_wave15:6",
+    "039_wave39:3",
+    "128_wave128:3",
+    "030_wave30:2",
+    "043_wave43:2",
+    "068_wave68:2",
+    "083_wave83:2",
+    "116d_wave116d:2",
+    "122_wave122:2",
+    "029_wave29:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "079_wave79:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:dept_tasks <069_wave69, 070_wave70>",
+    "from:goal_comments <016_wave16>",
+    "from:goal_ideas <030_wave30>",
+    "from:goals <015_wave15>"
+   ],
+   "at_boot": "boot: 015_wave15 waLoadGoals (goals) and 016_wave16 (goal_comments)",
+   "referenced_by_render_segments": {
+    "tables": {
+     "goal_ideas": [
+      "select"
+     ],
+     "projects": [
+      "update",
+      "select"
+     ],
+     "goals": [
+      "update",
+      "insert"
+     ],
+     "change_log": [
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "goal-propose",
+     "goal-sync"
+    ]
+   }
+  },
+  "tour": "goals",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61",
+   "085_wave85"
+  ],
+  "notes": "Id says goals, label says Department goals (teams_remap.py renames it at build time)."
+ },
+ {
+  "id": "projects",
+  "route": "#projects",
+  "panel": "projects",
+  "nav_label": "Projects",
+  "nav_group": "Strategy",
+  "nav_placed_by": "116d_wave116d strategyGroup creates",
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116e_wave116e"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "116d_wave116d (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116d_wave116d:9",
+    "116_wave116:4",
+    "116f_wave116f:2",
+    "122_wave122:2",
+    "116b_wave116b:1",
+    "116e_wave116e:1",
+    "116k_wave116k:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:goals <116e_wave116e>",
+    "from:projects <116_wave116>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "projects": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "goals": [
+      "select"
+     ],
+     "change_log": [
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "projects",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "goalmap",
+  "route": "#goalmap",
+  "panel": "goalmap",
+  "nav_label": "Goal alignment",
+  "nav_group": "Strategy",
+  "nav_placed_by": "116d_wave116d strategyGroup creates",
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116f_wave116f"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "116f_wave116f (WA_NAV.register)"
+   ],
+   "static_references": [
+    "116f_wave116f:7",
+    "122_wave122:2"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "projects": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "goals": [
+      "update",
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "goal-sync"
+    ]
+   }
+  },
+  "tour": "goalmap",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "bank",
+  "route": "#bank[/<team>]",
+  "panel": "bank",
+  "nav_label": "The bank",
+  "nav_group": "Strategy",
+  "nav_placed_by": "132_wave132 placeTab (last in Strategy)",
+  "access_gate": "role default: member and up; WA_NAV gate: member; database: moving work in or out follows checked functions",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": "database: moving work in or out follows checked functions"
+  },
+  "segments": {
+   "render_on_open": [
+    "132_wave132"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "132_wave132 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "132_wave132:16"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "rpc:bank_list <132_wave132>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "dept_tasks": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "bank_list",
+     "bank_task",
+     "bank_project",
+     "bank_add_task",
+     "bank_undo",
+     "bank_unbank",
+     "bank_redate"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "bank",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "requests",
+  "route": "#requests[/new/<type>|/team/<team>|/r/<id>|/m/<id>|/mine|/sent|/all|/settings]",
+  "panel": "requests",
+  "nav_label": "Requests",
+  "nav_group": "top level",
+  "nav_placed_by": "005_wave5 creates, 073_wave73 orders",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "123_wave123"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "005_wave5 (applyHash)",
+    "005_wave5 (hashchange)",
+    "123_wave123 (showPanel)"
+   ],
+   "static_references": [
+    "123_wave123:51",
+    "005_wave5:6",
+    "122_wave122:3",
+    "131_wave131:3",
+    "007_wave7:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "080_wave80:1",
+    "082_wave82:1",
+    "133_wave133:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "boot: 005_wave5 waLoadRequests (dept_requests, request_types), 031_wave31 wa31Reqs (dept_requests again), 123_wave123 (dept_requests, request_types, request_suggestions, hub_mail)",
+   "referenced_by_render_segments": {
+    "tables": {
+     "request_types": [
+      "select"
+     ],
+     "dept_requests": [
+      "select",
+      "insert",
+      "update"
+     ],
+     "request_suggestions": [
+      "select",
+      "update"
+     ],
+     "hub_mail": [
+      "select"
+     ],
+     "hub_settings": [
+      "select",
+      "upsert"
+     ],
+     "request_notes": [
+      "select",
+      "insert"
+     ],
+     "change_log": [
+      "select",
+      "insert"
+     ]
+    },
+    "rpcs": [
+     "team_inbox_mail"
+    ],
+    "functions": [
+     "team-inbox"
+    ]
+   }
+  },
+  "tour": "requests",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "Rendered by 123_wave123. The older module (005_wave5 renderRequestsModule, wrapped by 050, 065 and 123) still loads its data at boot."
+ },
+ {
+  "id": "orgchart",
+  "route": "#orgchart[/<positionId>]",
+  "panel": "orgchart",
+  "nav_label": "Org chart",
+  "nav_group": "People",
+  "nav_placed_by": "011_wave11 creates; 073_wave73 People",
+  "access_gate": "role default: member and up; database: only Admin and Executive profiles rearrange (wa_org_editor)",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: only Admin and Executive profiles rearrange (wa_org_editor)"
+  },
+  "segments": {
+   "render_on_open": [
+    "133_wave133",
+    "011_wave11"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "011_wave11 (applyHash)",
+    "011_wave11 (hashchange)"
+   ],
+   "static_references": [
+    "133_wave133:9",
+    "011_wave11:6",
+    "116_wave116:3",
+    "128_wave128:3",
+    "116g_wave116g:2",
+    "122_wave122:2",
+    "033_wave33:1",
+    "039_wave39:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "116k_wave116k:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:board_circle <011_wave11>",
+    "from:org_positions <133_wave133>",
+    "from:user_state <012_wave12>",
+    "rpc:wa_org_editor <133_wave133>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "board_circle": [
+      "select"
+     ],
+     "slack_hours": [
+      "select"
+     ],
+     "org_positions": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "wa_org_editor",
+     "org_move",
+     "org_set_reports",
+     "org_add_opening",
+     "org_update",
+     "org_fill",
+     "org_place",
+     "org_vacate",
+     "org_remove"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "orgchart",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "The wave11 roster card still renders and is hidden with .w133old (kept as the fallback when the chart cannot load)."
+ },
+ {
+  "id": "training",
+  "route": "#training[/t/<id>|/p/<id>|/cert/<id>|/sops|/sopnew/<team>|/onboarding]",
+  "panel": "training",
+  "nav_label": "Training academy",
+  "nav_group": "People",
+  "nav_placed_by": "036_wave36 creates; 073_wave73 People",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "044_wave44",
+    "057_wave57",
+    "045_wave45",
+    "122_wave122",
+    "036_wave36",
+    "037_wave37",
+    "058_wave58"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "036_wave36 (applyHash)",
+    "036_wave36 (showPanel)",
+    "057_wave57 (showPanel)",
+    "058_wave58 (showPanel)",
+    "122_wave122 (showPanel)"
+   ],
+   "static_references": [
+    "122_wave122:37",
+    "036_wave36:7",
+    "039_wave39:4",
+    "058_wave58:4",
+    "106_wave106:3",
+    "116_wave116:3",
+    "047_wave47:2",
+    "124_wave124:2",
+    "037_wave37:1",
+    "045_wave45:1",
+    "046_wave46:1",
+    "057_wave57:1",
+    "060_wave60:1",
+    "061_wave61:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:academy_awards <122_wave122>",
+    "from:academy_awards:upsert <122_wave122>",
+    "from:academy_paths <122_wave122>",
+    "from:fund_events <122_wave122>",
+    "from:hr_setup_steps <039_wave39>",
+    "from:hr_setup_template <039_wave39>",
+    "from:onboarding_help <039_wave39>",
+    "from:onboarding_update_acks <122_wave122, 058_wave58>",
+    "from:training_progress <122_wave122>",
+    "from:trainings <122_wave122>",
+    "from:wa_policies <122_wave122>",
+    "from:wa_policy_signoffs <122_wave122>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "trainings": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "training_progress": [
+      "select",
+      "upsert",
+      "delete"
+     ],
+     "team_members": [
+      "select"
+     ],
+     "dept_requests": [
+      "insert"
+     ],
+     "onboarding_template": [
+      "select",
+      "update",
+      "insert"
+     ],
+     "onboardings": [
+      "select",
+      "update"
+     ],
+     "onboarding_steps": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "onboarding_update_acks": [
+      "select",
+      "insert"
+     ],
+     "academy_paths": [
+      "select"
+     ],
+     "academy_awards": [
+      "select",
+      "upsert",
+      "update"
+     ],
+     "wa_policies": [
+      "select"
+     ],
+     "wa_policy_signoffs": [
+      "select",
+      "insert"
+     ],
+     "hub_shoutouts": [
+      "insert"
+     ],
+     "fund_events": [
+      "select"
+     ]
+    },
+    "rpcs": [
+     "onboarding_assign"
+    ],
+    "functions": []
+   }
+  },
+  "tour": "academy",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61",
+   "085_wave85"
+  ],
+  "notes": "Label Training academy. The old Training page (waves 36, 37, 44, 45, 57, 58) is still rendered into a hidden 39 KB card and shown only in the classic view (localStorage w122classic)."
+ },
+ {
+  "id": "activity",
+  "route": "#activity",
+  "panel": "activity",
+  "nav_label": "Activity",
+  "nav_group": "More",
+  "nav_placed_by": "base markup; 073_wave73 More",
+  "access_gate": "role default: leader and up",
+  "access": {
+   "role_default_min": "leader",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 2,
+    "lead": 6,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "000_head_base",
+    "085_wave85"
+   ],
+   "page_chrome_on_open": [
+    "118_wave118",
+    "043_wave43"
+   ],
+   "routing": [
+    "000_head_base (applyHash)"
+   ],
+   "static_references": [
+    "000_head_base:4",
+    "122_wave122:4",
+    "042_wave42:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "130_wave130:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot: 000_head_base renderActivity from the loadAll change_log cache (300 rows)",
+   "referenced_by_render_segments": {
+    "tables": {},
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "activity",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": null
+ },
+ {
+  "id": "adminpanel",
+  "route": "#adminpanel[/ai|/adoption|/accounts|/people|/access|/security|/change]",
+  "panel": "adminpanel",
+  "nav_label": "Admin",
+  "nav_group": "More",
+  "nav_placed_by": "040_wave40 creates; 073_wave73 More",
+  "access_gate": "role default: admin and up; database: only admins can change access",
+  "access": {
+   "role_default_min": "admin",
+   "wa_nav_gate": "",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 1,
+    "lead": 0,
+    "none": [
+     "marketing",
+     "fundraising",
+     "progdev",
+     "opsmtl",
+     "opsto",
+     "hr",
+     "board",
+     "executive"
+    ],
+    "undecided": 0
+   },
+   "database_lock": "database: only admins can change access"
+  },
+  "segments": {
+   "render_on_open": [
+    "115_wave115",
+    "072_wave72",
+    "116l_wave116l",
+    "116n_wave116n",
+    "116r_wave116r",
+    "113_wave113",
+    "040_wave40",
+    "131_wave131",
+    "110_wave110"
+   ],
+   "page_chrome_on_open": [
+    "118_wave118",
+    "043_wave43"
+   ],
+   "routing": [
+    "040_wave40 (showPanel)",
+    "086_wave86 (showPanel)",
+    "115_wave115 (showPanel)",
+    "116l_wave116l (showPanel)",
+    "116n_wave116n (showPanel)",
+    "116r_wave116r (showPanel)",
+    "118_wave118 (showPanel)",
+    "127_wave127 (showPanel)",
+    "131_wave131 (showPanel)"
+   ],
+   "static_references": [
+    "131_wave131:17",
+    "118_wave118:11",
+    "127_wave127:9",
+    "122_wave122:8",
+    "040_wave40:4",
+    "042_wave42:2",
+    "086_wave86:2",
+    "116l_wave116l:2",
+    "116n_wave116n:2",
+    "116r_wave116r:2",
+    "060_wave60:1",
+    "061_wave61:1",
+    "085_wave85:1",
+    "096_wave96:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "fn:directory-sync <116l_wave116l>",
+    "fn:llm <116n_wave116n>",
+    "from:hub_access_profiles <131_wave131>",
+    "from:hub_access_settings <131_wave131>",
+    "from:hub_roles <113_wave113, 131_wave131>",
+    "from:team_members <113_wave113, 131_wave131>",
+    "from:wa_access_requests <110_wave110, 131_wave131>",
+    "rpc:hub_adoption <116r_wave116r>",
+    "rpc:wa_hub_logins <113_wave113, 131_wave131>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_roles": [
+      "select",
+      "upsert"
+     ],
+     "team_members": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "hub_visits": [
+      "insert"
+     ],
+     "hub_access_profiles": [
+      "select",
+      "update"
+     ],
+     "hub_access_settings": [
+      "select",
+      "update"
+     ],
+     "wa_access_requests": [
+      "select",
+      "update"
+     ]
+    },
+    "rpcs": [
+     "wa_hub_logins",
+     "hub_adoption"
+    ],
+    "functions": [
+     "hub-invite",
+     "directory-sync",
+     "llm"
+    ]
+   }
+  },
+  "tour": "adminpanel",
+  "help_popup_writers": null,
+  "notes": "One card shown per section (118_wave118 CSS). The classic People and access cards (#w113card, #w127card) still render hidden unless body.w131classic."
+ },
+ {
+  "id": "importantinfo",
+  "route": "#importantinfo",
+  "panel": "importantinfo",
+  "nav_label": "Important info",
+  "nav_group": "More",
+  "nav_placed_by": "004_wave4 creates; 095_wave95 moves into More",
+  "access_gate": "role default: member and up; always allowed by wave40",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": true,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "004_wave4"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "004_wave4 (applyHash)",
+    "004_wave4 (hashchange)",
+    "040_wave40 (showPanel)",
+    "112_wave112 (showPanel)"
+   ],
+   "static_references": [
+    "004_wave4:6",
+    "112_wave112:2",
+    "122_wave122:2",
+    "005_wave5:1",
+    "007_wave7:1",
+    "040_wave40:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "130_wave130:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:info_links <004_wave4>",
+    "from:wa_onboarding:upsert <112_wave112>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "dept_tasks": [
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "info_links": [
+      "select",
+      "delete",
+      "insert"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "ask"
+    ]
+   }
+  },
+  "tour": "importantinfo",
+  "help_popup_writers": [
+   "043_wave43",
+   "060_wave60",
+   "061_wave61"
+  ],
+  "notes": "Always allowed by wave40."
+ },
+ {
+  "id": "brain",
+  "route": "#brain",
+  "panel": "brain",
+  "nav_label": "The Brain",
+  "nav_group": "More",
+  "nav_placed_by": "087_wave87 WA_NAV.register; 095_wave95 moves into More",
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "087_wave87"
+   ],
+   "page_chrome_on_open": [
+    "118_wave118"
+   ],
+   "routing": [
+    "087_wave87 (WA_NAV.register)"
+   ],
+   "static_references": [
+    "122_wave122:5",
+    "087_wave87:1",
+    "112_wave112:1",
+    "118c_wave118c:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:mentions <087_wave87>",
+    "from:task_comments <087_wave87>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "mentions": [
+      "select"
+     ],
+     "task_comments": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "brain",
+  "help_popup_writers": null,
+  "notes": "Registered twice in WA_NAV.pages (087_wave87 calls w87Register at load and again in startApp)."
+ },
+ {
+  "id": "photos",
+  "route": "#photos[/<id>|/new]",
+  "panel": "photos",
+  "nav_label": "Photo library",
+  "nav_group": "More",
+  "nav_placed_by": "118c_wave118c place (More)",
+  "access_gate": "role default: member and up; WA_NAV gate: member",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": "member",
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": true
+    },
+    "board": {
+     "allowed": true,
+     "in_menu": true
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 9,
+    "lead": 0,
+    "none": [],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "118c_wave118c"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "118c_wave118c (hashchange)",
+    "118c_wave118c (WA_NAV.register)"
+   ],
+   "static_references": [
+    "118c_wave118c:81",
+    "122_wave122:6"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:wa_photos_list <118c_wave118c>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "wa_photos_list": [
+      "select"
+     ],
+     "wa_photos": [
+      "update",
+      "insert",
+      "delete"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "llm"
+    ]
+   }
+  },
+  "tour": "photos",
+  "help_popup_writers": null,
+  "notes": null
+ },
+ {
+  "id": "dashboard",
+  "route": "#dashboard",
+  "panel": "overview (the #dashboard panel is never shown; 111_wave111 clones its children into the numbers fold)",
+  "nav_label": "Dashboard",
+  "nav_group": "hidden tab (in #tabBar with display:none for every role)",
+  "nav_placed_by": "base markup; hidden by 073_wave73",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "111_wave111"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "000_head_base (applyHash)",
+    "111_wave111 (showPanel)"
+   ],
+   "static_references": [
+    "111_wave111:8",
+    "000_head_base:5",
+    "122_wave122:3",
+    "073_wave73:2",
+    "128_wave128:2",
+    "060_wave60:1",
+    "061_wave61:1",
+    "114_wave114:1"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": "rendered at boot into the hidden #dashboard panel: 000_head_base renderDashboard (111_wave111 clones it)",
+   "referenced_by_render_segments": {
+    "tables": {
+     "finance_transactions": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "dashboard",
+  "help_popup_writers": null,
+  "notes": "Tab hidden by 073_wave73 (data-w73hide). Alias: showPanel(dashboard) opens the Executive dashboard with the numbers fold."
+ },
+ {
+  "id": "create",
+  "route": "#create",
+  "panel": "create",
+  "nav_label": "Create studio",
+  "nav_group": "hidden tab (in #tabBar with display:none for every role)",
+  "nav_placed_by": "017_wave17 creates; hidden by 073_wave73",
+  "access_gate": "role default: member and up",
+  "access": {
+   "role_default_min": "member",
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": true,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 8,
+    "lead": 0,
+    "none": [
+     "board"
+    ],
+    "undecided": 0
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "017_wave17"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43",
+    "118_wave118"
+   ],
+   "routing": [
+    "017_wave17 (applyHash)",
+    "017_wave17 (hashchange)",
+    "118c_wave118c (hashchange)"
+   ],
+   "static_references": [
+    "017_wave17:7",
+    "118c_wave118c:5",
+    "122_wave122:4",
+    "073_wave73:3",
+    "024_wave24:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "116_wave116:1",
+    "133_wave133:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:content_drafts <017_wave17>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "content_drafts": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "draft-content"
+    ]
+   }
+  },
+  "tour": "create",
+  "help_popup_writers": null,
+  "notes": "Tab hidden by 073_wave73; reached from team page tools and the photo library."
+ },
+ {
+  "id": "needsme",
+  "route": "#needsme or #needs-me (both land on Home)",
+  "panel": "mypage",
+  "nav_label": null,
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "no role default; always allowed by wave40",
+  "access": {
+   "role_default_min": null,
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": true,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "115_wave115",
+    "074_wave74",
+    "112_wave112",
+    "116_wave116",
+    "075_wave75",
+    "089_wave89",
+    "114_wave114"
+   ],
+   "page_chrome_on_open": [],
+   "routing": [
+    "000_head_base (applyHash)",
+    "078_wave78 (applyHash)",
+    "040_wave40 (showPanel)"
+   ],
+   "static_references": [
+    "000_head_base:4",
+    "078_wave78:2",
+    "040_wave40:1",
+    "131_wave131:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:mentions <074_wave74>",
+    "from:slack_hours <074_wave74>",
+    "from:user_state <012_wave12>",
+    "from:wa_notify_prefs <089_wave89>"
+   ],
+   "at_boot": "rendered at boot into the hidden #needsme panel: 000_head_base renderNeedsMe",
+   "referenced_by_render_segments": {
+    "tables": {
+     "mentions": [
+      "select"
+     ],
+     "slack_hours": [
+      "select"
+     ],
+     "wa_notify_prefs": [
+      "select",
+      "upsert"
+     ],
+     "wa_onboarding": [
+      "upsert",
+      "select"
+     ],
+     "team_members": [
+      "select",
+      "update"
+     ],
+     "change_log": [
+      "insert"
+     ],
+     "hub_events": [
+      "select"
+     ],
+     "hub_calendar_state": [
+      "select"
+     ],
+     "projects": [
+      "select"
+     ],
+     "metrics": [
+      "select",
+      "update"
+     ],
+     "dept_updates": [
+      "insert"
+     ],
+     "volunteer_events": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "notify"
+    ]
+   }
+  },
+  "tour": null,
+  "help_popup_writers": null,
+  "notes": "Header button #needsMeBtn is display:none !important (116_wave116); the base panel still renders."
+ },
+ {
+  "id": "projectpage",
+  "route": "#project/<id>",
+  "panel": "projectpage",
+  "nav_label": null,
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "no role default; always allowed by wave40",
+  "access": {
+   "role_default_min": null,
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": true,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "099_wave99",
+    "100_wave100",
+    "101_wave101"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43"
+   ],
+   "routing": [
+    "027_wave27 (applyHash)",
+    "040_wave40 (showPanel)",
+    "132_wave132 (showPanel)"
+   ],
+   "static_references": [
+    "122_wave122:5",
+    "132_wave132:5",
+    "027_wave27:4",
+    "028_wave28:1",
+    "040_wave40:1",
+    "052_wave52:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "099_wave99:1",
+    "100_wave100:1",
+    "101_wave101:1",
+    "104_wave104:1",
+    "131_wave131:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:dept_tasks <099_wave99, 104_wave104>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "dept_tasks": [
+      "select"
+     ],
+     "team_members": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": [
+     "project-report",
+     "project-slack"
+    ]
+   }
+  },
+  "tour": "project",
+  "help_popup_writers": null,
+  "notes": "Panel id differs from the route (project/<id> shows #projectpage). #projectpage alone falls back to the dashboard."
+ },
+ {
+  "id": "personpage",
+  "route": "#person/<name>",
+  "panel": "personpage",
+  "nav_label": null,
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "no role default; always allowed by wave40",
+  "access": {
+   "role_default_min": null,
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": true,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [
+    "116k_wave116k"
+   ],
+   "page_chrome_on_open": [
+    "043_wave43"
+   ],
+   "routing": [
+    "033_wave33 (applyHash)",
+    "040_wave40 (showPanel)",
+    "112_wave112 (showPanel)",
+    "122_wave122 (showPanel)",
+    "124_wave124 (showPanel)",
+    "133_wave133 (showPanel)"
+   ],
+   "static_references": [
+    "116k_wave116k:8",
+    "122_wave122:5",
+    "124_wave124:4",
+    "033_wave33:3",
+    "133_wave133:3",
+    "036_wave36:1",
+    "037_wave37:1",
+    "040_wave40:1",
+    "060_wave60:1",
+    "061_wave61:1",
+    "112_wave112:1",
+    "115_wave115:1",
+    "116c_wave116c:1",
+    "131_wave131:1"
+   ]
+  },
+  "reads": {
+   "on_open": [
+    "from:team_members <033_wave33, 036_wave36, 116c_wave116c, 116k_wave116k>"
+   ],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {
+     "hub_checkins": [
+      "select"
+     ],
+     "team_members": [
+      "select"
+     ]
+    },
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": "person",
+  "help_popup_writers": null,
+  "notes": "Panel created on first visit."
+ },
+ {
+  "id": "confirm",
+  "route": "#confirm/<token>",
+  "panel": "full-screen overlay #wa31c (no panel)",
+  "nav_label": null,
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "no role default",
+  "access": {
+   "role_default_min": null,
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [],
+   "page_chrome_on_open": [],
+   "routing": [],
+   "static_references": [
+    "031_wave31:2"
+   ]
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {},
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": null,
+  "help_popup_writers": null,
+  "notes": "Public volunteer confirmation page (no sign-in). Broken: it polls window.db, which never exists because db is a top-level let (see fe_findings.md B2)."
+ },
+ {
+  "id": "task",
+  "route": "#task/<id>",
+  "panel": "team (tasks drawer)",
+  "nav_label": null,
+  "nav_group": "not in the menu",
+  "nav_placed_by": null,
+  "access_gate": "no role default",
+  "access": {
+   "role_default_min": null,
+   "wa_nav_gate": null,
+   "always_allowed_by_wave40": false,
+   "by_role_in_fixture_run": {
+    "admin": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "leader": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "member": {
+     "allowed": false,
+     "in_menu": false
+    },
+    "board": {
+     "allowed": false,
+     "in_menu": false
+    }
+   },
+   "profiles_fixture_snapshot": {
+    "all": 0,
+    "lead": 0,
+    "none": [],
+    "undecided": 9
+   },
+   "database_lock": null
+  },
+  "segments": {
+   "render_on_open": [],
+   "page_chrome_on_open": [],
+   "routing": [
+    "000_head_base (applyHash)",
+    "116i_wave116i (applyHash)"
+   ],
+   "static_references": []
+  },
+  "reads": {
+   "on_open": [],
+   "at_boot": null,
+   "referenced_by_render_segments": {
+    "tables": {},
+    "rpcs": [],
+    "functions": []
+   }
+  },
+  "tour": null,
+  "help_popup_writers": null,
+  "notes": "Base applyHash showed the classic panel; 116i_wave116i redirects to #team/<team>/tasks and opens the drawer."
+ }
+]

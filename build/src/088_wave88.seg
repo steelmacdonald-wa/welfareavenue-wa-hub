@@ -33,11 +33,11 @@
   document.head.appendChild(css);
 
   var STAGES = [
-    ['A meeting happens', 'Someone records a meeting (Otter, Loom or notes) and drops the transcript into the Hub on the Meetings page. That is the only manual step.'],
+    ['A meeting happens', 'Someone records a meeting (Otter, Loom or notes) and drops the transcript into the Hub, on the Transcript archive page under Meetings. That is the only manual step.'],
     ['The Hub reads it', 'The Hub reads the whole conversation and pulls out what matters: who agreed to do what, progress on existing work, open questions.'],
-    ['Work appears by itself', 'Tasks land on the right department with an owner. Updates land on the team page. Decisions that need the EDs land on the Decisions page. People who were mentioned see it on Home.'],
+    ['Work appears by itself', 'Tasks land on the right department with an owner. Updates land on the team page. Decisions that need the EDs land on the Executive dashboard. People who were mentioned see it on Home.'],
     ['Tasks join projects', 'Each task files itself into the right project, so nothing floats loose. Comments from later meetings attach to the same task.'],
-    ['Projects roll up to goals', 'Projects connect to quarterly goals, and goals roll up to the organisational direction. The map on Strategy and The Brain show the whole chain, meeting to mission.']
+    ['Projects roll up to goals', 'Projects connect to quarterly goals, and goals roll up to the organisational direction. Goal alignment and The Brain show the whole chain, meeting to mission.']
   ];
 
   var SVG =

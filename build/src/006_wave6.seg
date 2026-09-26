@@ -158,12 +158,18 @@ function waWireAgendaCard(card, d) {
 
 /* WA v6b: executive meeting agendas (1on1s and leaders meetings) on Overview */
 var WA_LEADERS = [];
+var __waLeadersP = null; /* audit 26/09/26: the load in flight, shared */
 async function waLoadLeaders() {
   if (WA_LEADERS.length) return;
-  try {
-    var r = await db.from('team_members').select('name, department, role').eq('active', true).order('name');
-    if (!r.error) WA_LEADERS = r.data || [];
-  } catch (e) { /* offline */ }
+  if (__waLeadersP) return __waLeadersP;
+  __waLeadersP = (async function () {
+    try {
+      var r = await db.from('team_members').select('name, department, role').eq('active', true).order('name');
+      if (!r.error) WA_LEADERS = r.data || [];
+    } catch (e) { /* offline */ }
+    __waLeadersP = null;
+  })();
+  return __waLeadersP;
 }
 async function renderExecAgendaCard() { /* superseded: wave7 moved this to the Agendas page and replaced the binding with a stub; body removed in Phase 0 compaction */ }
 (function () {

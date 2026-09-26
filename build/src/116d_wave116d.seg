@@ -39,7 +39,7 @@
     var sec = document.getElementById('projects');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'projects'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Strategy</div><h2>Projects</h2><p>Every active project by team, with its status, the goal it serves and its open work. Open a project for the full picture.</p></div><div class="card" id="w116projhost"><p class="read">Loading projects...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Goals and projects</div><h2>Projects</h2><p>Every active project by team, with its status, the goal it serves and its open work. Open a project for the full picture.</p></div><div class="card" id="w116projhost"><p class="read">Loading projects...</p></div>';
       var goals = document.getElementById('goals');
       if (goals && goals.parentNode === main) goals.insertAdjacentElement('afterend', sec); else main.appendChild(sec);
     }
@@ -84,6 +84,15 @@
   }
   function strategyGroup() {
     var bar = document.getElementById('tabBar'); if (!bar) return;
+    /* wave134: the menu layout places these pages; this still creates the buttons and names them */
+    if (window.WA_NAV && WA_NAV.layout) {
+      [['overview', 'Executive dashboard', null], ['orggoals', 'Organizational goals', '#DCA527'], ['goals', 'Department goals', null], ['projects', 'Projects', '#6F64AB'], ['goalmap', 'Goal alignment', '#2A8C7A']].forEach(function (o) {
+        var b0 = bar.querySelector('.tab[data-tab="' + o[0] + '"]');
+        if (!b0 && o[2]) { b0 = document.createElement('button'); b0.className = 'tab'; b0.setAttribute('data-tab', o[0]); b0.innerHTML = '<span class="tabdot" style="background:' + o[2] + '"></span>' + o[1]; bar.appendChild(b0); }
+        if (b0 && (b0.textContent || '').trim() !== o[1]) relabel(b0, o[1]);
+      });
+      return;
+    }
     var goals = bar.querySelector('.tab[data-tab="goals"]');
     var over = bar.querySelector('.tab[data-tab="overview"]');
     if (!goals && !over) return;
@@ -133,6 +142,7 @@
   }
   window.w116Strategy = strategyGroup;
   window.w116StrategyOk = function () {
+    if (window.WA_NAV && WA_NAV.layout) return true; /* wave134 */
     var bar = document.getElementById('tabBar'); if (!bar) return true;
     var g = bar.querySelector('.tab-group[data-w42g="strategy"] .tab-group-p'); if (!g) return false;
     return ['overview', 'orggoals', 'goals', 'projects', 'goalmap'].every(function (id) { var b = bar.querySelector('.tab[data-tab="' + id + '"]'); return !b || b.parentNode === g; });

@@ -26,10 +26,11 @@ const json = (b, s = 200)=>new Response(JSON.stringify(b), {
     }
   });
 const DEPT_LABEL = {
-  opsmtl: 'Ops and Program Dev Montreal',
-  opsto: 'Ops and Program Dev Toronto',
+  opsmtl: 'Operations Montreal',
+  progdev: 'Program Development',
+  opsto: 'Operations Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Grants',
+  fundraising: 'Fundraising and Finances',
   hr: 'Human Resources',
   board: 'Board'
 };

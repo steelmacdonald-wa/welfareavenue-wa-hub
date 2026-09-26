@@ -1,4 +1,10 @@
+# Build order: build.sh joins these segments top to bottom (lines starting with # are notes).
+# Later waves wrap the functions of earlier ones, so the order carries meaning. Several waves sit
+# out of number order on purpose (116q before 116p; 119 to 126 before 117, 118, 118b and 118c):
+# keep the order when adding one, and check any move with the harness (docs/ARCHITECTURE.md).
+# 000_head_base: the page markup, db, and the base functions every wave wraps.
 000_head_base
+# 001_wave116a: the teams registry (WA_TEAMS) that later waves read.
 001_wave116a
 002_wave2
 003_wave3
@@ -152,5 +158,8 @@
 131_wave131
 132_wave132
 133_wave133
+# 134_wave134: the menu layout (WA_NAV.layout); after every wave that creates or moves a menu button.
+134_wave134
+# 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

@@ -12,7 +12,7 @@
 //   {action:'connect_meta', page_id?}          add the Page and its Instagram   (staff)
 //   {action:'ga4_list'}                          GA4 properties the service account can read (staff)
 //   {action:'connect_ga4', property_id}        add a GA4 property               (staff)
-//   {action:'disconnect', account_id}          remove an account and its rows   (staff)
+//   {action:'disconnect', account_id}          remove an account and its rows   (admins, since 26/09/26)
 //   {action:'sync', account_id?, days?}        pull the numbers                 (staff or x-wa-secret, cron wa-social-pull)
 //   {action:'import_csv', platform, rows, posts?, handle?, name?, demographics?}  CSV or export rows (staff); v1.5 keeps post clicks, engagement and raw fields, and audience breakdowns in the account meta
 //   {action:'note', days?}                     the AI note                      (staff or x-wa-secret, cron wa-social-note)
@@ -680,6 +680,8 @@ Deno.serve(async (req: Request) => {
       return json({ ok: !r.error, account: acc, result: r, sa_email: await saEmail() });
     }
     if (action === 'disconnect') {
+      /* audit 26/09/26: it deletes the account and, by cascade, its analytics history: admins only */
+      if (!me.admin) return json({ error: 'Only admins can disconnect an account.' }, 403);
       const id = Number(body.account_id);
       if (!id) return json({ error: 'account_id' }, 400);
       const { error } = await svc.from('social_accounts').delete().eq('id', id);

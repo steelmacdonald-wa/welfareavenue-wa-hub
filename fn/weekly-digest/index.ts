@@ -22,9 +22,10 @@ const json = (b, s = 200)=>new Response(JSON.stringify(b), {
   });
 const DEPT_LABEL = {
   opsmtl: 'Ops Montreal',
+  progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Grants',
+  fundraising: 'Fundraising and Finances',
   hr: 'HR',
   board: 'Board'
 };

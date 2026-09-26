@@ -1,0 +1,1169 @@
+# Welfare Avenue Hub: the data model
+
+Generated from the schema comments by `build/gen_data_model.py` (26/09/26). The comments themselves live in the database (`COMMENT ON`), so an agent reading the schema sees the same text. When a table or column changes, update its comment in the same migration and regenerate this file.
+
+## Conventions
+
+- **Team code**: one of `opsmtl`, `progdev`, `opsto`, `marketing`, `fundraising`, `hr`, `board`. `dept_meta` is the list, with each team's `label`, `short_label`, `sort` and `color`. No foreign key enforces the code yet.
+- **People**: `team_members.id` is the person key for staff and the board; `volunteer_people.id` for volunteers. Many older columns hold a display name (usually a first name) or an email instead; the comments say which.
+- **Done**: `dept_tasks.done` (with `closed_at`) is the truth; `dept_tasks.status` is a legacy free-text label.
+- **Confidentiality**: `board_only`, `confidential`, `visibility` (NULL, empty, department, leadership, private) and, for tasks and projects, `banked_at` (the bank). Edge functions use the service role and must apply these filters themselves.
+- **Service role**: edge functions and cron jobs; they bypass row-level security.
+- **Audit trail**: `change_log` (who changed what); job runs are also written there today.
+
+## Work: tasks, projects, goals, decisions, team pages
+
+### `dept_tasks`
+
+Source of truth for tasks of every team. Written by the Hub pages (team boards, task drawer), by AI from meeting transcripts and emails (apply_transcript_result via process-transcript, process-leadership, mail-pull), by Ask the Hub, check-in and the bank functions. Use done (not status) to know whether a task is finished; banked rows (banked_at set) are hidden from the web app by a restrictive policy.
+
+- `department`: Team code that owns the task (opsmtl, opsto, progdev, marketing, fundraising, hr, board). No foreign key.
+- `subsection`: Free-text group within the team, such as Fundraising events, Content, Grants. Not a code list.
+- `owner`: Who owns the task as free text: a display name, sometimes several names in one string. task_assignees holds the same fact by member id and the two can disagree; prefer task_assignees.
+- `status`: Legacy free-text status (Open, In progress, Done, Waiting, Blocked, dated variants and one-off notes). Not reliable: many finished tasks still say Open. Use done and closed_at instead.
+- `flag`: True when the task is flagged for leadership attention (listed first in the weekly Slack digest). reason_category and reason_note say why.
+- `priority`: Unused boolean (false in every row). flag is the marker in use.
+- `done`: Source of truth for completion. The trigger set_task_closed_at sets closed_at when done becomes true and clears it otherwise.
+- `updated_by`: Who last changed the task: a display name, or 'AI: <transcript title>' when AI wrote it. wa_stamp_restricted() and wa69_general_link() match that text to find rows created from a transcript.
+- `opened_at`: When the task was created.
+- `closed_at`: When the task was marked done. Maintained by the trigger set_task_closed_at.
+- `reason_category`: Why the task is flagged: Strategy or direction, Budget or purchase, Hiring or people, Partnership or external (same list as decisions.reason_category). Often filled by suggest-reason.
+- `confidential`: When true, board viewers cannot read the task. Currently false in every row.
+- `board_only`: When true, only people in board_circle can read the task (being an admin is not enough). Service-role jobs must filter it out themselves.
+- `visibility`: Restricted-meeting visibility copied from the source transcript: NULL or department (everyone), leadership, private. Checked by wa_sees_restricted(). CHECK: NULL, empty, department, leadership or private. Never set so far.
+- `allowed_people`: JSON array of display names or emails allowed to see a private row (used with visibility = private). Never set so far.
+- `project_id`: Project the task belongs to (projects.id). General work is either NULL or the team's "General ..." project (wa69_general_link() moves AI-created tasks there).
+- `parent_task_id`: Parent task for subtasks (dept_tasks.id). Not used yet.
+- `banked_at`: Set when the task is parked in the bank (wave132). Banked tasks are hidden from the web app by the restrictive policy dept_tasks_not_banked and come back on bank_until.
+- `bank_until`: Date the banked task comes back (bank_resurface() runs daily at 10:05 UTC).
+- `bank_note`: Why the task was banked (up to 300 characters).
+- `banked_by`: Display name of who banked the task.
+- `bank_due`: The due_date the task had when it was banked; restored when it comes back if still in the future.
+- `bank_project_id`: Set when the task was banked together with a whole project (projects.id). Foreign key (on delete set null).
+- `resurfaced_at`: When the task last came back from the bank.
+
+### `task_assignees`
+
+People assigned to a task, by id: one row per (task_id, member_id). The id-based counterpart of dept_tasks.owner and the better source for who owns a task. Written by the task drawer and by apply_transcript_result.
+
+- `task_id`: dept_tasks.id (cascade delete).
+- `member_id`: team_members.id (cascade delete).
+
+### `task_comments`
+
+Comments and activity on a task: quotes captured by AI from transcripts and Slack (transcript-requests) and comments typed in the task drawer.
+
+- `task_id`: dept_tasks.id. Foreign key (on delete cascade).
+- `author`: Author label. For AI-captured comments this is a system label, not a person.
+- `source`: Where the comment came from: transcript, slack or manual.
+- `source_ref`: Id of the source item (for example a transcript id) as text.
+- `source_label`: Readable name of the source, such as a meeting title.
+- `quote`: Verbatim quote from the source that supports the comment.
+
+### `task_due_suggestions`
+
+Due dates proposed by AI (transcript-requests) for existing tasks, waiting for a person to accept or dismiss on the task. All rows are still pending.
+
+- `task_id`: dept_tasks.id. Foreign key (on delete cascade).
+- `transcript_id`: transcripts.id the date came from. Foreign key (on delete set null).
+- `confidence`: Model confidence on a 1 to 10 scale (values seen 6 to 10).
+- `status`: pending, accepted or dismissed (only pending seen so far).
+
+### `task_files`
+
+Files and links attached to a task: uploads in the private task-files bucket or Google Drive links. Empty so far.
+
+- `task_id`: dept_tasks.id (cascade delete).
+- `by`: Display name of who attached the file (as sent by the page).
+- `by_email`: Email of who attached the file; the trigger task_files_stamp overwrites it with the signed-in email.
+- `path`: Object path in the task-files bucket when kind = upload.
+- `url`: Link when kind = link (usually Google Drive).
+
+### `projects`
+
+Projects that group tasks within a team, optionally nested (parent_id) and linked to a goal. Every team has a "General ..." project for loose tasks. Projects can be parked in the bank with their open tasks; banked projects are hidden from the web app by a restrictive policy.
+
+- `department`: Team code that owns the project.
+- `parent_id`: Parent project (projects.id) for sub-projects.
+- `status`: Project status; only active is used today. No CHECK.
+- `goal_id`: Goal this project serves (goals.id).
+- `leads`: JSON array of project lead display names (0 to 2). wa_leads_project() matches the signed-in person by name.
+- `workstream`: Free-text workstream label within the team, such as Fundraising events, Donor program, Grants.
+- `banked_at`: Set when the project (with its sub-projects and open tasks) is parked in the bank. See dept_tasks.banked_at.
+- `bank_until`: Date the banked project comes back.
+
+### `goals`
+
+Quarterly and organisational goals per team. Synced both ways with the ClickUp quarterly goal lists by goal-sync (daily cron); goals created in the Hub have source = dashboard.
+
+- `department`: Team code, or org for organisation-wide goals (org is not in dept_meta).
+- `quarter`: Period as text: Q4 FY2026, Q1 FY2027 or FY2027. The fiscal year starts on 1 October.
+- `status`: ClickUp-style status text: in progress, not started, closed, in review, delayed, incomplete, on track. No CHECK.
+- `progress`: Unused (NULL in every row).
+- `source`: Where the goal came from: the ClickUp list name and id, or dashboard.
+- `task_ids`: Unused array of dept_tasks ids (empty in every row). Link tasks through projects.goal_id instead.
+- `clickup_task_id`: ClickUp task id of the mirrored goal (goal-sync).
+- `suggestions`: Latest AI gap analysis for this goal from goal-suggest: {note, generated, covered, suggestions}.
+- `parent_goal_id`: Parent goal (goals.id) for sub-goals.
+- `owner`: Unused (NULL in every row).
+- `why`: SMART goal field "why" (wave116f). Unused so far.
+- `approach`: SMART goal field "approach" (wave116f). Unused so far.
+- `success`: SMART goal field "what success looks like" (wave116f). Unused so far.
+
+### `goal_comments`
+
+Comments on a goal, synced with ClickUp task comments by goal-sync.
+
+- `goal_id`: goals.id (cascade delete).
+- `clickup_comment_id`: ClickUp comment id once synced.
+
+### `goal_ideas`
+
+Latest AI goal suggestions per team, one row per team code, overwritten by goal-propose.
+
+- `department`: Team code (primary key).
+- `payload`: JSON from goal-propose: {note, generated, suggestions}.
+
+### `goal_wins`
+
+Evidence of progress toward a goal found in meeting transcripts (a win and a supporting quote), written by transcript-requests.
+
+- `goal_id`: goals.id (cascade delete).
+- `transcript_id`: transcripts.id the win came from. Foreign key (on delete set null).
+- `visibility`: Copied restricted-meeting visibility (NULL, department, leadership, private). CHECK: NULL, empty, department, leadership or private. Never set so far.
+
+### `decisions`
+
+Executive decisions log: open questions for leadership, AI recommendations and outcomes. Rows come from transcript processing (apply_transcript_result), process-leadership, mail-pull and the executive dashboard; recommend-decision writes recommendation.
+
+- `pos`: Manual sort position on the executive dashboard.
+- `area`: Team as a label (Fundraising, Ops TO, Ops MTL, HR, Board, Marketing, Grants), not a team code. See db_findings.md section 3.
+- `suggested_move`: The proposed decision or next step.
+- `done`: True when the decision has been made. decided_at and decided_note record the outcome (3 done rows have no decided_at).
+- `reason_category`: Category of decision: Hiring or people, Budget or purchase, Partnership or external, Strategy or direction, Ethics or policy, Board Strat.
+- `confidential`: When true, board viewers cannot read the row.
+- `board_only`: When true, only board_circle members can read the row.
+- `visibility`: Restricted-meeting visibility (NULL, department, leadership, private). CHECK: NULL, empty, department, leadership or private. Never set so far.
+- `allowed_people`: JSON array of names or emails for private rows. Never set so far.
+- `raised_by`: Free text naming who raised the question (often a meeting or source label).
+- `owner`: Display name of who should decide.
+- `recommendation`: AI recommendation text from recommend-decision; recommendation_at is when it was written.
+
+### `dept_updates`
+
+Dated status updates per team. Mostly written by AI from meeting transcripts and filed emails (apply_transcript_result, process-leadership, mail-pull); some typed on the team page.
+
+- `department`: Team code.
+- `entry_label`: Free-text label packing a date and a source, such as 'Aug 9 (Otter)' or 'Jul 12 (Slack digest)'. Not a date column.
+- `text`: The update text.
+- `added_by`: Who added it: 'AI: <transcript title>' for AI rows (used as a link back to the transcript), otherwise a name or email.
+- `confidential`: When true, board viewers cannot read the row.
+- `board_only`: When true, only board_circle members can read the row.
+- `visibility`: Restricted-meeting visibility (NULL, department, leadership, private). CHECK: NULL, empty, department, leadership or private. Never set so far.
+
+### `dept_meta`
+
+One row per team; department is the canonical team code list (opsmtl, opsto, progdev, marketing, fundraising, hr, board). label, short_label, sort and color say how to show each team. Holds the AI's current read of the team, progress text and priorities (written by apply_transcript_result), the header image, the meeting schedule, and a cache of upcoming meetings written by calendar-sync.
+
+- `department`: Team code (primary key). The canonical list of team codes; other tables store these codes without a foreign key.
+- `read`: The AI's short read of how the team is doing, rewritten after each processed transcript.
+- `progress`: The AI's progress narrative for the team, rewritten after each processed transcript.
+- `priorities`: JSON array of strings: the team's current priorities, written by AI.
+- `header_image_url`: Public URL of the team page header image (dept-images bucket).
+- `meeting_schedule`: Human-readable meeting rhythm of the team.
+- `calendar_match`: JSON array of words used by calendar-sync to tag hub_events with this team.
+- `meeting_cache`: JSON array of upcoming meetings {title, start, link}, a cache of hub_events written by calendar-sync; meeting_cache_at is when.
+
+### `dept_sentiment`
+
+Sentiment score per team and capture date, derived from Slack messages by slack-pull (weekly cron).
+
+- `score`: Sentiment score (values seen 6 to 9; scale assumed 1 to 10, unverified).
+- `confidence`: low, medium or high.
+
+### `metrics`
+
+KPI definitions and current values per team, shown as "KPIs we track". Staff update values inline on the team page.
+
+- `key`: Stable KPI key, unique (for example servings_biweekly_mtl).
+- `department`: Team code the KPI belongs to.
+- `unit`: Display unit such as $, $/mo, servings, followers.
+
+### `item_status`
+
+Legacy: done flags for items of the original static dashboard (keys like hr-6, dec-2). No code reads or writes it; last write 30 Jun 2026. Candidate for removal.
+
+## Requests and the team inbox
+
+### `dept_requests`
+
+Requests filed to a team (design, print, hiring, time off, purchase orders and more). Created from the Requests page, from meetings (accepted request_suggestions), by Ask the Hub, by time off and from email. New rows and changes are announced in the team's Slack channel by team-inbox (triggers trg_wa123_request_new and trg_wa123_request_update).
+
+- `type_key`: request_types.key (foreign key).
+- `department`: Team code the request is addressed to.
+- `details`: Answers to the request form. Usually a JSON object keyed by form field labels; older rows hold a plain JSON string.
+- `status`: Status from the type's own list (request_types.statuses), such as requested, approved, interviewing. Free text; done is the reliable finished flag.
+- `requested_by`: Display name of who asked.
+- `requested_email`: Email of who asked; defaults to the signed-in email.
+- `assignee`: Display name of who handles it (defaults to request_types.default_assignee).
+- `priority`: normal or urgent (CHECK).
+- `source`: Where it was filed: requests, meeting, ask, timeoff or email.
+- `mail_id`: hub_mail.id when filed from an email. Foreign key (on delete set null).
+- `slack`: Slack post of the request: {channel, channel_id, ts, url, at}.
+
+### `request_types`
+
+Catalogue of request types per team: the form fields, the status list, the default assignee and the Slack channel. Edited in the Requests settings.
+
+- `key`: Stable kebab-case key used by dept_requests.type_key and request_suggestions.type_key.
+- `department`: Team code that receives this type.
+- `fields`: JSON array of form fields: [{name, label, type, required}].
+- `statuses`: JSON array of status labels for this type, in order. Casing is inconsistent across types.
+- `default_status`: Status given to a new request.
+- `source`: Where the type came from: a ClickUp list name and id, or dashboard.
+- `default_assignee`: Display name of the default assignee.
+- `channel`: Slack channel id that overrides the team's channel for this type.
+- `channel_mode`: full (post the details) or brief (post without details, used for time off).
+
+### `request_notes`
+
+Notes added to a request by staff (insert own, delete own or admin). Each new note is announced by team-inbox. Empty so far.
+
+- `request_id`: dept_requests.id (cascade delete).
+- `email`: Author email; defaults to the signed-in email.
+
+### `request_suggestions`
+
+Requests proposed by AI from meeting transcripts (transcript-requests), waiting for a person to accept (which files a dept_requests row) or dismiss.
+
+- `transcript_id`: transcripts.id the suggestion came from. Foreign key (on delete cascade).
+- `type_key`: request_types.key. No foreign key yet.
+- `status`: pending, accepted or dismissed.
+- `request_id`: dept_requests.id created when accepted. Foreign key (on delete set null).
+- `kind`: new (file a new request). target_request_id is reserved for updates to an existing request and is unused so far.
+- `confidence`: Model confidence on a 1 to 10 scale (values seen 7 to 10).
+
+### `hub_mail`
+
+Emails received by the hub@ mailbox, pulled every 30 minutes by mail-pull, classified by AI and filed into what they describe (tasks, transcripts, requests, candidates). filed records what was created so an email can be undone or refiled.
+
+- `gmail_id`: Gmail message id (unique). Test messages start with test-.
+- `kind`: Classifier result: invoice, meeting_summary, update, application or noise.
+- `status`: Processing state: new, filed, ignored, undone or failed.
+- `department`: Team code the email was filed to, if any.
+- `attachments`: JSON array [{filename, mime, size, attachmentId}]; files are stored in the private hub-mail bucket when filed.
+- `links`: JSON array of URLs found in the body.
+- `filed`: JSON describing what the email created: {type, id, title, department, ...}. Used by undo and refile.
+- `team_state`: Team inbox state set by team_inbox_mail(): open, done or request. Unused so far.
+- `request_id`: dept_requests.id created from the email in the team inbox. Foreign key (on delete set null).
+- `confidence`: Classifier confidence from 0 to 1.
+
+### `hub_mail_state`
+
+Singleton (id = 1) sync status for mail-pull: last sync, last message date seen, run count, last result and error.
+
+### `hub_candidates`
+
+Job applicants filed from email by mail-pull, with CV and hiring stage; managed in the HR centre. status: new, reviewing, interview, offer, hired, declined, withdrawn. request_id links the hiring request (position) when matched. Empty so far.
+
+- `request_id`: dept_requests.id of the hiring request (position). Foreign key (on delete set null).
+- `mail_id`: hub_mail.id of the application email. Foreign key (on delete set null).
+- `cv_path`: Object path of the CV in the hub-mail bucket.
+
+## Meetings, agendas, transcripts, calendar
+
+### `transcripts`
+
+Meeting transcripts and summaries (from Otter, Plaud, Loom, Slack or email). On insert, trigger trg_transcript_insert posts every new row to process-transcript, which writes tasks, updates, decisions and dept_meta through apply_transcript_result and marks the row processed; rows whose department contains leadership are also sent to process-leadership (trg_wa65_leadership).
+
+- `department`: Team code of the meeting. One row says Leadership meeting instead of a code.
+- `added_by`: Who or what added it (a display name or a source label).
+- `processed`: True once AI processing has applied its results.
+- `ai_summary`: Short AI summary of the meeting.
+- `fts`: Generated full-text search vector used by search_transcripts().
+- `board_only`: When true, only board_circle members can read the transcript.
+- `speakers`: Speaker names extracted from the body by the trigger transcripts_set_speakers (extract_speakers()).
+- `visibility`: Restricted meeting: NULL or department (everyone), leadership, private. wa_stamp_restricted() copies it to the rows the meeting created. CHECK: NULL, empty, department, leadership or private. Never set so far.
+- `allowed_people`: JSON array of names or emails allowed to see a private meeting. Never set so far.
+
+### `transcript_request_scans`
+
+Ledger of transcripts already scanned by transcript-requests (every 2 hours), with how many suggestions it found. One row per transcript; service role writes, staff read.
+
+- `transcript_id`: transcripts.id (primary key). Foreign key (on delete cascade).
+- `n_found`: Number of suggestions (requests, wins, mentions, dates) found in the scan.
+
+### `mentions`
+
+People mentioned in meeting transcripts, with the quote and context, written by transcript-requests. The person sees their own mentions (matched by name); leaders see non-private ones.
+
+- `person`: Display name of the person mentioned, as matched to the roster. Row-level security matches it to the signed-in person with wa_name_matches().
+- `transcript_id`: transcripts.id. Foreign key (on delete cascade).
+- `department`: Copied from the transcript (a team code, or Leadership meeting).
+- `seen`: True once the person (or an admin) has seen it.
+
+### `plaud_seen`
+
+Legacy ledger of Plaud recording ids seen by an earlier transcript import, with why each was or was not imported. No current code reads or writes it; last write 11 Jul 2026. Candidate for removal.
+
+### `agendas`
+
+Meeting agendas built in the Hub. scope decides who sees it: department (the team), oneonone, leaders or group. Shareable by a secret link (agenda-share) that lets anyone with the link read the agenda and add items.
+
+- `department`: Team code for department-scope agendas; NULL for other scopes.
+- `scope`: department, oneonone, leaders or group (CHECK).
+- `status`: draft, final or done (CHECK).
+- `created_by`: Display name of the creator; row-level security matches it with wa_name_matches().
+- `with_person`: Display name of the other person in a one-to-one.
+- `attendees`: Display names of attendees; each attendee can read and edit the agenda.
+- `share_token`: Secret token of the public share link (agenda-share). Treat as a credential.
+- `purpose`: Meeting purpose. Unused so far.
+- `summary`: Meeting summary. Unused so far.
+
+### `agenda_items`
+
+Lines on an agenda: a topic, project, decision or update, with optional linked tasks. Written by the agenda page, build-agenda (AI draft) and the public share link.
+
+- `agenda_id`: agendas.id (cascade delete).
+- `kind`: topic, project, decision or update (CHECK).
+- `task_ids`: Array of dept_tasks ids discussed under this item. Arrays cannot carry a foreign key.
+- `source`: Where the item came from; only app is used.
+
+### `hub_events`
+
+Mirror of the hub@welfareavenue.com Google Calendar, refreshed every 30 minutes by calendar-sync (and by hub-connect when a person connects a calendar). Source of meeting times across the Hub; do not edit rows by hand.
+
+- `id`: Google Calendar event id.
+- `summary`: Event title.
+- `organizer`: Organizer email.
+- `attendees`: JSON array [{email, name, status, optional, organizer}] from Google. attendee_emails holds the same emails as a text array.
+- `attendee_emails`: Lower-case attendee emails; calendar_my_meetings() uses it to find a person's own meetings.
+- `department`: Team code matched from dept_meta.calendar_match, NULL when no team matched.
+- `status`: Google event status (confirmed; cancelled events are excluded by readers).
+
+### `hub_calendar_state`
+
+Sync status for calendar-sync, one row per mirrored Google calendar.
+
+## Board
+
+### `board_members`
+
+Board directors and advisers (wave126). A signed-in person is matched to a seat through emails (my_board_member_id()). Admins edit; everyone who can see the board reads.
+
+- `name`: Short display name (unique).
+- `emails`: All emails of the director; used to recognise them at sign-in.
+- `seat`: Board role or seat, as text.
+- `renewal`: Term renewal as text (such as Q3 2026); renewal_due is the date form.
+- `status`: active, adviser, resigned or former (CHECK).
+
+### `board_committees`
+
+The four board committees (fundraising, people, operations, fiduciary), with chair, members, internal staff leads and the teams they oversee.
+
+- `key`: Committee key: fundraising, people, operations or fiduciary (CHECK). Not a team code.
+- `chair_id`: board_members.id of the chair.
+- `member_ids`: Array of board_members ids on the committee (no foreign key possible on an array).
+- `internal_leads`: Display names of staff leads for the committee.
+- `depts`: Array of team codes the committee oversees.
+- `status`: Committee status; only created is used.
+
+### `board_items`
+
+Board work items grouped by the board's three jobs (steward, fiduciary, strategy), optionally tied to a committee and to a dept_tasks row.
+
+- `job`: steward, fiduciary or strategy (CHECK).
+- `committee`: board_committees.key.
+- `status`: done, in_progress, todo, at_risk, watch or standing (CHECK).
+- `owner`: Free-text owner (a name or a group).
+- `due`: Free-text due description, not a date.
+- `task_id`: dept_tasks.id when the item mirrors a staff task. Foreign key (on delete set null).
+- `source`: Where the item came from, such as a board deck or minutes.
+
+### `board_meetings`
+
+Register of board meetings with agenda and notes links. Board leaders write; everyone who can see the board reads.
+
+- `kind`: board, special, agm or strategy (CHECK).
+- `status`: held, scheduled, tentative, to schedule or cancelled (CHECK).
+
+### `board_touchpoints`
+
+Log of committee contacts, meetings and recommendations recorded by board members; each person edits their own. Empty so far.
+
+- `committee`: board_committees.key (cascade delete).
+- `kind`: internal, external, meeting, recommendation or note (CHECK).
+- `member_id`: board_members.id of the director concerned.
+- `meeting_id`: board_meetings.id when tied to a meeting.
+- `logged_by_email`: Email of who logged it; defaults to the signed-in email.
+
+### `board_circle`
+
+Access list: emails of the board-only confidentiality tier. Rows flagged board_only in dept_tasks, dept_updates, decisions, transcripts and change_log are visible only to these people (is_board_circle()). Not the list of directors (see board_members).
+
+- `email`: Lower-case email.
+
+### `board_viewers`
+
+Access list: emails of read-only board viewers who may open board pages without being staff (is_board_viewer(), get_my_role() = board). Admins edit.
+
+- `email`: Lower-case email.
+
+## People, access and HR
+
+### `team_members`
+
+Staff and board roster; id is the key other tables should use for a person (task_assignees, onboardings, org_positions). Kept in step with Google Workspace by directory-sync; invitations by hub-invite. Triggers notify on invites (trg_wa89_invited), assign an access profile (wa_auto_profile) and add new staff to the org chart (wa133_roster_sync).
+
+- `name`: Display name, usually a first name. Many tables store this text instead of the id; it is unique in practice but not by constraint.
+- `email`: Lower-case Workspace email; NULL for roster entries without an account.
+- `department`: Team code.
+- `role`: Job title as free text (not the Hub access role; see hub_roles.role).
+- `active`: False for people who left. Readers usually filter active = true.
+- `ai_bio`: Short AI-written job description from person-profile; ai_bio_at is when.
+- `responsibilities`: JSON array of 3 to 5 responsibility lines (strings).
+- `jd_url`: Link to the job description document; jd_name is its title.
+- `start_source`: Where start_date came from: google (Workspace account creation) or manual (set by HR).
+
+### `hub_directory`
+
+Mirror of Google Workspace accounts, synced daily by directory-sync. Links each account to the roster (member_id) and holds the queue of accounts an admin still has to place, dismiss or skip. Not a person key; use team_members.
+
+- `email`: Primary Workspace email (primary key).
+- `org_unit`: Google organisational unit path (such as /), not a team code.
+- `is_admin`: True for Google Workspace admins (not Hub admins).
+- `member_id`: team_members.id the account is linked to. Foreign key (on delete set null).
+- `deactivated_member_id`: team_members.id that was deactivated because the account was suspended or deleted. Foreign key (on delete set null).
+- `aliases`: Other addresses of the account; my_emails() uses them to find a person's meetings.
+- `placed_by`: Email of the admin who linked the account to the roster.
+
+### `hub_directory_state`
+
+Singleton (id = 1) sync status for directory-sync, with the last run summary in last_result.
+
+- `last_result`: JSON summary of the last run: users, matched, queued, new_in_queue, deactivated, reactivated, photos, start_dates and more.
+
+### `hub_roles`
+
+Hub access per email. role decides the tier; profile picks the page set from hub_access_profiles. Admins write; a staff member may insert their own member row. The trigger wa72_founder_guard keeps the founders as admins; wa_auto_profile assigns a profile when enabled.
+
+- `email`: Lower-case email (primary key).
+- `role`: admin, leader, member, viewer or blocked (CHECK). blocked denies access even for a welfareavenue.com email.
+- `profile`: hub_access_profiles.key. NULL means no profile. Foreign key (on delete set null).
+- `tabs`: Legacy per-person page list (NULL in every row). wa_page_ok() still defers to it when it is a non-empty array.
+
+### `hub_access_profiles`
+
+Access profiles (wave127): one per team plus executive, admin and board. pages says which Hub pages the profile opens; tier is the minimum role needed. Admins edit.
+
+- `key`: Profile key: a team code, or executive, admin, board.
+- `tier`: Minimum hub_roles.role for the profile to apply: viewer, member, leader or admin (CHECK).
+- `team`: Team code of a team profile; NULL for executive, admin and board.
+- `pages`: JSON object: page key to all (everyone with the profile), lead (leaders and admins only) or none. Read by wa_page_ok() and the page.
+- `can`: JSON array of plain-language sentences describing what the profile can do (display text, not codes).
+
+### `hub_access_settings`
+
+Singleton (id = 1) switches for access profiles, such as auto_profile (assign a profile automatically to new members and leaders).
+
+### `wa_access_requests`
+
+Requests from staff for more Hub access, decided by an admin (status new, granted or declined). Empty so far.
+
+### `wa_hr_access`
+
+Access list: emails with HR access (wa_is_hr()), who can read and decide time off, discipline records and policy sign-offs. Readable by every signed-in user.
+
+### `wa_discipline`
+
+HR discipline records. Readable by HR (wa_hr_access) and by the person concerned; only HR writes.
+
+- `category`: ack_messages, time_commitment, missed_meetings, conduct or other (CHECK).
+- `level`: Level of the step taken, as text. No CHECK.
+- `clean_slate`: True when the record marks a clean slate.
+
+### `wa_timeoff`
+
+Time-off requests. The person inserts and reads their own; HR reads, decides and deletes.
+
+- `category`: vacation, school_break, sick, bereavement, religious, wedding or other (CHECK).
+- `status`: requested, approved or declined (CHECK).
+
+### `wa_policies`
+
+HR policies staff must read and sign (link to the document). HR edits; everyone reads.
+
+### `wa_policy_signoffs`
+
+Who signed which policy and when; one row per (email, policy_key).
+
+- `policy_key`: wa_policies.key (foreign key).
+
+### `onboardings`
+
+HR onboarding plans, one per new team member (at most one active per member). Created by onboarding_assign(), which also copies the checklist steps.
+
+- `member_id`: team_members.id of the new person.
+- `person_name`: Copy of the display name at assignment time.
+- `status`: active or completed.
+- `started_at`: Start date of the plan; step due dates are computed from it by onb_due().
+
+### `onboarding_steps`
+
+Checklist steps of one onboarding plan, copied from onboarding_template (one row per plan and template step).
+
+- `template_id`: onboarding_template.id.
+- `due_date`: Due date from onb_due(section, started_at).
+
+### `onboarding_template`
+
+Master onboarding checklist in sections WEEK 1 to WEEK 4 and 60 DAYS, originally imported from ClickUp. Triggers copy new or re-activated steps to active plans (onboarding_template_propagate) and touch updated_at on content changes.
+
+- `id`: Step id as text (ClickUp task id for imported steps).
+- `section`: WEEK 1, WEEK 2, WEEK 3, WEEK 4 or 60 DAYS; drives onb_due(). No CHECK.
+- `parent_id`: Parent step (onboarding_template.id) for sub-steps.
+- `content_pending`: True when the step's content is still to be written.
+
+### `onboarding_update_acks`
+
+Records that a person acknowledged a changed onboarding step (template_updated_at is the version they saw).
+
+- `onboarding_id`: onboardings.id. Foreign key (on delete cascade).
+- `template_id`: onboarding_template.id. Foreign key (on delete cascade).
+
+### `onboarding_help`
+
+Help requests raised by a new person on an onboarding step; each insert notifies Slack through notify (trigger on_onboarding_help). Empty so far.
+
+### `hr_setup_template`
+
+HR's own setup checklist for a new person, in three phases (Before day one, The onboarding call, Manager follow-through). Changes propagate to active plans (hr_setup_propagate).
+
+- `id`: Short step code (primary key).
+
+### `hr_setup_steps`
+
+Per-onboarding copies of hr_setup_template steps (one row per plan and step).
+
+### `wa_onboarding`
+
+Per-person "first steps in the Hub" checklist (profile, task, team page and more) keyed by email. Not HR onboarding; see onboardings.
+
+- `steps`: JSON object: step key (such as profile, task, dept, info, brain) to a string recording completion.
+
+### `org_positions`
+
+Org chart seats (wave133): one seat per person or open position, with a reporting line. Read by staff; changed only through the org_* functions (executives and admins). New active staff are added automatically by wa133_roster_sync.
+
+- `member_id`: team_members.id holding the seat; NULL for an open position. Unique when set.
+- `department`: Team code of the seat.
+- `reports_to`: org_positions.id of the manager seat; NULL means it reports to the executive directors.
+- `kind`: exec or staff (CHECK). Exec seats stay at the top.
+- `status`: filled, open, hiring or on_hold (CHECK).
+
+### `user_state`
+
+Presence heartbeat: the last time each signed-in person was seen in the Hub (page upsert). Staff, admins and board read everyone's to show who is online.
+
+### `hub_visits`
+
+One row per Hub opening (at most once per six hours per browser), written by the page at boot; admins read it through hub_adoption(). Starts 25 Sep 2026.
+
+- `ua`: Browser user agent.
+- `source`: hub (desktop) or phone.
+
+### `wa_usage`
+
+Daily seconds and visits per person, meant to be written by wa_usage_visit() and wa_usage_beat(). Empty: the page calls both without await, so the requests are never sent. Superseded by hub_visits and user_state; candidate for removal.
+
+### `hub_checkins`
+
+Check-in and check-out sessions started from the Hub, with minutes worked and a summary; checkin-post posts each one to Slack. Open sessions close themselves after eight hours (auto_closed).
+
+- `name`: Copy of the display name.
+- `department`: Team code at check-in.
+- `slack_ts`: Slack timestamp of the check-in message; slack_out_ts of the check-out message.
+- `closed_task_ids`: dept_tasks ids closed during the session.
+
+### `hub_shoutouts`
+
+Shout-outs shown on the home page: generated daily by the shoutouts job (kind auto) or posted by staff (kind manual). They expire after ten days by default.
+
+- `kind`: auto or manual.
+- `source`: What triggered it: tasks, project, hours, hire, anniversary, welcome or manual.
+- `ref`: De-duplication key for automatic shout-outs (unique when set).
+- `person`: Display name of the person celebrated; member_id is the roster id.
+- `team`: Team code.
+- `by`: Email of who posted a manual shout-out.
+
+### `hub_birthdays`
+
+Birthdays people chose to share (month and day, no year). share: everyone, team or me. Empty so far.
+
+### `hub_announcements`
+
+Manual "What's new" announcements posted by leaders and admins (pinned, expiring). Empty so far.
+
+- `department`: Team code the announcement is about, or NULL for everyone.
+
+### `hub_connections`
+
+Per-person connections made through hub-connect: provider slack, google_calendar or google_drive, with the external account id and name. Readable by the person and admins.
+
+- `external_id`: Account id at the provider (for Slack the user id).
+- `meta`: JSON details from the provider, such as {handle}.
+
+### `wa_notify_prefs`
+
+Per-person notification preferences, read by notify and team-inbox. Empty so far.
+
+- `disabled`: JSON array of notification kinds the person turned off.
+- `prefs`: JSON object of further preferences (wave116j). Shape not in use yet.
+
+### `wa_change_requests`
+
+Change requests about the Hub filed by staff from the page or the /hub Slack command; admins update the status. Empty so far.
+
+### `slack_hours`
+
+Weekly hours per person parsed from the Slack check-in channels by hours-pull (daily cron): sessions pair an in with the next out, up to 16 hours, in Toronto time.
+
+- `slack_name`: Slack display name (part of the primary key).
+- `member_name`: Roster display name matched from the Slack name; NULL when no match.
+- `department`: Team code of the matched roster person.
+- `week_start`: Monday of the week (Toronto time).
+- `missed_outs`: Check-ins without a matching check-out.
+
+### `wa_checkin_scope`
+
+Summary of who posts in the Slack check-in channels over the last 30 days (message count, active days, AI summary), refreshed weekly by checkin-scope. Readable by welfareavenue.com accounts and one hardcoded personal address.
+
+- `slack_id`: Slack user id (primary key).
+
+### `wa_slack_ids`
+
+Email to Slack user id map used to @mention people (notify, team-inbox, hub-connect write it). Service role only (row-level security on, no policies).
+
+- `source`: How the id was found (lookup by email, name match, or chosen by the person).
+
+### `wa_slack_names`
+
+Normalised name to Slack user id cache used to @mention people by name (project-slack, slack-digest, slack-command). Service role only.
+
+- `name_norm`: Lower-case normalised name (primary key).
+- `source`: users.list exact name, users.list first name, or pinned (set by hand).
+
+## Training Academy
+
+### `trainings`
+
+Training catalogue (wave122): Loom videos, reads, documents, SOP lessons, lessons with quizzes and Hub page tours. Written by the Academy pages and tour seeds.
+
+- `category`: Category name (training_categories.name, no foreign key). One value, Our SOPs, is missing from training_categories.
+- `kind`: tour, video, read, doc, sop or lesson. No CHECK.
+- `key`: Stable key for seeded trainings (unique when set).
+- `path_group`: Learning path, stored as academy_paths.name (not the path key).
+- `source`: Where the training came from: hub, loom, clickup or a wave seed label.
+- `ext_id`: External id, such as the Loom video id.
+- `body`: Lesson content as JSON; the shape depends on kind (tours: {tab, tour}; SOP lessons: {phases, roles, dayof, money, links, ...}; lessons: {chapters, quiz, ...}).
+- `xp`: Experience points awarded on completion.
+
+### `training_progress`
+
+Per-person progress on one training: status, percent, last step, score and time spent. Unique by (training_id, person_name), so a person is identified by display name.
+
+- `training_id`: trainings.id (cascade delete).
+- `person_name`: Display name of the learner (part of the unique key).
+- `email`: Learner email; filled only on newer rows.
+- `status`: assigned, started or done. No CHECK.
+- `data`: JSON learner state, such as {seen, quizTries}.
+
+### `training_categories`
+
+Category list for the training catalogue; trainings.category holds the name. Leaders manage.
+
+- `department`: Team code the category belongs to, or NULL for organisation-wide.
+
+### `academy_paths`
+
+Learning paths shown in the Training Academy. Trainings join a path by trainings.path_group = academy_paths.name. Leaders write; staff read.
+
+- `name`: Path name; the join value used by trainings.path_group (unique).
+- `dept`: Team code of a team path, NULL for organisation-wide paths.
+- `required`: True for paths every staff member must complete.
+
+### `academy_awards`
+
+Badges, levels and certificates earned in the Training Academy, celebrated once. Unique by (person_name, award).
+
+- `kind`: badge, level or cert. No CHECK.
+- `person_name`: Display name of the learner (part of the unique key); email identifies them too.
+- `meta`: JSON display details, such as {color, icon, n, path, items}.
+
+## Volunteering (Sunday serving and other volunteer events)
+
+### `volunteer_people`
+
+Volunteer directory: one row per volunteer with phones, emails, volunteer roles and tags, linked to Quo (OpenPhone) contacts by quo-sync. Possible duplicates are merged with volunteer_merge(). Contains personal data.
+
+- `emails`: All known emails of the volunteer.
+- `phones`: All known phone numbers; matching uses the last 10 digits.
+- `roles`: Volunteer roles the person does (such as cook, server, driver).
+- `needs_review`: True when the import found something to check (for example a shared phone); review_note says what.
+- `quo_contact_id`: Quo contact id linked by quo-sync; quo_synced_at is when.
+
+### `volunteer_events`
+
+Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind service), plus drives and planning days. Creating a service event copies the run-sheet steps (trigger trg_event_steps); moving its date moves the step due dates.
+
+- `code`: Short unique event code in the form WA-yy-nn (with letter suffixes for extra events).
+- `status`: planned, in progress, completed or cancelled. No CHECK.
+- `kind`: service (Sunday serving), drive or planning.
+- `season`: Winter, Spring, Summer or Fall.
+- `title`: Optional title; readers show Sunday serving when NULL and kind = service.
+- `itinerary_url`: Link to the day's itinerary document.
+
+### `event_roster`
+
+Who is rostered for each volunteer event and in which role, with their confirmation. Written by the volunteering page, by quo-send (which adds missing rows and a confirmation link) and by the public confirmation form.
+
+- `event_id`: volunteer_events.id (cascade delete).
+- `person_id`: volunteer_people.id; NULL for people not in the directory.
+- `person_name`: Copy of the volunteer's name; can drift from volunteer_people.full_name.
+- `role`: Role at the event: server, cook, driver, photographer, dishwasher, team_leader, community_debrief (community_talker is also targeted by the page). No CHECK.
+- `status`: Attendance: Confirmed, TBD, Unavailable, Waiting For Response in older rows; the confirmation form writes lower-case confirmed or declined. Compare case-insensitively.
+- `detail`: JSON with per-event details and, in most rows, a copy of the volunteer's phone, email and address: {phone, email, address, pickup_dropoff, ingredients_delivered, type_of_food}. Personal data.
+- `confirm_token`: Secret token of the volunteer's personal confirmation link (volunteer_confirm_get and volunteer_confirm_submit). Treat as a credential.
+- `confirm_status`: Answer from the confirmation form: confirmed, declined or needs attention. Unused so far.
+- `confirm`: JSON answers submitted on the confirmation form. Unused so far.
+- `recipe_id`: recipes.id assigned to a cook. Unused so far.
+
+### `volunteer_event_summary` (view)
+
+One row per volunteer event with roster size, confirmed count, run-sheet steps total and done, and extra to-dos total and open. Read by the volunteering page. Runs with the caller's rights.
+
+### `volunteer_inventory`
+
+Serving supplies inventory by category, shareable by a token link through inventory-share (share settings in hub_settings key inventory_share).
+
+- `qty_in`: Quantity in stock, stored as text (all current values are whole numbers).
+- `qty_remaining`: Unused (NULL in every row).
+- `reorder_needed`: Unused (NULL in every row).
+
+### `recipes`
+
+Recipe list for serving days, each linked to a Google Drive document; assignable to cooks on the roster (event_roster.recipe_id).
+
+### `quo_messages`
+
+Log of SMS messages sent to volunteers through Quo (OpenPhone) by quo-send, or recorded as a dry run.
+
+- `batch_id`: Groups the messages of one send.
+- `status`: dry_run or sent (failed sends record error).
+- `sent_by`: Who sent it (a name or system).
+
+### `sop_template`
+
+Sunday serving run-sheet: the steps of the serving SOP, imported from one ClickUp list by sop-import and edited in the Hub with sop_step_insert, sop_step_move and sop_step_deactivate. Changes propagate to planned events (sop_template_propagate). Not the SOP lessons in trainings.
+
+- `id`: Step id: the ClickUp task id for imported steps, or wa followed by 9 hex characters for steps added in the Hub.
+- `parent_id`: Parent step (sop_template.id). Foreign key (on delete set null).
+- `section`: Top-level section name from ClickUp (such as Itineraries, Post Event).
+- `phase`: When the step is due relative to the event: t_minus_2w, t_minus_1w, week_of, event_day, post_event or anytime. sop_phase_due() turns it into a date.
+- `default_owner`: Display name of the usual owner, copied to new event steps.
+- `needs_review`: True when the step text is known to be out of date; review_note explains.
+- `has_secret`: True when a shared password was scrubbed from the ClickUp description on import.
+- `active`: False for steps removed from the run-sheet; inactive steps are not copied to new events.
+
+### `sop_event_steps`
+
+Per-event copies of the run-sheet steps with owner, due date and done flag. The done flag has never been set so far.
+
+- `template_id`: sop_template.id (cascade delete).
+- `owner`: Display name of who does the step at this event.
+- `due_date`: From sop_phase_due(phase, event_date); moves with the event date.
+
+### `sop_event_extras`
+
+Extra to-dos for one volunteer event, captured by AI from meeting transcripts (process-transcript) or added on the page.
+
+- `owner`: Display name of who does it.
+- `source`: Where it came from (transcript).
+- `transcript_id`: transcripts.id it came from. Foreign key (on delete set null).
+
+### `sop_roles`
+
+Named serving roles and the run-sheet steps each role covers.
+
+- `step_ids`: JSON array of sop_template ids covered by the role (no foreign key possible in JSON).
+
+### `sop_shots`
+
+Screenshots attached to run-sheet steps, copied from ClickUp into the public sop-shots bucket (sop-import, attach-rehost).
+
+- `template_id`: sop_template.id (cascade delete).
+- `attachment_id`: ClickUp attachment id.
+- `storage_path`: Object path in the sop-shots bucket; public_url is the public link.
+
+## Fundraising and finance
+
+### `fund_events`
+
+Fundraising events calendar (plan 2026-27) with timing, partners, targets, status and results. Not the Google Calendar (hub_events) and not volunteer serving days (volunteer_events).
+
+- `plan`: Plan year label, 2026-27. Unique with title.
+- `season`: Season slot: backlog, summer-2026, fall-2026, winter-2027, spring-2027.
+- `"precision"`: How precise the dates are: day, month, range, season, flexible or none (CHECK). The column name is a SQL keyword; quote it as "precision" to be safe.
+- `timing`: Display text for when the event happens; start_date and end_date are the real dates.
+- `status`: idea, planned, confirmed, done or cancelled (CHECK).
+- `project_id`: projects.id that runs the event.
+- `sop_training_id`: trainings.id of the SOP lesson for the event (a trainings row with kind = sop). Foreign key (on delete set null).
+- `source`: plan or plan + tasks (how the row was seeded).
+- `lead`: Unused (NULL in every row).
+
+### `finance_budgets`
+
+Budget amounts per fiscal year and period for each chart-of-accounts category (the budget lines). Category keys also feed the AI category list of finance-import. Staff with the Finances page write.
+
+- `fiscal_year`: Fiscal year label: FY24, FY25 or FY26 (the year starts on 1 October).
+- `period`: FY, Q1, Q2, Q3 or Q4 (CHECK).
+- `scope`: category (a budget line) or department (CHECK). Only category is used.
+- `key`: Chart-of-accounts category label when scope = category (such as 5020 Purchases - COS), a team code when scope = department.
+- `kind`: income or expense (CHECK).
+
+### `finance_statements`
+
+Bank statements uploaded for AI import (finance-import), one row per upload with the period and counts.
+
+- `status`: processing, done or failed.
+- `uploaded_by`: Email of the uploader, or system.
+- `dup_count`: Transactions in this file that were already in the ledger.
+
+### `finance_transactions`
+
+Bank transactions extracted from statements by finance-import, with an AI-allocated team and category. Staff can re-allocate on the Finances page.
+
+- `amount`: Signed amount: negative for money out, positive for money in.
+- `department`: Team code, or org for organisation-wide costs (org is not in dept_meta). progdev is not used here.
+- `category`: Chart-of-accounts label (matches finance_budgets.key for scope = category), or Other.
+- `source`: Where the row came from; only statement is used.
+- `statement_id`: finance_statements.id of the import.
+- `allocated_by`: AI (high confidence), AI (low confidence), or the person who re-allocated it.
+- `duplicate_of`: finance_transactions.id of the earlier copy when the same transaction was imported again. Excluded from totals when set.
+- `fingerprint`: Duplicate detection key: date|amount|normalised description.
+
+## Marketing and content
+
+### `content_drafts`
+
+Branded content created with AI on the Create page (draft-content edge function). Staff only.
+
+- `content_type`: email, social_post, graphic or report.
+- `audience`: Target audience, such as partners, volunteers, sponsors_donors.
+- `language`: en or fr.
+- `status`: draft or in review.
+
+### `content_posts`
+
+Content calendar posts: planned, scheduled and published to the Facebook Page and Instagram by social-publish (cron every 5 minutes). Outgoing posts; social_posts holds published posts and their metrics.
+
+- `platforms`: Target platforms, such as instagram and facebook.
+- `media`: JSON array of media [{url, path, kind, mime, size, w, h, dur}] in the content-images bucket.
+- `status`: Workflow state; social-publish uses scheduled, publishing, posted and failed. No CHECK.
+- `results`: JSON of per-platform publish results written by social-publish.
+- `live`: JSON of per-platform live post ids and links written by social-publish.
+- `owner`: Display name of who owns the post.
+
+### `social_accounts`
+
+Connected social and analytics accounts (Facebook Page, Instagram, LinkedIn by CSV, GA4), managed by social-pull. Service role writes; staff and board viewers read.
+
+- `platform`: facebook, instagram, tiktok, linkedin, ga4 or youtube (CHECK).
+- `status`: connected, csv (data comes from CSV imports) or pending.
+- `meta`: JSON provider details: {by, history, demographics, site, page_id, media_count}.
+
+### `social_daily`
+
+Daily metric values per account (one row per platform, account, day and metric), from the APIs (social-pull, daily cron) or CSV imports. Read through social_overview() and social_range().
+
+- `metric`: Metric name, such as views, reach, engagement, followers, new_followers, likes, comments, shares, saves, sessions, users, pageviews.
+- `source`: api or csv.
+
+### `social_posts`
+
+Published social posts and their performance metrics, from the APIs or CSV imports (social-pull). Incoming data; content_posts is the outgoing calendar.
+
+- `kind`: Post type: post, feed, reels, page (GA4 pages) or video.
+- `raw`: JSON of extra fields from CSV imports (ctr, audience, post_type, engagement_rate, posted_by, video_views).
+- `source`: api or csv.
+
+### `social_notes`
+
+AI-written insight notes on social performance (social-pull, weekly cron).
+
+- `kind`: Type of note (insights).
+- `data`: JSON {evidence, recommendations, days} behind the note.
+
+### `wa_brand`
+
+Welfare Avenue brand tokens and rules (Welfare Avenue Brand Guides v1 2026). Seeded 24/09/26. Public read, admins write. category: colour | colour_rule | tint | font | type_scale | type_rule | logo | logo_rule | identity | pillar | personality | archetype | persona | voice | voice_term | messaging | doodle | doodle_principle | doodle_rule | e_that_moves | application | fun_fact | css | tokens.
+
+- `meta`: JSON details whose keys depend on category (for example rgb, cmyk, weight, family, we_say, we_dont_say).
+
+### `wa_brand_assets`
+
+Welfare Avenue brand asset registry (logos, E component, doodles). kind: logo_primary | logo_secondary | logo_lockup | e_component | doodle. Files live in Storage at storage_bucket/storage_path; inline_svg and data_uri let the hub render without the upload. Seeded 24/09/26. Public read, admins write.
+
+- `usage`: Plain-language usage rule for the asset.
+
+### `wa_brand_assets_list` (view)
+
+wa_brand_assets without the heavy inline_svg and data_uri columns (has_inline_svg and has_data_uri say whether they exist). Runs with the caller's rights since wave133.
+
+### `wa_photos`
+
+Welfare Avenue photo library: labels, usage guidance and storage paths (content-images/photos/). usage: ready | crop (crop the named edge first) | consent (a community member or child is identifiable) | internal | check (not reviewed yet). Staff write; admins delete.
+
+- `people`: Who is in the photo, by role, never by name.
+- `focal_x`: Horizontal focal point, 0 to 1, for cropping (focal_y is vertical).
+- `version`: Cache-busting version appended to the public URLs.
+
+### `wa_photos_list` (view)
+
+wa_photos plus public URLs for the full, web and thumbnail sizes (url_full, url_web, url_thumb). Runs with the caller's rights.
+
+### `wa_drive_docs`
+
+Index of Google Drive files visible to the Hub's service account, with the text of Google Docs (up to 80,000 characters). Synced daily by drive-pull; read by Ask the Hub and the page. Readable by welfareavenue.com accounts and one hardcoded personal address.
+
+- `text_content`: Extracted text for Google Docs and text files; NULL for other formats.
+- `modified_time`: Drive modified time; unchanged docs keep their stored text.
+
+## Integrations and AI
+
+### `ai_routes`
+
+Model router configuration: one row per AI job (task), with the chain of OpenRouter model ids. Read by the llm edge function; edited in Admin.
+
+- `task`: Job name sent by callers in the x-wa-task header (primary key).
+- `chain`: OpenRouter model ids in order: the first is primary, the rest are fallbacks.
+- `jev`: True when the job also runs Jev checks.
+- `max_tokens`: Unused (NULL in every row).
+
+### `ai_calls`
+
+Log of every AI call made through the llm router: job, caller, requested and actual model, tokens, cost and errors. Rows older than 90 days are deleted daily by the cron job wa-ai-calls-prune. Admins read.
+
+- `task`: ai_routes.task of the job (test calls use other values). No foreign key: this is a log.
+- `via`: How the model was chosen: chain, jev or test.
+- `cost`: Cost reported by OpenRouter for the call.
+- `ms`: Duration in milliseconds.
+
+### `wa_health_checks`
+
+Latest health check per AI service (router_brain, router_cheap, jev), written daily by health-check. Service role only.
+
+### `wa_rate_limits`
+
+Short-lived rate-limit counters (per IP and action) for the public inventory share link (inventory-share). Rows are deleted when their window ends. Service role only.
+
+### `hub_knowledge`
+
+Knowledge articles given to Ask the Hub as background (read by the ask edge function). One row today.
+
+### `clickup_sources`
+
+ClickUp folders mapped to teams for the weekly ClickUp snapshot (clickup-pull).
+
+- `id`: ClickUp folder id.
+- `department`: Team code, or split-mtl-to (a rule: split the folder's lists between opsmtl and opsto by list name).
+
+### `clickup_weekly`
+
+Weekly ClickUp snapshot per team (clickup-pull, Mondays): tasks created and closed that week and open tasks by status.
+
+- `week_start`: Monday of the week.
+- `status_counts`: JSON object: raw ClickUp status label to count. Labels vary by list and are not normalised.
+
+### `slack_sources`
+
+Slack channels read by slack-pull, mapped to teams.
+
+- `name`: Channel name without the # (primary key).
+- `department`: Team code, or NULL for organisation-wide channels.
+
+## System
+
+### `app_config`
+
+Key-value text settings and small job state used by edge functions and the page. Keys include site_url, github_repo, netlify_site_id, slack_digest, slack_last_pull (job state), quo_phone_number_id (cache), wa_writing_style, onboarding_email_template, review_channel_id, review_channel_name, agenda_slack_policy, drive_source_links. Staff read and write; board viewers read. Compare hub_settings (JSON values).
+
+### `hub_settings`
+
+Key-value JSON settings edited in the Hub. Keys: team_inbox (Slack channels per team), fund_goals, hours_minimums, inventory_share (share link token and expiry), board ({terms, source, cadence}); social-publish also reads content_calendar. Any staff member can write. Compare app_config (text values).
+
+- `value`: JSON value; the shape depends on key.
+
+### `staff_notes`
+
+Tiny staff-only key-value store (k, v) read by the volunteer messaging screen. Its value is sensitive: never copy it into prompts, logs or messages.
+
+- `k`: Key.
+- `v`: Value (plain text).
+
+### `info_links`
+
+Important links, folders, videos and shared logins shown on the Important info page, optionally per team. Staff read and write; hub-edit proposes changes for admins.
+
+- `kind`: password, video, folder or link (CHECK).
+- `username`: Login name for kind = password.
+- `secret`: For kind = password: the shared login. Sensitive: never copy it into prompts, logs or messages.
+- `department`: Team code, or NULL for everyone.
+
+### `change_log`
+
+Audit trail of changes made in the Hub (one row per changed field) plus run logs written by scheduled jobs. Staff read it; board_only rows only for board_circle.
+
+- `entity_type`: What changed. Tasks appear as dept_task or task, roster rows as member or team_member; job runs use types such as site_deploy, hours_pull, db_backup, drive_pull, calendar_sync, edge_function, repo_sync.
+- `entity_id`: Id of the changed row as text; for job runs a date or label.
+- `changed_by`: Who made the change: an email, a display name, 'AI: <transcript title>', or a job label such as db-backup v1.
+- `board_only`: When true, only board_circle members can read the row.
+
+### `site_files`
+
+The built Hub page stored in parts: path index.html in about 380 KB parts (part 1, 2, ...) plus _headers (security headers). The site edge function serves it and host-sync deploys it. Service role only.
+
+- `part`: Order of the part within the file.
+
+## Backups and leftovers (candidates for removal)
+
+### `sop_template_backup_20260802`
+
+Frozen copy of sop_template taken on 2 Aug 2026. No primary key, no policies, no code references, not included in the nightly db-backup export. Do not use as live data; candidate for removal.
+
+### `transcripts_backup_20260722`
+
+Frozen copy of transcripts taken on 22 Jul 2026, with old long team labels. No primary key, no policies, no code references, not in the nightly export. Do not use as live data; candidate for removal.
+
+### `wa_loom_stage`
+
+Empty staging table left from a Loom import. No code references. Candidate for removal.
+
+Functions:
+
+- `wa_email()`: The signed-in email in lower case (from auth.jwt()), or an empty string. Access: anon and authenticated.
+- `my_emails()`: All emails of the signed-in person: the sign-in email, its dotless spelling and Workspace aliases from hub_directory. Used by calendar_my_meetings(). Access: anon and authenticated.
+- `wa_my_names()`: The signed-in email, roster display name and first name in lower case, for matching free-text name columns. Access: anon and authenticated.
+- `wa_name_matches(cand text)`: True when a free-text name or email refers to the signed-in person (email, full roster name, or a first name that is unique among active members). Used by policies on agendas and mentions and by wa_sees_restricted(). Access: anon and authenticated.
+- `wa_actor_name()`: Display name of the signed-in person from team_members (falls back to the email). Written into *_by columns by the bank and org functions. Access: authenticated.
+- `is_wa_staff()`: True for staff: an email with a non-blocked role in hub_roles, or any welfareavenue.com email not blocked. The main check in staff policies. Called by photo-library. Access: authenticated.
+- `is_hub_admin()`: True when the signed-in email has role admin in hub_roles. Same check as is_wa_admin() (alias). Called by llm, photo-library, shoutouts and social-pull. Access: anon and authenticated.
+- `is_wa_admin()`: True when the signed-in email has role admin in hub_roles. Same check as is_hub_admin() (alias). Access: anon and authenticated.
+- `is_hub_leader()`: True when the signed-in email has role admin or leader in hub_roles. Same check as is_wa_leader() (alias). Access: anon and authenticated.
+- `is_wa_leader()`: True when the signed-in email has role admin or leader in hub_roles. Same check as is_hub_leader() (alias). Access: anon and authenticated.
+- `wa_is_hr()`: True when the signed-in email is in wa_hr_access (HR tools). Access: anon and authenticated.
+- `wa_page_ok(p_tab text)`: Whether the signed-in person may open a Hub page by its key: true or false from their hub_roles row and access profile pages, or NULL when the profile does not decide (legacy tabs, no profile). Access: anon and authenticated.
+- `wa_sees_restricted(vis text, ap jsonb, creator text)`: Row visibility check for restricted meetings: NULL, empty or department is visible to all; leadership to leaders, board circle and board viewers; private to the creator and the names in ap. Admins see everything. Used by policies on dept_tasks, dept_updates, decisions, transcripts and goal_wins. Access: anon and authenticated.
+- `get_my_role()`: Coarse role of the signed-in person for the page: staff, board or none. Called by the page at sign-in. Access: authenticated.
+- `is_board_circle()`: True when the signed-in email is in board_circle (may see board_only rows). Called by the page and many policies. Access: anon and authenticated.
+- `is_board_viewer()`: True when the signed-in email is in board_viewers. Access: authenticated.
+- `my_board_member_id()`: board_members.id of the signed-in person (matched on emails, active or adviser), or NULL. Access: anon and authenticated.
+- `is_board_person()`: True for directors (board_members), board viewers and board circle members. Access: anon and authenticated.
+- `wa_board_leader()`: True for admins, and for leaders whose access profile opens the governance page. Access: anon and authenticated.
+- `can_see_board()`: True when the signed-in person may open the board pages: is_board_person() or wa_board_leader(). Access: anon and authenticated.
+- `wa_can_bank()`: True for staff who are not viewers; required by the bank functions. Access: authenticated.
+- `wa_leads_project(p_id bigint)`: True for leaders and admins, or when the signed-in person is named in projects.leads of the project. Access: authenticated.
+- `wa_org_editor()`: True for Hub admins and for people with the executive access profile; required by the org_* functions. Called by the org chart page. Access: authenticated.
+- `wa_today()`: Today's date in America/Toronto. Use instead of current_date (the database runs in UTC). Access: anon and authenticated.
+- `bank_list()`: Everything in the bank for the bank page: banked tasks and projects the caller may see, items back recently, today's date and whether the caller can bank or leads. Returns empty lists for non-staff. Called by the page. Access: authenticated.
+- `bank_task(p_id bigint, p_until date, p_note text)`: Parks an open task and its open subtasks in the bank until p_until (after today, within about three years), with a note. Checks wa_can_bank() and the task's visibility, then calls bank_task_do(). Called by the page and by the ask edge function (as the signed-in person). Access: authenticated.
+- `bank_project(p_id bigint, p_until date, p_note text)`: Parks a project, its sub-projects and their open tasks in the bank until p_until. Only the project's lead or a leader; team General projects cannot be banked. Called by the page. Access: authenticated.
+- `bank_add_task(p_department text, p_title text, p_until date, p_note text, p_project_id bigint, p_owner text)`: Creates a new task directly in the bank for a team (team code required) with a return date. Checks wa_can_bank(). Called by the page. Access: authenticated.
+- `bank_redate(p_kind text, p_id bigint, p_until date)`: Changes the return date of a banked task (p_kind task) or project (p_kind project). Projects need their lead or a leader. Called by the page. Access: authenticated.
+- `bank_unbank(p_kind text, p_id bigint, p_why text)`: Brings a banked task or project back now, with a reason. Checks wa_can_bank(), visibility, and project lead rights. Called by the page. Access: authenticated.
+- `bank_undo(p_kind text, p_id bigint)`: Undoes a bank action within 30 minutes of banking. Called by the page. Access: authenticated.
+- `bank_task_do(p_id bigint, p_until date, p_note text, p_by text)`: Internal: banks a task tree without permission checks, logs to change_log and returns the number of tasks banked. Used by bank_task() and apply_transcript_result(). Access: service role only.
+- `bank_project_do(p_id bigint, p_until date, p_note text, p_by text)`: Internal: banks a project tree and its open tasks without permission checks. Used by bank_project(). Access: service role only.
+- `bank_unbank_do(p_kind text, p_id bigint, p_why text, p_by text)`: Internal: brings a banked task or project back and restores future due dates. Used by bank_unbank(), bank_resurface() and the process-transcript edge function. Access: service role only.
+- `bank_resurface()`: Daily job (cron wa-bank-resurface, 10:05 UTC): brings back banked tasks and projects whose date has come, keeping children with a still-banked parent. Access: service role only.
+- `wa_task_tree(p_id bigint)`: Internal: the task id and all its descendant subtask ids. Access: service role only.
+- `wa_project_tree(p_id bigint)`: Internal: the project id and all its descendant project ids. Access: service role only.
+- `org_add_opening(p_reports_to bigint, p_title text, p_department text, p_status text, p_note text)`: Adds an open position to the org chart under a seat (or under the executive directors when NULL). Executives and admins only (wa_org_editor()). Logs to change_log. Called by the page. Access: authenticated.
+- `org_fill(p_id bigint, p_member_id bigint)`: Puts an active roster member into an open seat. Executives and admins only. Called by the page. Access: authenticated.
+- `org_move(p_id bigint, p_reports_to bigint, p_department text)`: Changes who a seat reports to (and optionally its team). Exec seats cannot move; cycles are refused. Executives and admins only. Called by the page. Access: authenticated.
+- `org_place(p_member_id bigint, p_reports_to bigint)`: Creates a filled seat for a roster member who is not yet on the chart. Executives and admins only. Called by the page. Access: authenticated.
+- `org_remove(p_id bigint)`: Deletes an empty seat; its reports move up to its manager. Executives and admins only. Called by the page. Access: authenticated.
+- `org_set_reports(p_id bigint, p_reports bigint[])`: Sets exactly which seats report to a seat (moving others out). Executives and admins only. Called by the page. Access: authenticated.
+- `org_update(p_id bigint, p_title text, p_status text, p_note text, p_department text)`: Edits a seat's title, status, note and team. Executives and admins only. Called by the page. Access: authenticated.
+- `org_vacate(p_id bigint)`: Takes the person off a seat, leaving an open position. Exec seats cannot be vacated. Executives and admins only. Called by the page. Access: authenticated.
+- `org_is_under(p_node bigint, p_root bigint)`: True when seat p_node is below seat p_root in the reporting line (used to refuse cycles). Access: authenticated.
+- `org_label(p_id bigint)`: Readable label of a seat for change_log text (name and title, or open position). Access: service role only.
+- `board_home()`: All data for the board home page in one JSON: the caller's board seat, goals, the fiscal year window (from 1 October) and board summaries. Returns NULL unless can_see_board(). Called by the page. Access: anon and authenticated.
+- `board_me()`: The caller's board context: {member_id, board, leader, admin}. Called by the page. Access: anon and authenticated.
+- `calendar_my_meetings(p_from timestamp with time zone, p_to timestamp with time zone)`: The caller's own meetings from hub_events between two times (organizer or attendee is one of my_emails()), excluding cancelled events. Staff and board viewers only. Called by the page. Access: anon and authenticated (checks inside).
+- `search_transcripts(q text)`: Full-text and substring search over transcripts, ranked, with a snippet and the AI summary. Staff only; board_only transcripts only for the board circle. Called by the page. Access: anon and authenticated (checks inside).
+- `team_inbox_mail(p_id bigint, p_state text, p_assignee text, p_request_id bigint, p_clear_assignee boolean, p_by text)`: Updates the team inbox state of a hub_mail row: state open, done or request, assignee, linked request; logs to change_log. Staff only. Called by the page. Access: anon and authenticated (checks inside).
+- `hub_adoption()`: Adoption statistics for Admin: people, visits, hours, tasks, AI calls and cost, questions, transcripts and emails for today, 7 and 30 days. Admins or service role only. Called by the page. Access: anon and authenticated (checks inside).
+- `wa_hub_logins()`: Last sign-in and account creation time per auth user (lower-case email). Staff only. Called by the page (HR centre). Access: anon and authenticated (checks inside).
+- `social_overview(p_days integer)`: Social and web analytics for the last p_days compared with the previous period: accounts, totals, daily series, top posts, followers and the latest insight note. Staff, board viewers or service role. Called by the page and social-pull. Access: anon and authenticated (checks inside).
+- `social_range(p_from date, p_to date)`: Same as social_overview() for any date range (with automatic bucketing and the previous period). Staff, board viewers or service role. Called by the page. Access: authenticated.
+- `ai_usage(days integer)`: AI usage per job over the last N days from ai_calls: calls, successes, average time, cost, tokens and models. Called by the llm edge function for Admin. Access: service role only (since 26/09/26).
+- `volunteer_confirm_get(p_token text)`: Public confirmation page: returns the volunteer's name, role and event for a roster confirmation token, or NULL. Meant for anyone holding the link. Called by the page. Access: anon and authenticated.
+- `volunteer_confirm_submit(p_token text, p jsonb)`: Public confirmation page: saves the answers (p.attending yes or no) for a roster token and sets confirm_status and status. Meant for anyone holding the link. Called by the page. Access: anon and authenticated.
+- `volunteer_history()`: Per volunteer: events rostered, confirmed, unavailable and waiting, last event, last confirmed event and roles. Staff and board viewers only. Called by the page. Access: anon and authenticated (checks inside).
+- `volunteer_merge(p_keep bigint, p_drop bigint)`: Merges a duplicate volunteer into another: moves roster rows and Quo messages, combines contact fields, deletes the duplicate and logs to change_log. Staff only. Called by the page. Access: anon and authenticated (checks inside).
+- `sop_step_insert(p_anchor text, p_mode text, p_name text, p_owner text, p_help text, p_desc text)`: Adds a run-sheet step to sop_template: a new section (p_mode section), a child of p_anchor (child) or a step after p_anchor (after). Returns the new id. Runs with the caller's rights (staff policy). Called by the page. Access: anon and authenticated.
+- `sop_step_move(p_id text, p_dir integer)`: Moves a run-sheet step and its children among its siblings: down when p_dir is positive, otherwise up. Runs with the caller's rights. Called by the page. Access: anon and authenticated.
+- `sop_step_deactivate(p_id text)`: Deactivates a run-sheet step and all its children (active = false); returns how many. Runs with the caller's rights. Called by the page. Access: anon and authenticated.
+- `ensure_event_steps(p_event_id bigint)`: Copies any missing active run-sheet steps to one event's checklist; returns rows added. Runs from the trigger trg_event_steps and from sop_sync_all_events(). Access: service role only.
+- `sop_sync_all_events()`: Runs ensure_event_steps() for every service event. Called by the sop-import edge function. Access: service role only.
+- `sop_phase_due(p_phase text, p_event date)`: Due date for a run-sheet phase: t_minus_2w = event minus 14 days, t_minus_1w minus 7, week_of minus 3, event_day, post_event plus 3; NULL otherwise. Access: anon and authenticated.
+- `onboarding_assign(p_member_id bigint, p_by text)`: Starts an HR onboarding plan for a roster member: creates the onboardings row, copies the onboarding_template steps with due dates, and copies the hr_setup_template steps. p_by is stored as given. Staff only (checked inside). Called by the page (HR centre). Access: authenticated.
+- `onb_due(p_section text, p_start date)`: Due date for an onboarding section: WEEK 1 = start plus 7 days, WEEK 2 plus 14, WEEK 3 plus 21, WEEK 4 plus 28, 60 DAYS plus 60, otherwise plus 90. Access: anon and authenticated.
+- `wa_usage_visit()`: Adds one visit for the signed-in email today in wa_usage. The page calls it without await, so it never runs; superseded by hub_visits. Access: anon and authenticated.
+- `wa_usage_beat(p_seconds integer)`: Adds up to 600 seconds of time for the signed-in email today in wa_usage. Never runs (see wa_usage_visit). Access: anon and authenticated.
+- `apply_transcript_result(p_transcript_id bigint, p jsonb, p_changed_by text)`: Applies the AI result of one transcript: maps the transcript's team, then writes dept_meta (read, progress, priorities), new tasks (with assignees, banking far-off ones), closed tasks, updates, new and decided decisions, and marks the transcript processed. p keys: read, progress, priorities, summary, new_tasks, close_task_ids, new_updates, new_decisions, decide_decisions. Called by process-transcript. Access: service role only.
+- `get_secret(secret_name text)`: Reads a secret from Supabase Vault by name. Called by almost every edge function (tokens, WA_TRIGGER_SECRET). Access: service role only.
+- `call_edge(fn text, payload jsonb)`: Calls an edge function over pg_net with the anon key and the vault WA_TRIGGER_SECRET header; returns the request id. Used by cron jobs and triggers. Access: service role only.
+- `wa_notify_call(payload jsonb)`: Calls the notify edge function through call_edge(), ignoring errors. Used by the trg_wa89_* triggers. Access: service role only.
+- `wa_backup_tables()`: Names of the public tables the nightly db-backup job exports (all except names containing backup or starting wa_stage). Called by db-backup. Access: service role only.
+- `extract_speakers(p_body text)`: Speaker names found at the start of transcript lines (such as Name: or 00:12 Name:), minus common headings; up to 15. Used by the trigger transcripts_set_speakers. Access: anon and authenticated.
+- `wa_fix_names(s text)`: Replaces known misspellings and long forms of specific people's names with their roster display names. A hardcoded list; an alias table would be data instead of code. Access: anon and authenticated.
+- `set_task_closed_at()`: Trigger on dept_tasks: sets closed_at when done becomes true and clears it when done is false.
+- `wa132_bank_close()`: Trigger on dept_tasks: when a banked task is closed, clears the bank columns and restores due_date from bank_due.
+- `trg_wa89_task_reassigned()`: Trigger on dept_tasks: notifies (notify) the new owner when an open task's owner text changes.
+- `trg_wa89_request_filed()`: Trigger on dept_requests insert: notifies (notify) that a request was filed.
+- `trg_wa123_request_new()`: Trigger on dept_requests insert: tells team-inbox to post the new request to the team's Slack channel.
+- `trg_wa123_request_update()`: Trigger on dept_requests update: tells team-inbox when status, done or assignee changes.
+- `trg_wa123_note_new()`: Trigger on request_notes insert: tells team-inbox about the new note.
+- `trg_wa123_mail_filed()`: Trigger on hub_mail: when an email is filed to a team (not noise, not a test), tells team-inbox.
+- `trg_wa89_mentioned()`: Trigger on mentions insert: notifies (notify) the person mentioned.
+- `trg_wa89_suggestion_accepted()`: Trigger on request_suggestions: notifies (notify) when a suggestion moves from pending to accepted.
+- `trg_wa89_invited()`: Trigger on team_members: notifies (notify) when a member is added active or re-activated.
+- `wa133_roster_sync()`: Trigger on team_members: puts a new or re-activated staff member (not board) on the org chart under their team head.
+- `wa_auto_profile()`: Trigger on hub_roles and team_members: when hub_access_settings.auto_profile is on, gives members and leaders without a profile the access profile of their team.
+- `wa72_founder_guard()`: Trigger on hub_roles: keeps the founders' rows as admin and prevents deleting them (founder emails are hardcoded).
+- `on_transcript_insert()`: Trigger on transcripts insert (every row): posts the new transcript id to the process-transcript edge function.
+- `wa65_on_leadership_insert()`: Trigger on transcripts insert, only when department contains leadership: sends the row to the process-leadership edge function.
+- `transcripts_set_speakers()`: Trigger on transcripts: fills speakers from the body with extract_speakers().
+- `wa_stamp_restricted()`: Trigger on transcripts: when a restricted meeting (leadership or private) is processed, copies its visibility and allowed_people to the updates, tasks and decisions it created, found by the text 'AI: <title>' in added_by or updated_by.
+- `wa69_general_link()`: Trigger on transcripts: when processed, moves the tasks it created (found by updated_by = 'AI: <title>') without a project into the team's General project.
+- `trg_event_steps()`: Trigger on volunteer_events insert: copies the run-sheet steps to new service events (ensure_event_steps()).
+- `volunteer_event_date_moved()`: Trigger on volunteer_events: when event_date changes, recomputes the due dates of the event's run-sheet steps.
+- `sop_template_propagate()`: Trigger on sop_template: copies new active steps to planned future events and pushes default owner and phase changes to their open steps.
+- `onboarding_template_propagate()`: Trigger on onboarding_template: adds new or re-activated steps to active onboarding plans and removes deactivated ones.
+- `tg_onbtmpl_touch()`: Trigger on onboarding_template: sets updated_at when the name or description changes (used to ask people to re-acknowledge).
+- `hr_setup_propagate()`: Trigger on hr_setup_template: adds new or re-activated steps to active onboarding plans and removes deactivated ones.
+- `on_onboarding_help()`: Trigger on onboarding_help insert: posts the help request to the notify edge function.
+- `task_files_stamp()`: Trigger on task_files: records the signed-in email in by_email, whatever the request says.
+- `wa_photos_touch()`: Trigger on wa_photos: sets updated_at on every update.
+
+## Added with wave134
+
+- `request_suggestions.target_request_id`: References dept_requests.id (the request a suggestion would update). Foreign key (on delete set null).
+- `hub_shoutouts.member_id`: References team_members.id. Foreign key (on delete set null).
+- `dept_meta.label`: Full team name as the Hub shows it (Operations Montreal, Program Development, Operations Toronto, Marketing, Branding & Web, Fundraising & Finances, Human Resources, Board & Governance).
+- `dept_meta.short_label`: Short team name for chips and tight spaces (Ops Montreal, Program Dev, Ops Toronto, Marketing, Fundraising & Finances, HR, Board).
+- `dept_meta.sort`: Menu order of the team (1 = first).
+- `dept_meta.color`: Team colour (hex) used for dots, chips and columns.
+

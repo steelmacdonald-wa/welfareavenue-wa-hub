@@ -78,10 +78,10 @@
   };
   var GLYPH_RE = new RegExp('[' + Object.keys(GLYPHS).map(function (g) { return g.length === 2 ? '\\u{' + g.codePointAt(0).toString(16) + '}' : '\\u' + ('0000' + g.charCodeAt(0).toString(16)).slice(-4); }).join('') + ']', 'u');
   var MAST = {
-    "overview": ["Strategy", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
-    "dashboard": ["Strategy", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
-    "goals": ["Strategy", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
-    "requests": ["Strategy", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
+    "overview": ["Home", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
+    "dashboard": ["Executive dashboard", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
+    "goals": ["Goals and projects", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
+    "requests": ["Requests and inbox", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
     "transcripts": ["Meetings", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
     "agendas": ["Meetings", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],
@@ -89,19 +89,19 @@
     "hrcentre": ["Human Resources", "HR centre", "People records, hours, onboarding and policies in one place.", true, "HR centre"],
     "orgchart": ["People", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
     "training": ["People", "Training academy", "Onboarding, learning paths, a tour of every page, and your progress.", false, "Training academy"],
-    "hubmail": ["Meetings", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
-    "needsme": ["People", "Needs me", "Everything waiting on you, in one queue.", true, "Needs me"],
-    "activity": ["More", "Activity", "Everything that changed on the Hub, newest first.", true, "Activity"],
-    "importantinfo": ["More", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
-    "brain": ["More", "The Brain", "Ask across everything the Hub knows.", true, "The Brain"],
-    "create": ["More", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
+    "hubmail": ["Requests and inbox", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
+    "needsme": ["Home", "Needs me", "Everything waiting on you, in one queue.", true, "Needs me"],
+    "activity": ["Admin", "Activity", "Everything that changed on the Hub, newest first.", true, "Activity"],
+    "importantinfo": ["Resources", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
+    "brain": ["Goals and projects", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
+    "create": ["Resources", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
   };
-  var ADMIN = [
+  var ADMIN = [ /* audit 26/09/26: People and access first; the menu shows these as the Admin group */
+    ["people", "People and access", "#w113card, #w113card + .card", "Everyone on the roster, what they can see, their invitations, and the access requests."],
+    ["security", "Security and audit trail", "#w86card", "What the Hub enforces, the backups, and every change with who made it."],
     ["ai", "AI models", "#w116ncard", "Which model answers each job, with fallbacks and spend."],
     ["adoption", "Adoption", "#w116rcard", "Who uses the hub and how much: sign-ins, hours, tasks closed and AI spend, daily, weekly and monthly."],
     ["accounts", "Workspace accounts", "#w116lcard", "Google Workspace accounts, placed on the roster or set aside."],
-    ["people", "People and access", "#w113card, #w113card + .card", "Everyone on the roster, what they can see, their invitations, and the access requests."],
-    ["security", "Security and audit trail", "#w86card", "What the Hub enforces, the backups, and every change with who made it."],
     ["change", "Change the Hub", "#w96card", "Edit content with AI, or file a build request for the pipeline."]
   ];
 

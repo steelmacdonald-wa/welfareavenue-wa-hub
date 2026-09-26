@@ -50,7 +50,7 @@
       s.push({ t: 'Requests and the HR centre', p: 'Teams ask each other for work through Requests, and the HR centre runs onboarding, training and time commitments. Both are in the top menu.', hash: null });
     }
     if (role === 'admin') {
-      s.push({ t: 'The Admin page', p: 'Invite people by email, set what each role can see, and check the audit trail. It is under More.', hash: null });
+      s.push({ t: 'The Admin page', p: 'Invite people by email, set what each role can see, and check the audit trail. Its sections are at the bottom of the menu, under Admin.', hash: null });
     }
     if (role === 'board') {
       s.push({ t: 'A read-only window', p: 'As a board viewer you see decisions, goals and progress across the organisation. Nothing here needs anything from you day to day.', hash: null });

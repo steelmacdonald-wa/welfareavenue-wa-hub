@@ -580,6 +580,17 @@ Deno.serve(async (req: Request) => {
   if (!caller) return json({ error: 'unauthorized' }, 401);
   const body = await req.json().catch(() => ({}));
   const action = String(body.action || 'probe');
+  /* audit 26/09/26: who may do what. probe (any Gmail search of the hub@ mailbox) and test: the pipeline and admins.
+     undo and refile (they delete or move what an email created): leaders and admins, as the Hub inbox page. */
+  if (caller !== 'automation' && ['probe', 'test', 'undo', 'refile'].includes(action)) {
+    const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: req.headers.get('Authorization') || '' } } });
+    let admin = false, leader = false;
+    try { const a = await asUser.rpc('is_hub_admin'); admin = a.data === true; } catch (_) { admin = false; }
+    try { const l = await asUser.rpc('is_hub_leader'); leader = l.data === true; } catch (_) { leader = false; }
+    if (!leader) { try { const pg = await asUser.rpc('wa_page_ok', { p_tab: 'hubmail' }); leader = pg.data === true; } catch (_) { /* no */ } }
+    if ((action === 'probe' || action === 'test') && !admin) return json({ error: 'Only admins can use ' + action + '.' }, 403);
+    if ((action === 'undo' || action === 'refile') && !admin && !leader) return json({ error: 'Only leaders and admins can ' + action + ' a filing.' }, 403);
+  }
   try {
     if (action === 'probe') {
       const { token, sa } = await delegatedToken();

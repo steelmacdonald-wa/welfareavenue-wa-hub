@@ -12,7 +12,7 @@
     /* the board has no Home: the calendar sits in Strategy, without the volunteering and birthday layers */
     var bv = boardOk() && !staffOk();
     var hb = hasBoard();
-    mast('calendar', bv ? 'Strategy' : 'Home', 'Calendar', bv ? (hb ? 'Board meetings, fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings and marketing posts, in one place.') : 'Fundraising events, ' + (hb ? 'board dates, ' : '') + 'your meetings, marketing posts, volunteering and birthdays, in one place.');
+    mast('calendar', bv ? 'Board' : 'Home', 'Calendar', bv ? (hb ? 'Board meetings, fundraising events, your meetings and marketing posts, in one place.' : 'Fundraising events, your meetings and marketing posts, in one place.') : 'Fundraising events, ' + (hb ? 'board dates, ' : '') + 'your meetings, marketing posts, volunteering and birthdays, in one place.');
     var h = document.getElementById('w124cal');
     if (!h) { h = document.createElement('div'); h.id = 'w124cal'; sec.appendChild(h); }
     return h;

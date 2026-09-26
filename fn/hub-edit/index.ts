@@ -113,12 +113,12 @@ Deno.serve(async (req: Request) => {
   };
 
   try {
-    const key = await getSecret('ANTHROPIC_API_KEY');
     let lastErr = '';
     for (const model of MODELS) {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
+      /* audit 26/09/26: through the llm router */
+      const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
         method: 'POST',
-        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'draft', 'x-wa-caller': 'hub-edit', 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model, max_tokens: 3000, temperature: 0, system: SYSTEM,
           messages: [{ role: 'user', content: 'CONTEXT:\n' + JSON.stringify(context) + '\n\nADMIN INSTRUCTION:\n' + instruction }],

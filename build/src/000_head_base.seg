@@ -974,7 +974,7 @@ const CATEGORIES = ["Budget or purchase", "Hiring or people", "Legal, risk, or g
 const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#103F39", "Partnership or external": "#3a6ea5", "Ethics or policy": "#6F64AB" };
 
 function isStaff() { return MODE === "staff"; }
-function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;"); } /* audit 26/09/26: quotes too, esc() is used inside attribute values */
 function catTag(cat) { if (!cat) return ""; return '<span class="cat-tag" style="background:' + (CAT_COLORS[cat] || "#797773") + '">' + esc(cat) + "</span>"; }
 
 function initCloud() {
@@ -1077,7 +1077,7 @@ async function loadAll() {
     db.from("task_assignees").select("*"),
     db.from("dept_sentiment").select("*").gte("captured_on", new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10)),
     db.from("slack_hours").select("*").gte("week_start", new Date(Date.now() - 42 * 86400000).toISOString().slice(0, 10)),
-    db.from("clickup_weekly").select("*").gte("week_start", new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10))
+    Promise.resolve({ data: [] }) /* audit 26/09/26: clickup_weekly is no longer read anywhere (wave116g), so it is not loaded */
   ];
   if (isStaff()) base.push(db.from("change_log").select("*").order("changed_at", { ascending: false }).limit(300));
   const res = await Promise.all(base);
@@ -1517,7 +1517,7 @@ function metaLine(by, at) {
   const d = at ? new Date(at).toLocaleDateString() : "";
   return "Done by " + by + (d ? " on " + d : "");
 }
-function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function escapeHtml(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML.replace(/"/g, "&quot;").replace(/'/g, "&#39;"); }
 
 let toastTimer = null;
 function toast(msg) {

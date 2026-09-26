@@ -22,9 +22,10 @@ const SITE = 'https://wa-exec-dashboard.netlify.app/';
 const BOT_NAME = 'Welfare Avenue Hub';
 const DEPT_LABEL = {
   opsmtl: 'Ops Montreal',
+  progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising & Grants',
+  fundraising: 'Fundraising & Finances',
   hr: 'Human Resources',
   board: 'Board'
 };

@@ -72,6 +72,7 @@ async function authorize(req) {
 }
 const DEPTS = [
   'opsmtl',
+ 'progdev',
   'progdev',
   'opsto',
   'marketing',
@@ -84,7 +85,7 @@ const DEPT_LABELS = {
   progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Grants',
+  fundraising: 'Fundraising and Finances',
   hr: 'Human Resources',
   board: 'Board'
 };

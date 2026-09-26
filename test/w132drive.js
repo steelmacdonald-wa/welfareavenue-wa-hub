@@ -85,7 +85,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
       await shot(f, 'top');
       const s = await f.ev(new Function(vis + `
         const tab = document.querySelector('#tabBar .tab[data-tab="bank"]'); const host = tab && tab.closest('.tab-group');
-        const strat = Array.from(document.querySelectorAll('#tabBar .tab-group[data-w42g="strategy"] .tab')).map(t => t.getAttribute('data-tab'));
+        const strat = Array.from(document.querySelectorAll('#tabBar .tab-group[data-w42g="goals"] .tab')).map(t => t.getAttribute('data-tab'));
         return { tab: !!tab, label: tab && tab.textContent.trim(), group: host && host.getAttribute('data-w42g'), strat, active: (document.querySelector('.panel.active') || {}).id,
           mast: (document.querySelector('#bank > .w118mast h1') || {}).textContent, crumb: (document.querySelector('#bank > .w118mast .crumb') || {}).textContent,
           stats: Array.from(document.querySelectorAll('#w132 .w132st')).map(x => x.innerText.replace(/\\s+/g, ' ').trim()), add: vis(document.querySelector('#w132 [data-w132new]')),
@@ -93,8 +93,9 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
           chips: Array.from(document.querySelectorAll('#w132 .w132chip')).map(x => x.textContent.replace(/\\s+/g, ' ').trim()),
           groups: Array.from(document.querySelectorAll('#w132 .w132grp h3')).map(h => h.firstChild.textContent.trim()),
           items: Array.from(document.querySelectorAll('#w132 .w132it .tt')).map(x => x.textContent), title: document.title };`));
-      ok("The bank sits in the Strategy menu after the five strategy pages", s.tab && s.label === 'The bank' && s.group === 'strategy' && s.strat[s.strat.length - 1] === 'bank' && s.strat.indexOf('goalmap') === s.strat.length - 2, s);
-      ok("the page opens with its masthead", s.active === 'bank' && s.mast === 'The bank' && s.crumb === 'Strategy', s);
+      /* wave134: the menu groups are Goals and projects (orggoals, goals, projects, goalmap, brain, bank) */
+      ok("The bank sits last in Goals and projects", s.tab && s.label === 'The bank' && s.group === 'goals' && s.strat[s.strat.length - 1] === 'bank' && s.strat.indexOf('goalmap') >= 0 && s.strat.indexOf('goalmap') < s.strat.length - 1, s);
+      ok("the page opens with its masthead", s.active === 'bank' && s.mast === 'The bank' && s.crumb === 'Goals and projects', s);
       ok("the tab title says The bank", /The bank/.test(s.title), s.title);
       ok("three numbers: in the bank, coming back in 30 days, back lately", s.stats.length === 3 && /^5 in the bank \(4 tasks, 1 project\)/.test(s.stats[0]) && /^1 coming back in the next 30 days/.test(s.stats[1]) && /^2 back in the last two weeks/.test(s.stats[2]), s.stats);
       ok("Put something in the bank, and how it works", s.add && s.how, s);

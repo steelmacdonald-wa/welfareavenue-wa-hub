@@ -1,0 +1,7791 @@
+[
+ {
+  "name": "academy_awards",
+  "kind": "table",
+  "area": "Training Academy",
+  "purpose": "Badges, levels and certificates a person earned in the Training Academy; written by the Academy page and celebrated once (wave122).",
+  "rows": 16,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "upsert": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 16,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 16,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T01:53:04.536+00:00",
+  "created_in_migration": "20260925164133 wa122_academy_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.4 unique key uses display name"
+  ]
+ },
+ {
+  "name": "academy_paths",
+  "kind": "table",
+  "area": "Training Academy",
+  "purpose": "Learning paths in the Training Academy; trainings join a path by trainings.path_group = academy_paths.name (wave122).",
+  "rows": 8,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 12,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 8,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 8,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T21:37:42.485692+00:00",
+  "created_in_migration": "20260925164133 wa122_academy_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.4 trainings join by name, not key"
+  ]
+ },
+ {
+  "name": "agenda_items",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Lines on a meeting agenda (topic, project, decision, update) with optional dept_tasks ids in task_ids.",
+  "rows": 89,
+  "rows_method": "count(*)",
+  "total_size": "120 kB",
+  "total_bytes": 122880,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "agenda_id -> agendas.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "insert": 1,
+    "update": 2,
+    "delete": 1,
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "agenda-share",
+    "build-agenda"
+   ],
+   "reads": [
+    "agenda-share"
+   ],
+   "writes": [
+    "agenda-share",
+    "build-agenda"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 121,
+   "n_tup_upd": 2,
+   "n_tup_del": 32,
+   "n_live_tup": 89,
+   "n_dead_tup": 34,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-05T01:46:43.744606+00:00",
+  "created_in_migration": "20260722154548 agenda_builder_tables",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "agendas",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Meeting agendas built in the Hub (department, one-to-one, leaders or group scope), shareable by token through agenda-share.",
+  "rows": 13,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "agenda_items.agenda_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 28,
+   "operations": {
+    "update": 1,
+    "delete": 1,
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "agenda-share",
+    "build-agenda"
+   ],
+   "reads": [
+    "agenda-share"
+   ],
+   "writes": [
+    "agenda-share",
+    "build-agenda"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 19,
+   "n_tup_upd": 12,
+   "n_tup_del": 6,
+   "n_live_tup": 13,
+   "n_dead_tup": 18,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-05T01:46:43.311159+00:00",
+  "created_in_migration": "20260722154548 agenda_builder_tables",
+  "flags": [
+   "no-writes-since-2026-08-05",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "ai_calls",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Log of every AI call made through the llm router (pruned to 90 days by cron).",
+  "rows": 135,
+  "rows_method": "count(*)",
+  "total_size": "104 kB",
+  "total_bytes": 106496,
+  "column_count": 15,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 1,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "llm"
+   ],
+   "reads": [
+    "llm"
+   ],
+   "writes": [
+    "llm"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "ai_usage",
+   "hub_adoption"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [
+    "wa-ai-calls-prune"
+   ],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 135,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 135,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T04:40:48.048754+00:00",
+  "created_in_migration": "20260925022705 wa116n_ai_routes",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "ai_routes",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Model router configuration: one row per AI job with its model chain.",
+  "rows": 18,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 9,
+  "primary_key": "task",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "llm"
+   ],
+   "reads": [
+    "llm"
+   ],
+   "writes": [
+    "llm"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 19,
+   "n_tup_upd": 15,
+   "n_tup_del": 1,
+   "n_live_tup": 18,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:24:46.229381+00:00",
+  "created_in_migration": "20260925022705 wa116n_ai_routes",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "app_config",
+  "kind": "table",
+  "area": "System",
+  "purpose": "Key-value text settings and small job state used by edge functions and the page (site URL, repo, Slack settings and more).",
+  "rows": 12,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 3,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 10,
+   "quoted_name_mentions": 10,
+   "operations": {
+    "select": 6,
+    "update": 1,
+    "upsert": 3
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "agenda-share",
+    "daily-alerts",
+    "dashboard",
+    "draft-content",
+    "finance-import",
+    "host-sync",
+    "hub-edit",
+    "hub-invite",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "quo-pull",
+    "quo-send",
+    "repo-sync",
+    "slack-digest",
+    "slack-pull",
+    "weekly-digest"
+   ],
+   "reads": [
+    "agenda-share",
+    "daily-alerts",
+    "dashboard",
+    "draft-content",
+    "finance-import",
+    "host-sync",
+    "hub-edit",
+    "hub-invite",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "quo-pull",
+    "quo-send",
+    "slack-digest",
+    "slack-pull",
+    "weekly-digest"
+   ],
+   "writes": [
+    "host-sync",
+    "quo-pull",
+    "repo-sync",
+    "slack-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-daily-alerts",
+    "wa-mail-pull",
+    "wa-slack-pull",
+    "wa-slack-weekly-digest",
+    "wa-weekly-digest"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 13,
+   "n_tup_upd": 80,
+   "n_tup_del": 1,
+   "n_live_tup": 12,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:40:48.113+00:00",
+  "created_in_migration": "20260702050110 security_cutover_and_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.8 three settings stores"
+  ]
+ },
+ {
+  "name": "board_circle",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Emails of the board-only confidentiality tier: people allowed to see rows flagged board_only (is_board_circle()).",
+  "rows": 6,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 3,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask"
+   ],
+   "reads": [
+    "ask"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "is_board_circle",
+   "is_board_person"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 6,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 6,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-25T16:28:30.706528+00:00",
+  "created_in_migration": "20260725162830 board_only_tier",
+  "flags": [
+   "no-writes-since-2026-07-25",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.2 one of four board access lists"
+  ]
+ },
+ {
+  "name": "board_committees",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "The four board committees (fundraising, people, operations, fiduciary) with chair, members and linked teams (wave126).",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 15,
+  "primary_key": "key",
+  "foreign_keys_out": [
+   "chair_id -> board_members.id on delete set null"
+  ],
+  "foreign_keys_in": [
+   "board_items.committee",
+   "board_touchpoints.committee"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 4,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 4,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:08:14.723825+00:00",
+  "created_in_migration": "20260925200814 wa126_board",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "board_items",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Board work items grouped by the board's three jobs (steward, fiduciary, strategy), optionally tied to a committee and a dept_tasks row.",
+  "rows": 16,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 13,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "committee -> board_committees.key on delete set null"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "update": 1,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 18,
+   "n_tup_upd": 2,
+   "n_tup_del": 2,
+   "n_live_tup": 16,
+   "n_dead_tup": 4,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:08:14.723825+00:00",
+  "created_in_migration": "20260925200814 wa126_board",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.4 to-do list outside dept_tasks",
+   "11.1 due stored as text"
+  ]
+ },
+ {
+  "name": "board_meetings",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Register of board meetings (board, special, AGM, strategy) with agenda and notes links.",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "board_touchpoints.meeting_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 2,
+    "update": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 4,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 4,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:08:14.723825+00:00",
+  "created_in_migration": "20260925200814 wa126_board",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.3 meetings live in several tables"
+  ]
+ },
+ {
+  "name": "board_members",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Board directors and advisers; emails[] matches a signed-in person to a board seat (my_board_member_id()).",
+  "rows": 8,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "board_committees.chair_id",
+   "board_touchpoints.member_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home",
+   "my_board_member_id"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 8,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 8,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:08:04.094177+00:00",
+  "created_in_migration": "20260925200814 wa126_board",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.2 one of four board access lists",
+   "11.1 renewal stored as text"
+  ]
+ },
+ {
+  "name": "board_touchpoints",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Log of committee contacts, meetings and recommendations recorded by board members (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 13,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "committee -> board_committees.key on delete cascade",
+   "meeting_id -> board_meetings.id on delete set null",
+   "member_id -> board_members.id on delete set null"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "update": 1,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925200814 wa126_board",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "board_viewers",
+  "kind": "table",
+  "area": "Board",
+  "purpose": "Emails of read-only board viewers who may open board pages without being staff (is_board_viewer()).",
+  "rows": 2,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "is_board_viewer"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 2,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-25T14:58:24.987812+00:00",
+  "created_in_migration": "20260702050110 security_cutover_and_schema",
+  "flags": [
+   "no-writes-since-2026-07-25",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.2 one of four board access lists"
+  ]
+ },
+ {
+  "name": "change_log",
+  "kind": "table",
+  "area": "System",
+  "purpose": "Audit trail of changes made in the Hub, plus run logs written by scheduled jobs.",
+  "rows": 2509,
+  "rows_method": "count(*)",
+  "total_size": "1384 kB",
+  "total_bytes": 1417216,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 54,
+   "quoted_name_mentions": 54,
+   "operations": {
+    "select": 10,
+    "insert": 44
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "calendar-sync",
+    "checkin-post",
+    "checkin-scope",
+    "clickup-pull",
+    "db-backup",
+    "directory-sync",
+    "drive-pull",
+    "fn-deploy",
+    "goal-sync",
+    "host-sync",
+    "hours-pull",
+    "hub-connect",
+    "hub-edit",
+    "hub-invite",
+    "inventory-share",
+    "llm",
+    "mail-pull",
+    "notify",
+    "process-leadership",
+    "process-transcript",
+    "project-slack",
+    "recommend-decision",
+    "repo-sync",
+    "shoutouts",
+    "slack-digest",
+    "slack-pull",
+    "social-publish",
+    "team-inbox"
+   ],
+   "reads": [],
+   "writes": [
+    "ask",
+    "build-agenda",
+    "calendar-sync",
+    "checkin-post",
+    "checkin-scope",
+    "clickup-pull",
+    "db-backup",
+    "directory-sync",
+    "drive-pull",
+    "fn-deploy",
+    "goal-sync",
+    "host-sync",
+    "hours-pull",
+    "hub-connect",
+    "hub-edit",
+    "hub-invite",
+    "inventory-share",
+    "llm",
+    "mail-pull",
+    "notify",
+    "process-leadership",
+    "process-transcript",
+    "project-slack",
+    "recommend-decision",
+    "repo-sync",
+    "shoutouts",
+    "slack-digest",
+    "slack-pull",
+    "social-publish",
+    "team-inbox"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "bank_add_task",
+   "bank_project_do",
+   "bank_redate",
+   "bank_task_do",
+   "bank_unbank_do",
+   "org_add_opening",
+   "org_fill",
+   "org_move",
+   "org_place",
+   "org_remove",
+   "org_set_reports",
+   "org_update",
+   "org_vacate",
+   "team_inbox_mail",
+   "volunteer_merge"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-calendar-sync",
+    "wa-checkin-scope",
+    "wa-clickup-pull",
+    "wa-db-backup",
+    "wa-directory-sync",
+    "wa-drive-sync",
+    "wa-goals-sync",
+    "wa-hours-pull",
+    "wa-mail-pull",
+    "wa-shoutouts",
+    "wa-slack-pull",
+    "wa-slack-weekly-digest",
+    "wa-social-publish"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 2624,
+   "n_tup_upd": 51,
+   "n_tup_del": 43,
+   "n_live_tup": 2509,
+   "n_dead_tup": 100,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:40:48.102806+00:00",
+  "created_in_migration": "20260702041802 exec_dashboard_additive_v1",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.7 audit trail and job runs mixed",
+   "2.7 two spellings per entity type",
+   "4.1 changed_by mixes formats"
+  ]
+ },
+ {
+  "name": "clickup_sources",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "ClickUp folders mapped to teams for the weekly ClickUp snapshot.",
+  "rows": 15,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "clickup-pull"
+   ],
+   "reads": [
+    "clickup-pull"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-clickup-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 15,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 15,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260702132839 sentiment_hours_clickup",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "3 split-mtl-to is a rule, not a team"
+  ]
+ },
+ {
+  "name": "clickup_weekly",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Weekly ClickUp snapshot per team: tasks created, closed and counts by status.",
+  "rows": 60,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 6,
+  "primary_key": "department,week_start",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "clickup-pull"
+   ],
+   "reads": [],
+   "writes": [
+    "clickup-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-clickup-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 60,
+   "n_tup_upd": 25,
+   "n_tup_del": 0,
+   "n_live_tup": 60,
+   "n_dead_tup": 8,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-21T11:21:18.62+00:00",
+  "created_in_migration": "20260702132839 sentiment_hours_clickup",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "6 status_counts keyed by raw ClickUp labels"
+  ]
+ },
+ {
+  "name": "content_drafts",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Branded content drafted with AI on the Create page (draft-content).",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 17,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": true,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 2,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "draft-content"
+   ],
+   "reads": [
+    "draft-content"
+   ],
+   "writes": [
+    "draft-content"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 8,
+   "n_tup_upd": 3,
+   "n_tup_del": 1,
+   "n_live_tup": 7,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-29T02:32:32.62343+00:00",
+  "created_in_migration": "20260726033906 content_drafts",
+  "flags": [
+   "no-writes-since-2026-07-29"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "content_posts",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Content calendar posts planned, scheduled and published to Facebook and Instagram by social-publish.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 20,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 2,
+    "update": 1,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "social-publish"
+   ],
+   "reads": [
+    "social-publish"
+   ],
+   "writes": [
+    "social-publish"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-publish"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 3,
+   "n_tup_upd": 3,
+   "n_tup_del": 2,
+   "n_live_tup": 1,
+   "n_dead_tup": 5,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:41:30.372801+00:00",
+  "created_in_migration": "20260925142123 wa121_content_calendar",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "7 content_posts (outgoing) vs social_posts (incoming)"
+  ]
+ },
+ {
+  "name": "decisions",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Executive decisions log: open questions, AI recommendations and outcomes; fed by transcript processing and the executive dashboard.",
+  "rows": 21,
+  "rows_method": "count(*)",
+  "total_size": "72 kB",
+  "total_bytes": 73728,
+  "column_count": 21,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 8,
+   "quoted_name_mentions": 11,
+   "operations": {
+    "select": 2,
+    "insert": 2,
+    "update": 4
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "daily-alerts",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "recommend-decision",
+    "transcript-preview",
+    "weekly-digest"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "daily-alerts",
+    "process-leadership",
+    "process-transcript",
+    "recommend-decision",
+    "transcript-preview",
+    "weekly-digest"
+   ],
+   "writes": [
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "recommend-decision"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "extract_speakers",
+   "wa_stamp_restricted"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-daily-alerts",
+    "wa-mail-pull",
+    "wa-weekly-digest"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 24,
+   "n_tup_upd": 59,
+   "n_tup_del": 2,
+   "n_live_tup": 21,
+   "n_dead_tup": 12,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:23:49.821+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "3 area holds labels, not team codes",
+   "8 confidentiality mechanisms"
+  ]
+ },
+ {
+  "name": "dept_meta",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "One row per team keyed by department code: the AI's read of the team, progress text, priorities, header image, meeting schedule and a meeting cache.",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "256 kB",
+  "total_bytes": 262144,
+  "column_count": 10,
+  "primary_key": "department",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 2,
+    "insert": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "calendar-sync",
+    "goal-propose",
+    "import-images",
+    "process-transcript",
+    "recommend-decision"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "calendar-sync",
+    "goal-propose",
+    "process-transcript",
+    "recommend-decision"
+   ],
+   "writes": [
+    "calendar-sync",
+    "import-images"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-calendar-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 7,
+   "n_tup_upd": 622,
+   "n_tup_del": 0,
+   "n_live_tup": 7,
+   "n_dead_tup": 43,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:08:04.094177+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "3 canonical team list has no label column",
+   "2.3 meeting_cache duplicates hub_events"
+  ]
+ },
+ {
+  "name": "dept_requests",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Requests filed to a team (design, print, hiring, time off and more) from the Requests page, meetings, Ask the Hub or email.",
+  "rows": 10,
+  "rows_method": "count(*)",
+  "total_size": "96 kB",
+  "total_bytes": 98304,
+  "column_count": 19,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "type_key -> request_types.key"
+  ],
+  "foreign_keys_in": [
+   "request_notes.request_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 22,
+   "quoted_name_mentions": 22,
+   "operations": {
+    "select": 9,
+    "insert": 5,
+    "update": 8
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "mail-pull",
+    "notify",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "mail-pull",
+    "notify",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "writes": [
+    "ask",
+    "team-inbox"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "trg_wa123_request_update",
+   "trg_wa123_request_new",
+   "trg_wa89_request_filed"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull",
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 12,
+   "n_tup_upd": 34,
+   "n_tup_del": 2,
+   "n_live_tup": 10,
+   "n_dead_tup": 19,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:01:57.875+00:00",
+  "created_in_migration": "20260722073130 department_requests_tables",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "6 details is sometimes a string",
+   "5.2 status casing"
+  ]
+ },
+ {
+  "name": "dept_sentiment",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Sentiment score per team and capture date, derived from Slack messages by slack-pull.",
+  "rows": 50,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "department,captured_on",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "slack-pull"
+   ],
+   "reads": [],
+   "writes": [
+    "slack-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-slack-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 59,
+   "n_tup_upd": 1,
+   "n_tup_del": 9,
+   "n_live_tup": 50,
+   "n_dead_tup": 9,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-24T00:00:00+00:00",
+  "created_in_migration": "20260702132839 sentiment_hours_clickup",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "dept_tasks",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "The task list for every team and the source of truth for tasks; written by Hub pages, AI transcript and email processing, Ask the Hub and the bank functions.",
+  "rows": 568,
+  "rows_method": "count(*)",
+  "total_size": "344 kB",
+  "total_bytes": 352256,
+  "column_count": 31,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "parent_task_id -> dept_tasks.id on delete set null",
+   "project_id -> projects.id"
+  ],
+  "foreign_keys_in": [
+   "dept_tasks.parent_task_id",
+   "task_assignees.task_id",
+   "task_files.task_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 35,
+   "quoted_name_mentions": 35,
+   "operations": {
+    "select": 14,
+    "update": 15,
+    "insert": 5,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "checkin-post",
+    "daily-alerts",
+    "draft-content",
+    "goal-propose",
+    "goal-suggest",
+    "mail-pull",
+    "notify",
+    "person-profile",
+    "process-leadership",
+    "process-transcript",
+    "project-report",
+    "project-slack",
+    "recommend-decision",
+    "shoutouts",
+    "slack-command",
+    "slack-digest",
+    "transcript-preview",
+    "transcript-requests",
+    "weekly-digest"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "checkin-post",
+    "daily-alerts",
+    "draft-content",
+    "goal-propose",
+    "goal-suggest",
+    "notify",
+    "person-profile",
+    "process-leadership",
+    "process-transcript",
+    "project-report",
+    "project-slack",
+    "recommend-decision",
+    "shoutouts",
+    "slack-command",
+    "slack-digest",
+    "transcript-preview",
+    "transcript-requests",
+    "weekly-digest"
+   ],
+   "writes": [
+    "ask",
+    "checkin-post",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "bank_add_task",
+   "bank_list",
+   "bank_project_do",
+   "bank_redate",
+   "bank_resurface",
+   "bank_task",
+   "bank_task_do",
+   "bank_unbank",
+   "bank_unbank_do",
+   "bank_undo",
+   "board_home",
+   "hub_adoption",
+   "wa69_general_link",
+   "wa_stamp_restricted",
+   "wa_task_tree"
+  ],
+  "triggers": [
+   "set_task_closed_at",
+   "wa132_bank_close",
+   "trg_wa89_task_reassigned"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-daily-alerts",
+    "wa-mail-pull",
+    "wa-shoutouts",
+    "wa-slack-weekly-digest",
+    "wa-transcript-requests",
+    "wa-weekly-digest"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 615,
+   "n_tup_upd": 1449,
+   "n_tup_del": 20,
+   "n_live_tup": 568,
+   "n_dead_tup": 161,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:37:54.118+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "5.1 status contradicts done",
+   "2.1 owner text vs task_assignees",
+   "4.2 AI provenance stored in updated_by",
+   "8 four confidentiality mechanisms"
+  ]
+ },
+ {
+  "name": "dept_updates",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Dated status updates per team, mostly written by AI from meeting transcripts and filed emails.",
+  "rows": 177,
+  "rows_method": "count(*)",
+  "total_size": "176 kB",
+  "total_bytes": 180224,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "goal-propose",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "weekly-digest"
+   ],
+   "reads": [
+    "goal-propose",
+    "weekly-digest"
+   ],
+   "writes": [
+    "mail-pull",
+    "process-leadership",
+    "process-transcript"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "wa_stamp_restricted"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull",
+    "wa-weekly-digest"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 194,
+   "n_tup_upd": 18,
+   "n_tup_del": 17,
+   "n_live_tup": 177,
+   "n_dead_tup": 26,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T03:13:23.193565+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.2 AI provenance stored in added_by",
+   "11.1 entry_label packs date and source"
+  ]
+ },
+ {
+  "name": "event_roster",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Who is rostered for each volunteer event, in which role, and whether they confirmed.",
+  "rows": 503,
+  "rows_method": "count(*)",
+  "total_size": "376 kB",
+  "total_bytes": 385024,
+  "column_count": 14,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "event_id -> volunteer_events.id on delete cascade",
+   "person_id -> volunteer_people.id on delete set null",
+   "recipe_id -> recipes.id"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 7,
+   "quoted_name_mentions": 11,
+   "operations": {
+    "select": 1,
+    "update": 3,
+    "insert": 2,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "quo-pull",
+    "quo-send"
+   ],
+   "reads": [
+    "quo-pull",
+    "quo-send"
+   ],
+   "writes": [
+    "quo-send"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "volunteer_confirm_get",
+   "volunteer_confirm_submit",
+   "volunteer_history",
+   "volunteer_merge"
+  ],
+  "triggers": [],
+  "read_by_views": [
+   "volunteer_event_summary"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 503,
+   "n_tup_upd": 506,
+   "n_tup_del": 0,
+   "n_live_tup": 503,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "6 detail copies volunteer contact data",
+   "5.2 status casing differs by writer",
+   "1.5 confirmation columns unused"
+  ]
+ },
+ {
+  "name": "finance_budgets",
+  "kind": "table",
+  "area": "Fundraising and finance",
+  "purpose": "Budget amounts per fiscal year and period for each chart-of-accounts category.",
+  "rows": 63,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 1,
+    "upsert": 4
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "finance-import",
+    "hub-edit"
+   ],
+   "reads": [
+    "finance-import",
+    "hub-edit"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 63,
+   "n_tup_upd": 29,
+   "n_tup_del": 0,
+   "n_live_tup": 63,
+   "n_dead_tup": 7,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-07T04:28:36.067745+00:00",
+  "created_in_migration": "20260727204348 finance_schema",
+  "flags": [
+   "no-writes-since-2026-08-07",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "finance_statements",
+  "kind": "table",
+  "area": "Fundraising and finance",
+  "purpose": "Bank statements uploaded for AI import, one row per upload.",
+  "rows": 47,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "finance_transactions.statement_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "finance-import"
+   ],
+   "reads": [
+    "finance-import"
+   ],
+   "writes": [
+    "finance-import"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 49,
+   "n_tup_upd": 50,
+   "n_tup_del": 2,
+   "n_live_tup": 47,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T03:20:31.293817+00:00",
+  "created_in_migration": "20260727204348 finance_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "finance_transactions",
+  "kind": "table",
+  "area": "Fundraising and finance",
+  "purpose": "Bank transactions extracted from statements, with AI-allocated department and category.",
+  "rows": 792,
+  "rows_method": "count(*)",
+  "total_size": "528 kB",
+  "total_bytes": 540672,
+  "column_count": 13,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "duplicate_of -> finance_transactions.id on delete set null",
+   "statement_id -> finance_statements.id on delete set null"
+  ],
+  "foreign_keys_in": [
+   "finance_transactions.duplicate_of"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 10,
+   "quoted_name_mentions": 10,
+   "operations": {
+    "select": 7,
+    "update": 2,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "finance-import"
+   ],
+   "reads": [
+    "finance-import"
+   ],
+   "writes": [
+    "finance-import"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 800,
+   "n_tup_upd": 1,
+   "n_tup_del": 8,
+   "n_live_tup": 792,
+   "n_dead_tup": 9,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-07T05:23:48.376065+00:00",
+  "created_in_migration": "20260727204348 finance_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "3 org is not a team code",
+   "11.4 duplicate_of never set"
+  ]
+ },
+ {
+  "name": "fund_events",
+  "kind": "table",
+  "area": "Fundraising and finance",
+  "purpose": "Fundraising events calendar (plan 2026-27) with targets, status and results.",
+  "rows": 22,
+  "rows_method": "count(*)",
+  "total_size": "96 kB",
+  "total_bytes": 98304,
+  "column_count": 25,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "project_id -> projects.id on delete set null"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 7,
+   "quoted_name_mentions": 7,
+   "operations": {
+    "select": 4,
+    "update": 1,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 22,
+   "n_tup_upd": 11,
+   "n_tup_del": 0,
+   "n_live_tup": 22,
+   "n_dead_tup": 5,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:00:37.925904+00:00",
+  "created_in_migration": "20260925174814 wa124_calendar",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.3 \"event\" means three things",
+   "7 precision is a SQL keyword"
+  ]
+ },
+ {
+  "name": "goal_comments",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Comments on a goal, synced with ClickUp comments by goal-sync.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 7,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "goal_id -> goals.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "insert": 1,
+    "update": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "goal-sync"
+   ],
+   "reads": [
+    "goal-sync"
+   ],
+   "writes": [
+    "goal-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-goals-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 1,
+   "n_tup_del": 1,
+   "n_live_tup": 1,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-24T22:10:35.472352+00:00",
+  "created_in_migration": "20260726012037 goal_links_and_comments",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "goal_ideas",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Latest AI goal suggestions per team (one row per department), written by goal-propose.",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "120 kB",
+  "total_bytes": 122880,
+  "column_count": 3,
+  "primary_key": "department",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "goal-propose"
+   ],
+   "reads": [],
+   "writes": [
+    "goal-propose"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 7,
+   "n_tup_upd": 7,
+   "n_tup_del": 0,
+   "n_live_tup": 7,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T14:19:16.722+00:00",
+  "created_in_migration": "20260729030824 org_goals_and_ideas",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "goal_wins",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Progress evidence for a goal found in meeting transcripts (win, quote, meeting date), written by transcript-requests.",
+  "rows": 19,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "goal_id -> goals.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "transcript-requests"
+   ],
+   "reads": [],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 19,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 19,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-24T12:26:04.642382+00:00",
+  "created_in_migration": "20260804172435 wa65_wins_mentions_refinements",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 transcript_id has no foreign key"
+  ]
+ },
+ {
+  "name": "goals",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Quarterly and organisational goals per team, synced both ways with ClickUp by goal-sync.",
+  "rows": 28,
+  "rows_method": "count(*)",
+  "total_size": "88 kB",
+  "total_bytes": 90112,
+  "column_count": 22,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "parent_goal_id -> goals.id"
+  ],
+  "foreign_keys_in": [
+   "goal_comments.goal_id",
+   "goal_wins.goal_id",
+   "goals.parent_goal_id",
+   "projects.goal_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 13,
+   "quoted_name_mentions": 49,
+   "operations": {
+    "select": 4,
+    "update": 7,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "draft-content",
+    "goal-propose",
+    "goal-suggest",
+    "goal-sync",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "reads": [
+    "draft-content",
+    "goal-propose",
+    "goal-suggest",
+    "goal-sync",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "writes": [
+    "goal-suggest",
+    "goal-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-goals-sync",
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 66,
+   "n_tup_upd": 84,
+   "n_tup_del": 38,
+   "n_live_tup": 28,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:12:18.032809+00:00",
+  "created_in_migration": "20260725211404 goals_table",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.5 several columns always NULL",
+   "2.6 fiscal period formats",
+   "3 org is not a team code"
+  ]
+ },
+ {
+  "name": "hr_setup_steps",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Per-onboarding copies of hr_setup_template steps.",
+  "rows": 60,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "onboarding_id -> onboardings.id on delete cascade",
+   "template_id -> hr_setup_template.id"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hr_setup_propagate",
+   "onboarding_assign"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 100,
+   "n_tup_upd": 0,
+   "n_tup_del": 40,
+   "n_live_tup": 60,
+   "n_dead_tup": 40,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260730031911 hr_setup_and_onboarding_help",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hr_setup_template",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "HR's own setup checklist for a new person (before day one, onboarding call, manager follow-through).",
+  "rows": 20,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "hr_setup_steps.template_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "onboarding_assign"
+  ],
+  "triggers": [
+   "hr_setup_propagate"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 20,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 20,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260730031911 hr_setup_and_onboarding_help",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_access_profiles",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Access profiles (one per team, plus executive, admin, board) listing which pages each profile opens.",
+  "rows": 9,
+  "rows_method": "count(*)",
+  "total_size": "112 kB",
+  "total_bytes": 114688,
+  "column_count": 12,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 7,
+   "quoted_name_mentions": 7,
+   "operations": {
+    "select": 2,
+    "update": 5
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "wa_auto_profile",
+   "wa_page_ok"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 39,
+   "n_tup_del": 0,
+   "n_live_tup": 9,
+   "n_dead_tup": 33,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T21:11:27.233981+00:00",
+  "created_in_migration": "20260925211127 wa127_access",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_access_settings",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Singleton switches for access profiles, such as assigning a profile automatically.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 8,
+   "quoted_name_mentions": 8,
+   "operations": {
+    "select": 2,
+    "update": 6
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "wa_auto_profile"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 4,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 4,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:07:47.077+00:00",
+  "created_in_migration": "20260925211127 wa127_access",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_announcements",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Manual \"What's new\" announcements posted by leaders and admins (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 11,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "insert": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260924222855 wa116f_goals_smart_and_announcements",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_birthdays",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Birthdays people chose to share (month and day, with who may see them) (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 5,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "upsert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925174814 wa124_calendar",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_calendar_state",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Sync status for calendar-sync, one row per mirrored Google calendar.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 6,
+  "primary_key": "calendar_id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "calendar-sync"
+   ],
+   "reads": [
+    "calendar-sync"
+   ],
+   "writes": [
+    "calendar-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-calendar-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 68,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 17,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:35:03.225+00:00",
+  "created_in_migration": "20260924194204 wa116_hub_events",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_candidates",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Job applicants filed from email with CV and hiring stage (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 20,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": true,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "mail-pull",
+    "shoutouts"
+   ],
+   "reads": [
+    "mail-pull",
+    "shoutouts"
+   ],
+   "writes": [
+    "mail-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull",
+    "wa-shoutouts"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 0,
+   "n_tup_del": 1,
+   "n_live_tup": 0,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925024654 wa116o_hub_candidates",
+  "flags": [
+   "empty"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_checkins",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Check-in and check-out sessions from the Hub with minutes and a summary, posted to Slack by checkin-post.",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 9,
+   "quoted_name_mentions": 9,
+   "operations": {
+    "select": 5,
+    "update": 3,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "checkin-post",
+    "shoutouts"
+   ],
+   "reads": [
+    "checkin-post",
+    "shoutouts"
+   ],
+   "writes": [
+    "checkin-post"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hub_adoption"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-shoutouts"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 7,
+   "n_tup_upd": 20,
+   "n_tup_del": 0,
+   "n_live_tup": 7,
+   "n_dead_tup": 20,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:33:24.476629+00:00",
+  "created_in_migration": "20260925002916 wa116j_checkins_connections_prefs",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_connections",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Per-person connections to Slack, Google Calendar and Google Drive made through hub-connect.",
+  "rows": 8,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 11,
+  "primary_key": "email,provider",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "hub-connect"
+   ],
+   "reads": [
+    "hub-connect"
+   ],
+   "writes": [
+    "hub-connect"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 13,
+   "n_tup_del": 1,
+   "n_live_tup": 8,
+   "n_dead_tup": 14,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T18:59:42.648+00:00",
+  "created_in_migration": "20260925002916 wa116j_checkins_connections_prefs",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_directory",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Mirror of Google Workspace accounts synced daily by directory-sync and linked to the roster by member_id.",
+  "rows": 48,
+  "rows_method": "count(*)",
+  "total_size": "128 kB",
+  "total_bytes": 131072,
+  "column_count": 28,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "directory-sync"
+   ],
+   "reads": [
+    "directory-sync"
+   ],
+   "writes": [
+    "directory-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "my_emails"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-directory-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 48,
+   "n_tup_upd": 289,
+   "n_tup_del": 0,
+   "n_live_tup": 48,
+   "n_dead_tup": 55,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T17:48:29.354+00:00",
+  "created_in_migration": "20260925012212 wa116l_hub_directory",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 member_id has no foreign key (1 orphan)"
+  ]
+ },
+ {
+  "name": "hub_directory_state",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Singleton sync status for directory-sync.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "directory-sync"
+   ],
+   "reads": [
+    "directory-sync"
+   ],
+   "writes": [
+    "directory-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-directory-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 7,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 7,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T17:48:29.354+00:00",
+  "created_in_migration": "20260925012212 wa116l_hub_directory",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_events",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Mirror of the hub@welfareavenue.com Google Calendar, refreshed every 30 minutes by calendar-sync; the source for meeting times in the Hub.",
+  "rows": 66,
+  "rows_method": "count(*)",
+  "total_size": "416 kB",
+  "total_bytes": 425984,
+  "column_count": 18,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "calendar-sync",
+    "hub-connect"
+   ],
+   "reads": [
+    "calendar-sync",
+    "hub-connect"
+   ],
+   "writes": [
+    "calendar-sync",
+    "hub-connect"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "calendar_my_meetings"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-calendar-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 66,
+   "n_tup_upd": 3800,
+   "n_tup_del": 0,
+   "n_live_tup": 66,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:35:02.891+00:00",
+  "created_in_migration": "20260924194204 wa116_hub_events",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.3 \"event\" means three things",
+   "6 attendees duplicates attendee_emails"
+  ]
+ },
+ {
+  "name": "hub_knowledge",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Knowledge articles given to Ask the Hub as background (one row).",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 5,
+  "primary_key": "slug",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "ask"
+   ],
+   "reads": [
+    "ask"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-02T06:05:00.962746+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-writes-since-2026-08-02",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_mail",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Emails received by the hub@ mailbox, classified by AI and filed into tasks, transcripts, requests or candidates by mail-pull.",
+  "rows": 20,
+  "rows_method": "count(*)",
+  "total_size": "192 kB",
+  "total_bytes": 196608,
+  "column_count": 34,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 5
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "mail-pull",
+    "team-inbox"
+   ],
+   "reads": [
+    "mail-pull",
+    "team-inbox"
+   ],
+   "writes": [
+    "mail-pull",
+    "team-inbox"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hub_adoption",
+   "team_inbox_mail"
+  ],
+  "triggers": [
+   "trg_wa123_mail_filed"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 22,
+   "n_tup_upd": 8,
+   "n_tup_del": 2,
+   "n_live_tup": 20,
+   "n_dead_tup": 6,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:42:01.717419+00:00",
+  "created_in_migration": "20260924230742 wa116h_hub_mail",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_mail_state",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Singleton sync status for mail-pull.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "mail-pull"
+   ],
+   "reads": [
+    "mail-pull"
+   ],
+   "writes": [
+    "mail-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 63,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 12,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:42:01.941+00:00",
+  "created_in_migration": "20260924230742 wa116h_hub_mail",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_roles",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Hub access per email: role (admin, leader, member, viewer, blocked) and access profile.",
+  "rows": 26,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 7,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 15,
+   "quoted_name_mentions": 15,
+   "operations": {
+    "select": 5,
+    "upsert": 9,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "directory-sync",
+    "hub-edit",
+    "hub-invite",
+    "notify",
+    "team-inbox"
+   ],
+   "reads": [
+    "directory-sync",
+    "hub-edit",
+    "hub-invite",
+    "notify",
+    "team-inbox"
+   ],
+   "writes": [
+    "hub-invite"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "is_hub_admin",
+   "is_hub_leader",
+   "is_wa_admin",
+   "is_wa_leader",
+   "is_wa_staff",
+   "wa_auto_profile",
+   "wa_can_bank",
+   "wa_org_editor",
+   "wa_page_ok"
+  ],
+  "triggers": [
+   "wa72_founder_guard",
+   "wa_auto_profile"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-directory-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 30,
+   "n_tup_upd": 53,
+   "n_tup_del": 0,
+   "n_live_tup": 26,
+   "n_dead_tup": 7,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:08:04.094177+00:00",
+  "created_in_migration": "20260730032442 hub_roles_admin_panel",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "5.2 role has no CHECK",
+   "1.5 tabs is legacy and unused",
+   "2.2 access defined in many places"
+  ]
+ },
+ {
+  "name": "hub_settings",
+  "kind": "table",
+  "area": "System",
+  "purpose": "Key-value JSON settings edited in the Hub (team inbox channels, fund goals, inventory share, hours minimums, board).",
+  "rows": 5,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 8,
+   "quoted_name_mentions": 9,
+   "operations": {
+    "select": 6,
+    "upsert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "inventory-share",
+    "social-publish",
+    "team-inbox"
+   ],
+   "reads": [
+    "inventory-share",
+    "social-publish",
+    "team-inbox"
+   ],
+   "writes": [
+    "inventory-share",
+    "social-publish"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "board_home"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-publish"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 5,
+   "n_tup_upd": 2,
+   "n_tup_del": 0,
+   "n_live_tup": 5,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T20:08:14.723825+00:00",
+  "created_in_migration": "20260803201350 hub_settings",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.8 three settings stores"
+  ]
+ },
+ {
+  "name": "hub_shoutouts",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Shout-outs shown on the home page, generated daily by the shoutouts job or posted by staff.",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 2,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "shoutouts"
+   ],
+   "reads": [
+    "shoutouts"
+   ],
+   "writes": [
+    "shoutouts"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hub_adoption"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-shoutouts"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 6,
+   "n_tup_upd": 0,
+   "n_tup_del": 2,
+   "n_live_tup": 4,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T11:10:03.834071+00:00",
+  "created_in_migration": "20260925031833 wa116s_shoutouts",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "hub_visits",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "One row per Hub opening (at most once per six hours per browser), read by Admin > Adoption.",
+  "rows": 12,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hub_adoption"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 12,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 12,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T01:44:30.40767+00:00",
+  "created_in_migration": "20260925032556 wa116r_visits_and_adoption",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "info_links",
+  "kind": "table",
+  "area": "System",
+  "purpose": "Important links, folders, videos and shared passwords shown on the Important Info page.",
+  "rows": 13,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 11,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 1,
+    "delete": 2,
+    "insert": 2,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "hub-edit"
+   ],
+   "reads": [
+    "hub-edit"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 14,
+   "n_tup_upd": 2,
+   "n_tup_del": 1,
+   "n_live_tup": 13,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T00:47:47.445489+00:00",
+  "created_in_migration": "20260722072013 info_links_table",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "11.5 plain-text shared passwords"
+  ]
+ },
+ {
+  "name": "item_status",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Legacy done flags for items of the original static dashboard (unverified: no code references; last write 30 Jun 2026, before the first migration).",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 7,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 7,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-06-30T01:44:09.069+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "no-code-references",
+   "create-not-in-migration-history",
+   "no-writes-since-2026-06-30",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.2 no code uses it"
+  ]
+ },
+ {
+  "name": "mentions",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "People mentioned in meeting transcripts (person name, quote, context), written by transcript-requests and shown to that person.",
+  "rows": 71,
+  "rows_method": "count(*)",
+  "total_size": "104 kB",
+  "total_bytes": 106496,
+  "column_count": 11,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 8,
+   "operations": {
+    "select": 4,
+    "update": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "notify",
+    "transcript-requests"
+   ],
+   "reads": [
+    "notify"
+   ],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "trg_wa89_mentioned"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 73,
+   "n_tup_upd": 33,
+   "n_tup_del": 2,
+   "n_live_tup": 71,
+   "n_dead_tup": 9,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-19T00:25:38.039654+00:00",
+  "created_in_migration": "20260804172435 wa65_wins_mentions_refinements",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "3 Leadership meeting stored as a team",
+   "4.1 person matched by name"
+  ]
+ },
+ {
+  "name": "metrics",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "KPI definitions and current values per team, shown as \"KPIs we track\".",
+  "rows": 6,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 6,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 6,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-24T20:31:22.631+00:00",
+  "created_in_migration": "20260702041802 exec_dashboard_additive_v1",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "onboarding_help",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Help requests raised by a new person on an onboarding step (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 7,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "onboarding_id -> onboardings.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "on_onboarding_help"
+  ],
+  "triggers": [
+   "on_onboarding_help"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260730031911 hr_setup_and_onboarding_help",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "onboarding_steps",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Checklist steps of an onboarding plan, copied from onboarding_template.",
+  "rows": 137,
+  "rows_method": "count(*)",
+  "total_size": "112 kB",
+  "total_bytes": 114688,
+  "column_count": 7,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "onboarding_id -> onboardings.id on delete cascade",
+   "template_id -> onboarding_template.id"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "onboarding_assign",
+   "onboarding_template_propagate"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 231,
+   "n_tup_upd": 81,
+   "n_tup_del": 94,
+   "n_live_tup": 137,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-04T15:52:56.663+00:00",
+  "created_in_migration": "20260729221022 onboarding_master_and_tracking",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "onboarding_template",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Master onboarding checklist (sections WEEK 1 to 60 DAYS), originally imported from ClickUp.",
+  "rows": 48,
+  "rows_method": "count(*)",
+  "total_size": "72 kB",
+  "total_bytes": 73728,
+  "column_count": 11,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "parent_id -> onboarding_template.id"
+  ],
+  "foreign_keys_in": [
+   "onboarding_steps.template_id",
+   "onboarding_template.parent_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 1,
+    "update": 3,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "onboarding_assign"
+  ],
+  "triggers": [
+   "onboarding_template_propagate",
+   "tg_onbtmpl_touch"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 49,
+   "n_tup_upd": 65,
+   "n_tup_del": 1,
+   "n_live_tup": 48,
+   "n_dead_tup": 45,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-15T02:16:39.042242+00:00",
+  "created_in_migration": "20260729221022 onboarding_master_and_tracking",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "onboarding_update_acks",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Records that a person acknowledged a changed onboarding step.",
+  "rows": 2,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 2,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 2,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-15T02:17:12.487949+00:00",
+  "created_in_migration": "20260803210627 onboarding_update_tracking",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 ids without foreign keys"
+  ]
+ },
+ {
+  "name": "onboardings",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "HR onboarding plans, one per new team member.",
+  "rows": 3,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "member_id -> team_members.id"
+  ],
+  "foreign_keys_in": [
+   "hr_setup_steps.onboarding_id",
+   "onboarding_help.onboarding_id",
+   "onboarding_steps.onboarding_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "update": 2,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "hr_setup_propagate",
+   "onboarding_assign",
+   "onboarding_template_propagate"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 5,
+   "n_tup_upd": 1,
+   "n_tup_del": 2,
+   "n_live_tup": 3,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T00:00:00+00:00",
+  "created_in_migration": "20260729221022 onboarding_master_and_tracking",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.5 two onboarding systems"
+  ]
+ },
+ {
+  "name": "org_positions",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Org chart seats: who holds each position, who it reports to, and open positions (wave133).",
+  "rows": 38,
+  "rows_method": "count(*)",
+  "total_size": "96 kB",
+  "total_bytes": 98304,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "member_id -> team_members.id on delete set null",
+   "reports_to -> org_positions.id on delete set null"
+  ],
+  "foreign_keys_in": [
+   "org_positions.reports_to"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "org_add_opening",
+   "org_fill",
+   "org_is_under",
+   "org_label",
+   "org_move",
+   "org_place",
+   "org_remove",
+   "org_set_reports",
+   "org_update",
+   "org_vacate",
+   "wa133_roster_sync"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 38,
+   "n_tup_upd": 36,
+   "n_tup_del": 0,
+   "n_live_tup": 38,
+   "n_dead_tup": 28,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T04:47:32.806232+00:00",
+  "created_in_migration": "20260926044732 wa133_org",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "plaud_seen",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Ledger of Plaud recording ids seen by an earlier transcript import (unverified: no current code reads or writes it; last write 11 Jul 2026).",
+  "rows": 87,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 7,
+  "primary_key": "file_id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 87,
+   "n_tup_upd": 10,
+   "n_tup_del": 0,
+   "n_live_tup": 87,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-11T17:44:37.659215+00:00",
+  "created_in_migration": "20260704155524 plaud_seen",
+  "flags": [
+   "no-code-references",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.2 no code uses it"
+  ]
+ },
+ {
+  "name": "projects",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Projects that group tasks within a team, optionally nested and linked to a goal; can be parked in the bank.",
+  "rows": 25,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 17,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "goal_id -> goals.id",
+   "parent_id -> projects.id"
+  ],
+  "foreign_keys_in": [
+   "dept_tasks.project_id",
+   "fund_events.project_id",
+   "projects.parent_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 16,
+   "quoted_name_mentions": 44,
+   "operations": {
+    "select": 6,
+    "update": 8,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "goal-propose",
+    "goal-suggest",
+    "process-leadership",
+    "process-transcript",
+    "project-report",
+    "project-slack",
+    "shoutouts",
+    "slack-command"
+   ],
+   "reads": [
+    "ask",
+    "goal-propose",
+    "goal-suggest",
+    "process-leadership",
+    "process-transcript",
+    "project-report",
+    "project-slack",
+    "shoutouts",
+    "slack-command"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "bank_add_task",
+   "bank_list",
+   "bank_project",
+   "bank_project_do",
+   "bank_redate",
+   "bank_resurface",
+   "bank_unbank_do",
+   "bank_undo",
+   "wa69_general_link",
+   "wa_leads_project",
+   "wa_project_tree"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-shoutouts"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 29,
+   "n_tup_upd": 90,
+   "n_tup_del": 0,
+   "n_live_tup": 25,
+   "n_dead_tup": 38,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T00:24:51.861626+00:00",
+  "created_in_migration": "20260729012215 projects_layer",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "6 leads stored as names"
+  ]
+ },
+ {
+  "name": "quo_messages",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Log of SMS messages sent (or dry-run) to volunteers through Quo by quo-send.",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "event_id -> volunteer_events.id on delete set null",
+   "person_id -> volunteer_people.id on delete set null"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "quo-send"
+   ],
+   "reads": [],
+   "writes": [
+    "quo-send"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "volunteer_merge"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 4,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 4,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-27T21:40:38.157156+00:00",
+  "created_in_migration": "20260727213935 quo_messages_log",
+  "flags": [
+   "no-writes-since-2026-07-27",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "recipes",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Recipe list linked to Google Drive, assignable to cooks on the roster.",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 7,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "event_roster.recipe_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 7,
+   "operations": {
+    "select": 1,
+    "update": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 7,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 7,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-29T03:41:36.132213+00:00",
+  "created_in_migration": "20260729034136 confirmations_recipes_request_routing",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "request_notes",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Notes added to a request by staff (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "24 kB",
+  "total_bytes": 24576,
+  "column_count": 6,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "request_id -> dept_requests.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "team-inbox"
+   ],
+   "reads": [
+    "team-inbox"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "trg_wa123_note_new"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925165856 wa123_requests_inbox",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "request_suggestions",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Requests proposed by AI from meeting transcripts, waiting for a person to accept or dismiss.",
+  "rows": 9,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 9,
+   "quoted_name_mentions": 9,
+   "operations": {
+    "select": 3,
+    "update": 6
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "notify",
+    "transcript-requests"
+   ],
+   "reads": [
+    "notify",
+    "transcript-requests"
+   ],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "trg_wa89_suggestion_accepted"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 7,
+   "n_tup_del": 0,
+   "n_live_tup": 9,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T18:39:44.029+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 ids without foreign keys"
+  ]
+ },
+ {
+  "name": "request_types",
+  "kind": "table",
+  "area": "Requests and inbox",
+  "purpose": "Catalogue of request types per team with form fields, status list, default assignee and Slack channel.",
+  "rows": 16,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 14,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "dept_requests.type_key"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 5
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "notify",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "reads": [
+    "ask",
+    "notify",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 16,
+   "n_tup_upd": 3,
+   "n_tup_del": 0,
+   "n_live_tup": 16,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260722073130 department_requests_tables",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "5.2 status lists with casing twins and a typo"
+  ]
+ },
+ {
+  "name": "site_files",
+  "kind": "table",
+  "area": "System",
+  "purpose": "The built Hub page stored in parts; served by the site function and deployed by host-sync.",
+  "rows": 11,
+  "rows_method": "count(*)",
+  "total_size": "3272 kB",
+  "total_bytes": 3350528,
+  "column_count": 4,
+  "primary_key": "path,part",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "host-sync",
+    "site"
+   ],
+   "reads": [
+    "host-sync",
+    "site"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 11,
+   "n_tup_upd": 787,
+   "n_tup_del": 0,
+   "n_live_tup": 11,
+   "n_dead_tup": 20,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:32:54.095013+00:00",
+  "created_in_migration": "20260702105513 site_files_table",
+  "flags": [
+   "service-role-only (RLS on, no policies)",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "slack_hours",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Weekly hours per person parsed from Slack check-in channels by hours-pull.",
+  "rows": 302,
+  "rows_method": "count(*)",
+  "total_size": "160 kB",
+  "total_bytes": 163840,
+  "column_count": 8,
+  "primary_key": "slack_name,week_start",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 5
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "build-agenda",
+    "hours-pull"
+   ],
+   "reads": [
+    "build-agenda"
+   ],
+   "writes": [
+    "hours-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-hours-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 477,
+   "n_tup_upd": 12347,
+   "n_tup_del": 175,
+   "n_live_tup": 302,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T12:15:06.009+00:00",
+  "created_in_migration": "20260702132839 sentiment_hours_clickup",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.1 people keyed by Slack name"
+  ]
+ },
+ {
+  "name": "slack_sources",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Slack channels read by slack-pull, mapped to teams.",
+  "rows": 13,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "name",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "slack-pull"
+   ],
+   "reads": [
+    "slack-pull"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-slack-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 13,
+   "n_tup_upd": 4,
+   "n_tup_del": 0,
+   "n_live_tup": 13,
+   "n_dead_tup": 4,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-07T15:03:01.183119+00:00",
+  "created_in_migration": "20260702131841 slack_pull_sources",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "social_accounts",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Connected social and analytics accounts (Facebook, Instagram, LinkedIn, GA4).",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "96 kB",
+  "total_bytes": 98304,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "social_daily.account_id",
+   "social_posts.account_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "social-publish",
+    "social-pull"
+   ],
+   "reads": [
+    "social-publish",
+    "social-pull"
+   ],
+   "writes": [
+    "social-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "social_overview",
+   "social_range"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-note",
+    "wa-social-publish",
+    "wa-social-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 6,
+   "n_tup_upd": 48,
+   "n_tup_del": 2,
+   "n_live_tup": 4,
+   "n_dead_tup": 4,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T22:11:16.883+00:00",
+  "created_in_migration": "20260925043815 wa120_social",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "social_daily",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Daily metric values per account (reach, views, followers, sessions and more), from APIs or CSV imports.",
+  "rows": 18780,
+  "rows_method": "count(*)",
+  "total_size": "4168 kB",
+  "total_bytes": 4268032,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "account_id -> social_accounts.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "social-pull"
+   ],
+   "reads": [
+    "social-pull"
+   ],
+   "writes": [
+    "social-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "social_overview",
+   "social_range"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-note",
+    "wa-social-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 18783,
+   "n_tup_upd": 1671,
+   "n_tup_del": 3,
+   "n_live_tup": 18788,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T22:18:36.131+00:00",
+  "created_in_migration": "20260925043815 wa120_social",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "social_notes",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "AI-written insight notes on social performance.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "social-pull"
+   ],
+   "reads": [],
+   "writes": [
+    "social-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "social_overview",
+   "social_range"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-note",
+    "wa-social-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 0,
+   "n_tup_del": 1,
+   "n_live_tup": 1,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:37:17.492338+00:00",
+  "created_in_migration": "20260925043815 wa120_social",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "social_posts",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Published posts and their performance metrics, from APIs or CSV imports.",
+  "rows": 669,
+  "rows_method": "count(*)",
+  "total_size": "952 kB",
+  "total_bytes": 974848,
+  "column_count": 20,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "account_id -> social_accounts.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "social-publish",
+    "social-pull"
+   ],
+   "reads": [
+    "social-publish"
+   ],
+   "writes": [
+    "social-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "social_overview",
+   "social_range"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-social-note",
+    "wa-social-publish",
+    "wa-social-pull"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 671,
+   "n_tup_upd": 276,
+   "n_tup_del": 2,
+   "n_live_tup": 669,
+   "n_dead_tup": 44,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T22:16:18.289+00:00",
+  "created_in_migration": "20260925043815 wa120_social",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "7 content_posts (outgoing) vs social_posts (incoming)"
+  ]
+ },
+ {
+  "name": "sop_event_extras",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Extra to-dos for one volunteer event, captured from meeting transcripts.",
+  "rows": 15,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "event_id -> volunteer_events.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "update": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "process-transcript"
+   ],
+   "reads": [],
+   "writes": [
+    "process-transcript"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [
+   "volunteer_event_summary"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 18,
+   "n_tup_upd": 0,
+   "n_tup_del": 3,
+   "n_live_tup": 15,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T03:13:23.154234+00:00",
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.4 to-dos outside dept_tasks",
+   "4.3 transcript_id has no foreign key"
+  ]
+ },
+ {
+  "name": "sop_event_steps",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Per-event copies of the sop_template steps with owner, due date and done flag.",
+  "rows": 2291,
+  "rows_method": "count(*)",
+  "total_size": "624 kB",
+  "total_bytes": 638976,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "event_id -> volunteer_events.id on delete cascade",
+   "template_id -> sop_template.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "update": 3
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "person-profile"
+   ],
+   "reads": [
+    "person-profile"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "ensure_event_steps",
+   "sop_template_propagate",
+   "volunteer_event_date_moved"
+  ],
+  "triggers": [],
+  "read_by_views": [
+   "volunteer_event_summary"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 2759,
+   "n_tup_upd": 2374,
+   "n_tup_del": 468,
+   "n_live_tup": 2291,
+   "n_dead_tup": 94,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.5 done never set"
+  ]
+ },
+ {
+  "name": "sop_roles",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Named serving roles with the run-sheet step ids each role covers.",
+  "rows": 8,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 2,
+    "update": 1,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 8,
+   "n_tup_upd": 4,
+   "n_tup_del": 0,
+   "n_live_tup": 8,
+   "n_dead_tup": 4,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-03T21:35:50.479+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-writes-since-2026-08-03",
+   "no-comment"
+  ],
+  "see_findings": [
+   "6 step_ids is a hidden foreign key"
+  ]
+ },
+ {
+  "name": "sop_shots",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Screenshots attached to run-sheet steps, stored in the sop-shots bucket.",
+  "rows": 31,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "template_id -> sop_template.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "sop-import"
+   ],
+   "reads": [],
+   "writes": [
+    "sop-import"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 31,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 31,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "sop_template",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Sunday serving run-sheet steps (sections, phases, default owners) imported from ClickUp by sop-import and edited in the Hub.",
+  "rows": 94,
+  "rows_method": "count(*)",
+  "total_size": "160 kB",
+  "total_bytes": 163840,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "sop_event_steps.template_id",
+   "sop_shots.template_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 7,
+   "quoted_name_mentions": 7,
+   "operations": {
+    "select": 2,
+    "update": 5
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "person-profile",
+    "sop-import"
+   ],
+   "reads": [
+    "person-profile"
+   ],
+   "writes": [
+    "sop-import"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "ensure_event_steps",
+   "sop_step_deactivate",
+   "sop_step_insert",
+   "sop_step_move",
+   "sop_template_propagate",
+   "volunteer_event_date_moved"
+  ],
+  "triggers": [
+   "sop_template_propagate",
+   "sop_template_propagate"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 96,
+   "n_tup_upd": 134,
+   "n_tup_del": 2,
+   "n_live_tup": 94,
+   "n_dead_tup": 14,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T01:01:42.805+00:00",
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.9 SOP means two things",
+   "4.3 parent_id has no foreign key"
+  ]
+ },
+ {
+  "name": "sop_template_backup_20260802",
+  "kind": "table",
+  "area": "Backups and leftovers",
+  "purpose": "Backup copy of sop_template taken on 2 Aug 2026; no primary key and no references.",
+  "rows": 94,
+  "rows_method": "count(*)",
+  "total_size": "72 kB",
+  "total_bytes": 73728,
+  "column_count": 16,
+  "primary_key": null,
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 94,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 94,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-27T16:45:10.778+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "backup-copy",
+   "no-primary-key",
+   "no-code-references",
+   "service-role-only (RLS on, no policies)",
+   "create-not-in-migration-history",
+   "no-writes-since-2026-07-27",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.1 frozen backup copy"
+  ]
+ },
+ {
+  "name": "staff_notes",
+  "kind": "table",
+  "area": "System",
+  "purpose": "Tiny staff-only key-value store; holds one key, the shared Quo login shown on the volunteer messaging screen.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 3,
+  "primary_key": "k",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-29T03:55:37.533689+00:00",
+  "created_in_migration": "20260729035537 staff_notes_quo_login",
+  "flags": [
+   "no-writes-since-2026-07-29",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.8 three settings stores",
+   "11.5 holds a shared login"
+  ]
+ },
+ {
+  "name": "task_assignees",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Team members assigned to a task (task_id, member_id); the id-based counterpart of the free-text dept_tasks.owner.",
+  "rows": 481,
+  "rows_method": "count(*)",
+  "total_size": "88 kB",
+  "total_bytes": 90112,
+  "column_count": 2,
+  "primary_key": "task_id,member_id",
+  "foreign_keys_out": [
+   "member_id -> team_members.id on delete cascade",
+   "task_id -> dept_tasks.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 1,
+    "insert": 3,
+    "delete": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 507,
+   "n_tup_upd": 0,
+   "n_tup_del": 26,
+   "n_live_tup": 481,
+   "n_dead_tup": 26,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260702041802 exec_dashboard_additive_v1",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "task_comments",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Comments and activity on a task, including quotes captured from transcripts and Slack.",
+  "rows": 169,
+  "rows_method": "count(*)",
+  "total_size": "160 kB",
+  "total_bytes": 163840,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 7,
+   "quoted_name_mentions": 7,
+   "operations": {
+    "select": 5,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "transcript-requests"
+   ],
+   "reads": [],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 169,
+   "n_tup_upd": 6,
+   "n_tup_del": 0,
+   "n_live_tup": 169,
+   "n_dead_tup": 6,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-15T01:54:34.517476+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 task_id has no foreign key"
+  ]
+ },
+ {
+  "name": "task_due_suggestions",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Due dates proposed by AI from transcripts for existing tasks, waiting for a person to accept or dismiss.",
+  "rows": 28,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "update": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "transcript-requests"
+   ],
+   "reads": [
+    "transcript-requests"
+   ],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 28,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 28,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-24T12:25:28.543941+00:00",
+  "created_in_migration": "20260803193841 task_due_suggestions",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 ids without foreign keys"
+  ]
+ },
+ {
+  "name": "task_files",
+  "kind": "table",
+  "area": "Work: tasks, projects, goals",
+  "purpose": "Files (task-files bucket) and Drive links attached to a task (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "task_id -> dept_tasks.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 1,
+    "insert": 2,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "task_files_stamp"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 2,
+   "n_tup_upd": 0,
+   "n_tup_del": 2,
+   "n_live_tup": 0,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925033522 wa116t_task_hierarchy_descriptions_files",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "team_members",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Staff and board roster (display name, email, team, role, active); the id other tables should use to reference a person.",
+  "rows": 48,
+  "rows_method": "count(*)",
+  "total_size": "144 kB",
+  "total_bytes": 147456,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "onboardings.member_id",
+   "org_positions.member_id",
+   "task_assignees.member_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 22,
+   "quoted_name_mentions": 22,
+   "operations": {
+    "select": 19,
+    "update": 3
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "checkin-post",
+    "directory-sync",
+    "hours-pull",
+    "hub-connect",
+    "hub-invite",
+    "mail-pull",
+    "notify",
+    "person-profile",
+    "process-leadership",
+    "process-transcript",
+    "shoutouts",
+    "slack-command",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "checkin-post",
+    "directory-sync",
+    "hours-pull",
+    "hub-connect",
+    "hub-invite",
+    "mail-pull",
+    "notify",
+    "person-profile",
+    "process-leadership",
+    "process-transcript",
+    "shoutouts",
+    "slack-command",
+    "team-inbox",
+    "transcript-preview",
+    "transcript-requests"
+   ],
+   "writes": [
+    "directory-sync",
+    "hub-invite",
+    "person-profile"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "hub_adoption",
+   "onboarding_assign",
+   "org_fill",
+   "org_label",
+   "org_place",
+   "org_set_reports",
+   "org_update",
+   "org_vacate",
+   "wa133_roster_sync",
+   "wa_actor_name",
+   "wa_auto_profile",
+   "wa_my_names",
+   "wa_name_matches"
+  ],
+  "triggers": [
+   "wa133_roster_sync",
+   "trg_wa89_invited",
+   "wa_auto_profile"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-directory-sync",
+    "wa-hours-pull",
+    "wa-mail-pull",
+    "wa-shoutouts",
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 51,
+   "n_tup_upd": 306,
+   "n_tup_del": 2,
+   "n_live_tup": 48,
+   "n_dead_tup": 37,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T04:08:52.03682+00:00",
+  "created_in_migration": "20260702041802 exec_dashboard_additive_v1",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.1 the person key; most names are first names only"
+  ]
+ },
+ {
+  "name": "training_categories",
+  "kind": "table",
+  "area": "Training Academy",
+  "purpose": "Category list for the training catalogue; trainings.category holds a category name (no foreign key).",
+  "rows": 9,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 3,
+  "primary_key": "name",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 9,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260804185426 wa67_training_categories",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "training_progress",
+  "kind": "table",
+  "area": "Training Academy",
+  "purpose": "Per-person progress on one training (assigned, started, done, percent, score), unique by training_id + person_name.",
+  "rows": 77,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 15,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "training_id -> trainings.id on delete cascade"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 9,
+   "quoted_name_mentions": 9,
+   "operations": {
+    "select": 2,
+    "upsert": 5,
+    "delete": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 78,
+   "n_tup_upd": 27,
+   "n_tup_del": 1,
+   "n_live_tup": 78,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T01:56:01.916+00:00",
+  "created_in_migration": "20260729112347 training_catalog_and_progress",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.4 unique key uses display name"
+  ]
+ },
+ {
+  "name": "trainings",
+  "kind": "table",
+  "area": "Training Academy",
+  "purpose": "Training catalogue: Loom videos, reads, SOP lessons, page tours and quizzes (kind), with lesson content in body JSON.",
+  "rows": 93,
+  "rows_method": "count(*)",
+  "total_size": "248 kB",
+  "total_bytes": 253952,
+  "column_count": 18,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "training_progress.training_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 10,
+   "quoted_name_mentions": 10,
+   "operations": {
+    "select": 3,
+    "update": 4,
+    "insert": 3
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 93,
+   "n_tup_upd": 146,
+   "n_tup_del": 0,
+   "n_live_tup": 93,
+   "n_dead_tup": 8,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T05:34:12.536561+00:00",
+  "created_in_migration": "20260729112347 training_catalog_and_progress",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.3 category Our SOPs missing from training_categories",
+   "2.9 SOP means two things"
+  ]
+ },
+ {
+  "name": "transcript_request_scans",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Ledger of transcripts already scanned by the transcript-requests job, with the number of suggestions found.",
+  "rows": 126,
+  "rows_method": "count(*)",
+  "total_size": "24 kB",
+  "total_bytes": 24576,
+  "column_count": 3,
+  "primary_key": "transcript_id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "transcript-requests"
+   ],
+   "reads": [
+    "transcript-requests"
+   ],
+   "writes": [
+    "transcript-requests"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 133,
+   "n_tup_upd": 10,
+   "n_tup_del": 7,
+   "n_live_tup": 126,
+   "n_dead_tup": 7,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T04:25:04.859+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.10 could be columns on transcripts",
+   "4.3 no foreign key"
+  ]
+ },
+ {
+  "name": "transcripts",
+  "kind": "table",
+  "area": "Meetings and calendar",
+  "purpose": "Meeting transcripts and summaries; each insert triggers AI processing (process-transcript or process-leadership) that writes tasks, updates and decisions.",
+  "rows": 148,
+  "rows_method": "count(*)",
+  "total_size": "4328 kB",
+  "total_bytes": 4431872,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 29,
+   "operations": {
+    "select": 3,
+    "update": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "build-agenda",
+    "draft-content",
+    "goal-propose",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "recommend-decision",
+    "slack-pull",
+    "transcript-requests"
+   ],
+   "reads": [
+    "ask",
+    "build-agenda",
+    "draft-content",
+    "goal-propose",
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "recommend-decision",
+    "transcript-requests"
+   ],
+   "writes": [
+    "mail-pull",
+    "process-leadership",
+    "process-transcript",
+    "slack-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "apply_transcript_result",
+   "hub_adoption",
+   "search_transcripts"
+  ],
+  "triggers": [
+   "wa_stamp_restricted",
+   "on_transcript_insert",
+   "wa65_on_leadership_insert",
+   "transcripts_set_speakers",
+   "wa69_general_link"
+  ],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-mail-pull",
+    "wa-slack-pull",
+    "wa-transcript-requests"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 162,
+   "n_tup_upd": 379,
+   "n_tup_del": 14,
+   "n_live_tup": 148,
+   "n_dead_tup": 5,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T03:13:23.193565+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "4.2 created rows link back by title text",
+   "8 visibility never set; search ignores it"
+  ]
+ },
+ {
+  "name": "transcripts_backup_20260722",
+  "kind": "table",
+  "area": "Backups and leftovers",
+  "purpose": "Backup copy of transcripts taken on 22 Jul 2026; no primary key and no references.",
+  "rows": 62,
+  "rows_method": "count(*)",
+  "total_size": "664 kB",
+  "total_bytes": 679936,
+  "column_count": 11,
+  "primary_key": null,
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 62,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 62,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-22T03:18:16.155334+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "backup-copy",
+   "no-primary-key",
+   "no-code-references",
+   "service-role-only (RLS on, no policies)",
+   "create-not-in-migration-history",
+   "no-writes-since-2026-07-22",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.1 frozen backup copy"
+  ]
+ },
+ {
+  "name": "user_state",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Presence heartbeat: the last time each signed-in person was seen in the Hub.",
+  "rows": 18,
+  "rows_method": "count(*)",
+  "total_size": "64 kB",
+  "total_bytes": 65536,
+  "column_count": 3,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 2,
+    "upsert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 18,
+   "n_tup_upd": 15694,
+   "n_tup_del": 0,
+   "n_live_tup": 18,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-26T02:29:52.456+00:00",
+  "created_in_migration": "20260702050110 security_cutover_and_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "volunteer_event_summary",
+  "kind": "view",
+  "area": "Volunteering",
+  "purpose": "View: one row per volunteer event with roster, checklist and extra to-do counts.",
+  "rows": 30,
+  "rows_method": "view: one row per volunteer_events row",
+  "total_size": "0 bytes",
+  "total_bytes": 0,
+  "column_count": 15,
+  "primary_key": null,
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": false,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": null,
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260727172613 volunteer_events_kind_and_summary",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "volunteer_events",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Volunteer events, mostly the biweekly Sunday serving days in Montreal.",
+  "rows": 30,
+  "rows_method": "count(*)",
+  "total_size": "80 kB",
+  "total_bytes": 81920,
+  "column_count": 13,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "event_roster.event_id",
+   "quo_messages.event_id",
+   "sop_event_extras.event_id",
+   "sop_event_steps.event_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 12,
+   "quoted_name_mentions": 12,
+   "operations": {
+    "update": 5,
+    "select": 6,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "process-transcript",
+    "quo-send"
+   ],
+   "reads": [
+    "process-transcript",
+    "quo-send"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "sop_sync_all_events",
+   "sop_template_propagate",
+   "volunteer_confirm_get",
+   "volunteer_history"
+  ],
+  "triggers": [
+   "trg_event_steps",
+   "volunteer_event_date_moved"
+  ],
+  "read_by_views": [
+   "volunteer_event_summary"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 30,
+   "n_tup_upd": 16,
+   "n_tup_del": 0,
+   "n_live_tup": 30,
+   "n_dead_tup": 13,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-27T17:26:13.699072+00:00",
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.3 \"event\" means three things",
+   "5.2 status has no CHECK"
+  ]
+ },
+ {
+  "name": "volunteer_inventory",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Serving supplies inventory, shareable by link through inventory-share.",
+  "rows": 21,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 1,
+    "update": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "inventory-share"
+   ],
+   "reads": [
+    "inventory-share"
+   ],
+   "writes": [
+    "inventory-share"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 21,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 21,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-27T17:16:19.324398+00:00",
+  "created_in_migration": "20260727171609 volunteer_inventory",
+  "flags": [
+   "no-writes-since-2026-07-27",
+   "no-comment"
+  ],
+  "see_findings": [
+   "11.1 quantities stored as text"
+  ]
+ },
+ {
+  "name": "volunteer_people",
+  "kind": "table",
+  "area": "Volunteering",
+  "purpose": "Volunteer directory with phones, emails, roles, tags and the Quo (OpenPhone) contact link.",
+  "rows": 437,
+  "rows_method": "count(*)",
+  "total_size": "360 kB",
+  "total_bytes": 368640,
+  "column_count": 17,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "event_roster.person_id",
+   "quo_messages.person_id"
+  ],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 2,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "quo-pull",
+    "quo-send",
+    "quo-sync"
+   ],
+   "reads": [
+    "quo-pull",
+    "quo-send",
+    "quo-sync"
+   ],
+   "writes": [
+    "quo-sync"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "volunteer_merge"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 437,
+   "n_tup_upd": 343,
+   "n_tup_del": 0,
+   "n_live_tup": 437,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-07-27T21:38:36.158+00:00",
+  "created_in_migration": "20260727164344 sunday_serving_sop_schema",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "11.4 duplicate names and rows needing review"
+  ]
+ },
+ {
+  "name": "wa_access_requests",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Requests from staff for more Hub access, decided by an admin (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 10,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 3,
+    "update": 2,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260819181011 wa_p12_access_requests",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_brand",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Brand kit tokens and rules (colours, type, voice, logo rules and more), seeded from the Brand Guides v1 2026.",
+  "rows": 139,
+  "rows_method": "count(*)",
+  "total_size": "216 kB",
+  "total_bytes": 221184,
+  "column_count": 9,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": true,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 139,
+   "n_tup_upd": 125,
+   "n_tup_del": 0,
+   "n_live_tup": 139,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T02:19:07.012695+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "no-code-references",
+   "create-not-in-migration-history"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_brand_assets",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Brand asset registry (logos, E component, doodles) with storage paths and inline SVG.",
+  "rows": 54,
+  "rows_method": "count(*)",
+  "total_size": "1280 kB",
+  "total_bytes": 1310720,
+  "column_count": 16,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": true,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [
+   "wa_brand_assets_list"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 54,
+   "n_tup_upd": 162,
+   "n_tup_del": 0,
+   "n_live_tup": 54,
+   "n_dead_tup": 54,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T01:32:16.156395+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "create-not-in-migration-history"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_brand_assets_list",
+  "kind": "view",
+  "area": "Marketing and content",
+  "purpose": "View: wa_brand_assets without the heavy inline_svg and data_uri columns.",
+  "rows": 54,
+  "rows_method": "view: one row per wa_brand_assets row",
+  "total_size": "0 bytes",
+  "total_bytes": 0,
+  "column_count": 15,
+  "primary_key": null,
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": false,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": null,
+  "last_write_seen_in_data": null,
+  "created_in_migration": null,
+  "flags": [
+   "no-code-references",
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_change_requests",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Change requests about the Hub filed by staff (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 8,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "insert": 1,
+    "select": 1,
+    "update": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "notify",
+    "slack-command"
+   ],
+   "reads": [
+    "notify"
+   ],
+   "writes": [
+    "slack-command"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260807055844 wa_p7_change_requests",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_checkin_scope",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "30-day summary of who posts in the Slack check-in channels, refreshed weekly by checkin-scope.",
+  "rows": 9,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 10,
+  "primary_key": "slack_id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "checkin-scope"
+   ],
+   "reads": [],
+   "writes": [
+    "checkin-scope"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-checkin-scope"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 43,
+   "n_tup_upd": 0,
+   "n_tup_del": 34,
+   "n_live_tup": 9,
+   "n_dead_tup": 34,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-24T11:45:18.286+00:00",
+  "created_in_migration": "20260807150301 wa_p8_slack_round13",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.1 three Slack identity tables",
+   "2.2 policy checks the email domain directly"
+  ]
+ },
+ {
+  "name": "wa_discipline",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "HR discipline records, readable by HR and by the person concerned.",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 11,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 3,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 1,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 4,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 4,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-08T05:08:42.956054+00:00",
+  "created_in_migration": "20260807194255 wa_p10_hr_tools",
+  "flags": [
+   "no-writes-since-2026-08-08",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_drive_docs",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Index of Google Drive files visible to the Hub's service account, with the text of Google Docs; synced daily by drive-pull.",
+  "rows": 1820,
+  "rows_method": "count(*)",
+  "total_size": "2512 kB",
+  "total_bytes": 2572288,
+  "column_count": 7,
+  "primary_key": "file_id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 3,
+   "quoted_name_mentions": 3,
+   "operations": {
+    "select": 3
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "ask",
+    "drive-pull"
+   ],
+   "reads": [
+    "ask",
+    "drive-pull"
+   ],
+   "writes": [
+    "drive-pull"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-drive-sync"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 1820,
+   "n_tup_upd": 67776,
+   "n_tup_del": 0,
+   "n_live_tup": 1820,
+   "n_dead_tup": 209,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T07:40:47.135+00:00",
+  "created_in_migration": "20260807201648 wa_p11_drive_docs",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.2 policy checks the email domain directly"
+  ]
+ },
+ {
+  "name": "wa_health_checks",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Latest health check result per AI service, written daily by health-check.",
+  "rows": 3,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "service",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "health-check"
+   ],
+   "reads": [
+    "health-check"
+   ],
+   "writes": [
+    "health-check"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-health-check"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 5,
+   "n_tup_upd": 3,
+   "n_tup_del": 2,
+   "n_live_tup": 3,
+   "n_dead_tup": 5,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T11:50:04.182+00:00",
+  "created_in_migration": null,
+  "flags": [
+   "service-role-only (RLS on, no policies)",
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_hr_access",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Emails with HR access (wa_is_hr()).",
+  "rows": 6,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 1,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "select": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "wa_is_hr"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 0,
+   "n_tup_del": 3,
+   "n_live_tup": 6,
+   "n_dead_tup": 3,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260807194255 wa_p10_hr_tools",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.2 access lists",
+   "8 readable by every signed-in user"
+  ]
+ },
+ {
+  "name": "wa_loom_stage",
+  "kind": "table",
+  "area": "Backups and leftovers",
+  "purpose": "Empty staging table left from a Loom import; no references.",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "16 kB",
+  "total_bytes": 16384,
+  "column_count": 5,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 0,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": null,
+  "flags": [
+   "empty",
+   "no-code-references",
+   "service-role-only (RLS on, no policies)",
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.2 empty leftover"
+  ]
+ },
+ {
+  "name": "wa_notify_prefs",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Per-person notification preferences (empty so far).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "select": 2,
+    "upsert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [
+    "notify",
+    "team-inbox"
+   ],
+   "reads": [
+    "notify",
+    "team-inbox"
+   ],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 0,
+   "n_tup_del": 1,
+   "n_live_tup": 0,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260806171727 wa_p4_notifications",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_onboarding",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Per-person \"first steps in the Hub\" checklist keyed by email; not HR onboarding (see onboardings).",
+  "rows": 7,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 6,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 2,
+   "quoted_name_mentions": 2,
+   "operations": {
+    "upsert": 1,
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 9,
+   "n_tup_upd": 9,
+   "n_tup_del": 1,
+   "n_live_tup": 7,
+   "n_dead_tup": 11,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:16:45.643774+00:00",
+  "created_in_migration": "20260924160054 wa_onboarding_checklist",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.5 two onboarding systems"
+  ]
+ },
+ {
+  "name": "wa_photos",
+  "kind": "table",
+  "area": "Marketing and content",
+  "purpose": "Photo library labels and usage guidance for photos stored under content-images/photos/.",
+  "rows": 16,
+  "rows_method": "count(*)",
+  "total_size": "152 kB",
+  "total_bytes": 155648,
+  "column_count": 44,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": true,
+  "frontend_candidate_html": {
+   "from_calls": 4,
+   "quoted_name_mentions": 4,
+   "operations": {
+    "update": 2,
+    "insert": 1,
+    "delete": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [
+   "wa_photos_touch"
+  ],
+  "read_by_views": [
+   "wa_photos_list"
+  ],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 16,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 16,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T15:31:07.741112+00:00",
+  "created_in_migration": "20260925152446 wa118c_photo_library",
+  "flags": [],
+  "see_findings": []
+ },
+ {
+  "name": "wa_photos_list",
+  "kind": "view",
+  "area": "Marketing and content",
+  "purpose": "View: wa_photos plus public URLs for the full, web and thumbnail sizes.",
+  "rows": 16,
+  "rows_method": "view: one row per wa_photos row",
+  "total_size": "0 bytes",
+  "total_bytes": 0,
+  "column_count": 47,
+  "primary_key": null,
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": false,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": null,
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260925152446 wa118c_photo_library",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_policies",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "HR policies that staff must read and sign.",
+  "rows": 3,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 6,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [
+   "wa_policy_signoffs.policy_key"
+  ],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 6,
+   "quoted_name_mentions": 6,
+   "operations": {
+    "select": 3,
+    "update": 2,
+    "insert": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 3,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 3,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260807194255 wa_p10_hr_tools",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_policy_signoffs",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Who signed which policy and when.",
+  "rows": 4,
+  "rows_method": "count(*)",
+  "total_size": "48 kB",
+  "total_bytes": 49152,
+  "column_count": 5,
+  "primary_key": "id",
+  "foreign_keys_out": [
+   "policy_key -> wa_policies.key"
+  ],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 2,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 3,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 4,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 4,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-22T01:34:11.489009+00:00",
+  "created_in_migration": "20260807194255 wa_p10_hr_tools",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_rate_limits",
+  "kind": "table",
+  "area": "Integrations and AI",
+  "purpose": "Short-lived rate-limit counters for the public inventory share link.",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "40 kB",
+  "total_bytes": 40960,
+  "column_count": 3,
+  "primary_key": "key",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "inventory-share"
+   ],
+   "reads": [
+    "inventory-share"
+   ],
+   "writes": [
+    "inventory-share"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 38,
+   "n_tup_upd": 38,
+   "n_tup_del": 38,
+   "n_live_tup": 0,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": null,
+  "flags": [
+   "empty",
+   "service-role-only (RLS on, no policies)",
+   "create-not-in-migration-history",
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_slack_ids",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Email to Slack user id map used to @mention people.",
+  "rows": 20,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 4,
+  "primary_key": "email",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "checkin-post",
+    "hub-connect",
+    "notify",
+    "slack-command",
+    "team-inbox"
+   ],
+   "reads": [
+    "checkin-post",
+    "hub-connect",
+    "notify",
+    "slack-command",
+    "team-inbox"
+   ],
+   "writes": [
+    "hub-connect",
+    "notify",
+    "team-inbox"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 20,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 20,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T17:16:21.404+00:00",
+  "created_in_migration": "20260806171727 wa_p4_notifications",
+  "flags": [
+   "service-role-only (RLS on, no policies)",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.1 three Slack identity tables"
+  ]
+ },
+ {
+  "name": "wa_slack_names",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Normalised name to Slack user id cache used to @mention people by name.",
+  "rows": 33,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "name_norm",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 0,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 0,
+   "quoted_name_mentions": 0,
+   "operations": {}
+  },
+  "edge_functions": {
+   "references": [
+    "project-slack",
+    "slack-command",
+    "slack-digest"
+   ],
+   "reads": [
+    "project-slack",
+    "slack-command",
+    "slack-digest"
+   ],
+   "writes": [
+    "project-slack",
+    "slack-digest"
+   ],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": [
+    "wa-slack-weekly-digest"
+   ]
+  },
+  "write_activity": {
+   "n_tup_ins": 33,
+   "n_tup_upd": 0,
+   "n_tup_del": 0,
+   "n_live_tup": 33,
+   "n_dead_tup": 0,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-08-17T13:00:02.61+00:00",
+  "created_in_migration": "20260807140329 wa_p8_slack_name_cache",
+  "flags": [
+   "service-role-only (RLS on, no policies)",
+   "no-comment"
+  ],
+  "see_findings": [
+   "2.1 three Slack identity tables"
+  ]
+ },
+ {
+  "name": "wa_timeoff",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Time-off requests and HR decisions.",
+  "rows": 1,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 12,
+  "primary_key": "id",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 4,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 5,
+   "quoted_name_mentions": 5,
+   "operations": {
+    "select": 2,
+    "update": 1,
+    "insert": 2
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 1,
+   "n_tup_del": 0,
+   "n_live_tup": 1,
+   "n_dead_tup": 1,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": "2026-09-25T13:57:05.925+00:00",
+  "created_in_migration": "20260807194255 wa_p10_hr_tools",
+  "flags": [
+   "no-comment"
+  ],
+  "see_findings": []
+ },
+ {
+  "name": "wa_usage",
+  "kind": "table",
+  "area": "People, access and HR",
+  "purpose": "Daily seconds and visits per person; empty because the page's calls are never sent (superseded by hub_visits and user_state).",
+  "rows": 0,
+  "rows_method": "count(*)",
+  "total_size": "32 kB",
+  "total_bytes": 32768,
+  "column_count": 5,
+  "primary_key": "email,day",
+  "foreign_keys_out": [],
+  "foreign_keys_in": [],
+  "rls_enabled": true,
+  "policy_count": 1,
+  "has_comment": false,
+  "frontend_candidate_html": {
+   "from_calls": 1,
+   "quoted_name_mentions": 1,
+   "operations": {
+    "select": 1
+   }
+  },
+  "edge_functions": {
+   "references": [],
+   "reads": [],
+   "writes": [],
+   "note": "All 54 live functions checked: 37 from the repo (fn/), 17 fetched from the live project."
+  },
+  "sql_functions": [
+   "wa_usage_beat",
+   "wa_usage_visit"
+  ],
+  "triggers": [],
+  "read_by_views": [],
+  "cron_jobs": {
+   "direct": [],
+   "via_edge_functions": []
+  },
+  "write_activity": {
+   "n_tup_ins": 1,
+   "n_tup_upd": 1,
+   "n_tup_del": 1,
+   "n_live_tup": 0,
+   "n_dead_tup": 2,
+   "note": "pg_stat_user_tables counters since the last stats reset"
+  },
+  "last_write_seen_in_data": null,
+  "created_in_migration": "20260807044431 wa_p6_usage_tracking",
+  "flags": [
+   "empty",
+   "no-comment"
+  ],
+  "see_findings": [
+   "1.3 never filled: the page never sends its calls"
+  ]
+ }
+]

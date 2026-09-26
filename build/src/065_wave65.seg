@@ -643,7 +643,7 @@
       try {
         await db.from('change_log').insert({
           entity_type: 'sop', entity_id: String(drag.id), field: 'moved',
-          old_value: null, new_value: sec + (drag.parent_id ? ' (nested)' : ' (main step)'),
+          old_value: null, new_value: (drag.section || '') + (drag.parent_id ? ' (nested)' : ' (main step)'), /* audit 26/09/26: was an undeclared sec, so no move was logged */
           changed_by: (typeof who === 'function') ? who() : 'staff'
         });
       } catch (e2) { /* log only */ }

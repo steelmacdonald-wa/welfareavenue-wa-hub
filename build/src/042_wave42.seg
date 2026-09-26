@@ -121,7 +121,8 @@
     register: function (def) {
       if (!def || !def.id) return;
       wa42Enrol(def.id, def.gate);
-      if (!def.noRoute) this.pages.push(def);
+      /* audit 26/09/26: a page registered twice (wave87 did) is kept once */
+      if (!def.noRoute && !this.pages.some(function (p) { return p.id === def.id; })) this.pages.push(def);
       if (def.panel !== false && !document.getElementById(def.id)) {
         var main = document.querySelector('main');
         if (main) {
@@ -140,7 +141,8 @@
           if (g) host = g.querySelector('.tab-group-p');
         }
         if (host) host.appendChild(b);
-        else bar.insertBefore(b, bar.querySelector('.tab[data-tab="adminpanel"]') || null);
+        else bar.insertBefore(b, bar.querySelector(':scope > .tab[data-tab="adminpanel"]') || null); /* the menu layout (wave134) may hold Admin inside a group */
+        if (window.WA_NAV && WA_NAV.layout && WA_NAV.applyLayout) setTimeout(function () { try { WA_NAV.applyLayout(); } catch (e) { /* fine */ } }, 0);
       }
       if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
     },

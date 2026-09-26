@@ -1,0 +1,25 @@
+# The wave134 audit (26/09/26)
+
+A read-only audit of the Hub at commit `d483466` (wave133): the front end, the 54 edge functions and 21 scheduled jobs, and the database. The fixes it called obvious shipped in wave134; the rest are decisions for Steel. The release note, with the list of decisions, is `docs/26-09-26 - wave134 the audit (menu, pages, data and functions).md`.
+
+## What is here
+
+| File | What it holds |
+|---|---|
+| `fe_findings.md` | The front end: bugs, dead code, repetition, the menu and routing, and what confuses developers and agents, each with its evidence (segment and line) and a tag, OBVIOUS or DECISION. |
+| `fe_pages.json` | One entry per page or route (42): its hash shape and panel, where the menu shows it, who can open it (per identity and profile), the segments that render and route it, what it reads on open and at boot, its tour and its help. The appendix of `fe_findings.md` explains the fields. |
+| `fn_findings.md` | The edge functions and jobs: a table of all 54 (purpose, trigger, gate, evidence of use, verdict), the cron jobs with their real results, overlaps, security, naming and what agents need. |
+| `db_findings.md` | The database: the ten findings that matter most, then tables by area, identities, team codes, value lists, JSON columns, naming, confidentiality and performance. |
+| `db_inventory.json` | Every table with its row count, columns, keys and policies at the time of the audit. |
+
+The evidence scripts and raw probe outputs the reports mention (`audit/fe_work/`, `audit/fn_src/`) stayed in the session workspace. The function sources are in `fn/` since commit `9a3ff2f`.
+
+## Numbers are from before wave134
+
+The reports describe the Hub as it was. Since then:
+
+- **Front end:** bugs B1 to B4 are fixed, the remaps are baked into the sources (finding 6), the menu has one layout (section 4.3, steps 1 to 3), the crumbs, help titles and profile groups follow it, Coming up no longer repeats Next up, and boot skips `clickup_weekly` and makes one roster request for the agendas page.
+- **Edge functions:** transcript-requests, finance-import and hub-edit go through the llm router (slack-pull does not, pending a decision); Program Development is in every team list of the 12 active functions that had one; mail-pull, social-pull and repo-sync are gated; sop-import is retired; the repo matches live.
+- **Database:** every table, view and function has a comment (and 438 columns), `dept_meta` carries the team labels, 24 foreign keys and their indexes are in, CHECK rules guard `hub_roles.role`, `visibility` and `platform`, and four functions are closed to anonymous callers. `docs/DATA_MODEL.md` is the current picture, generated from the live schema by `build/gen_data_model.py`.
+
+Everything tagged DECISION that is not listed above is still open.

@@ -19,9 +19,10 @@ const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const SITE = 'https://wa-exec-dashboard.netlify.app/';
 const DEPT_LABEL = {
   opsmtl: 'Ops Montreal',
+  progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising & Grants',
+  fundraising: 'Fundraising & Finances',
   hr: 'Human Resources',
   board: 'Board'
 };

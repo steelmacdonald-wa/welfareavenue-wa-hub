@@ -48,7 +48,7 @@ async function authorize(req: Request): Promise<{ ok: boolean; who: string }> {
   return { ok: false, who: '' };
 }
 
-const DEPTS = ['opsmtl', 'opsto', 'marketing', 'fundraising', 'hr', 'board', 'org'];
+const DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board', 'org'];
 const BASE_CATS = ['4100 Donation', '4110 FlagPlus Football', '4200 Grants', 'Services', '5020 Purchases - COS', 'Supplies and materials - COS', '6010 Transportation fees', '6020 Meal and entertainment expenses', '6030 Subscription fees', '7035 Office expenses', '7090 Telecommunication', '7120 Publicity and Promotion', '7145 Lease payments', 'Other'];
 
 async function loadCats(): Promise<string[]> {
@@ -77,7 +77,7 @@ Extraction rules:
 2. Amounts: money leaving the account (debits, purchases, sent e-Transfers, fees) is NEGATIVE. Money arriving (credits, received e-Transfers, refunds, returned merchandise, deposits) is POSITIVE. BMO lines usually show the transaction amount first and the running balance last; never use the running balance as the amount. Cross-check: the amounts you extract should walk the balance from opening to closing.
 3. date: ISO YYYY-MM-DD using the statement period's month and year. A statement covers roughly one month.
 4. description: a clean readable merchant or transfer description, for example "Amazon (AMZN MKTP CA)", "U-Haul storage Cremazie", "Interac e-Transfer received", "Facebook ads", "Intuit QuickBooks".
-5. department: one of opsmtl, opsto, marketing, fundraising, hr, board, org. Groceries and serving event supplies default to opsmtl (Instacart, MAXI, Metro, Super C, IGA, Provigo, Costco, RONA, Canadian Tire, Dollarama) unless clearly Toronto, then opsto. Ads (FACEBK, Meta, Google Ads, Canva print) are marketing. Donation platform costs (Keela), Stripe and fundraising event costs are fundraising. Recruiting tools (LinkedIn Recruiter) are hr. Org-wide software (DigitalOcean, Loom, OpenPhone, Intuit QuickBooks, Google, Slack, Zoom, ClickUp), storage and lease (U-Haul storage, Depotium), telecom, government registrations and bank fees are org.
+5. department: one of opsmtl, progdev, opsto, marketing, fundraising, hr, board, org. Groceries and serving event supplies default to opsmtl (Instacart, MAXI, Metro, Super C, IGA, Provigo, Costco, RONA, Canadian Tire, Dollarama) unless clearly Toronto, then opsto. Ads (FACEBK, Meta, Google Ads, Canva print) are marketing. Donation platform costs (Keela), Stripe and fundraising event costs are fundraising. Recruiting tools (LinkedIn Recruiter) are hr. Org-wide software (DigitalOcean, Loom, OpenPhone, Intuit QuickBooks, Google, Slack, Zoom, ClickUp), storage and lease (U-Haul storage, Depotium), telecom, government registrations and bank fees are org.
 6. category: exactly one of the chart of accounts values provided in the tool schema. Food and grocery purchases for events (Instacart, MAXI, Costco): "5020 Purchases - COS". Event supplies and equipment: "Supplies and materials - COS". Gas, parking, Uber rides, transport: "6010 Transportation fees". Restaurant meals, Uber Eats, cafes: "6020 Meal and entertainment expenses". Software subscriptions (DigitalOcean, Loom, QuickBooks, Keela, LinkedIn, Uber One membership): "6030 Subscription fees". Office and hardware for office use: "7035 Office expenses". Phone and internet (OpenPhone): "7090 Telecommunication". Ads, promotion, print shops, Eventbrite listing costs: "7120 Publicity and Promotion". Storage units and leases (U-Haul storage, Depotium): "7145 Lease payments". Donations and personal e-Transfer income: "4100 Donation". Grant deposits from governments, cities, municipalities and foundations (for example City of Toronto, Ville de Montreal, community foundations): "4200 Grants". FlagPlus football league income: "4110 FlagPlus Football". Service revenue and Stripe payouts: "Services". Bank fees, government fees and anything else: "Other".
 7. Received Interac e-Transfers and cheque deposits are income: category "4100 Donation" for individuals, "4200 Grants" when the payer is clearly a government, city or foundation, or "Services" when clearly payment for services; department fundraising unless the text clearly says otherwise. Sent e-Transfers are usually volunteer reimbursements for event food or supplies: default "5020 Purchases - COS" and opsmtl with confidence low. A cancelled e-Transfer is a POSITIVE credit reversing an earlier send.
 8. confidence: "high" when the merchant clearly implies the allocation, "low" when guessing.
@@ -117,7 +117,6 @@ function buildTool(cats: string[]) {
 const MODELS = ['claude-sonnet-5', 'claude-sonnet-4-5', 'claude-sonnet-4-20250514'];
 
 async function callAnthropic(text: string | null, pdfB64: string | null, cats: string[], guidance: string): Promise<Record<string, unknown>> {
-  const key = await getSecret('ANTHROPIC_API_KEY');
   const content: unknown[] = [];
   if (pdfB64) {
     content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdfB64 } });
@@ -130,9 +129,10 @@ async function callAnthropic(text: string | null, pdfB64: string | null, cats: s
     : '');
   let lastErr = '';
   for (const model of MODELS) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    /* audit 26/09/26: through the llm router (route finance_import, Claude models, which read PDF statements) */
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
       method: 'POST',
-      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'finance_import', 'x-wa-caller': 'finance-import', 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model, max_tokens: 16000, temperature: 0, system,
         messages: [{ role: 'user', content }],

@@ -859,7 +859,7 @@
         if (gv.nextElementSibling !== cm) sub.insertBefore(cm, gv.nextElementSibling);
         gv.classList.add('w116tool'); cm.classList.add('w116tool');
         var ov = sub.querySelector('[data-w116="#team/board"],[data-w116go="#team/board"],a[data-w42a="overview"]'); if (ov && !ov.__w126) { ov.__w126 = true; ov.textContent = 'Team page'; ov.setAttribute('data-w126go', '#team/board'); }
-      } else {
+      } else if (!(window.WA_NAV && WA_NAV.layout)) { /* wave134: the menu layout puts them in the Board group */
         var anchor = bar.querySelector('.tab[data-tab="overview"]');
         if (anchor && anchor.parentNode && anchor.nextElementSibling !== gv) anchor.parentNode.insertBefore(gv, anchor.nextElementSibling);
         if (gv.parentNode && gv.nextElementSibling !== cm) gv.parentNode.insertBefore(cm, gv.nextElementSibling);

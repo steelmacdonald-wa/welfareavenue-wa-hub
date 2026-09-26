@@ -43,14 +43,16 @@
   var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
   var TEAMS = (window.WA_TEAMS && window.WA_TEAMS.order) || ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
   var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
-  var GROUPS = [
-    ['Everyday', ['mypage', 'calendar', 'requests', 'overview', 'dashboard', 'create', 'photos', 'brain', 'importantinfo']],
-    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap', 'bank']],
-    ['Teams', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
-    ['Board', ['governance', 'committees', 'board']],
-    ['Meetings', ['transcripts', 'agendas', 'hubmail']],
+  var GROUPS = [ /* wave134: the same groups as the menu */
+    ['Everyday', ['mypage', 'overview', 'dashboard', 'calendar']],
+    ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
+    ['Board', ['board', 'governance', 'committees']],
+    ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
+    ['Meetings', ['agendas', 'transcripts']],
+    ['Requests and inbox', ['requests', 'hubmail']],
     ['People', ['orgchart', 'training']],
-    ['More', ['activity', 'adminpanel']]
+    ['Resources', ['importantinfo', 'photos', 'create']],
+    ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',

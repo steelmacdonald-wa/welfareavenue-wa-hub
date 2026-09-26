@@ -443,7 +443,7 @@
       var r = await fn('hub-connect', { action: 'rsvp', event_id: id, response: resp });
       if (r.ok === false) throw new Error(r.error || 'failed');
       toastS(resp === 'accepted' ? 'Accepted' : 'Declined');
-      try { (window.__waEvents || []).forEach(function (ev) { if (String(ev.id) === String(id)) (ev.attendees || []).forEach(function (at) { if (lower(at.email) === myEmail()) at.status = resp; }); }); } catch (x) { /* fine */ }
+      try { ((window.W116 && window.W116.events) || []) /* audit 26/09/26: the events cache is W116.events */.forEach(function (ev) { if (String(ev.id) === String(id)) (ev.attendees || []).forEach(function (at) { if (lower(at.email) === myEmail()) at.status = resp; }); }); } catch (x) { /* fine */ }
       try { if (typeof renderMyPage === 'function') renderMyPage(); } catch (x) { /* fine */ }
     } catch (err) { toastS('Could not send the reply: ' + String(err.message || err).slice(0, 100)); a.textContent = resp === 'accepted' ? 'Accept' : 'Decline'; }
   }, true);

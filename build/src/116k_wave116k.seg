@@ -276,7 +276,7 @@
       '</div></div>';
     sec.innerHTML = html;
     place(lifted, m);
-    try { if (window.w116Onboard && window.w116Onboard.tick) window.w116Onboard.tick('profile'); } catch (e) { /* fine */ }
+    /* audit 26/09/26: the 'Check your profile' step is ticked by wave112 when you open your own page */
   }
   function aboutCard(m, bio) { return '<div class="w116card" id="w116kabout"><h3>About<a class="lnk" data-w33bref="' + E(m.id) + '">Rewrite from the latest work</a></h3><div class="w116kabout" id="w33bio"><p>' + E(bio) + '</p></div></div>'; }
   /* blocks the older chain rendered: lift them into the new layout */

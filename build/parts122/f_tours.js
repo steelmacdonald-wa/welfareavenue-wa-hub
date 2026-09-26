@@ -7,10 +7,9 @@
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here, grouped into Departments, Meetings, Strategy and People. Departments fold open to show each team’s extra pages, like Volunteering or the Content calendar.'),
+      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Departments, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A department folds open to show its team’s own pages, like Volunteering or the Content calendar.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
-      S('#needsMeBtn', 'Needs me', 'One queue of everything waiting on you: tasks due, requests to action and decisions that sit with you.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
       S('#waChatBtn', 'Ask the Hub', 'Ask anything about what is happening at Welfare Avenue, or type a request or a task in plain words. It answers from the Hub’s live data and asks you to confirm before it saves anything.', OPT),
       C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Training academy.')
@@ -245,7 +244,8 @@
     ] },
     importantinfo: { tab: 'importantinfo', icon: 'doc', hash: '#importantinfo', steps: [
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
-      S('#infoBody .pw-note', 'Logins', 'Shared logins stay masked until you press Show. Staff only, never board viewers.', OPT),
+      S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
+      S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
       H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Training academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),

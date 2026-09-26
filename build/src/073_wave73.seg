@@ -57,6 +57,16 @@
       var bar = document.getElementById('tabBar');
       if (!bar || !bar.dataset.wa42 || bar.dataset.w73) return;
       bar.dataset.w73 = '1';
+      /* wave134: the menu layout owns the groups and their order; this only keeps the merged tabs hidden */
+      if (window.WA_NAV && WA_NAV.layout) {
+        ['dashboard', 'create'].forEach(function (id) {
+          var hb = bar.querySelector('.tab[data-tab="' + id + '"]');
+          if (hb) { hb.style.display = 'none'; hb.dataset.w73hide = '1'; }
+        });
+        if (WA_NAV.applyLayout) WA_NAV.applyLayout();
+        if (typeof wa40Enforce === 'function') { try { wa40Enforce(); } catch (e) { /* non-fatal */ } }
+        return;
+      }
 
       /* dissolve wave42's groups, keeping the department flyout rows intact */
       var deptRows = [];

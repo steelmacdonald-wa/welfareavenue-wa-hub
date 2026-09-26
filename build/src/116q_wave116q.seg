@@ -155,7 +155,7 @@
       try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: myEmail(), field: 'out', old_value: null, new_value: 'checked out' + (bullets.length ? ' with a note' : ''), changed_by: myName() }); } catch (e) { /* audit */ }
       c.clear(); closeModal();
       toastS('Checked out: ' + c.fmtMins(r.minutes || mins(Q.row)) + (r.posted ? ', posted to #check-in-out-wa' : ' (Slack post failed: ' + (r.error || 'unknown') + ')') + (r.closed && r.closed.length ? '. Closed ' + r.closed.length + (r.closed.length === 1 ? ' task' : ' tasks') : ''));
-      try { if (r.closed && r.closed.length && typeof loadTasks === 'function') loadTasks(); } catch (e) { /* fine */ }
+      try { var shut = (r.closed || []).map(String); if (shut.length && typeof DB_TASKS !== 'undefined' && DB_TASKS) { var nowIso = new Date().toISOString(); DB_TASKS.forEach(function (t) { if (shut.indexOf(String(t.id)) >= 0) { t.done = true; t.closed_at = t.closed_at || nowIso; } }); if (typeof renderMyPage === 'function') renderMyPage(); } } catch (e) { /* fine */ } /* audit 26/09/26: there was no loadTasks; the closed tasks are marked here */
       c.render(); c.presence();
     } catch (e) {
       if (ok) ok.textContent = 'Could not check out: ' + (e.message || e);

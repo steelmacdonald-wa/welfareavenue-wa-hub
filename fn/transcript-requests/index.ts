@@ -57,6 +57,7 @@ async function authorize(req) {
 }
 const DEPTS = [
   'opsmtl',
+  'progdev',
   'opsto',
   'marketing',
   'fundraising',
@@ -100,7 +101,7 @@ const REQ_TOOL = {
             },
             department: {
               type: 'string',
-              description: 'The department that should ACTION it: opsmtl, opsto, marketing, fundraising, hr, or board. Default to the request type\'s actioned-by department unless the meeting clearly assigns another team.'
+              description: 'The department that should ACTION it: opsmtl, progdev, opsto, marketing, fundraising, hr, or board. Default to the request type\'s actioned-by department unless the meeting clearly assigns another team.'
             },
             title: {
               type: 'string',
@@ -316,13 +317,10 @@ const MEN_SYSTEM = 'You find Welfare Avenue roster members who were meaningfully
 async function callModel(key, system, user, tool, toolName) {
   let lastErr = '';
   for (const model of MODELS){
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    /* audit 26/09/26: through the llm router (the direct Anthropic account is out of credit) */
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
       method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'transcript_extract', 'x-wa-caller': 'transcript-requests', 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model,
         max_tokens: 1800,
@@ -361,10 +359,7 @@ Deno.serve(async (req)=>{
   if (!await authorize(req)) return json({
     error: 'unauthorized'
   }, 401);
-  const key = await getSecret('ANTHROPIC_API_KEY');
-  if (!key) return json({
-    error: 'ANTHROPIC_API_KEY missing'
-  }, 500);
+  const key = 'hub-router'; /* audit 26/09/26: the llm router holds the model keys */
   const { data: scanned } = await svc.from('transcript_request_scans').select('transcript_id');
   const done = new Set((scanned || []).map((s)=>s.transcript_id));
   const { data: txs } = await svc.from('transcripts').select('id,title,department,meeting_date,body,ai_summary,board_only,added_by,visibility,speakers').not('ai_summary', 'is', null).order('id', {
@@ -425,11 +420,13 @@ Deno.serve(async (req)=>{
   let reqFound = 0, cmtFound = 0, dueFound = 0, winFound = 0, menFound = 0, scannedN = 0;
   for (const tx of todo){
     scannedN++;
-    let n = 0;
+    let n = 0, tried = 0, failed = 0; /* audit 26/09/26 */
+    const before = reqFound + cmtFound + dueFound + winFound + menFound;
     const isSlack = String(tx.added_by || '').indexOf('Slack pull') === 0;
     const isLead = tx.visibility === 'leadership' || /leadership/i.test(String(tx.department || ''));
     const meetHdr = 'MEETING: ' + (tx.title || 'Untitled') + ' (' + (tx.department || '') + ', ' + (tx.meeting_date || '') + ')' + (isLead ? '\nMEETING KIND: LEADERSHIP (leaders of every department present; spread requests across the departments that action them)' : '') + '\nMEETING DATE: ' + (tx.meeting_date || 'unknown') + '\n\nSUMMARY:\n' + String(tx.ai_summary || '').slice(0, 3000) + '\n\nTRANSCRIPT:\n' + String(tx.body || '').slice(0, 14000);
     try {
+      tried++;
       const body = await callModel(key, REQ_SYSTEM, 'REQUEST TYPES:\n' + typesTxt + '\n\nOPEN REQUESTS (for kind "refine", use these numeric ids only):\n' + openReqTxt + '\n\nALREADY SUGGESTED (skip anything matching these):\n' + tracked.map((t)=>'- ' + t).join('\n') + '\n\n' + meetHdr, REQ_TOOL, 'suggest_requests');
       for (const o of toolItems(body, 'suggest_requests', 'suggestions').slice(0, isLead ? 8 : 3)){
         const conf = Number(o.confidence) || 0;
@@ -457,9 +454,10 @@ Deno.serve(async (req)=>{
           tracked.push(title);
         }
       }
-    } catch (_) {}
+    } catch (e) { failed++; console.warn('transcript-requests pass failed', tx.id, String(e).slice(0, 200)); }
     try {
       if (tasksTxt) {
+        tried++;
         const body2 = await callModel(key, CMT_SYSTEM, 'OPEN TASKS (use these numeric ids only):\n' + tasksTxt + '\n\n' + meetHdr, CMT_TOOL, 'attach_task_comments');
         for (const o of toolItems(body2, 'attach_task_comments', 'comments').slice(0, 5)){
           const tid = Number(o.task_id);
@@ -478,9 +476,10 @@ Deno.serve(async (req)=>{
           if (!error) cmtFound++;
         }
       }
-    } catch (_) {}
+    } catch (e) { failed++; console.warn('transcript-requests pass failed', tx.id, String(e).slice(0, 200)); }
     try {
       if (noDueTxt) {
+        tried++;
         const body3 = await callModel(key, DUE_SYSTEM, 'TASKS WITHOUT DUE DATES (use these numeric ids only):\n' + noDueTxt + '\n\n' + meetHdr, DUE_TOOL, 'suggest_due_dates');
         for (const o of toolItems(body3, 'suggest_due_dates', 'suggestions').slice(0, 5)){
           const tid = Number(o.task_id);
@@ -501,9 +500,10 @@ Deno.serve(async (req)=>{
           }
         }
       }
-    } catch (_) {}
+    } catch (e) { failed++; console.warn('transcript-requests pass failed', tx.id, String(e).slice(0, 200)); }
     try {
       if (goalsTxt) {
+        tried++;
         const body4 = await callModel(key, WIN_SYSTEM, 'QUARTERLY GOALS (use these numeric ids only):\n' + goalsTxt + '\n\n' + meetHdr, WIN_TOOL, 'record_goal_wins');
         for (const o of toolItems(body4, 'record_goal_wins', 'wins').slice(0, 4)){
           const gid = Number(o.goal_id);
@@ -524,10 +524,11 @@ Deno.serve(async (req)=>{
           if (!error) winFound++;
         }
       }
-    } catch (_) {}
+    } catch (e) { failed++; console.warn('transcript-requests pass failed', tx.id, String(e).slice(0, 200)); }
     try {
       if (rosterTxt && !isSlack) {
         const speakers = Array.isArray(tx.speakers) ? tx.speakers.join(', ') : '(unknown)';
+        tried++;
         const body5 = await callModel(key, MEN_SYSTEM, 'ROSTER (use these exact names only):\n' + rosterTxt + '\n\nSPEAKERS (present in the meeting, never mention-worthy):\n' + speakers + '\nUPLOADER: ' + (tx.added_by || '') + '\n\n' + meetHdr, MEN_TOOL, 'record_mentions');
         for (const o of toolItems(body5, 'record_mentions', 'mentions').slice(0, 5)){
           const conf = Number(o.confidence) || 0;
@@ -549,7 +550,9 @@ Deno.serve(async (req)=>{
           if (!error) menFound++;
         }
       }
-    } catch (_) {}
+    } catch (e) { failed++; console.warn('transcript-requests pass failed', tx.id, String(e).slice(0, 200)); }
+    if (tried > 0 && failed === tried) { scannedN--; continue; } /* every pass failed: try this meeting again next run */
+    n = reqFound + cmtFound + dueFound + winFound + menFound - before; /* everything this scan produced */
     await svc.from('transcript_request_scans').upsert({
       transcript_id: tx.id,
       n_found: n,

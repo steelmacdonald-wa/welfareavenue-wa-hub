@@ -28,6 +28,7 @@ const json = (b, s = 200)=>new Response(JSON.stringify(b), {
   });
 const DEPTS = [
   'opsmtl',
+  'progdev',
   'opsto',
   'marketing',
   'fundraising',
