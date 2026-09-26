@@ -125,7 +125,7 @@
       + '<p class="snote" style="margin-top:0">Write it the way you would explain it to the next person running it. One item per line; the formats are shown under each box.</p>'
       + '<div class="row2"><label>Title<input type="text" data-sf="title" value="' + E(t ? sopTitle(t) : '') + '" placeholder="For example: Flag Football tournament"></label>'
       + '<label>Owner<input type="text" data-sf="owner" value="' + E(b.owner || '') + '" placeholder="For example: Fundraising, with Marketing"></label></div>'
-      + '<label>One-line summary<small>Shown on the card in the academy and on the team page.</small><input type="text" data-sf="description" value="' + E((t && t.description) || '') + '"></label>'
+      + '<label>One-line summary<small>Shown on the card in the Avenue Academy and on the team page.</small><input type="text" data-sf="description" value="' + E((t && t.description) || '') + '"></label>'
       + '<div class="teams"><span>Teams</span>' + SOP_TEAMS.map(function (d) { return '<label class="tg"><input type="checkbox" data-sfteam="1" value="' + d + '"' + (ds.indexOf(d) >= 0 ? ' checked' : '') + '>' + E(teamShortName(d)) + '</label>'; }).join('') + '</div>'
       + ta('intro', 'What it is and why we do it', 'A short paragraph.', b.intro, 3)
       + ta('glance', 'At a glance', 'Label: value, one per line. For example: When: a Saturday in August', pairsOut(b.glance, ': '), 5)

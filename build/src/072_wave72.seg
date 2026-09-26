@@ -59,7 +59,7 @@
     agendas: 'Agendas', requests: 'Requests', importantinfo: 'Important info',
     opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing',
     fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
-    volunteering: 'Volunteering', training: 'Training', hrcentre: 'HR centre',
+    volunteering: 'Volunteering', training: 'Avenue Academy', hrcentre: 'HR centre',
     orgchart: 'Org chart', transcripts: 'Transcript archive', activity: 'Activity',
     finances: 'Finances', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
   };

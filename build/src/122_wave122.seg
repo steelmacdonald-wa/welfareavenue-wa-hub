@@ -1068,7 +1068,7 @@
       (!done && pct > 0 ? '<div class="pb"><i style="width:' + pct + '%"></i></div>' : '') + '</div></button>';
   }
   function topHtml() {
-    return '<div class="w122top"><span class="crumb">People &middot; Training academy</span><span class="sp"></span>' +
+    return '<div class="w122top"><span class="crumb">People &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
@@ -1136,7 +1136,7 @@
     var hi = (s.done ? 'You have completed ' + plural(s.done, 'training') : 'Your learning starts here') + (s.streak > 1 ? ', and you are on a ' + s.streak + '-day streak.' : '.');
     var rings = '<svg width="180" height="180" viewBox="0 0 180 180" aria-hidden="true">' +
       ringArc(90, 80, 13, s.onb.total ? s.onb.pct : 100, GOLD) + ringArc(90, 62, 13, s.reqPct, '#5CD6B8') + ringArc(90, 44, 13, lv.pct, '#B3A8F5') + '</svg>';
-    var h = '<section class="w122hero" data-sec="hero"><div><div class="eyebrow">Welfare Avenue</div><h1>Training academy</h1>' +
+    var h = '<section class="w122hero" data-sec="hero"><div><div class="eyebrow">Welfare Avenue</div><h1>Avenue Academy</h1>' +
       '<div class="hi">Hi ' + E(m.name) + '. ' + E(hi) + '</div>' +
       '<div class="lvl"><span class="n">' + lv.n + '</span>Level ' + lv.n + ' &middot; ' + E(lv.name) + '</div>' +
       '<div class="xpbar"><i style="width:' + lv.pct + '%"></i></div><div class="xpt">' + s.xp.toLocaleString() + ' XP' + (lv.next ? ' &middot; ' + lv.toNext + ' to ' + E(lv.nextName) : ' &middot; top level') + '</div>' +
@@ -1144,7 +1144,7 @@
       '<div class="st"><b>' + s.badges.length + '<span style="font-size:13px;color:rgba(255,250,242,.6)">/' + BADGES.length + '</span></b><span>badges</span></div><div class="st fl"><b>' + s.streak + '</b><span>day streak</span></div></div></div>' +
       '<div class="rings"><div class="rs">' + rings + '<div class="ctr"><b>' + lv.n + '</b><span>level</span></div></div>' +
       '<div class="leg"><div><i style="background:' + GOLD + '"></i>Onboarding<b>' + (s.onb.total ? s.onb.pct + '%' : 'done') + '</b></div><div><i style="background:#5CD6B8"></i>Required learning<b>' + s.reqPct + '%</b></div><div><i style="background:#B3A8F5"></i>To level ' + (lv.next ? lv.n + 1 : lv.n) + '<b>' + lv.pct + '%</b></div></div></div></section>';
-    if (A.welcome) h += '<div class="w122welcome">' + ic('sparkle') + '<div><b>Welcome to the new academy.</b> Your past work already counts: ' + plural(A.welcome, 'achievement') + ' unlocked.</div><span class="sp"></span><button class="w122btn sm" data-w122goto="trophies">See your trophies</button><button class="w122lnk" data-w122welcomex="1">Dismiss</button></div>';
+    if (A.welcome) h += '<div class="w122welcome">' + ic('sparkle') + '<div><b>Welcome to the Avenue Academy.</b> Your past work already counts: ' + plural(A.welcome, 'achievement') + ' unlocked.</div><span class="sp"></span><button class="w122btn sm" data-w122goto="trophies">See your trophies</button><button class="w122lnk" data-w122welcomex="1">Dismiss</button></div>';
     return h;
   }
   function ringArc(c, r, w, pct, color) {
@@ -1167,7 +1167,7 @@
   }
   function nextHtml(s) {
     var list = upNext(s);
-    if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a path or the library below.</div></div></div></section>';
+    if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a Learning Avenue or the library below.</div></div></div></section>';
     return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">What you started, what was assigned to you, and what is recommended.</div></div></div>' +
       '<div class="w122scroll">' + list.map(function (x) { return cardHtml(x.t, { tag: x.tag }); }).join('') + '</div></section>';
   }
@@ -1181,9 +1181,9 @@
         '<div class="ft2">' + (ps.complete ? '<span class="seal">' + ic('seal') + ' Certified' + (cert ? ' ' + E(fmtShort(cert.earned_at)) : '') + '</span>' : '<span>' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; ' + mins(ps.minsLeft) + ' left' : '') + '</span>') +
         '<span class="sp"></span><span class="w122lnk">' + (ps.complete ? 'Review' : ps.done ? 'Continue' : 'Start') + ' ' + ic('arrow') + '</span></div></div></div>';
     }
-    return '<section class="w122sec" data-sec="paths"><div class="w122sech"><div><h2>Learning paths</h2><div class="sub">Short series with a certificate at the end.</div></div></div>' +
+    return '<section class="w122sec" data-sec="paths"><div class="w122sech"><div><h2>Learning Avenues</h2><div class="sub">Short series with a certificate at the end.</div></div></div>' +
       '<div class="w122paths">' + mineP.map(one).join('') + '</div>' +
-      (other.length ? '<div class="w122sech" style="margin-top:22px"><div><h2 style="font-size:19px">More paths</h2><div class="sub">For other teams, open to everyone.</div></div></div><div class="w122paths">' + other.map(one).join('') + '</div>' : '') + '</section>';
+      (other.length ? '<div class="w122sech" style="margin-top:22px"><div><h2 style="font-size:19px">More Learning Avenues</h2><div class="sub">For other teams, open to everyone.</div></div></div><div class="w122paths">' + other.map(one).join('') + '</div>' : '') + '</section>';
   }
   function shade(hex) {
     var m = String(hex || '').match(/^#?([0-9a-f]{6})$/i); if (!m) return hex;
@@ -1272,8 +1272,8 @@
       }).join('') + '</div></section>';
   }
   function homeHtml() {
-    if (!staffOk()) return '<div class="w122none">The Training academy is available to staff accounts.</div>';
-    if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
+    if (!staffOk()) return '<div class="w122none">The Avenue Academy is available to staff accounts.</div>';
+    if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The Avenue Academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
     return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
@@ -1281,7 +1281,7 @@
   function paint() {
     var root = document.getElementById('w122'); if (!root) return;
     if (!A.loaded) {
-      if (!root.__skel) { root.innerHTML = '<div class="w122none" style="margin-top:20px">Loading the academy\u2026</div>'; root.__skel = 1; }
+      if (!root.__skel) { root.innerHTML = '<div class="w122none" style="margin-top:20px">Loading the Avenue Academy\u2026</div>'; root.__skel = 1; }
       load().then(function () { root.__skel = 0; paint(); after(); });
       return;
     }
@@ -1519,12 +1519,12 @@
 
   /* ---------- path view ---------- */
   function openPath(key) {
-    var p = pathByKey(key); if (!p) { toastS('That path is not available'); location.hash = '#training'; return; }
+    var p = pathByKey(key); if (!p) { toastS('That Learning Avenue is not available'); location.hash = '#training'; return; }
     stopTimer(); R = { mode: 'path', path: p, secs: 0 }; renderSheet();
   }
   function renderPath(sh) {
     var p = R.path, ps = pathState(p), col = p.color || GREEN, cert = A.myAwards['cert:' + p.key];
-    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning path</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
+    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="pr"><i style="width:' + ps.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap">' +
       '<div class="phero" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')"><span class="big">' + ic(p.icon || 'book') + '</span><h3>' + E(p.title) + '</h3><p>' + E(p.blurb || '') + '</p><div class="bar"><i style="width:' + ps.pct + '%"></i></div><div style="font-size:13px">' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; about ' + mins(ps.minsLeft) + ' left' : '') + '</div></div>' +
       (cert ? '<div class="callout tip">' + ic('seal') + '<div><b>Certified</b>You earned the ' + E(p.cert_title || p.title) + ' certificate on ' + E(fmtDate(cert.earned_at)) + '. <button class="w122lnk" data-w122cert="cert:' + E(p.key) + '">View it</button></div></div>' : '<div class="callout info">' + ic('seal') + '<div><b>' + E(p.cert_title || p.title) + ' certificate</b>Finish every item to earn it.</div></div>') +
@@ -1532,7 +1532,7 @@
         var ok = isDone(t.id), k = KIND[kindOf(t)] || KIND.read;
         return '<button class="pitem' + (ok ? ' ok' : '') + '" data-w122pitem="' + E(t.id) + '"><span class="n">' + (ok ? ic('check') : (i + 1)) + '</span><span class="tx"><b>' + E(String(t.title).replace(/^Page tour:\s*/, '')) + '</b><span>' + E(k.l) + ' &middot; ' + mins(minutesOf(t)) + (ok ? ' &middot; done' : '') + '</span></span>' + ic('chev') + '</button>';
       }).join('') + '</div></div></div></div>' +
-      '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Path complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
+      '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Learning Avenue complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
     sh.innerHTML = html;
   }
 
@@ -1556,7 +1556,7 @@
   }
   function certHtml(a) {
     var m = me();
-    return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; TRAINING ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
+    return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; AVENUE ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
       '<div class="c-meta"><span>Awarded ' + E(fmtDate(a.earned_at)) + '</span><span>Certificate ' + E(certNo(a, a.earned_at)) + '</span></div><div class="c-seal">' + ic('seal') + '</div></div>';
   }
   function renderCert(sh) {
@@ -1576,7 +1576,7 @@
   async function shareAward(award, silent) {
     var a = A.myAwards[award]; if (!a || (a.meta && a.meta.shared)) return;
     var m = me();
-    var text = a.kind === 'cert' ? m.name + ' earned the ' + a.title + ' certificate in the Training academy.' : m.name + ' reached ' + a.title + ' in the Training academy.';
+    var text = a.kind === 'cert' ? m.name + ' earned the ' + a.title + ' certificate in the Avenue Academy.' : m.name + ' reached ' + a.title + ' in the Avenue Academy.';
     try {
       var r = await db.from('hub_shoutouts').insert({ kind: 'manual', source: 'academy', ref: 'award:' + award, person: m.name, member_id: m.id || null, team: m.dept || null, text: text, by: m.email });
       if (r && r.error) throw r.error;
@@ -1621,7 +1621,7 @@
       '<label>Minutes<input type="number" min="1" max="600" data-f="minutes" value="' + E(t.minutes || (t.id ? minutesOf(t) : '')) + '"></label></div>' +
       '<label>Link (video or document)<input type="url" data-f="resource_url" value="' + E(t.resource_url || '') + '" placeholder="https://www.loom.com/share/..."></label>' +
       '<div class="row2"><label>Topic<input type="text" list="w122cats" data-f="category" value="' + E(t.category || 'General') + '"><datalist id="w122cats">' + cats.map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></label>' +
-      '<label>Learning path<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
+      '<label>Learning Avenue<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
       '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, and lines starting Try it: or Done when: become highlighted boxes.">' + E(t.description || '') + '</textarea></label>' +
       '</div></div></div></div><div class="ft">' + (!isNew ? '<button class="w122btn ghost" data-w122retire="1">Retire it</button>' : '') + '<span class="sp"></span><button class="w122btn soft" data-w122x="1">Cancel</button><button class="w122btn" data-w122save="1">' + ic('check') + ' Save</button></div>';
   }
@@ -1646,7 +1646,7 @@
   }
   async function retire() {
     if (!R || !R.t) return;
-    try { var res = await db.from('trainings').update({ active: false, updated_at: nowIso() }).eq('id', R.t.id); if (res.error) throw res.error; A.trainings = A.trainings.filter(function (x) { return x.id !== R.t.id; }); applyTrainings(A.trainings); toastS('Retired. It no longer shows in the academy.'); closeSheet(); }
+    try { var res = await db.from('trainings').update({ active: false, updated_at: nowIso() }).eq('id', R.t.id); if (res.error) throw res.error; A.trainings = A.trainings.filter(function (x) { return x.id !== R.t.id; }); applyTrainings(A.trainings); toastS('Retired. It no longer shows in the Avenue Academy.'); closeSheet(); }
     catch (e) { toastS('Could not retire it'); }
   }
 
@@ -1678,7 +1678,7 @@
       (res.levelUp ? '<div class="lvup">You reached<b>Level ' + res.levelUp.n + ': ' + E(res.levelUp.name) + '</b></div>' : '<div class="lv"><div class="t">Level ' + lv.n + ' &middot; ' + E(lv.name) + '<span>' + (lv.next ? lv.toNext + ' XP to ' + E(lv.nextName) : 'Top level') + '</span></div><div class="bar"><i style="width:' + fromPct + '%" data-to="' + lv.pct + '"></i></div></div>') +
       (fresh.length ? '<div class="aws">' + fresh.map(function (a, i) { var v = awardVisual(a); return '<div class="aw' + (a.kind === 'cert' ? ' cert' : '') + '" style="animation-delay:' + (0.25 + i * 0.12) + 's"><span class="md" style="background:linear-gradient(135deg,' + v.color + ',' + shade(v.color) + ')">' + ic(v.icon) + '</span><div><b>' + E(a.title) + '</b><span>' + (a.kind === 'cert' ? 'Certificate' : 'Badge') + ' unlocked</span></div></div>'; }).join('') + '</div>' : '') +
       (certs.length ? '<label class="share"><input type="checkbox" data-w122shareck="1" checked> Share it with the team in the shout-outs</label>' : '') +
-      '<div class="btns">' + (certs.length ? '<button class="w122btn gold" data-w122celcert="' + E(certs[0].award) + '">' + ic('seal') + ' View certificate</button>' : '') + nextAfter(t) + '<button class="w122btn' + (certs.length ? ' soft' : '') + '" data-w122celx="1">' + (T || (t && kindOf(t) === 'tour') ? 'Stay on this page' : 'Continue') + '</button>' + (t && kindOf(t) === 'tour' ? '<button class="w122btn soft" data-w122celhome="1">Back to the academy</button>' : '') + '</div></div>';
+      '<div class="btns">' + (certs.length ? '<button class="w122btn gold" data-w122celcert="' + E(certs[0].award) + '">' + ic('seal') + ' View certificate</button>' : '') + nextAfter(t) + '<button class="w122btn' + (certs.length ? ' soft' : '') + '" data-w122celx="1">' + (T || (t && kindOf(t) === 'tour') ? 'Stay on this page' : 'Continue') + '</button>' + (t && kindOf(t) === 'tour' ? '<button class="w122btn soft" data-w122celhome="1">Back to the Avenue Academy</button>' : '') + '</div></div>';
     el.__certs = certs.map(function (a) { return a.award; });
     document.body.appendChild(el);
     setTimeout(function () { var bar = el.querySelector('.lv .bar i'); if (bar) bar.style.width = bar.getAttribute('data-to') + '%'; }, 300);
@@ -1718,13 +1718,13 @@
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
       S('#waChatBtn', 'Ask the Hub', 'Ask anything about what is happening at Welfare Avenue, or type a request or a task in plain words. It answers from the Hub\u2019s live data and asks you to confirm before it saves anything.', OPT),
-      C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Training academy.')
+      C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Avenue Academy.')
     ] },
     home: { tab: 'mypage', icon: 'home', hash: '#mypage', steps: [
       S('#mpBody .mp-head', 'Your day at a glance', 'Home greets you with the date and your role. If you only check one page, check this one.'),
       S('#mpBody .mp-chips', 'Quick counts', 'Your open tasks, your team\u2019s tasks, open decisions and new mentions. Click a chip to jump to that list.', OPT),
       S('#w116home', 'Your upcoming meetings', 'Meetings from the shared calendar that include you, with the agenda one click away.', OPT),
-      S('#w112wrap', 'Get started with the Hub', 'Five first steps for new people. Each one ticks itself when you do it. They also live in the Onboarding section of the Training academy.', OPT),
+      S('#w112wrap', 'Get started with the Hub', 'Five first steps for new people. Each one ticks itself when you do it. They also live in the Onboarding section of the Avenue Academy.', OPT),
       S('#w74attn', 'Needs your attention', 'Mentions from meetings you were not in, and other things that need a look. Hit Got it once you have read one.', OPT),
       S('#w75card', 'Ask the Hub anything', 'Suggested questions to try with the assistant, based on what is happening this week.', OPT),
       H(/^My tasks/i, '.mp-sec', 'My tasks', 'Everything with your name on it, across every team, soonest due first. Tick a task to close it; overdue ones turn red.', OPT),
@@ -1734,7 +1734,7 @@
       H(/^Time commitments/i, '.mp-sec', 'Time commitments', 'Check-in hours for the last three weeks, so everyone can see how time is being spent.', OPT),
       S('#w89box', 'Slack notifications', 'Choose which Hub updates reach you in Slack.', OPT),
       S('#w105my', 'Time off', 'Request time off here. HR approves it in the HR centre and your days update.', OPT),
-      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Training academy.', OPT)
+      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Avenue Academy.', OPT)
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
       S('#w116host .w116top', 'Your team\u2019s home', 'The team page brings together the team\u2019s pulse, decisions, updates and meetings. The line under the name is the AI\u2019s read of how the team is doing, from recent meetings.'),
@@ -1748,7 +1748,7 @@
       S('#w116meet', 'Upcoming meetings', 'The team\u2019s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
       H(/^Projects/i, '.w116card', 'Projects', 'The team\u2019s projects with their open tasks. Add a project here, or open All projects.', OPT),
-      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Training academy. Open one before running the event or process again, and update it afterwards.', OPT),
+      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Avenue Academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
@@ -1866,14 +1866,14 @@
       S('#w116krespcard', 'Main responsibilities', 'Three to five lines on what this person owns. Keep yours current.', OPT),
       S('#w116kopen', 'On their plate', 'Open tasks with their name on them.', OPT),
       S('#w116kabout', 'About', 'A bio written from their latest work. Rewrite it from the latest work whenever it drifts.', OPT),
-      S('#w122pk || #w116ktrain', 'Academy', 'Their level, certificates and badges from the Training academy.', OPT),
+      S('#w122pk || #w116ktrain', 'Avenue Academy', 'Their level, certificates and badges from the Avenue Academy.', OPT),
       S('#w116kmeet', 'Their meetings', 'Upcoming meetings they are part of.', OPT)
     ] },
     academy: { tab: 'training', icon: 'book', hash: '#training', steps: [
       S('#w122 .w122onb', 'Onboarding comes first', 'Your onboarding plan, the Hub first steps and the policies to sign, in one place at the top.', OPT),
       S('#w122 .w122hero', 'Your progress', 'Your level, XP, streak, certificates and badges. The rings show onboarding, required learning and your progress to the next level.'),
       S('#w122 [data-sec="next"]', 'Up next', 'What you started, what was assigned to you, and what is recommended for your team.', OPT),
-      S('#w122 [data-sec="paths"]', 'Learning paths', 'Short series with a certificate at the end.', OPT),
+      S('#w122 [data-sec="paths"]', 'Learning Avenues', 'Short series with a certificate at the end.', OPT),
       S('#w122 [data-sec="sops"]', 'Our SOPs', 'How we run the things we do again and again, step by step, with what we learned last time. Your team\u2019s come first, and each one links to its events on the events calendar. Leaders and team members can write and update them.', OPT),
       S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Tour them all for the Hub Navigator certificate.', OPT),
       S('#w122 [data-sec="library"]', 'The library', 'Every training: videos, lessons, reading and documents. Filter by type or topic, or search.', OPT),
@@ -1897,7 +1897,7 @@
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),
       S('#w116phero', 'At a glance', 'Headcount, hours, onboarding in flight and trainings outstanding. Click a tile to jump to it.', OPT),
       S('#w46body .w47tabs', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline.', OPT),
-      S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; academy certificates can be shared here too.', OPT),
+      S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; Avenue Academy certificates can be shared here too.', OPT),
       S('#w116ppeople .grid || #w116ppeople', 'People', 'Everyone on the roster with their team, start date and hours this month.', OPT),
       S('#w103scope', 'Scope of work', 'What each person has been working on, from their check-ins.', OPT),
       S('#w105to', 'Time off', 'Requests waiting on a decision, and the days taken this fiscal year.', OPT),
@@ -1952,7 +1952,7 @@
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
       S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
       S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
-      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Training academy.', { opt: 1, range: 1 }),
+      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Avenue Academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),
       S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, video, folder or link, tagged to a team.', OPT)
@@ -2123,7 +2123,7 @@
     var L = document.querySelector('.w122tp'); if (L) L.remove();
     if (T && !silent && T.tr && !isDone(T.tr.id)) saveProg(T.tr, { last_step: T.max, pct: Math.min(95, Math.round(100 * (T.max + 1) / Math.max(1, T.steps.length))) });
     var was = T; T = null;
-    if (was && !silent) toastS('Tour paused. Pick it up again from the Training academy.');
+    if (was && !silent) toastS('Tour paused. Pick it up again from the Avenue Academy.');
   }
   async function finishTour() {
     if (!T) return;
@@ -2260,7 +2260,7 @@
       + '<p class="snote" style="margin-top:0">Write it the way you would explain it to the next person running it. One item per line; the formats are shown under each box.</p>'
       + '<div class="row2"><label>Title<input type="text" data-sf="title" value="' + E(t ? sopTitle(t) : '') + '" placeholder="For example: Flag Football tournament"></label>'
       + '<label>Owner<input type="text" data-sf="owner" value="' + E(b.owner || '') + '" placeholder="For example: Fundraising, with Marketing"></label></div>'
-      + '<label>One-line summary<small>Shown on the card in the academy and on the team page.</small><input type="text" data-sf="description" value="' + E((t && t.description) || '') + '"></label>'
+      + '<label>One-line summary<small>Shown on the card in the Avenue Academy and on the team page.</small><input type="text" data-sf="description" value="' + E((t && t.description) || '') + '"></label>'
       + '<div class="teams"><span>Teams</span>' + SOP_TEAMS.map(function (d) { return '<label class="tg"><input type="checkbox" data-sfteam="1" value="' + d + '"' + (ds.indexOf(d) >= 0 ? ' checked' : '') + '>' + E(teamShortName(d)) + '</label>'; }).join('') + '</div>'
       + ta('intro', 'What it is and why we do it', 'A short paragraph.', b.intro, 3)
       + ta('glance', 'At a glance', 'Label: value, one per line. For example: When: a Saturday in August', pairsOut(b.glance, ': '), 5)
@@ -2465,7 +2465,7 @@
     var sig = key + '|' + done.length + '|' + todo.length + '|' + aw.length + '|' + lvN;
     var cur = document.getElementById('w122pk');
     if (cur && cur.getAttribute('data-k') === sig && cur.parentNode === host) return;
-    var html = '<div class="w116card" id="w122pk" data-k="' + E(sig) + '"><h3>Academy <a class="lnk" href="#training">' + (isMe ? 'open' : 'the academy') + '</a></h3>' +
+    var html = '<div class="w116card" id="w122pk" data-k="' + E(sig) + '"><h3>Avenue Academy <a class="lnk" href="#training">' + (isMe ? 'open' : 'open yours') + '</a></h3>' +
       '<div class="lvrow"><div class="rg">' + ring(isMe ? lvPct : 100, 58, 6, GOLD, 'rgba(16,63,57,.08)') + '<b>' + lvN + '</b></div><div class="tx"><b>Level ' + lvN + ' &middot; ' + E(lvName) + '</b><span>' + plural(done.length, 'training') + ' completed' + (todo.length ? ' &middot; ' + todo.length + ' assigned' : '') + '</span></div></div>' +
       (certs.length ? '<div class="chips">' + certs.map(function (c) { return '<span class="chip">' + ic('seal') + E(c.title) + '</span>'; }).join('') + '</div>' : '') +
       (badges.length ? '<div class="bdgs">' + badges.map(function (b) { var v = awardVisual(b); return '<i title="' + E(b.title) + '" style="background:linear-gradient(135deg,' + v.color + ',' + shade(v.color) + ')">' + ic(v.icon) + '</i>'; }).join('') + '</div>' : '') +
@@ -2489,7 +2489,7 @@
   function classicBar(p) {
     if (document.getElementById('w122cbar')) return;
     var b = document.createElement('div'); b.id = 'w122cbar';
-    b.innerHTML = ic('sparkle') + '<span>This is the classic Training page.</span><span style="flex:1"></span><button class="w122btn sm" data-w122classic="0">Back to the Training academy</button>';
+    b.innerHTML = ic('sparkle') + '<span>This is the classic Training page.</span><span style="flex:1"></span><button class="w122btn sm" data-w122classic="0">Back to the Avenue Academy</button>';
     p.insertBefore(b, p.firstChild);
   }
   function mount() {
@@ -2614,7 +2614,7 @@
     if ((el = t.closest('[data-w122assigngo]'))) { el.disabled = true; doAssign(); return; }
     if ((el = t.closest('[data-w122edit]'))) { openForm(R.t); return; }
     if ((el = t.closest('[data-w122save]'))) { saveForm(); return; }
-    if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the academy, and progress already recorded is kept.')) retire(); return; }
+    if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the Avenue Academy, and progress already recorded is kept.')) retire(); return; }
     if ((el = t.closest('[data-w122share]'))) { shareAward(el.getAttribute('data-w122share')); return; }
     if ((el = t.closest('[data-w122print]'))) { printCert(el.getAttribute('data-w122print')); return; }
   });

@@ -140,7 +140,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#brain` | The Brain | Goals and projects | 087 |
 | `#bank` | The bank | Goals and projects | 132 |
 | `#orgchart` | Org chart | People | 011, 012, 133 |
-| `#training/...` | Training academy | People | 122 (classic view: 036, 037, 044, 045, 057, 058) |
+| `#training/...` | Avenue Academy (Learning Avenues, tours, library) | People | 122 (classic view: 036, 037, 044, 045, 057, 058) |
 | `#activity` | Activity | Admin | 000, 085 |
 | `#adminpanel/<section>` | Admin sections | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131 |
 | `#importantinfo` | Important info | Resources | 004, 134 (passwords by request) |

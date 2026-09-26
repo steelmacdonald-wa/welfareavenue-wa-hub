@@ -12,13 +12,13 @@
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
       S('#waChatBtn', 'Ask the Hub', 'Ask anything about what is happening at Welfare Avenue, or type a request or a task in plain words. It answers from the Hub’s live data and asks you to confirm before it saves anything.', OPT),
-      C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Training academy.')
+      C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Avenue Academy.')
     ] },
     home: { tab: 'mypage', icon: 'home', hash: '#mypage', steps: [
       S('#mpBody .mp-head', 'Your day at a glance', 'Home greets you with the date and your role. If you only check one page, check this one.'),
       S('#mpBody .mp-chips', 'Quick counts', 'Your open tasks, your team’s tasks, open decisions and new mentions. Click a chip to jump to that list.', OPT),
       S('#w116home', 'Your upcoming meetings', 'Meetings from the shared calendar that include you, with the agenda one click away.', OPT),
-      S('#w112wrap', 'Get started with the Hub', 'Five first steps for new people. Each one ticks itself when you do it. They also live in the Onboarding section of the Training academy.', OPT),
+      S('#w112wrap', 'Get started with the Hub', 'Five first steps for new people. Each one ticks itself when you do it. They also live in the Onboarding section of the Avenue Academy.', OPT),
       S('#w74attn', 'Needs your attention', 'Mentions from meetings you were not in, and other things that need a look. Hit Got it once you have read one.', OPT),
       S('#w75card', 'Ask the Hub anything', 'Suggested questions to try with the assistant, based on what is happening this week.', OPT),
       H(/^My tasks/i, '.mp-sec', 'My tasks', 'Everything with your name on it, across every team, soonest due first. Tick a task to close it; overdue ones turn red.', OPT),
@@ -28,7 +28,7 @@
       H(/^Time commitments/i, '.mp-sec', 'Time commitments', 'Check-in hours for the last three weeks, so everyone can see how time is being spent.', OPT),
       S('#w89box', 'Slack notifications', 'Choose which Hub updates reach you in Slack.', OPT),
       S('#w105my', 'Time off', 'Request time off here. HR approves it in the HR centre and your days update.', OPT),
-      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Training academy.', OPT)
+      S('#w105sign', 'Policies', 'Policies you still need to read and sign. They also appear in the Onboarding section of the Avenue Academy.', OPT)
     ] },
     team: { tab: 'dept', icon: 'people', hash: function () { return '#team/' + deptTab(); }, steps: [
       S('#w116host .w116top', 'Your team’s home', 'The team page brings together the team’s pulse, decisions, updates and meetings. The line under the name is the AI’s read of how the team is doing, from recent meetings.'),
@@ -42,7 +42,7 @@
       S('#w116meet', 'Upcoming meetings', 'The team’s next meetings, with a link to build or open the agenda.', OPT),
       H(/^KPIs we track/i, '.w116card', 'KPIs we track', 'The measures this team reports on, with the latest value.', OPT),
       H(/^Projects/i, '.w116card', 'Projects', 'The team’s projects with their open tasks. Add a project here, or open All projects.', OPT),
-      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Training academy. Open one before running the event or process again, and update it afterwards.', OPT),
+      S('#w122sopcard', 'Our SOPs', 'The team\u2019s standard operating procedures, kept in the Avenue Academy. Open one before running the event or process again, and update it afterwards.', OPT),
       H(/^Team org chart/i, '.w116card', 'The team', 'Who is on the team. Click a person to open their profile.', OPT),
       H(/^Tools/i, '.w116card', 'Tools', 'Shortcuts to the pages this team uses most.', OPT)
     ] },
@@ -160,14 +160,14 @@
       S('#w116krespcard', 'Main responsibilities', 'Three to five lines on what this person owns. Keep yours current.', OPT),
       S('#w116kopen', 'On their plate', 'Open tasks with their name on them.', OPT),
       S('#w116kabout', 'About', 'A bio written from their latest work. Rewrite it from the latest work whenever it drifts.', OPT),
-      S('#w122pk || #w116ktrain', 'Academy', 'Their level, certificates and badges from the Training academy.', OPT),
+      S('#w122pk || #w116ktrain', 'Avenue Academy', 'Their level, certificates and badges from the Avenue Academy.', OPT),
       S('#w116kmeet', 'Their meetings', 'Upcoming meetings they are part of.', OPT)
     ] },
     academy: { tab: 'training', icon: 'book', hash: '#training', steps: [
       S('#w122 .w122onb', 'Onboarding comes first', 'Your onboarding plan, the Hub first steps and the policies to sign, in one place at the top.', OPT),
       S('#w122 .w122hero', 'Your progress', 'Your level, XP, streak, certificates and badges. The rings show onboarding, required learning and your progress to the next level.'),
       S('#w122 [data-sec="next"]', 'Up next', 'What you started, what was assigned to you, and what is recommended for your team.', OPT),
-      S('#w122 [data-sec="paths"]', 'Learning paths', 'Short series with a certificate at the end.', OPT),
+      S('#w122 [data-sec="paths"]', 'Learning Avenues', 'Short series with a certificate at the end.', OPT),
       S('#w122 [data-sec="sops"]', 'Our SOPs', 'How we run the things we do again and again, step by step, with what we learned last time. Your team\u2019s come first, and each one links to its events on the events calendar. Leaders and team members can write and update them.', OPT),
       S('#w122 [data-sec="tours"]', 'Page tours', 'A guided walkthrough for every page of the Hub. Tour them all for the Hub Navigator certificate.', OPT),
       S('#w122 [data-sec="library"]', 'The library', 'Every training: videos, lessons, reading and documents. Filter by type or topic, or search.', OPT),
@@ -191,7 +191,7 @@
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),
       S('#w116phero', 'At a glance', 'Headcount, hours, onboarding in flight and trainings outstanding. Click a tile to jump to it.', OPT),
       S('#w46body .w47tabs', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline.', OPT),
-      S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; academy certificates can be shared here too.', OPT),
+      S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; Avenue Academy certificates can be shared here too.', OPT),
       S('#w116ppeople .grid || #w116ppeople', 'People', 'Everyone on the roster with their team, start date and hours this month.', OPT),
       S('#w103scope', 'Scope of work', 'What each person has been working on, from their check-ins.', OPT),
       S('#w105to', 'Time off', 'Requests waiting on a decision, and the days taken this fiscal year.', OPT),
@@ -246,7 +246,7 @@
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
       S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
       S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
-      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Training academy.', { opt: 1, range: 1 }),
+      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Avenue Academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),
       S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, video, folder or link, tagged to a team.', OPT)
@@ -417,7 +417,7 @@
     var L = document.querySelector('.w122tp'); if (L) L.remove();
     if (T && !silent && T.tr && !isDone(T.tr.id)) saveProg(T.tr, { last_step: T.max, pct: Math.min(95, Math.round(100 * (T.max + 1) / Math.max(1, T.steps.length))) });
     var was = T; T = null;
-    if (was && !silent) toastS('Tour paused. Pick it up again from the Training academy.');
+    if (was && !silent) toastS('Tour paused. Pick it up again from the Avenue Academy.');
   }
   async function finishTour() {
     if (!T) return;

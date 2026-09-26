@@ -358,7 +358,7 @@
     if (!panel) return;
     if (!wa46IsHr()) { panel.innerHTML = '<div class="card"><h2>HR centre</h2><p class="read">This page is for admins and leaders.</p></div>'; return; }
     panel.innerHTML = '<div class="card"><h2>HR centre <button class="w43help" data-w46help="1">&#63; How this page works</button></h2>'
-      + '<p class="read">Onboarding, trainings and recruitment for the whole organization. Personal training lives on the Training page.</p>'
+      + '<p class="read">Onboarding, trainings and recruitment for the whole organization. Personal training lives in the Avenue Academy.</p>'
       + '<div id="w46body">Loading...</div></div>';
     try {
       await Promise.all([
@@ -413,7 +413,7 @@
       var h = e.target.closest && e.target.closest('[data-w46help]');
       if (h) {
         openModal('<h3>HR centre</h3><div class="w43hm">'
-          + '<p>The organization view of people operations. Regular members never see this page; their own training and onboarding live on the Training page.</p>'
+          + '<p>The organization view of people operations. Regular members never see this page; their own training and onboarding live in the Avenue Academy.</p>'
           + '<p>Onboarding: who is mid-onboarding, their progress and pace, who is asking for help. Assign an onboarding from the dropdown; the Welcome kit opens with the onboarding email, channel message and setup checklist prefilled.</p>'
           + '<p>Master onboarding: the program itself. Open a week, edit any step (name, instructions, link, week, position, priority), add steps and subtasks, retire what no longer fits. Changes reach everyone mid-onboarding instantly.</p>'
           + '<p>Trainings: catalog editing, and per-person assignment with the Assign trainings buttons.</p>'

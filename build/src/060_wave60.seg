@@ -85,7 +85,7 @@
   var T = {
     mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
     requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
   };

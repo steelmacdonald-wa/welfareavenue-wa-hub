@@ -65,7 +65,7 @@
     var sig = key + '|' + done.length + '|' + todo.length + '|' + aw.length + '|' + lvN;
     var cur = document.getElementById('w122pk');
     if (cur && cur.getAttribute('data-k') === sig && cur.parentNode === host) return;
-    var html = '<div class="w116card" id="w122pk" data-k="' + E(sig) + '"><h3>Academy <a class="lnk" href="#training">' + (isMe ? 'open' : 'the academy') + '</a></h3>' +
+    var html = '<div class="w116card" id="w122pk" data-k="' + E(sig) + '"><h3>Avenue Academy <a class="lnk" href="#training">' + (isMe ? 'open' : 'open yours') + '</a></h3>' +
       '<div class="lvrow"><div class="rg">' + ring(isMe ? lvPct : 100, 58, 6, GOLD, 'rgba(16,63,57,.08)') + '<b>' + lvN + '</b></div><div class="tx"><b>Level ' + lvN + ' &middot; ' + E(lvName) + '</b><span>' + plural(done.length, 'training') + ' completed' + (todo.length ? ' &middot; ' + todo.length + ' assigned' : '') + '</span></div></div>' +
       (certs.length ? '<div class="chips">' + certs.map(function (c) { return '<span class="chip">' + ic('seal') + E(c.title) + '</span>'; }).join('') + '</div>' : '') +
       (badges.length ? '<div class="bdgs">' + badges.map(function (b) { var v = awardVisual(b); return '<i title="' + E(b.title) + '" style="background:linear-gradient(135deg,' + v.color + ',' + shade(v.color) + ')">' + ic(v.icon) + '</i>'; }).join('') + '</div>' : '') +
@@ -89,7 +89,7 @@
   function classicBar(p) {
     if (document.getElementById('w122cbar')) return;
     var b = document.createElement('div'); b.id = 'w122cbar';
-    b.innerHTML = ic('sparkle') + '<span>This is the classic Training page.</span><span style="flex:1"></span><button class="w122btn sm" data-w122classic="0">Back to the Training academy</button>';
+    b.innerHTML = ic('sparkle') + '<span>This is the classic Training page.</span><span style="flex:1"></span><button class="w122btn sm" data-w122classic="0">Back to the Avenue Academy</button>';
     p.insertBefore(b, p.firstChild);
   }
   function mount() {
@@ -214,7 +214,7 @@
     if ((el = t.closest('[data-w122assigngo]'))) { el.disabled = true; doAssign(); return; }
     if ((el = t.closest('[data-w122edit]'))) { openForm(R.t); return; }
     if ((el = t.closest('[data-w122save]'))) { saveForm(); return; }
-    if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the academy, and progress already recorded is kept.')) retire(); return; }
+    if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the Avenue Academy, and progress already recorded is kept.')) retire(); return; }
     if ((el = t.closest('[data-w122share]'))) { shareAward(el.getAttribute('data-w122share')); return; }
     if ((el = t.closest('[data-w122print]'))) { printCert(el.getAttribute('data-w122print')); return; }
   });

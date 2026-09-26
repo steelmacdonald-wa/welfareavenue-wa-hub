@@ -120,7 +120,7 @@
   var WA43_TITLE = {
     mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
     requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Training academy',
+    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages'
   };
@@ -136,7 +136,7 @@
     create: '<p>Draft branded content in the Welfare Avenue voice: emails, social posts, graphics, reports, newsletters and letters.</p><p>Describe what you need and Generate. Refine with follow-up instructions, copy or download the result, or send it for review. For graphics, pick a format and optionally add a photo.</p>',
     finances: '<p>Budget vs actual by category, spending by department, and the full transaction ledger.</p><p>Re-allocate transactions inline, mark duplicates, import a statement, or log an expense. The fiscal year runs October 1 to September 30.</p>',
     orgchart: '<p>The live structure, built from the roster. Green dots show who is online now.</p><p>Click anyone to open their profile, and from there their full page: bio, stats, current plate and training progress.</p>',
-    training: '<p>The Training academy: your onboarding first (your plan week by week, the Hub first steps and the policies to sign), then your level and progress, what is up next, learning paths with a certificate at the end, a guided tour of every page, and the full library.</p><p>Open any training and it fills the screen: watch the video, read the lesson or take the knowledge check, then mark it complete. Certificates and badges show on your profile. Leaders can assign trainings and add new ones; HR manages onboarding from the HR centre. Classic view brings back the previous page.</p>',
+    training: '<p>The Avenue Academy: your onboarding first (your plan week by week, the Hub first steps and the policies to sign), then your level and progress, what is up next, Learning Avenues with a certificate at the end, a guided tour of every page, and the full library.</p><p>Open any training and it fills the screen: watch the video, read the lesson or take the knowledge check, then mark it complete. Certificates and badges show on your profile. Leaders can assign trainings and add new ones; HR manages onboarding from the HR centre. Classic view brings back the previous page.</p>',
     volunteering: '<p>The serving programme end to end.</p><p>Calendar: upcoming and past events. The SOP: the master checklist, editable, with changes flowing to upcoming events. Volunteers: everyone, searchable and editable. Inventory: stock plus purchase orders. Recipes: the cook library.</p><p>Open an event for its checklist, roster, confirmations, texting, Quo replies and driver itinerary.</p>',
     transcripts: '<p>Paste or import any meeting transcript, tag the department, and save. The AI updates the department page within minutes and posts a summary to Slack.</p><p>Search and filter the archive below; every transcript shows what it contributed. Use Reprocess if something did not land.</p>',
     activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',

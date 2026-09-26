@@ -1,4 +1,4 @@
-/* wave122 drive: the Training academy (onboarding section, hero, paths, library, reader for every kind, lessons and the knowledge check,
+/* wave122 drive: the Avenue Academy (onboarding section, hero, paths, library, reader for every kind, lessons and the knowledge check,
    celebrations, certificates, assign and add for leaders, person card, classic view) and the page tours (every tour, step by step).
    usage: node w122drive.js [role] [email] [name] [mode: all|tours|smoke] [width] */
 const fs = require("fs");
@@ -69,7 +69,7 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
   check("academy mounts and takes over the page", home.root && home.on && home.legacyHidden, home);
   if (ROLE === "board") { await finish(); return; }
   check("sections in order: onboarding first", home.secs[0] === "onboarding" && home.secs.indexOf("hero") === 1, home.secs);
-  check("nav label is Training academy", /Training academy/.test(home.nav), home.nav.trim());
+  check("nav label is Avenue Academy", /Avenue Academy/.test(home.nav), home.nav.trim());
   await shot("d_home_top");
 
   if (MODE === "tours") { await runTours(); await finish(); return; }

@@ -15,7 +15,7 @@
       (!done && pct > 0 ? '<div class="pb"><i style="width:' + pct + '%"></i></div>' : '') + '</div></button>';
   }
   function topHtml() {
-    return '<div class="w122top"><span class="crumb">People &middot; Training academy</span><span class="sp"></span>' +
+    return '<div class="w122top"><span class="crumb">People &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
@@ -83,7 +83,7 @@
     var hi = (s.done ? 'You have completed ' + plural(s.done, 'training') : 'Your learning starts here') + (s.streak > 1 ? ', and you are on a ' + s.streak + '-day streak.' : '.');
     var rings = '<svg width="180" height="180" viewBox="0 0 180 180" aria-hidden="true">' +
       ringArc(90, 80, 13, s.onb.total ? s.onb.pct : 100, GOLD) + ringArc(90, 62, 13, s.reqPct, '#5CD6B8') + ringArc(90, 44, 13, lv.pct, '#B3A8F5') + '</svg>';
-    var h = '<section class="w122hero" data-sec="hero"><div><div class="eyebrow">Welfare Avenue</div><h1>Training academy</h1>' +
+    var h = '<section class="w122hero" data-sec="hero"><div><div class="eyebrow">Welfare Avenue</div><h1>Avenue Academy</h1>' +
       '<div class="hi">Hi ' + E(m.name) + '. ' + E(hi) + '</div>' +
       '<div class="lvl"><span class="n">' + lv.n + '</span>Level ' + lv.n + ' &middot; ' + E(lv.name) + '</div>' +
       '<div class="xpbar"><i style="width:' + lv.pct + '%"></i></div><div class="xpt">' + s.xp.toLocaleString() + ' XP' + (lv.next ? ' &middot; ' + lv.toNext + ' to ' + E(lv.nextName) : ' &middot; top level') + '</div>' +
@@ -91,7 +91,7 @@
       '<div class="st"><b>' + s.badges.length + '<span style="font-size:13px;color:rgba(255,250,242,.6)">/' + BADGES.length + '</span></b><span>badges</span></div><div class="st fl"><b>' + s.streak + '</b><span>day streak</span></div></div></div>' +
       '<div class="rings"><div class="rs">' + rings + '<div class="ctr"><b>' + lv.n + '</b><span>level</span></div></div>' +
       '<div class="leg"><div><i style="background:' + GOLD + '"></i>Onboarding<b>' + (s.onb.total ? s.onb.pct + '%' : 'done') + '</b></div><div><i style="background:#5CD6B8"></i>Required learning<b>' + s.reqPct + '%</b></div><div><i style="background:#B3A8F5"></i>To level ' + (lv.next ? lv.n + 1 : lv.n) + '<b>' + lv.pct + '%</b></div></div></div></section>';
-    if (A.welcome) h += '<div class="w122welcome">' + ic('sparkle') + '<div><b>Welcome to the new academy.</b> Your past work already counts: ' + plural(A.welcome, 'achievement') + ' unlocked.</div><span class="sp"></span><button class="w122btn sm" data-w122goto="trophies">See your trophies</button><button class="w122lnk" data-w122welcomex="1">Dismiss</button></div>';
+    if (A.welcome) h += '<div class="w122welcome">' + ic('sparkle') + '<div><b>Welcome to the Avenue Academy.</b> Your past work already counts: ' + plural(A.welcome, 'achievement') + ' unlocked.</div><span class="sp"></span><button class="w122btn sm" data-w122goto="trophies">See your trophies</button><button class="w122lnk" data-w122welcomex="1">Dismiss</button></div>';
     return h;
   }
   function ringArc(c, r, w, pct, color) {
@@ -114,7 +114,7 @@
   }
   function nextHtml(s) {
     var list = upNext(s);
-    if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a path or the library below.</div></div></div></section>';
+    if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a Learning Avenue or the library below.</div></div></div></section>';
     return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">What you started, what was assigned to you, and what is recommended.</div></div></div>' +
       '<div class="w122scroll">' + list.map(function (x) { return cardHtml(x.t, { tag: x.tag }); }).join('') + '</div></section>';
   }
@@ -128,9 +128,9 @@
         '<div class="ft2">' + (ps.complete ? '<span class="seal">' + ic('seal') + ' Certified' + (cert ? ' ' + E(fmtShort(cert.earned_at)) : '') + '</span>' : '<span>' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; ' + mins(ps.minsLeft) + ' left' : '') + '</span>') +
         '<span class="sp"></span><span class="w122lnk">' + (ps.complete ? 'Review' : ps.done ? 'Continue' : 'Start') + ' ' + ic('arrow') + '</span></div></div></div>';
     }
-    return '<section class="w122sec" data-sec="paths"><div class="w122sech"><div><h2>Learning paths</h2><div class="sub">Short series with a certificate at the end.</div></div></div>' +
+    return '<section class="w122sec" data-sec="paths"><div class="w122sech"><div><h2>Learning Avenues</h2><div class="sub">Short series with a certificate at the end.</div></div></div>' +
       '<div class="w122paths">' + mineP.map(one).join('') + '</div>' +
-      (other.length ? '<div class="w122sech" style="margin-top:22px"><div><h2 style="font-size:19px">More paths</h2><div class="sub">For other teams, open to everyone.</div></div></div><div class="w122paths">' + other.map(one).join('') + '</div>' : '') + '</section>';
+      (other.length ? '<div class="w122sech" style="margin-top:22px"><div><h2 style="font-size:19px">More Learning Avenues</h2><div class="sub">For other teams, open to everyone.</div></div></div><div class="w122paths">' + other.map(one).join('') + '</div>' : '') + '</section>';
   }
   function shade(hex) {
     var m = String(hex || '').match(/^#?([0-9a-f]{6})$/i); if (!m) return hex;
@@ -219,8 +219,8 @@
       }).join('') + '</div></section>';
   }
   function homeHtml() {
-    if (!staffOk()) return '<div class="w122none">The Training academy is available to staff accounts.</div>';
-    if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
+    if (!staffOk()) return '<div class="w122none">The Avenue Academy is available to staff accounts.</div>';
+    if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The Avenue Academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
     return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
@@ -228,7 +228,7 @@
   function paint() {
     var root = document.getElementById('w122'); if (!root) return;
     if (!A.loaded) {
-      if (!root.__skel) { root.innerHTML = '<div class="w122none" style="margin-top:20px">Loading the academy…</div>'; root.__skel = 1; }
+      if (!root.__skel) { root.innerHTML = '<div class="w122none" style="margin-top:20px">Loading the Avenue Academy…</div>'; root.__skel = 1; }
       load().then(function () { root.__skel = 0; paint(); after(); });
       return;
     }

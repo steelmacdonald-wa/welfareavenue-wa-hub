@@ -40,7 +40,7 @@
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
-    activity: 'Activity', training: 'Training academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', adminpanel: 'Admin'
+    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', adminpanel: 'Admin'
   };
   function me() {
     return {

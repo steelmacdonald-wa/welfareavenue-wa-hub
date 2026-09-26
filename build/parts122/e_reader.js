@@ -218,12 +218,12 @@
 
   /* ---------- path view ---------- */
   function openPath(key) {
-    var p = pathByKey(key); if (!p) { toastS('That path is not available'); location.hash = '#training'; return; }
+    var p = pathByKey(key); if (!p) { toastS('That Learning Avenue is not available'); location.hash = '#training'; return; }
     stopTimer(); R = { mode: 'path', path: p, secs: 0 }; renderSheet();
   }
   function renderPath(sh) {
     var p = R.path, ps = pathState(p), col = p.color || GREEN, cert = A.myAwards['cert:' + p.key];
-    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning path</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
+    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="pr"><i style="width:' + ps.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap">' +
       '<div class="phero" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')"><span class="big">' + ic(p.icon || 'book') + '</span><h3>' + E(p.title) + '</h3><p>' + E(p.blurb || '') + '</p><div class="bar"><i style="width:' + ps.pct + '%"></i></div><div style="font-size:13px">' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; about ' + mins(ps.minsLeft) + ' left' : '') + '</div></div>' +
       (cert ? '<div class="callout tip">' + ic('seal') + '<div><b>Certified</b>You earned the ' + E(p.cert_title || p.title) + ' certificate on ' + E(fmtDate(cert.earned_at)) + '. <button class="w122lnk" data-w122cert="cert:' + E(p.key) + '">View it</button></div></div>' : '<div class="callout info">' + ic('seal') + '<div><b>' + E(p.cert_title || p.title) + ' certificate</b>Finish every item to earn it.</div></div>') +
@@ -231,7 +231,7 @@
         var ok = isDone(t.id), k = KIND[kindOf(t)] || KIND.read;
         return '<button class="pitem' + (ok ? ' ok' : '') + '" data-w122pitem="' + E(t.id) + '"><span class="n">' + (ok ? ic('check') : (i + 1)) + '</span><span class="tx"><b>' + E(String(t.title).replace(/^Page tour:\s*/, '')) + '</b><span>' + E(k.l) + ' &middot; ' + mins(minutesOf(t)) + (ok ? ' &middot; done' : '') + '</span></span>' + ic('chev') + '</button>';
       }).join('') + '</div></div></div></div>' +
-      '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Path complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
+      '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Learning Avenue complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
     sh.innerHTML = html;
   }
 
@@ -255,7 +255,7 @@
   }
   function certHtml(a) {
     var m = me();
-    return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; TRAINING ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
+    return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; AVENUE ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
       '<div class="c-meta"><span>Awarded ' + E(fmtDate(a.earned_at)) + '</span><span>Certificate ' + E(certNo(a, a.earned_at)) + '</span></div><div class="c-seal">' + ic('seal') + '</div></div>';
   }
   function renderCert(sh) {
@@ -275,7 +275,7 @@
   async function shareAward(award, silent) {
     var a = A.myAwards[award]; if (!a || (a.meta && a.meta.shared)) return;
     var m = me();
-    var text = a.kind === 'cert' ? m.name + ' earned the ' + a.title + ' certificate in the Training academy.' : m.name + ' reached ' + a.title + ' in the Training academy.';
+    var text = a.kind === 'cert' ? m.name + ' earned the ' + a.title + ' certificate in the Avenue Academy.' : m.name + ' reached ' + a.title + ' in the Avenue Academy.';
     try {
       var r = await db.from('hub_shoutouts').insert({ kind: 'manual', source: 'academy', ref: 'award:' + award, person: m.name, member_id: m.id || null, team: m.dept || null, text: text, by: m.email });
       if (r && r.error) throw r.error;
@@ -320,7 +320,7 @@
       '<label>Minutes<input type="number" min="1" max="600" data-f="minutes" value="' + E(t.minutes || (t.id ? minutesOf(t) : '')) + '"></label></div>' +
       '<label>Link (video or document)<input type="url" data-f="resource_url" value="' + E(t.resource_url || '') + '" placeholder="https://www.loom.com/share/..."></label>' +
       '<div class="row2"><label>Topic<input type="text" list="w122cats" data-f="category" value="' + E(t.category || 'General') + '"><datalist id="w122cats">' + cats.map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></label>' +
-      '<label>Learning path<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
+      '<label>Learning Avenue<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
       '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, and lines starting Try it: or Done when: become highlighted boxes.">' + E(t.description || '') + '</textarea></label>' +
       '</div></div></div></div><div class="ft">' + (!isNew ? '<button class="w122btn ghost" data-w122retire="1">Retire it</button>' : '') + '<span class="sp"></span><button class="w122btn soft" data-w122x="1">Cancel</button><button class="w122btn" data-w122save="1">' + ic('check') + ' Save</button></div>';
   }
@@ -345,7 +345,7 @@
   }
   async function retire() {
     if (!R || !R.t) return;
-    try { var res = await db.from('trainings').update({ active: false, updated_at: nowIso() }).eq('id', R.t.id); if (res.error) throw res.error; A.trainings = A.trainings.filter(function (x) { return x.id !== R.t.id; }); applyTrainings(A.trainings); toastS('Retired. It no longer shows in the academy.'); closeSheet(); }
+    try { var res = await db.from('trainings').update({ active: false, updated_at: nowIso() }).eq('id', R.t.id); if (res.error) throw res.error; A.trainings = A.trainings.filter(function (x) { return x.id !== R.t.id; }); applyTrainings(A.trainings); toastS('Retired. It no longer shows in the Avenue Academy.'); closeSheet(); }
     catch (e) { toastS('Could not retire it'); }
   }
 
@@ -377,7 +377,7 @@
       (res.levelUp ? '<div class="lvup">You reached<b>Level ' + res.levelUp.n + ': ' + E(res.levelUp.name) + '</b></div>' : '<div class="lv"><div class="t">Level ' + lv.n + ' &middot; ' + E(lv.name) + '<span>' + (lv.next ? lv.toNext + ' XP to ' + E(lv.nextName) : 'Top level') + '</span></div><div class="bar"><i style="width:' + fromPct + '%" data-to="' + lv.pct + '"></i></div></div>') +
       (fresh.length ? '<div class="aws">' + fresh.map(function (a, i) { var v = awardVisual(a); return '<div class="aw' + (a.kind === 'cert' ? ' cert' : '') + '" style="animation-delay:' + (0.25 + i * 0.12) + 's"><span class="md" style="background:linear-gradient(135deg,' + v.color + ',' + shade(v.color) + ')">' + ic(v.icon) + '</span><div><b>' + E(a.title) + '</b><span>' + (a.kind === 'cert' ? 'Certificate' : 'Badge') + ' unlocked</span></div></div>'; }).join('') + '</div>' : '') +
       (certs.length ? '<label class="share"><input type="checkbox" data-w122shareck="1" checked> Share it with the team in the shout-outs</label>' : '') +
-      '<div class="btns">' + (certs.length ? '<button class="w122btn gold" data-w122celcert="' + E(certs[0].award) + '">' + ic('seal') + ' View certificate</button>' : '') + nextAfter(t) + '<button class="w122btn' + (certs.length ? ' soft' : '') + '" data-w122celx="1">' + (T || (t && kindOf(t) === 'tour') ? 'Stay on this page' : 'Continue') + '</button>' + (t && kindOf(t) === 'tour' ? '<button class="w122btn soft" data-w122celhome="1">Back to the academy</button>' : '') + '</div></div>';
+      '<div class="btns">' + (certs.length ? '<button class="w122btn gold" data-w122celcert="' + E(certs[0].award) + '">' + ic('seal') + ' View certificate</button>' : '') + nextAfter(t) + '<button class="w122btn' + (certs.length ? ' soft' : '') + '" data-w122celx="1">' + (T || (t && kindOf(t) === 'tour') ? 'Stay on this page' : 'Continue') + '</button>' + (t && kindOf(t) === 'tour' ? '<button class="w122btn soft" data-w122celhome="1">Back to the Avenue Academy</button>' : '') + '</div></div>';
     el.__certs = certs.map(function (a) { return a.award; });
     document.body.appendChild(el);
     setTimeout(function () { var bar = el.querySelector('.lv .bar i'); if (bar) bar.style.width = bar.getAttribute('data-to') + '%'; }, 300);

@@ -657,9 +657,9 @@
   function toolsHtml(d) {
     var tools = [];
     if (d === 'opsmtl' || d === 'opsto') { tools.push(['&#129387;', 'Volunteering manager', '#volunteering']); tools.push(['&#128214;', 'Recipes', '#volunteering/recipes']); }
-    if (d === 'hr') { tools.push(['&#127891;', 'Training', '#training']); tools.push(['&#128202;', 'Onboarding board', '#training']); if (tabVisible('hrcentre')) tools.push(['&#128101;', 'HR centre', '#hrcentre']); }
+    if (d === 'hr') { tools.push(['&#127891;', 'Avenue Academy', '#training']); tools.push(['&#128202;', 'Onboarding board', '#training']); if (tabVisible('hrcentre')) tools.push(['&#128101;', 'HR centre', '#hrcentre']); }
     if (d === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
-    if (d === 'marketing') { tools.push(['&#9997;', 'Content drafter', '#create']); tools.push(['&#127891;', 'Training paths', '#training']); }
+    if (d === 'marketing') { tools.push(['&#9997;', 'Content drafter', '#create']); tools.push(['&#127891;', 'Learning Avenues', '#training']); }
     if (d === 'fundraising' && tabVisible('finances')) tools.push(['&#128176;', 'Finances', '#finances']);
     tools.push(['&#127919;', 'Department goals', '#goals']);
     tools.push(['&#128194;', 'Projects', '#projects']);

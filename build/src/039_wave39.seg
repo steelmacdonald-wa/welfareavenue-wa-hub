@@ -111,11 +111,11 @@ function wa39DeptTools(id) {
     tools.push(['&#128214;', 'Recipes', '#volunteering/recipes']);
   }
   if (id === 'hr') {
-    tools.push(['&#127891;', 'Training', '#training']);
+    tools.push(['&#127891;', 'Avenue Academy', '#training']);
     tools.push(['&#128202;', 'Onboarding board', '#training']);
   }
   if (id === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
-  if (id === 'marketing') tools.push(['&#127891;', 'Training paths', '#training']);
+  if (id === 'marketing') tools.push(['&#127891;', 'Learning Avenues', '#training']);
   tools.push(['&#127919;', 'Goals', '#goals']);
   tools.push(['&#128194;', 'Projects', 'scroll:projects']);
   if (!tools.length) return '';
