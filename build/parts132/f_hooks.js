@@ -72,7 +72,7 @@
   function cardHtml(d) {
     var c = teamCounts(d);
     var rows = c.back.slice(0, 3).map(function (x) { var dd = dayOfIso(x.at); return '<div class="w132trow back"><span>' + E(x.title) + '</span><em>back ' + E(dd ? fmtShort(dd) : '') + '</em></div>'; })
-      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
+      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : x.kind === 'idea' ? 'Content idea: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
     var sum = [];
     if (c.list.length) sum.push('<b>' + plural(c.list.length, 'item', 'items') + '</b> waiting' + (c.projects ? ' (' + plural(c.projects, 'project', 'projects') + ')' : ''));
     if (c.back.length) sum.push('<b>' + c.back.length + '</b> back in the last two weeks');

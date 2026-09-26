@@ -6,7 +6,7 @@
   }
   function norm(d) {
     d = d || {};
-    return { tasks: arr(d.tasks), projects: arr(d.projects), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
+    return { tasks: arr(d.tasks), projects: arr(d.projects), ideas: arr(d.ideas), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
   }
   function load(force) {
     if (!staffOk()) { B.data = norm(null); return Promise.resolve(B.data); }
@@ -29,6 +29,11 @@
     d.tasks.forEach(function (t) {
       out.push({ kind: 'task', id: t.id, title: t.title || 'A task', dept: t.department, until: t.bank_until, note: t.bank_note, by: t.banked_by, at: t.banked_at,
         owner: t.owner, project: t.project, parent: t.parent, desc: t.description, subs: Number(t.subtasks || 0), due: t.bank_due, priority: !!t.priority, lead: true });
+    });
+    /* wave136: content ideas the Content calendar put here (Marketing) */
+    d.ideas.forEach(function (c) {
+      out.push({ kind: 'idea', id: c.id, title: c.title || 'A content idea', dept: c.department || 'marketing', until: c.bank_until, note: c.bank_note, by: c.banked_by, at: c.banked_at,
+        desc: c.idea, source: c.source, sourceId: c.source_transcript_id, sourceDate: c.source_date, forDate: c.idea_for, owner: c.suggested_by, campaign: c.campaign, lead: true });
     });
     out.sort(function (a, b) { return String(a.until || '').localeCompare(String(b.until || '')) || String(a.title).localeCompare(String(b.title)); });
     return out;
@@ -137,6 +142,7 @@
     var it = itemBy(kind, id);
     var res = await rpc('bank_unbank', { p_kind: kind, p_id: Number(id), p_why: 'brought back early' });
     if (kind === 'project') await refreshProjects();
+    if (kind === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (e) { /* fine */ } toastS((it ? '“' + clip(it.title, 50) + '”' : 'It') + ' is back in the Content calendar’s Ideas'); afterChange(); return res; }
     await reloadTasks();
     toastS((it ? '“' + clip(it.title, 50) + '”' : 'It') + ' is back on the ' + teamShort(it ? it.dept : '') + ' board');
     afterChange();

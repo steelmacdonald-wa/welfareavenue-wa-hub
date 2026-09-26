@@ -865,7 +865,7 @@ Branded content created with AI on the Create page (draft-content edge function)
 
 ### `content_posts`
 
-Content calendar posts: planned, scheduled and published to the Facebook Page and Instagram by social-publish (cron every 5 minutes). Outgoing posts; social_posts holds published posts and their metrics.
+Content calendar posts: planned, scheduled and published to the Facebook Page and Instagram by social-publish (cron every 5 minutes). A draft without a date is an idea (the Ideas tray); ideas raised in marketing meetings are added by process-transcript (source_transcript_id), and an idea in the bank (banked_at) is out of the calendar until bank_until. Outgoing posts; social_posts holds published posts and their metrics. Staff write; staff and board viewers read.
 
 - `platforms`: Target platforms, such as instagram and facebook.
 - `media`: JSON array of media [{url, path, kind, mime, size, w, h, dur}] in the content-images bucket.
@@ -873,6 +873,14 @@ Content calendar posts: planned, scheduled and published to the Facebook Page an
 - `results`: JSON of per-platform publish results written by social-publish.
 - `live`: JSON of per-platform live post ids and links written by social-publish.
 - `owner`: Display name of who owns the post.
+- `source_transcript_id`: The meeting (transcripts.id) an idea came from, when process-transcript found it in a marketing meeting. NULL for posts made in the calendar.
+- `suggested_by`: Display name of who raised the idea in the meeting (a roster name when the AI was sure), else NULL.
+- `idea_for`: The date, event or season the idea is for, when the meeting tied it to one. An idea for three months or more away goes to the bank until six weeks before this date.
+- `banked_at`: Set while the idea is in the bank (the bank page lists it; the Content calendar leaves it out). Only an undated draft can be banked (content_posts_bank_check).
+- `bank_until`: The day a banked idea comes back to the Ideas tray (the daily bank_resurface job).
+- `bank_note`: Why the idea waits, such as "For December 2, 2026: Giving Tuesday".
+- `banked_by`: Display name of who banked it, or "the meeting" when process-transcript did.
+- `resurfaced_at`: When the idea came back from the bank (shown as back from the bank for two weeks).
 
 ### `social_accounts`
 
@@ -1082,7 +1090,7 @@ Functions:
 - `wa_leads_project(p_id bigint)`: True for leaders and admins, or when the signed-in person is named in projects.leads of the project. Access: authenticated.
 - `wa_org_editor()`: True for Hub admins and for people with the executive access profile; required by the org_* functions. Called by the org chart page. Access: authenticated.
 - `wa_today()`: Today's date in America/Toronto. Use instead of current_date (the database runs in UTC). Access: anon and authenticated.
-- `bank_list()`: Everything in the bank for the bank page: banked tasks and projects the caller may see, items back recently, today's date and whether the caller can bank or leads. Returns empty lists for non-staff. Called by the page. Access: authenticated.
+- `bank_list()`: Everything in the bank for the bank page: banked tasks and projects the caller may see, banked content ideas (Marketing), items back recently, today's date and whether the caller can bank or leads. Returns empty lists for non-staff. Called by the page. Access: authenticated.
 - `bank_task(p_id bigint, p_until date, p_note text)`: Parks an open task and its open subtasks in the bank until p_until (after today, within about three years), with a note. Checks wa_can_bank() and the task's visibility, then calls bank_task_do(). Called by the page and by the ask edge function (as the signed-in person). Access: authenticated.
 - `bank_project(p_id bigint, p_until date, p_note text)`: Parks a project, its sub-projects and their open tasks in the bank until p_until. Only the project's lead or a leader; team General projects cannot be banked. Called by the page. Access: authenticated.
 - `bank_add_task(p_department text, p_title text, p_until date, p_note text, p_project_id bigint, p_owner text)`: Creates a new task directly in the bank for a team (team code required) with a return date. Checks wa_can_bank(). Called by the page. Access: authenticated.
@@ -1092,7 +1100,7 @@ Functions:
 - `bank_task_do(p_id bigint, p_until date, p_note text, p_by text)`: Internal: banks a task tree without permission checks, logs to change_log and returns the number of tasks banked. Used by bank_task() and apply_transcript_result(). Access: service role only.
 - `bank_project_do(p_id bigint, p_until date, p_note text, p_by text)`: Internal: banks a project tree and its open tasks without permission checks. Used by bank_project(). Access: service role only.
 - `bank_unbank_do(p_kind text, p_id bigint, p_why text, p_by text)`: Internal: brings a banked task or project back and restores future due dates. Used by bank_unbank(), bank_resurface() and the process-transcript edge function. Access: service role only.
-- `bank_resurface()`: Daily job (cron wa-bank-resurface, 10:05 UTC): brings back banked tasks and projects whose date has come, keeping children with a still-banked parent. Access: service role only.
+- `bank_resurface()`: Daily job (cron wa-bank-resurface, 10:05 UTC): brings back banked tasks, projects and content ideas whose date has come, keeping children with a still-banked parent. Access: service role only.
 - `wa_task_tree(p_id bigint)`: Internal: the task id and all its descendant subtask ids. Access: service role only.
 - `wa_project_tree(p_id bigint)`: Internal: the project id and all its descendant project ids. Access: service role only.
 - `org_add_opening(p_reports_to bigint, p_title text, p_department text, p_status text, p_note text)`: Adds an open position to the org chart under a seat (or under the executive directors when NULL). Executives and admins only (wa_org_editor()). Logs to change_log. Called by the page. Access: authenticated.
@@ -1182,4 +1190,10 @@ Functions:
 - `info_decide(bigint, text)`: Admins grant, decline or revoke a request to see a password (info_link_access). Logged. Access: authenticated (admins only, checked inside).
 - `info_grant(bigint, text)`: Admins give a person access to a password without a request. Logged. Access: authenticated (admins only, checked inside).
 - `info_links_grant_adder()`: Trigger on info_links insert: whoever adds a password can see it (a granted info_link_access row).
+- `content_ideas_from_meeting(bigint, jsonb, text)`: Adds the content ideas process-transcript found in a marketing meeting to the Content calendar as undated drafts (title, idea in notes with the meeting, suggested_by, idea_for, source_transcript_id); skips a title already in the calendar and an idea whose date has passed; banks an idea for three months or more away until six weeks before its date. Refuses board-only, leadership and private meetings. Logged. Access: service role only.
+- `bank_idea(bigint, date, text)`: Puts a Content calendar idea (an undated draft) in the bank until a date, with an optional reason; it leaves the calendar and comes back to the Ideas tray on that day. Checks wa_can_bank(). Logged. Called by the Content calendar. Access: authenticated.
+- `bank_unbank_do(text, bigint, text, text)`: Internal: brings a banked task, project or content idea (p_kind task, project or idea) back; tasks get their future due dates back. Used by bank_unbank(), bank_undo(), bank_resurface() and the process-transcript edge function. Access: service role only.
+- `bank_unbank(text, bigint, text)`: Brings a banked task, project or content idea back now, with a reason. Checks wa_can_bank(), visibility, and project lead rights. Called by the page. Access: authenticated.
+- `bank_redate(text, bigint, date)`: Changes the return date of a banked task (p_kind task), project (project) or content idea (idea). Projects need their lead or a leader. Called by the page. Access: authenticated.
+- `bank_undo(text, bigint)`: Undoes a bank action (a task, project or content idea) within 30 minutes of banking. Called by the page. Access: authenticated.
 

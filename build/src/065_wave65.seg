@@ -176,6 +176,9 @@
       }) + '</div>';
     h += '<div class="w65sec"><h4>People to keep in the loop (' + (p.mentions || []).length + ')</h4>'
       + w65PlanRows(p.mentions, function (m) { return '<div class="w65row"><span>' + w65Esc(m) + '</span></div>'; }) + '</div>';
+    /* wave136: a Marketing meeting's content ideas go to the Content calendar's Ideas (the far ones to the bank) */
+    if ((p.content_ideas || []).length) h += '<div class="w65sec"><h4>Content ideas for the calendar (' + p.content_ideas.length + ')</h4>'
+      + w65PlanRows(p.content_ideas, function (c) { var far = c.for_date && (Date.parse(c.for_date + 'T12:00:00') - Date.now()) >= 90 * 86400000; return '<div class="w65row"><span>' + w65Esc(c.title) + '</span>' + (c.for_date ? '<span class="w65mut" style="margin-left:auto">for ' + w65Esc(c.for_date) + (far ? ', waits in the bank' : '') + '</span>' : '') + '</div>'; }) + '</div>';
     h += '</div>'
       + '<p class="m-sub" style="margin-top:8px">This is a close estimate from the same AI that will process the meeting; exact wording can differ. Nothing is saved until you approve. Suggested requests, comments and due dates always wait for a human to accept them.</p>'
       + '<div class="m-actions"><button class="btn" id="w65go">Approve: upload and process</button> <button class="btn ghost" id="w65cx">Cancel</button></div>';

@@ -1920,7 +1920,7 @@
       S('#contentcal .cap', 'The Meta connection', 'Shows whether the Hub can publish for you. With publishing on, you can schedule and publish from here; otherwise it plans posts and confirms them when they appear on Meta.', OPT),
       S('#contentcal .glance', 'This week', 'Planned and live posts this week, the next post, anything that needs attention, and ideas waiting for a date.', OPT),
       S('#contentcal .mg || #contentcal .lay', 'The calendar', 'Click + on a day to plan a post. Drag posts between days; you can undo a move.', OPT),
-      S('#contentcal .tray', 'Ideas', 'Posts without a date. Drag one onto a day to plan it.', OPT),
+      S('#contentcal .tray', 'Ideas', 'Posts without a date. Ideas raised in marketing meetings land here too, with the meeting they came from. Drag one onto a day to plan it, or open it and put it in the bank until later.', OPT),
       C('The composer', 'Open any post to write the caption (the AI drafts it in the Welfare Avenue voice), add images, check the preview, then plan it, schedule it or publish it now.')
     ] },
     socialstats: { tab: 'socialstats', icon: 'target', hash: '#socialstats', steps: [

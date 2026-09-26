@@ -1,3 +1,4 @@
+// wave136 (26/09/26): for a Marketing meeting the preview also lists the content ideas that will go to the Content calendar's Ideas.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'transcript_preview') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: transcript-preview (v1, 04/08/26)
@@ -202,6 +203,18 @@ const TOOL = {
         items: {
           type: 'string'
         }
+      },
+      content_ideas: {
+        type: 'array',
+        description: 'Marketing meetings only (empty for every other department): ideas for posts, reels, carousels, stories or series raised in the meeting, even when nobody committed to making them. They go to the Content calendar Ideas.',
+        items: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'A short working title, 3 to 8 words.' },
+            for_date: { type: ['string', 'null'], description: 'ISO date the idea is for when the meeting ties it to a date, event or season, else null.' }
+          },
+          required: ['title']
+        }
       }
     },
     required: [
@@ -286,6 +299,7 @@ Deno.serve(async (req)=>{
     if (res.ok) {
       const out = await res.json();
       const tu = (out.content || []).find((c)=>c.type === 'tool_use');
+      if (tu?.input && !/market/i.test(dept)) tu.input.content_ideas = []; /* wave136: content ideas come from Marketing meetings only */
       if (tu?.input) return json({
         ok: true,
         preview: tu.input,

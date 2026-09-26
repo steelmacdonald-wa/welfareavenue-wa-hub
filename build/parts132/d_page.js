@@ -16,10 +16,10 @@
   }
   function statsHtml(all) {
     var t = today(), soon = all.filter(function (x) { var d = parseDay(x.until); return d && daysBetween(t, d) <= 30; }).length;
-    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, np = all.length - nt, back = backItems().length;
+    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, ni = all.filter(function (x) { return x.kind === 'idea'; }).length, np = all.length - nt - ni, back = backItems().length;
     var add = canWork() && (B.data ? B.data.can : true);
     return '<div class="w132top">'
-      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
+      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : '', ni ? plural(ni, 'content idea', 'content ideas') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
       + '<div class="w132st"><b>' + soon + '</b><span>coming back in the next 30 days</span></div>'
       + '<div class="w132st"><b>' + back + '</b><span>back in the last two weeks</span></div>'
       + (add ? '<button type="button" class="w132add" data-w132new="1">' + I('plus') + 'Put something in the bank</button>' : '')
@@ -29,7 +29,8 @@
     return '<details class="w132how"' + (B.howOpen ? ' open' : '') + '><summary>' + I('vault') + 'How the bank works</summary>'
       + '<p>When a piece of work cannot start for three months or more, move it here instead of leaving it on a board: open the task and press <b>Move to the bank</b> (its open subtasks go with it), or bank a whole project from its page (the project, its sub-projects and every open task in them). Pick when it should come back and say why it waits.</p>'
       + '<p>Nothing in the bank shows on boards, lists, counts, alerts, digests or agendas. On the morning of its date it goes back to its team’s board with its owner, subtasks and project, keeps its due date if that is still ahead, and carries <b>back from the bank</b> for two weeks.</p>'
-      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p></details>';
+      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p>'
+      + '<p>Content ideas wait here too: an idea from a marketing meeting for three months or more away, or one someone moved from the Content calendar. It comes back to the calendar’s Ideas on its date (six weeks before the date it is for, when it came from a meeting).</p></details>';
   }
   function backHtml(team) {
     var rows = backItems().filter(function (x) { return !team || x.department === team; });
@@ -37,7 +38,7 @@
     return '<div class="w132card w132back" id="w132back"><h3>Back from the bank <span>the last two weeks, now on their boards</span></h3>'
       + rows.slice(0, 12).map(function (x) {
         var d = dayOfIso(x.at);
-        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' · project' : '') + (x.owner ? ' · ' + E(x.owner) : '') + ' · back ' + E(d ? fmtShort(d) : '') + '</div></div>'
+        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' · project' : x.kind === 'idea' ? ' · content idea, in the calendar’s Ideas' : '') + (x.owner ? ' · ' + E(x.owner) : '') + ' · back ' + E(d ? fmtShort(d) : '') + '</div></div>'
           + '<button type="button" class="w132lnk" data-w132open="' + E(x.kind) + ':' + E(x.id) + '" data-d="' + E(x.department) + '">Open</button></div>';
       }).join('') + '</div>';
   }
@@ -62,6 +63,12 @@
       if (x.parent) meta.push('<span>subtask of ' + E(clip(x.parent, 48)) + '</span>');
       if (x.owner) meta.push('<span>' + E(x.owner) + '</span>');
       if (x.subs) meta.push('<span>with ' + plural(x.subs, 'subtask', 'subtasks') + '</span>');
+    } else if (x.kind === 'idea') {
+      meta.push('<span>content idea</span>');
+      if (x.forDate) meta.push('<span>for ' + E(fmtShort(parseDay(x.forDate))) + '</span>');
+      if (x.campaign) meta.push('<span>' + E(x.campaign) + '</span>');
+      if (x.owner) meta.push('<span>raised by ' + E(x.owner) + '</span>');
+      if (x.source) meta.push('<span>from ' + E(clip(x.source, 48)) + '</span>');
     } else {
       if (x.parent) meta.push('<span>part of ' + E(x.parent) + '</span>');
       meta.push('<span>' + plural(x.tasks, 'open task', 'open tasks') + (x.subs ? ' in it and ' + plural(x.subs, 'sub-project', 'sub-projects') : '') + '</span>');
@@ -84,7 +91,7 @@
     }
     return '<div class="w132it' + (x.kind === 'project' ? ' proj' : '') + '" data-w132it="' + E(key) + '">'
       + '<span class="ic">' + I(x.kind === 'project' ? 'box' : 'task') + '</span>'
-      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : '')
+      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : x.kind === 'idea' ? '<span class="kd">Content idea</span>' : '')
       + '<div class="m">' + meta.join('') + '</div>' + whyHtml(x) + (by.length ? '<div class="by">' + by.join(' · ') + '</div>' : '') + more + '</div>'
       + '<div class="r"><div class="when"><b>' + E(d ? fmtShort(d) : 'Later') + '</b><span>' + E(d ? inDays(d) : '') + '</span></div>' + acts + '</div>'
       + '</div>';

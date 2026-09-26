@@ -17466,6 +17466,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       }) + '</div>';
     h += '<div class="w65sec"><h4>People to keep in the loop (' + (p.mentions || []).length + ')</h4>'
       + w65PlanRows(p.mentions, function (m) { return '<div class="w65row"><span>' + w65Esc(m) + '</span></div>'; }) + '</div>';
+    /* wave136: a Marketing meeting's content ideas go to the Content calendar's Ideas (the far ones to the bank) */
+    if ((p.content_ideas || []).length) h += '<div class="w65sec"><h4>Content ideas for the calendar (' + p.content_ideas.length + ')</h4>'
+      + w65PlanRows(p.content_ideas, function (c) { var far = c.for_date && (Date.parse(c.for_date + 'T12:00:00') - Date.now()) >= 90 * 86400000; return '<div class="w65row"><span>' + w65Esc(c.title) + '</span>' + (c.for_date ? '<span class="w65mut" style="margin-left:auto">for ' + w65Esc(c.for_date) + (far ? ', waits in the bank' : '') + '</span>' : '') + '</div>'; }) + '</div>';
     h += '</div>'
       + '<p class="m-sub" style="margin-top:8px">This is a close estimate from the same AI that will process the meeting; exact wording can differ. Nothing is saved until you approve. Suggested requests, comments and due dates always wait for a human to accept them.</p>'
       + '<div class="m-actions"><button class="btn" id="w65go">Approve: upload and process</button> <button class="btn ghost" id="w65cx">Cancel</button></div>';
@@ -37230,6 +37233,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '#contentcal .tr b{display:block;font-size:12px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
     '#contentcal .tr span{display:block;font-size:10.5px;color:var(--wa-muted);}' +
     '#contentcal .tray .empty{font-size:12px;color:var(--wa-muted);text-align:center;padding:16px 6px;border:1px dashed rgba(16,63,57,.2);border-radius:10px;}' +
+    /* wave136: ideas from meetings, and the bank */
+    '#contentcal .tr em{display:block;font-style:normal;font-size:10.5px;color:' + GREEN + ';opacity:.85;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#contentcal .tr em i,#contentcal .lr .src i{font-style:normal;background:rgba(220,165,39,.25);color:#6b4d05;border-radius:999px;padding:0 6px;margin-right:4px;}' +
+    '#contentcal .tray .bnk{display:block;text-align:center;font-size:11.5px;margin-top:8px;color:' + GREEN + ';font-weight:600;text-decoration:underline;cursor:pointer;}' +
+    '#contentcal .lr .src{font-size:11px;color:' + GREEN + ';opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '#w121dr .w136src{background:rgba(220,165,39,.12);border:1px solid rgba(220,165,39,.35);border-radius:12px;padding:9px 12px;margin:0 0 12px;font-size:12.5px;line-height:1.45;}' +
+    '#w121dr .w136src a{color:' + GREEN + ';font-weight:600;cursor:pointer;}' +
+    '#w121dr .w136bank{border:1px solid rgba(16,63,57,.15);border-radius:12px;padding:10px 12px;margin:0 0 12px;background:#FFFAF2;}' +
+    '#w121dr .w136bank label{display:block;font-size:12.5px;font-weight:700;margin:0 0 4px;color:' + GREEN + ';}' +
+    '#w121dr .w136bank p{font-size:11.5px;color:var(--wa-muted);margin:0 0 8px;line-height:1.4;}' +
+    '#w121dr .w136bank .r2{display:grid;grid-template-columns:150px minmax(0,1fr);gap:8px;margin-bottom:8px;}' +
+    '#w121dr .w136bank .ac{display:flex;gap:8px;justify-content:flex-end;}' +
+    '@media (max-width:520px){#w121dr .w136bank .r2{grid-template-columns:minmax(0,1fr);}}' +
     /* list */
     '#contentcal .lg h4{font-family:' + HEAD + ';font-size:18px;color:' + GREEN + ';margin:14px 0 8px;display:flex;gap:8px;align-items:baseline;}' +
     '#contentcal .lg h4 small{font-family:' + BODY + ';font-size:11.5px;color:var(--wa-muted);font-weight:500;}' +
@@ -37413,13 +37429,40 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await db.from('content_posts').select('*').order('scheduled_at', { ascending: true }).limit(1500);
       if (r.error) throw r.error;
-      C.posts = (r.data || []).map(function (p) { p.platforms = p.platforms || []; p.media = p.media || []; p.results = p.results || {}; p.live = p.live || {}; return p; });
+      var all121 = (r.data || []).map(function (p) { p.platforms = p.platforms || []; p.media = p.media || []; p.results = p.results || {}; p.live = p.live || {}; return p; });
+      /* wave136: an idea in the bank is out of the calendar until its date (the bank page lists it) */
+      C.banked = all121.filter(function (p) { return !!p.banked_at; });
+      C.posts = all121.filter(function (p) { return !p.banked_at; });
+      loadSources();
       C.loaded = true; C.at = Date.now();
     } catch (e) { C.err = e.message || String(e); }
     C.loading = false; paint();
     if (!C.cap && staff() && !C.capBusy) loadCap();
     if (!C.perf && !C.perfBusy) loadPerf();
   }
+  /* wave136: the meeting each idea came from */
+  async function loadSources() {
+    try {
+      C.src = C.src || {}; var ids = [];
+      C.posts.concat(C.banked || []).forEach(function (p) { var s = p.source_transcript_id; if (s && !C.src[s] && ids.indexOf(s) < 0) ids.push(s); });
+      if (!ids.length) return;
+      var r = await db.from('transcripts').select('id, title, meeting_date').in('id', ids.slice(0, 200));
+      ((r && r.data) || []).forEach(function (x) { C.src[x.id] = { title: x.title || null, date: x.meeting_date || null }; });
+      ids.forEach(function (id) { if (!C.src[id]) C.src[id] = { title: null, date: null }; });
+      paint(); if (C.edit) paintDrawer();
+    } catch (e) { /* the ideas still show, without the meeting's name */ }
+  }
+  function srcOf(p) { if (!p || !p.source_transcript_id) return null; return (C.src && C.src[p.source_transcript_id]) || { title: null, date: null }; }
+  function shortDay(ds) { return niceDate(ds, String(ds).slice(0, 4) === today().slice(0, 4) ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }); }
+  function ideaLine(p) {
+    var bits = [], s = srcOf(p);
+    if (p.resurfaced_at && (Date.now() - new Date(p.resurfaced_at).getTime()) < 14 * 86400000) bits.push('<i>Back from the bank</i>');
+    if (p.idea_for) bits.push('For ' + E(shortDay(p.idea_for)));
+    if (s) bits.push('From ' + (s.title ? E(s.title) : 'a meeting'));
+    else if (p.suggested_by) bits.push('Idea from ' + E(p.suggested_by));
+    return bits.join(' \u00b7 ');
+  }
+  window.w121Stale = function () { C.at = 0; };
   async function loadCap() {
     C.capBusy = true;
     try { C.cap = await fn('social-publish', { action: 'capabilities' }); } catch (e) { C.cap = { token: false, error: e.message || String(e), can: {}, accounts: [] }; }
@@ -37499,7 +37542,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div><b>' + live + '</b><span>live this week</span></div>' +
       '<div' + (next ? ' data-w121open="' + next.id + '"' + ' data-w121jump="1"' : '') + '><b>' + (next ? E(niceDate(dayOf(next.scheduled_at), { weekday: 'short' }) + ' ' + hm(next.scheduled_at)) : '\u2013') + '</b><span>next post</span>' + (next ? '<em>' + E(titleOf(next)) + '</em>' : '') + '</div>' +
       '<div data-w121jump="attn"><b class="' + (attn ? 'warn' : '') + '">' + attn + '</b><span>need attention</span></div>' +
-      '<div><b>' + ideas + '</b><span>ideas without a date</span></div>' +
+      '<div><b>' + ideas + '</b><span>ideas without a date' + (C.banked && C.banked.length ? ', ' + C.banked.length + ' more in the bank' : '') + '</span></div>' +
       '<div><b>' + (reach ? num(reach) : '\u2013') + '</b><span>reach from calendar posts, 30 days</span></div>' +
       (slot ? '<div title="From the analytics insights"><b style="font-size:20px">' + E(slot.label) + '</b><span>best slot to post</span></div>' : '') +
       '</div>';
@@ -37560,7 +37603,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function listRow(p) {
     var s = stateOf(p); var th = thumbOf(p);
-    return '<div class="lr" data-w121open="' + p.id + '"><div class="when">' + (p.scheduled_at ? E(niceDate(dayOf(p.scheduled_at))) + '<span>' + hm(p.scheduled_at) + '</span>' : 'No date<span>idea</span>') + '</div>' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '<div class="ph">' + (hasVideo(p) ? '\u25b6' : '\u270e') + '</div>') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><div class="cap2">' + E(p.caption || p.notes || '') + '</div>' + confLine(p, s) + '</div><div class="rt"><span class="pill ' + s.cls + '">' + E(s.label) + '</span>' + marks(p.platforms, s.live) + (p.owner ? '<span style="font-size:11px;color:var(--wa-muted)">' + E(p.owner) + '</span>' : '') + '</div></div>';
+    return '<div class="lr" data-w121open="' + p.id + '"><div class="when">' + (p.scheduled_at ? E(niceDate(dayOf(p.scheduled_at))) + '<span>' + hm(p.scheduled_at) + '</span>' : 'No date<span>' + (p.idea_for ? 'for ' + E(shortDay(p.idea_for)) : 'idea') + '</span>') + '</div>' + (th ? '<img src="' + E(th) + '" alt="" loading="lazy">' : '<div class="ph">' + (hasVideo(p) ? '\u25b6' : '\u270e') + '</div>') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><div class="cap2">' + E(p.caption || p.notes || '') + '</div>' + (function () { var il = p.scheduled_at ? '' : ideaLine(p); return il ? '<div class="src">' + il + '</div>' : ''; })() + confLine(p, s) + '</div><div class="rt"><span class="pill ' + s.cls + '">' + E(s.label) + '</span>' + marks(p.platforms, s.live) + (p.owner ? '<span style="font-size:11px;color:var(--wa-muted)">' + E(p.owner) + '</span>' : '') + '</div></div>';
   }
   function listView() {
     var all = C.posts.filter(function (p) { return p.status !== 'cancelled' && matches(p); }); var now = Date.now();
@@ -37575,7 +37618,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function tray() {
     var list = undated();
-    return '<div class="tray" data-w121tray="1"><h4>Ideas</h4><p>Posts without a date. Drag one onto a day to plan it; drag a planned post here to take it off the calendar.</p>' + (list.length ? list.map(function (p) { var th = thumbOf(p); return '<div class="tr" draggable="' + (draggable(p) ? 'true' : 'false') + '" data-w121card="' + p.id + '" data-w121open="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="">' : '') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><span>' + (p.campaign ? E(p.campaign) + ' \u00b7 ' : '') + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(', ') + '</span></div></div>'; }).join('') : '<div class="empty">No ideas waiting.</div>') + (staff() ? '<button class="btn mini ghost" style="width:100%;margin-top:6px" data-w121new="idea">New idea</button>' : '') + '</div>';
+    return '<div class="tray" data-w121tray="1"><h4>Ideas</h4><p>Posts without a date. Drag one onto a day to plan it; drag a planned post here to take it off the calendar. Ideas from marketing meetings land here too.</p>' + (list.length ? list.map(function (p) { var th = thumbOf(p); return '<div class="tr" draggable="' + (draggable(p) ? 'true' : 'false') + '" data-w121card="' + p.id + '" data-w121open="' + p.id + '">' + (th ? '<img src="' + E(th) + '" alt="">' : '') + '<div style="min-width:0"><b>' + E(titleOf(p)) + '</b><span>' + (p.campaign ? E(p.campaign) + ' \u00b7 ' : '') + (p.platforms || []).map(function (k) { return PL[k] ? PL[k].label : k; }).join(', ') + '</span>' + (function () { var il = ideaLine(p); return il ? '<em>' + il + '</em>' : ''; })() + '</div></div>'; }).join('') : '<div class="empty">No ideas waiting.</div>') + (staff() ? '<button class="btn mini ghost" style="width:100%;margin-top:6px" data-w121new="idea">New idea</button>' : '') + (C.banked && C.banked.length ? '<a class="bnk" href="#bank/marketing">' + C.banked.length + (C.banked.length === 1 ? ' idea waits' : ' ideas wait') + ' in the bank</a>' : '') + '</div>';
   }
   function paint() {
     var sec = panel(); if (!sec) return;
@@ -37748,6 +37791,51 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return html;
   }
   function campaigns() { var s = {}; C.posts.forEach(function (p) { if (p.campaign) s[p.campaign] = 1; }); return Object.keys(s).sort(); }
+  /* wave136: where an idea came from, and putting it in the bank */
+  function ideaBox(e) {
+    var p = e && e.id ? C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] : null, h = '';
+    if (p && (p.source_transcript_id || p.idea_for || p.suggested_by)) {
+      var s = srcOf(p), bits = [];
+      if (p.source_transcript_id) bits.push('From the meeting <b>' + E((s && s.title) || 'a meeting') + '</b>' + (s && s.date ? ' (' + E(shortDay(s.date)) + ')' : ''));
+      if (p.suggested_by) bits.push((bits.length ? 'raised by ' : 'Raised by ') + E(p.suggested_by));
+      if (p.idea_for) bits.push((bits.length ? 'for ' : 'For ') + E(shortDay(p.idea_for)));
+      h += '<div class="w136src">' + bits.join(', ') + '.' + (p.source_transcript_id ? ' <a href="#tx/' + E(p.source_transcript_id) + '" data-w136tx="1">Open the meeting</a>' : '') + '</div>';
+    }
+    if (e && e.bank) {
+      h += '<div class="w136bank"><label>Put this idea in the bank</label><p>It leaves the calendar and comes back to the Ideas on the day you pick. The bank page lists it with the rest of the work that can wait.</p>'
+        + '<div class="r2"><input type="date" id="w136until" value="' + E(e.bank.until) + '" min="' + E(addDays(today(), 1)) + '" aria-label="Comes back on"><input type="text" id="w136note" maxlength="300" placeholder="Why it waits (optional), such as For Giving Tuesday" value="' + E(e.bank.note || '') + '" aria-label="Why it waits"></div>'
+        + '<div class="ac"><button class="btn mini ghost" data-w136bankx="1">Cancel</button><button class="btn mini go" data-w136bankgo="1"' + (e.bank.busy ? ' disabled' : '') + '>Put it in the bank</button></div></div>';
+    }
+    return h;
+  }
+  function bankErr(x) {
+    var m = String((x && (x.message || x.details)) || x || '');
+    if (/staff only/i.test(m)) return 'Your access can plan posts but not move ideas to the bank.';
+    if (/after today/i.test(m)) return 'Pick a day after today.';
+    if (/three years/i.test(m)) return 'Pick a day in the next three years.';
+    if (/without a date/i.test(m)) return 'Only an idea without a date can go in the bank.';
+    return 'Could not put it in the bank: ' + m;
+  }
+  async function bankIdea() {
+    var ed = C.edit; if (!ed || !ed.bank || !ed.id) return;
+    var u = document.getElementById('w136until'), n = document.getElementById('w136note');
+    if (u) ed.bank.until = u.value; if (n) ed.bank.note = n.value;
+    if (!ed.bank.until || ed.bank.until <= today()) { toastS('Pick a day after today'); return; }
+    if (ed.dirty) { try { readForm(); await saveRow(ed.id, rowFromEdit(ed)); ed.dirty = false; } catch (x) { toastS('Could not save the idea first: ' + (x.message || x)); return; } }
+    ed.bank.busy = true; paintDrawer();
+    try {
+      var id = ed.id, until = ed.bank.until;
+      var r = await db.rpc('bank_idea', { p_id: Number(id), p_until: until, p_note: String(ed.bank.note || '').trim() || null });
+      if (r.error) throw r.error;
+      var p = C.posts.filter(function (x) { return String(x.id) === String(id); })[0];
+      C.posts = C.posts.filter(function (x) { return String(x.id) !== String(id); });
+      if (p) { p.banked_at = new Date().toISOString(); p.bank_until = until; (C.banked = C.banked || []).push(p); }
+      closeComposer(true);
+      C.undo = { id: id, text: 'In the bank until ' + shortDay(until), fn: async function () { var r2 = await db.rpc('bank_undo', { p_kind: 'idea', p_id: Number(id) }); if (r2.error) throw r2.error; await load(true); } };
+      clearTimeout(C.undoT); C.undoT = setTimeout(function () { C.undo = null; paint(); }, 7000);
+      paint();
+    } catch (x) { if (C.edit && C.edit.bank) { C.edit.bank.busy = false; paintDrawer(); } toastS(bankErr(x)); }
+  }
   function paintDrawer() {
     var e = C.edit; var old = document.getElementById('w121dr');
     if (!e) { if (old) old.remove(); return; }
@@ -37759,7 +37847,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var chars = e.caption.length, tags = tagsOf(e.caption).length;
     var html = '<div class="bk" data-w121close="1"></div><aside class="pn" role="dialog" aria-label="Post">' +
       '<header><input class="ttl" id="w121title" placeholder="Name this post (only the team sees it)" value="' + E(e.title) + '"' + (ro ? ' disabled' : '') + '>' + (function () { var hs = stateOf(Object.assign({}, C.posts.filter(function (x) { return String(x.id) === String(e.id); })[0] || {}, { status: e.status, results: e.results, live: e.live, platforms: e.platforms })); return '<span class="pill ' + hs.cls + '">' + E(e.id ? hs.label : 'New') + '</span>'; })() + '<button class="x" data-w121close="1" title="Close">\u2715</button></header>' +
-      '<div class="bd">' + resultHtml(e) +
+      '<div class="bd">' + resultHtml(e) + ideaBox(e) +
       '<div class="sec"><label>Where</label><div class="pls">' + ['instagram', 'facebook'].map(function (k) { return '<span class="tg' + (e.platforms.indexOf(k) >= 0 ? ' on' : '') + '" data-w121pl="' + k + '"><i style="background:' + PL[k].color + '">' + PL[k].short + '</i>' + PL[k].label + '</span>'; }).join('') + '</div>' + valHtml(v) + '</div>' +
       '<div class="sec"><label>Photos or a video</label>' + (ro ? '' : '<div class="drop" id="w121drop">Drop photos or a video here, <a data-w121pick="1">choose files</a>, or paste. Photos become JPEGs for Instagram.<input type="file" id="w121file" multiple accept="image/*,video/mp4,video/quicktime" style="display:none"></div>') + '<div class="thumbs" id="w121thumbs">' + e.media.map(thumbHtml).join('') + '</div></div>' +
       '<div class="sec"><label>Caption</label><textarea id="w121cap" placeholder="What is this post about? Start with the line people see first."' + (ro ? ' disabled' : '') + '>' + E(e.caption) + '</textarea><div class="cc"><span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span></div>' +
@@ -37781,7 +37869,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!staff()) return '<footer><span class="ro">Read only.</span><span class="sp"></span><button class="btn mini ghost" data-w121close="1">Close</button></footer>';
     if (ro) return '<footer>' + (e.id ? '<button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' + (e.status === 'posted' || e.status === 'published' ? '<button class="lnk" data-w121reopen="1" title="Back to a draft (does not remove the post from Instagram or Facebook)">Back to draft</button>' : '') + '<button class="btn mini ghost" data-w121close="1">Close</button></footer>';
     var bad = v.errors > 0; var hasDate = !!(e.date && e.time);
-    var parts = '<footer>' + (e.id ? '<button class="lnk del" data-w121del="1">Delete</button><button class="lnk" data-w121dup="1">Duplicate</button>' : '') + '<span class="sp"></span>' +
+    var parts = '<footer>' + (e.id ? '<button class="lnk del" data-w121del="1">Delete</button><button class="lnk" data-w121dup="1">Duplicate</button>' + (!e.date && e.status === 'draft' && !e.bank ? '<button class="lnk" data-w136bank="1" title="Out of the calendar until a day you pick">Put in the bank</button>' : '') : '') + '<span class="sp"></span>' +
       '<button class="btn mini ghost" data-w121save="draft">Save draft</button>';
     if (hasDate) parts += '<button class="btn mini go" data-w121save="schedule"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (pubOk ? 'Schedule to publish' : 'Plan it') + '</button>';
     if (pubOk) parts += '<button class="btn mini pub" data-w121save="publish"' + (bad ? ' disabled title="Fix the items marked \u2715 first"' : '') + '>' + (e.status === 'failed' ? 'Try again now' : 'Publish now') + '</button>';
@@ -37931,7 +38019,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     load(false).then(function () {
       var pre = window.__w121prefill; if (pre && staff()) { window.__w121prefill = null; openComposer(null, pre); return; }
       if (sub === 'new' && staff()) { openComposer(null); return; }
-      if (sub && /^\d+$/.test(sub)) { var p = C.posts.filter(function (x) { return String(x.id) === sub; })[0]; if (p) openComposer(p); else toastS('That post is not in the calendar any more'); }
+      if (sub && /^\d+$/.test(sub)) { var p = C.posts.filter(function (x) { return String(x.id) === sub; })[0]; if (p) openComposer(p); else { var bk = (C.banked || []).filter(function (x) { return String(x.id) === sub; })[0]; toastS(bk ? 'That idea waits in the bank until ' + shortDay(bk.bank_until) : 'That post is not in the calendar any more'); } }
     });
     return true;
   }
@@ -37991,7 +38079,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!inCal && !inDr) return;
     if ((el = t.closest('[data-w121go]'))) { e.preventDefault(); location.hash = el.getAttribute('data-w121go'); return; }
     if (inCal) {
-      if ((el = t.closest('[data-w121undo]'))) { e.preventDefault(); var u = C.undo; C.undo = null; if (u) { try { await saveRow(u.id, u.patch); toastS('Undone'); } catch (x) { toastS('Could not undo: ' + (x.message || x)); } } paint(); return; }
+      if ((el = t.closest('[data-w121undo]'))) { e.preventDefault(); var u = C.undo; C.undo = null; if (u) { try { if (u.fn) await u.fn(); else await saveRow(u.id, u.patch); toastS('Undone'); } catch (x) { toastS('Could not undo: ' + (x.message || x)); } } paint(); return; }
       if ((el = t.closest('[data-w121view]'))) { C.view = el.getAttribute('data-w121view'); paint(); return; }
       if ((el = t.closest('[data-w121nav]'))) { var n = Number(el.getAttribute('data-w121nav')); if (n === 0) C.anchor = today(); else C.anchor = C.view === 'month' ? addMonths(C.anchor, n) : addDays(C.anchor, 7 * n); paint(); return; }
       if ((el = t.closest('[data-w121fpl]'))) { C.filter.pl = el.getAttribute('data-w121fpl'); paint(); return; }
@@ -38007,6 +38095,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     /* the composer */
     var ed = C.edit; if (!ed) return;
     if ((el = t.closest('[data-w121close]'))) { e.preventDefault(); closeComposer(false); return; }
+    if ((el = t.closest('[data-w136tx]'))) { closeComposer(false); if (C.edit) e.preventDefault(); return; }
+    if ((el = t.closest('[data-w136bank]'))) { e.preventDefault(); readForm(); var pb = C.posts.filter(function (x) { return String(x.id) === String(ed.id); })[0] || {}; var dflt = pb.idea_for ? addDays(pb.idea_for, -42) : addMonths(today(), 3); if (dflt <= today()) dflt = addMonths(today(), 3); ed.bank = { until: dflt, note: pb.idea_for ? 'For ' + shortDay(pb.idea_for) + (pb.campaign ? ': ' + pb.campaign : '') : '' }; paintDrawer(); var bd0 = document.querySelector('#w121dr .bd'); if (bd0) bd0.scrollTop = 0; return; }
+    if ((el = t.closest('[data-w136bankx]'))) { e.preventDefault(); ed.bank = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w136bankgo]'))) { e.preventDefault(); await bankIdea(); return; }
     if (readOnly() && !t.closest('[data-w121dup]') && !t.closest('[data-w121reopen]') && !t.closest('[data-w121tab]')) return;
     if ((el = t.closest('[data-w121tab]'))) { ed.tab = el.getAttribute('data-w121tab'); readForm(); paintDrawer(); return; }
     if ((el = t.closest('[data-w121pl]'))) { readForm(); var k = el.getAttribute('data-w121pl'); var i = ed.platforms.indexOf(k); if (i >= 0) ed.platforms.splice(i, 1); else ed.platforms.push(k); ed.platforms.sort(); ed.dirty = true; paintDrawer(); return; }
@@ -38029,6 +38121,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var t = e.target; if (!t) return;
     if (t.id === 'w121q') { C.filter.q = t.value; clearTimeout(C.qT); C.qT = setTimeout(paint, 180); return; }
     if (!C.edit || !t.closest || !t.closest('#w121dr')) return;
+    if (C.edit.bank && (t.id === 'w136until' || t.id === 'w136note')) { C.edit.bank[t.id === 'w136until' ? 'until' : 'note'] = t.value; return; } /* wave136 */
     C.edit.dirty = true;
     if (t.id === 'w121cap') { readForm(); var cc = document.querySelector('#w121dr .cc'); if (cc) { var chars = C.edit.caption.length, tags = tagsOf(C.edit.caption).length; cc.innerHTML = '<span><b class="' + (chars > 2200 ? 'bad' : '') + '">' + num(chars) + '</b> / 2,200 characters</span><span><b class="' + (tags > 30 ? 'bad' : '') + '">' + tags + '</b> / 30 hashtags</span><span>' + (chars > 125 ? 'Instagram shows the first 125 before \u201cmore\u201d' : '') + '</span>'; } clearTimeout(C.pvT); C.pvT = setTimeout(function () { if (!C.edit) return; readForm(); var pv = document.querySelector('#w121dr .sec:last-child'); var box = pv ? pv : null; if (box) box.innerHTML = '<label>Preview</label>' + previewHtml(C.edit); var val = document.querySelector('#w121dr .pls + .val, #w121dr .pls'); var sec = document.querySelector('#w121dr [data-w121pl]'); if (sec) { var host = sec.closest('.sec'); var v = validate(C.edit); var old = host.querySelector('.val'); var nv = valHtml(v); if (old) old.outerHTML = nv || '<div class="val"></div>'; else host.insertAdjacentHTML('beforeend', nv); } var f = document.querySelector('#w121dr footer'); if (f) f.outerHTML = footerHtml(C.edit, validate(C.edit), canPublish(C.edit.platforms), readOnly()); }, 350); }
   });
@@ -39989,7 +40082,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#contentcal .cap', 'The Meta connection', 'Shows whether the Hub can publish for you. With publishing on, you can schedule and publish from here; otherwise it plans posts and confirms them when they appear on Meta.', OPT),
       S('#contentcal .glance', 'This week', 'Planned and live posts this week, the next post, anything that needs attention, and ideas waiting for a date.', OPT),
       S('#contentcal .mg || #contentcal .lay', 'The calendar', 'Click + on a day to plan a post. Drag posts between days; you can undo a move.', OPT),
-      S('#contentcal .tray', 'Ideas', 'Posts without a date. Drag one onto a day to plan it.', OPT),
+      S('#contentcal .tray', 'Ideas', 'Posts without a date. Ideas raised in marketing meetings land here too, with the meeting they came from. Drag one onto a day to plan it, or open it and put it in the bank until later.', OPT),
       C('The composer', 'Open any post to write the caption (the AI drafts it in the Welfare Avenue voice), add images, check the preview, then plan it, schedule it or publish it now.')
     ] },
     socialstats: { tab: 'socialstats', icon: 'target', hash: '#socialstats', steps: [
@@ -50685,7 +50778,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function norm(d) {
     d = d || {};
-    return { tasks: arr(d.tasks), projects: arr(d.projects), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
+    return { tasks: arr(d.tasks), projects: arr(d.projects), ideas: arr(d.ideas), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
   }
   function load(force) {
     if (!staffOk()) { B.data = norm(null); return Promise.resolve(B.data); }
@@ -50708,6 +50801,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     d.tasks.forEach(function (t) {
       out.push({ kind: 'task', id: t.id, title: t.title || 'A task', dept: t.department, until: t.bank_until, note: t.bank_note, by: t.banked_by, at: t.banked_at,
         owner: t.owner, project: t.project, parent: t.parent, desc: t.description, subs: Number(t.subtasks || 0), due: t.bank_due, priority: !!t.priority, lead: true });
+    });
+    /* wave136: content ideas the Content calendar put here (Marketing) */
+    d.ideas.forEach(function (c) {
+      out.push({ kind: 'idea', id: c.id, title: c.title || 'A content idea', dept: c.department || 'marketing', until: c.bank_until, note: c.bank_note, by: c.banked_by, at: c.banked_at,
+        desc: c.idea, source: c.source, sourceId: c.source_transcript_id, sourceDate: c.source_date, forDate: c.idea_for, owner: c.suggested_by, campaign: c.campaign, lead: true });
     });
     out.sort(function (a, b) { return String(a.until || '').localeCompare(String(b.until || '')) || String(a.title).localeCompare(String(b.title)); });
     return out;
@@ -50816,6 +50914,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var it = itemBy(kind, id);
     var res = await rpc('bank_unbank', { p_kind: kind, p_id: Number(id), p_why: 'brought back early' });
     if (kind === 'project') await refreshProjects();
+    if (kind === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (e) { /* fine */ } toastS((it ? '\u201c' + clip(it.title, 50) + '\u201d' : 'It') + ' is back in the Content calendar\u2019s Ideas'); afterChange(); return res; }
     await reloadTasks();
     toastS((it ? '\u201c' + clip(it.title, 50) + '\u201d' : 'It') + ' is back on the ' + teamShort(it ? it.dept : '') + ' board');
     afterChange();
@@ -50857,10 +50956,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function statsHtml(all) {
     var t = today(), soon = all.filter(function (x) { var d = parseDay(x.until); return d && daysBetween(t, d) <= 30; }).length;
-    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, np = all.length - nt, back = backItems().length;
+    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, ni = all.filter(function (x) { return x.kind === 'idea'; }).length, np = all.length - nt - ni, back = backItems().length;
     var add = canWork() && (B.data ? B.data.can : true);
     return '<div class="w132top">'
-      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
+      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : '', ni ? plural(ni, 'content idea', 'content ideas') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
       + '<div class="w132st"><b>' + soon + '</b><span>coming back in the next 30 days</span></div>'
       + '<div class="w132st"><b>' + back + '</b><span>back in the last two weeks</span></div>'
       + (add ? '<button type="button" class="w132add" data-w132new="1">' + I('plus') + 'Put something in the bank</button>' : '')
@@ -50870,7 +50969,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<details class="w132how"' + (B.howOpen ? ' open' : '') + '><summary>' + I('vault') + 'How the bank works</summary>'
       + '<p>When a piece of work cannot start for three months or more, move it here instead of leaving it on a board: open the task and press <b>Move to the bank</b> (its open subtasks go with it), or bank a whole project from its page (the project, its sub-projects and every open task in them). Pick when it should come back and say why it waits.</p>'
       + '<p>Nothing in the bank shows on boards, lists, counts, alerts, digests or agendas. On the morning of its date it goes back to its team\u2019s board with its owner, subtasks and project, keeps its due date if that is still ahead, and carries <b>back from the bank</b> for two weeks.</p>'
-      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p></details>';
+      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p>'
+      + '<p>Content ideas wait here too: an idea from a marketing meeting for three months or more away, or one someone moved from the Content calendar. It comes back to the calendar\u2019s Ideas on its date (six weeks before the date it is for, when it came from a meeting).</p></details>';
   }
   function backHtml(team) {
     var rows = backItems().filter(function (x) { return !team || x.department === team; });
@@ -50878,7 +50978,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<div class="w132card w132back" id="w132back"><h3>Back from the bank <span>the last two weeks, now on their boards</span></h3>'
       + rows.slice(0, 12).map(function (x) {
         var d = dayOfIso(x.at);
-        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' \u00b7 project' : '') + (x.owner ? ' \u00b7 ' + E(x.owner) : '') + ' \u00b7 back ' + E(d ? fmtShort(d) : '') + '</div></div>'
+        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' \u00b7 project' : x.kind === 'idea' ? ' \u00b7 content idea, in the calendar\u2019s Ideas' : '') + (x.owner ? ' \u00b7 ' + E(x.owner) : '') + ' \u00b7 back ' + E(d ? fmtShort(d) : '') + '</div></div>'
           + '<button type="button" class="w132lnk" data-w132open="' + E(x.kind) + ':' + E(x.id) + '" data-d="' + E(x.department) + '">Open</button></div>';
       }).join('') + '</div>';
   }
@@ -50903,6 +51003,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (x.parent) meta.push('<span>subtask of ' + E(clip(x.parent, 48)) + '</span>');
       if (x.owner) meta.push('<span>' + E(x.owner) + '</span>');
       if (x.subs) meta.push('<span>with ' + plural(x.subs, 'subtask', 'subtasks') + '</span>');
+    } else if (x.kind === 'idea') {
+      meta.push('<span>content idea</span>');
+      if (x.forDate) meta.push('<span>for ' + E(fmtShort(parseDay(x.forDate))) + '</span>');
+      if (x.campaign) meta.push('<span>' + E(x.campaign) + '</span>');
+      if (x.owner) meta.push('<span>raised by ' + E(x.owner) + '</span>');
+      if (x.source) meta.push('<span>from ' + E(clip(x.source, 48)) + '</span>');
     } else {
       if (x.parent) meta.push('<span>part of ' + E(x.parent) + '</span>');
       meta.push('<span>' + plural(x.tasks, 'open task', 'open tasks') + (x.subs ? ' in it and ' + plural(x.subs, 'sub-project', 'sub-projects') : '') + '</span>');
@@ -50925,7 +51031,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     return '<div class="w132it' + (x.kind === 'project' ? ' proj' : '') + '" data-w132it="' + E(key) + '">'
       + '<span class="ic">' + I(x.kind === 'project' ? 'box' : 'task') + '</span>'
-      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : '')
+      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : x.kind === 'idea' ? '<span class="kd">Content idea</span>' : '')
       + '<div class="m">' + meta.join('') + '</div>' + whyHtml(x) + (by.length ? '<div class="by">' + by.join(' \u00b7 ') + '</div>' : '') + more + '</div>'
       + '<div class="r"><div class="when"><b>' + E(d ? fmtShort(d) : 'Later') + '</b><span>' + E(d ? inDays(d) : '') + '</span></div>' + acts + '</div>'
       + '</div>';
@@ -51159,7 +51265,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function cardHtml(d) {
     var c = teamCounts(d);
     var rows = c.back.slice(0, 3).map(function (x) { var dd = dayOfIso(x.at); return '<div class="w132trow back"><span>' + E(x.title) + '</span><em>back ' + E(dd ? fmtShort(dd) : '') + '</em></div>'; })
-      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
+      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : x.kind === 'idea' ? 'Content idea: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
     var sum = [];
     if (c.list.length) sum.push('<b>' + plural(c.list.length, 'item', 'items') + '</b> waiting' + (c.projects ? ' (' + plural(c.projects, 'project', 'projects') + ')' : ''));
     if (c.back.length) sum.push('<b>' + c.back.length + '</b> back in the last two weeks');
@@ -51258,6 +51364,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w132open]'))) {
       var ko = el.getAttribute('data-w132open').split(':');
       if (ko[0] === 'project') { go('#project/' + ko[1]); return; }
+      if (ko[0] === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (x) { /* fine */ } go('#contentcal/' + ko[1]); return; }
       var tt = taskById(ko[1]);
       if (tt && window.w116Board && window.w116Board.open) { window.w116Board.open(Number(ko[1])); return; }
       go('#team/' + (el.getAttribute('data-d') || '') + '/tasks');
@@ -51315,7 +51422,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
         S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
-        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off.', OPT),
+        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team\u2019s board again, marked back from the bank.', OPT),
         S('#w132 .w132bar', 'Each team', 'Show one team\u2019s bank, or search for something.', OPT),
         S('#w132 .w132grp', 'By the month it comes back', 'Why each piece waits and who put it here. Bring it back now or give it a new date.', OPT)

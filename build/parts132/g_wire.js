@@ -52,6 +52,7 @@
     if ((el = t.closest('[data-w132open]'))) {
       var ko = el.getAttribute('data-w132open').split(':');
       if (ko[0] === 'project') { go('#project/' + ko[1]); return; }
+      if (ko[0] === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (x) { /* fine */ } go('#contentcal/' + ko[1]); return; }
       var tt = taskById(ko[1]);
       if (tt && window.w116Board && window.w116Board.open) { window.w116Board.open(Number(ko[1])); return; }
       go('#team/' + (el.getAttribute('data-d') || '') + '/tasks');
@@ -109,7 +110,7 @@
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
         S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
-        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off.', OPT),
+        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team’s board again, marked back from the bank.', OPT),
         S('#w132 .w132bar', 'Each team', 'Show one team’s bank, or search for something.', OPT),
         S('#w132 .w132grp', 'By the month it comes back', 'Why each piece waits and who put it here. Bring it back now or give it a new date.', OPT)

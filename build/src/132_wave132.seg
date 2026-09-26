@@ -290,7 +290,7 @@
   }
   function norm(d) {
     d = d || {};
-    return { tasks: arr(d.tasks), projects: arr(d.projects), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
+    return { tasks: arr(d.tasks), projects: arr(d.projects), ideas: arr(d.ideas), back: arr(d.back), today: d.today || ymd(today()), can: d.can_bank !== false, leader: !!d.leader };
   }
   function load(force) {
     if (!staffOk()) { B.data = norm(null); return Promise.resolve(B.data); }
@@ -313,6 +313,11 @@
     d.tasks.forEach(function (t) {
       out.push({ kind: 'task', id: t.id, title: t.title || 'A task', dept: t.department, until: t.bank_until, note: t.bank_note, by: t.banked_by, at: t.banked_at,
         owner: t.owner, project: t.project, parent: t.parent, desc: t.description, subs: Number(t.subtasks || 0), due: t.bank_due, priority: !!t.priority, lead: true });
+    });
+    /* wave136: content ideas the Content calendar put here (Marketing) */
+    d.ideas.forEach(function (c) {
+      out.push({ kind: 'idea', id: c.id, title: c.title || 'A content idea', dept: c.department || 'marketing', until: c.bank_until, note: c.bank_note, by: c.banked_by, at: c.banked_at,
+        desc: c.idea, source: c.source, sourceId: c.source_transcript_id, sourceDate: c.source_date, forDate: c.idea_for, owner: c.suggested_by, campaign: c.campaign, lead: true });
     });
     out.sort(function (a, b) { return String(a.until || '').localeCompare(String(b.until || '')) || String(a.title).localeCompare(String(b.title)); });
     return out;
@@ -421,6 +426,7 @@
     var it = itemBy(kind, id);
     var res = await rpc('bank_unbank', { p_kind: kind, p_id: Number(id), p_why: 'brought back early' });
     if (kind === 'project') await refreshProjects();
+    if (kind === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (e) { /* fine */ } toastS((it ? '\u201c' + clip(it.title, 50) + '\u201d' : 'It') + ' is back in the Content calendar\u2019s Ideas'); afterChange(); return res; }
     await reloadTasks();
     toastS((it ? '\u201c' + clip(it.title, 50) + '\u201d' : 'It') + ' is back on the ' + teamShort(it ? it.dept : '') + ' board');
     afterChange();
@@ -462,10 +468,10 @@
   }
   function statsHtml(all) {
     var t = today(), soon = all.filter(function (x) { var d = parseDay(x.until); return d && daysBetween(t, d) <= 30; }).length;
-    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, np = all.length - nt, back = backItems().length;
+    var nt = all.filter(function (x) { return x.kind === 'task'; }).length, ni = all.filter(function (x) { return x.kind === 'idea'; }).length, np = all.length - nt - ni, back = backItems().length;
     var add = canWork() && (B.data ? B.data.can : true);
     return '<div class="w132top">'
-      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
+      + '<div class="w132st gold"><b>' + all.length + '</b><span>in the bank' + (all.length ? ' (' + [nt ? plural(nt, 'task', 'tasks') : '', np ? plural(np, 'project', 'projects') : '', ni ? plural(ni, 'content idea', 'content ideas') : ''].filter(Boolean).join(', ') + ')' : '') + '</span></div>'
       + '<div class="w132st"><b>' + soon + '</b><span>coming back in the next 30 days</span></div>'
       + '<div class="w132st"><b>' + back + '</b><span>back in the last two weeks</span></div>'
       + (add ? '<button type="button" class="w132add" data-w132new="1">' + I('plus') + 'Put something in the bank</button>' : '')
@@ -475,7 +481,8 @@
     return '<details class="w132how"' + (B.howOpen ? ' open' : '') + '><summary>' + I('vault') + 'How the bank works</summary>'
       + '<p>When a piece of work cannot start for three months or more, move it here instead of leaving it on a board: open the task and press <b>Move to the bank</b> (its open subtasks go with it), or bank a whole project from its page (the project, its sub-projects and every open task in them). Pick when it should come back and say why it waits.</p>'
       + '<p>Nothing in the bank shows on boards, lists, counts, alerts, digests or agendas. On the morning of its date it goes back to its team\u2019s board with its owner, subtasks and project, keeps its due date if that is still ahead, and carries <b>back from the bank</b> for two weeks.</p>'
-      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p></details>';
+      + '<p>The Hub does the same on its own when a meeting puts something off by three months or more, and Ask the Hub can move a task here when you ask it to. You can bring anything back early, or give it a new date.</p>'
+      + '<p>Content ideas wait here too: an idea from a marketing meeting for three months or more away, or one someone moved from the Content calendar. It comes back to the calendar\u2019s Ideas on its date (six weeks before the date it is for, when it came from a meeting).</p></details>';
   }
   function backHtml(team) {
     var rows = backItems().filter(function (x) { return !team || x.department === team; });
@@ -483,7 +490,7 @@
     return '<div class="w132card w132back" id="w132back"><h3>Back from the bank <span>the last two weeks, now on their boards</span></h3>'
       + rows.slice(0, 12).map(function (x) {
         var d = dayOfIso(x.at);
-        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' \u00b7 project' : '') + (x.owner ? ' \u00b7 ' + E(x.owner) : '') + ' \u00b7 back ' + E(d ? fmtShort(d) : '') + '</div></div>'
+        return '<div class="w132brow"><span class="ic">' + I(x.kind === 'project' ? 'box' : 'back') + '</span><div style="min-width:0"><div class="t">' + E(x.title) + '</div><div class="m">' + E(teamShort(x.department)) + (x.kind === 'project' ? ' \u00b7 project' : x.kind === 'idea' ? ' \u00b7 content idea, in the calendar\u2019s Ideas' : '') + (x.owner ? ' \u00b7 ' + E(x.owner) : '') + ' \u00b7 back ' + E(d ? fmtShort(d) : '') + '</div></div>'
           + '<button type="button" class="w132lnk" data-w132open="' + E(x.kind) + ':' + E(x.id) + '" data-d="' + E(x.department) + '">Open</button></div>';
       }).join('') + '</div>';
   }
@@ -508,6 +515,12 @@
       if (x.parent) meta.push('<span>subtask of ' + E(clip(x.parent, 48)) + '</span>');
       if (x.owner) meta.push('<span>' + E(x.owner) + '</span>');
       if (x.subs) meta.push('<span>with ' + plural(x.subs, 'subtask', 'subtasks') + '</span>');
+    } else if (x.kind === 'idea') {
+      meta.push('<span>content idea</span>');
+      if (x.forDate) meta.push('<span>for ' + E(fmtShort(parseDay(x.forDate))) + '</span>');
+      if (x.campaign) meta.push('<span>' + E(x.campaign) + '</span>');
+      if (x.owner) meta.push('<span>raised by ' + E(x.owner) + '</span>');
+      if (x.source) meta.push('<span>from ' + E(clip(x.source, 48)) + '</span>');
     } else {
       if (x.parent) meta.push('<span>part of ' + E(x.parent) + '</span>');
       meta.push('<span>' + plural(x.tasks, 'open task', 'open tasks') + (x.subs ? ' in it and ' + plural(x.subs, 'sub-project', 'sub-projects') : '') + '</span>');
@@ -530,7 +543,7 @@
     }
     return '<div class="w132it' + (x.kind === 'project' ? ' proj' : '') + '" data-w132it="' + E(key) + '">'
       + '<span class="ic">' + I(x.kind === 'project' ? 'box' : 'task') + '</span>'
-      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : '')
+      + '<div style="min-width:0"><button type="button" class="tt" data-w132more="' + E(key) + '" aria-expanded="' + (open ? 'true' : 'false') + '">' + E(x.title) + '</button>' + (x.kind === 'project' ? '<span class="kd">Project</span>' : x.kind === 'idea' ? '<span class="kd">Content idea</span>' : '')
       + '<div class="m">' + meta.join('') + '</div>' + whyHtml(x) + (by.length ? '<div class="by">' + by.join(' \u00b7 ') + '</div>' : '') + more + '</div>'
       + '<div class="r"><div class="when"><b>' + E(d ? fmtShort(d) : 'Later') + '</b><span>' + E(d ? inDays(d) : '') + '</span></div>' + acts + '</div>'
       + '</div>';
@@ -764,7 +777,7 @@
   function cardHtml(d) {
     var c = teamCounts(d);
     var rows = c.back.slice(0, 3).map(function (x) { var dd = dayOfIso(x.at); return '<div class="w132trow back"><span>' + E(x.title) + '</span><em>back ' + E(dd ? fmtShort(dd) : '') + '</em></div>'; })
-      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
+      .concat(c.list.slice(0, Math.max(0, 4 - Math.min(3, c.back.length))).map(function (x) { var dd = parseDay(x.until); return '<div class="w132trow"><span>' + (x.kind === 'project' ? 'Project: ' : x.kind === 'idea' ? 'Content idea: ' : '') + E(x.title) + '</span><em>' + E(dd ? fmtShort(dd) : '') + '</em></div>'; }));
     var sum = [];
     if (c.list.length) sum.push('<b>' + plural(c.list.length, 'item', 'items') + '</b> waiting' + (c.projects ? ' (' + plural(c.projects, 'project', 'projects') + ')' : ''));
     if (c.back.length) sum.push('<b>' + c.back.length + '</b> back in the last two weeks');
@@ -863,6 +876,7 @@
     if ((el = t.closest('[data-w132open]'))) {
       var ko = el.getAttribute('data-w132open').split(':');
       if (ko[0] === 'project') { go('#project/' + ko[1]); return; }
+      if (ko[0] === 'idea') { try { if (window.w121Stale) window.w121Stale(); } catch (x) { /* fine */ } go('#contentcal/' + ko[1]); return; }
       var tt = taskById(ko[1]);
       if (tt && window.w116Board && window.w116Board.open) { window.w116Board.open(Number(ko[1])); return; }
       go('#team/' + (el.getAttribute('data-d') || '') + '/tasks');
@@ -920,7 +934,7 @@
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
         S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
-        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off.', OPT),
+        S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team\u2019s board again, marked back from the bank.', OPT),
         S('#w132 .w132bar', 'Each team', 'Show one team\u2019s bank, or search for something.', OPT),
         S('#w132 .w132grp', 'By the month it comes back', 'Why each piece waits and who put it here. Bring it back now or give it a new date.', OPT)
