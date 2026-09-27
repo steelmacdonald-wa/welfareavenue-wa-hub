@@ -1,5 +1,5 @@
-/* w149drive.js: wave149. The loading screen (milestones, shout-outs, lessons, learnings and fun facts in turn, and the news
-   banner along the bottom), its cache after sign-in, Admin > Loading screen, Meet attendance in the HR centre only, the hover
+/* w149drive.js: wave149. The loading screen (milestones, shout-outs, lessons, learnings and fun facts in turn; the news
+   banner moved to Home in wave151, see w151drive), its cache after sign-in, Admin > Loading screen, Meet attendance in the HR centre only, the hover
    numbers on the Analytics graphs, and the post photo fallback. usage: node test/w149drive.js */
 const fs = require('fs');
 const path = require('path');
@@ -58,31 +58,25 @@ function kindOk(entry) { const [lab, text] = entry.split('|'); const m = /^([MLE
   v = await veil(f);
   ok('the loading screen shows a labelled line from this week', v.seen.length >= 1 && v.seen.every(kindOk), v.seen);
   ok('the first three lines are three different kinds (one of each before any repeats)', v.seen.length >= 3 && new Set(v.seen.slice(0, 3).map(s => s.split('|')[0])).size === 3, v.seen);
-  ok('the news banner runs along the bottom with the day’s news', v.bar && v.bar.label === 'News' && v.bar.items.slice(0, 3).join('|') === CACHE.news.join('|') && v.bar.items.length >= 6 && v.bar.items.length % 3 === 0, v.bar);
-  ok('the banner scrolls (a duration set, a seamless loop)', v.bar && v.bar.go && /s$/.test(v.bar.dur || ''), v.bar);
-  ok('the doodles move up to make room for the banner', /w149n/.test(v.cls || ''), v.cls);
+  ok('the loading screen has no news banner (it moved to Home), even with news in an older cache', !v.bar && !/w149n/.test(v.cls || ''), [v.bar, v.cls]);
   await f.ev(() => { window.__allowReady = true; document.documentElement.classList.add('wa-ready'); setTimeout(function () { var v = document.getElementById('wa110veil'); if (v) v.remove(); }, 450); });
   await f.page.waitForTimeout(600);
   const gone = await f.ev(() => { const el = document.getElementById('wa110veil'); return el ? getComputedStyle(el).opacity : 'removed'; });
   ok('once the Hub is ready the loading screen fades', gone === 'removed' || Number(gone) < 0.5, gone);
   await f.page.waitForTimeout(5500);
   const cache = await f.ev(() => { try { return JSON.parse(localStorage.getItem('wa149reel')); } catch (e) { return null; } });
-  ok('after sign-in the cache holds this week’s lines and today’s news from the Hub', cache && cache.lines.some(x => /^RPC lesson/.test(x.t)) && cache.news.join() === 'RPC news: Welcome to the new volunteers' && cache.at > NOW, cache);
-  ok('the Hub\u2019s own shout-outs are cached, without one about delegation or one staff posted', cache && cache.shouts.some(t => /Ian closed 52/.test(t)) && !cache.shouts.some(t => /delegation|staff-posted/i.test(t)) && cache.day === '2026-09-25', cache && [cache.shouts, cache.day]);
+  ok('after sign-in the cache holds this week’s lines and no news any more', cache && cache.v === 3 && cache.lines.some(x => /^RPC lesson/.test(x.t)) && cache.news === undefined && cache.day === undefined && cache.at > NOW, cache);
+  ok('the Hub\u2019s own shout-outs are cached, without one about delegation or one staff posted', cache && cache.shouts.some(t => /Ian closed 52/.test(t)) && !cache.shouts.some(t => /delegation|staff-posted/i.test(t)), cache && cache.shouts);
   await f.ev(() => window.w149.clear());
   const cleared = await f.ev(() => [localStorage.getItem('wa149reel'), localStorage.getItem('wa116s')]);
   ok('signing out clears the loading screen cache (both kinds)', cleared[0] === null && cleared[1] === null, cleared);
   ok('no page errors (loading screen)', f.errs.length === 0, f.errs);
   await f.close();
 
-  /* reduced motion: one news item at a time, no scrolling */
+  /* reduced motion: the lines still rotate, and there is no banner */
   f = await fresh(browser, { who: 'admin', hash: '#mypage', init: veilInit({ wa149reel: CACHE }, true), wait: 600 });
   v = await veil(f);
-  ok('with reduced motion the banner shows one item at a time', v.bar && v.bar.rm && !v.bar.go && v.bar.items.length === 3 && v.bar.on.length === 1, v.bar);
-  const first = v.bar && v.bar.on[0];
-  await f.page.waitForTimeout(4300);
-  v = await veil(f);
-  ok('and moves to the next item after a few seconds', v.bar && v.bar.on.length === 1 && v.bar.on[0] !== first, [first, v.bar && v.bar.on]);
+  ok('with reduced motion the loading screen shows its lines and no banner', !v.bar && v.seen.length >= 1 && v.seen.every(kindOk), v);
   await f.close();
 
   /* the older shout-out cache is no longer read (it was not filtered), and it is removed */
@@ -98,10 +92,10 @@ function kindOk(entry) { const [lab, text] = entry.split('|'); const m = /^([MLE
   ok('without a sign-in in this browser the cache is not shown', !v.bar && v.seen.length >= 1 && v.seen.every(s => s.split('|')[0] === 'Did you know'), v);
   await f.close();
 
-  /* news from an older day is not shown; the week's lines are */
+  /* an older day in the cache does not matter any more: the week's lines show, and there is no banner */
   f = await fresh(browser, { who: 'admin', hash: '#mypage', init: veilInit({ wa149reel: Object.assign({}, CACHE, { day: '2026-09-20' }) }), wait: 600 });
   v = await veil(f);
-  ok('news from an older day is left off the banner (the week\u2019s lines still show)', !v.bar && v.seen.length >= 1 && v.seen.every(kindOk) && v.seen.some(s => !/^Did you know/.test(s)) || (!v.bar && v.seen.length >= 1), v);
+  ok('an older day in the cache: the week\u2019s lines show, no banner', !v.bar && v.seen.length >= 1 && v.seen.every(kindOk), v);
   await f.close();
 
   /* a cache older than two weeks is ignored: fun facts only */
@@ -123,8 +117,8 @@ function kindOk(entry) { const [lab, text] = entry.split('|'); const m = /^([MLE
       db.__w149 = 1; }, 5); })();`;
   f = await fresh(browser, { who: 'admin', hash: '#adminpanel/loading', init: MOCK, rpcs: { wa_org_editor: true, hub_reel_admin: ADMIN, hub_reel_current: { lines: [], news: [] } }, wait: 4500 });
   const adm = await f.ev(() => { const c = document.getElementById('w149card'); const nav = document.querySelector('#adminpanel nav.w118adm a[data-w118sec="loading"]');
-    return c ? { shown: getComputedStyle(c).display !== 'none', nav: !!nav, navOn: nav && nav.classList.contains('on'), cols: [...c.querySelectorAll('.col h4')].map(h => h.textContent), off: [...c.querySelectorAll('.col li.off span')].map(s => s.textContent), news: [...c.querySelectorAll('.news li span')].map(s => s.textContent), mast: (document.querySelector('#adminpanel .w118mast') || {}).textContent || '' } : { nav: !!nav }; });
-  ok('Admin has a Loading screen section with its card', adm.shown && adm.nav && adm.navOn && /Loading screen/.test(adm.mast), adm);
+    return c ? { shown: getComputedStyle(c).display !== 'none', nav: !!nav, navOn: nav && nav.classList.contains('on'), cols: [...c.querySelectorAll('.col h4')].map(h => h.textContent), off: [...c.querySelectorAll('.col li.off span')].map(s => s.textContent), news: [...c.querySelectorAll('.news li span')].map(s => s.textContent), mast: (document.querySelector('#adminpanel .w118mast') || {}).textContent || '', top: (c.querySelector('.top p') || {}).textContent || '' } : { nav: !!nav }; });
+  ok('Admin has a Loading screen and news section with its card', adm.shown && adm.nav && adm.navOn && /Loading screen and news/.test(adm.mast) && /top of Home/.test(adm.top || ''), adm);
   ok('this week’s lines by kind, with what was taken off struck through', adm.cols && adm.cols.join('|') === 'Milestones 1|Lessons learned 1|Learnings 1' && adm.off.length === 1 && /taken off by suhaib/.test(adm.off[0]), adm);
   ok('the news banner lists the live update first, then the day’s news', adm.news && /^Holiday drive sign-ups/.test(adm.news[0]) && /^Next serving/.test(adm.news[1] || ''), adm.news);
   await f.ev(() => document.querySelector('#w149card .col li:not(.off) [data-w149hide]').click());
@@ -147,7 +141,7 @@ function kindOk(entry) { const [lab, text] = entry.split('|'); const m = /^([MLE
   const inv = await f.ev(() => window.__INV.filter(x => x.name === 'hub-reel'));
   ok('Rebuild now rebuilds the week and the news', busy && busy.d && /Rebuilding/.test(busy.t) && inv.length === 1 && inv[0].body.action === 'build' && inv[0].body.force === true, [busy, inv]);
   const tour = await f.ev(() => { const s = (window.w122 && w122.tours && w122.tours.adminpanel && w122.tours.adminpanel.steps) || []; const st = s.filter(x => x.s === '#w149card')[0]; const nav = s.filter(x => x.s === '#adminpanel nav.w118adm')[0]; return { has: !!st, hash: st && st.hash, nav: nav && nav.p }; });
-  ok('the Admin tour has a stop for the loading screen', tour.has && tour.hash === '#adminpanel/loading', tour);
+  ok('the Admin tour has a stop for the loading screen and news', tour.has && tour.hash === '#adminpanel/loading', tour);
   await f.hash('#adminpanel/security', 900);
   const hid = await f.ev(() => { const c = document.getElementById('w149card'); return c ? getComputedStyle(c).display : 'none'; });
   ok('the card is hidden on the other Admin sections', hid === 'none', hid);

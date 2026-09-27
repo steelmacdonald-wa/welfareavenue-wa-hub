@@ -1,0 +1,174 @@
+/* =====================================================================
+   WA v151 the news banner moves from the loading screen to Home (27/09/26)
+   =====================================================================
+   Steel (27/09/26): "I see the news banner, I don't want [it] to be on the loading page, instead put it on the dashboard
+   itself", then chose Home (the page staff land on after the loading screen).
+   - The banner sits at the top of Home, under the greeting: a gold News label and the day's news scrolling on the green,
+     read live from hub_reel_current() (admins' updates first, then the news hub-reel rebuilds every morning). No news, no
+     banner. Items with a link open it (a Hub page, or a web page in a new tab).
+   - Moving content can be stopped: hovering or focusing it pauses it, and the pause button stops it until pressed again
+     (remembered per browser). With reduced motion it shows one item at a time. Keyboard focus on an item brings it into
+     view. Screen readers read the list once; the copies that make the loop seamless are hidden from them.
+   - The loading screen (000_head_base) no longer shows or caches the news; Admin, Loading screen and news (wave149) edits
+     it as before and refreshes this banner.
+   ===================================================================== */
+(function () {
+  if (window.__wa151) return; window.__wa151 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private window */ } }
+  function signedIn() { try { return typeof db !== 'undefined' && !!db && typeof USER !== 'undefined' && !!USER && !!USER.email; } catch (e) { return false; } }
+  function reduced() { try { return !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; } }
+
+  var st = document.createElement('style'); st.id = 'w151css';
+  st.textContent = ''
+    + '#w151news{position:relative;display:flex;align-items:stretch;height:42px;margin:12px 0 14px;border-radius:14px;overflow:hidden;background:' + GREEN + ';color:' + CREAM + ';font:13.5px/1.2 ' + BODY + ';box-shadow:0 1px 2px rgba(16,63,57,.12);}'
+    + '#w151news .lb{flex:none;display:flex;align-items:center;padding:0 14px 0 16px;background:' + GOLD + ';color:' + INK + ';font-weight:700;font-size:11px;letter-spacing:2.2px;text-transform:uppercase;}'
+    + '#w151news .trk{flex:1;min-width:0;overflow:hidden;display:flex;align-items:center;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);mask-image:linear-gradient(90deg,transparent 0,#000 22px,#000 calc(100% - 22px),transparent 100%);}'
+    + '#w151news .run{display:inline-flex;white-space:nowrap;will-change:transform;}'
+    + '#w151news .run.go{animation:w151tick 30s linear infinite;}'
+    + '#w151news:hover .run.go,#w151news:focus-within .run.go,#w151news.paused .run.go{animation-play-state:paused;}'
+    + '#w151news .it{display:inline-flex;align-items:center;padding:0 34px 0 0;color:inherit;text-decoration:none;}'
+    + '#w151news .it::before{content:"";width:6px;height:6px;border-radius:50%;background:' + GOLD + ';margin-right:12px;flex:none;}'
+    + '#w151news a.it{cursor:pointer;}#w151news a.it:hover span,#w151news a.it:focus span{text-decoration:underline;text-underline-offset:3px;}'
+    + '#w151news a.it:focus{outline:none;}#w151news a.it:focus-visible span{outline:2px solid ' + GOLD + ';outline-offset:3px;border-radius:3px;}'
+    + '#w151news a.it .ex{opacity:.7;margin-left:5px;font-size:11px;}'
+    + '#w151news.one .it{display:none;padding-right:0;}#w151news.one .it.on{display:inline-flex;}#w151news.one .trk{padding-left:14px;-webkit-mask-image:none;mask-image:none;}'
+    + '#w151news .pz{flex:none;width:40px;border:0;border-left:1px solid rgba(255,250,242,.14);background:transparent;color:' + CREAM + ';cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;}'
+    + '#w151news .pz:hover{background:rgba(255,250,242,.08);}#w151news .pz:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-4px;}'
+    + '#w151news .pz svg{width:14px;height:14px;fill:currentColor;}'
+    + '@keyframes w151tick{from{transform:translateX(0);}to{transform:translateX(-50%);}}'
+    + '@media (max-width:600px){#w151news{height:40px;font-size:12.5px;margin:10px 0 12px;}#w151news .lb{padding:0 10px 0 12px;letter-spacing:1.6px;}#w151news .pz{width:36px;}}'
+    + '@media print{#w151news{display:none;}}';
+  document.head.appendChild(st);
+
+  /* ---------- data: the day's news, live ---------- */
+  var N = { items: null, at: 0, busy: null, day: null };
+  function cleanLink(l) { l = String(l || '').trim(); if (/^#[\w\/-]{1,80}$/.test(l)) return l; if (/^https:\/\/[^\s"'<>]{4,300}$/.test(l)) return l; return ''; }
+  function load(force) {
+    if (!signedIn()) return Promise.resolve();
+    if (N.busy) return N.busy;
+    if (!force && N.items && Date.now() - N.at < 10 * 60000) return Promise.resolve();
+    N.busy = (async function () {
+      try {
+        var r = await db.rpc('hub_reel_current');
+        if (r && !r.error) {
+          var d = r.data || {};
+          N.items = (d.news || []).map(function (n) { return n && n.t ? { t: String(n.t).trim(), link: cleanLink(n.link) } : null; }).filter(function (n) { return n && n.t; }).slice(0, 12);
+          N.day = d.day || null; N.at = Date.now();
+        } else if (r && r.error) { N.items = []; N.at = Date.now(); }
+      } catch (e) { /* offline: keep what we had */ }
+      N.busy = null;
+    })();
+    return N.busy;
+  }
+
+  /* ---------- the banner ---------- */
+  var PAUSE = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1"/><rect x="13.8" y="5" width="4.2" height="14" rx="1"/></svg>';
+  var PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>';
+  var timer = null;
+  function itemHtml(n, copy) {
+    var inner = '<span>' + E(n.t) + '</span>';
+    if (!n.link) return '<span class="it">' + inner + '</span>';
+    var ext = /^https:/.test(n.link);
+    return '<a class="it" href="' + E(n.link) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + (copy ? ' tabindex="-1"' : '') + '>' + inner + (ext ? '<span class="ex" aria-hidden="true">↗</span>' : '') + '</a>';
+  }
+  function paused() { return lsGet('w151paused') === '1'; }
+  function paint() {
+    var body = document.getElementById('mpBody');
+    var old = document.getElementById('w151news');
+    var items = N.items || [];
+    var head = body && body.querySelector('.mp-head');
+    /* only on the real Home (a board viewer's page has no greeting), and only when there is news */
+    if (!body || !head || !items.length) { if (old) old.remove(); stopTimer(); return; }
+    var bar = old;
+    var sig = JSON.stringify(items);
+    if (bar && bar.__sig === sig && bar.parentNode === body) { syncPause(bar); return; }
+    if (!bar) { bar = document.createElement('div'); bar.id = 'w151news'; bar.setAttribute('role', 'region'); bar.setAttribute('aria-label', 'News'); }
+    if (bar.previousElementSibling !== head) head.insertAdjacentElement('afterend', bar);
+    stopTimer();
+    var one = reduced();
+    bar.className = one ? 'one' : '';
+    bar.__sig = sig;
+    bar.innerHTML = '<span class="lb" aria-hidden="true">News</span><div class="trk"><div class="run">' + items.map(function (n) { return itemHtml(n, false); }).join('') + '</div></div>'
+      + '<button type="button" class="pz" data-w151pause="1"></button>';
+    syncPause(bar);
+    var run = bar.querySelector('.run');
+    if (one) { startOne(bar); return; }
+    /* copies of the list make the loop seamless; they are hidden from screen readers and from the keyboard */
+    requestAnimationFrame(function () {
+      if (!document.body.contains(run)) return;
+      var trk = bar.querySelector('.trk'), w0 = (trk && trk.clientWidth) || 800, copies = 1, guard = 0;
+      var copyHtml = '<span class="cp" aria-hidden="true" style="display:inline-flex">' + items.map(function (n) { return itemHtml(n, true); }).join('') + '</span>';
+      while ((run.scrollWidth < w0 * 2 || copies % 2) && guard++ < 10) { run.insertAdjacentHTML('beforeend', copyHtml); copies++; }
+      var d = Math.max(16, (run.scrollWidth / 2) / 60);
+      run.style.animationDuration = d.toFixed(1) + 's';
+      run.classList.add('go');
+    });
+  }
+  function startOne(bar) {
+    var its = bar.querySelectorAll('.run > .it'); if (!its.length) return;
+    var j = 0; its[0].classList.add('on');
+    if (its.length < 2) return;
+    timer = setInterval(function () {
+      if (!document.body.contains(bar)) { stopTimer(); return; }
+      if (bar.classList.contains('paused') || bar.matches(':hover') || bar.contains(document.activeElement)) return;
+      its[j].classList.remove('on'); j = (j + 1) % its.length; its[j].classList.add('on');
+    }, 5000);
+  }
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function syncPause(bar) {
+    var p = paused(), b = bar.querySelector('[data-w151pause]');
+    bar.classList.toggle('paused', p);
+    if (b) { b.innerHTML = p ? PLAY : PAUSE; b.setAttribute('aria-label', p ? 'Play the news' : 'Pause the news'); b.title = p ? 'Play the news' : 'Pause the news'; }
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('#w151news [data-w151pause]');
+    if (!b) return;
+    e.preventDefault(); lsSet('w151paused', paused() ? null : '1');
+    var bar = document.getElementById('w151news'); if (bar) syncPause(bar);
+  });
+  /* a focused item comes into view: the scroll stops while the keyboard is on it */
+  document.addEventListener('focusin', function (e) {
+    var a = e.target && e.target.closest && e.target.closest('#w151news .run > a.it');
+    if (!a) return;
+    var bar = document.getElementById('w151news'), run = bar && bar.querySelector('.run'), trk = bar && bar.querySelector('.trk');
+    if (!run || !trk || bar.classList.contains('one')) return;
+    run.style.animation = 'none';
+    run.style.transform = 'translateX(' + (-Math.max(0, a.offsetLeft - 22)) + 'px)';
+  });
+  document.addEventListener('focusout', function (e) {
+    var bar = document.getElementById('w151news');
+    if (!bar || !bar.contains(e.target)) return;
+    setTimeout(function () { if (bar.contains(document.activeElement)) return; var run = bar.querySelector('.run'); if (run) { run.style.animation = ''; run.style.transform = ''; } }, 0);
+  });
+
+  function refresh(force) { return load(force).then(paint).catch(function () { /* fine */ }); }
+  if (typeof renderMyPage === 'function') {
+    var __rm151 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm151.apply(this, arguments);
+      try { paint(); refresh(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  /* the news is rebuilt every morning: a page left open picks up the new day */
+  setInterval(function () { if (document.visibilityState !== 'hidden' && document.getElementById('mpBody')) refresh(true); }, 30 * 60000);
+  try { if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { N.items = null; N.at = 0; var b = document.getElementById('w151news'); if (b) b.remove(); } }); } catch (e) { /* fine */ }
+
+  /* ---------- the Home tour gets a stop ---------- */
+  function addTour() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T || !T.home) return;
+      var s = T.home.steps || [];
+      if (!s.some(function (x) { return x.s === '#w151news'; })) {
+        s.splice(1, 0, { s: '#w151news', t: 'News', p: 'What happened recently and what is coming, rebuilt every morning: the next servings, thank-yous after a serving, fundraising events, people who joined a team, wins from team meetings and updates from the admins. Hover over it or press pause to stop it; an item with a link opens it.', opt: 1 });
+      }
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  window.w151 = { refresh: refresh, state: function () { return N; }, paint: paint };
+})();

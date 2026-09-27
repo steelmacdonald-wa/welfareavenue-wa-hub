@@ -11,8 +11,10 @@
      bottom. It can only use what this browser kept from the last visit, so after sign-in this segment reads
      hub_reel_current() (this week's lines, rebuilt every Monday, and today's news, rebuilt every morning, by hub-reel) and
      the live shout-outs into localStorage wa149reel. Signing out clears it (and wave116p's older wa116s).
-   - Admin, Loading screen (#w149card, admins): this week's lines and today's news, each can be taken off and put back
-     (hub_reel_hide); an update for the news banner (hub_news_add: under 140 characters, until a day); Rebuild now.
+   - Admin, Loading screen and news (#w149card, admins): this week's lines and today's news, each can be taken off and put
+     back (hub_reel_hide); an update for the news banner (hub_news_add: under 140 characters, until a day); Rebuild now.
+   - wave151: the news banner moved from the loading screen to the top of Home (151_wave151 reads it live), so the cache
+     below keeps only the lines and the shout-outs.
    - Analytics: hovering across a graph (a tap and drag on a phone, or the arrow keys) shows a guide line, a dot on each
      line and the numbers of that day, week or month for every platform, with the total. wave120 (the chart and the tile
      lines) and wave147 (Google Search) hand their points in window.__w149ch; bars with data-w149tip show their counts.
@@ -91,15 +93,15 @@
           var q = await db.from('hub_shoutouts').select('text').eq('active', true).eq('kind', 'auto').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(12);
           sh = ((q && q.data) || []).map(function (x) { return String(x.text || '').trim(); }).filter(function (t) { return t && !CONF.test(t); });
         } catch (e) { sh = []; }
-        var c = { v: 2, at: Date.now(), week: d.week || null, day: d.day || null,
+        var c = { v: 3, at: Date.now(), week: d.week || null,
           lines: (d.lines || []).filter(function (x) { return x && x.t && /^(milestone|lesson|learning)$/.test(x.k); }).slice(0, 24).map(function (x) { return { k: x.k, t: String(x.t) }; }),
-          shouts: sh.slice(0, 12),
-          news: (d.news || []).map(function (n) { return n && n.t ? String(n.t) : ''; }).filter(Boolean).slice(0, 12) };
+          shouts: sh.slice(0, 12) };
         try { localStorage.setItem('wa149reel', JSON.stringify(c)); } catch (e) { /* private window: the fun facts show */ }
       } else clearCache(); /* not allowed (a former member) or an error: nothing stays behind */
     } catch (e) { clearCache(); }
     cacheBusy = false;
   }
+  function refreshNews() { try { if (window.w151 && typeof window.w151.refresh === 'function') window.w151.refresh(true); } catch (e) { /* fine */ } }
   function clearCache() { try { localStorage.removeItem('wa149reel'); localStorage.removeItem('wa116s'); } catch (e) { /* fine */ } }
   if (typeof signOutAll === 'function') {
     var __so149 = signOutAll;
@@ -190,7 +192,7 @@
       var W = window.__wa118; if (!W || !Array.isArray(W.ADMIN)) return false;
       if (!W.ADMIN.some(function (a) { return a[0] === 'loading'; })) {
         var at = W.ADMIN.length; W.ADMIN.forEach(function (a, i) { if (a[0] === 'change') at = i; });
-        W.ADMIN.splice(at, 0, ['loading', 'Loading screen', '#w149card', 'What shows while the Hub opens: this week’s milestones, lessons and learnings, the shout-outs, and the news banner along the bottom.']);
+        W.ADMIN.splice(at, 0, ['loading', 'Loading screen and news', '#w149card', 'What shows while the Hub opens (this week’s milestones, lessons and learnings, and the shout-outs), and the news banner at the top of Home.']);
       }
       return true;
     } catch (e) { return false; }
@@ -211,7 +213,7 @@
   }
   function lineLi(x, kind) {
     var src = { wa_lessons: 'Our story, lessons learned', wa_history: 'Our story', goal_wins: 'a win from a meeting', form_summaries: 'what volunteers said', social_notes: 'Analytics insights', search_top: 'Google Search', volunteer_events: 'the volunteering calendar', fund_events: 'fundraising events', team_members: 'the roster', admin: 'an admin' }[x.source] || '';
-    return '<li class="' + (x.hidden ? 'off' : '') + '"><span>' + E(x.text) + (src || x.hidden_by ? '<small>' + E(src ? 'From ' + src : '') + (x.hidden ? (src ? ' · ' : '') + 'taken off' + (x.hidden_by ? ' by ' + E(String(x.hidden_by).split('@')[0]) : '') : '') + '</small>' : '') + '</span><button type="button" data-w149hide="' + E(x.id) + '" data-on="' + (x.hidden ? '0' : '1') + '">' + (x.hidden ? 'Put back' : 'Take off') + '</button></li>';
+    return '<li class="' + (x.hidden ? 'off' : '') + '"><span>' + E(x.text) + (src || x.hidden_by ? '<small>' + E(src ? 'From ' + src : '') + (x.hidden ? (src ? ' · ' : '') + 'taken off' + (x.hidden_by ? ' by ' + E(String(x.hidden_by).split('@')[0]) : '') : '') + '</small>' : '') + '</span><button type="button" data-w149hide="' + E(x.id) + '" data-k="' + (kind === 'news' ? 'news' : 'line') + '" data-on="' + (x.hidden ? '0' : '1') + '">' + (x.hidden ? 'Put back' : 'Take off') + '</button></li>';
   }
   function paintAdmin() {
     var c = cardEl(); if (!c) return;
@@ -221,12 +223,12 @@
     var lines = d.lines || [];
     var col = function (kind, title) { var xs = lines.filter(function (x) { return x.kind === kind; }); return '<div class="col"><h4>' + title + ' <span class="n">' + xs.filter(function (x) { return !x.hidden; }).length + '</span></h4>' + (xs.length ? '<ul>' + xs.map(function (x) { return lineLi(x, kind); }).join('') + '</ul>' : '<p class="empty">None this week.</p>') + '</div>'; };
     var news = d.news || [], ups = d.updates || [];
-    var html = '<div class="top"><p>While the Hub opens, the loading screen rotates this week’s milestones, lessons learned and learnings with the shout-outs and fun facts, and the news banner runs along the bottom. The lines are rebuilt every Monday and the news every morning' + (d.built_at ? ' (lines built ' + E(ago(d.built_at)) + (d.news_at ? ', news ' + E(ago(d.news_at)) : '') + ')' : '') + '. Anything taken off here stays off (it does not come back in later weeks), and each person\u2019s loading screen catches up the next time they open the Hub. Lines about roles, leadership changes, anyone leaving or HR matters are filtered out; take off anything that slips through.</p>'
+    var html = '<div class="top"><p>While the Hub opens, the loading screen rotates this week’s milestones, lessons learned and learnings with the shout-outs and fun facts. The news banner runs along the top of Home. The lines are rebuilt every Monday and the news every morning' + (d.built_at ? ' (lines built ' + E(ago(d.built_at)) + (d.news_at ? ', news ' + E(ago(d.news_at)) : '') + ')' : '') + '. Anything taken off here stays off (it does not come back in later weeks). Each person\u2019s loading screen catches up the next time they open the Hub, and the news banner the next time Home loads. Lines about roles, leadership changes, anyone leaving or HR matters are filtered out; take off anything that slips through.</p>'
       + '<button type="button" class="btn149 ghost" data-w149rebuild="1"' + (A.rebuilding ? ' disabled' : '') + '>' + (A.rebuilding ? 'Rebuilding…' : 'Rebuild now') + '</button></div>'
       + '<div class="grid">' + col('milestone', 'Milestones') + col('lesson', 'Lessons learned') + col('learning', 'Learnings') + '</div>'
-      + '<div class="sub">News banner' + (d.day ? ', ' + E(dayLong(d.day)) : '') + '</div>'
+      + '<div class="sub">News banner on Home' + (d.day ? ', ' + E(dayLong(d.day)) : '') + '</div>'
       + '<div class="news">' + (ups.filter(function (u) { return u.live; }).length || news.length
-        ? '<ul>' + ups.filter(function (u) { return u.live; }).map(function (u) { return '<li><span>' + E(u.text) + '<small>Your update' + (u.by ? ' from ' + E(String(u.by).split('@')[0]) : '') + (u.until ? ', until ' + E(dayLong(u.until)) : '') + '</small></span><button type="button" data-w149hide="' + E(u.id) + '" data-on="1">Take down</button></li>'; }).join('') + news.map(function (x) { return lineLi(x, 'news'); }).join('') + '</ul>'
+        ? '<ul>' + ups.filter(function (u) { return u.live; }).map(function (u) { return '<li><span>' + E(u.text) + '<small>Your update' + (u.by ? ' from ' + E(String(u.by).split('@')[0]) : '') + (u.until ? ', until ' + E(dayLong(u.until)) : '') + '</small></span><button type="button" data-w149hide="' + E(u.id) + '" data-k="news" data-on="1">Take down</button></li>'; }).join('') + news.map(function (x) { return lineLi(x, 'news'); }).join('') + '</ul>'
         : '<p class="empty">Nothing on the news banner today. Add an update below.</p>')
       + '<div class="add"><label>Add an update to the news banner <input type="text" id="w149t" maxlength="140" placeholder="Holiday drive sign-ups open on 1 November" value="' + E(A.draft) + '"><span class="cnt" id="w149c">' + (140 - A.draft.length) + ' characters left</span></label>'
       + '<label>Link (optional) <input type="text" id="w149l" placeholder="#fundevents or https://" value="' + E(A.link) + '"></label>'
@@ -248,9 +250,10 @@
     if ((el = x.closest('#w149card [data-w149hide]'))) {
       e.preventDefault(); var id = Number(el.getAttribute('data-w149hide')), on = el.getAttribute('data-on') === '1';
       el.disabled = true;
-      try { var r = await db.rpc('hub_reel_hide', { p_id: id, p_hidden: on }); if (r.error) throw r.error; toastS(on ? 'Taken off the loading screen' : 'Back on the loading screen'); }
+      var where = el.getAttribute('data-k') === 'news' ? 'the news banner' : 'the loading screen';
+      try { var r = await db.rpc('hub_reel_hide', { p_id: id, p_hidden: on }); if (r.error) throw r.error; toastS(on ? 'Taken off ' + where : 'Back on ' + where); }
       catch (e2) { toastS('Could not change it: ' + ((e2 && e2.message) || e2)); }
-      await loadAdmin(); refreshCache(); return;
+      await loadAdmin(); refreshCache(); refreshNews(); return;
     }
     if ((el = x.closest('#w149card [data-w149add]'))) {
       e.preventDefault(); var text = (A.draft || '').trim();
@@ -258,13 +261,13 @@
       A.adding = true; paintAdmin();
       try { var r2 = await db.rpc('hub_news_add', { p_text: text, p_link: (A.link || '').trim() || null, p_until: A.until || null }); if (r2.error) throw r2.error; A.draft = ''; A.link = ''; A.until = ''; toastS('Added to the news banner'); }
       catch (e3) { toastS('Could not add it: ' + ((e3 && e3.message) || e3)); }
-      A.adding = false; await loadAdmin(); refreshCache(); return;
+      A.adding = false; await loadAdmin(); refreshCache(); refreshNews(); return;
     }
     if ((el = x.closest('#w149card [data-w149rebuild]'))) {
       e.preventDefault(); if (A.rebuilding) return; A.rebuilding = true; paintAdmin();
       try { var r3 = await db.functions.invoke('hub-reel', { body: { action: 'build', force: true } }); if (r3.error) throw r3.error; var dd = r3.data || {}; if (dd.error) throw new Error(dd.error); toastS('Rebuilt: ' + ((dd.reel && dd.reel.lines) || 0) + ' lines and ' + ((dd.news && dd.news.news) || 0) + ' news'); }
       catch (e4) { toastS('Could not rebuild just now: ' + ((e4 && e4.message) || e4)); }
-      A.rebuilding = false; await loadAdmin(); refreshCache(); return;
+      A.rebuilding = false; await loadAdmin(); refreshCache(); refreshNews(); return;
     }
     if ((el = x.closest('#w149card [data-w149go]'))) { e.preventDefault(); location.hash = el.getAttribute('data-w149go'); }
   });
@@ -281,10 +284,10 @@
       var s = T.adminpanel.steps || [];
       if (!s.some(function (x) { return x.s === '#w149card'; })) {
         var at = s.length; s.forEach(function (x, i) { if (x.s === '#w96card') at = i; });
-        s.splice(at, 0, { s: '#w149card', t: 'Loading screen', p: 'What everyone sees while the Hub opens: this week’s milestones, lessons and learnings (rebuilt every Monday) with the shout-outs, and the news banner along the bottom (rebuilt every morning). Take a line off, or add an update for the banner.', opt: 1, hash: '#adminpanel/loading' });
+        s.splice(at, 0, { s: '#w149card', t: 'Loading screen and news', p: 'What everyone sees while the Hub opens: this week’s milestones, lessons and learnings (rebuilt every Monday) with the shout-outs. Below them, the news banner at the top of Home (rebuilt every morning). Take a line off, or add an update for the banner.', opt: 1, hash: '#adminpanel/loading' });
       }
       var nav = s.filter(function (x) { return x.s === '#adminpanel nav.w118adm'; })[0];
-      if (nav && nav.p.indexOf('loading screen') < 0) nav.p = nav.p.replace('and changing the Hub', 'the loading screen, and changing the Hub');
+      if (nav && nav.p.indexOf('loading screen') < 0) nav.p = nav.p.replace('and changing the Hub', 'the loading screen and the news, and changing the Hub');
     } catch (e) { /* fine */ }
   }
   addTours(); setTimeout(addTours, 1500);

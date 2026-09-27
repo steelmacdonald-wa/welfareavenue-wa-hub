@@ -174,8 +174,10 @@
 146_wave146
 # 147_wave147: Google Search in Analytics (search-console edge function; connects itself once Search Console access is given).
 147_wave147
-# 149_wave149: the loading screen (lines and news cache, Admin > Loading screen; the rotation and the news banner live in 000_head_base), hover numbers on the Analytics graphs, post photo fallback.
+# 149_wave149: the loading screen (lines cache, Admin > Loading screen and news; the rotation lives in 000_head_base), hover numbers on the Analytics graphs, post photo fallback.
 149_wave149
+# 151_wave151: the news banner at the top of Home (moved from the loading screen), read live from hub_reel_current.
+151_wave151
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

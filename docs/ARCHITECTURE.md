@@ -21,7 +21,7 @@ The page is assembled from 157 segments in `build/src/*.seg`. Each segment after
 ## 3. Anatomy of the page
 
 - **Head** (`000_head_base.seg`): a small script with `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `FUNCTIONS_BASE`; supabase-js from jsDelivr; the base CSS (colour tokens on `:root`); the boot veil CSS.
-- **Body markup** (`000_head_base.seg`): the boot veil `#wa110veil` (its first-paint script rotates the fun facts and, from wave149, the week's lines, shout-outs and the news banner that `149_wave149` caches in `localStorage` `wa149reel` after sign-in; shown only while the browser holds a Hub sign-in); the sign-in gate `#gate`; `header.wa-header` (the old brand row, hidden since wave114); `div.wa-toolbar` (search, status and account buttons, restyled by later waves); `nav.wa-nav > #tabBar` with ten buttons; `<main>` with twelve `section.panel` elements (`overview`, `dashboard`, six department panels, `needsme`, `activity`, `transcripts`); `#toast`; `#modalBack` and `#modalBox`.
+- **Body markup** (`000_head_base.seg`): the boot veil `#wa110veil` (its first-paint script rotates the fun facts and, from wave149, the week's lines and shout-outs that `149_wave149` caches in `localStorage` `wa149reel` after sign-in; shown only while the browser holds a Hub sign-in. The news banner moved to the top of Home in wave151 (`151_wave151`, read live)); the sign-in gate `#gate`; `header.wa-header` (the old brand row, hidden since wave114); `div.wa-toolbar` (search, status and account buttons, restyled by later waves); `nav.wa-nav > #tabBar` with ten buttons; `<main>` with twelve `section.panel` elements (`overview`, `dashboard`, six department panels, `needsme`, `activity`, `transcripts`); `#toast`; `#modalBack` and `#modalBox`.
 - **Main script**: one `<script>` that starts in `000_head_base` and ends in `999_tail`. Every other segment is a slice of it.
 
 Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` for a new id; `#personpage` appears on first use), inject their own `<style id="waNNcss">` (140 style elements at runtime), and add buttons to `#tabBar`.
@@ -119,7 +119,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 
 | Route | Menu label | Menu place | Main segments |
 |---|---|---|---|
-| `#mypage` | Home | top level | 009, 074, 075, 089, 105, 112, 115, 116 |
+| `#mypage` | Home (the news banner along the top from 151) | top level | 009, 074, 075, 089, 105, 112, 115, 116, 151 |
 | `#overview` | Executive dashboard | top level | 000, 111, 116g, 116m, 128 |
 | `#calendar` | Calendar | top level | 124 |
 | `#team/<team>/...` | each team in Departments (Meeting attendance moved to the HR centre in 149) | Departments | 116, 116b, 116i, 116t, 122, 123, 124, 126, 132, 144 |

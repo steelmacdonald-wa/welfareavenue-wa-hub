@@ -1302,7 +1302,7 @@ One row: while locked_until is in the future a forms-flow run is filing answers,
 
 ### `hub_reel`
 
-The loading screen (wave149). kind lesson, learning, milestone: the week's lines (batch = Monday, Toronto time; rebuilt once a week by hub-reel from wa_lessons, form_summaries, social_notes, search_top, wa_history and goal_wins, phrased by the model). kind news: the news banner along the bottom (batch = the day; rebuilt every morning from servings, fundraising events, new starters and wins). kind update: an admin's own line for the news banner, shown until the day in until. hidden: taken off the loading screen by an admin (Admin, Loading screen). Shout-outs stay in hub_shoutouts. Read through hub_reel_current() and hub_reel_admin(); nothing about leadership changes, roles or departures is written here (hub-reel filters every line).
+The loading screen and the news banner on Home (wave149; the banner moved to Home in wave151). kind lesson, learning, milestone: the loading screen's lines for the week (batch = Monday, Toronto time; rebuilt once a week by hub-reel from wa_lessons, form_summaries, social_notes, search_top, wa_history and goal_wins, phrased by the model). kind news: the news banner at the top of Home (batch = the day; rebuilt every morning from servings, fundraising events, new starters and wins). kind update: an admin's own line for the news banner, shown until the day in until. hidden: taken off by an admin (Admin, Loading screen and news). Shout-outs stay in hub_shoutouts. Read through hub_reel_current() and hub_reel_admin(); nothing about leadership changes, roles or departures is written here (hub-reel filters every line).
 
 - `batch`: The Monday of the week (lesson, learning, milestone) or the day (news), Toronto time; null for an update.
 - `source_key`: Where the line came from, e.g. lesson:<wa_lessons.key>, history:<wa_history.key>, win:<goal_wins.id>, event:<volunteer_events.id>; used so a lesson or milestone does not come back for eight weeks.
@@ -1340,9 +1340,9 @@ Functions:
 - `wa_in_team(text)`: True when the signed-in person is on that team (the roster, or a Hub profile for it).
 - `wa_meet_people_ok(text)`: True when the signed-in person may read everyone's attendance for that meeting.
 - `wa_board_pack_guard()`: Keeps board_meetings.pack for the board-pack function (service role): anyone else's insert or update leaves it as it was.
-- `hub_reel_current()`: The loading screen (wave149): this week's lessons, learnings and milestones and today's news banner (live updates first), without hidden lines. Everyone on the Hub (staff, the board, admins).
-- `hub_reel_admin()`: Admin, Loading screen (wave149): the week's lines and today's news with ids and hidden flags, and the admins' updates of the last 30 days. Admins only.
-- `hub_reel_hide(bigint, boolean)`: Takes a loading screen line or news item off (p_hidden true) or puts it back. Admins only; logged in change_log.
-- `hub_news_add(text, text, date)`: Adds an admin's update to the news banner on the loading screen (under 140 characters; link a Hub page #... or an https address; shown until p_until, two weeks by default, 90 days at most). Admins only; logged in change_log.
+- `hub_reel_current()`: The loading screen's lines for the week (lessons, learnings and milestones, cached by the page after sign-in) and today's news banner for the top of Home (live updates first, read live by the page), without hidden lines. Everyone on the Hub (staff, the board, admins); the banner itself shows on Home, which is for staff.
+- `hub_reel_admin()`: Admin, Loading screen and news (wave149, wave151): the week's lines and today's news with ids and hidden flags, and the admins' updates of the last 30 days. Admins only.
+- `hub_reel_hide(bigint, boolean)`: Takes a loading screen line or a news banner item off (p_hidden true) or puts it back. Admins only; logged in change_log.
+- `hub_news_add(text, text, date)`: Adds an admin's update to the news banner at the top of Home (under 140 characters; link a Hub page #... or an https address; shown until p_until, two weeks by default, 90 days at most). Admins only; logged in change_log.
 - `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
 
