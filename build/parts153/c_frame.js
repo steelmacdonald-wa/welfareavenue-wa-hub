@@ -1,0 +1,143 @@
+
+  /* ---------- the dock, the launcher and the rail ---------- */
+  var S = { app: null, open: false, drawn: 0 };
+  function nav() { return document.querySelector('nav.wa-nav'); }
+  function ensure() {
+    var n = nav(); if (!n) return false;
+    if (!document.getElementById('w153rail')) {
+      var r = document.createElement('div'); r.id = 'w153rail'; r.setAttribute('aria-label', 'App menu');
+      var bar = document.getElementById('tabBar');
+      if (bar && bar.parentNode === n) bar.insertAdjacentElement('afterend', r); else n.appendChild(r);
+    }
+    if (!document.getElementById('w153dock')) {
+      var d = document.createElement('div'); d.id = 'w153dock';
+      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="true" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
+        '<button type="button" class="w153back" data-w153back="1">' + I('back') + ' Back to the Hub</button>';
+      n.appendChild(d);
+    }
+    if (!document.getElementById('w153pop')) {
+      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Apps');
+      document.body.appendChild(p);
+    }
+    if (!document.getElementById('w153bar')) {
+      var main = document.querySelector('main');
+      if (main) { var b = document.createElement('div'); b.id = 'w153bar'; main.insertBefore(b, main.firstChild); }
+    }
+    return true;
+  }
+  function tileHtml(a, on) {
+    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
+  }
+  function paintPop() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var cur = S.app || 'hub';
+    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') + '</div>';
+  }
+  function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
+  function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }
+  function togglePop() { if (S.open) closePop(); else openPop(); }
+
+  /* the rail: the app's pages and sections, the current one marked */
+  /* pages with sections switched inside the page: how to read the current one, and the button that opens one */
+  var SEC = {
+    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); } },
+    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); } }
+  };
+  function secNow(page) { return SEC[page] ? SEC[page].now() : null; }
+  function subOf(h) { return String(h || '').replace(/^#/, '').split('/')[1] || ''; }
+  function firstOfPage(app, pg) { var gs = items(app); for (var i = 0; i < gs.length; i++) for (var j = 0; j < gs[i].items.length; j++) if (pageOf(gs[i].items[j].h) === pg) return gs[i].items[j]; return null; }
+  function isOn(app, it) {
+    var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);
+    if (ip !== pg) return false;
+    if (it.sec) return secNow(ip) === it.sec;
+    if (app === 'crm' && ip === 'crm') return (isub || 'contacts') === (sub === 'c' || !sub ? 'contacts' : sub);
+    if (!sub) return isub ? firstOfPage(app, ip) === it : true;   /* the page alone: its first section */
+    if (isub) return isub === sub;
+    /* the page's own item while the address names a section the rail does not list */
+    return !items(app).some(function (g) { return g.items.some(function (x) { return pageOf(x.h) === ip && subOf(x.h) === sub; }); });
+  }
+  function paintRail() {
+    var r = document.getElementById('w153rail'); if (!r) return;
+    var app = S.app; if (!app) { r.innerHTML = ''; return; }
+    var a = APPS[app], gs = items(app);
+    r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
+      gs.map(function (g) {
+        return '<div class="w153sec"><div class="w153sh">' + E(g.label) + '</div>' + g.items.map(function (it) {
+          var on = isOn(app, it);
+          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span></a>';
+        }).join('') + '</div>';
+      }).join('') +
+      (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');
+  }
+  /* the app bar: the app, where you are, its quick actions */
+  function whereNow(app) {
+    var gs = items(app), found = null;
+    gs.forEach(function (g) { g.items.forEach(function (it) { if (!found && isOn(app, it)) found = it; }); });
+    if (found) return found.l;
+    var h = hashNow(), pg = pageOf(h);
+    var t = tab(pg); return t ? (t.textContent || '').trim() : '';
+  }
+  function paintBar() {
+    var b = document.getElementById('w153bar'); if (!b) return;
+    var app = S.app; if (!app) { b.innerHTML = ''; return; }
+    var a = APPS[app], where = whereNow(app);
+    b.innerHTML = '<div class="w153bc"><span class="w153ai" style="background:' + a.color + ';width:28px;height:28px;border-radius:8px">' + I(a.ic) + '</span><b>' + E(a.label) + '</b>' + (where ? '<span>' + E(where) + '</span>' : '') + '</div>' +
+      '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
+      (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
+  }
+  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() : '') + '|' + (S.app || ''); }
+  function paint() {
+    if (!ensure()) return;
+    S.sig = sig();
+    var was = S.app; S.app = current(); S.sig = sig();
+    document.body.classList.toggle('w153app', !!S.app);
+    ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
+    var dock = document.getElementById('w153dock');
+    var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
+    if (dock) dock.style.display = any ? '' : 'none';
+    if (!S.app) { var h = hashNow(); if (h && pageOf(h) !== 'crm') store(KEY_LAST, h); }
+    paintRail(); paintBar(); if (S.open) paintPop();
+    if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
+    S.drawn++;
+  }
+
+  /* ---------- open and close ---------- */
+  function open(id) {
+    closePop();
+    if (id === 'hub' || !APPS[id]) return close();
+    if (!appOk(id)) return;
+    store(KEY, id);
+    var pg = pageOf(hashNow());
+    if (APPS[id].pages.indexOf(pg) < 0) { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = APPS[id].home || '#mypage'; } else paint();
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function close() {
+    closePop();
+    store(KEY, null);
+    var pg = pageOf(hashNow());
+    if (pg === 'crm') { var last = read(KEY_LAST); location.hash = last && pageOf(last) && pageOf(last) !== 'crm' ? last : '#mypage'; }
+    else paint();
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function go(h, sec) {
+    var pg = pageOf(h);
+    if (location.hash !== h) location.hash = h; else { try { if (typeof applyHash === 'function') applyHash(); } catch (e) { /* fine */ } }
+    if (sec && SEC[pg]) {
+      /* the page may still be drawing (some rebuild their tabs): keep asking for the section until it is on */
+      var tries = 0, clicks = 0, iv = setInterval(function () {
+        tries++;
+        if (pageOf(hashNow()) !== pg) { clearInterval(iv); return; }
+        if (SEC[pg].now() === sec) { clearInterval(iv); setTimeout(paint, 60); return; }
+        var t = SEC[pg].btn(sec);
+        if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
+        if (tries > 30) clearInterval(iv);
+      }, 150);
+    }
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function act(k) {
+    if (S.app === 'crm' && k === 'add') {
+      if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';
+      var tries = 0, iv = setInterval(function () { tries++; var b = document.querySelector('#crm [data-w152add]'); if (b) { clearInterval(iv); b.click(); } else if (tries > 40) clearInterval(iv); }, 100);
+    }
+  }

@@ -34935,7 +34935,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     ensureCandsBlock(); decorateTabs(); hero(); applyView();
     if (!document.getElementById('w116pcbody').children.length) paintCands();
     var sub = String(location.hash || '').split('/')[1] || '';
-    if ((!currentView() && sub === 'people') || (!sub && !P.landed)) { P.landed = true; var t = document.querySelector('#w46body .w47tab[data-w47v="people"]'); if (t) { t.click(); setTimeout(applyView, 30); } }
+    /* wave153: land on People only while the HR centre is the page on screen (a render finishing after you left was rewriting the address) */
+    var onScreen = (function () { var pn = document.getElementById('hrcentre'); return !!pn && pn.classList.contains('active') && String(location.hash || '').indexOf('#hrcentre') === 0; })();
+    if (onScreen && ((!currentView() && sub === 'people') || (!sub && !P.landed))) { P.landed = true; var t = document.querySelector('#w46body .w47tab[data-w47v="people"]'); if (t) { t.click(); setTimeout(applyView, 30); } }
   }
   function schedule() { clearTimeout(P.pend); P.pend = setTimeout(function () { try { decorate(); } catch (e) { /* fine */ } }, 150); }
   function watch() {
@@ -56222,8 +56224,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     'volunteer_roles,volunteer_tags,volunteer_organization,last_applied,volunteer_needs_review,in_quo,legacy_servings,legacy_hours,hub_servings,last_serving_on,' +
     'donation_total,donation_count,last_donation_at,org_names';
   var S = {
-    contacts: null, dupes: null, counts: null, partners: null, loading: {}, at: {}, err: {},
-    ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60 },
+    contacts: null, dupes: null, counts: null, partners: null, gifts: null, loading: {}, at: {}, err: {},
+    ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60, gq: '', gplat: '', gyear: '', gshow: 60 },
     sheet: null, detail: {}, confirm: null
   };
   /* the API answers at most 1,000 rows a call: read a table page by page until a short page (or nothing new) */
@@ -56244,7 +56246,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var LOADERS = {
     contacts: function () { return pageAll(function (a, b) { return db.from('crm_contacts_v').select(COLS).order('id', { ascending: true }).range(a, b); }, function (r) { return String(r.id); }); },
     dupes: function () { return pageAll(function (a, b) { return db.from('crm_duplicates_v').select('*').order('contact_id', { ascending: true }).order('duplicate_id', { ascending: true }).range(a, b); }, function (r) { return r.contact_id + ':' + r.duplicate_id + ':' + r.matched_on + ':' + r.value; }); },
-    partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); }
+    partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); },
+    /* wave153: the Gifts tab */
+    gifts: function () { return pageAll(function (a, b) { return db.from('crm_donations').select('id,contact_id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,receipt_source,external_id,notes').order('donated_at', { ascending: false }).order('id', { ascending: false }).range(a, b); }, function (r) { return String(r.id); }); }
   };
   /* the rows the page works with: a few derived fields for filters, sorting and search */
   function shape(c) {
@@ -56530,7 +56534,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<nav class="w152tabs" role="tablist">' +
       '<button role="tab" class="' + (t === 'contacts' ? 'on' : '') + '" data-w152go="#crm">' + I('people') + ' Contacts</button>' +
       '<button role="tab" class="' + (t === 'dupes' ? 'on' : '') + '" data-w152go="#crm/dupes">' + I('merge') + ' Possible duplicates' + (n ? ' <em>' + n + '</em>' : '') + '</button>' +
-      '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button></nav>';
+      '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button>' +
+      '<button role="tab" class="' + (t === 'gifts' ? 'on' : '') + '" data-w152go="#crm/gifts">' + I('heart') + ' Gifts</button></nav>';
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -56601,14 +56606,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (S.err.contacts && !S.contacts.length) { root.innerHTML = '<div class="w152empty">The contacts could not load (' + E(S.err.contacts) + ').</div>'; return; }
     if (S.ui.tab === 'dupes') paintDupes(root);
     else if (S.ui.tab === 'sources') paintSources(root);
+    else if (S.ui.tab === 'gifts') paintGifts(root);
     else paintContacts(root);
   }
   function openCrm(h) {
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : 'contacts';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : 'contacts';
     if (!staffOk() || boardMode()) { paint(); return; }
-    Promise.all([load('contacts'), load('dupes')]).then(function () {
+    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
       else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);
@@ -57197,6 +57203,74 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w152card"><h3>To tidy</h3>' + tidy + '</div></div>';
     if (!S.counts) loadCounts().then(function () { if (S.ui.tab === 'sources') paint(); });
   }
+
+  /* ---------- the Gifts tab (wave153): every gift with its donor, campaign, platform and receipt ---------- */
+  function fyOf(day) { var d = dayOf(day); if (!d) return ''; var y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7)); return String(m >= 10 ? y + 1 : y); } /* the fiscal year ends September 30 */
+  function giftDonor(g) { var c = contact(g.contact_id); return c ? c.full_name : ''; }
+  function giftHay(g) { var c = contact(g.contact_id); return fold([giftDonor(g), c ? c.emails.join(' ') : '', g.campaign, g.designation, g.platform, g.receipt_number, g.external_id, g.notes].join(' ')); }
+  function giftMatches(g) {
+    var u = S.ui;
+    if (u.gplat && lower(g.platform) !== u.gplat) return false;
+    if (u.gyear && fyOf(g.donated_at) !== u.gyear) return false;
+    if (u.gq) { var words = fold(u.gq).split(/\s+/).filter(Boolean), hay = giftHay(g); if (!words.every(function (w) { return hay.indexOf(w) >= 0; })) return false; }
+    return true;
+  }
+  function platName(p) { p = lower(p); return { zeffy: 'Zeffy', keela: 'Keela', stripe: 'Stripe', cash: 'Cash', cheque: 'Cheque', hub: 'The Hub', paypal: 'PayPal' }[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Unknown'); }
+  function giftRow(g) {
+    var c = contact(g.contact_id), nm = c ? c.full_name : 'Contact ' + g.contact_id;
+    var rc = g.receipt_number ? '<span class="rc">' + (g.receipt_url ? '<a href="' + E(g.receipt_url) + '" target="_blank" rel="noopener">Receipt ' + E(g.receipt_number) + ' ' + I('ext') + '</a>' : 'Receipt ' + E(g.receipt_number)) + (g.receipt_issued_at ? ' \u00b7 ' + E(fmtDay(g.receipt_issued_at)) : '') + '</span>' : '<span class="rc">No receipt</span>';
+    return '<div class="w152row" role="listitem">' +
+      '<span>' + E(fmtDay(g.donated_at)) + '</span>' +
+      '<span><a href="#crm/c/' + E(g.contact_id) + '">' + E(nm) + '</a>' + (c && c.emails[0] ? '<div class="m">' + E(c.emails[0]) + '</div>' : '') + '</span>' +
+      '<span class="amt">' + E(money(g.amount)) + (g.recurring ? '<small> monthly</small>' : '') + '</span>' +
+      '<span>' + E([g.campaign, g.designation].filter(Boolean).join(' \u00b7 ') || '\u2013') + '<div class="m">' + E(platName(g.platform)) + '</div></span>' +
+      '<span>' + rc + '</span></div>';
+  }
+  function paintGifts(root) {
+    var u = S.ui;
+    if (!S.gifts) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the gifts\u2026'); load('gifts').then(function () { if (u.tab === 'gifts') paint(); }); return; }
+    var all = S.gifts, list = all.filter(giftMatches);
+    var total = 0, donors = {}, receipted = 0, years = {}, plats = {};
+    all.forEach(function (g) { total += Number(g.amount) || 0; donors[g.contact_id] = 1; if (g.receipt_number) receipted++; var fy = fyOf(g.donated_at); if (fy) years[fy] = 1; plats[lower(g.platform) || ''] = 1; });
+    var fyNow = fyOf(today()), thisFy = all.filter(function (g) { return fyOf(g.donated_at) === fyNow; }), thisTot = thisFy.reduce(function (a, g) { return a + (Number(g.amount) || 0); }, 0);
+    var sel = list.reduce(function (a, g) { return a + (Number(g.amount) || 0); }, 0);
+    var shown = list.slice(0, u.gshow), filtered = u.gq || u.gplat || u.gyear;
+    var focus = document.activeElement && document.activeElement.hasAttribute && document.activeElement.hasAttribute('data-w152gq');
+    var caret = focus && document.activeElement.selectionStart;
+    root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() +
+      '<div class="w152stats">' +
+      '<div class="w152st"><b>' + E(money(total)) + '</b><span>given, all time (' + plural(all.length, 'gift', 'gifts') + ')</span></div>' +
+      '<div class="w152st"><b>' + E(money(thisTot)) + '</b><span>this fiscal year (to 30 Sep ' + E(fyNow) + ', ' + plural(thisFy.length, 'gift', 'gifts') + ')</span></div>' +
+      '<div class="w152st"><b>' + Object.keys(donors).length.toLocaleString('en-CA') + '</b><span>donors</span></div>' +
+      '<div class="w152st"><b>' + receipted.toLocaleString('en-CA') + '</b><span>with a tax receipt</span></div></div>' +
+      '<div class="w152bar"><label class="w152q">' + I('search') + '<input type="search" data-w152gq="1" value="' + E(u.gq) + '" placeholder="Search a donor, campaign, receipt number or platform" aria-label="Search the gifts"></label>' +
+      '<select class="w152sel" data-w152gplat aria-label="Platform"><option value="">Every platform</option>' + Object.keys(plats).sort().map(function (p) { return '<option value="' + E(p) + '"' + (u.gplat === p ? ' selected' : '') + '>' + E(platName(p)) + '</option>'; }).join('') + '</select>' +
+      '<select class="w152sel" data-w152gyear aria-label="Fiscal year"><option value="">Every year</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option value="' + E(y) + '"' + (u.gyear === y ? ' selected' : '') + '>FY ' + E(y) + ' (Oct ' + (Number(y) - 1) + ' to Sep ' + E(y) + ')</option>'; }).join('') + '</select></div>' +
+      '<div class="w152count">' + (filtered ? plural(list.length, 'gift matches', 'gifts match') + ' (' + E(money(sel)) + ') \u00b7 <button class="w152mini" data-w152gclear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'gift', 'gifts') + ', newest first') +
+      (shown.length < list.length ? ' \u00b7 showing the first ' + shown.length : '') + '</div>' +
+      (shown.length ? '<div class="w152list w153gifts" role="list"><div class="w152lh" aria-hidden="true"><span>When</span><span>Donor</span><span>Amount</span><span>Campaign and platform</span><span>Receipt</span></div>' + shown.map(giftRow).join('') + '</div>' +
+        (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152gmore="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
+        : '<div class="w152empty">' + (all.length ? 'No gift matches. Try another word, or <button class="w152mini" data-w152gclear="1">clear the filters</button>.' : 'No gifts in the CRM yet. Zeffy joins next; until then the Keela export is the record.') + '</div>');
+    if (focus) { var inp = root.querySelector('[data-w152gq]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
+  }
+  var gqT = null;
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.getAttribute || !t.hasAttribute('data-w152gq')) return;
+    var v = t.value; clearTimeout(gqT);
+    gqT = setTimeout(function () { S.ui.gq = v; S.ui.gshow = 60; paint(); }, 160);
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('.w152root')) return;
+    if (t.hasAttribute('data-w152gplat')) S.ui.gplat = t.value;
+    else if (t.hasAttribute('data-w152gyear')) S.ui.gyear = t.value;
+    else return;
+    S.ui.gshow = 60; paint();
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target, el; if (!t || !t.closest) return;
+    if ((el = t.closest('[data-w152gclear]'))) { e.preventDefault(); S.ui.gq = ''; S.ui.gplat = ''; S.ui.gyear = ''; S.ui.gshow = 60; paint(); return; }
+    if ((el = t.closest('[data-w152gmore]'))) { e.preventDefault(); S.ui.gshow += 60; paint(); return; }
+  });
   /* ======================= wiring ======================= */
   function go(h) { if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
   function inOurs(t) { return t.closest && (t.closest('.w152root') || t.closest('#w152sheet')); }
@@ -57331,6 +57405,510 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay };
+})();
+/* =====================================================================
+   WA v153 the apps: a 9-dot launcher, an app frame with its own rail, and the CRM as the first app (27/09/26)
+   =====================================================================
+   Steel (wave149): "the app launcher (9-dot, bottom left: Admin centre, HR centre, Finance with the
+   finances pages only, then the CRM)". Steel (wave152): "remember the 9 dots for the Finances module, HR
+   center module, and CRM module? ... the CRM will need space both at the top for menu and search options,
+   as well as on the side for all the options like email marketing, fundraising, etc". And: "Okay go for it
+   step 1 first".
+
+   - A dock at the bottom of the menu (a 9-dot button, "Apps") opens the launcher: the Hub, the CRM, the
+     HR centre, Finance and the Admin centre. Only the apps this person can open are offered (an app is
+     there when one of its pages is), and directors (the board view) get none.
+   - Inside an app the menu becomes the app's rail (its pages and sections, the current one marked) with
+     "Back to the Hub" in the dock, and an app bar above the page names the app and where you are, with the
+     app's quick actions (the CRM: add a contact). The pages themselves are the ones that already exist:
+     nothing is rebuilt, the rail and the bar are a frame around them.
+   - The CRM is always an app: any #crm address opens the frame. The other apps open from the launcher and
+     close when you go to a page outside them; the last app is remembered on this device.
+   - Search everything finds contacts too (staff with the CRM), first when you are in the CRM.
+   - The CRM gains a Gifts tab (#crm/gifts): every gift with its donor, campaign, platform and receipt.
+   ===================================================================== */
+(function () {
+  if (window.__wa153) return; window.__wa153 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var KEY = 'wa153.app', KEY_LAST = 'wa153.last';
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  function fold(s) { try { return lower(s).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { return lower(s); } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+  function read(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+  /* ---------- icons ---------- */
+  var P = {
+    grid: '<circle cx="5" cy="5" r="1.9"/><circle cx="12" cy="5" r="1.9"/><circle cx="19" cy="5" r="1.9"/><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/><circle cx="5" cy="19" r="1.9"/><circle cx="12" cy="19" r="1.9"/><circle cx="19" cy="19" r="1.9"/>',
+    home: '<path d="M4 11.5 12 4.5l8 7"/><path d="M6.5 10.5V19.5h11v-9"/>',
+    people: '<circle cx="9" cy="8.5" r="3.3"/><path d="M3 19.5c.7-3.3 3.1-5.2 6-5.2s5.3 1.9 6 5.2"/><circle cx="17" cy="9.5" r="2.6"/><path d="M16.5 14.3c2.3.2 4 1.8 4.5 4.7"/>',
+    merge: '<path d="M6 4v5a5 5 0 0 0 5 5h2a5 5 0 0 1 5 5v1"/><path d="m15 17 3 3 3-3"/><path d="M18 4v5"/>',
+    db: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>',
+    heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+    clip: '<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9 4.5V3h6v1.5M9 10h6M9 14h6"/>',
+    coins: '<circle cx="9" cy="9" r="5"/><path d="M14.5 10.5a5 5 0 1 1-4 4"/>',
+    shield: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    back: '<path d="m10 6-6 6 6 6"/><path d="M4 12h16"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    chart: '<path d="M4 19h16"/><path d="M7 16V9M12 16V5M17 16v-6"/>',
+    mail: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 6 7.5-6"/>',
+    list: '<path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4.5" cy="7" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17" r="1"/>',
+    form: '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/>',
+    org: '<rect x="9" y="3.5" width="6" height="4" rx="1"/><rect x="3" y="15.5" width="6" height="4" rx="1"/><rect x="15" y="15.5" width="6" height="4" rx="1"/><path d="M12 7.5v4M6 15.5v-4h12v4"/>',
+    cap: '<path d="m3 9 9-4 9 4-9 4z"/><path d="M6.5 10.6V15c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4.4"/>',
+    key: '<circle cx="8" cy="15" r="3.5"/><path d="m10.5 12.5 8-8M16 7l2.5 2.5M14 9l2 2"/>',
+    star: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
+  };
+  function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
+
+  /* ---------- the apps: which pages each one frames ----------
+     an item is {h: hash, l: label, ic: icon, page: the page (tab) it needs, sec: a section switch on that page} */
+  var ADMIN_FALLBACK = [['people', 'People and access'], ['access', 'Access profiles'], ['security', 'Security and audit trail'], ['ai', 'AI models'], ['adoption', 'Adoption'], ['accounts', 'Workspace accounts'], ['loading', 'Loading screen and news'], ['change', 'Change the Hub']];
+  function adminSections() {
+    var A = window.__wa118 && window.__wa118.ADMIN;
+    var list = Array.isArray(A) && A.length ? A : ADMIN_FALLBACK;
+    return list.map(function (a) { return { h: '#adminpanel/' + a[0], l: a[1], ic: { people: 'people', access: 'key', security: 'shield', ai: 'star', adoption: 'chart', accounts: 'mail', loading: 'bell', change: 'form' }[a[0]] || 'star', page: 'adminpanel' }; });
+  }
+  var APPS = {
+    hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, meetings, goals and everything else', pages: [] },
+    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm', always: true,
+      groups: function () {
+        return [{ label: 'Contacts', items: [
+          { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
+          { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
+          { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' }
+        ] }, { label: 'Giving', items: [
+          { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
+        ] }];
+      },
+      next: [['list', 'Lists'], ['mail', 'Email'], ['form', 'Forms'], ['chart', 'Reports']],
+      actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
+    },
+    hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'Onboarding, hours, policies, the org chart', pages: ['hrcentre', 'hr', 'orgchart', 'training'], home: '#hrcentre/people',
+      groups: function () {
+        return [{ label: 'HR centre', items: [
+          { h: '#hrcentre/people', l: 'People', ic: 'people', page: 'hrcentre', sec: 'people' },
+          { h: '#hrcentre/onboarding', l: 'Onboarding', ic: 'clip', page: 'hrcentre', sec: 'onboarding' },
+          { h: '#hrcentre/training', l: 'Training', ic: 'cap', page: 'hrcentre', sec: 'training' },
+          { h: '#hrcentre/recruitment', l: 'Recruitment', ic: 'star', page: 'hrcentre', sec: 'recruitment' },
+          { h: '#hrcentre/hours', l: 'Commitment', ic: 'chart', page: 'hrcentre', sec: 'hours' },
+          { h: '#hrcentre/policies', l: 'Policies', ic: 'form', page: 'hrcentre', sec: 'policies' },
+          { h: '#hrcentre/discipline', l: 'Discipline', ic: 'shield', page: 'hrcentre', sec: 'discipline' }
+        ] }, { label: 'People', items: [
+          { h: '#hr', l: 'Human Resources', ic: 'home', page: 'hr' },
+          { h: '#orgchart', l: 'Org chart', ic: 'org', page: 'orgchart' },
+          { h: '#training', l: 'Avenue Academy', ic: 'cap', page: 'training' },
+          { h: '#adminpanel/people', l: 'People and access', ic: 'key', page: 'adminpanel' }
+        ] }];
+      }
+    },
+    finance: { id: 'finance', label: 'Finance', color: ORANGE, ic: 'coins', blurb: 'The ledger, budgets and trends', pages: ['finances'], home: '#finances',
+      groups: function () {
+        return [{ label: 'Finances', items: [
+          { h: '#finances', l: 'Overview', ic: 'home', page: 'finances', sec: 'overview' },
+          { h: '#finances', l: 'Trends', ic: 'chart', page: 'finances', sec: 'trends' },
+          { h: '#finances', l: 'Money map', ic: 'coins', page: 'finances', sec: 'money' },
+          { h: '#finances', l: 'Budget', ic: 'list', page: 'finances', sec: 'budget' },
+          { h: '#finances', l: 'Transactions', ic: 'db', page: 'finances', sec: 'txns' }
+        ] }];
+      }
+    },
+    admin: { id: 'admin', label: 'Admin centre', color: SLATE, ic: 'shield', blurb: 'Access, security, the AI models, the Hub itself', pages: ['adminpanel', 'activity'], home: '#adminpanel/people',
+      groups: function () {
+        return [{ label: 'Admin', items: adminSections() }, { label: 'Audit', items: [{ h: '#activity', l: 'Activity', ic: 'list', page: 'activity' }] }];
+      }
+    }
+  };
+  var ORDER = ['hub', 'crm', 'hr', 'finance', 'admin'];
+
+  /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
+  function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }
+  function allowed(id) { var t = tab(id); return !!t && t.style.display !== 'none' && !!document.getElementById(id); }
+  function appOk(id) {
+    if (boardMode() || !staffOk()) return false;
+    var a = APPS[id]; if (!a) return false;
+    if (id === 'hub') return true;
+    return a.pages.some(allowed);
+  }
+  function items(app) {
+    var a = APPS[app]; if (!a || !a.groups) return [];
+    return a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+  }
+  function firstHash(app) { var gs = items(app); return gs.length ? gs[0].items[0].h : (APPS[app] && APPS[app].home) || '#mypage'; }
+
+  /* ---------- where we are ---------- */
+  function hashNow() { try { return decodeURIComponent(location.hash || ''); } catch (e) { return location.hash || ''; } }
+  function pageOf(h) { return String(h || '').replace(/^#/, '').split('/')[0]; }
+  function current() {
+    /* the app in force: the CRM for any #crm address; else the remembered app when this page belongs to it */
+    var h = hashNow(), pg = pageOf(h);
+    if (boardMode() || !staffOk()) return null;
+    if (pg === 'crm' && appOk('crm')) return 'crm';
+    var s = read(KEY);
+    if (s && APPS[s] && s !== 'hub' && appOk(s) && APPS[s].pages.indexOf(pg) >= 0) return s;
+    return null;
+  }
+
+  /* ---------- styles ---------- */
+  var css = ''
+    + '.w153i{width:18px;height:18px;flex:0 0 auto;}'
+    /* the dock at the bottom of the menu */
+    + 'nav.wa-nav{display:flex;flex-direction:column;align-items:stretch;}'
+    + 'nav.wa-nav #waNavToggle{align-self:flex-start;}'
+    + 'nav.wa-nav #tabBar{flex:0 0 auto;}'
+    + 'nav.wa-nav{padding-bottom:0 !important;}'
+    + '#w153dock{position:sticky;bottom:0;margin:auto -12px 0;padding:10px 12px 14px;background:var(--wa-card);border-top:1px solid rgba(16,63,57,.10);display:flex;align-items:center;gap:8px;flex:0 0 auto;z-index:3;}'
+    + '#w153dock .w153grid{display:inline-flex;align-items:center;gap:9px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';border-radius:12px;padding:8px 12px 8px 10px;font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;}'
+    + '#w153dock .w153grid:hover,#w153dock .w153grid[aria-expanded="true"]{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w153dock .w153grid .w153i{width:20px;height:20px;}'
+    + '#w153dock .w153back{display:none;align-items:center;gap:6px;border:none;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:12.5px;font-weight:600;cursor:pointer;padding:6px 8px;border-radius:10px;margin-left:auto;white-space:nowrap;}'
+    + 'body.w153app #w153dock .w153grid span{display:none;}'
+    + '#w153dock .w153back:hover{background:rgba(16,63,57,.07);}'
+    + 'body.w153app #w153dock .w153back{display:inline-flex;}'
+    + '#w153dock .w153grid:focus-visible,#w153dock .w153back:focus-visible,#w153pop .w153tile:focus-visible,#w153rail .w153it:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    /* the launcher */
+    + '#w153pop{display:none;position:fixed;left:12px;bottom:66px;width:250px;background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:18px;box-shadow:0 22px 60px -14px rgba(16,63,57,.35);padding:12px;z-index:240;font-family:' + BODY + ';}'
+    + '#w153pop.open{display:block;}'
+    + '#w153pop .w153ph{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';padding:2px 6px 10px;}'
+    + '#w153pop .w153tiles{display:flex;flex-direction:column;gap:6px;}'
+    + '#w153pop .w153tile{display:grid;grid-template-columns:32px minmax(0,1fr);grid-template-rows:auto auto;column-gap:12px;row-gap:1px;align-items:center;border:1px solid rgba(16,63,57,.08);background:' + CREAM + ';border-radius:14px;padding:8px 10px;cursor:pointer;text-align:left;font-family:' + BODY + ';color:' + INK + ';}'
+    + '#w153pop .w153tile .w153ai{grid-row:1 / span 2;}'
+    + '#w153pop .w153tile:hover{border-color:rgba(16,63,57,.3);background:rgba(16,63,57,.05);}'
+    + '#w153pop .w153tile.on{border-color:' + GREEN + ';box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
+    + '#w153pop .w153tile b{font-size:13px;font-weight:700;line-height:1.2;}'
+    + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
+    + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
+    + '.w153ai .w153i{width:18px;height:18px;}'
+    /* the app frame: the rail replaces the menu */
+    + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
+    + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
+    + 'body.w153app #w153rail{display:block;}'
+    + '#w153rail .w153ah{display:flex;align-items:center;gap:10px;padding:2px 8px 14px;margin-bottom:6px;border-bottom:1px solid rgba(16,63,57,.10);}'
+    + '#w153rail .w153ah b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:22px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';line-height:1;}'
+    + '#w153rail .w153ah small{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    + '#w153rail .w153sh{font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.6px;text-transform:uppercase;color:' + MUTED + ';padding:12px 12px 4px;}'
+    + '#w153rail .w153it{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:7px 12px;border-radius:10px;border:none;background:none;font-family:' + BODY + ';font-weight:500;font-size:13.5px;color:var(--wa-text);line-height:1.3;cursor:pointer;text-decoration:none;box-sizing:border-box;}'
+    + '#w153rail .w153it .w153i{width:17px;height:17px;color:' + MUTED + ';}'
+    + '#w153rail .w153it:hover{background:rgba(16,63,57,.06);color:' + GREEN + ';}'
+    + '#w153rail .w153it.on{background:rgba(16,63,57,.10);color:' + GREEN + ';font-weight:700;}'
+    + '#w153rail .w153it.on .w153i{color:' + GREEN + ';}'
+    + '#w153rail .w153next{margin:14px 8px 6px;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.12);border:1px dashed rgba(220,165,39,.6);font-size:12px;color:' + INK + ';line-height:1.45;}'
+    + '#w153rail .w153next b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:#6b4d05;margin-bottom:4px;}'
+    + '#w153rail .w153next span{display:inline-flex;align-items:center;gap:5px;margin:2px 8px 2px 0;color:' + MUTED + ';}'
+    + '#w153rail .w153next .w153i{width:14px;height:14px;}'
+    /* the app bar above the page */
+    + '#w153bar{display:none;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 14px;padding:10px 14px;border-radius:14px;background:var(--wa-card);border:1px solid rgba(16,63,57,.08);font-family:' + BODY + ';}'
+    + 'body.w153app #w153bar{display:flex;}'
+    + '#w153bar .w153bc{display:flex;align-items:center;gap:10px;min-width:0;}'
+    + '#w153bar .w153bc b{font-family:' + HEAD + ';font-weight:600;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w153bar .w153bc span{font-size:13.5px;color:' + MUTED + ';}'
+    + '#w153bar .w153bc span::before{content:"\\203A";margin:0 8px 0 2px;color:rgba(16,63,57,.35);}'
+    + '#w153bar .w153acts{margin-left:auto;display:flex;gap:8px;align-items:center;}'
+    + '#w153bar .w153btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:8px 14px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;}'
+    + '#w153bar .w153btn:hover{background:#0c332e;}'
+    + '#w153bar .w153btn .w153i{width:15px;height:15px;}'
+    + '#w153bar .w153menu{display:none;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.18);border-radius:999px;padding:7px 12px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:12.5px;font-weight:700;cursor:pointer;}'
+    + 'body.w153app.w153crm #crm > .w118mast .crumb{display:none;}'
+    + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
+    /* search everything: contacts */
+    + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'
+    /* the gifts tab in the CRM */
+    + '#crm .w153gifts .w152lh,#crm .w153gifts .w152row{grid-template-columns:110px 1.4fr 110px 1fr 1fr;}'
+    + '#crm .w153gifts .w152row{cursor:default;}'
+    + '#crm .w153gifts .w152row .amt{font-weight:700;color:' + GREEN + ';}'
+    + '#crm .w153gifts .w152row a{color:' + GREEN + ';font-weight:600;text-decoration:none;}'
+    + '#crm .w153gifts .w152row a:hover{text-decoration:underline;}'
+    + '#crm .w153gifts .rc{font-size:12px;color:' + MUTED + ';}'
+    + '#crm .w153gifts .rc a{font-weight:500;}'
+    + '#crm .w153gtot{margin:6px 0 10px;font-size:13px;color:' + MUTED + ';}'
+    + '#crm .w153gtot b{color:' + INK + ';}'
+    /* phones */
+    + '@media (max-width:900px){'
+    + '#w153pop{left:12px;right:12px;width:auto;bottom:calc(82px + env(safe-area-inset-bottom));}'
+    + '#w153bar{position:sticky;top:0;z-index:40;margin:0 0 10px;box-shadow:0 8px 24px -12px rgba(16,63,57,.25);}'
+    + '#w153bar .w153menu{display:inline-flex;}'
+    + '#w153bar .w153acts{margin-left:0;width:100%;justify-content:space-between;}'
+    + '#crm .w153gifts .w152lh{display:none;}'
+    + '#crm .w153gifts .w152row{grid-template-columns:1fr 1fr;}'
+    + '}';
+  if (!document.getElementById('wa153css')) { var st = document.createElement('style'); st.id = 'wa153css'; st.textContent = css; document.head.appendChild(st); }
+
+  /* ---------- the dock, the launcher and the rail ---------- */
+  var S = { app: null, open: false, drawn: 0 };
+  function nav() { return document.querySelector('nav.wa-nav'); }
+  function ensure() {
+    var n = nav(); if (!n) return false;
+    if (!document.getElementById('w153rail')) {
+      var r = document.createElement('div'); r.id = 'w153rail'; r.setAttribute('aria-label', 'App menu');
+      var bar = document.getElementById('tabBar');
+      if (bar && bar.parentNode === n) bar.insertAdjacentElement('afterend', r); else n.appendChild(r);
+    }
+    if (!document.getElementById('w153dock')) {
+      var d = document.createElement('div'); d.id = 'w153dock';
+      d.innerHTML = '<button type="button" class="w153grid" aria-label="Apps" aria-haspopup="true" aria-expanded="false" data-w153grid="1">' + I('grid') + '<span>Apps</span></button>' +
+        '<button type="button" class="w153back" data-w153back="1">' + I('back') + ' Back to the Hub</button>';
+      n.appendChild(d);
+    }
+    if (!document.getElementById('w153pop')) {
+      var p = document.createElement('div'); p.id = 'w153pop'; p.setAttribute('role', 'dialog'); p.setAttribute('aria-label', 'Apps');
+      document.body.appendChild(p);
+    }
+    if (!document.getElementById('w153bar')) {
+      var main = document.querySelector('main');
+      if (main) { var b = document.createElement('div'); b.id = 'w153bar'; main.insertBefore(b, main.firstChild); }
+    }
+    return true;
+  }
+  function tileHtml(a, on) {
+    return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
+  }
+  function paintPop() {
+    var p = document.getElementById('w153pop'); if (!p) return;
+    var cur = S.app || 'hub';
+    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') + '</div>';
+  }
+  function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
+  function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }
+  function togglePop() { if (S.open) closePop(); else openPop(); }
+
+  /* the rail: the app's pages and sections, the current one marked */
+  /* pages with sections switched inside the page: how to read the current one, and the button that opens one */
+  var SEC = {
+    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); } },
+    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); } }
+  };
+  function secNow(page) { return SEC[page] ? SEC[page].now() : null; }
+  function subOf(h) { return String(h || '').replace(/^#/, '').split('/')[1] || ''; }
+  function firstOfPage(app, pg) { var gs = items(app); for (var i = 0; i < gs.length; i++) for (var j = 0; j < gs[i].items.length; j++) if (pageOf(gs[i].items[j].h) === pg) return gs[i].items[j]; return null; }
+  function isOn(app, it) {
+    var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);
+    if (ip !== pg) return false;
+    if (it.sec) return secNow(ip) === it.sec;
+    if (app === 'crm' && ip === 'crm') return (isub || 'contacts') === (sub === 'c' || !sub ? 'contacts' : sub);
+    if (!sub) return isub ? firstOfPage(app, ip) === it : true;   /* the page alone: its first section */
+    if (isub) return isub === sub;
+    /* the page's own item while the address names a section the rail does not list */
+    return !items(app).some(function (g) { return g.items.some(function (x) { return pageOf(x.h) === ip && subOf(x.h) === sub; }); });
+  }
+  function paintRail() {
+    var r = document.getElementById('w153rail'); if (!r) return;
+    var app = S.app; if (!app) { r.innerHTML = ''; return; }
+    var a = APPS[app], gs = items(app);
+    r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
+      gs.map(function (g) {
+        return '<div class="w153sec"><div class="w153sh">' + E(g.label) + '</div>' + g.items.map(function (it) {
+          var on = isOn(app, it);
+          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span></a>';
+        }).join('') + '</div>';
+      }).join('') +
+      (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');
+  }
+  /* the app bar: the app, where you are, its quick actions */
+  function whereNow(app) {
+    var gs = items(app), found = null;
+    gs.forEach(function (g) { g.items.forEach(function (it) { if (!found && isOn(app, it)) found = it; }); });
+    if (found) return found.l;
+    var h = hashNow(), pg = pageOf(h);
+    var t = tab(pg); return t ? (t.textContent || '').trim() : '';
+  }
+  function paintBar() {
+    var b = document.getElementById('w153bar'); if (!b) return;
+    var app = S.app; if (!app) { b.innerHTML = ''; return; }
+    var a = APPS[app], where = whereNow(app);
+    b.innerHTML = '<div class="w153bc"><span class="w153ai" style="background:' + a.color + ';width:28px;height:28px;border-radius:8px">' + I(a.ic) + '</span><b>' + E(a.label) + '</b>' + (where ? '<span>' + E(where) + '</span>' : '') + '</div>' +
+      '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
+      (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
+  }
+  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() : '') + '|' + (S.app || ''); }
+  function paint() {
+    if (!ensure()) return;
+    S.sig = sig();
+    var was = S.app; S.app = current(); S.sig = sig();
+    document.body.classList.toggle('w153app', !!S.app);
+    ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
+    var dock = document.getElementById('w153dock');
+    var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
+    if (dock) dock.style.display = any ? '' : 'none';
+    if (!S.app) { var h = hashNow(); if (h && pageOf(h) !== 'crm') store(KEY_LAST, h); }
+    paintRail(); paintBar(); if (S.open) paintPop();
+    if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
+    S.drawn++;
+  }
+
+  /* ---------- open and close ---------- */
+  function open(id) {
+    closePop();
+    if (id === 'hub' || !APPS[id]) return close();
+    if (!appOk(id)) return;
+    store(KEY, id);
+    var pg = pageOf(hashNow());
+    if (APPS[id].pages.indexOf(pg) < 0) { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = APPS[id].home || '#mypage'; } else paint();
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function close() {
+    closePop();
+    store(KEY, null);
+    var pg = pageOf(hashNow());
+    if (pg === 'crm') { var last = read(KEY_LAST); location.hash = last && pageOf(last) && pageOf(last) !== 'crm' ? last : '#mypage'; }
+    else paint();
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function go(h, sec) {
+    var pg = pageOf(h);
+    if (location.hash !== h) location.hash = h; else { try { if (typeof applyHash === 'function') applyHash(); } catch (e) { /* fine */ } }
+    if (sec && SEC[pg]) {
+      /* the page may still be drawing (some rebuild their tabs): keep asking for the section until it is on */
+      var tries = 0, clicks = 0, iv = setInterval(function () {
+        tries++;
+        if (pageOf(hashNow()) !== pg) { clearInterval(iv); return; }
+        if (SEC[pg].now() === sec) { clearInterval(iv); setTimeout(paint, 60); return; }
+        var t = SEC[pg].btn(sec);
+        if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
+        if (tries > 30) clearInterval(iv);
+      }, 150);
+    }
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  function act(k) {
+    if (S.app === 'crm' && k === 'add') {
+      if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';
+      var tries = 0, iv = setInterval(function () { tries++; var b = document.querySelector('#crm [data-w152add]'); if (b) { clearInterval(iv); b.click(); } else if (tries > 40) clearInterval(iv); }, 100);
+    }
+  }
+
+  /* ---------- Search everything finds contacts (staff with the CRM), first inside the CRM ---------- */
+  var SEARCH_PH = 'Search everything: tasks, people, goals, meetings...';
+  var CRM_PH = 'Search contacts: a name, email, phone, organization or tag';
+  var loading = false;
+  function crmContacts() { try { var st = window.w152 && window.w152.state && window.w152.state(); return st && st.contacts ? st.contacts : null; } catch (e) { return null; } }
+  function loadContacts() {
+    if (loading || crmContacts()) return Promise.resolve(crmContacts());
+    if (!window.w152 || !window.w152.load) return Promise.resolve(null);
+    loading = true;
+    return Promise.resolve(window.w152.load('contacts')).then(function () { loading = false; return crmContacts(); }, function () { loading = false; return null; });
+  }
+  function contactHits(q) {
+    var list = crmContacts(); if (!list) return [];
+    var fq = fold(q), words = fq.split(/\s+/).filter(Boolean), digits = q.replace(/\D/g, '');
+    if (!words.length && !digits) return [];
+    var out = [];
+    for (var i = 0; i < list.length && out.length < 6; i++) {
+      var c = list[i], hay = c._hay || fold([c.full_name, (c.emails || []).join(' '), (c.phones || []).join(' ')].join(' '));
+      var ok = words.every(function (w) { return hay.indexOf(w) >= 0; }) || (digits.length >= 4 && (c._digits || '').indexOf(digits) >= 0);
+      if (ok) out.push(c);
+    }
+    return out;
+  }
+  function kindWord(c) { var k = (c.kinds || [])[0] || ''; return { volunteer: 'Volunteer', donor: 'Donor', partner: 'Partner contact', supporter: 'Supporter', staff: 'Staff', alumni: 'Alumni', board: 'Board' }[k] || 'Contact'; }
+  function rowFor(c) {
+    var div = document.createElement('div'); div.className = 'sr'; div.setAttribute('data-w153c', c.id);
+    div.innerHTML = '<span class="sr-type w153c">' + E(kindWord(c)) + '</span>' + E(c.full_name || '(no name)') + (c.emails && c.emails[0] ? ' <span style="color:var(--wa-muted)">' + E(c.emails[0]) + '</span>' : '');
+    div.addEventListener('click', function () {
+      var pop = document.getElementById('searchResults'); if (pop) pop.style.display = 'none';
+      var gs = document.getElementById('globalSearch'); if (gs) gs.value = '';
+      location.hash = '#crm/c/' + c.id;
+    });
+    return div;
+  }
+  function addHits(q) {
+    var pop = document.getElementById('searchResults'); if (!pop || pop.style.display === 'none') return;
+    if (pop.querySelector('[data-w153c]')) return;
+    var hits = contactHits(q); if (!hits.length) return;
+    var empty = !pop.querySelector('.sr[data-hash]') && !pop.querySelector('[data-w107]') ? pop.querySelector('.sr') : null;
+    if (empty && (empty.textContent || '').indexOf('No matches') >= 0) empty.remove();
+    var first = S.app === 'crm';
+    hits.forEach(function (c) { var row = rowFor(c); if (first) pop.insertBefore(row, pop.firstChild); else pop.appendChild(row); });
+    if (first) { /* keep the contacts in the order found (each insert went to the top) */
+      var rows = Array.prototype.slice.call(pop.querySelectorAll('[data-w153c]')).reverse();
+      rows.forEach(function (r) { pop.insertBefore(r, pop.firstChild); });
+    }
+  }
+  var tS = null;
+  if (typeof renderSearch === 'function') {
+    var __rs153 = renderSearch;
+    renderSearch = function (q) {
+      __rs153.apply(this, arguments);
+      if (!allowed('crm') || boardMode()) return;
+      clearTimeout(tS);
+      if (crmContacts()) addHits(q);
+      else tS = setTimeout(function () { loadContacts().then(function () { var gs = document.getElementById('globalSearch'); if (gs && gs.value.trim() === q) addHits(q); }); }, 200);
+    };
+  }
+  function placeholder() {
+    var gs = document.getElementById('globalSearch'); if (!gs) return;
+    var want = S.app === 'crm' ? CRM_PH : SEARCH_PH;
+    if (gs.getAttribute('placeholder') !== want) gs.setAttribute('placeholder', want);
+  }
+  document.addEventListener('wa153app', placeholder);
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (ev) {
+    var t = ev.target.closest ? ev.target : null; if (!t) return;
+    var el;
+    if ((el = t.closest('[data-w153grid]'))) { ev.preventDefault(); togglePop(); return; }
+    if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
+    if ((el = t.closest('[data-w153back]'))) { ev.preventDefault(); close(); return; }
+    if ((el = t.closest('[data-w153go]'))) { ev.preventDefault(); go(el.getAttribute('data-w153go'), el.getAttribute('data-w153sec')); return; }
+    if ((el = t.closest('[data-w153menu]'))) { ev.preventDefault(); document.body.classList.toggle('wa-mob-open'); return; }
+    if ((el = t.closest('[data-w153act]'))) { ev.preventDefault(); act(el.getAttribute('data-w153act')); return; }
+    if (S.open && !t.closest('#w153pop') && !t.closest('#w153dock')) closePop();
+  });
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && S.open) { closePop(); var g = document.querySelector('#w153dock .w153grid'); if (g) { try { g.focus(); } catch (e) { /* fine */ } } } });
+  window.addEventListener('hashchange', function () { setTimeout(paint, 0); });
+  /* the Finances sections are switched inside the page: follow them in the rail */
+  document.addEventListener('click', function (ev) { if (ev.target.closest && ev.target.closest('#finances .w94tab, #hrcentre .w47tab')) setTimeout(paint, 80); });
+  if (typeof showPanel === 'function') {
+    var __sp153 = showPanel;
+    showPanel = function () { var r = __sp153.apply(this, arguments); try { setTimeout(paint, 0); } catch (e) { /* fine */ } return r; };
+  }
+  function boot() {
+    try { paint(); placeholder(); } catch (e) { console.warn('wave153 boot', e); }
+    [400, 1500, 4000].forEach(function (ms) { setTimeout(function () { try { paint(); placeholder(); } catch (e) { /* fine */ } }, ms); });
+  }
+  if (typeof startApp === 'function') {
+    var __sa153 = startApp;
+    startApp = async function () { var r = await __sa153.apply(this, arguments); boot(); return r; };
+  }
+  /* a page that draws its sections late (the HR centre rebuilds its tabs) moves the mark in the rail when it settles */
+  try {
+    var main = document.querySelector('main');
+    if (main) new MutationObserver(function () { if (!S.app) return; clearTimeout(S.tm); S.tm = setTimeout(function () { try { if (S.sig !== sig()) paint(); } catch (e) { /* fine */ } }, 220); }).observe(main, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+  } catch (e) { /* fine */ }
+  /* a page the menu gains or loses later (access changes at boot) moves apps in and out of the launcher */
+  try {
+    var bar = document.getElementById('tabBar');
+    if (bar) new MutationObserver(function () { clearTimeout(S.t); S.t = setTimeout(function () { try { if (S.drawn) paint(); } catch (e) { /* fine */ } }, 200); }).observe(bar, { attributes: true, subtree: true, attributeFilter: ['style'] });
+  } catch (e) { /* fine */ }
+
+  /* ---------- the tour (wave122's engine; trainings row tour:apps) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours || W.tours.apps) return;
+      var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
+        T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. Each app is a place of its own with its own menu, built on the pages you already know.'),
+        T('#w153pop', 'The launcher', 'The Hub, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
+        T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
+        T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
+        T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. The CRM is always an app; the others close on their own when you open a page outside them.', { go: function () { } }),
+        { c: 1, t: 'Coming next', p: 'The CRM\u2019s rail already saves room for what comes next: lists, email campaigns, forms and reports. They arrive one wave at a time.', go: function () { close(); } }
+      ] };
+    } catch (e) { /* fine */ }
+  }
+  addTour();
+
+  /* ---------- test hook ---------- */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS };
+  window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();
 /* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)

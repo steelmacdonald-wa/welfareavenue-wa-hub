@@ -93,6 +93,7 @@ Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` f
 - `applyLayout()` runs at boot, after the older rebuilds in `013` and `042` (the `073` rebuild defers to it), and again whenever something moves a button (one observer on `#tabBar`, with a safety valve). The older placement code in `073`, `116d`, `116h`, `124` and `126` defers to it when `WA_NAV.layout` is set, `WA_NAV.register` (`042`) hands new buttons to it, and the observer puts back whatever `095`, `116` and `132` still move. The team-row placements (`116` adopt, `120`, `121`) and the profile row flattening (`127`) are unchanged.
 - `114` turns the bar into the left sidebar with CSS only.
 - To move a page, change `WA_NAV.layout` only. The page crumbs (`118` `MAST` and the pages' own headers), the access profile editor's `GROUPS` (`parts127`, `parts131`) and the menu step of the chrome tour use the same group names.
+- **The apps (since wave153).** A dock at the foot of the sidebar (`#w153dock`, sticky) holds the 9-dot launcher (`#w153pop`: the Hub, the CRM, the HR centre, Finance, the Admin centre; only the apps whose pages this person can open, none for directors). Inside an app `body.w153app` (and `body.w153<app>`) hides `#tabBar` and shows the app's rail `#w153rail` (its pages and sections, the current one marked) and the app bar `#w153bar` at the top of `main` (the app, where you are, quick actions; Menu opens the drawer on a phone). The apps are a frame around existing pages: `APPS` in `parts153/a_head.js` lists each app's pages and rail items (`{h, l, ic, page, sec}`; `sec` names a section switched inside the page, read and clicked through `SEC` in `parts153/c_frame.js` for `#finances` and `#hrcentre`). The CRM is always an app (any `#crm` address); the others open from the launcher, are remembered in `localStorage` (`wa153.app`) and close when a page outside them opens. `WA_APP.open(id)` / `WA_APP.close()` for other waves. To add an app or a rail item, edit `APPS` only; access follows the menu (a hidden tab is a page that person cannot open).
 
 ## 10. How to add a page
 
@@ -141,7 +142,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#bank` | The bank | Goals and projects | 132 |
 | `#orgchart` | Org chart | People | 011, 012, 133 |
 | `#training/...` | Avenue Academy (Learning Avenues, tours, library; the hard knowledge check and the brand lesson blocks from 150 live in 122) | People | 122 (classic view: 036, 037, 044, 045, 057, 058) |
-| `#crm`, `#crm/c/<id>`, `#crm/dupes`, `#crm/sources` | CRM (every contact, their page and timeline, the duplicates, the sources; from 152) | People | 152 |
+| `#crm`, `#crm/c/<id>`, `#crm/dupes`, `#crm/sources`, `#crm/gifts` | CRM (every contact, their page and timeline, the duplicates, the sources, the gifts; from 152, an app with its own rail from 153) | People (and the CRM app) | 152, 153 |
 | `#activity` | Activity | Admin | 000, 085 |
 | `#adminpanel/<section>` | Admin sections (the monthly security check at the top of Security and audit trail from 146; Loading screen from 149) | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131, 146, 149 |
 | `#importantinfo` | Important info | Resources | 004, 134 (passwords by request) |

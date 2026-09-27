@@ -180,6 +180,8 @@
 151_wave151
 # 152_wave152: the CRM (People > CRM, #crm): every contact, their page and timeline, duplicates, sources.
 152_wave152
+# 153_wave153: the apps: the 9-dot launcher at the bottom of the menu, the app frame (rail, app bar), the CRM as an app, contacts in Search everything, the CRM's Gifts tab.
+153_wave153
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

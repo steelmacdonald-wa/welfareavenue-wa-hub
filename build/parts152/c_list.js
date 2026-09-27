@@ -46,7 +46,8 @@
     return '<nav class="w152tabs" role="tablist">' +
       '<button role="tab" class="' + (t === 'contacts' ? 'on' : '') + '" data-w152go="#crm">' + I('people') + ' Contacts</button>' +
       '<button role="tab" class="' + (t === 'dupes' ? 'on' : '') + '" data-w152go="#crm/dupes">' + I('merge') + ' Possible duplicates' + (n ? ' <em>' + n + '</em>' : '') + '</button>' +
-      '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button></nav>';
+      '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button>' +
+      '<button role="tab" class="' + (t === 'gifts' ? 'on' : '') + '" data-w152go="#crm/gifts">' + I('heart') + ' Gifts</button></nav>';
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -117,14 +118,15 @@
     if (S.err.contacts && !S.contacts.length) { root.innerHTML = '<div class="w152empty">The contacts could not load (' + E(S.err.contacts) + ').</div>'; return; }
     if (S.ui.tab === 'dupes') paintDupes(root);
     else if (S.ui.tab === 'sources') paintSources(root);
+    else if (S.ui.tab === 'gifts') paintGifts(root);
     else paintContacts(root);
   }
   function openCrm(h) {
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : 'contacts';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : 'contacts';
     if (!staffOk() || boardMode()) { paint(); return; }
-    Promise.all([load('contacts'), load('dupes')]).then(function () {
+    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
       else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);

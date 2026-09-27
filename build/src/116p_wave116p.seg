@@ -331,7 +331,9 @@
     ensureCandsBlock(); decorateTabs(); hero(); applyView();
     if (!document.getElementById('w116pcbody').children.length) paintCands();
     var sub = String(location.hash || '').split('/')[1] || '';
-    if ((!currentView() && sub === 'people') || (!sub && !P.landed)) { P.landed = true; var t = document.querySelector('#w46body .w47tab[data-w47v="people"]'); if (t) { t.click(); setTimeout(applyView, 30); } }
+    /* wave153: land on People only while the HR centre is the page on screen (a render finishing after you left was rewriting the address) */
+    var onScreen = (function () { var pn = document.getElementById('hrcentre'); return !!pn && pn.classList.contains('active') && String(location.hash || '').indexOf('#hrcentre') === 0; })();
+    if (onScreen && ((!currentView() && sub === 'people') || (!sub && !P.landed))) { P.landed = true; var t = document.querySelector('#w46body .w47tab[data-w47v="people"]'); if (t) { t.click(); setTimeout(applyView, 30); } }
   }
   function schedule() { clearTimeout(P.pend); P.pend = setTimeout(function () { try { decorate(); } catch (e) { /* fine */ } }, 150); }
   function watch() {
