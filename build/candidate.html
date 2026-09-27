@@ -46890,7 +46890,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
     ['Meetings', ['agendas', 'transcripts']],
     ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training']],
+    ['People', ['orgchart', 'training', 'crm']],
     ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
     ['Admin', ['adminpanel', 'activity']]
   ];
@@ -46902,7 +46902,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
-    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy',
+    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
   };
   /* what the database enforces on top of the menu */
@@ -46915,7 +46915,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     agendas: 'Each agenda is visible to the person who made it and the people invited.',
     transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
     bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project\u2019s lead or a leader for a whole project.',
-    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.'
+    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.',
+    crm: 'Contacts, their history and their email permission follow the profile in the database, not just the menu. Directors never see them.'
   };
   var SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
 
@@ -49237,7 +49238,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
     ['Meetings', ['agendas', 'transcripts']],
     ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training']],
+    ['People', ['orgchart', 'training', 'crm']],
     ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
     ['Admin', ['adminpanel', 'activity']]
   ];
@@ -49249,7 +49250,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
-    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy',
+    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
   };
   var LOCK = {
@@ -49261,7 +49262,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     agendas: 'Each agenda is visible to the person who made it and the people invited.',
     transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
     bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project\u2019s lead or a leader for a whole project.',
-    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.'
+    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.',
+    crm: 'Contacts, their history and their email permission follow the profile in the database, not just the menu. Directors never see them.'
   };
   var P = {
     x: '<path d="M6 6l12 12M18 6 6 18"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', plus: '<path d="M12 5v14M5 12h14"/>',
@@ -52456,7 +52458,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       { key: 'goals', label: 'Goals and projects', items: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'] },
       { key: 'meetings', label: 'Meetings', items: ['agendas', 'transcripts'] },
       { key: 'inbox', label: 'Requests and inbox', items: ['requests', 'hubmail'] },
-      { key: 'people', label: 'People', items: ['orgchart', 'training'] },
+      { key: 'people', label: 'People', items: ['orgchart', 'training', 'crm'] }, /* wave152: the CRM */
       { key: 'resources', label: 'Resources', items: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: Our story, Partners, Document finder */
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
@@ -56077,6 +56079,1226 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w151 = { refresh: refresh, state: function () { return N; }, paint: paint };
 })();
 /* =====================================================================
+   WA v152 the CRM: every contact in one place (27/09/26)
+   =====================================================================
+   Steel: "hub.welfareavenue.com: the Hub ... the CRM as an app inside the Hub, hub being the back end",
+   "All contacts essentially, email marketing capabilities and automation, details about each contact
+   we have", and "CRM visible to all staff".
+
+   A new page under People, CRM (#crm), on the tables of the CRM foundation (migration
+   wa150_crm_foundation, 27/09/26): 481 contacts from the old website's volunteer sign-ups (George's
+   Django export), the Hub roster and MTL volunteering, with each volunteer's servings from the event
+   rosters.
+   - Contacts: everyone, with what they have done with us (servings, gifts, organizations), found by
+     kind, volunteer role, activity and email permission, or by any name, email or phone.
+   - A contact's page (#crm/c/<id>): their details, what they did with Welfare Avenue, their email
+     permission (CASL), tags, and one timeline (notes, calls and emails logged here, servings, gifts,
+     the old website's history). Staff edit the details (a volunteer's name, emails, phones and address
+     are saved on their volunteer record, so MTL volunteering and the CRM stay one record), log what
+     happened, tag, and link a person to an organization from Partners.
+   - Possible duplicates (#crm/dupes): the same email or phone twice. Keep one (crm_merge_contacts(),
+     which also merges two volunteer records through volunteer_merge()) or mark them as different people.
+   - Sources (#crm/sources): where the contacts come from, what joins next (the old website's history,
+     website messages, Zeffy gifts) and the email permission count before any campaign.
+   Data: crm_contacts_v, crm_duplicates_v, crm_interactions, crm_donations, crm_volunteer_history,
+   crm_contact_orgs, crm_dupe_dismissals, event_roster, volunteer_events, wa_partners (migration
+   wa152_crm). The database follows the page access: staff with the CRM page in their profile
+   (wa_page_ok('crm')); directors never see it.
+   ===================================================================== */
+(function () {
+  if (window.__wa152) return; window.__wa152 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E', PURPLE = '#6F64AB', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /* what a contact is to us; the order is the order of the chips */
+  var KINDS = {
+    volunteer: ['Volunteer', TEAL], donor: ['Donor', '#B9851B'], partner: ['Partner contact', PURPLE], supporter: ['Supporter', '#C87A2F'],
+    staff: ['Staff', GREEN], alumni: ['Alumni', '#8C6A2E'], board: ['Board', '#4A4F57']
+  };
+  var KIND_ORDER = ['volunteer', 'donor', 'partner', 'supporter', 'staff', 'alumni', 'board'];
+  /* the kinds someone can give a contact by hand (staff and alumni come from the roster, volunteers from MTL volunteering) */
+  var KIND_HAND = ['donor', 'partner', 'supporter', 'board'];
+  var ROLES = {
+    team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer',
+    community_talker: 'Community talker', community_debrief: 'Community debrief'
+  };
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var SOURCES = {
+    django_website_export: ['Old website sign-ups', 'Everyone who signed up to volunteer on welfareavenue.com before July 2026 (the Django site).'],
+    hub_roster: ['Hub roster', 'Staff and alumni from the Hub roster.'],
+    hub_volunteers: ['MTL volunteering', 'Volunteers added in MTL volunteering since the import.'],
+    hub: ['Added in the CRM', 'Contacts someone added on this page.'],
+    zeffy: ['Zeffy', 'Donors from Zeffy.'],
+    website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],
+    keela: ['Keela', 'Contacts from the Keela export.']
+  };
+  var LANGS = [['', 'Not known'], ['en', 'English'], ['fr', 'French'], ['other', 'Another language']];
+  /* the email permission (Canada's anti-spam law, CASL) */
+  var PERM = {
+    express: ['Express consent', TEAL, 'They said yes to our emails.'],
+    implied: ['Implied consent', '#B9851B', 'They gave, volunteered or bought with us in the last two years.'],
+    none: ['No consent', FLAG, 'Do not send them newsletters or campaigns.'],
+    unknown: ['Not recorded', MUTED, 'No permission on file yet.'],
+    unsub: ['Unsubscribed', FLAG, 'They asked for no more emails.'],
+    bounced: ['Email bounces', FLAG, 'Their address does not accept email.']
+  };
+  /* what someone can log on a contact's timeline: [kind, direction, label] */
+  var LOGS = { note: ['note', 'internal', 'Note'], call: ['call', 'out', 'Call'], meeting: ['meeting', 'out', 'Meeting'], email_out: ['email', 'out', 'Email we sent'],
+    email_in: ['email', 'in', 'Email they sent'], text: ['sms', 'out', 'Text message'] };
+  var LOG_ORDER = ['note', 'call', 'meeting', 'email_out', 'email_in', 'text'];
+  var AV = [GREEN, TEAL, PURPLE, '#B9851B', '#3A6EA5', '#8C6A2E', '#2B6F55', '#C87A2F'];
+
+  var P = {
+    people: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0M16 5.2a3 3 0 0 1 0 5.6M18 14.5a5 5 0 0 1 3 4.8"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', plus: '<path d="M12 5v14M5 12h14"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
+    mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/>',
+    phone: '<path d="M6.6 3.5h2.8l1.4 4.2-2.1 1.3a11 11 0 0 0 6.3 6.3l1.3-2.1 4.2 1.4v2.8a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.6 5.7a2 2 0 0 1 2-2.2z"/>',
+    chat: '<path d="M4.5 5.5h15v10h-9l-4.5 3.5v-3.5h-1.5z"/>', pin: '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>',
+    heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.3a4.3 4.3 0 0 1 7.5 2.5C19.5 15.4 12 20 12 20z"/>',
+    hand: '<path d="M7 11.5 10.5 8a2 2 0 0 1 2.8 0l.7.7M3 10l4-4 3 1.5M21 10l-4-4-4.5 1.2"/><path d="m7 11.5 4.5 4.5a1.6 1.6 0 0 0 2.3-2.3M13.8 13.7l1.5 1.5a1.6 1.6 0 0 0 2.3-2.3L14 9.4"/>',
+    note: '<path d="M6 3.5h9l3.5 3.5v13.5H6z"/><path d="M9 11h6.5M9 14.5h6.5M9 18h4"/>', clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+    merge: '<path d="M6 4v5a5 5 0 0 0 5 5h7M14 10l4 4-4 4"/><path d="M6 20v-4"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>', chev: '<path d="m9 5 7 7-7 7"/>', lock: '<rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/>',
+    spark: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>', tag: '<path d="M3.5 12.5V4.5h8l9 9-8 8z"/><circle cx="8" cy="9" r="1.5"/>',
+    alert: '<path d="M12 4 21 19.5H3z"/><path d="M12 10v4.5M12 17.2v.3"/>', copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-3a1 1 0 0 0-1-1h-9a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h3"/>',
+    ext: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>', db: '<ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-13M4.5 12c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8"/>',
+    trash: '<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>', shield: '<path d="M12 3.5 19 6v5.5c0 4.3-3 7.6-7 9-4-1.4-7-4.7-7-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+    hand2: '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11.5V4a1.5 1.5 0 0 1 3 0v7.5M14 11.5V5.5a1.5 1.5 0 0 1 3 0V14c0 4-2.6 6.5-6 6.5-2.4 0-3.9-1.1-5.2-3L3.5 14a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/>'
+  };
+  function I(n, cls) { return '<svg class="w152i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.spark) + '</svg>'; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
+  /* for matching: lower case, accents off (\u00c9milie finds emilie) */
+  function fold(s) { try { return lower(s).normalize('NFD').replace(/[\u0300-\u036f]/g, ''); } catch (e) { return lower(s); } }
+  function digits(s) { return String(s == null ? '' : s).replace(/\D+/g, ''); }
+  function clip(s, n) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trim() + '\u2026' : s; }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function plural(n, one, many) { return Number(n).toLocaleString('en-CA') + ' ' + (n === 1 ? one : many); }
+  function arr(a) { return Array.isArray(a) ? a.filter(function (x) { return x != null && String(x).trim() !== ''; }) : []; }
+  function uniq(a) { var seen = {}, out = []; a.forEach(function (x) { var k = lower(x); if (k && !seen[k]) { seen[k] = 1; out.push(x); } }); return out; }
+  function initials(n) { var p = String(n || '').replace(/[()]/g, '').trim().split(/\s+/).filter(Boolean); if (!p.length) return '?'; return (p[0][0] + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase(); }
+  function avColor(id) { var n = Math.abs(Number(id) || 0); return AV[n % AV.length]; }
+  function money(n) { var v = Number(n) || 0, f = v % 1 ? 2 : 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: f, maximumFractionDigits: f }); } catch (e) { return '$' + v; } }
+  function listJoin(a) { a = (a || []).filter(Boolean); if (a.length <= 1) return a.join(''); return a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+
+  /* ---------- dates (the Hub's clock is Montreal time) ---------- */
+  function torontoDay(t) { try { return new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); } catch (e) { return new Date(t).toISOString().slice(0, 10); } }
+  function today() { return torontoDay(Date.now()); }
+  /* a date column (2026-09-14) or a timestamp, as the day it was in Montreal */
+  function dayOf(s) {
+    s = String(s || ''); if (!s) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    var t = new Date(s).getTime(); return isNaN(t) ? '' : torontoDay(t);
+  }
+  function fmtDay(s) { var d = dayOf(s); if (!d) return ''; var p = d.split('-'); return Number(p[2]) + ' ' + MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function daysSince(s) { var d = dayOf(s); if (!d) return null; return Math.round((Date.parse(today() + 'T12:00:00Z') - Date.parse(d + 'T12:00:00Z')) / 86400000); }
+  function ago(s) {
+    var n = daysSince(s); if (n == null) return '';
+    if (n < 0) return 'in ' + plural(-n, 'day', 'days');
+    if (n === 0) return 'today';
+    if (n === 1) return 'yesterday';
+    if (n < 14) return n + ' days ago';
+    if (n < 60) return Math.round(n / 7) + ' weeks ago';
+    if (n < 700) return Math.round(n / 30.4) + ' months ago';
+    return Math.round(n / 365.25) + ' years ago';
+  }
+  function addYears(day, n) { var p = String(day || '').split('-'); if (p.length < 3) return ''; return (Number(p[0]) + n) + '-' + p[1] + '-' + (p[1] === '02' && p[2] === '29' ? '28' : p[2]); }
+
+  /* ---------- who is looking ---------- */
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function wRole() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function amAdmin() { return wRole() === 'admin' || ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'].indexOf(myEmail()) >= 0; }
+  function actor() { return myEmail() || 'staff'; }
+
+  /* ---------- the data ---------- */
+  var COLS = 'id,full_name,first_name,last_name,emails,phones,primary_email,address,city,province,postal_code,country,language,kinds,tags,source,volunteer_id,member_id,' +
+    'email_status,email_consent,consent_source,consent_at,implied_consent_until,sms_opt_out,notes,last_activity_at,created_at,updated_at,created_by,updated_by,legacy_refs,' +
+    'volunteer_roles,volunteer_tags,volunteer_organization,last_applied,volunteer_needs_review,in_quo,legacy_servings,legacy_hours,hub_servings,last_serving_on,' +
+    'donation_total,donation_count,last_donation_at,org_names';
+  var S = {
+    contacts: null, dupes: null, counts: null, partners: null, loading: {}, at: {}, err: {},
+    ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60 },
+    sheet: null, detail: {}, confirm: null
+  };
+  var LOADERS = {
+    contacts: function () { return db.from('crm_contacts_v').select(COLS).order('full_name', { ascending: true }).limit(20000); },
+    dupes: function () { return db.from('crm_duplicates_v').select('*').limit(2000); },
+    partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); }
+  };
+  /* the rows the page works with: a few derived fields for filters, sorting and search */
+  function shape(c) {
+    c.emails = arr(c.emails); c.phones = arr(c.phones); c.kinds = arr(c.kinds); c.tags = arr(c.tags);
+    c.volunteer_roles = arr(c.volunteer_roles); c.volunteer_tags = arr(c.volunteer_tags); c.org_names = arr(c.org_names);
+    c._roles = uniq(c.volunteer_roles.concat(c.volunteer_tags.filter(function (t) { return ROLES[t]; })));
+    c._served = (Number(c.hub_servings) || 0) + (Number(c.legacy_servings) || 0);
+    var acts = [dayOf(c.last_serving_on), dayOf(c.last_activity_at), dayOf(c.last_donation_at)].filter(Boolean).sort();
+    c._last = acts.length ? acts[acts.length - 1] : '';
+    c._donor = c.kinds.indexOf('donor') >= 0 || Number(c.donation_count) > 0;
+    c._partner = c.kinds.indexOf('partner') >= 0 || c.org_names.length > 0;
+    c._perm = permKey(c);
+    c._digits = c.phones.map(digits).filter(function (d) { return d.length >= 7; });
+    c._hay = fold([c.full_name, c.emails.join(' '), c.phones.join(' '), c.city, c.volunteer_organization, c.org_names.join(' '), c.tags.join(' '),
+      c._roles.map(function (r) { return ROLES[r] || r; }).join(' '), c.kinds.map(function (k) { return (KINDS[k] || [k])[0]; }).join(' ')].join(' '));
+    return c;
+  }
+  /* the permission that applies today: an opt-out wins, an implied consent runs out */
+  function permKey(c) {
+    var st = lower(c.email_status);
+    if (st === 'unsubscribed' || st === 'complained') return 'unsub';
+    if (st === 'bounced') return 'bounced';
+    var k = lower(c.email_consent);
+    if (k === 'express') return 'express';
+    if (k === 'implied') return (!c.implied_consent_until || dayOf(c.implied_consent_until) >= today()) ? 'implied' : 'unknown';
+    if (k === 'none') return 'none';
+    return 'unknown';
+  }
+  function load(what, force) {
+    if (S.loading[what]) return S.loading[what];
+    if (S[what] && !force && Date.now() - (S.at[what] || 0) < 120000) return Promise.resolve(S[what]);
+    if (typeof db === 'undefined' || !db || !db.from) return Promise.resolve(S[what] || []);
+    S.loading[what] = Promise.resolve(LOADERS[what]()).then(function (res) {
+      S.loading[what] = null;
+      if (res && res.error) { S.err[what] = String(res.error.message || res.error); S[what] = S[what] || []; return S[what]; }
+      S.err[what] = ''; S.at[what] = Date.now();
+      var rows = (res && res.data) || [];
+      if (what === 'contacts') { rows = rows.filter(function (c) { return c && c.id != null; }).map(shape); indexContacts(rows); }
+      S[what] = rows;
+      return rows;
+    }).catch(function (e) { S.loading[what] = null; S.err[what] = String((e && e.message) || e); S[what] = S[what] || []; return S[what]; });
+    return S.loading[what];
+  }
+  var BY_ID = {};
+  function indexContacts(rows) { BY_ID = {}; rows.forEach(function (c) { BY_ID[String(c.id)] = c; }); }
+  function contact(id) { return BY_ID[String(id)] || null; }
+  /* the pairs to look at: both still in the CRM, one card per pair whatever matched */
+  function dupePairs() {
+    var by = {};
+    (S.dupes || []).forEach(function (d) {
+      var a = Math.min(Number(d.contact_id), Number(d.duplicate_id)), b = Math.max(Number(d.contact_id), Number(d.duplicate_id));
+      if (!contact(a) || !contact(b)) return;
+      var k = a + '-' + b;
+      if (!by[k]) by[k] = { a: a, b: b, on: [], values: [] };
+      if (by[k].on.indexOf(d.matched_on) < 0) by[k].on.push(d.matched_on);
+      if (d.value && by[k].values.indexOf(d.value) < 0) by[k].values.push(d.value);
+    });
+    return Object.keys(by).map(function (k) { return by[k]; }).sort(function (x, y) { return (y.on.length - x.on.length) || (x.a - y.a); });
+  }
+
+  /* the masthead and the host of the page */
+  function mastFor() {
+    var sec = document.getElementById('crm'); if (!sec) return null;
+    var m = sec.querySelector(':scope > .w118mast');
+    if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w152', 'crm'); sec.insertBefore(m, sec.firstChild); }
+    var html = '<div class="crumb">People</div><h1>CRM</h1><p>Everyone Welfare Avenue knows (volunteers, donors, partners and the team) in one place, with what they have done with us and when we last heard from them.</p>';
+    if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
+    var h = sec.querySelector(':scope > .w152root');
+    if (!h) { h = document.createElement('div'); h.className = 'w152root'; sec.appendChild(h); }
+    return h;
+  }
+  function busy(msg) { return '<div class="w152empty">' + E(msg || 'Loading\u2026') + '</div>'; }
+  function kindChip(k) { var d = KINDS[k] || [k.charAt(0).toUpperCase() + k.slice(1), MUTED]; return '<span class="w152kd" style="background:' + d[1] + '1a;color:' + d[1] + '">' + E(d[0]) + '</span>'; }
+  function kindsHtml(c) {
+    var ks = c.kinds.slice();
+    if (c._donor && ks.indexOf('donor') < 0) ks.push('donor');
+    if (c._partner && ks.indexOf('partner') < 0) ks.push('partner');
+    ks.sort(function (a, b) { var x = KIND_ORDER.indexOf(a), y = KIND_ORDER.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); });
+    return ks.map(kindChip).join('');
+  }
+  function permChip(key) { var p = PERM[key] || PERM.unknown; return '<span class="w152pm" style="background:' + p[1] + '17;color:' + p[1] + '"><i style="background:' + p[1] + '"></i>' + E(p[0]) + '</span>'; }
+  function avatar(c, big) { return '<span class="w152av' + (big ? ' big' : '') + '" style="background:' + avColor(c.id) + '" aria-hidden="true">' + E(initials(c.full_name)) + '</span>'; }
+  function roleName(r) { return ROLES[r] || String(r || '').replace(/_/g, ' '); }
+  /* ---------- styles ---------- */
+  var css = document.createElement('style'); css.id = 'w152css';
+  css.textContent = ''
+    + '.w152root,#w152sheet{font-family:' + BODY + ';color:var(--wa-text,' + INK + ');}'
+    + '.w152i{width:17px;height:17px;flex:none;display:inline-block;vertical-align:middle;}'
+    + '.w152root{display:flex;flex-direction:column;gap:16px;max-width:1180px;}'
+    /* numbers at the top */
+    + '.w152stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;}'
+    + '.w152st{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:14px 16px;display:flex;flex-direction:column;gap:3px;min-width:0;border:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;}'
+    + '.w152st:hover{box-shadow:0 1px 2px rgba(16,63,57,.08),0 10px 28px rgba(16,63,57,.12);}'
+    + '.w152st.on{box-shadow:0 0 0 2px ' + GOLD + ',' + SH1 + ';}'
+    + '.w152st b{font-family:' + HEAD + ';font-size:34px;font-weight:600;line-height:1;color:' + GREEN + ';}'
+    + '.w152st span{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');line-height:1.35;}'
+    /* tabs */
+    + '.w152tabs{display:flex;gap:6px;border-bottom:1px solid rgba(16,63,57,.12);overflow-x:auto;scrollbar-width:none;}'
+    + '.w152tabs::-webkit-scrollbar{display:none;}'
+    + '.w152tabs button{border:none;background:none;font-family:' + BODY + ';font-size:14px;font-weight:700;color:var(--wa-muted,' + MUTED + ');padding:10px 14px;cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1px;display:inline-flex;gap:8px;align-items:center;white-space:nowrap;}'
+    + '.w152tabs button.on{color:' + GREEN + ';border-bottom-color:' + GOLD + ';}'
+    + '.w152tabs em{font-style:normal;font-size:11.5px;background:rgba(220,165,39,.2);color:#8a6414;border-radius:999px;padding:1px 7px;}'
+    /* filter bar */
+    + '.w152bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}'
+    + '.w152chips{display:flex;gap:6px;flex-wrap:wrap;flex:1 1 420px;min-width:0;}'
+    + '.w152chip{border:1px solid rgba(16,63,57,.16);background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');border-radius:999px;padding:6px 12px;font-size:12.5px;font-weight:600;cursor:pointer;font-family:' + BODY + ';display:inline-flex;align-items:center;gap:6px;white-space:nowrap;}'
+    + '.w152chip i{width:8px;height:8px;border-radius:50%;display:inline-block;}'
+    + '.w152chip em{font-style:normal;color:var(--wa-muted,' + MUTED + ');font-weight:500;}'
+    + '.w152chip.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}.w152chip.on em{color:rgba(255,250,242,.75);}'
+    + '.w152sel{border:1px solid rgba(16,63,57,.16);border-radius:12px;padding:8px 10px;font-family:' + BODY + ';font-size:13px;background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');max-width:230px;}'
+    + '.w152q{position:relative;flex:1 1 260px;min-width:200px;}'
+    + '.w152q .w152i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--wa-muted,' + MUTED + ');width:16px;height:16px;pointer-events:none;}'
+    + '.w152q input{width:100%;box-sizing:border-box;padding:9px 12px 9px 34px !important;border:1px solid rgba(16,63,57,.16);border-radius:12px;font-family:' + BODY + ';font-size:13.5px;background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');}'
+    + '.w152btn{display:inline-flex;align-items:center;gap:7px;border:none;border-radius:12px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-weight:700;font-size:13.5px;padding:10px 14px;cursor:pointer;white-space:nowrap;text-decoration:none;}'
+    + '.w152btn:hover{background:#0b2f2a;}.w152btn:disabled{opacity:.55;cursor:default;}'
+    + '.w152btn.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}.w152btn.soft:hover{background:rgba(16,63,57,.14);}'
+    + '.w152btn.ghost{background:none;color:var(--wa-muted,' + MUTED + ');}.w152btn.ghost:hover{background:rgba(16,63,57,.06);}'
+    + '.w152btn.danger{background:' + FLAG + ';color:' + CREAM + ';}.w152btn.danger:hover{background:#96331f;}'
+    + '.w152btn.sm{padding:7px 11px;font-size:12.5px;border-radius:10px;}'
+    + '.w152mini{border:none;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-weight:700;font-size:12px;cursor:pointer;padding:3px 6px;border-radius:8px;display:inline-flex;align-items:center;gap:4px;text-decoration:none;}'
+    + '.w152mini:hover{background:rgba(16,63,57,.08);}.w152mini .w152i{width:14px;height:14px;}'
+    + '.w152empty{background:var(--wa-card,' + CREAM + ');border-radius:16px;box-shadow:' + SH1 + ';padding:22px;color:var(--wa-muted,' + MUTED + ');font-size:14px;line-height:1.5;}'
+    + '.w152count{font-size:13px;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152kd{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;border-radius:6px;padding:2px 6px;white-space:nowrap;}'
+    + '.w152pm{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;}'
+    + '.w152pm i{width:7px;height:7px;border-radius:50%;display:inline-block;}'
+    + '.w152rl{display:inline-block;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 8px;background:rgba(42,140,122,.1);color:#1f6e60;white-space:nowrap;}'
+    + '.w152tg{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 8px;background:rgba(111,100,171,.11);color:#4b4287;white-space:nowrap;}'
+    + '.w152av{width:36px;height:36px;border-radius:50%;color:' + CREAM + ';font-family:' + HEAD + ';font-weight:600;font-size:15px;letter-spacing:.5px;display:inline-flex;align-items:center;justify-content:center;flex:none;}'
+    + '.w152av.big{width:58px;height:58px;font-size:24px;}'
+    /* the list */
+    + '.w152list{background:var(--wa-card,' + CREAM + ');border-radius:18px;box-shadow:' + SH1 + ';overflow:hidden;}'
+    + '.w152lh,.w152row{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,2fr) minmax(0,1.5fr) minmax(0,.8fr) minmax(0,1fr);gap:12px;align-items:center;padding:10px 16px;}'
+    + '.w152lh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');border-bottom:1px solid rgba(16,63,57,.08);padding-top:12px;}'
+    + '.w152row{width:100%;border:none;background:none;text-align:left;font-family:' + BODY + ';color:inherit;cursor:pointer;border-top:1px solid rgba(16,63,57,.06);}'
+    + '.w152row:first-of-type{border-top:none;}.w152row:hover{background:rgba(16,63,57,.035);}.w152row:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
+    + '.w152row .who{display:flex;gap:10px;align-items:center;min-width:0;}'
+    + '.w152row .nm{font-weight:700;font-size:14.5px;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+    + '.w152row .ks{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;}'
+    + '.w152row .ct{font-size:13px;min-width:0;line-height:1.4;}.w152row .ct div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.w152row .ct .m{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152row .rl{display:flex;gap:4px;flex-wrap:wrap;min-width:0;}'
+    + '.w152row .sv{font-family:' + HEAD + ';font-size:20px;font-weight:600;color:' + GREEN + ';line-height:1;}.w152row .sv small{display:block;font-family:' + BODY + ';font-size:11px;font-weight:500;color:var(--wa-muted,' + MUTED + ');margin-top:3px;}'
+    + '.w152row .la{font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152row .fl{color:' + FLAG + ';}'
+    + '.w152more{align-self:center;}'
+    /* the sheet */
+    + '#w152sheet{position:fixed;inset:0;z-index:4000;display:flex;align-items:flex-start;justify-content:center;background:rgba(16,24,22,.45);padding:4vh 16px;overflow-y:auto;box-sizing:border-box;}'
+    + '#w152sheet .sh{background:var(--wa-card,' + CREAM + ');border-radius:20px;box-shadow:0 30px 80px -20px rgba(0,0,0,.45);width:min(1000px,100%);padding:22px 24px 20px;position:relative;box-sizing:border-box;}'
+    + '#w152sheet .sh.narrow{width:min(640px,100%);}'
+    + '#w152sheet .xb{position:absolute;right:14px;top:14px;border:none;background:rgba(16,63,57,.08);color:' + GREEN + ';border-radius:10px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;}'
+    + '#w152sheet h2{font-family:' + HEAD + ';font-size:32px;font-weight:600;color:' + GREEN + ';margin:0;line-height:1.05;}'
+    + '#w152sheet .sub{font-size:13px;color:var(--wa-muted,' + MUTED + ');margin:4px 0 0;line-height:1.45;}'
+    + '.w152hd{display:flex;gap:14px;align-items:center;margin-right:40px;}'
+    + '.w152hd .ks{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;align-items:center;}'
+    + '.w152qa{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px;}'
+    + '.w152cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px;margin-top:10px;}'
+    + '.w152sec{border-top:1px solid rgba(16,63,57,.08);padding-top:10px;margin-top:12px;}'
+    + '.w152sec:first-child{margin-top:0;}'
+    + '.w152sec h4{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');margin:0 0 6px;}'
+    + '.w152kv{display:grid;grid-template-columns:96px minmax(0,1fr);gap:6px 10px;font-size:13.5px;line-height:1.45;}'
+    + '.w152kv b{color:var(--wa-muted,' + MUTED + ');font-weight:600;font-size:12.5px;}'
+    + '.w152kv a{color:' + GREEN + ';font-weight:600;text-decoration:none;word-break:break-all;}.w152kv a:hover{text-decoration:underline;}'
+    + '.w152kv span{word-break:break-word;}'
+    + '.w152line{font-size:13.5px;line-height:1.5;margin:3px 0;}'
+    + '.w152line .m{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152pnote{font-size:12.5px;line-height:1.5;color:var(--wa-muted,' + MUTED + ');margin:6px 0 0;}'
+    + '.w152tags{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}'
+    + '.w152tags .w152tg button{border:none;background:none;color:inherit;cursor:pointer;padding:0 0 0 2px;font-size:13px;line-height:1;}'
+    + '.w152tags input{border:1px dashed rgba(16,63,57,.3);border-radius:999px;padding:4px 10px;font-family:' + BODY + ';font-size:12.5px;width:130px;background:transparent;color:var(--wa-text,' + INK + ');}'
+    + '.w152orgs{display:flex;flex-direction:column;gap:4px;}'
+    /* the timeline */
+    + '.w152log{background:rgba(16,63,57,.04);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}'
+    + '.w152log .r{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}'
+    + '.w152log select,.w152log input[type=date]{border:1px solid rgba(16,63,57,.18);border-radius:10px;padding:6px 8px;font-family:' + BODY + ';font-size:12.5px;background:#FFFAF2;color:' + INK + ';}'
+    + '.w152log textarea{border:1px solid rgba(16,63,57,.18);border-radius:10px;padding:8px 10px;font-family:' + BODY + ';font-size:13.5px;min-height:58px;resize:vertical;background:#FFFAF2;color:' + INK + ';box-sizing:border-box;width:100%;}'
+    + '.w152tl{list-style:none;margin:0;padding:0;}'
+    + '.w152it{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;padding:9px 0;border-top:1px solid rgba(16,63,57,.06);}'
+    + '.w152it:first-child{border-top:none;}'
+    + '.w152it .ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+    + '.w152it .ic .w152i{width:16px;height:16px;}'
+    + '.w152it .t{font-weight:700;font-size:13.5px;line-height:1.35;}'
+    + '.w152it .t .d{font-weight:500;color:var(--wa-muted,' + MUTED + ');font-size:12px;margin-left:6px;}'
+    + '.w152it p{margin:3px 0 0;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}'
+    + '.w152it .by{font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:3px;display:flex;gap:8px;align-items:center;}'
+    + '.w152it.faint{opacity:.62;}'
+    /* forms */
+    + '.w152form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin-top:12px;}'
+    + '.w152form label{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:700;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152form .full{grid-column:1 / -1;}'
+    + '.w152form .lbl{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:700;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152form input,.w152form select,.w152form textarea{font-family:' + BODY + ';font-size:14px;border:1px solid rgba(16,63,57,.2);border-radius:10px;padding:8px 10px;background:#FFFAF2;color:' + INK + ';font-weight:500;box-sizing:border-box;width:100%;}'
+    + '.w152form textarea{min-height:76px;resize:vertical;}'
+    + '.w152form .hint{font-weight:500;font-size:11.5px;}'
+    + '.w152form .chk{flex-direction:row;align-items:center;gap:8px;font-size:13px;color:var(--wa-text,' + INK + ');font-weight:600;}'
+    + '.w152form .chk input{width:auto;}'
+    + '.w152form .kinds{display:flex;gap:10px;flex-wrap:wrap;}'
+    + '.w152form .kinds label{flex-direction:row;align-items:center;gap:6px;font-size:13px;color:var(--wa-text,' + INK + ');font-weight:600;}'
+    + '.w152form .kinds input{width:auto;}'
+    + '.w152form .note{grid-column:1 / -1;font-size:12.5px;line-height:1.5;background:rgba(220,165,39,.12);border-radius:10px;padding:8px 10px;color:var(--wa-text,' + INK + ');font-weight:500;}'
+    + '.w152err{color:' + FLAG + ';font-size:13px;font-weight:600;min-height:1em;}'
+    + '.w152foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px;align-items:center;}'
+    + '.w152foot .w152err{margin-right:auto;}'
+    + '.w152warn{grid-column:1 / -1;background:rgba(179,64,47,.08);border-radius:10px;padding:9px 11px;font-size:13px;line-height:1.5;}'
+    + '.w152warn b{color:' + FLAG + ';}'
+    /* duplicates */
+    + '.w152dl{display:flex;flex-direction:column;gap:12px;}'
+    + '.w152dp{background:var(--wa-card,' + CREAM + ');border-radius:18px;box-shadow:' + SH1 + ';padding:14px 16px;}'
+    + '.w152dp .why{font-size:12.5px;font-weight:700;color:#8a6414;display:flex;gap:6px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}'
+    + '.w152dp .why span{font-weight:500;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152dp .two{display:grid;grid-template-columns:1fr 1fr;gap:12px;}'
+    + '.w152ds{border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:0;}'
+    + '.w152ds .top{display:flex;gap:10px;align-items:center;}'
+    + '.w152ds .nm{font-weight:700;font-size:14.5px;}'
+    + '.w152ds .ln{font-size:12.5px;line-height:1.45;word-break:break-word;}.w152ds .ln .m{color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152ds .act{margin-top:auto;padding-top:4px;display:flex;gap:6px;flex-wrap:wrap;}'
+    + '.w152dp .bot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px;align-items:center;}'
+    + '.w152cf{margin-top:10px;background:rgba(179,64,47,.07);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between;}'
+    /* sources */
+    + '.w152card{background:var(--wa-card,' + CREAM + ');border-radius:18px;box-shadow:' + SH1 + ';padding:16px 18px;}'
+    + '.w152card h3{font-family:' + HEAD + ';font-size:22px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';margin:0 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}'
+    + '.w152card h3 span{font-family:' + BODY + ';font-size:12px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152srow{display:grid;grid-template-columns:70px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 0;border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w152srow:first-of-type{border-top:none;}'
+    + '.w152srow b{font-family:' + HEAD + ';font-size:26px;font-weight:600;color:' + GREEN + ';text-align:right;line-height:1;}'
+    + '.w152srow .tt{font-weight:700;font-size:14px;}.w152srow p{margin:2px 0 0;font-size:12.5px;line-height:1.45;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w152srow .st{font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 9px;white-space:nowrap;}'
+    + '.w152srow .st.on{background:rgba(42,140,122,.12);color:#1f6e60;}.w152srow .st.next{background:rgba(220,165,39,.18);color:#8a6414;}'
+    + '.w152srow.nx{grid-template-columns:minmax(0,1fr) auto;}'
+    + '.w152grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}'
+    + '@media (max-width:980px){.w152lh,.w152row{grid-template-columns:minmax(0,2.2fr) minmax(0,2fr) minmax(0,.8fr) minmax(0,1fr);}.w152lh .c3,.w152row .rl{display:none;}}'
+    + '@media (max-width:760px){.w152stats{grid-template-columns:repeat(2,minmax(0,1fr));}.w152q{flex:1 1 100%;}.w152sel{max-width:none;flex:1 1 140px;}'
+    + '.w152lh{display:none;}.w152row{grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:11px 14px;}.w152row .ct{grid-column:1 / -1;order:3;padding-left:46px;}'
+    + '.w152row .sv{text-align:right;font-size:18px;}.w152row .la{display:none;}'
+    + '#w152sheet{padding:0;}#w152sheet .sh,#w152sheet .sh.narrow{width:100%;min-height:100%;border-radius:0;padding:18px 16px 24px;}'
+    + '.w152cols,.w152grid2,.w152dp .two,.w152form{grid-template-columns:minmax(0,1fr);}.w152kv{grid-template-columns:84px minmax(0,1fr);}'
+    + '.w152srow{grid-template-columns:52px minmax(0,1fr);}.w152srow .st{grid-column:2;justify-self:start;}.w152srow.nx{grid-template-columns:minmax(0,1fr);}.w152srow.nx .st{grid-column:1;}}';
+  document.head.appendChild(css);
+  /* ======================= the contacts (#crm) ======================= */
+  var ACTS = [['', 'Any activity'], ['served12', 'Served in the last 12 months'], ['served', 'Has served at an event'], ['never', 'Volunteers who have not served yet'],
+    ['review', 'Volunteer record needs a review'], ['noemail', 'No email address'], ['new30', 'Added in the last 30 days']];
+  var PERMS = [['', 'Any email permission'], ['express', 'Express consent'], ['implied', 'Implied consent'], ['unknown', 'Not recorded'], ['none', 'No consent'], ['unsub', 'Unsubscribed or bouncing']];
+  var SORTS = [['recent', 'Recently active'], ['name', 'Name'], ['served', 'Most servings'], ['new', 'Newest']];
+  function hasKind(c, k) {
+    if (k === 'donor') return c._donor;
+    if (k === 'partner') return c._partner;
+    return c.kinds.indexOf(k) >= 0;
+  }
+  function actOk(c, a) {
+    if (!a) return true;
+    if (a === 'served12') { var n = daysSince(c.last_serving_on); return n != null && n <= 365 && n >= 0; }
+    if (a === 'served') return c._served > 0;
+    if (a === 'never') return c.kinds.indexOf('volunteer') >= 0 && !c._served;
+    if (a === 'review') return !!c.volunteer_needs_review;
+    if (a === 'noemail') return !c.emails.length;
+    if (a === 'new30') { var d = daysSince(c.created_at); return d != null && d <= 30; }
+    return true;
+  }
+  function permOk(c, p) {
+    if (!p) return true;
+    if (p === 'unsub') return c._perm === 'unsub' || c._perm === 'bounced';
+    return c._perm === p;
+  }
+  function qOk(c, q) {
+    if (!q) return true;
+    var ds = digits(q);
+    if (ds.length >= 4 && ds.length >= q.replace(/[\s()+.-]/g, '').length - 1) return c._digits.some(function (d) { return d.indexOf(ds) >= 0; });
+    return fold(q).split(/\s+/).filter(Boolean).every(function (t) { return c._hay.indexOf(t) >= 0; });
+  }
+  function matches(c) {
+    var u = S.ui;
+    return (!u.kind || hasKind(c, u.kind)) && (!u.role || c._roles.indexOf(u.role) >= 0) && actOk(c, u.act) && permOk(c, u.perm) && qOk(c, u.q);
+  }
+  function sortRows(list) {
+    var s = S.ui.sort;
+    var byName = function (a, b) { return fold(a.full_name).localeCompare(fold(b.full_name)); };
+    if (s === 'name') return list.sort(byName);
+    if (s === 'served') return list.sort(function (a, b) { return (b._served - a._served) || byName(a, b); });
+    if (s === 'new') return list.sort(function (a, b) { return String(b.created_at || '').localeCompare(String(a.created_at || '')) || byName(a, b); });
+    return list.sort(function (a, b) { return String(b._last || '').localeCompare(String(a._last || '')) || (b._served - a._served) || byName(a, b); });
+  }
+  function tabsHtml() {
+    var t = S.ui.tab, n = S.contacts && S.dupes ? dupePairs().length : 0;
+    return '<nav class="w152tabs" role="tablist">' +
+      '<button role="tab" class="' + (t === 'contacts' ? 'on' : '') + '" data-w152go="#crm">' + I('people') + ' Contacts</button>' +
+      '<button role="tab" class="' + (t === 'dupes' ? 'on' : '') + '" data-w152go="#crm/dupes">' + I('merge') + ' Possible duplicates' + (n ? ' <em>' + n + '</em>' : '') + '</button>' +
+      '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button></nav>';
+  }
+  function statsHtml(all) {
+    var u = S.ui, plain = !u.role && !u.perm && !u.q;
+    var vol = all.filter(function (c) { return hasKind(c, 'volunteer'); }).length;
+    var served = all.filter(function (c) { return c._served > 0; }).length;
+    var donors = all.filter(function (c) { return c._donor; }).length;
+    var pairs = S.dupes ? dupePairs().length : 0;
+    function st(key, n, label, on) { return '<button class="w152st' + (on ? ' on' : '') + '" data-w152set="' + key + '"><b>' + Number(n).toLocaleString('en-CA') + '</b><span>' + E(label) + '</span></button>'; }
+    return '<div class="w152stats">' +
+      st('all', all.length, 'contacts in the CRM', plain && !u.kind && !u.act) +
+      st('volunteer', vol, 'volunteers', plain && u.kind === 'volunteer' && !u.act) +
+      st('served', served, 'have served at an event', plain && !u.kind && u.act === 'served') +
+      (donors ? st('donor', donors, 'donors', plain && u.kind === 'donor' && !u.act)
+        : '<button class="w152st" data-w152go="#crm/dupes"><b>' + pairs + '</b><span>possible duplicates to check</span></button>') + '</div>';
+  }
+  function opts(list, cur) { return list.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(cur) === String(o[0]) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join(''); }
+  function barHtml(all) {
+    var u = S.ui, kc = {}, rc = {};
+    all.forEach(function (c) {
+      KIND_ORDER.forEach(function (k) { if (hasKind(c, k)) kc[k] = (kc[k] || 0) + 1; });
+      c._roles.forEach(function (r) { rc[r] = (rc[r] || 0) + 1; });
+    });
+    var chips = '<button class="w152chip' + (!u.kind ? ' on' : '') + '" data-w152kind="">Everyone <em>' + all.length + '</em></button>' +
+      KIND_ORDER.filter(function (k) { return kc[k]; }).map(function (k) {
+        return '<button class="w152chip' + (u.kind === k ? ' on' : '') + '" data-w152kind="' + k + '"><i style="background:' + KINDS[k][1] + '"></i>' + E(KINDS[k][0]) + ' <em>' + kc[k] + '</em></button>';
+      }).join('');
+    var roles = ROLE_ORDER.filter(function (r) { return rc[r]; }).concat(Object.keys(rc).filter(function (r) { return ROLE_ORDER.indexOf(r) < 0; }).sort());
+    return '<div class="w152bar"><div class="w152chips">' + chips + '</div></div>' +
+      '<div class="w152bar">' +
+      '<div class="w152q">' + I('search') + '<input type="search" data-w152q="contacts" placeholder="Search a name, email, phone, organization or tag" value="' + E(u.q) + '" aria-label="Search contacts"></div>' +
+      '<select class="w152sel" data-w152role aria-label="Volunteer role"><option value="">Every volunteer role</option>' + roles.map(function (r) { return '<option value="' + E(r) + '"' + (u.role === r ? ' selected' : '') + '>' + E(roleName(r)) + ' (' + rc[r] + ')</option>'; }).join('') + '</select>' +
+      '<select class="w152sel" data-w152act aria-label="Activity">' + opts(ACTS, u.act) + '</select>' +
+      '<select class="w152sel" data-w152perm aria-label="Email permission">' + opts(PERMS, u.perm) + '</select>' +
+      '<select class="w152sel" data-w152sort aria-label="Sort">' + opts(SORTS.map(function (s) { return [s[0], 'Sort: ' + s[1]]; }), u.sort) + '</select>' +
+      '<button class="w152btn" data-w152add="1">' + I('plus') + ' Add a contact</button></div>';
+  }
+  function rowHtml(c) {
+    var roles = c._roles.slice(0, 3).map(function (r) { return '<span class="w152rl">' + E(roleName(r)) + '</span>'; }).join('') + (c._roles.length > 3 ? '<span class="w152count">+' + (c._roles.length - 3) + '</span>' : '');
+    var em = c.emails[0] || '', ph = c.phones[0] || '';
+    return '<button class="w152row" data-w152open="' + E(c.id) + '">' +
+      '<span class="who">' + avatar(c) + '<span style="min-width:0"><span class="nm">' + E(c.full_name) + '</span><span class="ks">' + kindsHtml(c) +
+      (c.volunteer_needs_review ? '<span class="w152kd" style="background:rgba(179,64,47,.1);color:' + FLAG + '">Review</span>' : '') + '</span></span></span>' +
+      '<span class="ct"><div>' + (em ? E(em) : '<span class="m">No email</span>') + '</div>' + (ph ? '<div class="m">' + E(ph) + '</div>' : '') + '</span>' +
+      '<span class="rl">' + (roles || '<span class="w152count">\u2013</span>') + '</span>' +
+      '<span class="sv">' + (c._served ? c._served + '<small>' + (c._served === 1 ? 'serving' : 'servings') + '</small>' : '<span class="w152count">\u2013</span>') + '</span>' +
+      '<span class="la">' + (c._last ? E(ago(c._last)) : '\u2013') + '</span></button>';
+  }
+  function paintContacts(root) {
+    var all = S.contacts || [], u = S.ui;
+    var focus = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute('data-w152q') : null;
+    var caret = focus && document.activeElement.selectionStart;
+    var list = sortRows(all.filter(matches));
+    var shown = list.slice(0, u.show);
+    var filtered = u.kind || u.role || u.act || u.perm || u.q;
+    root.innerHTML = statsHtml(all) + tabsHtml() + barHtml(all) +
+      '<div class="w152count">' + (filtered ? plural(list.length, 'contact matches', 'contacts match') + ' \u00b7 <button class="w152mini" data-w152clear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'contact', 'contacts')) +
+      (shown.length < list.length ? ' \u00b7 showing the first ' + shown.length : '') + '</div>' +
+      (shown.length ? '<div class="w152list" role="list"><div class="w152lh" aria-hidden="true"><span>Name</span><span>Email and phone</span><span class="c3">Volunteer roles</span><span>Served</span><span>Last activity</span></div>' +
+        shown.map(rowHtml).join('') + '</div>' +
+        (shown.length < list.length ? '<button class="w152btn soft w152more" data-w152more="1">Show ' + Math.min(60, list.length - shown.length) + ' more</button>' : '')
+        : '<div class="w152empty">Nobody matches. Try another word, or <button class="w152mini" data-w152clear="1">clear the filters</button>.</div>');
+    if (focus) { var inp = root.querySelector('[data-w152q="' + focus + '"]'); if (inp) { inp.focus(); try { inp.setSelectionRange(caret, caret); } catch (e) { /* fine */ } } }
+  }
+  function paint() {
+    var root = mastFor(); if (!root) return;
+    if (!staffOk() || boardMode()) { root.innerHTML = '<div class="w152empty">' + I('lock') + ' The CRM is for the Welfare Avenue team.</div>'; return; }
+    if (!S.contacts) { root.innerHTML = busy('Loading the contacts\u2026'); return; }
+    if (S.err.contacts && !S.contacts.length) { root.innerHTML = '<div class="w152empty">The contacts could not load (' + E(S.err.contacts) + ').</div>'; return; }
+    if (S.ui.tab === 'dupes') paintDupes(root);
+    else if (S.ui.tab === 'sources') paintSources(root);
+    else paintContacts(root);
+  }
+  function openCrm(h) {
+    var parts = String(h || '').split('/');
+    var sub = parts[1] || '';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : 'contacts';
+    if (!staffOk() || boardMode()) { paint(); return; }
+    Promise.all([load('contacts'), load('dupes')]).then(function () {
+      paint();
+      if (sub === 'c' && parts[2]) contactSheet(parts[2]);
+      else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);
+    });
+    paint();
+  }
+  /* ======================= a contact's page (#crm/c/<id>) ======================= */
+  var lastFocus = null;
+  function openSheet(html, tag, narrow) {
+    var o = document.getElementById('w152sheet');
+    if (!o) {
+      o = document.createElement('div'); o.id = 'w152sheet'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-modal', 'true');
+      document.body.appendChild(o);
+      o.addEventListener('click', function (e) { if (e.target === o) closeSheet(); });
+    }
+    if (!S.sheet) lastFocus = document.activeElement;
+    var same = S.sheet === tag;
+    S.sheet = tag || 'sheet';
+    var keep = same ? o.scrollTop : 0;
+    o.innerHTML = '<div class="sh' + (narrow ? ' narrow' : '') + '"><button class="xb" data-w152close="1" aria-label="Close">' + I('x') + '</button>' + html + '</div>';
+    o.style.display = 'flex';
+    o.scrollTop = keep;
+    if (!same) { var f = o.querySelector('.w152form input,.w152form select,.w152form textarea') || o.querySelector('.xb'); if (f) { try { f.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }
+  }
+  /* closing a contact puts the address back to the list (no page repaint) */
+  function closeSheet(quiet) {
+    var o = document.getElementById('w152sheet'); if (o) { o.style.display = 'none'; o.innerHTML = ''; }
+    S.sheet = null; S.confirm = null;
+    if (!quiet && /^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } }
+    if (lastFocus && lastFocus.focus && document.body.contains(lastFocus)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    lastFocus = null;
+  }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.sheet) closeSheet(); });
+
+  function loadDetail(c) {
+    var id = String(c.id);
+    var q = function (p) { return Promise.resolve(p).then(function (r) { return (r && !r.error && r.data) || []; }, function () { return []; }); };
+    return Promise.all([
+      q(db.from('crm_interactions').select('*').eq('contact_id', c.id).order('occurred_at', { ascending: false }).limit(300)),
+      q(db.from('crm_donations').select('id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,notes').eq('contact_id', c.id).order('donated_at', { ascending: false }).limit(300)),
+      q(db.from('crm_volunteer_history').select('*').eq('contact_id', c.id).order('event_at', { ascending: false }).limit(500)),
+      c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
+      q(db.from('crm_contact_orgs').select('*').eq('contact_id', c.id)),
+      load('partners')
+    ]).then(function (r) {
+      var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
+      var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
+      var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
+      return evs.then(function (events) {
+        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], at: Date.now() };
+        return S.detail[id];
+      });
+    });
+  }
+
+  function partnerOf(id) { return (S.partners || []).filter(function (p) { return String(p.id) === String(id); })[0] || null; }
+  function sourceName(s) { return (SOURCES[s] || [s ? String(s).replace(/_/g, ' ') : 'Unknown'])[0]; }
+  function langName(l) { var x = LANGS.filter(function (o) { return o[0] === l; })[0]; return x ? x[1] : (l || ''); }
+  function telOf(p) { var d = digits(p); if (d.length === 10) d = '1' + d; return d ? '+' + d : ''; }
+
+  function detailsHtml(c) {
+    var rows = [];
+    if (c.emails.length) rows.push(['Email', c.emails.map(function (e) { return '<a href="mailto:' + E(e) + '">' + E(e) + '</a>'; }).join('<br>')]);
+    if (c.phones.length) rows.push(['Phone', c.phones.map(function (p) { return telOf(p) ? '<a href="tel:' + E(telOf(p)) + '">' + E(p) + '</a>' : E(p); }).join('<br>')]);
+    var place = [c.address, [c.city, c.province].filter(Boolean).join(', '), c.postal_code].filter(Boolean).join(' \u00b7 ');
+    if (place) rows.push(['Address', E(place)]);
+    if (c.language) rows.push(['Language', E(langName(c.language))]);
+    if (c.volunteer_organization) rows.push(['School or work', E(c.volunteer_organization)]);
+    return rows.length ? '<div class="w152kv">' + rows.map(function (r) { return '<b>' + r[0] + '</b><span>' + r[1] + '</span>'; }).join('') + '</div>' : '<p class="w152pnote">No details yet.</p>';
+  }
+  function withUsHtml(c, d) {
+    var out = [];
+    if (c.kinds.indexOf('volunteer') >= 0 || c.volunteer_id) {
+      if (c._roles.length) out.push('<div class="w152line">' + c._roles.map(function (r) { return '<span class="w152rl">' + E(roleName(r)) + '</span>'; }).join(' ') + '</div>');
+      var hs = Number(c.hub_servings) || 0, ls = Number(c.legacy_servings) || 0;
+      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> at Hub events' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') : 'No serving at a Hub event yet') + '</div>');
+      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website' + (Number(c.legacy_hours) ? ' (' + Number(c.legacy_hours).toLocaleString('en-CA') + ' hours)' : '') + '</div>');
+      if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
+      if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in MTL volunteering.</div>');
+    }
+    if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b>' + money(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
+    if (c.kinds.indexOf('staff') >= 0 || c.kinds.indexOf('alumni') >= 0) out.push('<div class="w152line">' + (c.kinds.indexOf('staff') >= 0 ? 'On the team' : 'Was on the team') + ' (the Hub roster)</div>');
+    /* organizations from Partners */
+    var orgs = (d && d.orgs) || [];
+    out.push('<div class="w152orgs">' + (orgs.length ? orgs.map(function (o) {
+      var p = partnerOf(o.partner_id); var nm = p ? p.name : (c.org_names[0] || 'An organization');
+      return '<div class="w152line">' + I('hand') + ' <button class="w152mini" style="padding:0" data-w152go="#partners/' + E(o.partner_id) + '">' + E(nm) + '</button>' + (o.role_title ? ' <span class="m">' + E(o.role_title) + '</span>' : '') +
+        ' <button class="w152mini" data-w152unlink="' + E(o.id) + '" aria-label="Unlink ' + E(nm) + '">' + I('x') + '</button></div>';
+    }).join('') : (d ? '' : c.org_names.map(function (n) { return '<div class="w152line">' + I('hand') + ' ' + E(n) + '</div>'; }).join(''))) + '</div>');
+    var links = [];
+    links.push('<button class="w152mini" data-w152linkorg="' + E(c.id) + '">' + I('link') + 'Link an organization</button>');
+    if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people">' + I('arrow') + 'MTL volunteering</button>');
+    var mem = c.member_id && typeof MEMBER_BY_ID !== 'undefined' && MEMBER_BY_ID ? MEMBER_BY_ID[c.member_id] : null;
+    if (mem && mem.name) links.push('<button class="w152mini" data-w152go="#person/' + E(encodeURIComponent(mem.name)) + '">' + I('arrow') + 'Their Hub profile</button>');
+    out.push('<div class="w152line">' + links.join(' ') + '</div>');
+    return out.join('');
+  }
+  function permHtml(c) {
+    var p = PERM[c._perm] || PERM.unknown, bits = [];
+    if (c.email_consent === 'express' && (c.consent_source || c.consent_at)) bits.push('Given ' + [c.consent_source ? '(' + c.consent_source + ')' : '', c.consent_at ? 'on ' + fmtDay(c.consent_at) : ''].filter(Boolean).join(' '));
+    if (c.email_consent === 'implied' && c.implied_consent_until) bits.push((dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : ''));
+    if (c._perm === 'unknown' && c.email_consent === 'implied') bits.push('Their implied consent ran out' + (c.implied_consent_until ? ' on ' + fmtDay(c.implied_consent_until) : '') + '.');
+    return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' \u00b7 ')) + '</div>' : '') +
+      (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
+      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and campaigns need their express consent, or an implied consent that has not run out. Replies to what they asked us stay fine.</p>';
+  }
+  function tagsHtml(c) {
+    return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">\u00d7</button></span>'; }).join('') +
+      '<input data-w152tagin="' + E(c.id) + '" placeholder="Add a tag" aria-label="Add a tag" maxlength="40"></div>';
+  }
+  /* one timeline: what was logged here, the gifts, the old website's history, the Hub's rosters */
+  function timeline(c, d) {
+    var out = [];
+    var ICON = { note: 'note', call: 'phone', meeting: 'people', email: 'mail', sms: 'chat', website_message: 'mail', form: 'note' };
+    (d.ints || []).forEach(function (x) {
+      var k = lower(x.kind), dir = lower(x.direction);
+      var t = k === 'note' ? 'Note' : k === 'call' ? (dir === 'in' ? 'They called' : 'Call') : k === 'meeting' ? 'Meeting' : k === 'email' ? (dir === 'in' ? 'Email from them' : 'Email to them') :
+        k === 'sms' ? (dir === 'in' ? 'Text from them' : 'Text message') : k === 'website_message' ? 'Message from the website' : (x.subject || k || 'Activity');
+      var mine = lower(x.created_by) === myEmail() && lower(x.source) === 'hub';
+      out.push({ at: x.occurred_at || x.created_at, icon: ICON[k] || 'note', t: t + (x.subject && k !== 'website_message' && x.subject !== t ? ': ' + x.subject : ''), p: x.body || (k === 'website_message' ? x.subject : ''),
+        by: x.created_by && x.created_by !== 'crm_sync' ? x.created_by : '', del: mine || amAdmin() ? x.id : null });
+    });
+    (d.gifts || []).forEach(function (g) {
+      out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
+        p: [g.campaign, g.designation, g.platform ? 'through ' + (g.platform.charAt(0).toUpperCase() + g.platform.slice(1)) : ''].filter(Boolean).join(' \u00b7 '),
+        rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
+    });
+    (d.hist || []).forEach(function (h) {
+      var role = h.position ? roleName(lower(h.position)) : 'a volunteer';
+      var t = h.attended ? 'Served as ' + role : h.withdrawn ? 'Withdrew' : h.waitlisted ? 'On the waiting list' : h.confirmed ? 'Confirmed as ' + role : h.approved ? 'Approved as ' + role : 'Signed up as ' + role;
+      out.push({ at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' \u00b7 ') + (h.attended && Number(h.hours) ? ' \u00b7 ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
+    });
+    var EV = {}; (d.events || []).forEach(function (e) { EV[String(e.id)] = e; });
+    (d.roster || []).forEach(function (r) {
+      var e = EV[String(r.event_id)]; if (!e || lower(e.status) === 'cancelled') return;
+      var st = r.status || '', role = roleName(r.role), past = lower(e.status) === 'completed' || (dayOf(e.event_date) && dayOf(e.event_date) < today());
+      var t;
+      if (st === 'Confirmed') t = past ? (lower(e.status) === 'completed' ? 'Served as ' + role : 'Down as ' + role) : 'Confirmed as ' + role;
+      else if (st === 'Waiting For Response') { if (past) return; t = 'Asked to come as ' + role; }
+      else if (st === 'Unavailable') t = 'Could not come (' + role + ')';
+      else return;
+      var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
+      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' \u00b7 '), faint: st !== 'Confirmed', by: 'MTL volunteering' });
+    });
+    out.sort(function (a, b) { return String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
+    return out;
+  }
+  function logFormHtml(c) {
+    return '<div class="w152log"><div class="r"><select data-w152logk aria-label="What happened">' + LOG_ORDER.map(function (k) { return '<option value="' + k + '">' + E(LOGS[k][2]) + '</option>'; }).join('') + '</select>' +
+      '<input type="date" data-w152logd value="' + E(today()) + '" max="' + E(today()) + '" aria-label="When"></div>' +
+      '<textarea data-w152logt placeholder="What happened, or what to remember next time" aria-label="Note"></textarea>' +
+      '<div class="r" style="justify-content:space-between"><span class="w152err" data-w152logerr></span><button class="w152btn sm" data-w152log="' + E(c.id) + '">' + I('check') + ' Save to the timeline</button></div></div>';
+  }
+  function timelineHtml(c, d) {
+    if (!d) return logFormHtml(c) + busy('Loading their history\u2026');
+    var items = timeline(c, d);
+    return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + '<span class="d">' + E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '') + '</span></div>' +
+        (x.p ? '<p>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
+        (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
+    }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
+  }
+  function contactHtml(c, d) {
+    var srcLine = 'From ' + sourceName(c.source) + (c.created_at ? ' \u00b7 in the CRM since ' + fmtDay(c.created_at) : '');
+    var qa = [];
+    if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
+    if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
+    if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
+      (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
+      '<div class="w152cols"><div>' +
+      '<div class="w152sec"><h4>Contact details <button class="w152mini" data-w152edit="' + E(c.id) + '">' + I('edit') + 'Edit</button></h4>' + detailsHtml(c) + '</div>' +
+      '<div class="w152sec"><h4>With Welfare Avenue</h4>' + withUsHtml(c, d) + '</div>' +
+      '<div class="w152sec"><h4>Email permission <button class="w152mini" data-w152perm-edit="' + E(c.id) + '">' + I('shield') + 'Change</button></h4>' + permHtml(c) + '</div>' +
+      '<div class="w152sec"><h4>Tags</h4>' + tagsHtml(c) + '</div>' +
+      (c.notes ? '<div class="w152sec"><h4>Good to know</h4><p class="w152line" style="white-space:pre-wrap">' + E(c.notes) + '</p></div>' : '') +
+      '</div><div><div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';
+  }
+  function contactSheet(id, refresh) {
+    var c = contact(id);
+    if (!c) {
+      if (S.contacts) { toastS('That contact is not in the CRM any more (merged, or never there)'); if (/^#crm\/c\//.test(location.hash)) { try { history.replaceState(null, '', '#crm'); } catch (e) { /* fine */ } } }
+      return;
+    }
+    var tag = 'c:' + c.id, d = S.detail[String(c.id)];
+    openSheet(contactHtml(c, d), tag);
+    if (!d || refresh) loadDetail(c).then(function (dd) { if (S.sheet === tag) openSheet(contactHtml(contact(id) || c, dd), tag); });
+  }
+  /* a list repaint behind the sheet keeps the list true after an edit */
+  function repaintBehind() { try { if (document.getElementById('crm') && document.getElementById('crm').classList.contains('active')) paint(); } catch (e) { /* fine */ } }
+
+  /* ---------- the forms ---------- */
+  function field(label, html, full, hint) { return '<label' + (full ? ' class="full"' : '') + '>' + E(label) + (hint ? ' <span class="hint">' + E(hint) + '</span>' : '') + html + '</label>'; }
+  function inp(name, val, ph, type) { return '<input data-f="' + name + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + E(val == null ? '' : val) + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>'; }
+  function area(name, val, ph) { return '<textarea data-f="' + name + '"' + (ph ? ' placeholder="' + E(ph) + '"' : '') + '>' + E(val == null ? '' : val) + '</textarea>'; }
+  function sel(name, list, cur) { return '<select data-f="' + name + '">' + opts(list, cur) + '</select>'; }
+  function formVals() {
+    var o = document.getElementById('w152sheet'), v = {}, ks = [];
+    if (!o) return v;
+    o.querySelectorAll('[data-f]').forEach(function (el) { v[el.getAttribute('data-f')] = el.type === 'checkbox' ? el.checked : String(el.value || '').trim(); });
+    o.querySelectorAll('[data-fk]').forEach(function (el) { if (el.checked) ks.push(el.getAttribute('data-fk')); });
+    v._kinds = ks;
+    return v;
+  }
+  function showErr(m) { var el = document.querySelector('#w152sheet [data-w152err]'); if (el) el.textContent = m; }
+  function splitList(s) { return String(s || '').split(/[,;\n]/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  var EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/;
+  function nameParts(n) { var p = String(n || '').trim().split(/\s+/); return { first: p[0] || null, last: p.length > 1 ? p.slice(1).join(' ') : null }; }
+  function kindsBoxes(c, isNew) {
+    var fixed = [];
+    if (!isNew && c && c.volunteer_id) fixed.push('Volunteer (from MTL volunteering)');
+    if (!isNew && c && c.kinds.indexOf('staff') >= 0) fixed.push('Staff (from the roster)');
+    if (!isNew && c && c.kinds.indexOf('alumni') >= 0) fixed.push('Alumni (from the roster)');
+    var list = (isNew ? ['volunteer'] : []).concat(KIND_HAND);
+    var cur = c ? c.kinds : [];
+    return '<div class="kinds">' + list.map(function (k) { return '<label><input type="checkbox" data-fk="' + k + '"' + (cur.indexOf(k) >= 0 ? ' checked' : '') + '> ' + E(KINDS[k][0]) + '</label>'; }).join('') +
+      (fixed.length ? '<span class="w152count">' + E(fixed.join(' \u00b7 ')) + '</span>' : '') + '</div>';
+  }
+  function editForm(id) {
+    var c = id ? contact(id) : null, isNew = !c;
+    var x = c || { full_name: '', emails: [], phones: [], kinds: [], tags: [] };
+    var html = '<h2>' + (isNew ? 'Add a contact' : 'Edit ' + E(x.full_name)) + '</h2>' +
+      '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so MTL volunteering sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
+      '<div class="w152form">' +
+      (c && c.volunteer_id ? '<div class="note">' + I('link') + ' Their name, emails, phones and address are saved on their volunteer record as well, so MTL volunteering and the CRM stay the same person.</div>' : '') +
+      field('Full name', inp('full_name', x.full_name, 'First and last name'), true) +
+      field('Emails', inp('emails', x.emails.join(', '), 'name@example.com'), false, 'separated by commas; the first one is used') +
+      field('Phones', inp('phones', x.phones.join(', '), '514 555 0123'), false, 'separated by commas') +
+      field('Street address', inp('address', x.address), true) +
+      field('City', inp('city', x.city, 'Montreal')) + field('Province', inp('province', x.province, 'QC')) +
+      field('Postal code', inp('postal_code', x.postal_code, 'H2X 1Y4')) + field('Language', sel('language', LANGS, x.language || '')) +
+      '<div class="full lbl">What they are to us' + kindsBoxes(c, isNew) + '</div>' +
+      (isNew ? field('Email permission', sel('perm', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: a recent gift, membership or volunteering'], ['none', 'No consent']], ''), false) +
+        field('Where it came from', inp('perm_source', '', 'e.g. signed up at the gala'), false) : '') +
+      field('Good to know', area('notes', x.notes, 'Anything the team should know: how they like to be reached, who knows them best'), true) +
+      '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id || '') + '">Cancel</button>' +
+      '<button class="w152btn" data-w152save="' + E(id || 'new') + '">' + I('check') + (isNew ? ' Add them' : ' Save') + '</button></div>';
+    openSheet(html, isNew ? 'add' : 'edit:' + id, true);
+  }
+  function permForm(id) {
+    var c = contact(id); if (!c) return;
+    var until = c.implied_consent_until ? dayOf(c.implied_consent_until) : (c._last ? addYears(c._last, 2) : '');
+    var html = '<h2>Email permission</h2><div class="sub">' + E(c.full_name) + '. What they agreed to, so newsletters and campaigns only go to people who said yes.</div><div class="w152form">' +
+      field('Permission', sel('email_consent', [['', 'Not recorded'], ['express', 'Express consent: they said yes to our emails'], ['implied', 'Implied consent: an existing relationship'], ['none', 'No consent']], c.email_consent || ''), true) +
+      field('Where it came from', inp('consent_source', c.consent_source, 'the website form, a sign-up sheet, an email'), true) +
+      field('Date they said yes', inp('consent_at', c.consent_at ? dayOf(c.consent_at) : '', '', 'date'), false, 'express consent') +
+      field('Implied consent runs until', inp('implied_consent_until', until, '', 'date'), false, 'two years after the last gift, membership or volunteering') +
+      '<label class="chk full"><input type="checkbox" data-f="unsub"' + (c._perm === 'unsub' ? ' checked' : '') + '> They unsubscribed: no newsletters or campaigns</label>' +
+      '<label class="chk full"><input type="checkbox" data-f="sms_opt_out"' + (c.sms_opt_out ? ' checked' : '') + '> No text messages</label>' +
+      '<div class="note">Implied consent under CASL: an existing relationship in the last two years, such as a gift or volunteering for a registered charity, or a membership. It runs out two years after the last one. When in doubt, ask for express consent.</div>' +
+      '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button><button class="w152btn" data-w152savep="' + E(id) + '">' + I('check') + ' Save</button></div>';
+    openSheet(html, 'perm:' + id, true);
+  }
+  function orgForm(id) {
+    var c = contact(id); if (!c) return;
+    load('partners').then(function (ps) {
+      if (S.sheet !== 'c:' + id && S.sheet !== 'org:' + id) return;
+      var list = (ps || []).filter(function (p) { return p.status !== 'declined'; });
+      var html = '<h2>Link an organization</h2><div class="sub">' + E(c.full_name) + ' and an organization from Partners: a sponsor\u2019s contact, a school\u2019s club president, a funder\u2019s program officer.</div><div class="w152form">' +
+        (list.length ? field('Organization', '<select data-f="partner_id"><option value="">Choose</option>' + list.map(function (p) { return '<option value="' + E(p.id) + '">' + E(p.name) + '</option>'; }).join('') + '</select>', true) +
+          field('Their role there', inp('role_title', '', 'President, Program officer, Owner'), true) +
+          '<label class="chk full"><input type="checkbox" data-f="is_primary"> Their main organization</label>'
+          : '<div class="note">No organization in Partners yet. Add it on the Partners page first.</div>') +
+        '</div><div class="w152foot"><span class="w152err" data-w152err></span><button class="w152btn ghost" data-w152back="' + E(id) + '">Cancel</button>' + (list.length ? '<button class="w152btn" data-w152saveorg="' + E(id) + '">' + I('check') + ' Link</button>' : '') + '</div>';
+      openSheet(html, 'org:' + id, true);
+    });
+  }
+
+  /* ---------- saving ---------- */
+  async function audit(id, field, oldV, newV) {
+    try { await db.from('change_log').insert({ entity_type: 'crm_contact', entity_id: String(id), field: field, old_value: oldV == null ? null : String(oldV).slice(0, 500), new_value: newV == null ? null : String(newV).slice(0, 500), changed_by: actor() }); } catch (e) { /* the audit trail is best effort */ }
+  }
+  /* the row after a save: the database's answer when there is one, else what we sent */
+  function applyLocal(id, patch) {
+    var c = contact(id); if (!c) return null;
+    Object.keys(patch).forEach(function (k) { c[k] = patch[k]; });
+    if (patch.emails) c.primary_email = (patch.emails[0] || '').toLowerCase() || null;
+    shape(c);
+    return c;
+  }
+  async function saveContact(id) {
+    var v = formVals(), isNew = id === 'new';
+    var c = isNew ? null : contact(id);
+    if (!v.full_name) { showErr('Give their name.'); return; }
+    var emails = uniq(splitList(v.emails).map(function (e) { return e.toLowerCase(); }));
+    var bad = emails.filter(function (e) { return !EMAIL_RE.test(e); });
+    if (bad.length) { showErr('This does not look like an email: ' + bad[0]); return; }
+    var phones = uniq(splitList(v.phones));
+    var np = nameParts(v.full_name);
+    var fixedKinds = c ? c.kinds.filter(function (k) { return KIND_HAND.indexOf(k) < 0; }) : [];
+    var kinds = uniq(fixedKinds.concat(v._kinds.filter(function (k) { return k !== 'volunteer' || isNew; })));
+    var row = { full_name: v.full_name, first_name: np.first, last_name: np.last, emails: emails, phones: phones, address: v.address || null, city: v.city || null,
+      province: v.province || null, postal_code: v.postal_code ? v.postal_code.toUpperCase() : null, language: v.language || null, kinds: kinds, notes: v.notes || null, updated_by: actor() };
+    try {
+      if (isNew) {
+        /* the same person twice is the most common CRM mistake: stop at an email or a phone we already have */
+        var byEmail = (S.contacts || []).filter(function (x) { return x.emails.some(function (e) { return emails.indexOf(lower(e)) >= 0; }); })[0];
+        var byPhone = (S.contacts || []).filter(function (x) { return x._digits.some(function (d) { return phones.map(digits).indexOf(d) >= 0; }); })[0];
+        var clash = byEmail || byPhone;
+        var warn = function (html) {
+          showErr('');
+          var box = document.querySelector('#w152sheet .w152form'); if (!box) return;
+          var old = box.querySelector('.w152warn'); if (old) old.remove();
+          box.insertAdjacentHTML('afterbegin', '<div class="w152warn">' + html + '</div>');
+        };
+        if (byEmail && kinds.indexOf('volunteer') >= 0) {
+          warn('<b>Already in the CRM.</b> ' + E(byEmail.full_name) + ' has this email, and a volunteer is added once. <button class="w152mini" data-w152open="' + E(byEmail.id) + '">Open ' + E(byEmail.full_name) + '</button>');
+          return;
+        }
+        if (clash && S.confirm !== 'dup:' + clash.id) {
+          S.confirm = 'dup:' + clash.id;
+          warn('<b>Already in the CRM?</b> ' + E(clash.full_name) + ' has the same ' + (byEmail ? 'email' : 'phone') + '. <button class="w152mini" data-w152open="' + E(clash.id) + '">Open ' + E(clash.full_name) + '</button> or press Add them again to add a new contact anyway.');
+          return;
+        }
+        row.source = 'hub'; row.created_by = actor();
+        if (v.perm) { row.email_consent = v.perm; row.consent_source = v.perm_source || null; if (v.perm === 'express') row.consent_at = new Date().toISOString(); if (v.perm === 'implied') row.implied_consent_until = addYears(today(), 2); }
+        var newId = null;
+        if (kinds.indexOf('volunteer') >= 0) {
+          /* a new volunteer: their volunteer record first; the database makes (or links) their contact from it */
+          var vr = await db.from('volunteer_people').insert({ full_name: row.full_name, emails: emails, phones: phones, address: row.address, roles: [], tags: [] }).select('id');
+          if (vr && vr.error) throw vr.error;
+          var vid = vr && vr.data && vr.data[0] && vr.data[0].id;
+          if (vid != null) {
+            var cr = await db.from('crm_contacts').select('id').eq('volunteer_id', vid).limit(1);
+            newId = cr && cr.data && cr.data[0] && cr.data[0].id;
+            if (newId != null) {
+              var ur = await db.from('crm_contacts').update(row).eq('id', newId).select('id');
+              if (ur && ur.error) throw ur.error;
+            }
+          }
+          row.volunteer_id = vid != null ? vid : null;
+        }
+        if (newId == null) {
+          var ir = await db.from('crm_contacts').insert(row).select('id');
+          if (ir && ir.error) throw ir.error;
+          newId = ir && ir.data && ir.data[0] && ir.data[0].id;
+        }
+        if (newId == null) newId = 'tmp' + Date.now();
+        var nc = shape(Object.assign({ id: newId, kinds: [], tags: [], emails: [], phones: [], created_at: new Date().toISOString(), hub_servings: 0, legacy_servings: 0, legacy_hours: 0, donation_total: 0, donation_count: 0, org_names: [], volunteer_roles: [], volunteer_tags: [] }, row));
+        S.contacts.push(nc); BY_ID[String(nc.id)] = nc; S.confirm = null;
+        audit(newId, 'created', null, row.full_name);
+        S.detail[String(newId)] = { ints: [], gifts: [], hist: [], roster: [], events: [], orgs: [], at: Date.now() };
+        toastS(row.full_name + ' is in the CRM');
+        try { history.replaceState(null, '', '#crm/c/' + newId); } catch (e) { /* fine */ }
+        contactSheet(newId); repaintBehind();
+        return;
+      }
+      if (c.volunteer_id) {
+        /* their volunteer record carries the name, emails, phones and address (MTL volunteering reads it) */
+        var vu = await db.from('volunteer_people').update({ full_name: row.full_name, emails: emails, phones: phones, address: row.address }).eq('id', c.volunteer_id).select('id');
+        if (vu && vu.error) throw vu.error;
+      }
+      var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
+      if (res && res.error) throw res.error;
+      if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }
+      var changed = ['full_name', 'emails', 'phones', 'address', 'city', 'province', 'postal_code', 'language', 'kinds', 'notes'].filter(function (k) { return JSON.stringify(c[k] == null ? null : c[k]) !== JSON.stringify(row[k] == null ? null : row[k]); });
+      applyLocal(c.id, row);
+      if (changed.length) audit(c.id, 'details', null, changed.join(', '));
+      toastS('Saved'); contactSheet(c.id); repaintBehind();
+    } catch (e) { showErr('Could not save: ' + String((e && e.message) || e).slice(0, 160)); }
+  }
+  async function savePerm(id) {
+    var c = contact(id); if (!c) return;
+    var v = formVals();
+    var row = { email_consent: v.email_consent || null, consent_source: v.consent_source || null, updated_by: actor(), sms_opt_out: !!v.sms_opt_out };
+    if (v.email_consent === 'express') row.consent_at = v.consent_at ? v.consent_at + 'T12:00:00Z' : (c.consent_at || new Date().toISOString());
+    else row.consent_at = v.email_consent ? (c.consent_at || null) : null;
+    if (v.email_consent === 'implied') { if (!v.implied_consent_until) { showErr('Say until when the implied consent runs (two years after the last gift or volunteering).'); return; } row.implied_consent_until = v.implied_consent_until; }
+    else row.implied_consent_until = null;
+    var st = lower(c.email_status);
+    if (v.unsub) row.email_status = 'unsubscribed';
+    else if (st === 'unsubscribed' || st === 'complained') row.email_status = 'unknown';
+    try {
+      var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
+      if (res && res.error) throw res.error;
+      if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }
+      var before = c._perm;
+      applyLocal(c.id, row);
+      audit(c.id, 'email_permission', PERM[before][0], PERM[c._perm][0] + (row.consent_source ? ' (' + row.consent_source + ')' : ''));
+      toastS('Saved'); contactSheet(c.id); repaintBehind();
+    } catch (e) { showErr('Could not save: ' + String((e && e.message) || e).slice(0, 160)); }
+  }
+  async function saveTags(id, tags) {
+    var c = contact(id); if (!c) return;
+    var before = c.tags.slice();
+    try {
+      var res = await db.from('crm_contacts').update({ tags: tags, updated_by: actor() }).eq('id', c.id).select('id');
+      if (res && res.error) throw res.error;
+      applyLocal(c.id, { tags: tags });
+      audit(c.id, 'tags', before.join(', '), tags.join(', '));
+      contactSheet(c.id); repaintBehind();
+      var t = document.querySelector('#w152sheet [data-w152tagin]'); if (t) { try { t.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+    } catch (e) { toastS('Could not save the tag: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  async function saveLog(id) {
+    var c = contact(id); if (!c) return;
+    var o = document.getElementById('w152sheet'); if (!o) return;
+    var k = (o.querySelector('[data-w152logk]') || {}).value || 'note', when = (o.querySelector('[data-w152logd]') || {}).value || today(), text = String((o.querySelector('[data-w152logt]') || {}).value || '').trim();
+    var errEl = o.querySelector('[data-w152logerr]');
+    if (!text) { if (errEl) errEl.textContent = 'Write what happened first.'; return; }
+    if (when > today()) { if (errEl) errEl.textContent = 'That date is in the future.'; return; }
+    var L = LOGS[k] || LOGS.note;
+    var row = { contact_id: c.id, kind: L[0], direction: L[1], channel: L[0] === 'note' ? null : L[0], body: text, occurred_at: when === today() ? new Date().toISOString() : when + 'T12:00:00Z', source: 'hub', created_by: actor() };
+    try {
+      var res = await db.from('crm_interactions').insert(row).select('*');
+      if (res && res.error) throw res.error;
+      var saved = Object.assign({ id: 'tmp' + Date.now(), created_at: new Date().toISOString() }, row, (res && res.data && res.data[0]) || {});
+      var d = S.detail[String(c.id)]; if (d) d.ints.unshift(saved);
+      if (L[1] !== 'internal' && (!c.last_activity_at || String(row.occurred_at) > String(c.last_activity_at))) applyLocal(c.id, { last_activity_at: row.occurred_at });
+      toastS('Saved to ' + (c.first_name || c.full_name) + '\u2019s timeline'); contactSheet(c.id); repaintBehind();
+    } catch (e) { if (errEl) errEl.textContent = 'Could not save: ' + String((e && e.message) || e).slice(0, 140); }
+  }
+  async function deleteLog(id, intId) {
+    var c = contact(id); if (!c) return;
+    if (S.confirm !== 'del:' + intId) { S.confirm = 'del:' + intId; toastS('Press Delete again to remove it from the timeline'); return; }
+    S.confirm = null;
+    try {
+      var res = await db.from('crm_interactions').delete().eq('id', intId).select('id');
+      if (res && res.error) throw res.error;
+      if (res && Array.isArray(res.data) && !res.data.length) { toastS('Only the person who wrote it (or an admin) can delete it'); return; }
+      var d = S.detail[String(c.id)]; if (d) d.ints = d.ints.filter(function (x) { return String(x.id) !== String(intId); });
+      audit(c.id, 'timeline', 'deleted an entry', null);
+      toastS('Deleted'); contactSheet(c.id);
+    } catch (e) { toastS('Could not delete: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  async function saveOrg(id) {
+    var c = contact(id); if (!c) return;
+    var v = formVals();
+    if (!v.partner_id) { showErr('Choose the organization.'); return; }
+    var d = S.detail[String(c.id)];
+    if (d && d.orgs.some(function (o) { return String(o.partner_id) === String(v.partner_id); })) { showErr('They are already linked to it.'); return; }
+    var row = { contact_id: c.id, partner_id: Number(v.partner_id), role_title: v.role_title || null, is_primary: !!v.is_primary, created_by: actor() };
+    try {
+      var res = await db.from('crm_contact_orgs').insert(row).select('*');
+      if (res && res.error) throw res.error;
+      var saved = Object.assign({ id: 'tmp' + Date.now() }, row, (res && res.data && res.data[0]) || {});
+      if (d) d.orgs.push(saved);
+      var p = partnerOf(v.partner_id);
+      if (p && c.org_names.indexOf(p.name) < 0) applyLocal(c.id, { org_names: c.org_names.concat([p.name]) });
+      audit(c.id, 'organization', null, p ? p.name : v.partner_id);
+      toastS('Linked'); contactSheet(c.id); repaintBehind();
+    } catch (e) { showErr('Could not link: ' + String((e && e.message) || e).slice(0, 160)); }
+  }
+  async function unlinkOrg(linkId) {
+    var id = String(S.sheet || '').replace(/^c:/, ''); var c = contact(id); if (!c) return;
+    if (S.confirm !== 'unlink:' + linkId) { S.confirm = 'unlink:' + linkId; toastS('Press \u00d7 again to unlink the organization'); return; }
+    S.confirm = null;
+    try {
+      var res = await db.from('crm_contact_orgs').delete().eq('id', linkId).select('id');
+      if (res && res.error) throw res.error;
+      var d = S.detail[String(c.id)], gone = null;
+      if (d) { gone = d.orgs.filter(function (o) { return String(o.id) === String(linkId); })[0]; d.orgs = d.orgs.filter(function (o) { return String(o.id) !== String(linkId); }); }
+      var p = gone ? partnerOf(gone.partner_id) : null;
+      if (p) applyLocal(c.id, { org_names: c.org_names.filter(function (n) { return n !== p.name; }) });
+      audit(c.id, 'organization', p ? p.name : linkId, null);
+      toastS('Unlinked'); contactSheet(c.id); repaintBehind();
+    } catch (e) { toastS('Could not unlink: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  /* ======================= possible duplicates (#crm/dupes) ======================= */
+  function sideHtml(c, other) {
+    var lines = [];
+    if (c.emails.length) lines.push('<div class="ln">' + c.emails.map(function (e) { return other.emails.some(function (x) { return lower(x) === lower(e); }) ? '<b>' + E(e) + '</b>' : E(e); }).join(', ') + '</div>');
+    if (c.phones.length) lines.push('<div class="ln">' + c.phones.map(function (p) { var d = digits(p); return d.length >= 7 && other._digits.indexOf(d) >= 0 ? '<b>' + E(p) + '</b>' : E(p); }).join(', ') + '</div>');
+    var facts = [];
+    if (c._served) facts.push(plural(c._served, 'serving', 'servings'));
+    if (Number(c.donation_count)) facts.push(plural(Number(c.donation_count), 'gift', 'gifts'));
+    if (c._roles.length) facts.push(c._roles.map(roleName).join(', '));
+    lines.push('<div class="ln m">' + E(['From ' + sourceName(c.source)].concat(facts).join(' \u00b7 ')) + '</div>');
+    if (c.created_at) lines.push('<div class="ln m">In the CRM since ' + E(fmtDay(c.created_at)) + '</div>');
+    return '<div class="w152ds"><div class="top">' + avatar(c) + '<div style="min-width:0"><div class="nm">' + E(c.full_name) + '</div><div class="ks" style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px">' + kindsHtml(c) + '</div></div></div>' +
+      lines.join('') + '<div class="act"><button class="w152btn sm" data-w152keep="' + E(c.id) + '" data-drop="' + E(other.id) + '">' + I('check') + ' Keep this one</button>' +
+      '<button class="w152mini" data-w152open="' + E(c.id) + '">Open</button></div></div>';
+  }
+  function pairHtml(p) {
+    var a = contact(p.a), b = contact(p.b);
+    var why = p.on.length > 1 ? 'Same email and phone' : p.on[0] === 'email' ? 'Same email' : 'Same phone';
+    var cf = '';
+    var m = /^merge:(\d+):(\d+)$/.exec(S.confirm || '');
+    if (m && ((m[1] === String(a.id) && m[2] === String(b.id)) || (m[1] === String(b.id) && m[2] === String(a.id)))) {
+      var keep = contact(m[1]), drop = contact(m[2]);
+      cf = '<div class="w152cf"><span>Merge <b>' + E(drop.full_name) + '</b> into <b>' + E(keep.full_name) + '</b>? Their emails, phones, tags, notes and history move to ' + E(keep.full_name) +
+        (keep.volunteer_id && drop.volunteer_id ? ', and their two volunteer records become one (with both rosters)' : '') + '. The Hub cannot undo it.</span>' +
+        '<span style="display:flex;gap:6px"><button class="w152btn ghost sm" data-w152cancel="1">Cancel</button><button class="w152btn danger sm" data-w152merge="' + E(keep.id) + '" data-drop="' + E(drop.id) + '">' + I('merge') + ' Merge</button></span></div>';
+    }
+    return '<div class="w152dp" data-pair="' + E(p.a + '-' + p.b) + '"><div class="why">' + I('merge') + E(why) + ' <span>' + E(p.values.join(' \u00b7 ')) + '</span></div>' +
+      '<div class="two">' + sideHtml(a, b) + sideHtml(b, a) + '</div>' + cf +
+      '<div class="bot"><button class="w152btn ghost sm" data-w152notdup="' + E(p.a + '-' + p.b) + '">' + I('x') + ' Not the same person</button></div></div>';
+  }
+  function paintDupes(root) {
+    var pairs = dupePairs();
+    root.innerHTML = tabsHtml() +
+      '<div class="w152count" style="max-width:760px;line-height:1.5">Two contacts with the same email or phone. Keep the right one and the other one\u2019s emails, phones, tags, notes and history move to it. Family members often share a phone: mark those as different people and they leave this list.</div>' +
+      (S.err.dupes && !S.dupes.length ? '<div class="w152empty">The duplicates could not load (' + E(S.err.dupes) + ').</div>' :
+        pairs.length ? '<div class="w152dl">' + pairs.map(pairHtml).join('') + '</div>' : '<div class="w152empty">' + I('check') + ' No possible duplicates right now.</div>');
+  }
+  async function merge(keepId, dropId) {
+    var keep = contact(keepId), drop = contact(dropId); if (!keep || !drop) return;
+    var btn = document.querySelector('[data-w152merge="' + keepId + '"]'); if (btn) btn.disabled = true;
+    try {
+      var r = await db.rpc('crm_merge_contacts', { p_keep: Number(keepId), p_drop: Number(dropId) });
+      if (r && r.error) throw r.error;
+      /* what the database did, on the page at once; the next visit reloads the numbers */
+      applyLocal(keep.id, {
+        emails: uniq(keep.emails.concat(drop.emails)), phones: uniq(keep.phones.concat(drop.phones)), tags: uniq(keep.tags.concat(drop.tags)), kinds: uniq(keep.kinds.concat(drop.kinds)),
+        hub_servings: (Number(keep.hub_servings) || 0) + (keep.volunteer_id && drop.volunteer_id && keep.volunteer_id !== drop.volunteer_id ? (Number(drop.hub_servings) || 0) : 0),
+        legacy_servings: (Number(keep.legacy_servings) || 0) + (Number(drop.legacy_servings) || 0), donation_total: (Number(keep.donation_total) || 0) + (Number(drop.donation_total) || 0),
+        donation_count: (Number(keep.donation_count) || 0) + (Number(drop.donation_count) || 0), org_names: uniq(keep.org_names.concat(drop.org_names))
+      });
+      S.contacts = S.contacts.filter(function (x) { return String(x.id) !== String(dropId); }); delete BY_ID[String(dropId)];
+      S.dupes = (S.dupes || []).filter(function (d) { return String(d.contact_id) !== String(dropId) && String(d.duplicate_id) !== String(dropId); });
+      delete S.detail[String(keepId)]; delete S.detail[String(dropId)];
+      S.at.contacts = 0; S.at.dupes = 0; S.confirm = null;
+      toastS(drop.full_name + ' merged into ' + keep.full_name);
+      paint();
+    } catch (e) { if (btn) btn.disabled = false; toastS('Could not merge: ' + String((e && e.message) || e).slice(0, 140)); }
+  }
+  async function notDup(key) {
+    var ab = String(key).split('-').map(Number); if (ab.length !== 2) return;
+    try {
+      var r = await db.from('crm_dupe_dismissals').insert({ a_id: Math.min(ab[0], ab[1]), b_id: Math.max(ab[0], ab[1]), dismissed_by: actor() });
+      if (r && r.error && !/duplicate key/i.test(String(r.error.message || ''))) throw r.error;
+      S.dupes = (S.dupes || []).filter(function (d) { var a = Math.min(Number(d.contact_id), Number(d.duplicate_id)), b = Math.max(Number(d.contact_id), Number(d.duplicate_id)); return !(a === Math.min(ab[0], ab[1]) && b === Math.max(ab[0], ab[1])); });
+      toastS('Marked as different people');
+      paint();
+    } catch (e) { toastS('Could not save: ' + String((e && e.message) || e).slice(0, 140)); }
+  }
+
+  /* ======================= sources (#crm/sources) ======================= */
+  function loadCounts() {
+    if (S.counts && Date.now() - (S.counts.at || 0) < 120000) return Promise.resolve(S.counts);
+    var n = function (p) { return Promise.resolve(p).then(function (r) { return r && !r.error && typeof r.count === 'number' ? r.count : null; }, function () { return null; }); };
+    return Promise.all([
+      n(db.from('crm_volunteer_history').select('id', { count: 'exact', head: true })),
+      n(db.from('crm_interactions').select('id', { count: 'exact', head: true }).eq('kind', 'website_message')),
+      n(db.from('crm_donations').select('id', { count: 'exact', head: true }))
+    ]).then(function (r) { S.counts = { hist: r[0], msgs: r[1], gifts: r[2], at: Date.now() }; return S.counts; });
+  }
+  function paintSources(root) {
+    var all = S.contacts || [], by = {}, perm = {};
+    all.forEach(function (c) { by[c.source || ''] = (by[c.source || ''] || 0) + 1; perm[c._perm] = (perm[c._perm] || 0) + 1; });
+    var srcRows = Object.keys(by).sort(function (a, b) { return by[b] - by[a]; }).map(function (s) {
+      var d = SOURCES[s] || [s ? String(s).replace(/_/g, ' ') : 'Unknown', ''];
+      return '<div class="w152srow"><b>' + by[s] + '</b><div><div class="tt">' + E(d[0]) + '</div>' + (d[1] ? '<p>' + E(d[1]) + '</p>' : '') + '</div><span></span></div>';
+    }).join('');
+    var k = S.counts || {};
+    var st = function (n, none) { return n == null ? '<span class="st next">Checking\u2026</span>' : n > 0 ? '<span class="st on">' + Number(n).toLocaleString('en-CA') + ' in</span>' : '<span class="st next">' + E(none) + '</span>'; };
+    var keela = by.keela || 0;
+    var next = [
+      ['Volunteer history from the old website', 'Every event each volunteer signed up for, was confirmed for and served at, from the Django site.', st(k.hist, 'Next')],
+      ['Messages from the website', 'What people write through the contact form on welfareavenue.com, on the sender\u2019s timeline.', st(k.msgs, 'Next')],
+      ['Gifts and tax receipts from Zeffy', 'Every donation with its receipt, on the donor\u2019s timeline and in their total.', st(k.gifts, 'Later')],
+      ['The Keela export', 'Donors and supporters from Keela, merged with the people already here.', keela ? '<span class="st on">' + keela + ' in</span>' : '<span class="st next">When it arrives</span>']
+    ].map(function (r) { return '<div class="w152srow nx"><div><div class="tt">' + E(r[0]) + '</div><p>' + E(r[1]) + '</p></div>' + r[2] + '</div>'; }).join('');
+    var ok = (perm.express || 0) + (perm.implied || 0);
+    var pr = [['express', 'said yes to our emails'], ['implied', 'with an implied consent that has not run out'], ['unknown', 'with no permission on file yet'], ['none', 'with no consent'], ['unsub', 'who unsubscribed'], ['bounced', 'whose address bounces']]
+      .filter(function (x) { return perm[x[0]]; }).map(function (x) { return '<div class="w152srow"><b>' + perm[x[0]] + '</b><div><div class="tt">' + permChip(x[0]) + '</div><p>' + E('Contacts ' + x[1] + '.') + '</p></div><span></span></div>'; }).join('');
+    var rev = all.filter(function (c) { return c.volunteer_needs_review; }).length, noEm = all.filter(function (c) { return !c.emails.length; }).length, noPh = all.filter(function (c) { return !c.phones.length; }).length, pairs = S.dupes ? dupePairs().length : 0;
+    var tidy = [[pairs, 'possible duplicates', 'Same email or phone on two contacts.', '#crm/dupes'], [rev, 'volunteer records to review', 'Flagged in MTL volunteering when they were imported.', ''],
+      [noEm, 'contacts with no email', '', ''], [noPh, 'contacts with no phone', '', '']].map(function (x) {
+      return '<div class="w152srow"><b>' + x[0] + '</b><div><div class="tt">' + E(x[1].charAt(0).toUpperCase() + x[1].slice(1)) + '</div>' + (x[2] ? '<p>' + E(x[2]) + '</p>' : '') + '</div>' + (x[3] && x[0] ? '<button class="w152mini" data-w152go="' + x[3] + '">Check them ' + I('arrow') + '</button>' : '<span></span>') + '</div>';
+    }).join('');
+    root.innerHTML = tabsHtml() + '<div class="w152grid2">' +
+      '<div class="w152card"><h3>Where they come from <span>' + plural(all.length, 'contact', 'contacts') + '</span></h3>' + srcRows + '</div>' +
+      '<div class="w152card"><h3>What joins next</h3>' + next + '</div>' +
+      '<div class="w152card"><h3>Email permission <span>' + plural(ok, 'contact', 'contacts') + ' can get a newsletter today</span></h3>' + pr +
+      '<p class="w152pnote">Campaigns go only to express consent, or implied consent that has not run out (CASL). Everyone else is asked first.</p></div>' +
+      '<div class="w152card"><h3>To tidy</h3>' + tidy + '</div></div>';
+    if (!S.counts) loadCounts().then(function () { if (S.ui.tab === 'sources') paint(); });
+  }
+  /* ======================= wiring ======================= */
+  function go(h) { if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
+  function inOurs(t) { return t.closest && (t.closest('.w152root') || t.closest('#w152sheet')); }
+  function sheetId() { var m = /^(?:c|edit|perm|org):(\d+|tmp\d+)$/.exec(S.sheet || ''); return m ? m[1] : null; }
+  function openContact(id) {
+    S.confirm = null;
+    if (/^#crm(\/|$)/.test(location.hash)) { try { history.replaceState(null, '', '#crm/c/' + id); } catch (e) { /* fine */ } contactSheet(id); }
+    else go('#crm/c/' + id);
+  }
+  function setFilter(o) { var u = S.ui; u.kind = o.kind || ''; u.role = o.role || ''; u.act = o.act || ''; u.perm = o.perm || ''; if (o.q !== undefined) u.q = o.q; u.show = 60; }
+  function addTag(input) {
+    var id = input.getAttribute('data-w152tagin'), c = contact(id); if (!c) return;
+    var t = String(input.value || '').trim().toLowerCase().replace(/\s+/g, ' ').slice(0, 40);
+    if (!t) return;
+    if (c.tags.map(lower).indexOf(t) >= 0) { input.value = ''; return; }
+    saveTags(c.id, c.tags.concat([t]));
+  }
+  function copy(text) {
+    var done = function () { toastS('Copied'); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function () { fallback(); }); return; } } catch (e) { /* fall through */ }
+    fallback();
+    function fallback() { try { var ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done(); } catch (e) { toastS(text); } }
+  }
+  var qT = null;
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !inOurs(t)) return;
+    var el, v;
+    if ((el = t.closest('[data-w152close]'))) { e.preventDefault(); closeSheet(); return; }
+    if ((el = t.closest('[data-w152open]'))) { e.preventDefault(); openContact(el.getAttribute('data-w152open')); return; }
+    if ((el = t.closest('[data-w152go]'))) {
+      e.preventDefault(); v = el.getAttribute('data-w152go');
+      if (S.sheet) closeSheet(true);
+      go(v); return;
+    }
+    if ((el = t.closest('[data-w152set]'))) {
+      v = el.getAttribute('data-w152set');
+      setFilter(v === 'volunteer' ? { kind: 'volunteer' } : v === 'served' ? { act: 'served' } : v === 'donor' ? { kind: 'donor' } : { q: '' });
+      paint(); return;
+    }
+    if ((el = t.closest('[data-w152kind]'))) { S.ui.kind = el.getAttribute('data-w152kind'); S.ui.show = 60; paint(); return; }
+    if ((el = t.closest('[data-w152clear]'))) { e.preventDefault(); setFilter({ q: '' }); paint(); return; }
+    if ((el = t.closest('[data-w152more]'))) { S.ui.show += 60; paint(); return; }
+    if ((el = t.closest('[data-w152add]'))) { e.preventDefault(); S.confirm = null; editForm(null); return; }
+    if ((el = t.closest('[data-w152edit]'))) { e.preventDefault(); editForm(el.getAttribute('data-w152edit')); return; }
+    if ((el = t.closest('[data-w152back]'))) { e.preventDefault(); v = el.getAttribute('data-w152back'); S.confirm = null; if (v && contact(v)) contactSheet(v); else closeSheet(); return; }
+    if ((el = t.closest('[data-w152save]'))) { e.preventDefault(); el.disabled = true; saveContact(el.getAttribute('data-w152save')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
+    if ((el = t.closest('[data-w152perm-edit]'))) { e.preventDefault(); permForm(el.getAttribute('data-w152perm-edit')); return; }
+    if ((el = t.closest('[data-w152savep]'))) { e.preventDefault(); el.disabled = true; savePerm(el.getAttribute('data-w152savep')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
+    if ((el = t.closest('[data-w152linkorg]'))) { e.preventDefault(); orgForm(el.getAttribute('data-w152linkorg')); return; }
+    if ((el = t.closest('[data-w152saveorg]'))) { e.preventDefault(); el.disabled = true; saveOrg(el.getAttribute('data-w152saveorg')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
+    if ((el = t.closest('[data-w152unlink]'))) { e.preventDefault(); unlinkOrg(el.getAttribute('data-w152unlink')); return; }
+    if ((el = t.closest('[data-w152untag]'))) {
+      e.preventDefault(); var cid = sheetId(), c = contact(cid); if (!c) return;
+      v = el.getAttribute('data-w152untag');
+      saveTags(c.id, c.tags.filter(function (x) { return x !== v; })); return;
+    }
+    if ((el = t.closest('[data-w152log]'))) { e.preventDefault(); el.disabled = true; saveLog(el.getAttribute('data-w152log')).then(function () { el.disabled = false; }, function () { el.disabled = false; }); return; }
+    if ((el = t.closest('[data-w152delint]'))) { e.preventDefault(); deleteLog(sheetId(), el.getAttribute('data-w152delint')); return; }
+    if ((el = t.closest('[data-w152copy]'))) { e.preventDefault(); copy(el.getAttribute('data-w152copy')); return; }
+    if ((el = t.closest('[data-w152keep]'))) { e.preventDefault(); S.confirm = 'merge:' + el.getAttribute('data-w152keep') + ':' + el.getAttribute('data-drop'); paint(); return; }
+    if ((el = t.closest('[data-w152cancel]'))) { e.preventDefault(); S.confirm = null; paint(); return; }
+    if ((el = t.closest('[data-w152merge]'))) { e.preventDefault(); merge(el.getAttribute('data-w152merge'), el.getAttribute('data-drop')); return; }
+    if ((el = t.closest('[data-w152notdup]'))) { e.preventDefault(); notDup(el.getAttribute('data-w152notdup')); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!t || !t.getAttribute) return;
+    if (t.hasAttribute('data-w152tagin') && (e.key === 'Enter' || e.key === ',')) { e.preventDefault(); addTag(t); }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.getAttribute || !t.hasAttribute('data-w152q')) return;
+    var v = t.value;
+    clearTimeout(qT);
+    qT = setTimeout(function () { S.ui.q = v; S.ui.show = 60; paint(); }, 160);
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('.w152root')) return;
+    if (t.hasAttribute('data-w152role')) S.ui.role = t.value;
+    else if (t.hasAttribute('data-w152act')) S.ui.act = t.value;
+    else if (t.hasAttribute('data-w152perm')) S.ui.perm = t.value;
+    else if (t.hasAttribute('data-w152sort')) S.ui.sort = t.value;
+    else return;
+    S.ui.show = 60; paint();
+  });
+  window.addEventListener('hashchange', function () {
+    if (!S.sheet) return;
+    if (!/^#crm(\/|$)/.test(location.hash)) closeSheet(true);
+  });
+
+  /* ---------- the menu: People > CRM ---------- */
+  function pageOk() { try { return typeof wa40Allowed !== 'function' || (wa40Allowed() || []).indexOf('crm') >= 0; } catch (e) { return true; } }
+  var PAGE = { id: 'crm', label: 'CRM', group: 'people', dot: TEAL, gate: 'member', onShow: function (h) { if (pageOk()) openCrm(h); } };
+  function register() {
+    if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'crm'; })) WA_NAV.register(PAGE);
+  }
+  if (typeof startApp === 'function') {
+    var __sa152 = startApp;
+    startApp = async function () {
+      var out = await __sa152.apply(this, arguments);
+      try {
+        register();
+        var root = decodeURIComponent(location.hash || '').replace(/^#/, '').split('/')[0];
+        if (root === 'crm') { try { applyHash(); } catch (e) { /* fine */ } }
+      } catch (e) { console.warn('wave152 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- the page tour (wave122's engine; trainings row tour:crm) ---------- */
+  function addTour() {
+    try {
+      var W = window.w122; if (!W || !W.tours || W.tours.crm) return;
+      var OPT = { opt: 1 };
+      var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      W.tours.crm = { tab: 'crm', icon: 'people', hash: '#crm', steps: [
+        T('#crm > .w118mast', 'CRM', 'Everyone Welfare Avenue knows in one place: volunteers, donors, partners\u2019 contacts and the team, with what each one has done with us.'),
+        T('#crm .w152stats', 'At a glance', 'Everyone, the volunteers, who has served at an event, and the donors (or the duplicates to check). A number narrows the list to them.', OPT),
+        T('#crm .w152tabs', 'Three views', 'The contacts, the possible duplicates to check, and where the contacts come from with what joins next.', OPT),
+        T('#crm .w152chips', 'Who they are to us', 'Volunteers, donors, partners\u2019 contacts, supporters, staff and alumni. One person can be several.', OPT),
+        T('#crm .w152q', 'Find anyone', 'Type a name, an email, a phone number, a school or a tag. Next to it: a volunteer role, their activity, their email permission, and the order.', OPT),
+        T('#crm [data-w152add]', 'Add someone', 'A donor, a partner\u2019s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
+        T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
+        { c: 1, t: 'A contact\u2019s page', p: 'Their details (a volunteer\u2019s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website\u2019s history.' },
+        { c: 1, t: 'Email permission', p: 'Canada\u2019s anti-spam law (CASL): newsletters and campaigns go only to people who said yes, or whose implied consent has not run out. Record it on their page when they tell you.' },
+        { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other\u2019s history moves to it, or mark them as different people (family members share phones).' }
+      ] };
+    } catch (e) { /* fine */ }
+  }
+  addTour();
+
+  /* ---------- test hook ---------- */
+  window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
+    save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
+    timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
@@ -56118,7 +57340,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
-    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', adminpanel: 'Admin'
+    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', crm: 'CRM', adminpanel: 'Admin'
   };
   function me() {
     return {

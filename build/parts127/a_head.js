@@ -39,19 +39,19 @@
     ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
     ['Meetings', ['agendas', 'transcripts']],
     ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training']],
-    ['Resources', ['importantinfo', 'photos', 'create']],
+    ['People', ['orgchart', 'training', 'crm']],
+    ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
-    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info',
+    create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
-    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy',
+    transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
   };
   /* what the database enforces on top of the menu */
@@ -64,7 +64,8 @@
     agendas: 'Each agenda is visible to the person who made it and the people invited.',
     transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
     bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project’s lead or a leader for a whole project.',
-    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.'
+    orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.',
+    crm: 'Contacts, their history and their email permission follow the profile in the database, not just the menu. Directors never see them.'
   };
   var SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
 

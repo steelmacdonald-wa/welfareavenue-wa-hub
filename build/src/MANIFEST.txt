@@ -178,6 +178,8 @@
 149_wave149
 # 151_wave151: the news banner at the top of Home (moved from the loading screen), read live from hub_reel_current.
 151_wave151
+# 152_wave152: the CRM (People > CRM, #crm): every contact, their page and timeline, duplicates, sources.
+152_wave152
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

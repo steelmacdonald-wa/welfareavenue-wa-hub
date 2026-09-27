@@ -1308,6 +1308,59 @@ The loading screen and the news banner on Home (wave149; the banner moved to Hom
 - `source_key`: Where the line came from, e.g. lesson:<wa_lessons.key>, history:<wa_history.key>, win:<goal_wins.id>, event:<volunteer_events.id>; used so a lesson or milestone does not come back for eight weeks.
 - `until`: An update shows on the news banner until the end of this day.
 
+### `crm_contacts`
+
+The CRM (wave150/152): one row per person Welfare Avenue knows (volunteers, donors, partner contacts, supporters, staff, alumni). Staff with the CRM page read and write it (wa_page_ok('crm')); directors never. A volunteer's name, emails, phones and address come from volunteer_people through crm_sync_from_volunteer; edit them there. A merged copy keeps its row with merged_into set; read crm_contacts_v for the live ones.
+
+- `kinds`: What they are to us, several allowed: volunteer, donor, partner, supporter, staff, alumni, board.
+- `tags`: Free tags staff give on the CRM page (lower case).
+- `source`: Where the contact came from: django_website_export (the old website's volunteers, July 2026), hub_roster (staff and alumni), hub_volunteers (MTL volunteering), hub (added on the CRM page), zeffy, website, keela.
+- `volunteer_id`: Their volunteer record (volunteer_people.id), unique; the trigger keeps the names and contact details in step.
+- `member_id`: Their roster row (team_members.id) for staff and alumni.
+- `legacy_refs`: Ids in the systems they came from: volunteer_people_id, django user/volunteer ids, keela contact id, zeffy ids, merged_contact_ids.
+- `email_status`: What their address does: unknown, subscribed, unsubscribed, bounced, complained. An opt-out or a bounce wins over any consent.
+- `email_consent`: CASL: express (they said yes), implied (an existing relationship: a gift, volunteering, a membership), none. Campaigns go only to express, or implied that has not run out.
+- `consent_source`: Where the consent came from (the website form, a sign-up sheet, an email).
+- `consent_at`: When express consent was given.
+- `implied_consent_until`: The day implied consent runs out (two years after the last gift, membership or volunteering).
+- `merged_into`: Set when this row was merged into another contact (crm_merge_contacts); the row stays for the record.
+- `last_activity_at`: The last outward or inward touch logged on their timeline (not internal notes).
+
+### `crm_contact_orgs`
+
+A contact's organizations from Partners (wa_partners), with their role there. Staff with the CRM page write it.
+
+### `crm_interactions`
+
+A contact's timeline: notes, calls, meetings, emails and texts logged on the CRM page (source hub), and later the website's messages (website_message) and campaign emails. The author (or an admin) deletes an entry.
+
+- `kind`: note, call, meeting, email, sms, website_message, form, campaign.
+- `direction`: in (they reached us), out (we reached them), internal (a note).
+- `source_ref`: The id in the system it came from (a website message id, a campaign send id); unique when set.
+
+### `crm_donations`
+
+Gifts: amount, date, platform (zeffy, keela, stripe, cash), campaign, and the tax receipt (number, date, link, who issued it). Zeffy and the Keela export fill it; staff with the CRM page may add a gift by hand.
+
+- `external_id`: The gift's id in its platform; unique per platform.
+- `receipt_source`: Who issued the receipt: zeffy, keela, hub, none.
+
+### `crm_volunteer_history`
+
+The old website's volunteering history (Django VolunteerAssignment rows): each sign-up, whether it was approved, confirmed, attended, the hours. Admin-only writes (the import); everyone with the CRM page reads it.
+
+### `crm_dupe_dismissals`
+
+Pairs of contacts someone marked as different people on the CRM page (family members sharing a phone, say); crm_duplicates_v leaves them out. Smaller id first.
+
+### `crm_contacts_v` (view)
+
+The live contacts (not merged) with their volunteer roles and tags, Hub servings (confirmed at completed events), the old website's servings and hours, gift totals and organization names. The CRM page reads this.
+
+### `crm_duplicates_v` (view)
+
+Pairs of live contacts with the same email or phone, less the pairs marked as different people. The CRM page's Possible duplicates tab.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1345,4 +1398,6 @@ Functions:
 - `hub_reel_hide(bigint, boolean)`: Takes a loading screen line or a news banner item off (p_hidden true) or puts it back. Admins only; logged in change_log.
 - `hub_news_add(text, text, date)`: Adds an admin's update to the news banner at the top of Home (under 140 characters; link a Hub page #... or an https address; shown until p_until, two weeks by default, 90 days at most). Admins only; logged in change_log.
 - `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
+- `crm_merge_contacts(bigint, bigint)`: Keep one contact and merge the other into it: the history, gifts, old website history and organizations move, the lists join up, the copy fills the gaps in the details, two volunteer records become one (volunteer_merge). Staff with the CRM page; logged in change_log.
+- `crm_sync_from_volunteer()`: Trigger on volunteer_people: a new or changed volunteer creates or updates their CRM contact (linking an existing contact with the same email instead of duplicating).
 

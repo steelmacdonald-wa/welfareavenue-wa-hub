@@ -141,6 +141,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#bank` | The bank | Goals and projects | 132 |
 | `#orgchart` | Org chart | People | 011, 012, 133 |
 | `#training/...` | Avenue Academy (Learning Avenues, tours, library; the hard knowledge check and the brand lesson blocks from 150 live in 122) | People | 122 (classic view: 036, 037, 044, 045, 057, 058) |
+| `#crm`, `#crm/c/<id>`, `#crm/dupes`, `#crm/sources` | CRM (every contact, their page and timeline, the duplicates, the sources; from 152) | People | 152 |
 | `#activity` | Activity | Admin | 000, 085 |
 | `#adminpanel/<section>` | Admin sections (the monthly security check at the top of Security and audit trail from 146; Loading screen from 149) | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131, 146, 149 |
 | `#importantinfo` | Important info | Resources | 004, 134 (passwords by request) |
