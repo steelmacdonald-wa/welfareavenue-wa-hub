@@ -136,8 +136,11 @@
     return r.data;
   }
 
-  /* ---------- the loading screen: shout-outs between the fun facts ---------- */
+  /* ---------- the loading screen: shout-outs between the fun facts ----------
+     wave149: the first-paint script in 000_head_base now runs the whole rotation (milestones, shout-outs, lessons,
+     learnings and fun facts) and reads this cache itself when the newer one is missing, so this no longer runs. */
   (function veil() {
+    return;
     try {
       var raw = localStorage.getItem('wa116s'); if (!raw) return;
       var cached = JSON.parse(raw); var shouts = (cached && cached.lines) || []; if (!shouts.length) return;
@@ -170,7 +173,7 @@
       try {
         var r = await db.from('hub_shoutouts').select('*').eq('active', true).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(40);
         P.shouts = (r && r.data) || []; P.shoutsAt = Date.now();
-        try { localStorage.setItem('wa116s', JSON.stringify({ at: Date.now(), lines: P.shouts.slice(0, 12).map(function (s) { return s.text; }) })); } catch (e) { /* fine */ }
+        /* wave149: the loading screen's cache is wave149's (Hub shout-outs only, filtered); this one is no longer written */
       } catch (e) { P.shouts = P.shouts || []; }
       P.loading.shouts = null;
     })();
@@ -350,8 +353,7 @@
     var __spp = showPanel;
     showPanel = function (id) { var out = __spp.apply(this, arguments); try { if (id === 'hrcentre') setTimeout(boot, 700); } catch (e) { /* fine */ } return out; };
   }
-  /* the hub loads shout-outs on any page once, so the loading screen has them next time */
-  setTimeout(function () { try { if (typeof db !== 'undefined' && myEmail()) loadShouts(false); } catch (e) { /* fine */ } }, 6000);
+  /* wave149: the loading screen no longer depends on this early load (wave149 caches the shout-outs itself) */
 
   /* ---------- events ---------- */
   document.addEventListener('click', async function (e) {

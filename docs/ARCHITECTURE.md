@@ -21,7 +21,7 @@ The page is assembled from 157 segments in `build/src/*.seg`. Each segment after
 ## 3. Anatomy of the page
 
 - **Head** (`000_head_base.seg`): a small script with `SUPABASE_URL`, `SUPABASE_ANON_KEY` and `FUNCTIONS_BASE`; supabase-js from jsDelivr; the base CSS (colour tokens on `:root`); the boot veil CSS.
-- **Body markup** (`000_head_base.seg`): the boot veil `#wa110veil`; the sign-in gate `#gate`; `header.wa-header` (the old brand row, hidden since wave114); `div.wa-toolbar` (search, status and account buttons, restyled by later waves); `nav.wa-nav > #tabBar` with ten buttons; `<main>` with twelve `section.panel` elements (`overview`, `dashboard`, six department panels, `needsme`, `activity`, `transcripts`); `#toast`; `#modalBack` and `#modalBox`.
+- **Body markup** (`000_head_base.seg`): the boot veil `#wa110veil` (its first-paint script rotates the fun facts and, from wave149, the week's lines, shout-outs and the news banner that `149_wave149` caches in `localStorage` `wa149reel` after sign-in; shown only while the browser holds a Hub sign-in); the sign-in gate `#gate`; `header.wa-header` (the old brand row, hidden since wave114); `div.wa-toolbar` (search, status and account buttons, restyled by later waves); `nav.wa-nav > #tabBar` with ten buttons; `<main>` with twelve `section.panel` elements (`overview`, `dashboard`, six department panels, `needsme`, `activity`, `transcripts`); `#toast`; `#modalBack` and `#modalBox`.
 - **Main script**: one `<script>` that starts in `000_head_base` and ends in `999_tail`. Every other segment is a slice of it.
 
 Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` for a new id; `#personpage` appears on first use), inject their own `<style id="waNNcss">` (140 style elements at runtime), and add buttons to `#tabBar`.
@@ -75,7 +75,7 @@ Later waves create 27 more panels (`WA_NAV.register` creates a `section.panel` f
 - The client is `db` (a supabase-js v2 client). Queries are written inline: `await db.from('table').select(...)`, `db.rpc('name', args)`, `db.functions.invoke('name', { body })`.
 - `loadAll()` in `000_head_base` fills the shared caches once per boot: `DB_DECISIONS`, `DB_META`, `DB_UPDATES`, `DB_TASKS`, `DB_MEMBERS` (active only, plus `MEMBER_BY_ID`), `DB_ASSIGN`, `DB_SENTIMENT`, `DB_HOURS`, `DB_CHANGES` (staff only; `DB_CLICKUP` stays empty since the audit, nothing reads it). Write paths call `loadAll()` again and re-render.
 - Almost every later wave keeps its own cache in a private object (`W116`, `WA37`, `W115`, `B` in the bank, `O` in the org chart) and loads its own tables. The same table is often loaded several times at boot (`team_members` 18 times); reuse `DB_MEMBERS` and the other caches where they fit.
-- Edge functions: 38 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`, `board-pack`, `meet-attendance`, `forms-flow`, `security-check`, `search-console`). All 61 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
+- Edge functions: 39 are invoked from the page by name (for example `ask`, `llm`, `hub-invite`, `notify`, `process-transcript`, `goal-sync`, `board-pack`, `meet-attendance`, `forms-flow`, `security-check`, `search-console`, `hub-reel`). All 62 live functions have their source in `fn/` (see `docs/EDGE_FUNCTIONS.md`). Every model call goes through the `llm` router.
 - Errors: most code wraps work in `try { } catch (e) { /* fine */ }`. When debugging, remove the empty catch locally first.
 
 ## 8. Routing
@@ -122,14 +122,14 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#mypage` | Home | top level | 009, 074, 075, 089, 105, 112, 115, 116 |
 | `#overview` | Executive dashboard | top level | 000, 111, 116g, 116m, 128 |
 | `#calendar` | Calendar | top level | 124 |
-| `#team/<team>/...` | each team in Departments (Meeting attendance under Upcoming meetings from 144) | Departments | 116, 116b, 116i, 116t, 122, 123, 124, 126, 132, 144 |
+| `#team/<team>/...` | each team in Departments (Meeting attendance moved to the HR centre in 149) | Departments | 116, 116b, 116i, 116t, 122, 123, 124, 126, 132, 144 |
 | `#volunteering/...` | MTL volunteering (the volunteer survey, the event audit and the sign-ups from 145) | Operations Montreal row | 020, 023 to 026, 031, 106, 119, 119b, 145 |
 | `#contentcal` | Content calendar | Marketing row | 121, 118c |
-| `#socialstats` | Analytics (with Google Search from 147) | Marketing row | 120, 129, 147 |
+| `#socialstats` | Analytics (with Google Search from 147; hover numbers on every graph and post photos from Hub storage from 149) | Marketing row | 120, 129, 147, 149 |
 | `#fundevents` | Events calendar | Fundraising row | 124 |
 | `#finances` | Finances | Fundraising row | 022, 090 to 094 |
-| `#hrcentre/...` | HR centre (Meeting attendance for the admins and the Executive profile from 144; the onboarding quizzes from 145) | Human Resources row | 046, 047, 049, 052, 054 to 057, 065, 075, 103, 105, 106, 116p, 144, 145 |
-| `#governance`, `#committees` | Board overview (with the board pack card from 143 and board attendance from 144), Committees | Board & Governance row (directors: Board group) | 126, 143, 144 |
+| `#hrcentre/...` | HR centre (Meeting attendance for the admins and the Executive profile from 144, with each team's meetings and the board meetings from 149; the onboarding quizzes from 145) | Human Resources row | 046, 047, 049, 052, 054 to 057, 065, 075, 103, 105, 106, 116p, 144, 145 |
+| `#governance`, `#committees` | Board overview (with the board pack card from 143; board attendance moved to the HR centre in 149), Committees | Board & Governance row (directors: Board group) | 126, 143 |
 | `#agendas` | Agendas | Meetings | 006, 007, 019, 047, 053 |
 | `#transcripts`, `#tx/<id>` | Transcript archive | Meetings | 000, 002, 021, 062, 065, 066 |
 | `#requests/...` | Requests | Requests and inbox | 005, 050, 065, 123 |
@@ -142,7 +142,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#orgchart` | Org chart | People | 011, 012, 133 |
 | `#training/...` | Avenue Academy (Learning Avenues, tours, library) | People | 122 (classic view: 036, 037, 044, 045, 057, 058) |
 | `#activity` | Activity | Admin | 000, 085 |
-| `#adminpanel/<section>` | Admin sections (the monthly security check at the top of Security and audit trail from 146) | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131, 146 |
+| `#adminpanel/<section>` | Admin sections (the monthly security check at the top of Security and audit trail from 146; Loading screen from 149) | Admin | 040, 072, 086, 096, 113, 115, 116l, 116n, 116r, 118, 127, 131, 146, 149 |
 | `#importantinfo` | Important info | Resources | 004, 134 (passwords by request) |
 | `#photos` | Photo library | Resources | 118c |
 | `#ourstory`, `#ourstory/lessons`, `#ourstory/e/<id>`, `#ourstory/<year>` | Our story (timeline and Lessons learned) | Resources | 140 |

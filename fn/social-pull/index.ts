@@ -1,4 +1,4 @@
-// Welfare Avenue: social-pull (v1.6, 25/09/26: backfill walks each account back as far as its API allows (Facebook and Instagram two years, posts and media all of them, GA4 since the property started), Instagram follower demographics (age and gender, cities, countries), a WhatsApp Business check in the probe, posts deduplicated before the upsert (GA4 pages); v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
+// Welfare Avenue: social-pull (v1.7, 27/09/26: a copy of each post's photo in Hub storage, social_posts.thumb_cached, because the Hub's content security policy only loads images from the Hub and Meta's photo links expire; action rehost, and each sync copies the new photos. v1.6, 25/09/26: backfill walks each account back as far as its API allows (Facebook and Instagram two years, posts and media all of them, GA4 since the property started), Instagram follower demographics (age and gender, cities, countries), a WhatsApp Business check in the probe, posts deduplicated before the upsert (GA4 pages); v1.5, 25/09/26: import keeps post clicks, engagement, raw fields and audience breakdowns (LinkedIn exports); v1.4: ga4_list; v1.3: Instagram day series walks back in 29 day windows; v1.2: insights action for the directional recommendations, sync confirms the content calendar; v1.1 Page token route; v1 25/09/26)
 // The numbers behind Marketing > Analytics. Reads Meta (Facebook Page +
 // Instagram business account) with the system user token in the vault
 // (META_SYSTEM_TOKEN), Google Analytics 4 with the hub's service account
@@ -17,6 +17,7 @@
 //   {action:'import_csv', platform, rows, posts?, handle?, name?, demographics?}  CSV or export rows (staff); v1.5 keeps post clicks, engagement and raw fields, and audience breakdowns in the account meta
 //   {action:'note', days?}                     the AI note                      (staff or x-wa-secret, cron wa-social-note)
 //   {action:'insights', evidence[], days?}      3 to 5 directional recommendations from the evidence the page computed (staff or automation)
+//   {action:'rehost', limit?, budget_ms?}    copy post photos into Hub storage (staff or automation; each sync does it too)   v1.7
 //   {action:'backfill', account_id, budget?}     one step of history: older days, older posts, demographics; call again until done (staff or automation)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
@@ -96,6 +97,67 @@ async function putPosts(posts: Post[]): Promise<number> {
     if (error) throw new Error('social_posts: ' + error.message);
   }
   return rows.length;
+}
+/* ---------- v1.7 (wave149): a copy of each post's photo in Hub storage ----------
+   Steel: "the photos from instagram posts don't show up". The Hub's content security policy only loads images from the
+   Hub and its Supabase project, and Meta's photo links expire after a few days, so the Analytics page shows the Hub's own
+   copy (social_posts.thumb_cached, in content-images/social/<platform>/<id>.<ext>). A link that has expired is asked for
+   again from the Graph API before giving up; a failed copy is retried after three days. */
+const THUMB_BUCKET = 'content-images';
+/* only Meta's photo hosts, 15 seconds at most, 8 MB at most (checked before the download when the size is given) */
+function metaHost(url: string): boolean { try { const u = new URL(url); return u.protocol === 'https:' && /(^|\.)(fbcdn\.net|cdninstagram\.com|fbsbx\.com)$/i.test(u.hostname); } catch (_) { return false; } }
+async function fetchImage(url: string): Promise<{ bytes: Uint8Array; type: string } | null> {
+  try {
+    if (!metaHost(url)) return null;
+    const r = await fetch(url, { headers: { 'User-Agent': 'WelfareAvenueHub/1.0' }, redirect: 'manual', signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const type = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!/^image\/(jpeg|jpg|png|webp|gif)$/.test(type)) return null;
+    const len = Number(r.headers.get('content-length') || 0); if (len > 8 * 1024 * 1024) return null;
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    if (bytes.length < 500 || bytes.length > 8 * 1024 * 1024) return null;
+    return { bytes, type: type === 'image/jpg' ? 'image/jpeg' : type };
+  } catch (_) { return null; }
+}
+const PAGE_TOKENS: Record<string, string> = {};
+async function freshThumb(p: Any, token: string): Promise<string | null> {
+  try {
+    if (p.platform === 'instagram') { const m = await graph('/' + p.external_id, token, { fields: 'media_type,media_url,thumbnail_url' }); return m.thumbnail_url || m.media_url || null; }
+    if (p.platform === 'facebook') {
+      const { data: acc } = await svc.from('social_accounts').select('external_id').eq('id', p.account_id).maybeSingle();
+      const pageId = acc && (acc as Any).external_id; if (!pageId) return null;
+      if (!PAGE_TOKENS[pageId]) PAGE_TOKENS[pageId] = await pageToken(pageId, token);
+      const m = await graph('/' + p.external_id, PAGE_TOKENS[pageId], { fields: 'full_picture' }); return m.full_picture || null;
+    }
+  } catch (_) { /* the post is gone or the token cannot see it */ }
+  return null;
+}
+async function rehost(limit = 40, budgetMs = 60000): Promise<Any> {
+  const t0 = Date.now();
+  const retry = new Date(Date.now() - 3 * 86400000).toISOString();
+  const { data, error } = await svc.from('social_posts').select('id, platform, account_id, external_id, thumb_url').in('platform', ['instagram', 'facebook']).is('thumb_cached', null).not('thumb_url', 'is', null)
+    .or('thumb_cached_at.is.null,thumb_cached_at.lt.' + retry).order('published_at', { ascending: false }).limit(Math.max(1, Math.min(200, limit)));
+  if (error) throw new Error('social_posts: ' + error.message);
+  const rows = (data || []) as Any[];
+  let token: string | null = null; try { token = await getSecret('META_SYSTEM_TOKEN'); } catch (_) { token = null; }
+  let cached = 0, failed = 0, i = 0;
+  const one = async (p: Any) => {
+    const now = new Date().toISOString();
+    let img = await fetchImage(p.thumb_url), src = p.thumb_url;
+    if (!img && token) { const f = await freshThumb(p, token); if (f && f !== p.thumb_url) { src = f; img = await fetchImage(f); } }
+    if (!img) { failed++; await svc.from('social_posts').update({ thumb_cached_at: now, thumb_error: 'The photo link has expired and Meta gave no new one' }).eq('id', p.id); return; }
+    const ext = img.type === 'image/png' ? 'png' : img.type === 'image/webp' ? 'webp' : img.type === 'image/gif' ? 'gif' : 'jpg';
+    const path = 'social/' + p.platform + '/' + String(p.external_id).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120) + '.' + ext;
+    const up = await svc.storage.from(THUMB_BUCKET).upload(path, img.bytes, { contentType: img.type, upsert: true, cacheControl: '31536000' });
+    if (up.error) { failed++; await svc.from('social_posts').update({ thumb_cached_at: now, thumb_error: 'storage: ' + String(up.error.message).slice(0, 160) }).eq('id', p.id); return; }
+    const url = svc.storage.from(THUMB_BUCKET).getPublicUrl(path).data.publicUrl;
+    await svc.from('social_posts').update({ thumb_cached: url, thumb_cached_at: now, thumb_error: null, ...(src !== p.thumb_url ? { thumb_url: src } : {}) }).eq('id', p.id);
+    cached++;
+  };
+  const workers = Array.from({ length: 5 }, async () => { while (i < rows.length && Date.now() - t0 < budgetMs) { const p = rows[i++]; await one(p); } });
+  await Promise.all(workers);
+  const { count } = await svc.from('social_posts').select('id', { count: 'exact', head: true }).in('platform', ['instagram', 'facebook']).is('thumb_cached', null).not('thumb_url', 'is', null);
+  return { cached, failed, tried: Math.min(i, rows.length), left: count || 0, ms: Date.now() - t0 };
 }
 async function upsertAccount(a: Partial<Account> & { platform: string; external_id: string }): Promise<Account> {
   const { data: cur } = await svc.from('social_accounts').select('*').eq('platform', a.platform).eq('external_id', a.external_id).maybeSingle();
@@ -697,7 +759,9 @@ Deno.serve(async (req: Request) => {
       for (const a of ((data || []) as Account[])) results.push(await syncAccount(a, days));
       let confirmed: Any = null;
       try { const r = await fetch(SUPABASE_URL + '/functions/v1/social-publish', { method: 'POST', headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm', days: 60 }) }); confirmed = await r.json(); } catch (_) { /* the calendar catches up on the next run */ }
-      return json({ ok: true, results, confirmed });
+      let photos: Any = null;
+      try { photos = await rehost(60, 45000); } catch (e) { photos = { error: String((e as Error).message || e).slice(0, 160) }; }
+      return json({ ok: true, results, confirmed, photos });
     }
     if (action === 'backfill') {
       const id = Number(body.account_id);
@@ -709,6 +773,8 @@ Deno.serve(async (req: Request) => {
       try { return json({ ok: true, ...(await backfill(acc as Account, budget)) }); }
       catch (e) { return json({ ok: false, id, error: String((e as Error).message || e).slice(0, 300) }); }
     }
+    if (action === 'rehost' && !me.admin) return json({ error: 'Only admins can copy the post photos by hand; each sync does it.' }, 403);
+    if (action === 'rehost') return json({ ok: true, ...(await rehost(Number(body.limit) || 40, Math.max(5000, Math.min(120000, Number(body.budget_ms) || 60000)))) });
     if (action === 'import_csv') return json(await importCsv(body, me));
     if (action === 'note') return json({ ok: true, ...(await writeNote(Math.max(7, Math.min(30, Number(body.days) || 7)))) });
     if (action === 'insights') return json({ ok: true, ...(await writeInsights(Array.isArray(body.evidence) ? body.evidence : [], Number(body.days) || 30)) });

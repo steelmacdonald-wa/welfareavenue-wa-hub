@@ -181,11 +181,16 @@
   function series(p, metric) { var d = S.data; var s = d && d.series && d.series[p] && d.series[p][metric]; return Array.isArray(s) ? s : []; }
   function bucketEnd(key) { var b = S.data && S.data.bucket; if (b !== 'week' && b !== 'month') return key; var dt = new Date(String(key).slice(0, 10) + 'T00:00:00Z'); return (b === 'week' ? new Date(dt.getTime() + 6 * 86400000) : new Date(Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth() + 1, 0))).toISOString().slice(0, 10); }
   function windowed(pts) { var from = S.data && S.data.from; return from ? pts.filter(function (x) { return x[0] >= from || bucketEnd(x[0]) >= from; }) : pts; }
-  function spark(pts, color) {
+  /* wave149: every graph hands its points to the hover (window.__w149ch, read by wave149): hovering across shows the numbers */
+  function hoverKey(k) { var b = S.data && S.data.bucket; var dt = new Date(String(k).slice(0, 10) + 'T12:00:00'); try { if (b === 'month') return dt.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }); if (b === 'week') return 'Week of ' + dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return String(k).slice(0, 10); } }
+  function full(v) { v = Number(v); return isFinite(v) ? Math.round(v).toLocaleString('en-CA') : '\u2013'; }
+  function spark(pts, color, key, label) {
     if (!pts || pts.length < 2) return '';
     var w = 200, h = 34, vals = pts.map(function (x) { return Number(x[1]) || 0; }); var mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals); var span = (mx - mn) || 1;
-    var d = vals.map(function (v, i) { return (i / (vals.length - 1) * w).toFixed(1) + ',' + (h - 3 - (v - mn) / span * (h - 8)).toFixed(1); });
-    return '<svg class="sp" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + d.join(' ') + '"></polyline><circle r="3" cx="' + w + '" cy="' + d[d.length - 1].split(',')[1] + '" fill="' + color + '"></circle></svg>';
+    var yOf = function (v) { return h - 3 - (v - mn) / span * (h - 8); };
+    var d = vals.map(function (v, i) { return (i / (vals.length - 1) * w).toFixed(1) + ',' + yOf(v).toFixed(1); });
+    if (key) { try { (window.__w149ch = window.__w149ch || {})[key] = { w: w, h: h, keys: pts.map(function (x, i) { return { k: String(x[0]).slice(0, 10), x: i / (pts.length - 1) * w, v: Number(x[1]) || 0 }; }), head: hoverKey, rows: function (k, kk) { return [{ label: label || '', value: full(kk.v), color: color, y: yOf(kk.v) }]; } }; } catch (e) { /* the hover is extra */ } }
+    return '<svg class="sp" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"' + (key ? ' data-w149h="' + E(key) + '" tabindex="0" role="img" aria-label="' + E((label || 'Trend') + ': use the arrow keys to read the numbers') + '"' : '') + '><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="' + d.join(' ') + '"></polyline><circle r="3" cx="' + w + '" cy="' + d[d.length - 1].split(',')[1] + '" fill="' + color + '"></circle></svg>';
   }
   function fn(body) {
     try { return db.functions.invoke('social-pull', { body: body }).then(function (r) { if (r.error) throw r.error; if (r.data && r.data.error) throw new Error(r.data.error); return r.data; }); }
@@ -240,9 +245,10 @@
       html += '<div class="big">' + (s.cur != null ? num(s.cur) : '\u2013') + '<small>sessions</small>' + delta(s.cur, s.prev) + '</div>';
     }
     html += '<div class="row">' + c.stats.map(function (m) { var t = tot[m] || {}; return '<div><b>' + (t.cur != null ? num(t.cur) : '\u2013') + '</b>' + E(MLABEL[m] || m) + ' ' + delta(t.cur, t.prev) + '</div>'; }).join('') + '</div>';
-    var sp = c.head === 'followers' ? series(p, 'followers') : series(p, 'sessions');
-    if (sp.length < 2) sp = series(p, c.stats[0]);
-    html += spark(windowed(sp).length > 1 ? windowed(sp) : sp, c.color);
+    var spM = c.head === 'followers' ? 'followers' : 'sessions';
+    var sp = series(p, spM);
+    if (sp.length < 2) { spM = c.stats[0]; sp = series(p, spM); }
+    html += spark(windowed(sp).length > 1 ? windowed(sp) : sp, c.color, 'tile:' + p, (MLABEL[spM] || spM) + (spM === 'followers' ? '' : ' (' + (S.data && S.data.bucket === 'month' ? 'month' : S.data && S.data.bucket === 'week' ? 'week' : 'day') + ')'));
     html += '<div class="off" style="font-size:11px">' + E(ago(a.last_sync_at)) + (a.status === 'error' && a.last_error ? ' \u00b7 ' + E(String(a.last_error).slice(0, 90)) : '') + '</div></div>';
     return html;
   }
@@ -282,7 +288,18 @@
       return (headP ? line(pts.slice(0, 2), true) : '') + line(pts.slice(headP ? 1 : 0, tailP ? pts.length - 1 : pts.length)) + (tailP ? line(pts.slice(-2), true) : '');
     }).join('');
     var lg = lines.map(function (l) { var tot = l.pts.reduce(function (s, x) { return s + (Number(x[1]) || 0); }, 0); return '<span><i style="background:' + P[l.p].color + '"></i>' + E(P[l.p].label) + ' · ' + num(m === 'followers' ? l.pts[l.pts.length - 1][1] : tot) + '</span>'; }).join('') + (dashed ? '<span style="color:var(--wa-muted)">Dashed: a ' + (d.bucket === 'week' ? 'week' : 'month') + ' only partly counted</span>' : '');
-    return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '</div></div>';
+    try {
+      var hk = {}; lines.forEach(function (l) { l.pts.forEach(function (x) { hk[String(x[0]).slice(0, 10)] = 1; }); });
+      var hs = lines.map(function (l) { var by = {}; l.pts.forEach(function (x) { by[String(x[0]).slice(0, 10)] = Number(x[1]) || 0; }); return { label: P[l.p].label, color: P[l.p].color, by: by }; });
+      (window.__w149ch = window.__w149ch || {}).main = { w: w, h: h, head: hoverKey,
+        keys: Object.keys(hk).sort().map(function (k) { return { k: k, x: X(k) }; }),
+        rows: function (k) {
+          var out = hs.map(function (x) { return { label: x.label, value: x.by[k] != null ? full(x.by[k]) : '\u2013', color: x.color, y: x.by[k] != null ? Y(x.by[k]) : null }; });
+          if (m !== 'followers' && hs.length > 1) { var tot = 0, any = false; hs.forEach(function (x) { if (x.by[k] != null) { tot += x.by[k]; any = true; } }); if (any) out.push({ label: 'All platforms', value: full(tot), color: null, y: null, strong: true }); }
+          return out;
+        } };
+    } catch (e) { /* the hover is extra */ }
+    return '<div class="cardy chart"><h4>' + (d.bucket === 'month' ? 'By month' : d.bucket === 'week' ? 'By week' : 'By day') + seg + '</h4><svg viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none" data-w149h="main" tabindex="0" role="img" aria-label="' + E((MLABEL[m] || m) + ' by ' + (d.bucket || 'day') + ': hover or use the arrow keys to read the numbers') + '">' + grid + paths + ticks + '</svg><div class="lg">' + lg + '<span class="w149hint">Hover across the graph for the numbers</span></div></div>';
   }
   function noteCard() {
     var n = S.data && S.data.note; var any = S.data && (S.data.accounts || []).length;
@@ -488,7 +505,7 @@
   window.w120BestSlot = bestSlot;
   window.w120Data = function () { return S.data; };
   function evCard(e) {
-    var bars = (e.bars || []).map(function (b) { return '<div class="bar' + (b.best ? ' best' : '') + (b.neg ? ' neg' : '') + '"><span>' + E(b.label) + '</span><i><s style="width:' + Math.max(3, b.w) + '%"></s></i><em>' + E(b.text || (b.n ? fx(b.idx) : '')) + '</em></div>'; }).join('');
+    var bars = (e.bars || []).map(function (b) { return '<div class="bar' + (b.best ? ' best' : '') + (b.neg ? ' neg' : '') + '" data-w149tip="' + E(b.label + ': ' + (b.n ? b.n + (b.n === 1 ? ' post, ' : ' posts, ') + fx(b.idx) + ' a typical post' : (b.text || ''))) + '"><span>' + E(b.label) + '</span><i><s style="width:' + Math.max(3, b.w) + '%"></s></i><em>' + E(b.text || (b.n ? fx(b.idx) : '')) + '</em></div>'; }).join('');
     return '<div class="ev" data-w120ev="' + E(e.key) + '"><b>' + E(e.title) + '</b><p>' + E(e.detail) + '</p>' + (bars ? '<div class="bars">' + bars + '</div>' : '') + '<div class="ft"><span class="c ' + E(e.confidence || '') + '">' + E(e.confidence || '') + '</span>' + (e.n ? ' \u00b7 ' + e.n + (e.key === 'growth' || e.key === 'momentum' ? ' platform' + (e.n === 1 ? '' : 's') : e.key === 'cadence' ? ' weeks' : ' posts') : '') + '</div></div>';
   }
   function insightsCard() {

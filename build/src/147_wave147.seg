@@ -87,8 +87,21 @@
   function spark(series) {
     if (series.length < 2) return '';
     var max = Math.max.apply(null, series.map(function (r) { return Number(r.clicks) || 0; })) || 1, W = 600, H = 60;
-    var pts = series.map(function (r, i) { return (i / (series.length - 1) * W).toFixed(1) + ',' + (H - 4 - (Number(r.clicks) || 0) / max * (H - 10)).toFixed(1); }).join(' ');
-    return '<svg class="sp" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="Clicks from Google, day by day"><polyline points="' + pts + '" fill="none" stroke="' + BLUE + '" stroke-width="2.2" vector-effect="non-scaling-stroke"/></svg>';
+    var yOf = function (v) { return H - 4 - (Number(v) || 0) / max * (H - 10); };
+    var pts = series.map(function (r, i) { return (i / (series.length - 1) * W).toFixed(1) + ',' + yOf(r.clicks).toFixed(1); }).join(' ');
+    /* wave149: hovering across the line shows the day's clicks, appearances, click rate and position */
+    try {
+      var full = function (v) { v = Number(v); return isFinite(v) ? Math.round(v).toLocaleString('en-CA') : '\u2013'; };
+      (window.__w149ch = window.__w149ch || {}).search = { w: W, h: H,
+        keys: series.map(function (r, i) { return { k: String(r.day).slice(0, 10), x: i / (series.length - 1) * W, r: r }; }),
+        head: function (k) { try { return new Date(String(k).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); } catch (e) { return k; } },
+        rows: function (k, kk) { var r = kk.r || {}; return [
+          { label: 'Clicks from Google', value: full(r.clicks), color: BLUE, y: yOf(r.clicks) },
+          { label: 'Times we appeared', value: full(r.impressions), color: null, y: null },
+          { label: 'Click rate', value: r.ctr != null ? (Number(r.ctr) * 100).toFixed(1) + '%' : '\u2013', color: null, y: null },
+          { label: 'Average position', value: r.position != null ? (Math.round(Number(r.position) * 10) / 10).toString() : '\u2013', color: null, y: null }]; } };
+    } catch (e) { /* the hover is extra */ }
+    return '<svg class="sp" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" data-w149h="search" tabindex="0" aria-label="Clicks from Google, day by day: hover or use the arrow keys to read the numbers"><polyline points="' + pts + '" fill="none" stroke="' + BLUE + '" stroke-width="2.2" vector-effect="non-scaling-stroke"/></svg>';
   }
   function rows(kind) {
     var list = G.top.filter(function (r) { return r.kind === kind; }).slice(0, 10);

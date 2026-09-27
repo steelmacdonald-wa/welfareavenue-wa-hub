@@ -907,6 +907,10 @@ Published social posts and their performance metrics, from the APIs or CSV impor
 - `kind`: Post type: post, feed, reels, page (GA4 pages) or video.
 - `raw`: JSON of extra fields from CSV imports (ctr, audience, post_type, engagement_rate, posted_by, video_views).
 - `source`: api or csv.
+- `thumb_url`: The platform's own photo link for the post (Meta links expire after a few days and are refreshed by each sync); the page never loads it: see thumb_cached.
+- `thumb_cached`: The Hub's copy of the post's photo in storage (content-images/social/<platform>/<external_id>.<ext>), written by social-pull (v1.7, wave149); what the Analytics page shows.
+- `thumb_cached_at`: When social-pull last tried to copy the photo (success or not); a failed copy is retried after three days.
+- `thumb_error`: Why the last copy failed (the photo link had expired and Meta gave no new one, not an image, too large), or null.
 
 ### `social_notes`
 
@@ -1249,7 +1253,7 @@ One row per document in the wave140 mining. stage: extract (read the text), scre
 
 ### `meet_meetings`
 
-Meet attendance (wave144): one row per team meeting, leadership meeting or board meeting that was scheduled on the hub@ calendar (or in board_meetings) or held on a team's Meet link. id is cal:<calendar instance id>, conf:<conference id> (a call on the team's link with no scheduled meeting) or board:<board_meetings.id>. Counts: expected (invited people, or the active directors), came, team (the team's own roster among the invited), visitors (came without an invitation), guests (not identified: signed out, phone). Written by meet-attendance only.
+Meet attendance (wave144; HR centre only since wave149): one row per team meeting, leadership meeting or board meeting that was scheduled on the hub@ calendar (or in board_meetings) or held on a team's Meet link. id is cal:<calendar instance id>, conf:<conference id> (a call on the team's link with no scheduled meeting) or board:<board_meetings.id>. Counts: expected (invited people, or the active directors), came, team (the team's own roster among the invited), visitors (came without an invitation), guests (not identified: signed out, phone). Written by meet-attendance only; read by the admins and the Executive profile.
 
 - `held`: Someone stayed three minutes or more on a call matched to this meeting (meeting notetakers are not counted).
 - `conference_ids`: The Meet conferences (Reports API conference_id) matched to this meeting; a meeting restarted on the same link has two.
@@ -1296,6 +1300,14 @@ Google Search Console (wave147): the top searches (kind query) and pages (kind p
 
 One row: while locked_until is in the future a forms-flow run is filing answers, and another run waits for the next turn.
 
+### `hub_reel`
+
+The loading screen (wave149). kind lesson, learning, milestone: the week's lines (batch = Monday, Toronto time; rebuilt once a week by hub-reel from wa_lessons, form_summaries, social_notes, search_top, wa_history and goal_wins, phrased by the model). kind news: the news banner along the bottom (batch = the day; rebuilt every morning from servings, fundraising events, new starters and wins). kind update: an admin's own line for the news banner, shown until the day in until. hidden: taken off the loading screen by an admin (Admin, Loading screen). Shout-outs stay in hub_shoutouts. Read through hub_reel_current() and hub_reel_admin(); nothing about leadership changes, roles or departures is written here (hub-reel filters every line).
+
+- `batch`: The Monday of the week (lesson, learning, milestone) or the day (news), Toronto time; null for an update.
+- `source_key`: Where the line came from, e.g. lesson:<wa_lessons.key>, history:<wa_history.key>, win:<goal_wins.id>, event:<volunteer_events.id>; used so a lesson or milestone does not come back for eight weeks.
+- `until`: An update shows on the news banner until the end of this day.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1328,4 +1340,9 @@ Functions:
 - `wa_in_team(text)`: True when the signed-in person is on that team (the roster, or a Hub profile for it).
 - `wa_meet_people_ok(text)`: True when the signed-in person may read everyone's attendance for that meeting.
 - `wa_board_pack_guard()`: Keeps board_meetings.pack for the board-pack function (service role): anyone else's insert or update leaves it as it was.
+- `hub_reel_current()`: The loading screen (wave149): this week's lessons, learnings and milestones and today's news banner (live updates first), without hidden lines. Everyone on the Hub (staff, the board, admins).
+- `hub_reel_admin()`: Admin, Loading screen (wave149): the week's lines and today's news with ids and hidden flags, and the admins' updates of the last 30 days. Admins only.
+- `hub_reel_hide(bigint, boolean)`: Takes a loading screen line or news item off (p_hidden true) or puts it back. Admins only; logged in change_log.
+- `hub_news_add(text, text, date)`: Adds an admin's update to the news banner on the loading screen (under 140 characters; link a Hub page #... or an https address; shown until p_until, two weeks by default, 90 days at most). Admins only; logged in change_log.
+- `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
 

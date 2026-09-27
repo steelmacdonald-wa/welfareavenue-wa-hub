@@ -9,6 +9,9 @@
 // with a ten-day life. The hub shows them on the loading screen between
 // the fun facts and in the HR centre, where staff can post their own.
 // Actions: refresh (x-wa-secret or admin), add {person, text} (staff).
+// v1.1 (wave149, 27/09/26): shout-outs also rotate on the loading screen for everyone, so a task or project whose title is about
+// roles, leadership, handovers or anyone leaving is never named in one (the count stays), and a phrased line that mentions
+// such things falls back to the plain template.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -63,6 +66,7 @@ async function collect(): Promise<Item[]> {
   /* 1. projects finished */
   const { data: projs } = await svc.from('projects').select('id, name, department, status, leads, updated_at').in('status', ['done', 'complete', 'completed', 'finished']).gte('updated_at', since14);
   for (const p of (projs || []) as Array<{ id: number; name: string; department: string | null; leads: unknown; updated_at: string }>) {
+    if (PRIVATE.test(String(p.name || ''))) continue;
     const leads = Array.isArray(p.leads) ? (p.leads as unknown[]).map(String).filter(Boolean) : [];
     const lead = leads[0] ? findMember(all, leads[0]) : null;
     items.push({ source: 'project', ref: 'project:' + p.id, person: lead ? lead.name : (leads[0] || null), member_id: lead ? lead.id : null, team: p.department,
@@ -75,13 +79,13 @@ async function collect(): Promise<Item[]> {
   for (const t of (closed || []) as Array<{ updated_by: string | null; title: string }>) {
     const who = String(t.updated_by || '').trim(); if (!who || /^(AI|Chat|Hub|dashboard|automation)/i.test(who)) continue;
     const m = findMember(all, who); if (!m) continue;
-    (byCloser[m.name] = byCloser[m.name] || { n: 0, titles: [] }).n++; byCloser[m.name].titles.push(t.title);
+    (byCloser[m.name] = byCloser[m.name] || { n: 0, titles: [] }).n++; if (t.title && !PRIVATE.test(t.title)) byCloser[m.name].titles.push(t.title);
   }
   Object.keys(byCloser).sort((a, b) => byCloser[b].n - byCloser[a].n).slice(0, 3).forEach(name => {
     const c = byCloser[name]; if (c.n < 3) return; const m = findMember(all, name)!;
     items.push({ source: 'tasks', ref: 'tasks:' + m.id + ':' + wk, person: m.name, member_id: m.id, team: m.department,
-      facts: m.name + ' closed ' + c.n + ' tasks this week, including "' + c.titles.slice(0, 2).join('", "') + '"',
-      fallback: first(m.name) + ' closed ' + c.n + ' tasks this week, including "' + String(c.titles[0]).slice(0, 60) + '".' });
+      facts: m.name + ' closed ' + c.n + ' tasks this week' + (c.titles.length ? ', including "' + c.titles.slice(0, 2).join('", "') + '"' : ''),
+      fallback: first(m.name) + ' closed ' + c.n + ' tasks this week' + (c.titles.length ? ', including "' + String(c.titles[0]).slice(0, 60) + '".' : '.') });
   });
   /* 3. big weeks on the hub */
   const { data: cks } = await svc.from('hub_checkins').select('email, name, minutes').gte('started_at', since7).not('minutes', 'is', null);
@@ -100,16 +104,18 @@ async function collect(): Promise<Item[]> {
     const anniv = new Date(y, sd.getMonth(), sd.getDate(), 12); const diff = (anniv.getTime() - today.getTime()) / 86400000;
     if (years >= 1 && diff >= -1 && diff <= 7) items.push({ source: 'anniversary', ref: 'anniv:' + m.id + ':' + y, person: m.name, member_id: m.id, team: m.department, facts: m.name + ' marks ' + years + (years === 1 ? ' year' : ' years') + ' with Welfare Avenue on ' + niceDate(y + m.start_date.slice(4)), fallback: first(m.name) + ' marks ' + years + (years === 1 ? ' year' : ' years') + ' with Welfare Avenue on ' + niceDate(y + m.start_date.slice(4)) + '.' });
     const sinceStart = (today.getTime() - sd.getTime()) / 86400000;
-    if (sinceStart >= 0 && sinceStart <= 14) items.push({ source: 'welcome', ref: 'welcome:' + m.id, person: m.name, member_id: m.id, team: m.department, facts: m.name + ' joined ' + (DEPT[m.department || ''] || 'the team') + ' on ' + niceDate(m.start_date), fallback: 'Welcome ' + first(m.name) + ', who joined ' + (DEPT[m.department || ''] || 'the team') + ' this month.' });
+    if (sinceStart >= 0 && sinceStart <= 14 && ['fundraising', 'hr', 'marketing', 'opsmtl', 'opsto', 'progdev'].indexOf(String(m.department || '')) >= 0) items.push({ source: 'welcome', ref: 'welcome:' + m.id, person: m.name, member_id: m.id, team: m.department, facts: m.name + ' joined ' + (DEPT[m.department || ''] || 'the team') + ' on ' + niceDate(m.start_date), fallback: 'Welcome ' + first(m.name) + ', who joined ' + (DEPT[m.department || ''] || 'the team') + ' this month.' });
   }
-  /* 6. hires */
-  const { data: hired } = await svc.from('hub_candidates').select('id, name, role, updated_at').eq('status', 'hired').gte('updated_at', since14);
-  for (const c of (hired || []) as Array<{ id: number; name: string; role: string | null }>) {
+  /* 6. hires: no longer announced (v1.1, wave149 review): an accepted offer is not news for the loading screen, the role may be
+     sensitive, and the person is welcomed once they are on a team's roster (5.) */
+  const hired: unknown[] = [];
+  for (const c of hired as Array<{ id: number; name: string; role: string | null }>) {
     items.push({ source: 'hire', ref: 'hire:' + c.id, person: c.name, member_id: null, team: 'hr', facts: c.name + ' accepted our offer' + (c.role ? ' for ' + c.role : ''), fallback: first(c.name) + ' is joining us' + (c.role ? ' as ' + c.role : '') + '. Welcome aboard.' });
   }
   return items;
 }
 
+const PRIVATE = /\b(managers?|coordinators?|treasurer|secretary|head of|promot(ed|es|ing|ion)|co-?directors?|directors?|hired|hiring|new hire|joins as|joined as|recruited as|stepped down|transition\w*|succession|successors?|succeed(s|ed|ing)?|hand(ing|ed|s)?[ -]?overs?|handed over|tak(e|es|ing|en)[ -]over|took over|now leads?|step(s|ped|ping)?\s+(down|back|away|aside|into|up)|resign\w*|departures?|departing|departed|(leav(e|es|ing)|left) (us|wa|welfare|the (team|org|organi[sz]ation|charity|board|role|hub))|moving on|retir(e|es|ed|ing)\b|replacement (for|of)|appoint(ed|s|ing)\b|nominat\w*|elected|election|new (role|position|title|ed|ceo|chair|president|director|lead(er)?)|executive team|role change|change of role|leadership|delegat\w*|chair(man|person|woman)?|president|executive directors?|co-?eds?|ed|ceo|interim|farewell|goodbyes?|good luck|best of luck|next chapter|new chapter|last day|offboard\w*|disciplin\w*|terminat\w*|salar(y|ies)|payroll|d\u00e9part\w*|passation|d\u00e9mission\w*)\b/i;
 async function phrase(items: Item[]): Promise<Record<string, string>> {
   const out: Record<string, string> = {};
   if (!items.length) return out;
@@ -126,7 +132,7 @@ async function phrase(items: Item[]): Promise<Record<string, string>> {
     const body = await res.json();
     // deno-lint-ignore no-explicit-any
     const tu = (body.content || []).find((c: any) => c.type === 'tool_use');
-    for (const l of ((tu && tu.input && tu.input.lines) || []) as Array<{ id: string; text: string }>) { const t = String(l.text || '').replace(/—/g, ',').trim(); if (t && t.length <= 180) out[String(l.id)] = t; }
+    for (const l of ((tu && tu.input && tu.input.lines) || []) as Array<{ id: string; text: string }>) { const t = String(l.text || '').replace(/—/g, ',').trim(); if (t && t.length <= 180 && !PRIVATE.test(t)) out[String(l.id)] = t; }
   } catch (_) { /* templates then */ }
   return out;
 }
@@ -136,7 +142,7 @@ async function refresh(): Promise<{ added: number; seen: number; lines: string[]
   const refs = items.map(i => i.ref);
   const { data: have } = refs.length ? await svc.from('hub_shoutouts').select('ref').in('ref', refs) : { data: [] };
   const known = new Set(((have || []) as Array<{ ref: string }>).map(r => r.ref));
-  const fresh = items.filter(i => !known.has(i.ref));
+  const fresh = items.filter(i => !known.has(i.ref) && !PRIVATE.test(i.fallback || '') && !PRIVATE.test(i.facts || ''));
   const phrased = await phrase(fresh);
   const rows = fresh.map(i => ({ kind: 'auto', source: i.source, ref: i.ref, person: i.person, member_id: i.member_id, team: i.team, text: phrased[i.ref] || i.fallback, by: 'the hub', expires_at: new Date(Date.now() + 10 * 86400000).toISOString() }));
   if (rows.length) { const { error } = await svc.from('hub_shoutouts').insert(rows); if (error) throw new Error(error.message); }

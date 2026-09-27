@@ -205,7 +205,9 @@
     var top = Math.max.apply(null, list.map(function (x) { return Number(x[1]) || 0; })) || 1;
     return '<div class="b" style="--c:' + color + '"><h5>' + title + '</h5>' + list.map(function (x) {
       var nm = o.name ? o.name(x[0]) : x[0], pct = den ? Number(x[1]) / den * 100 : 0;
-      return '<div class="row"><div class="t"><span title="' + E(nm) + '">' + E(nm) + '</span><i style="width:' + Math.max(3, Number(x[1]) / top * 100).toFixed(1) + '%"></i></div><b title="' + E(num(x[1])) + '">' + (pct > 0 && pct < 1 ? pct.toFixed(1) : Math.round(pct)) + '%</b></div>';
+      /* wave149: hovering a bar shows the count behind the percentage */
+      var pc = (pct > 0 && pct < 1 ? pct.toFixed(1) : Math.round(pct)) + '%';
+      return '<div class="row" data-w149tip="' + E(nm + ': ' + Math.round(Number(x[1])).toLocaleString('en-CA') + ' (' + pc + ')') + '"><div class="t"><span>' + E(nm) + '</span><i style="width:' + Math.max(3, Number(x[1]) / top * 100).toFixed(1) + '%"></i></div><b>' + pc + '</b></div>';
     }).join('') + (note ? '<p class="w129note">' + note + '</p>' : '') + '</div>';
   }
   function audienceHtml(d) {

@@ -1,0 +1,298 @@
+/* =====================================================================
+   WA v149 the loading screen, the news banner, numbers on the Analytics graphs and the post photos (27/09/26)
+   =====================================================================
+   Steel (27/09/26): "On the loading page: I want you to put learnings, lessons, and milestones along with shoutouts. I've
+   been seeing more shoutouts. And refresh it every week. Also at the bottom, I'd like for you to add sort of like a news
+   banner of events that happened recently, updates that the organization should know about." "For the analytics graphs in
+   marketing, I'd like to be able to hover accross to and see numbers." "The photos from instagram posts don't show up."
+   "For attendance ... it should only be seen on the HR center or in one of the admin pages" (wave144 edited).
+   - The loading screen: 000_head_base's first-paint script rotates milestones, shout-outs, lessons learned, learnings and
+     fun facts in turn (one of each kind before any repeats, a random order each time) and runs the news banner along the
+     bottom. It can only use what this browser kept from the last visit, so after sign-in this segment reads
+     hub_reel_current() (this week's lines, rebuilt every Monday, and today's news, rebuilt every morning, by hub-reel) and
+     the live shout-outs into localStorage wa149reel. Signing out clears it (and wave116p's older wa116s).
+   - Admin, Loading screen (#w149card, admins): this week's lines and today's news, each can be taken off and put back
+     (hub_reel_hide); an update for the news banner (hub_news_add: under 140 characters, until a day); Rebuild now.
+   - Analytics: hovering across a graph (a tap and drag on a phone, or the arrow keys) shows a guide line, a dot on each
+     line and the numbers of that day, week or month for every platform, with the total. wave120 (the chart and the tile
+     lines) and wave147 (Google Search) hand their points in window.__w149ch; bars with data-w149tip show their counts.
+   - Post photos now come from Hub storage (social-pull v1.7, wa149_posts); one that cannot load shows the platform mark.
+   ===================================================================== */
+(function () {
+  if (window.__wa149) return; window.__wa149 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function isAdmin() { return mine().role === 'admin'; }
+  function signedIn() { try { return typeof db !== 'undefined' && !!db && typeof USER !== 'undefined' && !!USER && !!USER.email; } catch (e) { return false; } }
+  function dayLong(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }); } catch (e) { return String(iso || ''); } }
+  function ago(iso) { if (!iso) return ''; var m = Math.round((Date.now() - new Date(iso).getTime()) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' minutes ago'; var h = Math.round(m / 60); if (h < 36) return h + (h === 1 ? ' hour ago' : ' hours ago'); return Math.round(h / 24) + ' days ago'; }
+
+  var st = document.createElement('style'); st.id = 'w149css';
+  st.textContent = ''
+    /* the hover */
+    + '#w149tip{position:fixed;z-index:10050;display:none;pointer-events:none;min-width:150px;max-width:290px;background:' + INK + ';color:' + CREAM + ';border-radius:10px;padding:8px 11px;font:12.5px/1.4 ' + BODY + ';box-shadow:0 10px 26px rgba(0,0,0,.24);}'
+    + '#w149tip b{display:block;font:700 14px/1.2 ' + HEAD + ';letter-spacing:.3px;margin:0 0 5px;color:' + GOLD + ';}'
+    + '#w149tip .r{display:flex;align-items:center;gap:7px;padding:1px 0;}'
+    + '#w149tip .r i{width:8px;height:8px;border-radius:50%;flex:none;}#w149tip .r i.n{background:transparent;}'
+    + '#w149tip .r span{flex:1;color:rgba(255,250,242,.82);}#w149tip .r em{font-style:normal;font-weight:700;white-space:nowrap;}'
+    + '#w149tip .r.s{border-top:1px solid rgba(255,250,242,.2);margin-top:4px;padding-top:5px;}'
+    + '#w149guide{position:fixed;z-index:10040;display:none;pointer-events:none;width:0;border-left:1.5px dashed rgba(121,119,115,.8);}'
+    + '.w149dot{position:fixed;z-index:10045;display:none;pointer-events:none;width:11px;height:11px;margin:-5.5px 0 0 -5.5px;border-radius:50%;border:2px solid ' + CREAM + ';box-shadow:0 1px 4px rgba(0,0,0,.35);box-sizing:border-box;}'
+    + '[data-w149h]{cursor:crosshair;touch-action:pan-y;}'
+    + '[data-w149h]:focus{outline:2px solid ' + GOLD + ';outline-offset:3px;border-radius:4px;}[data-w149h]:focus:not(:focus-visible){outline:none;}'
+    + '#socialstats .chart .w149hint,#w147 .w149hint{font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin:4px 0 0;}'
+    /* Admin, Loading screen */
+    + '.w118adm[data-sec="loading"] ~ .card:not(#w149card){display:none !important;}.w118adm:not([data-sec="loading"]) ~ #w149card{display:none !important;}'
+    + '#w149card .top{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px;}'
+    + '#w149card .top p{flex:1 1 360px;margin:0;font-size:13.5px;line-height:1.55;color:var(--wa-text,' + INK + ');}'
+    + '#w149card .btn149{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.25);background:' + GREEN + ';color:' + CREAM + ';border-radius:999px;padding:7px 14px;font:600 13px ' + BODY + ';cursor:pointer;}'
+    + '#w149card .btn149.ghost{background:transparent;color:' + GREEN + ';}'
+    + '#w149card .btn149[disabled]{opacity:.55;cursor:default;}'
+    + '#w149card .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:12px 0 4px;}'
+    + '#w149card .col{border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:10px 12px;background:rgba(16,63,57,.025);}'
+    + '#w149card h4{font:700 11px ' + BODY + ';letter-spacing:1.3px;text-transform:uppercase;color:' + GREEN + ';margin:2px 0 8px;display:flex;gap:6px;align-items:center;}'
+    + '#w149card h4 .n{font-weight:600;color:var(--wa-muted,' + MUTED + ');letter-spacing:0;text-transform:none;}'
+    + '#w149card ul{list-style:none;margin:0;padding:0;}'
+    + '#w149card li{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:7px 0;border-bottom:1px solid rgba(16,63,57,.07);font-size:13px;line-height:1.45;}'
+    + '#w149card li:last-child{border-bottom:0;}'
+    + '#w149card li.off span{color:var(--wa-muted,' + MUTED + ');text-decoration:line-through;}'
+    + '#w149card li button{flex:none;border:0;background:none;color:' + GREEN + ';font:600 12px ' + BODY + ';cursor:pointer;text-decoration:underline;padding:0;}'
+    + '#w149card li.off button{color:' + FLAG + ';}'
+    + '#w149card li small{display:block;color:var(--wa-muted,' + MUTED + ');font-size:11.5px;margin-top:2px;}'
+    + '#w149card .sub{font:700 11px ' + BODY + ';letter-spacing:1.3px;text-transform:uppercase;color:' + GREEN + ';margin:16px 0 6px;}'
+    + '#w149card .news{border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:6px 12px;}'
+    + '#w149card .add{display:grid;grid-template-columns:minmax(0,1fr) 220px 150px auto;gap:8px;align-items:end;margin-top:10px;}'
+    + '#w149card .add label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w149card .add input{border:1px solid rgba(16,63,57,.2);border-radius:10px;padding:8px 10px;font:13px ' + BODY + ';background:var(--wa-card,' + CREAM + ');color:var(--wa-text,' + INK + ');}'
+    + '#w149card .add .cnt{font-size:11px;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w149card .note{font-size:12px;color:var(--wa-muted,' + MUTED + ');margin:12px 0 0;line-height:1.5;}'
+    + '#w149card .note a{color:' + GREEN + ';cursor:pointer;text-decoration:underline;}'
+    + '#w149card .empty{font-size:13px;color:var(--wa-muted,' + MUTED + ');padding:6px 0;}'
+    + '@media (max-width:900px){#w149card .grid{grid-template-columns:1fr;}#w149card .add{grid-template-columns:1fr;}}';
+  document.head.appendChild(st);
+
+  /* ---------- 1. the loading screen's cache ---------- */
+  /* the same words hub-reel leaves out (roles, leadership, anyone leaving, HR and pay, descriptions of the people we serve) */
+  var CONF = /\b(transition\w*|succession|successors?|succeed(s|ed|ing)?|hand(ing|ed|s)?[ -]?overs?|handed over|tak(e|es|ing|en)[ -]over|took over|now leads?|step(s|ped|ping)?\s+(down|back|away|aside|into|up)|resign\w*|departures?|departing|departed|(leav(e|es|ing)|left) (us|wa|welfare|the (team|org|organi[sz]ation|charity|board|role|hub))|moving on|retir(e|es|ed|ing)\b|replacement (for|of)|appoint(ed|s|ing)\b|nominat\w*|elected|election|new (role|position|title|ed|ceo|chair|president|director|lead(er)?)|executive team|role change|change of role|leadership|delegat\w*|chair(man|person|woman)?|president|executive directors?|co-?eds?|ed|ceo|interim|farewell|goodbyes?|good luck|best of luck|miss (you|him|her|them)|next chapter|new chapter|last day|exit|disciplin\w*|terminat\w*|fired|salar(y|ies)|payroll|intoxicat\w*|drunk|drugs?|aggress\w*|violen\w*|homeless|beneficiar(y|ies)|d\u00e9part\w*|passation|d\u00e9mission\w*)\b/i;
+  var cacheBusy = false;
+  async function refreshCache() {
+    if (!signedIn() || cacheBusy) return;
+    cacheBusy = true;
+    try {
+      var r = await db.rpc('hub_reel_current');
+      if (r && !r.error) {
+        var d = r.data || {}, sh = [];
+        try {
+          /* the Hub's own shout-outs only (kind auto): ones staff post stay in the HR centre */
+          var q = await db.from('hub_shoutouts').select('text').eq('active', true).eq('kind', 'auto').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(12);
+          sh = ((q && q.data) || []).map(function (x) { return String(x.text || '').trim(); }).filter(function (t) { return t && !CONF.test(t); });
+        } catch (e) { sh = []; }
+        var c = { v: 2, at: Date.now(), week: d.week || null, day: d.day || null,
+          lines: (d.lines || []).filter(function (x) { return x && x.t && /^(milestone|lesson|learning)$/.test(x.k); }).slice(0, 24).map(function (x) { return { k: x.k, t: String(x.t) }; }),
+          shouts: sh.slice(0, 12),
+          news: (d.news || []).map(function (n) { return n && n.t ? String(n.t) : ''; }).filter(Boolean).slice(0, 12) };
+        try { localStorage.setItem('wa149reel', JSON.stringify(c)); } catch (e) { /* private window: the fun facts show */ }
+      } else clearCache(); /* not allowed (a former member) or an error: nothing stays behind */
+    } catch (e) { clearCache(); }
+    cacheBusy = false;
+  }
+  function clearCache() { try { localStorage.removeItem('wa149reel'); localStorage.removeItem('wa116s'); } catch (e) { /* fine */ } }
+  if (typeof signOutAll === 'function') {
+    var __so149 = signOutAll;
+    signOutAll = async function () { clearCache(); return __so149.apply(this, arguments); };
+  }
+  try { if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') clearCache(); }); } catch (e) { /* fine */ }
+
+  /* ---------- 2. the hover on the Analytics graphs ---------- */
+  var tip = null, guide = null, dots = [], cur = null;
+  function ensure() {
+    if (tip && document.body.contains(tip)) return;
+    tip = document.createElement('div'); tip.id = 'w149tip'; tip.setAttribute('aria-hidden', 'true'); document.body.appendChild(tip);
+    guide = document.createElement('div'); guide.id = 'w149guide'; document.body.appendChild(guide);
+    dots = [];
+  }
+  function hide() { if (!tip) return; tip.style.display = 'none'; guide.style.display = 'none'; dots.forEach(function (d) { d.style.display = 'none'; }); cur = null; }
+  function entryOf(el) { var k = el.getAttribute('data-w149h'); var reg = window.__w149ch || {}; var x = reg[k]; return x && x.keys && x.keys.length ? x : null; }
+  function nearest(entry, vx) {
+    var ks = entry.keys, lo = 0, hi = ks.length - 1;
+    if (vx <= ks[0].x) return 0; if (vx >= ks[hi].x) return hi;
+    while (hi - lo > 1) { var mid = (lo + hi) >> 1; if (ks[mid].x < vx) lo = mid; else hi = mid; }
+    return (vx - ks[lo].x) <= (ks[hi].x - vx) ? lo : hi;
+  }
+  function place(el, entry, idx, clientY) {
+    ensure();
+    var r = el.getBoundingClientRect(); if (!r.width || !r.height) { hide(); return; }
+    var kk = entry.keys[idx]; var px = r.left + kk.x / entry.w * r.width;
+    guide.style.display = 'block'; guide.style.left = Math.round(px) + 'px'; guide.style.top = Math.round(r.top) + 'px'; guide.style.height = Math.round(r.height) + 'px';
+    var rows = []; try { rows = entry.rows(kk.k, kk) || []; } catch (e) { rows = []; }
+    var head = kk.k; try { head = entry.head ? entry.head(kk.k, kk) : kk.k; } catch (e) { /* the date as it is */ }
+    tip.innerHTML = '<b>' + E(head) + '</b>' + rows.map(function (x) { return '<div class="r' + (x.strong ? ' s' : '') + '">' + (x.color ? '<i style="background:' + E(x.color) + '"></i>' : '<i class="n"></i>') + '<span>' + E(x.label) + '</span><em>' + E(x.value) + '</em></div>'; }).join('');
+    tip.style.display = 'block';
+    var withY = rows.filter(function (x) { return x.y != null && isFinite(x.y); });
+    while (dots.length < withY.length) { var dd = document.createElement('div'); dd.className = 'w149dot'; document.body.appendChild(dd); dots.push(dd); }
+    dots.forEach(function (d, i) { var x = withY[i]; if (!x) { d.style.display = 'none'; return; } d.style.display = 'block'; d.style.left = Math.round(px) + 'px'; d.style.top = Math.round(r.top + x.y / entry.h * r.height) + 'px'; d.style.background = x.color || GREEN; });
+    var tw = tip.offsetWidth, th = tip.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+    var left = px + 16; if (left + tw > vw - 8) left = px - 16 - tw; if (left < 8) left = 8;
+    var top = (clientY != null ? clientY : r.top + r.height / 2) - th / 2; top = Math.max(8, Math.min(vh - th - 8, top));
+    tip.style.left = Math.round(left) + 'px'; tip.style.top = Math.round(top) + 'px';
+    cur = { el: el, idx: idx };
+  }
+  function showTip(el, x, y) {
+    ensure(); guide.style.display = 'none'; dots.forEach(function (d) { d.style.display = 'none'; });
+    tip.innerHTML = E(el.getAttribute('data-w149tip')); tip.style.display = 'block';
+    var tw = tip.offsetWidth, th = tip.offsetHeight;
+    var left = Math.max(8, Math.min(window.innerWidth - tw - 8, x + 12)), top = y - th - 12; if (top < 8) top = y + 18;
+    tip.style.left = Math.round(left) + 'px'; tip.style.top = Math.round(top) + 'px'; cur = { el: el, idx: -1 };
+  }
+  function move(e) {
+    var t = e.target, el = t && t.closest ? t.closest('[data-w149h]') : null;
+    if (!el) {
+      var bt = t && t.closest ? t.closest('[data-w149tip]') : null;
+      if (bt) { showTip(bt, e.clientX, e.clientY); return; }
+      if (cur) hide(); return;
+    }
+    var entry = entryOf(el); if (!entry) { if (cur) hide(); return; }
+    var r = el.getBoundingClientRect(); if (!r.width) return;
+    place(el, entry, nearest(entry, (e.clientX - r.left) / r.width * entry.w), e.clientY);
+  }
+  document.addEventListener('pointermove', function (e) { if (e.pointerType === 'touch' && !cur) return; move(e); }, { passive: true });
+  document.addEventListener('pointerdown', function (e) { if (e.pointerType === 'touch') move(e); }, { passive: true });
+  document.documentElement.addEventListener('mouseleave', hide);
+  window.addEventListener('scroll', function () { if (cur) hide(); }, true);
+  window.addEventListener('resize', function () { if (cur) hide(); });
+  window.addEventListener('hashchange', hide);
+  document.addEventListener('keydown', function (e) {
+    var el = document.activeElement; if (!el || !el.hasAttribute || !el.hasAttribute('data-w149h')) return;
+    var entry = entryOf(el); if (!entry) return;
+    var n = entry.keys.length, idx = cur && cur.el === el && cur.idx >= 0 ? cur.idx : n - 1;
+    if (e.key === 'ArrowLeft') idx = Math.max(0, idx - 1); else if (e.key === 'ArrowRight') idx = Math.min(n - 1, idx + 1);
+    else if (e.key === 'Home') idx = 0; else if (e.key === 'End') idx = n - 1; else if (e.key === 'Escape') { hide(); return; } else return;
+    e.preventDefault(); place(el, entry, idx, null);
+  });
+  document.addEventListener('focusin', function (e) { var el = e.target; if (el && el.hasAttribute && el.hasAttribute('data-w149h')) { var entry = entryOf(el); if (entry) place(el, entry, entry.keys.length - 1, null); } });
+  document.addEventListener('focusout', function (e) { var el = e.target; if (el && el.hasAttribute && el.hasAttribute('data-w149h')) hide(); });
+  /* a post photo that cannot load shows the platform mark (older posts whose copy failed) */
+  document.addEventListener('error', function (e) {
+    var img = e.target; if (!img || img.tagName !== 'IMG' || !img.closest) return;
+    var th = img.closest('#socialstats .post .th');
+    if (th) { var mk = th.querySelector('.mk'); var big = document.createElement('span'); big.className = 'big'; big.textContent = mk ? mk.textContent : ''; img.replaceWith(big); return; }
+    if (img.closest('#socialstats')) img.remove();
+  }, true);
+
+  /* ---------- 3. Admin, Loading screen ---------- */
+  var A = { data: null, busy: false, err: null, rebuilding: false, adding: false, draft: '', link: '', until: '' };
+  function addSection() {
+    try {
+      var W = window.__wa118; if (!W || !Array.isArray(W.ADMIN)) return false;
+      if (!W.ADMIN.some(function (a) { return a[0] === 'loading'; })) {
+        var at = W.ADMIN.length; W.ADMIN.forEach(function (a, i) { if (a[0] === 'change') at = i; });
+        W.ADMIN.splice(at, 0, ['loading', 'Loading screen', '#w149card', 'What shows while the Hub opens: this week’s milestones, lessons and learnings, the shout-outs, and the news banner along the bottom.']);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+  addSection();
+  function onLoading() { return /^#adminpanel\/loading/.test(location.hash || ''); }
+  function cardEl() {
+    var panel = document.getElementById('adminpanel'); if (!panel || !isAdmin()) return null;
+    var c = document.getElementById('w149card');
+    if (!c) { c = document.createElement('div'); c.className = 'card'; c.id = 'w149card'; c.innerHTML = '<div id="w149"></div>'; panel.appendChild(c); }
+    return c;
+  }
+  async function loadAdmin() {
+    if (A.busy) return; A.busy = true; A.err = null;
+    try { var r = await db.rpc('hub_reel_admin'); if (r.error) throw r.error; A.data = r.data || {}; }
+    catch (e) { A.err = (e && e.message) || String(e); }
+    A.busy = false; paintAdmin();
+  }
+  function lineLi(x, kind) {
+    var src = { wa_lessons: 'Our story, lessons learned', wa_history: 'Our story', goal_wins: 'a win from a meeting', form_summaries: 'what volunteers said', social_notes: 'Analytics insights', search_top: 'Google Search', volunteer_events: 'the volunteering calendar', fund_events: 'fundraising events', team_members: 'the roster', admin: 'an admin' }[x.source] || '';
+    return '<li class="' + (x.hidden ? 'off' : '') + '"><span>' + E(x.text) + (src || x.hidden_by ? '<small>' + E(src ? 'From ' + src : '') + (x.hidden ? (src ? ' · ' : '') + 'taken off' + (x.hidden_by ? ' by ' + E(String(x.hidden_by).split('@')[0]) : '') : '') + '</small>' : '') + '</span><button type="button" data-w149hide="' + E(x.id) + '" data-on="' + (x.hidden ? '0' : '1') + '">' + (x.hidden ? 'Put back' : 'Take off') + '</button></li>';
+  }
+  function paintAdmin() {
+    var c = cardEl(); if (!c) return;
+    var host = document.getElementById('w149'); if (!host) return;
+    var d = A.data;
+    if (!d) { host.innerHTML = '<p class="empty">' + (A.err ? 'The loading screen could not load: ' + E(A.err) : 'Loading…') + '</p>'; return; }
+    var lines = d.lines || [];
+    var col = function (kind, title) { var xs = lines.filter(function (x) { return x.kind === kind; }); return '<div class="col"><h4>' + title + ' <span class="n">' + xs.filter(function (x) { return !x.hidden; }).length + '</span></h4>' + (xs.length ? '<ul>' + xs.map(function (x) { return lineLi(x, kind); }).join('') + '</ul>' : '<p class="empty">None this week.</p>') + '</div>'; };
+    var news = d.news || [], ups = d.updates || [];
+    var html = '<div class="top"><p>While the Hub opens, the loading screen rotates this week’s milestones, lessons learned and learnings with the shout-outs and fun facts, and the news banner runs along the bottom. The lines are rebuilt every Monday and the news every morning' + (d.built_at ? ' (lines built ' + E(ago(d.built_at)) + (d.news_at ? ', news ' + E(ago(d.news_at)) : '') + ')' : '') + '. Anything taken off here stays off (it does not come back in later weeks), and each person\u2019s loading screen catches up the next time they open the Hub. Lines about roles, leadership changes, anyone leaving or HR matters are filtered out; take off anything that slips through.</p>'
+      + '<button type="button" class="btn149 ghost" data-w149rebuild="1"' + (A.rebuilding ? ' disabled' : '') + '>' + (A.rebuilding ? 'Rebuilding…' : 'Rebuild now') + '</button></div>'
+      + '<div class="grid">' + col('milestone', 'Milestones') + col('lesson', 'Lessons learned') + col('learning', 'Learnings') + '</div>'
+      + '<div class="sub">News banner' + (d.day ? ', ' + E(dayLong(d.day)) : '') + '</div>'
+      + '<div class="news">' + (ups.filter(function (u) { return u.live; }).length || news.length
+        ? '<ul>' + ups.filter(function (u) { return u.live; }).map(function (u) { return '<li><span>' + E(u.text) + '<small>Your update' + (u.by ? ' from ' + E(String(u.by).split('@')[0]) : '') + (u.until ? ', until ' + E(dayLong(u.until)) : '') + '</small></span><button type="button" data-w149hide="' + E(u.id) + '" data-on="1">Take down</button></li>'; }).join('') + news.map(function (x) { return lineLi(x, 'news'); }).join('') + '</ul>'
+        : '<p class="empty">Nothing on the news banner today. Add an update below.</p>')
+      + '<div class="add"><label>Add an update to the news banner <input type="text" id="w149t" maxlength="140" placeholder="Holiday drive sign-ups open on 1 November" value="' + E(A.draft) + '"><span class="cnt" id="w149c">' + (140 - A.draft.length) + ' characters left</span></label>'
+      + '<label>Link (optional) <input type="text" id="w149l" placeholder="#fundevents or https://" value="' + E(A.link) + '"></label>'
+      + '<label>Show until <input type="date" id="w149u" value="' + E(A.until || '') + '"></label>'
+      + '<button type="button" class="btn149" data-w149add="1"' + (A.adding ? ' disabled' : '') + '>' + (A.adding ? 'Adding…' : 'Add') + '</button></div></div>'
+      + (ups.filter(function (u) { return !u.live; }).length ? '<div class="sub">Earlier updates</div><div class="news"><ul>' + ups.filter(function (u) { return !u.live; }).slice(0, 8).map(function (u) { return '<li class="off"><span>' + E(u.text) + '<small>' + (u.hidden ? 'Taken down' : 'Ended ' + E(dayLong(u.until))) + '</small></span></li>'; }).join('') + '</ul></div>' : '')
+      + '<p class="note">Shout-outs are written every morning from finished projects, big weeks and anniversaries; take one down in the HR centre. <a data-w149go="#hrcentre">Open the HR centre</a></p>';
+    if (host.__h !== html) { host.innerHTML = html; host.__h = html; }
+  }
+  function showAdmin() { if (!isAdmin() || !onLoading()) return; if (!cardEl()) return; paintAdmin(); loadAdmin(); }
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.id) return;
+    if (t.id === 'w149t') { A.draft = t.value; var c = document.getElementById('w149c'); if (c) c.textContent = (140 - t.value.length) + ' characters left'; }
+    else if (t.id === 'w149l') A.link = t.value; else if (t.id === 'w149u') A.until = t.value;
+  });
+  document.addEventListener('click', async function (e) {
+    var x = e.target; if (!x || !x.closest) return;
+    var el;
+    if ((el = x.closest('#w149card [data-w149hide]'))) {
+      e.preventDefault(); var id = Number(el.getAttribute('data-w149hide')), on = el.getAttribute('data-on') === '1';
+      el.disabled = true;
+      try { var r = await db.rpc('hub_reel_hide', { p_id: id, p_hidden: on }); if (r.error) throw r.error; toastS(on ? 'Taken off the loading screen' : 'Back on the loading screen'); }
+      catch (e2) { toastS('Could not change it: ' + ((e2 && e2.message) || e2)); }
+      await loadAdmin(); refreshCache(); return;
+    }
+    if ((el = x.closest('#w149card [data-w149add]'))) {
+      e.preventDefault(); var text = (A.draft || '').trim();
+      if (text.length < 3) { toastS('Write the update first'); return; }
+      A.adding = true; paintAdmin();
+      try { var r2 = await db.rpc('hub_news_add', { p_text: text, p_link: (A.link || '').trim() || null, p_until: A.until || null }); if (r2.error) throw r2.error; A.draft = ''; A.link = ''; A.until = ''; toastS('Added to the news banner'); }
+      catch (e3) { toastS('Could not add it: ' + ((e3 && e3.message) || e3)); }
+      A.adding = false; await loadAdmin(); refreshCache(); return;
+    }
+    if ((el = x.closest('#w149card [data-w149rebuild]'))) {
+      e.preventDefault(); if (A.rebuilding) return; A.rebuilding = true; paintAdmin();
+      try { var r3 = await db.functions.invoke('hub-reel', { body: { action: 'build', force: true } }); if (r3.error) throw r3.error; var dd = r3.data || {}; if (dd.error) throw new Error(dd.error); toastS('Rebuilt: ' + ((dd.reel && dd.reel.lines) || 0) + ' lines and ' + ((dd.news && dd.news.news) || 0) + ' news'); }
+      catch (e4) { toastS('Could not rebuild just now: ' + ((e4 && e4.message) || e4)); }
+      A.rebuilding = false; await loadAdmin(); refreshCache(); return;
+    }
+    if ((el = x.closest('#w149card [data-w149go]'))) { e.preventDefault(); location.hash = el.getAttribute('data-w149go'); }
+  });
+  window.addEventListener('hashchange', function () { setTimeout(showAdmin, 60); });
+  if (typeof showPanel === 'function') {
+    var __sp149 = showPanel;
+    showPanel = function (id) { var out = __sp149.apply(this, arguments); try { if (id === 'adminpanel') setTimeout(showAdmin, 80); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* ---------- 4. the tours: the Admin tour gets a stop ---------- */
+  function addTours() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T || !T.adminpanel) return;
+      var s = T.adminpanel.steps || [];
+      if (!s.some(function (x) { return x.s === '#w149card'; })) {
+        var at = s.length; s.forEach(function (x, i) { if (x.s === '#w96card') at = i; });
+        s.splice(at, 0, { s: '#w149card', t: 'Loading screen', p: 'What everyone sees while the Hub opens: this week’s milestones, lessons and learnings (rebuilt every Monday) with the shout-outs, and the news banner along the bottom (rebuilt every morning). Take a line off, or add an update for the banner.', opt: 1, hash: '#adminpanel/loading' });
+      }
+      var nav = s.filter(function (x) { return x.s === '#adminpanel nav.w118adm'; })[0];
+      if (nav && nav.p.indexOf('loading screen') < 0) nav.p = nav.p.replace('and changing the Hub', 'the loading screen, and changing the Hub');
+    } catch (e) { /* fine */ }
+  }
+  addTours(); setTimeout(addTours, 1500);
+
+  /* ---------- boot ---------- */
+  if (typeof startApp === 'function') {
+    var __sa149 = startApp;
+    startApp = async function () { var out = await __sa149.apply(this, arguments); try { if (!signedIn() || mine().role === 'blocked') clearCache(); else setTimeout(refreshCache, 5000); setTimeout(showAdmin, 900); } catch (e) { /* fine */ } return out; };
+  }
+  window.w149 = { refresh: refreshCache, clear: clearCache, admin: function () { return A; }, hide: hide };
+})();

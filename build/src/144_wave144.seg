@@ -12,6 +12,10 @@
    - the Board overview: how many directors came to the last board meeting, and each director's board meetings this year.
    Someone counts as there after three minutes on the call; meeting notetakers are left out; a meeting with no call on Meet
    (in person, or cancelled) is not counted. The team page and HR centre tours gain a step.
+   wave149 (27/09/26), Steel: "for attendance, I dont think it should be on the department overview page. I think it should
+   only be seen on the HR center or in one of the admin pages". The team pages and the Board overview no longer show it (and
+   the database only hands it to the admins and the Executive profile, wa149_attendance); the HR centre card gains each
+   team's last eight meetings (click a team) and the board meetings.
    ===================================================================== */
 (function () {
   if (window.__wa144) return; window.__wa144 = true;
@@ -81,6 +85,10 @@
     + '.w144btn svg{width:14px;height:14px;}'
     + '.w144sub{font:700 11px ' + BODY + ';letter-spacing:1.2px;text-transform:uppercase;color:' + GREEN + ';margin:14px 0 6px;}'
     + '.w144list{margin:0;padding:0;list-style:none;font-size:13px;}'
+    + '.w144tbl tr.on td{background:rgba(16,63,57,.05);}'
+    + '.w144teamdet{border:1px solid rgba(16,63,57,.12);border-radius:12px;padding:4px 12px 10px;margin:0 0 12px;}'
+    + '.w144teamdet .w144sub{margin-top:10px;display:flex;gap:10px;align-items:center;}'
+    + '.w144teamdet .w144sub .lnk{margin-left:auto;font:600 12px ' + BODY + ';letter-spacing:0;text-transform:none;color:' + GREEN + ';cursor:pointer;text-decoration:underline;}'
     + '.w144list li{padding:5px 0;border-bottom:1px solid rgba(16,63,57,.06);display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;}'
     + '.w144list li span{color:var(--wa-muted,' + MUTED + ');font-size:12px;}'
     + '.w144list li a{color:var(--wa-text,' + INK + ');font-weight:600;cursor:pointer;text-decoration:none;}'
@@ -200,9 +208,10 @@
     return '<div class="w144det">' + line + (came.length ? '<br>Came: ' + names(came) + '.' : '')
       + (missed.length ? '<br><span class="miss">Not on the call: ' + missed.map(function (r) { return E(firstName(r)) + (r.rsvp === 'declined' ? ' (declined)' : ''); }).join(', ') + '.</span>' : '') + '</div>';
   }
-  function teamCardHtml(d) {
+  function teamCardHtml(d, inHR) {
     var all = teamMeetings(d);
-    if (!all.length) return '<h3>Meeting attendance</h3><p class="w116empty">No team meeting on the hub calendar yet. When the team meeting invites hub@welfareavenue.com, who came to each one shows here.</p>';
+    var head = inHR ? '<div class="w144sub">' + E(label(d)) + ': the last eight meetings <a class="lnk" data-w144team="' + E(d) + '">Close</a></div>' : '<h3>Meeting attendance</h3>';
+    if (!all.length) return head + '<p class="w116empty">No team meeting on the hub calendar yet. When the team meeting invites hub@welfareavenue.com, who came to each one shows here.</p>';
     var ms = all.slice(Math.max(0, all.length - WINDOW));
     var r = rate(ms), withPeople = seesPeople(ms);
     var selId = M.sel[d]; var sel = ms.filter(function (m) { return m.id === selId; })[0] || ms.slice().reverse().filter(function (m) { return m.held; })[0] || ms[ms.length - 1];
@@ -215,7 +224,7 @@
       : 'None of the last ' + ms.length + ' meetings had a call on Meet.';
     var myP = people(ms).filter(function (p) { return p.key === myEmail() || (me() && String(p.member_id) === String(me().id)); })[0];
     if (myP && myP.of) lead += ' You came to ' + myP.came + ' of the ' + myP.of + ' you were invited to.';
-    var html = '<h3>Meeting attendance <span class="lnk" data-w144help="1" title="How it is counted">from Google Meet</span></h3><p class="lead">' + lead + '</p>' + strip + detailHtml(sel, withPeople, d);
+    var html = (inHR ? head : '<h3>Meeting attendance <span class="lnk" data-w144help="1" title="How it is counted">from Google Meet</span></h3>') + '<p class="lead">' + lead + '</p>' + strip + detailHtml(sel, withPeople, d);
     if (withPeople) {
       var ps = people(ms), team = ps.filter(function (p) { return p.home && p.expectedSome; }), others = ps.filter(function (p) { return !p.home && p.expectedSome; }), visitors = ps.filter(function (p) { return !p.expectedSome && p.extra; });
       if (!team.length) { team = others; others = []; }
@@ -237,17 +246,8 @@
   function curTeam() { try { var c = window.W116 && W116.cur; return c && c.page === 'overview' ? c.d : null; } catch (e) { return null; } }
   /* the card shows when the team has meetings this person can read, and always for the admins and the Executive profile */
   function wantTeam(d) { return teamMeetings(d).length > 0 || (isEditor() && !!LABELS[d]); }
-  function paintTeam() {
-    var d = curTeam(); if (!d) return;
-    var meet = document.getElementById('w116meet'); if (!meet) return;
-    if (!M.ok) { (M.busy || load()).then(function () { if (M.ok) paintTeam(); }); return; }
-    var el = document.getElementById('w144team');
-    if (!wantTeam(d)) { if (el) el.remove(); return; }
-    if (!el) { el = document.createElement('div'); el.className = 'w116card w144'; el.id = 'w144team'; el.__h = ''; meet.insertAdjacentElement('afterend', el); }
-    if (el.getAttribute('data-d') !== d) { el.setAttribute('data-d', d); el.__h = ''; }
-    var html = teamCardHtml(d);
-    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
-  }
+  /* wave149: attendance is no longer on the team pages; a card left from before is taken away */
+  function paintTeam() { var el = document.getElementById('w144team'); if (el) el.remove(); }
 
   /* ---------- the HR centre card (admins and the Executive profile) ---------- */
   function trendHtml(now, before) {
@@ -263,8 +263,8 @@
       var ms = teamMeetings(d), cur = ms.filter(function (m) { return t(m.scheduled_start) > now - W8; }), prev = ms.filter(function (m) { var x = t(m.scheduled_start); return x <= now - W8 && x > now - 2 * W8; });
       var rc = rate(cur), rp = rate(prev), inv = 0, invC = 0;
       cur.forEach(function (m) { if (m.held) { inv += m.expected_n; invC += m.expected_came_n; } });
-      if (!ms.length) return '<tr><td><a data-w144go="#team/' + E(d) + '">' + E(label(d)) + '</a></td><td colspan="4"><span class="w144note">No team meeting on the hub calendar: invite hub@welfareavenue.com to it.</span></td></tr>';
-      return '<tr><td><a data-w144go="#team/' + E(d) + '">' + E(label(d)) + '</a></td><td>' + (cur.length ? rc.held + ' of ' + cur.length : '<span class="w144note">none</span>') + '</td><td class="num">' + (rc.p != null ? rc.p + '%' : '–') + '</td><td>' + trendHtml(rc.p, rp.p) + '</td><td class="opt">' + (inv ? pct(invC, inv) + '%' : '–') + '</td></tr>';
+      if (!ms.length) return '<tr' + (M.sel.team === d ? ' class="on"' : '') + '><td><a data-w144team="' + E(d) + '" title="Show the team’s meetings">' + E(label(d)) + '</a></td><td colspan="4"><span class="w144note">No team meeting on the hub calendar: invite hub@welfareavenue.com to it.</span></td></tr>';
+      return '<tr' + (M.sel.team === d ? ' class="on"' : '') + '><td><a data-w144team="' + E(d) + '" title="Show the last eight meetings and who came">' + E(label(d)) + '</a></td><td>' + (cur.length ? rc.held + ' of ' + cur.length : '<span class="w144note">none</span>') + '</td><td class="num">' + (rc.p != null ? rc.p + '%' : '–') + '</td><td>' + trendHtml(rc.p, rp.p) + '</td><td class="opt">' + (inv ? pct(invC, inv) + '%' : '–') + '</td></tr>';
     }).join('');
     var lead = M.meetings.filter(function (m) { return m.kind === 'leadership' && when(m) && t(when(m)) <= now; }).sort(function (a, b) { return t(when(b)) - t(when(a)); }).slice(0, 4);
     var leadHtml = lead.map(function (m) {
@@ -281,11 +281,23 @@
     var flagHtml = flagged.map(function (f) {
       return '<li><a' + (f.p.member_id != null ? ' data-w144person="' + E(f.p.member_id) + '"' : '') + '>' + E(f.p.name) + '</a><span>' + E(label(f.d)) + ' · missed the last ' + f.p.run + (f.p.last ? ' · last came ' + E(dshort(f.p.last)) : ' · not at any meeting on record') + '</span></li>';
     }).join('');
+    /* wave149: the board meetings (they used to show on the Board overview) */
+    var boards = M.meetings.filter(function (m) { return m.kind === 'board' && m.scheduled_start && t(m.scheduled_start) <= now; }).sort(function (a, b) { return t(b.scheduled_start) - t(a.scheduled_start); });
+    var boardHtml = '';
+    if (boards.length) {
+      var lastB = boards[0], yr = boards.filter(function (m) { return m.held && t(m.scheduled_start) > now - 365 * 86400000; }), dirs = {}, dOrder = [];
+      yr.forEach(function (m) { rowsOf(m).forEach(function (r) { if (!r.expected || r.director_id == null) return; var k = String(r.director_id); if (!dirs[k]) { dirs[k] = { name: r.name || r.person, c: 0, n: 0 }; dOrder.push(k); } dirs[k].n++; if (r.came) dirs[k].c++; }); });
+      dOrder.sort(function (a, b) { return String(dirs[a].name).localeCompare(String(dirs[b].name)); });
+      boardHtml = '<div class="w144sub">Board meetings</div><ul class="w144list"><li><b>' + E(lastB.title || 'Last board meeting') + '</b><span>' + E(dshort(lastB.scheduled_start)) + ' · ' + (lastB.held ? lastB.expected_came_n + ' of ' + lastB.expected_n + ' directors came' : 'no call found on Meet') + '</span></li>'
+        + dOrder.map(function (k) { var x = dirs[k]; return '<li>' + E(x.name) + '<span>' + x.c + ' of ' + x.n + ' in the last twelve months</span></li>'; }).join('') + '</ul>';
+    }
+    var teamDet = M.sel.team ? '<div class="w144teamdet">' + teamCardHtml(M.sel.team, true) + '</div>' : '';
     var stt = M.state;
     return '<h2>Meeting attendance</h2><div class="w144top"><p class="read">Who came to each team’s meetings on Google Meet over the last eight weeks, against the eight weeks before. Team came is the team’s own people among those invited; invited came counts everyone on the invite.</p>'
       + '<button type="button" class="w144btn" data-w144sync="1"' + (M.syncing ? ' disabled' : '') + '>' + I('refresh') + (M.syncing ? ' Refreshing…' : ' Refresh now') + '</button></div>'
-      + (rows ? '<table class="w144tbl"><thead><tr><th>Team</th><th>Meetings with a call</th><th>Team came</th><th>Trend</th><th class="opt">Invited came</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="w116empty">No team meeting on the hub calendar yet.</p>')
+      + (rows ? '<table class="w144tbl"><thead><tr><th>Team</th><th>Meetings with a call</th><th>Team came</th><th>Trend</th><th class="opt">Invited came</th></tr></thead><tbody>' + rows + '</tbody></table>' + teamDet : '<p class="w116empty">No team meeting on the hub calendar yet.</p>')
       + (leadHtml ? '<div class="w144sub">Leadership meetings</div><ul class="w144list">' + leadHtml + '</ul>' : '')
+      + boardHtml
       + '<div class="w144sub">Worth a check-in</div>' + (flagHtml ? '<ul class="w144list">' + flagHtml + '</ul><p class="w144note">Missed their own team’s last three meetings with a call. A kind word first: people step back for many reasons.</p>' : '<p class="w144note">No one has missed their team’s last three meetings.</p>')
       + '<p class="w144note">From the Google Meet log, every six hours. Someone counts as there after three minutes on the call; notetakers are left out; a meeting with no call on Meet is not counted.' + (stt && stt.last_run_at ? ' Last read ' + E(dlong(stt.last_run_at)) + (stt.last_ok === false ? ' (it failed: ' + E(String(stt.note || '').slice(0, 120)) + ')' : '') + '.' : '') + '</p>';
   }
@@ -305,39 +317,8 @@
     if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
   }
 
-  /* ---------- the Board overview: the last meeting and each director ---------- */
-  function boardState() { try { return window.w126 && typeof w126.state === 'function' ? w126.state() : null; } catch (e) { return null; } }
-  function paintBoard() {
-    var gov = document.getElementById('w126gov'); if (!gov) return;
-    if (!M.ok) { (M.busy || load()).then(function () { if (M.ok) paintBoard(); }); return; }
-    var now = Date.now();
-    var boards = M.meetings.filter(function (m) { return m.kind === 'board' && m.scheduled_start && t(m.scheduled_start) <= now; }).sort(function (a, b) { return t(b.scheduled_start) - t(a.scheduled_start); });
-    if (!boards.length) return;
-    /* the last meeting: its cell in the meetings card */
-    var B = boardState(), bm = (B && B.data && B.data.meetings) || [];
-    var last = bm.filter(function (x) { return x.meets_at && x.kind !== 'strategy' && t(x.meets_at) < now && x.status !== 'cancelled'; }).sort(function (a, b) { return t(b.meets_at) - t(a.meets_at); })[0];
-    var cell = gov.querySelector('.w126meet > div:nth-child(3)');
-    if (cell && last) {
-      var row = boards.filter(function (m) { return String(m.board_meeting_id) === String(last.id); })[0];
-      var txt = row ? (row.held ? row.expected_came_n + ' of ' + row.expected_n + ' directors came' : 'No call found on Meet') : '';
-      var span = cell.querySelector('.w144att');
-      if (!span) { span = document.createElement('span'); span.className = 'w144att'; cell.appendChild(span); }
-      if (span.textContent !== txt) span.textContent = txt;
-      span.hidden = !txt;
-    }
-    /* each director: board meetings in the last twelve months */
-    var yr = boards.filter(function (m) { return m.held && t(m.scheduled_start) > now - 365 * 86400000; });
-    gov.querySelectorAll('.w126dir[data-w126dir]').forEach(function (card) {
-      var id = card.getAttribute('data-w126dir'), c = 0, n = 0;
-      yr.forEach(function (m) { rowsOf(m).forEach(function (r) { if (String(r.director_id) === String(id) && r.expected) { n++; if (r.came) c++; } }); });
-      var ft = card.querySelector('.ft'); if (!ft) return;
-      var txt = n ? 'Board meetings: ' + c + ' of ' + n : '';
-      var span = ft.querySelector('.w144b');
-      if (!span) { span = document.createElement('span'); span.className = 'w144b'; span.title = 'Board meetings with a call on Meet in the last twelve months'; ft.appendChild(span); }
-      if (span.textContent !== txt) span.textContent = txt;
-      span.hidden = !n;
-    });
-  }
+  /* ---------- the Board overview: wave149 took attendance off it (it is in the HR centre card); leftovers go ---------- */
+  function paintBoard() { document.querySelectorAll('#w126gov .w144att, #w126gov .w144b').forEach(function (x) { x.remove(); }); }
 
   /* ---------- wiring ---------- */
   function paintAll() { try { paintTeam(); } catch (e) { /* fine */ } try { paintHR(); } catch (e) { /* fine */ } try { paintBoard(); } catch (e) { /* fine */ } }
@@ -349,21 +330,15 @@
     obs[id].observe(sec, { childList: true, subtree: true });
   }
   function watchAll() {
-    watch('team', paintTeam, function () { var d = curTeam(); return !!(d && M.ok && document.getElementById('w116meet') && !document.getElementById('w144team') && wantTeam(d)); });
     watch('hrcentre', paintHR, function () { return isEditor() && !document.getElementById('w144hr'); });
-    watch('governance', paintBoard, function () {
-      var g = document.getElementById('w126gov'); if (!g || !M.meetings.some(function (m) { return m.kind === 'board'; })) return false;
-      var c = g.querySelector('.w126meet > div:nth-child(3)'); if (c && !c.querySelector('.w144att')) return true;
-      var fts = g.querySelectorAll('.w126dir .ft'); for (var i = 0; i < fts.length; i++) if (!fts[i].querySelector('.w144b')) return true;
-      return false;
-    });
   }
   document.addEventListener('click', function (e) {
     var x = e.target; if (!x || !x.closest) return;
     var el;
-    if ((el = x.closest('[data-w144m]'))) { e.preventDefault(); var d = el.getAttribute('data-d'); M.sel[d] = el.getAttribute('data-w144m'); paintTeam(); return; }
-    if ((el = x.closest('[data-w144more]'))) { e.preventDefault(); var k = el.getAttribute('data-w144more'); M.more[k] = !M.more[k]; paintTeam(); return; }
-    if ((el = x.closest('[data-w144help]'))) { e.preventDefault(); var n = document.querySelector('#w144team [data-w144note]'); if (n) n.hidden = !n.hidden; return; }
+    if ((el = x.closest('[data-w144m]'))) { e.preventDefault(); var d = el.getAttribute('data-d'); M.sel[d] = el.getAttribute('data-w144m'); paintHR(); return; }
+    if ((el = x.closest('[data-w144more]'))) { e.preventDefault(); var k = el.getAttribute('data-w144more'); M.more[k] = !M.more[k]; paintHR(); return; }
+    if ((el = x.closest('[data-w144help]'))) { e.preventDefault(); var box = el.closest('.w144'), n = box && box.querySelector('[data-w144note]'); if (n) n.hidden = !n.hidden; return; }
+    if ((el = x.closest('[data-w144team]'))) { e.preventDefault(); var tm = el.getAttribute('data-w144team'); M.sel.team = M.sel.team === tm ? null : tm; paintHR(); return; }
     if ((el = x.closest('[data-w144lm]'))) { e.preventDefault(); var id = el.getAttribute('data-w144lm'); M.sel.lm = M.sel.lm === id ? null : id; paintHR(); return; }
     if ((el = x.closest('[data-w144go]'))) { e.preventDefault(); location.hash = el.getAttribute('data-w144go'); return; }
     if ((el = x.closest('[data-w144person]'))) { e.preventDefault(); location.hash = '#person/' + el.getAttribute('data-w144person'); return; }
@@ -392,8 +367,7 @@
         var i = x.steps.map(function (s) { return s.s; }).indexOf(after);
         x.steps.splice(i >= 0 ? i + 1 : x.steps.length, 0, step); x[flag] = true;
       };
-      put('team', '#w116meet', { s: '#w144team', t: 'Meeting attendance', p: 'How many of the team came to each of the last eight meetings on Google Meet, and whether you came. Click a meeting for the day. Whoever runs the meeting and the team lead also see who came and who is not on the invite.', opt: 1 }, '__w144');
-      put('hrcentre', '#w103scope', { s: '#w144hr', t: 'Meeting attendance', p: 'Each team’s attendance over eight weeks with the trend, the leadership meetings, and anyone who missed their team’s last three meetings. For the executive directors and admins.', opt: 1 }, '__w144');
+      put('hrcentre', '#w103scope', { s: '#w144hr', t: 'Meeting attendance', p: 'Each team’s attendance over eight weeks with the trend (click a team for its last eight meetings and who came), the leadership meetings, the board meetings, and anyone who missed their team’s last three meetings. Only the executive directors and admins see it.', opt: 1 }, '__w144');
     } catch (e) { /* fine */ }
   }
   addSteps(); setTimeout(addSteps, 1500);
