@@ -141,6 +141,12 @@ async function wa36Render() {
 async function wa36SetMine(tid, done) {
   var me = (typeof wa28Me === 'function') ? wa28Me() : null;
   if (!me) { toast('Sign in to track your training'); return; }
+  /* wave150: a lesson with a hard knowledge check is completed only by passing it in the Avenue Academy */
+  if (done) {
+    var tr = WA36_TRAININGS.filter(function (x) { return String(x.id) === String(tid); })[0], bd = tr && tr.body;
+    if (typeof bd === 'string') { try { bd = JSON.parse(bd); } catch (e) { bd = null; } }
+    if (bd && bd.quiz && bd.quiz.hard) { toast('Pass its knowledge check in the Avenue Academy to complete this one'); return; }
+  }
   await wa36Assign(tid, me.name, done ? 'done' : 'assigned');
 }
 async function wa36Assign(tid, name, status) {

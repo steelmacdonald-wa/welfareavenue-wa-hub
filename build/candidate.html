@@ -10757,6 +10757,12 @@ async function wa36Render() {
 async function wa36SetMine(tid, done) {
   var me = (typeof wa28Me === 'function') ? wa28Me() : null;
   if (!me) { toast('Sign in to track your training'); return; }
+  /* wave150: a lesson with a hard knowledge check is completed only by passing it in the Avenue Academy */
+  if (done) {
+    var tr = WA36_TRAININGS.filter(function (x) { return String(x.id) === String(tid); })[0], bd = tr && tr.body;
+    if (typeof bd === 'string') { try { bd = JSON.parse(bd); } catch (e) { bd = null; } }
+    if (bd && bd.quiz && bd.quiz.hard) { toast('Pass its knowledge check in the Avenue Academy to complete this one'); return; }
+  }
   await wa36Assign(tid, me.name, done ? 'done' : 'assigned');
 }
 async function wa36Assign(tid, name, status) {
@@ -38272,7 +38278,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     { key: 'hub', name: 'Using the Hub', title: 'Using the Hub', blurb: 'Eight short modules on how the Hub turns meetings into work.', dept: null, required: true, cert_title: 'Hub Essentials', color: GREEN, icon: 'compass', sort: 20 },
     { key: 'tours', name: 'Hub page tours', title: 'Hub page tours', blurb: 'A guided walkthrough of every page of the Hub, section by section.', dept: null, required: false, cert_title: 'Hub Navigator', color: TEAL, icon: 'map', sort: 30 },
     { key: 'marketing', name: 'Marketing Strategy Package', title: 'Marketing strategy', blurb: 'The marketing strategy built for Welfare Avenue, module by module.', dept: 'marketing', required: false, cert_title: 'Marketing Strategy', color: PURPLE, icon: 'megaphone', sort: 40 },
-    { key: 'branding', name: 'Branding', title: 'Our brand', blurb: 'The brand refresh: what changed and why.', dept: 'marketing', required: false, cert_title: 'Brand Ready', color: '#B9851B', icon: 'sparkle', sort: 45 },
+    { key: 'branding', name: 'Branding', title: 'Our brand', blurb: 'The Brand Guides, the essentials of our brand and a hard knowledge check: who we are, how we speak and how we look. For everyone.', dept: null, required: true, cert_title: 'Brand Ready', color: '#B9851B', icon: 'sparkle', sort: 15 },
     { key: 'ops', name: 'Operations Basics', title: 'Operations basics', blurb: 'Running volunteers and ordering for a serving.', dept: 'opsmtl', required: false, cert_title: 'Operations Basics', color: STEM, icon: 'box', sort: 50 }
   ];
 
@@ -38715,6 +38721,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w122sheet .lnk2 .ar{margin-left:auto;color:#9a9893;}'
     + '#w122sheet .chfoot{display:flex;gap:10px;align-items:center;margin:34px 0 0;padding:18px 0 0;border-top:1px solid rgba(16,63,57,.08);}'
     + '#w122sheet .chfoot .sp{flex:1;}'
+    /* wave150: on a phone a long Next: chapter title wraps instead of pushing the page sideways */
+    + '@media (max-width:640px){#w122sheet .chfoot{flex-wrap:wrap;}#w122sheet .chfoot .w122btn{white-space:normal;max-width:100%;text-align:left;}}'
     + '#w122sheet .meta2{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#797773;margin:18px 0 0;}'
     + '#w122sheet .meta2 span{display:inline-flex;align-items:center;gap:6px;}'
     + '#w122sheet .docbox{background:#FFFAF2;border-radius:22px;padding:22px;box-shadow:' + SH1 + ';display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 22px;}'
@@ -38751,6 +38759,39 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w122sheet .quiz .dots{display:flex;gap:6px;margin:0 0 16px;}'
     + '#w122sheet .quiz .dots i{flex:1;height:5px;border-radius:999px;background:rgba(16,63,57,.1);}'
     + '#w122sheet .quiz .dots i.ok{background:' + TEAL + ';}#w122sheet .quiz .dots i.no{background:' + FLAG + ';}#w122sheet .quiz .dots i.cur{background:' + GOLD + ';}'
+    /* wave150: the hard knowledge check (quiz.hard) */
+    + '#w122sheet .quiz .intro{background:#FFFAF2;border-radius:20px;padding:18px 20px;box-shadow:' + SH1 + ';margin:0 0 6px;}'
+    + '#w122sheet .quiz .intro p{margin:0 0 10px;font-size:15px;line-height:1.55;}'
+    + '#w122sheet .quiz .intro ul{margin:0;padding-left:20px;font-size:14.5px;line-height:1.6;}'
+    + '#w122sheet .quiz .why.miss{box-shadow:inset 0 0 0 1.5px rgba(179,64,47,.25);}'
+    + '#w122sheet .quiz .res .go{text-align:left;background:#FFFAF2;border-radius:18px;padding:14px 18px;box-shadow:' + SH1 + ';margin:0 auto 18px;max-width:560px;font-size:14.5px;line-height:1.5;}'
+    + '#w122sheet .quiz .res .go ul{margin:6px 0 0;padding-left:20px;}'
+    + '#w122sheet .quiz .res .acts2{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}'
+    + '#w122sheet .quiz .review{text-align:left;margin:22px auto 0;max-width:640px;display:flex;flex-direction:column;gap:10px;}'
+    + '#w122sheet .quiz .review h4{margin:0 0 2px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#797773;}'
+    + '#w122sheet .quiz .review .rv{background:#FFFAF2;border-radius:16px;padding:12px 16px;box-shadow:' + SH1 + ';font-size:14px;line-height:1.5;}'
+    + '#w122sheet .quiz .review .rv b{display:block;font-size:14.5px;margin:0 0 4px;}'
+    + '#w122sheet .quiz .review .rv .an{color:#1c6b5d;font-weight:700;}'
+    /* wave150: lesson blocks for the brand (swatches, figures, fonts) */
+    + '#w122sheet .w150sw{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:16px 0;}'
+    + '@media (max-width:860px){#w122sheet .w150sw{grid-template-columns:repeat(2,minmax(0,1fr));}}'
+    + '#w122sheet .w150sw .sw{border-radius:18px;padding:14px 14px 16px;min-height:150px;display:flex;flex-direction:column;gap:4px;box-shadow:inset 0 0 0 1px rgba(16,63,57,.12);}'
+    + '#w122sheet .w150sw .sw b{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
+    + '#w122sheet .w150sw .sw .hx{font-size:12px;font-weight:700;letter-spacing:.5px;opacity:.85;}'
+    + '#w122sheet .w150sw .sw p{margin:6px 0 0;font-size:13px;line-height:1.4;}'
+    + '#w122sheet .w150sw .sw .u{margin-top:auto;font-size:11.5px;font-weight:700;opacity:.85;padding-top:8px;}'
+    + '#w122sheet .w150fig{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0;}'
+    + '#w122sheet .w150fig figure{margin:0;background:#FFFAF2;border-radius:18px;overflow:hidden;box-shadow:' + SH1 + ';display:flex;flex-direction:column;}'
+    + '#w122sheet .w150fig .im{height:130px;display:flex;align-items:center;justify-content:center;padding:18px;}'
+    + '#w122sheet .w150fig .im img{max-width:100%;max-height:100%;object-fit:contain;display:block;}'
+    + '#w122sheet .w150fig figcaption{padding:10px 14px 14px;font-size:13px;line-height:1.45;color:#4a4945;}'
+    + '#w122sheet .w150fig figcaption b.t{display:block;font-size:14.5px;color:' + INK + ';margin:0 0 2px;}'
+    + '#w122sheet .w150ty{display:flex;flex-direction:column;gap:10px;margin:16px 0;}'
+    + '#w122sheet .w150ty .ty{background:#FFFAF2;border-radius:18px;padding:16px 18px;box-shadow:' + SH1 + ';}'
+    + '#w122sheet .w150ty .ty .sm{font-size:30px;line-height:1.15;color:' + GREEN + ';margin:0 0 10px;}'
+    + '#w122sheet .w150ty .ty .sm.body{font-size:17px;line-height:1.5;color:' + INK + ';}'
+    + '#w122sheet .w150ty .ty b{font-size:14px;margin-right:8px;}'
+    + '#w122sheet .w150ty .ty span{font-size:13px;color:#797773;}'
     /* path view + forms inside the sheet */
     + '#w122sheet .pitems{display:flex;flex-direction:column;gap:10px;margin:18px 0;}'
     + '#w122sheet .pitem{display:flex;gap:14px;align-items:center;background:#FFFAF2;border-radius:18px;padding:14px 16px;box-shadow:' + SH1 + ';cursor:pointer;transition:transform .2s ' + EASE + ';border:none;width:100%;font:inherit;color:inherit;text-align:left;}'
@@ -39681,6 +39722,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!r || r.status !== 'done') patch.pct = Math.min(95, Math.round(100 * seen.length / Math.max(1, total)));
     saveProg(t, patch);
   }
+  /* wave150: helpers for the brand blocks. Pictures come only from the Hub's own public storage; fonts only from the brand pair. */
+  var HEX6 = /^#[0-9a-f]{6}$/i, OWN_IMG = /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\/storage\/v1\/object\/public\/[\w./-]+$/;
+  var FONTS = { 'Barlow Condensed': "'Barlow Condensed',sans-serif", 'Space Grotesk': "'Space Grotesk',sans-serif" };
+  function lumOf(hx) { var n = parseInt(String(hx).slice(1), 16); return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255; }
   function blocksHtml(blocks) { return blocks.map(blockHtml).join(''); }
   function blockHtml(b) {
     switch (b.type) {
@@ -39705,13 +39750,72 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       case 'kinds': { var cols = { Partner: [GREEN, '#1d5a51'], Sponsor: ['#B9851B', '#D9A43A'], Collaborator: [PURPLE, '#8b80c9'] }; return '<div class="kinds">' + (b.items || []).map(function (x) { var c = cols[x.t] || [GREEN, TEAL]; return '<div class="k3" style="background:linear-gradient(145deg,' + c[0] + ',' + c[1] + ')"><span class="i">' + ic(x.icon || 'star') + '</span><b>' + E(x.t) + '</b><p>' + E(x.d) + '</p>' + (x.e ? '<div class="e">For example: ' + E(x.e) + '</div>' : '') + '</div>'; }).join('') + '</div>'; }
       case 'partners': return '<div class="pgroups">' + (b.groups || []).map(function (g) { return '<div class="pg"><h4>' + E(g.g) + '</h4><div class="pl">' + (g.items || []).map(function (x) { var st = String(x.s || ''); var cls = st.indexOf('New') === 0 ? 'New' : st; return '<div class="p"><b><span>' + E(x.n) + '</span><span class="w122st ' + E(cls) + '">' + E(st) + '</span></b><p>' + E(x.d) + '</p></div>'; }).join('') + '</div></div>'; }).join('') + '</div>';
       case 'stages': { var tc = { muted: '#9a9893', gold: GOLD, green: TEAL, purple: PURPLE, flag: FLAG }; return '<div class="stages">' + (b.items || []).map(function (x) { return '<div class="g"><i style="background:' + (tc[x.tone] || TEAL) + '"></i><b>' + E(x.t) + '</b><span>' + E(x.d) + '</span></div>'; }).join('') + '</div>'; }
+      /* wave150: colour swatches, pictures from the Hub's own storage, and type specimens */
+      case 'swatches': return '<div class="w150sw">' + (b.items || []).map(function (x) {
+        var hx = HEX6.test(String(x.hex || '')) ? String(x.hex).toUpperCase() : '#CCCCCC', dark = lumOf(hx) < 0.55;
+        return '<div class="sw" style="background:' + hx + ';color:' + (dark ? '#FFFAF2' : GREEN) + '"><b>' + E(x.n) + '</b><span class="hx">' + E(hx) + '</span>' + (x.d ? '<p>' + E(x.d) + '</p>' : '') + (x.use ? '<span class="u">' + E(x.use) + '</span>' : '') + '</div>';
+      }).join('') + '</div>';
+      case 'figures': return '<div class="w150fig">' + (b.items || []).filter(function (x) { return OWN_IMG.test(String(x.src || '')); }).map(function (x) {
+        var bg = HEX6.test(String(x.bg || '')) ? x.bg : '#FFFAF2';
+        return '<figure><div class="im" style="background:' + bg + '"><img src="' + E(x.src) + '" alt="' + E(x.alt || x.t || '') + '" loading="lazy"></div><figcaption>' + (x.t ? '<b class="t">' + E(x.t) + '</b>' : '') + (x.d ? md(x.d) : '') + '</figcaption></figure>';
+      }).join('') + '</div>';
+      case 'fonts': return '<div class="w150ty">' + (b.items || []).map(function (x) {
+        var fam = FONTS[x.f] || 'inherit';
+        return '<div class="ty"><div class="sm' + (x.body ? ' body' : '') + '" style="font-family:' + fam + (x.upper ? ';text-transform:uppercase;font-weight:600' : '') + '">' + E(x.sample || x.f) + '</div><b>' + E(x.f) + '</b><span>' + E(x.role || '') + '</span></div>';
+      }).join('') + '</div>';
       default: return b.text ? '<p>' + md(b.text) + '</p>' : '';
     }
   }
   function linkCard(x) { return '<a class="lnk2" href="' + E(x.url) + '" target="_blank" rel="noopener"><span class="i">' + ic('doc') + '</span><span><b>' + E(x.t) + '</b><span>' + E(x.d || hostOf(x.url)) + '</span></span><span class="ar">' + ic('ext') + '</span></a>'; }
 
   /* ---------- the knowledge check ---------- */
+  /* wave150: the hard knowledge check (quiz.hard). Every attempt shuffles the questions and their answers; a wrong pick is not
+     revealed (it names the part of the source to check instead); the answers and the whys for anything missed are shown only
+     once the check is passed. quiz.source is the key of the training to go back to (the Brand Guides). */
+  function shuffled(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); for (var j = n - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var x = a[j]; a[j] = a[k]; a[k] = x; } return a; }
+  function hardNeed(q) { var n = (q.questions || []).length; return Math.min(n, Math.ceil(n * (q.pass || 0.8) - 1e-9)); }
+  function hardQuizHtml(t, q) {
+    var qs = q.questions || [], need = hardNeed(q);
+    if (!R.quiz || !R.quiz.hard) { R.quiz = { hard: true, started: !!R.qagain, i: 0, picks: [], order: shuffled(qs.length), opts: qs.map(function (x) { return shuffled((x.a || []).length); }) }; R.qagain = false; }
+    var Z = R.quiz, src = q.source ? A.byKey[q.source] : null;
+    var srcBtn = src && visibleT(src) && src.id !== t.id ? '<button class="w122btn soft" data-w122pitem="' + E(src.id) + '">' + ic('file') + ' Open ' + E(src.title) + '</button>' : '';
+    if (!Z.started) {
+      return '<div class="quiz hard"><div class="qn">Knowledge check</div><div class="qq">' + E(q.title || 'Ready when you are') + '</div><div class="intro">' + (q.intro ? '<p>' + md(q.intro) + '</p>' : '') +
+        '<ul><li>' + qs.length + ' questions, in a new order every attempt.</li><li>You need ' + need + ' right to pass.</li><li>A wrong answer is not revealed: you get the part of the guide to check instead. You see every answer once you pass.</li></ul></div>' +
+        '<div class="chfoot">' + srcBtn + '<span class="sp"></span><button class="w122btn gold" data-w122qstart="1">' + ic('star') + ' Start the check</button></div></div>';
+    }
+    if (Z.i >= qs.length) {
+      var missed = [], right = 0;
+      Z.order.forEach(function (qi, i) { if (Z.picks[i] === qs[qi].c) right++; else missed.push(qs[qi]); });
+      var pct = Math.round(100 * right / Math.max(1, qs.length)), pass = right >= need;
+      var head = '<div class="rg">' + ring(pct, 150, 12, pass ? TEAL : FLAG) + '<b>' + pct + '%</b></div><h3>' + (pass ? (missed.length ? 'You passed' : 'Perfect score!') : 'Almost there') + '</h3>';
+      if (!pass) {
+        var seen = {}, go = [];
+        missed.forEach(function (x) { var h = String(x.hint || '').trim(); if (h && !seen[h]) { seen[h] = 1; go.push(h); } });
+        return '<div class="quiz hard"><div class="res">' + head + '<p>' + right + ' of ' + qs.length + ' right. You need ' + need + ' to pass.</p>' +
+          (go.length ? '<div class="go"><b>Go back to these parts of the guide:</b><ul>' + go.map(function (h) { return '<li>' + E(h) + '</li>'; }).join('') + '</ul></div>' : '') +
+          '<div class="acts2"><button class="w122btn" data-w122qretry="1">' + ic('refresh') + ' Try again</button>' + srcBtn + '<button class="w122btn soft" data-w122ch="0">Review the lesson</button></div></div></div>';
+      }
+      return '<div class="quiz hard"><div class="res">' + head + '<p>' + right + ' of ' + qs.length + ' right. ' + (isDone(t.id) ? 'This lesson is complete.' : 'Complete the lesson to record it.') + '</p>' +
+        (isDone(t.id) ? '' : '<button class="w122btn" data-w122qfinish="' + pct + '">' + ic('check') + ' Complete the lesson</button>') +
+        (missed.length ? '<div class="review"><h4>What you missed</h4>' + missed.map(function (x) { return '<div class="rv"><b>' + E(x.q) + '</b><span class="an">' + E(x.a[x.c]) + '</span><br>' + E(x.why || '') + '</div>'; }).join('') + '</div>' : '') + '</div></div>';
+    }
+    var qi = Z.order[Z.i], cur = qs[qi], picked = Z.picks[Z.i];
+    var dots = Z.order.map(function (x, i) { return '<i class="' + (i < Z.i ? (Z.picks[i] === qs[x].c ? 'ok' : 'no') : i === Z.i ? 'cur' : '') + '"></i>'; }).join('');
+    var opts = (Z.opts[qi] || []).map(function (oi, pos) {
+      var cls = picked == null || oi !== picked ? '' : (oi === cur.c ? ' right' : ' wrong');
+      return '<button class="op' + cls + '" data-w122opt="' + oi + '"' + (picked != null ? ' disabled' : '') + '><span class="l">' + 'ABCDEF'[pos] + '</span><span>' + E(cur.a[oi]) + '</span></button>';
+    }).join('');
+    var fb = '';
+    if (picked != null) {
+      fb = picked === cur.c ? '<div class="why"><b>Right. </b>' + E(cur.why || '') + '</div>'
+        : '<div class="why miss"><b>Not quite. </b>' + (cur.hint ? 'Check ' + E(cur.hint) + '. ' : '') + 'The answer is shown once you pass.</div>';
+      fb += '<div class="chfoot"><span class="sp"></span><button class="w122btn" data-w122qnext="1">' + (Z.i + 1 < qs.length ? 'Next question' : 'See my score') + ' ' + ic('arrow') + '</button></div>';
+    }
+    return '<div class="quiz hard"><div class="dots">' + dots + '</div><div class="qn">Question ' + (Z.i + 1) + ' of ' + qs.length + '</div><div class="qq">' + E(cur.q) + '</div><div class="opts">' + opts + '</div>' + fb + '</div>';
+  }
   function quizHtml(t, q) {
+    if (q && q.hard) return hardQuizHtml(t, q);
     var qs = q.questions || [];
     if (!R.quiz) R.quiz = { i: 0, picks: [], shown: false, first: !(mine(t.id) && mine(t.id).data && mine(t.id).data.quizTries) };
     var Z = R.quiz;
@@ -40813,7 +40917,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w122undone]'))) { saveProg(R.t, { status: (mine(R.t.id) || {}).assigned_by ? 'assigned' : 'started', done_at: null, pct: 50 }).then(function () { renderSheet(); paintSoon(); }); return; }
     if ((el = t.closest('[data-w122opt]'))) { if (R.quiz && R.quiz.picks[R.quiz.i] == null) { R.quiz.picks[R.quiz.i] = Number(el.getAttribute('data-w122opt')); renderSheet(); } return; }
     if ((el = t.closest('[data-w122qnext]'))) { if (R.quiz) { R.quiz.i++; renderSheet(); } return; }
-    if ((el = t.closest('[data-w122qretry]'))) { var rr = mine(R.t.id) || {}; var dd = Object.assign({}, rr.data || {}); dd.quizTries = (Number(dd.quizTries) || 0) + 1; saveProg(R.t, { data: dd }); R.quiz = null; renderSheet(); return; }
+    if ((el = t.closest('[data-w122qretry]'))) { var rr = mine(R.t.id) || {}; var dd = Object.assign({}, rr.data || {}); dd.quizTries = (Number(dd.quizTries) || 0) + 1; saveProg(R.t, { data: dd }); R.quiz = null; R.qagain = true; renderSheet(); return; }
+    if ((el = t.closest('[data-w122qstart]'))) { if (R.quiz && R.quiz.hard) { R.quiz.started = true; renderSheet(); } return; }
     if ((el = t.closest('[data-w122qfinish]'))) {
       var sc = Number(el.getAttribute('data-w122qfinish')); var r0 = mine(R.t.id) || {}; var d0 = Object.assign({}, r0.data || {}); d0.quizTries = (Number(d0.quizTries) || 0) + 1;
       var bdy = lessonBody(R.t); d0.seen = (bdy.chapters || []).map(function (c) { return c.id; });

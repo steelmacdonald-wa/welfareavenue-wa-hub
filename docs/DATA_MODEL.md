@@ -668,7 +668,7 @@ Training catalogue (wave122): Loom videos, reads, documents, SOP lessons, lesson
 - `path_group`: The Learning Avenue (called a learning path before wave135) the training belongs to, stored as academy_paths.name (not the path key).
 - `source`: Where the training came from: hub, loom, clickup or a wave seed label.
 - `ext_id`: External id, such as the Loom video id.
-- `body`: Lesson content as JSON; the shape depends on kind (tours: {tab, tour}; SOP lessons: {phases, roles, dayof, money, links, ...}; lessons: {chapters, quiz, ...}).
+- `body`: Lesson content as JSON; the shape depends on kind (tours: {tab, tour}; SOP lessons: {phases, roles, dayof, money, links, ...}; lessons: {chapters: [{id, t, blocks}], quiz: {pass, questions: [{q, a, c, why, hint}], hard, source, title, intro}}). Block types: lead, p, h, quote, stats, note, cards, activities, callout, compare, list, steps, link, links, kinds, partners, stages, and from wave150 swatches, figures (pictures from the Hub's own public storage only) and fonts. A quiz with hard true (wave150) shuffles its questions and answers every attempt, answers a wrong pick with the question's hint instead of the answer, and shows the answers once passed; source is the key of the training offered to reread.
 - `xp`: Experience points awarded on completion.
 
 ### `training_progress`
