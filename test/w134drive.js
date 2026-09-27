@@ -29,7 +29,7 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
   const browser = await launch();
   /* 1. the menu, for each identity */
   const WANT = {
-    admin: { top: ['mypage', 'overview', 'calendar'], goals: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'], meetings: ['agendas', 'transcripts'], inbox: ['requests', 'hubmail'], people: ['orgchart', 'training'], resources: ['importantinfo', 'photos'] },
+    admin: { top: ['mypage', 'overview', 'calendar'], goals: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'], meetings: ['agendas', 'transcripts'], inbox: ['requests', 'hubmail'], people: ['orgchart', 'training', 'crm'], resources: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: the three Resources pages; wave152: the CRM */
     member: { top: ['mypage', 'overview', 'calendar'] },
     leader: { top: ['mypage', 'overview', 'calendar'] },
     board: { top: ['overview', 'calendar'] }

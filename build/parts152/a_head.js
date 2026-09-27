@@ -146,9 +146,24 @@
     ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60 },
     sheet: null, detail: {}, confirm: null
   };
+  /* the API answers at most 1,000 rows a call: read a table page by page until a short page (or nothing new) */
+  var PAGE_ROWS = 1000;
+  function pageAll(query, key) {
+    var rows = [], seen = {};
+    function step(from) {
+      return Promise.resolve(query(from, from + PAGE_ROWS - 1)).then(function (res) {
+        if (!res || res.error) return { data: rows, error: res && res.error };
+        var got = res.data || [], fresh = 0;
+        got.forEach(function (r) { var k = key(r); if (seen[k]) return; seen[k] = 1; rows.push(r); fresh++; });
+        if (got.length < PAGE_ROWS || !fresh || rows.length > 50000) return { data: rows, error: null };
+        return step(from + PAGE_ROWS);
+      });
+    }
+    return step(0);
+  }
   var LOADERS = {
-    contacts: function () { return db.from('crm_contacts_v').select(COLS).order('full_name', { ascending: true }).limit(20000); },
-    dupes: function () { return db.from('crm_duplicates_v').select('*').limit(2000); },
+    contacts: function () { return pageAll(function (a, b) { return db.from('crm_contacts_v').select(COLS).order('id', { ascending: true }).range(a, b); }, function (r) { return String(r.id); }); },
+    dupes: function () { return pageAll(function (a, b) { return db.from('crm_duplicates_v').select('*').order('contact_id', { ascending: true }).order('duplicate_id', { ascending: true }).range(a, b); }, function (r) { return r.contact_id + ':' + r.duplicate_id + ':' + r.matched_on + ':' + r.value; }); },
     partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); }
   };
   /* the rows the page works with: a few derived fields for filters, sorting and search */

@@ -56226,9 +56226,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     ui: { tab: 'contacts', kind: '', role: '', act: '', perm: '', q: '', sort: 'recent', show: 60 },
     sheet: null, detail: {}, confirm: null
   };
+  /* the API answers at most 1,000 rows a call: read a table page by page until a short page (or nothing new) */
+  var PAGE_ROWS = 1000;
+  function pageAll(query, key) {
+    var rows = [], seen = {};
+    function step(from) {
+      return Promise.resolve(query(from, from + PAGE_ROWS - 1)).then(function (res) {
+        if (!res || res.error) return { data: rows, error: res && res.error };
+        var got = res.data || [], fresh = 0;
+        got.forEach(function (r) { var k = key(r); if (seen[k]) return; seen[k] = 1; rows.push(r); fresh++; });
+        if (got.length < PAGE_ROWS || !fresh || rows.length > 50000) return { data: rows, error: null };
+        return step(from + PAGE_ROWS);
+      });
+    }
+    return step(0);
+  }
   var LOADERS = {
-    contacts: function () { return db.from('crm_contacts_v').select(COLS).order('full_name', { ascending: true }).limit(20000); },
-    dupes: function () { return db.from('crm_duplicates_v').select('*').limit(2000); },
+    contacts: function () { return pageAll(function (a, b) { return db.from('crm_contacts_v').select(COLS).order('id', { ascending: true }).range(a, b); }, function (r) { return String(r.id); }); },
+    dupes: function () { return pageAll(function (a, b) { return db.from('crm_duplicates_v').select('*').order('contact_id', { ascending: true }).order('duplicate_id', { ascending: true }).range(a, b); }, function (r) { return r.contact_id + ':' + r.duplicate_id + ':' + r.matched_on + ':' + r.value; }); },
     partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); }
   };
   /* the rows the page works with: a few derived fields for filters, sorting and search */
@@ -56683,6 +56698,22 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       return '<div class="w152line">' + I('hand') + ' <button class="w152mini" style="padding:0" data-w152go="#partners/' + E(o.partner_id) + '">' + E(nm) + '</button>' + (o.role_title ? ' <span class="m">' + E(o.role_title) + '</span>' : '') +
         ' <button class="w152mini" data-w152unlink="' + E(o.id) + '" aria-label="Unlink ' + E(nm) + '">' + I('x') + '</button></div>';
     }).join('') : (d ? '' : c.org_names.map(function (n) { return '<div class="w152line">' + I('hand') + ' ' + E(n) + '</div>'; }).join(''))) + '</div>');
+    /* what Keela knew (the export of 27/09/26) */
+    var K = c.legacy_refs && c.legacy_refs.keela;
+    if (K && typeof K === 'object') {
+      var kl = [];
+      var pos = arr(K.positions).map(function (p) { return String(p).replace(/^Volunteer\s+/i, ''); });
+      if (pos.length) kl.push('chose ' + listJoin(pos));
+      if (K.try_out_date) kl.push('try-out ' + fmtDay(K.try_out_date));
+      var dv = arr(K.dates_volunteered).map(function (d) { return fmtDay(String(d).slice(0, 10)); }).filter(Boolean);
+      if (dv.length) kl.push('volunteered ' + (dv.length > 4 ? plural(dv.length, 'time', 'times') + ', last ' + dv[dv.length - 1] : listJoin(dv)));
+      var av = arr(K.availability); if (av.length) kl.push('available ' + listJoin(av.slice(0, 3)) + (av.length > 3 ? ' and ' + (av.length - 3) + ' more' : ''));
+      if (K.rally_paper_team) kl.push('Rally Paper: ' + K.rally_paper_team);
+      if (K.assignee) kl.push('looked after by ' + K.assignee);
+      var em = K.email_marketing;
+      if (em && em.sent) kl.push('opened ' + (Number(em.opened) || 0) + ' of ' + em.sent + ' newsletters' + (em.last_opened ? ', last on ' + fmtDay(em.last_opened) : ''));
+      if (kl.length) out.push('<div class="w152line"><span class="m">From Keela: ' + E(kl.join(' \u00b7 ')) + '</span></div>');
+    }
     var links = [];
     links.push('<button class="w152mini" data-w152linkorg="' + E(c.id) + '">' + I('link') + 'Link an organization</button>');
     if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people">' + I('arrow') + 'MTL volunteering</button>');

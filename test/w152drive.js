@@ -45,6 +45,9 @@ function crmFixture(extra) {
       volunteer_id: 9100 + n, volunteer_roles: [RL[(i + j) % RL.length]], hub_servings: served, last_serving_on: served ? '2026-0' + (1 + (n % 8)) + '-1' + (n % 9) : null,
       created_at: n % 11 === 0 ? '2026-09-10T12:00:00Z' : '2026-07-27T14:00:00Z' }));
   }));
+  /* more than one page of contacts (the API answers 1,000 a call) */
+  for (let k = 0; k < 960; k++) rows.push(C(7000 + k, 'Page Two ' + k, { emails: ['page.two.' + k + '@example.net'], volunteer_id: 9500 + k, volunteer_roles: ['server'] }));
+  rows[0].legacy_refs = { keela: { contact_id: 'k1', positions: ['Volunteer Server', 'Photographer'], try_out_date: '2025-05-04', availability: ['November 15th, 2026', 'November 29th, 2026'], email_marketing: { sent: 12, opened: 7, last_opened: '2026-09-01' } } };
   fx.crm_contacts_v = rows;
   fx.crm_duplicates_v = [
     { contact_id: 5001, duplicate_id: 5008, matched_on: 'email', value: 'amara.okafor@example.com' },
@@ -120,15 +123,15 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
     chips: [...document.querySelectorAll('#crm [data-w152kind]')].map(b => b.textContent.trim())
   }));
   ok('#crm opens the CRM with its masthead (People > CRM)', a.active && a.crumb === 'People' && a.h1 === 'CRM', a);
-  ok('the numbers: contacts, volunteers, who served, donors', a.stats.join('|') === '89|86|71|1' && /donors/.test(a.statTxt[3] || ''), a);
+  ok('the numbers: contacts (more than one page), volunteers, who served, donors', a.stats.join('|') === '1,049|1,046|71|1' && /donors/.test(a.statTxt[3] || ''), a);
   ok('three tabs, with the duplicate pairs counted', a.tabs.length === 3 && /Possible duplicates\s*2/.test(a.tabs[1]) && /Sources/.test(a.tabs[2]), a.tabs);
-  ok('the list shows 60 at a time, with Show more', a.rows === 60 && /Show 29 more/.test(a.more) && /89 contacts/.test(a.count), a);
-  ok('a chip per kind that has people, with counts', a.chips.some(c => /^Volunteer\s*86$/.test(c)) && a.chips.some(c => /^Donor\s*1$/.test(c)) && a.chips.some(c => /^Partner contact\s*1$/.test(c)) && a.chips.some(c => /^Staff\s*1$/.test(c)) && a.chips.some(c => /^Alumni\s*1$/.test(c)), a.chips);
+  ok('the list shows 60 at a time, with Show more', a.rows === 60 && /Show 60 more/.test(a.more) && /1,049 contacts/.test(a.count), a);
+  ok('a chip per kind that has people, with counts', a.chips.some(c => /^Volunteer\s*1046$/.test(c)) && a.chips.some(c => /^Donor\s*1$/.test(c)) && a.chips.some(c => /^Partner contact\s*1$/.test(c)) && a.chips.some(c => /^Staff\s*1$/.test(c)) && a.chips.some(c => /^Alumni\s*1$/.test(c)), a.chips);
   let nm = await names(f);
   ok('recently active first (Amara and Samuel served on 13 Sep)', nm.indexOf('Amara Okafor') >= 0 && nm.indexOf('Amara Okafor') < 2 && nm.indexOf('Samuel Osei') < 2, nm.slice(0, 5));
   await shot(f, 'crm_list');
   await click(f, '#crm [data-w152more]'); await f.page.waitForTimeout(200);
-  ok('Show more shows the rest', (await f.ev(() => document.querySelectorAll('#crm .w152row').length)) === 89);
+  ok('Show more shows more', (await f.ev(() => document.querySelectorAll('#crm .w152row').length)) === 120);
   await typeQ(f, 'okafor'); nm = await names(f);
   ok('search finds both Amara Okafors', nm.length === 2 && nm.every(x => x === 'Amara Okafor'), nm);
   await typeQ(f, 'elodie'); nm = await names(f);
@@ -170,6 +173,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   ok('Email, Call and Text buttons use their email and phone', h.links.join(' ') === 'mailto:amara.okafor@example.com tel:+15145550101 sms:+15145550101', h.links);
   ok('their details: emails, phone, address, language, school', /amara\.okafor@example\.com/.test(s) && /514-555-0101/.test(s) && /12 Rue Example · Montreal, QC/.test(s) && /French/.test(s) && /Concordia/.test(s), s.slice(0, 600));
   ok('what they did with us: roles, Hub servings, the old website', /5 servings at Hub events, the last on 13 Sep 2026/.test(s) && /3 servings on the old website \(9 hours\)/.test(s) && /Cook/.test(s), s.slice(0, 900));
+  ok('what Keela knew shows in one line', /From Keela: chose Server and Photographer · try-out 4 May 2025 · available November 15th, 2026 and November 29th, 2026 · opened 7 of 12 newsletters, last on 1 Sep 2026/.test(s), s.slice(0, 1200));
   ok('the timeline mixes the roster, the old website, emails, notes and website messages, newest first',
     h.tl[0] === 'Confirmed as Server' && h.tl.indexOf('Served as Cook') > 0 && h.tl.indexOf('Email from them: Can I bring a friend?') > 0 && h.tl.indexOf('Note') > 0 && h.tl.indexOf('Message from the website') > 0 && h.tl.indexOf('Withdrew') > 0 && h.tl.indexOf('Could not come (Cook)') > 0 && h.tl[h.tl.length - 1] === 'Served as Cook' && h.tl.indexOf('Withdrew') === h.tl.length - 2, h.tl);
   await shot(f, 'crm_contact');

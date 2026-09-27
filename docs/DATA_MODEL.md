@@ -1361,6 +1361,19 @@ The live contacts (not merged) with their volunteer roles and tags, Hub servings
 
 Pairs of live contacts with the same email or phone, less the pairs marked as different people. The CRM page's Possible duplicates tab.
 
+### `site_events`
+
+The public website's events (welfareavenue.com): fundraising and volunteering events with their text, poster, hero image and gallery (files in the public site-media bucket). Anyone reads the published ones (the website is anonymous); staff and directors read all; leaders write. legacy keeps the old Django site's ids and paths.
+
+- `kind`: fundraising, volunteering, program or other.
+- `slug`: The address on the website (unique), e.g. holiday-gift-baskets-2025.
+- `paragraphs`: The extra paragraphs of a past event's page (the old site's par2 to par5).
+- `links`: Social links for the event: ig, tiktok, fb, linkedin, twitter.
+- `gallery`: Photo URLs (site-media bucket) shown on the event page.
+- `legacy`: Where it came from: django_id, django_kind (FundraiserEvents or VolunteeringEvents), the original image paths, created and updated stamps.
+- `fund_event_id`: The Hub's fundraising calendar row (fund_events) for the same event, when matched.
+- `volunteer_event_id`: The Hub's serving event (volunteer_events) for the same event, when matched.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).

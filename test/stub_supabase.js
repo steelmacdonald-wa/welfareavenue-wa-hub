@@ -23,6 +23,7 @@
     this._neq = [];
     this._order = [];
     this._limit = null;
+    this._offset = 0;
     this._single = false;
     this._maybe = false;
     this._count = null;
@@ -61,7 +62,7 @@
   };
   Builder.prototype.order = function (col, opts) { this._order.push([col, opts || {}]); return this; };
   Builder.prototype.limit = function (n) { this._limit = n; return this; };
-  Builder.prototype.range = function (a, b) { this._limit = (b - a + 1); return this; };
+  Builder.prototype.range = function (a, b) { this._offset = a; this._limit = (b - a + 1); return this; }; /* wave152: the offset counts, as in PostgREST */
   Builder.prototype.single = function () { this._single = true; return this; };
   Builder.prototype.maybeSingle = function () { this._maybe = true; return this; };
   Builder.prototype.csv = function () { return this; };
@@ -113,6 +114,7 @@
           return asc ? 1 : -1;
         });
       }
+      if (this._offset) rows = rows.slice(this._offset);
       if (this._limit !== null) rows = rows.slice(0, this._limit);
       if (this._single || this._maybe) {
         res = { data: rows.length ? clone(rows[0]) : null, error: null };

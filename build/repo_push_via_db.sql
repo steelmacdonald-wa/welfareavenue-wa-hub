@@ -1,0 +1,25 @@
+-- Run through the Supabase MCP after build/repo_push_via_db.py staged the files. Three steps, because the edge
+-- function is called asynchronously (pg_net): 1 sends the blobs, 2 checks the shas and commits, 3 cleans up.
+-- Step 0 (once per push, before staging):
+--   create table public.wa_stage_push (id bigint generated always as identity primary key, path text not null, b64 text not null, sha text not null, bytes int not null);
+--   alter table public.wa_stage_push enable row level security; create policy stage_ins on public.wa_stage_push for insert to anon with check (true); grant insert on public.wa_stage_push to anon;
+--   create table public.wa_stage_push_rids (batch int primary key, rid bigint not null, paths text[] not null);
+--   create or replace function public.wa_tmp_call_edge_long(fn text, payload jsonb) returns bigint language plpgsql security definer set search_path = '' as $$
+--   declare rid bigint; begin
+--     select net.http_post(url := 'https://zwnmulmnvopclzcvytce.supabase.co/functions/v1/' || fn, headers := jsonb_build_object('Content-Type', 'application/json', 'x-wa-secret', public.get_secret('WA_TRIGGER_SECRET')), body := payload, timeout_milliseconds := 120000) into rid; return rid; end $$;
+--   revoke execute on function public.wa_tmp_call_edge_long(text, jsonb) from public, anon, authenticated;
+-- Step 1: blobs in batches under ~900 KB of base64 (a big file goes alone).
+--   do $$ declare r record; cur jsonb := '[]'::jsonb; cur_paths text[] := '{}'; size int := 0; n int := 0; rid bigint; begin
+--     for r in select distinct on (path) path, b64 from public.wa_stage_push order by path, id desc loop
+--       if size + length(r.b64) > 900000 and jsonb_array_length(cur) > 0 then n := n + 1; rid := public.wa_tmp_call_edge_long('repo-sync', jsonb_build_object('action', 'blobs', 'repo', 'steelmacdonald-wa/welfareavenue-wa-hub', 'files', cur)); insert into public.wa_stage_push_rids values (n, rid, cur_paths); cur := '[]'::jsonb; cur_paths := '{}'; size := 0; end if;
+--       cur := cur || jsonb_build_array(jsonb_build_object('path', r.path, 'content_b64', r.b64)); cur_paths := cur_paths || r.path; size := size + length(r.b64);
+--     end loop;
+--     if jsonb_array_length(cur) > 0 then n := n + 1; rid := public.wa_tmp_call_edge_long('repo-sync', jsonb_build_object('action', 'blobs', 'repo', 'steelmacdonald-wa/welfareavenue-wa-hub', 'files', cur)); insert into public.wa_stage_push_rids values (n, rid, cur_paths); end if; end $$;
+-- Step 2 (after a few seconds): every blob sha equals the staged sha, then the commit on top of the head.
+--   with b as (select distinct b->>'path' path, b->>'sha' sha from public.wa_stage_push_rids r join net._http_response x on x.id = r.rid, jsonb_array_elements(x.content::jsonb->'blobs') b)
+--   select public.wa_tmp_call_edge_long('repo-sync', jsonb_build_object('action', 'commit', 'repo', 'steelmacdonald-wa/welfareavenue-wa-hub', 'branch', 'main', 'message', '<message>',
+--     'entries', (select jsonb_agg(jsonb_build_object('path', path, 'sha', sha) order by path) from b), 'deletes', '[]'::jsonb)) as rid
+--   where (select count(*) from b) = (select count(distinct path) from public.wa_stage_push)
+--     and not exists (select 1 from b left join (select distinct path, sha from public.wa_stage_push) s on s.path = b.path and s.sha = b.sha where s.path is null);
+-- Step 3: read the commit response (net._http_response where id = rid), then
+--   drop table public.wa_stage_push; drop table public.wa_stage_push_rids; drop function public.wa_tmp_call_edge_long(text, jsonb); delete from net._http_response where id in (...);

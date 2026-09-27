@@ -81,6 +81,22 @@
       return '<div class="w152line">' + I('hand') + ' <button class="w152mini" style="padding:0" data-w152go="#partners/' + E(o.partner_id) + '">' + E(nm) + '</button>' + (o.role_title ? ' <span class="m">' + E(o.role_title) + '</span>' : '') +
         ' <button class="w152mini" data-w152unlink="' + E(o.id) + '" aria-label="Unlink ' + E(nm) + '">' + I('x') + '</button></div>';
     }).join('') : (d ? '' : c.org_names.map(function (n) { return '<div class="w152line">' + I('hand') + ' ' + E(n) + '</div>'; }).join(''))) + '</div>');
+    /* what Keela knew (the export of 27/09/26) */
+    var K = c.legacy_refs && c.legacy_refs.keela;
+    if (K && typeof K === 'object') {
+      var kl = [];
+      var pos = arr(K.positions).map(function (p) { return String(p).replace(/^Volunteer\s+/i, ''); });
+      if (pos.length) kl.push('chose ' + listJoin(pos));
+      if (K.try_out_date) kl.push('try-out ' + fmtDay(K.try_out_date));
+      var dv = arr(K.dates_volunteered).map(function (d) { return fmtDay(String(d).slice(0, 10)); }).filter(Boolean);
+      if (dv.length) kl.push('volunteered ' + (dv.length > 4 ? plural(dv.length, 'time', 'times') + ', last ' + dv[dv.length - 1] : listJoin(dv)));
+      var av = arr(K.availability); if (av.length) kl.push('available ' + listJoin(av.slice(0, 3)) + (av.length > 3 ? ' and ' + (av.length - 3) + ' more' : ''));
+      if (K.rally_paper_team) kl.push('Rally Paper: ' + K.rally_paper_team);
+      if (K.assignee) kl.push('looked after by ' + K.assignee);
+      var em = K.email_marketing;
+      if (em && em.sent) kl.push('opened ' + (Number(em.opened) || 0) + ' of ' + em.sent + ' newsletters' + (em.last_opened ? ', last on ' + fmtDay(em.last_opened) : ''));
+      if (kl.length) out.push('<div class="w152line"><span class="m">From Keela: ' + E(kl.join(' · ')) + '</span></div>');
+    }
     var links = [];
     links.push('<button class="w152mini" data-w152linkorg="' + E(c.id) + '">' + I('link') + 'Link an organization</button>');
     if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people">' + I('arrow') + 'MTL volunteering</button>');
