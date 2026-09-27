@@ -57,7 +57,8 @@ function crmFixture(extra) {
   fx.crm_interactions = [
     { id: 71, contact_id: 5001, kind: 'note', direction: 'internal', channel: null, subject: null, body: 'Prefers the Sunday morning shift.', occurred_at: '2026-08-20T15:00:00Z', source: 'hub', source_ref: null, meta: null, created_at: '2026-08-20T15:00:00Z', created_by: 'someone.else@welfareavenue.com' },
     { id: 72, contact_id: 5001, kind: 'email', direction: 'in', channel: 'email', subject: 'Can I bring a friend?', body: 'My roommate wants to volunteer too.', occurred_at: '2026-09-02T13:00:00Z', source: 'hub', source_ref: null, meta: null, created_at: '2026-09-02T13:00:00Z', created_by: 'steel.macdonald@welfareavenue.com' },
-    { id: 73, contact_id: 5001, kind: 'website_message', direction: 'in', channel: 'website', subject: 'Volunteering question', body: 'Do you need cooks in October?', occurred_at: '2026-07-01T13:00:00Z', source: 'website', source_ref: 'contact-18', meta: null, created_at: '2026-07-01T13:00:00Z', created_by: 'crm_sync' }
+    { id: 73, contact_id: 5001, kind: 'website_message', direction: 'in', channel: 'website', subject: 'Volunteering question', body: 'Do you need cooks in October?', occurred_at: '2026-07-01T13:00:00Z', source: 'website', source_ref: 'contact-18', meta: null, created_at: '2026-07-01T13:00:00Z', created_by: 'crm_sync' },
+    { id: 74, contact_id: 5001, kind: 'website_message', direction: 'in', channel: 'website', subject: 'Cook', body: 'Can I cook food 22 December', occurred_at: '2000-01-01T00:00:00Z', source: 'website', source_ref: 'contactform:279', meta: { undated: true, legacy_ids: [279, 280], times_submitted: 2 }, created_at: '2026-09-27T22:00:00Z', created_by: 'wa152_import' }
   ];
   fx.crm_donations = [
     { id: 81, contact_id: 5003, amount: 100, currency: 'CAD', donated_at: '2026-08-30T15:00:00Z', platform: 'zeffy', campaign: 'Back to school meals', designation: null, recurring: false, receipt_number: 'WA-2026-0042', receipt_issued_at: '2026-08-30T15:01:00Z', receipt_url: 'https://example.com/receipt', notes: null },
@@ -66,17 +67,20 @@ function crmFixture(extra) {
   ];
   fx.crm_volunteer_history = [
     { id: 91, contact_id: 5001, volunteer_id: 9001, source: 'django', legacy_assignment_id: 1, legacy_event_id: 10, legacy_volunteer_id: 100, event_at: '2025-03-02T16:00:00Z', event_title: 'Sunday serving', city: 'Montreal', location: 'Cabot Square', position: 'Cook', approved: true, confirmed: true, attended: true, hours: 3, withdrawn: false, waitlisted: false },
-    { id: 92, contact_id: 5001, volunteer_id: 9001, source: 'django', legacy_assignment_id: 2, legacy_event_id: 11, legacy_volunteer_id: 100, event_at: '2025-04-06T16:00:00Z', event_title: 'Sunday serving', city: 'Montreal', location: 'Cabot Square', position: 'Server', approved: true, confirmed: false, attended: false, hours: null, withdrawn: true, waitlisted: false }
+    { id: 92, contact_id: 5001, volunteer_id: 9001, source: 'django', legacy_assignment_id: 2, legacy_event_id: 11, legacy_volunteer_id: 100, event_at: '2025-04-06T16:00:00Z', event_title: 'Sunday serving', city: 'Montreal', location: 'Cabot Square', position: 'Server', approved: true, confirmed: false, attended: false, hours: null, withdrawn: true, waitlisted: false },
+    { id: 93, contact_id: 5001, volunteer_id: 9001, source: 'django', legacy_assignment_id: 3, legacy_event_id: 12, legacy_volunteer_id: 100, event_at: '2024-11-10T17:00:00Z', event_title: 'OPEN TO EVERYONE', city: 'Montreal', location: 'Berri-UQAM', position: 'driver', approved: true, confirmed: true, attended: true, hours: 2, withdrawn: null, waitlisted: false, volunteer_event_id: 9104 }
   ];
   fx.volunteer_events = (fx.volunteer_events || []).concat([
     { id: 9101, code: 'T1', event_date: '2026-09-13', season: 'fall', location: 'Montreal', notes: null, status: 'completed', kind: 'service', title: 'Sunday serving', itinerary_url: null, planned_meals: 200, plan_note: null },
     { id: 9102, code: 'T2', event_date: '2026-10-04', season: 'fall', location: 'Montreal', notes: null, status: 'planned', kind: 'service', title: 'Sunday serving', itinerary_url: null, planned_meals: 200, plan_note: null },
-    { id: 9103, code: 'T3', event_date: '2026-08-16', season: 'summer', location: 'Montreal', notes: null, status: 'completed', kind: 'service', title: 'Sunday serving', itinerary_url: null, planned_meals: 200, plan_note: null }
+    { id: 9103, code: 'T3', event_date: '2026-08-16', season: 'summer', location: 'Montreal', notes: null, status: 'completed', kind: 'service', title: 'Sunday serving', itinerary_url: null, planned_meals: 200, plan_note: null },
+    { id: 9104, code: 'WA-24-20', event_date: '2024-11-10', season: 'Fall', location: 'Montreal', notes: 'From the old website (event 12) at Berri-UQAM', status: 'completed', kind: 'service', title: null, itinerary_url: null, planned_meals: null, plan_note: null }
   ]);
   fx.event_roster = (fx.event_roster || []).concat([
     { id: 99001, event_id: 9101, person_id: 9001, person_name: 'Amara Okafor', role: 'cook', status: 'Confirmed', notes: null, detail: null, sort: 1, confirm_token: null, confirm_status: null, confirmed_at: null, confirm: null, recipe_id: null },
     { id: 99002, event_id: 9102, person_id: 9001, person_name: 'Amara Okafor', role: 'server', status: 'Confirmed', notes: null, detail: null, sort: 1, confirm_token: null, confirm_status: null, confirmed_at: null, confirm: null, recipe_id: null },
-    { id: 99003, event_id: 9103, person_id: 9001, person_name: 'Amara Okafor', role: 'cook', status: 'Unavailable', notes: null, detail: null, sort: 1, confirm_token: null, confirm_status: null, confirmed_at: null, confirm: null, recipe_id: null }
+    { id: 99003, event_id: 9103, person_id: 9001, person_name: 'Amara Okafor', role: 'cook', status: 'Unavailable', notes: null, detail: null, sort: 1, confirm_token: null, confirm_status: null, confirmed_at: null, confirm: null, recipe_id: null },
+    { id: 99004, event_id: 9104, person_id: 9001, person_name: 'Amara Okafor', role: 'driver', status: 'Confirmed', notes: null, detail: { source: 'old website', legacy_assignment_id: 3, hours: 2 }, sort: 0, confirm_token: null, confirm_status: null, confirmed_at: '2024-11-10T17:00:00Z', confirm: null, recipe_id: null }
   ]);
   fx.wa_partners = [{ id: 11, key: 'p-11', name: 'Sportira', aka: [], status: 'active', visibility: 'everyone' }, { id: 12, key: 'p-12', name: 'Vanier College Student Association', aka: [], status: 'active', visibility: 'everyone' }];
   fx.crm_contact_orgs = [{ id: 1, contact_id: 5004, partner_id: 11, role_title: 'Events lead', is_primary: true, notes: null, created_at: '2026-09-01T12:00:00Z', created_by: 'steel.macdonald@welfareavenue.com' }];
@@ -168,14 +172,16 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   await click(f, '#crm [data-w152open="5001"]'); await f.page.waitForTimeout(700);
   let s = await sheet(f);
   const h = await f.ev(() => ({ hash: location.hash, perm: (document.querySelector('#w152sheet .w152hd .w152pm') || {}).textContent, links: [...document.querySelectorAll('#w152sheet .w152qa a')].map(a => a.getAttribute('href')),
-    tl: [...document.querySelectorAll('#w152sheet .w152it .t')].map(t => t.childNodes[0].textContent) }));
+    tl: [...document.querySelectorAll('#w152sheet .w152it .t')].map(t => t.childNodes[0].textContent), tld: [...document.querySelectorAll('#w152sheet .w152it .t .d')].map(t => t.textContent), by: [...document.querySelectorAll('#w152sheet .w152it .by span')].map(t => t.textContent) }));
   ok('a contact opens at #crm/c/<id>, with their name and email permission', h.hash === '#crm/c/5001' && /Amara Okafor/.test(s) && h.perm === 'Express consent', h);
   ok('Email, Call and Text buttons use their email and phone', h.links.join(' ') === 'mailto:amara.okafor@example.com tel:+15145550101 sms:+15145550101', h.links);
   ok('their details: emails, phone, address, language, school', /amara\.okafor@example\.com/.test(s) && /514-555-0101/.test(s) && /12 Rue Example · Montreal, QC/.test(s) && /French/.test(s) && /Concordia/.test(s), s.slice(0, 600));
-  ok('what they did with us: roles, Hub servings, the old website', /5 servings at Hub events, the last on 13 Sep 2026/.test(s) && /3 servings on the old website \(9 hours\)/.test(s) && /Cook/.test(s), s.slice(0, 900));
+  ok('what they did with us: roles, servings, the old website', /5 servings with us \(MTL volunteering\), the last on 13 Sep 2026/.test(s) && /3 servings on the old website, not yet in MTL volunteering \(9 hours\)/.test(s) && /Cook/.test(s), s.slice(0, 900));
   ok('what Keela knew shows in one line', /From Keela: chose Server and Photographer · try-out 4 May 2025 · available November 15th, 2026 and November 29th, 2026 · opened 7 of 12 newsletters, last on 1 Sep 2026/.test(s), s.slice(0, 1200));
   ok('the timeline mixes the roster, the old website, emails, notes and website messages, newest first',
-    h.tl[0] === 'Confirmed as Server' && h.tl.indexOf('Served as Cook') > 0 && h.tl.indexOf('Email from them: Can I bring a friend?') > 0 && h.tl.indexOf('Note') > 0 && h.tl.indexOf('Message from the website') > 0 && h.tl.indexOf('Withdrew') > 0 && h.tl.indexOf('Could not come (Cook)') > 0 && h.tl[h.tl.length - 1] === 'Served as Cook' && h.tl.indexOf('Withdrew') === h.tl.length - 2, h.tl);
+    h.tl[0] === 'Confirmed as Server' && h.tl.indexOf('Served as Cook') > 0 && h.tl.indexOf('Email from them: Can I bring a friend?') > 0 && h.tl.indexOf('Note') > 0 && h.tl.indexOf('Message from the website: Volunteering question') > 0 && h.tl.indexOf('Withdrew') > 0 && h.tl.indexOf('Could not come (Cook)') > 0 && h.tl.indexOf('Withdrew') < h.tl.lastIndexOf('Served as Cook') && h.tl.lastIndexOf('Served as Cook') < h.tl.indexOf('Served as Driver'), h.tl);
+  ok('a serving the old website recorded shows once, through the Hub roster, with its hours', h.tl.filter(t => t === 'Served as Driver').length === 1 && h.by.indexOf('The old website, now in MTL volunteering') >= 0 && /Serving · Montreal · 2 hours/.test(s), { tl: h.tl, by: h.by });
+  ok('a message the old website kept without a date comes last, and says so', h.tl[h.tl.length - 1] === 'Message from the old website: Cook' && h.tld[h.tld.length - 1] === 'date not recorded' && h.by.indexOf('The old website (the form kept no date)') >= 0, { tl: h.tl, tld: h.tld });
   await shot(f, 'crm_contact');
   /* log a note */
   await f.ev(() => { const s = document.getElementById('w152sheet'); s.querySelector('[data-w152logk]').value = 'call'; s.querySelector('[data-w152logt]').value = 'Called to confirm the October serving.'; s.querySelector('[data-w152log]').click(); });
@@ -279,7 +285,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   await f.hash('#crm/sources', 1200);
   const so = await f.ev(() => ({ cards: [...document.querySelectorAll('#crm .w152card h3')].map(x => x.textContent), txt: document.querySelector('#crm .w152root').innerText }));
   ok('Sources: where they come from, what joins next, email permission, to tidy', so.cards.length === 4 && /Where they come from/.test(so.cards[0]) && /What joins next/.test(so.cards[1]) && /Email permission/.test(so.cards[2]) && /To tidy/.test(so.cards[3]), so.cards);
-  ok('the sources name the old website sign-ups and what is already in (history, messages, gifts)', /Old website sign-ups/.test(so.txt) && /2 in/.test(so.txt) && /1 in/.test(so.txt) && /3 in/.test(so.txt), so.txt.slice(0, 900));
+  ok('the sources name the old website sign-ups and what is already in (history, messages, gifts)', /Old website sign-ups/.test(so.txt) && /Volunteer history from the old website[\s\S]*?3 in[\s\S]*?Messages from the website[\s\S]*?2 in[\s\S]*?Zeffy[\s\S]*?3 in/.test(so.txt), so.txt.slice(0, 900));
   await shot(f, 'crm_sources');
   /* a contact that is not in the CRM any more (merged; the database no longer returns it): the link says so */
   await f.ev(() => { window.__WAFIX.crm_contacts_v = window.__WAFIX.crm_contacts_v.filter(c => c.id !== 5008); return window.w152.load('contacts', true); });

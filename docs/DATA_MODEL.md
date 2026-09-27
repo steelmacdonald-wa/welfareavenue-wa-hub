@@ -721,7 +721,7 @@ Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind serv
 
 - `code`: Short unique event code in the form WA-yy-nn (with letter suffixes for extra events).
 - `status`: planned, in progress, completed or cancelled. No CHECK.
-- `kind`: service (Sunday serving), drive or planning.
+- `kind`: service (Sunday serving), drive, planning or outreach (tabling days from the old website).
 - `season`: Winter, Spring, Summer or Fall.
 - `title`: Optional title; readers show Sunday serving when NULL and kind = service.
 - `itinerary_url`: Link to the day's itinerary document.
@@ -1349,17 +1349,19 @@ Gifts: amount, date, platform (zeffy, keela, stripe, cash), campaign, and the ta
 
 The old website's volunteering history (Django VolunteerAssignment rows): each sign-up, whether it was approved, confirmed, attended, the hours. Admin-only writes (the import); everyone with the CRM page reads it.
 
+- `volunteer_event_id`: The Hub's volunteer event (volunteer_events) this sign-up belongs to, once the old website's event was brought into MTL volunteering (wave 152); a serving with it set is counted through the Hub roster, not here.
+
 ### `crm_dupe_dismissals`
 
 Pairs of contacts someone marked as different people on the CRM page (family members sharing a phone, say); crm_duplicates_v leaves them out. Smaller id first.
 
 ### `crm_contacts_v` (view)
 
-The live contacts (not merged) with their volunteer roles and tags, Hub servings (confirmed at completed events), the old website's servings and hours, gift totals and organization names. The CRM page reads this.
+The live contacts (not merged) with their volunteer roles and tags, Hub servings (confirmed at completed events, the old website's events included since wave 152), the old website's servings not yet in the Hub and its recorded hours, gift totals and organization names. The CRM page reads this.
 
 ### `crm_duplicates_v` (view)
 
-Pairs of live contacts with the same email or phone, less the pairs marked as different people. The CRM page's Possible duplicates tab.
+Pairs of live contacts sharing an email (any of theirs, case ignored) or a phone (same digits, any format), less the pairs marked as different people. The CRM page's Possible duplicates tab.
 
 ### `site_events`
 

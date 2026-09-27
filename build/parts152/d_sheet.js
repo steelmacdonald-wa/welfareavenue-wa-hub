@@ -33,7 +33,7 @@
       q(db.from('crm_interactions').select('*').eq('contact_id', c.id).order('occurred_at', { ascending: false }).limit(300)),
       q(db.from('crm_donations').select('id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,notes').eq('contact_id', c.id).order('donated_at', { ascending: false }).limit(300)),
       q(db.from('crm_volunteer_history').select('*').eq('contact_id', c.id).order('event_at', { ascending: false }).limit(500)),
-      c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
+      c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at,detail').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
       q(db.from('crm_contact_orgs').select('*').eq('contact_id', c.id)),
       load('partners')
     ]).then(function (r) {
@@ -66,9 +66,9 @@
     var out = [];
     if (c.kinds.indexOf('volunteer') >= 0 || c.volunteer_id) {
       if (c._roles.length) out.push('<div class="w152line">' + c._roles.map(function (r) { return '<span class="w152rl">' + E(roleName(r)) + '</span>'; }).join(' ') + '</div>');
-      var hs = Number(c.hub_servings) || 0, ls = Number(c.legacy_servings) || 0;
-      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> at Hub events' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') : 'No serving at a Hub event yet') + '</div>');
-      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website' + (Number(c.legacy_hours) ? ' (' + Number(c.legacy_hours).toLocaleString('en-CA') + ' hours)' : '') + '</div>');
+      var hs = Number(c.hub_servings) || 0, ls = Number(c.legacy_servings) || 0, lh = Number(c.legacy_hours) || 0;
+      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> with us (MTL volunteering)' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') + (lh && !ls ? ' · ' + lh.toLocaleString('en-CA') + ' hours on the old website’s records' : '') : 'No serving with us yet') + '</div>');
+      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website, not yet in MTL volunteering' + (lh ? ' (' + lh.toLocaleString('en-CA') + ' hours)' : '') + '</div>');
       if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
       if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in MTL volunteering.</div>');
     }
@@ -123,12 +123,13 @@
     var out = [];
     var ICON = { note: 'note', call: 'phone', meeting: 'people', email: 'mail', sms: 'chat', website_message: 'mail', form: 'note' };
     (d.ints || []).forEach(function (x) {
-      var k = lower(x.kind), dir = lower(x.direction);
+      var k = lower(x.kind), dir = lower(x.direction), undated = !!(x.meta && x.meta.undated);
       var t = k === 'note' ? 'Note' : k === 'call' ? (dir === 'in' ? 'They called' : 'Call') : k === 'meeting' ? 'Meeting' : k === 'email' ? (dir === 'in' ? 'Email from them' : 'Email to them') :
-        k === 'sms' ? (dir === 'in' ? 'Text from them' : 'Text message') : k === 'website_message' ? 'Message from the website' : (x.subject || k || 'Activity');
+        k === 'sms' ? (dir === 'in' ? 'Text from them' : 'Text message') : k === 'website_message' ? (undated ? 'Message from the old website' : 'Message from the website') : (x.subject || k || 'Activity');
       var mine = lower(x.created_by) === myEmail() && lower(x.source) === 'hub';
-      out.push({ at: x.occurred_at || x.created_at, icon: ICON[k] || 'note', t: t + (x.subject && k !== 'website_message' && x.subject !== t ? ': ' + x.subject : ''), p: x.body || (k === 'website_message' ? x.subject : ''),
-        by: x.created_by && x.created_by !== 'crm_sync' ? x.created_by : '', del: mine || amAdmin() ? x.id : null });
+      var system = /^(crm_sync|wa\d+_import)$/.test(String(x.created_by || ''));
+      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: x.body || '',
+        by: system ? (undated ? 'The old website (the form kept no date)' : '') : (x.created_by || ''), del: mine || amAdmin() ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
       out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
@@ -136,6 +137,7 @@
         rc: g.receipt_number ? 'Tax receipt ' + g.receipt_number : '', rcUrl: g.receipt_url || '' });
     });
     (d.hist || []).forEach(function (h) {
+      if (h.attended && h.volunteer_event_id) return; /* served: the Hub roster has it (the old website's events are in MTL volunteering) */
       var role = h.position ? roleName(lower(h.position)) : 'a volunteer';
       var t = h.attended ? 'Served as ' + role : h.withdrawn ? 'Withdrew' : h.waitlisted ? 'On the waiting list' : h.confirmed ? 'Confirmed as ' + role : h.approved ? 'Approved as ' + role : 'Signed up as ' + role;
       out.push({ at: h.event_at, icon: 'hand2', t: t, p: [h.event_title, h.location || h.city].filter(Boolean).join(' · ') + (h.attended && Number(h.hours) ? ' · ' + Number(h.hours) + ' hours' : ''), faint: !h.attended, by: 'The old website' });
@@ -150,9 +152,10 @@
       else if (st === 'Unavailable') t = 'Could not come (' + role + ')';
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
-      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · '), faint: st !== 'Confirmed', by: 'MTL volunteering' });
+      var old = r.detail && r.detail.source === 'old website';
+      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · ') + (old && Number(r.detail.hours) ? ' · ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in MTL volunteering' : 'MTL volunteering' });
     });
-    out.sort(function (a, b) { return String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
+    out.sort(function (a, b) { return ((a.undated ? 1 : 0) - (b.undated ? 1 : 0)) || String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
     return out;
   }
   function logFormHtml(c) {
@@ -165,7 +168,7 @@
     if (!d) return logFormHtml(c) + busy('Loading their history…');
     var items = timeline(c, d);
     return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
-      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + '<span class="d">' + E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '') + '</span></div>' +
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
         (x.p ? '<p>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
         (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
     }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
