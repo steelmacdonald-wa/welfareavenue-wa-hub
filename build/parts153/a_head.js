@@ -92,9 +92,10 @@
           { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' },
           { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' },
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
+        ] }, { label: 'Reports', items: [
+          { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
         ] }];
       },
-      next: [['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',

@@ -128,6 +128,7 @@
         T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM’s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Receipts shows the settings and who is owed a receipt for the year.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/automations"]', 'Automations', 'Automations (wave157): when someone fills in a form, gets a tag, gives, or has a serving coming, the Hub runs the steps for them: emails through the permission rule (8 am to 8 pm), waits, a yes and a no path on an opened email, tags, a task on a team’s board, a notice. They start as drafts; Try it on me runs one on your own contact.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/reports"]', 'Reports', 'Reports (wave160): a fiscal year at a glance, against the year before. Gifts by month, kind, campaign and size; donors who gave for the first time, again, or not yet this year (made into a list in one click); volunteers new and returning, by month and role; email permission today. The year in a few lines is ready to copy for the board, and the page prints.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other’s history moves to it, or mark them as different people (family members share phones).' }
       ] };
     } catch (e) { /* fine */ }
@@ -139,6 +140,7 @@
   window.w156 = { fm: function () { return FM; }, parse: parseOpts, clean: cleanQuestions, choices: toChoices, more: moreHtml, save: saveForm };
   window.w157 = { au: function () { return AU; }, clean: cleanSteps, row: autoRowOf, trig: trigText, step: stepText, save: saveAuto };
   window.w158 = { gf: function () { return GF; }, rule: receiptRule, form: giftForm, sample: sampleReceipt };
+  window.w160 = { rp: function () { return RP; }, summary: rpSummary, perm: rpPerm, load: rpLoad };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,

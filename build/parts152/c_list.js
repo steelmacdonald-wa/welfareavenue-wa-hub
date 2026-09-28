@@ -52,7 +52,8 @@
       '<button role="tab" class="' + (t === 'lists' ? 'on' : '') + '" data-w152go="#crm/lists">' + I('list') + ' Lists</button>' +
       '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Campaigns</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
-      '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button></nav>';
+      '<button role="tab" class="' + (t === 'automations' ? 'on' : '') + '" data-w152go="#crm/automations">' + I('bolt') + ' Automations</button>' +
+      '<button role="tab" class="' + (t === 'reports' ? 'on' : '') + '" data-w152go="#crm/reports">' + I('chart') + ' Reports</button></nav>';
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -129,15 +130,17 @@
     else if (S.ui.tab === 'campaigns') paintCampaigns(root);
     else if (S.ui.tab === 'forms') paintForms(root);
     else if (S.ui.tab === 'automations') paintAutos(root);
+    else if (S.ui.tab === 'reports') paintReports(root);
     else paintContacts(root);
   }
   function openCrm(h) {
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : 'contacts';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : 'contacts';
     if (sub === 'campaigns') openCampaigns(parts);
     if (sub === 'forms') openForms(parts);
     if (sub === 'automations') openAutos(parts);
+    if (sub === 'reports') openReports(parts);
     if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : ''; if (GF.view) GF.cfg = null; GF.msg = ''; GF.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
     Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
