@@ -138,7 +138,8 @@
       line('Eligible amount of the gift for tax purposes', cents(s.eligible_amount)) +
       '<div class="w158sig"><span class="w158line"></span><span>' + E(s.signatory_name ? s.signatory_name + (s.signatory_title ? ', ' + s.signatory_title : '') : 'Authorized signature (no signatory yet)') + '</span></div>' +
       '<div class="w158cra">' + E(s.cra) + '</div></div>' +
-      '<div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button><button class="w152btn" data-w158print="1">' + I('note') + ' Print the sample</button></div>';
+      '<div class="m" data-w158bsay role="status"></div>' +
+      '<div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button><button class="w152btn ghost" data-w158bpdfsample="1">' + I('note') + ' Download the sample (PDF)</button><button class="w152btn" data-w158print="1">' + I('note') + ' Print the sample</button></div>';
   }
 
   /* ---------- receipts: settings, the year's receipts due ---------- */
@@ -157,8 +158,9 @@
     var done = (S.grcpt || []).filter(function (r) { return String(r.tax_year) === String(yr) && r.receipt_status === 'receipted'; }).length;
     var set = function (k, label, ph, hint) { return '<label class="w155lb">' + E(label) + (hint ? ' <span class="m">' + E(hint) + '</span>' : '') + '<input class="w152in" data-w158cfg="' + k + '" value="' + E(cfg[k] || '') + '" placeholder="' + E(ph || '') + '"' + (admin ? '' : ' disabled') + '></label>'; };
     return '<div class="w155grid"><div class="w154card"><h3>' + I('note') + ' Receipt settings</h3>' +
-      '<p class="m">What every CRA receipt from the Hub will carry. Receipts from the Hub are ' + (cfg.receipt_mode === 'on' ? '<b>on</b>' : '<b>off</b>') + ': Keela’s 55 receipts stay the legal copies, and issuing starts once the treasurer confirms these settings (the numbering must not repeat Keela’s KEE numbers).</p>' +
+      '<p class="m">What every CRA receipt from the Hub will carry. Keela’s 55 receipts stay the legal copies; the numbering here must not repeat Keela’s KEE numbers.</p>' +
       (GF.err ? '<div class="w152err">' + E(GF.err) + '</div>' : '') + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
+      (RB.err ? '<div class="w152err">' + E(RB.err) + '</div>' : '') + (RB.msg ? '<div class="w154msg">' + E(RB.msg) + '</div>' : '') + rbStatusHtml(cfg) +
       set('receipt_charity_name', 'Charity name', 'Welfare Avenue', 'as on file with the CRA') + set('receipt_charity_address', 'Charity address', '', 'as on file with the CRA') +
       '<div class="w154kv"><span>Registration number</span><span>' + E(cfg.mail_charity_number || '') + '</span></div>' +
       set('receipt_location', 'Where receipts are issued', 'Montreal, Quebec') +
@@ -168,12 +170,13 @@
       '<div class="w154card"><h3>' + I('heart') + ' Receipts due for ' + E(yr) + ' <select class="w152sel w158yr" data-w158year aria-label="Tax year">' + ys.map(function (y) { return '<option' + (y === yr ? ' selected' : '') + '>' + E(y) + '</option>'; }).join('') + '</select></h3>' +
       '<p class="m">Receipts follow the donor’s tax year (January to December), not the fiscal year. The year-end run gives each donor one receipt for the year.</p>' +
       '<div class="w152stats"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done + '</b><span>already receipted</span></div></div>' +
+      rbRunHtml(donors.length, yr) +
       (donors.length ? '<div class="w156fl">' + donors.map(function (d) {
         var c = contact(d.id), noAddr = c && !String(c.address || '').trim();
         return '<div class="w156fr"><span><a href="#crm/c/' + E(d.id) + '">' + E(c ? c.full_name : 'Contact ' + d.id) + '</a><span class="m"> · ' + plural(d.gifts.length, 'gift', 'gifts') + (noAddr ? ' · <span class="w156warn">no address on file</span>' : '') + '</span></span><span>' + E(cents(d.total)) + '</span>' +
-          '<button class="w152mini" data-w158sample="' + E(d.gifts[0].gift_id) + '">Sample</button></div>';
+          '<button class="w152mini" data-w158sample="' + E(d.gifts[0].gift_id) + '">Sample</button>' + rbDueActions(d, yr) + '</div>';
       }).join('') + '</div>' : '<p class="m">No receipt is due for ' + E(yr) + '.</p>') +
-      '<div class="w154acts"><button class="w152btn ghost" data-w152go="#crm/gifts">Back to the gifts</button></div></div></div>';
+      '<div class="w154acts"><button class="w152btn ghost" data-w152go="#crm/gifts">Back to the gifts</button></div></div>' + rbIssuedHtml() + '</div>';
   }
   function saveRcfg() {
     var p = {}; document.querySelectorAll('#crm [data-w158cfg]').forEach(function (el) { p[el.getAttribute('data-w158cfg')] = el.value; });

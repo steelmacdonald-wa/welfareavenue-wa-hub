@@ -56629,7 +56629,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (sub === 'forms') openForms(parts);
     if (sub === 'automations') openAutos(parts);
     if (sub === 'reports') openReports(parts);
-    if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : ''; if (GF.view) GF.cfg = null; GF.msg = ''; GF.err = ''; }
+    if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : ''; if (GF.view) { GF.cfg = null; S.rcpts = null; RB.act = null; RB.confirmOn = false; } GF.msg = ''; GF.err = ''; RB.msg = ''; RB.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
     Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
@@ -57275,8 +57275,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var u = S.ui;
     if (!S.gifts || !S.grcpt) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the gifts\u2026'); Promise.all([load('gifts'), load('grcpt')]).then(function () { if (u.tab === 'gifts') paint(); }); return; }
     if (GF.view === 'receipts') {
-      if (!GF.cfg) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the receipt settings\u2026'); loadRcfg().then(function () { if (u.tab === 'gifts') paint(); }); return; }
-      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + receiptsHtml(); return;
+      if (!GF.cfg || !S.rcpts) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the receipt settings\u2026'); Promise.all([GF.cfg ? null : loadRcfg(), S.rcpts ? null : load('rcpts')]).then(function () { if (u.tab === 'gifts') paint(); }); return; }
+      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + receiptsHtml(); rbSigLoad(); return;
     }
     var all = S.gifts, list = all.filter(giftMatches);
     var total = 0, donors = {}, receipted = 0, years = {}, plats = {};
@@ -59067,7 +59067,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       line('Eligible amount of the gift for tax purposes', cents(s.eligible_amount)) +
       '<div class="w158sig"><span class="w158line"></span><span>' + E(s.signatory_name ? s.signatory_name + (s.signatory_title ? ', ' + s.signatory_title : '') : 'Authorized signature (no signatory yet)') + '</span></div>' +
       '<div class="w158cra">' + E(s.cra) + '</div></div>' +
-      '<div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button><button class="w152btn" data-w158print="1">' + I('note') + ' Print the sample</button></div>';
+      '<div class="m" data-w158bsay role="status"></div>' +
+      '<div class="w152foot"><button class="w152btn ghost" data-w152close="1">Close</button><button class="w152btn ghost" data-w158bpdfsample="1">' + I('note') + ' Download the sample (PDF)</button><button class="w152btn" data-w158print="1">' + I('note') + ' Print the sample</button></div>';
   }
 
   /* ---------- receipts: settings, the year's receipts due ---------- */
@@ -59086,8 +59087,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var done = (S.grcpt || []).filter(function (r) { return String(r.tax_year) === String(yr) && r.receipt_status === 'receipted'; }).length;
     var set = function (k, label, ph, hint) { return '<label class="w155lb">' + E(label) + (hint ? ' <span class="m">' + E(hint) + '</span>' : '') + '<input class="w152in" data-w158cfg="' + k + '" value="' + E(cfg[k] || '') + '" placeholder="' + E(ph || '') + '"' + (admin ? '' : ' disabled') + '></label>'; };
     return '<div class="w155grid"><div class="w154card"><h3>' + I('note') + ' Receipt settings</h3>' +
-      '<p class="m">What every CRA receipt from the Hub will carry. Receipts from the Hub are ' + (cfg.receipt_mode === 'on' ? '<b>on</b>' : '<b>off</b>') + ': Keela\u2019s 55 receipts stay the legal copies, and issuing starts once the treasurer confirms these settings (the numbering must not repeat Keela\u2019s KEE numbers).</p>' +
+      '<p class="m">What every CRA receipt from the Hub will carry. Keela\u2019s 55 receipts stay the legal copies; the numbering here must not repeat Keela\u2019s KEE numbers.</p>' +
       (GF.err ? '<div class="w152err">' + E(GF.err) + '</div>' : '') + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
+      (RB.err ? '<div class="w152err">' + E(RB.err) + '</div>' : '') + (RB.msg ? '<div class="w154msg">' + E(RB.msg) + '</div>' : '') + rbStatusHtml(cfg) +
       set('receipt_charity_name', 'Charity name', 'Welfare Avenue', 'as on file with the CRA') + set('receipt_charity_address', 'Charity address', '', 'as on file with the CRA') +
       '<div class="w154kv"><span>Registration number</span><span>' + E(cfg.mail_charity_number || '') + '</span></div>' +
       set('receipt_location', 'Where receipts are issued', 'Montreal, Quebec') +
@@ -59097,12 +59099,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w154card"><h3>' + I('heart') + ' Receipts due for ' + E(yr) + ' <select class="w152sel w158yr" data-w158year aria-label="Tax year">' + ys.map(function (y) { return '<option' + (y === yr ? ' selected' : '') + '>' + E(y) + '</option>'; }).join('') + '</select></h3>' +
       '<p class="m">Receipts follow the donor\u2019s tax year (January to December), not the fiscal year. The year-end run gives each donor one receipt for the year.</p>' +
       '<div class="w152stats"><div class="w152st"><b>' + E(cents(total)) + '</b><span>eligible, ' + plural(due.length, 'gift', 'gifts') + '</span></div><div class="w152st"><b>' + donors.length + '</b><span>' + (donors.length === 1 ? 'donor' : 'donors') + ' to receipt</span></div><div class="w152st"><b>' + done + '</b><span>already receipted</span></div></div>' +
+      rbRunHtml(donors.length, yr) +
       (donors.length ? '<div class="w156fl">' + donors.map(function (d) {
         var c = contact(d.id), noAddr = c && !String(c.address || '').trim();
         return '<div class="w156fr"><span><a href="#crm/c/' + E(d.id) + '">' + E(c ? c.full_name : 'Contact ' + d.id) + '</a><span class="m"> \u00b7 ' + plural(d.gifts.length, 'gift', 'gifts') + (noAddr ? ' \u00b7 <span class="w156warn">no address on file</span>' : '') + '</span></span><span>' + E(cents(d.total)) + '</span>' +
-          '<button class="w152mini" data-w158sample="' + E(d.gifts[0].gift_id) + '">Sample</button></div>';
+          '<button class="w152mini" data-w158sample="' + E(d.gifts[0].gift_id) + '">Sample</button>' + rbDueActions(d, yr) + '</div>';
       }).join('') + '</div>' : '<p class="m">No receipt is due for ' + E(yr) + '.</p>') +
-      '<div class="w154acts"><button class="w152btn ghost" data-w152go="#crm/gifts">Back to the gifts</button></div></div></div>';
+      '<div class="w154acts"><button class="w152btn ghost" data-w152go="#crm/gifts">Back to the gifts</button></div></div>' + rbIssuedHtml() + '</div>';
   }
   function saveRcfg() {
     var p = {}; document.querySelectorAll('#crm [data-w158cfg]').forEach(function (el) { p[el.getAttribute('data-w158cfg')] = el.value; });
@@ -59148,6 +59151,240 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var box = t.closest('[data-w158gift]'); if (box) { refreshRule(box); return; }
     if (t.hasAttribute('data-w158year')) { GF.year = t.value; paint(); }
   });
+  /* ======================= Official receipts (wave158b, 28/09/26) =======================
+     The machinery for CRA receipts from the Hub, built while receipts stay off. In Receipts: whether receipts from the Hub are on,
+     what is still missing (the settings and a signature image), the signature (admins upload an image; the Hub keeps it as a PNG
+     in the private bucket), the switch for admins (on needs everything; the treasurer and Steel decide), Issue for a donor's due
+     gifts of the tax year (one receipt: one gift, or several as the year-end run does), the year-end run (one receipt per donor),
+     and the receipts issued, each with its PDF, Replace and Cancel (with the reason). A sample receipt downloads as a PDF drawn by
+     receipt-pdf, marked SAMPLE. Issuing and replacing refuse in the database while receipt_mode is off. */
+  var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0 };
+  LOADERS.rcpts = function () { return db.from('crm_receipts').select('id,serial,contact_id,tax_year,kind,status,gift_ids,amount,advantage_amount,eligible_amount,donor,issued_at,issued_by,replaces_id,replaced_by_id,cancelled_at,cancel_reason,pdf_path,cancelled_pdf_path').order('issued_at', { ascending: false }).order('id', { ascending: false }).limit(3000); };
+  function rbFn(body) {
+    if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
+    return Promise.resolve(db.functions.invoke('receipt-pdf', { body: body })).then(function (r) {
+      if (r && r.error) {
+        var ctx = r.error.context;
+        if (ctx && typeof ctx.json === 'function') return ctx.json().then(function (j) { return { error: (j && j.error) || r.error.message || 'The receipt function refused.' }; }, function () { return { error: r.error.message || 'The receipt function refused.' }; });
+        return { error: r.error.message || 'The receipt function refused.' };
+      }
+      return (r && r.data) || {};
+    }).catch(function (e) { return { error: String((e && e.message) || e) }; });
+  }
+  function rbOn() { return !!(GF.cfg && GF.cfg.receipt_mode === 'on'); }
+  function rbAdmin() { return !!(GF.cfg && GF.cfg.is_admin); }
+  function rbSave(bytes, name, type) {
+    try {
+      var blob = bytes instanceof Blob ? bytes : new Blob([bytes], { type: type || 'application/pdf' }), url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) { /* fine */ } }, 30000);
+      return true;
+    } catch (e) { return false; }
+  }
+  function rbB64(b64) { var s = atob(b64), u = new Uint8Array(s.length); for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u; }
+  function rbRefresh() { S.at.rcpts = 0; S.at.gifts = 0; S.at.grcpt = 0; return Promise.all([load('rcpts', true), load('gifts', true), load('grcpt', true), loadRcfg()]).then(function () { if (S.ui.tab === 'gifts') paint(); }); }
+  function rbSay(msg, err) { RB.msg = err ? '' : msg; RB.err = err ? msg : ''; RB.busy = ''; if (S.ui.tab === 'gifts') paint(); }
+
+  /* ---------- the sample as a PDF ---------- */
+  function rbSamplePdf(btn) {
+    var m = /^rcpt:(\d+)$/.exec(S.sheet || ''); if (!m) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Drawing the PDF\u2026'; }
+    rbFn({ action: 'sample', gift_id: Number(m[1]) }).then(function (r) {
+      if (btn) { btn.disabled = false; btn.innerHTML = I('note') + ' Download the sample (PDF)'; }
+      var box = document.querySelector('#w152sheet [data-w158bsay]');
+      if (r.error || !r.pdf_b64) { if (box) box.textContent = 'The PDF did not come back: ' + (r.error || 'no file'); return; }
+      rbSave(rbB64(r.pdf_b64), 'sample-receipt-gift-' + m[1] + '.pdf');
+      if (box) box.textContent = 'Downloaded: sample-receipt-gift-' + m[1] + '.pdf (marked SAMPLE).';
+    });
+  }
+
+  /* ---------- in Receipts: the switch, the signature ---------- */
+  function rbStatusHtml(cfg) {
+    var on = cfg.receipt_mode === 'on', admin = !!cfg.is_admin, missing = (cfg.missing || []).slice();
+    if (!cfg.signature) missing.push('a signature image');
+    var sig = '<div class="w158bsig">' + (cfg.signature ? (RB.sigUrl ? '<img src="' + E(RB.sigUrl) + '" alt="The signature on receipts">' : '<span class="m">A signature image is uploaded.</span>') : '<span class="m">No signature image yet.</span>') +
+      (admin ? '<label class="w152btn sm ghost w158bup">' + I('edit') + (cfg.signature ? ' Replace the signature' : ' Upload the signature') + '<input type="file" accept="image/png,image/jpeg" data-w158bsig hidden></label>' : '') + '</div>';
+    return '<div class="w158bmode ' + (on ? 'on' : 'off') + '"><b>Receipts from the Hub are ' + (on ? 'on' : 'off') + '.</b> ' +
+      (on ? 'Admins issue, replace and cancel them below; every receipt takes the next number.'
+        : missing.length ? 'Before an admin can turn them on: ' + E(listJoin(missing)) + '.' : 'Everything is ready: an admin can turn them on once the treasurer and Steel agree.') + '</div>' +
+      '<div class="w155lb">The signature on receipts <span class="m">the treasurer\u2019s, or another person the board authorizes; a PNG or JPG on a white or clear background</span></div>' + sig +
+      (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on admins can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
+          '<div class="w154acts"><button class="w152btn" data-w158bmode="on">' + I('check') + ' Turn them on</button><button class="w152btn ghost" data-w158bmodeno="1">Not yet</button></div></div>'
+        : '<div class="w154acts">' + (on ? '<button class="w152btn ghost" data-w158bmode="off">' + I('lock') + ' Turn receipts off</button>' : '<button class="w152btn ghost" data-w158bask="1"' + (missing.length ? ' disabled title="' + E('Missing: ' + missing.join(', ')) + '"' : '') + '>' + I('check') + ' Turn receipts on\u2026</button>') + '</div>') : '');
+  }
+  function rbSigLoad() {
+    if (!GF.cfg || !GF.cfg.signature || RB.sigUrl || Date.now() - RB.sigAt < 60000 || !db.storage) return;
+    RB.sigAt = Date.now();
+    Promise.resolve(db.storage.from('receipts').createSignedUrl('settings/signature.png', 600)).then(function (r) {
+      if (r && r.data && r.data.signedUrl) { RB.sigUrl = r.data.signedUrl; if (S.ui.tab === 'gifts' && GF.view === 'receipts') paint(); }
+    }, function () { /* fine */ });
+  }
+  function rbSigUpload(input) {
+    var f = input.files && input.files[0]; if (!f) return;
+    if (!/^image\/(png|jpeg)$/.test(f.type)) { rbSay('A PNG or JPG, please.', true); return; }
+    RB.busy = 'sig'; RB.msg = 'Uploading the signature\u2026'; paint();
+    var img = new Image(), url = URL.createObjectURL(f);
+    img.onload = function () {
+      /* kept as a PNG no wider than 900 px, so the PDF can use it */
+      var sc = Math.min(1, 900 / img.naturalWidth), c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.naturalWidth * sc)); c.height = Math.max(1, Math.round(img.naturalHeight * sc));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      try { URL.revokeObjectURL(url); } catch (e) { /* fine */ }
+      c.toBlob(function (blob) {
+        if (!blob) { rbSay('That image could not be read.', true); return; }
+        Promise.resolve(db.storage.from('receipts').upload('settings/signature.png', blob, { upsert: true, contentType: 'image/png' })).then(function (r) {
+          if (r && r.error) { rbSay('Not uploaded: ' + (r.error.message || r.error), true); return; }
+          RB.sigUrl = null; RB.sigAt = 0;
+          try { db.from('change_log').insert({ entity_type: 'receipts', entity_id: 'settings', field: 'signature', old_value: null, new_value: 'uploaded', changed_by: actor() }); } catch (e) { /* the upload is what counts */ }
+          loadRcfg().then(function () { rbSay('The signature is saved.'); });
+        });
+      }, 'image/png');
+    };
+    img.onerror = function () { rbSay('That image could not be read.', true); };
+    img.src = url;
+  }
+  function rbModeSet(mode) {
+    RB.busy = 'mode'; RB.confirmOn = false;
+    Promise.resolve(db.rpc('crm_receipt_mode_set', { p_mode: mode })).then(function (r) {
+      if (r && r.error) { rbSay('Not changed: ' + (r.error.message || r.error), true); return; }
+      GF.cfg = r.data || GF.cfg; rbSay(mode === 'on' ? 'Receipts from the Hub are on.' : 'Receipts from the Hub are off.');
+    });
+  }
+
+  /* ---------- issuing ---------- */
+  function rbIssue(giftIds, quiet) {
+    return Promise.resolve(db.rpc('crm_receipt_issue', { p_gift_ids: giftIds.map(Number) })).then(function (r) {
+      if (r && r.error) return { error: r.error.message || String(r.error) };
+      var id = r && r.data; if (id && typeof id === 'object') id = id.crm_receipt_issue != null ? id.crm_receipt_issue : id.id;
+      return rbFn({ action: 'render', receipt_id: Number(id) }).then(function (p) { return { id: id, pdf: p && !p.error, pdfErr: p && p.error }; });
+    });
+  }
+  function rbIssueDonor(cid, year) {
+    var gifts = (S.grcpt || []).filter(function (r) { return String(r.contact_id) === String(cid) && String(r.tax_year) === String(year) && r.receipt_status === 'due'; }).map(function (r) { return r.gift_id; });
+    if (!gifts.length) return;
+    RB.busy = 'issue:' + cid; paint();
+    rbIssue(gifts).then(function (x) {
+      if (x.error) { rbSay('Not issued: ' + x.error, true); return; }
+      rbSay('Receipt issued' + (x.pdf ? ' and its PDF kept.' : '; the PDF did not come back (' + (x.pdfErr || '?') + '): Make the PDF below.'));
+      rbRefresh();
+    });
+  }
+  function rbYearRun(year) {
+    var by = {};
+    (S.grcpt || []).forEach(function (r) { if (String(r.tax_year) === String(year) && r.receipt_status === 'due') (by[r.contact_id] = by[r.contact_id] || []).push(r.gift_id); });
+    var ids = Object.keys(by), done = 0, bad = [];
+    if (!ids.length) return;
+    RB.busy = 'run'; RB.run = { total: ids.length, done: 0 }; paint();
+    var step = function (i) {
+      if (i >= ids.length) { RB.run = null; rbSay(plural(done, 'receipt', 'receipts') + ' issued for ' + year + (bad.length ? '; not issued: ' + bad.join('; ') : '.'), !!bad.length && !done); rbRefresh(); return; }
+      rbIssue(by[ids[i]]).then(function (x) {
+        if (x.error) { var c = contact(ids[i]); bad.push((c ? c.full_name : 'contact ' + ids[i]) + ' (' + x.error + ')'); } else done++;
+        RB.run.done = i + 1; if (S.ui.tab === 'gifts') paint();
+        step(i + 1);
+      });
+    };
+    step(0);
+  }
+  function rbDueActions(d, year) {
+    if (!rbAdmin() || !rbOn()) return '';
+    return '<button class="w152mini" data-w158bissue="' + E(d.id) + '" data-year="' + E(year) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'issue:' + d.id ? 'Issuing\u2026' : 'Issue') + '</button>';
+  }
+  function rbRunHtml(n, year) {
+    if (!n) return '';
+    if (RB.run) return '<div class="w154msg">Issuing ' + RB.run.done + ' of ' + RB.run.total + '\u2026</div>';
+    if (!rbOn()) return '<p class="m">' + I('lock') + ' Issuing waits until receipts from the Hub are on.</p>';
+    if (!rbAdmin()) return '<p class="m">An admin issues the receipts.</p>';
+    return '<div class="w154acts"><button class="w152btn" data-w158brun="' + E(year) + '"' + (RB.busy ? ' disabled' : '') + '>' + I('send') + ' Issue one receipt per donor (' + n + ')</button></div>';
+  }
+
+  /* ---------- the receipts issued ---------- */
+  function rbPdf(id, which) {
+    var r = (S.rcpts || []).filter(function (x) { return String(x.id) === String(id); })[0]; if (!r) return;
+    var path = which === 'cancelled' ? r.cancelled_pdf_path : r.pdf_path;
+    if (!path || !db.storage) return;
+    Promise.resolve(db.storage.from('receipts').createSignedUrl(path, 120)).then(function (s) {
+      if (s && s.data && s.data.signedUrl) { try { window.open(s.data.signedUrl, '_blank', 'noopener'); } catch (e) { /* fine */ } }
+      else rbSay('The PDF could not be opened' + (s && s.error ? ': ' + (s.error.message || s.error) : '.'), true);
+    });
+  }
+  function rbMake(id) {
+    RB.busy = 'pdf:' + id; paint();
+    rbFn({ action: 'render', receipt_id: Number(id) }).then(function (p) {
+      if (p.error) { rbSay('The PDF was not made: ' + p.error, true); return; }
+      rbSay('The PDF is kept.'); rbRefresh();
+    });
+  }
+  function rbAct(id, kind) {
+    var box = document.querySelector('#crm [data-w158breason="' + id + '"]'), why = box ? String(box.value || '').trim() : '';
+    if (why.length < 3) { rbSay('Say why, in a few words.', true); return; }
+    RB.busy = kind + ':' + id; paint();
+    var q = kind === 'replace' ? db.rpc('crm_receipt_replace', { p_id: Number(id), p_reason: why }) : db.rpc('crm_receipt_cancel', { p_id: Number(id), p_reason: why });
+    Promise.resolve(q).then(function (r) {
+      if (r && r.error) { rbSay((kind === 'replace' ? 'Not replaced: ' : 'Not cancelled: ') + (r.error.message || r.error), true); return; }
+      RB.act = null;
+      var newId = kind === 'replace' ? (r && r.data && typeof r.data === 'object' ? r.data.crm_receipt_replace : r && r.data) : null;
+      /* the kept copy marked cancelled, and the replacement's own PDF */
+      rbFn({ action: 'render', receipt_id: Number(id) }).then(function () {
+        return newId ? rbFn({ action: 'render', receipt_id: Number(newId) }) : null;
+      }).then(function () {
+        rbSay(kind === 'replace' ? 'Replaced: the original is kept, marked cancelled.' : 'Cancelled: the receipt is kept, marked cancelled, and its gifts follow the receipt rule again.');
+        rbRefresh();
+      });
+    });
+  }
+  function rbIssuedHtml() {
+    var list = S.rcpts || [], admin = rbAdmin(), on = rbOn();
+    var bySerial = {}; list.forEach(function (r) { bySerial[r.id] = r.serial; });
+    var rows = list.slice(0, 200).map(function (r) {
+      var c = contact(r.contact_id), who = c ? '<a href="#crm/c/' + E(c.id) + '">' + E((r.donor && r.donor.name) || c.full_name) + '</a>' : E((r.donor && r.donor.name) || 'Contact ' + r.contact_id);
+      var st = r.status === 'cancelled' ? (r.replaced_by_id ? 'Replaced by ' + (bySerial[r.replaced_by_id] || 'a new receipt') : 'Cancelled') : 'Issued';
+      var acts = [];
+      if (r.pdf_path) acts.push('<button class="w152mini" data-w158bpdf="' + E(r.id) + '">' + I('note') + ' PDF</button>');
+      else if (admin) acts.push('<button class="w152mini" data-w158bmake="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>Make the PDF</button>');
+      if (r.cancelled_pdf_path) acts.push('<button class="w152mini" data-w158bpdf="' + E(r.id) + '" data-which="cancelled">Cancelled copy</button>');
+      if (admin && r.status === 'issued') {
+        if (on) acts.push('<button class="w152mini" data-w158bdo="replace" data-id="' + E(r.id) + '">Replace</button>');
+        acts.push('<button class="w152mini" data-w158bdo="cancel" data-id="' + E(r.id) + '">Cancel</button>');
+      }
+      var form = RB.act && String(RB.act.id) === String(r.id) ? '<div class="w158bwhy"><input class="w152in" data-w158breason="' + E(r.id) + '" placeholder="' + (RB.act.kind === 'replace' ? 'Why it is replaced (the address changed, a typo\u2026)' : 'Why it is cancelled (issued in error\u2026)') + '">' +
+        '<button class="w152btn sm" data-w158bgo="' + E(RB.act.kind) + '" data-id="' + E(r.id) + '">' + (RB.act.kind === 'replace' ? 'Replace it' : 'Cancel it') + '</button><button class="w152btn sm ghost" data-w158bstop="1">Keep it</button></div>' : '';
+      return '<div class="w158brow' + (r.status === 'cancelled' ? ' off' : '') + '"><span class="s"><b>' + E(r.serial) + '</b><span class="m">' + E(fmtDay(r.issued_at)) + (r.kind === 'annual' ? ' \u00b7 ' + plural((r.gift_ids || []).length, 'gift', 'gifts') + ' in ' + E(r.tax_year) : '') + '</span></span>' +
+        '<span class="w">' + who + '</span><span class="a">' + E(cents(r.eligible_amount)) + '</span><span class="t">' + gchip({ issued: ['Issued', GREEN], cancelled: [st, MUTED] }, r.status) + (r.cancel_reason ? '<span class="m"> ' + E(String(r.cancel_reason).replace(/^Replaced:\s*/, '')) + '</span>' : '') + '</span>' +
+        '<span class="x">' + acts.join('') + '</span>' + form + '</div>';
+    }).join('');
+    return '<div class="w154card wide"><h3>' + I('note') + ' Receipts issued by the Hub <span class="m">' + plural(list.length, 'receipt', 'receipts') + '</span></h3>' +
+      (list.length ? '<div class="w158brows">' + rows + '</div>' : '<p class="m">None yet. Keela\u2019s 55 receipts are the legal copies until receipts from the Hub are on; then each one issued here is listed with its PDF.</p>') + '</div>';
+  }
+
+  /* ---------- styles ---------- */
+  var css158b = document.createElement('style'); css158b.id = 'w158bcss';
+  css158b.textContent = ''
+    + '.w158bmode{border-radius:12px;padding:10px 12px;margin:10px 0 12px;font-size:13.5px;line-height:1.45;}.w158bmode.off{background:rgba(179,64,47,.07);}.w158bmode.on{background:rgba(42,140,122,.1);}'
+    + '.w158bsig{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 0 10px;}.w158bsig img{max-width:220px;max-height:70px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.15);border-radius:8px;padding:4px;}'
+    + '.w158bup{cursor:pointer;}.w158brows{display:flex;flex-direction:column;}'
+    + '.w158brow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dashed rgba(16,63,57,.12);font-size:13.5px;}'
+    + '.w158brow.off{opacity:.72;}.w158brow .s{display:flex;flex-direction:column;min-width:0;}.w158brow .a{font-weight:600;font-variant-numeric:tabular-nums;}.w158brow .x{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}'
+    + '.w158brow .w a{color:inherit;font-weight:600;}.w158bwhy{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.w158bwhy .w152in{flex:1 1 240px;}'
+    + '@media (max-width:700px){.w158brow{grid-template-columns:minmax(0,1fr) auto;}.w158brow .w,.w158brow .t{grid-column:1/-1;}.w158brow .x{grid-column:1/-1;justify-content:flex-start;}}';
+  document.head.appendChild(css158b);
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target, el; if (!t || !t.closest) return;
+    if (!t.closest('.w152root') && !t.closest('#w152sheet')) return;
+    if ((el = t.closest('[data-w158bpdfsample]'))) { e.preventDefault(); rbSamplePdf(el); return; }
+    if ((el = t.closest('[data-w158bask]'))) { e.preventDefault(); RB.confirmOn = true; RB.msg = ''; RB.err = ''; paint(); return; }
+    if ((el = t.closest('[data-w158bmodeno]'))) { e.preventDefault(); RB.confirmOn = false; paint(); return; }
+    if ((el = t.closest('[data-w158bmode]'))) { e.preventDefault(); rbModeSet(el.getAttribute('data-w158bmode')); return; }
+    if ((el = t.closest('[data-w158bissue]'))) { e.preventDefault(); rbIssueDonor(el.getAttribute('data-w158bissue'), el.getAttribute('data-year')); return; }
+    if ((el = t.closest('[data-w158brun]'))) { e.preventDefault(); rbYearRun(el.getAttribute('data-w158brun')); return; }
+    if ((el = t.closest('[data-w158bpdf]'))) { e.preventDefault(); rbPdf(el.getAttribute('data-w158bpdf'), el.getAttribute('data-which')); return; }
+    if ((el = t.closest('[data-w158bmake]'))) { e.preventDefault(); rbMake(el.getAttribute('data-w158bmake')); return; }
+    if ((el = t.closest('[data-w158bdo]'))) { e.preventDefault(); RB.act = { id: el.getAttribute('data-id'), kind: el.getAttribute('data-w158bdo') }; RB.msg = ''; RB.err = ''; paint(); var inp = document.querySelector('#crm [data-w158breason]'); if (inp) inp.focus(); return; }
+    if ((el = t.closest('[data-w158bstop]'))) { e.preventDefault(); RB.act = null; paint(); return; }
+    if ((el = t.closest('[data-w158bgo]'))) { e.preventDefault(); rbAct(el.getAttribute('data-id'), el.getAttribute('data-w158bgo')); return; }
+  });
+  document.addEventListener('change', function (e) { var t = e.target; if (t && t.hasAttribute && t.hasAttribute('data-w158bsig')) rbSigUpload(t); });
   /* ======================= Reports (wave160, 28/09/26) =======================
      The CRM's Reports tab (#crm/reports, or #crm/reports/<the year a fiscal year starts>): one fiscal year (1 October to
      30 September) from crm_report(), which runs with the reader's rights. The year in a few lines for the board (copy it or
@@ -59562,7 +59799,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Campaigns', 'Campaigns (wave155): one message to a list, person by person, through the consent rule, at up to 80 a day on Resend\u2019s free plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM\u2019s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it.', OPT),
-        T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Receipts shows the settings and who is owed a receipt for the year.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Receipts shows the settings, who is owed a receipt for the year and the receipts the Hub issued; once an admin turns receipts on (the treasurer and Steel decide), admins issue them with their PDF, one per donor at year-end, and replace or cancel them with the reason.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/automations"]', 'Automations', 'Automations (wave157): when someone fills in a form, gets a tag, gives, or has a serving coming, the Hub runs the steps for them: emails through the permission rule (8 am to 8 pm), waits, a yes and a no path on an opened email, tags, a task on a team\u2019s board, a notice. They start as drafts; Try it on me runs one on your own contact.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/reports"]', 'Reports', 'Reports (wave160): a fiscal year at a glance, against the year before. Gifts by month, kind, campaign and size; donors who gave for the first time, again, or not yet this year (made into a list in one click); volunteers new and returning, by month and role; email permission today. The year in a few lines is ready to copy for the board, and the page prints.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other\u2019s history moves to it, or mark them as different people (family members share phones).' }
@@ -59577,6 +59814,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w157 = { au: function () { return AU; }, clean: cleanSteps, row: autoRowOf, trig: trigText, step: stepText, save: saveAuto };
   window.w158 = { gf: function () { return GF; }, rule: receiptRule, form: giftForm, sample: sampleReceipt };
   window.w160 = { rp: function () { return RP; }, summary: rpSummary, perm: rpPerm, load: rpLoad };
+  window.w158b = { rb: function () { return RB; }, issued: rbIssuedHtml, status: rbStatusHtml };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,

@@ -28,8 +28,8 @@
     var u = S.ui;
     if (!S.gifts || !S.grcpt) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the gifts…'); Promise.all([load('gifts'), load('grcpt')]).then(function () { if (u.tab === 'gifts') paint(); }); return; }
     if (GF.view === 'receipts') {
-      if (!GF.cfg) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the receipt settings…'); loadRcfg().then(function () { if (u.tab === 'gifts') paint(); }); return; }
-      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + receiptsHtml(); return;
+      if (!GF.cfg || !S.rcpts) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the receipt settings…'); Promise.all([GF.cfg ? null : loadRcfg(), S.rcpts ? null : load('rcpts')]).then(function () { if (u.tab === 'gifts') paint(); }); return; }
+      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + receiptsHtml(); rbSigLoad(); return;
     }
     var all = S.gifts, list = all.filter(giftMatches);
     var total = 0, donors = {}, receipted = 0, years = {}, plats = {};
