@@ -1350,6 +1350,9 @@ Gifts: amount, date, platform (zeffy, keela, stripe, cash), campaign, and the ta
 - `advantage_desc`: What the advantage was, in words, for the receipt (wave158).
 - `in_kind_desc`: A gift in kind: what was given (wave158); its fair market value is the amount. appraiser: who valued it, when it was appraised.
 - `tribute_kind`: A gift in honour or in memory of someone (wave158): honour or memory, with tribute_name.
+- `refunded_amount`: Money given back to the donor (wave161). While a gift has no receipt, amount is what was kept (the gift less its refunds), so totals, reports and receipts use it as it is, and a gift refunded in full keeps amount 0 and counts nowhere. A gift refunded after its receipt was issued keeps its amount, and its notes say the receipt must be cancelled or replaced.
+- `refunded_at`: When the last refund came through (wave161).
+- `plan_id`: The monthly gift (crm_gift_plans) this payment belongs to (wave161).
 
 ### `crm_volunteer_history`
 
@@ -1484,6 +1487,22 @@ Official donation receipts the Hub issued (wave158b): the serial number (prefix 
 - `charity`: The charity as printed: name and address as on file with the CRA, the registration number, the signatory and their title.
 - `pdf_path`: The official PDF in the private bucket receipts (<tax year>/<serial>.pdf), drawn once by receipt-pdf; pdf_sha256 is its checksum. cancelled_pdf_path is the copy marked cancelled.
 
+### `crm_gift_plans`
+
+Monthly gifts (wave161): one row per Stripe subscription started on the Hub's donation page, with its donor, amount, designation and tribute, its state (active, past_due after a failed payment, paused, cancelled, incomplete), the next payment, the last one paid or failed, a cancellation scheduled for the end of the period (ends_at) and why it stopped. Each month's payment is a gift in crm_donations with plan_id. Written only by crm_stripe_apply (service role); staff with the CRM page read it.
+
+- `external_id`: The Stripe subscription id (sub_...).
+- `customer_id`: The Stripe customer id (cus_...).
+- `last_event_at`: When Stripe created the last subscription event applied, so an older event arriving late does not undo a newer state.
+
+### `crm_stripe_events`
+
+Every event Stripe sent to the Hub's webhook (wave161), once each (the id is Stripe's): its type, when it came and how often, what the Hub did (result), or the error that makes Stripe send it again. payload is the object as Stripe sent it (names, emails and addresses of donors), so only admins read this table.
+
+### `crm_donate_attempts`
+
+Each time someone pressed Continue on the donation page (wave161): a Stripe Checkout session made (status session, with its amount), spam caught by the built-in checks, a refusal (the page off, too many tries) or an error. Keeps the rate limits (per hashed network address, never the address itself) and shows how many checkouts were started but not finished. Admins read it; the donate function writes it.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1552,7 +1571,7 @@ Functions:
 - `crm_automation_stop(bigint)`: Stops one person's run (wave157), cancelling its email still waiting in the queue. Staff with the CRM page.
 - `crm_claim_queued(integer)`: mail-send v6's claim (wave155), campaign rows only since wave157 so an older pump never touches an automation's email.
 - `crm_claim_queued(integer, text)`: Takes up to p_limit queued emails for mail-send's pump (wave157): p_source automation (an automation's emails, sent first, within the daily cap) or campaign (within the campaign cap too); a claim older than 10 minutes goes back to the queue. FOR UPDATE SKIP LOCKED, so two pumps never take the same row.
-- `wa_app_config_guard()`: Trigger on app_config (wave158): the email settings (mail_*: the mode, the sender, the caps) and the receipt settings (receipt_*) change only through an admin or the service role (mail-send checks the admin itself). Other staff settings (finance_ai_guidance) are untouched.
+- `wa_app_config_guard()`: Trigger on app_config (wave158a, wave161): the mail_*, receipt_* and donate_* settings change only through an admin or the service role; other settings stay as their policies allow.
 - `crm_receipt_config()`: The receipt settings for the Gifts tab (wave158, wave158b): the mode (off until the treasurer and Steel say go), the charity's name and address as on file with the CRA, the registration number, where receipts are issued, the numbering (prefix and next number), the signatory; whether the caller is an admin, whether a signature image is uploaded, what is still missing in words, and how many receipts are issued.
 - `crm_receipt_config_set(jsonb)`: Saves the receipt settings (wave158), admins only, each change in change_log. receipt_mode is not among them: switching receipts on comes with wave158b (the numbering, the PDF, the signature), once the treasurer and Steel agree.
 - `crm_receipt_sample(bigint)`: A sample CRA receipt for one gift (wave158): every field the CRA requires (the statement, the charity's name, address and registration number, a serial number, where and when it is issued, the date of the gift, the donor's name and address, the amount, the advantage and its description, the eligible amount, the signatory, the CRA's name and website), with what is missing in words. Never numbered, never stored, never sent. Staff with the CRM page.
@@ -1565,4 +1584,15 @@ Functions:
 - `crm_receipt_doc(bigint)`: One receipt as it was issued, for receipt-pdf and the Receipts view (wave158b): the serial, status, gifts, amounts, donor and charity as printed, where and when, the receipt it replaces or that replaced it, the PDF paths; and whether the caller is an admin. Staff with the CRM page.
 - `crm_receipt_pdf_set(bigint, text, text, boolean)`: Records where receipt-pdf saved a receipt's PDF and its checksum (wave158b), or its copy marked cancelled. Service role only.
 - `crm_report(int)`: The CRM's Reports tab (wave160): one fiscal year (1 October to 30 September; the year it starts, the current one when NULL) as JSON: gifts (by month against the year before, kind, campaign, source, size, receipt status), donors (new, retained, recaptured, lapsed, retention rate, who gave last year and not yet this year, the largest), volunteering (servings, people, events, new and returning, retention, by month and role, the most servings, hours and meals where recorded, the application funnel), the emails sent and the form answers. Runs with the caller's rights (RLS applies) and checks the CRM page first; read-only.
+- `crm_gift_plans_follow_merge()`: Trigger (wave161): when a contact is merged into another, their monthly gifts move with them.
+- `crm_stripe_contact(text, text, jsonb, boolean, text, timestamptz, text)`: The donor of an online gift (wave161): the contact with this email (never a merged one) or a new one (source hub_donation, kind donor), filling in only what is missing (the name, and the billing address whole only when they have no address). A ticked news box is express consent with the page and the day, never for someone who unsubscribed; the tick and its words go on the timeline once per checkout (p_ref). Internal to crm_stripe_apply.
+- `crm_stripe_plan_upsert(text, text, bigint, numeric, text, jsonb, timestamptz, timestamptz)`: A monthly gift by its Stripe subscription (wave161): created the first time any event names it (the checkout, the first invoice or the subscription itself, whichever Stripe sends first), then completed with what later events know (the donor, the amount, the designation and tribute, the next payment) without undoing what an earlier one set. Internal to crm_stripe_apply.
+- `crm_stripe_gift(text, bigint, numeric, text, timestamptz, jsonb, jsonb, boolean, bigint, jsonb)`: Records one online gift (wave161), once: platform stripe, the Stripe payment (pi_...) or monthly invoice (in_...) as external_id, the amount, the date paid, the designation and tribute the donor chose, the Stripe fee and net amount when known, what they added to cover the card fee (in the notes), a monthly payment's plan. A kind donation, receipt eligible: it joins the receipts due. Its insert starts the gift automations (crm_auto_on_gift) like any gift. Internal to crm_stripe_apply.
+- `crm_stripe_on_session(jsonb, jsonb, timestamptz)`: checkout.session.completed and checkout.session.async_payment_succeeded (wave161): for a checkout the donation page started, the donor and their email permission, then a one-time gift once paid, or the monthly gift (whose payments come from its invoices). Internal to crm_stripe_apply.
+- `crm_stripe_on_invoice(jsonb, jsonb, timestamptz)`: invoice.paid (wave161): a month's payment of a monthly gift the donation page started becomes a gift (recurring, with its plan, designation and tribute), and the monthly gift is marked paid (active again after a failed payment). Internal to crm_stripe_apply.
+- `crm_stripe_on_invoice_failed(jsonb, timestamptz)`: invoice.payment_failed (wave161): the monthly gift remembers when a payment failed (Stripe retries it; the subscription event says past_due). Internal to crm_stripe_apply.
+- `crm_stripe_on_refund(jsonb, timestamptz)`: charge.refunded (wave161): the gift of that payment keeps what was not given back (amount, net) and records the refund; Stripe's amount_refunded is the running total, so a second partial refund is applied correctly and a repeat changes nothing. A gift already receipted keeps its amount and gets a note to cancel or replace the receipt. A payment the donation page did not start is left alone. Internal to crm_stripe_apply.
+- `crm_stripe_on_subscription(jsonb, timestamptz)`: customer.subscription.created, .updated and .deleted (wave161): the monthly gift's state as Stripe has it (active, past_due, paused, cancelled, incomplete), its amount, next payment, a cancellation set for the end of the period and why it stopped. Events are applied in the order Stripe created them (last_event_at). Internal to crm_stripe_apply.
+- `crm_stripe_apply(jsonb, jsonb)`: Applies one Stripe event to the CRM (wave161), once: stripe-events calls it after checking Stripe's signature, with p_extra (the fee, net amount, charge and card the function looked up). Logs the event in crm_stripe_events; an event already done or ignored changes nothing. Records checkouts, monthly payments, failed payments, refunds and monthly gifts that change or stop, only for what the Hub's donation page started. An error is kept on the event and returned (not raised) so the function answers 500 and Stripe retries. Service role only.
+- `crm_donate_mode_set(text)`: Puts the Hub's donation page live or takes it down (wave161): admins only, written to change_log. Going live needs the Stripe product and the Hub's webhook with its secret in the vault (stripe-admin setup). Taking it down stops new gifts at once; monthly gifts already started carry on in Stripe.
 

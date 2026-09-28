@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Give to Welfare Avenue</title>
+<meta name="description" content="Give to Welfare Avenue, once or every month.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the Hub's donation page (wave161, 28/09/26). Served at /give (and /give/thanks after Stripe) by a
+     Netlify rewrite (_redirects). Reads its settings from the donate function, sends the donor to Stripe Checkout, and
+     shows the thank-you from what Stripe says. Off until an admin puts it live in the Hub (CRM, Gifts, Online giving);
+     ?preview=1 shows it to the team while it is off. Built by build/give/make.py from build/give/src.html. -->
+<style>
+:root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--ink);font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.5}
+.band{background:var(--green);color:var(--cream);padding:22px 16px 64px}
+.band .in{max-width:640px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.lockup{height:58px;width:auto;display:block;color:var(--cream)}
+main{max-width:640px;margin:-44px auto 0;padding:0 16px 40px}
+.card{background:var(--card);border-radius:20px;box-shadow:0 1px 2px rgba(16,63,57,.06),0 12px 32px rgba(16,63,57,.08);padding:28px 22px}
+@media (min-width:640px){.card{padding:36px 40px}}
+h1{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:34px;line-height:1.05;letter-spacing:.2px;text-transform:uppercase;color:var(--green);margin:0 0 6px}
+.rule{width:56px;height:4px;border-radius:4px;background:var(--gold);margin:10px 0 14px}
+.intro{margin:0 0 22px;color:#3d3c39;white-space:pre-line}
+fieldset{border:0;padding:0;margin:0 0 22px;min-width:0}
+legend,.lbl{display:block;font-weight:600;margin:0 0 8px;padding:0}
+.freq{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1.5px solid var(--green);border-radius:999px;padding:3px;background:#fff}
+.freq button{font:inherit;font-weight:600;border:0;border-radius:999px;padding:10px 12px;background:transparent;color:var(--green);cursor:pointer;min-width:0;margin:0}
+.freq button[aria-checked="true"]{background:var(--green);color:var(--cream)}
+.freq button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.amts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:520px){.amts{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.amt{font:inherit;font-weight:600;font-size:18px;border:1.5px solid var(--line);border-radius:14px;padding:14px 8px;background:#fff;color:var(--ink);cursor:pointer;margin:0;min-width:0}
+.amt:hover{border-color:rgba(16,63,57,.45)}
+.amt[aria-pressed="true"]{border-color:var(--green);background:var(--green);color:var(--cream)}
+.amt:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.amt small{display:block;font-weight:400;font-size:12px;opacity:.8}
+.other{display:flex;align-items:center;gap:8px;margin-top:10px;border:1.5px solid var(--line);border-radius:14px;padding:0 14px;background:#fff}
+.other:focus-within{border-color:var(--green);box-shadow:0 0 0 3px rgba(220,165,39,.35)}
+.other span{font-weight:600;color:var(--muted)}
+.other input{flex:1;min-width:0;font:inherit;font-size:18px;border:0;outline:0;padding:12px 0;background:transparent;color:inherit}
+.other.on{border-color:var(--green)}
+select,input[type=text]{width:100%;font:inherit;color:inherit;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+select:focus,input[type=text]:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(220,165,39,.35)}
+.check{display:flex;align-items:flex-start;gap:10px;border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;cursor:pointer;background:#fff;margin:0 0 10px}
+.check input{margin:3px 0 0;width:18px;height:18px;accent-color:var(--green);flex:none}
+.check:has(input:checked){border-color:var(--green);background:var(--soft)}
+.check:has(input:focus-visible){box-shadow:0 0 0 3px rgba(220,165,39,.45)}
+.check.dashed{border-style:dashed}
+.sub{margin:6px 0 12px 30px;display:grid;gap:8px}
+.radios{display:flex;flex-wrap:wrap;gap:8px}
+.radios label{display:flex;align-items:center;gap:6px;border:1.5px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer;background:#fff}
+.radios label:has(input:checked){border-color:var(--green);background:var(--soft)}
+.radios input{accent-color:var(--green);margin:0}
+.err{color:var(--flag);font-size:14px;margin:6px 0 0}
+.bad .other,.bad input[type=text]{border-color:var(--flag)}
+.small{font-size:13px;color:var(--muted);margin:6px 0 0}
+.total{display:flex;align-items:baseline;justify-content:space-between;gap:10px;border-top:1px solid var(--line);margin-top:6px;padding-top:16px}
+.total b{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:30px;color:var(--green);letter-spacing:.2px}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.go{font:inherit;font-weight:600;font-size:17px;border:0;border-radius:999px;padding:14px 28px;background:var(--gold);color:var(--ink);cursor:pointer;margin-top:14px;width:100%}
+.go:hover{filter:brightness(1.04)}
+.go:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+.go[disabled]{opacity:.65;cursor:progress}
+.secure{display:flex;align-items:center;gap:8px;justify-content:center;font-size:13px;color:var(--muted);margin:10px 0 0;text-align:center}
+.secure svg{flex:none}
+.banner{border-radius:12px;padding:12px 14px;margin:0 0 18px;font-size:15px}
+.banner.warn{background:rgba(179,64,47,.08);color:#7e2b1f}
+.banner.info{background:rgba(220,165,39,.18)}
+.done p{white-space:pre-line}
+.big{font-size:18px}
+.loading{color:var(--muted)}
+footer{max-width:640px;margin:0 auto;padding:0 16px 40px;font-size:13px;color:var(--muted)}
+a{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a></div></div>
+<main><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></main>
+<footer id="foot"></footer>
+<script>
+(function () {
+  var URL_FN = '%%SUPABASE_URL%%/functions/v1/donate';
+  var KEY = '%%ANON_KEY%%';
+  var LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 0 1 6 0v3H9Z"/></svg>';
+  var app = document.getElementById('app'), foot = document.getElementById('foot');
+  var q = new URLSearchParams(location.search);
+  var S = { cfg: null, token: '', loadedAt: 0, freq: 'once', amount: null, other: '', designation: '', tribute: false, tkind: 'honour', tname: '',
+            cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? 'No payment was made. You can change anything below and try again.' : '', bannerKind: 'info', sending: false };
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function money(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
+  function cents(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
+  function call(method, body) {
+    var opt = { method: method, headers: { apikey: KEY, Authorization: 'Bearer ' + KEY } };
+    if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+    return fetch(URL_FN, opt).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; }); });
+  }
+  function footer(o) {
+    o = o || (S.cfg && S.cfg.org) || {};
+    foot.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · Registered charity ' + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
+      (o.email ? ' · <a href="mailto:' + E(o.email) + '">' + E(o.email) + '</a>' : '') +
+      '<br>We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them. Payments are handled by Stripe.';
+  }
+  function list() { return (S.cfg.amounts[S.freq] || []).slice(0, 6); }
+  function base() {
+    if (S.other !== '') { var n = Number(String(S.other).replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; }
+    return S.amount;
+  }
+  function feeCents(b) { /* the same sum as the donate function: what to add so the whole gift reaches Welfare Avenue after the card fee */
+    var f = S.cfg.fee; if (!f || !f.on) return 0; var p = Number(f.percent), x = Number(f.fixed);
+    if (!(p >= 0 && p < 20) || !(x >= 0 && x < 5)) return 0;
+    return Math.max(0, Math.ceil((b + Math.round(x * 100)) / (1 - p / 100) - b));
+  }
+  function totals() {
+    var b = base(), bc = Math.round((Number(b) || 0) * 100), ok = isFinite(b) && b > 0 && Math.abs(b * 100 - bc) < 0.001;
+    var fee = ok ? feeCents(bc) : 0;
+    return { ok: ok, base: ok ? bc : 0, fee: fee, total: ok ? bc + (S.cover ? fee : 0) : 0 };
+  }
+  function message(title, html) { app.innerHTML = '<h1>' + E(title) + '</h1><div class="rule"></div>' + html; footer(); }
+  function amountError() {
+    var b = base(), c = S.cfg;
+    if (b == null || b === '' || !isFinite(b) || b <= 0) return 'Choose an amount, or enter your own.';
+    if (Math.abs(b * 100 - Math.round(b * 100)) > 0.001) return 'Enter an amount in dollars and cents.';
+    if (b < c.min) return 'The smallest gift online is ' + money(c.min) + '.';
+    if (b > c.max) return 'For a gift above ' + money(c.max) + ', please write to ' + (c.org.email || 'info@welfareavenue.com') + '.';
+    return '';
+  }
+  function render() {
+    var c = S.cfg, t = totals(), e = S.errors, amts = list(), mon = S.freq === 'monthly';
+    var preview = c.mode !== 'live';
+    var html = '<form id="give" novalidate><h1>' + E(c.title) + '</h1><div class="rule"></div>' + (c.intro ? '<p class="intro">' + E(c.intro) + '</p>' : '') +
+      (preview ? '<div class="banner info" role="status"><b>Preview.</b> This page is off, so it cannot take a gift yet. An admin puts it live in the Hub.</div>' : '') +
+      (S.banner ? '<div class="banner ' + S.bannerKind + '" role="alert">' + E(S.banner) + '</div>' : '') +
+      '<fieldset><legend id="lf">How often</legend><div class="freq" role="radiogroup" aria-labelledby="lf">' +
+        '<button type="button" role="radio" aria-checked="' + (!mon) + '" data-freq="once">Give once</button>' +
+        '<button type="button" role="radio" aria-checked="' + mon + '" data-freq="monthly">Give monthly</button></div></fieldset>' +
+      '<fieldset class="' + (e.amount ? 'bad' : '') + '"><legend>Your gift' + (mon ? ' each month' : '') + '</legend><div class="amts">' +
+        amts.map(function (a) { var on = S.other === '' && S.amount === a; return '<button type="button" class="amt" data-amt="' + a + '" aria-pressed="' + on + '">' + E(money(a)) + (mon ? '<small>a month</small>' : '') + '</button>'; }).join('') + '</div>' +
+        '<label class="other' + (S.other !== '' ? ' on' : '') + '"><span aria-hidden="true">$</span><input id="other" inputmode="decimal" autocomplete="off" placeholder="Other amount" aria-label="Other amount, in dollars" value="' + E(S.other) + '"' +
+          (e.amount ? ' aria-invalid="true" aria-describedby="e_amount"' : '') + '></label>' + (e.amount ? '<p class="err" id="e_amount">' + E(e.amount) + '</p>' : '') + '</fieldset>' +
+      (c.designations.length > 1 ? '<fieldset><label class="lbl" for="des">Where your gift goes</label><select id="des">' + c.designations.map(function (d) { return '<option' + (d === S.designation ? ' selected' : '') + '>' + E(d) + '</option>'; }).join('') + '</select></fieldset>' : '') +
+      '<fieldset class="' + (e.tribute_name ? 'bad' : '') + '"><legend class="hp">Extras</legend>' +
+        '<label class="check"><input type="checkbox" id="trib"' + (S.tribute ? ' checked' : '') + '><span>Give in honour or in memory of someone</span></label>' +
+        (S.tribute ? '<div class="sub"><div class="radios" role="radiogroup" aria-label="In honour or in memory"><label><input type="radio" name="tk" value="honour"' + (S.tkind === 'honour' ? ' checked' : '') + '> In honour of</label>' +
+          '<label><input type="radio" name="tk" value="memory"' + (S.tkind === 'memory' ? ' checked' : '') + '> In memory of</label></div>' +
+          '<input type="text" id="tname" maxlength="120" placeholder="Their name" aria-label="Their name" value="' + E(S.tname) + '"' + (e.tribute_name ? ' aria-invalid="true" aria-describedby="e_tn"' : '') + '>' +
+          (e.tribute_name ? '<p class="err" id="e_tn">' + E(e.tribute_name) + '</p>' : '') + '</div>' : '') +
+        (c.fee && c.fee.on ? '<label class="check"><input type="checkbox" id="cover"' + (S.cover ? ' checked' : '') + '><span>' + (t.ok && t.fee ? 'Add ' + E(cents(t.fee / 100)) + ' to help cover the card fee' + (mon ? ' each month' : '') : 'Add a little to help cover the card fee') + '</span></label>' : '') +
+        '<label class="check dashed"><input type="checkbox" id="consent"' + (S.consent ? ' checked' : '') + '><span>' + E(c.consent_label) + '</span></label>' +
+        '<p class="small">' + E((c.org && c.org.address) || 'Welfare Avenue') + ' · ' + E((c.org && c.org.email) || '') + '</p></fieldset>' +
+      '<div class="total" aria-live="polite"><span>' + (mon ? 'Your monthly gift' : 'Your gift') + '</span><b id="tot">' + (t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') : '–') + '</b></div>' +
+      '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" id="hp" tabindex="-1" autocomplete="off"></label></div>' +
+      '<button type="submit" class="go" id="go"' + (S.sending ? ' disabled' : '') + '>' + (S.sending ? 'Opening the secure payment page…' : 'Continue to payment') + '</button>' +
+      '<p class="secure">' + LOCK + '<span>You finish on Stripe’s secure page, by card or a digital wallet.</span></p>' +
+      (c.receipt_note ? '<p class="small" style="text-align:center">' + E(c.receipt_note) + '</p>' : '') + '</form>';
+    app.innerHTML = html;
+    footer();
+  }
+  function paintTotal() { /* keep typing smooth: update what depends on the amount without redrawing the field */
+    var t = totals(), mon = S.freq === 'monthly', tot = document.getElementById('tot');
+    if (tot) tot.innerHTML = t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') : '–';
+    var cov = document.getElementById('cover'); if (cov && cov.nextElementSibling) cov.nextElementSibling.textContent = t.ok && t.fee ? 'Add ' + cents(t.fee / 100) + ' to help cover the card fee' + (mon ? ' each month' : '') : 'Add a little to help cover the card fee';
+    document.querySelectorAll('.amt').forEach(function (b) { b.setAttribute('aria-pressed', String(S.other === '' && Number(b.getAttribute('data-amt')) === S.amount)); });
+    var o = document.querySelector('.other'); if (o) o.classList.toggle('on', S.other !== '');
+  }
+  app.addEventListener('click', function (ev) {
+    var el = ev.target.closest ? ev.target.closest('[data-freq],[data-amt]') : null; if (!el) return;
+    ev.preventDefault();
+    if (el.hasAttribute('data-freq')) { var f = el.getAttribute('data-freq'); if (f !== S.freq) { S.freq = f; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.other = ''; S.errors = {}; render(); var b2 = document.querySelector('[data-freq="' + f + '"]'); if (b2) b2.focus(); } return; }
+    S.amount = Number(el.getAttribute('data-amt')); S.other = ''; delete S.errors.amount;
+    var oi = document.getElementById('other'); if (oi) oi.value = '';
+    var fs = el.closest('fieldset'); if (fs) { fs.classList.remove('bad'); var er = document.getElementById('e_amount'); if (er) er.remove(); }
+    paintTotal();
+  });
+  app.addEventListener('keydown', function (ev) { /* arrow keys move between the two frequencies, as in a radio group */
+    var el = ev.target; if (!el.hasAttribute || !el.hasAttribute('data-freq') || (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight')) return;
+    ev.preventDefault(); var other = el.getAttribute('data-freq') === 'once' ? 'monthly' : 'once'; var b = document.querySelector('[data-freq="' + other + '"]'); if (b) b.click();
+  });
+  app.addEventListener('input', function (ev) {
+    var t = ev.target;
+    if (t.id === 'other') { S.other = t.value.slice(0, 12); paintTotal(); return; }
+    if (t.id === 'tname') { S.tname = t.value; return; }
+  });
+  app.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.id === 'trib') { S.tribute = t.checked; if (!S.tribute) delete S.errors.tribute_name; render(); if (S.tribute) { var n = document.getElementById('tname'); if (n) n.focus(); } return; }
+    if (t.name === 'tk') { S.tkind = t.value; return; }
+    if (t.id === 'cover') { S.cover = t.checked; paintTotal(); return; }
+    if (t.id === 'consent') { S.consent = t.checked; return; }
+    if (t.id === 'des') { S.designation = t.value; return; }
+  });
+  app.addEventListener('submit', function (ev) {
+    ev.preventDefault(); if (S.sending) return;
+    var c = S.cfg, errs = {}, ae = amountError();
+    if (ae) errs.amount = ae;
+    if (S.tribute && !S.tname.trim()) errs.tribute_name = 'Whose name should we record?';
+    S.errors = errs;
+    if (Object.keys(errs).length) { S.banner = ''; render(); var f = document.getElementById(errs.amount ? 'other' : 'tname'); if (f) f.focus(); return; }
+    if (c.mode !== 'live') { S.banner = 'This page is a preview: it cannot take a gift until an admin puts it live.'; S.bannerKind = 'info'; render(); return; }
+    S.sending = true; S.banner = ''; render();
+    var body = { action: 'checkout', token: S.token, hp: (document.getElementById('hp') || {}).value || '', frequency: S.freq, amount: Number(base()),
+      designation: S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: 'en' };
+    var wait = Math.max(0, 3300 - (Date.now() - S.loadedAt)); /* the token must be a few seconds old (a person, not a script) */
+    setTimeout(function () {
+      call('POST', body).then(function (r) {
+        if (r.status === 200 && r.body.url) { location.assign(r.body.url); return; }
+        S.sending = false;
+        if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = r.body.fields && r.body.fields.designation ? r.body.fields.designation : ''; S.bannerKind = 'warn'; render(); return; }
+        if (r.status === 400 && r.body.error === 'expired') { S.banner = 'This page was open a long time, so we refreshed it. Please press Continue again.'; S.bannerKind = 'info'; load(true); return; }
+        if (r.status === 403) { S.cfg.mode = 'off'; S.banner = 'Online giving is not open right now. Please try again later.'; S.bannerKind = 'warn'; render(); return; }
+        S.banner = r.status === 429 ? 'Too many tries from here. Please wait a few minutes and try again.' : 'Something went wrong on our side, and no payment was made. Please try again in a minute.';
+        S.bannerKind = 'warn'; render();
+      }).catch(function () { S.sending = false; S.banner = 'We could not reach Welfare Avenue. Check your connection and try again.'; S.bannerKind = 'warn'; render(); });
+    }, wait);
+  });
+  function load(keep) {
+    return call('GET').then(function (r) {
+      if (r.status !== 200 || !r.body.amounts) { message('Something went wrong', '<p>We could not load the page. Please try again in a minute, or write to <a href="mailto:info@welfareavenue.com">info@welfareavenue.com</a>.</p>'); return; }
+      var first = !S.cfg;
+      S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
+      if (first) { var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+      if (S.cfg.mode !== 'live' && !q.get('preview')) {
+        var mail = S.cfg.org.email || 'info@welfareavenue.com';
+        message('Online giving opens soon', '<p class="big">Thank you for thinking of Welfare Avenue. Our online giving page is not open yet.</p><p>To give today, or for any question, write to <a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p>');
+        return;
+      }
+      render();
+    }).catch(function () { message('We could not reach Welfare Avenue', '<p>Check your connection and try again.</p>'); });
+  }
+  function thanks(id) {
+    app.innerHTML = '<p class="loading">Checking your gift…</p>';
+    call('POST', { action: 'thanks', session_id: id }).then(function (r) {
+      var b = r.body || {}, o = b.org || {}, mail = o.email || 'info@welfareavenue.com';
+      footer(o);
+      if (r.status !== 200 || !b.ok) { message('We could not find this gift', '<p>If you just gave, thank you: your card or bank statement shows the payment. For any question, write to <a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p><p><a href="/give">Back to the giving page</a></p>'); return; }
+      if (!b.complete) { message('Your gift is not finished', '<p>No payment was made. You can <a href="/give">start again</a> whenever you like.</p>'); return; }
+      var mon = b.frequency === 'monthly', amt = cents(b.amount);
+      var lead = b.waiting ? 'Your gift of ' + amt + ' is on its way: a bank payment takes a few days to clear.' : mon ? 'Your monthly gift of ' + amt + ' has started.' : 'Your gift of ' + amt + ' is complete.';
+      message('Thank you' + (b.first_name ? ', ' + b.first_name : '') + '!', '<div class="done"><p class="big">' + E(lead) + '</p>' + (b.thanks ? '<p>' + E(b.thanks) + '</p>' : '') +
+        (b.receipt_note ? '<p class="small">' + E(b.receipt_note) + '</p>' : '') + (mon && b.monthly_note ? '<p class="small">' + E(b.monthly_note) + '</p>' : '') +
+        '<p><a href="https://welfareavenue.com">Visit welfareavenue.com</a></p></div>');
+      footer(o);
+      try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+    }).catch(function () { message('We could not reach Welfare Avenue', '<p>If you just gave, thank you: your card or bank statement shows the payment.</p>'); });
+  }
+  var sid = q.get('session_id');
+  if (/\/give\/thanks\/?$/.test(location.pathname) && sid) thanks(sid); else load();
+})();
+</script>
+</body>
+</html>

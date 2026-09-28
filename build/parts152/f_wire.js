@@ -143,6 +143,7 @@
   window.w160 = { rp: function () { return RP; }, summary: rpSummary, perm: rpPerm, load: rpLoad };
   window.w158b = { rb: function () { return RB; }, issued: rbIssuedHtml, status: rbStatusHtml };
   window.w159 = { steps: keelaSteps, html: keelaHtml };
+  window.w161 = { dg: function () { return DG; }, html: onlineHtml, save: dgSave, mode: dgMode, link: stripeLink, state: planState };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,

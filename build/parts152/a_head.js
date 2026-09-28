@@ -166,7 +166,7 @@
     dupes: function () { return pageAll(function (a, b) { return db.from('crm_duplicates_v').select('*').order('contact_id', { ascending: true }).order('duplicate_id', { ascending: true }).range(a, b); }, function (r) { return r.contact_id + ':' + r.duplicate_id + ':' + r.matched_on + ':' + r.value; }); },
     partners: function () { return db.from('wa_partners').select('id,name,aka,status,visibility').order('name').limit(3000); },
     /* wave153: the Gifts tab */
-    gifts: function () { return pageAll(function (a, b) { return db.from('crm_donations').select('id,contact_id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,receipt_source,receipt_eligible,external_id,notes,kind,method,advantage_amount,advantage_desc,in_kind_desc,appraiser,tribute_kind,tribute_name,created_by,updated_by').order('donated_at', { ascending: false }).order('id', { ascending: false }).range(a, b); }, function (r) { return String(r.id); }); }
+    gifts: function () { return pageAll(function (a, b) { return db.from('crm_donations').select('id,contact_id,amount,currency,donated_at,platform,campaign,designation,recurring,receipt_number,receipt_issued_at,receipt_url,receipt_source,receipt_eligible,external_id,notes,kind,method,advantage_amount,advantage_desc,in_kind_desc,appraiser,tribute_kind,tribute_name,created_by,updated_by,fee,net_amount,refunded_amount,refunded_at,plan_id').order('donated_at', { ascending: false }).order('id', { ascending: false }).range(a, b); }, function (r) { return String(r.id); }); }
   };
   /* the rows the page works with: a few derived fields for filters, sorting and search */
   function shape(c) {

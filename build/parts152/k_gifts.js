@@ -32,6 +32,13 @@
   function gchip(map, k) { var d = map[k] || [k || '?', MUTED]; return '<span class="w154chip" style="background:' + d[1] + '17;color:' + d[1] + '"><i style="background:' + d[1] + '"></i>' + E(d[0]) + '</span>'; }
 
   /* ---------- the gift form (a sheet) ---------- */
+  function stripeSub(x) { /* wave161: an online gift from the donation page */
+    var link = stripeLink(x), bits = [];
+    if (x.fee != null) bits.push('Stripe kept ' + cents(x.fee) + (x.net_amount != null ? ', ' + cents(x.net_amount) + ' reached Welfare Avenue' : ''));
+    if (Number(x.refunded_amount) > 0) bits.push(cents(x.refunded_amount) + ' refunded' + (x.refunded_at ? ' on ' + fmtDay(x.refunded_at) : '') + (Number(x.amount) > 0 ? ', ' + cents(x.amount) + ' kept' : ''));
+    return (x.recurring ? 'A monthly payment' : 'An online gift') + ' through the Hub’s donation page, paid on Stripe: the amount, the date and the donor stay as Stripe recorded them.' +
+      (bits.length ? ' ' + E(bits.join('; ')) + '.' : '') + (link ? ' <a href="' + E(link) + '" target="_blank" rel="noopener">Open it in Stripe ' + I('ext') + '</a>' : '');
+  }
   function giftForm(id, contactId) {
     var g = id ? giftById(id) : null, isNew = !g, hub = !g || lower(g.platform) === 'hub';
     var x = g || { contact_id: contactId || null, amount: '', donated_at: today(), kind: 'donation', method: 'cheque', campaign: '', designation: '', advantage_amount: 0, advantage_desc: '', in_kind_desc: '', appraiser: '', tribute_kind: '', tribute_name: '', notes: '', platform: 'hub' };
@@ -41,7 +48,7 @@
     var kinds = Object.keys(GKIND).map(function (k) { return [k, GKIND[k][0]]; });
     var ro = hub ? '' : ' disabled';
     var html = '<h2>' + (isNew ? 'Record a gift' : 'A gift of ' + E(money(x.amount))) + '</h2>' +
-      '<div class="sub">' + (isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.') + '</div>' +
+      '<div class="sub">' + (isNew ? 'A cheque, an e-transfer or cash that came in outside Zeffy and Keela. The thank-you automation starts on its own if it is on.' : hub ? 'Recorded in the Hub' + (x.created_by ? ' by ' + E(x.created_by) : '') + '.' : lower(x.platform) === 'stripe' ? stripeSub(x) : 'From ' + E(platName(x.platform)) + ': the amount, the date and the donor stay as ' + E(platName(x.platform)) + ' recorded them.') + '</div>' +
       '<div class="w152form" data-w158gift="' + E(id || 'new') + '">' +
       field('Donor', donor, true) +
       field('Amount ($)', '<input data-f="amount" type="number" step="0.01" min="0" value="' + E(x.amount) + '"' + ro + '>') + field('Date received', '<input data-f="donated_at" type="date" value="' + E(dayOf(x.donated_at) || today()) + '"' + ro + '>') +

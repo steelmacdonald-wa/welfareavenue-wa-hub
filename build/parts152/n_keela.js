@@ -4,7 +4,7 @@
      app_config keela_next_charge) and cancelling needs keela_notice_days of notice, so every step aims to be done a week before
      that. Read from the Hub: the contacts and gifts from Keela, the forms and automations (drafts, live, on), the email mode, the
      receipt mode and settings. The final export and import, and the donation form, are Steel's steps and read as such. */
-  LOADERS.kcfg = function () { return db.from('app_config').select('key,value').in('key', ['mail_mode', 'receipt_mode', 'receipt_signatory_name', 'receipt_next_number', 'keela_next_charge', 'keela_notice_days', 'keela_quarterly_cost', 'keela_donation_form']); };
+  LOADERS.kcfg = function () { return db.from('app_config').select('key,value').in('key', ['mail_mode', 'receipt_mode', 'receipt_signatory_name', 'receipt_next_number', 'keela_next_charge', 'keela_notice_days', 'keela_quarterly_cost', 'keela_donation_form', 'donate_mode', 'donate_webhook']); };
   function kcfg(k) { var r = (S.kcfg || []).filter(function (x) { return x.key === k; })[0]; return r ? String(r.value == null ? '' : r.value) : ''; }
   function kDays(day) { var n = daysSince(day); return n == null ? null : -n; }
   function kChip(state) {
@@ -20,7 +20,7 @@
     var paste = autos.filter(function (a) { return /\[Paste/i.test(JSON.stringify(a.steps || [])); });
     var mail = kcfg('mail_mode') || 'test', rmode = kcfg('receipt_mode') || 'off';
     var rMissing = []; if (!kcfg('receipt_signatory_name')) rMissing.push('who signs'); if (!/^\d+$/.test(kcfg('receipt_next_number'))) rMissing.push('the numbering');
-    var donation = kcfg('keela_donation_form');
+    var donation = kcfg('keela_donation_form'), page = kcfg('donate_mode') === 'live', built = !!kcfg('donate_webhook');
     return [
       { t: 'Contacts and gifts', k: 'Keela holds the donors, supporters and gifts.', s: S.gifts ? 'doing' : 'doing',
         h: plural(contacts, 'contact', 'contacts') + ' and ' + plural(kg.length, 'gift', 'gifts') + ' from Keela are in the Hub' + (lastKg ? ' (the latest gift from ' + fmtDay(lastKg) + ')' : '') + '.',
@@ -37,9 +37,11 @@
       { t: 'Tax receipts', k: 'Keela issued 55 receipts (KEE numbers).', s: rmode === 'on' ? 'done' : rMissing.length ? 'waiting' : 'todo',
         h: 'Receipts from the Hub are ' + (rmode === 'on' ? 'on.' : 'off' + (rMissing.length ? ' (missing: ' + listJoin(rMissing) + ').' : ', and ready to turn on.')),
         n: rmode === 'on' ? 'Issue from Receipts; the year-end run in January.' : 'The treasurer reviews a sample PDF and fills the settings with the signature; the treasurer and Steel decide to turn them on.' },
-      { t: 'Online donations', k: 'Keela’s donation form on the website.', s: donation ? 'done' : 'waiting',
-        h: donation ? 'Donations go through ' + donation + '.' : 'Not decided: Zeffy, if its embedded forms can be fully customized, or another option.',
-        n: donation ? 'Take Keela’s form off the website.' : 'Steel’s decision (Zeffy); until then Keela’s form stays on the website.' }
+      { t: 'Online donations', k: 'Keela’s donation form on the website.', s: page || donation ? 'done' : built ? 'doing' : 'waiting',
+        h: page ? 'The Hub’s donation page is live (hub.welfareavenue.com/give, paid on Stripe).' : donation ? 'Donations go through ' + donation + '.' :
+          built ? 'The Hub’s donation page is built (Stripe: once or monthly, where it goes, tributes) and off.' : 'Not decided: Zeffy, if its embedded forms can be fully customized, or another option.',
+        n: page || donation ? 'Point the website’s Donate buttons at the new page and take Keela’s form off the website.' :
+          built ? 'Steel reads the page and puts it live in Gifts, Online giving; then the website’s Donate buttons point to hub.welfareavenue.com/give.' : 'Steel’s decision (Zeffy); until then Keela’s form stays on the website.' }
     ];
   }
   function keelaHtml() {

@@ -1,4 +1,6 @@
-// Welfare Avenue: host-sync (v5, 28/09/26)
+// Welfare Avenue: host-sync (v6, 28/09/26)
+// v6 (wave161): also deploys the public donation page /give/index.html (served for /give and every /give/<path> by the
+// _redirects rules), read from site_files path 'give/index.html' when it exists.
 // v5 (wave156): also deploys the public form page /f/index.html and /_redirects (every /f/<slug> is served by that
 // page), read from site_files paths 'f/index.html' and '_redirects' when they exist.
 // v3 + Phase 2 (S2): also deploys a /_headers file (security headers: CSP,
@@ -107,8 +109,8 @@ Deno.serve(async (req: Request) => {
     const { data: hd } = await svc.from('site_files').select('part, content').eq('path', '_headers').order('part', { ascending: true });
     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
   } catch (_) { /* headers optional */ }
-  // v5: the public form page and the rewrite that serves it for every /f/<slug>
-  for (const extra of ['f/index.html', '_redirects']) {
+  // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page
+  for (const extra of ['f/index.html', 'give/index.html', '_redirects']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
       if (ex && ex.length) deployFiles['/' + extra] = new TextEncoder().encode(ex.map((r: { content: string }) => r.content).join(''));
@@ -121,7 +123,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v5'
+      changed_by: 'host-sync v6'
     });
   } catch (_) { /* audit only */ }
 
