@@ -84,9 +84,11 @@
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' }
         ] }, { label: 'Giving', items: [
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
+        ] }, { label: 'Email', items: [
+          { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' }
         ] }];
       },
-      next: [['list', 'Lists'], ['mail', 'Email'], ['form', 'Forms'], ['chart', 'Reports']],
+      next: [['list', 'Lists'], ['form', 'Forms'], ['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',

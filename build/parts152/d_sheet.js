@@ -111,8 +111,9 @@
     if (c.email_consent === 'implied' && c.implied_consent_until) bits.push((dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : ''));
     if (c._perm === 'unknown' && c.email_consent === 'implied') bits.push('Their implied consent ran out' + (c.implied_consent_until ? ' on ' + fmtDay(c.implied_consent_until) : '') + '.');
     return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' · ')) + '</div>' : '') +
+      permLine(c) +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and campaigns need their express consent, or an implied consent that has not run out. Replies to what they asked us stay fine.</p>';
+      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and appeals need their express consent, or an implied consent that has not run out (two years after a gift or a serving; Welfare Avenue is a registered charity). Confirmations, reminders and receipts are not commercial messages and still go out; a bouncing address stops everything.</p>';
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">×</button></span>'; }).join('') +
@@ -127,9 +128,11 @@
       var t = k === 'note' ? 'Note' : k === 'call' ? (dir === 'in' ? 'They called' : 'Call') : k === 'meeting' ? 'Meeting' : k === 'email' ? (dir === 'in' ? 'Email from them' : 'Email to them') :
         k === 'sms' ? (dir === 'in' ? 'Text from them' : 'Text message') : k === 'website_message' ? (undated ? 'Message from the old website' : 'Message from the website') : (x.subject || k || 'Activity');
       var mine = lower(x.created_by) === myEmail() && lower(x.source) === 'hub';
-      var system = /^(crm_sync|wa\d+_import)$/.test(String(x.created_by || ''));
-      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: x.body || '',
-        by: system ? (undated ? 'The old website (the form kept no date)' : '') : (x.created_by || ''), del: mine || amAdmin() ? x.id : null });
+      var system = /^(crm_sync|wa\d+_import|mail-unsubscribe|mail-events)$/.test(String(x.created_by || ''));
+      var sent = lower(x.source) === 'resend' && x.meta && x.meta.send_id; /* wave154: an email the Hub sent, with what happened to it */
+      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''),
+        st: sent ? (x.meta.status || 'sent') : '', by: sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
+        system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
       out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
@@ -168,7 +171,7 @@
     if (!d) return logFormHtml(c) + busy('Loading their history…');
     var items = timeline(c, d);
     return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
-      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
         (x.p ? '<p>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
         (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
     }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
@@ -179,6 +182,7 @@
     if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
     if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
     if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
     return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +

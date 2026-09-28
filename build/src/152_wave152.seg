@@ -453,7 +453,8 @@
       '<button role="tab" class="' + (t === 'contacts' ? 'on' : '') + '" data-w152go="#crm">' + I('people') + ' Contacts</button>' +
       '<button role="tab" class="' + (t === 'dupes' ? 'on' : '') + '" data-w152go="#crm/dupes">' + I('merge') + ' Possible duplicates' + (n ? ' <em>' + n + '</em>' : '') + '</button>' +
       '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button>' +
-      '<button role="tab" class="' + (t === 'gifts' ? 'on' : '') + '" data-w152go="#crm/gifts">' + I('heart') + ' Gifts</button></nav>';
+      '<button role="tab" class="' + (t === 'gifts' ? 'on' : '') + '" data-w152go="#crm/gifts">' + I('heart') + ' Gifts</button>' +
+      '<button role="tab" class="' + (t === 'email' ? 'on' : '') + '" data-w152go="#crm/email">' + I('mail') + ' Email</button></nav>';
   }
   function statsHtml(all) {
     var u = S.ui, plain = !u.role && !u.perm && !u.q;
@@ -525,14 +526,15 @@
     if (S.ui.tab === 'dupes') paintDupes(root);
     else if (S.ui.tab === 'sources') paintSources(root);
     else if (S.ui.tab === 'gifts') paintGifts(root);
+    else if (S.ui.tab === 'email') paintEmail(root);
     else paintContacts(root);
   }
   function openCrm(h) {
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : 'contacts';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : 'contacts';
     if (!staffOk() || boardMode()) { paint(); return; }
-    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts')] : [])).then(function () {
+    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts')] : sub === 'email' ? [load('templates'), load('sends')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
       else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);
@@ -652,8 +654,9 @@
     if (c.email_consent === 'implied' && c.implied_consent_until) bits.push((dayOf(c.implied_consent_until) >= today() ? 'Runs until ' : 'Ran out on ') + fmtDay(c.implied_consent_until) + (c.consent_source ? ' (' + c.consent_source + ')' : ''));
     if (c._perm === 'unknown' && c.email_consent === 'implied') bits.push('Their implied consent ran out' + (c.implied_consent_until ? ' on ' + fmtDay(c.implied_consent_until) : '') + '.');
     return '<div class="w152line">' + permChip(c._perm) + ' <span class="m">' + E(p[2]) + '</span></div>' + (bits.length ? '<div class="w152line m">' + E(bits.join(' \u00b7 ')) + '</div>' : '') +
+      permLine(c) +
       (c.sms_opt_out ? '<div class="w152line m">No text messages, they asked.</div>' : '') +
-      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and campaigns need their express consent, or an implied consent that has not run out. Replies to what they asked us stay fine.</p>';
+      '<p class="w152pnote">Canada\u2019s anti-spam law (CASL): newsletters and appeals need their express consent, or an implied consent that has not run out (two years after a gift or a serving; Welfare Avenue is a registered charity). Confirmations, reminders and receipts are not commercial messages and still go out; a bouncing address stops everything.</p>';
   }
   function tagsHtml(c) {
     return '<div class="w152tags">' + c.tags.map(function (t) { return '<span class="w152tg">' + I('tag') + E(t) + '<button data-w152untag="' + E(t) + '" aria-label="Remove the tag ' + E(t) + '">\u00d7</button></span>'; }).join('') +
@@ -668,9 +671,11 @@
       var t = k === 'note' ? 'Note' : k === 'call' ? (dir === 'in' ? 'They called' : 'Call') : k === 'meeting' ? 'Meeting' : k === 'email' ? (dir === 'in' ? 'Email from them' : 'Email to them') :
         k === 'sms' ? (dir === 'in' ? 'Text from them' : 'Text message') : k === 'website_message' ? (undated ? 'Message from the old website' : 'Message from the website') : (x.subject || k || 'Activity');
       var mine = lower(x.created_by) === myEmail() && lower(x.source) === 'hub';
-      var system = /^(crm_sync|wa\d+_import)$/.test(String(x.created_by || ''));
-      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: x.body || '',
-        by: system ? (undated ? 'The old website (the form kept no date)' : '') : (x.created_by || ''), del: mine || amAdmin() ? x.id : null });
+      var system = /^(crm_sync|wa\d+_import|mail-unsubscribe|mail-events)$/.test(String(x.created_by || ''));
+      var sent = lower(x.source) === 'resend' && x.meta && x.meta.send_id; /* wave154: an email the Hub sent, with what happened to it */
+      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''),
+        st: sent ? (x.meta.status || 'sent') : '', by: sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
+        system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
       out.push({ at: g.donated_at, icon: 'heart', t: money(g.amount) + (g.recurring ? ' monthly gift' : ' gift'),
@@ -709,7 +714,7 @@
     if (!d) return logFormHtml(c) + busy('Loading their history\u2026');
     var items = timeline(c, d);
     return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
-      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
+      return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
         (x.p ? '<p>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
         (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
     }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
@@ -720,6 +725,7 @@
     if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
     if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
     if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
     return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +
       '<div class="w152cols"><div>' +
@@ -1189,6 +1195,331 @@
     if ((el = t.closest('[data-w152gclear]'))) { e.preventDefault(); S.ui.gq = ''; S.ui.gplat = ''; S.ui.gyear = ''; S.ui.gshow = 60; paint(); return; }
     if ((el = t.closest('[data-w152gmore]'))) { e.preventDefault(); S.ui.gshow += 60; paint(); return; }
   });
+
+  /* ======================= the Email tab (wave154): sending from welfareavenue.com, the templates, the send log, the CASL rule =======================
+     Steel (27/09/26 plan, step 2): Resend from welfareavenue.com, branded templates, a CASL footer, suppression that follows each
+     contact's permission, a send log on the timeline, test sends to Steel only. Registered charity (713048502RR0001) confirmed
+     28/09/26: implied consent applies (two years after a gift or a serving). The tab talks to the mail-send function; nothing
+     goes out in test mode except to the test recipients. */
+  var MAIL = { st: null, err: '', busy: '', prev: null, edit: null, form: false, ferr: '', msg: '', sendc: null };
+  var MSTATUS = { queued: ['Queued', MUTED], sent: ['Sent', TEAL], delivered: ['Delivered', GREEN], delayed: ['Delayed', '#B9851B'], bounced: ['Bounced', FLAG], complained: ['Complaint', FLAG], failed: ['Failed', FLAG], suppressed: ['Not sent', MUTED] };
+  var MKIND = { transactional: ['Confirmation', TEAL], newsletter: ['Newsletter', PURPLE], fundraising: ['Appeal', '#B9851B'], test: ['Test', MUTED] };
+  var DSTATUS = { verified: ['Verified', GREEN], pending: ['Waiting for the records', '#B9851B'], not_started: ['Waiting for the records', '#B9851B'], failed: ['Records not found', FLAG], temporary_failure: ['Checking again', '#B9851B'] };
+  LOADERS.templates = function () { return db.from('crm_email_templates').select('*').order('sort', { ascending: true }); };
+  LOADERS.sends = function () { return db.from('crm_email_sends').select('id,contact_id,to_email,template_key,kind,subject,status,is_test,permission_basis,error,sent_at,delivered_at,opened_at,clicked_at,bounced_at,created_at,created_by,meta').order('created_at', { ascending: false }).limit(200); };
+
+  /* the function behind the tab; a refused call comes back as {error} with the function's own words */
+  function mailFn(action, body) {
+    if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
+    return Promise.resolve(db.functions.invoke('mail-send', { body: Object.assign({ action: action }, body || {}) })).then(function (r) {
+      if (r && r.error) {
+        var ctx = r.error.context;
+        if (ctx && typeof ctx.json === 'function') return ctx.json().then(function (j) { return { error: (j && j.error) || r.error.message || 'The email function refused.' }; }, function () { return { error: r.error.message || 'The email function refused.' }; });
+        return { error: r.error.message || 'The email function refused.' };
+      }
+      return (r && r.data) || {};
+    }).catch(function (e) { return { error: String((e && e.message) || e) }; });
+  }
+  function mchip(map, key) { var d = map[key] || [key || '?', MUTED]; return '<span class="w154chip" style="background:' + d[1] + '17;color:' + d[1] + '"><i style="background:' + d[1] + '"></i>' + E(d[0]) + '</span>'; }
+  function testList() { var s = MAIL.st && MAIL.st.settings ? MAIL.st.settings.mail_test_recipients : ''; return String(s || '').toLowerCase().split(/[,;\s]+/).filter(Boolean); }
+  function canTest() { return testList().indexOf(myEmail()) >= 0; }
+  function mailAdmin() { return MAIL.st ? !!MAIL.st.admin : amAdmin(); }
+  function tplByKey(k) { return (S.templates || []).filter(function (t) { return t.key === k; })[0] || null; }
+  /* what a contact may receive today, in the words the rule uses (the server checks again before every send) */
+  function permWhy(c) {
+    var k = c._perm, st = lower(c.email_status);
+    var trans = c.emails.length > 0 && st !== 'bounced' && st !== 'complained';
+    var news = k === 'express' || k === 'implied';
+    var why = k === 'express' ? 'express consent' : k === 'implied' ? 'implied consent until ' + fmtDay(c.implied_consent_until) : k === 'unsub' ? 'unsubscribed' : k === 'bounced' ? 'the address bounces' :
+      k === 'none' ? 'no consent' : (c.email_consent === 'implied' ? 'their implied consent ran out' : 'no permission recorded');
+    return { news: news, trans: trans, why: why };
+  }
+  function permLine(c) {
+    var w = permWhy(c);
+    if (!c.emails.length) return '<div class="w152line m">No email address on file, so nothing can be sent.</div>';
+    return '<div class="w152line m w154perm">Newsletters and appeals: <b style="color:' + (w.news ? GREEN : FLAG) + '">' + (w.news ? 'yes' : 'no') + '</b> (' + E(w.why) + ') \u00b7 Confirmations and reminders: <b style="color:' + (w.trans ? GREEN : FLAG) + '">' + (w.trans ? 'yes' : 'no') + '</b></div>';
+  }
+
+  /* ---------- the numbers: who can be emailed today ---------- */
+  function permStatsHtml(all) {
+    var n = { express: 0, implied: 0, unknown: 0, unsub: 0, bounced: 0 };
+    all.forEach(function (c) { if (!c.emails.length) return; var k = c._perm === 'none' ? 'unknown' : c._perm; if (n[k] != null) n[k]++; });
+    function st(key, v, label, color) { return '<button class="w152st" data-w154perm="' + key + '"><b style="color:' + color + '">' + Number(v).toLocaleString('en-CA') + '</b><span>' + E(label) + '</span></button>'; }
+    return '<div class="w152stats w154stats">' +
+      st('express', n.express, 'said yes to our emails (express consent)', GREEN) +
+      st('implied', n.implied, 'gave or served in the last two years (implied consent)', TEAL) +
+      st('unknown', n.unknown, 'with an address but no permission: confirmations only', MUTED) +
+      st('unsub', n.unsub + n.bounced, 'unsubscribed or bouncing: never a newsletter', FLAG) + '</div>';
+  }
+
+  /* ---------- the sending card: the domain, the settings, the mode ---------- */
+  function hostOf(name) { var d = (MAIL.st && MAIL.st.settings && MAIL.st.settings.mail_domain) || 'welfareavenue.com'; var n = String(name || ''); if (n === d) return '@'; return n.replace(new RegExp('\\.' + d.replace(/\./g, '\\.') + '$'), ''); }
+  function dnsHtml(dom) {
+    var recs = (dom && dom.records) || [];
+    if (!recs.length) return '';
+    return '<div class="w154dns"><div class="w154dh"><span>Type</span><span>Host (at Namecheap)</span><span>Value</span><span>Status</span></div>' + recs.map(function (r) {
+      var val = String(r.value || ''), st = lower(r.status || 'not_started');
+      return '<div class="w154dr"><span><b>' + E(r.type) + '</b>' + (r.priority != null ? '<div class="m">priority ' + E(r.priority) + '</div>' : '') + '<div class="m">' + E(r.record || '') + '</div></span>' +
+        '<span><code>' + E(hostOf(r.name)) + '</code> <button class="w152mini" data-w152copy="' + E(hostOf(r.name)) + '" aria-label="Copy the host">' + I('copy') + '</button></span>' +
+        '<span><code class="v">' + E(val) + '</code> <button class="w152mini" data-w152copy="' + E(val) + '" aria-label="Copy the value">' + I('copy') + 'Copy</button></span>' +
+        '<span>' + mchip(DSTATUS, st) + '</span></div>';
+    }).join('') + '</div><p class="w152pnote">Add each record at Namecheap under Advanced DNS (the host is relative to welfareavenue.com; <code>@</code> means the domain itself). Leave the Google MX, SPF and DKIM records as they are. Then Check the domain; verification takes a few minutes once the records are live.</p>';
+  }
+  function settingsFormHtml(s) {
+    return '<div class="w152form w154form">' +
+      field('From name', inp('mail_from_name', s.mail_from_name, 'Welfare Avenue')) + field('From address', inp('mail_from_email', s.mail_from_email, 'info@welfareavenue.com'), false, 'on welfareavenue.com') +
+      field('Reply-to', inp('mail_reply_to', s.mail_reply_to, 'info@welfareavenue.com')) +
+      field('Mode', sel('mail_mode', [['test', 'Test mode: only the test recipients get email'], ['live', 'Live: any contact the rule allows']], s.mail_mode || 'test'), false, 'switching to live is the go-ahead for real sends') +
+      field('Test recipients', inp('mail_test_recipients', s.mail_test_recipients, 'name@welfareavenue.com, other@\u2026'), true, 'separated by commas') +
+      field('Fundraising without consent', sel('mail_fundraising_exemption', [['off', 'Off: appeals follow the newsletter rule (consent needed)'], ['on', 'On: a registered charity may send appeals without consent (CASL s.6 exemption)']], s.mail_fundraising_exemption || 'off'), true) +
+      field('Postal address in the footer', inp('mail_postal_address', s.mail_postal_address, 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9'), true) +
+      '</div><div class="w152foot"><span class="w152err">' + E(MAIL.ferr) + '</span><button class="w152btn ghost sm" data-w154cancel="1">Cancel</button><button class="w152btn sm" data-w154savecfg="1">' + I('check') + ' Save the settings</button></div>';
+  }
+  function sendingCardHtml() {
+    var st = MAIL.st, s = (st && st.settings) || {}, adm = mailAdmin();
+    var head = '<h3>' + I('mail') + ' Sending from ' + E(s.mail_domain || 'welfareavenue.com') + '</h3>';
+    if (!st && !MAIL.err) return '<section class="w154card">' + head + '<div class="w152empty">Checking the engine\u2026</div></section>';
+    if (MAIL.err && !st) return '<section class="w154card">' + head + '<div class="w152empty">' + I('alert') + ' The email engine did not answer (' + E(MAIL.err) + '). <button class="w152mini" data-w154retry="1">Try again</button></div></section>';
+    var dom = st.domain && !st.domain.error ? st.domain : null;
+    var dchip = !st.key_present ? mchip({ k: ['Resend key missing', FLAG] }, 'k') : !st.domain_id ? mchip({ k: ['Not set up yet', MUTED] }, 'k') : dom ? mchip(DSTATUS, lower(dom.status)) : mchip({ k: ['Resend did not answer', FLAG] }, 'k');
+    var live = (s.mail_mode || 'test') === 'live';
+    var lines = '<div class="w154kv"><span>Domain</span><span>' + dchip + '</span></div>' +
+      '<div class="w154kv"><span>From</span><span>' + E(s.mail_from_name || 'Welfare Avenue') + ' &lt;' + E(s.mail_from_email || '') + '&gt;' + (s.mail_reply_to ? '<div class="m">replies to ' + E(s.mail_reply_to) + '</div>' : '') + '</span></div>' +
+      '<div class="w154kv"><span>Mode</span><span>' + (live ? mchip({ k: ['Live', GREEN] }, 'k') + ' <span class="m">any contact the rule allows</span>' : mchip({ k: ['Test mode', '#B9851B'] }, 'k') + ' <span class="m">only to ' + E(s.mail_test_recipients || 'nobody yet') + '</span>') + '</span></div>' +
+      '<div class="w154kv"><span>Webhook</span><span>' + (st.webhook_id && st.webhook_secret_present ? mchip({ k: ['Connected', GREEN] }, 'k') + ' <span class="m">deliveries, opens, bounces and complaints come back to the log</span>' : mchip({ k: ['Not connected', MUTED] }, 'k')) + '</span></div>' +
+      '<div class="w154kv"><span>Last 30 days</span><span>' + plural(st.last30.sent, 'email sent', 'emails sent') + ', ' + plural(st.last30.tests, 'test', 'tests') + (st.last30.bounced ? ', ' + plural(st.last30.bounced, 'bounce', 'bounces') : '') + (st.last30.suppressed ? ', ' + st.last30.suppressed + ' held back by the rule' : '') + (st.last30.failed ? ', ' + st.last30.failed + ' failed' : '') + '</span></div>';
+    var acts = [];
+    if (adm) {
+      if (st.key_present && !st.domain_id) acts.push('<button class="w152btn sm" data-w154act="domain_setup">' + I('spark') + ' Set up the domain in Resend</button>');
+      if (st.domain_id) acts.push('<button class="w152btn soft sm" data-w154act="domain_verify">' + I('check') + ' Check the domain</button>');
+      if (st.key_present && !(st.webhook_id && st.webhook_secret_present)) acts.push('<button class="w152btn soft sm" data-w154act="webhook_setup">' + I('link') + ' Connect the webhook</button>');
+      acts.push('<button class="w152btn ghost sm" data-w154cfg="1">' + I('edit') + ' Change the settings</button>');
+      acts.push('<button class="w152btn ghost sm" data-w154act="refresh_consent">' + I('shield') + ' Refresh implied consent</button>');
+    }
+    return '<section class="w154card">' + head + lines + (MAIL.msg ? '<div class="w154msg">' + E(MAIL.msg) + '</div>' : '') +
+      (acts.length ? '<div class="w154acts">' + acts.join('') + '</div>' : '') + (MAIL.busy ? '<div class="w152count">' + E(MAIL.busy) + '\u2026</div>' : '') +
+      (MAIL.form && adm ? settingsFormHtml(s) : '') + (dom ? dnsHtml(dom) : '') +
+      (!st.key_present ? '<p class="w152pnote">The Resend key (RESEND_API_KEY) is missing from the function secrets, so nothing can be sent or set up. An admin adds it in Supabase; the Hub never stores it.</p>' : '') +
+      '</section>';
+  }
+
+  /* ---------- the templates ---------- */
+  function templatesCardHtml() {
+    var list = S.templates || [], adm = mailAdmin();
+    var rows = list.map(function (t) {
+      var on = MAIL.prev && MAIL.prev.key === t.key, ed = MAIL.edit && MAIL.edit.key === t.key;
+      return '<div class="w154tpl' + (t.active ? '' : ' off') + (on ? ' on' : '') + '"><div class="w154tph"><div><b>' + E(t.name) + '</b> ' + mchip(MKIND, t.kind) + (t.active ? '' : ' <span class="m">switched off</span>') + '<div class="m">' + E(t.subject) + '</div></div>' +
+        '<div class="w154tpa"><button class="w152mini" data-w154prev="' + E(t.key) + '">' + I('search') + (on ? 'Hide' : 'Preview') + '</button>' +
+        (canTest() ? '<button class="w152mini" data-w154test="' + E(t.key) + '">' + I('mail') + 'Send me a test</button>' : '') +
+        (adm ? '<button class="w152mini" data-w154edit="' + E(t.key) + '">' + I('edit') + (ed ? 'Close' : 'Edit') + '</button>' : '') + '</div></div>' +
+        (ed ? editFormHtml(t) : '') +
+        (on ? (MAIL.prev.html ? '<div class="w154pv"><div class="m">Subject: <b>' + E(MAIL.prev.subject) + '</b>' + (MAIL.prev.preheader ? ' \u00b7 preview text: ' + E(MAIL.prev.preheader) : '') + '</div><iframe class="w154frame" title="Preview of ' + E(t.name) + '" sandbox="" srcdoc="' + E(MAIL.prev.html) + '"></iframe></div>' : '<div class="w152count">' + E(MAIL.prev.error || 'Rendering the preview\u2026') + '</div>') : '') + '</div>';
+    }).join('');
+    return '<section class="w154card"><h3>' + I('note') + ' Templates <span class="m">' + plural(list.length, 'template', 'templates') + '</span></h3>' +
+      '<p class="w152pnote">Each one is wrapped in the brand layout: the logo on green, cream body, gold button, and a footer with the postal address, the charity number, why they got it and the unsubscribe link. <code>{{first_name}}</code> fills in from the contact; <code>{{name|fallback}}</code> falls back when empty.</p>' +
+      (rows || '<div class="w152empty">No templates yet.</div>') + '</section>';
+  }
+  function editFormHtml(t) {
+    return '<div class="w152form w154form w154edit">' +
+      field('Name', inp('name', t.name), true) + field('Subject', inp('subject', t.subject), true) + field('Preview text', inp('preheader', t.preheader), true, 'the line inboxes show after the subject') +
+      field('Body (HTML: h1, h2, p, ul, li, strong, a class="btn")', area('html_body', t.html_body), true) + field('Plain-text version', area('text_body', t.text_body), true, 'what clients without HTML show') +
+      '<label class="full"><input type="checkbox" data-f="active"' + (t.active ? ' checked' : '') + '> In use</label>' +
+      '</div><div class="w152foot"><span class="w152err">' + E(MAIL.ferr) + '</span><button class="w152btn ghost sm" data-w154cancel="1">Cancel</button><button class="w152btn sm" data-w154savetpl="' + E(t.key) + '">' + I('check') + ' Save the template</button></div>';
+  }
+
+  /* ---------- the send log ---------- */
+  function sendRow(s) {
+    var c = s.contact_id ? contact(s.contact_id) : null, t = tplByKey(s.template_key);
+    var who = c ? '<a href="#crm/c/' + E(c.id) + '">' + E(c.full_name) + '</a><div class="m">' + E(s.to_email) + '</div>' : E(s.to_email);
+    var marks = [];
+    if (s.opened_at) marks.push('opened'); if (s.clicked_at) marks.push('clicked'); if (s.is_test) marks.push('test');
+    return '<div class="w154sr"><span>' + E(fmtDay(s.created_at)) + '<div class="m">' + E(String(s.created_by || '').split('@')[0]) + '</div></span><span>' + who + '</span>' +
+      '<span>' + E(t ? t.name : (s.template_key || '')) + (s.subject ? '<div class="m">' + E(clip(s.subject, 70)) + '</div>' : '') + '</span>' +
+      '<span>' + mchip(MSTATUS, s.status) + (marks.length ? '<div class="m">' + E(marks.join(', ')) + '</div>' : '') + (s.status === 'suppressed' || s.status === 'failed' ? '<div class="m">' + E(s.permission_basis || s.error || '') + '</div>' : '') + '</span></div>';
+  }
+  function sendsCardHtml() {
+    var list = S.sends || [];
+    return '<section class="w154card wide"><h3>' + I('clock') + ' Recent emails <span class="m">' + (list.length ? 'the last ' + list.length : '') + '</span></h3>' +
+      (list.length ? '<div class="w154sl"><div class="w154sh"><span>When</span><span>To</span><span>Template</span><span>What happened</span></div>' + list.slice(0, 60).map(sendRow).join('') + '</div>'
+        : '<div class="w152empty">Nothing sent yet. The first message is a test to the test recipients once the domain is verified.</div>') + '</section>';
+  }
+  function ruleHtml() {
+    return '<section class="w154card wide w154rule"><h3>' + I('shield') + ' How the rule works</h3>' +
+      '<p>Canada\u2019s anti-spam law (CASL) decides who gets what, and the Hub applies it before every send. Confirmations, reminders and receipts are not commercial messages, so they go to anyone whose address works. Newsletters and appeals need <b>express consent</b> (they said yes) or <b>implied consent</b>: Welfare Avenue is a registered charity (no. 713048502RR0001), so a gift or a serving gives two years of implied consent from that day. Someone who unsubscribed or whose address bounces never gets a newsletter or an appeal. Every email carries our postal address and an unsubscribe link, and each send sits on the contact\u2019s timeline with what happened to it. Implied consent is refreshed every morning from the gifts and the rosters.</p></section>';
+  }
+  function paintEmail(root) {
+    var u = S.ui;
+    if (!S.templates || !S.sends) {
+      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the email centre\u2026');
+      Promise.all([load('templates'), load('sends')]).then(function () { if (u.tab === 'email') paint(); });
+      return;
+    }
+    if (!MAIL.st && !MAIL.busy && !MAIL.err) {
+      MAIL.busy = 'Checking the engine';
+      mailFn('settings').then(function (r) { MAIL.busy = ''; if (r.error) MAIL.err = r.error; else { MAIL.st = r; MAIL.err = ''; } if (u.tab === 'email') paint(); });
+    }
+    root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + permStatsHtml(S.contacts || []) +
+      '<div class="w154grid">' + sendingCardHtml() + templatesCardHtml() + sendsCardHtml() + ruleHtml() + '</div>';
+  }
+  function refreshMail(after) {
+    return Promise.all([load('sends', true), mailFn('settings')]).then(function (r) { if (!r[1].error) MAIL.st = r[1]; if (after) after(); if (S.ui.tab === 'email') paint(); });
+  }
+  function mailAct(action) {
+    if (MAIL.busy) return;
+    MAIL.busy = { domain_setup: 'Setting up the domain in Resend', domain_verify: 'Asking Resend to check the records', webhook_setup: 'Connecting the webhook', refresh_consent: 'Refreshing implied consent' }[action] || 'Working';
+    MAIL.msg = ''; paint();
+    mailFn(action).then(function (r) {
+      MAIL.busy = '';
+      if (r.error) { MAIL.msg = r.error; paint(); return; }
+      if (action === 'refresh_consent' && r.counts) { MAIL.msg = 'Implied consent refreshed: ' + r.counts.updated + ' contacts updated, ' + r.counts.implied + ' with implied consent today, ' + r.counts.express + ' express.'; load('contacts', true).then(function () { paint(); }); }
+      else if (action === 'webhook_setup') MAIL.msg = r.note ? 'The webhook was already connected.' : 'Webhook connected; its secret is in the vault.';
+      else if (r.domain) MAIL.msg = 'Domain ' + (r.domain.name || '') + ': ' + ((DSTATUS[lower(r.domain.status)] || [r.domain.status])[0]).toLowerCase() + '.';
+      mailFn('settings').then(function (s) { if (!s.error) MAIL.st = s; paint(); });
+    });
+  }
+  function previewTpl(key, contactId) {
+    MAIL.prev = { key: key, html: '', subject: '', preheader: '' }; paint();
+    mailFn('preview', { template_key: key, contact_id: contactId || undefined }).then(function (r) {
+      if (!MAIL.prev || MAIL.prev.key !== key) return;
+      if (r.error) MAIL.prev.error = r.error; else { MAIL.prev.html = r.html; MAIL.prev.subject = r.subject; MAIL.prev.preheader = r.preheader; }
+      paint();
+    });
+  }
+  function sendTest(key) {
+    if (MAIL.busy) return;
+    MAIL.busy = 'Sending a test to ' + myEmail(); MAIL.msg = ''; paint();
+    mailFn('test', { template_key: key, to: myEmail() }).then(function (r) {
+      MAIL.busy = '';
+      MAIL.msg = r.error ? 'The test did not go: ' + r.error : 'Test sent to ' + (r.to || myEmail()) + ' (' + (r.status || 'sent') + ').';
+      refreshMail();
+    });
+  }
+  function saveSettings() {
+    var v = formVals(); MAIL.ferr = '';
+    var body = { mail_from_name: v.mail_from_name, mail_from_email: v.mail_from_email, mail_reply_to: v.mail_reply_to, mail_mode: v.mail_mode, mail_test_recipients: v.mail_test_recipients, mail_fundraising_exemption: v.mail_fundraising_exemption, mail_postal_address: v.mail_postal_address };
+    MAIL.busy = 'Saving the settings'; paint();
+    return mailFn('set_settings', body).then(function (r) {
+      MAIL.busy = '';
+      if (r.error) { MAIL.ferr = r.error; paint(); return; }
+      MAIL.form = false; MAIL.msg = r.changed ? 'Settings saved (' + plural(r.changed, 'change', 'changes') + ').' : 'Nothing changed.';
+      mailFn('settings').then(function (s) { if (!s.error) MAIL.st = s; paint(); });
+    });
+  }
+  function saveTemplate(key) {
+    var v = formVals(); MAIL.ferr = '';
+    if (!String(v.subject || '').trim() || !String(v.html_body || '').trim()) { MAIL.ferr = 'A subject and a body are needed.'; paint(); return Promise.resolve(); }
+    MAIL.busy = 'Saving the template'; paint();
+    return mailFn('save_template', { key: key, name: v.name, subject: v.subject, preheader: v.preheader, html_body: v.html_body, text_body: v.text_body, active: !!v.active }).then(function (r) {
+      MAIL.busy = '';
+      if (r.error) { MAIL.ferr = r.error; paint(); return; }
+      MAIL.edit = null; MAIL.msg = 'Template saved.';
+      if (MAIL.prev && MAIL.prev.key === key) MAIL.prev = null;
+      load('templates', true).then(function () { paint(); });
+    });
+  }
+  /* formVals reads [data-f] inside #w152sheet; the Email tab's forms live on the page, so read them there too */
+  var __formVals152 = formVals;
+  formVals = function () {
+    var o = document.querySelector('#w152sheet [data-f]') ? null : document.querySelector('.w152root .w154form');
+    if (!o) return __formVals152();
+    var v = {};
+    o.querySelectorAll('[data-f]').forEach(function (el) { v[el.getAttribute('data-f')] = el.type === 'checkbox' ? el.checked : String(el.value || '').trim(); });
+    v._kinds = [];
+    return v;
+  };
+
+  /* ---------- a contact's page: send them an email ---------- */
+  function mailFormHtml(c) {
+    var list = (S.templates || []).filter(function (t) { return t.active && t.kind !== 'test'; });
+    var cur = MAIL.sendc && MAIL.sendc.id === c.id ? MAIL.sendc : (MAIL.sendc = { id: c.id, key: list.length ? list[0].key : '', html: '', subject: '', err: '', msg: '', busy: '' });
+    var t = tplByKey(cur.key), w = permWhy(c), ok = t ? (t.kind === 'transactional' ? w.trans : w.news) : false;
+    var mode = MAIL.st && MAIL.st.settings ? MAIL.st.settings.mail_mode : 'test';
+    var testOnly = mode !== 'live' && testList().indexOf(lower(c.emails[0])) < 0;
+    return '<h2>Send an email</h2><div class="sub">To ' + E(c.full_name) + ' &lt;' + E(c.emails[0] || '') + '&gt;. The Hub checks their permission first and logs the send on their timeline.</div>' +
+      '<div class="w152form w154form"><label class="full">Template<select data-f="template_key" data-w154tplsel="' + E(c.id) + '">' + list.map(function (x) { return '<option value="' + E(x.key) + '"' + (x.key === cur.key ? ' selected' : '') + '>' + E(x.name) + ' (' + E((MKIND[x.kind] || [x.kind])[0].toLowerCase()) + ')</option>'; }).join('') + '</select></label></div>' +
+      (t ? '<div class="w152line m" style="margin-top:8px">' + (ok ? '<b style="color:' + GREEN + '">Allowed</b>: ' + E(t.kind === 'transactional' ? 'a confirmation or reminder, not a commercial message' : w.why) : '<b style="color:' + FLAG + '">Held back</b>: ' + E(w.why) + '. The Hub will not send a ' + E((MKIND[t.kind] || [t.kind])[0].toLowerCase()) + ' to them.') + '</div>' : '') +
+      (testOnly ? '<div class="w152line m">' + I('alert') + ' The Hub is in test mode: this address is not a test recipient, so the send would be refused until an admin switches the Email tab to live.</div>' : '') +
+      (cur.html ? '<iframe class="w154frame sheet" title="Preview" sandbox="" srcdoc="' + E(cur.html) + '"></iframe>' : '<div class="w152count">' + E(cur.err || (cur.busy || 'Rendering the preview\u2026')) + '</div>') +
+      '<div class="w152foot"><span class="w152err">' + E(cur.msg) + '</span><button class="w152btn ghost" data-w152back="' + E(c.id) + '">Back</button>' +
+      '<button class="w152btn" data-w154go="' + E(c.id) + '"' + (!ok || !t || cur.busy ? ' disabled' : '') + '>' + I('mail') + ' Send now</button></div>';
+  }
+  function mailForm(id) {
+    var c = contact(id); if (!c || !c.emails.length) return;
+    var open = function () {
+      openSheet(mailFormHtml(c), 'mail:' + c.id, true);
+      var cur = MAIL.sendc;
+      if (cur && cur.key && !cur.html && !cur.busy) {
+        cur.busy = 'Rendering the preview';
+        mailFn('preview', { template_key: cur.key, contact_id: c.id }).then(function (r) {
+          if (!MAIL.sendc || MAIL.sendc.id !== c.id || MAIL.sendc.key !== cur.key) return;
+          cur.busy = ''; if (r.error) cur.err = r.error; else { cur.html = r.html; cur.subject = r.subject; }
+          if (S.sheet === 'mail:' + c.id) openSheet(mailFormHtml(c), 'mail:' + c.id, true);
+        });
+      }
+    };
+    if (!S.templates) load('templates').then(open); else open();
+    if (!MAIL.st) mailFn('settings').then(function (r) { if (!r.error) { MAIL.st = r; if (S.sheet === 'mail:' + c.id) openSheet(mailFormHtml(c), 'mail:' + c.id, true); } });
+  }
+  function sendNow(id) {
+    var c = contact(id), cur = MAIL.sendc; if (!c || !cur || cur.id !== c.id || !cur.key) return Promise.resolve();
+    cur.busy = 'Sending'; cur.msg = ''; openSheet(mailFormHtml(c), 'mail:' + c.id, true);
+    return mailFn('send', { contact_id: c.id, template_key: cur.key }).then(function (r) {
+      cur.busy = '';
+      if (r.error) { cur.msg = r.error; openSheet(mailFormHtml(c), 'mail:' + c.id, true); return; }
+      if (r.status === 'suppressed') { cur.msg = 'Held back by the rule: ' + (r.basis || ''); openSheet(mailFormHtml(c), 'mail:' + c.id, true); return; }
+      toastS('Email sent to ' + (r.to || c.emails[0]));
+      MAIL.sendc = null; S.sends = null;
+      contactSheet(c.id, true);
+    });
+  }
+
+  /* ---------- styles ---------- */
+  var css154 = document.createElement('style'); css154.id = 'w154css';
+  css154.textContent = ''
+    + '.w154grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}'
+    + '.w154card{background:var(--wa-card,' + CREAM + ');border-radius:18px;box-shadow:' + SH1 + ';padding:18px 20px;min-width:0;}.w154card.wide{grid-column:1/-1;}'
+    + '.w154card h3{display:flex;align-items:center;gap:8px;margin:0 0 12px;font-family:' + HEAD + ';font-size:22px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';}.w154card h3 .m{font-family:' + BODY + ';font-size:12.5px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w154card .m{color:var(--wa-muted,' + MUTED + ');font-size:12.5px;}.w154card p{font-size:14px;line-height:1.55;margin:0 0 10px;}'
+    + '.w154chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;}.w154chip i{width:7px;height:7px;border-radius:50%;display:inline-block;}'
+    + '.w154kv{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;padding:7px 0;border-top:1px solid rgba(16,63,57,.07);font-size:13.5px;align-items:start;}.w154kv>span:first-child{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');padding-top:3px;}'
+    + '.w154acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}.w154msg{margin-top:10px;padding:9px 12px;border-radius:12px;background:rgba(220,165,39,.14);font-size:13px;}'
+    + '.w154form{margin-top:14px;}.w154form textarea{min-height:140px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;}'
+    + '.w154dns{margin-top:14px;border:1px solid rgba(16,63,57,.1);border-radius:12px;overflow:hidden;}.w154dh,.w154dr{display:grid;grid-template-columns:minmax(0,.6fr) minmax(0,1.15fr) minmax(0,2fr) minmax(0,1.05fr);gap:10px;padding:9px 12px;font-size:13px;align-items:center;}.w154dr .w154chip{white-space:normal;text-align:left;line-height:1.25;}'
+    + '.w154dh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');background:rgba(16,63,57,.04);}.w154dr{border-top:1px solid rgba(16,63,57,.07);}'
+    + '.w154dr code{font-size:12px;background:rgba(16,63,57,.06);border-radius:6px;padding:2px 6px;display:inline-block;max-width:100%;overflow-wrap:anywhere;word-break:break-all;}.w154dr>span{min-width:0;}'
+    + '.w154tpl{border-top:1px solid rgba(16,63,57,.08);padding:12px 0;}.w154tpl.off{opacity:.65;}.w154tph{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}.w154tph b{font-size:14.5px;}.w154tpa{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;}'
+    + '.w154pv{margin-top:10px;}.w154frame{width:100%;height:640px;border:1px solid rgba(16,63,57,.12);border-radius:12px;background:' + CREAM + ';margin-top:8px;}.w154frame.sheet{height:520px;}'
+    + '.w154sl{border:1px solid rgba(16,63,57,.1);border-radius:12px;overflow:hidden;}.w154sh,.w154sr{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr) minmax(0,1.6fr) minmax(0,1.3fr);gap:10px;padding:9px 12px;font-size:13px;align-items:start;}'
+    + '.w154sh{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');background:rgba(16,63,57,.04);}.w154sr{border-top:1px solid rgba(16,63,57,.07);}.w154sr a{color:' + GREEN + ';font-weight:700;text-decoration:none;}'
+    + '.w154rule p{font-size:14px;line-height:1.6;}.w154perm b{font-weight:700;}'
+    + '.w154st{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;}'
+    + '@media (max-width:980px){.w154grid{grid-template-columns:1fr;}.w154dh,.w154dr{grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.6fr);}.w154dh>span:last-child,.w154dr>span:last-child{display:none;}}'
+    + '@media (max-width:700px){.w154sh,.w154sr{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr);}.w154sh>span:nth-child(3),.w154sr>span:nth-child(3){display:none;}.w154kv{grid-template-columns:1fr;gap:2px;}.w154frame{height:520px;}}';
+  document.head.appendChild(css154);
+
+  /* ---------- wiring for the tab and the contact form ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target, el; if (!t || !t.closest) return;
+    if (!(t.closest('.w152root') || t.closest('#w152sheet'))) return;
+    if ((el = t.closest('[data-w154perm]'))) { e.preventDefault(); var k = el.getAttribute('data-w154perm'); setFilter({ perm: k === 'unknown' ? 'unknown' : k }); go('#crm'); return; }
+    if ((el = t.closest('[data-w154retry]'))) { e.preventDefault(); MAIL.err = ''; MAIL.st = null; paint(); return; }
+    if ((el = t.closest('[data-w154act]'))) { e.preventDefault(); mailAct(el.getAttribute('data-w154act')); return; }
+    if ((el = t.closest('[data-w154cfg]'))) { e.preventDefault(); MAIL.form = !MAIL.form; MAIL.edit = null; MAIL.ferr = ''; paint(); return; }
+    if ((el = t.closest('[data-w154cancel]'))) { e.preventDefault(); MAIL.form = false; MAIL.edit = null; MAIL.ferr = ''; paint(); return; }
+    if ((el = t.closest('[data-w154savecfg]'))) { e.preventDefault(); saveSettings(); return; }
+    if ((el = t.closest('[data-w154prev]'))) { e.preventDefault(); var pk = el.getAttribute('data-w154prev'); if (MAIL.prev && MAIL.prev.key === pk) { MAIL.prev = null; paint(); } else previewTpl(pk); return; }
+    if ((el = t.closest('[data-w154test]'))) { e.preventDefault(); sendTest(el.getAttribute('data-w154test')); return; }
+    if ((el = t.closest('[data-w154edit]'))) { e.preventDefault(); var ek = el.getAttribute('data-w154edit'); MAIL.edit = MAIL.edit && MAIL.edit.key === ek ? null : { key: ek }; MAIL.form = false; MAIL.ferr = ''; paint(); return; }
+    if ((el = t.closest('[data-w154savetpl]'))) { e.preventDefault(); saveTemplate(el.getAttribute('data-w154savetpl')); return; }
+    if ((el = t.closest('[data-w154send]'))) { e.preventDefault(); MAIL.sendc = null; mailForm(el.getAttribute('data-w154send')); return; }
+    if ((el = t.closest('[data-w154go]'))) { e.preventDefault(); el.disabled = true; sendNow(el.getAttribute('data-w154go')); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.hasAttribute || !t.hasAttribute('data-w154tplsel')) return;
+    var id = t.getAttribute('data-w154tplsel'), c = contact(id), cur = MAIL.sendc; if (!c || !cur) return;
+    cur.key = t.value; cur.html = ''; cur.err = ''; cur.msg = ''; cur.busy = '';
+    mailForm(id);
+  });
   /* ======================= wiring ======================= */
   function go(h) { if (location.hash === h) { try { applyHash(); } catch (e) { /* fine */ } } else location.hash = h; }
   function inOurs(t) { return t.closest && (t.closest('.w152root') || t.closest('#w152sheet')); }
@@ -1312,7 +1643,8 @@
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner\u2019s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
         T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
         { c: 1, t: 'A contact\u2019s page', p: 'Their details (a volunteer\u2019s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website\u2019s history.' },
-        { c: 1, t: 'Email permission', p: 'Canada\u2019s anti-spam law (CASL): newsletters and campaigns go only to people who said yes, or whose implied consent has not run out. Record it on their page when they tell you.' },
+        { c: 1, t: 'Email permission', p: 'Canada\u2019s anti-spam law (CASL): newsletters and appeals go only to people who said yes, or whose implied consent has not run out (two years after a gift or a serving). Record it on their page when they tell you.' },
+        T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact\u2019s page has Send an email from the Hub.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other\u2019s history moves to it, or mark them as different people (family members share phones).' }
       ] };
     } catch (e) { /* fine */ }
@@ -1322,5 +1654,6 @@
   /* ---------- test hook ---------- */
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
-    timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay };
+    timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
+    /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow };
 })();

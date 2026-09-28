@@ -121,7 +121,8 @@
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner’s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
         T('#crm .w152list', 'Everyone, one line each', 'What they are to us, how to reach them, their volunteer roles, how often they served and when we last saw them. Click anyone to open their page.', OPT),
         { c: 1, t: 'A contact’s page', p: 'Their details (a volunteer’s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website’s history.' },
-        { c: 1, t: 'Email permission', p: 'Canada’s anti-spam law (CASL): newsletters and campaigns go only to people who said yes, or whose implied consent has not run out. Record it on their page when they tell you.' },
+        { c: 1, t: 'Email permission', p: 'Canada’s anti-spam law (CASL): newsletters and appeals go only to people who said yes, or whose implied consent has not run out (two years after a gift or a serving). Record it on their page when they tell you.' },
+        T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact’s page has Send an email from the Hub.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other’s history moves to it, or mark them as different people (family members share phones).' }
       ] };
     } catch (e) { /* fine */ }
@@ -131,5 +132,6 @@
   /* ---------- test hook ---------- */
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
-    timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay };
+    timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
+    /* wave154 */ mail: MAIL, permWhy: permWhy, mailForm: mailForm, mailFn: mailFn, sendNow: sendNow };
 })();

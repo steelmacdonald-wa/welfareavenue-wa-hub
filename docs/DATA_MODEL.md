@@ -1376,6 +1376,25 @@ The public website's events (welfareavenue.com): fundraising and volunteering ev
 - `fund_event_id`: The Hub's fundraising calendar row (fund_events) for the same event, when matched.
 - `volunteer_event_id`: The Hub's serving event (volunteer_events) for the same event, when matched.
 
+### `crm_email_templates`
+
+The CRM's email templates (wave154). key names the template (welcome_volunteer, thank_you_gift, serving_reminder, newsletter, test); html_body is the inner content with {{placeholders}}, wrapped in the brand layout by mail-send at send time. Staff with the CRM page read; admins edit through mail-send (save_template), which logs the change.
+
+- `kind`: What the message is under CASL: transactional (a confirmation, reminder or receipt: not a commercial message, goes to anyone with a working address), newsletter (needs express or unexpired implied consent), fundraising (a registered charity's appeal: follows the newsletter rule unless the fundraising exemption setting is on), test.
+- `vars`: The placeholders the body expects, e.g. ["first_name","event_title"]. Contact fields (first_name, full_name, email) are always available.
+
+### `crm_email_sends`
+
+Every email the Hub sent (or refused to send) through Resend (wave154): who, which template, the permission it relied on, Resend's id and what happened to it (delivered, opened, clicked, bounced, complained; from the mail-events webhook). Written by mail-send and mail-events with the service role; staff with the CRM page read. A suppressed row is a send the permission rule refused.
+
+- `permission_basis`: Why the send was allowed (express consent, implied consent until a date, transactional, registered charity fundraising) or refused (unsubscribed, bounced, no consent).
+- `is_test`: A test message to one of the test recipients (mail_test_recipients in app_config); never counted as a campaign.
+- `meta`: template name, opens (count), clicks (links), the bounce type, the caller, the vars used.
+
+### `crm_email_events`
+
+Resend webhook events as received by mail-events (wave154), one row per event (svix_id keeps them idempotent). The send log is updated from them; kept for the audit trail. Service role writes; admins read.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1415,4 +1434,7 @@ Functions:
 - `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
 - `crm_merge_contacts(bigint, bigint)`: Keep one contact and merge the other into it: the history, gifts, old website history and organizations move, the lists join up, the copy fills the gaps in the details, two volunteer records become one (volunteer_merge). Staff with the CRM page; logged in change_log.
 - `crm_sync_from_volunteer()`: Trigger on volunteer_people: a new or changed volunteer creates or updates their CRM contact (linking an existing contact with the same email instead of duplicating).
+- `crm_email_permission(bigint, text)`: The CASL rule for one contact and one kind of message (wave154): allowed, why (the basis), when an implied consent runs out, the address and its status. Transactional messages go to anyone whose address works; unsubscribed, bounced and complained never get a newsletter or an appeal; express consent always does; implied consent lasts two years after the last gift or serving (Welfare Avenue is a registered charity, 713048502RR0001); fundraising without consent only when app_config mail_fundraising_exemption is on. mail-send calls it before every send; the CRM page shows it.
+- `crm_refresh_implied_consent()`: Writes implied consent onto the contacts (wave154): every live contact who is not express, unsubscribed, bounced or complained and who gave or served within two years gets email_consent implied, implied_consent_until two years after that last gift or serving, and a consent_source that says so. Never shortens a consent recorded by the team. Admins (the Email tab) and the daily cron job wa-crm-consent run it; returns the counts.
+- `wa_vault_set(text, text, text)`: Creates or replaces a vault secret by name (wave154). Only the service role may call it: the edge functions store secrets they receive (the Resend webhook signing secret) without the value ever leaving the platform.
 

@@ -68,7 +68,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   s = await state(f);
   ok('the CRM opens as an app: #crm, the menu gives way to the CRM rail, Back to the Hub in the dock', s.hash === '#crm' && s.app === 'crm' && /w153app/.test(s.body) && s.tabBar === 'none' && s.railShown !== 'none' && s.back !== 'none', s);
   let r = await rail(f);
-  ok('the rail: Contacts (current), Possible duplicates, Sources, Gifts, and what comes next', r.join('|') === 'Contacts*|Possible duplicates|Sources|Gifts' && await f.ev(() => /Next in the CRM/i.test(document.getElementById('w153rail').innerText) && /Lists/.test(document.getElementById('w153rail').innerText) && /Email/.test(document.getElementById('w153rail').innerText)), r);
+  ok('the rail: Contacts (current), Possible duplicates, Sources, Gifts, Email (wave154), and what comes next', r.join('|') === 'Contacts*|Possible duplicates|Sources|Gifts|Email' && await f.ev(() => /Next in the CRM/i.test(document.getElementById('w153rail').innerText) && /Lists/.test(document.getElementById('w153rail').innerText) && /Forms/.test(document.getElementById('w153rail').innerText)), r);
   ok('the app bar names the app and the place, with Add a contact', /^CRM Contacts/.test(s.bar) && /Add a contact/.test(s.bar), s.bar);
   ok('Search everything becomes the contact search', /Search contacts/.test(s.ph), s.ph);
   ok('the CRM page keeps its own tab strip out of the way on a wide screen (the rail has it)', await f.ev(() => getComputedStyle(document.querySelector('#crm .w152tabs')).display === 'none'));
@@ -178,7 +178,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('on a phone the CRM opens as an app with Menu in the app bar and its tab strip kept', s.app === 'crm' && ph.menuBtn !== 'none' && !ph.drawer && ph.wide && ph.tabs !== 'none', { s, ph });
   await click(f, '[data-w153menu]'); await f.page.waitForTimeout(500);
   const ph2 = await f.ev(() => ({ drawer: document.body.classList.contains('wa-mob-open'), rail: getComputedStyle(document.getElementById('w153rail')).display, items: [...document.querySelectorAll('#w153rail .w153it')].length, dockIn: document.getElementById('w153dock').getBoundingClientRect().bottom <= innerHeight + 1 }));
-  ok('Menu opens the drawer with the CRM rail and the dock at its foot', ph2.drawer && ph2.rail !== 'none' && ph2.items === 4 && ph2.dockIn, ph2);
+  ok('Menu opens the drawer with the CRM rail and the dock at its foot', ph2.drawer && ph2.rail !== 'none' && ph2.items === 5 && ph2.dockIn, ph2);
   await shot(f, 'apps_phone_rail');
   await click(f, '#w153rail [data-w153go="#crm/sources"]'); await f.page.waitForTimeout(800);
   ok('a rail item closes the drawer and opens the page', await f.ev(() => !document.body.classList.contains('wa-mob-open') && location.hash === '#crm/sources'));

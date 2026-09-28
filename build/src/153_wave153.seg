@@ -84,9 +84,11 @@
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' }
         ] }, { label: 'Giving', items: [
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
+        ] }, { label: 'Email', items: [
+          { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' }
         ] }];
       },
-      next: [['list', 'Lists'], ['mail', 'Email'], ['form', 'Forms'], ['chart', 'Reports']],
+      next: [['list', 'Lists'], ['form', 'Forms'], ['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
@@ -502,7 +504,7 @@
         T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app\u2019s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
-        { c: 1, t: 'Coming next', p: 'The CRM\u2019s rail already saves room for what comes next: lists, email campaigns, forms and reports. They arrive one wave at a time.', go: function () { close(); } }
+        { c: 1, t: 'Coming next', p: 'Email arrived in wave154 (the CRM\u2019s Email tab). The rail still saves room for lists, forms and reports; they arrive one wave at a time.', go: function () { close(); } }
       ] };
     } catch (e) { /* fine */ }
   }

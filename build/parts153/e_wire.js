@@ -49,7 +49,7 @@
         T('#w153rail', 'Inside an app', 'The menu becomes the app’s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app’s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app’s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
-        { c: 1, t: 'Coming next', p: 'The CRM’s rail already saves room for what comes next: lists, email campaigns, forms and reports. They arrive one wave at a time.', go: function () { close(); } }
+        { c: 1, t: 'Coming next', p: 'Email arrived in wave154 (the CRM’s Email tab). The rail still saves room for lists, forms and reports; they arrive one wave at a time.', go: function () { close(); } }
       ] };
     } catch (e) { /* fine */ }
   }
