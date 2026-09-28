@@ -1390,10 +1390,32 @@ Every email the Hub sent (or refused to send) through Resend (wave154): who, whi
 - `permission_basis`: Why the send was allowed (express consent, implied consent until a date, transactional, registered charity fundraising) or refused (unsubscribed, bounced, no consent).
 - `is_test`: A test message to one of the test recipients (mail_test_recipients in app_config); never counted as a campaign.
 - `meta`: template name, opens (count), clicks (links), the bounce type, the caller, the vars used.
+- `campaign_id`: The campaign this send belongs to (wave155); null for a single send from a contact's page or a test.
+- `claimed_at`: When a pump run took this queued send (wave155b); a claim older than 10 minutes goes back to the queue (Resend's idempotency key stops a double send).
 
 ### `crm_email_events`
 
 Resend webhook events as received by mail-events (wave154), one row per event (svix_id keeps them idempotent). The send log is updated from them; kept for the audit trail. Service role writes; admins read.
+
+### `crm_lists`
+
+Saved lists of contacts for campaigns (wave155). A live list (kind dynamic) keeps its conditions in filter and is evaluated by crm_list_members() whenever it is read, so it follows the data; a fixed list (kind static) keeps member_ids, the people who matched when it was saved. Staff with the CRM page read and write.
+
+- `filter`: The conditions as JSON (wave155b): {"groups":[{"all":[{"f":field,"op":op,"v":value}, ...]}, ...]}; every condition in a group must hold and a contact who matches any group is in. Fields and ops are listed on crm_contact_match(). The older flat shape (kind, role, act, perm, q, city, tags) still works through crm_list_preview_flat().
+
+### `crm_campaigns`
+
+An email campaign (wave155): a list, a template, the words (subject, preheader, vars such as headline, body_html, cta_url, cta_label) and its life: draft (staff edit it on the Campaigns tab), queued and sending (mail-send campaign_queue built the rows in crm_email_sends after the CASL rule; campaign_pump drains them), sent, cancelled. Counts: audience (people in the list), eligible (the rule said yes), held (the rule said no). Staff with the CRM page read and edit drafts; the functions move the status.
+
+- `kind`: What the messages are: newsletter (consent needed), fundraising (consent needed unless the exemption setting is on), volunteer (a call-out: anyone not unsubscribed, Steel 27/09/26), transactional (anyone with a working address). mail-send applies crm_email_permission with this kind.
+- `vars`: The placeholders for the template: headline, body_html (paragraphs), cta_url, cta_label, and anything else the template names.
+- `from_name`: Who the campaign comes from (wave155b): empty = the mail_from_name setting ("Welfare Avenue"), or a team member's name.
+- `from_email`: The sending address (wave155b): empty = mail_from_email (info@), or a team member's own @welfareavenue.com address; mail-send refuses any other domain.
+- `reply_to`: Where replies go (wave155b): empty = the sender when it is a person, else mail_reply_to.
+
+### `crm_campaign_stats_v` (view)
+
+Per-campaign counts from the send log (wave155): queued (waiting or being sent), sent, delivered, opened, clicked, bounced, complained, failed, suppressed (the rule said no), cancelled, unsubscribed. Reader's rights (security_invoker).
 
 Functions:
 
@@ -1434,7 +1456,16 @@ Functions:
 - `hub_reel_replace(text[], date, jsonb)`: hub-reel only (service role): replaces the lines of the given kinds for a batch in one locked transaction, keeping what admins took off and skipping any source taken off in the last 120 days.
 - `crm_merge_contacts(bigint, bigint)`: Keep one contact and merge the other into it: the history, gifts, old website history and organizations move, the lists join up, the copy fills the gaps in the details, two volunteer records become one (volunteer_merge). Staff with the CRM page; logged in change_log.
 - `crm_sync_from_volunteer()`: Trigger on volunteer_people: a new or changed volunteer creates or updates their CRM contact (linking an existing contact with the same email instead of duplicating).
-- `crm_email_permission(bigint, text)`: The CASL rule for one contact and one kind of message (wave154): allowed, why (the basis), when an implied consent runs out, the address and its status. Transactional messages go to anyone whose address works; unsubscribed, bounced and complained never get a newsletter or an appeal; express consent always does; implied consent lasts two years after the last gift or serving (Welfare Avenue is a registered charity, 713048502RR0001); fundraising without consent only when app_config mail_fundraising_exemption is on. mail-send calls it before every send; the CRM page shows it.
+- `crm_email_permission(bigint, text)`: The CASL rule for one contact and one kind of message (wave154; the volunteer kind wave155b). transactional/test: any working address. volunteer: any working address that has not unsubscribed (Steel, 27/09/26). newsletter/fundraising: express consent, or implied consent within two years of a gift or a serving; fundraising also under the exemption setting. Bounced and complained get nothing.
 - `crm_refresh_implied_consent()`: Writes implied consent onto the contacts (wave154): every live contact who is not express, unsubscribed, bounced or complained and who gave or served within two years gets email_consent implied, implied_consent_until two years after that last gift or serving, and a consent_source that says so. Never shortens a consent recorded by the team. Admins (the Email tab) and the daily cron job wa-crm-consent run it; returns the counts.
 - `wa_vault_set(text, text, text)`: Creates or replaces a vault secret by name (wave154). Only the service role may call it: the edge functions store secrets they receive (the Resend webhook signing secret) without the value ever leaving the platform.
+- `crm_perm_key(text, text, date)`: The email permission as the CRM page shows it (wave155): unsub, bounced, express, implied (not run out), none, unknown. The same rule as permKey in the page; crm_email_permission() is the one to trust before a send.
+- `crm_fold(text)`: Lower case with the common accents removed, for matching names and searches (wave155); the page's fold() in SQL.
+- `crm_list_preview(jsonb)`: The contact ids a list filter selects today (wave155, groups wave155b): {"groups":[{"all":[{f,op,v},...]},...]} is OR between groups and AND inside one; a filter without groups is the Contacts tab's flat shape. Reader's rights.
+- `crm_list_members(bigint)`: The live contact ids in a list (wave155): the filter's result for a dynamic list, the picked ids (still live) for a static one.
+- `crm_claim_queued(int)`: Takes up to p_limit queued sends for mail-send's campaign_pump (wave155b): status sending, claimed_at now; stale claims (over 10 minutes) go back to the queue. Service role only.
+- `crm_contact_match(crm_contacts_v, jsonb)`: One list condition {f, op, v} against one contact (wave155b). Fields: kind, role, tag, perm, email, served (ever, never, within days, count_gte), gave (ever, never, within days, lapsed days, total_gte, count_gte), city, language, source, added (days), active (days), opened and clicked (a Hub email within days), review, search. op not/none negates.
+- `crm_list_preview_flat(jsonb)`: The CRM page's flat filters (kind, role, act, perm, q, city, tags) evaluated in the database (wave155); crm_list_preview calls it when a filter has no groups.
+- `crm_list_sizes()`: How many live contacts each saved list holds today (wave155b), for the Lists tab.
+- `crm_campaign_audience(bigint)`: Everyone in a campaign's list with the rule's answer for the campaign's kind (wave155b): mail-send campaign_check and campaign_queue read it.
 

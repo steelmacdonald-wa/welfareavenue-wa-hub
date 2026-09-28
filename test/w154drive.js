@@ -82,7 +82,7 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   await patch(f);
   await f.hash('#crm/email', 2600);
   let s = await tabState(f);
-  ok('the CRM opens on the Email tab (five tabs, Email marked)', s.tabs.length === 5 && /Email\*/.test(s.tabs[4]) && s.root, s);
+  ok('the CRM opens on the Email tab (seven tabs since wave155, Email marked)', s.tabs.length === 7 && /Email\*/.test(s.tabs[4]) && s.root, s);
   const stats = await f.ev(() => [...document.querySelectorAll('#crm .w154stats .w152st')].map(b => b.querySelector('b').textContent + ' ' + b.querySelector('span').textContent));
   ok('the permission numbers: 1 express, 1 implied, 1 with no permission (confirmations only), 2 unsubscribed or bouncing', stats.length === 4 && /^1 said yes/.test(stats[0]) && /^1 gave or served/.test(stats[1]) && /^1 with an address/.test(stats[2]) && /^2 unsubscribed/.test(stats[3]), stats);
   const card = await text(f, '#crm .w154card');
@@ -160,7 +160,7 @@ const text = (f, s) => f.ev(x => { const el = document.querySelector(x); return 
   await patch(f);
   await f.hash('#crm/email', 2600);
   const m = await f.ev(() => ({ tabs: document.querySelectorAll('#crm .w152tabs button').length, card: !!document.querySelector('#crm .w154card'), acts: [...document.querySelectorAll('#crm .w154acts button')].map(b => b.textContent.trim()), test: !!document.querySelector('[data-w154test]'), edit: !!document.querySelector('[data-w154edit]'), dns: document.querySelectorAll('#crm .w154dr').length }));
-  ok('a member with the CRM sees the Email tab and the sending card, without the admin buttons, the edit buttons or Send me a test (not a test recipient)', m.tabs === 5 && m.card && m.acts.length === 0 && !m.test && !m.edit && m.dns === 3, m);
+  ok('a member with the CRM sees the Email tab and the sending card, without the admin buttons, the edit buttons or Send me a test (not a test recipient)', m.tabs === 7 && m.card && m.acts.length === 0 && !m.test && !m.edit && m.dns === 3, m);
   ok('no page errors (member)', f.errs.length === 0, f.errs);
   await f.close();
 

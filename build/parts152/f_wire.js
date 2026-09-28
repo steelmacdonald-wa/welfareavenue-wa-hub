@@ -123,6 +123,8 @@
         { c: 1, t: 'A contact’s page', p: 'Their details (a volunteer’s are saved on their volunteer record too), what they did with us, their email permission, tags, organizations from Partners, and one timeline: notes, calls and emails logged here, servings, gifts and the old website’s history.' },
         { c: 1, t: 'Email permission', p: 'Canada’s anti-spam law (CASL): newsletters and appeals go only to people who said yes, or whose implied consent has not run out (two years after a gift or a serving). Record it on their page when they tell you.' },
         T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact’s page has Send an email from the Hub.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Campaigns', 'Campaigns (wave155): one message to a list, person by person, through the consent rule, at up to 80 a day on Resend’s free plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other’s history moves to it, or mark them as different people (family members share phones).' }
       ] };
     } catch (e) { /* fine */ }
@@ -130,6 +132,7 @@
   addTour();
 
   /* ---------- test hook ---------- */
+  window.w155 = { lc: function () { return LC; }, groups: groupsFromFilters, clean: cleanGroups, describe: describe };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
