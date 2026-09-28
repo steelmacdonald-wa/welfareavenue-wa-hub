@@ -83,7 +83,8 @@
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
           { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' },
-          { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' }
+          { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' },
+          { h: '#crm/forms', l: 'Forms', ic: 'form', page: 'crm' }
         ] }, { label: 'Giving', items: [
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
         ] }, { label: 'Email', items: [
@@ -91,7 +92,7 @@
           { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' }
         ] }];
       },
-      next: [['form', 'Forms'], ['chart', 'Reports']],
+      next: [['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
@@ -507,7 +508,7 @@
         T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app\u2019s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
-        { c: 1, t: 'Coming next', p: 'Email arrived in wave154, lists and campaigns in wave155 (the CRM\u2019s Lists and Campaigns tabs). The rail still saves room for forms and reports; they arrive one wave at a time.', go: function () { close(); } }
+        { c: 1, t: 'Coming next', p: 'Email arrived in wave154, lists and campaigns in wave155, forms in wave156 (the CRM\u2019s Lists, Campaigns and Forms tabs). The rail still saves room for reports; it arrives in a later wave.', go: function () { close(); } }
       ] };
     } catch (e) { /* fine */ }
   }

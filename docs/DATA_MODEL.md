@@ -1417,6 +1417,34 @@ An email campaign (wave155): a list, a template, the words (subject, preheader, 
 
 Per-campaign counts from the send log (wave155): queued (waiting or being sent), sent, delivered, opened, clicked, bounced, complained, failed, suppressed (the rule said no), cancelled, unsubscribed. Reader's rights (security_invoker).
 
+### `crm_fields`
+
+Custom fields on contacts (wave156): what the Hub has no column for (a Rally Paper team, the part of the GTA, photo consent). type is text, long_text, number, date, choice, multi or yes_no; options lists the choices of a choice or multi field. An archived field keeps its values but leaves the forms and the contact page. Staff with the CRM page read and write.
+
+- `key`: The stable name forms and imports use (field:<key> in a form question); lower case, digits and underscores.
+- `options`: The choices of a choice or multi field, in order: strings, or {"v": value, "l": label} objects.
+
+### `crm_contact_fields`
+
+A contact's custom field values (wave156): one row per contact and field. value is JSON: a string, a number, true or false (yes_no), or an array (multi). source says where it came from (form:<slug>, keela, or the staff member who typed it). Merging two contacts moves the values (crm_merge_contacts). Staff with the CRM page read and write.
+
+### `crm_forms`
+
+The CRM's forms (wave156), shown to the public at hub.welfareavenue.com/f/<slug> while status is published. A draft is only seen by staff; a closed form shows that it no longer takes answers. Staff with the CRM page create, edit and publish; every status change is in change_log.
+
+- `kind`: volunteer (a volunteer application or registration), newsletter (a sign-up) or general.
+- `questions`: The questions in order: {"id", "type" (text, long_text, email, phone, choice, multi, yes_no, date, number, serving_dates), "label", "help", "required", "options", "to"}. to says where the answer is saved: contact.first_name, contact.last_name, contact.email, contact.phone, contact.city, contact.province, contact.postal_code, contact.address, contact.language, volunteer.roles, volunteer.dates (serving_dates: a sign-up on each picked event's roster), field:<crm_fields.key>, note (the timeline entry) or nothing (kept on the submission only).
+- `consent`: The email permission question: {"ask": true, "required": false, "label": the words shown next to the box}. A ticked box records express consent with those words (CASL); the box is never ticked in advance.
+- `settings`: volunteer_record (true: an application also creates or updates the MTL volunteering record), serving_location (the events a serving_dates question offers), city (written on new contacts), tags (added to the contact), confirm and confirm_template (a confirmation email through mail-send; off unless Steel turns it on).
+
+### `crm_form_submissions`
+
+Every answer to a CRM form (wave156), kept as sent: answers by question id, display (label and answer as shown), mapped (what goes where), consent (the words shown and whether the box was ticked), result (what the Hub did: the contact, a new or updated volunteer record, roster sign-ups, fields). status: received, processed, spam (a hidden-field or timing check failed), error (kept for the team to look at), test (a test against a draft). ip_hash is a keyed hash for rate limits, never the address. Staff with the CRM page read; only form-submit writes.
+
+### `crm_form_stats_v` (view)
+
+Per-form counts (wave156): real submissions, the last seven days, the last one, spam, errors and tests.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1468,4 +1496,6 @@ Functions:
 - `crm_list_preview_flat(jsonb)`: The CRM page's flat filters (kind, role, act, perm, q, city, tags) evaluated in the database (wave155); crm_list_preview calls it when a filter has no groups.
 - `crm_list_sizes()`: How many live contacts each saved list holds today (wave155b), for the Lists tab.
 - `crm_campaign_audience(bigint)`: Everyone in a campaign's list with the rule's answer for the campaign's kind (wave155b): mail-send campaign_check and campaign_queue read it.
+- `crm_form_apply(bigint)`: Applies one stored form submission (wave156) in one transaction: finds the contact by email (or creates one, source hub_form), creates or updates the MTL volunteering record when the form says so, fills in what the contact is missing without erasing anything (a phone only when they have none, so a form cannot add a number to someone else's record), records express consent with the form's name when the box was ticked (never for someone who unsubscribed), writes custom fields, signs the person up (status TBD) for the events they picked, and adds a timeline entry. Idempotent: a processed submission returns its result. Service role only (form-submit).
+- `crm_forms_stamp()`: Trigger on crm_forms (wave156): updated_at, the go-live checks (an email question; a newsletter asks for permission), published_at/by and closed_at, and a change_log line for every status change.
 

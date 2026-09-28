@@ -83,7 +83,8 @@
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
           { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' },
-          { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' }
+          { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' },
+          { h: '#crm/forms', l: 'Forms', ic: 'form', page: 'crm' }
         ] }, { label: 'Giving', items: [
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
         ] }, { label: 'Email', items: [
@@ -91,7 +92,7 @@
           { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' }
         ] }];
       },
-      next: [['form', 'Forms'], ['chart', 'Reports']],
+      next: [['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',

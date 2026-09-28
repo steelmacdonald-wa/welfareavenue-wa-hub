@@ -35,13 +35,15 @@
       q(db.from('crm_volunteer_history').select('*').eq('contact_id', c.id).order('event_at', { ascending: false }).limit(500)),
       c.volunteer_id ? q(db.from('event_roster').select('id,event_id,person_id,role,status,confirmed_at,detail').eq('person_id', c.volunteer_id).limit(500)) : Promise.resolve([]),
       q(db.from('crm_contact_orgs').select('*').eq('contact_id', c.id)),
-      load('partners')
+      load('partners'),
+      q(db.from('crm_contact_fields').select('field_id,value,source,updated_at').eq('contact_id', c.id)),
+      load('cfields')
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], at: Date.now() };
+        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], at: Date.now() };
         return S.detail[id];
       });
     });
@@ -130,8 +132,9 @@
       var mine = lower(x.created_by) === myEmail() && lower(x.source) === 'hub';
       var system = /^(crm_sync|wa\d+_import|mail-unsubscribe|mail-events)$/.test(String(x.created_by || ''));
       var sent = lower(x.source) === 'resend' && x.meta && x.meta.send_id; /* wave154: an email the Hub sent, with what happened to it */
-      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: ICON[k] || 'note', t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''),
-        st: sent ? (x.meta.status || 'sent') : '', by: sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
+      var hubForm = lower(x.source) === 'hub_form'; /* wave156: an answer to one of the CRM's forms */
+      out.push({ at: x.occurred_at || x.created_at, undated: undated, icon: hubForm ? 'form' : (ICON[k] || 'note'), t: t + (x.subject && x.subject !== t ? ': ' + x.subject : ''), p: sent ? '' : (x.body || ''), pre: hubForm,
+        st: sent ? (x.meta.status || 'sent') : '', by: hubForm ? 'The form at hub.welfareavenue.com/f/' + ((x.meta && x.meta.slug) || '') : sent ? 'Sent from the Hub' + (x.meta.template_name ? ' (' + x.meta.template_name + ')' : '') + (x.created_by && x.created_by !== 'automation' ? ' by ' + x.created_by : '') :
         system ? (undated ? 'The old website (the form kept no date)' : (x.created_by === 'mail-unsubscribe' ? 'Their unsubscribe link' : '')) : (x.created_by || ''), del: !sent && (mine || amAdmin()) ? x.id : null });
     });
     (d.gifts || []).forEach(function (g) {
@@ -153,6 +156,7 @@
       if (st === 'Confirmed') t = past ? (lower(e.status) === 'completed' ? 'Served as ' + role : 'Down as ' + role) : 'Confirmed as ' + role;
       else if (st === 'Waiting For Response') { if (past) return; t = 'Asked to come as ' + role; }
       else if (st === 'Unavailable') t = 'Could not come (' + role + ')';
+      else if (st === 'TBD' && r.detail && r.detail.source === 'hub_form') { if (past) return; t = 'Signed up as ' + role + ' through a form (to confirm)'; }
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
       var old = r.detail && r.detail.source === 'old website';
@@ -172,9 +176,20 @@
     var items = timeline(c, d);
     return logFormHtml(c) + (items.length ? '<ul class="w152tl">' + items.map(function (x) {
       return '<li class="w152it' + (x.faint ? ' faint' : '') + '"><span class="ic">' + I(x.icon) + '</span><div><div class="t">' + E(x.t) + (x.st ? '<span class="w154st" style="background:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '1a;color:' + (MSTATUS[x.st] || MSTATUS.sent)[1] + '">' + E((MSTATUS[x.st] || [x.st])[0]) + '</span>' : '') + '<span class="d">' + (x.undated ? 'date not recorded' : E(fmtDay(x.at)) + (dayOf(x.at) >= today() && dayOf(x.at) !== today() ? ' (' + E(ago(x.at)) + ')' : '')) + '</span></div>' +
-        (x.p ? '<p>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
+        (x.p ? '<p' + (x.pre ? ' class="pre"' : '') + '>' + E(x.p) + '</p>' : '') + (x.rc ? '<div class="by">' + (x.rcUrl ? '<a class="w152mini" style="padding:0" href="' + E(x.rcUrl) + '" target="_blank" rel="noopener">' + E(x.rc) + ' ' + I('ext') + '</a>' : E(x.rc)) + '</div>' : '') +
         (x.by || x.del ? '<div class="by">' + (x.by ? '<span>' + E(x.by) + '</span>' : '') + (x.del ? '<button class="w152mini" data-w152delint="' + E(x.del) + '">' + I('trash') + 'Delete</button>' : '') + '</div>' : '') + '</div></li>';
     }).join('') + '</ul>' : '<p class="w152pnote">Nothing on their timeline yet.</p>');
+  }
+  /* wave156: custom fields (a form's answers, Keela's fields) */
+  function moreHtml(d) {
+    var defs = {}; (S.cfields || []).forEach(function (f) { defs[String(f.id)] = f; });
+    var rows = (d.fields || []).map(function (v) { var f = defs[String(v.field_id)]; return f && !f.archived_at ? { f: f, v: v } : null; }).filter(Boolean)
+      .sort(function (a, b) { return (a.f.sort - b.f.sort) || (a.f.id - b.f.id); });
+    if (!rows.length) return '';
+    return '<div class="w156more">' + rows.map(function (x) {
+      var val = x.v.value, txt = x.f.type === 'yes_no' || typeof val === 'boolean' ? (val === true || val === 'yes' ? 'Yes' : 'No') : Array.isArray(val) ? val.join(', ') : String(val == null ? '' : val);
+      return '<div class="w152kv"><span>' + E(x.f.label) + '</span><span' + (x.f.type === 'long_text' ? ' style="white-space:pre-wrap"' : '') + '>' + E(txt) + '</span></div>';
+    }).join('') + '</div>';
   }
   function contactHtml(c, d) {
     var srcLine = 'From ' + sourceName(c.source) + (c.created_at ? ' · in the CRM since ' + fmtDay(c.created_at) : '');
@@ -190,6 +205,7 @@
       '<div class="w152sec"><h4>With Welfare Avenue</h4>' + withUsHtml(c, d) + '</div>' +
       '<div class="w152sec"><h4>Email permission <button class="w152mini" data-w152perm-edit="' + E(c.id) + '">' + I('shield') + 'Change</button></h4>' + permHtml(c) + '</div>' +
       '<div class="w152sec"><h4>Tags</h4>' + tagsHtml(c) + '</div>' +
+      (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
       (c.notes ? '<div class="w152sec"><h4>Good to know</h4><p class="w152line" style="white-space:pre-wrap">' + E(c.notes) + '</p></div>' : '') +
       '</div><div><div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';
   }

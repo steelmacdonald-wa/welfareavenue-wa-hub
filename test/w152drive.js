@@ -128,7 +128,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   }));
   ok('#crm opens the CRM with its masthead (People > CRM)', a.active && a.crumb === 'People' && a.h1 === 'CRM', a);
   ok('the numbers: contacts (more than one page), volunteers, who served, donors', a.stats.join('|') === '1,049|1,046|71|1' && /donors/.test(a.statTxt[3] || ''), a);
-  ok('seven tabs, with the duplicate pairs counted (Gifts since wave153, Email since wave154, Lists and Campaigns since wave155)', a.tabs.length === 7 && /Lists/.test(a.tabs[5]) && /Campaigns/.test(a.tabs[6]) && /Possible duplicates\s*2/.test(a.tabs[1]) && /Sources/.test(a.tabs[2]) && /Gifts/.test(a.tabs[3]) && /Email/.test(a.tabs[4]), a.tabs);
+  ok('eight tabs, with the duplicate pairs counted (Gifts since wave153, Email since wave154, Lists and Campaigns since wave155, Forms since wave156)', a.tabs.length === 8 && /Forms/.test(a.tabs[7]) && /Lists/.test(a.tabs[5]) && /Campaigns/.test(a.tabs[6]) && /Possible duplicates\s*2/.test(a.tabs[1]) && /Sources/.test(a.tabs[2]) && /Gifts/.test(a.tabs[3]) && /Email/.test(a.tabs[4]), a.tabs);
   ok('the list shows 60 at a time, with Show more', a.rows === 60 && /Show 60 more/.test(a.more) && /1,049 contacts/.test(a.count), a);
   ok('a chip per kind that has people, with counts', a.chips.some(c => /^Volunteer\s*1046$/.test(c)) && a.chips.some(c => /^Donor\s*1$/.test(c)) && a.chips.some(c => /^Partner contact\s*1$/.test(c)) && a.chips.some(c => /^Staff\s*1$/.test(c)) && a.chips.some(c => /^Alumni\s*1$/.test(c)), a.chips);
   let nm = await names(f);

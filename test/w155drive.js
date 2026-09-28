@@ -107,7 +107,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   await patch(f);
   await f.hash('#crm/lists', 2400);
   const tabs = await f.ev(() => [...document.querySelectorAll('#crm .w152tabs button')].map(b => b.textContent.trim() + (b.classList.contains('on') ? '*' : '')));
-  ok('the CRM has seven tabs and #crm/lists marks Lists', tabs.length === 7 && tabs[5] === 'Lists*' && tabs[6] === 'Campaigns', tabs);
+  ok('the CRM has eight tabs (Forms since wave156) and #crm/lists marks Lists', tabs.length === 8 && tabs[5] === 'Lists*' && tabs[6] === 'Campaigns', tabs);
   const rows = await f.ev(() => [...document.querySelectorAll('#crm .w155row')].map(r => r.innerText.replace(/\s+/g, ' ').trim()));
   ok('the saved list shows its name, Live, its size from crm_list_sizes and its conditions in words', rows.length === 1 && /Volunteers who served this year/.test(rows[0]) && /Live/.test(rows[0]) && /3 people/.test(rows[0]) && /Contact type is Volunteer and Served at an event in the last 365 days/.test(rows[0]), rows);
   await shot(f, 'lists');
@@ -184,7 +184,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   ok('Copy into a new draft opens the editor with the words of the sent campaign', dup.name === 'September news (copy)' && dup.hash === '#crm/campaigns/new', dup);
   /* the rail */
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
-  ok('the CRM rail lists Lists under Contacts and Campaigns under Email', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Gifts|Email|Campaigns', rail);
+  ok('the CRM rail lists Lists (and Forms since wave156) under Contacts and Campaigns under Email', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns', rail);
   ok('no page errors (admin)', f.errs.length === 0, f.errs);
   await f.close();
 
