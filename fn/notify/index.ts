@@ -4,6 +4,7 @@
 // is skipped. Comments, notes and the rest are sent at once. v11: that skip is logged like the others; the log says notify.
 // v9 (wave138): the quoted text of a mention reads as Slack formatting (bold, links, bullets and headings
 // written in the Hub's editor), and the DM quotes the part of a long text around the mention (hub_mentions.snippet).
+// v13 (wave157): the CRM automations' notices are hub_mentions of kind crm (from The CRM); their DM says "the CRM automation".
 // v8 (wave138): comment_mention. When someone @mentions a person anywhere in the Hub (hub_mentions, filed by
 // the mention triggers), the DM goes out automatically: as the writer when they have connected Slack
 // (slack-connect keeps their user token in the vault as slack_user_token:<email>), else from the Hub bot with
@@ -187,7 +188,7 @@ async function dmAsUser(fromEmail: string, slackId: string, text: string): Promi
 
 const MENTION_KIND: Record<string, string> = {
   task: 'the task', goal: 'the goal', request: 'the request', update: 'a team update', decision: 'the decision',
-  committee: 'a committee note', project: 'the project', content: 'the post'
+  committee: 'a committee note', project: 'the project', content: 'the post', crm: 'the CRM automation'
 };
 function slackEsc(s: string): string { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 /* v9: the Hub's editor writes markdown; Slack reads its own mrkdwn */

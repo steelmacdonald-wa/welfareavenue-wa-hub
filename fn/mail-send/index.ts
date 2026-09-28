@@ -1,4 +1,10 @@
-// Welfare Avenue: mail-send (v2, 27/09/26 Toronto, wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// Welfare Avenue: mail-send (v3, 28/09/26 Toronto, wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v3 (wave157): the automations' emails. crm_automation_advance queues one row per run and step (automation_id,
+//   automation_run_id, step_id, the content in meta.content); the pump sends them first, within the daily cap only
+//   (crm_claim_queued(p_limit, 'automation')), then the campaigns within both caps ('campaign'). In test mode only a
+//   test address, or a test run's own team address, gets an automation's email; anything else is cancelled with the
+//   reason, and campaigns wait as before. Also fixed: a {{placeholder}} typed inside a message (headline, body, button)
+//   is now filled like the subject (wave155 inserted those words without filling them).
 // v2: campaigns (campaign_check, campaign_queue, campaign_pump, campaign_cancel, campaign_test), the volunteer kind,
 //   a sender per campaign (any @domain address), a daily cap for Resend's free plan (mail_daily_cap, mail_campaign_daily_cap),
 //   preview with subject, preheader and kind overrides, a test to the caller's own staff address.
@@ -195,7 +201,11 @@ function cleanVars(v: unknown): Record<string, string> {
   return out;
 }
 async function render(tpl: any, c: any, extra: Record<string, string>, cfg: Record<string, string>, unsub: string) {
-  const vars = { ...contactVars(c, cfg), ...extra };
+  const base = { ...contactVars(c, cfg), ...extra };
+  /* v3: a placeholder typed inside the message itself ({{first_name|there}} in a campaign's or an automation's words) */
+  const vars: Record<string, string> = { ...base };
+  for (const k of ['headline', 'body_text', 'cta_label', 'cta_url']) if (vars[k]) vars[k] = fill(vars[k], base, false);
+  if (vars.body_html) vars.body_html = fill(vars.body_html, base, true);
   const subject = fill(tpl.subject, vars, false).replace(/\s+/g, ' ').trim();
   const preheader = fill(tpl.preheader || '', vars, false).trim();
   const inner = styleInner(fill(tpl.html_body, vars, true));
@@ -220,7 +230,7 @@ async function contactByEmail(email: string) {
 /* ---------- the send itself ---------- */
 type Sent = { send_id?: number; resend_id?: string; status?: string; to?: string; subject?: string; error?: string };
 type Sender = { name?: string | null; email?: string | null; reply?: string | null };
-type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null };
+type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null };
 function senderLine(cfg: Record<string, string>, s?: Sender | null) {
   const name = String((s && s.name) || cfg.mail_from_name || 'Welfare Avenue').replace(/[<>"\r\n]/g, '').trim() || 'Welfare Avenue';
   const email = String((s && s.email) || cfg.mail_from_email || 'info@welfareavenue.com').trim().toLowerCase();
@@ -244,6 +254,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   if (bulk && unsub) { headers['List-Unsubscribe'] = '<' + unsub + '>'; headers['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'; }
   const tags = [{ name: 'template', value: String(tpl.key).replace(/[^a-zA-Z0-9_-]/g, '_') }, { name: 'kind', value: kind }, { name: 'send_id', value: String(o.sendId) }];
   if (o.content.campaignId) tags.push({ name: 'campaign_id', value: String(o.content.campaignId) });
+  if (o.content.automationId) tags.push({ name: 'automation_id', value: String(o.content.automationId) });
   const payload: Record<string, unknown> = { from: sender.from, to: [o.to], subject: r.subject, html: r.html, text: r.text, reply_to: sender.reply, ...(Object.keys(headers).length ? { headers } : {}), tags };
   const res = await rs(key, 'POST', '/emails', payload, { 'Idempotency-Key': 'wa-send-' + o.sendId });
   await svc.from('crm_email_sends').update({ subject: r.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
@@ -251,7 +262,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   if (res.ok && o.c && !o.isTest) {
     await svc.from('crm_interactions').insert({
       contact_id: o.c.id, kind: 'email', direction: 'out', channel: 'email', subject: r.subject, body: r.text.split('\n--\n')[0].slice(0, 2000), occurred_at: new Date().toISOString(),
-      source: 'resend', source_ref: 'send:' + o.sendId, meta: { send_id: o.sendId, template: tpl.key, template_name: tpl.name, kind, status: 'sent', resend_id: res.body.id, campaign_id: o.content.campaignId || null }, created_by: o.who.email
+      source: 'resend', source_ref: 'send:' + o.sendId, meta: { send_id: o.sendId, template: tpl.key, template_name: tpl.name, kind, status: 'sent', resend_id: res.body.id, campaign_id: o.content.campaignId || null, automation_id: o.content.automationId || null }, created_by: o.who.email
     });
     await svc.from('crm_contacts').update({ last_activity_at: new Date().toISOString() }).eq('id', o.c.id);
   }
@@ -302,13 +313,53 @@ async function usage(cfg: Record<string, string>) {
   const room = Math.max(0, Math.min(daily > 0 ? daily - usedAll : 1e9, campaign > 0 ? campaign - usedCamp : 1e9));
   return { daily, campaign, used_all: usedAll, used_campaigns: usedCamp, room: room >= 1e9 ? null : room };
 }
-async function pump(cfg: Record<string, string>, who: Caller, max: number) {
-  if ((cfg.mail_mode || 'test') !== 'live') return { sent: 0, note: 'test mode: the queue waits' };
+/* v3: an automation's queued email, as crm_automation_advance wrote it (meta.content) */
+async function pumpAutomations(cfg: Record<string, string>, who: Caller, max: number) {
+  const live = (cfg.mail_mode || 'test') === 'live';
+  const tests = listOf(cfg.mail_test_recipients);
   const u = await usage(cfg);
-  const take = Math.min(max, u.room == null ? max : u.room);
-  if (take <= 0) return { sent: 0, note: 'the daily cap is reached; the queue goes on tomorrow', usage: u };
-  const claim = await svc.rpc('crm_claim_queued', { p_limit: take });
-  if (claim.error) return { sent: 0, error: 'claim: ' + claim.error.message };
+  const roomAll = u.daily > 0 ? Math.max(0, u.daily - u.used_all) : max;
+  const take = Math.min(max, roomAll);
+  const out = { sent: 0, held: 0, failed: 0, cancelled: 0, taken: 0 };
+  if (take <= 0) return out;
+  const claim = await svc.rpc('crm_claim_queued', { p_limit: take, p_source: 'automation' });
+  if (claim.error) return { ...out, error: 'claim: ' + claim.error.message };
+  const tpls: Record<string, any> = {};
+  for (const row of (claim.data || []) as any[]) {
+    out.taken++;
+    const m = (row.meta && row.meta.content) || {};
+    const to = String(row.to_email || '').toLowerCase();
+    if (!live && !(tests.includes(to) || (row.is_test && onDomain(to, cfg)))) {
+      await svc.from('crm_email_sends').update({ status: 'cancelled', claimed_at: null, error: 'the Hub is in test mode: only test addresses get email' }).eq('id', row.id); out.cancelled++; continue;
+    }
+    const key = String(m.template_key || row.template_key || 'newsletter');
+    const tpl = tpls[key] = tpls[key] || await template(key);
+    if (!tpl || !tpl.active) { await svc.from('crm_email_sends').update({ status: 'failed', claimed_at: null, error: 'the saved email "' + key + '" is missing or switched off' }).eq('id', row.id); out.failed++; continue; }
+    const c = row.contact_id ? await contactById(row.contact_id) : null;
+    const kind = KINDS.includes(String(row.kind)) ? String(row.kind) : 'transactional';
+    if (!row.is_test) {
+      const perm = c ? await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: kind }) : { data: [] };
+      const p = ((perm as any).data || [])[0];
+      if (!c || !p || !p.allowed) { await svc.from('crm_email_sends').update({ status: 'suppressed', claimed_at: null, permission_basis: p ? p.basis : 'the contact is gone' }).eq('id', row.id); out.held++; continue; }
+    }
+    const s = m.sender && m.sender.email ? { name: m.sender.name || null, email: String(m.sender.email), reply: m.sender.reply || null } : null;
+    const r = await sendRow({ sendId: row.id, c, to, content: { tpl, vars: cleanVars(m.vars || {}), kind, subject: m.subject || null, preheader: m.preheader || null, sender: s, automationId: row.automation_id || null },
+      cfg, isTest: !!row.is_test, who: { ...who, email: 'automation:' + (row.automation_id || '?') } });
+    if (r.status === 'sent') out.sent++; else out.failed++;
+    await sleep(550);
+  }
+  return out;
+}
+async function pump(cfg: Record<string, string>, who: Caller, max: number) {
+  /* a direct send (send, test) that never finished leaves a queued row nobody claims: close it so the cron can rest */
+  await svc.from('crm_email_sends').update({ status: 'failed', error: 'a direct send did not finish' }).eq('status', 'queued').is('campaign_id', null).is('automation_run_id', null).lt('created_at', new Date(Date.now() - 15 * 60000).toISOString());
+  const auto = await pumpAutomations(cfg, who, max);
+  if ((cfg.mail_mode || 'test') !== 'live') return { automations: auto, sent: auto.sent, note: 'test mode: campaigns wait' };
+  const u = await usage(cfg);
+  const take = Math.min(Math.max(0, max - auto.taken), u.room == null ? max : u.room);
+  if (take <= 0) return { automations: auto, sent: auto.sent, note: auto.taken >= max ? 'this round went to automations' : 'the daily cap is reached; the queue goes on tomorrow', usage: u };
+  const claim = await svc.rpc('crm_claim_queued', { p_limit: take, p_source: 'campaign' });
+  if (claim.error) return { automations: auto, sent: auto.sent, error: 'claim: ' + claim.error.message };
   const rows = (claim.data || []) as any[];
   const cache: Record<string, any> = {}; const tpls: Record<string, any> = {}; const touched = new Set<number>();
   let sent = 0, held = 0, failed = 0, cancelled = 0;
@@ -331,7 +382,7 @@ async function pump(cfg: Record<string, string>, who: Caller, max: number) {
     const k = cache[kid];
     if (k && k.status !== 'cancelled' && !(left.count || 0)) await svc.from('crm_campaigns').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', kid).in('status', ['queued', 'sending']);
   }
-  return { sent, held, failed, cancelled, usage: await usage(cfg) };
+  return { automations: auto, sent: sent + auto.sent, held, failed, cancelled, usage: await usage(cfg) };
 }
 
 Deno.serve(async (req: Request) => {

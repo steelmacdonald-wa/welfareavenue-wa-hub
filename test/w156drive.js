@@ -90,7 +90,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   let b = await f.ev(() => ({ tabs: [...document.querySelectorAll('#crm .w152tabs button')].map(x => x.textContent.trim() + (x.classList.contains('on') ? '*' : '')),
     rows: [...document.querySelectorAll('#crm .w156row')].map(r => r.innerText.replace(/\s+/g, ' ')), copy: [...document.querySelectorAll('#crm .w156row [data-w152copy]')].map(x => x.getAttribute('data-w152copy')),
     fields: [...document.querySelectorAll('#crm .w156fr')].map(r => r.innerText.replace(/\s+/g, ' ')) }));
-  ok('the CRM has eight tabs and #crm/forms marks Forms', b.tabs.length === 8 && b.tabs[7] === 'Forms*', b.tabs);
+  ok('the CRM has nine tabs (Automations since wave157) and #crm/forms marks Forms', b.tabs.length === 9 && b.tabs[7] === 'Forms*', b.tabs);
   ok('the forms list: two drafts and the live newsletter with its link and answers', b.rows.length === 3 && /Draft/.test(b.rows[0]) && /Live/.test(b.rows[2]) && /hub\.welfareavenue\.com\/f\/newsletter/.test(b.rows[2]) && /2 answers/.test(b.rows[2]) && /1 needs a look/.test(b.rows[2]), b.rows);
   ok('only the live form offers Copy the link, with the public address', b.copy.length === 1 && b.copy[0] === 'https://hub.welfareavenue.com/f/newsletter', b.copy);
   await f.page.waitForTimeout(400);
@@ -98,7 +98,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   ok('the custom fields card lists the fields, their kind, the forms using them and how many contacts have them', b.fields.length === 3 && /Instagram · Short answer · in Volunteer with Welfare Avenue/.test(b.fields[0]) && /1 contact/.test(b.fields[0]) && /Rally Paper team · One choice/.test(b.fields[2]), b.fields);
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
   const nextUp = await f.ev(() => (document.querySelector('#w153rail .w153next') || {}).innerText || '');
-  ok('the CRM rail lists Forms under Contacts', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns', rail);
+  ok('the CRM rail lists Forms under Contacts', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations', rail);
   ok('only Reports is still to come', /Reports/.test(nextUp) && !/Forms/.test(nextUp), nextUp);
   await shot(f, 'forms_list');
 

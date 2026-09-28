@@ -37,13 +37,16 @@
       q(db.from('crm_contact_orgs').select('*').eq('contact_id', c.id)),
       load('partners'),
       q(db.from('crm_contact_fields').select('field_id,value,source,updated_at').eq('contact_id', c.id)),
-      load('cfields')
+      load('cfields'),
+      /* wave157: the automations they are in */
+      q(db.from('crm_automation_runs').select('id,automation_id,status,step_id,next_at,is_test,started_at,finished_at').eq('contact_id', c.id).eq('is_test', false).order('started_at', { ascending: false }).limit(50)),
+      load('autos')
     ]).then(function (r) {
       var roster = r[3].filter(function (x) { return String(x.person_id) === String(c.volunteer_id); });
       var ids = uniq(roster.map(function (x) { return String(x.event_id); }));
       var evs = ids.length ? q(db.from('volunteer_events').select('id,event_date,title,location,status,kind,code').in('id', ids.map(Number))) : Promise.resolve([]);
       return evs.then(function (events) {
-        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], at: Date.now() };
+        S.detail[id] = { ints: r[0], gifts: r[1], hist: r[2], roster: roster, events: events, orgs: r[4], fields: r[6] || [], runs: r[8] || [], at: Date.now() };
         return S.detail[id];
       });
     });
@@ -206,6 +209,7 @@
       '<div class="w152sec"><h4>Email permission <button class="w152mini" data-w152perm-edit="' + E(c.id) + '">' + I('shield') + 'Change</button></h4>' + permHtml(c) + '</div>' +
       '<div class="w152sec"><h4>Tags</h4>' + tagsHtml(c) + '</div>' +
       (d && d.fields && moreHtml(d) ? '<div class="w152sec"><h4>More about them</h4>' + moreHtml(d) + '</div>' : '') +
+      (d && d.runs && d.runs.length ? '<div class="w152sec"><h4>Automations</h4>' + contactAutosHtml(d) + '</div>' : '') +
       (c.notes ? '<div class="w152sec"><h4>Good to know</h4><p class="w152line" style="white-space:pre-wrap">' + E(c.notes) + '</p></div>' : '') +
       '</div><div><div class="w152sec"><h4>Timeline</h4>' + timelineHtml(c, d) + '</div></div></div>';
   }

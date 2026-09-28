@@ -1392,6 +1392,7 @@ Every email the Hub sent (or refused to send) through Resend (wave154): who, whi
 - `meta`: template name, opens (count), clicks (links), the bounce type, the caller, the vars used.
 - `campaign_id`: The campaign this send belongs to (wave155); null for a single send from a contact's page or a test.
 - `claimed_at`: When a pump run took this queued send (wave155b); a claim older than 10 minutes goes back to the queue (Resend's idempotency key stops a double send).
+- `automation_id`: The automation that queued this email (wave157), with automation_run_id and step_id; one email per run and step.
 
 ### `crm_email_events`
 
@@ -1444,6 +1445,22 @@ Every answer to a CRM form (wave156), kept as sent: answers by question id, disp
 ### `crm_form_stats_v` (view)
 
 Per-form counts (wave156): real submissions, the last seven days, the last one, spam, errors and tests.
+
+### `crm_automations`
+
+The CRM's automations (wave157): when something happens to a contact (trigger), the Hub runs the steps for them, one run per contact (crm_automation_runs). status: draft (only a test run on yourself), on (people join as the trigger fires), paused (nobody joins, the runs wait where they are). Staff with the CRM page make, edit and turn them on; turning on checks the steps (crm_automation_problems) and every status change is in change_log. Emails go through mail-send and its rule.
+
+- `trigger`: What starts a run: {"kind": "form", "form_id"} (a submission of that form is processed; any form when form_id is empty), {"kind": "tag", "tag"} (the tag is added to a contact), {"kind": "gift", "first_only", "min_amount"} (a gift dated in the last 7 days is recorded), {"kind": "serving", "days_before", "location", "include_unconfirmed"} (N days before a planned serving they are on the roster for, Confirmed unless include_unconfirmed).
+- `steps`: The steps in order, each {"id", "type", ...}: send {"email": "write" or "template", "template_key", "kind" (transactional, volunteer, newsletter, fundraising), "subject", "preheader", "headline", "body", "cta_label", "cta_url", "from" (org or custom), "from_name", "from_email"}; wait {"days"}; wait_open {"step" (an earlier send), "days", "yes", "no" (next, end, or a later step id)}; tag {"add", "remove"}; task {"department", "title", "note", "due_days"}; notify {"to" (team emails), "message"}; end. Texts take {{first_name}}, {{full_name}}, {{email}} and the trigger's details ({{form_title}}, {{amount}}, {{event_day}}), with a fallback after a bar: {{first_name|there}}.
+- `settings`: reentry (true: the same contact can go through it again each time the trigger fires; a gift automation does so by default), notes.
+
+### `crm_automation_runs`
+
+One contact going through one automation (wave157). step_id is the step to run next (empty: the first), next_at when the engine looks again, wait_until the end of a wait, send_id the queued email it waits on. run_key keeps one run per contact (once) unless the automation lets people through again (the trigger's reference: a form answer, a gift, an event). context holds what started it (form, gift, tag, serving) and the email sent at each step; history is what each step did, in words. is_test marks a test run started with Try it on me (its emails go only to that team member, waits count minutes instead of days, tags, tasks and notices are skipped). Staff with the CRM page read; the functions write.
+
+### `crm_automation_stats_v` (view)
+
+Per-automation counts (wave157): people in it now, finished, stopped, needing a look, test runs, the last start, and the emails it sent.
 
 Functions:
 
@@ -1498,4 +1515,19 @@ Functions:
 - `crm_campaign_audience(bigint)`: Everyone in a campaign's list with the rule's answer for the campaign's kind (wave155b): mail-send campaign_check and campaign_queue read it.
 - `crm_form_apply(bigint)`: Applies one stored form submission (wave156) in one transaction: finds the contact by email (or creates one, source hub_form), creates or updates the MTL volunteering record when the form says so, fills in what the contact is missing without erasing anything (a phone only when they have none, so a form cannot add a number to someone else's record), records express consent with the form's name when the box was ticked (never for someone who unsubscribed), writes custom fields, signs the person up (status TBD) for the events they picked, and adds a timeline entry. Idempotent: a processed submission returns its result. Service role only (form-submit).
 - `crm_forms_stamp()`: Trigger on crm_forms (wave156): updated_at, the go-live checks (an email question; a newsletter asks for permission), published_at/by and closed_at, and a change_log line for every status change.
+- `crm_fill(text, jsonb)`: Fills {{key}} and {{key|fallback}} in a text from a JSON object of values (wave157: automation task titles and notices; mail-send fills the emails the same way).
+- `crm_text_html(text)`: A message typed in the Hub as HTML paragraphs (a blank line starts a paragraph, a line break stays), escaped; the same as the campaign composer (wave157).
+- `crm_automation_problems(jsonb, jsonb)`: What stops an automation from being turned on, in words (wave157): the trigger, each step's fields, a [Paste ...] note left in an email, paths that go backwards. Empty when it is ready. The Automations tab shows it; crm_automations_stamp enforces it.
+- `crm_automations_stamp()`: Trigger on crm_automations (wave157): updated_at; turning on runs crm_automation_problems and refuses with the reasons; turned_on_at/by and paused_at/by; a change_log line for every status change.
+- `crm_automation_enroll(bigint, bigint, text, jsonb, boolean, text)`: Starts one run (wave157): only for an automation that is on (or a test run), following merges to the kept contact, once per run_key (on conflict nothing). Called by the trigger functions and crm_automation_try; service role only.
+- `crm_auto_on_form()`: Trigger on crm_form_submissions (wave157): a real answer that reaches processed starts the automations that listen to that form (or to any form). Never fails the submission; skipped when the session sets wa.no_automations.
+- `crm_auto_on_tags()`: Trigger on crm_contacts (wave157): a tag that was not there before starts the automations listening to it. Never fails the change; an import sets wa.no_automations to stay quiet.
+- `crm_auto_on_gift()`: Trigger on crm_donations (wave157): a gift dated in the last 7 days starts the gift automations (a minimum amount, first gifts only); an import of older gifts starts nothing. Never fails the insert.
+- `crm_automation_scan_servings()`: Starts the serving-reminder automations (wave157): everyone on the roster of a planned serving (Confirmed, or also TBD and waiting when the trigger says so) whose date is within the trigger's days_before, once per event. Run by crm_automation_tick.
+- `crm_automation_advance(bigint)`: Runs one contact's automation as far as it can go now (wave157): a send queues one email in crm_email_sends (after the permission rule and the mode: in test mode only test addresses, or the team member's own address in a test run) and waits for mail-send to send it; emails go out between 8 am and 8 pm Toronto; waits count days (minutes in a test run); wait_open takes the yes path when the email was opened; tags, tasks on a team's board (dept_tasks) and notices (hub_mentions, which DM on Slack) are skipped in a test run. Every step writes a line of history.
+- `crm_automation_tick(int)`: The automations' clock (wave157, cron wa-crm-automations every minute): starts the serving reminders that are due, then advances every run whose time has come (of an automation that is on, or a test run); a run that fails is marked error with the reason and the others go on.
+- `crm_automation_try(bigint)`: Try it on me (wave157): a test run of any automation (a draft too) on the caller's own contact: its emails go only to the caller's address (allowed in test mode for a team or test address), marked as tests; each day of waiting is a minute; tags, tasks and notices are only described. Staff with the CRM page.
+- `crm_automation_stop(bigint)`: Stops one person's run (wave157), cancelling its email still waiting in the queue. Staff with the CRM page.
+- `crm_claim_queued(integer)`: mail-send v6's claim (wave155), campaign rows only since wave157 so an older pump never touches an automation's email.
+- `crm_claim_queued(integer, text)`: Takes up to p_limit queued emails for mail-send's pump (wave157): p_source automation (an automation's emails, sent first, within the daily cap) or campaign (within the campaign cap too); a claim older than 10 minutes goes back to the queue. FOR UPDATE SKIP LOCKED, so two pumps never take the same row.
 

@@ -56,6 +56,7 @@
     mail: '<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="m4.5 7.5 7.5 6 7.5-6"/>',
     list: '<path d="M8 7h12M8 12h12M8 17h12"/><circle cx="4.5" cy="7" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="17" r="1"/>',
     send: '<path d="M21 3 10.5 13.5"/><path d="M21 3 14.5 21l-4-7.5L3 9.5z"/>',
+    bolt: '<path d="M13.5 2.5 5 13.5h6l-1 8 8.5-11h-6z"/>',
     form: '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M8.5 9h7M8.5 12.5h7M8.5 16h4"/>',
     org: '<rect x="9" y="3.5" width="6" height="4" rx="1"/><rect x="3" y="15.5" width="6" height="4" rx="1"/><rect x="15" y="15.5" width="6" height="4" rx="1"/><path d="M12 7.5v4M6 15.5v-4h12v4"/>',
     cap: '<path d="m3 9 9-4 9 4-9 4z"/><path d="M6.5 10.6V15c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3v-4.4"/>',
@@ -89,7 +90,8 @@
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
         ] }, { label: 'Email', items: [
           { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' },
-          { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' }
+          { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' },
+          { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }];
       },
       next: [['chart', 'Reports']],

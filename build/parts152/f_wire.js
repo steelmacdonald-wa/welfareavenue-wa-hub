@@ -126,6 +126,7 @@
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Campaigns', 'Campaigns (wave155): one message to a list, person by person, through the consent rule, at up to 80 a day on Resend’s free plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM’s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/automations"]', 'Automations', 'Automations (wave157): when someone fills in a form, gets a tag, gives, or has a serving coming, the Hub runs the steps for them: emails through the permission rule (8 am to 8 pm), waits, a yes and a no path on an opened email, tags, a task on a team’s board, a notice. They start as drafts; Try it on me runs one on your own contact.', OPT),
         { c: 1, t: 'Possible duplicates', p: 'The same email or phone on two contacts. Keep the right one and the other’s history moves to it, or mark them as different people (family members share phones).' }
       ] };
     } catch (e) { /* fine */ }
@@ -135,6 +136,7 @@
   /* ---------- test hook ---------- */
   window.w155 = { lc: function () { return LC; }, groups: groupsFromFilters, clean: cleanGroups, describe: describe };
   window.w156 = { fm: function () { return FM; }, parse: parseOpts, clean: cleanQuestions, choices: toChoices, more: moreHtml, save: saveForm };
+  window.w157 = { au: function () { return AU; }, clean: cleanSteps, row: autoRowOf, trig: trigText, step: stepText, save: saveAuto };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,
