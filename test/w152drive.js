@@ -284,7 +284,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   /* ---------- sources ---------- */
   await f.hash('#crm/sources', 1200);
   const so = await f.ev(() => ({ cards: [...document.querySelectorAll('#crm .w152card h3')].map(x => x.textContent), txt: document.querySelector('#crm .w152root').innerText }));
-  ok('Sources: where they come from, what joins next, email permission, to tidy', so.cards.length === 4 && /Where they come from/.test(so.cards[0]) && /What joins next/.test(so.cards[1]) && /Email permission/.test(so.cards[2]) && /To tidy/.test(so.cards[3]), so.cards);
+  ok('Sources: Leaving Keela (wave159a), where they come from, what joins next, email permission, to tidy', so.cards.length === 5 && /Leaving Keela/.test(so.cards[0]) && /Where they come from/.test(so.cards[1]) && /What joins next/.test(so.cards[2]) && /Email permission/.test(so.cards[3]) && /To tidy/.test(so.cards[4]), so.cards);
   ok('the sources name the old website sign-ups and what is already in (history, messages, gifts)', /Old website sign-ups/.test(so.txt) && /Volunteer history from the old website[\s\S]*?3 in[\s\S]*?Messages from the website[\s\S]*?2 in[\s\S]*?Zeffy[\s\S]*?3 in/.test(so.txt), so.txt.slice(0, 900));
   await shot(f, 'crm_sources');
   /* a contact that is not in the CRM any more (merged; the database no longer returns it): the link says so */

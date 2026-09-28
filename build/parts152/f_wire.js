@@ -115,7 +115,7 @@
       W.tours.crm = { tab: 'crm', icon: 'people', hash: '#crm', steps: [
         T('#crm > .w118mast', 'CRM', 'Everyone Welfare Avenue knows in one place: volunteers, donors, partners’ contacts and the team, with what each one has done with us.'),
         T('#crm .w152stats', 'At a glance', 'Everyone, the volunteers, who has served at an event, and the donors (or the duplicates to check). A number narrows the list to them.', OPT),
-        T('#crm .w152tabs', 'Three views', 'The contacts, the possible duplicates to check, and where the contacts come from with what joins next.', OPT),
+        T('#crm .w152tabs', 'The tabs', 'Contacts, the possible duplicates to check, Sources (where the contacts come from, and Leaving Keela: what is left before Keela can be cancelled), Gifts, Email, Lists, Campaigns, Forms, Automations and Reports.', OPT),
         T('#crm .w152chips', 'Who they are to us', 'Volunteers, donors, partners’ contacts, supporters, staff and alumni. One person can be several.', OPT),
         T('#crm .w152q', 'Find anyone', 'Type a name, an email, a phone number, a school or a tag. Next to it: a volunteer role, their activity, their email permission, and the order.', OPT),
         T('#crm [data-w152add]', 'Add someone', 'A donor, a partner’s contact, a supporter or a new volunteer. The CRM stops you if they are already in it.', OPT),
@@ -142,6 +142,7 @@
   window.w158 = { gf: function () { return GF; }, rule: receiptRule, form: giftForm, sample: sampleReceipt };
   window.w160 = { rp: function () { return RP; }, summary: rpSummary, perm: rpPerm, load: rpLoad };
   window.w158b = { rb: function () { return RB; }, issued: rbIssuedHtml, status: rbStatusHtml };
+  window.w159 = { steps: keelaSteps, html: keelaHtml };
   window.w152 = { state: function () { return S; }, load: load, paint: paint, open: openCrm, sheet: contactSheet, edit: editForm, perm: permForm, org: orgForm,
     save: saveContact, savePerm: savePerm, log: saveLog, merge: merge, notDup: notDup, pairs: dupePairs, matches: matches, close: closeSheet,
     timeline: function (id) { var c = contact(id), d = S.detail[String(id)]; return c && d ? timeline(c, d) : null; }, permKey: permKey, ago: ago, fmtDay: fmtDay,

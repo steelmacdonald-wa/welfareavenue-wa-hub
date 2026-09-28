@@ -101,11 +101,14 @@
       [noEm, 'contacts with no email', '', ''], [noPh, 'contacts with no phone', '', '']].map(function (x) {
       return '<div class="w152srow"><b>' + x[0] + '</b><div><div class="tt">' + E(x[1].charAt(0).toUpperCase() + x[1].slice(1)) + '</div>' + (x[2] ? '<p>' + E(x[2]) + '</p>' : '') + '</div>' + (x[3] && x[0] ? '<button class="w152mini" data-w152go="' + x[3] + '">Check them ' + I('arrow') + '</button>' : '<span></span>') + '</div>';
     }).join('');
-    root.innerHTML = tabsHtml() + '<div class="w152grid2">' +
+    root.innerHTML = tabsHtml() + '<div class="w152grid2">' + keelaHtml() +
       '<div class="w152card"><h3>Where they come from <span>' + plural(all.length, 'contact', 'contacts') + '</span></h3>' + srcRows + '</div>' +
       '<div class="w152card"><h3>What joins next</h3>' + next + '</div>' +
       '<div class="w152card"><h3>Email permission <span>' + plural(ok, 'contact', 'contacts') + ' can get a newsletter today</span></h3>' + pr +
       '<p class="w152pnote">Campaigns go only to express consent, or implied consent that has not run out (CASL). Everyone else is asked first.</p></div>' +
       '<div class="w152card"><h3>To tidy</h3>' + tidy + '</div></div>';
     if (!S.counts) loadCounts().then(function () { if (S.ui.tab === 'sources') paint(); });
+    /* wave159a: what Leaving Keela reads */
+    var need = ['forms', 'autos', 'kcfg', 'gifts'].filter(function (k) { return !S[k] && !S.loading[k]; });
+    if (need.length) Promise.all(need.map(function (k) { return load(k); })).then(function () { if (S.ui.tab === 'sources') paint(); });
   }
