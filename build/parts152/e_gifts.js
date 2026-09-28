@@ -13,17 +13,24 @@
   function platName(p) { p = lower(p); return { zeffy: 'Zeffy', keela: 'Keela', stripe: 'Stripe', cash: 'Cash', cheque: 'Cheque', hub: 'The Hub', paypal: 'PayPal' }[p] || (p ? p.charAt(0).toUpperCase() + p.slice(1) : 'Unknown'); }
   function giftRow(g) {
     var c = contact(g.contact_id), nm = c ? c.full_name : 'Contact ' + g.contact_id;
-    var rc = g.receipt_number ? '<span class="rc">' + (g.receipt_url ? '<a href="' + E(g.receipt_url) + '" target="_blank" rel="noopener">Receipt ' + E(g.receipt_number) + ' ' + I('ext') + '</a>' : 'Receipt ' + E(g.receipt_number)) + (g.receipt_issued_at ? ' · ' + E(fmtDay(g.receipt_issued_at)) : '') + '</span>' : '<span class="rc">No receipt</span>';
-    return '<div class="w152row" role="listitem">' +
+    var rs = rcptFor(g.id), rule = rs ? [rs.receipt_status, rs.receipt_note] : receiptRule(g);
+    var rc = g.receipt_number ? '<span class="rc">' + (g.receipt_url ? '<a href="' + E(g.receipt_url) + '" target="_blank" rel="noopener">Receipt ' + E(g.receipt_number) + ' ' + I('ext') + '</a>' : 'Receipt ' + E(g.receipt_number)) + (g.receipt_issued_at ? ' · ' + E(fmtDay(g.receipt_issued_at)) : '') + '</span>'
+      : '<span class="rc">' + gchip(RSTS, rule[0]) + '<div class="m">' + E(rule[0] === 'due' ? 'for ' + cents(eligibleOf(g)) : rule[1]) + '</div></span>';
+    var kind = g.kind && g.kind !== 'donation' ? ' ' + gchip(GKIND, g.kind) : '';
+    return '<div class="w152row w158row" role="listitem" data-w158open="' + E(g.id) + '" tabindex="0" aria-label="Open the gift">' +
       '<span>' + E(fmtDay(g.donated_at)) + '</span>' +
       '<span><a href="#crm/c/' + E(g.contact_id) + '">' + E(nm) + '</a>' + (c && c.emails[0] ? '<div class="m">' + E(c.emails[0]) + '</div>' : '') + '</span>' +
-      '<span class="amt">' + E(money(g.amount)) + (g.recurring ? '<small> monthly</small>' : '') + '</span>' +
-      '<span>' + E([g.campaign, g.designation].filter(Boolean).join(' · ') || '–') + '<div class="m">' + E(platName(g.platform)) + '</div></span>' +
+      '<span class="amt">' + E(money(g.amount)) + (g.recurring ? '<small> monthly</small>' : '') + kind + (g.tribute_kind ? '<div class="m">' + E((g.tribute_kind === 'memory' ? 'In memory of ' : 'In honour of ') + (g.tribute_name || '')) + '</div>' : '') + '</span>' +
+      '<span>' + E([g.campaign, g.designation].filter(Boolean).join(' · ') || '–') + '<div class="m">' + E(platName(g.platform)) + (g.method ? ' · ' + E((GMETH.filter(function (m) { return m[0] === g.method; })[0] || ['', g.method])[1]) : '') + '</div></span>' +
       '<span>' + rc + '</span></div>';
   }
   function paintGifts(root) {
     var u = S.ui;
-    if (!S.gifts) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the gifts…'); load('gifts').then(function () { if (u.tab === 'gifts') paint(); }); return; }
+    if (!S.gifts || !S.grcpt) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the gifts…'); Promise.all([load('gifts'), load('grcpt')]).then(function () { if (u.tab === 'gifts') paint(); }); return; }
+    if (GF.view === 'receipts') {
+      if (!GF.cfg) { root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + busy('Loading the receipt settings…'); loadRcfg().then(function () { if (u.tab === 'gifts') paint(); }); return; }
+      root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + receiptsHtml(); return;
+    }
     var all = S.gifts, list = all.filter(giftMatches);
     var total = 0, donors = {}, receipted = 0, years = {}, plats = {};
     all.forEach(function (g) { total += Number(g.amount) || 0; donors[g.contact_id] = 1; if (g.receipt_number) receipted++; var fy = fyOf(g.donated_at); if (fy) years[fy] = 1; plats[lower(g.platform) || ''] = 1; });
@@ -40,7 +47,8 @@
       '<div class="w152st"><b>' + receipted.toLocaleString('en-CA') + '</b><span>with a tax receipt</span></div></div>' +
       '<div class="w152bar"><label class="w152q">' + I('search') + '<input type="search" data-w152gq="1" value="' + E(u.gq) + '" placeholder="Search a donor, campaign, receipt number or platform" aria-label="Search the gifts"></label>' +
       '<select class="w152sel" data-w152gplat aria-label="Platform"><option value="">Every platform</option>' + Object.keys(plats).sort().map(function (p) { return '<option value="' + E(p) + '"' + (u.gplat === p ? ' selected' : '') + '>' + E(platName(p)) + '</option>'; }).join('') + '</select>' +
-      '<select class="w152sel" data-w152gyear aria-label="Fiscal year"><option value="">Every year</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option value="' + E(y) + '"' + (u.gyear === y ? ' selected' : '') + '>FY ' + E(y) + ' (Oct ' + (Number(y) - 1) + ' to Sep ' + E(y) + ')</option>'; }).join('') + '</select></div>' +
+      '<select class="w152sel" data-w152gyear aria-label="Fiscal year"><option value="">Every year</option>' + Object.keys(years).sort().reverse().map(function (y) { return '<option value="' + E(y) + '"' + (u.gyear === y ? ' selected' : '') + '>FY ' + E(y) + ' (Oct ' + (Number(y) - 1) + ' to Sep ' + E(y) + ')</option>'; }).join('') + '</select>' +
+      '<button class="w152btn" data-w158new="1">' + I('plus') + ' Record a gift</button><button class="w152btn ghost" data-w152go="#crm/gifts/receipts">' + I('note') + ' Receipts</button></div>' + (GF.msg ? '<div class="w154msg">' + E(GF.msg) + '</div>' : '') +
       '<div class="w152count">' + (filtered ? plural(list.length, 'gift matches', 'gifts match') + ' (' + E(money(sel)) + ') · <button class="w152mini" data-w152gclear="1">' + I('x') + 'Clear the filters</button>' : plural(all.length, 'gift', 'gifts') + ', newest first') +
       (shown.length < list.length ? ' · showing the first ' + shown.length : '') + '</div>' +
       (shown.length ? '<div class="w152list w153gifts" role="list"><div class="w152lh" aria-hidden="true"><span>When</span><span>Donor</span><span>Amount</span><span>Campaign and platform</span><span>Receipt</span></div>' + shown.map(giftRow).join('') + '</div>' +

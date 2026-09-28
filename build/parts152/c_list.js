@@ -138,8 +138,9 @@
     if (sub === 'campaigns') openCampaigns(parts);
     if (sub === 'forms') openForms(parts);
     if (sub === 'automations') openAutos(parts);
+    if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : ''; if (GF.view) GF.cfg = null; GF.msg = ''; GF.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
-    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
+    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
       else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);

@@ -200,6 +200,7 @@
     if (c.emails[0]) qa.push('<a class="w152btn soft sm" href="mailto:' + E(c.emails[0]) + '">' + I('mail') + ' Email</a>');
     if (c.phones[0] && telOf(c.phones[0])) { qa.push('<a class="w152btn soft sm" href="tel:' + E(telOf(c.phones[0])) + '">' + I('phone') + ' Call</a>'); if (!c.sms_opt_out) qa.push('<a class="w152btn soft sm" href="sms:' + E(telOf(c.phones[0])) + '">' + I('chat') + ' Text</a>'); }
     if (c.emails[0]) qa.push('<button class="w152btn ghost sm" data-w152copy="' + E(c.emails[0]) + '">' + I('copy') + ' Copy the email</button>');
+    qa.push('<button class="w152btn soft sm" data-w158new="' + E(c.id) + '">' + I('heart') + ' Record a gift</button>');
     if (c.emails[0] && lower(c.email_status) !== 'bounced' && lower(c.email_status) !== 'complained') qa.push('<button class="w152btn soft sm" data-w154send="' + E(c.id) + '">' + I('spark') + ' Send an email from the Hub</button>');
     return '<div class="w152hd">' + avatar(c, true) + '<div style="min-width:0"><h2>' + E(c.full_name) + '</h2><div class="ks">' + kindsHtml(c) + permChip(c._perm) + '</div><div class="sub">' + E(srcLine) + '</div></div></div>' +
       (qa.length ? '<div class="w152qa">' + qa.join('') + '</div>' : '') +

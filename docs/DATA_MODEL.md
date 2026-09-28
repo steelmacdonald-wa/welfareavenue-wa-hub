@@ -1344,6 +1344,12 @@ Gifts: amount, date, platform (zeffy, keela, stripe, cash), campaign, and the ta
 
 - `external_id`: The gift's id in its platform; unique per platform.
 - `receipt_source`: Who issued the receipt: zeffy, keela, hub, none.
+- `kind`: What the money is (wave158): donation, registration (an event or a tournament fee), ticket, sponsorship (a business gets visibility: no receipt), in_kind (goods, at fair market value) or other. The Keela gifts came in as donations.
+- `method`: How it came (wave158): cheque, etransfer, cash, card, online or other; empty for platform gifts.
+- `advantage_amount`: The value of what the person received for the money (wave158): a meal, a ticket, the tournament itself. The eligible amount for a receipt is amount minus advantage; above 80 per cent of the amount no receipt is possible (the CRA's threshold).
+- `advantage_desc`: What the advantage was, in words, for the receipt (wave158).
+- `in_kind_desc`: A gift in kind: what was given (wave158); its fair market value is the amount. appraiser: who valued it, when it was appraised.
+- `tribute_kind`: A gift in honour or in memory of someone (wave158): honour or memory, with tribute_name.
 
 ### `crm_volunteer_history`
 
@@ -1462,6 +1468,10 @@ One contact going through one automation (wave157). step_id is the step to run n
 
 Per-automation counts (wave157): people in it now, finished, stopped, needing a look, test runs, the last start, and the emails it sent.
 
+### `crm_gift_receipts_v` (view)
+
+Every gift's receipt status (wave158): receipted (a receipt number exists, Keela's included), due (the Hub owes one: a donation, a gift in kind described, or a registration or ticket whose advantage is at most 80 per cent), platform (Zeffy issues it), no (with the reason). eligible_amount is amount minus advantage; tax_year is the calendar year in Toronto (receipts follow the donor's tax year, not the fiscal year).
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1530,4 +1540,8 @@ Functions:
 - `crm_automation_stop(bigint)`: Stops one person's run (wave157), cancelling its email still waiting in the queue. Staff with the CRM page.
 - `crm_claim_queued(integer)`: mail-send v6's claim (wave155), campaign rows only since wave157 so an older pump never touches an automation's email.
 - `crm_claim_queued(integer, text)`: Takes up to p_limit queued emails for mail-send's pump (wave157): p_source automation (an automation's emails, sent first, within the daily cap) or campaign (within the campaign cap too); a claim older than 10 minutes goes back to the queue. FOR UPDATE SKIP LOCKED, so two pumps never take the same row.
+- `wa_app_config_guard()`: Trigger on app_config (wave158): the email settings (mail_*: the mode, the sender, the caps) and the receipt settings (receipt_*) change only through an admin or the service role (mail-send checks the admin itself). Other staff settings (finance_ai_guidance) are untouched.
+- `crm_receipt_config()`: The receipt settings for the Gifts tab (wave158): mode (off until the treasurer and Steel say go), the charity's name and address as on file with the CRA, the registration number, where receipts are issued, the numbering (prefix and next number), the signatory; and whether the caller is an admin (who may change them).
+- `crm_receipt_config_set(jsonb)`: Saves the receipt settings (wave158), admins only, each change in change_log. receipt_mode is not among them: switching receipts on comes with wave158b (the numbering, the PDF, the signature), once the treasurer and Steel agree.
+- `crm_receipt_sample(bigint)`: A sample CRA receipt for one gift (wave158): every field the CRA requires (the statement, the charity's name, address and registration number, a serial number, where and when it is issued, the date of the gift, the donor's name and address, the amount, the advantage and its description, the eligible amount, the signatory, the CRA's name and website), with what is missing in words. Never numbered, never stored, never sent. Staff with the CRM page.
 
