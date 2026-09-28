@@ -40,8 +40,8 @@
   /* the rail: the app's pages and sections, the current one marked */
   /* pages with sections switched inside the page: how to read the current one, and the button that opens one */
   var SEC = {
-    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); } },
-    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); } }
+    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); }, count: function () { return document.querySelectorAll('#finances .w94tab').length; } },
+    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); }, count: function () { return document.querySelectorAll('#hrcentre .w47tab').length; } }
   };
   function secNow(page) { return SEC[page] ? SEC[page].now() : null; }
   function subOf(h) { return String(h || '').replace(/^#/, '').split('/')[1] || ''; }
@@ -85,17 +85,20 @@
       '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
       (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
   }
-  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() : '') + '|' + (S.app || ''); }
+  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() + '/' + SEC[pg].count() : '') + '|' + (S.app || ''); }
   function paint() {
     if (!ensure()) return;
     S.sig = sig();
+    var hn = hashNow(), pn = pageOf(hn), sn = subOf(hn);
+    if (hn !== S.lastHash) { S.lastHash = hn; S.settled = null; }   /* a fresh address gets its section settled once */
+    if (SEC[pn] && sn && S.settled !== hn && SEC[pn].now() !== sn) { S.settled = hn; settle(pn, sn); }
     var was = S.app; S.app = current(); S.sig = sig();
     document.body.classList.toggle('w153app', !!S.app);
     ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
     var dock = document.getElementById('w153dock');
     var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
     if (dock) dock.style.display = any ? '' : 'none';
-    if (!S.app) { var h = hashNow(); if (h && pageOf(h) !== 'crm') store(KEY_LAST, h); }
+    if (!S.app) { var h = hashNow(); if (h && pageOf(h) && !ownerOf(pageOf(h))) store(KEY_LAST, h); }
     paintRail(); paintBar(); if (S.open) paintPop();
     if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
     S.drawn++;
@@ -106,33 +109,37 @@
     closePop();
     if (id === 'hub' || !APPS[id]) return close();
     if (!appOk(id)) return;
-    store(KEY, id);
     var pg = pageOf(hashNow());
-    if (APPS[id].pages.indexOf(pg) < 0) { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = APPS[id].home || '#mypage'; } else paint();
+    if (APPS[id].pages.indexOf(pg) < 0) { if (APPS[id].home) go(APPS[id].home); else { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = '#mypage'; } } else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
+  /* back to the Hub: the page you left (an app's page always opens its app, so leaving means going somewhere else) */
   function close() {
     closePop();
-    store(KEY, null);
-    var pg = pageOf(hashNow());
-    if (pg === 'crm') { var last = read(KEY_LAST); location.hash = last && pageOf(last) && pageOf(last) !== 'crm' ? last : '#mypage'; }
-    else paint();
+    var last = read(KEY_LAST), lp = last ? pageOf(last) : '';
+    var to = last && lp && !ownerOf(lp) ? last : '#mypage';
+    if (location.hash !== to) location.hash = to; else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  /* a section named in the address: the page may still be drawing (some rebuild their tabs), so keep asking until it is on */
+  function settle(pg, sec) {
+    if (!SEC[pg] || !sec) return;
+    if (S.settle) clearInterval(S.settle);
+    var tries = 0, clicks = 0;
+    S.settle = setInterval(function () {
+      tries++;
+      var sub = subOf(hashNow());
+      if (pageOf(hashNow()) !== pg || (sub && sub !== sec)) { clearInterval(S.settle); S.settle = null; return; }
+      if (SEC[pg].now() === sec) { clearInterval(S.settle); S.settle = null; setTimeout(paint, 60); return; }
+      var t = SEC[pg].btn(sec);
+      if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
+      if (tries > 30) { clearInterval(S.settle); S.settle = null; }
+    }, 150);
   }
   function go(h, sec) {
     var pg = pageOf(h);
     if (location.hash !== h) location.hash = h; else { try { if (typeof applyHash === 'function') applyHash(); } catch (e) { /* fine */ } }
-    if (sec && SEC[pg]) {
-      /* the page may still be drawing (some rebuild their tabs): keep asking for the section until it is on */
-      var tries = 0, clicks = 0, iv = setInterval(function () {
-        tries++;
-        if (pageOf(hashNow()) !== pg) { clearInterval(iv); return; }
-        if (SEC[pg].now() === sec) { clearInterval(iv); setTimeout(paint, 60); return; }
-        var t = SEC[pg].btn(sec);
-        if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
-        if (tries > 30) clearInterval(iv);
-      }, 150);
-    }
+    if (sec) settle(pg, sec);
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
   function act(k) {

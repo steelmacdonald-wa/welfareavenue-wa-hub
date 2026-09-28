@@ -57422,8 +57422,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      "Back to the Hub" in the dock, and an app bar above the page names the app and where you are, with the
      app's quick actions (the CRM: add a contact). The pages themselves are the ones that already exist:
      nothing is rebuilt, the rail and the bar are a frame around them.
-   - The CRM is always an app: any #crm address opens the frame. The other apps open from the launcher and
-     close when you go to a page outside them; the last app is remembered on this device.
+   - Steel (27/09/26, after the first cut): "all the pages that are shown on the apps now, they should just
+     not be shown on the hub ... I also don't want you to combine things that are on the hub with things
+     that are in the apps. They basically be separate." So an app's pages leave the Hub's menu (the CRM, the
+     HR centre, Finances, the Admin sections and Activity are reached through the launcher only), an app
+     holds nothing but its own pages, and any address of an app's page opens that app's frame; Back to the
+     Hub returns to the page you left.
    - Search everything finds contacts too (staff with the CRM), first when you are in the CRM.
    - The CRM gains a Gifts tab (#crm/gifts): every gift with its donor, campaign, platform and receipt.
    ===================================================================== */
@@ -57432,7 +57436,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB';
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
-  var KEY = 'wa153.app', KEY_LAST = 'wa153.last';
+  var KEY_LAST = 'wa153.last';
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
@@ -57480,7 +57484,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   var APPS = {
     hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, meetings, goals and everything else', pages: [] },
-    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm', always: true,
+    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm',
       groups: function () {
         return [{ label: 'Contacts', items: [
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
@@ -57493,22 +57497,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       next: [['list', 'Lists'], ['mail', 'Email'], ['form', 'Forms'], ['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
-    hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'Onboarding, hours, policies, the org chart', pages: ['hrcentre', 'hr', 'orgchart', 'training'], home: '#hrcentre/people',
+    hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
       groups: function () {
-        return [{ label: 'HR centre', items: [
-          { h: '#hrcentre/people', l: 'People', ic: 'people', page: 'hrcentre', sec: 'people' },
-          { h: '#hrcentre/onboarding', l: 'Onboarding', ic: 'clip', page: 'hrcentre', sec: 'onboarding' },
-          { h: '#hrcentre/training', l: 'Training', ic: 'cap', page: 'hrcentre', sec: 'training' },
-          { h: '#hrcentre/recruitment', l: 'Recruitment', ic: 'star', page: 'hrcentre', sec: 'recruitment' },
-          { h: '#hrcentre/hours', l: 'Commitment', ic: 'chart', page: 'hrcentre', sec: 'hours' },
-          { h: '#hrcentre/policies', l: 'Policies', ic: 'form', page: 'hrcentre', sec: 'policies' },
-          { h: '#hrcentre/discipline', l: 'Discipline', ic: 'shield', page: 'hrcentre', sec: 'discipline' }
-        ] }, { label: 'People', items: [
-          { h: '#hr', l: 'Human Resources', ic: 'home', page: 'hr' },
-          { h: '#orgchart', l: 'Org chart', ic: 'org', page: 'orgchart' },
-          { h: '#training', l: 'Avenue Academy', ic: 'cap', page: 'training' },
-          { h: '#adminpanel/people', l: 'People and access', ic: 'key', page: 'adminpanel' }
-        ] }];
+        /* the page's own tabs once it has drawn (they depend on the person: the People view needs the HR access list); the known list before */
+        var IC = { people: 'people', onboarding: 'clip', training: 'cap', recruitment: 'star', hours: 'chart', policies: 'form', discipline: 'shield' };
+        var known = [['people', 'People'], ['onboarding', 'Onboarding'], ['training', 'Training'], ['recruitment', 'Recruitment'], ['hours', 'Commitment'], ['policies', 'Policies'], ['discipline', 'Discipline']];
+        var drawn = Array.prototype.map.call(document.querySelectorAll('#hrcentre .w47tab[data-w47v]'), function (b) {
+          var k = b.getAttribute('data-w47v'), t = (b.childNodes[0] && b.childNodes[0].nodeType === 3 ? b.childNodes[0].textContent : b.textContent) || k;
+          return [k, String(t).replace(/\d+$/, '').trim() || k];
+        });
+        /* the page drawn with no tabs is its notice (the HR centre is for admins and leaders): the rail says just the page */
+        var pn = document.getElementById('hrcentre'), notice = !drawn.length && !!pn && pn.classList.contains('active') && /for admins and leaders/i.test(pn.textContent || '');
+        if (notice) return [{ label: 'HR centre', items: [{ h: '#hrcentre', l: 'HR centre', ic: 'clip', page: 'hrcentre' }] }];
+        var list = drawn.length >= 3 ? drawn : known;
+        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0] }; }) }];
       }
     },
     finance: { id: 'finance', label: 'Finance', color: ORANGE, ic: 'coins', blurb: 'The ledger, budgets and trends', pages: ['finances'], home: '#finances',
@@ -57548,14 +57550,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- where we are ---------- */
   function hashNow() { try { return decodeURIComponent(location.hash || ''); } catch (e) { return location.hash || ''; } }
   function pageOf(h) { return String(h || '').replace(/^#/, '').split('/')[0]; }
+  /* the app that owns a page (every app page opens its app's frame; the Hub keeps the rest) */
+  function ownerOf(pg) { for (var i = 0; i < ORDER.length; i++) { var a = APPS[ORDER[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }
   function current() {
-    /* the app in force: the CRM for any #crm address; else the remembered app when this page belongs to it */
-    var h = hashNow(), pg = pageOf(h);
+    var pg = pageOf(hashNow());
     if (boardMode() || !staffOk()) return null;
-    if (pg === 'crm' && appOk('crm')) return 'crm';
-    var s = read(KEY);
-    if (s && APPS[s] && s !== 'hub' && appOk(s) && APPS[s].pages.indexOf(pg) >= 0) return s;
-    return null;
+    var id = ownerOf(pg);
+    return id && appOk(id) ? id : null;
   }
 
   /* ---------- styles ---------- */
@@ -57588,6 +57589,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
     + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
     + '.w153ai .w153i{width:18px;height:18px;}'
+    /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
+    + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"]{display:none !important;}'
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -57683,8 +57686,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* the rail: the app's pages and sections, the current one marked */
   /* pages with sections switched inside the page: how to read the current one, and the button that opens one */
   var SEC = {
-    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); } },
-    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); } }
+    finances: { now: function () { var t = document.querySelector('#finances .w94tab.on'); return t ? t.getAttribute('data-w94tab') : 'overview'; }, btn: function (k) { return document.querySelector('#finances .w94tab[data-w94tab="' + k + '"]'); }, count: function () { return document.querySelectorAll('#finances .w94tab').length; } },
+    hrcentre: { now: function () { var t = document.querySelector('#hrcentre .w47tab.on'); return t ? t.getAttribute('data-w47v') : null; }, btn: function (k) { return document.querySelector('#hrcentre .w47tab[data-w47v="' + k + '"]'); }, count: function () { return document.querySelectorAll('#hrcentre .w47tab').length; } }
   };
   function secNow(page) { return SEC[page] ? SEC[page].now() : null; }
   function subOf(h) { return String(h || '').replace(/^#/, '').split('/')[1] || ''; }
@@ -57728,17 +57731,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
       (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
   }
-  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() : '') + '|' + (S.app || ''); }
+  function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() + '/' + SEC[pg].count() : '') + '|' + (S.app || ''); }
   function paint() {
     if (!ensure()) return;
     S.sig = sig();
+    var hn = hashNow(), pn = pageOf(hn), sn = subOf(hn);
+    if (hn !== S.lastHash) { S.lastHash = hn; S.settled = null; }   /* a fresh address gets its section settled once */
+    if (SEC[pn] && sn && S.settled !== hn && SEC[pn].now() !== sn) { S.settled = hn; settle(pn, sn); }
     var was = S.app; S.app = current(); S.sig = sig();
     document.body.classList.toggle('w153app', !!S.app);
     ORDER.forEach(function (id) { document.body.classList.toggle('w153' + id, S.app === id); });
     var dock = document.getElementById('w153dock');
     var any = ORDER.some(function (id) { return id !== 'hub' && appOk(id); });
     if (dock) dock.style.display = any ? '' : 'none';
-    if (!S.app) { var h = hashNow(); if (h && pageOf(h) !== 'crm') store(KEY_LAST, h); }
+    if (!S.app) { var h = hashNow(); if (h && pageOf(h) && !ownerOf(pageOf(h))) store(KEY_LAST, h); }
     paintRail(); paintBar(); if (S.open) paintPop();
     if (was !== S.app) try { document.dispatchEvent(new CustomEvent('wa153app', { detail: { app: S.app } })); } catch (e) { /* fine */ }
     S.drawn++;
@@ -57749,33 +57755,37 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     closePop();
     if (id === 'hub' || !APPS[id]) return close();
     if (!appOk(id)) return;
-    store(KEY, id);
     var pg = pageOf(hashNow());
-    if (APPS[id].pages.indexOf(pg) < 0) { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = APPS[id].home || '#mypage'; } else paint();
+    if (APPS[id].pages.indexOf(pg) < 0) { if (APPS[id].home) go(APPS[id].home); else { var gs = items(id), first = gs.length ? gs[0].items[0] : null; if (first) go(first.h, first.sec); else location.hash = '#mypage'; } } else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
+  /* back to the Hub: the page you left (an app's page always opens its app, so leaving means going somewhere else) */
   function close() {
     closePop();
-    store(KEY, null);
-    var pg = pageOf(hashNow());
-    if (pg === 'crm') { var last = read(KEY_LAST); location.hash = last && pageOf(last) && pageOf(last) !== 'crm' ? last : '#mypage'; }
-    else paint();
+    var last = read(KEY_LAST), lp = last ? pageOf(last) : '';
+    var to = last && lp && !ownerOf(lp) ? last : '#mypage';
+    if (location.hash !== to) location.hash = to; else paint();
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+  }
+  /* a section named in the address: the page may still be drawing (some rebuild their tabs), so keep asking until it is on */
+  function settle(pg, sec) {
+    if (!SEC[pg] || !sec) return;
+    if (S.settle) clearInterval(S.settle);
+    var tries = 0, clicks = 0;
+    S.settle = setInterval(function () {
+      tries++;
+      var sub = subOf(hashNow());
+      if (pageOf(hashNow()) !== pg || (sub && sub !== sec)) { clearInterval(S.settle); S.settle = null; return; }
+      if (SEC[pg].now() === sec) { clearInterval(S.settle); S.settle = null; setTimeout(paint, 60); return; }
+      var t = SEC[pg].btn(sec);
+      if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
+      if (tries > 30) { clearInterval(S.settle); S.settle = null; }
+    }, 150);
   }
   function go(h, sec) {
     var pg = pageOf(h);
     if (location.hash !== h) location.hash = h; else { try { if (typeof applyHash === 'function') applyHash(); } catch (e) { /* fine */ } }
-    if (sec && SEC[pg]) {
-      /* the page may still be drawing (some rebuild their tabs): keep asking for the section until it is on */
-      var tries = 0, clicks = 0, iv = setInterval(function () {
-        tries++;
-        if (pageOf(hashNow()) !== pg) { clearInterval(iv); return; }
-        if (SEC[pg].now() === sec) { clearInterval(iv); setTimeout(paint, 60); return; }
-        var t = SEC[pg].btn(sec);
-        if (t && !t.classList.contains('on') && clicks < 3) { clicks++; t.click(); }
-        if (tries > 30) clearInterval(iv);
-      }, 150);
-    }
+    if (sec) settle(pg, sec);
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
   function act(k) {
@@ -57895,11 +57905,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var W = window.w122; if (!W || !W.tours || W.tours.apps) return;
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
-        T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. Each app is a place of its own with its own menu, built on the pages you already know.'),
+        T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. The CRM, the HR centre, Finance and the Admin centre live there now, each a place of its own with its own menu; the Hub\u2019s menu keeps the rest.'),
         T('#w153pop', 'The launcher', 'The Hub, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
         T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
-        T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. The CRM is always an app; the others close on their own when you open a page outside them.', { go: function () { } }),
+        T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app\u2019s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
         { c: 1, t: 'Coming next', p: 'The CRM\u2019s rail already saves room for what comes next: lists, email campaigns, forms and reports. They arrive one wave at a time.', go: function () { close(); } }
       ] };
     } catch (e) { /* fine */ }

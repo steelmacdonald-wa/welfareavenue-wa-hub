@@ -16,6 +16,17 @@ Steel, wave149: "the app launcher (9-dot, bottom left: Admin centre, HR centre, 
 - **Tour** `tour:apps` (six steps: the dock, the launcher, inside an app, the app bar, back to the Hub, what comes next) in Avenue Academy's Hub tours (sort 39).
 - **A fix on the way:** the HR centre's People landing (116p) rewrote the address to `#hrcentre/people` when its render finished after you had already left the page (the rail made that easy to hit); it now lands only while the HR centre is on screen.
 
+## The same evening: apps and Hub kept apart (153b)
+
+Steel, on seeing the first cut: "all the pages that are shown on the apps now, they should just not be shown on the hub ... I also don't want you to combine things that are on the hub with things that are in the apps. They basically be separate."
+
+- An app's pages leave the Hub's menu: the CRM (People), the HR centre (the Human Resources row), Finances (the Fundraising & Finances row) and the whole Admin group (its sections and Activity) are hidden by CSS; the buttons stay in the DOM because they carry the access rule (the launcher reads it) and the routing. The menu now reads Home, Executive dashboard, Calendar, Departments, Goals and projects, Meetings, Requests and inbox, People (Org chart, Avenue Academy), Resources; the dock underneath.
+- An app holds its own pages only: the HR centre app is the HR centre's sections (read from the page's own tabs once drawn, since the People view depends on the person; a person who only gets the page's notice sees the page alone in the rail). Human Resources, Org chart, Avenue Academy and People and access went back to where they belong (the Hub and the Admin centre).
+- Any address of an app's page opens that app (the page owns the app; no remembered app any more): a link to #hrcentre/policies opens the HR centre on Policies, #finances opens Finance, #adminpanel/security the Admin centre. A Hub page leaves the app. Back to the Hub returns to the last Hub page you were on (`wa153.last`), else Home.
+- Deep links to a section the page cannot land on itself (the HR centre only handles onboarding, training and recruitment) are settled by the frame: it asks the page for the section until it is on, surviving the page's tab rebuild.
+- A leader (no Admin page) reaches Activity through the Admin centre app, which shows Activity alone for them.
+- Live md5 858d9f900edb95453b02eea510230db1. Tests: w153drive 44, w152drive 68, w134drive 37 (the layout test now expects the apps' pages out of the menu).
+
 ## Files
 
 - `build/parts153/*.js` → `build/src/153_wave153.seg` (in MANIFEST after 152, before 110): `a_head.js` (the apps and their rail items, access), `b_css.js`, `c_frame.js` (dock, launcher, rail, app bar, open and close, the section switches), `d_search.js` (contacts in Search everything), `e_wire.js` (clicks, keys, hash and panel hooks, the tour, `window.w153` and `WA_APP`).

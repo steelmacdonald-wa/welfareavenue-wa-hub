@@ -29,7 +29,7 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
   const browser = await launch();
   /* 1. the menu, for each identity */
   const WANT = {
-    admin: { top: ['mypage', 'overview', 'calendar'], goals: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'], meetings: ['agendas', 'transcripts'], inbox: ['requests', 'hubmail'], people: ['orgchart', 'training', 'crm'], resources: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: the three Resources pages; wave152: the CRM */
+    admin: { top: ['mypage', 'overview', 'calendar'], goals: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'], meetings: ['agendas', 'transcripts'], inbox: ['requests', 'hubmail'], people: ['orgchart', 'training'], resources: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave153: the CRM left the menu for its app; wave140: the three Resources pages; wave152: the CRM */
     member: { top: ['mypage', 'overview', 'calendar'] },
     leader: { top: ['mypage', 'overview', 'calendar'] },
     board: { top: ['overview', 'calendar'] }
@@ -41,13 +41,16 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
     ok(who + ': Home, the Executive dashboard and the Calendar lead the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
     if (who === 'admin') {
       ['goals', 'meetings', 'inbox', 'people', 'resources'].forEach(g => ok('admin: ' + g + ' holds its pages in order', m.groups[g] && JSON.stringify(m.groups[g].items) === JSON.stringify(WANT.admin[g]), m.groups[g]));
-      ok('admin: the group names read as the layout says', m.groups.goals && m.groups.goals.label === 'Goals and projects' && m.groups.inbox.label === 'Requests and inbox' && m.groups.resources.label === 'Resources' && m.groups.admin.label === 'Admin', m.groups);
-      const adm = (m.groups.admin || {}).items || [];
-      ok('admin: Admin lists its sections, People and access first, then Activity', adm[0] === 'sec:people' && adm[1] === 'sec:security' && adm.indexOf('activity') === adm.length - 1 && adm.indexOf('adminpanel') < 0, adm);
+      ok('admin: the group names read as the layout says', m.groups.goals && m.groups.goals.label === 'Goals and projects' && m.groups.inbox.label === 'Requests and inbox' && m.groups.resources.label === 'Resources', m.groups);
+      /* wave153: the Admin sections live in the Admin centre app; the group stays in the DOM (access and routing) but leaves the menu */
+      const adm = await f.ev(() => ({ shown: !!document.querySelector('#tabBar .tab-group[data-w42g="admin"]') && getComputedStyle(document.querySelector('#tabBar .tab-group[data-w42g="admin"]')).display !== 'none', app: window.w153 ? window.w153.items('admin').map(g => g.items.map(i => i.h)).flat() : [] }));
+      ok('admin: Admin\'s sections are out of the menu and in the Admin centre app, People and access first, then Activity last', !m.groups.admin && !adm.shown && adm.app[0] === '#adminpanel/people' && adm.app[adm.app.length - 1] === '#activity', adm);
       ok('admin: Departments keep the seven teams', m.groups.departments && ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'].every(d => m.groups.departments.items.indexOf(d) >= 0), m.groups.departments);
-      await f.page.click('#tabBar .w118sub a[data-w118sec="people"]'); await f.page.waitForTimeout(1500);
-      const a = await f.ev(() => ({ hash: location.hash, active: (document.querySelector('.panel.active') || {}).id, on: (document.querySelector('#tabBar .w118sub a.on') || {}).textContent }));
-      ok('admin: an Admin section opens its page and is marked', a.hash === '#adminpanel/people' && a.active === 'adminpanel' && a.on === 'People and access', a);
+      /* wave153: the section opens from the Admin centre app's rail (the menu's own link is hidden) */
+      await f.ev(() => window.w153.open('admin')); await f.page.waitForTimeout(1500);
+      const a = await f.ev(() => ({ hash: location.hash, active: (document.querySelector('.panel.active') || {}).id, on: (document.querySelector('#tabBar .w118sub a.on') || {}).textContent, rail: (document.querySelector('#w153rail .w153it.on') || {}).textContent }));
+      ok('admin: an Admin section opens its page and is marked (in the app rail and the hidden menu link)', a.hash === '#adminpanel/people' && a.active === 'adminpanel' && a.on === 'People and access' && /People and access/.test(a.rail || ''), a);
+      await f.ev(() => window.w153.close()); await f.page.waitForTimeout(800);
       /* the crumbs follow the menu */
       const crumbs = {};
       for (const [h, sel] of [['#orggoals', '#orggoals .crumb'], ['#projects', '#projects .crumb'], ['#bank', '#bank .crumb'], ['#requests', '#requests > .w118mast .crumb'], ['#hubmail', '#hubmail .crumb'], ['#photos', '#photos .crumb'], ['#activity', '#activity > .w118mast .crumb'], ['#overview', '#overview > .w118mast .crumb']]) {
@@ -68,7 +71,7 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
       ok('esc() and escapeHtml() escape quotes', e.a === 'a&quot;b&#39;c&lt;d&gt;&amp;' && e.b === 'x&quot;y', e);
     }
     if (who === 'member') ok('member: no Admin group', !m.groups.admin, m.groups);
-    if (who === 'leader') ok('leader: Admin shows Activity only', m.groups.admin && JSON.stringify(m.groups.admin.items) === '["activity"]', m.groups.admin);
+    if (who === 'leader') { const la = await f.ev(() => ({ ok: window.w153.ok('admin'), items: window.w153.items('admin').map(g => g.items.map(i => i.h)).flat() })); ok('leader: no Admin group in the menu; the Admin centre app offers Activity only (wave153)', !m.groups.admin && la.ok && JSON.stringify(la.items) === '["#activity"]', { admin: m.groups.admin, la }); }
     if (who === 'board') ok('board: a Board group with Board overview and Committees', m.groups.board && m.groups.board.items.indexOf('governance') >= 0 && m.groups.board.items.indexOf('committees') >= 0, m.groups.board);
     ok(who + ': no page errors', f.errs.length === 0, f.errs);
     await f.close();

@@ -41,7 +41,7 @@ function fixture(extra) {
 const rail = f => f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim() + (a.classList.contains('on') ? '*' : '')));
 const state = f => f.ev(() => ({ hash: location.hash, app: window.w153.current(), body: document.body.className, tabBar: getComputedStyle(document.getElementById('tabBar')).display, railShown: getComputedStyle(document.getElementById('w153rail')).display,
   dock: !!document.getElementById('w153dock') && getComputedStyle(document.getElementById('w153dock')).display !== 'none', bar: (document.getElementById('w153bar') || { innerText: '' }).innerText.replace(/\s+/g, ' ').trim(), ph: document.getElementById('globalSearch').placeholder,
-  back: getComputedStyle(document.querySelector('#w153dock .w153back')).display, stored: localStorage.getItem('wa153.app') }));
+  back: getComputedStyle(document.querySelector('#w153dock .w153back')).display }));
 const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!el) return false; el.click(); return true; }, s);
 
 (async () => {
@@ -51,6 +51,10 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   await f.page.waitForTimeout(800);
   let s = await state(f);
   ok('the dock sits at the bottom of the menu, outside an app (the menu shows, no rail)', s.dock && !s.app && s.tabBar !== 'none' && s.railShown === 'none' && s.back === 'none', s);
+  const menu = await f.ev(() => { const vis = id => { const t = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); return t ? getComputedStyle(t).display : 'absent'; };
+    return { crm: vis('crm'), hrcentre: vis('hrcentre'), finances: vis('finances'), orgchart: vis('orgchart'), training: vis('training'), fundevents: vis('fundevents'), admin: getComputedStyle(document.querySelector('#tabBar .tab-group[data-w42g="admin"]')).display, allowedCrm: window.w153.allowed('crm'), allowedAdmin: window.w153.allowed('adminpanel') }; });
+  ok('the Hub\'s menu no longer shows the apps\' pages (CRM, HR centre, Finances, the Admin group) while the rest stays', menu.crm === 'none' && menu.hrcentre === 'none' && menu.finances === 'none' && menu.admin === 'none' && menu.orgchart !== 'none' && menu.training !== 'none' && menu.fundevents !== 'none', menu);
+  ok('the hidden buttons still carry the access rule (the launcher reads it)', menu.allowedCrm && menu.allowedAdmin, menu);
   const dockPos = await f.ev(() => { const n = document.querySelector('nav.wa-nav').getBoundingClientRect(), d = document.getElementById('w153dock').getBoundingClientRect(); return { navBottom: n.bottom, dockBottom: d.bottom, dockTop: d.top, navScroll: document.querySelector('nav.wa-nav').scrollHeight }; });
   ok('it stays in view at the foot of the menu even though the menu is taller than the screen', Math.abs(dockPos.dockBottom - dockPos.navBottom) < 2 && dockPos.navScroll > 900, dockPos);
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(250);
@@ -62,7 +66,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(200);
   await click(f, '[data-w153app="crm"]'); await f.page.waitForTimeout(1500);
   s = await state(f);
-  ok('the CRM opens as an app: #crm, the menu gives way to the CRM rail, Back to the Hub in the dock', s.hash === '#crm' && s.app === 'crm' && /w153app/.test(s.body) && s.tabBar === 'none' && s.railShown !== 'none' && s.back !== 'none' && s.stored === 'crm', s);
+  ok('the CRM opens as an app: #crm, the menu gives way to the CRM rail, Back to the Hub in the dock', s.hash === '#crm' && s.app === 'crm' && /w153app/.test(s.body) && s.tabBar === 'none' && s.railShown !== 'none' && s.back !== 'none', s);
   let r = await rail(f);
   ok('the rail: Contacts (current), Possible duplicates, Sources, Gifts, and what comes next', r.join('|') === 'Contacts*|Possible duplicates|Sources|Gifts' && await f.ev(() => /Next in the CRM/i.test(document.getElementById('w153rail').innerText) && /Lists/.test(document.getElementById('w153rail').innerText) && /Email/.test(document.getElementById('w153rail').innerText)), r);
   ok('the app bar names the app and the place, with Add a contact', /^CRM Contacts/.test(s.bar) && /Add a contact/.test(s.bar), s.bar);
@@ -101,23 +105,27 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   /* back to the Hub */
   await click(f, '[data-w153back]'); await f.page.waitForTimeout(900);
   s = await state(f);
-  ok('Back to the Hub returns to the page left behind (Home), the menu is back', s.hash === '#mypage' && !s.app && s.tabBar !== 'none' && s.railShown === 'none' && !s.stored && /Search everything/.test(s.ph), s);
+  ok('Back to the Hub returns to the page left behind (Home), the menu is back', s.hash === '#mypage' && !s.app && s.tabBar !== 'none' && s.railShown === 'none' && /Search everything/.test(s.ph), s);
+  await f.hash('#calendar'); await f.page.waitForTimeout(700);
   /* the HR centre */
   await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   s = await state(f); r = await rail(f);
-  ok('the HR centre opens on People with its sections and pages in the rail', s.app === 'hr' && s.hash === '#hrcentre/people' && r.join('|') === 'People*|Onboarding|Training|Recruitment|Commitment|Policies|Discipline|Human Resources|Org chart|Avenue Academy|People and access' && /^HR CENTRE People/.test(s.bar), { s, r });
+  ok('the HR centre opens where the page lands (People) with its own sections in the rail, nothing from the Hub', s.app === 'hr' && /^#hrcentre/.test(s.hash) && r.join('|') === 'People*|Onboarding|Training|Recruitment|Commitment|Policies|Discipline' && /^HR CENTRE People/.test(s.bar), { s, r });
   await click(f, '#w153rail [data-w153sec="policies"]'); await f.page.waitForTimeout(2600);
   const hr = await f.ev(() => ({ hash: location.hash, on: (document.querySelector('#hrcentre .w47tab.on') || {}).textContent, rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()) }));
   ok('Policies in the rail switches the page\'s tab and the rail follows', hr.hash === '#hrcentre/policies' && hr.on === 'Policies' && hr.rail.join() === 'Policies', hr);
   await click(f, '#hrcentre .w47tab[data-w47v="training"]'); await f.page.waitForTimeout(2600);
   ok('a tab clicked on the page moves the rail too', (await rail(f)).indexOf('Training*') >= 0, await rail(f));
-  await click(f, '#w153rail [data-w153go="#orgchart"]'); await f.page.waitForTimeout(1600);
-  s = await state(f);
-  ok('Org chart stays inside the HR centre', s.hash === '#orgchart' && s.app === 'hr' && /^HR CENTRE Org chart/.test(s.bar), s);
   await shot(f, 'apps_hr');
-  await f.hash('#calendar'); await f.page.waitForTimeout(900);
+  await click(f, '[data-w153back]'); await f.page.waitForTimeout(1200);
   s = await state(f);
-  ok('a page outside the app closes it (the Calendar is the Hub\'s)', s.hash === '#calendar' && !s.app && s.tabBar !== 'none', s);
+  ok('Back to the Hub from the HR centre returns to the Hub page left behind (the Calendar)', s.hash === '#calendar' && !s.app && s.tabBar !== 'none', s);
+  await f.hash('#hrcentre/policies'); await f.page.waitForTimeout(2600);
+  s = await state(f);
+  ok('a link straight to an HR centre address opens the HR centre app on its own', s.app === 'hr' && s.railShown !== 'none' && (await rail(f)).indexOf('Policies*') >= 0, s);
+  await f.hash('#orgchart'); await f.page.waitForTimeout(1600);
+  s = await state(f);
+  ok('a Hub page (the Org chart) leaves the app: the menu is back, no rail', s.hash === '#orgchart' && !s.app && s.tabBar !== 'none' && s.railShown === 'none', s);
   /* Finance */
   await f.ev(() => window.w153.open('finance')); await f.page.waitForTimeout(1500);
   r = await rail(f); s = await state(f);
@@ -148,9 +156,9 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   await f.page.waitForTimeout(800);
   const m = await f.ev(() => ({ dock: getComputedStyle(document.getElementById('w153dock')).display !== 'none', apps: ['hub', 'crm', 'hr', 'finance', 'admin'].filter(a => window.w153.ok(a)), fin: window.w153.allowed('finances'), adm: window.w153.allowed('adminpanel') }));
   ok('a member on the HR profile: the dock, with the Hub, the CRM and the HR centre (no Finance, no Admin centre)', m.dock && m.apps.join() === 'hub,crm,hr' && !m.fin && !m.adm, m);
-  await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(1500);
+  await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   r = await rail(f);
-  ok('their HR centre rail leaves out People and access (an admin page)', r.length > 5 && r.indexOf('People and access') < 0 && r.indexOf('Org chart') >= 0, r);
+  ok('their HR centre shows its notice (admins and leaders), so the rail is the page alone, nothing from the Hub', r.join('|') === 'HR centre*', r);
   ok('no page errors (member)', (f.errs || []).length === 0, f.errs);
   await f.close();
 

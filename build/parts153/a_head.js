@@ -14,8 +14,12 @@
      "Back to the Hub" in the dock, and an app bar above the page names the app and where you are, with the
      app's quick actions (the CRM: add a contact). The pages themselves are the ones that already exist:
      nothing is rebuilt, the rail and the bar are a frame around them.
-   - The CRM is always an app: any #crm address opens the frame. The other apps open from the launcher and
-     close when you go to a page outside them; the last app is remembered on this device.
+   - Steel (27/09/26, after the first cut): "all the pages that are shown on the apps now, they should just
+     not be shown on the hub ... I also don't want you to combine things that are on the hub with things
+     that are in the apps. They basically be separate." So an app's pages leave the Hub's menu (the CRM, the
+     HR centre, Finances, the Admin sections and Activity are reached through the launcher only), an app
+     holds nothing but its own pages, and any address of an app's page opens that app's frame; Back to the
+     Hub returns to the page you left.
    - Search everything finds contacts too (staff with the CRM), first when you are in the CRM.
    - The CRM gains a Gifts tab (#crm/gifts): every gift with its donor, campaign, platform and receipt.
    ===================================================================== */
@@ -24,7 +28,7 @@
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB';
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
-  var KEY = 'wa153.app', KEY_LAST = 'wa153.last';
+  var KEY_LAST = 'wa153.last';
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function lower(s) { return String(s == null ? '' : s).toLowerCase().trim(); }
@@ -72,7 +76,7 @@
   }
   var APPS = {
     hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, meetings, goals and everything else', pages: [] },
-    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm', always: true,
+    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm',
       groups: function () {
         return [{ label: 'Contacts', items: [
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
@@ -85,22 +89,20 @@
       next: [['list', 'Lists'], ['mail', 'Email'], ['form', 'Forms'], ['chart', 'Reports']],
       actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
     },
-    hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'Onboarding, hours, policies, the org chart', pages: ['hrcentre', 'hr', 'orgchart', 'training'], home: '#hrcentre/people',
+    hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
       groups: function () {
-        return [{ label: 'HR centre', items: [
-          { h: '#hrcentre/people', l: 'People', ic: 'people', page: 'hrcentre', sec: 'people' },
-          { h: '#hrcentre/onboarding', l: 'Onboarding', ic: 'clip', page: 'hrcentre', sec: 'onboarding' },
-          { h: '#hrcentre/training', l: 'Training', ic: 'cap', page: 'hrcentre', sec: 'training' },
-          { h: '#hrcentre/recruitment', l: 'Recruitment', ic: 'star', page: 'hrcentre', sec: 'recruitment' },
-          { h: '#hrcentre/hours', l: 'Commitment', ic: 'chart', page: 'hrcentre', sec: 'hours' },
-          { h: '#hrcentre/policies', l: 'Policies', ic: 'form', page: 'hrcentre', sec: 'policies' },
-          { h: '#hrcentre/discipline', l: 'Discipline', ic: 'shield', page: 'hrcentre', sec: 'discipline' }
-        ] }, { label: 'People', items: [
-          { h: '#hr', l: 'Human Resources', ic: 'home', page: 'hr' },
-          { h: '#orgchart', l: 'Org chart', ic: 'org', page: 'orgchart' },
-          { h: '#training', l: 'Avenue Academy', ic: 'cap', page: 'training' },
-          { h: '#adminpanel/people', l: 'People and access', ic: 'key', page: 'adminpanel' }
-        ] }];
+        /* the page's own tabs once it has drawn (they depend on the person: the People view needs the HR access list); the known list before */
+        var IC = { people: 'people', onboarding: 'clip', training: 'cap', recruitment: 'star', hours: 'chart', policies: 'form', discipline: 'shield' };
+        var known = [['people', 'People'], ['onboarding', 'Onboarding'], ['training', 'Training'], ['recruitment', 'Recruitment'], ['hours', 'Commitment'], ['policies', 'Policies'], ['discipline', 'Discipline']];
+        var drawn = Array.prototype.map.call(document.querySelectorAll('#hrcentre .w47tab[data-w47v]'), function (b) {
+          var k = b.getAttribute('data-w47v'), t = (b.childNodes[0] && b.childNodes[0].nodeType === 3 ? b.childNodes[0].textContent : b.textContent) || k;
+          return [k, String(t).replace(/\d+$/, '').trim() || k];
+        });
+        /* the page drawn with no tabs is its notice (the HR centre is for admins and leaders): the rail says just the page */
+        var pn = document.getElementById('hrcentre'), notice = !drawn.length && !!pn && pn.classList.contains('active') && /for admins and leaders/i.test(pn.textContent || '');
+        if (notice) return [{ label: 'HR centre', items: [{ h: '#hrcentre', l: 'HR centre', ic: 'clip', page: 'hrcentre' }] }];
+        var list = drawn.length >= 3 ? drawn : known;
+        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0] }; }) }];
       }
     },
     finance: { id: 'finance', label: 'Finance', color: ORANGE, ic: 'coins', blurb: 'The ledger, budgets and trends', pages: ['finances'], home: '#finances',
@@ -140,12 +142,11 @@
   /* ---------- where we are ---------- */
   function hashNow() { try { return decodeURIComponent(location.hash || ''); } catch (e) { return location.hash || ''; } }
   function pageOf(h) { return String(h || '').replace(/^#/, '').split('/')[0]; }
+  /* the app that owns a page (every app page opens its app's frame; the Hub keeps the rest) */
+  function ownerOf(pg) { for (var i = 0; i < ORDER.length; i++) { var a = APPS[ORDER[i]]; if (a.pages.indexOf(pg) >= 0) return a.id; } return null; }
   function current() {
-    /* the app in force: the CRM for any #crm address; else the remembered app when this page belongs to it */
-    var h = hashNow(), pg = pageOf(h);
+    var pg = pageOf(hashNow());
     if (boardMode() || !staffOk()) return null;
-    if (pg === 'crm' && appOk('crm')) return 'crm';
-    var s = read(KEY);
-    if (s && APPS[s] && s !== 'hub' && appOk(s) && APPS[s].pages.indexOf(pg) >= 0) return s;
-    return null;
+    var id = ownerOf(pg);
+    return id && appOk(id) ? id : null;
   }
