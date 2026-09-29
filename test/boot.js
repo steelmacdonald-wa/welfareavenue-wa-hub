@@ -64,6 +64,7 @@ async function fresh(browser, o) {
     if (url.startsWith('http://wahub.test/fonts/')) { const fp = path.join(__dirname, 'fonts', url.split('/').pop()); if (fs.existsSync(fp)) return route.fulfill({ contentType: 'font/woff2', body: fs.readFileSync(fp) }); }
     return route.abort();
   });
+  if (o.beforeGoto) await o.beforeGoto(page);   /* wave167: extra routes (screenshots with real pictures) win over the block above */
   await page.goto('http://wahub.test/' + (o.hash || ''), { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => { const g = document.getElementById('gate'); return g && g.style.display === 'none'; }, null, { timeout: 30000 });
   await page.waitForTimeout(o.wait || 3800);

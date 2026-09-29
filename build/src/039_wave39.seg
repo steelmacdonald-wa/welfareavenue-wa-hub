@@ -195,12 +195,12 @@ function wa39HelpModal(onbId) {
   var m = wa37StepsFor(onbId);
   var undone = WA37.tmpl.filter(function (t) { return m[t.id] && !m[t.id].done; });
   openModal('<h3>Ask for help</h3>'
-    + '<p class="m-sub">This posts to the #onboarding-updates channel in Slack so HR and your manager see it right away.</p>'
+    + '<p class="m-sub">HR and your lead see it in the Hub right away (the onboarding board, and your lead\'s Home) and reach out.</p>'
     + '<label>Which step are you stuck on?</label><select id="w39hs">'
     + undone.map(function (t) { return '<option value="' + esc(t.name) + '">' + esc(t.section + ': ' + t.name) + '</option>'; }).join('')
     + '</select>'
     + '<label>What is the problem? (optional)</label><textarea id="w39hn" rows="3" placeholder="What you tried, what happened"></textarea>'
-    + '<div class="m-actions"><button class="btn" id="w39hgo">Send it to Slack</button> <button class="btn ghost" id="w39hc">Cancel</button></div>');
+    + '<div class="m-actions"><button class="btn" id="w39hgo">Send it</button> <button class="btn ghost" id="w39hc">Cancel</button></div>');   /* wave166: the Hub, not Slack (it never reached Slack) */
   document.getElementById('w39hc').addEventListener('click', function () { closeModal(); });
   document.getElementById('w39hgo').addEventListener('click', async function () {
     var me = (typeof wa28Me === 'function') ? wa28Me() : null;
@@ -214,7 +214,7 @@ function wa39HelpModal(onbId) {
     });
     if (r.error) { btn.disabled = false; toast('Could not send it'); return; }
     closeModal();
-    toast('Sent. HR and your manager will see it in Slack.');
+    toast('Sent. HR and your lead will see it in the Hub.');
   });
 }
 

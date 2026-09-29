@@ -82,17 +82,16 @@
       + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:0 0 6px"><b>To get started, please complete these steps:</b></p>'
       + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%">'
       + step(1, 'Activate your Welfare Avenue Google account',
-          a('https://www.loom.com/share/welfare-avenue-google-setup', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
-          + 'Email: <b>' + esc(v.email || '[first.last@welfareavenue.com]') + '</b><br>Temporary password (change after first login): <b>Welfare Avenue</b>')
+          a('https://www.loom.com/share/522090b198054eb4aab13e0365efadf6', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
+          + 'Email: <b>' + esc(v.email || '[first.last@welfareavenue.com]') + '</b><br>Your temporary password comes to you separately; you will change it when you first sign in.')   /* wave166: the real setup video (public on Loom), no password in the email */
       + step(2, 'Accept your platform invitations',
           'Each invite arrives in your new <b>' + esc(v.email || 'Welfare Avenue') + '</b> inbox: '
           + a('https://slack.com/help/articles/212675257-Join-a-Slack-workspace', 'Slack') + ', '
-          + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ', '
-          + a('https://www.canva.com/help/join-team/', 'Canva') + ', '
-          + a('https://support.keela.co/hc/en-us/articles/360042989711-Adding-and-Editing-Users', 'Keela') + ' and '
-          + a('https://help.clickup.com/hc/en-us/articles/6303456942231-Join-a-Workspace', 'ClickUp') + '. Each link shows how to join when invited.')
-      + step(3, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
-      + step(4, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
+          + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ' and '
+          + a('https://www.canva.com/help/join-team/', 'Canva') + '. Each link shows how to join when invited.')   /* wave166: no Keela or ClickUp */
+      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://wa-exec-dashboard.netlify.app', 'wa-exec-dashboard.netlify.app') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
+      + step(4, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
+      + step(5, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
       + '</table>'
       + '<p style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.65;color:#4a5551;margin:14px 0 0">If you run into any technical issues or have questions, please reach out; we are here to make your onboarding smooth and welcoming.</p>'
       + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:16px 0 0">Looking forward to seeing all the great work you will do with us!</p>'

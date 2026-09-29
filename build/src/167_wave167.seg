@@ -1,0 +1,544 @@
+/* =====================================================================
+   WA v167 The onboarding journey (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "Make the onboarding interactive with our branding highlighted everywhere. Use photos and make it the
+   best most educational onboarding possible."
+
+   The plan in the Avenue Academy (#training/onboarding, the sheet wave122 draws and wave166 fills) becomes a journey:
+   - a welcome with a real photo, the logo and a doodle, the person's first name, their day, how far they are (a ring) and
+     Continue (the next step: the week opens, the step shows, folded or not);
+   - the avenue: the weeks as stops on a road (photo, title, how far), the E that moves standing at the week they are in;
+     choosing a stop shows that week;
+   - each week: its photo and due date, what you will learn and why it matters (app_config onboarding_journey, with the same
+     values here as a fallback), the lesson that opens it (an Academy lesson with a knowledge check; its step ticks itself),
+     then the week's steps (wave166's plan, one week at a time);
+   - your people (your lead from the org chart, your team, our co-executive directors, with their photos), Welfare Avenue in
+     numbers, a moment from our story (Did you know?), and Ask for help;
+   - a celebration when a week is finished (and when the whole plan is).
+   The lessons' photos: a 'photo' and a 'photos' block in wave122's lessons (122). Data: wa167_journey.
+   ===================================================================== */
+(function () {
+  if (window.__wa167) return; window.__wa167 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', PURPLE = '#6F64AB', TEAL = '#2A8C7A', INK = '#1F201E', FLAG = '#B3402F', MUTED = '#797773';
+  var ST = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
+  var BR = {
+    logo: ST + 'brand/logo-lockup-cream-600.png', e: ST + 'brand/e-large-gold-600.png', star: ST + 'brand/doodle-star-gold.png',
+    ast: ST + 'brand/doodle-asterisk-cream.png', heart: ST + 'brand/doodle-heart-purple.png',
+    flowers: ST + 'brand/doodle-flowers-gold.png', arrow: ST + 'brand/doodle-arrow-gold.png', blob: ST + 'brand/doodle-blob-purple.png'
+  };
+  var DEF = {"v":1,"hero":{"photo":"photos/web/2024-07-summer-team-under-the-tent.jpg","fx":0.5,"fy":0.52,"alt":"Thirteen volunteers in green Welfare Avenue vests pose under the green tent in a leafy park.","tag":"Service is solidarity, not charity."},"weeks":{"WEEK 1":{"title":"Get set up","photo":"photos/web/2024-10-autumn-volunteers-plating.jpg","fx":0.42,"fy":0.45,"lesson":"wa167w1","learn":["Set up your Welfare Avenue accounts: Google, Chrome, Slack and Loom","Find your way around the Hub and your team's page","Read our policies, and check in and out every time you work"],"why":"Everything at Welfare Avenue runs through these tools. A week spent setting them up well saves you hours later, and it means your team can reach you."},"WEEK 2":{"title":"Who we are","photo":"photos/web/2022-01-winter-crew-in-the-snow.jpg","fx":0.5,"fy":0.64,"lesson":"wa167w2","learn":["Tell our story and our mission in your own words","Use our brand and the words we use for the people we serve","Do your first work in the Hub"],"why":"You represent Welfare Avenue at servings, in messages and online. Knowing where we come from and how we speak means you represent us well."},"WEEK 3":{"title":"Your team","photo":"photos/web/2023-10-autumn-crew-behind-the-table.jpg","fx":0.55,"fy":0.55,"lesson":"wa167w3","learn":["Know how your team works and meets","Start your team's Learning Avenue","Volunteer at your first serving"],"why":"This is where you start contributing: your team, your tasks, and a serving where you see our work first hand."},"WEEK 4":{"title":"Look back","photo":"photos/web/2025-12-gift-baskets-the-crew.jpg","fx":0.5,"fy":0.5,"lesson":"wa167w4","learn":["Show what stuck in two short quizzes","Look back on your first weeks in a self-assessment","Sit down with your lead and HR for your 30-day evaluation"],"why":"A moment to check what stuck, say what could be better, and plan what comes next with your lead."},"60 DAYS":{"title":"Grow","photo":"photos/web/2026-08-flag-football-celebration.jpg","fx":0.5,"fy":0.5,"lesson":null,"learn":["Understand how Canadian charities work, receipts included","Pick a Learning Avenue to grow in","Meet one of our co-executive directors"],"why":"Onboarding ends, growing does not. These steps set you up for the months ahead."}},"numbers":[{"n":"2020","l":"the year we began, in Montreal"},{"n":"20,000+","l":"meals and food bags since"},{"n":"700+","l":"people have volunteered with us"},{"n":"3,000+","l":"holiday gifts delivered in 2025"},{"n":"3","l":"cities: Montreal, Toronto and a pilot in Ottawa"}],"numbers_note":"The Hub's estimates from our own records, September 2026."};
+  var ORDER = ['WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', '60 DAYS'];
+  var LABEL = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days' };
+  var S = { cfg: null, cfgAt: 0, ppl: null, pplAt: 0, story: null, storyI: 0, wk: null, onb: null, counts: {}, restore: null, first: true };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function fmtDay(iso) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); } }
+  function dayN(start) { if (!start) return 1; var a = new Date(String(start).slice(0, 10) + 'T12:00:00Z'), b = new Date(todayIso() + 'T12:00:00Z'); return Math.max(1, Math.round((b - a) / 86400000) + 1); }
+  function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function reduced() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function photoUrl(p) { return p ? (/^https:/.test(p) ? p : ST + String(p).replace(/^\/+/, '')) : ''; }
+  function bgPos(x) { return Math.round(100 * (x && x.fx != null ? Number(x.fx) : 0.5)) + '% ' + Math.round(100 * (x && x.fy != null ? Number(x.fy) : 0.5)) + '%'; }
+  function cfg() {
+    var c = S.cfg || DEF || {}, d = DEF || {};
+    return { hero: c.hero || d.hero || {}, weeks: Object.assign({}, d.weeks || {}, c.weeks || {}), numbers: c.numbers || d.numbers || [], numbers_note: c.numbers_note || d.numbers_note || '' };
+  }
+
+  var BAR = function (pct) { return '<i class="w167bar"><i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></i>'; };
+  function ring(pct, size, stroke) {
+    var r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="rgba(255,250,242,.22)" stroke-width="' + stroke + '"/>'
+      + '<circle class="arc" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="' + GOLD + '" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 ' + size / 2 + ' ' + size / 2 + ')"/></svg>';
+  }
+
+  var D = "'Barlow Condensed',sans-serif";
+  var CSS = ''
+    /* the sheet in journey mode */
+    + '#w122sheet .sh.w167 .main .wrap.w167j{max-width:1080px;padding-top:22px;}'
+    + '#w122sheet .sh.w167 .main .wrap.w167j > .prose{display:none;}'
+    + '.w167 h1,.w167 h2,.w167 h3.w167d{font-family:' + D + ';text-transform:uppercase;letter-spacing:.4px;font-weight:700;}'
+    + '.w167btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:11px 20px;font-weight:700;font-size:14px;line-height:1.1;font-family:inherit;cursor:pointer;background:' + GOLD + ';color:' + GREEN + ';box-shadow:0 10px 24px -12px rgba(0,0,0,.5);transition:transform .15s ease,box-shadow .15s ease;}'
+    + '.w167btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -12px rgba(0,0,0,.55);}'
+    + '.w167btn.ghost{background:rgba(255,250,242,.14);color:' + CREAM + ';box-shadow:none;border:1px solid rgba(255,250,242,.35);}'
+    + '.w167btn.green{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w167bar{display:block;height:6px;border-radius:99px;background:rgba(16,63,57,.12);overflow:hidden;}.w167bar > i{display:block;height:100%;border-radius:99px;background:' + GOLD + ';transition:width .6s ease;}'
+    /* the welcome */
+    + '.w167hero{position:relative;border-radius:26px;overflow:hidden;min-height:300px;display:flex;align-items:flex-end;gap:24px;padding:30px 34px;color:' + CREAM + ';background-color:' + GREEN + ';background-size:cover;box-shadow:0 30px 60px -34px rgba(16,63,57,.9);}'
+    + '.w167hero:before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,rgba(16,63,57,.97) 0%,rgba(16,63,57,.86) 42%,rgba(16,63,57,.35) 78%,rgba(16,63,57,.2) 100%);}'
+    + '.w167hero > *{position:relative;}'
+    + '.w167hero .lg{position:absolute;top:24px;left:34px;height:40px;width:auto;}'
+    + '.w167hero .dd1{position:absolute;top:18px;right:26px;width:64px;transform:rotate(12deg);opacity:.95;}'
+    + '.w167hero .tx{flex:1;min-width:0;padding-top:64px;}'
+    + '.w167hero .ey{font-size:12px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167hero h1{margin:6px 0 2px;font-size:56px;line-height:.95;color:' + CREAM + ';}'
+    + '.w167hero h1 span{color:' + GOLD + ';}'
+    + '.w167hero p{margin:0 0 6px;font-size:15px;line-height:1.5;max-width:560px;color:rgba(255,250,242,.92);}'
+    + '.w167hero .tag{font-family:' + D + ';font-size:19px;letter-spacing:.6px;text-transform:uppercase;color:' + CREAM + ';opacity:.85;margin:10px 0 16px;}'
+    + '.w167hero .cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}'
+    + '.w167hero .rg{flex:0 0 auto;position:relative;width:132px;height:132px;margin-bottom:6px;}'
+    + '.w167hero .rg .in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}'
+    + '.w167hero .rg b{font-family:' + D + ';font-size:36px;line-height:1;color:' + CREAM + ';}'
+    + '.w167hero .rg span{font-size:11px;letter-spacing:.4px;color:rgba(255,250,242,.8);}'
+    /* the avenue */
+    + '.w167road{position:relative;margin:24px 0 8px;padding:22px 10px 8px;}'
+    + '.w167road .lane{position:absolute;left:44px;right:44px;top:66px;height:12px;border-radius:99px;background:' + GREEN + ';}'
+    + '.w167road .lane:after{content:"";position:absolute;left:10px;right:10px;top:5px;height:2px;background:repeating-linear-gradient(90deg,' + GOLD + ' 0 14px,transparent 14px 26px);opacity:.9;}'
+    + '.w167road .lane i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:' + GOLD + ';opacity:.35;transition:width .6s ease;}'
+    + '.w167road .stops{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}'
+    + '.w167stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0 4px 8px;cursor:pointer;font-family:inherit;color:' + INK + ';text-align:center;border-radius:18px;}'
+    + '.w167stop:focus-visible{outline:3px solid ' + GOLD + ';outline-offset:2px;}'
+    + '.w167stop .pic{width:84px;height:84px;border-radius:50%;background-size:cover;background-color:' + GREEN + ';border:5px solid ' + CREAM + ';box-shadow:0 0 0 3px rgba(16,63,57,.2),0 12px 24px -14px rgba(0,0,0,.6);transition:transform .2s ease,box-shadow .2s ease;position:relative;}'
+    + '.w167stop:hover .pic{transform:translateY(-3px) scale(1.04);}'
+    + '.w167stop.on .pic{box-shadow:0 0 0 4px ' + GOLD + ',0 16px 30px -14px rgba(0,0,0,.7);}'
+    + '.w167stop.done .pic:after{content:"\\2713";position:absolute;right:-6px;bottom:-4px;width:26px;height:26px;border-radius:50%;background:' + TEAL + ';color:' + CREAM + ';font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;border:3px solid ' + CREAM + ';}'
+    + '.w167stop .lb{margin-top:6px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';}'
+    + '.w167stop.on .lb{color:' + PURPLE + ';}'
+    + '.w167stop b{font-family:' + D + ';font-size:21px;line-height:1;text-transform:uppercase;color:' + GREEN + ';}'
+    + '.w167stop .n{font-size:11.5px;color:' + MUTED + ';}'
+    + '.w167stop .w167bar{width:70%;margin-top:3px;}'
+    + '.w167stop .e{position:absolute;top:-24px;left:50%;width:46px;margin-left:-23px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25));}'
+    + '.w167stop.cur .e{animation:w167bob 1.8s ease-in-out infinite;}'
+    + '@keyframes w167bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}'
+    + '.w167road .hint{margin:6px 0 0;text-align:center;font-size:12.5px;color:' + MUTED + ';}'
+    /* a week */
+    + '.w167wk{margin:18px 0 8px;}'
+    + '.w167ban{position:relative;border-radius:24px;overflow:hidden;min-height:180px;display:flex;align-items:flex-end;padding:22px 26px;color:' + CREAM + ';background-color:' + GREEN + ';background-size:cover;}'
+    + '.w167ban:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(16,63,57,.95) 0%,rgba(16,63,57,.7) 45%,rgba(16,63,57,.1) 100%);}'
+    + '.w167ban > *{position:relative;}'
+    + '.w167ban .k{font-size:12px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167ban h2{margin:2px 0 4px;font-size:44px;line-height:1;color:' + CREAM + ';}'
+    + '.w167ban p{margin:0;font-size:13.5px;color:rgba(255,250,242,.88);}'
+    + '.w167ban .dd{position:absolute;right:24px;top:20px;width:54px;opacity:.9;}'
+    + '.w167ban .pb{width:220px;max-width:60vw;margin-top:10px;}.w167ban .pb .w167bar{background:rgba(255,250,242,.25);}'
+    + '.w167learn{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin:16px 0;}'
+    + '.w167learn .ob,.w167learn .wy{border-radius:20px;padding:18px 20px;}'
+    + '.w167learn .ob{background:' + CREAM + ';box-shadow:0 14px 34px -26px rgba(16,63,57,.8);border:1px solid rgba(16,63,57,.08);}'
+    + '.w167learn .wy{background:linear-gradient(145deg,' + PURPLE + ',#8b80c9);color:' + CREAM + ';position:relative;overflow:hidden;}'
+    + '.w167learn .wy img{position:absolute;right:-10px;bottom:-12px;width:90px;opacity:.35;}'
+    + '.w167learn h3{margin:0 0 10px;font-family:' + D + ';font-size:20px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';}'
+    + '.w167learn .wy h3{color:' + CREAM + ';}'
+    + '.w167learn ul{list-style:none;margin:0;padding:0;display:grid;gap:9px;}'
+    + '.w167learn li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;color:' + INK + ';}'
+    + '.w167learn li:before{content:"\\2713";flex:0 0 22px;height:22px;border-radius:50%;background:' + GOLD + ';color:' + GREEN + ';font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px;}'
+    + '.w167learn .wy p{margin:0;font-size:14px;line-height:1.55;position:relative;}'
+    + '.w167feat{display:flex;gap:16px;align-items:center;border-radius:20px;padding:16px 18px;margin:0 0 16px;background:' + GREEN + ';color:' + CREAM + ';box-shadow:0 18px 40px -28px rgba(16,63,57,.9);position:relative;overflow:hidden;}'
+    + '.w167feat .ic{flex:0 0 54px;height:54px;border-radius:16px;background:' + GOLD + ';display:flex;align-items:center;justify-content:center;font-family:' + D + ';font-size:26px;color:' + GREEN + ';}'
+    + '.w167feat .tx{flex:1;min-width:0;}'
+    + '.w167feat .tx span{display:block;font-size:11.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167feat .tx b{display:block;font-size:17px;margin:2px 0;}'
+    + '.w167feat .tx em{font-style:normal;font-size:13px;color:rgba(255,250,242,.8);}'
+    + '.w167feat.ok{background:linear-gradient(135deg,' + TEAL + ',' + GREEN + ');}'
+    + '.w167feat.ok .ic{background:' + CREAM + ';color:' + TEAL + ';}'
+    + '.w167steps h3{margin:18px 0 8px;font-family:' + D + ';font-size:20px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';}'
+    /* one week of the plan at a time; the week's lesson shows as the card above */
+    + '.sh.w167 .onbwrap details.w37week{display:none;}'
+    + '.sh.w167 .onbwrap details.w37week.w167on{display:block;}'
+    + '.sh.w167 .onbwrap details.w37week.w167on > summary{display:none;}'
+    + '.sh.w167 .onbwrap [data-w166t^="wa167w"]{display:none !important;}'
+    + '.sh.w167 .w37step.w167flash{animation:w167flash 1.6s ease;}'
+    + '@keyframes w167flash{0%,100%{background:transparent;}20%,60%{background:rgba(220,165,39,.28);}}'
+    /* your people, our numbers, a moment from our story */
+    + '.w167sec{margin:26px 0 8px;}'
+    + '.w167sec > h3{margin:0 0 12px;font-family:' + D + ';font-size:24px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';display:flex;align-items:center;gap:10px;}'
+    + '.w167sec > h3 img{width:30px;}'
+    + '.w167ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}'
+    + '.w167pc{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:18px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.08);box-shadow:0 12px 28px -24px rgba(16,63,57,.8);cursor:pointer;text-align:left;font-family:inherit;color:' + INK + ';transition:transform .15s ease;}'
+    + '.w167pc:hover{transform:translateY(-2px);}'
+    + '.w167pc .av{flex:0 0 52px;height:52px;border-radius:50%;background:' + GREEN + ' center/cover;color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border:3px solid ' + CREAM + ';box-shadow:0 0 0 2px ' + GOLD + ';}'
+    + '.w167pc .t{min-width:0;}.w167pc .t b{display:block;font-size:14px;}.w167pc .t span{display:block;font-size:12px;color:' + MUTED + ';line-height:1.35;}'
+    + '.w167pc .t em{display:inline-block;font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + PURPLE + ';margin-bottom:2px;}'
+    + '.w167team{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}'
+    + '.w167team button{display:flex;flex-direction:column;align-items:center;gap:4px;width:74px;background:none;border:0;cursor:pointer;font-family:inherit;color:' + INK + ';font-size:11.5px;}'
+    + '.w167team .av{width:50px;height:50px;border-radius:50%;background:' + TEAL + ' center/cover;color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;border:3px solid ' + CREAM + ';box-shadow:0 6px 14px -8px rgba(0,0,0,.5);}'
+    + '.w167num{position:relative;border-radius:24px;padding:24px 26px;background:' + GREEN + ';color:' + CREAM + ';overflow:hidden;}'
+    + '.w167num .dd1{position:absolute;right:-14px;top:-14px;width:110px;opacity:.5;}'
+    + '.w167num .dd2{position:absolute;left:44%;bottom:-18px;width:80px;opacity:.35;}'
+    + '.w167num .g{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}'
+    + '.w167num .g div b{display:block;font-family:' + D + ';font-size:44px;line-height:1;color:' + GOLD + ';}'
+    + '.w167num .g div span{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:rgba(255,250,242,.9);}'
+    + '.w167num .nt{position:relative;margin:14px 0 0;font-size:11.5px;color:rgba(255,250,242,.65);}'
+    + '.w167dyk{display:flex;gap:16px;align-items:flex-start;border-radius:22px;padding:18px 20px;background:rgba(220,165,39,.14);border:1px solid rgba(220,165,39,.35);}'
+    + '.w167dyk .yr{flex:0 0 auto;font-family:' + D + ';font-size:34px;line-height:1;color:' + PURPLE + ';}'
+    + '.w167dyk .tx{flex:1;min-width:0;}.w167dyk .tx b{display:block;font-size:15px;color:' + GREEN + ';margin-bottom:4px;}.w167dyk .tx p{margin:0;font-size:13.5px;line-height:1.5;color:#3d3c39;}'
+    + '.w167dyk .ac{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}'
+    + '.w167lnk{border:0;background:none;padding:0;color:' + GREEN + ';font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer;font-family:inherit;}'
+    /* the celebration */
+    + '.w167cel{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(16,63,57,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:w167in .25s ease;}'
+    + '@keyframes w167in{from{opacity:0;}to{opacity:1;}}'
+    + '.w167cel canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}'
+    + '.w167cel .cd{position:relative;width:min(440px,calc(100% - 40px));border-radius:28px;background:' + CREAM + ';padding:30px 28px 24px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.7);animation:w167pop .45s cubic-bezier(.2,1.4,.4,1);}'
+    + '@keyframes w167pop{from{transform:scale(.8);opacity:0;}to{transform:none;opacity:1;}}'
+    + '.w167cel .cd .e{width:92px;margin:4px auto 10px;display:block;}'
+    + '.w167cel .cd .fl{position:absolute;top:-26px;right:-18px;width:74px;transform:rotate(14deg);}'
+    + '.w167cel .cd h3{margin:4px 0 6px;font-family:' + D + ';font-size:40px;line-height:1;text-transform:uppercase;color:' + GREEN + ';}'
+    + '.w167cel .cd p{margin:0 0 16px;font-size:14.5px;line-height:1.5;color:#3d3c39;}'
+    + '.w167cel .cd .bt{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}'
+    /* phones */
+    + '@media (max-width:760px){'
+    + '.w167hero{flex-direction:column;align-items:flex-start;padding:22px 18px;min-height:0;border-radius:20px;}'
+    + '.w167hero:before{background:linear-gradient(180deg,rgba(16,63,57,.62) 0%,rgba(16,63,57,.9) 50%,rgba(16,63,57,.97) 100%);}'
+    + '.w167hero .lg{left:18px;top:18px;height:32px;}.w167hero .dd1{width:46px;right:14px;top:14px;}'
+    + '.w167hero .tx{padding-top:50px;}.w167hero h1{font-size:40px;}'
+    + '.w167hero .rg{position:absolute;right:16px;bottom:16px;width:86px;height:86px;}.w167hero .rg svg{width:86px;height:86px;}.w167hero .rg b{font-size:24px;}.w167hero .rg span{display:none;}'
+    + '.w167hero .cta{padding-right:96px;}'
+    + '.w167road{margin:18px -18px 4px;padding:36px 0 6px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;}'
+    + '.w167road .lane{top:70px;}'
+    + '.w167road .stops{grid-template-columns:repeat(5,120px);padding:0 18px;width:max-content;}'
+    + '.w167road .lane{left:60px;right:auto;width:560px;}'
+    + '.w167stop{scroll-snap-align:center;}.w167stop .pic{width:70px;height:70px;}'
+    + '.w167learn{grid-template-columns:1fr;}.w167ban h2{font-size:34px;}.w167ban{min-height:150px;padding:18px;}'
+    + '.w167feat{flex-wrap:wrap;}.w167feat .w167btn{width:100%;justify-content:center;}'
+    + '.w167num .g div b{font-size:34px;}'
+    + '}'
+    + '@media (prefers-reduced-motion:reduce){.w167stop.cur .e{animation:none;}.w167cel,.w167cel .cd{animation:none;}.w167bar > i{transition:none;}}';
+  if (!document.getElementById('wa167css')) { var st = document.createElement('style'); st.id = 'wa167css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- what the journey reads: its settings, the people around the person, and a moment from our story ---------- */
+  function loadCfg() {
+    if (S.cfgAt && Date.now() - S.cfgAt < 600000) return Promise.resolve(S.cfg);
+    S.cfgAt = Date.now();
+    return Promise.resolve(db.from('app_config').select('value').eq('key', 'onboarding_journey')).then(function (r) {
+      var v = r && r.data && r.data[0] && r.data[0].value;
+      if (v) { try { S.cfg = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { /* the fallback stays */ } }
+      return S.cfg;
+    }).catch(function () { return S.cfg; });
+  }
+  function loadPeople() {
+    if (S.pplAt && Date.now() - S.pplAt < 300000) return Promise.resolve(S.ppl);
+    S.pplAt = Date.now();
+    return Promise.all([
+      db.from('team_members').select('id,name,email,department,role,avatar_url').eq('active', true),
+      db.from('org_positions').select('id,member_id,title,department,reports_to')
+    ]).then(function (r) {
+      S.ppl = { members: (r[0] && r[0].data) || [], seats: (r[1] && r[1].data) || [] };
+      return S.ppl;
+    }).catch(function () { return S.ppl; });
+  }
+  function loadStory() {
+    if (S.story) return Promise.resolve(S.story);
+    return Promise.resolve(db.from('wa_history').select('id,date_start,title,summary,highlight,visibility,status').eq('highlight', true)).then(function (r) {
+      var rows = ((r && r.data) || []).filter(function (x) { return x && x.title && x.summary && x.status !== 'hidden' && (!x.visibility || x.visibility === 'everyone'); });
+      rows.sort(function (a, b) { return String(a.date_start).localeCompare(String(b.date_start)); });
+      S.story = rows; S.storyI = rows.length ? Math.floor(Math.random() * rows.length) : 0;
+      return rows;
+    }).catch(function () { S.story = []; return S.story; });
+  }
+
+  /* the person's own plan: the one the Academy's sheet shows */
+  function myName() {
+    try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; if (m && m.name) return m.name; } catch (e) { /* fine */ }
+    try { var full = String((USER && USER.name) || ''), em = String((USER && USER.email) || ''); return full ? full.split(' ')[0] : em.split('@')[0]; } catch (e) { return ''; }
+  }
+  function planOnb() {
+    try {
+      if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
+      var n = myName().toLowerCase();
+      return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
+    } catch (e) { return null; }
+  }
+  function seatOf(P, memberId) { return (P.seats || []).filter(function (s) { return String(s.member_id) === String(memberId); }).sort(function (a, b) { return a.id - b.id; })[0] || null; }
+  function memberOf(P, id) { return (P.members || []).filter(function (m) { return String(m.id) === String(id); })[0] || null; }
+  /* the people around them: their lead (the org chart), their team, our co-executive directors */
+  function peopleFor(o) {
+    var P = S.ppl; if (!P || !o) return null;
+    var me = memberOf(P, o.member_id) || (P.members || []).filter(function (m) { return String(m.name).toLowerCase() === String(o.person_name || '').toLowerCase(); })[0] || null;
+    var seat = me ? seatOf(P, me.id) : null, lead = null, leadSeat = null;
+    if (seat && seat.reports_to) { leadSeat = (P.seats || []).filter(function (s) { return String(s.id) === String(seat.reports_to); })[0] || null; if (leadSeat && leadSeat.member_id) lead = memberOf(P, leadSeat.member_id); }
+    var dept = (me && me.department) || null;
+    var team = (P.members || []).filter(function (m) { return dept && m.department === dept && (!me || m.id !== me.id) && (!lead || m.id !== lead.id); })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    var eds = (P.seats || []).filter(function (s) { return /co-?ed\b|co-executive/i.test(String(s.title || '')) && s.member_id; }).map(function (s) { var m = memberOf(P, s.member_id); return m ? { m: m, title: s.title } : null; }).filter(Boolean)
+      .filter(function (x) { return (!me || x.m.id !== me.id) && (!lead || x.m.id !== lead.id); });
+    return { me: me, title: seat ? seat.title : null, dept: dept, lead: lead, leadTitle: leadSeat ? leadSeat.title : null, team: team, eds: eds };
+  }
+
+  /* the journey from the plan (wave166's planStates: each week's steps, with what the Academy already finished) */
+  function journeyOf(o) {
+    var W = window.w166; if (!W || typeof W.planStates !== 'function' || !o) return null;
+    var weeks = W.planStates(o) || [], C = cfg(), total = 0, done = 0, next = null, nextWk = null;
+    var byName = {};
+    weeks.forEach(function (wk) {
+      var d = 0, due = null;
+      wk.steps.forEach(function (x) {
+        total++; if (x.done) { done++; d++; }
+        else { if (!next) { next = x; nextWk = wk.name; } if (x.s && x.s.due_date && (!due || String(x.s.due_date) < due)) due = String(x.s.due_date); }
+      });
+      var anyDue = null; wk.steps.forEach(function (x) { if (x.s && x.s.due_date && (!anyDue || String(x.s.due_date) > anyDue)) anyDue = String(x.s.due_date); });
+      var meta = C.weeks[wk.name] || {};
+      var lesson = meta.lesson ? wk.steps.filter(function (x) { return String(x.t.id) === String(meta.lesson); })[0] || null : null;
+      byName[wk.name] = { name: wk.name, steps: wk.steps, done: d, total: wk.steps.length, complete: d >= wk.steps.length, due: due || anyDue, meta: meta, lesson: lesson };
+    });
+    var list = ORDER.filter(function (k) { return byName[k]; }).concat(Object.keys(byName).filter(function (k) { return ORDER.indexOf(k) < 0; })).map(function (k) { return byName[k]; });
+    return { o: o, weeks: list, byName: byName, total: total, done: done, pct: total ? Math.round(100 * done / total) : 0, next: next, nextWk: nextWk, day: dayN(o.started_at), complete: total > 0 && done >= total };
+  }
+
+  /* ---------- the journey's parts ---------- */
+  function avHtml(m, cls) {
+    var url = m && m.avatar_url ? String(m.avatar_url) : '';
+    return '<span class="' + (cls || 'av') + '"' + (url ? ' style="background-image:url(\'' + E(url) + '\')"' : '') + '>' + (url ? '' : E(initials(m && m.name))) + '</span>';
+  }
+  function short(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : s; }
+  function heroHtml(J) {
+    var C = cfg(), h = C.hero || {}, o = J.o, pp = peopleFor(o);
+    var nm = first(o.person_name) || 'friend';
+    var who = pp && pp.title ? E(pp.title) + (pp.dept ? ', ' + E(teamName(pp.dept)) : '') + '. ' : (pp && pp.dept ? E(teamName(pp.dept)) + '. ' : '');
+    var line = J.complete ? who + 'Every step of your plan is done. Welcome to the team, for good.'
+      : who + 'Day ' + J.day + ' of your onboarding. Here is your road for the first 90 days, one stop at a time.';
+    var go = '';
+    if (J.next) {
+      var t = J.next.t, lessonStep = /^wa167w/.test(String(t.id)) && t.training_id;
+      go = lessonStep ? '<button type="button" class="w167btn" data-w166open="t:' + E(t.training_id) + '">Start here: ' + E(short(String(t.name).replace(/^Start here:\s*/i, ''), 40)) + '</button>'
+        : '<button type="button" class="w167btn" data-w167go="next">Continue: ' + E(short(t.name, 40)) + '</button>';
+    } else go = '<button type="button" class="w167btn" data-w166open="a:">Explore the Avenue Academy</button>';
+    var lead = pp && pp.lead ? '<button type="button" class="w167btn ghost" data-w167person="' + E(pp.lead.id) + '">Your lead: ' + E(first(pp.lead.name)) + '</button>' : '';
+    return '<section class="w167hero" style="background-image:url(\'' + E(photoUrl(h.photo)) + '\');background-position:' + bgPos(h) + '">'
+      + '<img class="lg" src="' + BR.logo + '" alt="Welfare Avenue, building pathways in our community">'
+      + '<img class="dd1" src="' + BR.star + '" alt="">'
+      + '<div class="tx"><div class="ey">Your onboarding' + (J.complete ? ' &middot; complete' : ' &middot; day ' + J.day) + '</div>'
+      + '<h1>Welcome, <span>' + E(nm) + '</span></h1>'
+      + '<p>' + line + '</p>'
+      + (h.tag ? '<div class="tag">' + E(h.tag) + '</div>' : '')
+      + '<div class="cta">' + go + lead + '</div></div>'
+      + '<div class="rg" title="' + J.done + ' of ' + J.total + ' steps done">' + ring(J.pct, 132, 12) + '<div class="in"><b>' + J.pct + '%</b><span>' + J.done + ' of ' + J.total + ' steps</span></div></div>'
+      + '</section>';
+  }
+  function curWeek(J) { return J.nextWk || (J.weeks.length ? J.weeks[J.weeks.length - 1].name : null); }
+  function roadHtml(J) {
+    var cur = curWeek(J), n = J.weeks.length, ci = 0;
+    J.weeks.forEach(function (w, i) { if (w.name === cur) ci = i; });
+    var lane = n > 1 ? Math.round(100 * ci / (n - 1)) : 0;
+    return '<nav class="w167road" aria-label="Your onboarding, week by week"><div class="lane"><i style="width:' + lane + '%"></i></div><div class="stops">'
+      + J.weeks.map(function (w) {
+        var m = w.meta || {}, pct = w.total ? Math.round(100 * w.done / w.total) : 0, lbl = LABEL[w.name] || w.name;
+        return '<button type="button" class="w167stop' + (w.complete ? ' done' : '') + (w.name === S.wk ? ' on' : '') + (w.name === cur && !J.complete ? ' cur' : '') + '" data-w167wk="' + E(w.name) + '" aria-pressed="' + (w.name === S.wk ? 'true' : 'false') + '" aria-label="' + E(lbl + ': ' + (m.title || '') + ', ' + w.done + ' of ' + w.total + ' done') + '">'
+          + (w.name === cur && !J.complete ? '<img class="e" src="' + BR.e + '" alt="">' : '')
+          + '<span class="pic" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"></span>'
+          + '<span class="lb">' + E(lbl) + '</span><b>' + E(m.title || lbl) + '</b><span class="n">' + w.done + ' of ' + w.total + '</span>' + BAR(pct) + '</button>';
+      }).join('') + '</div><p class="hint">Choose a stop to see that week. You are here: the E that moves.</p></nav>';
+  }
+  function featHtml(w) {
+    var x = w.lesson; if (!x || !x.t.training_id) return '';
+    var ls = x.ls || {}, done = !!x.done, title = String(x.t.name).replace(/^Start here:\s*/i, ''), num = String(LABEL[w.name] || '').replace(/\D/g, '') || '&#9733;';
+    return '<div class="w167feat' + (done ? ' ok' : '') + '"><div class="ic">' + (done ? '&#10003;' : num) + '</div><div class="tx"><span>' + (done ? 'Done: you passed its knowledge check' : 'Start here') + '</span><b>' + E(title) + '</b>'
+      + '<em>' + (ls.mins ? ls.mins + '-minute lesson with photos' : 'A short lesson with photos') + ' &middot; a knowledge check at the end &middot; it ticks itself</em></div>'
+      + '<button type="button" class="w167btn' + (done ? ' ghost' : '') + '" data-w166open="t:' + E(x.t.training_id) + '">' + (done ? 'Open it again' : 'Start the lesson') + '</button></div>';
+  }
+  function weekHeadHtml(J, w) {
+    if (!w) return '';
+    var m = w.meta || {}, lbl = LABEL[w.name] || w.name, pct = w.total ? Math.round(100 * w.done / w.total) : 0;
+    var k = lbl + (w.complete ? ' &middot; done' : (w.due ? ' &middot; due ' + E(fmtDay(w.due)) : ''));
+    var li = function (s) { return '<li>' + E(s) + '</li>'; };
+    return '<header class="w167ban" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"><img class="dd" src="' + BR.ast + '" alt="">'
+      + '<div><div class="k">' + k + '</div><h2>' + E(m.title || lbl) + '</h2><p>' + w.done + ' of ' + w.total + ' steps done</p><div class="pb">' + BAR(pct) + '</div></div></header>'
+      + ((m.learn && m.learn.length) || m.why ? '<div class="w167learn">' + (m.learn && m.learn.length ? '<div class="ob"><h3>By the end of this week you will</h3><ul>' + m.learn.map(li).join('') + '</ul></div>' : '')
+        + (m.why ? '<div class="wy"><img src="' + BR.heart + '" alt=""><h3>Why it matters</h3><p>' + E(m.why) + '</p></div>' : '') + '</div>' : '')
+      + featHtml(w);
+  }
+  function pplHtml(J) {
+    var pp = peopleFor(J.o);
+    var h = '<h3><img src="' + BR.flowers + '" alt="">Your people</h3>';
+    if (!pp) return h + '<div class="w167ppl"><div class="w167pc" style="cursor:default"><span class="av">&hellip;</span><div class="t"><b>Finding your people</b></div></div></div>';
+    var cards = [];
+    if (pp.lead) cards.push('<button type="button" class="w167pc" data-w167person="' + E(pp.lead.id) + '">' + avHtml(pp.lead) + '<div class="t"><em>Your lead</em><b>' + E(pp.lead.name) + '</b><span>' + E(pp.leadTitle || teamName(pp.lead.department)) + '. Checks in with you at two weeks and around day 30.</span></div></button>');
+    pp.eds.forEach(function (x) { cards.push('<button type="button" class="w167pc" data-w167person="' + E(x.m.id) + '">' + avHtml(x.m) + '<div class="t"><em>Co-executive director</em><b>' + E(x.m.name) + '</b><span>Book 15 minutes with one of them in your first 60 days.</span></div></button>'); });
+    var team = pp.team.slice(0, 12);
+    return h + (cards.length ? '<div class="w167ppl">' + cards.join('') + '</div>' : '')
+      + (team.length ? '<div class="w167team" aria-label="Your team">' + team.map(function (m) { return '<button type="button" data-w167person="' + E(m.id) + '" title="' + E(m.name + (m.role ? ', ' + m.role : '')) + '">' + avHtml(m) + '<span>' + E(first(m.name)) + '</span></button>'; }).join('')
+        + (pp.team.length > team.length ? '<span style="align-self:center;font-size:12px;color:' + MUTED + '">and ' + (pp.team.length - team.length) + ' more</span>' : '') + '</div>'
+        + '<p style="margin:8px 0 0;font-size:12.5px;color:' + MUTED + '">Your ' + E(teamName(pp.dept)) + ' team. Say hello in your team&rsquo;s channel; the org chart shows everyone else.</p>' : '');
+  }
+  function numHtml() {
+    var C = cfg(); if (!C.numbers || !C.numbers.length) return '';
+    return '<h3><img src="' + BR.star + '" alt="">Welfare Avenue in numbers</h3><div class="w167num"><img class="dd1" src="' + BR.blob + '" alt=""><img class="dd2" src="' + BR.arrow + '" alt="">'
+      + '<div class="g">' + C.numbers.map(function (x) { return '<div><b>' + E(x.n) + '</b><span>' + E(x.l) + '</span></div>'; }).join('') + '</div>'
+      + (C.numbers_note ? '<p class="nt">' + E(C.numbers_note) + '</p>' : '') + '</div>';
+  }
+  function dykHtml() {
+    var rows = S.story || []; if (!rows.length) return '';
+    var x = rows[S.storyI % rows.length];
+    return '<h3><img src="' + BR.heart + '" alt="">Did you know?</h3><div class="w167dyk"><div class="yr">' + E(String(x.date_start || '').slice(0, 4)) + '</div><div class="tx"><b>' + E(x.title) + '</b><p>' + E(short(x.summary, 320)) + '</p>'
+      + '<div class="ac"><button type="button" class="w167btn green" data-w167dyk="1">Another moment</button><button type="button" class="w167lnk" data-w167story="1">All of our story</button></div></div></div>';
+  }
+
+  /* ---------- building the journey around wave166's plan, in place, before the page paints ---------- */
+  function part(box, key, html) {
+    var el = box.querySelector('[data-w167p="' + key + '"]'); if (!el) return;
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function paintParts(sh, J) {
+    var box = sh.querySelector('.w167box'); if (!box) return;
+    part(box, 'hero', heroHtml(J));
+    part(box, 'road', roadHtml(J));
+    part(box, 'wh', weekHeadHtml(J, J.byName[S.wk]));
+    part(box, 'sh', (J.byName[S.wk] && J.byName[S.wk].lesson ? 'Then, this week' : 'This week') + '<span style="font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:10px">Tick each step as you go; steps marked Avenue Academy tick themselves.</span>');
+    part(box, 'ppl', pplHtml(J));
+    part(box, 'num', numHtml());
+    part(box, 'dyk', dykHtml());
+  }
+  function weekNameOf(d) { var s = d.querySelector('summary'); if (!s) return ''; var t = s.firstChild; return String(t && t.nodeType === 3 ? t.textContent : s.textContent).trim(); }
+  function applyWeek(sh) {
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap) return;
+    [].forEach.call(wrap.querySelectorAll('details.w37week'), function (d) {
+      var on = weekNameOf(d) === S.wk;
+      if (d.classList.contains('w167on') !== on) d.classList.toggle('w167on', on);
+      if (on && !d.open) d.open = true;
+    });
+  }
+  function build(sh, wrap) {
+    var W = window.w166; if (!W || typeof W.planStates !== 'function') return;
+    try { if (typeof W.decoratePlan === 'function') W.decoratePlan(); } catch (e) { /* fine */ }
+    var o = planOnb(); if (!o) return;
+    var J = journeyOf(o); if (!J || !J.weeks.length) return;
+    var main = wrap.closest('.wrap'); if (!main) return;
+    wrap.setAttribute('data-w167', '1');
+    sh.classList.add('w167');
+    main.classList.add('wide'); main.classList.add('w167j');
+    if (S.onb !== o.id) { S.onb = o.id; S.wk = null; }
+    if (!S.wk || !J.byName[S.wk]) S.wk = curWeek(J);
+    var box = document.createElement('div'); box.className = 'w167box';
+    box.innerHTML = '<div data-w167p="hero"></div><div data-w167p="road"></div>'
+      + '<section class="w167wk"><div class="w167wh" data-w167p="wh"></div><div class="w167steps"><h3 data-w167p="sh"></h3></div></section>'
+      + '<section class="w167sec" data-w167p="ppl"></section><section class="w167sec" data-w167p="num"></section><section class="w167sec" data-w167p="dyk"></section>';
+    main.insertBefore(box, main.firstChild);
+    var steps = box.querySelector('.w167steps'); steps.appendChild(wrap);
+    var help = sh.querySelector('#w166help'); if (help) steps.appendChild(help);
+    paintParts(sh, J);
+    applyWeek(sh);
+    try { if (typeof W.syncHead === 'function') W.syncHead(); } catch (e) { /* fine */ }
+    /* after a tick the Academy draws the sheet again: keep the place */
+    var m = sh.querySelector('.main');
+    if (m && S.restore && Date.now() < S.restore.until && S.restore.onb === o.id) m.scrollTop = S.restore.top;
+    S.restore = null;
+    celebrateCheck(J);
+    Promise.all([loadCfg(), loadPeople(), loadStory()]).then(function () { refresh(); });
+  }
+  function refresh() {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh || !sh.querySelector('.w167box')) return;
+    var o = planOnb(); if (!o) return;
+    var J = journeyOf(o); if (!J) return;
+    if (!J.byName[S.wk]) S.wk = curWeek(J);
+    paintParts(sh, J); applyWeek(sh); celebrateCheck(J);
+  }
+  function sync() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap');
+    if (!wrap) { if (sh.classList.contains('w167')) sh.classList.remove('w167'); return; }
+    if (!wrap.getAttribute('data-w167')) { build(sh, wrap); return; }
+    applyWeek(sh);
+  }
+  function select(wk, scroll) {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh) return;
+    S.wk = wk; refresh();
+    if (scroll) { var sec = sh.querySelector('.w167wk'); if (sec) try { sec.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); } catch (e) { /* fine */ } }
+  }
+  /* Continue: open the week of the next step and show the step (unfolding it when it sits under a bigger step) */
+  function continueNext() {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh) return;
+    var o = planOnb(), J = o ? journeyOf(o) : null; if (!J || !J.next) return;
+    S.wk = J.nextWk; refresh();
+    var tid = String(J.next.t.id), row = sh.querySelector('.onbwrap [data-w166t="' + tid.replace(/"/g, '') + '"]');
+    if (row && row.style.display === 'none' && J.next.t.parent_id) {
+      var tg = sh.querySelector('.onbwrap [data-w57t="' + String(J.next.t.parent_id).replace(/"/g, '') + '"]'); if (tg) tg.click();
+    }
+    if (!row) return;
+    try { row.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' }); } catch (e) { /* fine */ }
+    row.classList.remove('w167flash'); void row.offsetWidth; row.classList.add('w167flash');
+  }
+
+  /* ---------- a week finished, or the whole plan ---------- */
+  function celebrateCheck(J) {
+    var key = String(J.o.id), prev = S.counts[key], now = { __all: J.complete };
+    J.weeks.forEach(function (w) { now[w.name] = w.complete; });
+    S.counts[key] = now;
+    if (!prev) return;
+    if (J.complete && !prev.__all) { celebrate('all', J); return; }
+    var w = J.weeks.filter(function (x) { return x.complete && prev[x.name] === false; })[0];
+    if (w) celebrate(w.name, J);
+  }
+  function celebrate(kind, J) {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh || sh.querySelector('.w167cel')) return;
+    var mark = 'w167cel:' + J.o.id + ':' + kind; if (lsGet(mark)) return; lsSet(mark, '1');
+    var idx = -1; J.weeks.forEach(function (w, i) { if (w.name === kind) idx = i; });
+    var w = J.byName[kind], nxt = idx >= 0 ? J.weeks.slice(idx + 1).filter(function (x) { return !x.complete; })[0] : null;
+    var title = kind === 'all' ? 'You are onboarded!' : (LABEL[kind] || kind) + ' done!';
+    var text = kind === 'all' ? 'Every step of your plan is done. Thank you for the care you put into it; your lead and HR can see it too.'
+      : 'Every step of ' + ((w && w.meta && w.meta.title) || LABEL[kind] || kind) + ' is done.' + (nxt ? ' Next stop: ' + ((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '.' : '');
+    var el = document.createElement('div'); el.className = 'w167cel'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', title);
+    el.innerHTML = '<canvas></canvas><div class="cd"><img class="fl" src="' + BR.flowers + '" alt=""><img class="e" src="' + BR.e + '" alt=""><h3>' + E(title) + '</h3><p>' + E(text) + '</p><div class="bt">'
+      + (nxt ? '<button type="button" class="w167btn" data-w167wk="' + E(nxt.name) + '" data-w167celx="1">Next stop: ' + E((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '</button>' : '')
+      + '<button type="button" class="w167btn green" data-w167celx="1">' + (nxt ? 'Stay here' : 'Keep going') + '</button></div></div>';
+    sh.appendChild(el);
+    confetti(el.querySelector('canvas'));
+  }
+  function confetti(cv) {
+    if (!cv || reduced()) return;
+    var ctx = cv.getContext && cv.getContext('2d'); if (!ctx) return;
+    var W0 = cv.width = cv.offsetWidth * (window.devicePixelRatio || 1), H0 = cv.height = cv.offsetHeight * (window.devicePixelRatio || 1);
+    var cols = [GOLD, PURPLE, CREAM, TEAL, '#B3A8F5'], ps = [];
+    for (var i = 0; i < 140; i++) ps.push({ x: W0 / 2 + (Math.random() - 0.5) * W0 * 0.3, y: H0 * 0.42, vx: (Math.random() - 0.5) * W0 * 0.018, vy: -Math.random() * H0 * 0.022 - H0 * 0.006, r: 4 + Math.random() * 7, c: cols[i % cols.length], a: Math.random() * 6, va: (Math.random() - 0.5) * 0.3, round: Math.random() < 0.35 });
+    var t0 = Date.now();
+    (function tick() {
+      var t = Date.now() - t0; if (t > 3200 || !cv.isConnected) { try { ctx.clearRect(0, 0, W0, H0); } catch (e) { /* fine */ } return; }
+      ctx.clearRect(0, 0, W0, H0);
+      ps.forEach(function (p) {
+        p.vy += H0 * 0.0006; p.x += p.vx; p.y += p.vy; p.a += p.va;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - t / 3200); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c;
+        if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.r * 0.6, 0, 6.283); ctx.fill(); } else ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2);
+        ctx.restore();
+      });
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null; if (!t) return;
+    var b;
+    if ((b = t.closest('[data-w167celx]'))) {
+      e.preventDefault(); e.stopPropagation();
+      var cel = b.closest('.w167cel'); var wk = b.getAttribute('data-w167wk');
+      if (cel) cel.remove();
+      if (wk) select(wk, true);
+      return;
+    }
+    if (t.closest('.w167cel') && !t.closest('.cd')) { e.preventDefault(); e.stopPropagation(); t.closest('.w167cel').remove(); return; }
+    if ((b = t.closest('[data-w167wk]'))) { e.preventDefault(); e.stopPropagation(); select(b.getAttribute('data-w167wk'), true); return; }
+    if ((b = t.closest('[data-w167go]'))) { e.preventDefault(); e.stopPropagation(); continueNext(); return; }
+    if ((b = t.closest('[data-w167person]'))) { e.preventDefault(); e.stopPropagation(); location.hash = '#person/' + b.getAttribute('data-w167person'); return; }
+    if ((b = t.closest('[data-w167dyk]'))) { e.preventDefault(); e.stopPropagation(); S.storyI = (S.storyI + 1) % Math.max(1, (S.story || []).length); refresh(); return; }
+    if ((b = t.closest('[data-w167story]'))) { e.preventDefault(); e.stopPropagation(); location.hash = '#ourstory'; return; }
+  }, true);
+  /* Escape closes a celebration first (the Academy closes the sheet on Escape) */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var cel = document.querySelector('#w122sheet .w167cel'); if (!cel) return;
+    e.preventDefault(); e.stopPropagation(); cel.remove();
+  }, true);
+  /* a tick in the plan: the Academy draws the sheet again after it; remember where the person was */
+  document.addEventListener('change', function (e) {
+    var c = e.target; if (!c || !c.getAttribute || !c.getAttribute('data-w37chk')) return;
+    var sh = c.closest && c.closest('#w122sheet .sh.w167'); if (!sh) return;
+    var m = sh.querySelector('.main'); S.restore = { top: m ? m.scrollTop : 0, until: Date.now() + 5000, onb: S.onb };
+  }, true);
+  /* wave166 draws the plan again in place after the Academy ticked steps: the journey follows */
+  document.addEventListener('w166replan', function () { try { refresh(); } catch (e) { /* fine */ } });
+  function watchSheet() {
+    var el = document.getElementById('w122sheet'); if (!el) return false;
+    if (el.__w167) return true;
+    el.__w167 = true;
+    try { new MutationObserver(function () { try { sync(); } catch (e) { /* fine */ } }).observe(el, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+    sync();
+    return true;
+  }
+  if (!watchSheet()) {
+    try { var mo = new MutationObserver(function () { if (watchSheet()) mo.disconnect(); }); mo.observe(document.body, { childList: true }); } catch (e) { /* fine */ }
+  }
+  loadCfg();
+
+  /* ---------- test hook ---------- */
+  window.w167 = { state: function () { return S; }, sync: sync, refresh: refresh, select: select, journeyOf: journeyOf, planOnb: planOnb, celebrate: celebrate, cfg: cfg, peopleFor: peopleFor, continueNext: continueNext };
+})();

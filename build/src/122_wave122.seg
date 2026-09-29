@@ -581,6 +581,12 @@
     + '#w122sheet .w150fig .im{height:130px;display:flex;align-items:center;justify-content:center;padding:18px;}'
     + '#w122sheet .w150fig .im img{max-width:100%;max-height:100%;object-fit:contain;display:block;}'
     + '#w122sheet .w150fig figcaption{padding:10px 14px 14px;font-size:13px;line-height:1.45;color:#4a4945;}'
+    /* wave167: photos in lessons (the Photo library), full width or two side by side */
+    + '#w122sheet figure.w167ph{margin:18px 0;border-radius:20px;overflow:hidden;box-shadow:' + SH1 + ';background:' + GREEN + ';position:relative;}'
+    + '#w122sheet figure.w167ph img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;}'
+    + '#w122sheet figure.w167ph figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 16px 12px;background:linear-gradient(transparent,rgba(16,63,57,.88));color:#FFFAF2;font-size:12.5px;font-weight:600;letter-spacing:.2px;}'
+    + '#w122sheet .w167phs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0;}#w122sheet .w167phs figure.w167ph{margin:0;}#w122sheet .w167phs figure.w167ph img{aspect-ratio:4/3;}'
+    + '@media (max-width:600px){#w122sheet .w167phs{grid-template-columns:1fr;}}'
     + '#w122sheet .w150fig figcaption b.t{display:block;font-size:14.5px;color:' + INK + ';margin:0 0 2px;}'
     + '#w122sheet .w150ty{display:flex;flex-direction:column;gap:10px;margin:16px 0;}'
     + '#w122sheet .w150ty .ty{background:#FFFAF2;border-radius:18px;padding:16px 18px;box-shadow:' + SH1 + ';}'
@@ -1559,8 +1565,16 @@
         var fam = FONTS[x.f] || 'inherit';
         return '<div class="ty"><div class="sm' + (x.body ? ' body' : '') + '" style="font-family:' + fam + (x.upper ? ';text-transform:uppercase;font-weight:600' : '') + '">' + E(x.sample || x.f) + '</div><b>' + E(x.f) + '</b><span>' + E(x.role || '') + '</span></div>';
       }).join('') + '</div>';
+      /* wave167: photos from the Photo library (the Hub's own storage only), with where to hold the crop (fx, fy) and a caption */
+      case 'photo': return phHtml(b);
+      case 'photos': return '<div class="w167phs">' + (b.items || []).map(phHtml).join('') + '</div>';
       default: return b.text ? '<p>' + md(b.text) + '</p>' : '';
     }
+  }
+  function phHtml(x) {
+    if (!x || !OWN_IMG.test(String(x.src || ''))) return '';
+    var fx = Math.round(100 * (x.fx == null ? 0.5 : Number(x.fx))), fy = Math.round(100 * (x.fy == null ? 0.5 : Number(x.fy)));
+    return '<figure class="w167ph"><img src="' + E(x.src) + '" alt="' + E(x.alt || x.cap || '') + '" loading="lazy" style="object-position:' + fx + '% ' + fy + '%">' + (x.cap ? '<figcaption>' + E(x.cap) + '</figcaption>' : '') + '</figure>';
   }
   function linkCard(x) { return '<a class="lnk2" href="' + E(x.url) + '" target="_blank" rel="noopener"><span class="i">' + ic('doc') + '</span><span><b>' + E(x.t) + '</b><span>' + E(x.d || hostOf(x.url)) + '</span></span><span class="ar">' + ic('ext') + '</span></a>'; }
 

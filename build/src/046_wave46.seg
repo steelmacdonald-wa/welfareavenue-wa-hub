@@ -111,10 +111,11 @@
       'We are excited you have accepted the [job title] within our organization. You will be starting [start date], and we cannot wait to have you on board. To get started, please take the following steps:\n\n' +
       '1. Confirm your availability for two meetings: a 1-on-1 introductory meeting with the manager you will report to, [manager name and position], and your in-person group onboarding session with [manager name] at [date]. This step is crucial.\n' +
       '2. Activate your Welfare Avenue Google account. Watch the setup video: https://www.loom.com/share/522090b198054eb4aab13e0365efadf6\n' +
-      '   Email: [new WA email]\n   Password (change it after your first sign in): [password]\n' +
+      '   Email: [new WA email]\n   Your temporary password comes to you separately; you will be asked to change it when you first sign in.\n' +
       '3. Join the Slack workspace using the invitation sent to your new Welfare Avenue Gmail.\n' +
-      '4. Sign the contract, sent via DocuSign to your personal email.\n' +
-      '5. Review your job description and prepare questions to ask your director.\n\n' +
+      '4. Open the Hub (https://wa-exec-dashboard.netlify.app) and sign in with your Welfare Avenue Google account: your onboarding plan is in the Avenue Academy.\n' +
+      '5. Sign the contract, sent via DocuSign to your personal email.\n' +
+      '6. Review your job description and prepare questions to ask your director.\n\n' +
       'If you run into any technical issues or have any questions, do not hesitate to reach out. We are here to make your onboarding experience smooth and welcoming.\n\n' +
       'Looking forward to seeing all the great work you will do with us!\n\n[your signature]';
   }
@@ -138,20 +139,24 @@
       + '<a class="btn ghost mini" style="text-decoration:none" href="mailto:?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body) + '">Open in your mail app</a></div></details>'
       + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">2. Set up their accounts</summary>'
       + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
-      + '<li>Create their Welfare Avenue Gmail and send the password</li>'
+      + '<li>Create their Welfare Avenue Gmail and share the first password with them one to one</li>'
       + '<li>Send the Slack invitation to their WA Gmail</li>'
       + '<li>Create their onboarding channel: #onboarding-' + esc(first.toLowerCase()) + '</li>'
-      + '<li>Post the channel message below, then assign week 1</li>'
-      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva and Keela invites, drives, weekly meeting)</li>'
+      + '<li>Post the channel message below (their plan is already in the Hub, in the Avenue Academy)</li>'
+      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva invites, drives, weekly meeting, and a first look at the Hub and their plan in the Avenue Academy)</li>'
       + '</ul></details>'
       + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">3. Onboarding channel message</summary>'
       + '<textarea class="w46kittxt" id="w46sm">' + esc(wa46SlackMsg(first)) + '</textarea>'
       + '<div style="margin:6px 0"><button class="btn ghost mini" data-w46copy="w46sm">Copy the message</button></div></details>'
-      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">4. Manager checklist</summary>'
+      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">4. Their lead\'s moments</summary>'
+      + '<p class="m-sub" style="margin:4px 0">Their lead (who they report to in the org chart) sees them on Home in the Hub from today: their progress, what is late, their help requests, and these moments with their dates, ticked there.</p>'
       + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
-      + '<li>Assign the onboardee tasks in a meeting</li>'
-      + '<li>Review quizzes and share correct answers</li>'
-      + '<li>Perform the 30-day eval</li>'
+      + '<li>Introduce them at the team\'s meeting (first week)</li>'
+      + '<li>Give them their first tasks in a meeting (first week)</li>'
+      + '<li>Check in at two weeks</li>'
+      + '<li>Review their quizzes and share the correct answers (around day 30)</li>'
+      + '<li>The 30-day evaluation, with HR</li>'
+      + '<li>Probation and evaluation complete (four months)</li>'
       + '</ul></details>'
       + '<div class="m-actions"><button class="btn" id="w46kc">Done</button></div>');
     var c = document.getElementById('w46kc');

@@ -49,7 +49,7 @@ var WA36_LOADED = false;
     sec.id = 'training';
     sec.className = 'panel';
     sec.innerHTML = '<div class="card"><h2>Training</h2>'
-      + '<p class="read">Your Loom trainings and ClickUp training paths in one catalog. Assign a training to someone and mark it done; each person\'s progress shows on their profile.</p>'
+      + '<p class="read">Your Loom trainings and the Learning Avenues in one catalog. Assign a training to someone and mark it done; each person\'s progress shows on their profile.</p>'
       + '<div id="w36body">Loading the catalog...</div></div>';
     main.appendChild(sec);
   }

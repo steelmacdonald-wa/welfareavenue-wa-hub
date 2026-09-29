@@ -10660,7 +10660,7 @@ var WA36_LOADED = false;
     sec.id = 'training';
     sec.className = 'panel';
     sec.innerHTML = '<div class="card"><h2>Training</h2>'
-      + '<p class="read">Your Loom trainings and ClickUp training paths in one catalog. Assign a training to someone and mark it done; each person\'s progress shows on their profile.</p>'
+      + '<p class="read">Your Loom trainings and the Learning Avenues in one catalog. Assign a training to someone and mark it done; each person\'s progress shows on their profile.</p>'
       + '<div id="w36body">Loading the catalog...</div></div>';
     main.appendChild(sec);
   }
@@ -11565,12 +11565,12 @@ function wa39HelpModal(onbId) {
   var m = wa37StepsFor(onbId);
   var undone = WA37.tmpl.filter(function (t) { return m[t.id] && !m[t.id].done; });
   openModal('<h3>Ask for help</h3>'
-    + '<p class="m-sub">This posts to the #onboarding-updates channel in Slack so HR and your manager see it right away.</p>'
+    + '<p class="m-sub">HR and your lead see it in the Hub right away (the onboarding board, and your lead\'s Home) and reach out.</p>'
     + '<label>Which step are you stuck on?</label><select id="w39hs">'
     + undone.map(function (t) { return '<option value="' + esc(t.name) + '">' + esc(t.section + ': ' + t.name) + '</option>'; }).join('')
     + '</select>'
     + '<label>What is the problem? (optional)</label><textarea id="w39hn" rows="3" placeholder="What you tried, what happened"></textarea>'
-    + '<div class="m-actions"><button class="btn" id="w39hgo">Send it to Slack</button> <button class="btn ghost" id="w39hc">Cancel</button></div>');
+    + '<div class="m-actions"><button class="btn" id="w39hgo">Send it</button> <button class="btn ghost" id="w39hc">Cancel</button></div>');   /* wave166: the Hub, not Slack (it never reached Slack) */
   document.getElementById('w39hc').addEventListener('click', function () { closeModal(); });
   document.getElementById('w39hgo').addEventListener('click', async function () {
     var me = (typeof wa28Me === 'function') ? wa28Me() : null;
@@ -11584,7 +11584,7 @@ function wa39HelpModal(onbId) {
     });
     if (r.error) { btn.disabled = false; toast('Could not send it'); return; }
     closeModal();
-    toast('Sent. HR and your manager will see it in Slack.');
+    toast('Sent. HR and your lead will see it in the Hub.');
   });
 }
 
@@ -13088,10 +13088,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       'We are excited you have accepted the [job title] within our organization. You will be starting [start date], and we cannot wait to have you on board. To get started, please take the following steps:\n\n' +
       '1. Confirm your availability for two meetings: a 1-on-1 introductory meeting with the manager you will report to, [manager name and position], and your in-person group onboarding session with [manager name] at [date]. This step is crucial.\n' +
       '2. Activate your Welfare Avenue Google account. Watch the setup video: https://www.loom.com/share/522090b198054eb4aab13e0365efadf6\n' +
-      '   Email: [new WA email]\n   Password (change it after your first sign in): [password]\n' +
+      '   Email: [new WA email]\n   Your temporary password comes to you separately; you will be asked to change it when you first sign in.\n' +
       '3. Join the Slack workspace using the invitation sent to your new Welfare Avenue Gmail.\n' +
-      '4. Sign the contract, sent via DocuSign to your personal email.\n' +
-      '5. Review your job description and prepare questions to ask your director.\n\n' +
+      '4. Open the Hub (https://wa-exec-dashboard.netlify.app) and sign in with your Welfare Avenue Google account: your onboarding plan is in the Avenue Academy.\n' +
+      '5. Sign the contract, sent via DocuSign to your personal email.\n' +
+      '6. Review your job description and prepare questions to ask your director.\n\n' +
       'If you run into any technical issues or have any questions, do not hesitate to reach out. We are here to make your onboarding experience smooth and welcoming.\n\n' +
       'Looking forward to seeing all the great work you will do with us!\n\n[your signature]';
   }
@@ -13115,20 +13116,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<a class="btn ghost mini" style="text-decoration:none" href="mailto:?subject=' + encodeURIComponent(subj) + '&body=' + encodeURIComponent(body) + '">Open in your mail app</a></div></details>'
       + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">2. Set up their accounts</summary>'
       + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
-      + '<li>Create their Welfare Avenue Gmail and send the password</li>'
+      + '<li>Create their Welfare Avenue Gmail and share the first password with them one to one</li>'
       + '<li>Send the Slack invitation to their WA Gmail</li>'
       + '<li>Create their onboarding channel: #onboarding-' + esc(first.toLowerCase()) + '</li>'
-      + '<li>Post the channel message below, then assign week 1</li>'
-      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva and Keela invites, drives, weekly meeting)</li>'
+      + '<li>Post the channel message below (their plan is already in the Hub, in the Avenue Academy)</li>'
+      + '<li>On the onboarding call: follow the call checklist in the <a href="' + SOP_DOC + '" target="_blank" rel="noopener" style="color:#103F39">HR SOP doc</a> (Loom recording, bookmarks, Slack groups, Loom and Canva invites, drives, weekly meeting, and a first look at the Hub and their plan in the Avenue Academy)</li>'
       + '</ul></details>'
       + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">3. Onboarding channel message</summary>'
       + '<textarea class="w46kittxt" id="w46sm">' + esc(wa46SlackMsg(first)) + '</textarea>'
       + '<div style="margin:6px 0"><button class="btn ghost mini" data-w46copy="w46sm">Copy the message</button></div></details>'
-      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">4. Manager checklist</summary>'
+      + '<details><summary style="font-weight:700;font-size:13px;cursor:pointer">4. Their lead\'s moments</summary>'
+      + '<p class="m-sub" style="margin:4px 0">Their lead (who they report to in the org chart) sees them on Home in the Hub from today: their progress, what is late, their help requests, and these moments with their dates, ticked there.</p>'
       + '<ul style="font-size:12.5px;line-height:1.7;margin:6px 0 4px 18px;padding:0">'
-      + '<li>Assign the onboardee tasks in a meeting</li>'
-      + '<li>Review quizzes and share correct answers</li>'
-      + '<li>Perform the 30-day eval</li>'
+      + '<li>Introduce them at the team\'s meeting (first week)</li>'
+      + '<li>Give them their first tasks in a meeting (first week)</li>'
+      + '<li>Check in at two weeks</li>'
+      + '<li>Review their quizzes and share the correct answers (around day 30)</li>'
+      + '<li>The 30-day evaluation, with HR</li>'
+      + '<li>Probation and evaluation complete (four months)</li>'
       + '</ul></details>'
       + '<div class="m-actions"><button class="btn" id="w46kc">Done</button></div>');
     var c = document.getElementById('w46kc');
@@ -26250,17 +26255,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:0 0 6px"><b>To get started, please complete these steps:</b></p>'
       + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%">'
       + step(1, 'Activate your Welfare Avenue Google account',
-          a('https://www.loom.com/share/welfare-avenue-google-setup', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
-          + 'Email: <b>' + esc(v.email || '[first.last@welfareavenue.com]') + '</b><br>Temporary password (change after first login): <b>Welfare Avenue</b>')
+          a('https://www.loom.com/share/522090b198054eb4aab13e0365efadf6', 'Watch the setup video') + ' (or Google&#39;s ' + a('https://support.google.com/a/users/answer/9388045', 'first-time sign-in FAQ') + ').<br>'
+          + 'Email: <b>' + esc(v.email || '[first.last@welfareavenue.com]') + '</b><br>Your temporary password comes to you separately; you will change it when you first sign in.')   /* wave166: the real setup video (public on Loom), no password in the email */
       + step(2, 'Accept your platform invitations',
           'Each invite arrives in your new <b>' + esc(v.email || 'Welfare Avenue') + '</b> inbox: '
           + a('https://slack.com/help/articles/212675257-Join-a-Slack-workspace', 'Slack') + ', '
-          + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ', '
-          + a('https://www.canva.com/help/join-team/', 'Canva') + ', '
-          + a('https://support.keela.co/hc/en-us/articles/360042989711-Adding-and-Editing-Users', 'Keela') + ' and '
-          + a('https://help.clickup.com/hc/en-us/articles/6303456942231-Join-a-Workspace', 'ClickUp') + '. Each link shows how to join when invited.')
-      + step(3, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
-      + step(4, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
+          + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ' and '
+          + a('https://www.canva.com/help/join-team/', 'Canva') + '. Each link shows how to join when invited.')   /* wave166: no Keela or ClickUp */
+      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://wa-exec-dashboard.netlify.app', 'wa-exec-dashboard.netlify.app') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
+      + step(4, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
+      + step(5, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
       + '</table>'
       + '<p style="font-family:Arial,sans-serif;font-size:13.5px;line-height:1.65;color:#4a5551;margin:14px 0 0">If you run into any technical issues or have questions, please reach out; we are here to make your onboarding smooth and welcoming.</p>'
       + '<p style="font-family:Arial,sans-serif;font-size:14px;color:#1F201E;margin:16px 0 0">Looking forward to seeing all the great work you will do with us!</p>'
@@ -38813,6 +38817,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w122sheet .w150fig .im{height:130px;display:flex;align-items:center;justify-content:center;padding:18px;}'
     + '#w122sheet .w150fig .im img{max-width:100%;max-height:100%;object-fit:contain;display:block;}'
     + '#w122sheet .w150fig figcaption{padding:10px 14px 14px;font-size:13px;line-height:1.45;color:#4a4945;}'
+    /* wave167: photos in lessons (the Photo library), full width or two side by side */
+    + '#w122sheet figure.w167ph{margin:18px 0;border-radius:20px;overflow:hidden;box-shadow:' + SH1 + ';background:' + GREEN + ';position:relative;}'
+    + '#w122sheet figure.w167ph img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;}'
+    + '#w122sheet figure.w167ph figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 16px 12px;background:linear-gradient(transparent,rgba(16,63,57,.88));color:#FFFAF2;font-size:12.5px;font-weight:600;letter-spacing:.2px;}'
+    + '#w122sheet .w167phs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0;}#w122sheet .w167phs figure.w167ph{margin:0;}#w122sheet .w167phs figure.w167ph img{aspect-ratio:4/3;}'
+    + '@media (max-width:600px){#w122sheet .w167phs{grid-template-columns:1fr;}}'
     + '#w122sheet .w150fig figcaption b.t{display:block;font-size:14.5px;color:' + INK + ';margin:0 0 2px;}'
     + '#w122sheet .w150ty{display:flex;flex-direction:column;gap:10px;margin:16px 0;}'
     + '#w122sheet .w150ty .ty{background:#FFFAF2;border-radius:18px;padding:16px 18px;box-shadow:' + SH1 + ';}'
@@ -39791,8 +39801,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         var fam = FONTS[x.f] || 'inherit';
         return '<div class="ty"><div class="sm' + (x.body ? ' body' : '') + '" style="font-family:' + fam + (x.upper ? ';text-transform:uppercase;font-weight:600' : '') + '">' + E(x.sample || x.f) + '</div><b>' + E(x.f) + '</b><span>' + E(x.role || '') + '</span></div>';
       }).join('') + '</div>';
+      /* wave167: photos from the Photo library (the Hub's own storage only), with where to hold the crop (fx, fy) and a caption */
+      case 'photo': return phHtml(b);
+      case 'photos': return '<div class="w167phs">' + (b.items || []).map(phHtml).join('') + '</div>';
       default: return b.text ? '<p>' + md(b.text) + '</p>' : '';
     }
+  }
+  function phHtml(x) {
+    if (!x || !OWN_IMG.test(String(x.src || ''))) return '';
+    var fx = Math.round(100 * (x.fx == null ? 0.5 : Number(x.fx))), fy = Math.round(100 * (x.fy == null ? 0.5 : Number(x.fy)));
+    return '<figure class="w167ph"><img src="' + E(x.src) + '" alt="' + E(x.alt || x.cap || '') + '" loading="lazy" style="object-position:' + fx + '% ' + fy + '%">' + (x.cap ? '<figcaption>' + E(x.cap) + '</figcaption>' : '') + '</figure>';
   }
   function linkCard(x) { return '<a class="lnk2" href="' + E(x.url) + '" target="_blank" rel="noopener"><span class="i">' + ic('doc') + '</span><span><b>' + E(x.t) + '</b><span>' + E(x.d || hostOf(x.url)) + '</span></span><span class="ar">' + ic('ext') + '</span></a>'; }
 
@@ -61086,6 +61104,1107 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   addStep(); setTimeout(addStep, 1500);
 
   window.w162 = { load: load, state: function () { return S; }, paint: paint, html: html };
+})();
+/* =====================================================================
+   WA v166 Onboarding around the Hub and the Avenue Academy (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "please consider embedding Loom videos in the Avenue Academy for trainings and for the onboarding as
+   well (which I believe needs some revision giving the move away from ClickUp, the new Hub). In fact the onboarding could
+   include members doing some of the Avenue Academy modules. Give the onboarding a whole revamp. I also believe that
+   managers or leads that have people onboarding should have something on their home page to show the progress their
+   member is making and where they need to come in to ensure they progress."
+
+   What changed where:
+   - The plan (wa166_onboarding): ClickUp and Keela are out; the Hub and the Avenue Academy are in. A step can be done in
+     the Academy (onboarding_template.training_id: a module; academy_path: an avenue, 'team' or 'any') and ticks itself
+     when the person finishes it there (wa166_onb_sync on training_progress). The week 1 Loom videos are Academy modules
+     in a new avenue, Your first week.
+   - Here, the plan as the member and HR see it (wa37Checklist, replaced again): each Academy step says so, shows how far
+     the person is and opens the module or the avenue; the ClickUp "syncing" note is gone. The plan sheet gets "Stuck on
+     a step? Ask for help" (the help request HR and the lead see).
+   - Here, Loom links in onboarding steps, Academy lessons and readings and the HR checklists get "Watch here": the video
+     plays in place (a Loom embed, loaded only when asked). The Loom card's meeting links are left alone.
+   - Here, the leads' card on Home (#w166lead, onboarding_lead_view): each person the signed-in lead is onboarding, how
+     far they are and what is late, the avenues, their help requests, and "Where you come in": the lead's moments with
+     their dates (introduce them, first tasks, the two-week and 30-day check-ins, the quizzes, probation), ticked here
+     (onboarding_lead_tick). The plan itself opens in place.
+   - Elsewhere: the Home tour (122), the welcome kit and the onboarding email (046, 108: no ClickUp or Keela, the real
+     setup video), the help request's promise (039: the Hub, not Slack), Hub module 7.
+   ===================================================================== */
+(function () {
+  if (window.__wa166) return; window.__wa166 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2';
+  var S = { lead: null, loading: null, at: 0, err: null, busy: {}, open: {} };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function fmtDay(iso) {
+    if (!iso) return '';
+    try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  function ago(iso) {
+    if (!iso) return '';
+    var d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (!(d >= 0)) return '';
+    return d === 0 ? 'today' : (d === 1 ? 'yesterday' : d + ' days ago');
+  }
+  function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function meName() { try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; return (m && m.name) || ''; } catch (e) { return ''; } }
+
+  var CSS = ''
+    /* Loom players in place */
+    + '.w166play{display:inline-flex;align-items:center;gap:5px;margin:0 0 0 8px;padding:2px 10px;border-radius:999px;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ';font-family:inherit;font-weight:700;font-size:11.5px;line-height:1.6;cursor:pointer;vertical-align:1px;}'
+    + '.w166play:hover{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w166vidwrap{position:relative;width:100%;max-width:720px;aspect-ratio:16/9;margin:8px 0 10px;border-radius:10px;overflow:hidden;background:#1F201E;}'
+    + '.w166vidwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}'
+    /* Academy steps in the plan */
+    + '.w166acad{display:inline-flex;align-items:center;gap:6px;margin:4px 0 2px;padding:2px 9px;border-radius:999px;background:rgba(42,140,122,.12);color:' + TEAL + ';font-size:11px;font-weight:700;letter-spacing:.3px;}'
+    + '.w166acad.ok{background:rgba(16,63,57,.1);color:' + GREEN + ';}'
+    + '.w166go{margin-left:8px;border:0;background:none;padding:0;color:' + GREEN + ';font-weight:700;font-size:12px;text-decoration:underline;cursor:pointer;}'
+    + '.w166help{margin:10px 0 0;}'
+    + '.w166hform{display:none;margin-top:10px;gap:8px;max-width:560px;}.w166hform.on{display:grid;}'
+    + '.w166help > button{border:1px solid ' + LINE + ';background:' + CREAM + ';border-radius:999px;padding:5px 12px;font-weight:700;font-size:12.5px;color:' + GREEN + ';cursor:pointer;}'
+    /* the leads\u2019 card on Home */
+    + '#w166lead{margin:12px 0;}'
+    + '#w166lead .w166ppl{display:grid;gap:12px;}'
+    + '#w166lead .w166p{border:1px solid ' + LINE + ';border-radius:12px;background:' + CREAM + ';padding:12px 14px;}'
+    + '#w166lead .w166top{display:flex;gap:12px;align-items:center;}'
+    + '#w166lead .w166av{flex:0 0 38px;height:38px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;}'
+    + '#w166lead .w166who{flex:1;min-width:0;}'
+    + '#w166lead .w166who b{display:block;font-size:14.5px;color:#1F201E;}'
+    + '#w166lead .w166who span{display:block;font-size:12px;color:' + MUTED + ';}'
+    + '#w166lead .w166day{text-align:right;font-weight:800;font-size:15px;color:' + GREEN + ';line-height:1.1;}'
+    + '#w166lead .w166day span{display:block;font-weight:600;font-size:11px;color:' + MUTED + ';}'
+    + '#w166lead .w166bar{height:7px;border-radius:99px;background:#F1EDE2;margin:10px 0 6px;overflow:hidden;}'
+    + '#w166lead .w166bar i{display:block;height:100%;background:' + GREEN + ';border-radius:99px;}'
+    + '#w166lead .w166sum{font-size:12.5px;color:#4a5551;}'
+    + '#w166lead .w166sum .late{color:' + FLAG + ';font-weight:800;}'
+    + '#w166lead .w166sum .ok{color:' + TEAL + ';font-weight:800;}'
+    + '#w166lead .w166wks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;}'
+    + '#w166lead .w166wk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#F4F2EA;color:#4a5551;}'
+    + '#w166lead .w166wk.done{background:rgba(16,63,57,.1);color:' + GREEN + ';}'
+    + '#w166lead .w166wk.late{background:rgba(179,64,47,.1);color:' + FLAG + ';}'
+    + '#w166lead .w166you{margin-top:10px;padding:10px 12px;border-radius:10px;background:#F4F2EA;border:1px solid ' + LINE + ';}'
+    + '#w166lead .w166h{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 6px;}'
+    + '#w166lead .w166ls{display:flex;gap:9px;align-items:flex-start;padding:4px 0;font-size:13px;color:#1F201E;}'
+    + '#w166lead .w166ls input{margin-top:3px;width:15px;height:15px;accent-color:' + GREEN + ';}'
+    + '#w166lead .w166ls .w166due{font-size:11.5px;color:' + MUTED + ';margin-left:6px;white-space:nowrap;}'
+    + '#w166lead .w166ls .w166due.late{color:' + FLAG + ';font-weight:700;}'
+    + '#w166lead .w166ls .w166due.soon{color:#8a6414;font-weight:700;}'
+    + '#w166lead .w166ls.done{color:' + MUTED + ';text-decoration:line-through;}'
+    + '#w166lead .w166ls small{display:block;color:' + MUTED + ';font-size:11.5px;text-decoration:none;}'
+    + '#w166lead .w166ask{margin:6px 0 2px;padding:7px 10px;border-radius:8px;background:rgba(220,165,39,.14);font-size:12.5px;color:#5c4410;}'
+    + '#w166lead .w166ask button,#w166lead .w166act{margin-left:6px;border:1px solid ' + LINE + ';background:' + CREAM + ';border-radius:999px;padding:2px 10px;font-weight:700;font-size:11.5px;color:' + GREEN + ';cursor:pointer;}'
+    + '#w166lead .w166note{font-size:12.5px;color:#4a5551;margin:6px 0 0;}'
+    + '#w166lead .w166av2{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;}'
+    + '#w166lead .w166av2 span{font-size:11px;padding:2px 8px;border-radius:999px;background:#F4F2EA;color:#4a5551;}'
+    + '#w166lead .w166av2 b{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:' + TEAL + ';align-self:center;margin-right:2px;}'
+    + '#w166lead .w166av2 span.ok{background:rgba(16,63,57,.1);color:' + GREEN + ';font-weight:700;}'
+    + '#w166lead details.w166plan{margin-top:8px;}'
+    + '#w166lead details.w166plan summary{cursor:pointer;font-weight:700;font-size:12.5px;color:' + GREEN + ';}'
+    + '#w166lead .w166sec{margin:8px 0 0;}'
+    + '#w166lead .w166sec b{font-size:11px;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w166lead .w166st{font-size:12.5px;padding:2px 0 2px 18px;position:relative;color:#1F201E;}'
+    + '#w166lead .w166st.child{padding-left:32px;}'
+    + '#w166lead .w166st:before{content:"";position:absolute;left:2px;top:7px;width:9px;height:9px;border-radius:50%;border:1.5px solid ' + MUTED + ';}'
+    + '#w166lead .w166st.child:before{left:16px;}'
+    + '#w166lead .w166st.done{color:' + MUTED + ';}'
+    + '#w166lead .w166st.done:before{background:' + GREEN + ';border-color:' + GREEN + ';}'
+    + '#w166lead .w166st.late{color:' + FLAG + ';}'
+    + '#w166lead .w166st em{font-style:normal;font-size:11px;color:' + TEAL + ';margin-left:6px;}'
+    + '@media (max-width:700px){#w166lead .w166top{flex-wrap:wrap;}#w166lead .w166day{text-align:left;}}';
+  if (!document.getElementById('wa166css')) { var st = document.createElement('style'); st.id = 'wa166css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- Loom videos play in place ("Watch here") ----------
+     In onboarding steps, the Academy's lessons and readings, the HR checklists and the leads' card, a Loom link gets a Watch
+     here button; the video opens under the paragraph as a Loom embed (loaded only when asked) and closes again. A link next to
+     a player that already shows the same video (the Academy's video sheet) is left alone, and so are the Loom card's meeting
+     recordings (they are meetings, not trainings). */
+  var LOOM_RE = /loom\.com\/(?:share|embed)\/([0-9a-f]{32})/i;
+  var SCOPES = '#training, #w122sheet, .modal-back, #w166lead, #hrcentre';
+  function loomIdOf(href) { var m = String(href || '').match(LOOM_RE); return m ? m[1].toLowerCase() : ''; }
+  function playerNear(a, id) {
+    var box = a.closest('.wrap, .w37step, .ds, .prose, .modal-back, .sh') || a.parentElement;
+    if (!box) return false;
+    return [].slice.call(box.querySelectorAll('iframe')).some(function (f) { return f.src && f.src.indexOf(id) >= 0 && !f.closest('.w166vidwrap'); });
+  }
+  function upgrade(root) {
+    var n = 0;
+    (root || document).querySelectorAll('a[href*="loom.com/share/"], a[href*="loom.com/embed/"]').forEach(function (a) {
+      if (a.getAttribute('data-w166') || !a.closest(SCOPES) || a.closest('#w162loom') || a.closest('.w166vidwrap') || a.classList.contains('w122lnk')) return;
+      var id = loomIdOf(a.getAttribute('href')); if (!id) return;
+      a.setAttribute('data-w166', '1');
+      if (playerNear(a, id)) return;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'w166play'; b.setAttribute('data-w166loom', id); b.setAttribute('aria-expanded', 'false');
+      b.innerHTML = '&#9654; Watch here';
+      a.insertAdjacentElement('afterend', b); n++;
+    });
+    return n;
+  }
+  function hostOf(b) {
+    /* the block the player goes under: the paragraph, list item or step text holding the link */
+    var h = b.closest('p, li, .ds, .w166ask, .w166ls') || b.parentElement;
+    return h;
+  }
+  function toggle(b) {
+    var id = b.getAttribute('data-w166loom'); var host = hostOf(b); if (!host) return;
+    var next = host.nextElementSibling;
+    if (next && next.classList.contains('w166vidwrap') && next.getAttribute('data-id') === id) {
+      next.remove(); b.innerHTML = '&#9654; Watch here'; b.setAttribute('aria-expanded', 'false'); return;
+    }
+    var w = document.createElement('div'); w.className = 'w166vidwrap'; w.setAttribute('data-id', id);
+    w.innerHTML = '<iframe src="https://www.loom.com/embed/' + id + '?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true" title="Loom video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>';
+    host.insertAdjacentElement('afterend', w);
+    b.innerHTML = 'Hide the video'; b.setAttribute('aria-expanded', 'true');
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166loom]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    try { toggle(b); } catch (err) { /* fine */ }
+  }, true);
+  var upT = null;
+  function soon() { clearTimeout(upT); upT = setTimeout(function () { try { afterDom(); } catch (e) { /* fine */ } }, 120); }
+  try { new MutationObserver(function (list) { for (var i = 0; i < list.length; i++) { if (list[i].addedNodes && list[i].addedNodes.length) { soon(); return; } } }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  /* ---------- the plan: Academy steps say so, show how far the person is, and open the module or the avenue ---------- */
+  var REQ = { hub: 'Using the Hub', foundations: 'Welfare Avenue foundations', branding: 'Our brand' };
+  function academy() { try { return (window.w122 && window.w122.A) || null; } catch (e) { return null; } }
+  function myName() {
+    var n = meName(); if (n) return n;
+    try { var full = String((USER && USER.name) || ''), em = String((USER && USER.email) || ''); return full ? full.split(' ')[0] : em.split('@')[0]; } catch (e) { return ''; }
+  }
+  function personOf(onb) {
+    try {
+      var m = null;
+      if (typeof WA28_PEOPLE !== 'undefined' && onb) m = WA28_PEOPLE.filter(function (p) { return String(p.id) === String(onb.member_id) || String(p.name).toLowerCase() === String(onb.person_name || '').toLowerCase(); })[0] || null;
+      return { name: (onb && onb.person_name) || (m && m.name) || '', email: (m && m.email) || '', dept: (m && m.department) || '' };
+    } catch (e) { return { name: (onb && onb.person_name) || '', email: '', dept: '' }; }
+  }
+  /* the person's Academy in one pass (the same rules as wa166_path_state and wa166_training_done: the database ticks the
+     step, this shows it at once): what they finished, and every avenue with how far they are */
+  function ctxFor(who) {
+    var A = academy(); if (!A || !A.loaded) return null;
+    var n = String(who.name || '').toLowerCase(), em = String(who.email || '').toLowerCase(), done = {};
+    (A.prog || []).forEach(function (p) {
+      if (p.status === 'done' && (String(p.person_name || '').toLowerCase() === n || (em && String(p.email || '').toLowerCase() === em))) done[String(p.training_id)] = true;
+    });
+    var byGroup = {};
+    (A.trainings || []).forEach(function (t) {
+      if (t.active === false || t.kind === 'tour' || (t.body && t.body.planned)) return;
+      (byGroup[t.path_group] = byGroup[t.path_group] || []).push(t);
+    });
+    var all = (A.paths || []).filter(function (p) { return p.active !== false; }).map(function (p) {
+      var items = byGroup[p.name] || [];
+      var d = items.filter(function (t) { return done[String(t.id)]; }).length;
+      return { key: p.key, title: p.title || p.name, dept: p.dept || null, required: !!p.required, sort: p.sort == null ? 1e9 : Number(p.sort),
+        done: d, total: items.length, complete: items.length > 0 && d >= items.length, ratio: items.length ? d / items.length : 0 };
+    });
+    return { A: A, who: who, done: done, all: all };
+  }
+  function pick(list) {
+    return list.slice().sort(function (x, y) {
+      return (y.complete - x.complete) || (y.ratio - x.ratio) || (x.sort - y.sort) || String(x.key).localeCompare(String(y.key));
+    })[0] || null;
+  }
+  /* 'team': the team's avenue they are furthest in (any avenue besides the three everyone does when the team has none);
+     'any': an avenue besides the three everyone does and the one that counted for 'team' (one avenue never ticks both) */
+  function pathState(cx, key) {
+    var elig = cx.all.filter(function (p) { return !p.required && ['tours', 'firstweek', 'keela'].indexOf(p.key) < 0; });
+    var team = elig.filter(function (p) { return p.dept && p.dept === cx.who.dept; });
+    var teamPick = pick(team.length ? team : elig);
+    var cand;
+    if (key === 'team') cand = teamPick ? [teamPick] : [];
+    else if (key === 'any') cand = elig.filter(function (p) { return !(teamPick && teamPick.complete && p.key === teamPick.key); });
+    else cand = cx.all.filter(function (p) { return p.key === key; });
+    var best = pick(cand);
+    return best ? { key: best.key, title: best.title, done: best.done, total: best.total, complete: best.complete, teamHas: team.length > 0 }
+      : { key: key, title: null, done: 0, total: 0, complete: false, teamHas: team.length > 0 };
+  }
+  function linkState(cx, t) {
+    if (!cx) return null;
+    if (t.training_id) {
+      var tr = cx.A.byId ? cx.A.byId[String(t.training_id)] : null;
+      return { kind: 'module', id: t.training_id, title: tr ? tr.title : 'the module', mins: tr ? (tr.minutes || null) : null, done: !!cx.done[String(t.training_id)] };
+    }
+    if (t.academy_path) {
+      var s = pathState(cx, t.academy_path);
+      return { kind: 'avenue', key: s.key, title: s.title || REQ[t.academy_path] || 'the avenue', done: s.complete, n: s.done, total: s.total, asked: t.academy_path, teamHas: s.teamHas };
+    }
+    return null;
+  }
+  function chipHtml(t, ls) {
+    if (!t.training_id && !t.academy_path) return '';
+    if (!ls) return '<div><span class="w166acad">Avenue Academy</span></div>';
+    var open = (ls.asked === 'team' || ls.asked === 'any') && !ls.n && !ls.done;   /* nothing started yet: they choose */
+    var what = ls.kind === 'module' ? 'Avenue Academy module' + (ls.mins ? ' &middot; ' + ls.mins + ' min' : '')
+      : (open ? (ls.asked === 'team' && ls.teamHas ? 'Your team&rsquo;s Learning Avenues' : 'Learning Avenues')
+        : (ls.title ? E(ls.title) : 'Learning Avenue') + (ls.total ? ' &middot; ' + ls.n + ' of ' + ls.total : ''));
+    var go = ls.kind === 'module' ? '<button type="button" class="w166go" data-w166open="t:' + E(ls.id) + '">' + (ls.done ? 'Open it again' : 'Open it') + '</button>'
+      : (!open && ls.key && ls.key !== 'team' && ls.key !== 'any' ? '<button type="button" class="w166go" data-w166open="p:' + E(ls.key) + '">' + (ls.done ? 'Open the avenue' : 'Go to the avenue') + '</button>'
+        : '<button type="button" class="w166go" data-w166open="a:">Browse the avenues</button>');
+    return '<div><span class="w166acad' + (ls.done ? ' ok' : '') + '">' + (ls.done ? '&#10003; ' : '') + what + '</span>' + go + '</div>';
+  }
+  /* the plan's steps with what the Academy already finished */
+  function planStates(onb) {
+    var cx = ctxFor(personOf(onb)), m = (typeof wa37StepsFor === 'function') ? wa37StepsFor(onb.id) : {};
+    var weeks = (typeof wa37Weeks === 'function') ? wa37Weeks() : [], out = [];
+    weeks.forEach(function (wk) {
+      var list = wk.steps.filter(function (t) { return m[t.id]; }).map(function (t) {
+        var ls = linkState(cx, t);
+        return { t: t, s: m[t.id], ls: ls, done: !!(m[t.id].done || (ls && ls.done)) };
+      });
+      if (list.length) out.push({ name: wk.name, steps: list });
+    });
+    return out;
+  }
+  var __chk166 = (typeof wa37Checklist === 'function') ? wa37Checklist : null;
+  function checklist(onb, canTick) {
+    var today = todayIso(), html = '', firstOpen = false;
+    planStates(onb).forEach(function (wk) {
+      var d = wk.steps.filter(function (x) { return x.done; }).length;
+      var open = !firstOpen && d < wk.steps.length; if (open) firstOpen = true;
+      html += '<details class="w37week"' + (open ? ' open' : '') + '><summary>' + E(wk.name)
+        + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / wk.steps.length) + '%"></i></span>'
+        + '<span style="font-size:11.5px;color:#797773;font-weight:500">' + d + ' of ' + wk.steps.length + '</span></summary><div class="w37wbody">';
+      wk.steps.forEach(function (x) {
+        var t = x.t, s = x.s, ls = x.ls, done = x.done, acad = !!(t.training_id || t.academy_path);
+        var due = '';
+        if (!done && s.due_date) due = '<span class="w44due' + (String(s.due_date) < today ? ' late' : '') + '">due ' + E(String(s.due_date)) + '</span>';
+        html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (done ? ' done' : '') + '" data-w166t="' + E(t.id) + '">'
+          + '<input type="checkbox" data-w37chk="' + s.id + '"' + (done ? ' checked' : '') + (canTick && !(ls && ls.done) ? '' : ' disabled')
+          + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
+          + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
+          + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
+          + chipHtml(t, ls)
+          + (t.description ? '<div class="ds">' + ((typeof wa37Md === 'function') ? wa37Md(t.description) : E(t.description)) + '</div>' : '')
+          + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + E(s.done_by) + '</div>' : (done && !s.done ? '<div class="ds" style="opacity:.6">done in the Avenue Academy</div>' : ''))
+          + '</div></div>';
+      });
+      html += '</div></details>';
+    });
+    return html;
+  }
+  if (__chk166) wa37Checklist = checklist;
+  /* open a module or an avenue from the plan (the plan sheet closes behind it in the Academy's own routing) */
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166open]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var v = String(b.getAttribute('data-w166open') || ''), k = v.slice(0, 2), id = v.slice(2);
+    try { if (typeof closeModal === 'function' && b.closest('.modal-back')) closeModal(); } catch (x) { /* fine */ }
+    if (k === 't:') location.hash = '#training/t/' + id;
+    else if (k === 'p:') location.hash = '#training/p/' + id;
+    else location.hash = '#training';
+  }, true);
+
+  /* the plan sheet in the Academy: which onboarding it shows (the Academy's own choice: the person's, not cancelled) */
+  function planOnb() {
+    try {
+      if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
+      var n = myName().toLowerCase();
+      return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
+    } catch (e) { return null; }
+  }
+  /* its counts include the steps finished in the Academy that the page has not reloaded yet */
+  function syncHead() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh || !sh.querySelector('.onbwrap')) return;
+    var o = planOnb(); if (!o) return;
+    var total = 0, done = 0;
+    planStates(o).forEach(function (wk) { wk.steps.forEach(function (x) { total++; if (x.done) done++; }); });
+    if (!total) return;
+    var kk = sh.querySelector('.hd .kk span:last-child'); if (kk && / steps$/.test(kk.textContent)) kk.textContent = done + ' of ' + total + ' steps';
+    var bar = sh.querySelector(':scope > .pr > i'); if (bar) bar.style.width = Math.round(100 * done / total) + '%';
+    var st = sh.querySelector('.ft .st'); if (st && !st.querySelector('.ok') && / done$/.test(st.textContent)) st.textContent = done + ' of ' + total + ' done';
+  }
+  /* draw the plan again in place (after the Academy ticked steps), keeping the weeks that were open and the scroll */
+  function replan() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap) return;
+    var o = planOnb(); if (!o) return;
+    var open = [].map.call(wrap.querySelectorAll('details.w37week'), function (d) { return d.open; });
+    var main = sh.querySelector('.main'), top = main ? main.scrollTop : 0;
+    wrap.innerHTML = checklist(o, true);
+    [].forEach.call(wrap.querySelectorAll('details.w37week'), function (d, i) { if (open[i] != null) d.open = open[i]; });
+    if (main) main.scrollTop = top;
+    syncHead();
+    try { document.dispatchEvent(new CustomEvent('w166replan')); } catch (e) { /* fine: wave167's journey listens */ }
+  }
+  /* the plan sheet: say how Academy steps work, and ask for help from here too */
+  function decoratePlan() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap || wrap.getAttribute('data-w166')) return;
+    wrap.setAttribute('data-w166', '1');
+    var intro = sh.querySelector('.main .prose p');
+    if (intro && intro.textContent.indexOf('Avenue Academy') < 0) intro.insertAdjacentHTML('beforeend', ' Steps marked Avenue Academy tick themselves when you finish the module or the avenue here, and the videos play inside the Hub.');
+    var mine = planOnb(); if (mine && mine.status !== 'active') mine = null;
+    if (mine) {
+      /* the Academy's sheet sits above every modal, so the form opens right here */
+      var left = planStates(mine).reduce(function (a, wk) { return a.concat(wk.steps.filter(function (x) { return !x.done; }).map(function (x) { return x.t; })); }, []);
+      wrap.insertAdjacentHTML('afterend', '<div class="w166help" id="w166help"><button type="button" data-w166help="' + E(mine.id) + '">Stuck on a step? Ask for help</button> <span style="font-size:12px;color:#797773">HR and your lead see it in the Hub.</span>'
+        + '<div class="w166hform">'
+        + '<label style="font-size:12.5px;font-weight:700;color:#103F39">Which step<select id="w166hs" style="display:block;width:100%;margin-top:4px">' + left.map(function (t) { return '<option>' + E(t.name) + '</option>'; }).join('') + '<option>Something else</option></select></label>'
+        + '<label style="font-size:12.5px;font-weight:700;color:#103F39">What is getting in the way<textarea id="w166hn" rows="3" style="display:block;width:100%;margin-top:4px" placeholder="A link that does not open, an invite that never came, a step that is unclear..."></textarea></label>'
+        + '<div><button type="button" class="w122btn" data-w166hsend="' + E(mine.id) + '">Send it</button></div></div></div>');
+    }
+    syncHead();
+  }
+  document.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166hsend]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.disabled) return; b.disabled = true;
+    try {
+      var r = await db.from('onboarding_help').insert({ onboarding_id: Number(b.getAttribute('data-w166hsend')), person_name: myName() || 'A team member',
+        step_name: (document.getElementById('w166hs') || {}).value || 'an onboarding step', note: ((document.getElementById('w166hn') || {}).value || '').trim() || null });
+      if (r && r.error) throw r.error;
+      var box = document.getElementById('w166help'); if (box) box.innerHTML = '<span class="w166acad ok">&#10003; Sent</span> <span style="font-size:12.5px;color:#4a5551">HR and your lead see it in the Hub and will reach out.</span>';
+    } catch (err) { b.disabled = false; T('Could not send it'); }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166help]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var f = b.parentElement && b.parentElement.querySelector('.w166hform'); if (f) { f.classList.toggle('on'); if (f.classList.contains('on')) { var ta = f.querySelector('textarea'); if (ta) ta.focus(); } }
+  }, true);
+
+  /* ---------- Home: the people a lead is onboarding, and where the lead comes in (onboarding_lead_view) ---------- */
+  function load(force) {
+    if (S.loading) return S.loading;
+    if (S.lead && !force && Date.now() - S.at < 60000) return Promise.resolve(S.lead);
+    S.loading = (async function () {
+      try {
+        var r = await db.rpc('onboarding_lead_view');
+        if (r && r.error) throw r.error;
+        S.lead = (r && r.data) || { people: [] }; S.err = null;
+      } catch (e) { S.err = String((e && e.message) || e); S.lead = S.lead || { people: [] }; }
+      S.at = Date.now(); S.loading = null;
+      return S.lead;
+    })();
+    return S.loading;
+  }
+  var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function leadStepsHtml(p) {
+    var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    var steps = (p.lead_steps || []).slice();
+    var open = steps.filter(function (s) { return !s.done; }), done = steps.filter(function (s) { return s.done; });
+    var showOpen = open.filter(function (s) { return !s.due || String(s.due) <= soonDay; });
+    var later = open.length - showOpen.length;
+    var h = '';
+    showOpen.forEach(function (s) {
+      var late = s.due && String(s.due) < today;
+      var extra = '';
+      if (/quiz/i.test(s.name || '')) extra = (p.quizzes_done >= 2 ? 'Both quizzes are in: review them with them.' : (p.quizzes_done === 1 ? 'One of the two quizzes is in.' : 'Their quizzes come in week 4.'));
+      h += '<label class="w166ls"><input type="checkbox" data-w166tick="' + E(s.id) + '"' + (S.busy['t' + s.id] ? ' disabled' : '') + ' /><span>' + E(s.name)
+        + (s.due ? '<span class="w166due' + (late ? ' late' : (String(s.due) <= soonDay ? ' soon' : '')) + '">' + (late ? 'was due ' : 'by ') + E(fmtDay(s.due)) + '</span>' : '')
+        + (s.description || extra ? '<small>' + E(extra || s.description) + '</small>' : '') + '</span></label>';
+    });
+    if (later) h += '<div class="w166note">Later: ' + later + ' more of yours, starting ' + E(fmtDay((open.filter(function (s) { return String(s.due || '') > soonDay; })[0] || {}).due)) + '.</div>';
+    if (!showOpen.length && !later && done.length) h += '<div class="w166note">All your moments are done. Thank you for bringing them in.</div>';
+    if (done.length && (showOpen.length || later)) h += '<div class="w166note" style="color:#797773">Done: ' + done.map(function (s) { return E(s.name); }).join(', ') + '.</div>';
+    (p.help || []).forEach(function (q) {
+      h += '<div class="w166ask"><b>Asked for help</b> on ' + E(q.step || 'a step') + (q.note ? ': \u201c' + E(q.note) + '\u201d' : '') + ' <span style="color:#8a6414">(' + E(ago(q.at)) + ')</span>'
+        + '<button type="button" data-w166resolve="' + E(q.id) + '">Dealt with</button></div>';
+    });
+    if (p.late_count) {
+      h += '<div class="w166note"><b style="color:#B3402F">Behind on ' + p.late_count + (p.late_count === 1 ? ' step' : ' steps') + '</b>: '
+        + (p.late || []).slice(0, 3).map(function (l) { return E(l.name) + ' (due ' + E(fmtDay(l.due)) + ')'; }).join(', ')
+        + (p.late_count > 3 ? ', and more' : '') + '. A quick message or ten minutes together usually unblocks it.</div>';
+    }
+    return h;
+  }
+  function planHtml(p) {
+    var today = todayIso(), by = {}, order = [];
+    (p.steps || []).forEach(function (s) { if (!by[s.section]) { by[s.section] = []; order.push(s.section); } by[s.section].push(s); });
+    return order.map(function (sec) {
+      return '<div class="w166sec"><b>' + E(SEC_SHORT[sec] || sec) + '</b>' + by[sec].map(function (s) {
+        var late = !s.done && s.due && String(s.due) < today;
+        return '<div class="w166st' + (s.child ? ' child' : '') + (s.done ? ' done' : '') + (late ? ' late' : '') + '">' + E(s.name) + (s.academy ? '<em>Avenue Academy</em>' : '') + (late ? ' <span style="font-size:11px">(due ' + E(fmtDay(s.due)) + ')</span>' : '') + '</div>';
+      }).join('') + '</div>';
+    }).join('');
+  }
+  function personHtml(p) {
+    var pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    var status = p.late_count ? '<span class="late">' + p.late_count + ' late</span>' : '<span class="ok">on pace</span>';
+    var wks = (p.sections || []).map(function (s) {
+      var cls = s.done >= s.total ? ' done' : (s.due && String(s.due) < todayIso() ? ' late' : '');
+      return '<span class="w166wk' + cls + '">' + E(SEC_SHORT[s.name] || s.name) + ' ' + s.done + '/' + s.total + '</span>';
+    }).join('');
+    var av = (p.academy || []).filter(function (a) { return a && a.total; }).map(function (a) {
+      if (a.asked === 'team' && !a.done && !a.complete) return '<span>Team avenue: not started</span>';
+      return '<span class="' + (a.complete ? 'ok' : '') + '">' + (a.complete ? '&#10003; ' : '') + E(a.title || a.key) + ' ' + a.done + '/' + a.total + '</span>';
+    }).join('');
+    var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
+    return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
+      + '<div class="w166top"><div class="w166av">' + E(initials(p.name)) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
+      + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
+      + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
+      + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')
+      + (p.next ? ' &middot; next: ' + E(p.next.name) : '') + '</div>'
+      + '<div class="w166wks">' + wks + '</div>'
+      + '<div class="w166you"><div class="w166h">Where you come in</div>' + (leadStepsHtml(p) || '<div class="w166note">Nothing for you right now.</div>') + '</div>'
+      + (av ? '<div class="w166av2"><b>Avenue Academy</b>' + av + '</div>' : '')
+      + '<details class="w166plan"' + (S.open[p.onboarding_id] ? ' open' : '') + ' data-w166plan="' + E(p.onboarding_id) + '"><summary>See their plan</summary>' + planHtml(p) + '</details>'
+      + '</div>';
+  }
+  function cardHtml(d) {
+    var ppl = (d && d.people) || [];
+    if (!ppl.length) return '';
+    return '<h3>' + (ppl.length === 1 ? 'Your new person\u2019s onboarding' : 'Your people\u2019s onboarding (' + ppl.length + ')') + '</h3>'
+      + '<p style="margin:0 0 10px;font-size:12.5px;color:#4a5551">How each person you are bringing in is doing, and the moments that are yours. Tick yours as you do them.</p>'
+      + '<div class="w166ppl">' + ppl.map(personHtml).join('') + '</div>';
+  }
+  function paint() {
+    var body = document.getElementById('mpBody');
+    var el = document.getElementById('w166lead');
+    var html = cardHtml(S.lead);
+    if (!body || !html) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w166lead'; el.className = 'mp-sec';
+      var a = document.getElementById('w112wrap') || body.querySelector('.mp-online') || body.querySelector('.mp-chips') || body.querySelector('.mp-head');
+      if (a && a.parentNode === body) body.insertBefore(el, a.nextSibling); else body.insertBefore(el, body.firstChild);
+    }
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function refresh(force) { return load(force).then(function () { paint(); }); }
+  document.addEventListener('toggle', function (e) {
+    var d = e.target; if (!d || !d.getAttribute || !d.getAttribute('data-w166plan')) return;
+    S.open[d.getAttribute('data-w166plan')] = d.open;
+  }, true);
+  document.addEventListener('change', async function (e) {
+    var c = e.target; if (!c || !c.getAttribute || !c.getAttribute('data-w166tick')) return;
+    var id = Number(c.getAttribute('data-w166tick')); S.busy['t' + id] = true; c.disabled = true;
+    try {
+      var r = await db.rpc('onboarding_lead_tick', { p_step: id, p_done: !!c.checked });
+      if (r && r.error) throw r.error;
+      T(c.checked ? 'Done. Thank you.' : 'Marked not done');
+    } catch (err) { c.checked = !c.checked; T('Could not save that: ' + String((err && err.message) || err).slice(0, 80)); }
+    delete S.busy['t' + id];
+    await refresh(true);
+  }, true);
+  document.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166resolve]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation(); b.disabled = true;
+    try {
+      var r = await db.rpc('onboarding_help_resolve', { p_id: Number(b.getAttribute('data-w166resolve')) });
+      if (r && r.error) throw r.error;
+      T('Marked as dealt with');
+    } catch (err) { b.disabled = false; T('Could not save that'); return; }
+    await refresh(true);
+  }, true);
+
+  /* ---------- wiring ---------- */
+  /* one pass after the page changes (the body observer above calls it, debounced): the Watch here buttons, the plan sheet's
+     help and counts, and a finished Academy module (its celebration shows) brings the plan, the Academy and Home up to date */
+  var celSeen = false;
+  function afterDom() {
+    try { upgrade(document); } catch (e) { /* fine */ }
+    try { if (document.querySelector('#w122sheet .onbwrap:not([data-w166])')) decoratePlan(); } catch (e) { /* fine */ }
+    try {
+      var cel = !!document.getElementById('w122cel');
+      if (cel && !celSeen) { celSeen = true; afterComplete(); } else if (!cel) celSeen = false;
+    } catch (e) { /* fine */ }
+  }
+  /* a module or an avenue was finished: the database has ticked the plan's steps that go with it (trg_wa166_tp_onb) */
+  var acQ = null;
+  function afterComplete() {
+    if (acQ) return acQ;
+    acQ = (async function () {
+      try { if (typeof wa37Load === 'function') await wa37Load(true); } catch (e) { /* offline */ }
+      try { var st = window.w122 && window.w122.state ? window.w122.state() : null; if (st && st.R && st.R.mode === 'onb') replan(); } catch (e) { /* fine */ }
+      try { if (window.w122 && typeof window.w122.paint === 'function') window.w122.paint(); } catch (e) { /* fine */ }
+      try { if (document.getElementById('w166lead')) await refresh(true); } catch (e) { /* fine */ }
+      acQ = null;
+    })();
+    return acQ;
+  }
+
+  /* Home: the leads' card after every render of Home (cached for a minute; ticks and help refresh it at once) */
+  if (typeof renderMyPage === 'function') {
+    var __rm166 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm166.apply(this, arguments);
+      try { paint(); refresh(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) {
+      if (evt === 'SIGNED_OUT') { S.lead = null; S.at = 0; S.open = {}; var el = document.getElementById('w166lead'); if (el) el.remove(); }
+    });
+  } catch (e) { /* fine */ }
+
+  /* ---------- the tours: a stop for the leads' card on Home; the Academy's onboarding stop says how Academy steps work ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT) return;
+      var hs = TT.home && TT.home.steps;
+      if (hs && !hs.some(function (x) { return x.s === '#w166lead'; })) {
+        var i = -1; hs.forEach(function (x, k) { if (x.s === '#w112wrap') i = k; });
+        hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w166lead', t: 'Your people\u2019s onboarding',
+          p: 'Leads see each person they are onboarding: how far they are, what is late, their help requests, and the moments that are yours (introduce them, first tasks, the two-week check-in, the quizzes, the 30-day evaluation). Tick yours here; See their plan opens the whole plan.', opt: 1 });
+      }
+      var as = TT.academy && TT.academy.steps;
+      var st = as ? as.filter(function (x) { return x.s === '#w122 .w122onb'; })[0] : null;
+      if (st && String(st.p).indexOf('journey') < 0) st.p = 'Your onboarding plan, the Hub first steps and the policies to sign, in one place at the top. The plan opens as a journey, week by week; steps marked Avenue Academy tick themselves when you finish the module or the avenue, and the videos play inside the Hub.';
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  /* ---------- test hook ---------- */
+  window.w166 = {
+    state: function () { return S; }, load: load, paint: paint, refresh: refresh, upgrade: upgrade, checklist: checklist,
+    planStates: planStates, decoratePlan: decoratePlan, syncHead: syncHead, afterComplete: afterComplete,
+    pathState: function (who, key) { var cx = ctxFor(who); return cx ? pathState(cx, key) : null; }
+  };
+})();
+/* =====================================================================
+   WA v167 The onboarding journey (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "Make the onboarding interactive with our branding highlighted everywhere. Use photos and make it the
+   best most educational onboarding possible."
+
+   The plan in the Avenue Academy (#training/onboarding, the sheet wave122 draws and wave166 fills) becomes a journey:
+   - a welcome with a real photo, the logo and a doodle, the person's first name, their day, how far they are (a ring) and
+     Continue (the next step: the week opens, the step shows, folded or not);
+   - the avenue: the weeks as stops on a road (photo, title, how far), the E that moves standing at the week they are in;
+     choosing a stop shows that week;
+   - each week: its photo and due date, what you will learn and why it matters (app_config onboarding_journey, with the same
+     values here as a fallback), the lesson that opens it (an Academy lesson with a knowledge check; its step ticks itself),
+     then the week's steps (wave166's plan, one week at a time);
+   - your people (your lead from the org chart, your team, our co-executive directors, with their photos), Welfare Avenue in
+     numbers, a moment from our story (Did you know?), and Ask for help;
+   - a celebration when a week is finished (and when the whole plan is).
+   The lessons' photos: a 'photo' and a 'photos' block in wave122's lessons (122). Data: wa167_journey.
+   ===================================================================== */
+(function () {
+  if (window.__wa167) return; window.__wa167 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', PURPLE = '#6F64AB', TEAL = '#2A8C7A', INK = '#1F201E', FLAG = '#B3402F', MUTED = '#797773';
+  var ST = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
+  var BR = {
+    logo: ST + 'brand/logo-lockup-cream-600.png', e: ST + 'brand/e-large-gold-600.png', star: ST + 'brand/doodle-star-gold.png',
+    ast: ST + 'brand/doodle-asterisk-cream.png', heart: ST + 'brand/doodle-heart-purple.png',
+    flowers: ST + 'brand/doodle-flowers-gold.png', arrow: ST + 'brand/doodle-arrow-gold.png', blob: ST + 'brand/doodle-blob-purple.png'
+  };
+  var DEF = {"v":1,"hero":{"photo":"photos/web/2024-07-summer-team-under-the-tent.jpg","fx":0.5,"fy":0.52,"alt":"Thirteen volunteers in green Welfare Avenue vests pose under the green tent in a leafy park.","tag":"Service is solidarity, not charity."},"weeks":{"WEEK 1":{"title":"Get set up","photo":"photos/web/2024-10-autumn-volunteers-plating.jpg","fx":0.42,"fy":0.45,"lesson":"wa167w1","learn":["Set up your Welfare Avenue accounts: Google, Chrome, Slack and Loom","Find your way around the Hub and your team's page","Read our policies, and check in and out every time you work"],"why":"Everything at Welfare Avenue runs through these tools. A week spent setting them up well saves you hours later, and it means your team can reach you."},"WEEK 2":{"title":"Who we are","photo":"photos/web/2022-01-winter-crew-in-the-snow.jpg","fx":0.5,"fy":0.64,"lesson":"wa167w2","learn":["Tell our story and our mission in your own words","Use our brand and the words we use for the people we serve","Do your first work in the Hub"],"why":"You represent Welfare Avenue at servings, in messages and online. Knowing where we come from and how we speak means you represent us well."},"WEEK 3":{"title":"Your team","photo":"photos/web/2023-10-autumn-crew-behind-the-table.jpg","fx":0.55,"fy":0.55,"lesson":"wa167w3","learn":["Know how your team works and meets","Start your team's Learning Avenue","Volunteer at your first serving"],"why":"This is where you start contributing: your team, your tasks, and a serving where you see our work first hand."},"WEEK 4":{"title":"Look back","photo":"photos/web/2025-12-gift-baskets-the-crew.jpg","fx":0.5,"fy":0.5,"lesson":"wa167w4","learn":["Show what stuck in two short quizzes","Look back on your first weeks in a self-assessment","Sit down with your lead and HR for your 30-day evaluation"],"why":"A moment to check what stuck, say what could be better, and plan what comes next with your lead."},"60 DAYS":{"title":"Grow","photo":"photos/web/2026-08-flag-football-celebration.jpg","fx":0.5,"fy":0.5,"lesson":null,"learn":["Understand how Canadian charities work, receipts included","Pick a Learning Avenue to grow in","Meet one of our co-executive directors"],"why":"Onboarding ends, growing does not. These steps set you up for the months ahead."}},"numbers":[{"n":"2020","l":"the year we began, in Montreal"},{"n":"20,000+","l":"meals and food bags since"},{"n":"700+","l":"people have volunteered with us"},{"n":"3,000+","l":"holiday gifts delivered in 2025"},{"n":"3","l":"cities: Montreal, Toronto and a pilot in Ottawa"}],"numbers_note":"The Hub's estimates from our own records, September 2026."};
+  var ORDER = ['WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', '60 DAYS'];
+  var LABEL = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days' };
+  var S = { cfg: null, cfgAt: 0, ppl: null, pplAt: 0, story: null, storyI: 0, wk: null, onb: null, counts: {}, restore: null, first: true };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function fmtDay(iso) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); } }
+  function dayN(start) { if (!start) return 1; var a = new Date(String(start).slice(0, 10) + 'T12:00:00Z'), b = new Date(todayIso() + 'T12:00:00Z'); return Math.max(1, Math.round((b - a) / 86400000) + 1); }
+  function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function reduced() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function photoUrl(p) { return p ? (/^https:/.test(p) ? p : ST + String(p).replace(/^\/+/, '')) : ''; }
+  function bgPos(x) { return Math.round(100 * (x && x.fx != null ? Number(x.fx) : 0.5)) + '% ' + Math.round(100 * (x && x.fy != null ? Number(x.fy) : 0.5)) + '%'; }
+  function cfg() {
+    var c = S.cfg || DEF || {}, d = DEF || {};
+    return { hero: c.hero || d.hero || {}, weeks: Object.assign({}, d.weeks || {}, c.weeks || {}), numbers: c.numbers || d.numbers || [], numbers_note: c.numbers_note || d.numbers_note || '' };
+  }
+
+  var BAR = function (pct) { return '<i class="w167bar"><i style="width:' + Math.max(0, Math.min(100, pct)) + '%"></i></i>'; };
+  function ring(pct, size, stroke) {
+    var r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
+    return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '" aria-hidden="true"><circle cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="rgba(255,250,242,.22)" stroke-width="' + stroke + '"/>'
+      + '<circle class="arc" cx="' + size / 2 + '" cy="' + size / 2 + '" r="' + r + '" fill="none" stroke="' + GOLD + '" stroke-width="' + stroke + '" stroke-linecap="round" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" transform="rotate(-90 ' + size / 2 + ' ' + size / 2 + ')"/></svg>';
+  }
+
+  var D = "'Barlow Condensed',sans-serif";
+  var CSS = ''
+    /* the sheet in journey mode */
+    + '#w122sheet .sh.w167 .main .wrap.w167j{max-width:1080px;padding-top:22px;}'
+    + '#w122sheet .sh.w167 .main .wrap.w167j > .prose{display:none;}'
+    + '.w167 h1,.w167 h2,.w167 h3.w167d{font-family:' + D + ';text-transform:uppercase;letter-spacing:.4px;font-weight:700;}'
+    + '.w167btn{display:inline-flex;align-items:center;gap:8px;border:0;border-radius:999px;padding:11px 20px;font-weight:700;font-size:14px;line-height:1.1;font-family:inherit;cursor:pointer;background:' + GOLD + ';color:' + GREEN + ';box-shadow:0 10px 24px -12px rgba(0,0,0,.5);transition:transform .15s ease,box-shadow .15s ease;}'
+    + '.w167btn:hover{transform:translateY(-1px);box-shadow:0 14px 28px -12px rgba(0,0,0,.55);}'
+    + '.w167btn.ghost{background:rgba(255,250,242,.14);color:' + CREAM + ';box-shadow:none;border:1px solid rgba(255,250,242,.35);}'
+    + '.w167btn.green{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w167bar{display:block;height:6px;border-radius:99px;background:rgba(16,63,57,.12);overflow:hidden;}.w167bar > i{display:block;height:100%;border-radius:99px;background:' + GOLD + ';transition:width .6s ease;}'
+    /* the welcome */
+    + '.w167hero{position:relative;border-radius:26px;overflow:hidden;min-height:300px;display:flex;align-items:flex-end;gap:24px;padding:30px 34px;color:' + CREAM + ';background-color:' + GREEN + ';background-size:cover;box-shadow:0 30px 60px -34px rgba(16,63,57,.9);}'
+    + '.w167hero:before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,rgba(16,63,57,.97) 0%,rgba(16,63,57,.86) 42%,rgba(16,63,57,.35) 78%,rgba(16,63,57,.2) 100%);}'
+    + '.w167hero > *{position:relative;}'
+    + '.w167hero .lg{position:absolute;top:24px;left:34px;height:40px;width:auto;}'
+    + '.w167hero .dd1{position:absolute;top:18px;right:26px;width:64px;transform:rotate(12deg);opacity:.95;}'
+    + '.w167hero .tx{flex:1;min-width:0;padding-top:64px;}'
+    + '.w167hero .ey{font-size:12px;font-weight:800;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167hero h1{margin:6px 0 2px;font-size:56px;line-height:.95;color:' + CREAM + ';}'
+    + '.w167hero h1 span{color:' + GOLD + ';}'
+    + '.w167hero p{margin:0 0 6px;font-size:15px;line-height:1.5;max-width:560px;color:rgba(255,250,242,.92);}'
+    + '.w167hero .tag{font-family:' + D + ';font-size:19px;letter-spacing:.6px;text-transform:uppercase;color:' + CREAM + ';opacity:.85;margin:10px 0 16px;}'
+    + '.w167hero .cta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}'
+    + '.w167hero .rg{flex:0 0 auto;position:relative;width:132px;height:132px;margin-bottom:6px;}'
+    + '.w167hero .rg .in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;}'
+    + '.w167hero .rg b{font-family:' + D + ';font-size:36px;line-height:1;color:' + CREAM + ';}'
+    + '.w167hero .rg span{font-size:11px;letter-spacing:.4px;color:rgba(255,250,242,.8);}'
+    /* the avenue */
+    + '.w167road{position:relative;margin:24px 0 8px;padding:22px 10px 8px;}'
+    + '.w167road .lane{position:absolute;left:44px;right:44px;top:66px;height:12px;border-radius:99px;background:' + GREEN + ';}'
+    + '.w167road .lane:after{content:"";position:absolute;left:10px;right:10px;top:5px;height:2px;background:repeating-linear-gradient(90deg,' + GOLD + ' 0 14px,transparent 14px 26px);opacity:.9;}'
+    + '.w167road .lane i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;background:' + GOLD + ';opacity:.35;transition:width .6s ease;}'
+    + '.w167road .stops{position:relative;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}'
+    + '.w167stop{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:0;padding:0 4px 8px;cursor:pointer;font-family:inherit;color:' + INK + ';text-align:center;border-radius:18px;}'
+    + '.w167stop:focus-visible{outline:3px solid ' + GOLD + ';outline-offset:2px;}'
+    + '.w167stop .pic{width:84px;height:84px;border-radius:50%;background-size:cover;background-color:' + GREEN + ';border:5px solid ' + CREAM + ';box-shadow:0 0 0 3px rgba(16,63,57,.2),0 12px 24px -14px rgba(0,0,0,.6);transition:transform .2s ease,box-shadow .2s ease;position:relative;}'
+    + '.w167stop:hover .pic{transform:translateY(-3px) scale(1.04);}'
+    + '.w167stop.on .pic{box-shadow:0 0 0 4px ' + GOLD + ',0 16px 30px -14px rgba(0,0,0,.7);}'
+    + '.w167stop.done .pic:after{content:"\\2713";position:absolute;right:-6px;bottom:-4px;width:26px;height:26px;border-radius:50%;background:' + TEAL + ';color:' + CREAM + ';font-weight:800;font-size:14px;display:flex;align-items:center;justify-content:center;border:3px solid ' + CREAM + ';}'
+    + '.w167stop .lb{margin-top:6px;font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';}'
+    + '.w167stop.on .lb{color:' + PURPLE + ';}'
+    + '.w167stop b{font-family:' + D + ';font-size:21px;line-height:1;text-transform:uppercase;color:' + GREEN + ';}'
+    + '.w167stop .n{font-size:11.5px;color:' + MUTED + ';}'
+    + '.w167stop .w167bar{width:70%;margin-top:3px;}'
+    + '.w167stop .e{position:absolute;top:-24px;left:50%;width:46px;margin-left:-23px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25));}'
+    + '.w167stop.cur .e{animation:w167bob 1.8s ease-in-out infinite;}'
+    + '@keyframes w167bob{0%,100%{transform:translateY(0);}50%{transform:translateY(-6px);}}'
+    + '.w167road .hint{margin:6px 0 0;text-align:center;font-size:12.5px;color:' + MUTED + ';}'
+    /* a week */
+    + '.w167wk{margin:18px 0 8px;}'
+    + '.w167ban{position:relative;border-radius:24px;overflow:hidden;min-height:180px;display:flex;align-items:flex-end;padding:22px 26px;color:' + CREAM + ';background-color:' + GREEN + ';background-size:cover;}'
+    + '.w167ban:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(16,63,57,.95) 0%,rgba(16,63,57,.7) 45%,rgba(16,63,57,.1) 100%);}'
+    + '.w167ban > *{position:relative;}'
+    + '.w167ban .k{font-size:12px;font-weight:800;letter-spacing:1.3px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167ban h2{margin:2px 0 4px;font-size:44px;line-height:1;color:' + CREAM + ';}'
+    + '.w167ban p{margin:0;font-size:13.5px;color:rgba(255,250,242,.88);}'
+    + '.w167ban .dd{position:absolute;right:24px;top:20px;width:54px;opacity:.9;}'
+    + '.w167ban .pb{width:220px;max-width:60vw;margin-top:10px;}.w167ban .pb .w167bar{background:rgba(255,250,242,.25);}'
+    + '.w167learn{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin:16px 0;}'
+    + '.w167learn .ob,.w167learn .wy{border-radius:20px;padding:18px 20px;}'
+    + '.w167learn .ob{background:' + CREAM + ';box-shadow:0 14px 34px -26px rgba(16,63,57,.8);border:1px solid rgba(16,63,57,.08);}'
+    + '.w167learn .wy{background:linear-gradient(145deg,' + PURPLE + ',#8b80c9);color:' + CREAM + ';position:relative;overflow:hidden;}'
+    + '.w167learn .wy img{position:absolute;right:-10px;bottom:-12px;width:90px;opacity:.35;}'
+    + '.w167learn h3{margin:0 0 10px;font-family:' + D + ';font-size:20px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';}'
+    + '.w167learn .wy h3{color:' + CREAM + ';}'
+    + '.w167learn ul{list-style:none;margin:0;padding:0;display:grid;gap:9px;}'
+    + '.w167learn li{display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45;color:' + INK + ';}'
+    + '.w167learn li:before{content:"\\2713";flex:0 0 22px;height:22px;border-radius:50%;background:' + GOLD + ';color:' + GREEN + ';font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center;margin-top:1px;}'
+    + '.w167learn .wy p{margin:0;font-size:14px;line-height:1.55;position:relative;}'
+    + '.w167feat{display:flex;gap:16px;align-items:center;border-radius:20px;padding:16px 18px;margin:0 0 16px;background:' + GREEN + ';color:' + CREAM + ';box-shadow:0 18px 40px -28px rgba(16,63,57,.9);position:relative;overflow:hidden;}'
+    + '.w167feat .ic{flex:0 0 54px;height:54px;border-radius:16px;background:' + GOLD + ';display:flex;align-items:center;justify-content:center;font-family:' + D + ';font-size:26px;color:' + GREEN + ';}'
+    + '.w167feat .tx{flex:1;min-width:0;}'
+    + '.w167feat .tx span{display:block;font-size:11.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '.w167feat .tx b{display:block;font-size:17px;margin:2px 0;}'
+    + '.w167feat .tx em{font-style:normal;font-size:13px;color:rgba(255,250,242,.8);}'
+    + '.w167feat.ok{background:linear-gradient(135deg,' + TEAL + ',' + GREEN + ');}'
+    + '.w167feat.ok .ic{background:' + CREAM + ';color:' + TEAL + ';}'
+    + '.w167steps h3{margin:18px 0 8px;font-family:' + D + ';font-size:20px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';}'
+    /* one week of the plan at a time; the week's lesson shows as the card above */
+    + '.sh.w167 .onbwrap details.w37week{display:none;}'
+    + '.sh.w167 .onbwrap details.w37week.w167on{display:block;}'
+    + '.sh.w167 .onbwrap details.w37week.w167on > summary{display:none;}'
+    + '.sh.w167 .onbwrap [data-w166t^="wa167w"]{display:none !important;}'
+    + '.sh.w167 .w37step.w167flash{animation:w167flash 1.6s ease;}'
+    + '@keyframes w167flash{0%,100%{background:transparent;}20%,60%{background:rgba(220,165,39,.28);}}'
+    /* your people, our numbers, a moment from our story */
+    + '.w167sec{margin:26px 0 8px;}'
+    + '.w167sec > h3{margin:0 0 12px;font-family:' + D + ';font-size:24px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';display:flex;align-items:center;gap:10px;}'
+    + '.w167sec > h3 img{width:30px;}'
+    + '.w167ppl{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;}'
+    + '.w167pc{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:18px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.08);box-shadow:0 12px 28px -24px rgba(16,63,57,.8);cursor:pointer;text-align:left;font-family:inherit;color:' + INK + ';transition:transform .15s ease;}'
+    + '.w167pc:hover{transform:translateY(-2px);}'
+    + '.w167pc .av{flex:0 0 52px;height:52px;border-radius:50%;background:' + GREEN + ' center/cover;color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;border:3px solid ' + CREAM + ';box-shadow:0 0 0 2px ' + GOLD + ';}'
+    + '.w167pc .t{min-width:0;}.w167pc .t b{display:block;font-size:14px;}.w167pc .t span{display:block;font-size:12px;color:' + MUTED + ';line-height:1.35;}'
+    + '.w167pc .t em{display:inline-block;font-style:normal;font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + PURPLE + ';margin-bottom:2px;}'
+    + '.w167team{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;}'
+    + '.w167team button{display:flex;flex-direction:column;align-items:center;gap:4px;width:74px;background:none;border:0;cursor:pointer;font-family:inherit;color:' + INK + ';font-size:11.5px;}'
+    + '.w167team .av{width:50px;height:50px;border-radius:50%;background:' + TEAL + ' center/cover;color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;border:3px solid ' + CREAM + ';box-shadow:0 6px 14px -8px rgba(0,0,0,.5);}'
+    + '.w167num{position:relative;border-radius:24px;padding:24px 26px;background:' + GREEN + ';color:' + CREAM + ';overflow:hidden;}'
+    + '.w167num .dd1{position:absolute;right:-14px;top:-14px;width:110px;opacity:.5;}'
+    + '.w167num .dd2{position:absolute;left:44%;bottom:-18px;width:80px;opacity:.35;}'
+    + '.w167num .g{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}'
+    + '.w167num .g div b{display:block;font-family:' + D + ';font-size:44px;line-height:1;color:' + GOLD + ';}'
+    + '.w167num .g div span{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:rgba(255,250,242,.9);}'
+    + '.w167num .nt{position:relative;margin:14px 0 0;font-size:11.5px;color:rgba(255,250,242,.65);}'
+    + '.w167dyk{display:flex;gap:16px;align-items:flex-start;border-radius:22px;padding:18px 20px;background:rgba(220,165,39,.14);border:1px solid rgba(220,165,39,.35);}'
+    + '.w167dyk .yr{flex:0 0 auto;font-family:' + D + ';font-size:34px;line-height:1;color:' + PURPLE + ';}'
+    + '.w167dyk .tx{flex:1;min-width:0;}.w167dyk .tx b{display:block;font-size:15px;color:' + GREEN + ';margin-bottom:4px;}.w167dyk .tx p{margin:0;font-size:13.5px;line-height:1.5;color:#3d3c39;}'
+    + '.w167dyk .ac{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}'
+    + '.w167lnk{border:0;background:none;padding:0;color:' + GREEN + ';font-weight:700;font-size:13px;text-decoration:underline;cursor:pointer;font-family:inherit;}'
+    /* the celebration */
+    + '.w167cel{position:absolute;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;background:rgba(16,63,57,.55);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);animation:w167in .25s ease;}'
+    + '@keyframes w167in{from{opacity:0;}to{opacity:1;}}'
+    + '.w167cel canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}'
+    + '.w167cel .cd{position:relative;width:min(440px,calc(100% - 40px));border-radius:28px;background:' + CREAM + ';padding:30px 28px 24px;text-align:center;box-shadow:0 40px 90px -30px rgba(0,0,0,.7);animation:w167pop .45s cubic-bezier(.2,1.4,.4,1);}'
+    + '@keyframes w167pop{from{transform:scale(.8);opacity:0;}to{transform:none;opacity:1;}}'
+    + '.w167cel .cd .e{width:92px;margin:4px auto 10px;display:block;}'
+    + '.w167cel .cd .fl{position:absolute;top:-26px;right:-18px;width:74px;transform:rotate(14deg);}'
+    + '.w167cel .cd h3{margin:4px 0 6px;font-family:' + D + ';font-size:40px;line-height:1;text-transform:uppercase;color:' + GREEN + ';}'
+    + '.w167cel .cd p{margin:0 0 16px;font-size:14.5px;line-height:1.5;color:#3d3c39;}'
+    + '.w167cel .cd .bt{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}'
+    /* phones */
+    + '@media (max-width:760px){'
+    + '.w167hero{flex-direction:column;align-items:flex-start;padding:22px 18px;min-height:0;border-radius:20px;}'
+    + '.w167hero:before{background:linear-gradient(180deg,rgba(16,63,57,.62) 0%,rgba(16,63,57,.9) 50%,rgba(16,63,57,.97) 100%);}'
+    + '.w167hero .lg{left:18px;top:18px;height:32px;}.w167hero .dd1{width:46px;right:14px;top:14px;}'
+    + '.w167hero .tx{padding-top:50px;}.w167hero h1{font-size:40px;}'
+    + '.w167hero .rg{position:absolute;right:16px;bottom:16px;width:86px;height:86px;}.w167hero .rg svg{width:86px;height:86px;}.w167hero .rg b{font-size:24px;}.w167hero .rg span{display:none;}'
+    + '.w167hero .cta{padding-right:96px;}'
+    + '.w167road{margin:18px -18px 4px;padding:36px 0 6px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;}'
+    + '.w167road .lane{top:70px;}'
+    + '.w167road .stops{grid-template-columns:repeat(5,120px);padding:0 18px;width:max-content;}'
+    + '.w167road .lane{left:60px;right:auto;width:560px;}'
+    + '.w167stop{scroll-snap-align:center;}.w167stop .pic{width:70px;height:70px;}'
+    + '.w167learn{grid-template-columns:1fr;}.w167ban h2{font-size:34px;}.w167ban{min-height:150px;padding:18px;}'
+    + '.w167feat{flex-wrap:wrap;}.w167feat .w167btn{width:100%;justify-content:center;}'
+    + '.w167num .g div b{font-size:34px;}'
+    + '}'
+    + '@media (prefers-reduced-motion:reduce){.w167stop.cur .e{animation:none;}.w167cel,.w167cel .cd{animation:none;}.w167bar > i{transition:none;}}';
+  if (!document.getElementById('wa167css')) { var st = document.createElement('style'); st.id = 'wa167css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- what the journey reads: its settings, the people around the person, and a moment from our story ---------- */
+  function loadCfg() {
+    if (S.cfgAt && Date.now() - S.cfgAt < 600000) return Promise.resolve(S.cfg);
+    S.cfgAt = Date.now();
+    return Promise.resolve(db.from('app_config').select('value').eq('key', 'onboarding_journey')).then(function (r) {
+      var v = r && r.data && r.data[0] && r.data[0].value;
+      if (v) { try { S.cfg = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { /* the fallback stays */ } }
+      return S.cfg;
+    }).catch(function () { return S.cfg; });
+  }
+  function loadPeople() {
+    if (S.pplAt && Date.now() - S.pplAt < 300000) return Promise.resolve(S.ppl);
+    S.pplAt = Date.now();
+    return Promise.all([
+      db.from('team_members').select('id,name,email,department,role,avatar_url').eq('active', true),
+      db.from('org_positions').select('id,member_id,title,department,reports_to')
+    ]).then(function (r) {
+      S.ppl = { members: (r[0] && r[0].data) || [], seats: (r[1] && r[1].data) || [] };
+      return S.ppl;
+    }).catch(function () { return S.ppl; });
+  }
+  function loadStory() {
+    if (S.story) return Promise.resolve(S.story);
+    return Promise.resolve(db.from('wa_history').select('id,date_start,title,summary,highlight,visibility,status').eq('highlight', true)).then(function (r) {
+      var rows = ((r && r.data) || []).filter(function (x) { return x && x.title && x.summary && x.status !== 'hidden' && (!x.visibility || x.visibility === 'everyone'); });
+      rows.sort(function (a, b) { return String(a.date_start).localeCompare(String(b.date_start)); });
+      S.story = rows; S.storyI = rows.length ? Math.floor(Math.random() * rows.length) : 0;
+      return rows;
+    }).catch(function () { S.story = []; return S.story; });
+  }
+
+  /* the person's own plan: the one the Academy's sheet shows */
+  function myName() {
+    try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; if (m && m.name) return m.name; } catch (e) { /* fine */ }
+    try { var full = String((USER && USER.name) || ''), em = String((USER && USER.email) || ''); return full ? full.split(' ')[0] : em.split('@')[0]; } catch (e) { return ''; }
+  }
+  function planOnb() {
+    try {
+      if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
+      var n = myName().toLowerCase();
+      return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
+    } catch (e) { return null; }
+  }
+  function seatOf(P, memberId) { return (P.seats || []).filter(function (s) { return String(s.member_id) === String(memberId); }).sort(function (a, b) { return a.id - b.id; })[0] || null; }
+  function memberOf(P, id) { return (P.members || []).filter(function (m) { return String(m.id) === String(id); })[0] || null; }
+  /* the people around them: their lead (the org chart), their team, our co-executive directors */
+  function peopleFor(o) {
+    var P = S.ppl; if (!P || !o) return null;
+    var me = memberOf(P, o.member_id) || (P.members || []).filter(function (m) { return String(m.name).toLowerCase() === String(o.person_name || '').toLowerCase(); })[0] || null;
+    var seat = me ? seatOf(P, me.id) : null, lead = null, leadSeat = null;
+    if (seat && seat.reports_to) { leadSeat = (P.seats || []).filter(function (s) { return String(s.id) === String(seat.reports_to); })[0] || null; if (leadSeat && leadSeat.member_id) lead = memberOf(P, leadSeat.member_id); }
+    var dept = (me && me.department) || null;
+    var team = (P.members || []).filter(function (m) { return dept && m.department === dept && (!me || m.id !== me.id) && (!lead || m.id !== lead.id); })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    var eds = (P.seats || []).filter(function (s) { return /co-?ed\b|co-executive/i.test(String(s.title || '')) && s.member_id; }).map(function (s) { var m = memberOf(P, s.member_id); return m ? { m: m, title: s.title } : null; }).filter(Boolean)
+      .filter(function (x) { return (!me || x.m.id !== me.id) && (!lead || x.m.id !== lead.id); });
+    return { me: me, title: seat ? seat.title : null, dept: dept, lead: lead, leadTitle: leadSeat ? leadSeat.title : null, team: team, eds: eds };
+  }
+
+  /* the journey from the plan (wave166's planStates: each week's steps, with what the Academy already finished) */
+  function journeyOf(o) {
+    var W = window.w166; if (!W || typeof W.planStates !== 'function' || !o) return null;
+    var weeks = W.planStates(o) || [], C = cfg(), total = 0, done = 0, next = null, nextWk = null;
+    var byName = {};
+    weeks.forEach(function (wk) {
+      var d = 0, due = null;
+      wk.steps.forEach(function (x) {
+        total++; if (x.done) { done++; d++; }
+        else { if (!next) { next = x; nextWk = wk.name; } if (x.s && x.s.due_date && (!due || String(x.s.due_date) < due)) due = String(x.s.due_date); }
+      });
+      var anyDue = null; wk.steps.forEach(function (x) { if (x.s && x.s.due_date && (!anyDue || String(x.s.due_date) > anyDue)) anyDue = String(x.s.due_date); });
+      var meta = C.weeks[wk.name] || {};
+      var lesson = meta.lesson ? wk.steps.filter(function (x) { return String(x.t.id) === String(meta.lesson); })[0] || null : null;
+      byName[wk.name] = { name: wk.name, steps: wk.steps, done: d, total: wk.steps.length, complete: d >= wk.steps.length, due: due || anyDue, meta: meta, lesson: lesson };
+    });
+    var list = ORDER.filter(function (k) { return byName[k]; }).concat(Object.keys(byName).filter(function (k) { return ORDER.indexOf(k) < 0; })).map(function (k) { return byName[k]; });
+    return { o: o, weeks: list, byName: byName, total: total, done: done, pct: total ? Math.round(100 * done / total) : 0, next: next, nextWk: nextWk, day: dayN(o.started_at), complete: total > 0 && done >= total };
+  }
+
+  /* ---------- the journey's parts ---------- */
+  function avHtml(m, cls) {
+    var url = m && m.avatar_url ? String(m.avatar_url) : '';
+    return '<span class="' + (cls || 'av') + '"' + (url ? ' style="background-image:url(\'' + E(url) + '\')"' : '') + '>' + (url ? '' : E(initials(m && m.name))) + '</span>';
+  }
+  function short(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '\u2026' : s; }
+  function heroHtml(J) {
+    var C = cfg(), h = C.hero || {}, o = J.o, pp = peopleFor(o);
+    var nm = first(o.person_name) || 'friend';
+    var who = pp && pp.title ? E(pp.title) + (pp.dept ? ', ' + E(teamName(pp.dept)) : '') + '. ' : (pp && pp.dept ? E(teamName(pp.dept)) + '. ' : '');
+    var line = J.complete ? who + 'Every step of your plan is done. Welcome to the team, for good.'
+      : who + 'Day ' + J.day + ' of your onboarding. Here is your road for the first 90 days, one stop at a time.';
+    var go = '';
+    if (J.next) {
+      var t = J.next.t, lessonStep = /^wa167w/.test(String(t.id)) && t.training_id;
+      go = lessonStep ? '<button type="button" class="w167btn" data-w166open="t:' + E(t.training_id) + '">Start here: ' + E(short(String(t.name).replace(/^Start here:\s*/i, ''), 40)) + '</button>'
+        : '<button type="button" class="w167btn" data-w167go="next">Continue: ' + E(short(t.name, 40)) + '</button>';
+    } else go = '<button type="button" class="w167btn" data-w166open="a:">Explore the Avenue Academy</button>';
+    var lead = pp && pp.lead ? '<button type="button" class="w167btn ghost" data-w167person="' + E(pp.lead.id) + '">Your lead: ' + E(first(pp.lead.name)) + '</button>' : '';
+    return '<section class="w167hero" style="background-image:url(\'' + E(photoUrl(h.photo)) + '\');background-position:' + bgPos(h) + '">'
+      + '<img class="lg" src="' + BR.logo + '" alt="Welfare Avenue, building pathways in our community">'
+      + '<img class="dd1" src="' + BR.star + '" alt="">'
+      + '<div class="tx"><div class="ey">Your onboarding' + (J.complete ? ' &middot; complete' : ' &middot; day ' + J.day) + '</div>'
+      + '<h1>Welcome, <span>' + E(nm) + '</span></h1>'
+      + '<p>' + line + '</p>'
+      + (h.tag ? '<div class="tag">' + E(h.tag) + '</div>' : '')
+      + '<div class="cta">' + go + lead + '</div></div>'
+      + '<div class="rg" title="' + J.done + ' of ' + J.total + ' steps done">' + ring(J.pct, 132, 12) + '<div class="in"><b>' + J.pct + '%</b><span>' + J.done + ' of ' + J.total + ' steps</span></div></div>'
+      + '</section>';
+  }
+  function curWeek(J) { return J.nextWk || (J.weeks.length ? J.weeks[J.weeks.length - 1].name : null); }
+  function roadHtml(J) {
+    var cur = curWeek(J), n = J.weeks.length, ci = 0;
+    J.weeks.forEach(function (w, i) { if (w.name === cur) ci = i; });
+    var lane = n > 1 ? Math.round(100 * ci / (n - 1)) : 0;
+    return '<nav class="w167road" aria-label="Your onboarding, week by week"><div class="lane"><i style="width:' + lane + '%"></i></div><div class="stops">'
+      + J.weeks.map(function (w) {
+        var m = w.meta || {}, pct = w.total ? Math.round(100 * w.done / w.total) : 0, lbl = LABEL[w.name] || w.name;
+        return '<button type="button" class="w167stop' + (w.complete ? ' done' : '') + (w.name === S.wk ? ' on' : '') + (w.name === cur && !J.complete ? ' cur' : '') + '" data-w167wk="' + E(w.name) + '" aria-pressed="' + (w.name === S.wk ? 'true' : 'false') + '" aria-label="' + E(lbl + ': ' + (m.title || '') + ', ' + w.done + ' of ' + w.total + ' done') + '">'
+          + (w.name === cur && !J.complete ? '<img class="e" src="' + BR.e + '" alt="">' : '')
+          + '<span class="pic" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"></span>'
+          + '<span class="lb">' + E(lbl) + '</span><b>' + E(m.title || lbl) + '</b><span class="n">' + w.done + ' of ' + w.total + '</span>' + BAR(pct) + '</button>';
+      }).join('') + '</div><p class="hint">Choose a stop to see that week. You are here: the E that moves.</p></nav>';
+  }
+  function featHtml(w) {
+    var x = w.lesson; if (!x || !x.t.training_id) return '';
+    var ls = x.ls || {}, done = !!x.done, title = String(x.t.name).replace(/^Start here:\s*/i, ''), num = String(LABEL[w.name] || '').replace(/\D/g, '') || '&#9733;';
+    return '<div class="w167feat' + (done ? ' ok' : '') + '"><div class="ic">' + (done ? '&#10003;' : num) + '</div><div class="tx"><span>' + (done ? 'Done: you passed its knowledge check' : 'Start here') + '</span><b>' + E(title) + '</b>'
+      + '<em>' + (ls.mins ? ls.mins + '-minute lesson with photos' : 'A short lesson with photos') + ' &middot; a knowledge check at the end &middot; it ticks itself</em></div>'
+      + '<button type="button" class="w167btn' + (done ? ' ghost' : '') + '" data-w166open="t:' + E(x.t.training_id) + '">' + (done ? 'Open it again' : 'Start the lesson') + '</button></div>';
+  }
+  function weekHeadHtml(J, w) {
+    if (!w) return '';
+    var m = w.meta || {}, lbl = LABEL[w.name] || w.name, pct = w.total ? Math.round(100 * w.done / w.total) : 0;
+    var k = lbl + (w.complete ? ' &middot; done' : (w.due ? ' &middot; due ' + E(fmtDay(w.due)) : ''));
+    var li = function (s) { return '<li>' + E(s) + '</li>'; };
+    return '<header class="w167ban" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"><img class="dd" src="' + BR.ast + '" alt="">'
+      + '<div><div class="k">' + k + '</div><h2>' + E(m.title || lbl) + '</h2><p>' + w.done + ' of ' + w.total + ' steps done</p><div class="pb">' + BAR(pct) + '</div></div></header>'
+      + ((m.learn && m.learn.length) || m.why ? '<div class="w167learn">' + (m.learn && m.learn.length ? '<div class="ob"><h3>By the end of this week you will</h3><ul>' + m.learn.map(li).join('') + '</ul></div>' : '')
+        + (m.why ? '<div class="wy"><img src="' + BR.heart + '" alt=""><h3>Why it matters</h3><p>' + E(m.why) + '</p></div>' : '') + '</div>' : '')
+      + featHtml(w);
+  }
+  function pplHtml(J) {
+    var pp = peopleFor(J.o);
+    var h = '<h3><img src="' + BR.flowers + '" alt="">Your people</h3>';
+    if (!pp) return h + '<div class="w167ppl"><div class="w167pc" style="cursor:default"><span class="av">&hellip;</span><div class="t"><b>Finding your people</b></div></div></div>';
+    var cards = [];
+    if (pp.lead) cards.push('<button type="button" class="w167pc" data-w167person="' + E(pp.lead.id) + '">' + avHtml(pp.lead) + '<div class="t"><em>Your lead</em><b>' + E(pp.lead.name) + '</b><span>' + E(pp.leadTitle || teamName(pp.lead.department)) + '. Checks in with you at two weeks and around day 30.</span></div></button>');
+    pp.eds.forEach(function (x) { cards.push('<button type="button" class="w167pc" data-w167person="' + E(x.m.id) + '">' + avHtml(x.m) + '<div class="t"><em>Co-executive director</em><b>' + E(x.m.name) + '</b><span>Book 15 minutes with one of them in your first 60 days.</span></div></button>'); });
+    var team = pp.team.slice(0, 12);
+    return h + (cards.length ? '<div class="w167ppl">' + cards.join('') + '</div>' : '')
+      + (team.length ? '<div class="w167team" aria-label="Your team">' + team.map(function (m) { return '<button type="button" data-w167person="' + E(m.id) + '" title="' + E(m.name + (m.role ? ', ' + m.role : '')) + '">' + avHtml(m) + '<span>' + E(first(m.name)) + '</span></button>'; }).join('')
+        + (pp.team.length > team.length ? '<span style="align-self:center;font-size:12px;color:' + MUTED + '">and ' + (pp.team.length - team.length) + ' more</span>' : '') + '</div>'
+        + '<p style="margin:8px 0 0;font-size:12.5px;color:' + MUTED + '">Your ' + E(teamName(pp.dept)) + ' team. Say hello in your team&rsquo;s channel; the org chart shows everyone else.</p>' : '');
+  }
+  function numHtml() {
+    var C = cfg(); if (!C.numbers || !C.numbers.length) return '';
+    return '<h3><img src="' + BR.star + '" alt="">Welfare Avenue in numbers</h3><div class="w167num"><img class="dd1" src="' + BR.blob + '" alt=""><img class="dd2" src="' + BR.arrow + '" alt="">'
+      + '<div class="g">' + C.numbers.map(function (x) { return '<div><b>' + E(x.n) + '</b><span>' + E(x.l) + '</span></div>'; }).join('') + '</div>'
+      + (C.numbers_note ? '<p class="nt">' + E(C.numbers_note) + '</p>' : '') + '</div>';
+  }
+  function dykHtml() {
+    var rows = S.story || []; if (!rows.length) return '';
+    var x = rows[S.storyI % rows.length];
+    return '<h3><img src="' + BR.heart + '" alt="">Did you know?</h3><div class="w167dyk"><div class="yr">' + E(String(x.date_start || '').slice(0, 4)) + '</div><div class="tx"><b>' + E(x.title) + '</b><p>' + E(short(x.summary, 320)) + '</p>'
+      + '<div class="ac"><button type="button" class="w167btn green" data-w167dyk="1">Another moment</button><button type="button" class="w167lnk" data-w167story="1">All of our story</button></div></div></div>';
+  }
+
+  /* ---------- building the journey around wave166's plan, in place, before the page paints ---------- */
+  function part(box, key, html) {
+    var el = box.querySelector('[data-w167p="' + key + '"]'); if (!el) return;
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function paintParts(sh, J) {
+    var box = sh.querySelector('.w167box'); if (!box) return;
+    part(box, 'hero', heroHtml(J));
+    part(box, 'road', roadHtml(J));
+    part(box, 'wh', weekHeadHtml(J, J.byName[S.wk]));
+    part(box, 'sh', (J.byName[S.wk] && J.byName[S.wk].lesson ? 'Then, this week' : 'This week') + '<span style="font-family:inherit;font-size:13px;font-weight:600;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:10px">Tick each step as you go; steps marked Avenue Academy tick themselves.</span>');
+    part(box, 'ppl', pplHtml(J));
+    part(box, 'num', numHtml());
+    part(box, 'dyk', dykHtml());
+  }
+  function weekNameOf(d) { var s = d.querySelector('summary'); if (!s) return ''; var t = s.firstChild; return String(t && t.nodeType === 3 ? t.textContent : s.textContent).trim(); }
+  function applyWeek(sh) {
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap) return;
+    [].forEach.call(wrap.querySelectorAll('details.w37week'), function (d) {
+      var on = weekNameOf(d) === S.wk;
+      if (d.classList.contains('w167on') !== on) d.classList.toggle('w167on', on);
+      if (on && !d.open) d.open = true;
+    });
+  }
+  function build(sh, wrap) {
+    var W = window.w166; if (!W || typeof W.planStates !== 'function') return;
+    try { if (typeof W.decoratePlan === 'function') W.decoratePlan(); } catch (e) { /* fine */ }
+    var o = planOnb(); if (!o) return;
+    var J = journeyOf(o); if (!J || !J.weeks.length) return;
+    var main = wrap.closest('.wrap'); if (!main) return;
+    wrap.setAttribute('data-w167', '1');
+    sh.classList.add('w167');
+    main.classList.add('wide'); main.classList.add('w167j');
+    if (S.onb !== o.id) { S.onb = o.id; S.wk = null; }
+    if (!S.wk || !J.byName[S.wk]) S.wk = curWeek(J);
+    var box = document.createElement('div'); box.className = 'w167box';
+    box.innerHTML = '<div data-w167p="hero"></div><div data-w167p="road"></div>'
+      + '<section class="w167wk"><div class="w167wh" data-w167p="wh"></div><div class="w167steps"><h3 data-w167p="sh"></h3></div></section>'
+      + '<section class="w167sec" data-w167p="ppl"></section><section class="w167sec" data-w167p="num"></section><section class="w167sec" data-w167p="dyk"></section>';
+    main.insertBefore(box, main.firstChild);
+    var steps = box.querySelector('.w167steps'); steps.appendChild(wrap);
+    var help = sh.querySelector('#w166help'); if (help) steps.appendChild(help);
+    paintParts(sh, J);
+    applyWeek(sh);
+    try { if (typeof W.syncHead === 'function') W.syncHead(); } catch (e) { /* fine */ }
+    /* after a tick the Academy draws the sheet again: keep the place */
+    var m = sh.querySelector('.main');
+    if (m && S.restore && Date.now() < S.restore.until && S.restore.onb === o.id) m.scrollTop = S.restore.top;
+    S.restore = null;
+    celebrateCheck(J);
+    Promise.all([loadCfg(), loadPeople(), loadStory()]).then(function () { refresh(); });
+  }
+  function refresh() {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh || !sh.querySelector('.w167box')) return;
+    var o = planOnb(); if (!o) return;
+    var J = journeyOf(o); if (!J) return;
+    if (!J.byName[S.wk]) S.wk = curWeek(J);
+    paintParts(sh, J); applyWeek(sh); celebrateCheck(J);
+  }
+  function sync() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap');
+    if (!wrap) { if (sh.classList.contains('w167')) sh.classList.remove('w167'); return; }
+    if (!wrap.getAttribute('data-w167')) { build(sh, wrap); return; }
+    applyWeek(sh);
+  }
+  function select(wk, scroll) {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh) return;
+    S.wk = wk; refresh();
+    if (scroll) { var sec = sh.querySelector('.w167wk'); if (sec) try { sec.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'start' }); } catch (e) { /* fine */ } }
+  }
+  /* Continue: open the week of the next step and show the step (unfolding it when it sits under a bigger step) */
+  function continueNext() {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh) return;
+    var o = planOnb(), J = o ? journeyOf(o) : null; if (!J || !J.next) return;
+    S.wk = J.nextWk; refresh();
+    var tid = String(J.next.t.id), row = sh.querySelector('.onbwrap [data-w166t="' + tid.replace(/"/g, '') + '"]');
+    if (row && row.style.display === 'none' && J.next.t.parent_id) {
+      var tg = sh.querySelector('.onbwrap [data-w57t="' + String(J.next.t.parent_id).replace(/"/g, '') + '"]'); if (tg) tg.click();
+    }
+    if (!row) return;
+    try { row.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' }); } catch (e) { /* fine */ }
+    row.classList.remove('w167flash'); void row.offsetWidth; row.classList.add('w167flash');
+  }
+
+  /* ---------- a week finished, or the whole plan ---------- */
+  function celebrateCheck(J) {
+    var key = String(J.o.id), prev = S.counts[key], now = { __all: J.complete };
+    J.weeks.forEach(function (w) { now[w.name] = w.complete; });
+    S.counts[key] = now;
+    if (!prev) return;
+    if (J.complete && !prev.__all) { celebrate('all', J); return; }
+    var w = J.weeks.filter(function (x) { return x.complete && prev[x.name] === false; })[0];
+    if (w) celebrate(w.name, J);
+  }
+  function celebrate(kind, J) {
+    var sh = document.querySelector('#w122sheet .sh.w167'); if (!sh || sh.querySelector('.w167cel')) return;
+    var mark = 'w167cel:' + J.o.id + ':' + kind; if (lsGet(mark)) return; lsSet(mark, '1');
+    var idx = -1; J.weeks.forEach(function (w, i) { if (w.name === kind) idx = i; });
+    var w = J.byName[kind], nxt = idx >= 0 ? J.weeks.slice(idx + 1).filter(function (x) { return !x.complete; })[0] : null;
+    var title = kind === 'all' ? 'You are onboarded!' : (LABEL[kind] || kind) + ' done!';
+    var text = kind === 'all' ? 'Every step of your plan is done. Thank you for the care you put into it; your lead and HR can see it too.'
+      : 'Every step of ' + ((w && w.meta && w.meta.title) || LABEL[kind] || kind) + ' is done.' + (nxt ? ' Next stop: ' + ((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '.' : '');
+    var el = document.createElement('div'); el.className = 'w167cel'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', title);
+    el.innerHTML = '<canvas></canvas><div class="cd"><img class="fl" src="' + BR.flowers + '" alt=""><img class="e" src="' + BR.e + '" alt=""><h3>' + E(title) + '</h3><p>' + E(text) + '</p><div class="bt">'
+      + (nxt ? '<button type="button" class="w167btn" data-w167wk="' + E(nxt.name) + '" data-w167celx="1">Next stop: ' + E((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '</button>' : '')
+      + '<button type="button" class="w167btn green" data-w167celx="1">' + (nxt ? 'Stay here' : 'Keep going') + '</button></div></div>';
+    sh.appendChild(el);
+    confetti(el.querySelector('canvas'));
+  }
+  function confetti(cv) {
+    if (!cv || reduced()) return;
+    var ctx = cv.getContext && cv.getContext('2d'); if (!ctx) return;
+    var W0 = cv.width = cv.offsetWidth * (window.devicePixelRatio || 1), H0 = cv.height = cv.offsetHeight * (window.devicePixelRatio || 1);
+    var cols = [GOLD, PURPLE, CREAM, TEAL, '#B3A8F5'], ps = [];
+    for (var i = 0; i < 140; i++) ps.push({ x: W0 / 2 + (Math.random() - 0.5) * W0 * 0.3, y: H0 * 0.42, vx: (Math.random() - 0.5) * W0 * 0.018, vy: -Math.random() * H0 * 0.022 - H0 * 0.006, r: 4 + Math.random() * 7, c: cols[i % cols.length], a: Math.random() * 6, va: (Math.random() - 0.5) * 0.3, round: Math.random() < 0.35 });
+    var t0 = Date.now();
+    (function tick() {
+      var t = Date.now() - t0; if (t > 3200 || !cv.isConnected) { try { ctx.clearRect(0, 0, W0, H0); } catch (e) { /* fine */ } return; }
+      ctx.clearRect(0, 0, W0, H0);
+      ps.forEach(function (p) {
+        p.vy += H0 * 0.0006; p.x += p.vx; p.y += p.vy; p.a += p.va;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - t / 3200); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c;
+        if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.r * 0.6, 0, 6.283); ctx.fill(); } else ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2);
+        ctx.restore();
+      });
+      requestAnimationFrame(tick);
+    })();
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest ? e.target : null; if (!t) return;
+    var b;
+    if ((b = t.closest('[data-w167celx]'))) {
+      e.preventDefault(); e.stopPropagation();
+      var cel = b.closest('.w167cel'); var wk = b.getAttribute('data-w167wk');
+      if (cel) cel.remove();
+      if (wk) select(wk, true);
+      return;
+    }
+    if (t.closest('.w167cel') && !t.closest('.cd')) { e.preventDefault(); e.stopPropagation(); t.closest('.w167cel').remove(); return; }
+    if ((b = t.closest('[data-w167wk]'))) { e.preventDefault(); e.stopPropagation(); select(b.getAttribute('data-w167wk'), true); return; }
+    if ((b = t.closest('[data-w167go]'))) { e.preventDefault(); e.stopPropagation(); continueNext(); return; }
+    if ((b = t.closest('[data-w167person]'))) { e.preventDefault(); e.stopPropagation(); location.hash = '#person/' + b.getAttribute('data-w167person'); return; }
+    if ((b = t.closest('[data-w167dyk]'))) { e.preventDefault(); e.stopPropagation(); S.storyI = (S.storyI + 1) % Math.max(1, (S.story || []).length); refresh(); return; }
+    if ((b = t.closest('[data-w167story]'))) { e.preventDefault(); e.stopPropagation(); location.hash = '#ourstory'; return; }
+  }, true);
+  /* Escape closes a celebration first (the Academy closes the sheet on Escape) */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    var cel = document.querySelector('#w122sheet .w167cel'); if (!cel) return;
+    e.preventDefault(); e.stopPropagation(); cel.remove();
+  }, true);
+  /* a tick in the plan: the Academy draws the sheet again after it; remember where the person was */
+  document.addEventListener('change', function (e) {
+    var c = e.target; if (!c || !c.getAttribute || !c.getAttribute('data-w37chk')) return;
+    var sh = c.closest && c.closest('#w122sheet .sh.w167'); if (!sh) return;
+    var m = sh.querySelector('.main'); S.restore = { top: m ? m.scrollTop : 0, until: Date.now() + 5000, onb: S.onb };
+  }, true);
+  /* wave166 draws the plan again in place after the Academy ticked steps: the journey follows */
+  document.addEventListener('w166replan', function () { try { refresh(); } catch (e) { /* fine */ } });
+  function watchSheet() {
+    var el = document.getElementById('w122sheet'); if (!el) return false;
+    if (el.__w167) return true;
+    el.__w167 = true;
+    try { new MutationObserver(function () { try { sync(); } catch (e) { /* fine */ } }).observe(el, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+    sync();
+    return true;
+  }
+  if (!watchSheet()) {
+    try { var mo = new MutationObserver(function () { if (watchSheet()) mo.disconnect(); }); mo.observe(document.body, { childList: true }); } catch (e) { /* fine */ }
+  }
+  loadCfg();
+
+  /* ---------- test hook ---------- */
+  window.w167 = { state: function () { return S; }, sync: sync, refresh: refresh, select: select, journeyOf: journeyOf, planOnb: planOnb, celebrate: celebrate, cfg: cfg, peopleFor: peopleFor, continueNext: continueNext };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

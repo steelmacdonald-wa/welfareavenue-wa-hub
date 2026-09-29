@@ -1,0 +1,557 @@
+/* =====================================================================
+   WA v166 Onboarding around the Hub and the Avenue Academy (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "please consider embedding Loom videos in the Avenue Academy for trainings and for the onboarding as
+   well (which I believe needs some revision giving the move away from ClickUp, the new Hub). In fact the onboarding could
+   include members doing some of the Avenue Academy modules. Give the onboarding a whole revamp. I also believe that
+   managers or leads that have people onboarding should have something on their home page to show the progress their
+   member is making and where they need to come in to ensure they progress."
+
+   What changed where:
+   - The plan (wa166_onboarding): ClickUp and Keela are out; the Hub and the Avenue Academy are in. A step can be done in
+     the Academy (onboarding_template.training_id: a module; academy_path: an avenue, 'team' or 'any') and ticks itself
+     when the person finishes it there (wa166_onb_sync on training_progress). The week 1 Loom videos are Academy modules
+     in a new avenue, Your first week.
+   - Here, the plan as the member and HR see it (wa37Checklist, replaced again): each Academy step says so, shows how far
+     the person is and opens the module or the avenue; the ClickUp "syncing" note is gone. The plan sheet gets "Stuck on
+     a step? Ask for help" (the help request HR and the lead see).
+   - Here, Loom links in onboarding steps, Academy lessons and readings and the HR checklists get "Watch here": the video
+     plays in place (a Loom embed, loaded only when asked). The Loom card's meeting links are left alone.
+   - Here, the leads' card on Home (#w166lead, onboarding_lead_view): each person the signed-in lead is onboarding, how
+     far they are and what is late, the avenues, their help requests, and "Where you come in": the lead's moments with
+     their dates (introduce them, first tasks, the two-week and 30-day check-ins, the quizzes, probation), ticked here
+     (onboarding_lead_tick). The plan itself opens in place.
+   - Elsewhere: the Home tour (122), the welcome kit and the onboarding email (046, 108: no ClickUp or Keela, the real
+     setup video), the help request's promise (039: the Hub, not Slack), Hub module 7.
+   ===================================================================== */
+(function () {
+  if (window.__wa166) return; window.__wa166 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2';
+  var S = { lead: null, loading: null, at: 0, err: null, busy: {}, open: {} };
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function fmtDay(iso) {
+    if (!iso) return '';
+    try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  function ago(iso) {
+    if (!iso) return '';
+    var d = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+    if (!(d >= 0)) return '';
+    return d === 0 ? 'today' : (d === 1 ? 'yesterday' : d + ' days ago');
+  }
+  function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function meName() { try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; return (m && m.name) || ''; } catch (e) { return ''; } }
+
+  var CSS = ''
+    /* Loom players in place */
+    + '.w166play{display:inline-flex;align-items:center;gap:5px;margin:0 0 0 8px;padding:2px 10px;border-radius:999px;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ';font-family:inherit;font-weight:700;font-size:11.5px;line-height:1.6;cursor:pointer;vertical-align:1px;}'
+    + '.w166play:hover{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '.w166vidwrap{position:relative;width:100%;max-width:720px;aspect-ratio:16/9;margin:8px 0 10px;border-radius:10px;overflow:hidden;background:#1F201E;}'
+    + '.w166vidwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0;}'
+    /* Academy steps in the plan */
+    + '.w166acad{display:inline-flex;align-items:center;gap:6px;margin:4px 0 2px;padding:2px 9px;border-radius:999px;background:rgba(42,140,122,.12);color:' + TEAL + ';font-size:11px;font-weight:700;letter-spacing:.3px;}'
+    + '.w166acad.ok{background:rgba(16,63,57,.1);color:' + GREEN + ';}'
+    + '.w166go{margin-left:8px;border:0;background:none;padding:0;color:' + GREEN + ';font-weight:700;font-size:12px;text-decoration:underline;cursor:pointer;}'
+    + '.w166help{margin:10px 0 0;}'
+    + '.w166hform{display:none;margin-top:10px;gap:8px;max-width:560px;}.w166hform.on{display:grid;}'
+    + '.w166help > button{border:1px solid ' + LINE + ';background:' + CREAM + ';border-radius:999px;padding:5px 12px;font-weight:700;font-size:12.5px;color:' + GREEN + ';cursor:pointer;}'
+    /* the leads\u2019 card on Home */
+    + '#w166lead{margin:12px 0;}'
+    + '#w166lead .w166ppl{display:grid;gap:12px;}'
+    + '#w166lead .w166p{border:1px solid ' + LINE + ';border-radius:12px;background:' + CREAM + ';padding:12px 14px;}'
+    + '#w166lead .w166top{display:flex;gap:12px;align-items:center;}'
+    + '#w166lead .w166av{flex:0 0 38px;height:38px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;}'
+    + '#w166lead .w166who{flex:1;min-width:0;}'
+    + '#w166lead .w166who b{display:block;font-size:14.5px;color:#1F201E;}'
+    + '#w166lead .w166who span{display:block;font-size:12px;color:' + MUTED + ';}'
+    + '#w166lead .w166day{text-align:right;font-weight:800;font-size:15px;color:' + GREEN + ';line-height:1.1;}'
+    + '#w166lead .w166day span{display:block;font-weight:600;font-size:11px;color:' + MUTED + ';}'
+    + '#w166lead .w166bar{height:7px;border-radius:99px;background:#F1EDE2;margin:10px 0 6px;overflow:hidden;}'
+    + '#w166lead .w166bar i{display:block;height:100%;background:' + GREEN + ';border-radius:99px;}'
+    + '#w166lead .w166sum{font-size:12.5px;color:#4a5551;}'
+    + '#w166lead .w166sum .late{color:' + FLAG + ';font-weight:800;}'
+    + '#w166lead .w166sum .ok{color:' + TEAL + ';font-weight:800;}'
+    + '#w166lead .w166wks{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px;}'
+    + '#w166lead .w166wk{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:#F4F2EA;color:#4a5551;}'
+    + '#w166lead .w166wk.done{background:rgba(16,63,57,.1);color:' + GREEN + ';}'
+    + '#w166lead .w166wk.late{background:rgba(179,64,47,.1);color:' + FLAG + ';}'
+    + '#w166lead .w166you{margin-top:10px;padding:10px 12px;border-radius:10px;background:#F4F2EA;border:1px solid ' + LINE + ';}'
+    + '#w166lead .w166h{font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 6px;}'
+    + '#w166lead .w166ls{display:flex;gap:9px;align-items:flex-start;padding:4px 0;font-size:13px;color:#1F201E;}'
+    + '#w166lead .w166ls input{margin-top:3px;width:15px;height:15px;accent-color:' + GREEN + ';}'
+    + '#w166lead .w166ls .w166due{font-size:11.5px;color:' + MUTED + ';margin-left:6px;white-space:nowrap;}'
+    + '#w166lead .w166ls .w166due.late{color:' + FLAG + ';font-weight:700;}'
+    + '#w166lead .w166ls .w166due.soon{color:#8a6414;font-weight:700;}'
+    + '#w166lead .w166ls.done{color:' + MUTED + ';text-decoration:line-through;}'
+    + '#w166lead .w166ls small{display:block;color:' + MUTED + ';font-size:11.5px;text-decoration:none;}'
+    + '#w166lead .w166ask{margin:6px 0 2px;padding:7px 10px;border-radius:8px;background:rgba(220,165,39,.14);font-size:12.5px;color:#5c4410;}'
+    + '#w166lead .w166ask button,#w166lead .w166act{margin-left:6px;border:1px solid ' + LINE + ';background:' + CREAM + ';border-radius:999px;padding:2px 10px;font-weight:700;font-size:11.5px;color:' + GREEN + ';cursor:pointer;}'
+    + '#w166lead .w166note{font-size:12.5px;color:#4a5551;margin:6px 0 0;}'
+    + '#w166lead .w166av2{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0;}'
+    + '#w166lead .w166av2 span{font-size:11px;padding:2px 8px;border-radius:999px;background:#F4F2EA;color:#4a5551;}'
+    + '#w166lead .w166av2 b{font-size:10.5px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:' + TEAL + ';align-self:center;margin-right:2px;}'
+    + '#w166lead .w166av2 span.ok{background:rgba(16,63,57,.1);color:' + GREEN + ';font-weight:700;}'
+    + '#w166lead details.w166plan{margin-top:8px;}'
+    + '#w166lead details.w166plan summary{cursor:pointer;font-weight:700;font-size:12.5px;color:' + GREEN + ';}'
+    + '#w166lead .w166sec{margin:8px 0 0;}'
+    + '#w166lead .w166sec b{font-size:11px;letter-spacing:.5px;color:' + GREEN + ';}'
+    + '#w166lead .w166st{font-size:12.5px;padding:2px 0 2px 18px;position:relative;color:#1F201E;}'
+    + '#w166lead .w166st.child{padding-left:32px;}'
+    + '#w166lead .w166st:before{content:"";position:absolute;left:2px;top:7px;width:9px;height:9px;border-radius:50%;border:1.5px solid ' + MUTED + ';}'
+    + '#w166lead .w166st.child:before{left:16px;}'
+    + '#w166lead .w166st.done{color:' + MUTED + ';}'
+    + '#w166lead .w166st.done:before{background:' + GREEN + ';border-color:' + GREEN + ';}'
+    + '#w166lead .w166st.late{color:' + FLAG + ';}'
+    + '#w166lead .w166st em{font-style:normal;font-size:11px;color:' + TEAL + ';margin-left:6px;}'
+    + '@media (max-width:700px){#w166lead .w166top{flex-wrap:wrap;}#w166lead .w166day{text-align:left;}}';
+  if (!document.getElementById('wa166css')) { var st = document.createElement('style'); st.id = 'wa166css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- Loom videos play in place ("Watch here") ----------
+     In onboarding steps, the Academy's lessons and readings, the HR checklists and the leads' card, a Loom link gets a Watch
+     here button; the video opens under the paragraph as a Loom embed (loaded only when asked) and closes again. A link next to
+     a player that already shows the same video (the Academy's video sheet) is left alone, and so are the Loom card's meeting
+     recordings (they are meetings, not trainings). */
+  var LOOM_RE = /loom\.com\/(?:share|embed)\/([0-9a-f]{32})/i;
+  var SCOPES = '#training, #w122sheet, .modal-back, #w166lead, #hrcentre';
+  function loomIdOf(href) { var m = String(href || '').match(LOOM_RE); return m ? m[1].toLowerCase() : ''; }
+  function playerNear(a, id) {
+    var box = a.closest('.wrap, .w37step, .ds, .prose, .modal-back, .sh') || a.parentElement;
+    if (!box) return false;
+    return [].slice.call(box.querySelectorAll('iframe')).some(function (f) { return f.src && f.src.indexOf(id) >= 0 && !f.closest('.w166vidwrap'); });
+  }
+  function upgrade(root) {
+    var n = 0;
+    (root || document).querySelectorAll('a[href*="loom.com/share/"], a[href*="loom.com/embed/"]').forEach(function (a) {
+      if (a.getAttribute('data-w166') || !a.closest(SCOPES) || a.closest('#w162loom') || a.closest('.w166vidwrap') || a.classList.contains('w122lnk')) return;
+      var id = loomIdOf(a.getAttribute('href')); if (!id) return;
+      a.setAttribute('data-w166', '1');
+      if (playerNear(a, id)) return;
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'w166play'; b.setAttribute('data-w166loom', id); b.setAttribute('aria-expanded', 'false');
+      b.innerHTML = '&#9654; Watch here';
+      a.insertAdjacentElement('afterend', b); n++;
+    });
+    return n;
+  }
+  function hostOf(b) {
+    /* the block the player goes under: the paragraph, list item or step text holding the link */
+    var h = b.closest('p, li, .ds, .w166ask, .w166ls') || b.parentElement;
+    return h;
+  }
+  function toggle(b) {
+    var id = b.getAttribute('data-w166loom'); var host = hostOf(b); if (!host) return;
+    var next = host.nextElementSibling;
+    if (next && next.classList.contains('w166vidwrap') && next.getAttribute('data-id') === id) {
+      next.remove(); b.innerHTML = '&#9654; Watch here'; b.setAttribute('aria-expanded', 'false'); return;
+    }
+    var w = document.createElement('div'); w.className = 'w166vidwrap'; w.setAttribute('data-id', id);
+    w.innerHTML = '<iframe src="https://www.loom.com/embed/' + id + '?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true" title="Loom video" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen loading="lazy"></iframe>';
+    host.insertAdjacentElement('afterend', w);
+    b.innerHTML = 'Hide the video'; b.setAttribute('aria-expanded', 'true');
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166loom]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    try { toggle(b); } catch (err) { /* fine */ }
+  }, true);
+  var upT = null;
+  function soon() { clearTimeout(upT); upT = setTimeout(function () { try { afterDom(); } catch (e) { /* fine */ } }, 120); }
+  try { new MutationObserver(function (list) { for (var i = 0; i < list.length; i++) { if (list[i].addedNodes && list[i].addedNodes.length) { soon(); return; } } }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  /* ---------- the plan: Academy steps say so, show how far the person is, and open the module or the avenue ---------- */
+  var REQ = { hub: 'Using the Hub', foundations: 'Welfare Avenue foundations', branding: 'Our brand' };
+  function academy() { try { return (window.w122 && window.w122.A) || null; } catch (e) { return null; } }
+  function myName() {
+    var n = meName(); if (n) return n;
+    try { var full = String((USER && USER.name) || ''), em = String((USER && USER.email) || ''); return full ? full.split(' ')[0] : em.split('@')[0]; } catch (e) { return ''; }
+  }
+  function personOf(onb) {
+    try {
+      var m = null;
+      if (typeof WA28_PEOPLE !== 'undefined' && onb) m = WA28_PEOPLE.filter(function (p) { return String(p.id) === String(onb.member_id) || String(p.name).toLowerCase() === String(onb.person_name || '').toLowerCase(); })[0] || null;
+      return { name: (onb && onb.person_name) || (m && m.name) || '', email: (m && m.email) || '', dept: (m && m.department) || '' };
+    } catch (e) { return { name: (onb && onb.person_name) || '', email: '', dept: '' }; }
+  }
+  /* the person's Academy in one pass (the same rules as wa166_path_state and wa166_training_done: the database ticks the
+     step, this shows it at once): what they finished, and every avenue with how far they are */
+  function ctxFor(who) {
+    var A = academy(); if (!A || !A.loaded) return null;
+    var n = String(who.name || '').toLowerCase(), em = String(who.email || '').toLowerCase(), done = {};
+    (A.prog || []).forEach(function (p) {
+      if (p.status === 'done' && (String(p.person_name || '').toLowerCase() === n || (em && String(p.email || '').toLowerCase() === em))) done[String(p.training_id)] = true;
+    });
+    var byGroup = {};
+    (A.trainings || []).forEach(function (t) {
+      if (t.active === false || t.kind === 'tour' || (t.body && t.body.planned)) return;
+      (byGroup[t.path_group] = byGroup[t.path_group] || []).push(t);
+    });
+    var all = (A.paths || []).filter(function (p) { return p.active !== false; }).map(function (p) {
+      var items = byGroup[p.name] || [];
+      var d = items.filter(function (t) { return done[String(t.id)]; }).length;
+      return { key: p.key, title: p.title || p.name, dept: p.dept || null, required: !!p.required, sort: p.sort == null ? 1e9 : Number(p.sort),
+        done: d, total: items.length, complete: items.length > 0 && d >= items.length, ratio: items.length ? d / items.length : 0 };
+    });
+    return { A: A, who: who, done: done, all: all };
+  }
+  function pick(list) {
+    return list.slice().sort(function (x, y) {
+      return (y.complete - x.complete) || (y.ratio - x.ratio) || (x.sort - y.sort) || String(x.key).localeCompare(String(y.key));
+    })[0] || null;
+  }
+  /* 'team': the team's avenue they are furthest in (any avenue besides the three everyone does when the team has none);
+     'any': an avenue besides the three everyone does and the one that counted for 'team' (one avenue never ticks both) */
+  function pathState(cx, key) {
+    var elig = cx.all.filter(function (p) { return !p.required && ['tours', 'firstweek', 'keela'].indexOf(p.key) < 0; });
+    var team = elig.filter(function (p) { return p.dept && p.dept === cx.who.dept; });
+    var teamPick = pick(team.length ? team : elig);
+    var cand;
+    if (key === 'team') cand = teamPick ? [teamPick] : [];
+    else if (key === 'any') cand = elig.filter(function (p) { return !(teamPick && teamPick.complete && p.key === teamPick.key); });
+    else cand = cx.all.filter(function (p) { return p.key === key; });
+    var best = pick(cand);
+    return best ? { key: best.key, title: best.title, done: best.done, total: best.total, complete: best.complete, teamHas: team.length > 0 }
+      : { key: key, title: null, done: 0, total: 0, complete: false, teamHas: team.length > 0 };
+  }
+  function linkState(cx, t) {
+    if (!cx) return null;
+    if (t.training_id) {
+      var tr = cx.A.byId ? cx.A.byId[String(t.training_id)] : null;
+      return { kind: 'module', id: t.training_id, title: tr ? tr.title : 'the module', mins: tr ? (tr.minutes || null) : null, done: !!cx.done[String(t.training_id)] };
+    }
+    if (t.academy_path) {
+      var s = pathState(cx, t.academy_path);
+      return { kind: 'avenue', key: s.key, title: s.title || REQ[t.academy_path] || 'the avenue', done: s.complete, n: s.done, total: s.total, asked: t.academy_path, teamHas: s.teamHas };
+    }
+    return null;
+  }
+  function chipHtml(t, ls) {
+    if (!t.training_id && !t.academy_path) return '';
+    if (!ls) return '<div><span class="w166acad">Avenue Academy</span></div>';
+    var open = (ls.asked === 'team' || ls.asked === 'any') && !ls.n && !ls.done;   /* nothing started yet: they choose */
+    var what = ls.kind === 'module' ? 'Avenue Academy module' + (ls.mins ? ' &middot; ' + ls.mins + ' min' : '')
+      : (open ? (ls.asked === 'team' && ls.teamHas ? 'Your team&rsquo;s Learning Avenues' : 'Learning Avenues')
+        : (ls.title ? E(ls.title) : 'Learning Avenue') + (ls.total ? ' &middot; ' + ls.n + ' of ' + ls.total : ''));
+    var go = ls.kind === 'module' ? '<button type="button" class="w166go" data-w166open="t:' + E(ls.id) + '">' + (ls.done ? 'Open it again' : 'Open it') + '</button>'
+      : (!open && ls.key && ls.key !== 'team' && ls.key !== 'any' ? '<button type="button" class="w166go" data-w166open="p:' + E(ls.key) + '">' + (ls.done ? 'Open the avenue' : 'Go to the avenue') + '</button>'
+        : '<button type="button" class="w166go" data-w166open="a:">Browse the avenues</button>');
+    return '<div><span class="w166acad' + (ls.done ? ' ok' : '') + '">' + (ls.done ? '&#10003; ' : '') + what + '</span>' + go + '</div>';
+  }
+  /* the plan's steps with what the Academy already finished */
+  function planStates(onb) {
+    var cx = ctxFor(personOf(onb)), m = (typeof wa37StepsFor === 'function') ? wa37StepsFor(onb.id) : {};
+    var weeks = (typeof wa37Weeks === 'function') ? wa37Weeks() : [], out = [];
+    weeks.forEach(function (wk) {
+      var list = wk.steps.filter(function (t) { return m[t.id]; }).map(function (t) {
+        var ls = linkState(cx, t);
+        return { t: t, s: m[t.id], ls: ls, done: !!(m[t.id].done || (ls && ls.done)) };
+      });
+      if (list.length) out.push({ name: wk.name, steps: list });
+    });
+    return out;
+  }
+  var __chk166 = (typeof wa37Checklist === 'function') ? wa37Checklist : null;
+  function checklist(onb, canTick) {
+    var today = todayIso(), html = '', firstOpen = false;
+    planStates(onb).forEach(function (wk) {
+      var d = wk.steps.filter(function (x) { return x.done; }).length;
+      var open = !firstOpen && d < wk.steps.length; if (open) firstOpen = true;
+      html += '<details class="w37week"' + (open ? ' open' : '') + '><summary>' + E(wk.name)
+        + ' <span class="w37bar" style="max-width:140px"><i style="width:' + Math.round(100 * d / wk.steps.length) + '%"></i></span>'
+        + '<span style="font-size:11.5px;color:#797773;font-weight:500">' + d + ' of ' + wk.steps.length + '</span></summary><div class="w37wbody">';
+      wk.steps.forEach(function (x) {
+        var t = x.t, s = x.s, ls = x.ls, done = x.done, acad = !!(t.training_id || t.academy_path);
+        var due = '';
+        if (!done && s.due_date) due = '<span class="w44due' + (String(s.due_date) < today ? ' late' : '') + '">due ' + E(String(s.due_date)) + '</span>';
+        html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (done ? ' done' : '') + '" data-w166t="' + E(t.id) + '">'
+          + '<input type="checkbox" data-w37chk="' + s.id + '"' + (done ? ' checked' : '') + (canTick && !(ls && ls.done) ? '' : ' disabled')
+          + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
+          + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
+          + (t.priority === 'high' ? '<span class="pr">important</span>' : '') + due + '</div>'
+          + chipHtml(t, ls)
+          + (t.description ? '<div class="ds">' + ((typeof wa37Md === 'function') ? wa37Md(t.description) : E(t.description)) + '</div>' : '')
+          + (s.done && s.done_by ? '<div class="ds" style="opacity:.6">done by ' + E(s.done_by) + '</div>' : (done && !s.done ? '<div class="ds" style="opacity:.6">done in the Avenue Academy</div>' : ''))
+          + '</div></div>';
+      });
+      html += '</div></details>';
+    });
+    return html;
+  }
+  if (__chk166) wa37Checklist = checklist;
+  /* open a module or an avenue from the plan (the plan sheet closes behind it in the Academy's own routing) */
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166open]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var v = String(b.getAttribute('data-w166open') || ''), k = v.slice(0, 2), id = v.slice(2);
+    try { if (typeof closeModal === 'function' && b.closest('.modal-back')) closeModal(); } catch (x) { /* fine */ }
+    if (k === 't:') location.hash = '#training/t/' + id;
+    else if (k === 'p:') location.hash = '#training/p/' + id;
+    else location.hash = '#training';
+  }, true);
+
+  /* the plan sheet in the Academy: which onboarding it shows (the Academy's own choice: the person's, not cancelled) */
+  function planOnb() {
+    try {
+      if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
+      var n = myName().toLowerCase();
+      return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
+    } catch (e) { return null; }
+  }
+  /* its counts include the steps finished in the Academy that the page has not reloaded yet */
+  function syncHead() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh || !sh.querySelector('.onbwrap')) return;
+    var o = planOnb(); if (!o) return;
+    var total = 0, done = 0;
+    planStates(o).forEach(function (wk) { wk.steps.forEach(function (x) { total++; if (x.done) done++; }); });
+    if (!total) return;
+    var kk = sh.querySelector('.hd .kk span:last-child'); if (kk && / steps$/.test(kk.textContent)) kk.textContent = done + ' of ' + total + ' steps';
+    var bar = sh.querySelector(':scope > .pr > i'); if (bar) bar.style.width = Math.round(100 * done / total) + '%';
+    var st = sh.querySelector('.ft .st'); if (st && !st.querySelector('.ok') && / done$/.test(st.textContent)) st.textContent = done + ' of ' + total + ' done';
+  }
+  /* draw the plan again in place (after the Academy ticked steps), keeping the weeks that were open and the scroll */
+  function replan() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap) return;
+    var o = planOnb(); if (!o) return;
+    var open = [].map.call(wrap.querySelectorAll('details.w37week'), function (d) { return d.open; });
+    var main = sh.querySelector('.main'), top = main ? main.scrollTop : 0;
+    wrap.innerHTML = checklist(o, true);
+    [].forEach.call(wrap.querySelectorAll('details.w37week'), function (d, i) { if (open[i] != null) d.open = open[i]; });
+    if (main) main.scrollTop = top;
+    syncHead();
+    try { document.dispatchEvent(new CustomEvent('w166replan')); } catch (e) { /* fine: wave167's journey listens */ }
+  }
+  /* the plan sheet: say how Academy steps work, and ask for help from here too */
+  function decoratePlan() {
+    var sh = document.querySelector('#w122sheet .sh'); if (!sh) return;
+    var wrap = sh.querySelector('.onbwrap'); if (!wrap || wrap.getAttribute('data-w166')) return;
+    wrap.setAttribute('data-w166', '1');
+    var intro = sh.querySelector('.main .prose p');
+    if (intro && intro.textContent.indexOf('Avenue Academy') < 0) intro.insertAdjacentHTML('beforeend', ' Steps marked Avenue Academy tick themselves when you finish the module or the avenue here, and the videos play inside the Hub.');
+    var mine = planOnb(); if (mine && mine.status !== 'active') mine = null;
+    if (mine) {
+      /* the Academy's sheet sits above every modal, so the form opens right here */
+      var left = planStates(mine).reduce(function (a, wk) { return a.concat(wk.steps.filter(function (x) { return !x.done; }).map(function (x) { return x.t; })); }, []);
+      wrap.insertAdjacentHTML('afterend', '<div class="w166help" id="w166help"><button type="button" data-w166help="' + E(mine.id) + '">Stuck on a step? Ask for help</button> <span style="font-size:12px;color:#797773">HR and your lead see it in the Hub.</span>'
+        + '<div class="w166hform">'
+        + '<label style="font-size:12.5px;font-weight:700;color:#103F39">Which step<select id="w166hs" style="display:block;width:100%;margin-top:4px">' + left.map(function (t) { return '<option>' + E(t.name) + '</option>'; }).join('') + '<option>Something else</option></select></label>'
+        + '<label style="font-size:12.5px;font-weight:700;color:#103F39">What is getting in the way<textarea id="w166hn" rows="3" style="display:block;width:100%;margin-top:4px" placeholder="A link that does not open, an invite that never came, a step that is unclear..."></textarea></label>'
+        + '<div><button type="button" class="w122btn" data-w166hsend="' + E(mine.id) + '">Send it</button></div></div></div>');
+    }
+    syncHead();
+  }
+  document.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166hsend]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.disabled) return; b.disabled = true;
+    try {
+      var r = await db.from('onboarding_help').insert({ onboarding_id: Number(b.getAttribute('data-w166hsend')), person_name: myName() || 'A team member',
+        step_name: (document.getElementById('w166hs') || {}).value || 'an onboarding step', note: ((document.getElementById('w166hn') || {}).value || '').trim() || null });
+      if (r && r.error) throw r.error;
+      var box = document.getElementById('w166help'); if (box) box.innerHTML = '<span class="w166acad ok">&#10003; Sent</span> <span style="font-size:12.5px;color:#4a5551">HR and your lead see it in the Hub and will reach out.</span>';
+    } catch (err) { b.disabled = false; T('Could not send it'); }
+  }, true);
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166help]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    var f = b.parentElement && b.parentElement.querySelector('.w166hform'); if (f) { f.classList.toggle('on'); if (f.classList.contains('on')) { var ta = f.querySelector('textarea'); if (ta) ta.focus(); } }
+  }, true);
+
+  /* ---------- Home: the people a lead is onboarding, and where the lead comes in (onboarding_lead_view) ---------- */
+  function load(force) {
+    if (S.loading) return S.loading;
+    if (S.lead && !force && Date.now() - S.at < 60000) return Promise.resolve(S.lead);
+    S.loading = (async function () {
+      try {
+        var r = await db.rpc('onboarding_lead_view');
+        if (r && r.error) throw r.error;
+        S.lead = (r && r.data) || { people: [] }; S.err = null;
+      } catch (e) { S.err = String((e && e.message) || e); S.lead = S.lead || { people: [] }; }
+      S.at = Date.now(); S.loading = null;
+      return S.lead;
+    })();
+    return S.loading;
+  }
+  var SEC_SHORT = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days', '90 DAYS': '90 days', '6 MONTHS': '6 months' };
+  function weekOf(day) { if (day <= 7) return 'Week 1 of 4'; if (day <= 14) return 'Week 2 of 4'; if (day <= 21) return 'Week 3 of 4'; if (day <= 28) return 'Week 4 of 4'; if (day <= 60) return 'Up to 60 days'; return 'Past 60 days'; }
+  function leadStepsHtml(p) {
+    var today = todayIso(), soonDay = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    var steps = (p.lead_steps || []).slice();
+    var open = steps.filter(function (s) { return !s.done; }), done = steps.filter(function (s) { return s.done; });
+    var showOpen = open.filter(function (s) { return !s.due || String(s.due) <= soonDay; });
+    var later = open.length - showOpen.length;
+    var h = '';
+    showOpen.forEach(function (s) {
+      var late = s.due && String(s.due) < today;
+      var extra = '';
+      if (/quiz/i.test(s.name || '')) extra = (p.quizzes_done >= 2 ? 'Both quizzes are in: review them with them.' : (p.quizzes_done === 1 ? 'One of the two quizzes is in.' : 'Their quizzes come in week 4.'));
+      h += '<label class="w166ls"><input type="checkbox" data-w166tick="' + E(s.id) + '"' + (S.busy['t' + s.id] ? ' disabled' : '') + ' /><span>' + E(s.name)
+        + (s.due ? '<span class="w166due' + (late ? ' late' : (String(s.due) <= soonDay ? ' soon' : '')) + '">' + (late ? 'was due ' : 'by ') + E(fmtDay(s.due)) + '</span>' : '')
+        + (s.description || extra ? '<small>' + E(extra || s.description) + '</small>' : '') + '</span></label>';
+    });
+    if (later) h += '<div class="w166note">Later: ' + later + ' more of yours, starting ' + E(fmtDay((open.filter(function (s) { return String(s.due || '') > soonDay; })[0] || {}).due)) + '.</div>';
+    if (!showOpen.length && !later && done.length) h += '<div class="w166note">All your moments are done. Thank you for bringing them in.</div>';
+    if (done.length && (showOpen.length || later)) h += '<div class="w166note" style="color:#797773">Done: ' + done.map(function (s) { return E(s.name); }).join(', ') + '.</div>';
+    (p.help || []).forEach(function (q) {
+      h += '<div class="w166ask"><b>Asked for help</b> on ' + E(q.step || 'a step') + (q.note ? ': \u201c' + E(q.note) + '\u201d' : '') + ' <span style="color:#8a6414">(' + E(ago(q.at)) + ')</span>'
+        + '<button type="button" data-w166resolve="' + E(q.id) + '">Dealt with</button></div>';
+    });
+    if (p.late_count) {
+      h += '<div class="w166note"><b style="color:#B3402F">Behind on ' + p.late_count + (p.late_count === 1 ? ' step' : ' steps') + '</b>: '
+        + (p.late || []).slice(0, 3).map(function (l) { return E(l.name) + ' (due ' + E(fmtDay(l.due)) + ')'; }).join(', ')
+        + (p.late_count > 3 ? ', and more' : '') + '. A quick message or ten minutes together usually unblocks it.</div>';
+    }
+    return h;
+  }
+  function planHtml(p) {
+    var today = todayIso(), by = {}, order = [];
+    (p.steps || []).forEach(function (s) { if (!by[s.section]) { by[s.section] = []; order.push(s.section); } by[s.section].push(s); });
+    return order.map(function (sec) {
+      return '<div class="w166sec"><b>' + E(SEC_SHORT[sec] || sec) + '</b>' + by[sec].map(function (s) {
+        var late = !s.done && s.due && String(s.due) < today;
+        return '<div class="w166st' + (s.child ? ' child' : '') + (s.done ? ' done' : '') + (late ? ' late' : '') + '">' + E(s.name) + (s.academy ? '<em>Avenue Academy</em>' : '') + (late ? ' <span style="font-size:11px">(due ' + E(fmtDay(s.due)) + ')</span>' : '') + '</div>';
+      }).join('') + '</div>';
+    }).join('');
+  }
+  function personHtml(p) {
+    var pct = p.total ? Math.round(100 * p.done / p.total) : 0;
+    var status = p.late_count ? '<span class="late">' + p.late_count + ' late</span>' : '<span class="ok">on pace</span>';
+    var wks = (p.sections || []).map(function (s) {
+      var cls = s.done >= s.total ? ' done' : (s.due && String(s.due) < todayIso() ? ' late' : '');
+      return '<span class="w166wk' + cls + '">' + E(SEC_SHORT[s.name] || s.name) + ' ' + s.done + '/' + s.total + '</span>';
+    }).join('');
+    var av = (p.academy || []).filter(function (a) { return a && a.total; }).map(function (a) {
+      if (a.asked === 'team' && !a.done && !a.complete) return '<span>Team avenue: not started</span>';
+      return '<span class="' + (a.complete ? 'ok' : '') + '">' + (a.complete ? '&#10003; ' : '') + E(a.title || a.key) + ' ' + a.done + '/' + a.total + '</span>';
+    }).join('');
+    var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
+    return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
+      + '<div class="w166top"><div class="w166av">' + E(initials(p.name)) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
+      + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
+      + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
+      + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')
+      + (p.next ? ' &middot; next: ' + E(p.next.name) : '') + '</div>'
+      + '<div class="w166wks">' + wks + '</div>'
+      + '<div class="w166you"><div class="w166h">Where you come in</div>' + (leadStepsHtml(p) || '<div class="w166note">Nothing for you right now.</div>') + '</div>'
+      + (av ? '<div class="w166av2"><b>Avenue Academy</b>' + av + '</div>' : '')
+      + '<details class="w166plan"' + (S.open[p.onboarding_id] ? ' open' : '') + ' data-w166plan="' + E(p.onboarding_id) + '"><summary>See their plan</summary>' + planHtml(p) + '</details>'
+      + '</div>';
+  }
+  function cardHtml(d) {
+    var ppl = (d && d.people) || [];
+    if (!ppl.length) return '';
+    return '<h3>' + (ppl.length === 1 ? 'Your new person\u2019s onboarding' : 'Your people\u2019s onboarding (' + ppl.length + ')') + '</h3>'
+      + '<p style="margin:0 0 10px;font-size:12.5px;color:#4a5551">How each person you are bringing in is doing, and the moments that are yours. Tick yours as you do them.</p>'
+      + '<div class="w166ppl">' + ppl.map(personHtml).join('') + '</div>';
+  }
+  function paint() {
+    var body = document.getElementById('mpBody');
+    var el = document.getElementById('w166lead');
+    var html = cardHtml(S.lead);
+    if (!body || !html) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w166lead'; el.className = 'mp-sec';
+      var a = document.getElementById('w112wrap') || body.querySelector('.mp-online') || body.querySelector('.mp-chips') || body.querySelector('.mp-head');
+      if (a && a.parentNode === body) body.insertBefore(el, a.nextSibling); else body.insertBefore(el, body.firstChild);
+    }
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function refresh(force) { return load(force).then(function () { paint(); }); }
+  document.addEventListener('toggle', function (e) {
+    var d = e.target; if (!d || !d.getAttribute || !d.getAttribute('data-w166plan')) return;
+    S.open[d.getAttribute('data-w166plan')] = d.open;
+  }, true);
+  document.addEventListener('change', async function (e) {
+    var c = e.target; if (!c || !c.getAttribute || !c.getAttribute('data-w166tick')) return;
+    var id = Number(c.getAttribute('data-w166tick')); S.busy['t' + id] = true; c.disabled = true;
+    try {
+      var r = await db.rpc('onboarding_lead_tick', { p_step: id, p_done: !!c.checked });
+      if (r && r.error) throw r.error;
+      T(c.checked ? 'Done. Thank you.' : 'Marked not done');
+    } catch (err) { c.checked = !c.checked; T('Could not save that: ' + String((err && err.message) || err).slice(0, 80)); }
+    delete S.busy['t' + id];
+    await refresh(true);
+  }, true);
+  document.addEventListener('click', async function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('[data-w166resolve]') : null;
+    if (!b) return;
+    e.preventDefault(); e.stopPropagation(); b.disabled = true;
+    try {
+      var r = await db.rpc('onboarding_help_resolve', { p_id: Number(b.getAttribute('data-w166resolve')) });
+      if (r && r.error) throw r.error;
+      T('Marked as dealt with');
+    } catch (err) { b.disabled = false; T('Could not save that'); return; }
+    await refresh(true);
+  }, true);
+
+  /* ---------- wiring ---------- */
+  /* one pass after the page changes (the body observer above calls it, debounced): the Watch here buttons, the plan sheet's
+     help and counts, and a finished Academy module (its celebration shows) brings the plan, the Academy and Home up to date */
+  var celSeen = false;
+  function afterDom() {
+    try { upgrade(document); } catch (e) { /* fine */ }
+    try { if (document.querySelector('#w122sheet .onbwrap:not([data-w166])')) decoratePlan(); } catch (e) { /* fine */ }
+    try {
+      var cel = !!document.getElementById('w122cel');
+      if (cel && !celSeen) { celSeen = true; afterComplete(); } else if (!cel) celSeen = false;
+    } catch (e) { /* fine */ }
+  }
+  /* a module or an avenue was finished: the database has ticked the plan's steps that go with it (trg_wa166_tp_onb) */
+  var acQ = null;
+  function afterComplete() {
+    if (acQ) return acQ;
+    acQ = (async function () {
+      try { if (typeof wa37Load === 'function') await wa37Load(true); } catch (e) { /* offline */ }
+      try { var st = window.w122 && window.w122.state ? window.w122.state() : null; if (st && st.R && st.R.mode === 'onb') replan(); } catch (e) { /* fine */ }
+      try { if (window.w122 && typeof window.w122.paint === 'function') window.w122.paint(); } catch (e) { /* fine */ }
+      try { if (document.getElementById('w166lead')) await refresh(true); } catch (e) { /* fine */ }
+      acQ = null;
+    })();
+    return acQ;
+  }
+
+  /* Home: the leads' card after every render of Home (cached for a minute; ticks and help refresh it at once) */
+  if (typeof renderMyPage === 'function') {
+    var __rm166 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm166.apply(this, arguments);
+      try { paint(); refresh(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) {
+      if (evt === 'SIGNED_OUT') { S.lead = null; S.at = 0; S.open = {}; var el = document.getElementById('w166lead'); if (el) el.remove(); }
+    });
+  } catch (e) { /* fine */ }
+
+  /* ---------- the tours: a stop for the leads' card on Home; the Academy's onboarding stop says how Academy steps work ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT) return;
+      var hs = TT.home && TT.home.steps;
+      if (hs && !hs.some(function (x) { return x.s === '#w166lead'; })) {
+        var i = -1; hs.forEach(function (x, k) { if (x.s === '#w112wrap') i = k; });
+        hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w166lead', t: 'Your people\u2019s onboarding',
+          p: 'Leads see each person they are onboarding: how far they are, what is late, their help requests, and the moments that are yours (introduce them, first tasks, the two-week check-in, the quizzes, the 30-day evaluation). Tick yours here; See their plan opens the whole plan.', opt: 1 });
+      }
+      var as = TT.academy && TT.academy.steps;
+      var st = as ? as.filter(function (x) { return x.s === '#w122 .w122onb'; })[0] : null;
+      if (st && String(st.p).indexOf('journey') < 0) st.p = 'Your onboarding plan, the Hub first steps and the policies to sign, in one place at the top. The plan opens as a journey, week by week; steps marked Avenue Academy tick themselves when you finish the module or the avenue, and the videos play inside the Hub.';
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  /* ---------- test hook ---------- */
+  window.w166 = {
+    state: function () { return S; }, load: load, paint: paint, refresh: refresh, upgrade: upgrade, checklist: checklist,
+    planStates: planStates, decoratePlan: decoratePlan, syncHead: syncHead, afterComplete: afterComplete,
+    pathState: function (who, key) { var cx = ctxFor(who); return cx ? pathState(cx, key) : null; }
+  };
+})();

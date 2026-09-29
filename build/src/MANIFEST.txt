@@ -184,6 +184,10 @@
 153_wave153
 # 162_wave162: the Loom pull: the Loom card at the top of the Transcript archive (admins), the tour stop.
 162_wave162
+# 166_wave166: onboarding around the Hub and the Avenue Academy (the plan: Academy steps that tick themselves, Loom videos that play in place, Ask for help; the leads' card on Home; the tours). The changes also live in 039, 046 and 108.
+166_wave166
+# 167_wave167: the onboarding journey: the plan in the Avenue Academy as a branded, photo-led road of weeks (welcome, the avenue, each week's goals, why and opening lesson, your people, our numbers, our story, celebrations); lesson photos live in 122.
+167_wave167
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

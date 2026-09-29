@@ -529,6 +529,8 @@ Master onboarding checklist in sections WEEK 1 to WEEK 4 and 60 DAYS, originally
 - `section`: WEEK 1, WEEK 2, WEEK 3, WEEK 4 or 60 DAYS; drives onb_due(). No CHECK.
 - `parent_id`: Parent step (onboarding_template.id) for sub-steps.
 - `content_pending`: True when the step's content is still to be written.
+- `academy_path`: wave166: the step is done in the Avenue Academy, by finishing a Learning Avenue: an academy_paths key, 'team' (one of the avenues of the person's team, or any avenue when their team has none) or 'any' (an avenue besides the three everyone does and the one that counted for 'team'). The step ticks itself (wa166_onb_sync, trg_wa166_tp_onb).
+- `training_id`: wave166: the step is done in the Avenue Academy, by finishing this module (trainings.id). The step ticks itself (wa166_onb_sync, trg_wa166_tp_onb).
 
 ### `onboarding_update_acks`
 
@@ -546,6 +548,8 @@ Help requests raised by a new person on an onboarding step; each insert notifies
 HR's own setup checklist for a new person, in three phases (Before day one, The onboarding call, Manager follow-through). Changes propagate to active plans (hr_setup_propagate).
 
 - `id`: Short step code (primary key).
+- `who`: wave166: who does the step: hr (HR, before day one and on the onboarding call) or lead (the person's lead: they see and tick it on Home, onboarding_lead_view and onboarding_lead_tick).
+- `due_day`: wave166: when the step is due, in days after the onboarding started (0 = on the first day).
 
 ### `hr_setup_steps`
 
@@ -1645,7 +1649,14 @@ Functions:
 - `wa_people_expand(jsonb)`: wave165: a list of people (names or emails) with every roster email and alias of the ones on the roster added, so a one-on-one's people match however they sign in.
 - `wa_task_visible(bigint)`: wave165: whether the signed-in person may see a task (the task_comments policy uses it; a comment whose task is gone stays readable).
 - `wa_ask_meetings(text, integer)`: wave165: Ask the Hub's meeting search, run as the asker: each word of the question counts by its rarity among the meetings (a word in the title counts double), with the passage around the rarest words; only what the asker may read (wa_sees_restricted, board_only).
-
+- `wa166_path_state(bigint, text)`: wave166: how far a person (team_members.id) is in a Learning Avenue: {key, title, done, total, complete, asked}. 'team': the avenue of their team they are furthest in (any avenue besides the three everyone does when their team has none); 'any': an avenue besides the three everyone does and besides the one that counted for 'team'. Keela, page tours, Your first week and planned trainings do not count there.
+- `wa166_training_done(bigint, bigint)`: wave166: whether a person (team_members.id) finished an Academy module.
+- `wa166_onb_sync(bigint)`: wave166: ticks the steps of an active onboarding that were done in the Avenue Academy (a module or an avenue). Called by trg_wa166_tp_onb and onboarding_assign; the plan completes itself when its last step is ticked (trg_wa166_onb_done).
+- `wa166_onb_done()`: wave166: trigger on onboarding_steps: an onboarding completes when its last active step is ticked, and opens again when a step is unticked.
+- `wa166_person_card(bigint, text)`: wave166: one onboarding as a lead sees it: the plan by week, what is late and next, the lead's moments, open help requests and the avenues. Only through onboarding_lead_view.
+- `onboarding_lead_view()`: wave166: the signed-in lead's people with an onboarding in progress: those who report to them in the org chart, or without a manager there the leaders of their team, or without either the admins. Home shows it.
+- `onboarding_lead_tick(bigint, boolean)`: wave166: a lead ticks one of their moments (an HR setup step whose who is lead) for a person they are onboarding; admins can tick any step.
+- `onboarding_help_resolve(bigint)`: wave166: the person's lead or a leader marks a help request on an onboarding step as dealt with.
 - `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
 
 ### `www_files` (wave162)

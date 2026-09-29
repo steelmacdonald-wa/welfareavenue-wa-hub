@@ -1,0 +1,100 @@
+{
+ "v": 1,
+ "hero": {
+  "photo": "photos/web/2024-07-summer-team-under-the-tent.jpg",
+  "fx": 0.5,
+  "fy": 0.52,
+  "alt": "Thirteen volunteers in green Welfare Avenue vests pose under the green tent in a leafy park.",
+  "tag": "Service is solidarity, not charity."
+ },
+ "weeks": {
+  "WEEK 1": {
+   "title": "Get set up",
+   "photo": "photos/web/2024-10-autumn-volunteers-plating.jpg",
+   "fx": 0.42,
+   "fy": 0.45,
+   "lesson": "wa167w1",
+   "learn": [
+    "Set up your Welfare Avenue accounts: Google, Chrome, Slack and Loom",
+    "Find your way around the Hub and your team's page",
+    "Read our policies, and check in and out every time you work"
+   ],
+   "why": "Everything at Welfare Avenue runs through these tools. A week spent setting them up well saves you hours later, and it means your team can reach you."
+  },
+  "WEEK 2": {
+   "title": "Who we are",
+   "photo": "photos/web/2022-01-winter-crew-in-the-snow.jpg",
+   "fx": 0.5,
+   "fy": 0.64,
+   "lesson": "wa167w2",
+   "learn": [
+    "Tell our story and our mission in your own words",
+    "Use our brand and the words we use for the people we serve",
+    "Do your first work in the Hub"
+   ],
+   "why": "You represent Welfare Avenue at servings, in messages and online. Knowing where we come from and how we speak means you represent us well."
+  },
+  "WEEK 3": {
+   "title": "Your team",
+   "photo": "photos/web/2023-10-autumn-crew-behind-the-table.jpg",
+   "fx": 0.55,
+   "fy": 0.55,
+   "lesson": "wa167w3",
+   "learn": [
+    "Know how your team works and meets",
+    "Start your team's Learning Avenue",
+    "Volunteer at your first serving"
+   ],
+   "why": "This is where you start contributing: your team, your tasks, and a serving where you see our work first hand."
+  },
+  "WEEK 4": {
+   "title": "Look back",
+   "photo": "photos/web/2025-12-gift-baskets-the-crew.jpg",
+   "fx": 0.5,
+   "fy": 0.5,
+   "lesson": "wa167w4",
+   "learn": [
+    "Show what stuck in two short quizzes",
+    "Look back on your first weeks in a self-assessment",
+    "Sit down with your lead and HR for your 30-day evaluation"
+   ],
+   "why": "A moment to check what stuck, say what could be better, and plan what comes next with your lead."
+  },
+  "60 DAYS": {
+   "title": "Grow",
+   "photo": "photos/web/2026-08-flag-football-celebration.jpg",
+   "fx": 0.5,
+   "fy": 0.5,
+   "lesson": null,
+   "learn": [
+    "Understand how Canadian charities work, receipts included",
+    "Pick a Learning Avenue to grow in",
+    "Meet one of our co-executive directors"
+   ],
+   "why": "Onboarding ends, growing does not. These steps set you up for the months ahead."
+  }
+ },
+ "numbers": [
+  {
+   "n": "2020",
+   "l": "the year we began, in Montreal"
+  },
+  {
+   "n": "20,000+",
+   "l": "meals and food bags since"
+  },
+  {
+   "n": "700+",
+   "l": "people have volunteered with us"
+  },
+  {
+   "n": "3,000+",
+   "l": "holiday gifts delivered in 2025"
+  },
+  {
+   "n": "3",
+   "l": "cities: Montreal, Toronto and a pilot in Ottawa"
+  }
+ ],
+ "numbers_note": "The Hub's estimates from our own records, September 2026."
+}
