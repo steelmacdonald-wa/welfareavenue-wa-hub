@@ -11,7 +11,10 @@
 <!-- Welfare Avenue: the Hub's donation page (wave161, 28/09/26). Served at /give (and /give/thanks after Stripe) by a
      Netlify rewrite (_redirects). Reads its settings from the donate function, sends the donor to Stripe Checkout, and
      shows the thank-you from what Stripe says. Off until an admin puts it live in the Hub (CRM, Gifts, Online giving);
-     ?preview=1 shows it to the team while it is off. Built by build/give/make.py from build/give/src.html. -->
+     ?preview=1 shows it to the team while it is off. Built by build/give/make.py from build/give/src.html.
+     v2 (28/09/26, wave161b): when the function says pay 'embedded' (the publishable key is set), Stripe's own form opens
+     inside this page (Embedded Checkout, Stripe.js v3 from js.stripe.com) and the donor never leaves the site; Change goes
+     back to the choices. If Stripe.js cannot load, the page falls back to Stripe's hosted page as before. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
 *{box-sizing:border-box}
@@ -73,6 +76,13 @@ select:focus,input[type=text]:focus{border-color:var(--green);box-shadow:0 0 0 3
 .done p{white-space:pre-line}
 .big{font-size:18px}
 .loading{color:var(--muted)}
+.summary{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 16px;background:var(--soft)}
+.summary .what{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:26px;line-height:1.1;color:var(--green);letter-spacing:.2px}
+.summary .small{margin:2px 0 0}
+.linkbtn{font:inherit;font-weight:600;border:0;background:transparent;color:var(--green);text-decoration:underline;cursor:pointer;padding:4px 2px;margin:0;flex:none}
+.linkbtn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.paybox{min-height:360px}
+@media (max-width:519px){.paybox{margin:0 -14px}}
 footer{max-width:640px;margin:0 auto;padding:0 16px 40px;font-size:13px;color:var(--muted)}
 a{color:var(--green)}
 </style>
@@ -89,10 +99,26 @@ a{color:var(--green)}
   var app = document.getElementById('app'), foot = document.getElementById('foot');
   var q = new URLSearchParams(location.search);
   var S = { cfg: null, token: '', loadedAt: 0, freq: 'once', amount: null, other: '', designation: '', tribute: false, tkind: 'honour', tname: '',
-            cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? 'No payment was made. You can change anything below and try again.' : '', bannerKind: 'info', sending: false };
+            cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? 'No payment was made. You can change anything below and try again.' : '', bannerKind: 'info', sending: false,
+            paying: false, checkout: null, stripe: null };
+  var stripeJs = null;
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function money(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
   function cents(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
+  function embedded() { return !!(S.cfg && S.cfg.pay === 'embedded' && S.cfg.stripe_pk); }
+  function loadStripeJs() { /* Stripe.js must come from js.stripe.com itself (never bundled); v3 matches the API version the function uses */
+    if (window.Stripe) return Promise.resolve(window.Stripe);
+    if (stripeJs) return stripeJs;
+    stripeJs = new Promise(function (resolve, reject) {
+      var el = document.createElement('script'), timer = setTimeout(function () { reject(new Error('Stripe.js took too long')); }, 15000);
+      el.src = 'https://js.stripe.com/v3/'; el.async = true;
+      el.onload = function () { clearTimeout(timer); if (window.Stripe) resolve(window.Stripe); else reject(new Error('Stripe.js did not start')); };
+      el.onerror = function () { clearTimeout(timer); reject(new Error('Stripe.js could not load')); };
+      document.head.appendChild(el);
+    });
+    stripeJs.catch(function () { stripeJs = null; }); /* a later try loads it again */
+    return stripeJs;
+  }
   function call(method, body) {
     var opt = { method: method, headers: { apikey: KEY, Authorization: 'Bearer ' + KEY } };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
@@ -153,11 +179,54 @@ a{color:var(--green)}
         '<p class="small">' + E((c.org && c.org.address) || 'Welfare Avenue') + ' · ' + E((c.org && c.org.email) || '') + '</p></fieldset>' +
       '<div class="total" aria-live="polite"><span>' + (mon ? 'Your monthly gift' : 'Your gift') + '</span><b id="tot">' + (t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') : '–') + '</b></div>' +
       '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" id="hp" tabindex="-1" autocomplete="off"></label></div>' +
-      '<button type="submit" class="go" id="go"' + (S.sending ? ' disabled' : '') + '>' + (S.sending ? 'Opening the secure payment page…' : 'Continue to payment') + '</button>' +
-      '<p class="secure">' + LOCK + '<span>You finish on Stripe’s secure page, by card or a digital wallet.</span></p>' +
+      '<button type="submit" class="go" id="go"' + (S.sending ? ' disabled' : '') + '>' + (S.sending ? (embedded() ? 'Opening the secure payment form…' : 'Opening the secure payment page…') : 'Continue to payment') + '</button>' +
+      '<p class="secure">' + LOCK + '<span>' + (embedded() ? 'Next, Stripe’s secure payment form opens right here, for a card or a digital wallet.' : 'You finish on Stripe’s secure page, by card or a digital wallet.') + '</span></p>' +
       (c.receipt_note ? '<p class="small" style="text-align:center">' + E(c.receipt_note) + '</p>' : '') + '</form>';
     app.innerHTML = html;
     footer();
+  }
+  function paintPay() { /* the choices in one line with Change, and Stripe's form below them */
+    var c = S.cfg, t = totals(), mon = S.freq === 'monthly', bits = [];
+    if (c.designations.length > 1) bits.push(S.designation || c.designations[0]);
+    if (S.tribute && S.tname.trim()) bits.push((S.tkind === 'memory' ? 'In memory of ' : 'In honour of ') + S.tname.trim());
+    if (S.cover && t.fee) bits.push('includes ' + cents(t.fee / 100) + ' for the card fee');
+    app.innerHTML = '<h1>' + E(c.title) + '</h1><div class="rule"></div>' +
+      '<div class="summary"><div><span class="small">' + (mon ? 'Your monthly gift' : 'Your gift') + '</span><div class="what">' + E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') + '</div>' +
+        (bits.length ? '<p class="small">' + E(bits.join(' · ')) + '</p>' : '') + '</div><button type="button" class="linkbtn" id="change">Change</button></div>' +
+      '<div id="pay" class="paybox"><p class="loading">Loading the secure payment form…</p></div>' +
+      '<p class="secure">' + LOCK + '<span>Stripe handles the payment securely. Welfare Avenue never sees your card number.</span></p>' +
+      (c.receipt_note ? '<p class="small" style="text-align:center">' + E(c.receipt_note) + '</p>' : '');
+    footer();
+    try { app.scrollIntoView({ block: 'start' }); } catch (e) { /* fine */ }
+  }
+  function pay(secret, body) { /* mount Stripe's form in the page; if Stripe.js cannot run here, fall back to Stripe's own page */
+    S.sending = false; S.paying = true; paintPay();
+    loadStripeJs().then(function (StripeFn) {
+      if (!S.stripe) S.stripe = StripeFn(S.cfg.stripe_pk);
+      var make = S.stripe.createEmbeddedCheckoutPage || S.stripe.initEmbeddedCheckout; /* the newer Stripe.js name, then v3's */
+      if (typeof make !== 'function') throw new Error('no embedded checkout');
+      return make.call(S.stripe, { fetchClientSecret: function () { return Promise.resolve(secret); } });
+    }).then(function (co) {
+      if (!S.paying) { try { co.destroy(); } catch (e) { /* gone */ } return; }
+      S.checkout = co;
+      var box = document.getElementById('pay'); if (box) box.innerHTML = '';
+      co.mount('#pay');
+    }).catch(function () { hosted(body); });
+  }
+  function hosted(body) {
+    if (!S.paying) return;
+    var b = JSON.parse(JSON.stringify(body)); delete b.ui;
+    var box = document.getElementById('pay'); if (box) box.innerHTML = '<p class="loading">Opening Stripe’s secure page instead…</p>';
+    call('POST', b).then(function (r) {
+      if (r.status === 200 && r.body.url) { location.assign(r.body.url); return; }
+      S.paying = false; S.banner = 'Something went wrong on our side, and no payment was made. Please try again in a minute.'; S.bannerKind = 'warn'; render();
+    }).catch(function () { S.paying = false; S.banner = 'We could not reach Welfare Avenue. Check your connection and try again.'; S.bannerKind = 'warn'; render(); });
+  }
+  function back() { /* Change: Stripe's form goes away (only one can exist at a time) and the choices come back as they were */
+    S.paying = false;
+    if (S.checkout) { try { S.checkout.destroy(); } catch (e) { /* gone */ } S.checkout = null; }
+    S.banner = ''; render();
+    var g = document.getElementById('go'); if (g) g.focus();
   }
   function paintTotal() { /* keep typing smooth: update what depends on the amount without redrawing the field */
     var t = totals(), mon = S.freq === 'monthly', tot = document.getElementById('tot');
@@ -167,6 +236,7 @@ a{color:var(--green)}
     var o = document.querySelector('.other'); if (o) o.classList.toggle('on', S.other !== '');
   }
   app.addEventListener('click', function (ev) {
+    if (ev.target.closest && ev.target.closest('#change')) { ev.preventDefault(); back(); return; }
     var el = ev.target.closest ? ev.target.closest('[data-freq],[data-amt]') : null; if (!el) return;
     ev.preventDefault();
     if (el.hasAttribute('data-freq')) { var f = el.getAttribute('data-freq'); if (f !== S.freq) { S.freq = f; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.other = ''; S.errors = {}; render(); var b2 = document.querySelector('[data-freq="' + f + '"]'); if (b2) b2.focus(); } return; }
@@ -203,9 +273,11 @@ a{color:var(--green)}
     S.sending = true; S.banner = ''; render();
     var body = { action: 'checkout', token: S.token, hp: (document.getElementById('hp') || {}).value || '', frequency: S.freq, amount: Number(base()),
       designation: S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: 'en' };
+    if (embedded()) body.ui = 'embedded';
     var wait = Math.max(0, 3300 - (Date.now() - S.loadedAt)); /* the token must be a few seconds old (a person, not a script) */
     setTimeout(function () {
       call('POST', body).then(function (r) {
+        if (r.status === 200 && r.body.client_secret) { pay(r.body.client_secret, body); return; }
         if (r.status === 200 && r.body.url) { location.assign(r.body.url); return; }
         S.sending = false;
         if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = r.body.fields && r.body.fields.designation ? r.body.fields.designation : ''; S.bannerKind = 'warn'; render(); return; }
@@ -228,6 +300,7 @@ a{color:var(--green)}
         return;
       }
       render();
+      if (embedded() && S.cfg.mode === 'live') loadStripeJs().catch(function () { /* the fallback handles it at payment time */ });
     }).catch(function () { message('We could not reach Welfare Avenue', '<p>Check your connection and try again.</p>'); });
   }
   function thanks(id) {

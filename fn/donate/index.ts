@@ -1,25 +1,32 @@
-// Welfare Avenue: donate (v2, 28/09/26, wave161)
+// Welfare Avenue: donate (v3, 28/09/26, wave161b)
 // The public side of the Hub's donation page, shown at hub.welfareavenue.com/give.
 //   GET   The page's settings (the title and words, the amounts for once and monthly, the minimum and maximum, where the
 //         gift can go, the card-fee option, the news box and its words, the receipt and monthly notes, the charity's name,
 //         number and address) and a signed token. While the page is off (app_config donate_mode) mode is 'off': the page
-//         says giving online opens soon, and ?preview=1 shows it to the team without taking a gift.
-//   POST {action: 'checkout', token, hp, frequency, amount, designation, tribute_kind, tribute_name, consent, fee_cover, lang}
+//         says giving online opens soon, and ?preview=1 shows it to the team without taking a gift. v3: pay is 'embedded'
+//         with stripe_pk (the publishable key, which is public by design) when STRIPE_PUBLISHABLE_KEY is set and matches the
+//         secret key's mode, so the page shows Stripe's form in place; otherwise pay is 'redirect' (Stripe's own page).
+//   POST {action: 'checkout', token, hp, frequency, amount, designation, tribute_kind, tribute_name, consent, fee_cover, lang, ui}
 //         The forms' built-in checks (the hidden field hp empty, the token 3 seconds to 24 hours old; spam is kept and
 //         answered without a link, so a bot learns nothing), at most 10 checkouts per network address in 10 minutes and 300
 //         an hour in all, the choices checked against the settings, then a Stripe Checkout session: one-time (payment,
 //         Donate button) or monthly (subscription), in Canadian dollars only (no other currency offered), the billing
 //         address required (a receipt needs it),
 //         the card fee added only when asked and worked out here (never taken from the page), the donor's choices in the
-//         session's metadata (wa_source hub-donate is how stripe-events knows the gift is the page's). Answers {url}.
+//         session's metadata (wa_source hub-donate is how stripe-events knows the gift is the page's). Answers {url}, or with
+//         ui 'embedded' (v3, when the publishable key is set) an embedded session: {client_secret}, which the page mounts
+//         with Stripe.js; Stripe then sends the donor to /give/thanks on the same site (return_url).
 //   POST {action: 'thanks', session_id}  What the thank-you view shows: complete, paid or waiting (a bank debit), once or
 //         monthly, the amount, the first name, and the page's thank-you, receipt and monthly notes. A session the page did
 //         not make is not found.
 // Tests: x-wa-secret (WA_TRIGGER_SECRET) with {"test": true} may make a session while the page is off (kept as test in
-//   crm_donate_attempts); {"checks": true} runs the spam checks as for the public; {"action": "token", "age": n} gives a token.
+//   crm_donate_attempts); {"checks": true} runs the spam checks as for the public; {"action": "token", "age": n} gives a token;
+//   {"ui": "embedded"} makes an embedded session even before the publishable key is set (v3).
 // Auth: verify_jwt on with the publishable key, which the page sends like every page of the Hub. Stripe: the restricted key
-//   STRIPE_SECRET_KEY (Edge Function secret), Stripe-Version pinned. Vault: WA_FORM_SECRET signs the tokens and keys the
-//   network address hash (never the address itself). Tables: app_config (read), crm_donate_attempts (write).
+//   STRIPE_SECRET_KEY and the publishable key STRIPE_PUBLISHABLE_KEY (Edge Function secrets Steel adds), Stripe-Version pinned
+//   (2024-06-20, where the embedded mode is ui_mode 'embedded'; Stripe.js v3 on the page matches it). Vault: WA_FORM_SECRET
+//   signs the tokens and keys the network address hash (never the address itself). Tables: app_config (read),
+//   crm_donate_attempts (write).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -85,6 +92,16 @@ async function stripe(method: string, path: string, params?: Json, idem?: string
   return { status: r.status, ok: r.ok, body: j };
 }
 
+function keyMode(k: string): string { return /^(sk|rk|pk)_live_/.test(k) ? 'live' : /^(sk|rk|pk)_test_/.test(k) ? 'test' : ''; }
+// the publishable key for Stripe.js on the page: only a pk_ key, and only in the secret key's mode (a live session cannot be
+// shown with a test key); anything else means the page sends donors to Stripe's own page as before
+function publishable(): string {
+  const pk = (Deno.env.get('STRIPE_PUBLISHABLE_KEY') || '').trim();
+  const sk = (Deno.env.get('STRIPE_SECRET_KEY') || '').trim();
+  if (!/^pk_(live|test)_[A-Za-z0-9]{10,250}$/.test(pk) || !keyMode(sk) || keyMode(pk) !== keyMode(sk)) return '';
+  return pk;
+}
+
 // ---------- the page's settings ----------
 async function settings(): Promise<Record<string, string>> {
   const { data, error } = await svc.from('app_config').select('key,value').in('key', KEYS);
@@ -148,7 +165,8 @@ Deno.serve(async (req: Request) => {
       const m = await settings();
       const ts = Math.floor(Date.now() / 1000);
       const token = ts + '.' + (await hmac(await secret('WA_FORM_SECRET'), 'donate|' + ts)).slice(0, 32);
-      return reply(req, { ...publicConfig(m), token });
+      const pk = publishable();
+      return reply(req, { ...publicConfig(m), token, pay: pk ? 'embedded' : 'redirect', stripe_pk: pk || undefined });
     }
     if (req.method !== 'POST') return reply(req, { error: 'method' }, 405);
     const raw = await req.text();
@@ -214,11 +232,14 @@ Deno.serve(async (req: Request) => {
 
     const c = check(cfg, body);
     if (Object.keys(c.errors).length) return reply(req, { error: 'invalid', fields: c.errors }, 400);
+    // v3: Stripe's form inside the page when it asks for it and the publishable key is there; Stripe's own page otherwise
+    // (a test with the trigger secret may ask for one before the publishable key exists, to check Stripe accepts the session)
+    const embedded = body.ui === 'embedded' && (!!publishable() || isTest);
 
     const meta: Record<string, string> = {
       wa_source: 'hub-donate', wa_frequency: c.freq, wa_designation: c.designation, wa_tribute_kind: c.tk, wa_tribute_name: c.tn,
       wa_consent: c.consent ? 'yes' : 'no', wa_consent_label: c.consent ? cfg.consent_label.slice(0, 480) : '',
-      wa_base_cents: String(c.base), wa_fee_cover_cents: String(c.cover), wa_lang: c.lang, wa_page: 'give v1' + (isTest ? ' test' : '')
+      wa_base_cents: String(c.base), wa_fee_cover_cents: String(c.cover), wa_lang: c.lang, wa_page: 'give v2 ' + (embedded ? 'embedded' : 'hosted') + (isTest ? ' test' : '')
     };
     const product = (m.donate_product || '').trim();
     const price: Json = { currency: 'cad', unit_amount: c.total };
@@ -226,8 +247,6 @@ Deno.serve(async (req: Request) => {
     const params: Json = {
       mode: c.freq === 'monthly' ? 'subscription' : 'payment',
       line_items: [{ quantity: 1, price_data: c.freq === 'monthly' ? { ...price, recurring: { interval: 'month' } } : price }],
-      success_url: SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: SITE + '/give?cancelled=1',
       billing_address_collection: 'required',
       locale: c.lang === 'fr' ? 'fr' : 'auto',
       // the gift stays in Canadian dollars (a receipt is in dollars): no offer to pay in another currency
@@ -235,17 +254,20 @@ Deno.serve(async (req: Request) => {
       metadata: meta,
       expires_at: Math.floor(Date.now() / 1000) + 3600
     };
+    if (embedded) { params.ui_mode = 'embedded'; params.return_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}'; }
+    else { params.success_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}'; params.cancel_url = SITE + '/give?cancelled=1'; }
     if (c.freq === 'monthly') params.subscription_data = { metadata: meta, description: 'Monthly gift to Welfare Avenue' };
     else { params.submit_type = 'donate'; params.customer_creation = 'always'; params.payment_intent_data = { metadata: meta, description: 'Gift to Welfare Avenue' }; }
 
     const r = await stripe('POST', '/v1/checkout/sessions', params, 'wa-give-' + crypto.randomUUID());
-    if (!r.ok || !r.body || !r.body.url) {
+    if (!r.ok || !r.body || !(embedded ? r.body.client_secret : r.body.url)) {
       const e = r.body && r.body.error ? (r.body.error.code || r.body.error.type || '') + ': ' + String(r.body.error.message || '').slice(0, 200) : 'status ' + r.status;
       await attempt({ ...base, status: 'error', frequency: c.freq, amount_cents: c.total, error: e });
       return reply(req, isTest ? { error: 'stripe', detail: e } : { error: 'stripe' }, 502);
     }
     await attempt({ ...base, status: isTest ? 'test' : 'session', frequency: c.freq, amount_cents: c.total, session_id: r.body.id });
-    return reply(req, isTest ? { url: r.body.url, session_id: r.body.id, total_cents: c.total, cover_cents: c.cover } : { url: r.body.url });
+    const out: Json = embedded ? { client_secret: r.body.client_secret } : { url: r.body.url };
+    return reply(req, isTest ? { ...out, session_id: r.body.id, ui_mode: r.body.ui_mode, total_cents: c.total, cover_cents: c.cover } : out);
   } catch (e) {
     return reply(req, { error: 'server', detail: String((e as Error).message || e).slice(0, 200) }, 500);
   }
