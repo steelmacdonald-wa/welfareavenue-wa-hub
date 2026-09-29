@@ -8,3 +8,5 @@ out/
 og/*.png
 staged.json
 __pycache__/
+team-src/
+ev-src/

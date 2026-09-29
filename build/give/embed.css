@@ -1,0 +1,13 @@
+/* Welfare Avenue: the donation popup's styles (wave161c, 28/09/26), served from https://hub.welfareavenue.com/give/embed.css
+   and linked by give/embed.js, so pages with a strict Content-Security-Policy (no inline styles) can show the popup. */
+.wa-dn-back{position:fixed;top:0;right:0;bottom:0;left:0;z-index:2147483000;background:rgba(14,30,27,.62);display:flex;align-items:center;justify-content:center;padding:24px 16px;box-sizing:border-box}
+.wa-dn-box{position:relative;width:100%;max-width:980px;background:#fff;border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,.35);overflow:hidden}
+.wa-dn-box iframe{display:block;width:100%;height:560px;border:0;background:#fff}
+.wa-dn-x{position:absolute;top:10px;right:10px;z-index:2;width:40px;height:40px;border-radius:50%;border:0;margin:0;padding:0;background:rgba(255,255,255,.94);color:#103F39;font:600 26px/40px Arial,sans-serif;text-align:center;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.22)}
+.wa-dn-x:focus-visible{outline:3px solid #DCA527;outline-offset:2px}
+.wa-dn-wait{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;align-items:center;justify-content:center;background:#fff;color:#6B6A66;font:15px Arial,sans-serif}
+.wa-dn-trap{position:absolute;width:1px;height:1px;overflow:hidden;opacity:0}
+@media (max-width:640px){.wa-dn-back{padding:0}
+.wa-dn-box{max-width:none;height:100%;border-radius:0}
+}
+.wa-dn-msg{margin:0 24px;text-align:center}

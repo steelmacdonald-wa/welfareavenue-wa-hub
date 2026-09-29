@@ -152,6 +152,12 @@ ROLES = {
 # Past fundraisers (site_events, kind fundraising, published). Titles and one-line notes written for the new site;
 # dates and places from the Hub (event 5's date from its own poster: 17 March). Poster images: build/www/images.py.
 EVENTS = [
+    (16, '2026-09-19', {'en': 'Rally Paper 2026', 'fr': 'Rally Paper 2026'}, 'Montreal',
+     {'en': 'Our Rally Paper challenge weekend, September 19 and 20, run together with partner organizations.',
+      'fr': 'Notre fin de semaine défi Rally Paper, les 19 et 20 septembre, organisée avec des organismes partenaires.'}),
+    (15, '2026-08-08', {'en': 'Flag Football Tournament, with the MFL', 'fr': 'Tournoi de football-drapeau, avec la MFL'}, 'Montreal',
+     {'en': '13 teams and 78 players took the field with the Montreal Flag Football League and raised $2,800. Thank you to Guru, DOSE and Lush for their support in kind, and to La Licorne de Feu for the food.',
+      'fr': '13 équipes et 78 joueurs et joueuses ont foulé le terrain avec la Montreal Flag Football League et amassé 2\u00a0800\u00a0$. Merci à Guru, DOSE et Lush pour leur soutien en nature, et à La Licorne de Feu pour la nourriture.'}),
     (14, '2025-12-21', {'en': 'Holiday Gift Baskets', 'fr': 'Paniers-cadeaux des fêtes'}, 'Montreal',
      {'en': 'Our second Holiday Gift Basket Drive, with Scattered and CEP: more than 3,000 gifts hand-delivered across Montreal.',
       'fr': 'Notre deuxième collecte de paniers-cadeaux des fêtes, avec Scattered et CEP : plus de 3 000 cadeaux livrés en main propre à Montréal.'}),
@@ -254,4 +260,125 @@ PHOTOS_NEW = [
      {'en': 'A smiling volunteer in a green vest over a brown jacket stands under the tent flap printed with the @welfareavenue handle.', 'fr': 'Une bénévole souriante en dossard vert par-dessus un manteau brun, sous le rabat de la tente où figure @welfareavenue.'}),
     ('2022-05-spring-grill-master', {'en': 'The grill master, May 2022', 'fr': 'Le maître du barbecue, mai 2022'},
      {'en': 'A volunteer in sunglasses and a Welfare Avenue vest flexes his arm with tongs in hand beside a grill of hot dogs.', 'fr': 'Un bénévole en lunettes de soleil et dossard Welfare Avenue fléchit le bras, pinces à la main, à côté d’un gril couvert de hot-dogs.'}),
+]
+
+# The team (wave162, 28/09/26): everyone active in the Hub's team list, by team. First names only; the roles are the
+# Hub's, written for the public (French in épicène forms). 'photo' is the file under img/team (from the Hub's avatars;
+# Slack's letter placeholders and a two-person photo left out, so those show initials). 'serv' and 'first' count the
+# servings in the member's linked volunteer record (event rosters confirmed plus legacy attendance, past dates only);
+# 'since' is the year of the member's start date in the Hub, left out where that date is the Google workspace's
+# setup day (17/01/2024) and so not the day they joined. Anyone can ask to be left off.
+TEAM_GROUPS = [
+    ('exec', {'en': 'Leadership', 'fr': 'Direction'}),
+    ('board', {'en': 'Board of directors', 'fr': 'Conseil d’administration'}),
+    ('opsmtl', {'en': 'Operations, Montreal', 'fr': 'Opérations, Montréal'}),
+    ('opsto', {'en': 'Toronto', 'fr': 'Toronto'}),
+    ('progdev', {'en': 'Program development', 'fr': 'Développement des programmes'}),
+    ('fundraising', {'en': 'Fundraising and events', 'fr': 'Collecte de fonds et événements'}),
+    ('marketing', {'en': 'Marketing and content', 'fr': 'Marketing et contenu'}),
+    ('hr', {'en': 'People and logistics', 'fr': 'Ressources humaines et logistique'}),
+]
+TEAM = [  # (hub id, team, name, role en, role fr, photo, servings, first serving year, since year)
+    (37, 'exec', 'Steel', 'Founder and board president', 'Personne fondatrice, présidence du CA', 'steel', 23, 2020, None),
+    (38, 'exec', 'Suhaib', 'Co-executive director', 'Codirection générale', None, 0, None, 2026),
+    (32, 'board', 'Daniela', 'Treasurer', 'Trésorerie', 'daniela', 0, None, 2025),
+    (39, 'board', 'Kellian', 'Board member', 'Membre du CA', None, 0, None, 2025),
+    (40, 'board', 'Mohamed', 'Board member', 'Membre du CA', None, 0, None, None),
+    (41, 'board', 'Tamara', 'Board member', 'Membre du CA', 'tamara', 0, None, None),
+    (42, 'board', 'Rima', 'Board adviser', 'Conseil auprès du CA', None, 0, None, None),
+    (1, 'opsmtl', 'Ahmed', 'Operations lead, Montreal', 'Responsable des opérations, Montréal', 'ahmed', 0, None, 2025),
+    (49, 'opsmtl', 'Eno', 'Operations co-lead', 'Coresponsable des opérations', 'eno', 0, None, 2026),
+    (6, 'opsmtl', 'Mary', 'Cook coordination', 'Coordination de la cuisine', 'mary', 0, None, 2026),
+    (43, 'opsmtl', 'Eleftherios (Terry)', 'Operations', 'Opérations', 'eleftherios', 0, None, 2026),
+    (45, 'opsmtl', 'Ibrahim', 'Operations', 'Opérations', None, 0, None, 2025),
+    (9, 'opsto', 'Tate', 'Operations manager, Toronto', 'Gestion des opérations, Toronto', None, 0, None, 2025),
+    (10, 'opsto', 'Melvina', 'Programs, Toronto', 'Programmes, Toronto', None, 0, None, 2026),
+    (11, 'opsto', 'Mandeep', 'Partnerships', 'Partenariats', None, 0, None, None),
+    (8, 'opsto', 'Gamze', 'Operations, Toronto', 'Opérations, Toronto', None, 0, None, None),
+    (12, 'opsto', 'Sama', 'Toronto team', 'Équipe de Toronto', None, 0, None, 2025),
+    (14, 'opsto', 'Bela', 'Toronto team', 'Équipe de Toronto', None, 0, None, None),
+    (15, 'opsto', 'Gabe', 'Student relations and the Community Closet', 'Relations étudiantes et vestiaire communautaire', None, 0, None, None),
+    (16, 'opsto', 'Karan', 'Volunteer driver', 'Transport bénévole', None, 0, None, 2026),
+    (3, 'progdev', 'Shima', 'Program development lead', 'Responsable du développement des programmes', 'shima', 0, None, 2026),
+    (4, 'progdev', 'Brianna', 'Program development and community coordination', 'Développement des programmes et coordination communautaire', 'brianna', 6, 2026, 2026),
+    (46, 'progdev', 'Zachee', 'Community team lead', 'Responsable de l’équipe communautaire', None, 0, None, 2026),
+    (7, 'progdev', 'Ola', 'Program development', 'Développement des programmes', None, 0, None, 2026),
+    (27, 'fundraising', 'Amanda', 'Events co-lead', 'Coresponsable des événements', 'amanda', 0, None, 2026),
+    (29, 'fundraising', 'Jemeela', 'Event coordinator', 'Coordination des événements', None, 0, None, None),
+    (50, 'fundraising', 'Alyx', 'Event coordinator', 'Coordination des événements', None, 0, None, 2026),
+    (30, 'fundraising', 'Alexis', 'Donor relations', 'Relations avec les personnes donatrices', 'alexis', 0, None, 2026),
+    (33, 'fundraising', 'Cindy', 'Grants', 'Subventions', None, 0, None, None),
+    (17, 'marketing', 'Ian', 'Director of marketing', 'Direction du marketing', 'ian', 0, None, None),
+    (18, 'marketing', 'Kahkashan', 'Marketing co-director', 'Codirection du marketing', 'kahkashan', 0, None, 2026),
+    (20, 'marketing', 'Eduardo', 'Brand lead', 'Responsable de l’image de marque', None, 0, None, 2025),
+    (22, 'marketing', 'Joy', 'Content and collaborations', 'Contenu et collaborations', 'joy', 2, 2024, 2024),
+    (23, 'marketing', 'Soraya', 'Design and newsletters', 'Design et infolettres', None, 2, 2026, 2024),
+    (21, 'marketing', 'Alejandra', 'Designer', 'Design graphique', None, 0, None, 2025),
+    (25, 'marketing', 'Patricia', 'Content and video', 'Contenu et vidéo', None, 0, None, 2025),
+    (26, 'marketing', 'Edison', 'Website and photography', 'Site web et photographie', None, 0, None, 2026),
+    (24, 'marketing', 'Robert', 'Copywriting', 'Rédaction', None, 0, None, None),
+    (34, 'hr', 'Valex', 'Human resources lead', 'Responsable des ressources humaines', 'valex', 0, None, 2025),
+    (36, 'hr', 'Samson', 'Onboarding', 'Accueil et intégration', None, 0, None, 2026),
+    (2, 'hr', 'Tuna', 'Logistics', 'Logistique', None, 1, 2026, 2025),
+]
+
+# Companies that worked with us, in their own LinkedIn posts (Steel, 28/09/26). The dates come from the posts' ids.
+# The posts load from LinkedIn only when a visitor asks.
+COMPANY_POSTS = [
+    ('Adaptavist', 'urn:li:ugcPost:7286722679879958528', 539, '2025-01',
+     {'en': 'Bryan’s post about the work Adaptavist did with us.', 'fr': 'La publication de Bryan sur le travail d’Adaptavist avec nous.'}),
+    ('GHD', 'urn:li:share:7335712650166759425', 668, '2025-06',
+     {'en': 'GHD’s post about a day with Welfare Avenue.', 'fr': 'La publication de GHD sur une journée avec Welfare Avenue.'}),
+    ('RBC', 'urn:li:share:7086448235212328961', 1070, '2023-07',
+     {'en': 'A post about our collaboration with RBC.', 'fr': 'Une publication sur notre collaboration avec RBC.'}),
+]
+
+# Fundraiser photos (wave162, 28/09/26): picked from content-images 'Flagfootball 2026' (the tournament on 08/08/26;
+# the Canon's clock reads May 2025, the leaves and the phones' dates say August 2026) and 'Gift basket drive'
+# (December 2025, WhatsApp copies). Sources are downloaded into build/www/ev-src (not in git). Volunteers,
+# players, partners and gifts only. The pictures not right for the website were moved into a 'Not for website'
+# folder beside them (photo-library sideline) for Steel to review and delete.
+FUND_PHOTOS = [  # (key, source under ev-src, caption, alt)
+    ('2026-08-flag-football-team-in-yellow', 'flag/BN0A8586.JPG', {'en': 'A team in yellow, August 2026', 'fr': 'Une équipe en jaune, août 2026'},
+     {'en': 'A team in yellow jerseys poses on the grass, the front row kneeling around a football.', 'fr': 'Une équipe en maillot jaune pose sur la pelouse, la première rangée à genoux autour d’un ballon.'}),
+    ('2025-12-gift-baskets-the-crew', 'gift/motion_photo_3185939658622393109.jpg', {'en': 'The gift basket crew, December 2025', 'fr': 'L’équipe des paniers-cadeaux, décembre 2025'},
+     {'en': 'About twenty volunteers hold up wrapped gifts behind tables in a bright room with city windows.', 'fr': 'Une vingtaine de bénévoles tiennent des cadeaux emballés derrière des tables, dans une pièce lumineuse qui donne sur la ville.'}),
+    ('2026-08-flag-football-on-the-run', 'flag/BN0A8540.JPG', {'en': 'On the run, August 2026', 'fr': 'À la course, août 2026'},
+     {'en': 'Players in yellow and white chase the play across the field, flags at their hips.', 'fr': 'Des joueurs en jaune et en blanc suivent le jeu sur le terrain, les fanions à la taille.'}),
+    ('2025-12-gift-baskets-wrapping', 'gift/motion_photo_5583711275468760194.jpg', {'en': 'Wrapping gifts, December 2025', 'fr': 'L’emballage des cadeaux, décembre 2025'},
+     {'en': 'Volunteers sit on the floor wrapping gifts beside large windows and stacks of boxes.', 'fr': 'Des bénévoles assis par terre emballent des cadeaux près de grandes fenêtres et de piles de boîtes.'}),
+    ('2026-08-flag-football-celebration', 'flag/BN0A8601.JPG', {'en': 'Celebrating on the field, August 2026', 'fr': 'La fête sur le terrain, août 2026'},
+     {'en': 'A team in yellow celebrates on the field, arms raised.', 'fr': 'Une équipe en jaune célèbre sur le terrain, les bras levés.'}),
+    ('2025-12-gift-baskets-bags', 'gift/motion_photo_3336655848881728989.jpg', {'en': 'Gift bags ready to go, December 2025', 'fr': 'Des sacs-cadeaux prêts à partir, décembre 2025'},
+     {'en': 'Brown paper gift bags filled with presents line a green table.', 'fr': 'Des sacs-cadeaux en papier brun remplis de présents sur une table verte.'}),
+    ('2026-08-flag-football-team-photo', 'flag/27953746-b6cc-41ec-8724-9de3949d37d1.jpg', {'en': 'A team on the field, August 2026', 'fr': 'Une équipe sur le terrain, août 2026'},
+     {'en': 'A group of players poses on the field under a blue sky, some crouching in front with a football.', 'fr': 'Un groupe de joueurs pose sur le terrain sous un ciel bleu, certains accroupis devant avec un ballon.'}),
+    ('2025-12-gift-baskets-elf-hat', 'gift/motion_photo_2911787912436395858.jpg', {'en': 'A volunteer in an elf hat, December 2025', 'fr': 'Une bénévole au bonnet de lutin, décembre 2025'},
+     {'en': 'A smiling volunteer in a green elf hat holds up a wrapped gift.', 'fr': 'Une bénévole souriante au bonnet de lutin vert tient un cadeau emballé.'}),
+    ('2026-08-flag-football-referee', 'flag/BN0A8550.JPG', {'en': 'The referee, August 2026', 'fr': 'L’arbitre, août 2026'},
+     {'en': 'A referee in a striped shirt and a cream cap stands by the field.', 'fr': 'Un arbitre en chandail rayé et casquette crème se tient au bord du terrain.'}),
+    ('2025-12-gift-baskets-delivery', 'gift/IMG-20251223-WA0008.jpg', {'en': 'Gifts delivered, December 2025', 'fr': 'Des cadeaux livrés, décembre 2025'},
+     {'en': 'Five volunteers stand with carts piled high with gift bags in a lobby.', 'fr': 'Cinq bénévoles avec des chariots chargés de sacs-cadeaux, dans un hall d’entrée.'}),
+    ('2026-08-flag-football-our-tent', 'flag/20260808_113416.jpg', {'en': 'Our tent at the tournament, August 2026', 'fr': 'Notre tente au tournoi, août 2026'},
+     {'en': 'Our green tent with the Welfare Avenue table banner and a red GURU drinks bin, bleachers behind.', 'fr': 'Notre tente verte avec la bannière Welfare Avenue sur la table et un bac rouge de boissons GURU, des gradins derrière.'}),
+    ('2026-08-flag-football-food-truck', 'flag/BN0A8513.JPG', {'en': 'La Licorne de Feu fed the players, August 2026', 'fr': 'La Licorne de Feu a nourri les joueurs, août 2026'},
+     {'en': 'A smiling man holding a can stands beside the black La Licorne de Feu food trailer, a cook at its window.', 'fr': 'Un homme souriant, une canette à la main, près de la remorque noire de La Licorne de Feu, un cuisinier à la fenêtre.'}),
+]
+EVENT_PHOTO = {14: '2025-12-gift-baskets-bags', 15: '2026-08-flag-football-team-in-yellow'}  # past events without a poster
+
+# Fundraisers coming up (wave162, 28/09/26), from the Hub's fundraising calendar (fund_events 3, 4, 13 and 14, the
+# 2026-27 plan). Only the recurring ones with a season set; dates firm up closer to each event.
+FUNDRAISERS_NEXT = [
+    ({'en': 'One Bag Challenge', 'fr': 'One Bag Challenge'}, {'en': 'November to December 2026', 'fr': 'Novembre et décembre 2026'},
+     {'en': 'Our fundraiser for the Holiday Gift Basket Drive, with clothing donated by thrift stores and brands.',
+      'fr': 'Notre collecte au profit des paniers-cadeaux des fêtes, avec des vêtements donnés par des friperies et des marques.'}),
+    ({'en': 'Holiday Gift Basket Drive', 'fr': 'Paniers-cadeaux des fêtes'}, {'en': 'December 2026', 'fr': 'Décembre 2026'},
+     {'en': 'Our third drive: gifts collected, wrapped and hand-delivered across Montreal before the holidays.',
+      'fr': 'Notre troisième collecte : des cadeaux recueillis, emballés et livrés en main propre à Montréal avant les fêtes.'}),
+    ({'en': 'Flag Football Tournament', 'fr': 'Tournoi de football-drapeau'}, {'en': 'Summer 2027', 'fr': 'Été 2027'},
+     {'en': 'The tournament returns with the Montreal Flag Football League. Teams can start planning now.',
+      'fr': 'Le tournoi revient avec la Montreal Flag Football League. Les équipes peuvent déjà s’y préparer.'}),
+    ({'en': 'Rally Paper', 'fr': 'Rally Paper'}, {'en': 'Summer 2027', 'fr': 'Été 2027'},
+     {'en': 'Our challenge weekend returns, run together with partner organizations.',
+      'fr': 'Notre fin de semaine défi revient, organisée avec des organismes partenaires.'}),
 ]

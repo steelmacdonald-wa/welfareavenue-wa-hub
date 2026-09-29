@@ -36,6 +36,9 @@ for k in PHOTOS:
 import sys; sys.path.insert(0, HERE); import content
 for k, _, _ in content.PHOTOS_NEW:
     save(Image.open(os.path.join(HERE, 'good-out', 'web', k + '.jpg')), k, [480, 960, 1600])
+# 28/09/26: fundraiser photos from the Flag football and Gift basket folders (build/www/ev-src, content.FUND_PHOTOS)
+for k, src, _, _ in content.FUND_PHOTOS:
+    save(Image.open(os.path.join(HERE, 'ev-src', src)), k, [480, 960, 1600])
 for i, f in POSTERS.items():
     save(Image.open(os.path.join(SRC, f)), 'event-%d' % i, [480, 1080])
 json.dump(man, open(os.path.join(HERE, 'img.json'), 'w'), indent=1, sort_keys=True)

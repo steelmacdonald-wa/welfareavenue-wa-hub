@@ -181,6 +181,99 @@
    1600
   ]
  },
+ "2025-12-gift-baskets-bags": {
+  "ratio": 1.7778,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2025-12-gift-baskets-delivery": {
+  "ratio": 0.7525,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2025-12-gift-baskets-elf-hat": {
+  "ratio": 1.3333,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2025-12-gift-baskets-the-crew": {
+  "ratio": 0.75,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2025-12-gift-baskets-wrapping": {
+  "ratio": 1.3333,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2026-08-flag-football-celebration": {
+  "ratio": 0.6667,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-food-truck": {
+  "ratio": 0.6667,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-on-the-run": {
+  "ratio": 0.6667,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-our-tent": {
+  "ratio": 1.3333,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-referee": {
+  "ratio": 1.5,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-team-in-yellow": {
+  "ratio": 0.6667,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2026-08-flag-football-team-photo": {
+  "ratio": 0.563,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
  "event-1": {
   "ratio": 0.5625,
   "w": [

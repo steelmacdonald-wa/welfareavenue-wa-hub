@@ -1,4 +1,4 @@
-// Welfare Avenue: photo-library (v1, 25/09/26)
+// Welfare Avenue: photo-library (v2, 28/09/26; v1 25/09/26)
 // Puts photo files into the public content-images bucket under photos/ for
 // the hub's Photo library (wa_photos). The hub itself uploads straight to
 // storage with the signed-in person's session (staff can write to
@@ -11,6 +11,9 @@
 //   {action:'remove', paths:[...]}          trigger secret or hub admin only
 //   {action:'check', paths:[...]}           which paths exist, with sizes
 // Every path must start with photos/ and end in .jpg, .jpeg, .png or .webp.
+//   {action:'sideline', paths:[...]}        v2, trigger secret or hub admin only: moves pictures that are not
+//        right for the website into a 'Not for website' folder beside them, so a person can review and delete
+//        them in one place. Nothing is deleted. Only for the upload folders named in SIDELINE (max 100 a call).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -18,6 +21,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const BUCKET = 'content-images';
+const SIDELINE = /^(Flagfootball 2026|Gift basket drive)\/([^\/]{1,160}\.(?:jpe?g|png|heic|webp))$/i;
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -94,6 +98,19 @@ Deno.serve(async (req: Request) => {
       const { data, error } = await svc.storage.from(BUCKET).remove(paths);
       if (error) return json({ error: error.message }, 500);
       return json({ ok: true, removed: (data || []).map(o => o.name) });
+    }
+    if (action === 'sideline') {
+      if (!me.admin) return json({ error: 'Only the trigger secret or a hub admin can move files.' }, 403);
+      const paths = (Array.isArray(body.paths) ? body.paths : []).map(String).slice(0, 100);
+      const out: Array<Record<string, unknown>> = [];
+      for (const from of paths) {
+        const m = SIDELINE.exec(from);
+        if (!m) { out.push({ from, ok: false, error: 'not an allowed upload folder' }); continue; }
+        const to = m[1] + '/Not for website/' + m[2];
+        const { error } = await svc.storage.from(BUCKET).move(from, to);
+        out.push(error ? { from, ok: false, error: error.message } : { from, to, ok: true });
+      }
+      return json({ ok: out.every(r => r.ok), moved: out.filter(r => r.ok).length, files: out });
     }
     return json({ error: 'unknown action' }, 400);
   } catch (e) {

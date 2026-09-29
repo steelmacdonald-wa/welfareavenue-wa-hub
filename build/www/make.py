@@ -102,7 +102,7 @@ def head(lang, key, title, desc, image=None):
             '<link rel="apple-touch-icon" href="/apple-touch-icon.png">\n'
             '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">\n'
-            '<link rel="stylesheet" href="/assets/site.css?v=%s">\n%s<script src="/assets/site.js?v=%s" defer></script>\n%s</head>\n'
+            '<link rel="stylesheet" href="/assets/site.css?v=%s">\n%s<script src="/assets/site.js?v=%s" defer></script>\n%s<script src="https://hub.welfareavenue.com/give/embed.js" async></script>\n</head>\n'
             % (lang, e(t), e(desc), '' if LAUNCH else '<meta name="robots" content="noindex">\n', e(canon), alt, e(t), e(desc), e(canon), og,
                'fr_CA' if lang == 'fr' else 'en_CA', V['site.css'], ld,
                V['site.js'], ('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else ''))
@@ -239,6 +239,58 @@ def receipt_line(lang):
     return ('Welfare Avenue is a registered charity in Canada (%s). Eligible gifts receive an official receipt for income tax purposes.' % C.CHARITY if lang == 'en' else
             'Welfare Avenue est un organisme de bienfaisance enregistré au Canada (%s). Les dons admissibles donnent droit à un reçu officiel aux fins de l’impôt.' % C.CHARITY)
 
+MONTHS = {'en': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+          'fr': ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']}
+
+def companies_section(lang):
+    """Companies that worked with us, each in its own LinkedIn post, embedded (Steel, 28/09/26); the frames load as the visitor scrolls to them."""
+    en = lang == 'en'
+    cards = []
+    for name, urn, h, ym, line in C.COMPANY_POSTS:
+        y, m = ym.split('-')
+        when = '%s %s' % (MONTHS[lang][int(m) - 1], y)
+        when = when[0].upper() + when[1:]
+        cards.append('<li class="lipost card"><p class="over">%s · LinkedIn</p><h3>%s</h3><p>%s</p>'
+                     '<iframe src="https://www.linkedin.com/embed/feed/update/%s?collapsed=1" height="%d" title="%s" loading="lazy" allowfullscreen></iframe>'
+                     '<p class="mb0"><a class="lilink" href="https://www.linkedin.com/feed/update/%s/" target="_blank" rel="noopener">%s</a></p></li>'
+                     % (e(when), e(name), e(line[lang]), e(urn), h, e(('%s on LinkedIn' if en else '%s sur LinkedIn') % name),
+                        e(urn), e('Open on LinkedIn' if en else 'Ouvrir sur LinkedIn')))
+    return ('<section class="band on-cream" id="companies"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p><ul class="liposts mt2">%s</ul>'
+            '<p class="mt2">%s <a href="%s">%s</a></p></div></section>\n'
+            % (e('Companies that work with us' if en else 'Des entreprises à nos côtés'), rule(),
+               e('Teams from these companies have worked alongside us. Here it is in their own words, on LinkedIn.' if en else
+                 'Des équipes de ces entreprises ont travaillé à nos côtés. Voici ce qu’elles en disent, sur LinkedIn.'),
+               ''.join(cards),
+               e('Want to bring your team?' if en else 'Vous voulez venir avec votre équipe\u00a0?'), e(url('volunteer', lang) + '#groups'),
+               e('Serve with us as a group' if en else 'Venir en groupe')))
+
+def team_section(lang):
+    """The team from the Hub (content.TEAM): photo or initials, first name, role, and servings or the year they joined."""
+    en = lang == 'en'
+    groups = []
+    for key, label in C.TEAM_GROUPS:
+        items = []
+        for hid, _, name, ren, rfr, photo, serv, first, since in [t for t in C.TEAM if t[1] == key]:
+            if photo:
+                pic = '<img class="face" src="/img/team/%s.jpg" alt="" width="96" height="96" loading="lazy" decoding="async">' % photo
+            else:
+                pic = '<span class="face ini c%d" aria-hidden="true">%s</span>' % (hid % 3, e(name[0].upper()))
+            if serv > 1: note = ('%d servings since %d' % (serv, first)) if en else ('%d repas du dimanche depuis %d' % (serv, first))
+            elif serv == 1: note = ('First serving in %d' % first) if en else ('Premier repas du dimanche en %d' % first)
+            elif since: note = ('On the team since %d' % since) if en else ('Dans l’équipe depuis %d' % since)
+            else: note = ''
+            items.append('<li>%s<div><p class="nm">%s</p><p class="rl">%s</p>%s</div></li>'
+                         % (pic, e(name), e(ren if en else rfr), ('<p class="sv">%s</p>' % e(note)) if note else ''))
+        groups.append('<div class="tgroup"><h3>%s</h3><ul class="team">%s</ul></div>' % (e(label[lang]), ''.join(items)))
+    return ('<section class="band on-soft" id="team"><div class="wrap"><p class="over">%s</p><h2>%s</h2>%s<p class="maxw">%s</p>%s'
+            '<p class="small mt2">%s</p></div></section>\n'
+            % (e('Our team' if en else 'Notre équipe'), e('The people behind every serving' if en else 'Les gens derrière chaque repas'), rule(),
+               e('Meet the youth-powered team that makes every serving happen, from the kitchens and the streets to the board.' if en else
+                 'Voici l’équipe portée par les jeunes qui rend chaque repas possible, des cuisines à la rue jusqu’au conseil d’administration.'),
+               ''.join(groups),
+               e('Serving counts come from our volunteer records. On the team and want your profile changed or taken down? Write to %s.' % C.EMAIL if en else
+                 'Le nombre de repas vient de nos registres de bénévolat. Vous faites partie de l’équipe et voulez modifier ou retirer votre profil ? Écrivez à %s.' % C.EMAIL)))
+
 def about(lang):
     en = lang == 'en'
     T = {
@@ -273,7 +325,9 @@ def about(lang):
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s%s<div class="mt3">%s</div></div></section>\n' % (e(T['pillars_h']), rule(), pillars(lang), stats(lang)) +
         '<section class="band on-cream"><div class="wrap"><p class="over">%s</p><h2>%s</h2>%s<ol class="timeline mt2">%s</ol></div></section>\n' % (e(T['story_over']), e(T['story_h']), rule(), story) +
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p>%s</div></section>\n' % (e(T['partners_h']), rule(), e(T['partners_p']), partners) +
+        companies_section(lang) +
         '<section class="band on-green"><div class="wrap">%s</div></section>\n' % quote(C.QUOTE_PARTNER, lang) +
+        team_section(lang) +
         '<section class="band on-cream"><div class="wrap cta"><div><h2>%s</h2>%s<p class="mb0">%s</p></div><div class="btns">%s%s</div></div></section>\n'
         % (e(T['charity_h']), rule(), e(T['charity_p']), btn(url('volunteer', lang), 'Volunteer' if en else 'Devenir bénévole'), btn(C.GIVE, 'Donate' if en else 'Faire un don', 'ghost dark', donate=True)))
     return page(lang, 'about', T['title'], T['desc'], body)
@@ -342,6 +396,13 @@ def events(lang):
         'photos_p': 'Photos from our Sunday servings. We only share photos of volunteers, food and moments where no one we serve can be recognized without their consent.' if en else
                     'Des photos de nos repas du dimanche. Nous ne publions que des photos de bénévoles, de nourriture et de moments où personne parmi les gens que nous servons ne peut être reconnu sans son consentement.',
         'past_h': 'Past events' if en else 'Événements passés',
+        'fund_h': 'Fundraisers coming up' if en else 'Collectes à venir',
+        'fund_p': 'Dates firm up as each one gets closer. Want to take part, sponsor or bring a team?' if en else
+                  'Les dates se précisent à l’approche de chacune. Vous voulez participer, commanditer ou inscrire une équipe\u00a0?',
+        'fund_btn': 'Write to us' if en else 'Écrivez-nous',
+        'fphotos_h': 'From our fundraisers' if en else 'Nos collectes en images',
+        'fphotos_p': 'Flag Football 2026 with the Montreal Flag Football League, and our 2025 Holiday Gift Basket Drive.' if en else
+                     'Le tournoi de football-drapeau 2026 avec la Montreal Flag Football League, et nos paniers-cadeaux des fêtes 2025.',
         'host_h': 'Host a fundraiser with us' if en else 'Organisez une collecte avec nous',
         'host_p': 'Parties, bake sales, tournaments, talent shows: our best fundraisers started as someone’s idea. Tell us yours.' if en else
                   'Soirées, ventes de pâtisseries, tournois, spectacles de talents : nos meilleures collectes ont commencé par l’idée de quelqu’un. Parlez-nous de la vôtre.',
@@ -353,7 +414,7 @@ def events(lang):
                   % (big(k), e(cap[lang]), e(alt[lang]), img(k, alt[lang], '(min-width: 760px) 33vw, 50vw')) for k, cap, alt in mixed)
     posters = []
     for i, d, title, place, note in sorted(C.EVENTS, key=lambda ev: ev[1], reverse=True):
-        name = 'event-%d' % i
+        name = 'event-%d' % i if ('event-%d' % i) in IMG else C.EVENT_PHOTO.get(i, 'event-%d' % i)
         meta = fmt_date(d, lang) + ((' · ' + (C.CITY[lang].get(place, place))) if place else '')
         if name in IMG:
             pic = '<button type="button" data-full="%s" data-title="%s" data-caption="%s" data-alt="%s">%s</button>' % (
@@ -364,9 +425,15 @@ def events(lang):
     body = (page_hero(T['over'], T['title'], T['lede']) +
         '<section class="band on-cream"><div class="wrap grid2"><div><h2>%s</h2>%s%s</div><div>%s</div></div></section>\n'
         % (e(T['next_h']), rule(), upcoming_box(lang, 'all', 6, 'volunteer#apply', T['next_note']), img('2023-10-autumn-crew-behind-the-table', C.PHOTOS_NEW[9][2][lang])) +
+        '<section class="band on-green" id="fundraisers"><div class="wrap"><h2>%s</h2>%s<ul class="fundnext mt2">%s</ul><div class="cta mt3"><p class="lede mb0">%s</p><div class="btns">%s</div></div></div></section>\n'
+        % (e(T['fund_h']), rule(), ''.join('<li class="card"><p class="num">%s</p><h3>%s</h3><p>%s</p></li>' % (e(w[lang]), e(ti[lang]), e(no[lang])) for ti, w, no in C.FUNDRAISERS_NEXT),
+           e(T['fund_p']), btn(url('contact', lang), T['fund_btn'])) +
         '<section class="band on-soft" id="photos"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p><div class="gallery mt2" data-lb-group>%s</div></div></section>\n'
         % (e(T['photos_h']), rule(), e(T['photos_p']), gal) +
-        '<section class="band on-cream" id="past"><div class="wrap"><h2>%s</h2>%s<ul class="posters mt2" data-lb-group>%s</ul></div></section>\n'
+        '<section class="band on-cream" id="fundphotos"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p><div class="gallery mt2" data-lb-group>%s</div></div></section>\n'
+        % (e(T['fphotos_h']), rule(), e(T['fphotos_p']), ''.join('<button type="button" data-full="%s" data-title="%s" data-alt="%s">%s</button>'
+            % (big(k), e(cap[lang]), e(alt[lang]), img(k, alt[lang], '(min-width: 760px) 33vw, 50vw')) for k, _, cap, alt in C.FUND_PHOTOS)) +
+        '<section class="band on-soft" id="past"><div class="wrap"><h2>%s</h2>%s<ul class="posters mt2" data-lb-group>%s</ul></div></section>\n'
         % (e(T['past_h']), rule(), ''.join(posters)) +
         '<section class="band on-green"><div class="wrap cta"><div><h2>%s</h2>%s<p class="lede mb0">%s</p></div><div class="btns">%s</div></div></section>\n'
         % (e(T['host_h']), rule(), e(T['host_p']), btn(url('contact', lang), T['host_btn'])) + seed_script())
@@ -437,8 +504,8 @@ def donate(lang):
         'lede': 'Your gift turns into home-cooked meals every second Sunday and essentials all year. Thank you for standing with our community.' if en else
                 'Votre don devient des repas maison un dimanche sur deux et des articles essentiels toute l’année. Merci d’être aux côtés de notre communauté.',
         'give_h': 'Give online' if en else 'Donner en ligne',
-        'give_p': 'Give once, or every month to keep it steady. It takes a minute, securely through Stripe.' if en else
-                  'Donnez une fois, ou chaque mois pour un soutien constant. Cela prend une minute, de façon sécurisée avec Stripe.',
+        'give_p': 'Give once, or every month to keep it steady. It takes a minute, securely through Stripe, without leaving this page.' if en else
+                  'Donnez une fois, ou chaque mois pour un soutien constant. Cela prend une minute, de façon sécurisée avec Stripe, sans quitter cette page.',
         'give_btn': 'Give now' if en else 'Donner maintenant',
         'what_h': 'What your gift makes possible' if en else 'Ce que votre don rend possible',
         'what': ([('Sunday servings', 'Ingredients, containers and supplies for home-cooked meals served in downtown Montreal.'),
@@ -492,13 +559,13 @@ REDIRECTS = [
 ]
 put('_redirects', '# Welfare Avenue website (wave162): the old website\'s addresses\n' + ''.join('%s  %s  301\n' % (a, b) for a, b in REDIRECTS))
 
-CSP = ("default-src 'self'; script-src 'self' https://hub.welfareavenue.com; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; "
+CSP = ("default-src 'self'; script-src 'self' https://hub.welfareavenue.com; style-src 'self' https://fonts.googleapis.com https://hub.welfareavenue.com; font-src https://fonts.gstatic.com; "
        "img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; "
-       "frame-src https://www.youtube-nocookie.com https://hub.welfareavenue.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests")
+       "frame-src https://www.youtube-nocookie.com https://hub.welfareavenue.com https://www.linkedin.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests")
 HEADERS = ('# Welfare Avenue website (wave162): security headers for every page. One CSP for the whole site.\n/*\n'
            '  Content-Security-Policy: ' + CSP + '\n'
            '  Strict-Transport-Security: max-age=31536000\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n'
-           '  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()\n'
+           '  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self \"https://hub.welfareavenue.com\")\n'
            + ('' if LAUNCH else '  X-Robots-Tag: noindex\n') +
            '/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/img/*\n  Cache-Control: public, max-age=604800\n')
 put('_headers', HEADERS)

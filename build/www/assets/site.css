@@ -254,3 +254,24 @@ details.more>.in{padding:0 20px 20px}
 .mt0{margin-top:0}.mt1{margin-top:12px}.mt2{margin-top:28px}.mt3{margin-top:44px}.mb0{margin-bottom:0}
 .maxw{max-width:46em}
 .notfound{padding:90px 0}
+/* Companies that work with us: their LinkedIn posts, embedded (wave162) */
+.liposts{list-style:none;margin:0;padding:0;column-width:430px;column-gap:24px}
+.lipost{break-inside:avoid;margin:0 0 24px}
+.lipost iframe{display:block;width:100%;max-width:504px;margin:6px auto 14px;border:0;border-radius:8px;background:#fff}
+.lilink{font-size:15px;font-weight:700;color:var(--green)}
+/* The team (wave162) */
+.tgroup{margin-top:36px}
+.tgroup h3{margin:0 0 16px}
+.team{display:grid;gap:18px 24px;grid-template-columns:repeat(auto-fill,minmax(min(100%,250px),1fr));list-style:none;margin:0;padding:0}
+.team li{display:flex;gap:14px;align-items:center}
+.face{width:72px;height:72px;border-radius:50%;flex:none;object-fit:cover;background:var(--cream)}
+.ini{display:flex;align-items:center;justify-content:center;font-family:var(--hf);font-weight:600;font-size:30px;line-height:1}
+.ini.c0{background:var(--green);color:var(--cream)}
+.ini.c1{background:var(--purple);color:var(--cream)}
+.ini.c2{background:var(--gold);color:var(--green)}
+.team .nm{font-weight:700;margin:0;color:var(--green);line-height:1.3}
+.team .rl{margin:2px 0 0;font-size:15px;line-height:1.35}
+.team .sv{margin:4px 0 0;font-size:13px;color:var(--muted)}
+/* Fundraisers coming up (wave162) */
+.fundnext{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));list-style:none;margin:0;padding:0}
+.fundnext .card p:last-child{margin-bottom:0}

@@ -65,6 +65,13 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
       const r = opts.post ? opts.post(body) : { status: 200, body: { ok: true, thank_you: 'You are on the list.' } };
       return route.fulfill({ status: r.status, headers: cors, body: JSON.stringify(r.body) });
     });
+    // the donation popup (wave161c): the Hub's script and styles from the build, the page inside as a small stand-in
+    const GIVE = path.join(__dirname, '..', 'build', 'give');
+    await ctx.route('https://hub.welfareavenue.com/give/embed.js', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: fs.readFileSync(path.join(GIVE, 'embed.js')) }));
+    await ctx.route('https://hub.welfareavenue.com/give/embed.css', r => r.fulfill({ status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(GIVE, 'embed.css')) }));
+    await ctx.route(/^https:\/\/hub\.welfareavenue\.com\/give\/\?embed=1$/, r => { calls.push('give-frame'); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Give</title><h1>Give to Welfare Avenue</h1><script>parent.postMessage({wa:"give",type:"height",height:620},"*")</script>' }); });
+    // LinkedIn is never reached from the tests: a stand-in page answers for the company posts' embeds
+    await ctx.route('https://www.linkedin.com/**', r => { calls.push('linkedin:' + r.request().url()); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Post</title><p>LinkedIn post</p>' }); });
     const page = await ctx.newPage(); const errors = [];
     page.on('console', m => { if (m.type() === 'error' && !/status of 404/.test(m.text())) errors.push(m.text()); });
     page.on('pageerror', e => errors.push('pageerror ' + e.message));
@@ -201,9 +208,16 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   {
     const { ctx, page } = await context();
     await page.goto(ORIGIN + '/events/', { waitUntil: 'networkidle' });
-    ok((await page.$$('#photos [data-full]')).length === 24 && (await page.$$('#past li')).length === 14, 'events: 24 photos and 14 past events');
+    ok((await page.$$('#photos [data-full]')).length === 24 && (await page.$$('#past li')).length === 16, 'events: 24 photos and 16 past events');
+    ok((await page.$$('#fundraisers .fundnext li')).length === 4 && (await page.$$('#fundphotos [data-full]')).length === 12, 'events: 4 fundraisers coming up and 12 fundraiser photos');
+    for (const im of await page.$$('#fundphotos img, #past img')) await im.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const brokenF = await page.evaluate(() => Array.from(document.querySelectorAll('#fundphotos img, #past img')).filter(i => !(i.complete && i.naturalWidth > 0)).map(i => i.getAttribute('src')));
+    ok(!brokenF.length, 'events: every fundraiser photo and poster loads ' + brokenF.join(' '));
+    const past = await page.evaluate(() => Array.from(document.querySelectorAll('#past li .t')).slice(0, 3).map(t => t.textContent));
+    ok(past[0] === 'Rally Paper 2026' && /Flag Football Tournament/.test(past[1]) && past[2] === 'Holiday Gift Baskets', 'events: newest past events first (' + past.join(' | ') + ')');
     const dates = await page.$$eval('#past .m', ms => ms.map(m => m.textContent));
-    ok(/2025/.test(dates[0]) && /2022/.test(dates[dates.length - 1]), 'events: newest fundraiser first');
+    ok(/2026/.test(dates[0]) && /2022/.test(dates[dates.length - 1]), 'events: newest fundraiser first');
     await page.click('#photos [data-full] >> nth=1');
     ok(await page.isVisible('.lb.open') && /2022/.test(await page.textContent('.lb figcaption')), 'viewer opens with the caption');
     await page.keyboard.press('ArrowRight');
@@ -214,6 +228,60 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     await page.goto(ORIGIN + '/press/', { waitUntil: 'networkidle' });
     await page.click('[data-yt="5C7RoUmCMSI"]');
     ok(await page.$eval('.video iframe', f => f.src.startsWith('https://www.youtube-nocookie.com/embed/5C7RoUmCMSI')), 'press: the video loads only when asked, from youtube-nocookie');
+    await ctx.close();
+  }
+
+  // Donate opens the Hub's donation page in a popup over the page (wave161c), on a computer and on a phone
+  for (const W of [1280, 390]) {
+    const { ctx, page, calls } = await context({ width: W });
+    await page.goto(ORIGIN + '/volunteer/', { waitUntil: 'networkidle' });
+    await page.click(W > 900 ? '.nav .btn.desk' : '.top .donate-m');
+    await page.waitForSelector('.wa-dn-back iframe');
+    ok(new URL(page.url()).pathname === '/volunteer/', W + ' donate: the visitor stays on the page');
+    ok((await page.getAttribute('.wa-dn-back iframe', 'src')) === 'https://hub.welfareavenue.com/give/?embed=1' && (await page.getAttribute('.wa-dn-back iframe', 'allow')) === 'payment *', W + ' donate: the popup shows the Hub\'s donation page, payments allowed');
+    const st = await page.evaluate(() => { const b = document.querySelector('.wa-dn-back'); const cs = getComputedStyle(b); return { pos: cs.position, csp: window.__csp.slice() }; });
+    ok(st.pos === 'fixed', W + ' donate: the popup\'s styles loaded under the site\'s policy');
+    ok(!st.csp.length, W + ' donate: nothing blocked by the policy ' + st.csp.join(' | '));
+    await page.keyboard.press('Escape');
+    ok(!(await page.$('.wa-dn-back')), W + ' donate: Escape closes it');
+    await page.goto(ORIGIN + '/donate/', { waitUntil: 'networkidle' });
+    await page.click('main a[data-wa-donate]');
+    await page.waitForSelector('.wa-dn-back');
+    ok(new URL(page.url()).pathname === '/donate/', W + ' donate page: Give now opens the popup too');
+    await ctx.close();
+  }
+
+  // About: the team from the Hub and the companies' LinkedIn posts, which load only when asked (wave162)
+  ok(/Permissions-Policy: [^\n]*payment=\(self "https:\/\/hub\.welfareavenue\.com"\)/.test(headers), '_headers: payments allowed for the Hub\'s donation frame only');
+  ok(/frame-src [^;]*https:\/\/www\.linkedin\.com/.test(headers), '_headers: LinkedIn frames allowed for the company posts');
+  for (const [W, lang] of [[1280, 'en'], [390, 'fr']]) {
+    const { ctx, page, errors, calls } = await context({ width: W });
+    await page.goto(ORIGIN + (lang === 'en' ? '/about/' : '/fr/a-propos/'), { waitUntil: 'networkidle' });
+    const t = await page.evaluate(() => ({
+      groups: document.querySelectorAll('#team .tgroup').length, people: document.querySelectorAll('#team .team li').length,
+      photos: Array.from(document.querySelectorAll('#team img.face')).map(i => [i.getAttribute('src'), i.getAttribute('alt')]),
+      initials: document.querySelectorAll('#team .ini').length,
+      steel: Array.from(document.querySelectorAll('#team .team li')).map(li => li.textContent).find(x => x.startsWith('Steel')) || '',
+      cards: document.querySelectorAll('#companies .lipost').length, frames: document.querySelectorAll('#companies iframe').length }));
+    ok(t.groups === 8 && t.people === 41, W + ' about ' + lang + ': the team in 8 groups, 41 people (' + t.groups + ', ' + t.people + ')');
+    ok(t.photos.length === 15 && t.initials === 26 && t.photos.every(([src, alt]) => /^\/img\/team\/[a-z]+\.jpg$/.test(src) && alt === ''), W + ' about ' + lang + ': 15 photos, initials for the other 26');
+    await page.locator('#team').scrollIntoViewIfNeeded();
+    for (const img of await page.$$('#team img.face')) await img.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const broken = await page.evaluate(() => Array.from(document.querySelectorAll('#team img.face')).filter(i => !(i.complete && i.naturalWidth === 192)).map(i => i.src));
+    ok(!broken.length, W + ' about ' + lang + ': every team photo loads ' + broken.join(' '));
+    ok(t.steel.includes(lang === 'en' ? '23 servings since 2020' : '23 repas du dimanche depuis 2020'), W + ' about ' + lang + ': servings from the volunteer record');
+    ok(t.cards === 3 && t.frames === 3, W + ' about ' + lang + ': the three company posts are embedded');
+    const fr = await page.evaluate(() => Array.from(document.querySelectorAll('#companies iframe')).map(i => [i.getAttribute('src'), i.getAttribute('height'), i.getAttribute('loading'), i.title]));
+    ok(fr[2][0] === 'https://www.linkedin.com/embed/feed/update/urn:li:share:7086448235212328961?collapsed=1' && fr[2][1] === '1070' && /RBC/.test(fr[2][3]) && fr.every(f => f[2] === 'lazy' && /^https:\/\/www\.linkedin\.com\/embed\/feed\/update\/urn:li:(share|ugcPost):\d+\?collapsed=1$/.test(f[0])), W + ' about ' + lang + ': each post at its own address and height, loading lazily');
+    await page.locator('#companies').scrollIntoViewIfNeeded();
+    for (const f of await page.$$('#companies iframe')) await f.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(600);
+    const widths = await page.evaluate(() => Array.from(document.querySelectorAll('#companies iframe')).map(i => Math.round(i.getBoundingClientRect().width)));
+    ok(widths.every(w => w > 250 && w <= 504), W + ' about ' + lang + ': the posts keep LinkedIn\'s width (' + widths.join(', ') + ')');
+    ok(calls.filter(c => c.startsWith('linkedin:')).length >= 3 && !(await page.evaluate(() => window.__csp.length)), W + ' about ' + lang + ': the posts load under the site\'s policy');
+    ok(!errors.length, W + ' about ' + lang + ': no console errors ' + errors.join(' | '));
+    ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= W, W + ' about ' + lang + ': no sideways scroll');
     await ctx.close();
   }
 
