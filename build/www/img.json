@@ -1,0 +1,281 @@
+{
+ "2021-02-winter-sandwich-prep": {
+  "ratio": 1.3333,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2021-06-drivers-selfie": {
+  "ratio": 0.75,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2021-11-two-volunteers-at-the-tent": {
+  "ratio": 0.6663,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2021-11-volunteer-portrait-blue-beanie": {
+  "ratio": 0.6663,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2021-11-volunteer-portrait-under-the-tent": {
+  "ratio": 1.5009,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2022-01-winter-crew-in-the-snow": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-01-winter-serving-team": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-02-winter-volunteer-group-a": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-02-winter-volunteer-group-b": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-04-spring-crew-at-the-table": {
+  "ratio": 1.4995,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2022-04-spring-soup-from-the-pot": {
+  "ratio": 1.4995,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2022-05-spring-grill-master": {
+  "ratio": 1.7778,
+  "w": [
+   480
+  ]
+ },
+ "2022-06-media-interview-b": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-10-autumn-crew-at-the-tent": {
+  "ratio": 0.8531,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2022-10-autumn-student-group": {
+  "ratio": 0.75,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2023-05-spring-crew-under-the-tent": {
+  "ratio": 0.5619,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2023-10-autumn-crew-behind-the-table": {
+  "ratio": 0.6669,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2023-10-autumn-plate-served": {
+  "ratio": 0.6669,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2024-07-summer-salad-trays": {
+  "ratio": 1.1469,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2024-07-summer-servers-at-the-table": {
+  "ratio": 1.4311,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2024-07-summer-team-under-the-tent": {
+  "ratio": 0.6669,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "2024-07-summer-volunteer-portrait": {
+  "ratio": 1.4995,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2024-07-summer-volunteer-team": {
+  "ratio": 1.0837,
+  "w": [
+   480,
+   960
+  ]
+ },
+ "2024-10-autumn-volunteers-plating": {
+  "ratio": 0.6669,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ },
+ "event-1": {
+  "ratio": 0.5625,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-10": {
+  "ratio": 1.0,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-11": {
+  "ratio": 1.0,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-12": {
+  "ratio": 1.274,
+  "w": [
+   480
+  ]
+ },
+ "event-13": {
+  "ratio": 1.265,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-2": {
+  "ratio": 0.5104,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-3": {
+  "ratio": 0.75,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-4": {
+  "ratio": 0.75,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-5": {
+  "ratio": 0.9968,
+  "w": [
+   480
+  ]
+ },
+ "event-6": {
+  "ratio": 0.4962,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-7": {
+  "ratio": 1.0,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-8": {
+  "ratio": 1.0,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "event-9": {
+  "ratio": 1.2945,
+  "w": [
+   480,
+   1080
+  ]
+ },
+ "food-salads-and-grapes": {
+  "ratio": 0.805,
+  "w": [
+   480,
+   960,
+   1600
+  ]
+ }
+}

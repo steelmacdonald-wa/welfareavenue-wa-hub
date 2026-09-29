@@ -1,4 +1,4 @@
-// Welfare Avenue: form-submit (v2, 28/09/26, wave156)
+// Welfare Avenue: form-submit (v3, 28/09/26, wave156; v3 wave162: the website preview origin)
 // The public side of the CRM's forms, shown at hub.welfareavenue.com/f/<slug> (Steel, 28/09/26).
 //   GET  ?slug=<slug>  The published form: questions, the email permission question, the thank-you, the open serving
 //        dates for a serving_dates question, the charity's name and address (CASL), and a signed token. A draft is
@@ -26,7 +26,8 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || '';
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 
-const ORIGINS = ['https://hub.welfareavenue.com', 'https://welfareavenue.com', 'https://www.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app'];
+// v3 (wave162, 28/09/26): the new website's preview address may show the forms too
+const ORIGINS = ['https://hub.welfareavenue.com', 'https://welfareavenue.com', 'https://www.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app', 'https://welfareavenue-www.netlify.app'];
 const MIN_SECONDS = 3, MAX_AGE = 86400, PER_IP = 20, PER_IP_WINDOW = 10, PER_EMAIL = 3, MAX_BODY = 32000;
 const TYPES = ['text', 'long_text', 'email', 'phone', 'choice', 'multi', 'yes_no', 'date', 'number', 'serving_dates'];
 const MON_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];

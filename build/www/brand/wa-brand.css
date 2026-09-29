@@ -1,0 +1,34 @@
+/* Welfare Avenue brand tokens (Welfare Avenue Brand Guides v1 2026). Generated 24/09/26. Hub tints marked (hub) are derived, not from the deck. */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap');
+:root{
+  --wa-dignity:#FFFAF2; --wa-cream:#FFFAF2; --wa-dignity-rgb:255,250,242;
+  --wa-community:#103F39; --wa-green:#103F39; --wa-community-rgb:16,63,57;
+  --wa-ground:#1F201E; --wa-ground-rgb:31,32,30;
+  --wa-possibility:#6F64AB; --wa-purple:#6F64AB; --wa-possibility-rgb:111,100,171;
+  --wa-action:#DCA527; --wa-gold:#DCA527; --wa-action-rgb:220,165,39;
+  --wa-canvas:#F4F2EA; /* (hub) Page canvas behind cream cards (hub wave114). */
+  --wa-soft:#ECEBE3; /* (hub) Soft tint for hover and secondary surfaces (hub wave114). */
+  --wa-line:#DEE0D8; /* (hub) Hairlines and table rules (hub wave114). */
+  --wa-muted:#797773; /* (hub) Muted grey-green text and metadata (hub wave114). */
+  --wa-stem:#2B6F55; /* (hub) Leaf green used for doodle stems (sampled from the deck flowers, page 36). */
+  --wa-font-heading:'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif;
+  --wa-font-body:'Space Grotesk','Helvetica Neue',Arial,sans-serif;
+  --wa-font-lockup:'Bebas Neue','Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --wa-type-ratio:1.414;
+  --wa-display:4.0em; /* 96px at the 24px reference base; Barlow Condensed 500 uppercase */
+  --wa-h1:2.828em; /* 68px at the 24px reference base; Barlow Condensed 500 uppercase */
+  --wa-h2:2.0em; /* 48px at the 24px reference base; Barlow Condensed 500 uppercase */
+  --wa-h3:1.414em; /* 34px at the 24px reference base; Space Grotesk 400 uppercase */
+  --wa-body:1.0em; /* 24px at the 24px reference base; Space Grotesk 400 sentence */
+  --wa-p2:0.707em; /* 17px at the 24px reference base; Space Grotesk 400 sentence */
+  --wa-overline:0.5em; /* 12px at the 24px reference base; Space Grotesk 700 uppercase */
+  --wa-radius-card:16px; --wa-radius-button:6px; --wa-rule-gold:32px 3px;
+}
+/* Semantic helpers */
+.wa-heading{font-family:var(--wa-font-heading);font-weight:500;text-transform:uppercase;letter-spacing:.01em;line-height:1.05;}
+.wa-body{font-family:var(--wa-font-body);font-weight:400;line-height:1.5;}
+.wa-overline{font-family:var(--wa-font-body);font-weight:700;text-transform:uppercase;font-size:var(--wa-overline);letter-spacing:.08em;}
+.wa-on-green{background:var(--wa-community);color:var(--wa-dignity);}
+.wa-on-cream{background:var(--wa-dignity);color:var(--wa-community);}
+.wa-accent-gold{color:var(--wa-action);} .wa-accent-purple{color:var(--wa-possibility);}
+.wa-btn{background:var(--wa-action);color:var(--wa-community);font-family:var(--wa-font-heading);font-weight:600;text-transform:uppercase;letter-spacing:1px;border-radius:var(--wa-radius-button);padding:14px 28px;border:0;}

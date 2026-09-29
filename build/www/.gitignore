@@ -1,0 +1,10 @@
+# Downloads and generated files (rebuild with images.py, icons.py, make.py; sources are in Supabase storage:
+# content-images/photos/web/<key>.jpg and site-media/events/fundraising/<file>)
+img-src/
+good-src/
+good-src2/
+good-out/
+out/
+og/*.png
+staged.json
+__pycache__/
