@@ -1,4 +1,6 @@
-/* Welfare Avenue: the donation popup for welfareavenue.com (wave161c, 28/09/26; its styles in give/embed.css since wave162).
+/* Welfare Avenue: the donation popup for welfareavenue.com (wave161c, 28/09/26; its styles in give/embed.css since wave162;
+   French since wave162b: on a French page, or for a button whose link asks for lang=fr, the page inside and the popup's own
+   words are in French).
    Served from https://hub.welfareavenue.com/give/embed.js (host-sync deploys site_files path give/embed.js).
    Add it to any page with <script async src="https://hub.welfareavenue.com/give/embed.js"></script>; it adds nothing
    visible until someone presses a Donate button. It opens the Hub's donation page (hub.welfareavenue.com/give) in a popup
@@ -13,6 +15,13 @@
   if (window.WADonate) return;
   var HUB = 'https://hub.welfareavenue.com';
   var SRC = HUB + '/give/?embed=1';
+  function isFr(t) { /* the button's own link says so, or the page is French */
+    var h = t && t.getAttribute ? (t.getAttribute('href') || '') : '';
+    if (/[?&]lang=fr\b/.test(h) || (t && t.getAttribute && t.getAttribute('data-wa-lang') === 'fr')) return true;
+    return String(document.documentElement.getAttribute('lang') || '').toLowerCase().indexOf('fr') === 0;
+  }
+  var WORDS = { en: { title: 'Give to Welfare Avenue', close: 'Close', loading: 'Loading…', failed: 'The giving page did not load here.', tab: 'Open it in a new tab' },
+    fr: { title: 'Donner à Welfare Avenue', close: 'Fermer', loading: 'Chargement…', failed: 'La page de dons ne s’est pas chargée ici.', tab: 'L’ouvrir dans un nouvel onglet' } };
   var PICK = '[data-wa-donate],a[href^="' + HUB + '/give"],.keela-popup-button[data-src*="give-can.keela.co"]';
   var back = null, box = null, frame = null, wait = null, xbtn = null, last = null, paying = false, contentH = 0, prevOverflow = '';
 
@@ -32,12 +41,13 @@
     if (back) return;
     css();
     last = trigger || document.activeElement;
+    var fr = isFr(trigger), w = WORDS[fr ? 'fr' : 'en'], src = SRC + (fr ? '&lang=fr' : ''), page = HUB + '/give' + (fr ? '/?lang=fr' : '');
     paying = false; contentH = 0;
     back = document.createElement('div');
     back.className = 'wa-dn-back';
-    back.innerHTML = '<span class="wa-dn-trap" tabindex="0"></span><div class="wa-dn-box" role="dialog" aria-modal="true" aria-label="Give to Welfare Avenue">' +
-      '<button type="button" class="wa-dn-x" aria-label="Close">&times;</button><div class="wa-dn-wait">Loading…</div>' +
-      '<iframe title="Give to Welfare Avenue" allow="payment *" src="' + SRC + '"></iframe></div><span class="wa-dn-trap" tabindex="0"></span>';
+    back.innerHTML = '<span class="wa-dn-trap" tabindex="0"></span><div class="wa-dn-box" role="dialog" aria-modal="true" aria-label="' + w.title + '">' +
+      '<button type="button" class="wa-dn-x" aria-label="' + w.close + '">&times;</button><div class="wa-dn-wait">' + w.loading + '</div>' +
+      '<iframe title="' + w.title + '" allow="payment *" src="' + src + '"></iframe></div><span class="wa-dn-trap" tabindex="0"></span>';
     box = back.querySelector('.wa-dn-box'); frame = back.querySelector('iframe'); wait = back.querySelector('.wa-dn-wait'); xbtn = back.querySelector('.wa-dn-x');
     xbtn.addEventListener('click', function () { close(); });
     back.addEventListener('mousedown', function (ev) { if (ev.target === back && !paying) close(); });
@@ -45,7 +55,7 @@
     traps[0].addEventListener('focus', function () { frame.focus(); });
     traps[1].addEventListener('focus', function () { xbtn.focus(); });
     var timer = setTimeout(function () { /* the page never answered: offer it in a new tab instead of a blank popup */
-      if (wait) wait.innerHTML = '<p class="wa-dn-msg">The giving page did not load here. <a href="' + HUB + '/give" target="_blank" rel="noopener">Open it in a new tab</a>.</p>';
+      if (wait) wait.innerHTML = '<p class="wa-dn-msg">' + w.failed + ' <a href="' + page + '" target="_blank" rel="noopener">' + w.tab + '</a>.</p>';
     }, 15000);
     frame.addEventListener('load', function () { setTimeout(function () { if (!contentH) return; clearTimeout(timer); }, 50); });
     prevOverflow = document.documentElement.style.overflow;

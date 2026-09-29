@@ -103,10 +103,11 @@ html.embed .efoot a{color:inherit}
   html.embed .card{padding:40px 40px 28px}
 }
 a{color:var(--green)}
+.band .langlink{color:var(--cream);font-weight:600;font-size:15px;text-decoration:underline;text-underline-offset:3px}
 </style>
 </head>
 <body>
-<div class="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a></div></div>
+<header class="band"><div class="in"><a href="https://welfareavenue.com" id="home" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a><a class="langlink" id="langlink" href="?lang=fr" hreflang="fr" lang="fr">Français</a></div></header>
 <main><div class="ewrap" id="ewrap"><div class="ephoto" id="ephoto" aria-hidden="true"></div><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></div></main>
 <footer id="foot"></footer>
 <script>
@@ -116,10 +117,77 @@ a{color:var(--green)}
   var LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 0 1 6 0v3H9Z"/></svg>';
   var app = document.getElementById('app'), foot = document.getElementById('foot');
   var q = new URLSearchParams(location.search);
+  /* v4 (wave162b, 29/09/26): French with ?lang=fr (the French website's buttons and its popup ask for it), English otherwise */
+  var L = q.get('lang') === 'fr' ? 'fr' : 'en', FR = L === 'fr';
+  var W = {
+    en: { cancelled: 'No payment was made. You can change anything below and try again.', charity: ' · Registered charity ',
+      privacy: 'We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them.', stripe_note: ' Payments are handled by Stripe.',
+      err_choose: 'Choose an amount, or enter your own.', err_cents: 'Enter an amount in dollars and cents.',
+      err_min: function (x) { return 'The smallest gift online is ' + x + '.'; }, err_max: function (x, m) { return 'For a gift above ' + x + ', please write to ' + m + '.'; },
+      preview: '<b>Preview.</b> This page is off, so it cannot take a gift yet. An admin puts it live in the Hub.', how_often: 'How often', give_once: 'Give once', give_monthly: 'Give monthly',
+      legend: function (mon) { return 'Your gift' + (mon ? ' each month' : ''); }, a_month: 'a month', other: 'Other amount', other_aria: 'Other amount, in dollars', where: 'Where your gift goes',
+      extras: 'Extras', tribute: 'Give in honour or in memory of someone', tribute_aria: 'In honour or in memory', honour: 'In honour of', memory: 'In memory of', their_name: 'Their name',
+      fee_add: function (x, mon) { return 'Add ' + x + ' to help cover the card fee' + (mon ? ' each month' : ''); }, fee_little: 'Add a little to help cover the card fee',
+      total: function (mon) { return mon ? 'Your monthly gift' : 'Your gift'; }, opening_form: 'Opening the secure payment form…', opening_page: 'Opening the secure payment page…', go: 'Continue to payment',
+      next_embedded: 'Next, Stripe’s secure payment form opens right here, for a card or a digital wallet.', next_hosted: 'You finish on Stripe’s secure page, by card or a digital wallet.',
+      includes_fee: function (x) { return 'includes ' + x + ' for the card fee'; }, change: 'Change', loading_form: 'Loading the secure payment form…',
+      stripe_secure: 'Stripe handles the payment securely. Welfare Avenue never sees your card number.', one_more: 'One more step: your gift continues on Stripe’s secure page.',
+      to_stripe: 'Continue on Stripe’s secure page', change_gift: 'Change my gift', instead: 'Opening Stripe’s secure page instead…',
+      err_ours: 'Something went wrong on our side, and no payment was made. Please try again in a minute.', err_reach: 'We could not reach Welfare Avenue. Check your connection and try again.',
+      whose: 'Whose name should we record?', preview_submit: 'This page is a preview: it cannot take a gift until an admin puts it live.',
+      expired: 'This page was open a long time, so we refreshed it. Please press Continue again.', closed: 'Online giving is not open right now. Please try again later.',
+      too_many: 'Too many tries from here. Please wait a few minutes and try again.', wrong: 'Something went wrong',
+      wrong_html: '<p>We could not load the page. Please try again in a minute, or write to <a href="mailto:info@welfareavenue.com">info@welfareavenue.com</a>.</p>',
+      soon: 'Online giving opens soon', soon_html: function (m) { return '<p class="big">Thank you for thinking of Welfare Avenue. Our online giving page is not open yet.</p><p>To give today, or for any question, write to <a href="mailto:' + m + '">' + m + '</a>.</p>'; },
+      reach: 'We could not reach Welfare Avenue', reach_html: '<p>Check your connection and try again.</p>', checking: 'Checking your gift…', notfound: 'We could not find this gift',
+      notfound_html: function (m) { return '<p>If you just gave, thank you: your card or bank statement shows the payment. For any question, write to <a href="mailto:' + m + '">' + m + '</a>.</p><p><a href="/give">Back to the giving page</a></p>'; },
+      unfinished: 'Your gift is not finished', unfinished_html: '<p>No payment was made. You can <a href="/give">start again</a> whenever you like.</p>',
+      lead_waiting: function (a) { return 'Your gift of ' + a + ' is on its way: a bank payment takes a few days to clear.'; }, lead_monthly: function (a) { return 'Your monthly gift of ' + a + ' has started.'; },
+      lead_once: function (a) { return 'Your gift of ' + a + ' is complete.'; }, thank_you: function (n) { return 'Thank you' + (n ? ', ' + n : '') + '!'; }, close: 'Close',
+      visit_html: '<p><a href="https://welfareavenue.com">Visit welfareavenue.com</a></p>', gave_html: '<p>If you just gave, thank you: your card or bank statement shows the payment.</p>',
+      loading: 'Loading…', title_tag: 'Give to Welfare Avenue', site: 'https://welfareavenue.com', other_lang: 'Français' },
+    fr: { cancelled: 'Aucun paiement n’a été effectué. Vous pouvez modifier vos choix ci-dessous et réessayer.', charity: ' · Organisme de bienfaisance enregistré ',
+      privacy: 'Nous utilisons vos renseignements pour traiter votre don et vous remercier et, seulement si vous le souhaitez, pour vous donner des nouvelles. Nous ne les vendons ni ne les partageons jamais.', stripe_note: ' Les paiements sont traités par Stripe.',
+      err_choose: 'Choisissez un montant ou entrez le vôtre.', err_cents: 'Entrez un montant en dollars et en cents.',
+      err_min: function (x) { return 'Le don minimum en ligne est de ' + x + '.'; }, err_max: function (x, m) { return 'Pour un don de plus de ' + x + ', veuillez écrire à ' + m + '.'; },
+      preview: '<b>Aperçu.</b> Cette page est fermée : elle ne peut pas encore recevoir de don. Un administrateur la met en ligne dans le Hub.', how_often: 'Fréquence', give_once: 'Donner une fois', give_monthly: 'Donner chaque mois',
+      legend: function (mon) { return mon ? 'Votre don mensuel' : 'Votre don'; }, a_month: 'par mois', other: 'Autre montant', other_aria: 'Autre montant, en dollars', where: 'Où va votre don',
+      extras: 'Options', tribute: 'Donner en l’honneur ou à la mémoire de quelqu’un', tribute_aria: 'En l’honneur ou à la mémoire', honour: 'En l’honneur de', memory: 'À la mémoire de', their_name: 'Son nom',
+      fee_add: function (x, mon) { return 'Ajouter ' + x + ' pour aider à couvrir les frais de carte' + (mon ? ' chaque mois' : ''); }, fee_little: 'Ajouter un petit montant pour aider à couvrir les frais de carte',
+      total: function (mon) { return mon ? 'Votre don mensuel' : 'Votre don'; }, opening_form: 'Ouverture du formulaire de paiement sécurisé…', opening_page: 'Ouverture de la page de paiement sécurisée…', go: 'Passer au paiement',
+      next_embedded: 'Le formulaire de paiement sécurisé de Stripe s’ouvre ensuite ici même, pour une carte ou un portefeuille numérique.', next_hosted: 'Vous terminez sur la page sécurisée de Stripe, par carte ou portefeuille numérique.',
+      includes_fee: function (x) { return 'dont ' + x + ' pour les frais de carte'; }, change: 'Modifier', loading_form: 'Chargement du formulaire de paiement sécurisé…',
+      stripe_secure: 'Stripe traite le paiement de façon sécurisée. Welfare Avenue ne voit jamais votre numéro de carte.', one_more: 'Une dernière étape : votre don se poursuit sur la page sécurisée de Stripe.',
+      to_stripe: 'Continuer sur la page sécurisée de Stripe', change_gift: 'Modifier mon don', instead: 'Ouverture de la page sécurisée de Stripe…',
+      err_ours: 'Un problème est survenu de notre côté, et aucun paiement n’a été effectué. Veuillez réessayer dans une minute.', err_reach: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.',
+      whose: 'Quel nom devons-nous inscrire ?', preview_submit: 'Cette page est un aperçu : elle ne peut pas recevoir de don avant qu’un administrateur la mette en ligne.',
+      expired: 'Cette page était ouverte depuis longtemps, alors nous l’avons actualisée. Appuyez de nouveau sur Passer au paiement.', closed: 'Les dons en ligne ne sont pas ouverts pour le moment. Veuillez réessayer plus tard.',
+      too_many: 'Trop de tentatives depuis cet appareil. Attendez quelques minutes, puis réessayez.', wrong: 'Un problème est survenu',
+      wrong_html: '<p>Impossible de charger la page. Veuillez réessayer dans une minute, ou écrivez à <a href="mailto:info@welfareavenue.com">info@welfareavenue.com</a>.</p>',
+      soon: 'Les dons en ligne ouvrent bientôt', soon_html: function (m) { return '<p class="big">Merci de penser à Welfare Avenue. Notre page de dons en ligne n’est pas encore ouverte.</p><p>Pour donner dès aujourd’hui, ou pour toute question, écrivez à <a href="mailto:' + m + '">' + m + '</a>.</p>'; },
+      reach: 'Impossible de joindre Welfare Avenue', reach_html: '<p>Vérifiez votre connexion et réessayez.</p>', checking: 'Vérification de votre don…', notfound: 'Nous ne trouvons pas ce don',
+      notfound_html: function (m) { return '<p>Si vous venez de donner, merci : le paiement paraît sur votre relevé de carte ou de compte. Pour toute question, écrivez à <a href="mailto:' + m + '">' + m + '</a>.</p><p><a href="/give/?lang=fr">Retour à la page de dons</a></p>'; },
+      unfinished: 'Votre don n’est pas terminé', unfinished_html: '<p>Aucun paiement n’a été effectué. Vous pouvez <a href="/give/?lang=fr">recommencer</a> quand vous le voulez.</p>',
+      lead_waiting: function (a) { return 'Votre don de ' + a + ' est en route : un paiement bancaire prend quelques jours à être traité.'; }, lead_monthly: function (a) { return 'Votre don mensuel de ' + a + ' a commencé.'; },
+      lead_once: function (a) { return 'Votre don de ' + a + ' a bien été reçu.'; }, thank_you: function (n) { return 'Merci' + (n ? ', ' + n : '') + ' !'; }, close: 'Fermer',
+      visit_html: '<p><a href="https://welfareavenue.com/fr/">Visiter welfareavenue.com</a></p>', gave_html: '<p>Si vous venez de donner, merci : le paiement paraît sur votre relevé de carte ou de compte.</p>',
+      loading: 'Chargement…', title_tag: 'Donner à Welfare Avenue', site: 'https://welfareavenue.com/fr/', other_lang: 'English' }
+  }[L];
+  function cf(k) { var c = S.cfg || {}; return FR && c.fr && c.fr[k] != null ? c.fr[k] : c[k]; } /* a setting in the page's language (the function sends both) */
+  function dlabel(d) { var c = S.cfg || {}, i = (c.designations || []).indexOf(d); return FR && c.fr && c.fr.designations && c.fr.designations[i] ? c.fr.designations[i] : d; }
+  (function () { /* the language link keeps the rest of the address (the team's ?preview=1, a thank-you's session) */
+    var ll = document.getElementById('langlink'), home = document.getElementById('home'), p2 = new URLSearchParams(location.search);
+    if (FR) p2.delete('lang'); else p2.set('lang', 'fr');
+    var qs = p2.toString();
+    if (ll) { ll.href = location.pathname + (qs ? '?' + qs : ''); ll.textContent = W.other_lang; ll.setAttribute('hreflang', FR ? 'en' : 'fr'); ll.setAttribute('lang', FR ? 'en' : 'fr'); }
+    if (home) home.href = W.site;
+    if (FR) { document.documentElement.lang = 'fr'; document.title = W.title_tag; }
+  })();
   /* v3: the embed layout inside the popup on welfareavenue.com (or with ?embed=1) */
   var EMBED = q.get('embed') === '1' || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
   var PHOTO = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/photos/web/2024-07-summer-volunteer-team.jpg';
   if (EMBED) document.documentElement.classList.add('embed');
+  if (FR) app.innerHTML = '<p class="loading">' + W.loading + '</p>';
   function post(msg) { /* to the popup around the page: height, state, close (never anything about the donor) */
     if (!EMBED || window.parent === window) return;
     try { msg.wa = 'give'; window.parent.postMessage(msg, '*'); } catch (e) { /* no parent to tell */ }
@@ -133,12 +201,12 @@ a{color:var(--green)}
     document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') post({ type: 'escape' }); });
   }
   var S = { cfg: null, token: '', loadedAt: 0, freq: 'once', amount: null, other: '', designation: '', tribute: false, tkind: 'honour', tname: '',
-            cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? 'No payment was made. You can change anything below and try again.' : '', bannerKind: 'info', sending: false,
+            cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? W.cancelled : '', bannerKind: 'info', sending: false,
             paying: false, checkout: null, stripe: null };
   var stripeJs = null;
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-  function money(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
-  function cents(n) { var v = Number(n) || 0; try { return v.toLocaleString('en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { return '$' + v.toFixed(2); } }
+  function money(n) { var v = Number(n) || 0; try { return v.toLocaleString(FR ? 'fr-CA' : 'en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); } catch (e) { return FR ? v.toFixed(2).replace('.', ',') + '\u00a0$' : '$' + v.toFixed(2); } }
+  function cents(n) { var v = Number(n) || 0; try { return v.toLocaleString(FR ? 'fr-CA' : 'en-CA', { style: 'currency', currency: 'CAD', minimumFractionDigits: 2, maximumFractionDigits: 2 }); } catch (e) { return FR ? v.toFixed(2).replace('.', ',') + '\u00a0$' : '$' + v.toFixed(2); } }
   function embedded() { return !!(S.cfg && S.cfg.pay === 'embedded' && S.cfg.stripe_pk); }
   function loadStripeJs() { /* Stripe.js must come from js.stripe.com itself (never bundled); v3 matches the API version the function uses */
     if (window.Stripe) return Promise.resolve(window.Stripe);
@@ -160,18 +228,18 @@ a{color:var(--green)}
   }
   function footer(o) {
     o = o || (S.cfg && S.cfg.org) || {};
-    foot.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · Registered charity ' + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
+    foot.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? W.charity + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
       (o.email ? ' · <a href="mailto:' + E(o.email) + '">' + E(o.email) + '</a>' : '') +
-      '<br>We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them. Payments are handled by Stripe.';
+      '<br>' + W.privacy + W.stripe_note;
     if (EMBED) { /* the page footer is hidden in the popup: a short one in the card */
       var ef = document.getElementById('efoot');
       if (!ef) { ef = document.createElement('p'); ef.id = 'efoot'; ef.className = 'efoot'; app.appendChild(ef); }
-      ef.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · Registered charity ' + E(o.charity) : '') + '<br>We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them.';
+      ef.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? W.charity + E(o.charity) : '') + '<br>' + W.privacy;
     }
   }
   function list() { return (S.cfg.amounts[S.freq] || []).slice(0, 6); }
   function base() {
-    if (S.other !== '') { var n = Number(String(S.other).replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; }
+    if (S.other !== '') { var n = Number(FR ? String(S.other).replace(/[$\s\u00a0]/g, '').replace(/,/g, '.') : String(S.other).replace(/[$,\s]/g, '')); return isFinite(n) ? n : NaN; }
     return S.amount;
   }
   function feeCents(b) { /* the same sum as the donate function: what to add so the whole gift reaches Welfare Avenue after the card fee */
@@ -187,54 +255,54 @@ a{color:var(--green)}
   function message(title, html) { app.innerHTML = '<h1>' + E(title) + '</h1><div class="rule"></div>' + html; footer(); }
   function amountError() {
     var b = base(), c = S.cfg;
-    if (b == null || b === '' || !isFinite(b) || b <= 0) return 'Choose an amount, or enter your own.';
-    if (Math.abs(b * 100 - Math.round(b * 100)) > 0.001) return 'Enter an amount in dollars and cents.';
-    if (b < c.min) return 'The smallest gift online is ' + money(c.min) + '.';
-    if (b > c.max) return 'For a gift above ' + money(c.max) + ', please write to ' + (c.org.email || 'info@welfareavenue.com') + '.';
+    if (b == null || b === '' || !isFinite(b) || b <= 0) return W.err_choose;
+    if (Math.abs(b * 100 - Math.round(b * 100)) > 0.001) return W.err_cents;
+    if (b < c.min) return W.err_min(money(c.min));
+    if (b > c.max) return W.err_max(money(c.max), c.org.email || 'info@welfareavenue.com');
     return '';
   }
   function render() {
     var c = S.cfg, t = totals(), e = S.errors, amts = list(), mon = S.freq === 'monthly';
     var preview = c.mode !== 'live';
-    var html = '<form id="give" novalidate><h1>' + E(c.title) + '</h1><div class="rule"></div>' + (c.intro ? '<p class="intro">' + E(c.intro) + '</p>' : '') +
-      (preview ? '<div class="banner info" role="status"><b>Preview.</b> This page is off, so it cannot take a gift yet. An admin puts it live in the Hub.</div>' : '') +
+    var html = '<form id="give" novalidate><h1>' + E(cf('title')) + '</h1><div class="rule"></div>' + (cf('intro') ? '<p class="intro">' + E(cf('intro')) + '</p>' : '') +
+      (preview ? '<div class="banner info" role="status">' + W.preview + '</div>' : '') +
       (S.banner ? '<div class="banner ' + S.bannerKind + '" role="alert">' + E(S.banner) + '</div>' : '') +
-      '<fieldset><legend id="lf">How often</legend><div class="freq" role="radiogroup" aria-labelledby="lf">' +
-        '<button type="button" role="radio" aria-checked="' + (!mon) + '" data-freq="once">Give once</button>' +
-        '<button type="button" role="radio" aria-checked="' + mon + '" data-freq="monthly">Give monthly</button></div></fieldset>' +
-      '<fieldset class="' + (e.amount ? 'bad' : '') + '"><legend>Your gift' + (mon ? ' each month' : '') + '</legend><div class="amts">' +
-        amts.map(function (a) { var on = S.other === '' && S.amount === a; return '<button type="button" class="amt" data-amt="' + a + '" aria-pressed="' + on + '">' + E(money(a)) + (mon ? '<small>a month</small>' : '') + '</button>'; }).join('') + '</div>' +
-        '<label class="other' + (S.other !== '' ? ' on' : '') + '"><span aria-hidden="true">$</span><input id="other" inputmode="decimal" autocomplete="off" placeholder="Other amount" aria-label="Other amount, in dollars" value="' + E(S.other) + '"' +
-          (e.amount ? ' aria-invalid="true" aria-describedby="e_amount"' : '') + '></label>' + (e.amount ? '<p class="err" id="e_amount">' + E(e.amount) + '</p>' : '') + '</fieldset>' +
-      (c.designations.length > 1 ? '<fieldset><label class="lbl" for="des">Where your gift goes</label><select id="des">' + c.designations.map(function (d) { return '<option' + (d === S.designation ? ' selected' : '') + '>' + E(d) + '</option>'; }).join('') + '</select></fieldset>' : '') +
-      '<fieldset class="' + (e.tribute_name ? 'bad' : '') + '"><legend class="hp">Extras</legend>' +
-        '<label class="check"><input type="checkbox" id="trib"' + (S.tribute ? ' checked' : '') + '><span>Give in honour or in memory of someone</span></label>' +
-        (S.tribute ? '<div class="sub"><div class="radios" role="radiogroup" aria-label="In honour or in memory"><label><input type="radio" name="tk" value="honour"' + (S.tkind === 'honour' ? ' checked' : '') + '> In honour of</label>' +
-          '<label><input type="radio" name="tk" value="memory"' + (S.tkind === 'memory' ? ' checked' : '') + '> In memory of</label></div>' +
-          '<input type="text" id="tname" maxlength="120" placeholder="Their name" aria-label="Their name" value="' + E(S.tname) + '"' + (e.tribute_name ? ' aria-invalid="true" aria-describedby="e_tn"' : '') + '>' +
+      '<fieldset><legend id="lf">' + W.how_often + '</legend><div class="freq" role="radiogroup" aria-labelledby="lf">' +
+        '<button type="button" role="radio" aria-checked="' + (!mon) + '" data-freq="once">' + W.give_once + '</button>' +
+        '<button type="button" role="radio" aria-checked="' + mon + '" data-freq="monthly">' + W.give_monthly + '</button></div></fieldset>' +
+      '<fieldset class="' + (e.amount ? 'bad' : '') + '"><legend>' + W.legend(mon) + '</legend><div class="amts">' +
+        amts.map(function (a) { var on = S.other === '' && S.amount === a; return '<button type="button" class="amt" data-amt="' + a + '" aria-pressed="' + on + '">' + E(money(a)) + (mon ? '<small>' + W.a_month + '</small>' : '') + '</button>'; }).join('') + '</div>' +
+        '<label class="other' + (S.other !== '' ? ' on' : '') + '">' + (FR ? '' : '<span aria-hidden="true">$</span>') + '<input id="other" inputmode="decimal" autocomplete="off" placeholder="' + W.other + '" aria-label="' + W.other_aria + '" value="' + E(S.other) + '"' +
+          (e.amount ? ' aria-invalid="true" aria-describedby="e_amount"' : '') + '>' + (FR ? '<span aria-hidden="true">$</span>' : '') + '</label>' + (e.amount ? '<p class="err" id="e_amount">' + E(e.amount) + '</p>' : '') + '</fieldset>' +
+      (c.designations.length > 1 ? '<fieldset><label class="lbl" for="des">' + W.where + '</label><select id="des">' + c.designations.map(function (d) { return '<option value="' + E(d) + '"' + (d === S.designation ? ' selected' : '') + '>' + E(dlabel(d)) + '</option>'; }).join('') + '</select></fieldset>' : '') +
+      '<fieldset class="' + (e.tribute_name ? 'bad' : '') + '"><legend class="hp">' + W.extras + '</legend>' +
+        '<label class="check"><input type="checkbox" id="trib"' + (S.tribute ? ' checked' : '') + '><span>' + W.tribute + '</span></label>' +
+        (S.tribute ? '<div class="sub"><div class="radios" role="radiogroup" aria-label="' + W.tribute_aria + '"><label><input type="radio" name="tk" value="honour"' + (S.tkind === 'honour' ? ' checked' : '') + '> ' + W.honour + '</label>' +
+          '<label><input type="radio" name="tk" value="memory"' + (S.tkind === 'memory' ? ' checked' : '') + '> ' + W.memory + '</label></div>' +
+          '<input type="text" id="tname" maxlength="120" placeholder="' + W.their_name + '" aria-label="' + W.their_name + '" value="' + E(S.tname) + '"' + (e.tribute_name ? ' aria-invalid="true" aria-describedby="e_tn"' : '') + '>' +
           (e.tribute_name ? '<p class="err" id="e_tn">' + E(e.tribute_name) + '</p>' : '') + '</div>' : '') +
-        (c.fee && c.fee.on ? '<label class="check"><input type="checkbox" id="cover"' + (S.cover ? ' checked' : '') + '><span>' + (t.ok && t.fee ? 'Add ' + E(cents(t.fee / 100)) + ' to help cover the card fee' + (mon ? ' each month' : '') : 'Add a little to help cover the card fee') + '</span></label>' : '') +
-        '<label class="check dashed"><input type="checkbox" id="consent"' + (S.consent ? ' checked' : '') + '><span>' + E(c.consent_label) + '</span></label>' +
+        (c.fee && c.fee.on ? '<label class="check"><input type="checkbox" id="cover"' + (S.cover ? ' checked' : '') + '><span>' + (t.ok && t.fee ? E(W.fee_add(cents(t.fee / 100), mon)) : W.fee_little) + '</span></label>' : '') +
+        '<label class="check dashed"><input type="checkbox" id="consent"' + (S.consent ? ' checked' : '') + '><span>' + E(cf('consent_label')) + '</span></label>' +
         '<p class="small">' + E((c.org && c.org.address) || 'Welfare Avenue') + ' · ' + E((c.org && c.org.email) || '') + '</p></fieldset>' +
-      '<div class="total" aria-live="polite"><span>' + (mon ? 'Your monthly gift' : 'Your gift') + '</span><b id="tot">' + (t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') : '–') + '</b></div>' +
+      '<div class="total" aria-live="polite"><span>' + W.total(mon) + '</span><b id="tot">' + (t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> ' + W.a_month + '</small>' : '') : '–') + '</b></div>' +
       '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" id="hp" tabindex="-1" autocomplete="off"></label></div>' +
-      '<button type="submit" class="go" id="go"' + (S.sending ? ' disabled' : '') + '>' + (S.sending ? (embedded() ? 'Opening the secure payment form…' : 'Opening the secure payment page…') : 'Continue to payment') + '</button>' +
-      '<p class="secure">' + LOCK + '<span>' + (embedded() ? 'Next, Stripe’s secure payment form opens right here, for a card or a digital wallet.' : 'You finish on Stripe’s secure page, by card or a digital wallet.') + '</span></p>' +
-      (c.receipt_note ? '<p class="small" style="text-align:center">' + E(c.receipt_note) + '</p>' : '') + '</form>';
+      '<button type="submit" class="go" id="go"' + (S.sending ? ' disabled' : '') + '>' + (S.sending ? (embedded() ? W.opening_form : W.opening_page) : W.go) + '</button>' +
+      '<p class="secure">' + LOCK + '<span>' + (embedded() ? W.next_embedded : W.next_hosted) + '</span></p>' +
+      (cf('receipt_note') ? '<p class="small" style="text-align:center">' + E(cf('receipt_note')) + '</p>' : '') + '</form>';
     app.innerHTML = html;
     footer();
   }
   function paintPay() { /* the choices in one line with Change, and Stripe's form below them */
     var c = S.cfg, t = totals(), mon = S.freq === 'monthly', bits = [];
-    if (c.designations.length > 1) bits.push(S.designation || c.designations[0]);
-    if (S.tribute && S.tname.trim()) bits.push((S.tkind === 'memory' ? 'In memory of ' : 'In honour of ') + S.tname.trim());
-    if (S.cover && t.fee) bits.push('includes ' + cents(t.fee / 100) + ' for the card fee');
-    app.innerHTML = '<h1>' + E(c.title) + '</h1><div class="rule"></div>' +
-      '<div class="summary"><div><span class="small">' + (mon ? 'Your monthly gift' : 'Your gift') + '</span><div class="what">' + E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') + '</div>' +
-        (bits.length ? '<p class="small">' + E(bits.join(' · ')) + '</p>' : '') + '</div><button type="button" class="linkbtn" id="change">Change</button></div>' +
-      '<div id="pay" class="paybox"><p class="loading">Loading the secure payment form…</p></div>' +
-      '<p class="secure">' + LOCK + '<span>Stripe handles the payment securely. Welfare Avenue never sees your card number.</span></p>' +
-      (c.receipt_note ? '<p class="small" style="text-align:center">' + E(c.receipt_note) + '</p>' : '');
+    if (c.designations.length > 1) bits.push(dlabel(S.designation || c.designations[0]));
+    if (S.tribute && S.tname.trim()) bits.push((S.tkind === 'memory' ? W.memory : W.honour) + ' ' + S.tname.trim());
+    if (S.cover && t.fee) bits.push(W.includes_fee(cents(t.fee / 100)));
+    app.innerHTML = '<h1>' + E(cf('title')) + '</h1><div class="rule"></div>' +
+      '<div class="summary"><div><span class="small">' + W.total(mon) + '</span><div class="what">' + E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> ' + W.a_month + '</small>' : '') + '</div>' +
+        (bits.length ? '<p class="small">' + E(bits.join(' · ')) + '</p>' : '') + '</div><button type="button" class="linkbtn" id="change">' + W.change + '</button></div>' +
+      '<div id="pay" class="paybox"><p class="loading">' + W.loading_form + '</p></div>' +
+      '<p class="secure">' + LOCK + '<span>' + W.stripe_secure + '</span></p>' +
+      (cf('receipt_note') ? '<p class="small" style="text-align:center">' + E(cf('receipt_note')) + '</p>' : '');
     footer();
     try { app.scrollIntoView({ block: 'start' }); } catch (e) { /* fine */ }
   }
@@ -255,19 +323,19 @@ a{color:var(--green)}
   function toStripe(url) { /* Stripe's own page: in the popup it cannot open inside the frame, so a link opens it at the top */
     if (!EMBED) { location.assign(url); return; }
     S.sending = false; S.paying = true; post({ type: 'state', paying: true });
-    app.innerHTML = '<h1>' + E(S.cfg.title) + '</h1><div class="rule"></div><p class="big">One more step: your gift continues on Stripe’s secure page.</p>' +
-      '<a class="go" style="display:block;text-align:center;text-decoration:none" id="tostripe" href="' + E(url) + '" target="_top" rel="noopener">Continue on Stripe’s secure page</a>' +
-      '<p class="small" style="text-align:center"><button type="button" class="linkbtn" id="change">Change my gift</button></p>';
+    app.innerHTML = '<h1>' + E(cf('title')) + '</h1><div class="rule"></div><p class="big">' + W.one_more + '</p>' +
+      '<a class="go" style="display:block;text-align:center;text-decoration:none" id="tostripe" href="' + E(url) + '" target="_top" rel="noopener">' + W.to_stripe + '</a>' +
+      '<p class="small" style="text-align:center"><button type="button" class="linkbtn" id="change">' + W.change_gift + '</button></p>';
     footer();
   }
   function hosted(body) {
     if (!S.paying) return;
     var b = JSON.parse(JSON.stringify(body)); delete b.ui;
-    var box = document.getElementById('pay'); if (box) box.innerHTML = '<p class="loading">Opening Stripe’s secure page instead…</p>';
+    var box = document.getElementById('pay'); if (box) box.innerHTML = '<p class="loading">' + W.instead + '</p>';
     call('POST', b).then(function (r) {
       if (r.status === 200 && r.body.url) { toStripe(r.body.url); return; }
-      S.paying = false; S.banner = 'Something went wrong on our side, and no payment was made. Please try again in a minute.'; S.bannerKind = 'warn'; render();
-    }).catch(function () { S.paying = false; S.banner = 'We could not reach Welfare Avenue. Check your connection and try again.'; S.bannerKind = 'warn'; render(); });
+      S.paying = false; S.banner = W.err_ours; S.bannerKind = 'warn'; render();
+    }).catch(function () { S.paying = false; S.banner = W.err_reach; S.bannerKind = 'warn'; render(); });
   }
   function back() { /* Change: Stripe's form goes away (only one can exist at a time) and the choices come back as they were */
     S.paying = false; post({ type: 'state', paying: false });
@@ -277,8 +345,8 @@ a{color:var(--green)}
   }
   function paintTotal() { /* keep typing smooth: update what depends on the amount without redrawing the field */
     var t = totals(), mon = S.freq === 'monthly', tot = document.getElementById('tot');
-    if (tot) tot.innerHTML = t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> a month</small>' : '') : '–';
-    var cov = document.getElementById('cover'); if (cov && cov.nextElementSibling) cov.nextElementSibling.textContent = t.ok && t.fee ? 'Add ' + cents(t.fee / 100) + ' to help cover the card fee' + (mon ? ' each month' : '') : 'Add a little to help cover the card fee';
+    if (tot) tot.innerHTML = t.ok ? E(cents(t.total / 100)) + (mon ? '<small style="font-size:16px"> ' + W.a_month + '</small>' : '') : '–';
+    var cov = document.getElementById('cover'); if (cov && cov.nextElementSibling) cov.nextElementSibling.textContent = t.ok && t.fee ? W.fee_add(cents(t.fee / 100), mon) : W.fee_little;
     document.querySelectorAll('.amt').forEach(function (b) { b.setAttribute('aria-pressed', String(S.other === '' && Number(b.getAttribute('data-amt')) === S.amount)); });
     var o = document.querySelector('.other'); if (o) o.classList.toggle('on', S.other !== '');
   }
@@ -314,13 +382,13 @@ a{color:var(--green)}
     ev.preventDefault(); if (S.sending) return;
     var c = S.cfg, errs = {}, ae = amountError();
     if (ae) errs.amount = ae;
-    if (S.tribute && !S.tname.trim()) errs.tribute_name = 'Whose name should we record?';
+    if (S.tribute && !S.tname.trim()) errs.tribute_name = W.whose;
     S.errors = errs;
     if (Object.keys(errs).length) { S.banner = ''; render(); var f = document.getElementById(errs.amount ? 'other' : 'tname'); if (f) f.focus(); return; }
-    if (c.mode !== 'live') { S.banner = 'This page is a preview: it cannot take a gift until an admin puts it live.'; S.bannerKind = 'info'; render(); return; }
+    if (c.mode !== 'live') { S.banner = W.preview_submit; S.bannerKind = 'info'; render(); return; }
     S.sending = true; S.banner = ''; render();
     var body = { action: 'checkout', token: S.token, hp: (document.getElementById('hp') || {}).value || '', frequency: S.freq, amount: Number(base()),
-      designation: S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: 'en' };
+      designation: S.designation || c.designations[0], tribute_kind: S.tribute ? S.tkind : '', tribute_name: S.tribute ? S.tname.trim() : '', consent: S.consent, fee_cover: S.cover, lang: L };
     if (embedded()) body.ui = 'embedded';
     var wait = Math.max(0, 3300 - (Date.now() - S.loadedAt)); /* the token must be a few seconds old (a person, not a script) */
     setTimeout(function () {
@@ -329,45 +397,48 @@ a{color:var(--green)}
         if (r.status === 200 && r.body.url) { toStripe(r.body.url); return; }
         S.sending = false;
         if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = r.body.fields && r.body.fields.designation ? r.body.fields.designation : ''; S.bannerKind = 'warn'; render(); return; }
-        if (r.status === 400 && r.body.error === 'expired') { S.banner = 'This page was open a long time, so we refreshed it. Please press Continue again.'; S.bannerKind = 'info'; load(true); return; }
-        if (r.status === 403) { S.cfg.mode = 'off'; S.banner = 'Online giving is not open right now. Please try again later.'; S.bannerKind = 'warn'; render(); return; }
-        S.banner = r.status === 429 ? 'Too many tries from here. Please wait a few minutes and try again.' : 'Something went wrong on our side, and no payment was made. Please try again in a minute.';
+        if (r.status === 400 && r.body.error === 'expired') { S.banner = W.expired; S.bannerKind = 'info'; load(true); return; }
+        if (r.status === 403) { S.cfg.mode = 'off'; S.banner = W.closed; S.bannerKind = 'warn'; render(); return; }
+        S.banner = r.status === 429 ? W.too_many : W.err_ours;
         S.bannerKind = 'warn'; render();
-      }).catch(function () { S.sending = false; S.banner = 'We could not reach Welfare Avenue. Check your connection and try again.'; S.bannerKind = 'warn'; render(); });
+      }).catch(function () { S.sending = false; S.banner = W.err_reach; S.bannerKind = 'warn'; render(); });
     }, wait);
   });
   function load(keep) {
     return call('GET').then(function (r) {
-      if (r.status !== 200 || !r.body.amounts) { message('Something went wrong', '<p>We could not load the page. Please try again in a minute, or write to <a href="mailto:info@welfareavenue.com">info@welfareavenue.com</a>.</p>'); return; }
+      if (r.status !== 200 || !r.body.amounts) { message(W.wrong, W.wrong_html); return; }
       var first = !S.cfg;
       S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
       if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String(S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
       if (first) { var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
       if (S.cfg.mode !== 'live' && !q.get('preview')) {
         var mail = S.cfg.org.email || 'info@welfareavenue.com';
-        message('Online giving opens soon', '<p class="big">Thank you for thinking of Welfare Avenue. Our online giving page is not open yet.</p><p>To give today, or for any question, write to <a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p>');
+        message(W.soon, W.soon_html(E(mail)));
         return;
       }
       render();
       if (embedded() && S.cfg.mode === 'live') loadStripeJs().catch(function () { /* the fallback handles it at payment time */ });
-    }).catch(function () { message('We could not reach Welfare Avenue', '<p>Check your connection and try again.</p>'); });
+    }).catch(function () { message(W.reach, W.reach_html); });
   }
   function thanks(id) {
-    app.innerHTML = '<p class="loading">Checking your gift…</p>';
+    app.innerHTML = '<p class="loading">' + W.checking + '</p>';
     call('POST', { action: 'thanks', session_id: id }).then(function (r) {
       var b = r.body || {}, o = b.org || {}, mail = o.email || 'info@welfareavenue.com';
+      if (!FR && b.lang === 'fr' && !q.get('lang')) { var p3 = new URLSearchParams(location.search); p3.set('lang', 'fr'); location.replace(location.pathname + '?' + p3.toString()); return; } /* a French gift comes back to the French thank-you */
+      var bf = FR && b.fr ? b.fr : {};
       footer(o);
-      if (r.status !== 200 || !b.ok) { message('We could not find this gift', '<p>If you just gave, thank you: your card or bank statement shows the payment. For any question, write to <a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p><p><a href="/give">Back to the giving page</a></p>'); return; }
-      if (!b.complete) { message('Your gift is not finished', '<p>No payment was made. You can <a href="/give">start again</a> whenever you like.</p>'); return; }
+      if (r.status !== 200 || !b.ok) { message(W.notfound, W.notfound_html(E(mail))); return; }
+      if (!b.complete) { message(W.unfinished, W.unfinished_html); return; }
       var mon = b.frequency === 'monthly', amt = cents(b.amount);
-      var lead = b.waiting ? 'Your gift of ' + amt + ' is on its way: a bank payment takes a few days to clear.' : mon ? 'Your monthly gift of ' + amt + ' has started.' : 'Your gift of ' + amt + ' is complete.';
-      message('Thank you' + (b.first_name ? ', ' + b.first_name : '') + '!', '<div class="done"><p class="big">' + E(lead) + '</p>' + (b.thanks ? '<p>' + E(b.thanks) + '</p>' : '') +
-        (b.receipt_note ? '<p class="small">' + E(b.receipt_note) + '</p>' : '') + (mon && b.monthly_note ? '<p class="small">' + E(b.monthly_note) + '</p>' : '') +
-        (EMBED ? '<button type="button" class="go" id="closepop">Close</button>' : '<p><a href="https://welfareavenue.com">Visit welfareavenue.com</a></p>') + '</div>');
+      var lead = b.waiting ? W.lead_waiting(amt) : mon ? W.lead_monthly(amt) : W.lead_once(amt);
+      var thx = bf.thanks != null ? bf.thanks : b.thanks, rn = bf.receipt_note != null ? bf.receipt_note : b.receipt_note, mn = bf.monthly_note != null ? bf.monthly_note : b.monthly_note;
+      message(W.thank_you(b.first_name), '<div class="done"><p class="big">' + E(lead) + '</p>' + (thx ? '<p>' + E(thx) + '</p>' : '') +
+        (rn ? '<p class="small">' + E(rn) + '</p>' : '') + (mon && mn ? '<p class="small">' + E(mn) + '</p>' : '') +
+        (EMBED ? '<button type="button" class="go" id="closepop">' + W.close + '</button>' : W.visit_html) + '</div>');
       post({ type: 'state', paying: false, done: true });
       footer(o);
       try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
-    }).catch(function () { message('We could not reach Welfare Avenue', '<p>If you just gave, thank you: your card or bank statement shows the payment.</p>'); });
+    }).catch(function () { message(W.reach, W.gave_html); });
   }
   var sid = q.get('session_id');
   if (/\/give\/thanks\/?$/.test(location.pathname) && sid) thanks(sid); else load();

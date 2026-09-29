@@ -214,6 +214,58 @@ const shot = async (p, n) => { if (SHOTS) await p.screenshot({ path: path.join(S
     await shot(f.page, 'give_phone');
     ok('no page errors (phone)', f.errors.length === 0, f.errors);
     await f.ctx.close();
+
+    /* 9. French (wave162b): ?lang=fr, the settings' French words from the function, amounts in Canadian French, the
+       choices sent with lang fr and the English value of where the gift goes, and the French thank-you */
+    const FRC = { title: 'Donner à Welfare Avenue', intro: 'Chaque don compte.', designations: ['Là où les besoins sont les plus grands', 'Toronto (FR)'],
+      consent_label: 'Oui, envoyez-moi des nouvelles par courriel.', thanks: 'Merci d’être là.', receipt_note: 'Organisme de bienfaisance enregistré (713048502RR0001).', monthly_note: 'Écrivez-nous pour le modifier.' };
+    f = await open(browser, 'https://hub.welfareavenue.com/give/?lang=fr', (c) => {
+      if (c.method === 'GET') return { body: CFG({ fr: FRC }) };
+      return { body: { url: 'https://checkout.stripe.com/c/pay/cs_live_FRTEST' } };
+    });
+    t = await text(f.page);
+    st = await f.page.evaluate(() => ({ lang: document.documentElement.lang, title: document.title, h1: document.querySelector('h1').innerText, amts: [...document.querySelectorAll('.amt')].map(b => b.innerText.replace(/\s+/g, ' ')),
+      freq: [...document.querySelectorAll('[data-freq]')].map(b => b.innerText), des: [...document.querySelectorAll('#des option')].map(o => o.value + '=' + o.textContent), total: document.getElementById('tot').innerText.replace(/\s+/g, ' '),
+      link: (document.getElementById('langlink') || {}).textContent, linkHref: (document.getElementById('langlink') || {}).href, home: (document.getElementById('home') || {}).href,
+      cover: document.getElementById('cover').nextElementSibling.innerText.replace(/\s+/g, ' '), consent: document.getElementById('consent').nextElementSibling.innerText }));
+    ok('French: the page, its title and its words in French', st.lang === 'fr' && st.title === 'Donner à Welfare Avenue' && st.h1.toLowerCase() === 'donner à welfare avenue', st);
+    ok('French: once or monthly, amounts written the Canadian French way ($50 chosen), the total', st.freq.join('|') === 'Donner une fois|Donner chaque mois' && st.amts.join(',') === '25 $,50 $,100 $,250 $' && st.total === '50,00 $', st);
+    ok('French: where the gift goes shows French labels but keeps the English values', st.des.join('|') === 'Where it is needed most=Là où les besoins sont les plus grands|Toronto=Toronto (FR)', st.des);
+    ok('French: the fee offer, the news box in the French words, the receipt note, the footer', /Ajouter 1,81 \$ pour aider à couvrir les frais de carte/.test(st.cover) && st.consent === FRC.consent_label && /Organisme de bienfaisance enregistré \(713048502RR0001\)/.test(t) &&
+      /Organisme de bienfaisance enregistré 713048502RR0001/.test(t) && /Nous utilisons vos renseignements/.test(t), { cover: st.cover, t: t.slice(-500) });
+    ok('French: an English link back and the lockup to the French website', st.link === 'English' && /\/give\/$/.test(new URL(st.linkHref).pathname) && !/lang=/.test(st.linkHref) && st.home === 'https://welfareavenue.com/fr/', st);
+    await f.page.fill('#other', '3'); await f.page.click('#go'); await f.page.waitForTimeout(250);
+    ok('French: the minimum in French, nothing sent', /Le don minimum en ligne est de 5\s\$\./.test(await text(f.page)) && f.calls.filter(c => c.method === 'POST').length === 0);
+    await f.page.fill('#other', '42,50'); await f.page.waitForTimeout(80);
+    ok('French: 42,50 typed the French way is $42.50', (await f.page.textContent('#tot')).replace(/\s+/g, ' ') === '42,50 $');
+    await f.page.check('#trib'); await f.page.click('#go'); await f.page.waitForTimeout(250);
+    ok('French: a tribute without a name is caught in French', /Quel nom devons-nous inscrire\s\?/.test(await text(f.page)));
+    await f.page.check('input[name="tk"][value="honour"]'); await f.page.fill('#tname', 'Nan'); await f.page.selectOption('#des', 'Toronto'); await f.page.check('#consent');
+    await f.page.click('#go');
+    await f.page.waitForURL(/checkout\.stripe\.com/, { timeout: 8000 }).catch(() => {});
+    const pf = (f.calls.filter(c => c.method === 'POST')[0] || {}).body || {};
+    ok('French: the checkout says lang fr, $42.50, the English value Toronto, in honour of Nan, the news box', pf.lang === 'fr' && pf.amount === 42.5 && pf.designation === 'Toronto' && pf.tribute_kind === 'honour' && pf.tribute_name === 'Nan' && pf.consent === true, pf);
+    ok('no page errors and nothing blocked (French)', f.errors.length === 0 && f.csp.length === 0, { errors: f.errors, csp: f.csp });
+    await shot(f.page, 'give_fr');
+    await f.ctx.close();
+    /* the French settings missing (an older function): the page's own words in French, the settings in English */
+    f = await open(browser, 'https://hub.welfareavenue.com/give/?lang=fr', c => ({ body: CFG() }));
+    t = await text(f.page);
+    ok('French without French settings: French page words, English settings, no errors', /Donner une fois/.test(t) && /Give to Welfare Avenue/i.test(t) && f.errors.length === 0, t.slice(0, 300));
+    await f.ctx.close();
+    /* the French thank-you, and an English address for a French gift turns French */
+    const THX = { ok: true, complete: true, paid: true, waiting: false, frequency: 'once', amount: 51.81, currency: 'CAD', first_name: 'Amélie', designation: 'Toronto', thanks: 'Thank you in English.',
+      receipt_note: 'English receipt note.', monthly_note: 'English monthly note.', org: ORG, lang: 'fr', fr: { thanks: 'Merci d’être aux côtés de Welfare Avenue.', receipt_note: 'Reçu officiel pour les dons admissibles.', monthly_note: 'Note mensuelle.' } };
+    f = await open(browser, 'https://hub.welfareavenue.com/give/thanks?session_id=cs_live_FRTHANKS1234&lang=fr', c => (c.method === 'POST' ? { body: THX } : { status: 404, body: {} }));
+    await f.page.waitForTimeout(400);
+    t = await text(f.page);
+    ok('French thank-you: the name, the amount in French, the French notes', /Merci, Amélie\s!/i.test(t) && /Votre don de 51,81\s\$ a bien été reçu\./.test(t) && /Merci d’être aux côtés de Welfare Avenue\./.test(t) && /Reçu officiel/.test(t) && !/English/.test(t.replace('English', '')), t.slice(0, 500));
+    await f.ctx.close();
+    f = await open(browser, 'https://hub.welfareavenue.com/give/thanks?session_id=cs_live_FRTHANKS1234', c => (c.method === 'POST' ? { body: THX } : { status: 404, body: {} }));
+    await f.page.waitForTimeout(900);
+    t = await text(f.page);
+    ok('a French gift back on the English address switches to the French thank-you', /lang=fr/.test(f.page.url()) && /Merci, Amélie/i.test(t), { url: f.page.url(), t: t.slice(0, 200) });
+    await f.ctx.close();
   } catch (e) { fail++; console.log('FAIL crashed: ' + (e && e.stack || e)); }
   await browser.close();
   console.log('\nw161page: ' + pass + ' passed, ' + fail + ' failed');

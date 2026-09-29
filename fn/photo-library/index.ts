@@ -1,4 +1,4 @@
-// Welfare Avenue: photo-library (v2, 28/09/26; v1 25/09/26)
+// Welfare Avenue: photo-library (v3, 29/09/26; v2 28/09/26; v1 25/09/26)
 // Puts photo files into the public content-images bucket under photos/ for
 // the hub's Photo library (wa_photos). The hub itself uploads straight to
 // storage with the signed-in person's session (staff can write to
@@ -14,6 +14,8 @@
 //   {action:'sideline', paths:[...]}        v2, trigger secret or hub admin only: moves pictures that are not
 //        right for the website into a 'Not for website' folder beside them, so a person can review and delete
 //        them in one place. Nothing is deleted. Only for the upload folders named in SIDELINE (max 100 a call).
+//        v3: {to: 'Duplicates'} moves a dashboard double upload ('name (1).jpg') into a Duplicates folder beside it, only
+//        when the original ('name.jpg') is there with exactly the same size; 'Good photos' is allowed for this.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -22,6 +24,7 @@ const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const BUCKET = 'content-images';
 const SIDELINE = /^(Flagfootball 2026|Gift basket drive)\/([^\/]{1,160}\.(?:jpe?g|png|heic|webp))$/i;
+const DUPLICATE = /^(Flagfootball 2026|Gift basket drive|Good photos)\/([^\/]{1,160}) \((\d{1,3})\)(\.[A-Za-z0-9]{2,5})$/;
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -103,6 +106,31 @@ Deno.serve(async (req: Request) => {
       if (!me.admin) return json({ error: 'Only the trigger secret or a hub admin can move files.' }, 403);
       const paths = (Array.isArray(body.paths) ? body.paths : []).map(String).slice(0, 100);
       const out: Array<Record<string, unknown>> = [];
+      if (body.to === 'Duplicates') { // v3: exact double uploads only
+        const sizes: Record<string, Record<string, number>> = {};
+        const sizeOf = async (folder: string, name: string) => {
+          if (!sizes[folder]) {
+            sizes[folder] = {};
+            for (let off = 0; ; off += 1000) {
+              const { data } = await svc.storage.from(BUCKET).list(folder, { limit: 1000, offset: off });
+              (data || []).forEach(o => { sizes[folder][o.name] = Number((o.metadata as { size?: number } | null)?.size ?? -1); });
+              if (!data || data.length < 1000) break;
+            }
+          }
+          return sizes[folder][name];
+        };
+        for (const from of paths) {
+          const m = DUPLICATE.exec(from);
+          if (!m) { out.push({ from, ok: false, error: 'not a double upload in an allowed folder' }); continue; }
+          const copy = from.slice(m[1].length + 1), orig = m[2] + m[4];
+          const a = await sizeOf(m[1], copy), b = await sizeOf(m[1], orig);
+          if (!(a > 0) || a !== b) { out.push({ from, ok: false, error: 'the original is missing or differs' }); continue; }
+          const to = m[1] + '/Duplicates/' + copy;
+          const { error } = await svc.storage.from(BUCKET).move(from, to);
+          out.push(error ? { from, ok: false, error: error.message } : { from, to, ok: true });
+        }
+        return json({ ok: out.every(r => r.ok), moved: out.filter(r => r.ok).length, files: out });
+      }
       for (const from of paths) {
         const m = SIDELINE.exec(from);
         if (!m) { out.push({ from, ok: false, error: 'not an allowed upload folder' }); continue; }

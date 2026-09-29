@@ -1,4 +1,10 @@
-// Welfare Avenue: donate (v3, 28/09/26, wave161b)
+// Welfare Avenue: donate (v4, 29/09/26, wave162b; v3 28/09/26, wave161b)
+// v4: French. The page sends lang 'fr' (hub.welfareavenue.com/give/?lang=fr: the French website's buttons and popup ask
+//   for it). GET adds fr: the page's words in French (the donate_*_fr settings, or the defaults below until an admin sets
+//   them; a note left empty in English stays empty in French), with where the gift goes as French labels in the same order.
+//   A French checkout records the consent with the French words, opens Stripe in Canadian French (locale fr-CA) and
+//   comes back to the French thank-you; the thank-you answer says the gift's language and carries the French notes.
+//   The donor's choices are still checked against the English list (a French label is turned back into it).
 // The public side of the Hub's donation page, shown at hub.welfareavenue.com/give.
 //   GET   The page's settings (the title and words, the amounts for once and monthly, the minimum and maximum, where the
 //         gift can go, the card-fee option, the news box and its words, the receipt and monthly notes, the charity's name,
@@ -38,7 +44,18 @@ const ORIGINS = ['https://hub.welfareavenue.com', 'https://welfareavenue.com', '
 const MIN_SECONDS = 3, MAX_AGE = 86400, PER_IP = 10, PER_IP_WINDOW = 10, PER_HOUR = 300, MAX_BODY = 8000;
 const KEYS = ['donate_mode', 'donate_title', 'donate_intro', 'donate_amounts_once', 'donate_amounts_monthly', 'donate_min', 'donate_max', 'donate_designations',
   'donate_fee_cover', 'donate_fee_percent', 'donate_fee_fixed', 'donate_consent_label', 'donate_thanks', 'donate_receipt_note', 'donate_monthly_note', 'donate_product',
-  'mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number'];
+  'mail_from_name', 'mail_postal_address', 'mail_reply_to', 'mail_charity_number',
+  'donate_title_fr', 'donate_intro_fr', 'donate_designations_fr', 'donate_consent_label_fr', 'donate_thanks_fr', 'donate_receipt_note_fr', 'donate_monthly_note_fr'];
+// v4: the French words until an admin sets the donate_*_fr settings (translations of the English settings of 28/09/26)
+const FR: Record<string, string> = {
+  title: 'Donner à Welfare Avenue',
+  intro: 'Chaque don permet à nos bénévoles étudiants de continuer à servir nos communautés à Montréal et à Toronto. Donnez une fois, ou chaque mois pour un appui constant.',
+  consent_label: 'Oui, envoyez-moi par courriel des nouvelles et des histoires de Welfare Avenue. Je peux me désabonner en tout temps.',
+  thanks: 'Merci d’être aux côtés de Welfare Avenue et des bénévoles qui le font vivre.',
+  receipt_note: 'Welfare Avenue est un organisme de bienfaisance enregistré au Canada ({charity}). Les dons admissibles donnent droit à un reçu officiel aux fins de l’impôt sur le revenu.',
+  monthly_note: 'Vous pouvez modifier ou arrêter votre don mensuel en tout temps\u00a0: écrivez à {email}.'
+};
+const FR_DESIGNATIONS: Record<string, string> = { 'Where it is needed most': 'Là où les besoins sont les plus grands' };
 
 // deno-lint-ignore no-explicit-any
 type Json = any;
@@ -123,6 +140,8 @@ function feeCents(base: number, pct: number, fixed: number): number {
 }
 function publicConfig(m: Record<string, string>): Json {
   const des = lines(m.donate_designations);
+  const desFr = lines(m.donate_designations_fr);
+  const both = (en: string, fr: string, dflt: string) => (String(en || '').trim() ? (fr || dflt) : ''); // empty in English: empty in French
   return {
     mode: m.donate_mode === 'live' ? 'live' : 'off',
     title: m.donate_title || 'Give to Welfare Avenue', intro: m.donate_intro || '',
@@ -132,26 +151,34 @@ function publicConfig(m: Record<string, string>): Json {
     fee: { on: m.donate_fee_cover !== 'off', percent: num(m.donate_fee_percent, 2.9), fixed: num(m.donate_fee_fixed, 0.3) },
     consent_label: m.donate_consent_label || 'Yes, send me news and stories from Welfare Avenue by email. I can unsubscribe at any time.',
     thanks: m.donate_thanks || '', receipt_note: fill(m.donate_receipt_note, m), monthly_note: fill(m.donate_monthly_note, m),
-    org: { name: m.mail_from_name || 'Welfare Avenue', address: m.mail_postal_address || '', email: m.mail_reply_to || 'info@welfareavenue.com', charity: m.mail_charity_number || '' }
+    org: { name: m.mail_from_name || 'Welfare Avenue', address: m.mail_postal_address || '', email: m.mail_reply_to || 'info@welfareavenue.com', charity: m.mail_charity_number || '' },
+    fr: {
+      title: m.donate_title_fr || FR.title, intro: both(m.donate_intro, m.donate_intro_fr, FR.intro),
+      designations: (des.length ? des : ['Where it is needed most']).map((d, i) => desFr[i] || FR_DESIGNATIONS[d] || d),
+      consent_label: m.donate_consent_label_fr || FR.consent_label, thanks: both(m.donate_thanks, m.donate_thanks_fr, FR.thanks),
+      receipt_note: fill(both(m.donate_receipt_note, m.donate_receipt_note_fr, FR.receipt_note), m), monthly_note: fill(both(m.donate_monthly_note, m.donate_monthly_note_fr, FR.monthly_note), m)
+    }
   };
 }
 
 // ---------- the donor's choices against the settings ----------
 function check(cfg: Json, body: Json) {
   const errors: Record<string, string> = {};
+  const fr = body.lang === 'fr';
   const freq = body.frequency === 'monthly' ? 'monthly' : body.frequency === 'once' ? 'once' : '';
-  if (!freq) errors.frequency = 'Choose once or monthly.';
+  if (!freq) errors.frequency = fr ? 'Choisissez une fois ou chaque mois.' : 'Choose once or monthly.';
   const amt = Number(body.amount), base = Math.round(amt * 100);
-  if (!isFinite(amt) || Math.abs(amt * 100 - base) > 0.001) errors.amount = 'Enter an amount in dollars and cents.';
-  else if (base < Math.round(cfg.min * 100)) errors.amount = 'The smallest gift online is $' + cfg.min + '.';
-  else if (base > Math.round(cfg.max * 100)) errors.amount = 'For a gift above $' + cfg.max + ', please write to ' + cfg.org.email + '.';
+  if (!isFinite(amt) || Math.abs(amt * 100 - base) > 0.001) errors.amount = fr ? 'Entrez un montant en dollars et en cents.' : 'Enter an amount in dollars and cents.';
+  else if (base < Math.round(cfg.min * 100)) errors.amount = fr ? 'Le don minimum en ligne est de ' + cfg.min + '\u00a0$.' : 'The smallest gift online is $' + cfg.min + '.';
+  else if (base > Math.round(cfg.max * 100)) errors.amount = fr ? 'Pour un don de plus de ' + cfg.max + '\u00a0$, veuillez écrire à ' + cfg.org.email + '.' : 'For a gift above $' + cfg.max + ', please write to ' + cfg.org.email + '.';
   let designation = String(body.designation || '').trim();
   if (!designation) designation = cfg.designations[0];
-  if (!cfg.designations.includes(designation)) errors.designation = 'Choose where your gift goes.';
+  if (!cfg.designations.includes(designation) && cfg.fr && cfg.fr.designations.indexOf(designation) >= 0) designation = cfg.designations[cfg.fr.designations.indexOf(designation)];
+  if (!cfg.designations.includes(designation)) errors.designation = fr ? 'Choisissez où va votre don.' : 'Choose where your gift goes.';
   const tk = body.tribute_kind === 'honour' || body.tribute_kind === 'memory' ? body.tribute_kind : '';
   const tn = tk ? String(body.tribute_name || '').trim().replace(/\s+/g, ' ') : '';
-  if (tk && !tn) errors.tribute_name = 'Whose name should we record?';
-  if (tn.length > 120) errors.tribute_name = 'That name is too long.';
+  if (tk && !tn) errors.tribute_name = fr ? 'Quel nom devons-nous inscrire\u00a0?' : 'Whose name should we record?';
+  if (tn.length > 120) errors.tribute_name = fr ? 'Ce nom est trop long.' : 'That name is too long.';
   const cover = body.fee_cover === true && cfg.fee.on ? feeCents(base, cfg.fee.percent, cfg.fee.fixed) : 0;
   return { errors, freq, base, cover, total: base + cover, designation, tk, tn, consent: body.consent === true, lang: body.lang === 'fr' ? 'fr' : 'en' };
 }
@@ -189,7 +216,8 @@ Deno.serve(async (req: Request) => {
         waiting: o.status === 'complete' && o.payment_status === 'unpaid', frequency: monthly ? 'monthly' : 'once',
         amount: (Number(o.amount_total) || 0) / 100, currency: String(o.currency || 'cad').toUpperCase(),
         first_name: String((o.customer_details && o.customer_details.name) || '').trim().split(/\s+/)[0] || '',
-        designation: o.metadata.wa_designation || '', thanks: cfg.thanks, receipt_note: cfg.receipt_note, monthly_note: cfg.monthly_note, org: cfg.org
+        designation: o.metadata.wa_designation || '', thanks: cfg.thanks, receipt_note: cfg.receipt_note, monthly_note: cfg.monthly_note, org: cfg.org,
+        lang: o.metadata.wa_lang === 'fr' ? 'fr' : 'en', fr: { thanks: cfg.fr.thanks, receipt_note: cfg.fr.receipt_note, monthly_note: cfg.fr.monthly_note }
       });
     }
 
@@ -238,7 +266,7 @@ Deno.serve(async (req: Request) => {
 
     const meta: Record<string, string> = {
       wa_source: 'hub-donate', wa_frequency: c.freq, wa_designation: c.designation, wa_tribute_kind: c.tk, wa_tribute_name: c.tn,
-      wa_consent: c.consent ? 'yes' : 'no', wa_consent_label: c.consent ? cfg.consent_label.slice(0, 480) : '',
+      wa_consent: c.consent ? 'yes' : 'no', wa_consent_label: c.consent ? String(c.lang === 'fr' ? cfg.fr.consent_label : cfg.consent_label).slice(0, 480) : '',
       wa_base_cents: String(c.base), wa_fee_cover_cents: String(c.cover), wa_lang: c.lang, wa_page: 'give v2 ' + (embedded ? 'embedded' : 'hosted') + (isTest ? ' test' : '')
     };
     const product = (m.donate_product || '').trim();
@@ -248,14 +276,15 @@ Deno.serve(async (req: Request) => {
       mode: c.freq === 'monthly' ? 'subscription' : 'payment',
       line_items: [{ quantity: 1, price_data: c.freq === 'monthly' ? { ...price, recurring: { interval: 'month' } } : price }],
       billing_address_collection: 'required',
-      locale: c.lang === 'fr' ? 'fr' : 'auto',
+      locale: c.lang === 'fr' ? 'fr-CA' : 'auto',
       // the gift stays in Canadian dollars (a receipt is in dollars): no offer to pay in another currency
       adaptive_pricing: { enabled: false },
       metadata: meta,
       expires_at: Math.floor(Date.now() / 1000) + 3600
     };
-    if (embedded) { params.ui_mode = 'embedded'; params.return_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}'; }
-    else { params.success_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}'; params.cancel_url = SITE + '/give?cancelled=1'; }
+    const lq = c.lang === 'fr' ? '&lang=fr' : '';
+    if (embedded) { params.ui_mode = 'embedded'; params.return_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}' + lq; }
+    else { params.success_url = SITE + '/give/thanks?session_id={CHECKOUT_SESSION_ID}' + lq; params.cancel_url = SITE + '/give?cancelled=1' + lq; }
     if (c.freq === 'monthly') params.subscription_data = { metadata: meta, description: 'Monthly gift to Welfare Avenue' };
     else { params.submit_type = 'donate'; params.customer_creation = 'always'; params.payment_intent_data = { metadata: meta, description: 'Gift to Welfare Avenue' }; }
 

@@ -29,7 +29,8 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     ok(!/<script(?![^>]*\b(src=|type="application\/(ld\+)?json"))[^>]*>/i.test(s), rel + ': no inline executable script');
     ok(!/\son[a-z]+="/i.test(s), rel + ': no inline event handler');
     const donate = s.match(/<a [^>]*data-wa-donate[^>]*>/g) || [];
-    ok(donate.every(a => a.includes('href="https://hub.welfareavenue.com/give"')), rel + ': every donate button goes to the Hub donation page');
+    const giveHref = rel.startsWith('fr/') ? 'href="https://hub.welfareavenue.com/give/?lang=fr"' : 'href="https://hub.welfareavenue.com/give"';
+    ok(donate.length > 0 && donate.every(a => a.includes(giveHref)), rel + ': every donate button goes to the Hub donation page in the page’s language');
     ok(rel === '404.html' || /<meta name="robots" content="noindex">/.test(s), rel + ': preview build is noindex');
   }
   const headers = fs.readFileSync(path.join(OUT, '_headers'), 'utf8');
@@ -69,7 +70,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     const GIVE = path.join(__dirname, '..', 'build', 'give');
     await ctx.route('https://hub.welfareavenue.com/give/embed.js', r => r.fulfill({ status: 200, contentType: 'application/javascript', body: fs.readFileSync(path.join(GIVE, 'embed.js')) }));
     await ctx.route('https://hub.welfareavenue.com/give/embed.css', r => r.fulfill({ status: 200, contentType: 'text/css', body: fs.readFileSync(path.join(GIVE, 'embed.css')) }));
-    await ctx.route(/^https:\/\/hub\.welfareavenue\.com\/give\/\?embed=1$/, r => { calls.push('give-frame'); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Give</title><h1>Give to Welfare Avenue</h1><script>parent.postMessage({wa:"give",type:"height",height:620},"*")</script>' }); });
+    await ctx.route(/^https:\/\/hub\.welfareavenue\.com\/give\/\?embed=1(&lang=fr)?$/, r => { calls.push('give-frame'); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Give</title><h1>Give to Welfare Avenue</h1><script>parent.postMessage({wa:"give",type:"height",height:620},"*")</script>' }); });
     // LinkedIn is never reached from the tests: a stand-in page answers for the company posts' embeds
     await ctx.route('https://www.linkedin.com/**', r => { calls.push('linkedin:' + r.request().url()); return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Post</title><p>LinkedIn post</p>' }); });
     const page = await ctx.newPage(); const errors = [];
@@ -282,6 +283,37 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     ok(calls.filter(c => c.startsWith('linkedin:')).length >= 3 && !(await page.evaluate(() => window.__csp.length)), W + ' about ' + lang + ': the posts load under the site\'s policy');
     ok(!errors.length, W + ' about ' + lang + ': no console errors ' + errors.join(' | '));
     ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= W, W + ' about ' + lang + ': no sideways scroll');
+    await ctx.close();
+  }
+
+  // accessibility (29/09/26): axe-core (npm i -g axe-core) finds no WCAG 2.1 A/AA or best-practice violation on any page
+  {
+    let AXE = null; try { AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'); } catch (e) { console.log('skip: axe-core is not installed'); }
+    if (AXE) for (const W of [1280, 390]) {
+      const { ctx, page } = await context({ width: W });
+      for (const key of Object.keys(PAGES)) for (const pth of PAGES[key]) {
+        await page.goto(ORIGIN + pth, { waitUntil: 'load' }); await page.waitForTimeout(400);
+        await page.evaluate(AXE);
+        const v = await page.evaluate(async () => (await axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] } })).violations.map(x => x.id + ' (' + x.nodes.length + ')'));
+        ok(!v.length, W + ' ' + pth + ': no accessibility violations ' + v.join(', '));
+      }
+      await ctx.close();
+    }
+  }
+
+  // French pages open the French donation page in the popup (wave162b)
+  {
+    const { ctx, page, errors, calls } = await context({ width: 1280 });
+    await page.goto(ORIGIN + '/fr/', { waitUntil: 'networkidle' });
+    await page.locator('[data-wa-donate]:visible').first().click();
+    await page.waitForSelector('.wa-dn-back iframe');
+    const fr = await page.evaluate(() => ({ src: document.querySelector('.wa-dn-back iframe').getAttribute('src'), label: document.querySelector('.wa-dn-box').getAttribute('aria-label'), close: document.querySelector('.wa-dn-x').getAttribute('aria-label') }));
+    ok(fr.src === 'https://hub.welfareavenue.com/give/?embed=1&lang=fr' && fr.label === 'Donner à Welfare Avenue' && fr.close === 'Fermer', 'fr donate: the popup opens the French donation page, its own words in French');
+    await page.keyboard.press('Escape');
+    await page.goto(ORIGIN + '/fr/donner/', { waitUntil: 'networkidle' });
+    const note = await page.evaluate(() => document.body.innerText);
+    ok(!/en anglais pour le moment/.test(note), 'fr donate page: no more note that the donation page is in English');
+    ok(!errors.length, 'fr donate: no console errors ' + errors.join(' | '));
     await ctx.close();
   }
 

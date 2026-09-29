@@ -71,6 +71,10 @@ def img(name, alt, sizes='(min-width: 900px) 50vw, 100vw', cls='', eager=False):
 def big(name):
     ws = IMG[name]['w']; return '/img/%s-%d.jpg' % (name, ws[-1])
 
+def give(lang):
+    """The Hub's donation page in the page's language (French since wave162b: the page and Stripe's form in French)."""
+    return C.GIVE if lang == 'en' else C.GIVE + '/?lang=fr'
+
 def btn(href, label, cls='', donate=False, ext=False):
     return '<a class="btn%s" href="%s"%s%s>%s</a>' % ((' ' + cls) if cls else '', e(href), ' data-wa-donate' if donate else '', '', e(label))
 
@@ -120,14 +124,14 @@ def header(lang, key):
             '%s\n<button class="menu-btn" type="button" aria-expanded="false" aria-controls="nav"><span aria-hidden="true"></span><b class="sr">%s</b></button>\n'
             '<nav class="nav" id="nav" aria-label="%s">%s<a class="lang" href="%s" hreflang="%s" lang="%s">%s</a>%s</nav>\n</div></header>\n<main id="main">\n'
             % (lang, SUPA, KEY, e(u['skip']), hint, e(url('home', lang)), e(u['home_label']),
-               btn(C.GIVE, u['nav']['donate'], 'donate-m', donate=True), e(u['menu']), e(u['main_nav']), links, e(other_url), other, other, e(u['other_lang']),
-               btn(C.GIVE, u['nav']['donate'], 'desk', donate=True)))
+               btn(give(lang), u['nav']['donate'], 'donate-m', donate=True), e(u['menu']), e(u['main_nav']), links, e(other_url), other, other, e(u['other_lang']),
+               btn(give(lang), u['nav']['donate'], 'desk', donate=True)))
 
 def footer(lang):
     u = C.UI[lang]
     explore = ''.join('<li><a href="%s">%s</a></li>' % (e(url(k, lang)), e(u['nav'][k])) for k in ['home'] + C.NAV if k != 'home')
     explore = '<li><a href="%s">%s</a></li>' % (e(url('home', lang)), 'Home' if lang == 'en' else 'Accueil') + explore
-    inv = ''.join('<li><a href="%s">%s</a></li>' % (e(C.GIVE if k == 'donate' else url(k, lang)), e(t)) for k, t in u['foot_links_involved'])
+    inv = ''.join('<li><a href="%s">%s</a></li>' % (e(give(lang) if k == 'donate' else url(k, lang)), e(t)) for k, t in u['foot_links_involved'])
     soc = ''.join('<li><a href="%s" rel="noopener">%s</a></li>' % (e(h), e(n)) for n, h in C.SOCIAL)
     return ('</main>\n<footer class="foot"><div class="wrap"><div class="cols">\n'
             '<div><a class="logo" href="%s" aria-label="%s"><img src="/assets/lockup-cream.svg" alt="%s" width="200" height="90"></a>'
@@ -216,7 +220,7 @@ def home(lang):
     body = (
         '<section class="hero"><div class="wrap grid">\n<div><p class="over">%s</p>%s<p class="lede">%s</p><div class="btns">%s%s</div></div>\n'
         '<div class="photo">%s<img class="doodle" src="https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/doodle-star-gold.png" alt="" width="74" height="74" loading="lazy"></div>\n</div></section>\n'
-        % (e(T['over']), moving_where(lang), e(T['lede']), btn(url('volunteer', lang), T['vol']), btn(C.GIVE, T['don'], 'ghost', donate=True),
+        % (e(T['over']), moving_where(lang), e(T['lede']), btn(url('volunteer', lang), T['vol']), btn(give(lang), T['don'], 'ghost', donate=True),
            img('2022-10-autumn-crew-at-the-tent', T['alt_hero'], '(min-width: 900px) 40vw, 100vw', eager=True)) +
         '<section class="band on-cream"><div class="wrap"><p class="over">%s</p><h2>%s</h2>%s<p class="lede">%s</p>%s<div class="mt3">%s</div></div></section>\n'
         % (e(T['impact_over']), e(T['impact_h']), rule(), e(T['impact_p']), pillars(lang), stats(lang)) +
@@ -231,7 +235,7 @@ def home(lang):
         '<section class="band on-cream"><div class="wrap grid2"><div id="newsletter"><h2>%s</h2>%s<p>%s</p>%s</div>'
         '<div class="card"><h2 class="h2">%s</h2>%s<p>%s</p><div class="btns">%s</div><p class="fine mt2">%s</p></div></div></section>\n'
         % (e(T['news_h']), rule(), e(T['news_p']), form_box('newsletter' if en else 'infolettre,newsletter', news_fallback, lang, heading=False),
-           e(T['give_h']), rule(), e(T['give_p']), btn(C.GIVE, T['give_btn'], donate=True), e(receipt_line(lang))) +
+           e(T['give_h']), rule(), e(T['give_p']), btn(give(lang), T['give_btn'], donate=True), e(receipt_line(lang))) +
         seed_script())
     return page(lang, 'home', T['title'], T['desc'], body)
 
@@ -321,7 +325,7 @@ def about(lang):
     partners = ''.join('<p class="city">%s</p><ul class="chips">%s</ul>' % (e(C.CITY[lang][c]), ''.join('<li>%s</li>' % e(C.PARTNER_FR.get(n, n) if lang == 'fr' else n) for n in names)) for c, names in C.PARTNERS.items())
     body = (page_hero(T['over'], T['title'], T['lede']) +
         '<section class="band on-cream"><div class="wrap split"><div><h2>%s</h2>%s<p>%s</p><p>%s</p><p>%s</p></div><div>%s</div></div></section>\n'
-        % (e(T['mission_h']), rule(), e(T['mission_p1']), e(T['mission_p2']), e(T['mission_p3']), img('2022-01-winter-serving-team', T['alt1'])) +
+        % (e(T['mission_h']), rule(), e(T['mission_p1']), e(T['mission_p2']), e(T['mission_p3']), img('2022-01-winter-serving-team', T['alt1'], eager=True)) +
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s%s<div class="mt3">%s</div></div></section>\n' % (e(T['pillars_h']), rule(), pillars(lang), stats(lang)) +
         '<section class="band on-cream"><div class="wrap"><p class="over">%s</p><h2>%s</h2>%s<ol class="timeline mt2">%s</ol></div></section>\n' % (e(T['story_over']), e(T['story_h']), rule(), story) +
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p>%s</div></section>\n' % (e(T['partners_h']), rule(), e(T['partners_p']), partners) +
@@ -329,7 +333,7 @@ def about(lang):
         '<section class="band on-green"><div class="wrap">%s</div></section>\n' % quote(C.QUOTE_PARTNER, lang) +
         team_section(lang) +
         '<section class="band on-cream"><div class="wrap cta"><div><h2>%s</h2>%s<p class="mb0">%s</p></div><div class="btns">%s%s</div></div></section>\n'
-        % (e(T['charity_h']), rule(), e(T['charity_p']), btn(url('volunteer', lang), 'Volunteer' if en else 'Devenir bénévole'), btn(C.GIVE, 'Donate' if en else 'Faire un don', 'ghost dark', donate=True)))
+        % (e(T['charity_h']), rule(), e(T['charity_p']), btn(url('volunteer', lang), 'Volunteer' if en else 'Devenir bénévole'), btn(give(lang), 'Donate' if en else 'Faire un don', 'ghost dark', donate=True)))
     return page(lang, 'about', T['title'], T['desc'], body)
 
 def volunteer(lang):
@@ -365,7 +369,7 @@ def volunteer(lang):
     fb = '<p class="waf-note">%s %s.</p>' % (e(T['apply_fb']), mail(lang))
     body = (page_hero(T['over'], T['h1'], T['lede']) +
         '<section class="band on-cream"><div class="wrap split"><div><h2>%s</h2>%s<p>%s</p></div><div>%s</div></div>'
-        '<div class="wrap grid3 mt3">%s</div></section>\n' % (e(T['roles_h']), rule(), e(T['roles_p']), img('2024-07-summer-team-under-the-tent', T['alt_team']), roles) +
+        '<div class="wrap grid3 mt3">%s</div></section>\n' % (e(T['roles_h']), rule(), e(T['roles_p']), img('2024-07-summer-team-under-the-tent', T['alt_team'], eager=True), roles) +
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s<div class="grid3 mt2">%s</div></div></section>\n' % (e(T['how_h']), rule(), how) +
         '<section class="band on-cream" id="apply"><div class="wrap grid2"><div><h2>%s</h2>%s%s<div class="mt3">%s</div></div><div>%s</div></div></section>\n'
         % (e(T['next_h']), rule(), upcoming_box(lang, 'servings', 5, 'volunteer#apply', T['next_note']), quote(C.QUOTE_VOLUNTEER, lang),
@@ -424,7 +428,7 @@ def events(lang):
         posters.append('<li>%s<p class="t">%s</p><p class="m">%s</p><p class="fine mb0">%s</p></li>' % (pic, e(title[lang]), e(meta), e(note[lang])))
     body = (page_hero(T['over'], T['title'], T['lede']) +
         '<section class="band on-cream"><div class="wrap grid2"><div><h2>%s</h2>%s%s</div><div>%s</div></div></section>\n'
-        % (e(T['next_h']), rule(), upcoming_box(lang, 'all', 6, 'volunteer#apply', T['next_note']), img('2023-10-autumn-crew-behind-the-table', C.PHOTOS_NEW[9][2][lang])) +
+        % (e(T['next_h']), rule(), upcoming_box(lang, 'all', 6, 'volunteer#apply', T['next_note']), img('2023-10-autumn-crew-behind-the-table', C.PHOTOS_NEW[9][2][lang], eager=True)) +
         '<section class="band on-green" id="fundraisers"><div class="wrap"><h2>%s</h2>%s<ul class="fundnext mt2">%s</ul><div class="cta mt3"><p class="lede mb0">%s</p><div class="btns">%s</div></div></div></section>\n'
         % (e(T['fund_h']), rule(), ''.join('<li class="card"><p class="num">%s</p><h3>%s</h3><p>%s</p></li>' % (e(w[lang]), e(ti[lang]), e(no[lang])) for ti, w, no in C.FUNDRAISERS_NEXT),
            e(T['fund_p']), btn(url('contact', lang), T['fund_btn'])) +
@@ -452,14 +456,14 @@ def press(lang):
         'alt_media': 'A volunteer holds a news microphone at a Sunday serving.' if en else 'Une bénévole tient un micro de presse lors d’un service du dimanche.',
     }
     cards = []
-    for p in C.PRESS:
+    for pi, p in enumerate(C.PRESS):
         src = p['src'][lang] if isinstance(p['src'], dict) else p['src']
-        vid = ('<div class="video"><button type="button" data-yt="%s" aria-label="%s%s%s"><img src="https://i.ytimg.com/vi/%s/hqdefault.jpg" alt="" width="480" height="360" loading="lazy">'
-               '<span class="play" aria-hidden="true"></span></button></div>' % (p['yt'], e(T['play']), ': ' if en else '\u00a0: ', e(p['title'][lang]), p['yt']))
+        vid = ('<div class="video"><button type="button" data-yt="%s" aria-label="%s%s%s"><img src="https://i.ytimg.com/vi/%s/hqdefault.jpg" alt="" width="480" height="360"%s>'
+               '<span class="play" aria-hidden="true"></span></button></div>' % (p['yt'], e(T['play']), ': ' if en else '\u00a0: ', e(p['title'][lang]), p['yt'], ' fetchpriority="high"' if pi == 0 else ' loading="lazy"'))
         link = ('<p><a href="%s" rel="noopener">%s</a></p>' % (e(p['url']), e(p['link'][lang]))) if p.get('url') and p.get('link') else ''
         cards.append('<article>%s<p class="src">%s</p><h3>%s</h3><p>%s</p>%s</article>' % (vid, e(src), e(p['title'][lang]), e(p['text'][lang]), link))
     body = (page_hero(T['over'], T['h1'], T['lede']) +
-        '<section class="band on-cream"><div class="wrap"><div class="press">%s</div></div></section>\n' % ''.join(cards) +
+        '<section class="band on-cream"><div class="wrap"><h2 class="sr">%s</h2><div class="press">%s</div></div></section>\n' % (e('News stories' if en else 'Reportages'), ''.join(cards)) +
         '<section class="band on-soft"><div class="wrap split"><div><h2>%s</h2>%s<p>%s</p><p><a href="mailto:%s">%s</a></p></div><div>%s</div></div></section>\n'
         % (e(T['media_h']), rule(), e(T['media_p']), C.EMAIL, C.EMAIL, img('2022-06-media-interview-b', T['alt_media'])))
     return page(lang, 'press', T['title'], T['desc'], body)
@@ -484,7 +488,7 @@ def contact(lang):
     }
     soc = ''.join('<li><a href="%s" rel="noopener">%s</a></li>' % (e(h), e(n)) for n, h in C.SOCIAL)
     body = (page_hero(T['over'], T['title'], T['lede']) +
-        '<section class="band on-cream"><div class="wrap grid2"><div>%s</div><div><h2>%s</h2>%s<h3 class="mt2">%s</h3><p><a href="mailto:%s">%s</a></p>'
+        '<section class="band on-cream"><div class="wrap grid2"><div><h2 class="sr">' + e('Contact form' if en else 'Formulaire de contact') + '</h2>%s</div><div><h2>%s</h2>%s<h3 class="mt2">%s</h3><p><a href="mailto:%s">%s</a></p>'
         '<h3 class="mt2">%s</h3><ul class="chips">%s</ul><p class="mt2"><a href="%s" rel="noopener">%s</a></p>'
         '<div class="card mt3"><h3>%s</h3><p class="mb0">%s</p></div></div></div></section>\n'
         % (form_box('contact' if en else 'nous-joindre,contact', '<h3>%s</h3><p class="waf-note">%s %s.</p>' % (e(T['form_h']), e(T['form_fb']), mail(lang)), lang),
@@ -523,12 +527,10 @@ def donate(lang):
         'talk': 'Talk to us' if en else 'Parlons-en',
         'alt': 'Volunteers in green vests serve food onto a plate held out across the table.' if en else 'Des bénévoles en dossard vert servent une assiette tendue de l’autre côté de la table.',
     }
-    if not en:
-        T['give_p'] += ' (La page de don est en anglais pour le moment.)'
     what = ''.join('<div class="card"><h3>%s</h3><p>%s</p></div>' % (e(t), e(d)) for t, d in T['what'])
     body = (page_hero(T['over'], T['h1'], T['lede']) +
         '<section class="band on-cream"><div class="wrap split"><div><h2>%s</h2>%s<p class="lede">%s</p><div class="btns">%s</div><p class="fine mt2">%s</p></div><div>%s</div></div></section>\n'
-        % (e(T['give_h']), rule(), e(T['give_p']), btn(C.GIVE, T['give_btn'], donate=True), e(receipt_line(lang)), img('2023-10-autumn-plate-served', T['alt'])) +
+        % (e(T['give_h']), rule(), e(T['give_p']), btn(give(lang), T['give_btn'], donate=True), e(receipt_line(lang)), img('2023-10-autumn-plate-served', T['alt'], eager=True)) +
         '<section class="band on-soft"><div class="wrap"><h2>%s</h2>%s<div class="grid3 mt2">%s</div><div class="mt3">%s</div></div></section>\n' % (e(T['what_h']), rule(), what, stats(lang)) +
         '<section class="band on-cream" id="essentials"><div class="wrap grid2"><div class="card"><h2 class="h2">%s</h2>%s<p>%s</p><div class="btns">%s</div></div>'
         '<div class="card"><h2 class="h2">%s</h2>%s<p>%s</p><div class="btns">%s</div></div></div></section>\n'
