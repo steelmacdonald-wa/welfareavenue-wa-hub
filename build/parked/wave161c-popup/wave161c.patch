@@ -1,0 +1,223 @@
+diff --git a/build/give/src.html b/build/give/src.html
+index 0a2c5dc..6b8f8ba 100644
+--- a/build/give/src.html
++++ b/build/give/src.html
+@@ -14,7 +14,11 @@
+      ?preview=1 shows it to the team while it is off. Built by build/give/make.py from build/give/src.html.
+      v2 (28/09/26, wave161b): when the function says pay 'embedded' (the publishable key is set), Stripe's own form opens
+      inside this page (Embedded Checkout, Stripe.js v3 from js.stripe.com) and the donor never leaves the site; Change goes
+-     back to the choices. If Stripe.js cannot load, the page falls back to Stripe's hosted page as before. -->
++     back to the choices. If Stripe.js cannot load, the page falls back to Stripe's hosted page as before.
++     v3 (28/09/26, wave161c): inside the popup on welfareavenue.com (give/embed.js), or with ?embed=1, the page takes the
++     embed layout: a photo beside the form, no green band or page footer (a short footer sits in the card), and it tells
++     the popup its height and whether a payment is open; the thank-you has Close; Stripe's own page (the fallback) opens
++     at the top of the window through a link, since Stripe's page cannot be shown inside a frame. -->
+ <style>
+ :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--soft:rgba(16,63,57,.05)}
+ *{box-sizing:border-box}
+@@ -84,12 +88,26 @@ select:focus,input[type=text]:focus{border-color:var(--green);box-shadow:0 0 0 3
+ .paybox{min-height:360px}
+ @media (max-width:519px){.paybox{margin:0 -14px}}
+ footer{max-width:640px;margin:0 auto;padding:0 16px 40px;font-size:13px;color:var(--muted)}
++.ephoto{display:none}
++.efoot{display:none}
++html.embed,html.embed body{background:#fff}
++html.embed .band,html.embed footer{display:none}
++html.embed main{max-width:none;margin:0;padding:0}
++html.embed .card{border-radius:0;box-shadow:none;padding:30px 22px 24px}
++html.embed h1{padding-right:44px}
++html.embed .efoot{display:block;font-size:12px;color:var(--muted);margin:18px 0 0;text-align:center}
++html.embed .efoot a{color:inherit}
++@media (min-width:760px){
++  html.embed .ewrap{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);align-items:stretch}
++  html.embed .ephoto{display:block;background-color:var(--green);background-size:cover;background-repeat:no-repeat;background-position:50% 42%;position:sticky;top:0;height:100vh;align-self:start}
++  html.embed .card{padding:40px 40px 28px}
++}
+ a{color:var(--green)}
+ </style>
+ </head>
+ <body>
+ <div class="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a></div></div>
+-<main><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></main>
++<main><div class="ewrap" id="ewrap"><div class="ephoto" id="ephoto" aria-hidden="true"></div><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></div></main>
+ <footer id="foot"></footer>
+ <script>
+ (function () {
+@@ -98,6 +116,22 @@ a{color:var(--green)}
+   var LOCK = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5Zm-3 8V7a3 3 0 0 1 6 0v3H9Z"/></svg>';
+   var app = document.getElementById('app'), foot = document.getElementById('foot');
+   var q = new URLSearchParams(location.search);
++  /* v3: the embed layout inside the popup on welfareavenue.com (or with ?embed=1) */
++  var EMBED = q.get('embed') === '1' || (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
++  var PHOTO = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/photos/web/2024-07-summer-volunteer-team.jpg';
++  if (EMBED) document.documentElement.classList.add('embed');
++  function post(msg) { /* to the popup around the page: height, state, close (never anything about the donor) */
++    if (!EMBED || window.parent === window) return;
++    try { msg.wa = 'give'; window.parent.postMessage(msg, '*'); } catch (e) { /* no parent to tell */ }
++  }
++  var lastH = 0;
++  /* the form's own height (the photo follows the window, so it must not drive the popup's height) */
++  function sendHeight() { var h = Math.ceil(app.getBoundingClientRect().height); if (h && h !== lastH) { lastH = h; post({ type: 'height', height: h }); } }
++  if (EMBED) {
++    try { if (window.ResizeObserver) new ResizeObserver(sendHeight).observe(app); } catch (e) { /* the timer below covers it */ }
++    setInterval(sendHeight, 700);
++    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') post({ type: 'escape' }); });
++  }
+   var S = { cfg: null, token: '', loadedAt: 0, freq: 'once', amount: null, other: '', designation: '', tribute: false, tkind: 'honour', tname: '',
+             cover: false, consent: false, errors: {}, banner: q.get('cancelled') ? 'No payment was made. You can change anything below and try again.' : '', bannerKind: 'info', sending: false,
+             paying: false, checkout: null, stripe: null };
+@@ -129,6 +163,11 @@ a{color:var(--green)}
+     foot.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · Registered charity ' + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
+       (o.email ? ' · <a href="mailto:' + E(o.email) + '">' + E(o.email) + '</a>' : '') +
+       '<br>We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them. Payments are handled by Stripe.';
++    if (EMBED) { /* the page footer is hidden in the popup: a short one in the card */
++      var ef = document.getElementById('efoot');
++      if (!ef) { ef = document.createElement('p'); ef.id = 'efoot'; ef.className = 'efoot'; app.appendChild(ef); }
++      ef.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · Registered charity ' + E(o.charity) : '') + '<br>We use your details to process and acknowledge your gift and, only if you say yes, to share news. We never sell or share them.';
++    }
+   }
+   function list() { return (S.cfg.amounts[S.freq] || []).slice(0, 6); }
+   function base() {
+@@ -200,7 +239,7 @@ a{color:var(--green)}
+     try { app.scrollIntoView({ block: 'start' }); } catch (e) { /* fine */ }
+   }
+   function pay(secret, body) { /* mount Stripe's form in the page; if Stripe.js cannot run here, fall back to Stripe's own page */
+-    S.sending = false; S.paying = true; paintPay();
++    S.sending = false; S.paying = true; paintPay(); post({ type: 'state', paying: true });
+     loadStripeJs().then(function (StripeFn) {
+       if (!S.stripe) S.stripe = StripeFn(S.cfg.stripe_pk);
+       var make = S.stripe.createEmbeddedCheckoutPage || S.stripe.initEmbeddedCheckout; /* the newer Stripe.js name, then v3's */
+@@ -213,17 +252,25 @@ a{color:var(--green)}
+       co.mount('#pay');
+     }).catch(function () { hosted(body); });
+   }
++  function toStripe(url) { /* Stripe's own page: in the popup it cannot open inside the frame, so a link opens it at the top */
++    if (!EMBED) { location.assign(url); return; }
++    S.sending = false; S.paying = true; post({ type: 'state', paying: true });
++    app.innerHTML = '<h1>' + E(S.cfg.title) + '</h1><div class="rule"></div><p class="big">One more step: your gift continues on Stripe’s secure page.</p>' +
++      '<a class="go" style="display:block;text-align:center;text-decoration:none" id="tostripe" href="' + E(url) + '" target="_top" rel="noopener">Continue on Stripe’s secure page</a>' +
++      '<p class="small" style="text-align:center"><button type="button" class="linkbtn" id="change">Change my gift</button></p>';
++    footer();
++  }
+   function hosted(body) {
+     if (!S.paying) return;
+     var b = JSON.parse(JSON.stringify(body)); delete b.ui;
+     var box = document.getElementById('pay'); if (box) box.innerHTML = '<p class="loading">Opening Stripe’s secure page instead…</p>';
+     call('POST', b).then(function (r) {
+-      if (r.status === 200 && r.body.url) { location.assign(r.body.url); return; }
++      if (r.status === 200 && r.body.url) { toStripe(r.body.url); return; }
+       S.paying = false; S.banner = 'Something went wrong on our side, and no payment was made. Please try again in a minute.'; S.bannerKind = 'warn'; render();
+     }).catch(function () { S.paying = false; S.banner = 'We could not reach Welfare Avenue. Check your connection and try again.'; S.bannerKind = 'warn'; render(); });
+   }
+   function back() { /* Change: Stripe's form goes away (only one can exist at a time) and the choices come back as they were */
+-    S.paying = false;
++    S.paying = false; post({ type: 'state', paying: false });
+     if (S.checkout) { try { S.checkout.destroy(); } catch (e) { /* gone */ } S.checkout = null; }
+     S.banner = ''; render();
+     var g = document.getElementById('go'); if (g) g.focus();
+@@ -237,6 +284,7 @@ a{color:var(--green)}
+   }
+   app.addEventListener('click', function (ev) {
+     if (ev.target.closest && ev.target.closest('#change')) { ev.preventDefault(); back(); return; }
++    if (ev.target.closest && ev.target.closest('#closepop')) { ev.preventDefault(); post({ type: 'close' }); return; }
+     var el = ev.target.closest ? ev.target.closest('[data-freq],[data-amt]') : null; if (!el) return;
+     ev.preventDefault();
+     if (el.hasAttribute('data-freq')) { var f = el.getAttribute('data-freq'); if (f !== S.freq) { S.freq = f; var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.other = ''; S.errors = {}; render(); var b2 = document.querySelector('[data-freq="' + f + '"]'); if (b2) b2.focus(); } return; }
+@@ -278,7 +326,7 @@ a{color:var(--green)}
+     setTimeout(function () {
+       call('POST', body).then(function (r) {
+         if (r.status === 200 && r.body.client_secret) { pay(r.body.client_secret, body); return; }
+-        if (r.status === 200 && r.body.url) { location.assign(r.body.url); return; }
++        if (r.status === 200 && r.body.url) { toStripe(r.body.url); return; }
+         S.sending = false;
+         if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = r.body.fields && r.body.fields.designation ? r.body.fields.designation : ''; S.bannerKind = 'warn'; render(); return; }
+         if (r.status === 400 && r.body.error === 'expired') { S.banner = 'This page was open a long time, so we refreshed it. Please press Continue again.'; S.bannerKind = 'info'; load(true); return; }
+@@ -293,6 +341,7 @@ a{color:var(--green)}
+       if (r.status !== 200 || !r.body.amounts) { message('Something went wrong', '<p>We could not load the page. Please try again in a minute, or write to <a href="mailto:info@welfareavenue.com">info@welfareavenue.com</a>.</p>'); return; }
+       var first = !S.cfg;
+       S.cfg = r.body; S.token = r.body.token; S.loadedAt = Date.now();
++      if (EMBED) { var ph = document.getElementById('ephoto'); if (ph) ph.style.backgroundImage = 'url("' + String(S.cfg.photo || PHOTO).replace(/["\\]/g, '') + '")'; }
+       if (first) { var a = list(); S.amount = a[1] != null ? a[1] : a[0]; S.designation = S.cfg.designations[0]; }
+       if (S.cfg.mode !== 'live' && !q.get('preview')) {
+         var mail = S.cfg.org.email || 'info@welfareavenue.com';
+@@ -314,7 +363,8 @@ a{color:var(--green)}
+       var lead = b.waiting ? 'Your gift of ' + amt + ' is on its way: a bank payment takes a few days to clear.' : mon ? 'Your monthly gift of ' + amt + ' has started.' : 'Your gift of ' + amt + ' is complete.';
+       message('Thank you' + (b.first_name ? ', ' + b.first_name : '') + '!', '<div class="done"><p class="big">' + E(lead) + '</p>' + (b.thanks ? '<p>' + E(b.thanks) + '</p>' : '') +
+         (b.receipt_note ? '<p class="small">' + E(b.receipt_note) + '</p>' : '') + (mon && b.monthly_note ? '<p class="small">' + E(b.monthly_note) + '</p>' : '') +
+-        '<p><a href="https://welfareavenue.com">Visit welfareavenue.com</a></p></div>');
++        (EMBED ? '<button type="button" class="go" id="closepop">Close</button>' : '<p><a href="https://welfareavenue.com">Visit welfareavenue.com</a></p>') + '</div>');
++      post({ type: 'state', paying: false, done: true });
+       footer(o);
+       try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+     }).catch(function () { message('We could not reach Welfare Avenue', '<p>If you just gave, thank you: your card or bank statement shows the payment.</p>'); });
+diff --git a/build/site/_headers b/build/site/_headers
+index 369bee0..12bca8c 100644
+--- a/build/site/_headers
++++ b/build/site/_headers
+@@ -1,20 +1,23 @@
+ # Welfare Avenue: the Hub's Netlify headers (deployed by host-sync from site_files path _headers; source build/site/_headers).
+ # The security headers apply everywhere. The Content-Security-Policy is set per path, never twice on one path: the Hub and
+ # the form pages keep the strict policy, and the donation page (/give, wave161b) also allows Stripe's embedded form
+-# (Stripe's documented hosts for Checkout, Stripe.js and Link).
++# (Stripe's documented hosts for Checkout, Stripe.js and Link). Since wave161c the donation page may be framed by
++# welfareavenue.com (the popup, give/embed.js); X-Frame-Options DENY stays on the Hub and the form pages only.
+ /*
+   Strict-Transport-Security: max-age=31536000; includeSubDomains
+   X-Content-Type-Options: nosniff
+-  X-Frame-Options: DENY
+   Referrer-Policy: strict-origin-when-cross-origin
+   Permissions-Policy: camera=(), geolocation=(), microphone=(self)
+ /
++  X-Frame-Options: DENY
+   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+ /index.html
++  X-Frame-Options: DENY
+   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+ /f/*
++  X-Frame-Options: DENY
+   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+ /give
+-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co https://*.stripe.com https://*.link.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://api.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
++  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co https://*.stripe.com https://*.link.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://api.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-ancestors 'self' https://welfareavenue.com https://www.welfareavenue.com; base-uri 'self'; form-action 'self'
+ /give/*
+-  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co https://*.stripe.com https://*.link.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://api.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
++  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com https://*.js.stripe.com https://checkout.stripe.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co https://*.stripe.com https://*.link.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://api.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-src https://js.stripe.com https://*.js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://link.com https://*.link.com; frame-ancestors 'self' https://welfareavenue.com https://www.welfareavenue.com; base-uri 'self'; form-action 'self'
+diff --git a/fn/host-sync/index.ts b/fn/host-sync/index.ts
+index 406645f..7525e2f 100644
+--- a/fn/host-sync/index.ts
++++ b/fn/host-sync/index.ts
+@@ -1,4 +1,6 @@
+-// Welfare Avenue: host-sync (v6, 28/09/26)
++// Welfare Avenue: host-sync (v7, 28/09/26)
++// v7 (wave161c): also deploys give/embed.js, the donation popup script the website loads (site_files path
++// 'give/embed.js'; a real file, so the /give/* rewrite does not touch it).
+ // v6 (wave161): also deploys the public donation page /give/index.html (served for /give and every /give/<path> by the
+ // _redirects rules), read from site_files path 'give/index.html' when it exists.
+ // v5 (wave156): also deploys the public form page /f/index.html and /_redirects (every /f/<slug> is served by that
+@@ -110,7 +112,7 @@ Deno.serve(async (req: Request) => {
+     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
+   } catch (_) { /* headers optional */ }
+   // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page
+-  for (const extra of ['f/index.html', 'give/index.html', '_redirects']) {
++  for (const extra of ['f/index.html', 'give/index.html', 'give/embed.js', '_redirects']) {
+     try {
+       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
+       if (ex && ex.length) deployFiles['/' + extra] = new TextEncoder().encode(ex.map((r: { content: string }) => r.content).join(''));
+@@ -123,7 +125,7 @@ Deno.serve(async (req: Request) => {
+     await svc.from('change_log').insert({
+       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
+       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
+-      changed_by: 'host-sync v6'
++      changed_by: 'host-sync v7'
+     });
+   } catch (_) { /* audit only */ }
+ 
+diff --git a/fn/host-sync/meta.json b/fn/host-sync/meta.json
+index 2699e05..3a7fb55 100644
+--- a/fn/host-sync/meta.json
++++ b/fn/host-sync/meta.json
+@@ -1 +1 @@
+-{"verify_jwt": true, "version": 6, "content_type": "application/octet-stream"}
+\ No newline at end of file
++{"verify_jwt": true, "version": 7, "content_type": "application/octet-stream"}
+\ No newline at end of file
