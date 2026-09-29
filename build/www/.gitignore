@@ -10,3 +10,4 @@ staged.json
 __pycache__/
 team-src/
 ev-src/
+fund-lib/
