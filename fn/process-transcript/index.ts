@@ -1,3 +1,5 @@
+// v15 (28/09/26, wave162): meetings the Loom pull files (added_by 'Loom pull ...') post the usual Slack line only when app_config
+// loom_pull_slack is 'on'; it is off until Steel says otherwise, so a scheduled catch-up never floods the channel. Nothing else changed.
 // v14 (26/09/26): content ideas. For a Marketing meeting a second pass reads the whole transcript (up to three 60,000-character
 // pieces) for ideas for posts, reels, carousels, stories and series, even when nobody has committed to making them yet. Each idea
 // carries an exact quote; one whose quote is not in the transcript is dropped. content_ideas_from_meeting() files them in the Content
@@ -689,7 +691,12 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     eventLine = '\n:spiral_calendar_pad: Event tasks routed: ' + bits.join(', ') + '.';
   }
   const isTest = /\[test\]/i.test(tx.title || '');
-  if (!isTest) {
+  /* v15 (wave162): a meeting the Loom pull filed posts its Slack line only when app_config loom_pull_slack is 'on' (off by default) */
+  let loomQuiet = false;
+  if (/^Loom pull/i.test(String(tx.added_by || ''))) {
+    try { const { data: cfg } = await svc.from('app_config').select('value').eq('key', 'loom_pull_slack').maybeSingle(); loomQuiet = String(cfg?.value || 'off').trim().toLowerCase() !== 'on'; } catch (_) { loomQuiet = true; }
+  }
+  if (!isTest && !loomQuiet) {
     await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + jevLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
   }
   return { ...(applied as Record<string, unknown>), tasks_unbanked: unbanked.length, tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, content_ideas: ideasRes, jev: jevRep };

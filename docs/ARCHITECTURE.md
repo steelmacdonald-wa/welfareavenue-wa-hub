@@ -132,7 +132,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#hrcentre/...` | HR centre (Meeting attendance for the admins and the Executive profile from 144, with each team's meetings and the board meetings from 149; the onboarding quizzes from 145) | Human Resources row | 046, 047, 049, 052, 054 to 057, 065, 075, 103, 105, 106, 116p, 144, 145 |
 | `#governance`, `#committees` | Board overview (with the board pack card from 143; board attendance moved to the HR centre in 149), Committees | Board & Governance row (directors: Board group) | 126, 143 |
 | `#agendas` | Agendas | Meetings | 006, 007, 019, 047, 053 |
-| `#transcripts`, `#tx/<id>` | Transcript archive | Meetings | 000, 002, 021, 062, 065, 066 |
+| `#transcripts`, `#tx/<id>` | Transcript archive (the Loom card for admins at the top from 162) | Meetings | 000, 002, 021, 062, 065, 066, 162 |
 | `#requests/...` | Requests | Requests and inbox | 005, 050, 065, 123 |
 | `#hubmail` | Hub inbox | Requests and inbox | 116h, 123 |
 | `#orggoals`, `#goalmap` | Organizational goals, Goal alignment | Goals and projects | 116f |

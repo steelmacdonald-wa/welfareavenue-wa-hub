@@ -1,0 +1,325 @@
+/* =====================================================================
+   WA v162 the Loom pull (28/09/26)
+   =====================================================================
+   Steel: "I want to make sure that the hub pulls from loom automatically every monday, wednesday, and friday without the
+   need for claude to be open". The loom-pull edge function reads Loom through the Atlassian Rovo MCP server (read tools
+   only) on Monday, Wednesday and Friday at 7:30 in Toronto and files each new meeting as a transcript: the weekly team
+   meetings for everyone, leadership meetings for the leaders, everything else confidential to the people in it and the
+   leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait for an admin.
+   This segment: the Loom card at the top of the Transcript archive, for admins only (loom_pull_status()): the last pull
+   and the next one, what came in, what needs a look (File it with a team and who sees it, or Skip), what was skipped,
+   and Pull now. A stop in the Transcript archive tour.
+   ===================================================================== */
+(function () {
+  if (window.__wa162) return; window.__wa162 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var TZ = 'America/Toronto';
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
+  function teamName(k) { for (var i = 0; i < TEAMS.length; i++) if (TEAMS[i][0] === k) return TEAMS[i][1]; try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) return DEPT_LABEL[k]; } catch (e) { /* fine */ } return k || ''; }
+  var P = {
+    loom: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M5.6 18.4l2.9-2.9M15.5 8.5l2.9-2.9"/>',
+    refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/>',
+    out: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'
+  };
+  function I(n) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.loom) + '</svg>'; }
+
+  var st = document.createElement('style'); st.id = 'w162css';
+  st.textContent = ''
+    + '#w162loom{border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:14px 16px;margin:0 0 16px;background:rgba(16,63,57,.025);font-family:' + BODY + ';}'
+    + '#w162loom .hd{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap;}'
+    + '#w162loom .hd h3{margin:0;display:flex;align-items:center;gap:7px;font:700 12px ' + BODY + ';letter-spacing:1.4px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w162loom .hd h3 svg{width:17px;height:17px;}'
+    + '#w162loom .when{font-size:13px;color:var(--wa-muted,' + MUTED + ');margin:4px 0 0;line-height:1.5;max-width:760px;}'
+    + '#w162loom .when b{color:var(--wa-text,' + INK + ');}'
+    + '#w162loom .when.bad{color:' + FLAG + ';}'
+    + '.w162btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:7px 12px;background:' + GREEN + ';color:' + CREAM + ';font:600 12.5px ' + BODY + ';cursor:pointer;}'
+    + '.w162btn[disabled]{opacity:.55;cursor:progress;}'
+    + '.w162btn svg{width:14px;height:14px;}'
+    + '.w162btn.ghost{background:transparent;color:' + GREEN + ';border:1px solid rgba(16,63,57,.25);}'
+    + '.w162btn.small{padding:4px 10px;font-size:12px;}'
+    + '#w162loom .acts2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}'
+    + '#w162loom .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin:12px 0 4px;}'
+    + '#w162loom .tile{background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:8px 11px;}'
+    + '#w162loom .tile b{display:block;font-size:20px;font-weight:700;color:' + GREEN + ';line-height:1.1;}'
+    + '#w162loom .tile b.warm{color:#8a6414;}'
+    + '#w162loom .tile span{display:block;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:3px;line-height:1.35;}'
+    + '#w162loom h4{margin:14px 0 4px;font:700 11px ' + BODY + ';letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w162loom .row{border-top:1px solid rgba(16,63,57,.08);padding:9px 2px;display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}'
+    + '#w162loom .row .main{flex:1 1 320px;min-width:0;}'
+    + '#w162loom .row .t{font-size:13.5px;font-weight:600;color:var(--wa-text,' + INK + ');overflow-wrap:anywhere;}'
+    + '#w162loom .row .s{font-size:12px;color:var(--wa-muted,' + MUTED + ');margin-top:2px;line-height:1.45;overflow-wrap:anywhere;}'
+    + '#w162loom .row .acts{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}'
+    + '#w162loom .row a{color:' + GREEN + ';font-weight:600;text-decoration:none;font-size:12.5px;}'
+    + '#w162loom .row a.out{display:inline-flex;align-items:center;gap:3px;}'
+    + '#w162loom .row a.out svg{width:12px;height:12px;}'
+    + '#w162loom .chip{display:inline-block;border-radius:999px;padding:1px 9px;font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-right:6px;vertical-align:1px;}'
+    + '#w162loom .chip.all{background:rgba(42,140,122,.12);color:' + TEAL + ';}'
+    + '#w162loom .chip.lead{background:rgba(111,100,171,.14);color:' + PURPLE + ';}'
+    + '#w162loom .chip.priv{background:rgba(179,64,47,.12);color:' + FLAG + ';}'
+    + '#w162loom .chip.look{background:rgba(220,165,39,.2);color:#8a6414;}'
+    + '#w162loom .chip.off{background:rgba(121,119,115,.14);color:' + MUTED + ';}'
+    + '#w162loom .file{flex:1 1 100%;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;background:var(--wa-card,' + CREAM + ');border:1px solid rgba(16,63,57,.1);border-radius:10px;padding:9px 10px;margin-top:4px;}'
+    + '#w162loom .file label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');}'
+    + '#w162loom .file select{min-width:190px;max-width:100%;}'
+    + '#w162loom .file .hint{flex:1 1 100%;font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin:0;}'
+    + '#w162loom .more{font-size:12.5px;color:' + GREEN + ';font-weight:600;cursor:pointer;background:none;border:none;padding:6px 0 0;font-family:' + BODY + ';}'
+    + '#w162loom .foot{font-size:11.5px;color:var(--wa-muted,' + MUTED + ');margin-top:10px;line-height:1.5;}'
+    + '@media (max-width:700px){#w162loom{padding:12px;}#w162loom .file select{min-width:0;width:100%;}#w162loom .file label{flex:1 1 100%;}}';
+  document.head.appendChild(st);
+
+  var S = { data: null, ok: false, at: 0, busy: null, pulling: false, connecting: false, open: {}, filing: null, showAll: false, poll: 0 };
+  function mine() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE) || {}; } catch (e) { return {}; } }
+  function isAdmin() { return mine().role === 'admin'; }
+  function load(force) {
+    if (!force && S.ok && Date.now() - S.at < 3 * 60000) return Promise.resolve(S);
+    if (S.busy) return S.busy;
+    S.busy = (async function () {
+      try { var r = await db.rpc('loom_pull_status'); if (r && !r.error && r.data) { S.data = r.data; S.ok = true; S.at = Date.now(); } else S.ok = !!S.data; }
+      catch (e) { S.ok = !!S.data; }
+      S.busy = null; return S;
+    })();
+    return S.busy;
+  }
+  function when(iso, withTime) {
+    if (!iso) return '';
+    try {
+      var d = new Date(iso); var o = { timeZone: TZ, weekday: 'long', month: 'long', day: 'numeric' };
+      var s = d.toLocaleDateString('en-US', o);
+      if (withTime) s += ' at ' + d.toLocaleTimeString('en-US', { timeZone: TZ, hour: 'numeric', minute: '2-digit' });
+      return s;
+    } catch (e) { return String(iso).slice(0, 10); }
+  }
+  function day(iso) { if (!iso) return ''; try { return new Date(String(iso).length === 10 ? iso + 'T12:00:00Z' : iso).toLocaleDateString('en-US', { timeZone: String(iso).length === 10 ? 'UTC' : TZ, month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(5, 10); } }
+  function mins(s) { s = Number(s); if (!s) return ''; var m = Math.round(s / 60); return m < 60 ? m + ' min' : Math.floor(m / 60) + ' h ' + (m % 60 ? (m % 60) + ' min' : ''); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+  function chip(v) {
+    if (v.status === 'filed') {
+      if (v.visibility === 'leadership') return '<span class="chip lead">Leaders</span>';
+      if (v.visibility === 'private') return '<span class="chip priv">Confidential' + (Array.isArray(v.allowed_people) ? ' &middot; ' + v.allowed_people.length : '') + '</span>';
+      return '<span class="chip all">Everyone</span>';
+    }
+    if (v.status === 'needs_look') return '<span class="chip look">Needs a look</span>';
+    if (v.status === 'waiting') return '<span class="chip off">Waiting</span>';
+    if (v.status === 'error') return '<span class="chip priv">Could not read</span>';
+    return '<span class="chip off">Skipped</span>';
+  }
+  function headline(d) {
+    var last = d.last, next = d.next_run;
+    var nextTxt = d.scheduled ? ' Next pull: <b>' + E(when(next, true)) + '</b>.' : ' The schedule is not on yet.';
+    if (S.pulling || (last && last.status === 'running')) return { cls: '', t: 'Pulling from Loom now. This takes a minute or two.' };
+    if (!last) return { cls: '', t: 'Meetings recorded in Loom come in by themselves on Monday, Wednesday and Friday at 7:30. No pull has run yet.' + nextTxt };
+    if (last.status === 'no_key') return { cls: 'bad', t: 'Loom is not connected yet. Press Connect Loom, sign in to Atlassian as hub@welfareavenue.com and approve reading Loom.' + nextTxt };
+    if (last.status === 'refused') return { cls: 'bad', t: 'Atlassian refused the Loom connection on ' + E(when(last.started_at, true)) + (last.note ? ' (' + E(last.note) + ')' : '') + '. Press Connect Loom and approve it again as hub@welfareavenue.com.' + nextTxt };
+    var did = [];
+    if (last.filed) did.push(plural(last.filed, 'meeting filed', 'meetings filed'));
+    if (last.needs_look) did.push(plural(last.needs_look, 'needs a look', 'need a look'));
+    if (last.waiting) did.push(plural(last.waiting, 'waiting for its transcript', 'waiting for their transcripts'));
+    if (last.skipped) did.push(plural(last.skipped, 'skipped', 'skipped'));
+    var what = did.length ? did.join(', ') : 'nothing new';
+    if (last.status === 'error') return { cls: 'bad', t: 'The last pull (' + E(when(last.started_at, true)) + ') hit a problem: ' + E(last.note || 'unknown') + '. It tries again at the next pull.' + nextTxt };
+    return { cls: '', t: 'Last pull <b>' + E(when(last.started_at, true)) + '</b>' + (last.why && last.why !== 'schedule' ? ' (' + E(last.why) + ')' : '') + ': ' + E(what) + '.' + (last.status === 'partial' && last.note ? ' ' + E(last.note) + '.' : '') + nextTxt };
+  }
+  function fileForm(v) {
+    var def = v.department && v.department !== 'board' ? v.department : '';
+    return '<div class="file" data-w162form="' + E(v.loom_id) + '">'
+      + '<label>Team<select data-w162team><option value="">Pick the team</option>' + TEAMS.map(function (t) { return '<option value="' + E(t[0]) + '"' + (t[0] === def ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('') + '</select></label>'
+      + '<label>Who sees it<select data-w162vis>'
+      + '<option value="private">Confidential: the people in it and the leaders</option>'
+      + '<option value="leadership">Leaders only</option>'
+      + '<option value="department">Everyone</option>'
+      + '</select></label>'
+      + '<button type="button" class="w162btn small" data-w162save="' + E(v.loom_id) + '"' + (S.filing === v.loom_id ? ' disabled' : '') + '>' + (S.filing === v.loom_id ? 'Filing…' : 'File it') + '</button>'
+      + '<button type="button" class="w162btn ghost small" data-w162cancel="' + E(v.loom_id) + '">Cancel</button>'
+      + '<p class="hint">The Hub reads the transcript from Loom again and files it; the team page, tasks and decisions follow in a few minutes, as with any upload.</p>'
+      + '</div>';
+  }
+  function row(v, canFile) {
+    var bits = [day(v.meeting_date || v.recorded_at), mins(v.duration_s)];
+    if (v.speakers && v.speakers.length) bits.push(v.speakers.slice(0, 4).join(', ') + (v.speakers.length > 4 ? ' and ' + (v.speakers.length - 4) + ' more' : ''));
+    var sub = bits.filter(Boolean).join(' · ');
+    var where = v.status === 'filed' && v.department && v.department !== 'Leadership meeting' ? teamName(v.department) + '. ' : '';
+    var acts = '';
+    if (v.status === 'filed' && v.transcript_id) acts += '<a href="#tx/' + E(v.transcript_id) + '">Open</a>';
+    if (v.url) acts += '<a class="out" href="' + E(v.url) + '" target="_blank" rel="noopener">Loom' + I('out') + '</a>';
+    if (canFile && v.status !== 'filed') acts += '<button type="button" class="w162btn small" data-w162file="' + E(v.loom_id) + '">File it</button>';
+    if (v.status === 'needs_look' || v.status === 'waiting' || v.status === 'error') acts += '<button type="button" class="w162btn ghost small" data-w162skip="' + E(v.loom_id) + '">Skip</button>';
+    return '<div class="row" data-w162row="' + E(v.loom_id) + '"><div class="main"><div class="t">' + chip(v) + E(v.title || 'Untitled recording') + '</div>'
+      + '<div class="s">' + E(sub) + '</div>'
+      + (v.reason ? '<div class="s">' + E(where) + E(v.reason) + (v.status === 'waiting' || v.status === 'error' ? ' (tried ' + E(v.attempts || 1) + (v.attempts === 1 ? ' time)' : ' times)') : '') + '</div>' : '')
+      + '</div><div class="acts">' + acts + '</div>'
+      + (S.open[v.loom_id] ? fileForm(v) : '') + '</div>';
+  }
+  function html() {
+    var d = S.data || {};
+    var hl = headline(d);
+    var h = '<div class="hd"><div><h3>' + I('loom') + 'Meetings from Loom</h3><p class="when' + (hl.cls ? ' ' + hl.cls : '') + '">' + hl.t + '</p></div>'
+      + '<div class="acts2">' + (d.connected ? '' : '<button type="button" class="w162btn ghost" data-w162connect="1"' + (S.connecting ? ' disabled' : '') + '>' + (S.connecting ? 'Opening Atlassian…' : 'Connect Loom') + '</button> ')
+      + '<button type="button" class="w162btn" data-w162pull="1"' + (S.pulling ? ' disabled' : '') + '>' + I('refresh') + (S.pulling ? ' Pulling…' : ' Pull now') + '</button></div></div>';
+    var c = d.counts || {};
+    h += '<div class="tiles">'
+      + '<div class="tile"><b>' + E(c.filed || 0) + '</b><span>filed since ' + E(day(d.since)) + '</span></div>'
+      + '<div class="tile"><b' + ((c.needs_look || 0) ? ' class="warm"' : '') + '>' + E(c.needs_look || 0) + '</b><span>' + ((c.needs_look || 0) === 1 ? 'needs' : 'need') + ' a look</span></div>'
+      + '<div class="tile"><b>' + E((c.waiting || 0) + (c.error || 0)) + '</b><span>waiting for Loom</span></div>'
+      + '<div class="tile"><b>' + E(c.skipped || 0) + '</b><span>skipped</span></div>'
+      + '</div>';
+    var look = d.look || [];
+    if (look.length) h += '<h4>Needs a look</h4>' + look.map(function (v) { return row(v, true); }).join('');
+    var recent = d.recent || [];
+    if (recent.length) {
+      var shown = S.showAll ? recent : recent.slice(0, 6);
+      h += '<h4>Latest from Loom</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
+      if (recent.length > 6) h += '<button type="button" class="more" data-w162more="1">' + (S.showAll ? 'Show fewer' : 'Show all ' + recent.length) + '</button>';
+    }
+    h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
+      + (c.personal ? plural(c.personal, 'personal recording was', 'personal recordings were') + ' left out; nothing about them is kept. ' : '')
+      + 'The Hub only reads Loom, as hub@welfareavenue.com, and never changes anything there. '
+      + (d.connected ? 'Connected through Atlassian' + (d.connected_at ? ' since ' + E(day(d.connected_at)) : '') + ' (<button type="button" class="more" data-w162connect="1" style="padding:0">connect again</button>).' : 'Not connected through Atlassian yet.')
+      + '</div>';
+    return h;
+  }
+  function onPage() { return /^#transcripts\b/.test(location.hash || '') || !!(document.getElementById('transcripts') && document.getElementById('transcripts').classList.contains('active')); }
+  function paint() {
+    var sec = document.getElementById('transcripts'); if (!sec) return;
+    var el = document.getElementById('w162loom');
+    if (!isAdmin()) { if (el) el.remove(); return; }
+    if (!S.ok) { if (onPage()) (S.busy || load()).then(function () { if (S.ok) paint(); }); return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w162loom'; el.__h = '';
+      var mast = sec.querySelector(':scope > .w118mast');
+      if (mast) mast.insertAdjacentElement('afterend', el); else sec.insertBefore(el, sec.firstChild);
+    }
+    var x = html();
+    if (el.__h !== x) {
+      /* keep what an admin picked in an open form */
+      var keep = {};
+      el.querySelectorAll('[data-w162form]').forEach(function (f) { keep[f.getAttribute('data-w162form')] = { t: (f.querySelector('[data-w162team]') || {}).value, v: (f.querySelector('[data-w162vis]') || {}).value }; });
+      el.innerHTML = x; el.__h = x;
+      Object.keys(keep).forEach(function (id) { var f = el.querySelector('[data-w162form="' + id + '"]'); if (!f) return; if (keep[id].t !== undefined) f.querySelector('[data-w162team]').value = keep[id].t; if (keep[id].v !== undefined) f.querySelector('[data-w162vis]').value = keep[id].v; });
+    }
+  }
+  function refreshArchive() { try { if (typeof loadTranscriptsData === 'function') Promise.resolve(loadTranscriptsData()).then(function () { try { if (typeof renderTranscripts === 'function') renderTranscripts(); } catch (e) { /* fine */ } }); } catch (e) { /* fine */ } }
+  function pollRun(n) {
+    clearTimeout(S.poll);
+    S.poll = setTimeout(async function () {
+      await load(true);
+      var last = S.data && S.data.last;
+      if (last && last.status === 'running' && n < 12) { paint(); pollRun(n + 1); return; }
+      S.pulling = false; paint();
+      if (last && last.status !== 'running') { toastS(last.filed ? 'Loom: ' + plural(last.filed, 'meeting filed', 'meetings filed') : 'Loom: the pull is done'); if (last.filed) refreshArchive(); }
+    }, n ? 15000 : 8000);
+  }
+  async function fnError(r) {
+    try { if (r && r.error && r.error.context && typeof r.error.context.json === 'function') { var j = await r.error.context.json(); if (j && j.error) return j.error; } } catch (e) { /* fine */ }
+    return (r && r.error && r.error.message) || (r && r.data && r.data.error) || '';
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w162pull]'))) {
+      e.preventDefault(); if (S.pulling || el.disabled) return;
+      S.pulling = true; paint();
+      db.functions.invoke('loom-pull', { body: { action: 'sync' } }).then(async function (r) {
+        if (r && !r.error && r.data && (r.data.accepted || r.data.run)) { toastS('Pulling from Loom. The list updates in a minute or two.'); pollRun(0); return; }
+        var msg = await fnError(r);
+        S.pulling = false; await load(true); paint();
+        toastS(/already running/i.test(msg) ? 'A pull is already running' : 'The Loom pull could not start just now');
+      }).catch(function () { S.pulling = false; paint(); toastS('The Loom pull could not start just now'); });
+      return;
+    }
+    if ((el = t.closest('[data-w162connect]'))) {
+      e.preventDefault(); if (S.connecting) return;
+      S.connecting = true; paint();
+      db.functions.invoke('loom-connect', { body: { action: 'start' } }).then(async function (r) {
+        if (r && !r.error && r.data && r.data.url) { location.href = r.data.url; return; }
+        var msg = await fnError(r);
+        S.connecting = false; paint(); toastS('Atlassian could not be opened just now' + (msg ? ': ' + msg : ''));
+      }).catch(function () { S.connecting = false; paint(); toastS('Atlassian could not be opened just now'); });
+      return;
+    }
+    if ((el = t.closest('[data-w162file]'))) { e.preventDefault(); var id = el.getAttribute('data-w162file'); S.open[id] = !S.open[id]; paint(); return; }
+    if ((el = t.closest('[data-w162cancel]'))) { e.preventDefault(); S.open[el.getAttribute('data-w162cancel')] = false; paint(); return; }
+    if ((el = t.closest('[data-w162more]'))) { e.preventDefault(); S.showAll = !S.showAll; paint(); return; }
+    if ((el = t.closest('[data-w162save]'))) {
+      e.preventDefault(); if (S.filing) return;
+      var lid = el.getAttribute('data-w162save');
+      var form = el.closest('[data-w162form]');
+      var team = form && form.querySelector('[data-w162team]').value, vis = form && form.querySelector('[data-w162vis]').value;
+      if (!team) { toastS('Pick the team it belongs to'); return; }
+      if (team === 'Leadership meeting' && vis === 'private') vis = 'leadership';
+      S.filing = lid; paint();
+      db.functions.invoke('loom-pull', { body: { action: 'file', loom_id: lid, department: team, visibility: vis } }).then(async function (r) {
+        var okd = r && !r.error && r.data && r.data.ok;
+        var msg = okd ? '' : await fnError(r);
+        S.filing = null;
+        if (okd) { S.open[lid] = false; toastS(r.data.already ? 'It was already in the archive' : 'Filed. The team page updates in a few minutes.'); refreshArchive(); }
+        else toastS(msg ? 'Not filed: ' + msg : 'It could not be filed just now');
+        await load(true); paint();
+      }).catch(function () { S.filing = null; paint(); toastS('It could not be filed just now'); });
+      return;
+    }
+    if ((el = t.closest('[data-w162skip]'))) {
+      e.preventDefault();
+      var sid = el.getAttribute('data-w162skip');
+      db.rpc('loom_video_decide', { p_loom_id: sid, p_action: 'skip' }).then(async function (r) {
+        if (r && r.error) { toastS('It could not be skipped: ' + (r.error.message || '')); return; }
+        S.open[sid] = false; toastS('Skipped. File it later from the list if you change your mind.');
+        await load(true); paint();
+      });
+    }
+  });
+
+  var mo = null;
+  function watch() {
+    var sec = document.getElementById('transcripts'); if (!sec || mo) return;
+    var pending = false;
+    mo = new MutationObserver(function () { if (pending || !S.ok || !isAdmin() || document.getElementById('w162loom')) return; pending = true; setTimeout(function () { pending = false; paint(); }, 60); });
+    mo.observe(sec, { childList: true });
+  }
+  var tries = 0;
+  function kick() {
+    try {
+      watch();
+      if (!onPage()) { paint(); return; }
+      if (isAdmin()) { tries = 0; load().then(paint); return; }
+      paint();
+      /* the access profile may still be on its way: look again a few times */
+      if (!mine().role && tries < 8) { tries++; setTimeout(kick, 700); }
+    } catch (e) { /* fine */ }
+  }
+  window.addEventListener('hashchange', function () { setTimeout(kick, 120); });
+  /* back from Atlassian's approval (loom-connect): ?loom=connected | cancelled | error&why=... */
+  (function () {
+    try {
+      var q = new URLSearchParams(location.search || ''); var res = q.get('loom'); if (!res) return;
+      var why = q.get('why') || '';
+      q.delete('loom'); q.delete('why');
+      history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q.toString() : '') + (location.hash || '#transcripts'));
+      setTimeout(function () {
+        toastS(res === 'connected' ? 'Loom is connected. The next pull uses it.' : res === 'cancelled' ? 'Connecting Loom was cancelled' : 'Loom was not connected: ' + why);
+        load(true).then(paint);
+      }, 1800);
+    } catch (e) { /* fine */ }
+  })();
+  if (typeof startApp === 'function') {
+    var __sa162 = startApp;
+    startApp = async function () { var out = await __sa162.apply(this, arguments); setTimeout(kick, 200); return out; };
+  }
+
+  /* the Transcript archive tour: a stop for the Loom card, after the masthead */
+  function addStep() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T || !T.transcripts || !T.transcripts.steps || T.transcripts.__w162) return;
+      var steps = T.transcripts.steps;
+      var i = steps.map(function (s) { return s.s; }).indexOf('#transcripts > .w118mast');
+      steps.splice(i >= 0 ? i + 1 : 0, 0, { s: '#w162loom', t: 'Meetings from Loom', p: 'Every Monday, Wednesday and Friday at 7:30 the Hub pulls new Loom meetings: team meetings for everyone, leadership meetings for the leaders, the rest confidential to the people in them and the leaders. Anything that needs a look waits here for an admin to file or skip.', opt: 1 });
+      T.transcripts.__w162 = true;
+    } catch (e) { /* fine */ }
+  }
+  addStep(); setTimeout(addStep, 1500);
+
+  window.w162 = { load: load, state: function () { return S; }, paint: paint, html: html };
+})();

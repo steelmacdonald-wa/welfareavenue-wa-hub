@@ -1,0 +1,8 @@
+-- wave162d (29/09/26, applied once the first Loom pull worked): Hub module 3 says Loom meetings come in by themselves. The page
+-- side (the Add a transcript line and the Loom row in Settings, Connections) shipped with it: live md5 1a86a2c1d5dd20181890526481f43542.
+
+update public.trainings set description = replace(description, 'Drop any meeting transcript into the Transcript archive and the Hub does the rest.', 'Drop any meeting transcript into the Transcript archive and the Hub does the rest. Meetings recorded on the Hub''s Loom account (hub@welfareavenue.com) come in by themselves: every Monday, Wednesday and Friday at 7:30 the Hub pulls the new ones. The weekly team meetings are visible to everyone; leadership meetings to the leaders; one-on-ones, interviews and other meetings stay confidential to the people in them and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait for an admin, who files or skips them from the Loom card at the top of the archive.'), updated_at = now()
+  where id = 41 and position('Drop any meeting transcript into the Transcript archive and the Hub does the rest.' in description) > 0 and position('come in by themselves' in description) = 0;
+
+insert into public.change_log (entity_type, entity_id, field, old_value, new_value, changed_by)
+  values ('release', 'wave162d', 'hub_release', 'e044a3095f335679cc2475c24ce3728b', '1a86a2c1d5dd20181890526481f43542 (Add a transcript and Settings, Connections say meetings on the Hub''s Loom account come in by themselves on Monday, Wednesday and Friday mornings; Hub module 3 says the same)', 'wave162d');

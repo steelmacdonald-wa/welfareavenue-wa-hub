@@ -182,6 +182,8 @@
 152_wave152
 # 153_wave153: the apps: the 9-dot launcher at the bottom of the menu, the app frame (rail, app bar), the CRM as an app, contacts in Search everything, the CRM's Gifts tab.
 153_wave153
+# 162_wave162: the Loom pull: the Loom card at the top of the Transcript archive (admins), the tour stop.
+162_wave162
 # 110_wave110: last before the tail; its startApp wrapper sets html.wa-ready, which shows the page.
 110_wave110
 999_tail

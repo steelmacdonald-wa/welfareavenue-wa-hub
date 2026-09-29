@@ -1,5 +1,7 @@
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'leadership') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
+// v3 (29/09/26, wave162): a leadership meeting the Loom pull filed posts its Slack note only when app_config loom_pull_slack is 'on'
+// (off by default), like process-transcript v15. Nothing else changed.
 // Welfare Avenue: process-leadership (v2, 04/08/26)
 // v2: leadership meetings can now be OPEN. The transcript's visibility
 // decides what gets stamped on the fan-out rows: 'leadership' keeps them
@@ -505,7 +507,18 @@ async function processLeadership(transcriptId) {
     day: 'numeric'
   }) : 'recent';
   const isTest = /\[test\]/i.test(tx.title || '');
-  if (!isTest) {
+  /* v3 (29/09/26, wave162): a leadership meeting the Loom pull filed (added_by 'Loom pull ...') posts to Slack only when
+     app_config loom_pull_slack is 'on' (off until Steel says otherwise), the same rule as process-transcript v15 */
+  let loomQuiet = false;
+  if (/^Loom pull/i.test(String(tx.added_by || ''))) {
+    try {
+      const { data: cfg } = await svc.from('app_config').select('value').eq('key', 'loom_pull_slack').maybeSingle();
+      loomQuiet = String(cfg?.value || 'off').trim().toLowerCase() !== 'on';
+    } catch (_) {
+      loomQuiet = true;
+    }
+  }
+  if (!isTest && !loomQuiet) {
     const countsLine = counts.updates + ' updates and ' + counts.tasks + ' tasks spread across ' + deptSet.size + ' departments, ' + counts.closed + ' tasks closed, ' + counts.decisions + ' new decisions.';
     if (restricted) {
       await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\nA leadership meeting (' + dateStr + ') was processed: ' + countsLine + ' Details are visible to ' + (stampVis === 'private' ? 'the people on the meeting' : 'leaders and admins') + ' in the Hub.');

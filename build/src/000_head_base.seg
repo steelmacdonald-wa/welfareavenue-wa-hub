@@ -531,7 +531,7 @@
   <section id="transcripts" class="panel">
     <div class="card">
       <h2>Add a transcript</h2>
-      <p class="read">Paste a meeting transcript, tag the department, and save. The AI processes it automatically: the department page updates itself within a few minutes and a summary posts to #exec-dashboard in Slack.</p>
+      <p class="read">Paste a meeting transcript, tag the department, and save. The AI processes it automatically: the department page updates itself within a few minutes and a summary posts to #exec-dashboard in Slack. Meetings recorded on the Hub’s Loom account (hub@welfareavenue.com) come in by themselves on Monday, Wednesday and Friday mornings, so there is no need to paste those.</p>
       <div class="tx-form-grid">
         <div>
           <label style="font-size:12.5px;color:var(--wa-muted);">Department</label><br/>

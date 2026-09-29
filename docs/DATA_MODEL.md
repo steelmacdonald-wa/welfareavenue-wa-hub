@@ -1503,6 +1503,27 @@ Every event Stripe sent to the Hub's webhook (wave161), once each (the id is Str
 
 Each time someone pressed Continue on the donation page (wave161): a Stripe Checkout session made (status session, with its amount), spam caught by the built-in checks, a refusal (the page off, too many tries) or an error. Keeps the rate limits (per hashed network address, never the address itself) and shows how many checkouts were started but not finished. Admins read it; the donate function writes it.
 
+### `loom_videos`
+
+Every Loom recording the Loom pull has looked at (wave162), one row per Loom video id, so nothing is filed twice. status: filed (a transcript, transcript_id), needs_look (waits for an admin in the Transcript archive: a board meeting, something that may be sensitive, a team that is unclear, or a one-person recording an admin may still file), skipped (one person speaking, no transcript after five days, or skipped by an admin), waiting (Loom has no transcript yet; tried again next time), error (tried again, up to six times), personal (a personal recording: nothing is kept but the id, not even the title). Admins read it; only the loom-pull function (service role) writes it, and admins decide through loom_video_decide().
+
+- `loom_id`: The Loom video id (32 hex characters, as in loom.com/share/<id>).
+- `title`: The recording's name in Loom. Null for a personal recording.
+- `recorded_at`: When Loom says it was recorded (or created).
+- `meeting_date`: The recording's date in Toronto; the transcript's meeting_date.
+- `speakers`: The speakers named in Loom's transcript (at most 15).
+- `loom_privacy`: Loom's own sharing setting for the recording, as Loom names it. One Loom keeps to its owner is filed as confidential.
+- `reason`: Why it was filed that way, or why it waits or was skipped, in plain words for the Loom card.
+- `department`: The team it was filed under (or would be): opsmtl, opsto, marketing, fundraising, hr, progdev, or Leadership meeting.
+- `visibility`: How it was filed: null or department (everyone), leadership, or private (allowed_people and the admins).
+- `allowed_people`: For a confidential meeting: the people in it who are on the Hub, plus the leaders (roster names, as the upload form stores them).
+- `attempts`: How many runs tried it (waiting and error rows are tried again until six).
+- `decided_by`: Who filed or skipped it: Loom pull (scheduled), an admin, or the person who uploaded it by hand before wave162.
+
+### `loom_pull_runs`
+
+Every run of the Loom pull (wave162): why (schedule, pull now by an admin, check), when, what it did (seen, filed, needs a look, skipped, waiting, errors) and how it ended: ok, partial (more left for next time), error, no_key (the Atlassian API token is not set yet) or refused (Atlassian refused the token, for example once it expires). Admins read it; the loom-pull function writes it.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1595,6 +1616,15 @@ Functions:
 - `crm_stripe_on_subscription(jsonb, timestamptz)`: customer.subscription.created, .updated and .deleted (wave161): the monthly gift's state as Stripe has it (active, past_due, paused, cancelled, incomplete), its amount, next payment, a cancellation set for the end of the period and why it stopped. Events are applied in the order Stripe created them (last_event_at). Internal to crm_stripe_apply.
 - `crm_stripe_apply(jsonb, jsonb)`: Applies one Stripe event to the CRM (wave161), once: stripe-events calls it after checking Stripe's signature, with p_extra (the fee, net amount, charge and card the function looked up). Logs the event in crm_stripe_events; an event already done or ignored changes nothing. Records checkouts, monthly payments, failed payments, refunds and monthly gifts that change or stop, only for what the Hub's donation page started. An error is kept on the event and returned (not raised) so the function answers 500 and Stripe retries. Service role only.
 - `crm_donate_mode_set(text)`: Puts the Hub's donation page live or takes it down (wave161): admins only, written to change_log. Going live needs the Stripe product and the Hub's webhook with its secret in the vault (stripe-admin setup). Taking it down stops new gifts at once; monthly gifts already started carry on in Stripe.
+- `loom_file_seen(text, bigint, text)`: Marks a Loom recording as filed when the archive already has it (someone uploaded it by hand, or the Hub inbox filed its summary email), so the pull never files it twice. The loom-pull function only.
+- `loom_pull_begin(text)`: Starts a run of the Loom pull (wave162) unless one is already running (a run left running for 15 minutes is closed as stopped). Returns the run id, or null. The loom-pull function only.
+- `loom_pull_finish(bigint, text, jsonb, text)`: Closes a run of the Loom pull with its status, counts and note. The loom-pull function only.
+- `loom_pull_context()`: What the Loom pull needs to decide (wave162): the settings (loom_pull_since, loom_pull_max, loom_cloud_id, loom_mcp_url), the active roster (name, email, team) to match speakers, and the leaders' names, who join every confidential meeting. The loom-pull function only.
+- `loom_pull_known(text[])`: For a list of Loom ids: what the pull already knows about each (status, attempts) and which are already in the transcript archive (by their Loom link), so nothing is filed twice. The loom-pull function only.
+- `loom_video_save(jsonb)`: Records what the Loom pull decided about a recording that was not filed (needs a look, skipped, waiting, error, personal); a personal recording keeps only its id and dates. Never changes a filed row. The loom-pull function only.
+- `loom_file(jsonb)`: Files a Loom recording as a transcript (wave162): one transaction inserts the transcripts row (which starts the normal pipeline through its triggers) and marks the recording filed; if the archive already has that Loom link, nothing is inserted. Checks the team, the visibility and that a confidential meeting names its people. Logged in change_log (entity_type loom). The loom-pull function only.
+- `loom_pull_status()`: The Loom card in the Transcript archive (wave162, admins only): the next scheduled pull (Monday, Wednesday and Friday at 7:30, Toronto), whether the schedule is on, the last run and the last good one, the last eight runs, counts by status since loom_pull_since, the recordings that need a look, and the latest 30 recordings the pull handled (personal recordings never listed).
+- `loom_video_decide(text, text)`: An admin skips a Loom recording that needed a look (p_action skip) or puts a skipped one back (look). Filing goes through the loom-pull function (action file), which reads the transcript from Loom. Logged in change_log (entity_type loom).
 
 - `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
 
