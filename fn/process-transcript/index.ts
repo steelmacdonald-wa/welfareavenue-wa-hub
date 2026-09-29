@@ -1,3 +1,5 @@
+// v16 (29/09/26, wave164): Finance is its own team, apart from Fundraising (Steel: "these should be seperate"): a meeting tagged Finance
+// files its tasks and updates under finance (apply_transcript_result maps it too), and Fundraising is called Fundraising. Nothing else changed.
 // v15 (28/09/26, wave162): meetings the Loom pull files (added_by 'Loom pull ...') post the usual Slack line only when app_config
 // loom_pull_slack is 'on'; it is off until Steel says otherwise, so a scheduled catch-up never floods the channel. Nothing else changed.
 // v14 (26/09/26): content ideas. For a Marketing meeting a second pass reads the whole transcript (up to three 60,000-character
@@ -53,7 +55,7 @@ const json = (body: unknown, status = 200) =>
 
 const DEPT_LABEL: Record<string, string> = {
   opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing',
-  fundraising: 'Fundraising and Finances', hr: 'Human Resources', board: 'Board and Governance',
+  fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board and Governance',
 };
 
 function deptKey(d: string): string | null {
@@ -62,6 +64,7 @@ function deptKey(d: string): string | null {
   if (s === 'opsmtl' || s.includes('montreal')) return 'opsmtl';
   if (s === 'opsto' || s.includes('toronto')) return 'opsto';
   if (s.includes('marketing')) return 'marketing';
+  if (s === 'finance' || s.startsWith('financ')) return 'finance';   /* v16: before fundraising (the old tag read Finance (Fundraising & Finances)) */
   if (s.includes('fundrais') || s.includes('grant')) return 'fundraising';
   if (s === 'hr' || s.includes('human')) return 'hr';
   if (s.includes('board')) return 'board';

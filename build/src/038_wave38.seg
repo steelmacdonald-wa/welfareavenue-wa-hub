@@ -35,7 +35,7 @@ var WA38_N = 0;
 function wa38FieldLines(p) {
   var i = p.input || {};
   var lines = [];
-  var L = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Finances', hr: 'Human Resources', board: 'Board' };
+  var L = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board', progdev: 'Program Development' };
   if (p.name === 'create_request') {
     lines.push('To: ' + (L[i.department] || i.department));
     if (i.type_key) lines.push('Type: ' + i.type_key);

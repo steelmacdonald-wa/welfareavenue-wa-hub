@@ -1,3 +1,4 @@
+// wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Welfare Avenue: project-slack (v5, 07/08/26)
 // Posts a project summary into a Slack channel of the sender's choosing:
@@ -29,7 +30,8 @@ const DEPT_LABEL = {
   progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising & Finances',
+  fundraising: 'Fundraising',
+  finance: 'Finance',
   hr: 'Human Resources',
   board: 'Board'
 };

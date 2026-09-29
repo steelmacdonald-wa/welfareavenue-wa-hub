@@ -17,7 +17,7 @@
      band above the grid. Up next, the month's birthdays, and a sheet for
      every item with its links (join the meeting, the event's board, the
      post, the serving, the person).
-   - Events calendar (#fundevents, Fundraising & Finances): the 2026-27
+   - Events calendar (#fundevents, Fundraising): the 2026-27
      plan season by season (fund_events, seeded from "Fundraising Events
      Calendar 2026-27"), the goals ($10K minimum, $15K healthy, $20K
      target) with what the events raised, a year strip, the ideas
@@ -525,7 +525,7 @@
   var PLAN_START = mk(2026, 9, 1, 12), PLAN_END = mk(2027, 9, 1, 12);
   function fundHost() {
     var sec = document.getElementById('fundevents'); if (!sec) return null;
-    mast('fundevents', tabOk('fundraising') ? 'Fundraising & Finances' : 'Home', 'Events calendar', 'The year\u2019s fundraising events, season by season: partners, targets, and where each one stands.');
+    mast('fundevents', tabOk('fundraising') ? 'Fundraising' : 'Home', 'Events calendar', 'The year\u2019s fundraising events, season by season: partners, targets, and where each one stands.');
     var h = document.getElementById('w124fund');
     if (!h) { h = document.createElement('div'); h.id = 'w124fund'; sec.appendChild(h); }
     return h;
@@ -874,7 +874,7 @@
     try { new MutationObserver(function () { if (pillBusy) return; clearTimeout(ppT); ppT = setTimeout(personPill, 80); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
   }
 
-  /* ---------- menus: Calendar under Home, Events calendar in Fundraising & Finances ---------- */
+  /* ---------- menus: Calendar under Home, Events calendar in Fundraising ---------- */
   function placeTabs() {
     try {
       var bar = document.getElementById('tabBar'); if (!bar) return;
@@ -887,7 +887,7 @@
       if (!LAY && cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
       var fe = bar.querySelector('.tab[data-tab="fundevents"]');
       if (fe) {
-        /* inside Fundraising & Finances when that page is yours; otherwise (the board) right after the calendar */
+        /* inside Fundraising when that page is yours; otherwise (the board) right after the calendar */
         var fr = bar.querySelector('.tab[data-tab="fundraising"]'); var row = fr && fr.closest ? fr.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
         if (sub && tabOk('fundraising')) { if (fe.parentNode !== sub) { var fin = sub.querySelector('.tab[data-tab="finances"]'); if (fin) sub.insertBefore(fe, fin); else sub.appendChild(fe); } fe.classList.add('w116tool'); }
         else if (!LAY && cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }

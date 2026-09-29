@@ -16,11 +16,11 @@
     var v = r.v;
     if (v === '' || v === 'new') {
       R.view = 'new'; R.nw.sent = null;
-      R.nw.d = T.order.indexOf(r.a) >= 0 ? r.a : null;
+      R.nw.d = INBOX.indexOf(r.a) >= 0 ? r.a : null;
       R.nw.type = R.nw.d && r.b ? r.b : null;
     } else if (v === 'sent') { R.view = 'new'; }
     else if (v === 'mine') R.view = 'mine';
-    else if (v === 'team') { R.view = 'team'; if (T.order.indexOf(r.a) >= 0) R.tm.d = r.a; }
+    else if (v === 'team') { R.view = 'team'; if (INBOX.indexOf(r.a) >= 0) R.tm.d = r.a; }
     else if (v === 'all') R.view = isLeader() ? 'all' : 'mine';
     else if (v === 'settings') { R.view = isLeader() ? 'settings' : 'new'; R.cfgDraft = null; R.bot = null; }
     else if (v !== 'r' && v !== 'm') R.view = 'new';
@@ -253,6 +253,7 @@
   /* ---------- test hook ---------- */
   window.w123 = {
     state: function () { return R; }, load: load, paint: paint, route: route, open: openSheet, close: closeSheet,
-    items: teamItems, card: injectCard, counts: counts, me: me
+    items: teamItems, card: injectCard, counts: counts, me: me,
+    cardHtml: function (d) { return teamCardHtml(d); }, loaded: function () { return !!R.loaded; }, ver: function () { return R.ver; }   /* wave164: the Finance app shows Finance's team inbox */
   };
 })();

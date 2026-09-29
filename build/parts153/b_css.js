@@ -46,6 +46,8 @@
     + '#w153rail .w153it:hover{background:rgba(16,63,57,.06);color:' + GREEN + ';}'
     + '#w153rail .w153it.on{background:rgba(16,63,57,.10);color:' + GREEN + ';font-weight:700;}'
     + '#w153rail .w153it.on .w153i{color:' + GREEN + ';}'
+    /* wave164: a section's count (the HR centre's tabs had them) */
+    + '#w153rail .w153it .w153n{margin-left:auto;font-size:11px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border-radius:999px;padding:1px 8px;}'
     + '#w153rail .w153next{margin:14px 8px 6px;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.12);border:1px dashed rgba(220,165,39,.6);font-size:12px;color:' + INK + ';line-height:1.45;}'
     + '#w153rail .w153next b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:#6b4d05;margin-bottom:4px;}'
     + '#w153rail .w153next span{display:inline-flex;align-items:center;gap:5px;margin:2px 8px 2px 0;color:' + MUTED + ';}'
@@ -65,6 +67,10 @@
     + '#w153bar .w153menu{display:none;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.18);border-radius:999px;padding:7px 12px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:12.5px;font-weight:700;cursor:pointer;}'
     + 'body.w153app.w153crm #crm > .w118mast .crumb{display:none;}'
     + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
+    /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
+       menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
+    + 'body.w153app main .panel > .w118mast .crumb{display:none;}'
+    + '@media (min-width:901px){body.w153app.w153finance #finances #w94nav,body.w153app.w153hr #hrcentre .w47tabs{display:none !important;}}'
     /* search everything: contacts */
     + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'
     /* the gifts tab in the CRM */

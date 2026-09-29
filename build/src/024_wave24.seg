@@ -44,8 +44,7 @@ function wa24Nav() {
 function wa24Links(id) {
   var map = {
     opsmtl: [['#volunteering', 'Volunteering programme']],
-    marketing: [['#create', 'Create content']],
-    fundraising: [['#finances', 'Finances and budgeting']]
+    marketing: [['#create', 'Create content']]   /* wave164: Fundraising no longer links to Finance (they are separate) */
   };
   var links = map[id];
   if (!links) return;

@@ -23,7 +23,7 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto', WINDOW = 8;
-  var LABELS = { fundraising: 'Fundraising & Finances', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development' };
+  var LABELS = { fundraising: 'Fundraising', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development' };
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
   var P = {

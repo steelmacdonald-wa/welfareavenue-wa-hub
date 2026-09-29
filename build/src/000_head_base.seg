@@ -539,7 +539,7 @@
             <option value="opsmtl">Operations Montreal</option>
             <option value="opsto">Operations Toronto</option>
             <option value="marketing">Marketing, Branding &amp; Web</option>
-            <option value="fundraising">Fundraising &amp; Finances</option>
+            <option value="fundraising">Fundraising</option>
             <option value="hr">Human Resources</option>
             <option value="board">Board &amp; Governance</option>
           </select>
@@ -572,7 +572,8 @@
           <option value="Operations Montreal">Operations Montreal</option>
           <option value="Operations Toronto">Operations Toronto</option>
           <option value="Marketing, Branding &amp; Web">Marketing, Branding &amp; Web</option>
-          <option value="Fundraising &amp; Finances">Fundraising &amp; Finances</option>
+          <option value="Fundraising">Fundraising</option>
+          <option value="Finance">Finance</option>
           <option value="Human Resources">Human Resources</option>
           <option value="Board &amp; Governance">Board &amp; Governance</option>
         </select>
@@ -827,7 +828,7 @@ const SECTIONS = {
   },
 
   fundraising: {
-    title: "Fundraising &amp; Finances",
+    title: "Fundraising",
     color: "var(--c-fund)",
     read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
     progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
@@ -968,8 +969,8 @@ let USER = { email: "", name: "" };
 let SESSION = null;
 
 const DEPT_ORDER = ["opsmtl", "opsto", "marketing", "fundraising", "hr", "board"];
-const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising & Grants", hr: "Human Resources", board: "Board" };
-const DEPT_COLOR = { opsmtl: "#103F39", opsto: "#3a6ea5", marketing: "#6F64AB", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57" };
+const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising", hr: "Human Resources", board: "Board", finance: "Finance" };
+const DEPT_COLOR = { opsmtl: "#103F39", opsto: "#3a6ea5", marketing: "#6F64AB", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57", finance: "#b9851b" };
 const CATEGORIES = ["Budget or purchase", "Hiring or people", "Legal, risk, or governance", "Strategy or direction", "Partnership or external", "Ethics or policy"];
 const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#103F39", "Partnership or external": "#3a6ea5", "Ethics or policy": "#6F64AB" };
 
@@ -2175,6 +2176,7 @@ function txDeptKey(label) {
   if (s === "opsmtl" || s.indexOf("montreal") >= 0) return "opsmtl";
   if (s === "opsto" || s.indexOf("toronto") >= 0) return "opsto";
   if (s.indexOf("marketing") >= 0) return "marketing";
+  if (s === "finance" || s.indexOf("financ") === 0) return "finance"; /* wave164: Finance is not part of Fundraising */
   if (s.indexOf("fundrais") >= 0 || s.indexOf("grant") >= 0) return "fundraising";
   if (s === "hr" || s.indexOf("human") >= 0) return "hr";
   if (s.indexOf("board") >= 0) return "board";

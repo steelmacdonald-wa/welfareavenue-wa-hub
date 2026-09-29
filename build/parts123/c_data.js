@@ -24,7 +24,7 @@
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function isAdmin() { return role() === 'admin'; }
   function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
-  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return T.order.filter(function (d) { return !a || a.indexOf(d) >= 0; }); }
+  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return INBOX.filter(function (d) { return !a || a.indexOf(pageOfTeam(d)) >= 0; }); }
   function teamLabel(d) { return (T.labels && T.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
   function teamShort(d) { return (T.short && T.short[d]) || teamLabel(d); }
   function teamColor(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
@@ -80,7 +80,7 @@
   function cfgOf(v) {
     v = v || {};
     var ch = {};
-    T.order.forEach(function (d) {
+    INBOX.forEach(function (d) {
       var x = v.channels && v.channels[d];
       var arr = (Array.isArray(x) ? x : (x ? [x] : [])).map(function (s) { return String(s || '').replace(/^#/, '').trim(); }).filter(Boolean);
       ch[d] = arr.length ? arr : (DEFAULT_CHANNELS[d] || []).slice();

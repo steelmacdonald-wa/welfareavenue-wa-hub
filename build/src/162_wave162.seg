@@ -17,7 +17,7 @@
   var TZ = 'America/Toronto';
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
-  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
+  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
   function teamName(k) { for (var i = 0; i < TEAMS.length; i++) if (TEAMS[i][0] === k) return TEAMS[i][1]; try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) return DEPT_LABEL[k]; } catch (e) { /* fine */ } return k || ''; }
   var P = {
     loom: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M5.6 18.4l2.9-2.9M15.5 8.5l2.9-2.9"/>',

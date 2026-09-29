@@ -25,7 +25,7 @@
     try { new MutationObserver(function () { if (pillBusy) return; clearTimeout(ppT); ppT = setTimeout(personPill, 80); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
   }
 
-  /* ---------- menus: Calendar under Home, Events calendar in Fundraising & Finances ---------- */
+  /* ---------- menus: Calendar under Home, Events calendar in Fundraising ---------- */
   function placeTabs() {
     try {
       var bar = document.getElementById('tabBar'); if (!bar) return;
@@ -38,7 +38,7 @@
       if (!LAY && cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
       var fe = bar.querySelector('.tab[data-tab="fundevents"]');
       if (fe) {
-        /* inside Fundraising & Finances when that page is yours; otherwise (the board) right after the calendar */
+        /* inside Fundraising when that page is yours; otherwise (the board) right after the calendar */
         var fr = bar.querySelector('.tab[data-tab="fundraising"]'); var row = fr && fr.closest ? fr.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
         if (sub && tabOk('fundraising')) { if (fe.parentNode !== sub) { var fin = sub.querySelector('.tab[data-tab="finances"]'); if (fin) sub.insertBefore(fe, fin); else sub.appendChild(fe); } fe.classList.add('w116tool'); }
         else if (!LAY && cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }

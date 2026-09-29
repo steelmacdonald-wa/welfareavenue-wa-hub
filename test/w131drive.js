@@ -194,7 +194,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
   /* 4. requests */
   { const f = await fresh('#adminpanel/people/requests');
     const s = await f.ev(() => ({ n: document.querySelectorAll('#w131card .w131rq [data-w131grant]').length, txt: (document.querySelector('#w131card [data-w131rq="902"]') || {}).textContent }));
-    ok("the requests, each with what Grant does", s.n === 2 && /Adds Finances/.test(s.txt || ''), s);
+    ok("the requests, each with what Grant does", s.n === 2 && /Adds Finance/.test(s.txt || ''), s);
     await click(f, '#w131card [data-w131grant="902"]', 1100);
     const g = (await writes(f, 'hub_roles')).map(w => w.payload).filter(p => p.email === 'samson.jules@welfareavenue.com')[0], d = (await writes(f, 'wa_access_requests')).map(w => w.payload);
     ok("Grant adds the page on top of what they have and closes the request", g && Array.isArray(g.tabs) && g.tabs.indexOf('finances') >= 0 && g.tabs.length > 5 && d.some(p => p.status === 'granted'), { g, d });

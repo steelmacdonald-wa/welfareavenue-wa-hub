@@ -7,15 +7,16 @@
    can view and query), each their own Overview page that holds clear
    bullet point form updates, mentions from other departments, and other
    pertinent KPIs... Operations Montreal should have the Volunteering
-   tool under its drop down... Fundraising & Finances: Grants, Event
-   Fundraising, Donor Relations and Finance each get their own task
-   management page (ClickUp-like) with their projects; Finance also
-   opens the existing Finance tool... sync meeting times to what
+   tool under its drop down... Fundraising: Grants, Event Fundraising
+   and Donor Relations each get their own task management page
+   (ClickUp-like) with their projects (wave164: Finance left Fundraising
+   for the Finance app, its tasks there)... sync meeting times to what
    hub@welfareavenue.com has on its calendar... on one's home page they
    should see exactly what meetings they have upcoming."
    1. Routes: #team/<dept> (Overview), #team/<dept>/agenda,
       #team/<dept>/tasks[/<workstream>], #team/fundraising/<board>
-      (grants, events, donors, finance) and #team/opsmtl/volunteering.
+      (grants, events, donors) and #team/opsmtl/volunteering.
+      wave164: #team/finance[/...] opens the Finance app's Tasks.
       One panel (#team) hosts them all; the classic #dept/<d> page stays
       reachable (Executive decisions, Transcripts, the footer link).
    2. Departments menu: clicking a team opens its Overview; the flyout
@@ -174,7 +175,7 @@
     '.w116team .r:hover b{color:' + GREEN + ';}' +
     '.w116team .r b{color:var(--wa-text);font-weight:600;}' +
     '.w116team .r span{color:var(--wa-muted);font-size:12px;}' +
-    /* board cards on the Fundraising & Finances overview */
+    /* board cards on the Fundraising overview */
     '.w116boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 16px;}' +
     '.w116bcard{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);border-top:4px solid ' + GREEN + ';}' +
     '.w116bcard:hover{border-color:rgba(16,63,57,.25);}' +
@@ -465,7 +466,6 @@
         out.push({ key: 'tasks', label: 'All tasks', hash: '#team/' + d + '/tasks' });
       }
     });
-    if (d === 'fundraising' && tabVisible('finances')) out.push({ key: 'finances', label: 'Finances', hash: '#finances', tool: true });
     if (d === 'hr' && tabVisible('hrcentre')) out.push({ key: 'hrcentre', label: 'HR centre', hash: '#hrcentre', tool: true });
     return out;
   }
@@ -660,7 +660,6 @@
     if (d === 'hr') { tools.push(['&#127891;', 'Avenue Academy', '#training']); tools.push(['&#128202;', 'Onboarding board', '#training']); if (tabVisible('hrcentre')) tools.push(['&#128101;', 'HR centre', '#hrcentre']); }
     if (d === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
     if (d === 'marketing') { tools.push(['&#9997;', 'Content drafter', '#create']); tools.push(['&#127891;', 'Learning Avenues', '#training']); }
-    if (d === 'fundraising' && tabVisible('finances')) tools.push(['&#128176;', 'Finances', '#finances']);
     tools.push(['&#127919;', 'Department goals', '#goals']);
     tools.push(['&#128194;', 'Projects', '#projects']);
     tools.push(['&#128196;', 'Transcripts', '#transcripts']);
@@ -823,6 +822,7 @@
   function route(h) {
     var p = String(h || '').split('/');
     var d = p[1] || '', page = p[2] || 'overview', sub = p[3] || '';
+    if (d === 'finance') { try { location.replace('#finances/tasks'); } catch (e) { go('#finances/tasks'); } return; }   /* wave164: Finance has no team page; its tasks are in the Finance app */
     if (!d || T.order.indexOf(d) < 0) { go('#mypage'); return; }
     if (!allowedDept(d)) { go('#overview'); return; }
     if (page === 'volunteering') { go('#volunteering'); return; }
@@ -843,7 +843,7 @@
 
   /* ---------- nav: the Departments menu ---------- */
   /* tools that live inside a team's menu: the real tab button moves in, so its wiring and role gating stay intact */
-  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finances']], hr: [['hrcentre', 'HR centre']] };
+  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finance']],   /* wave164: the Finance app's page (hidden from the Hub's menu since wave153; Finance is not Fundraising's) */ hr: [['hrcentre', 'HR centre']] };
   function flyout(d) {
     var pages = pagesOf(d).filter(function (p) { return !p.tool && p.key !== 'volunteering'; });
     var html = pages.map(function (p) {

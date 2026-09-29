@@ -141,7 +141,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
       await click(f, '#w132 [data-w132back="task:95003"]', 900);
       const bb = await rpcs(f, 'bank_unbank');
       ok("Bring back now calls bank_unbank and reloads the bank", bb.length === 1 && bb[0].args.p_kind === 'task' && bb[0].args.p_id === 95003 && /brought back/.test(bb[0].args.p_why) && (await f.ev(() => window.__RPC.filter(c => c.fn === 'bank_list').length)) > nLoad, bb);
-      ok("and says where it went", await f.ev(() => window.__T.some(t => /Apply to the Trillium seed grant.*back on the Fundraising & Finances board/.test(t))));
+      ok("and says where it went", await f.ev(() => window.__T.some(t => /Apply to the Trillium seed grant.*back on the Fundraising board/.test(t))));
       /* put something new in */
       await click(f, '#w132 [data-w132new]', 400);
       const ns = await f.ev(() => ({ h: (document.querySelector('#w132sheet h2') || {}).textContent, team: (document.getElementById('w132nteam') || {}).value, picks: Array.from(document.querySelectorAll('#w132sheet [data-w132pick]')).map(b => b.innerText.replace(/\s+/g, ' ').trim()), on: (document.querySelector('#w132sheet .opt.on') || {}).getAttribute && document.querySelector('#w132sheet .opt.on').getAttribute('data-w132pick'), focus: document.activeElement && document.activeElement.id }));

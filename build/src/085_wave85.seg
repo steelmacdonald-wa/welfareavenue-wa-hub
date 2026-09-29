@@ -27,7 +27,7 @@
     goals: 'Every team\'s quarterly goals, SMART, with tasks and comments.',
     requests: 'How teams ask each other for work, with a form for every kind of ask.',
     importantinfo: 'Logins, links and documents the team reaches for most.',
-    finances: 'Statements, the ledger and budgets per team.',
+    finances: 'The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.',   /* wave164: the Overview's line (164_wave164 changes it with the section) */
     orgchart: 'Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.',
     training: 'Your onboarding and the training catalog, tracked per person.',
     volunteering: 'The serving programme: events, volunteers, the master SOP and inventory.',

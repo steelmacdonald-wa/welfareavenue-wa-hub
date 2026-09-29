@@ -69,7 +69,7 @@
   }
   function teamsHtml() {
     var m = me();
-    var tiles = T.order.map(function (d) {
+    var tiles = INBOX.map(function (d) {
       var ts = typesFor(d), ch = chanFor(d);
       return '<button type="button" class="w123team' + (m.dept === d ? ' mine' : '') + '" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '">'
         + '<span class="w123ico">' + I(TEAM_ICON[d]) + '</span><b>' + E(teamLabel(d)) + '</b><span class="s">' + E(TEAM_BLURB[d] || '') + '</span>'
@@ -91,7 +91,7 @@
       var hay = lower(t.label + ' ' + (t.description || '') + ' ' + teamLabel(t.department) + ' ' + (t.key || '').replace(/-/g, ' '));
       return words.every(function (w) { return hay.indexOf(w) >= 0; });
     });
-    var teams = T.order.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
+    var teams = INBOX.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
     var rows = hits.map(function (t) { return typeRow(t.department, t, true); }).join('')
       + teams.map(function (d) { return '<button type="button" class="w123type other" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '"><span class="w123ico">' + I(TEAM_ICON[d]) + '</span><span><span class="t2">Team</span><b>' + E(teamLabel(d)) + '</b><span class="d">' + E(TEAM_BLURB[d] || '') + '</span></span>' + I('chev') + '</button>'; }).join('');
     if (!rows) return '<div class="w123types w123anim"><p class="w123empty" style="padding:18px 20px">Nothing matches &ldquo;' + E(qs) + '&rdquo;. Pick the team below and choose <b>Something else</b>: describe it in your own words.</p></div>';
@@ -292,7 +292,7 @@
     });
     rows = f.state === 'open' ? rows.sort(sortOpen) : rows;
     var byTeam = {}; R.reqs.forEach(function (r) { if (!r.done) byTeam[r.department] = (byTeam[r.department] || 0) + 1; });
-    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + T.order.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
+    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + INBOX.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
       + '<span class="w123small">' + [['open', 'Open'], ['done', 'Done'], ['any', 'Everything']].map(function (o) { return '<a data-w123alls="' + o[0] + '" class="' + (f.state === o[0] ? 'on' : '') + '">' + o[1] + '</a>'; }).join('') + '</span>'
       + '<span class="sp"></span><input type="search" data-w123allq placeholder="Search requests" value="' + E(f.q) + '" aria-label="Search requests"></div>'
       + '<div id="w123allrows">' + allRows(rows) + '</div></div>';
@@ -317,7 +317,7 @@
     var c = R.cfgDraft || (R.cfgDraft = JSON.parse(JSON.stringify(R.cfg || cfgOf(null))));
     var can = isAdmin(), bot = R.bot;
     var dis = can ? '' : ' disabled';
-    var rows = T.order.map(function (d) {
+    var rows = INBOX.map(function (d) {
       var st = bot && bot.teams && bot.teams[d];
       var stat = !bot ? '<span class="op" style="font-size:12px;color:var(--wa-muted)">Checking Slack…</span>'
         : st && st.channel ? '<span class="ok">' + I('check') + ' Posting in #' + E(st.channel) + (st.chain && st.chain[0] !== st.channel ? ' (the first choice is not reachable)' : '') + '</span>'

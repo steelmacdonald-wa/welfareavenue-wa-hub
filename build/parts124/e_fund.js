@@ -3,7 +3,7 @@
   var PLAN_START = mk(2026, 9, 1, 12), PLAN_END = mk(2027, 9, 1, 12);
   function fundHost() {
     var sec = document.getElementById('fundevents'); if (!sec) return null;
-    mast('fundevents', tabOk('fundraising') ? 'Fundraising & Finances' : 'Home', 'Events calendar', 'The year’s fundraising events, season by season: partners, targets, and where each one stands.');
+    mast('fundevents', tabOk('fundraising') ? 'Fundraising' : 'Home', 'Events calendar', 'The year’s fundraising events, season by season: partners, targets, and where each one stands.');
     var h = document.getElementById('w124fund');
     if (!h) { h = document.createElement('div'); h.id = 'w124fund'; sec.appendChild(h); }
     return h;

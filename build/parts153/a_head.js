@@ -25,7 +25,7 @@
    ===================================================================== */
 (function () {
   if (window.__wa153) return; window.__wa153 = true;
-  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB';
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB', FINGOLD = '#B9851B';   /* wave164: Finance has its own colour, apart from Fundraising's orange */
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var KEY_LAST = 'wa153.last';
@@ -70,7 +70,9 @@
     flag: '<path d="M6 21V3.5"/><path d="M6 4.5h11l-2.3 4.2L17 13H6"/>',
     layers: '<path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12 8.5 4.2 8.5-4.2"/><path d="m3.5 16.2 8.5 4.3 8.5-4.3"/>',
     tree: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v10M12 11.5H5V17M12 11.5h7V17"/>',
-    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>'
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>',
+    /* wave164: Finance's Tasks */
+    check: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="m8.5 12.3 2.4 2.4 4.6-4.9"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -125,19 +127,23 @@
         var known = [['people', 'People'], ['onboarding', 'Onboarding'], ['training', 'Training'], ['recruitment', 'Recruitment'], ['hours', 'Commitment'], ['policies', 'Policies'], ['discipline', 'Discipline']];
         var drawn = Array.prototype.map.call(document.querySelectorAll('#hrcentre .w47tab[data-w47v]'), function (b) {
           var k = b.getAttribute('data-w47v'), t = (b.childNodes[0] && b.childNodes[0].nodeType === 3 ? b.childNodes[0].textContent : b.textContent) || k;
-          return [k, String(t).replace(/\d+$/, '').trim() || k];
+          var n = String(b.textContent || '').match(/(\d+)\s*$/);   /* wave164: the tab's count moves into the rail (the tabs are hidden on a computer) */
+          return [k, String(t).replace(/\d+$/, '').trim() || k, n ? n[1] : null];
         });
         /* the page drawn with no tabs is its notice (the HR centre is for admins and leaders): the rail says just the page */
         var pn = document.getElementById('hrcentre'), notice = !drawn.length && !!pn && pn.classList.contains('active') && /for admins and leaders/i.test(pn.textContent || '');
         if (notice) return [{ label: 'HR centre', items: [{ h: '#hrcentre', l: 'HR centre', ic: 'clip', page: 'hrcentre' }] }];
         var list = drawn.length >= 3 ? drawn : known;
-        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0] }; }) }];
+        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0], n: x[2] || null }; }) }];
       }
     },
-    finance: { id: 'finance', label: 'Finance', color: ORANGE, ic: 'coins', blurb: 'The ledger, budgets and trends', pages: ['finances'], home: '#finances',
+    /* wave164: Steel: "still shows fundraising and finance being togther. these should be seperate": Finance is an app of its own,
+       apart from Fundraising (its own gold), with its own Tasks (department finance) */
+    finance: { id: 'finance', label: 'Finance', color: FINGOLD, ic: 'coins', blurb: 'The ledger, the budget and the finance work', pages: ['finances'], home: '#finances',
       groups: function () {
-        return [{ label: 'Finances', items: [
+        return [{ label: 'Finance', items: [
           { h: '#finances', l: 'Overview', ic: 'home', page: 'finances', sec: 'overview' },
+          { h: '#finances', l: 'Tasks', ic: 'check', page: 'finances', sec: 'tasks' },
           { h: '#finances', l: 'Trends', ic: 'chart', page: 'finances', sec: 'trends' },
           { h: '#finances', l: 'Money map', ic: 'coins', page: 'finances', sec: 'money' },
           { h: '#finances', l: 'Budget', ic: 'list', page: 'finances', sec: 'budget' },
@@ -164,7 +170,10 @@
   }
   function items(app) {
     var a = APPS[app]; if (!a || !a.groups) return [];
-    return a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+    var gs = a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+    /* wave164: an app with one group named after itself (Finance, the HR centre) shows no group heading: it only repeated the app's name */
+    if (gs.length === 1 && fold(gs[0].label).replace(/s$/, '') === fold(a.label).replace(/s$/, '')) gs[0].solo = true;
+    return gs;
   }
   function firstHash(app) { var gs = items(app); return gs.length ? gs[0].items[0].h : (APPS[app] && APPS[app].home) || '#mypage'; }
 

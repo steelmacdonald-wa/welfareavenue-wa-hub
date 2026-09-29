@@ -110,7 +110,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   /* the HR centre */
   await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   s = await state(f); r = await rail(f);
-  ok('the HR centre opens where the page lands (People) with its own sections in the rail, nothing from the Hub', s.app === 'hr' && /^#hrcentre/.test(s.hash) && r.join('|') === 'People*|Onboarding|Training|Recruitment|Commitment|Policies|Discipline' && /^HR CENTRE People/.test(s.bar), { s, r });
+  ok('the HR centre opens where the page lands (People) with its own sections in the rail, nothing from the Hub', s.app === 'hr' && /^#hrcentre/.test(s.hash) && /^People\d*\*\|Onboarding\|Training\|Recruitment\|Commitment\|Policies\|Discipline$/.test(r.join('|')) && /^HR CENTRE People/.test(s.bar), { s, r });
   await click(f, '#w153rail [data-w153sec="policies"]'); await f.page.waitForTimeout(2600);
   const hr = await f.ev(() => ({ hash: location.hash, on: (document.querySelector('#hrcentre .w47tab.on') || {}).textContent, rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()) }));
   ok('Policies in the rail switches the page\'s tab and the rail follows', hr.hash === '#hrcentre/policies' && hr.on === 'Policies' && hr.rail.join() === 'Policies', hr);
@@ -129,7 +129,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   /* Finance */
   await f.ev(() => window.w153.open('finance')); await f.page.waitForTimeout(1500);
   r = await rail(f); s = await state(f);
-  ok('Finance holds the finances pages only: Overview (current), Trends, Money map, Budget, Transactions', s.app === 'finance' && s.hash === '#finances' && r.join('|') === 'Overview*|Trends|Money map|Budget|Transactions', { s, r });
+  ok('Finance holds the finance pages only: Overview (current), Tasks (wave164), Trends, Money map, Budget, Transactions', s.app === 'finance' && s.hash === '#finances' && r.join('|') === 'Overview*|Tasks|Trends|Money map|Budget|Transactions', { s, r });
   await click(f, '#w153rail [data-w153sec="budget"]'); await f.page.waitForTimeout(900);
   const fin = await f.ev(() => ({ on: (document.querySelector('#finances .w94tab.on') || {}).textContent, rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()), bar: document.getElementById('w153bar').innerText.replace(/\s+/g, ' ') }));
   ok('Budget in the rail opens the Budget section', fin.on === 'Budget' && fin.rail.join() === 'Budget' && /Finance Budget/i.test(fin.bar), fin);

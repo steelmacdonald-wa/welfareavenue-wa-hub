@@ -80,7 +80,7 @@ const MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(){ if
       ok("the masthead says who reports to whom", /Who reports to whom/.test(s.mast), s.mast);
       ok("the numbers: people, open positions, not placed, teams", /38 people on the chart/.test(s.stats) && /1 open position/.test(s.stats) && /2 not placed yet/.test(s.stats) && /6 teams/.test(s.stats), s.stats);
       ok("the board band holds the directors, the co-EDs lead the executive row", s.board.join('|') === 'Kellian|Mohamed|Rima Naim|Tamara' && s.execs.join('|') === 'Steel|Suhaib', s);
-      ok("six team columns in the menu's order", s.teams.join('|') === 'Operations Montreal|Program Development|Operations Toronto|Marketing, Branding & Web|Fundraising & Finances|Human Resources', s.teams);
+      ok("six team columns in the menu's order", s.teams.join('|') === 'Operations Montreal|Program Development|Operations Toronto|Marketing, Branding & Web|Fundraising|Human Resources', s.teams);
       ok("a team's leads come first, with their people nested under them", s.mkt.join('|') === 'Ian|Kahkashan' && s.ianKids.length === 7 && s.ianKids.indexOf('Eduardo de Freitas') >= 0 && s.ianCnt === '7', s);
       ok("someone reporting to one executive says so", /Cindy/.test(s.cindy) && /reports to Suhaib/.test(s.cindy), s.cindy);
       ok("an open position shows as open, with its status and note, under its manager", /Open position/i.test(s.open) && /Volunteer coordinator, Toronto/.test(s.open) && /Hiring/i.test(s.open) && /Recruiting now/.test(s.open) && s.openUnder, s);

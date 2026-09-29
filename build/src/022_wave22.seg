@@ -505,7 +505,7 @@ function waFinExpenseModal() {
   renderSection = function (id) {
     __rs22(id);
     try {
-      if (id !== 'fundraising' || !isStaff()) return;
+      return;   /* wave164: Finance is not part of Fundraising, so the Fundraising page no longer links to it */
       var card = document.querySelector('#fundraising .dept-card');
       if (!card || card.querySelector('[data-fin-open]')) return;
       var btn = document.createElement('button');

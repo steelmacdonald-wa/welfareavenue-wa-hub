@@ -1,3 +1,5 @@
+// wave164 (29/09/26): Finance is its own team, apart from Fundraising: requests and tasks can go to finance (reimbursements, purchase
+// approvals, invoices and receipts), and Fundraising is called Fundraising.
 // v13 (26/09/26): our story (wave140, the Drive mining). An OUR STORY block from wa_story_context: the moments, year lines,
 // partners, lessons learned and documents that match the question (accents and word endings forgiven), or the year it names;
 // the asker's access decides what it holds (leaders and directors: leadership moments and sources; leaders only: leadership
@@ -81,6 +83,7 @@ const DEPTS = [
   'opsto',
   'marketing',
   'fundraising',
+  'finance',
   'hr',
   'board'
 ];
@@ -89,7 +92,8 @@ const DEPT_LABELS = {
   progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Finances',
+  fundraising: 'Fundraising',
+  finance: 'Finance',
   hr: 'Human Resources',
   board: 'Board'
 };
@@ -299,7 +303,7 @@ const CREATE_REQUEST_TOOL = {
       },
       department: {
         type: 'string',
-        description: 'One of: opsmtl, progdev, opsto, marketing, fundraising, hr, board. The department that should action it.'
+        description: 'One of: opsmtl, progdev, opsto, marketing, fundraising, finance, hr, board. The department that should action it (finance: reimbursements, purchase approvals, invoices and receipts; fundraising: grants, donors, sponsors and events).'
       },
       title: {
         type: 'string',
@@ -330,7 +334,7 @@ const CREATE_TASK_TOOL = {
     properties: {
       department: {
         type: 'string',
-        description: 'One of: opsmtl, progdev, opsto, marketing, fundraising, hr, board.'
+        description: 'One of: opsmtl, progdev, opsto, marketing, fundraising, finance, hr, board (finance is the books, apart from fundraising).'
       },
       title: {
         type: 'string',

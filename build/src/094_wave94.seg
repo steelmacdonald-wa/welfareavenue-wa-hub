@@ -38,6 +38,7 @@
 
   var SECS = [
     ['overview', 'Overview'],
+    ['tasks', 'Tasks'],   /* wave164: Finance's own board (164_wave164 draws it) */
     ['trends', 'Trends'],
     ['money', 'Money map'],
     ['budget', 'Budget'],
@@ -58,7 +59,9 @@
       t.classList.toggle('on', t.getAttribute('data-w94tab') === id);
     });
     if (id === 'trends') w94Interactive();
+    try { document.dispatchEvent(new CustomEvent('wa94show', { detail: { id: id } })); } catch (e) { /* fine */ }   /* wave164: the title and the Tasks board follow the section */
   }
+  window.w94Show = w94Show; window.w94Cur = w94Cur;
 
   /* ---------- restructure the rendered page into sections ---------- */
   function w94Build() {
@@ -218,6 +221,8 @@
 
   /* ---------- interactive charts ---------- */
   function w94Money(v) { return waFinMoney(v, true); }
+  /* wave164: a canvas can hold one chart: free it before drawing again (Trends opened twice drew on a busy canvas) */
+  function w94Free(cv) { try { var ex = cv && window.Chart && window.Chart.getChart ? window.Chart.getChart(cv) : null; if (ex) ex.destroy(); } catch (e) { /* fine */ } }
   function w94Destroy() {
     W94.charts.forEach(function (c) { try { c.destroy(); } catch (e) { /* fine */ } });
     W94.charts = [];
@@ -268,6 +273,7 @@
         sets.push({ label: 'Projected income', data: pInc, backgroundColor: INC + '59', borderColor: INC, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
         sets.push({ label: 'Projected spending', data: pSpd, backgroundColor: SPD + '59', borderColor: SPD, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
       }
+      w94Free(c1);
       W94.charts.push(new Chart(c1, {
         type: 'bar',
         data: { labels: labels, datasets: sets },
@@ -293,6 +299,7 @@
         if (i3 <= endActual) { c += d.M[i3].inc - d.M[i3].spd; cum.push(Math.round(c * 100) / 100); }
         else if (d.proj) { c += d.proj.avgInc - d.proj.avgSpd; cum.push(Math.round(c * 100) / 100); }
       }
+      w94Free(c2);
       W94.charts.push(new Chart(c2, {
         type: 'line',
         data: {
@@ -322,6 +329,7 @@
         if (box && (!all || all.length < 2)) box.style.display = 'none';
         return;
       }
+      w94Free(c3);   /* wave164: the year-over-year data arrives late; a second mount must not collide with the first ("Canvas is already in use") */
       W94.charts.push(new Chart(c3, {
         type: 'bar',
         data: {

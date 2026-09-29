@@ -47,7 +47,7 @@
   var PCAT_ORDER = ['partner', 'collaborator', 'sponsor'];
   var PKINDS = ['nonprofit', 'business', 'school', 'university', 'student club', 'government', 'funder', 'media', 'community group', 'faith group', 'other'];
   var DTEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
-    ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
+    ['fundraising', 'Fundraising'], ['finance', 'Finance'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
   var DKINDS = [['guide', 'Guides'], ['plan', 'Plans'], ['report', 'Reports'], ['meeting notes', 'Meeting notes'], ['presentation', 'Presentations'], ['proposal', 'Proposals'],
     ['letter', 'Letters'], ['newsletter', 'Newsletters'], ['application', 'Applications'], ['list', 'Lists'], ['posts', 'Posts and posters'], ['other', 'Other']];
 

@@ -1,4 +1,7 @@
-// Welfare Avenue: team-inbox (v1.1, 25/09/26: who asked reads plainly for meeting and Ask the Hub requests; v1 25/09/26)
+// Welfare Avenue: team-inbox (v1.2, 29/09/26: Finance is a team of its own for requests and emails, apart from Fundraising, and posts in
+// #accounting-finance (private: the Hub's app was added to it); an invoice, receipt or reimbursement says which it is. Steel: "all finance
+// related emails like invoices, receipts, reimbursements should go straight to the finance slack channel not fundraising".
+// v1.1, 25/09/26: who asked reads plainly for meeting and Ask the Hub requests; v1 25/09/26)
 // Steel: "redo the Request tab ... make sure requests are also sent to the
 // department's channel as well as have an inbox on the department's overview
 // page showing the requests that came in via requests and via Hub Inbox (Jev
@@ -43,12 +46,12 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 
 const TEAMS: Record<string, string> = {
   opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing',
-  fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance',
+  fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board & Governance',
 };
 type Settings = { channels: Record<string, string[]>; post_requests: boolean; thread_updates: boolean; dm_requester: boolean; email_mode: Record<string, string> };
 const DEFAULT_CHANNELS: Record<string, string[]> = {
   opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'],
-  marketing: ['social-media'], fundraising: ['fundraising'], hr: ['human-resources'], board: ['board-of-directors'],
+  marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'],
 };
 
 async function getSecret(name: string): Promise<string> {
@@ -367,9 +370,20 @@ async function requestNote(noteId: number): Promise<Record<string, unknown>> {
 /* ---------- emails the Hub inbox filed: Jev decides ---------- */
 type Mail = { id: number; gmail_id: string | null; internal_date: string | null; from_email: string | null; from_name: string | null; subject: string | null; title: string | null; summary: string | null; kind: string | null; department: string | null; amount: number | null; due_date: string | null; meeting_date: string | null; status: string | null; filed: Record<string, unknown> | null; notify: Record<string, unknown> | null; attachments: Array<{ filename: string }> | null; body_text: string | null };
 const KIND_LABEL: Record<string, string> = { invoice: 'Invoice', meeting_summary: 'Meeting summary', update: 'Email', application: 'Job application' };
+/* v1.2: a money email says what it is (the Hub inbox files them all as kind invoice) */
+function kindLabel(m: Mail): string {
+  if (m.kind !== 'invoice') return KIND_LABEL[String(m.kind)] || 'Email';
+  const t = ((m.title || '') + ' ' + (m.subject || '')).toLowerCase();
+  if (/reimburs|rembours/.test(t)) return 'Reimbursement';
+  if (/declined|failed|past due|overdue|unpaid|action required/.test(t)) return 'Payment problem';
+  if (/refund/.test(t)) return 'Refund';
+  if (/receipt|re\u00e7u|recu\b|payment received|paid/.test(t)) return 'Receipt';
+  if (/statement/.test(t)) return 'Statement';
+  return 'Invoice';
+}
 function filedLabel(m: Mail): string {
   const f = (m.filed || {}) as Record<string, unknown>;
-  if (f.type === 'task') return 'filed as a Finance task';
+  if (f.type === 'task') return 'filed on the Finance board';
   if (f.type === 'transcript') return 'sent through the meeting pipeline';
   if (f.type === 'candidate') return 'added to Recruitment';
   if (f.type === 'update') return 'filed as an update on the team page';
@@ -383,7 +397,7 @@ async function jevDecide(m: Mail): Promise<Decision> {
     today, team,
     email: {
       from: (m.from_name ? m.from_name + ' ' : '') + '<' + (m.from_email || '') + '>', received: m.internal_date, subject: m.subject,
-      what_it_is: KIND_LABEL[String(m.kind)] || m.kind, summary: m.summary, amount: m.amount, due_date: m.due_date, meeting_date: m.meeting_date,
+      what_it_is: kindLabel(m), summary: m.summary, amount: m.amount, due_date: m.due_date, meeting_date: m.meeting_date,
       attachments: (m.attachments || []).map(a => a.filename).slice(0, 6), body_excerpt: clip(m.body_text || '', 1800),
     },
     what_the_hub_did: filedLabel(m),
@@ -419,7 +433,7 @@ const WHY_TEXT: Record<string, string> = { act: 'someone needs to act', deadline
 async function mailText(m: Mail, d: Decision): Promise<string> {
   const team = TEAMS[String(m.department)] || String(m.department);
   const lines: string[] = [];
-  lines.push(':envelope_with_arrow: *' + sx(KIND_LABEL[String(m.kind)] || 'Email') + ' for ' + sx(team) + '* · through the Hub inbox');
+  lines.push(':envelope_with_arrow: *' + sx(kindLabel(m)) + ' for ' + sx(team) + '* · through the Hub inbox');
   lines.push('*' + link('#requests/m/' + m.id, clip(m.title || m.subject || 'Email', 150)) + '*');
   if (m.summary) lines.push('> ' + sx(clip(m.summary, 320)));
   const meta: string[] = ['From ' + sx(m.from_name || m.from_email || 'someone')];

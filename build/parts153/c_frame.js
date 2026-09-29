@@ -63,9 +63,9 @@
     var a = APPS[app], gs = items(app);
     r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
       gs.map(function (g) {
-        return '<div class="w153sec"><div class="w153sh">' + E(g.label) + '</div>' + g.items.map(function (it) {
+        return '<div class="w153sec">' + (g.solo ? '' : '<div class="w153sh">' + E(g.label) + '</div>') + g.items.map(function (it) {
           var on = isOn(app, it);
-          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span></a>';
+          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span>' + (it.n ? '<small class="w153n">' + E(it.n) + '</small>' : '') + '</a>';
         }).join('') + '</div>';
       }).join('') +
       (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');

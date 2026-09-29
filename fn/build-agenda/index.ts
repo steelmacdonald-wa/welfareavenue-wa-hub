@@ -1,3 +1,4 @@
+// wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: build-agenda (v6, 03/08/26)
@@ -30,7 +31,8 @@ const DEPT_LABEL = {
   progdev: 'Program Development',
   opsto: 'Operations Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Finances',
+  fundraising: 'Fundraising',
+  finance: 'Finance',
   hr: 'Human Resources',
   board: 'Board'
 };

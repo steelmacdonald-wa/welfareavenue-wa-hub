@@ -8,10 +8,15 @@
    - Program Development ('progdev') splits out of Operations Montreal,
      with its own panel, tab button, colour and workstreams.
    - Plain names (Steel's call): Operations Montreal, Program
-     Development, Operations Toronto, Fundraising & Finances.
-   - Fundraising & Finances carries four sub-teams as workstreams:
-     Grants, Event fundraising, Donor relations, Finance (each one a
-     task board with its projects; Finance also opens the Finance tool).
+     Development, Operations Toronto, Fundraising.
+   - Fundraising carries three sub-teams as workstreams: Grants, Event
+     fundraising, Donor relations (each one a task board with its projects).
+   - wave164 (29/09/26), Steel: "still shows fundraising and finance being
+     togther. these should be seperate". Finance is not a Fundraising
+     sub-team any more: it has its own key ('finance', label Finance) with
+     no team page (like exec). Its tasks, requests and emails live in the
+     Finance app; T.inbox lists the teams that receive requests and emails
+     (the seven teams plus Finance).
    - The transcript upload selects gain the new team; txDeptKey learns
      the new labels. Data rows move in the wa116 migration; the pipeline
      learns the key in process-transcript v7. Build-time teams_remap.py
@@ -38,14 +43,15 @@
       fundraising: [
         { key: 'grants', label: 'Grants', ws: 'Grants', color: '#b8902f', blurb: 'Applications, reports and funder relationships.' },
         { key: 'events', label: 'Event fundraising', ws: 'Fundraising events', color: '#c87a2f', blurb: 'Flag Football, Rally Paper, the Gift Basket Drive and friends.' },
-        { key: 'donors', label: 'Donor relations', ws: 'Donor program', color: '#2c8a6f', blurb: 'Donor program, corporate donors and sponsorships.' },
-        { key: 'finance', label: 'Finance', ws: 'Finance', color: '#3a6ea5', blurb: 'Bookkeeping, statements, budgets and forecasts.', tool: 'finances', toolLabel: 'Finances' }
+        { key: 'donors', label: 'Donor relations', ws: 'Donor program', color: '#2c8a6f', blurb: 'Donor program, corporate donors and sponsorships.' }
       ]
     },
     /* project ids that belong to a sub-team even when their tasks carry no workstream */
-    boardProjects: { grants: [23], events: [2, 11, 12, 13], donors: [1, 14], finance: [] },
-    labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance' },
-    short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising & Finances', hr: 'HR', board: 'Board' }
+    boardProjects: { grants: [23], events: [2, 11, 12, 13], donors: [1, 14] },
+    /* wave164: the teams that receive requests and emails (Finance has no team page; its inbox is in the Finance app) */
+    inbox: ['opsmtl', PD, 'opsto', 'marketing', 'fundraising', 'finance', 'hr', 'board'],
+    labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance', finance: 'Finance' },
+    short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', finance: 'Finance' }
   };
   /* wave137: the executive team (the co-executive directors) has a name but no team page: it is not in order or pages */
   window.WA_TEAMS.labels.exec = 'Executive team'; window.WA_TEAMS.short.exec = 'Executive';
@@ -53,7 +59,8 @@
     if (DEPT_ORDER.indexOf(PD) < 0) DEPT_ORDER.splice(DEPT_ORDER.indexOf('opsmtl') + 1, 0, PD);
     DEPT_LABEL.opsmtl = 'Operations Montreal';
     DEPT_LABEL.opsto = 'Operations Toronto';
-    DEPT_LABEL.fundraising = 'Fundraising & Finances';
+    DEPT_LABEL.fundraising = 'Fundraising';
+    DEPT_LABEL.finance = 'Finance'; DEPT_COLOR.finance = '#B9851B'; /* wave164 */
     DEPT_LABEL[PD] = PD_LABEL;
     DEPT_COLOR[PD] = PD_COLOR;
     DEPT_LABEL.exec = 'Executive team'; DEPT_COLOR.exec = '#103F39'; /* wave137 */
@@ -67,10 +74,9 @@
       }
       if (SECTIONS.opsto) SECTIONS.opsto.title = 'Operations Toronto';
       if (SECTIONS.fundraising) {
-        SECTIONS.fundraising.title = 'Fundraising &amp; Finances';
-        var fsubs = SECTIONS.fundraising.subsections || [];
-        if (!fsubs.some(function (s) { return s.title === 'Finance'; })) fsubs.push({ title: 'Finance', color: '#3a6ea5', summary: 'Bookkeeping, statements, budgets and forecasts.', items: [] });
-        SECTIONS.fundraising.subsections = fsubs;
+        SECTIONS.fundraising.title = 'Fundraising';
+        /* wave164: Finance is not a Fundraising workstream (it lives in the Finance app) */
+        SECTIONS.fundraising.subsections = (SECTIONS.fundraising.subsections || []).filter(function (s) { return s.title !== 'Finance'; });
       }
       if (!SECTIONS[PD]) {
         SECTIONS[PD] = {
@@ -120,7 +126,7 @@
         var ot = bar.querySelector('.tab[data-tab="opsto"]');
         if (ot) ot.innerHTML = '<span class="tabdot" style="background:' + col('opsto', '#3a6ea5') + '"></span>Operations Toronto';
         var fu = bar.querySelector('.tab[data-tab="fundraising"]');
-        if (fu) fu.innerHTML = '<span class="tabdot" style="background:' + col('fundraising', '#c87a2f') + '"></span>Fundraising &amp; Finances';
+        if (fu) fu.innerHTML = '<span class="tabdot" style="background:' + col('fundraising', '#c87a2f') + '"></span>Fundraising';
         if (!bar.querySelector('.tab[data-tab="' + PD + '"]')) {
           var b = document.createElement('button');
           b.className = 'tab'; b.setAttribute('data-tab', PD);
@@ -138,7 +144,7 @@
         var ot2 = sel.querySelector('option[value="opsto"]');
         if (ot2 && /Program Dev/.test(ot2.textContent)) ot2.textContent = 'Operations Toronto';
         var fu2 = sel.querySelector('option[value="fundraising"]');
-        if (fu2 && /Grants/.test(fu2.textContent)) fu2.textContent = 'Fundraising & Finances';
+        if (fu2 && /Grants|Financ/.test(fu2.textContent)) fu2.textContent = 'Fundraising';
         var lm = sel.querySelector('option[value="Ops & Program Dev - Montreal"], option[value="Operations Montreal"]');
         if (lm && !sel.querySelector('option[value="' + PD_LABEL + '"]')) {
           var n2 = document.createElement('option'); n2.value = PD_LABEL; n2.textContent = PD_LABEL;

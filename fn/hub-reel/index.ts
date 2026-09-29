@@ -1,3 +1,4 @@
+// wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // Welfare Avenue: hub-reel (v1, wave149, 27/09/26)
 // Steel: "On the loading page: I want you to put learnings, lessons, and milestones along with shoutouts ... And refresh it
 // every week. Also at the bottom, I'd like for you to add sort of like a news banner of events that happened recently,
@@ -32,7 +33,7 @@ type Row = Record<string, any>;
 /* the teams (dept_meta, without the board): wins and welcomes only come from these; the list below is the fallback */
 let TEAMS = ['fundraising', 'hr', 'marketing', 'opsmtl', 'opsto', 'progdev'];
 async function loadTeams(): Promise<void> { try { const { data } = await svc.from('dept_meta').select('department'); const t = ((data || []) as Row[]).map((r) => String(r.department)).filter((d) => d && !/^(board|exec|leadership|execs?)$/i.test(d)); if (t.length >= 3) TEAMS = t; } catch (_) { /* the fallback */ } }
-const DEPT: Record<string, string> = { fundraising: 'Fundraising & Finances', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development', board: 'the board', exec: 'the executive team' };
+const DEPT: Record<string, string> = { fundraising: 'Fundraising', finance: 'Finance', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development', board: 'the board', exec: 'the executive team' };
 
 async function getSecret(name: string): Promise<string> { const { data, error } = await svc.rpc('get_secret', { secret_name: name }); if (error || !data) throw new Error('secret ' + name + ' unavailable'); return data as string; }
 async function caller(req: Request): Promise<string | null> {

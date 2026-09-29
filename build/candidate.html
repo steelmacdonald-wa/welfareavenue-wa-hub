@@ -539,7 +539,7 @@
             <option value="opsmtl">Operations Montreal</option>
             <option value="opsto">Operations Toronto</option>
             <option value="marketing">Marketing, Branding &amp; Web</option>
-            <option value="fundraising">Fundraising &amp; Finances</option>
+            <option value="fundraising">Fundraising</option>
             <option value="hr">Human Resources</option>
             <option value="board">Board &amp; Governance</option>
           </select>
@@ -572,7 +572,8 @@
           <option value="Operations Montreal">Operations Montreal</option>
           <option value="Operations Toronto">Operations Toronto</option>
           <option value="Marketing, Branding &amp; Web">Marketing, Branding &amp; Web</option>
-          <option value="Fundraising &amp; Finances">Fundraising &amp; Finances</option>
+          <option value="Fundraising">Fundraising</option>
+          <option value="Finance">Finance</option>
           <option value="Human Resources">Human Resources</option>
           <option value="Board &amp; Governance">Board &amp; Governance</option>
         </select>
@@ -827,7 +828,7 @@ const SECTIONS = {
   },
 
   fundraising: {
-    title: "Fundraising &amp; Finances",
+    title: "Fundraising",
     color: "var(--c-fund)",
     read: "Fundraising: high morale and momentum colliding with overload and thin process. Rami adds firepower, but logistics keep pulling Steel in. Grants: optimistic and capable, visibly constrained, a credentialed new team blocked only by missing financial evidence.",
     progress: "Momentum is high. Rami is onboarded as co-lead with Amanda and Steel has formally stepped back from direction. A strategy pivot dropped iWave for a leaner grassroots CRM and tiered donor packages. The pipeline is full: frosh tabling, Flag Football (about $10k goal) and Rally Paper. The Jun 18 meeting started fixing the event-capture and photo-asset gaps. Grants now has a readiness framework and a split government and foundation list.",
@@ -968,8 +969,8 @@ let USER = { email: "", name: "" };
 let SESSION = null;
 
 const DEPT_ORDER = ["opsmtl", "opsto", "marketing", "fundraising", "hr", "board"];
-const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising & Grants", hr: "Human Resources", board: "Board" };
-const DEPT_COLOR = { opsmtl: "#103F39", opsto: "#3a6ea5", marketing: "#6F64AB", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57" };
+const DEPT_LABEL = { opsmtl: "Ops Montreal", opsto: "Ops Toronto", marketing: "Marketing", fundraising: "Fundraising", hr: "Human Resources", board: "Board", finance: "Finance" };
+const DEPT_COLOR = { opsmtl: "#103F39", opsto: "#3a6ea5", marketing: "#6F64AB", fundraising: "#c87a2f", hr: "#b3402f", board: "#4a4f57", finance: "#b9851b" };
 const CATEGORIES = ["Budget or purchase", "Hiring or people", "Legal, risk, or governance", "Strategy or direction", "Partnership or external", "Ethics or policy"];
 const CAT_COLORS = { "Budget or purchase": "#c87a2f", "Hiring or people": "#b3402f", "Legal, risk, or governance": "#4a4f57", "Strategy or direction": "#103F39", "Partnership or external": "#3a6ea5", "Ethics or policy": "#6F64AB" };
 
@@ -2175,6 +2176,7 @@ function txDeptKey(label) {
   if (s === "opsmtl" || s.indexOf("montreal") >= 0) return "opsmtl";
   if (s === "opsto" || s.indexOf("toronto") >= 0) return "opsto";
   if (s.indexOf("marketing") >= 0) return "marketing";
+  if (s === "finance" || s.indexOf("financ") === 0) return "finance"; /* wave164: Finance is not part of Fundraising */
   if (s.indexOf("fundrais") >= 0 || s.indexOf("grant") >= 0) return "fundraising";
   if (s === "hr" || s.indexOf("human") >= 0) return "hr";
   if (s.indexOf("board") >= 0) return "board";
@@ -2385,10 +2387,15 @@ async function startApp() {
    - Program Development ('progdev') splits out of Operations Montreal,
      with its own panel, tab button, colour and workstreams.
    - Plain names (Steel's call): Operations Montreal, Program
-     Development, Operations Toronto, Fundraising & Finances.
-   - Fundraising & Finances carries four sub-teams as workstreams:
-     Grants, Event fundraising, Donor relations, Finance (each one a
-     task board with its projects; Finance also opens the Finance tool).
+     Development, Operations Toronto, Fundraising.
+   - Fundraising carries three sub-teams as workstreams: Grants, Event
+     fundraising, Donor relations (each one a task board with its projects).
+   - wave164 (29/09/26), Steel: "still shows fundraising and finance being
+     togther. these should be seperate". Finance is not a Fundraising
+     sub-team any more: it has its own key ('finance', label Finance) with
+     no team page (like exec). Its tasks, requests and emails live in the
+     Finance app; T.inbox lists the teams that receive requests and emails
+     (the seven teams plus Finance).
    - The transcript upload selects gain the new team; txDeptKey learns
      the new labels. Data rows move in the wa116 migration; the pipeline
      learns the key in process-transcript v7. Build-time teams_remap.py
@@ -2415,14 +2422,15 @@ async function startApp() {
       fundraising: [
         { key: 'grants', label: 'Grants', ws: 'Grants', color: '#b8902f', blurb: 'Applications, reports and funder relationships.' },
         { key: 'events', label: 'Event fundraising', ws: 'Fundraising events', color: '#c87a2f', blurb: 'Flag Football, Rally Paper, the Gift Basket Drive and friends.' },
-        { key: 'donors', label: 'Donor relations', ws: 'Donor program', color: '#2c8a6f', blurb: 'Donor program, corporate donors and sponsorships.' },
-        { key: 'finance', label: 'Finance', ws: 'Finance', color: '#3a6ea5', blurb: 'Bookkeeping, statements, budgets and forecasts.', tool: 'finances', toolLabel: 'Finances' }
+        { key: 'donors', label: 'Donor relations', ws: 'Donor program', color: '#2c8a6f', blurb: 'Donor program, corporate donors and sponsorships.' }
       ]
     },
     /* project ids that belong to a sub-team even when their tasks carry no workstream */
-    boardProjects: { grants: [23], events: [2, 11, 12, 13], donors: [1, 14], finance: [] },
-    labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance' },
-    short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising & Finances', hr: 'HR', board: 'Board' }
+    boardProjects: { grants: [23], events: [2, 11, 12, 13], donors: [1, 14] },
+    /* wave164: the teams that receive requests and emails (Finance has no team page; its inbox is in the Finance app) */
+    inbox: ['opsmtl', PD, 'opsto', 'marketing', 'fundraising', 'finance', 'hr', 'board'],
+    labels: { opsmtl: 'Operations Montreal', progdev: PD_LABEL, opsto: 'Operations Toronto', marketing: 'Marketing, Branding & Web', fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance', finance: 'Finance' },
+    short: { opsmtl: 'Ops Montreal', progdev: 'Program Dev', opsto: 'Ops Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', finance: 'Finance' }
   };
   /* wave137: the executive team (the co-executive directors) has a name but no team page: it is not in order or pages */
   window.WA_TEAMS.labels.exec = 'Executive team'; window.WA_TEAMS.short.exec = 'Executive';
@@ -2430,7 +2438,8 @@ async function startApp() {
     if (DEPT_ORDER.indexOf(PD) < 0) DEPT_ORDER.splice(DEPT_ORDER.indexOf('opsmtl') + 1, 0, PD);
     DEPT_LABEL.opsmtl = 'Operations Montreal';
     DEPT_LABEL.opsto = 'Operations Toronto';
-    DEPT_LABEL.fundraising = 'Fundraising & Finances';
+    DEPT_LABEL.fundraising = 'Fundraising';
+    DEPT_LABEL.finance = 'Finance'; DEPT_COLOR.finance = '#B9851B'; /* wave164 */
     DEPT_LABEL[PD] = PD_LABEL;
     DEPT_COLOR[PD] = PD_COLOR;
     DEPT_LABEL.exec = 'Executive team'; DEPT_COLOR.exec = '#103F39'; /* wave137 */
@@ -2444,10 +2453,9 @@ async function startApp() {
       }
       if (SECTIONS.opsto) SECTIONS.opsto.title = 'Operations Toronto';
       if (SECTIONS.fundraising) {
-        SECTIONS.fundraising.title = 'Fundraising &amp; Finances';
-        var fsubs = SECTIONS.fundraising.subsections || [];
-        if (!fsubs.some(function (s) { return s.title === 'Finance'; })) fsubs.push({ title: 'Finance', color: '#3a6ea5', summary: 'Bookkeeping, statements, budgets and forecasts.', items: [] });
-        SECTIONS.fundraising.subsections = fsubs;
+        SECTIONS.fundraising.title = 'Fundraising';
+        /* wave164: Finance is not a Fundraising workstream (it lives in the Finance app) */
+        SECTIONS.fundraising.subsections = (SECTIONS.fundraising.subsections || []).filter(function (s) { return s.title !== 'Finance'; });
       }
       if (!SECTIONS[PD]) {
         SECTIONS[PD] = {
@@ -2497,7 +2505,7 @@ async function startApp() {
         var ot = bar.querySelector('.tab[data-tab="opsto"]');
         if (ot) ot.innerHTML = '<span class="tabdot" style="background:' + col('opsto', '#3a6ea5') + '"></span>Operations Toronto';
         var fu = bar.querySelector('.tab[data-tab="fundraising"]');
-        if (fu) fu.innerHTML = '<span class="tabdot" style="background:' + col('fundraising', '#c87a2f') + '"></span>Fundraising &amp; Finances';
+        if (fu) fu.innerHTML = '<span class="tabdot" style="background:' + col('fundraising', '#c87a2f') + '"></span>Fundraising';
         if (!bar.querySelector('.tab[data-tab="' + PD + '"]')) {
           var b = document.createElement('button');
           b.className = 'tab'; b.setAttribute('data-tab', PD);
@@ -2515,7 +2523,7 @@ async function startApp() {
         var ot2 = sel.querySelector('option[value="opsto"]');
         if (ot2 && /Program Dev/.test(ot2.textContent)) ot2.textContent = 'Operations Toronto';
         var fu2 = sel.querySelector('option[value="fundraising"]');
-        if (fu2 && /Grants/.test(fu2.textContent)) fu2.textContent = 'Fundraising & Finances';
+        if (fu2 && /Grants|Financ/.test(fu2.textContent)) fu2.textContent = 'Fundraising';
         var lm = sel.querySelector('option[value="Ops & Program Dev - Montreal"], option[value="Operations Montreal"]');
         if (lm && !sel.querySelector('option[value="' + PD_LABEL + '"]')) {
           var n2 = document.createElement('option'); n2.value = PD_LABEL; n2.textContent = PD_LABEL;
@@ -7198,7 +7206,7 @@ function waFinExpenseModal() {
   renderSection = function (id) {
     __rs22(id);
     try {
-      if (id !== 'fundraising' || !isStaff()) return;
+      return;   /* wave164: Finance is not part of Fundraising, so the Fundraising page no longer links to it */
       var card = document.querySelector('#fundraising .dept-card');
       if (!card || card.querySelector('[data-fin-open]')) return;
       var btn = document.createElement('button');
@@ -7416,8 +7424,7 @@ function wa24Nav() {
 function wa24Links(id) {
   var map = {
     opsmtl: [['#volunteering', 'Volunteering programme']],
-    marketing: [['#create', 'Create content']],
-    fundraising: [['#finances', 'Finances and budgeting']]
+    marketing: [['#create', 'Create content']]   /* wave164: Fundraising no longer links to Finance (they are separate) */
   };
   var links = map[id];
   if (!links) return;
@@ -11207,7 +11214,7 @@ var WA38_N = 0;
 function wa38FieldLines(p) {
   var i = p.input || {};
   var lines = [];
-  var L = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Finances', hr: 'Human Resources', board: 'Board' };
+  var L = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board', progdev: 'Program Development' };
   if (p.name === 'create_request') {
     lines.push('To: ' + (L[i.department] || i.department));
     if (i.type_key) lines.push('Type: ' + i.type_key);
@@ -12110,7 +12117,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     });
     order.push(wa42Group('departments', 'Departments', depts));
     order.push(wa42Group('work', 'Work', [grab('dashboard'), grab('goals'),
-      need('create', 'Create studio', '#6F64AB'), need('finances', 'Finances', '#c87a2f')]));
+      need('create', 'Create studio', '#6F64AB'), need('finances', 'Finance', '#B9851B')]));
     order.push(wa42Group('people', 'People', [grab('orgchart'), grab('training')]));
     order.push(need('volunteering', 'Volunteering', '#103F39'));
     order.push(wa42Group('archive', 'Archive', [grab('transcripts'), grab('activity')]));
@@ -12295,7 +12302,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var WA43_TITLE = {
     mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
     requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Avenue Academy',
+    create: 'Create studio', finances: 'Finance', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages'
   };
@@ -16380,7 +16387,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var T = {
     mypage: 'Home', overview: 'Decisions', dashboard: 'Dashboard', dept: 'Department pages',
     requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Avenue Academy',
+    create: 'Create studio', finances: 'Finance', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
   };
@@ -16635,7 +16642,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var T = {
     mypage: 'Home', overview: 'Executive dashboard', dashboard: 'Delivery numbers', dept: 'Department pages',
     requests: 'Requests', agendas: 'Agendas', importantinfo: 'Important info', goals: 'Department goals',
-    create: 'Create studio', finances: 'Finances', orgchart: 'Org chart', training: 'Avenue Academy',
+    create: 'Create studio', finances: 'Finance', orgchart: 'Org chart', training: 'Avenue Academy',
     volunteering: 'Volunteering', transcripts: 'Transcript archive', activity: 'Activity',
     adminpanel: 'Admin', projectpage: 'Project pages', personpage: 'People pages', hrcentre: 'HR centre'
   };
@@ -19418,7 +19425,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
     volunteering: 'Volunteering', training: 'Avenue Academy', hrcentre: 'HR centre',
     orgchart: 'Org chart', transcripts: 'Transcript archive', activity: 'Activity',
-    finances: 'Finances', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
+    finances: 'Finance', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
   };
   var W72_GROUPS = [
     ['Home and work', ['mypage', 'overview', 'dashboard', 'goals', 'agendas', 'requests', 'importantinfo', 'create', 'finances']],
@@ -21403,7 +21410,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     goals: 'Every team\'s quarterly goals, SMART, with tasks and comments.',
     requests: 'How teams ask each other for work, with a form for every kind of ask.',
     importantinfo: 'Logins, links and documents the team reaches for most.',
-    finances: 'Statements, the ledger and budgets per team.',
+    finances: 'The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.',   /* wave164: the Overview's line (164_wave164 changes it with the section) */
     orgchart: 'Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.',
     training: 'Your onboarding and the training catalog, tracked per person.',
     volunteering: 'The serving programme: events, volunteers, the master SOP and inventory.',
@@ -23299,13 +23306,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       the admin flags can be eyeballed in one place.
    3. Finances page: a "Finance tasks" fold at the top pulling open
       tasks from EVERY department whose text looks finance-related
-      (budget, statement, grant, audit, reimbursement...). Tasks are
+      (budget, statement, audit, reimbursement...). Tasks are
       surfaced here, never moved: each row links to its home page.
-   4. Finance meetings: the transcript upload gains a
-      "Finance (Fundraising & Finances)" option (flows through the
-      protected pipeline as fundraising, which both dept mappers
-      already accept; the pipeline itself is untouched), and the
-      Finances page lists those meetings with one-click upload access.
+      wave164: Finance's own tasks (department finance) have their own
+      Tasks section, so this fold lists the money work on other teams'
+      boards; grants and donors are Fundraising's, not Finance's.
+   4. Finance meetings: the transcript upload gains a "Finance" option
+      (wave164: the pipeline files it under Finance; it used to go to
+      Fundraising), and the Finances page lists those meetings with
+      one-click upload access.
    ===================================================================== */
 (function () {
   if (window.__wa93) return; window.__wa93 = true;
@@ -23456,8 +23465,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   })();
 
   /* ---------- 3 + 4. finance tasks and finance meetings on Finances ---------- */
-  var FIN_RX = /(budget|financ|statement|bookkeep|bookeep|audit|quickbook|bank |banking|expense|reimburs|insur|grant|donat|donor|funding|cra\b|t3010|tax|invoice|receipt)/i;
-  var DEPT_LABEL93 = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', org: 'Org-wide' };
+  var FIN_RX = /(budget|financ|statement|bookkeep|bookeep|audit|quickbook|bank |banking|expense|reimburs|insur|cra\b|t3010|tax|invoice|receipt|payment|payroll|purchase order)/i;   /* wave164: grants and donors are Fundraising's work, not Finance's */
+  var DEPT_LABEL93 = { opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', org: 'Org-wide' };
   var W93 = { tasks: null, meets: null, at: 0 };
 
   async function w93FinData() {
@@ -23465,12 +23474,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await Promise.all([
         db.from('dept_tasks').select('id, title, department, owner, due_date, subsection').eq('done', false).limit(600),
-        db.from('transcripts').select('id, title, meeting_date, department, processed').ilike('department', '%finance%').order('meeting_date', { ascending: false }).limit(25)
+        db.from('transcripts').select('id, title, meeting_date, department, processed').ilike('department', 'financ%').order('meeting_date', { ascending: false }).limit(25)
       ]);
       W93.tasks = ((r[0] && r[0].data) || []).filter(function (t) {
-        return FIN_RX.test((t.title || '') + ' ' + (t.subsection || ''));
+        return t.department !== 'finance' && FIN_RX.test((t.title || '') + ' ' + (t.subsection || ''));   /* wave164: Finance's own tasks are in its Tasks section */
       });
-      W93.meets = ((r[1] && r[1].data) || []).filter(function (m) { return /finance/i.test(m.department || ''); });
+      W93.meets = ((r[1] && r[1].data) || []).filter(function (m) { return /^financ/i.test(m.department || ''); });
       W93.at = Date.now();
     } catch (e) { W93.tasks = W93.tasks || []; W93.meets = W93.meets || []; }
   }
@@ -23492,7 +23501,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         '<span class="dep">' + esc(DEPT_LABEL93[dep] || dep) + '</span>' +
         (t.owner ? '<span class="mut">' + esc(t.owner) + '</span>' : '') +
         (t.due_date ? '<span class="mut">due ' + esc(t.due_date) + '</span>' : '') +
-        '<a data-w93go="' + esc(dep) + '">open page</a></div>';
+        '<a data-w93go="' + esc(dep) + '">open the board</a></div>';
     }).join('');
     var mHtml = meets.slice(0, 10).map(function (m) {
       return '<div class="w93row"><span class="t" title="' + esc(m.title || '') + '">' + esc(String(m.title || 'Finance meeting').slice(0, 70)) + '</span>' +
@@ -23502,19 +23511,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }).join('');
     var t = document.createElement('details');
     t.id = 'w93tasks';
-    t.innerHTML = '<summary>Finance tasks across the Hub (' + tasks.length + ')</summary>' +
-      '<div class="fin-note">Open tasks from every department that look finance-related (budgets, statements, grants, receipts...). They stay on their home pages; this is one place to see them all.</div>' +
-      (tHtml || '<div class="w93row"><span class="mut">No open finance-related tasks right now.</span></div>') +
+    t.innerHTML = '<summary>Money work on other teams\' boards (' + tasks.length + ')</summary>' +
+      '<div class="fin-note">Open tasks on the teams\' own boards that are about money (budgets, statements, receipts, payments, reimbursements). They stay on those boards; Finance\'s own work is in Tasks.</div>' +
+      (tHtml || '<div class="w93row"><span class="mut">No money work on other teams\' boards right now.</span></div>') +
       (tasks.length > 25 ? '<div class="fin-note">Showing 25 of ' + tasks.length + '.</div>' : '');
     var m = document.createElement('details');
     m.id = 'w93meet';
     m.innerHTML = '<summary>Finance meetings (' + meets.length + ')</summary>' +
-      '<div class="fin-note">Meetings uploaded with the "Finance (Fundraising &amp; Finances)" tag. <a data-w93add style="color:#103F39;cursor:pointer;text-decoration:underline">Upload a finance meeting</a></div>' +
+      '<div class="fin-note">Meetings added with the Finance tag: what they decide files under Finance. <a data-w93add style="color:#103F39;cursor:pointer;text-decoration:underline">Add a finance meeting</a></div>' +
       (mHtml || '<div class="w93row"><span class="mut">None yet. Upload the first one from the Meetings page.</span></div>');
     if (overview) { overview.appendChild(t); overview.appendChild(m); }
     else { anchor.insertAdjacentElement('afterend', m); anchor.insertAdjacentElement('afterend', t); }
     sec.querySelectorAll('[data-w93go]').forEach(function (a) {
-      a.addEventListener('click', function () { location.hash = '#dept/' + a.getAttribute('data-w93go'); });
+      a.addEventListener('click', function () { location.hash = '#team/' + a.getAttribute('data-w93go') + '/tasks'; });
     });
     sec.querySelectorAll('[data-w93tx],[data-w93add]').forEach(function (a) {
       a.addEventListener('click', function () {
@@ -23522,22 +23531,21 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         setTimeout(function () {
           try {
             var s = document.getElementById('txDept');
-            if (s) s.value = 'Finance (Fundraising & Finances)';
+            if (s) s.value = 'Finance';
           } catch (e) { /* fine */ }
         }, 400);
       });
     });
   }
 
-  /* transcript upload: Finance option (maps to fundraising in BOTH dept
-     mappers via the words it contains; the protected pipeline is untouched) */
+  /* transcript upload: the Finance option (wave164: both department mappers and apply_transcript_result map it to finance) */
   function w93TxOption() {
     var s = document.getElementById('txDept');
     if (!s || s.querySelector('[data-w93fin]')) return;
     var o = document.createElement('option');
-    o.value = 'Finance (Fundraising & Finances)';
+    o.value = 'Finance';
     o.setAttribute('data-w93fin', '1');
-    o.textContent = 'Finance (budgets, statements, grants)';
+    o.textContent = 'Finance (budgets, statements, the books)';
     var after = null;
     s.querySelectorAll('option').forEach(function (x) { if (x.value === 'fundraising') after = x; });
     if (after && after.nextSibling) s.insertBefore(o, after.nextSibling);
@@ -23613,6 +23621,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   var SECS = [
     ['overview', 'Overview'],
+    ['tasks', 'Tasks'],   /* wave164: Finance's own board (164_wave164 draws it) */
     ['trends', 'Trends'],
     ['money', 'Money map'],
     ['budget', 'Budget'],
@@ -23633,7 +23642,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       t.classList.toggle('on', t.getAttribute('data-w94tab') === id);
     });
     if (id === 'trends') w94Interactive();
+    try { document.dispatchEvent(new CustomEvent('wa94show', { detail: { id: id } })); } catch (e) { /* fine */ }   /* wave164: the title and the Tasks board follow the section */
   }
+  window.w94Show = w94Show; window.w94Cur = w94Cur;
 
   /* ---------- restructure the rendered page into sections ---------- */
   function w94Build() {
@@ -23793,6 +23804,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- interactive charts ---------- */
   function w94Money(v) { return waFinMoney(v, true); }
+  /* wave164: a canvas can hold one chart: free it before drawing again (Trends opened twice drew on a busy canvas) */
+  function w94Free(cv) { try { var ex = cv && window.Chart && window.Chart.getChart ? window.Chart.getChart(cv) : null; if (ex) ex.destroy(); } catch (e) { /* fine */ } }
   function w94Destroy() {
     W94.charts.forEach(function (c) { try { c.destroy(); } catch (e) { /* fine */ } });
     W94.charts = [];
@@ -23843,6 +23856,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         sets.push({ label: 'Projected income', data: pInc, backgroundColor: INC + '59', borderColor: INC, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
         sets.push({ label: 'Projected spending', data: pSpd, backgroundColor: SPD + '59', borderColor: SPD, borderWidth: 1, borderRadius: 3, maxBarThickness: 22 });
       }
+      w94Free(c1);
       W94.charts.push(new Chart(c1, {
         type: 'bar',
         data: { labels: labels, datasets: sets },
@@ -23868,6 +23882,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         if (i3 <= endActual) { c += d.M[i3].inc - d.M[i3].spd; cum.push(Math.round(c * 100) / 100); }
         else if (d.proj) { c += d.proj.avgInc - d.proj.avgSpd; cum.push(Math.round(c * 100) / 100); }
       }
+      w94Free(c2);
       W94.charts.push(new Chart(c2, {
         type: 'line',
         data: {
@@ -23897,6 +23912,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         if (box && (!all || all.length < 2)) box.style.display = 'none';
         return;
       }
+      w94Free(c3);   /* wave164: the year-over-year data arrives late; a second mount must not collide with the first ("Canvas is already in use") */
       W94.charts.push(new Chart(c3, {
         type: 'bar',
         data: {
@@ -28550,15 +28566,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    can view and query), each their own Overview page that holds clear
    bullet point form updates, mentions from other departments, and other
    pertinent KPIs... Operations Montreal should have the Volunteering
-   tool under its drop down... Fundraising & Finances: Grants, Event
-   Fundraising, Donor Relations and Finance each get their own task
-   management page (ClickUp-like) with their projects; Finance also
-   opens the existing Finance tool... sync meeting times to what
+   tool under its drop down... Fundraising: Grants, Event Fundraising
+   and Donor Relations each get their own task management page
+   (ClickUp-like) with their projects (wave164: Finance left Fundraising
+   for the Finance app, its tasks there)... sync meeting times to what
    hub@welfareavenue.com has on its calendar... on one's home page they
    should see exactly what meetings they have upcoming."
    1. Routes: #team/<dept> (Overview), #team/<dept>/agenda,
       #team/<dept>/tasks[/<workstream>], #team/fundraising/<board>
-      (grants, events, donors, finance) and #team/opsmtl/volunteering.
+      (grants, events, donors) and #team/opsmtl/volunteering.
+      wave164: #team/finance[/...] opens the Finance app's Tasks.
       One panel (#team) hosts them all; the classic #dept/<d> page stays
       reachable (Executive decisions, Transcripts, the footer link).
    2. Departments menu: clicking a team opens its Overview; the flyout
@@ -28717,7 +28734,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w116team .r:hover b{color:' + GREEN + ';}' +
     '.w116team .r b{color:var(--wa-text);font-weight:600;}' +
     '.w116team .r span{color:var(--wa-muted);font-size:12px;}' +
-    /* board cards on the Fundraising & Finances overview */
+    /* board cards on the Fundraising overview */
     '.w116boards{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:0 0 16px;}' +
     '.w116bcard{background:var(--wa-card);border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:14px 16px;cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.04),0 8px 24px rgba(16,63,57,.05);border-top:4px solid ' + GREEN + ';}' +
     '.w116bcard:hover{border-color:rgba(16,63,57,.25);}' +
@@ -29008,7 +29025,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         out.push({ key: 'tasks', label: 'All tasks', hash: '#team/' + d + '/tasks' });
       }
     });
-    if (d === 'fundraising' && tabVisible('finances')) out.push({ key: 'finances', label: 'Finances', hash: '#finances', tool: true });
     if (d === 'hr' && tabVisible('hrcentre')) out.push({ key: 'hrcentre', label: 'HR centre', hash: '#hrcentre', tool: true });
     return out;
   }
@@ -29203,7 +29219,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (d === 'hr') { tools.push(['&#127891;', 'Avenue Academy', '#training']); tools.push(['&#128202;', 'Onboarding board', '#training']); if (tabVisible('hrcentre')) tools.push(['&#128101;', 'HR centre', '#hrcentre']); }
     if (d === 'board') tools.push(['&#128101;', 'Org chart', '#orgchart']);
     if (d === 'marketing') { tools.push(['&#9997;', 'Content drafter', '#create']); tools.push(['&#127891;', 'Learning Avenues', '#training']); }
-    if (d === 'fundraising' && tabVisible('finances')) tools.push(['&#128176;', 'Finances', '#finances']);
     tools.push(['&#127919;', 'Department goals', '#goals']);
     tools.push(['&#128194;', 'Projects', '#projects']);
     tools.push(['&#128196;', 'Transcripts', '#transcripts']);
@@ -29366,6 +29381,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function route(h) {
     var p = String(h || '').split('/');
     var d = p[1] || '', page = p[2] || 'overview', sub = p[3] || '';
+    if (d === 'finance') { try { location.replace('#finances/tasks'); } catch (e) { go('#finances/tasks'); } return; }   /* wave164: Finance has no team page; its tasks are in the Finance app */
     if (!d || T.order.indexOf(d) < 0) { go('#mypage'); return; }
     if (!allowedDept(d)) { go('#overview'); return; }
     if (page === 'volunteering') { go('#volunteering'); return; }
@@ -29386,7 +29402,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- nav: the Departments menu ---------- */
   /* tools that live inside a team's menu: the real tab button moves in, so its wiring and role gating stay intact */
-  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finances']], hr: [['hrcentre', 'HR centre']] };
+  var ADOPT = { opsmtl: [['volunteering', 'Volunteering']], fundraising: [['finances', 'Finance']],   /* wave164: the Finance app's page (hidden from the Hub's menu since wave153; Finance is not Fundraising's) */ hr: [['hrcentre', 'HR centre']] };
   function flyout(d) {
     var pages = pagesOf(d).filter(function (p) { return !p.tool && p.key !== 'volunteering'; });
     var html = pages.map(function (p) {
@@ -32374,6 +32390,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      pipeline; other threads land as an update on the team's page; noise
      is ignored. hub_mail keeps the trail; change_log gets a row; Slack
      gets one line per filing.
+   - wave164 (29/09/26): every money email (invoice, bill, receipt,
+     payment notice, reimbursement) is Finance's, not Fundraising's: a
+     task on the Finance app's board, and #accounting-finance hears
+     about each one. Filing to a team offers Finance too.
    - This page (#hubmail, Meetings menu, leaders and admins) shows what
      came in and what happened to it, with Undo, "File to a team" for
      emails the model could not place, "File anyway" for ignored mail,
@@ -32500,14 +32520,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="top"><span>Last check ' + E(ago(st.last_sync_at)) + (st.last_result ? ' \u00b7 ' + E(st.last_result) : '') + (st.last_error ? ' \u00b7 <span style="color:' + FLAG + '">' + E(st.last_error) + '</span>' : '') + ' \u00b7 the hub checks every 30 minutes</span><span class="sp"></span>' + (canAct() ? '<button data-hact="sync"' + (H.busy ? ' disabled' : '') + '>' + (H.busy ? 'Checking...' : 'Check the inbox now') + '</button>' : '') + '</div>' +
       '<div class="sum">' +
       '<div class="k' + (H.filter === 'all' ? ' on' : '') + '" data-hact="filter" data-f="all"><b>' + n(function (x) { return x.status === 'filed'; }) + '</b>filed in 30 days</div>' +
-      '<div class="k' + (H.filter === 'invoice' ? ' on' : '') + '" data-hact="filter" data-f="invoice"><b>' + n(function (x) { return x.kind === 'invoice' && x.status === 'filed'; }) + '</b>invoices to Finance</div>' +
+      '<div class="k' + (H.filter === 'invoice' ? ' on' : '') + '" data-hact="filter" data-f="invoice"><b>' + n(function (x) { return x.kind === 'invoice' && x.status === 'filed'; }) + '</b>money emails to Finance</div>' +
       '<div class="k' + (H.filter === 'meeting_summary' ? ' on' : '') + '" data-hact="filter" data-f="meeting_summary"><b>' + n(function (x) { return x.kind === 'meeting_summary' && x.status === 'filed'; }) + '</b>meeting summaries</div>' +
       '<div class="k' + (H.filter === 'update' ? ' on' : '') + '" data-hact="filter" data-f="update"><b>' + n(function (x) { return x.kind === 'update' && x.status === 'filed'; }) + '</b>team updates</div>' +
       '<div class="k' + (needs ? ' warn' : '') + (H.filter === 'needs' ? ' on' : '') + '" data-hact="filter" data-f="needs"><b>' + needs + '</b>waiting for a team</div>' +
       '<div class="k' + (H.filter === 'ignored' ? ' on' : '') + '" data-hact="filter" data-f="ignored"><b>' + n(function (x) { return x.status === 'ignored'; }) + '</b>ignored as noise</div>' +
       '</div>' +
-      '<div class="how"><b>How it works.</b> Cc <code>hub@welfareavenue.com</code> on anything worth keeping. Invoices and receipts become tasks on the Finance board with the attachment saved; Loom, Otter and other meeting summaries go through the transcript pipeline (tasks, updates and decisions); anything else lands as an update on the team\'s page. Every filing is logged in Activity and posted to Slack; Undo takes it back.</div>' +
-      '<div class="chips">' + [['all', 'Everything filed'], ['invoice', 'Invoices'], ['meeting_summary', 'Meeting summaries'], ['update', 'Updates'], ['needs', 'Waiting for a team'], ['other', 'Undone or failed'], ['ignored', 'Ignored']].map(function (c) { return '<span class="chip' + (H.filter === c[0] ? ' on' : '') + '" data-hact="filter" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
+      '<div class="how"><b>How it works.</b> Cc <code>hub@welfareavenue.com</code> on anything worth keeping. Invoices, receipts, payment notices and reimbursements go to Finance (never to Fundraising): a task on the Finance board with the attachment saved, and a post in #accounting-finance; Loom, Otter and other meeting summaries go through the transcript pipeline (tasks, updates and decisions); anything else lands as an update on the team\'s page. Every filing is logged in Activity and posted to Slack; Undo takes it back.</div>' +
+      '<div class="chips">' + [['all', 'Everything filed'], ['invoice', 'Finance'], ['meeting_summary', 'Meeting summaries'], ['update', 'Updates'], ['needs', 'Waiting for a team'], ['other', 'Undone or failed'], ['ignored', 'Ignored']].map(function (c) { return '<span class="chip' + (H.filter === c[0] ? ' on' : '') + '" data-hact="filter" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
     html += shown.length ? shown.map(row).join('') : '<p class="empty">' + (rows.length ? 'Nothing here with this filter.' : 'Nothing filed yet. The first email cc\'d to hub@welfareavenue.com shows up here within half an hour.') + '</p>';
     html += '</div>';
     host.innerHTML = html;
@@ -32525,8 +32545,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return (r && r.data) || {};
   }
   function refileModal(x) {
-    var depts = T.order.slice();
-    var kinds = [['update', 'Team update'], ['invoice', 'Invoice (Finance task)'], ['meeting_summary', 'Meeting summary (transcript pipeline)']];
+    var depts = (T.inbox && T.inbox.length ? T.inbox : T.order).slice();   /* wave164: Finance too */
+    var kinds = [['update', 'Team update'], ['invoice', 'Money email (a Finance task)'], ['meeting_summary', 'Meeting summary (transcript pipeline)']];
     openModal('<div class="w116mm"><h3>File this email</h3><p class="m-sub">' + E(x.title || x.subject || '') + '</p>' +
       '<label>As</label><select id="w116mk">' + kinds.map(function (k) { return '<option value="' + k[0] + '"' + ((x.kind === 'noise' ? 'update' : x.kind) === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select>' +
       '<label>Team</label><select id="w116md">' + depts.map(function (d) { return '<option value="' + d + '"' + ((x.department || '') === d ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
@@ -32565,7 +32585,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('hubmail');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'hubmail'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices, receipts and reimbursements to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
       main.appendChild(sec);
     }
     return sec;
@@ -40202,7 +40222,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     hrcentre: { tab: 'hrcentre', icon: 'people', hash: '#hrcentre', steps: [
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),
       S('#w116phero', 'At a glance', 'Headcount, hours, onboarding in flight and trainings outstanding. Click a tile to jump to it.', OPT),
-      S('#w46body .w47tabs', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline.', OPT),
+      S('#w46body .w47tabs || #w153rail .w153sec', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline. On a computer they are in the menu on the left.', OPT),
       S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; Avenue Academy certificates can be shared here too.', OPT),
       S('#w116ppeople .grid || #w116ppeople', 'People', 'Everyone on the roster with their team, start date and hours this month.', OPT),
       S('#w103scope', 'Scope of work', 'What each person has been working on, from their check-ins.', OPT),
@@ -40210,13 +40230,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w93eng', 'Hub engagement', 'Who is using the Hub: last sign-in, visits and time on the Hub.', OPT)
     ] },
     finances: { tab: 'finances', icon: 'scale', hash: '#finances', steps: [
-      S('#finances > .w118mast', 'Finances and budgeting', 'Statements, the ledger and budgets per team. The fiscal year runs October 1 to September 30.'),
+      S('#finances > .w118mast', 'Finance', 'An app of its own, apart from Fundraising: the ledger, each team\u2019s budget and the finance work. The fiscal year runs October 1 to September 30.'),
       S('#finances .fin-head', 'The source', 'Which fiscal year you are looking at and where the budgets come from. Import a statement from here.', OPT),
       S('#w92pills', 'Time frame', 'Last fiscal year, this one, or the forecast.', OPT),
-      S('#w94nav', 'Views', 'The overview, trends, the money map, budget against actual, and every transaction.', OPT),
+      S('#w94nav || #w153rail .w153sec', 'Sections', 'The overview, the tasks, the trends, the money map, the budget against actual, and every transaction. On a computer they are in the menu on the left; the title changes with the section.', OPT),
       S('#finances .fin-kpis', 'The headline', 'Income, spending and net for the fiscal year so far.', OPT),
       S('#w92health', 'Nonprofit health', 'Standard charity-sector measures computed from the ledger, with guidelines for a young Canadian charity.', OPT),
-      S('#w93tasks', 'Finance tasks', 'Every finance task across the Hub in one list.', OPT),
+      S('#w164inbox', 'Requests and emails', 'Reimbursement and purchase requests sent to Finance, and the invoices and receipts the Hub inbox filed. #accounting-finance hears about the ones that need action.', OPT),
+      S('#w153rail .w153it[data-w153sec="tasks"] || #w94nav .w94tab[data-w94tab="tasks"]', 'Tasks', 'Finance\u2019s own board: bills to pay, receipts to file, reimbursements to approve. Invoices and receipts sent to hub@ land here as tasks, with the attachment.', OPT),
+      S('#w93tasks', 'Money work elsewhere', 'Tasks about money on the other teams\u2019 boards, in one list. They stay on those boards.', OPT),
       S('#w93meet', 'Finance meetings', 'The meetings where money was discussed.', OPT)
     ] },
     contentcal: { tab: 'contentcal', icon: 'grid', hash: '#contentcal', steps: [
@@ -40996,14 +41018,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var SH2 = '0 2px 6px rgba(16,63,57,.08),0 18px 44px rgba(16,63,57,.12)';
   var DEFAULT_STATUSES = ['Requested', 'In progress', 'Done'];
-  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], hr: ['human-resources'], board: ['board-of-directors'] };
+  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'] };   /* wave164: Finance has its own (private) channel */
   /* what each team is asked for, in a few words (the tiles on the first step) */
   var TEAM_BLURB = {
     opsmtl: 'Supplies, volunteers and transport for servings',
     progdev: 'Program data, research, partner coordination',
     opsto: 'Help with anything happening in Toronto',
     marketing: 'Social posts, emails, design, printing, event coverage',
-    fundraising: 'Reimbursements, purchases, grant information',
+    fundraising: 'Grant information, donors, sponsors and events',
+    finance: 'Reimbursements, purchase approvals, invoices and receipts',   /* wave164 */
     hr: 'Hiring, onboarding, access to tools, time off',
     board: 'Consent and media release, governance questions'
   };
@@ -41061,7 +41084,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   };
   function I(name, cls) { return '<svg class="w123i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.spark) + '</svg>'; }
   var TYPE_ICON = { 'post-request': 'megaphone', 'email-request': 'mail', 'design-request': 'pen', 'event-coverage': 'camera', 'print-request': 'printer', 'reimbursement': 'receipt', 'purchase-order': 'cart', 'grant-info': 'doc', 'time-off': 'sun', 'hiring-request': 'userplus', 'onboarding-request': 'flag', 'access-request': 'key', 'event-supplies': 'box', 'volunteer-support': 'people', 'transport-request': 'truck', 'media-release': 'shield' };
-  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', hr: 'people', board: 'columns' };
+  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', finance: 'receipt', hr: 'people', board: 'columns' };
+  /* wave164: the teams that receive requests and emails: the seven teams plus Finance (no team page; its inbox is in the Finance app) */
+  var INBOX = (T.inbox && T.inbox.length) ? T.inbox : T.order;
+  function pageOfTeam(d) { return d === 'finance' ? 'finances' : d; }
 
   /* ---------- small helpers ---------- */
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -41378,7 +41404,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function isAdmin() { return role() === 'admin'; }
   function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
-  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return T.order.filter(function (d) { return !a || a.indexOf(d) >= 0; }); }
+  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return INBOX.filter(function (d) { return !a || a.indexOf(pageOfTeam(d)) >= 0; }); }
   function teamLabel(d) { return (T.labels && T.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
   function teamShort(d) { return (T.short && T.short[d]) || teamLabel(d); }
   function teamColor(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
@@ -41434,7 +41460,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function cfgOf(v) {
     v = v || {};
     var ch = {};
-    T.order.forEach(function (d) {
+    INBOX.forEach(function (d) {
       var x = v.channels && v.channels[d];
       var arr = (Array.isArray(x) ? x : (x ? [x] : [])).map(function (s) { return String(s || '').replace(/^#/, '').trim(); }).filter(Boolean);
       ch[d] = arr.length ? arr : (DEFAULT_CHANNELS[d] || []).slice();
@@ -41714,7 +41740,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function teamsHtml() {
     var m = me();
-    var tiles = T.order.map(function (d) {
+    var tiles = INBOX.map(function (d) {
       var ts = typesFor(d), ch = chanFor(d);
       return '<button type="button" class="w123team' + (m.dept === d ? ' mine' : '') + '" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '">'
         + '<span class="w123ico">' + I(TEAM_ICON[d]) + '</span><b>' + E(teamLabel(d)) + '</b><span class="s">' + E(TEAM_BLURB[d] || '') + '</span>'
@@ -41736,7 +41762,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var hay = lower(t.label + ' ' + (t.description || '') + ' ' + teamLabel(t.department) + ' ' + (t.key || '').replace(/-/g, ' '));
       return words.every(function (w) { return hay.indexOf(w) >= 0; });
     });
-    var teams = T.order.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
+    var teams = INBOX.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
     var rows = hits.map(function (t) { return typeRow(t.department, t, true); }).join('')
       + teams.map(function (d) { return '<button type="button" class="w123type other" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '"><span class="w123ico">' + I(TEAM_ICON[d]) + '</span><span><span class="t2">Team</span><b>' + E(teamLabel(d)) + '</b><span class="d">' + E(TEAM_BLURB[d] || '') + '</span></span>' + I('chev') + '</button>'; }).join('');
     if (!rows) return '<div class="w123types w123anim"><p class="w123empty" style="padding:18px 20px">Nothing matches &ldquo;' + E(qs) + '&rdquo;. Pick the team below and choose <b>Something else</b>: describe it in your own words.</p></div>';
@@ -41937,7 +41963,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     });
     rows = f.state === 'open' ? rows.sort(sortOpen) : rows;
     var byTeam = {}; R.reqs.forEach(function (r) { if (!r.done) byTeam[r.department] = (byTeam[r.department] || 0) + 1; });
-    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + T.order.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
+    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + INBOX.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
       + '<span class="w123small">' + [['open', 'Open'], ['done', 'Done'], ['any', 'Everything']].map(function (o) { return '<a data-w123alls="' + o[0] + '" class="' + (f.state === o[0] ? 'on' : '') + '">' + o[1] + '</a>'; }).join('') + '</span>'
       + '<span class="sp"></span><input type="search" data-w123allq placeholder="Search requests" value="' + E(f.q) + '" aria-label="Search requests"></div>'
       + '<div id="w123allrows">' + allRows(rows) + '</div></div>';
@@ -41962,7 +41988,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var c = R.cfgDraft || (R.cfgDraft = JSON.parse(JSON.stringify(R.cfg || cfgOf(null))));
     var can = isAdmin(), bot = R.bot;
     var dis = can ? '' : ' disabled';
-    var rows = T.order.map(function (d) {
+    var rows = INBOX.map(function (d) {
       var st = bot && bot.teams && bot.teams[d];
       var stat = !bot ? '<span class="op" style="font-size:12px;color:var(--wa-muted)">Checking Slack\u2026</span>'
         : st && st.channel ? '<span class="ok">' + I('check') + ' Posting in #' + E(st.channel) + (st.chain && st.chain[0] !== st.channel ? ' (the first choice is not reachable)' : '') + '</span>'
@@ -42257,11 +42283,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var v = r.v;
     if (v === '' || v === 'new') {
       R.view = 'new'; R.nw.sent = null;
-      R.nw.d = T.order.indexOf(r.a) >= 0 ? r.a : null;
+      R.nw.d = INBOX.indexOf(r.a) >= 0 ? r.a : null;
       R.nw.type = R.nw.d && r.b ? r.b : null;
     } else if (v === 'sent') { R.view = 'new'; }
     else if (v === 'mine') R.view = 'mine';
-    else if (v === 'team') { R.view = 'team'; if (T.order.indexOf(r.a) >= 0) R.tm.d = r.a; }
+    else if (v === 'team') { R.view = 'team'; if (INBOX.indexOf(r.a) >= 0) R.tm.d = r.a; }
     else if (v === 'all') R.view = isLeader() ? 'all' : 'mine';
     else if (v === 'settings') { R.view = isLeader() ? 'settings' : 'new'; R.cfgDraft = null; R.bot = null; }
     else if (v !== 'r' && v !== 'm') R.view = 'new';
@@ -42494,7 +42520,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- test hook ---------- */
   window.w123 = {
     state: function () { return R; }, load: load, paint: paint, route: route, open: openSheet, close: closeSheet,
-    items: teamItems, card: injectCard, counts: counts, me: me
+    items: teamItems, card: injectCard, counts: counts, me: me,
+    cardHtml: function (d) { return teamCardHtml(d); }, loaded: function () { return !!R.loaded; }, ver: function () { return R.ver; }   /* wave164: the Finance app shows Finance's team inbox */
   };
 })();
 /* =====================================================================
@@ -42516,7 +42543,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      band above the grid. Up next, the month's birthdays, and a sheet for
      every item with its links (join the meeting, the event's board, the
      post, the serving, the person).
-   - Events calendar (#fundevents, Fundraising & Finances): the 2026-27
+   - Events calendar (#fundevents, Fundraising): the 2026-27
      plan season by season (fund_events, seeded from "Fundraising Events
      Calendar 2026-27"), the goals ($10K minimum, $15K healthy, $20K
      target) with what the events raised, a year strip, the ideas
@@ -43024,7 +43051,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var PLAN_START = mk(2026, 9, 1, 12), PLAN_END = mk(2027, 9, 1, 12);
   function fundHost() {
     var sec = document.getElementById('fundevents'); if (!sec) return null;
-    mast('fundevents', tabOk('fundraising') ? 'Fundraising & Finances' : 'Home', 'Events calendar', 'The year\u2019s fundraising events, season by season: partners, targets, and where each one stands.');
+    mast('fundevents', tabOk('fundraising') ? 'Fundraising' : 'Home', 'Events calendar', 'The year\u2019s fundraising events, season by season: partners, targets, and where each one stands.');
     var h = document.getElementById('w124fund');
     if (!h) { h = document.createElement('div'); h.id = 'w124fund'; sec.appendChild(h); }
     return h;
@@ -43373,7 +43400,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try { new MutationObserver(function () { if (pillBusy) return; clearTimeout(ppT); ppT = setTimeout(personPill, 80); }).observe(sec, { childList: true, subtree: true }); } catch (e) { /* fine */ }
   }
 
-  /* ---------- menus: Calendar under Home, Events calendar in Fundraising & Finances ---------- */
+  /* ---------- menus: Calendar under Home, Events calendar in Fundraising ---------- */
   function placeTabs() {
     try {
       var bar = document.getElementById('tabBar'); if (!bar) return;
@@ -43386,7 +43413,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (!LAY && cal && anchor && anchor.parentNode && anchor.nextSibling !== cal) anchor.parentNode.insertBefore(cal, anchor.nextSibling);
       var fe = bar.querySelector('.tab[data-tab="fundevents"]');
       if (fe) {
-        /* inside Fundraising & Finances when that page is yours; otherwise (the board) right after the calendar */
+        /* inside Fundraising when that page is yours; otherwise (the board) right after the calendar */
         var fr = bar.querySelector('.tab[data-tab="fundraising"]'); var row = fr && fr.closest ? fr.closest('.w42d') : null; var sub = row ? row.querySelector('.w42sub') : null;
         if (sub && tabOk('fundraising')) { if (fe.parentNode !== sub) { var fin = sub.querySelector('.tab[data-tab="finances"]'); if (fin) sub.insertBefore(fe, fin); else sub.appendChild(fe); } fe.classList.add('w116tool'); }
         else if (!LAY && cal && cal.parentNode) { if (cal.nextSibling !== fe) cal.parentNode.insertBefore(fe, cal.nextSibling); fe.classList.remove('w116tool'); }
@@ -44891,7 +44918,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     "transcripts": ["Other Tools", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
     "agendas": ["Other Tools", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],
-    "finances": ["Fundraising & Finances", "Finances and budgeting", "Statements, the ledger and budgets per team.", true, "Finances and budgeting"],
+    "finances": ["Finance", "Finance", "The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.", true, "Finances and budgeting"],   /* wave164: Finance is its own app, not part of Fundraising (the title follows the section: 164_wave164) */
     "hrcentre": ["Human Resources", "HR centre", "People records, hours, onboarding and policies in one place.", true, "HR centre"],
     "orgchart": ["Organization", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
     "training": ["Home", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],
@@ -46859,7 +46886,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    access profile. It's really important that you make it very clear in that page what each role
    provides access to." And: review the security roles and the Hub training whenever the Hub changes.
 
-   - Nine profiles in hub_access_profiles (Marketing, Fundraising & Finances, Program Development,
+   - Nine profiles in hub_access_profiles (Marketing, Fundraising, Program Development,
      Operations Montreal, Operations Toronto, HR & People, Board member, Executive, Admin). A team
      profile has a lead option (hub_roles.role = leader). Each page is open to everyone with the
      profile, to its leads only, or to nobody.
@@ -46900,8 +46927,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
-    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
-    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
+    fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
     transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
@@ -48958,7 +48985,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     transcripts: ['The transcript archive', 1], tx: ['Transcripts', 0], requests: ['Requests', 0], agendas: ['Agendas', 0],
     mypage: ['My page', 1], orgchart: ['The org chart', 1], goals: ['Department goals', 0], projects: ['Projects', 0],
     project: ['Project pages', 0], goalmap: ['Goal alignment', 1], orggoals: ['Organizational goals', 0], create: ['The Create studio', 1],
-    volunteering: ['Volunteering', 1], finances: ['Finances', 0], training: ['The Avenue Academy', 1], adminpanel: ['Admin', 1],
+    volunteering: ['Volunteering', 1], finances: ['Finance', 0], training: ['The Avenue Academy', 1], adminpanel: ['Admin', 1],
     brain: ['The Brain', 1], hubmail: ['The Hub inbox', 1], hrcentre: ['The HR centre', 1], team: ['Team pages', 0], dept: ['Team pages', 0],
     person: ['People pages', 0], personpage: ['People pages', 0], task: ['Tasks', 0], importantinfo: ['Important info', 1]
   };
@@ -49248,8 +49275,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
-    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
-    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
+    fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
     transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
@@ -53542,7 +53569,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var PCAT_ORDER = ['partner', 'collaborator', 'sponsor'];
   var PKINDS = ['nonprofit', 'business', 'school', 'university', 'student club', 'government', 'funder', 'media', 'community group', 'faith group', 'other'];
   var DTEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
-    ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
+    ['fundraising', 'Fundraising'], ['finance', 'Finance'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
   var DKINDS = [['guide', 'Guides'], ['plan', 'Plans'], ['report', 'Reports'], ['meeting notes', 'Meeting notes'], ['presentation', 'Presentations'], ['proposal', 'Proposals'],
     ['letter', 'Letters'], ['newsletter', 'Newsletters'], ['application', 'Applications'], ['list', 'Lists'], ['posts', 'Posts and posters'], ['other', 'Other']];
 
@@ -54645,7 +54672,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var TZ = 'America/Toronto', WINDOW = 8;
-  var LABELS = { fundraising: 'Fundraising & Finances', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development' };
+  var LABELS = { fundraising: 'Fundraising', hr: 'HR & People', marketing: 'Marketing', opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', progdev: 'Program Development' };
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
   var P = {
@@ -60178,7 +60205,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    ===================================================================== */
 (function () {
   if (window.__wa153) return; window.__wa153 = true;
-  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB';
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', INK = '#1F201E', MUTED = '#797773', TEAL = '#2A8C7A', FLAG = '#B3402F', ORANGE = '#c87a2f', SLATE = '#5C5A56', PURPLE = '#6F64AB', FINGOLD = '#B9851B';   /* wave164: Finance has its own colour, apart from Fundraising's orange */
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
   var KEY_LAST = 'wa153.last';
@@ -60223,7 +60250,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     flag: '<path d="M6 21V3.5"/><path d="M6 4.5h11l-2.3 4.2L17 13H6"/>',
     layers: '<path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12 8.5 4.2 8.5-4.2"/><path d="m3.5 16.2 8.5 4.3 8.5-4.3"/>',
     tree: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v10M12 11.5H5V17M12 11.5h7V17"/>',
-    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>'
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>',
+    /* wave164: Finance's Tasks */
+    check: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="m8.5 12.3 2.4 2.4 4.6-4.9"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -60278,19 +60307,23 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         var known = [['people', 'People'], ['onboarding', 'Onboarding'], ['training', 'Training'], ['recruitment', 'Recruitment'], ['hours', 'Commitment'], ['policies', 'Policies'], ['discipline', 'Discipline']];
         var drawn = Array.prototype.map.call(document.querySelectorAll('#hrcentre .w47tab[data-w47v]'), function (b) {
           var k = b.getAttribute('data-w47v'), t = (b.childNodes[0] && b.childNodes[0].nodeType === 3 ? b.childNodes[0].textContent : b.textContent) || k;
-          return [k, String(t).replace(/\d+$/, '').trim() || k];
+          var n = String(b.textContent || '').match(/(\d+)\s*$/);   /* wave164: the tab's count moves into the rail (the tabs are hidden on a computer) */
+          return [k, String(t).replace(/\d+$/, '').trim() || k, n ? n[1] : null];
         });
         /* the page drawn with no tabs is its notice (the HR centre is for admins and leaders): the rail says just the page */
         var pn = document.getElementById('hrcentre'), notice = !drawn.length && !!pn && pn.classList.contains('active') && /for admins and leaders/i.test(pn.textContent || '');
         if (notice) return [{ label: 'HR centre', items: [{ h: '#hrcentre', l: 'HR centre', ic: 'clip', page: 'hrcentre' }] }];
         var list = drawn.length >= 3 ? drawn : known;
-        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0] }; }) }];
+        return [{ label: 'HR centre', items: list.map(function (x) { return { h: '#hrcentre/' + x[0], l: x[1], ic: IC[x[0]] || 'star', page: 'hrcentre', sec: x[0], n: x[2] || null }; }) }];
       }
     },
-    finance: { id: 'finance', label: 'Finance', color: ORANGE, ic: 'coins', blurb: 'The ledger, budgets and trends', pages: ['finances'], home: '#finances',
+    /* wave164: Steel: "still shows fundraising and finance being togther. these should be seperate": Finance is an app of its own,
+       apart from Fundraising (its own gold), with its own Tasks (department finance) */
+    finance: { id: 'finance', label: 'Finance', color: FINGOLD, ic: 'coins', blurb: 'The ledger, the budget and the finance work', pages: ['finances'], home: '#finances',
       groups: function () {
-        return [{ label: 'Finances', items: [
+        return [{ label: 'Finance', items: [
           { h: '#finances', l: 'Overview', ic: 'home', page: 'finances', sec: 'overview' },
+          { h: '#finances', l: 'Tasks', ic: 'check', page: 'finances', sec: 'tasks' },
           { h: '#finances', l: 'Trends', ic: 'chart', page: 'finances', sec: 'trends' },
           { h: '#finances', l: 'Money map', ic: 'coins', page: 'finances', sec: 'money' },
           { h: '#finances', l: 'Budget', ic: 'list', page: 'finances', sec: 'budget' },
@@ -60317,7 +60350,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function items(app) {
     var a = APPS[app]; if (!a || !a.groups) return [];
-    return a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+    var gs = a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+    /* wave164: an app with one group named after itself (Finance, the HR centre) shows no group heading: it only repeated the app's name */
+    if (gs.length === 1 && fold(gs[0].label).replace(/s$/, '') === fold(a.label).replace(/s$/, '')) gs[0].solo = true;
+    return gs;
   }
   function firstHash(app) { var gs = items(app); return gs.length ? gs[0].items[0].h : (APPS[app] && APPS[app].home) || '#mypage'; }
 
@@ -60380,6 +60416,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w153rail .w153it:hover{background:rgba(16,63,57,.06);color:' + GREEN + ';}'
     + '#w153rail .w153it.on{background:rgba(16,63,57,.10);color:' + GREEN + ';font-weight:700;}'
     + '#w153rail .w153it.on .w153i{color:' + GREEN + ';}'
+    /* wave164: a section's count (the HR centre's tabs had them) */
+    + '#w153rail .w153it .w153n{margin-left:auto;font-size:11px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border-radius:999px;padding:1px 8px;}'
     + '#w153rail .w153next{margin:14px 8px 6px;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.12);border:1px dashed rgba(220,165,39,.6);font-size:12px;color:' + INK + ';line-height:1.45;}'
     + '#w153rail .w153next b{display:block;font-family:' + HEAD + ';font-weight:600;font-size:12.5px;letter-spacing:1.4px;text-transform:uppercase;color:#6b4d05;margin-bottom:4px;}'
     + '#w153rail .w153next span{display:inline-flex;align-items:center;gap:5px;margin:2px 8px 2px 0;color:' + MUTED + ';}'
@@ -60399,6 +60437,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '#w153bar .w153menu{display:none;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.18);border-radius:999px;padding:7px 12px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:12.5px;font-weight:700;cursor:pointer;}'
     + 'body.w153app.w153crm #crm > .w118mast .crumb{display:none;}'
     + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
+    /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
+       menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
+    + 'body.w153app main .panel > .w118mast .crumb{display:none;}'
+    + '@media (min-width:901px){body.w153app.w153finance #finances #w94nav,body.w153app.w153hr #hrcentre .w47tabs{display:none !important;}}'
     /* search everything: contacts */
     + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'
     /* the gifts tab in the CRM */
@@ -60486,9 +60528,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var a = APPS[app], gs = items(app);
     r.innerHTML = '<div class="w153ah"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><div><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></div></div>' +
       gs.map(function (g) {
-        return '<div class="w153sec"><div class="w153sh">' + E(g.label) + '</div>' + g.items.map(function (it) {
+        return '<div class="w153sec">' + (g.solo ? '' : '<div class="w153sh">' + E(g.label) + '</div>') + g.items.map(function (it) {
           var on = isOn(app, it);
-          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span></a>';
+          return '<a class="w153it' + (on ? ' on' : '') + '" href="' + E(it.h) + '" data-w153go="' + E(it.h) + '"' + (it.sec ? ' data-w153sec="' + E(it.sec) + '"' : '') + (on ? ' aria-current="page"' : '') + '>' + I(it.ic) + '<span>' + E(it.l) + '</span>' + (it.n ? '<small class="w153n">' + E(it.n) + '</small>' : '') + '</a>';
         }).join('') + '</div>';
       }).join('') +
       (a.next ? '<div class="w153next"><b>Next in the ' + E(a.label) + '</b>' + a.next.map(function (n) { return '<span>' + I(n[0]) + E(n[1]) + '</span>'; }).join('') + '</div>' : '');
@@ -60717,7 +60759,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var TZ = 'America/Toronto';
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
-  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
+  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
   function teamName(k) { for (var i = 0; i < TEAMS.length; i++) if (TEAMS[i][0] === k) return TEAMS[i][1]; try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) return DEPT_LABEL[k]; } catch (e) { /* fine */ } return k || ''; }
   var P = {
     loom: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M5.6 18.4l2.9-2.9M15.5 8.5l2.9-2.9"/>',
@@ -61024,6 +61066,163 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w162 = { load: load, state: function () { return S; }, paint: paint, html: html };
 })();
 /* =====================================================================
+   WA v164 Finance on its own (29/09/26)
+   =====================================================================
+   Steel (29/09/26), on the Finance app's Trends page: "It's a little repetitive here and still shows fundraising and
+   finance being togther. these should be seperate". Earlier the same day: "for the Hub Inbox, all finance related
+   emails like invoices, receipts, reimbursements should go straight to the finance slack channel not fundraising",
+   and "accounting-finance is the private channel" (he added the Hub's Slack app to it).
+
+   Where each change lives (the older waves hold their own pages; this segment draws what is new on the Finance page):
+   - The team is Fundraising (001 wave116a, the base, 038, 110, 116, 118, 124, 127, 131, 140, 122's tours): Grants,
+     Event fundraising and Donor relations. Finance is not a Fundraising sub-team any more: it has its own key
+     ('finance', label Finance, its own gold) with no team page, like the executive team. #team/finance opens the
+     Finance app's Tasks.
+   - The Finance app (153): its own gold instead of Fundraising's orange; Tasks after the Overview; no group heading
+     that repeats the app's name (the HR centre too); on a computer the rail is the menu, so the page's own tab strip
+     (and the HR centre's) is hidden, the HR centre's counts moving into the rail; inside any app the crumb is hidden
+     (the app bar is the crumb).
+   - Requests (123): Finance receives requests (T.inbox: the seven teams plus Finance), reimbursements and purchase
+     orders go to Finance (wa164_finance_own), its channel is #accounting-finance, its team inbox card is on the Finance
+     Overview (drawn here).
+   - The Hub inbox page (116h): money emails are Finance's; Filing to a team offers Finance.
+   - The Finance page (22, 24, 93, 94): the Fundraising page no longer links to it; Tasks is a section of its own
+     (94); the fold on the Overview lists the money work on other teams' boards, without grants and donors (93); a
+     meeting tagged Finance files under Finance.
+   - Here: the page's title follows the section (Finance on the Overview, then Tasks, Trends, Money map, Budget,
+     Transactions, each with a line saying what it holds), the Tasks section draws the task board for Finance
+     (w116Board, department finance), and the Overview shows Finance's team inbox (requests and the emails the Hub
+     inbox filed for Finance).
+   ===================================================================== */
+(function () {
+  if (window.__wa164) return; window.__wa164 = true;
+  var F = { drawn: 0, board: 0, inbox: 0, titled: '', sec: null };
+  /* the time frame does not apply to the task board */
+  if (!document.getElementById('wa164css')) { var st = document.createElement('style'); st.id = 'wa164css'; st.textContent = '#finances.w164t #w92pills,#finances.w164t .w92note{display:none !important;}#finances #w164inbox{margin:14px 0 18px;}'; document.head.appendChild(st); }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function panel() { return document.getElementById('finances'); }
+  function shell(id) { return document.querySelector('#finances .w94sec[data-w94sec="' + id + '"]'); }
+  function curSec() {
+    var t = document.querySelector('#finances .w94tab.on');
+    if (t) return t.getAttribute('data-w94tab');
+    try { return window.w94Cur ? window.w94Cur() : 'overview'; } catch (e) { return 'overview'; }
+  }
+
+  /* ---------- the title follows the section (the app bar says Finance, the rail says where) ---------- */
+  var SECT = {
+    overview: ['Finance', 'The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.'],
+    tasks: ['Tasks', 'Finance\u2019s own board: bills to pay, receipts to file, reimbursements to approve. Invoices and receipts sent to hub@ land here, and #accounting-finance hears about each one.'],
+    trends: ['Trends', 'Income against spending month by month, the net position over the year, and each fiscal year side by side.'],
+    money: ['Money map', 'Where the money comes from and where it goes: by category, by merchant and by team.'],
+    budget: ['Budget', 'Each line of the budget against what was actually spent.'],
+    txns: ['Transactions', 'Every transaction in the ledger, the ones waiting for a review, and the imported statements.']
+  };
+  function retitle(id) {
+    var m = document.querySelector('#finances > .w118mast'); if (!m) return;
+    var t = SECT[id] || SECT.overview;
+    var h = m.querySelector('h1'), p = m.querySelector(':scope > p');
+    if (h && h.textContent !== t[0]) h.textContent = t[0];
+    if (p && p.textContent !== t[1]) p.textContent = t[1];
+    F.titled = id;
+    try { if (panel() && panel().classList.contains('active')) document.title = (id === 'overview' ? 'Finance' : t[0] + ' \u00b7 Finance') + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+  }
+
+  /* ---------- Tasks: Finance's own board (department finance) ---------- */
+  function drawTasks() {
+    var sec = shell('tasks'); if (!sec) return;
+    var slot = sec.querySelector(':scope > #w164board');
+    if (!slot) { slot = document.createElement('div'); slot.id = 'w164board'; sec.appendChild(slot); }
+    if (!staffOk()) { slot.innerHTML = '<p class="w116empty">Finance\u2019s tasks are for the team.</p>'; return; }
+    if (!window.w116Board || !window.w116Board.render) { slot.innerHTML = '<p class="w116empty">The task board is loading\u2026</p>'; return; }
+    try { window.w116Board.render(slot, { dept: 'finance', board: null, ws: null }); F.board++; }
+    catch (e) { slot.innerHTML = '<p class="w116empty">The board did not load. Refresh the page to try again.</p>'; }
+  }
+
+  /* ---------- the Overview: Finance's team inbox (requests to Finance, emails the Hub inbox filed for Finance) ---------- */
+  var inboxBusy = false;
+  function drawInbox(force) {
+    var ov = shell('overview'), W = window.w123;
+    if (!ov || !W || !W.cardHtml || !staffOk()) return;
+    var cur = document.getElementById('w164inbox');
+    var ver = (W.ver ? W.ver() : 0) + '|' + (W.loaded && W.loaded() ? 1 : 0);
+    if (cur && !force && ov.contains(cur) && cur.getAttribute('data-w164v') === ver) return;
+    if (inboxBusy) return;
+    inboxBusy = true;
+    try {
+      var html = String(W.cardHtml('finance') || '').replace('id="w123tcard"', 'id="w164inbox" data-w164v="' + ver + '"');
+      if (cur) cur.remove();
+      var kp = ov.querySelector(':scope > .fin-kpis');
+      if (kp) kp.insertAdjacentHTML('afterend', html); else ov.insertAdjacentHTML('afterbegin', html);
+      F.inbox++;
+    } finally { inboxBusy = false; }
+    if (W.loaded && !W.loaded() && W.load && !F.loading) {
+      F.loading = true;
+      Promise.resolve(W.load()).then(function () { F.loading = false; drawInbox(true); }, function () { F.loading = false; });
+    }
+  }
+
+  /* ---------- one pass over the page ---------- */
+  function sync(id) {
+    var p = panel(); if (!p) return;
+    id = id || curSec();
+    p.classList.toggle('w164t', id === 'tasks');
+    retitle(id);
+    if (id === 'tasks') drawTasks();
+    if (id === 'overview' || !document.getElementById('w164inbox')) drawInbox(false);
+    F.sec = id; F.drawn++;
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('wa94show', function (ev) { try { sync(ev && ev.detail && ev.detail.id); } catch (e) { /* fine */ } });
+  /* the Finance page redraws itself when its data changes (wave22's waFinRender, wrapped by 90 to 94): draw again after it */
+  if (typeof waFinRender === 'function') {
+    var __fr164 = waFinRender;
+    waFinRender = function () {
+      var r = __fr164.apply(this, arguments);
+      try { setTimeout(function () { watch(); sync(); }, 0); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp164 = showPanel;
+    showPanel = function (id) {
+      var r = __sp164.apply(this, arguments);
+      try { if (id === 'finances') setTimeout(function () { sync(); }, 30); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  /* wave118 puts the masthead back with its default words when the page is drawn again, and copies wave85's line into it:
+     keep the section's title and line (the masthead itself is watched; a new masthead is picked up from the page) */
+  function check() {
+    var m = document.querySelector('#finances > .w118mast'); if (!m) return;
+    var h = m.querySelector('h1'), q = m.querySelector(':scope > p'), id = curSec(), t = SECT[id] || SECT.overview;
+    if ((h && h.textContent !== t[0]) || (q && q.textContent !== t[1])) retitle(id);
+  }
+  function watchMast() {
+    var m = document.querySelector('#finances > .w118mast'); if (!m || m.__w164obs) return;
+    m.__w164obs = true;
+    try { new MutationObserver(function () { check(); }).observe(m, { childList: true, subtree: true, characterData: true }); } catch (e) { /* fine */ }
+  }
+  function watch() {
+    var p = panel(); if (!p) return;
+    watchMast();
+    if (p.__w164obs) return;
+    p.__w164obs = true;
+    try { new MutationObserver(function () { watchMast(); check(); }).observe(p, { childList: true }); } catch (e) { /* fine */ }
+  }
+  if (typeof startApp === 'function') {
+    var __sa164 = startApp;
+    startApp = async function () {
+      var r = await __sa164.apply(this, arguments);
+      try { watch(); if (panel() && panel().classList.contains('active')) sync(); } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w164 = { state: function () { return F; }, sync: sync, retitle: retitle, tasks: drawTasks, inbox: drawInbox, sect: SECT };
+})();
+/* =====================================================================
    WA v163 the menu's new shape, the Strategy app, Partners in the CRM, and a menu that stays still (29/09/26)
    =====================================================================
    Steel (29/09/26): "Could you add the following pages to an App called strategy" (Organizational goals, Department
@@ -61328,7 +61527,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function appItems(app) {
     var A = window.WA_APP; if (!A) return [];
     var out = [];
-    try { A.items(app).forEach(function (g) { g.items.forEach(function (it) { out.push({ k: it.h + (it.sec ? '|' + it.sec : ''), l: it.l, sec: g.label, go: it.h, gsec: it.sec || '', ic: it.ic, on: !!(A.isOn && A.isOn(app, it)), app: app }); }); }); } catch (e) { /* fine */ }
+    try { A.items(app).forEach(function (g) { g.items.forEach(function (it) { out.push({ k: it.h + (it.sec ? '|' + it.sec : ''), l: it.l, sec: g.solo ? '' : g.label, go: it.h, gsec: it.sec || '', ic: it.ic, on: !!(A.isOn && A.isOn(app, it)), app: app, badge: it.n || null }); }); }); } catch (e) { /* fine */ }   /* wave164: no heading that repeats the app's name; the HR centre's counts */
     return out;
   }
   function rowHtml(it, i) {
@@ -61491,8 +61690,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* wave131: today's pages, named as the menu names them */
   var TAB_LABEL = {
     dashboard: 'Delivery numbers and donations', opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto',
-    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
-    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
+    fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
     activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', adminpanel: 'Admin'
   };

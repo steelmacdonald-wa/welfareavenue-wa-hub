@@ -37,14 +37,15 @@
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var SH2 = '0 2px 6px rgba(16,63,57,.08),0 18px 44px rgba(16,63,57,.12)';
   var DEFAULT_STATUSES = ['Requested', 'In progress', 'Done'];
-  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], hr: ['human-resources'], board: ['board-of-directors'] };
+  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'] };   /* wave164: Finance has its own (private) channel */
   /* what each team is asked for, in a few words (the tiles on the first step) */
   var TEAM_BLURB = {
     opsmtl: 'Supplies, volunteers and transport for servings',
     progdev: 'Program data, research, partner coordination',
     opsto: 'Help with anything happening in Toronto',
     marketing: 'Social posts, emails, design, printing, event coverage',
-    fundraising: 'Reimbursements, purchases, grant information',
+    fundraising: 'Grant information, donors, sponsors and events',
+    finance: 'Reimbursements, purchase approvals, invoices and receipts',   /* wave164 */
     hr: 'Hiring, onboarding, access to tools, time off',
     board: 'Consent and media release, governance questions'
   };
@@ -102,7 +103,10 @@
   };
   function I(name, cls) { return '<svg class="w123i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.spark) + '</svg>'; }
   var TYPE_ICON = { 'post-request': 'megaphone', 'email-request': 'mail', 'design-request': 'pen', 'event-coverage': 'camera', 'print-request': 'printer', 'reimbursement': 'receipt', 'purchase-order': 'cart', 'grant-info': 'doc', 'time-off': 'sun', 'hiring-request': 'userplus', 'onboarding-request': 'flag', 'access-request': 'key', 'event-supplies': 'box', 'volunteer-support': 'people', 'transport-request': 'truck', 'media-release': 'shield' };
-  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', hr: 'people', board: 'columns' };
+  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', finance: 'receipt', hr: 'people', board: 'columns' };
+  /* wave164: the teams that receive requests and emails: the seven teams plus Finance (no team page; its inbox is in the Finance app) */
+  var INBOX = (T.inbox && T.inbox.length) ? T.inbox : T.order;
+  function pageOfTeam(d) { return d === 'finance' ? 'finances' : d; }
 
   /* ---------- small helpers ---------- */
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }

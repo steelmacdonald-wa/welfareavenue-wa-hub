@@ -210,7 +210,7 @@
     });
     order.push(wa42Group('departments', 'Departments', depts));
     order.push(wa42Group('work', 'Work', [grab('dashboard'), grab('goals'),
-      need('create', 'Create studio', '#6F64AB'), need('finances', 'Finances', '#c87a2f')]));
+      need('create', 'Create studio', '#6F64AB'), need('finances', 'Finance', '#B9851B')]));
     order.push(wa42Group('people', 'People', [grab('orgchart'), grab('training')]));
     order.push(need('volunteering', 'Volunteering', '#103F39'));
     order.push(wa42Group('archive', 'Archive', [grab('transcripts'), grab('activity')]));

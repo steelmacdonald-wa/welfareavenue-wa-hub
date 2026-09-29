@@ -131,7 +131,7 @@
     transcripts: ['The transcript archive', 1], tx: ['Transcripts', 0], requests: ['Requests', 0], agendas: ['Agendas', 0],
     mypage: ['My page', 1], orgchart: ['The org chart', 1], goals: ['Department goals', 0], projects: ['Projects', 0],
     project: ['Project pages', 0], goalmap: ['Goal alignment', 1], orggoals: ['Organizational goals', 0], create: ['The Create studio', 1],
-    volunteering: ['Volunteering', 1], finances: ['Finances', 0], training: ['The Avenue Academy', 1], adminpanel: ['Admin', 1],
+    volunteering: ['Volunteering', 1], finances: ['Finance', 0], training: ['The Avenue Academy', 1], adminpanel: ['Admin', 1],
     brain: ['The Brain', 1], hubmail: ['The Hub inbox', 1], hrcentre: ['The HR centre', 1], team: ['Team pages', 0], dept: ['Team pages', 0],
     person: ['People pages', 0], personpage: ['People pages', 0], task: ['Tasks', 0], importantinfo: ['Important info', 1]
   };

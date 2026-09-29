@@ -1,3 +1,5 @@
+// wave164 (29/09/26): Finance is its own team, apart from Fundraising: leadership items about the books can go to finance; Fundraising
+// is called Fundraising.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'leadership') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // v3 (29/09/26, wave162): a leadership meeting the Loom pull filed posts its Slack note only when app_config loom_pull_slack is 'on'
@@ -37,6 +39,7 @@ const DEPTS = [
   'opsto',
   'marketing',
   'fundraising',
+  'finance',
   'hr',
   'board'
 ];
@@ -45,7 +48,8 @@ const DEPT_LABEL = {
   progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Finances',
+  fundraising: 'Fundraising',
+  finance: 'Finance',
   hr: 'Human Resources',
   board: 'Board and Governance'
 };
@@ -101,7 +105,7 @@ async function siteUrl() {
   const { data } = await svc.from('app_config').select('value').eq('key', 'site_url').maybeSingle();
   return data?.value || 'https://wa-exec-dashboard.netlify.app';
 }
-const SYSTEM = `You maintain the Welfare Avenue executive status board. You are reading a LEADERSHIP MEETING transcript: the leaders of every department are present, so what the meeting produces must be SPREAD ACROSS DEPARTMENTS. Route every new update and every new task to the single department that will own it (opsmtl, progdev, opsto, marketing, fundraising, hr, board), based on who is doing the work and which team it belongs to. Do not funnel everything into one department.
+const SYSTEM = `You maintain the Welfare Avenue executive status board. You are reading a LEADERSHIP MEETING transcript: the leaders of every department are present, so what the meeting produces must be SPREAD ACROSS DEPARTMENTS. Route every new update and every new task to the single department that will own it (opsmtl, progdev, opsto, marketing, fundraising, finance, hr, board; finance is the books, apart from fundraising), based on who is doing the work and which team it belongs to. Do not funnel everything into one department.
 
 Rules:
 1. Never use em dashes in any text you produce. Use commas, colons, parentheses, or the word "to" for ranges.

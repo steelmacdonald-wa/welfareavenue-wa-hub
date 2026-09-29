@@ -17,7 +17,7 @@
      band above the grid. Up next, the month's birthdays, and a sheet for
      every item with its links (join the meeting, the event's board, the
      post, the serving, the person).
-   - Events calendar (#fundevents, Fundraising & Finances): the 2026-27
+   - Events calendar (#fundevents, Fundraising): the 2026-27
      plan season by season (fund_events, seeded from "Fundraising Events
      Calendar 2026-27"), the goals ($10K minimum, $15K healthy, $20K
      target) with what the events raised, a year strip, the ideas

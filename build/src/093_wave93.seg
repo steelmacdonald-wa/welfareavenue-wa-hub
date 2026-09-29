@@ -11,13 +11,15 @@
       the admin flags can be eyeballed in one place.
    3. Finances page: a "Finance tasks" fold at the top pulling open
       tasks from EVERY department whose text looks finance-related
-      (budget, statement, grant, audit, reimbursement...). Tasks are
+      (budget, statement, audit, reimbursement...). Tasks are
       surfaced here, never moved: each row links to its home page.
-   4. Finance meetings: the transcript upload gains a
-      "Finance (Fundraising & Finances)" option (flows through the
-      protected pipeline as fundraising, which both dept mappers
-      already accept; the pipeline itself is untouched), and the
-      Finances page lists those meetings with one-click upload access.
+      wave164: Finance's own tasks (department finance) have their own
+      Tasks section, so this fold lists the money work on other teams'
+      boards; grants and donors are Fundraising's, not Finance's.
+   4. Finance meetings: the transcript upload gains a "Finance" option
+      (wave164: the pipeline files it under Finance; it used to go to
+      Fundraising), and the Finances page lists those meetings with
+      one-click upload access.
    ===================================================================== */
 (function () {
   if (window.__wa93) return; window.__wa93 = true;
@@ -168,8 +170,8 @@
   })();
 
   /* ---------- 3 + 4. finance tasks and finance meetings on Finances ---------- */
-  var FIN_RX = /(budget|financ|statement|bookkeep|bookeep|audit|quickbook|bank |banking|expense|reimburs|insur|grant|donat|donor|funding|cra\b|t3010|tax|invoice|receipt)/i;
-  var DEPT_LABEL93 = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', org: 'Org-wide' };
+  var FIN_RX = /(budget|financ|statement|bookkeep|bookeep|audit|quickbook|bank |banking|expense|reimburs|insur|cra\b|t3010|tax|invoice|receipt|payment|payroll|purchase order)/i;   /* wave164: grants and donors are Fundraising's work, not Finance's */
+  var DEPT_LABEL93 = { opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', hr: 'HR', board: 'Board', org: 'Org-wide' };
   var W93 = { tasks: null, meets: null, at: 0 };
 
   async function w93FinData() {
@@ -177,12 +179,12 @@
     try {
       var r = await Promise.all([
         db.from('dept_tasks').select('id, title, department, owner, due_date, subsection').eq('done', false).limit(600),
-        db.from('transcripts').select('id, title, meeting_date, department, processed').ilike('department', '%finance%').order('meeting_date', { ascending: false }).limit(25)
+        db.from('transcripts').select('id, title, meeting_date, department, processed').ilike('department', 'financ%').order('meeting_date', { ascending: false }).limit(25)
       ]);
       W93.tasks = ((r[0] && r[0].data) || []).filter(function (t) {
-        return FIN_RX.test((t.title || '') + ' ' + (t.subsection || ''));
+        return t.department !== 'finance' && FIN_RX.test((t.title || '') + ' ' + (t.subsection || ''));   /* wave164: Finance's own tasks are in its Tasks section */
       });
-      W93.meets = ((r[1] && r[1].data) || []).filter(function (m) { return /finance/i.test(m.department || ''); });
+      W93.meets = ((r[1] && r[1].data) || []).filter(function (m) { return /^financ/i.test(m.department || ''); });
       W93.at = Date.now();
     } catch (e) { W93.tasks = W93.tasks || []; W93.meets = W93.meets || []; }
   }
@@ -204,7 +206,7 @@
         '<span class="dep">' + esc(DEPT_LABEL93[dep] || dep) + '</span>' +
         (t.owner ? '<span class="mut">' + esc(t.owner) + '</span>' : '') +
         (t.due_date ? '<span class="mut">due ' + esc(t.due_date) + '</span>' : '') +
-        '<a data-w93go="' + esc(dep) + '">open page</a></div>';
+        '<a data-w93go="' + esc(dep) + '">open the board</a></div>';
     }).join('');
     var mHtml = meets.slice(0, 10).map(function (m) {
       return '<div class="w93row"><span class="t" title="' + esc(m.title || '') + '">' + esc(String(m.title || 'Finance meeting').slice(0, 70)) + '</span>' +
@@ -214,19 +216,19 @@
     }).join('');
     var t = document.createElement('details');
     t.id = 'w93tasks';
-    t.innerHTML = '<summary>Finance tasks across the Hub (' + tasks.length + ')</summary>' +
-      '<div class="fin-note">Open tasks from every department that look finance-related (budgets, statements, grants, receipts...). They stay on their home pages; this is one place to see them all.</div>' +
-      (tHtml || '<div class="w93row"><span class="mut">No open finance-related tasks right now.</span></div>') +
+    t.innerHTML = '<summary>Money work on other teams\' boards (' + tasks.length + ')</summary>' +
+      '<div class="fin-note">Open tasks on the teams\' own boards that are about money (budgets, statements, receipts, payments, reimbursements). They stay on those boards; Finance\'s own work is in Tasks.</div>' +
+      (tHtml || '<div class="w93row"><span class="mut">No money work on other teams\' boards right now.</span></div>') +
       (tasks.length > 25 ? '<div class="fin-note">Showing 25 of ' + tasks.length + '.</div>' : '');
     var m = document.createElement('details');
     m.id = 'w93meet';
     m.innerHTML = '<summary>Finance meetings (' + meets.length + ')</summary>' +
-      '<div class="fin-note">Meetings uploaded with the "Finance (Fundraising &amp; Finances)" tag. <a data-w93add style="color:#103F39;cursor:pointer;text-decoration:underline">Upload a finance meeting</a></div>' +
+      '<div class="fin-note">Meetings added with the Finance tag: what they decide files under Finance. <a data-w93add style="color:#103F39;cursor:pointer;text-decoration:underline">Add a finance meeting</a></div>' +
       (mHtml || '<div class="w93row"><span class="mut">None yet. Upload the first one from the Meetings page.</span></div>');
     if (overview) { overview.appendChild(t); overview.appendChild(m); }
     else { anchor.insertAdjacentElement('afterend', m); anchor.insertAdjacentElement('afterend', t); }
     sec.querySelectorAll('[data-w93go]').forEach(function (a) {
-      a.addEventListener('click', function () { location.hash = '#dept/' + a.getAttribute('data-w93go'); });
+      a.addEventListener('click', function () { location.hash = '#team/' + a.getAttribute('data-w93go') + '/tasks'; });
     });
     sec.querySelectorAll('[data-w93tx],[data-w93add]').forEach(function (a) {
       a.addEventListener('click', function () {
@@ -234,22 +236,21 @@
         setTimeout(function () {
           try {
             var s = document.getElementById('txDept');
-            if (s) s.value = 'Finance (Fundraising & Finances)';
+            if (s) s.value = 'Finance';
           } catch (e) { /* fine */ }
         }, 400);
       });
     });
   }
 
-  /* transcript upload: Finance option (maps to fundraising in BOTH dept
-     mappers via the words it contains; the protected pipeline is untouched) */
+  /* transcript upload: the Finance option (wave164: both department mappers and apply_transcript_result map it to finance) */
   function w93TxOption() {
     var s = document.getElementById('txDept');
     if (!s || s.querySelector('[data-w93fin]')) return;
     var o = document.createElement('option');
-    o.value = 'Finance (Fundraising & Finances)';
+    o.value = 'Finance';
     o.setAttribute('data-w93fin', '1');
-    o.textContent = 'Finance (budgets, statements, grants)';
+    o.textContent = 'Finance (budgets, statements, the books)';
     var after = null;
     s.querySelectorAll('option').forEach(function (x) { if (x.value === 'fundraising') after = x; });
     if (after && after.nextSibling) s.insertBefore(o, after.nextSibling);

@@ -13,6 +13,10 @@
      pipeline; other threads land as an update on the team's page; noise
      is ignored. hub_mail keeps the trail; change_log gets a row; Slack
      gets one line per filing.
+   - wave164 (29/09/26): every money email (invoice, bill, receipt,
+     payment notice, reimbursement) is Finance's, not Fundraising's: a
+     task on the Finance app's board, and #accounting-finance hears
+     about each one. Filing to a team offers Finance too.
    - This page (#hubmail, Meetings menu, leaders and admins) shows what
      came in and what happened to it, with Undo, "File to a team" for
      emails the model could not place, "File anyway" for ignored mail,
@@ -139,14 +143,14 @@
       '<div class="top"><span>Last check ' + E(ago(st.last_sync_at)) + (st.last_result ? ' \u00b7 ' + E(st.last_result) : '') + (st.last_error ? ' \u00b7 <span style="color:' + FLAG + '">' + E(st.last_error) + '</span>' : '') + ' \u00b7 the hub checks every 30 minutes</span><span class="sp"></span>' + (canAct() ? '<button data-hact="sync"' + (H.busy ? ' disabled' : '') + '>' + (H.busy ? 'Checking...' : 'Check the inbox now') + '</button>' : '') + '</div>' +
       '<div class="sum">' +
       '<div class="k' + (H.filter === 'all' ? ' on' : '') + '" data-hact="filter" data-f="all"><b>' + n(function (x) { return x.status === 'filed'; }) + '</b>filed in 30 days</div>' +
-      '<div class="k' + (H.filter === 'invoice' ? ' on' : '') + '" data-hact="filter" data-f="invoice"><b>' + n(function (x) { return x.kind === 'invoice' && x.status === 'filed'; }) + '</b>invoices to Finance</div>' +
+      '<div class="k' + (H.filter === 'invoice' ? ' on' : '') + '" data-hact="filter" data-f="invoice"><b>' + n(function (x) { return x.kind === 'invoice' && x.status === 'filed'; }) + '</b>money emails to Finance</div>' +
       '<div class="k' + (H.filter === 'meeting_summary' ? ' on' : '') + '" data-hact="filter" data-f="meeting_summary"><b>' + n(function (x) { return x.kind === 'meeting_summary' && x.status === 'filed'; }) + '</b>meeting summaries</div>' +
       '<div class="k' + (H.filter === 'update' ? ' on' : '') + '" data-hact="filter" data-f="update"><b>' + n(function (x) { return x.kind === 'update' && x.status === 'filed'; }) + '</b>team updates</div>' +
       '<div class="k' + (needs ? ' warn' : '') + (H.filter === 'needs' ? ' on' : '') + '" data-hact="filter" data-f="needs"><b>' + needs + '</b>waiting for a team</div>' +
       '<div class="k' + (H.filter === 'ignored' ? ' on' : '') + '" data-hact="filter" data-f="ignored"><b>' + n(function (x) { return x.status === 'ignored'; }) + '</b>ignored as noise</div>' +
       '</div>' +
-      '<div class="how"><b>How it works.</b> Cc <code>hub@welfareavenue.com</code> on anything worth keeping. Invoices and receipts become tasks on the Finance board with the attachment saved; Loom, Otter and other meeting summaries go through the transcript pipeline (tasks, updates and decisions); anything else lands as an update on the team\'s page. Every filing is logged in Activity and posted to Slack; Undo takes it back.</div>' +
-      '<div class="chips">' + [['all', 'Everything filed'], ['invoice', 'Invoices'], ['meeting_summary', 'Meeting summaries'], ['update', 'Updates'], ['needs', 'Waiting for a team'], ['other', 'Undone or failed'], ['ignored', 'Ignored']].map(function (c) { return '<span class="chip' + (H.filter === c[0] ? ' on' : '') + '" data-hact="filter" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
+      '<div class="how"><b>How it works.</b> Cc <code>hub@welfareavenue.com</code> on anything worth keeping. Invoices, receipts, payment notices and reimbursements go to Finance (never to Fundraising): a task on the Finance board with the attachment saved, and a post in #accounting-finance; Loom, Otter and other meeting summaries go through the transcript pipeline (tasks, updates and decisions); anything else lands as an update on the team\'s page. Every filing is logged in Activity and posted to Slack; Undo takes it back.</div>' +
+      '<div class="chips">' + [['all', 'Everything filed'], ['invoice', 'Finance'], ['meeting_summary', 'Meeting summaries'], ['update', 'Updates'], ['needs', 'Waiting for a team'], ['other', 'Undone or failed'], ['ignored', 'Ignored']].map(function (c) { return '<span class="chip' + (H.filter === c[0] ? ' on' : '') + '" data-hact="filter" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') + '</div>';
     html += shown.length ? shown.map(row).join('') : '<p class="empty">' + (rows.length ? 'Nothing here with this filter.' : 'Nothing filed yet. The first email cc\'d to hub@welfareavenue.com shows up here within half an hour.') + '</p>';
     html += '</div>';
     host.innerHTML = html;
@@ -164,8 +168,8 @@
     return (r && r.data) || {};
   }
   function refileModal(x) {
-    var depts = T.order.slice();
-    var kinds = [['update', 'Team update'], ['invoice', 'Invoice (Finance task)'], ['meeting_summary', 'Meeting summary (transcript pipeline)']];
+    var depts = (T.inbox && T.inbox.length ? T.inbox : T.order).slice();   /* wave164: Finance too */
+    var kinds = [['update', 'Team update'], ['invoice', 'Money email (a Finance task)'], ['meeting_summary', 'Meeting summary (transcript pipeline)']];
     openModal('<div class="w116mm"><h3>File this email</h3><p class="m-sub">' + E(x.title || x.subject || '') + '</p>' +
       '<label>As</label><select id="w116mk">' + kinds.map(function (k) { return '<option value="' + k[0] + '"' + ((x.kind === 'noise' ? 'update' : x.kind) === k[0] ? ' selected' : '') + '>' + k[1] + '</option>'; }).join('') + '</select>' +
       '<label>Team</label><select id="w116md">' + depts.map(function (d) { return '<option value="' + d + '"' + ((x.department || '') === d ? ' selected' : '') + '>' + E(label(d)) + '</option>'; }).join('') + '</select>' +
@@ -204,7 +208,7 @@
     var sec = document.getElementById('hubmail');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'hubmail'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices, receipts and reimbursements to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
       main.appendChild(sec);
     }
     return sec;

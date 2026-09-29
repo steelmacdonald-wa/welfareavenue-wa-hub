@@ -1,3 +1,8 @@
+// v9 (29/09/26, wave164): Finance is its own team, apart from Fundraising. Steel: "all finance related emails like invoices, receipts,
+// reimbursements should go straight to the finance slack channel not fundraising". Every money email (an invoice, a bill, a receipt, a
+// payment notice or a failed payment, a reimbursement, a bank, card or tax notice) is kind invoice, department finance: a task on the
+// Finance board (subsection Bills and receipts, titled Receipt:, Reimbursement:, Payment problem: or Invoice:), and team-inbox posts it
+// in #accounting-finance. Fundraising keeps grants, donors, sponsors and events. Refiling as an invoice files it under Finance.
 // v8 (25/09/26): a List-Unsubscribe header alone no longer marks mail as noise (Google Groups add one to real people's mail; bulk senders and mailing services still do); "Invitation with note" is calendar mail; applications match open positions in dept_requests (the table name was wrong). Filed emails now reach the team inbox, where Jev decides whether to ping the team (team-inbox).
 // v6 (25/09/26): classifier routed through the Hub model router (llm, task mail_triage), Jev checks every filing (jevMail), job applications become candidates in Recruitment (fileApplication, label Hub/Recruitment).
 // Welfare Avenue: mail-pull (v5, 25/09/26)
@@ -18,7 +23,7 @@
 //   'refile' {mail_id, kind?, department?} : undo then file again with overrides
 //   'test' {from, subject, body, cc?, dry_run?} : classify and file a made-up email (no Gmail)
 // Filing rules (kind decided by the model, rules as fallback):
-//   invoice          -> Finance task (dept_tasks, fundraising / Finance) with the
+//   invoice          -> Finance task (dept_tasks, finance / Bills and receipts) with the
 //                       attachments stored in the hub-mail bucket
 //   meeting_summary  -> transcripts row + process-transcript (tasks, updates,
 //                       decisions), unless the email is only a link
@@ -41,10 +46,10 @@ const CORS: Record<string, string> = {
 };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
-const DEPT_KEYS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
+const DEPT_KEYS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'finance', 'hr', 'board'];
 const DEPT_LABEL: Record<string, string> = {
   opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing',
-  fundraising: 'Fundraising & Finances', hr: 'Human Resources', board: 'Board & Governance',
+  fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board & Governance',
 };
 const NOISE_SENDERS = /(no-?reply@accounts\.google\.com|mail-noreply@google\.com|chat-noreply@google\.com|calendar-notification@google\.com|drive-shares-noreply@google\.com|mailer-daemon|postmaster@|noreply@google\.com|workspace-noreply@google\.com)/i;
 const CALENDAR_SUBJECT = /^(invitation|invitation with note|updated invitation|updated invitation with note|accepted|declined|tentatively accepted|canceled event|cancelled event|canceled event with note|cancelled event with note|new event|reminder):/i;
@@ -239,7 +244,8 @@ function rulesClassify(m: { from_email: string; subject: string; body_text: stri
     if (hit) department = hit.department;
   }
   const kw: Array<[string, RegExp]> = [
-    ['fundraising', /grant|donor|donation|sponsor|fundrais|invoice|facture|receipt|budget|quickbooks/],
+    ['finance', /invoice|facture|receipt|re[cç]u\b|reimburs|rembours|budget|quickbooks|bookkeep|bank statement|payment|expense|purchase order/],
+    ['fundraising', /grant|donor|donation|sponsor|fundrais/],
     ['hr', /hiring|recruit|onboard|policy|policies|payroll|job description|probation|interview/],
     ['marketing', /instagram|tiktok|linkedin|brand|website|newsletter|content|campaign|social media/],
     ['opsto', /toronto/],
@@ -250,18 +256,19 @@ function rulesClassify(m: { from_email: string; subject: string; body_text: stri
   if (!department) { const k = kw.find(x => x[1].test(text)); if (k) department = k[0]; }
   const amountM = text.match(/(?:\$|cad|usd)\s?([\d,]+(?:\.\d{2})?)/i) || text.match(/([\d,]+(?:\.\d{2})?)\s?(?:\$|cad)/i);
   const amount = amountM ? Number(String(amountM[1]).replace(/,/g, '')) : null;
-  const isInvoice = /invoice|facture|receipt|re[cç]u|payment due|amount due|bill\b|statement of account/.test(text) || /invoice|facture|receipt|recu/.test(attNames);
+  const isInvoice = /invoice|facture|receipt|re[cç]u|payment due|amount due|bill\b|statement of account|reimburs|rembours|payment (?:declined|failed|received)|card (?:was )?declined/.test(text) || /invoice|facture|receipt|recu/.test(attNames);
   const isSummary = /loom\.com|otter\.ai|fireflies|tl;dv|tldv|plaud|fathom/.test(text + ' ' + m.links.join(' ')) || /\b(recap|summary|meeting notes|transcript|minutes)\b/.test(subj.toLowerCase());
   const isApplication = /\b(resume|r\u00e9sum\u00e9|curriculum vitae|\bcv\b|cover letter|applying for|application for|apply for the|job application|internship|volunteer position)\b/i.test(subj + '\n' + body) || /resume|\bcv\b|cover/.test(attNames);
   const kind: Cls['kind'] = isInvoice ? 'invoice' : (isSummary ? 'meeting_summary' : (isApplication ? 'application' : 'update'));
   const first = body.split('\n').map(s => s.trim()).filter(Boolean)[0] || subj;
   if (kind === 'application') department = 'hr';
-  return { kind, department: department || (kind === 'invoice' ? 'fundraising' : null), candidate: kind === 'application' ? { name: m.from_email, email: m.from_email, phone: null, role: null, links: [] } : null, title: subj.slice(0, 90) || 'Email', summary: first.slice(0, 280), amount: kind === 'invoice' ? amount : null, due_date: null, meeting_date: null, vendor: null, confidence: 0.4, reason: 'rules' };
+  if (kind === 'invoice') department = 'finance';   /* v9: every money email is Finance's */
+  return { kind, department: department || null, candidate: kind === 'application' ? { name: m.from_email, email: m.from_email, phone: null, role: null, links: [] } : null, title: subj.slice(0, 90) || 'Email', summary: first.slice(0, 280), amount: kind === 'invoice' ? amount : null, due_date: null, meeting_date: null, vendor: null, confidence: 0.4, reason: 'rules' };
 }
 
 const MODELS = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-sonnet-5'];
-const CLS_SYSTEM = `You file emails that Welfare Avenue staff cc to the shared hub@ inbox. Welfare Avenue is a charity serving people in need in Montreal and Toronto. Decide what each email is and which team it belongs to, then write a one line summary a busy executive can read in three seconds. Never use em dashes. Teams (use the key): opsmtl Operations Montreal (serving events, volunteers, kitchen, inventory), progdev Program Development (beneficiary programs, partnerships, research), opsto Operations Toronto, marketing (brand, social, website, content), fundraising (grants, donors, sponsorships, events, and all finance: invoices, receipts, statements, bookkeeping), hr (hiring, onboarding, policies, people), board (governance).
-Kinds: invoice = a bill, invoice, receipt or payment request (any team; it files under finance); meeting_summary = an AI meeting recap or transcript (Loom, Otter, Fireflies, tl;dv, Plaud, Fathom) or meeting notes with decisions and action items; application = a person applying for a job, internship, placement or volunteer role with us (a CV or resume attached, or a cover note; often sent to hub@ or forwarded from jobs@), department hr, and fill in candidate; update = anything else with substance about the work (a thread the team wants on record); noise = automated notices, calendar mail, newsletters, marketing blasts, receipts for nothing, empty forwards. Prefer the team of the sender or of the colleagues on the thread; for invoices set vendor and the amount actually owed; dates in ISO.`;
+const CLS_SYSTEM = `You file emails that Welfare Avenue staff cc to the shared hub@ inbox. Welfare Avenue is a charity serving people in need in Montreal and Toronto. Decide what each email is and which team it belongs to, then write a one line summary a busy executive can read in three seconds. Never use em dashes. Teams (use the key): opsmtl Operations Montreal (serving events, volunteers, kitchen, inventory), progdev Program Development (beneficiary programs, partnerships, research), opsto Operations Toronto, marketing (brand, social, website, content), fundraising (grants, donors, sponsorships, fundraising events), finance (the books: invoices, bills, receipts, payments, reimbursements, bank, card and tax notices, statements, budgets, bookkeeping), hr (hiring, onboarding, policies, people), board (governance). Finance is its own team, not part of fundraising.
+Kinds: invoice = any money email the finance people handle: a bill, invoice, receipt, payment request or confirmation, a declined or failed payment, a reimbursement, a bank, card, payroll or tax notice, a statement (any team; department finance); meeting_summary = an AI meeting recap or transcript (Loom, Otter, Fireflies, tl;dv, Plaud, Fathom) or meeting notes with decisions and action items; application = a person applying for a job, internship, placement or volunteer role with us (a CV or resume attached, or a cover note; often sent to hub@ or forwarded from jobs@), department hr, and fill in candidate; update = anything else with substance about the work (a thread the team wants on record); noise = automated notices, calendar mail, newsletters, marketing blasts, receipts for nothing, empty forwards. Prefer the team of the sender or of the colleagues on the thread; for invoices set vendor and the amount actually owed; dates in ISO.`;
 const CLS_TOOL = {
   name: 'file_email',
   description: 'Classify one email for the hub.',
@@ -304,7 +311,7 @@ async function modelClassify(m: { from_email: string; from_name: string; to_list
       if (tu?.input) {
         const i = tu.input as Record<string, unknown>;
         const kind = ['invoice', 'meeting_summary', 'update', 'noise', 'application'].includes(String(i.kind)) ? String(i.kind) as Cls['kind'] : 'update';
-        const dep = kind === 'application' ? 'hr' : (DEPT_KEYS.includes(String(i.department)) ? String(i.department) : null);
+        const dep = kind === 'application' ? 'hr' : kind === 'invoice' ? 'finance' : (DEPT_KEYS.includes(String(i.department)) ? String(i.department) : null);
         const cnd = i.candidate && typeof i.candidate === 'object' ? i.candidate as Record<string, unknown> : null;
         const candidate: Candidate | null = kind === 'application' ? { name: String((cnd && cnd.name) || m.from_name || m.from_email).slice(0, 120), email: cnd && cnd.email ? String(cnd.email).slice(0, 160) : (m.from_email || null), phone: cnd && cnd.phone ? String(cnd.phone).slice(0, 40) : null, role: cnd && cnd.role ? String(cnd.role).slice(0, 120) : null, links: Array.isArray(cnd && cnd.links) ? (cnd!.links as unknown[]).map(String).slice(0, 5) : [] } : null;
         const cls: Cls = { kind, department: dep, candidate, title: String(i.title || m.subject || 'Email').replace(/—/g, ',').slice(0, 90), summary: String(i.summary || '').replace(/—/g, ',').slice(0, 600), amount: typeof i.amount === 'number' ? i.amount : null, vendor: i.vendor ? String(i.vendor).slice(0, 80) : null, due_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.due_date || '')) ? String(i.due_date) : null, meeting_date: /^\d{4}-\d{2}-\d{2}$/.test(String(i.meeting_date || '')) ? String(i.meeting_date) : null, confidence: Number(i.confidence || 0), reason: String(i.reason || '').slice(0, 300) };
@@ -342,16 +349,18 @@ async function fileInvoice(token: string, row: MailRow, site: string): Promise<R
   const atts = await storeAttachments(token, row);
   await svc.from('hub_mail').update({ attachments: atts }).eq('id', row.id);
   const amountTxt = row.amount != null ? ' ($' + Number(row.amount).toLocaleString('en-CA', { maximumFractionDigits: 2 }) + ')' : '';
-  const title = ('Invoice: ' + (row.vendor || row.title || row.subject || 'from ' + row.from_email)).slice(0, 200) + amountTxt;
+  const txt = ((row.title || '') + ' ' + (row.subject || '')).toLowerCase();
+  const what = /reimburs|rembours/.test(txt) ? 'Reimbursement' : /declined|failed|past due|overdue|unpaid|action required/.test(txt) ? 'Payment problem' : /refund/.test(txt) ? 'Refund' : /receipt|re\u00e7u|recu\b|payment received|paid/.test(txt) ? 'Receipt' : /statement/.test(txt) ? 'Statement' : 'Invoice';
+  const title = (what + ': ' + (row.vendor || row.title || row.subject || 'from ' + row.from_email)).slice(0, 200) + amountTxt;
   const big = row.amount != null && Number(row.amount) >= 1000;
   const note = [row.summary, 'From ' + (row.from_name ? row.from_name + ' ' : '') + '<' + row.from_email + '> via the hub inbox' + (atts.length ? '; attachments: ' + atts.map(a => a.filename).join(', ') : ''), site + '/#hubmail'].filter(Boolean).join(' ');
   const ins = await svc.from('dept_tasks').insert({
-    department: 'fundraising', subsection: 'Finance', title, owner: '', status: 'Open', flag: big, priority: false, done: false, sort: 999,
+    department: 'finance', subsection: 'Bills and receipts', title, owner: '', status: 'Open', flag: big, priority: false, done: false, sort: 999,
     due_date: row.due_date, reason_category: big ? 'Budget or purchase' : null, reason_note: note.slice(0, 600),
     updated_by: 'Hub inbox', opened_at: new Date().toISOString(), updated_at: new Date().toISOString(), project_id: null
   }).select('id').single();
   if (ins.error) throw new Error('task insert failed: ' + ins.error.message);
-  return { type: 'task', id: ins.data.id, department: 'fundraising', title, attachments: atts.filter(a => a.path).map(a => a.path) };
+  return { type: 'task', id: ins.data.id, department: 'finance', title, attachments: atts.filter(a => a.path).map(a => a.path) };
 }
 
 async function fileUpdate(row: MailRow, site: string): Promise<Record<string, unknown>> {
@@ -440,8 +449,8 @@ async function fileApplication(token: string, row: MailRow, site: string): Promi
    model's answer. */
 async function jevMail(cls: Cls, m: { from_email: string; from_name: string; to_list: string; subject: string; body_text: string; attachments: Att[] }): Promise<Cls> {
   try {
-    const teams: Record<string, string> = { opsmtl: 'Operations Montreal (serving events, volunteers, kitchen, inventory)', progdev: 'Program Development (beneficiary programs, partnerships, research)', opsto: 'Operations Toronto', marketing: 'Marketing (brand, social, website, content)', fundraising: 'Fundraising and finance (grants, donors, sponsorships, invoices, bookkeeping)', hr: 'HR (hiring, onboarding, policies, people)', board: 'Board (governance)', unsure: 'Cannot tell from the email' };
-    const kinds: Record<string, string> = { invoice: 'a bill, invoice, receipt or payment request', meeting_summary: 'an AI meeting recap, transcript or meeting notes', application: 'a person applying for a job, internship or volunteer role', update: 'something with substance about the work worth putting on record', noise: 'automated notices, newsletters, calendar mail, empty forwards' };
+    const teams: Record<string, string> = { opsmtl: 'Operations Montreal (serving events, volunteers, kitchen, inventory)', progdev: 'Program Development (beneficiary programs, partnerships, research)', opsto: 'Operations Toronto', marketing: 'Marketing (brand, social, website, content)', fundraising: 'Fundraising (grants, donors, sponsorships, fundraising events)', finance: 'Finance (the books: invoices, receipts, payments, reimbursements, statements, budgets)', hr: 'HR (hiring, onboarding, policies, people)', board: 'Board (governance)', unsure: 'Cannot tell from the email' };
+    const kinds: Record<string, string> = { invoice: 'a money email: a bill, invoice, receipt, payment notice, failed payment or reimbursement', meeting_summary: 'an AI meeting recap, transcript or meeting notes', application: 'a person applying for a job, internship or volunteer role', update: 'something with substance about the work worth putting on record', noise: 'automated notices, newsletters, calendar mail, empty forwards' };
     const state = { email: { from: m.from_name + ' <' + m.from_email + '>', to: m.to_list, subject: m.subject, attachments: m.attachments.map(a => a.filename), body_excerpt: (m.body_text || '').slice(0, 2500) }, proposed: { kind: cls.kind, team: cls.department, title: cls.title, summary: cls.summary }, teams };
     const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
       method: 'POST', headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'mail_triage', 'x-wa-caller': 'mail-pull', 'Content-Type': 'application/json' },
@@ -640,7 +649,7 @@ Deno.serve(async (req: Request) => {
       if (!row) return json({ error: 'not found' }, 404);
       if (row.status === 'filed') await undoOne(id, caller);
       const kind = ['invoice', 'meeting_summary', 'update', 'application'].includes(String(body.kind)) ? String(body.kind) : (row.kind === 'noise' ? 'update' : row.kind);
-      const department = DEPT_KEYS.includes(String(body.department)) ? String(body.department) : row.department;
+      const department = kind === 'invoice' ? 'finance' : (DEPT_KEYS.includes(String(body.department)) ? String(body.department) : row.department);   /* v9: a money email is Finance's */
       const { token } = await delegatedToken();
       const site = await siteUrl();
       const result = await fileOne(token, { ...(row as MailRow), kind, department }, site);

@@ -1,3 +1,4 @@
+// wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // Welfare Avenue: weekly-digest (v2, 25/07/26)
 // v2: board_only confidentiality tier. Every query on dept_updates, decisions
 // and dept_tasks now adds .eq('board_only', false) because this digest posts to
@@ -25,7 +26,8 @@ const DEPT_LABEL = {
   progdev: 'Program Development',
   opsto: 'Ops Toronto',
   marketing: 'Marketing',
-  fundraising: 'Fundraising and Finances',
+  fundraising: 'Fundraising',
+  finance: 'Finance',
   hr: 'HR',
   board: 'Board'
 };

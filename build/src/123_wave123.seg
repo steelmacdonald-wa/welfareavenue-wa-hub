@@ -37,14 +37,15 @@
   var SH1 = '0 1px 2px rgba(16,63,57,.05),0 8px 24px rgba(16,63,57,.06)';
   var SH2 = '0 2px 6px rgba(16,63,57,.08),0 18px 44px rgba(16,63,57,.12)';
   var DEFAULT_STATUSES = ['Requested', 'In progress', 'Done'];
-  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], hr: ['human-resources'], board: ['board-of-directors'] };
+  var DEFAULT_CHANNELS = { opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'], marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'] };   /* wave164: Finance has its own (private) channel */
   /* what each team is asked for, in a few words (the tiles on the first step) */
   var TEAM_BLURB = {
     opsmtl: 'Supplies, volunteers and transport for servings',
     progdev: 'Program data, research, partner coordination',
     opsto: 'Help with anything happening in Toronto',
     marketing: 'Social posts, emails, design, printing, event coverage',
-    fundraising: 'Reimbursements, purchases, grant information',
+    fundraising: 'Grant information, donors, sponsors and events',
+    finance: 'Reimbursements, purchase approvals, invoices and receipts',   /* wave164 */
     hr: 'Hiring, onboarding, access to tools, time off',
     board: 'Consent and media release, governance questions'
   };
@@ -102,7 +103,10 @@
   };
   function I(name, cls) { return '<svg class="w123i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[name] || P.spark) + '</svg>'; }
   var TYPE_ICON = { 'post-request': 'megaphone', 'email-request': 'mail', 'design-request': 'pen', 'event-coverage': 'camera', 'print-request': 'printer', 'reimbursement': 'receipt', 'purchase-order': 'cart', 'grant-info': 'doc', 'time-off': 'sun', 'hiring-request': 'userplus', 'onboarding-request': 'flag', 'access-request': 'key', 'event-supplies': 'box', 'volunteer-support': 'people', 'transport-request': 'truck', 'media-release': 'shield' };
-  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', hr: 'people', board: 'columns' };
+  var TEAM_ICON = { opsmtl: 'pot', progdev: 'sprout', opsto: 'pin', marketing: 'megaphone', fundraising: 'heart', finance: 'receipt', hr: 'people', board: 'columns' };
+  /* wave164: the teams that receive requests and emails: the seven teams plus Finance (no team page; its inbox is in the Finance app) */
+  var INBOX = (T.inbox && T.inbox.length) ? T.inbox : T.order;
+  function pageOfTeam(d) { return d === 'finance' ? 'finances' : d; }
 
   /* ---------- small helpers ---------- */
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -419,7 +423,7 @@
   function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
   function isAdmin() { return role() === 'admin'; }
   function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
-  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return T.order.filter(function (d) { return !a || a.indexOf(d) >= 0; }); }
+  function allowedTeams() { var a = null; try { a = typeof wa40Allowed === 'function' ? wa40Allowed() : null; } catch (e) { a = null; } return INBOX.filter(function (d) { return !a || a.indexOf(pageOfTeam(d)) >= 0; }); }
   function teamLabel(d) { return (T.labels && T.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; }
   function teamShort(d) { return (T.short && T.short[d]) || teamLabel(d); }
   function teamColor(d) { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || '#797773'; }
@@ -475,7 +479,7 @@
   function cfgOf(v) {
     v = v || {};
     var ch = {};
-    T.order.forEach(function (d) {
+    INBOX.forEach(function (d) {
       var x = v.channels && v.channels[d];
       var arr = (Array.isArray(x) ? x : (x ? [x] : [])).map(function (s) { return String(s || '').replace(/^#/, '').trim(); }).filter(Boolean);
       ch[d] = arr.length ? arr : (DEFAULT_CHANNELS[d] || []).slice();
@@ -755,7 +759,7 @@
   }
   function teamsHtml() {
     var m = me();
-    var tiles = T.order.map(function (d) {
+    var tiles = INBOX.map(function (d) {
       var ts = typesFor(d), ch = chanFor(d);
       return '<button type="button" class="w123team' + (m.dept === d ? ' mine' : '') + '" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '">'
         + '<span class="w123ico">' + I(TEAM_ICON[d]) + '</span><b>' + E(teamLabel(d)) + '</b><span class="s">' + E(TEAM_BLURB[d] || '') + '</span>'
@@ -777,7 +781,7 @@
       var hay = lower(t.label + ' ' + (t.description || '') + ' ' + teamLabel(t.department) + ' ' + (t.key || '').replace(/-/g, ' '));
       return words.every(function (w) { return hay.indexOf(w) >= 0; });
     });
-    var teams = T.order.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
+    var teams = INBOX.filter(function (d) { var hay = lower(teamLabel(d) + ' ' + (TEAM_BLURB[d] || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
     var rows = hits.map(function (t) { return typeRow(t.department, t, true); }).join('')
       + teams.map(function (d) { return '<button type="button" class="w123type other" data-w123team="' + d + '" style="' + cv(teamColor(d)) + '"><span class="w123ico">' + I(TEAM_ICON[d]) + '</span><span><span class="t2">Team</span><b>' + E(teamLabel(d)) + '</b><span class="d">' + E(TEAM_BLURB[d] || '') + '</span></span>' + I('chev') + '</button>'; }).join('');
     if (!rows) return '<div class="w123types w123anim"><p class="w123empty" style="padding:18px 20px">Nothing matches &ldquo;' + E(qs) + '&rdquo;. Pick the team below and choose <b>Something else</b>: describe it in your own words.</p></div>';
@@ -978,7 +982,7 @@
     });
     rows = f.state === 'open' ? rows.sort(sortOpen) : rows;
     var byTeam = {}; R.reqs.forEach(function (r) { if (!r.done) byTeam[r.department] = (byTeam[r.department] || 0) + 1; });
-    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + T.order.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
+    return '<div class="w123anim"><div class="w123bar"><select data-w123alld aria-label="Team"><option value="">Every team</option>' + INBOX.map(function (d) { return '<option value="' + d + '"' + (f.d === d ? ' selected' : '') + '>' + E(teamLabel(d)) + (byTeam[d] ? ' (' + byTeam[d] + ' open)' : '') + '</option>'; }).join('') + '</select>'
       + '<span class="w123small">' + [['open', 'Open'], ['done', 'Done'], ['any', 'Everything']].map(function (o) { return '<a data-w123alls="' + o[0] + '" class="' + (f.state === o[0] ? 'on' : '') + '">' + o[1] + '</a>'; }).join('') + '</span>'
       + '<span class="sp"></span><input type="search" data-w123allq placeholder="Search requests" value="' + E(f.q) + '" aria-label="Search requests"></div>'
       + '<div id="w123allrows">' + allRows(rows) + '</div></div>';
@@ -1003,7 +1007,7 @@
     var c = R.cfgDraft || (R.cfgDraft = JSON.parse(JSON.stringify(R.cfg || cfgOf(null))));
     var can = isAdmin(), bot = R.bot;
     var dis = can ? '' : ' disabled';
-    var rows = T.order.map(function (d) {
+    var rows = INBOX.map(function (d) {
       var st = bot && bot.teams && bot.teams[d];
       var stat = !bot ? '<span class="op" style="font-size:12px;color:var(--wa-muted)">Checking Slack\u2026</span>'
         : st && st.channel ? '<span class="ok">' + I('check') + ' Posting in #' + E(st.channel) + (st.chain && st.chain[0] !== st.channel ? ' (the first choice is not reachable)' : '') + '</span>'
@@ -1298,11 +1302,11 @@
     var v = r.v;
     if (v === '' || v === 'new') {
       R.view = 'new'; R.nw.sent = null;
-      R.nw.d = T.order.indexOf(r.a) >= 0 ? r.a : null;
+      R.nw.d = INBOX.indexOf(r.a) >= 0 ? r.a : null;
       R.nw.type = R.nw.d && r.b ? r.b : null;
     } else if (v === 'sent') { R.view = 'new'; }
     else if (v === 'mine') R.view = 'mine';
-    else if (v === 'team') { R.view = 'team'; if (T.order.indexOf(r.a) >= 0) R.tm.d = r.a; }
+    else if (v === 'team') { R.view = 'team'; if (INBOX.indexOf(r.a) >= 0) R.tm.d = r.a; }
     else if (v === 'all') R.view = isLeader() ? 'all' : 'mine';
     else if (v === 'settings') { R.view = isLeader() ? 'settings' : 'new'; R.cfgDraft = null; R.bot = null; }
     else if (v !== 'r' && v !== 'm') R.view = 'new';
@@ -1535,6 +1539,7 @@
   /* ---------- test hook ---------- */
   window.w123 = {
     state: function () { return R; }, load: load, paint: paint, route: route, open: openSheet, close: closeSheet,
-    items: teamItems, card: injectCard, counts: counts, me: me
+    items: teamItems, card: injectCard, counts: counts, me: me,
+    cardHtml: function (d) { return teamCardHtml(d); }, loaded: function () { return !!R.loaded; }, ver: function () { return R.ver; }   /* wave164: the Finance app shows Finance's team inbox */
   };
 })();

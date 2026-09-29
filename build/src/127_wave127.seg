@@ -7,7 +7,7 @@
    access profile. It's really important that you make it very clear in that page what each role
    provides access to." And: review the security roles and the Hub training whenever the Hub changes.
 
-   - Nine profiles in hub_access_profiles (Marketing, Fundraising & Finances, Program Development,
+   - Nine profiles in hub_access_profiles (Marketing, Fundraising, Program Development,
      Operations Montreal, Operations Toronto, HR & People, Board member, Executive, Admin). A team
      profile has a lead option (hub_roles.role = leader). Each page is open to everyone with the
      profile, to its leads only, or to nobody.
@@ -48,8 +48,8 @@
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
-    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
-    fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
+    marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
+    fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
     transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'

@@ -61,7 +61,7 @@
     fundraising: 'Fundraising', hr: 'Human Resources', board: 'Board & Governance',
     volunteering: 'Volunteering', training: 'Avenue Academy', hrcentre: 'HR centre',
     orgchart: 'Org chart', transcripts: 'Transcript archive', activity: 'Activity',
-    finances: 'Finances', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
+    finances: 'Finance', create: 'Content drafter', adminpanel: 'Admin', needsme: 'Needs me'
   };
   var W72_GROUPS = [
     ['Home and work', ['mypage', 'overview', 'dashboard', 'goals', 'agendas', 'requests', 'importantinfo', 'create', 'finances']],

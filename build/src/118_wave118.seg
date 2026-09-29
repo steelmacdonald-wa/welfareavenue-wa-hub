@@ -85,7 +85,7 @@
     "transcripts": ["Other Tools", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
     "agendas": ["Other Tools", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],
-    "finances": ["Fundraising & Finances", "Finances and budgeting", "Statements, the ledger and budgets per team.", true, "Finances and budgeting"],
+    "finances": ["Finance", "Finance", "The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.", true, "Finances and budgeting"],   /* wave164: Finance is its own app, not part of Fundraising (the title follows the section: 164_wave164) */
     "hrcentre": ["Human Resources", "HR centre", "People records, hours, onboarding and policies in one place.", true, "HR centre"],
     "orgchart": ["Organization", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
     "training": ["Home", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],

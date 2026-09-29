@@ -223,7 +223,7 @@
   function appItems(app) {
     var A = window.WA_APP; if (!A) return [];
     var out = [];
-    try { A.items(app).forEach(function (g) { g.items.forEach(function (it) { out.push({ k: it.h + (it.sec ? '|' + it.sec : ''), l: it.l, sec: g.label, go: it.h, gsec: it.sec || '', ic: it.ic, on: !!(A.isOn && A.isOn(app, it)), app: app }); }); }); } catch (e) { /* fine */ }
+    try { A.items(app).forEach(function (g) { g.items.forEach(function (it) { out.push({ k: it.h + (it.sec ? '|' + it.sec : ''), l: it.l, sec: g.solo ? '' : g.label, go: it.h, gsec: it.sec || '', ic: it.ic, on: !!(A.isOn && A.isOn(app, it)), app: app, badge: it.n || null }); }); }); } catch (e) { /* fine */ }   /* wave164: no heading that repeats the app's name; the HR centre's counts */
     return out;
   }
   function rowHtml(it, i) {

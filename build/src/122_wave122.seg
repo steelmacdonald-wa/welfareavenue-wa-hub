@@ -2008,7 +2008,7 @@
     hrcentre: { tab: 'hrcentre', icon: 'people', hash: '#hrcentre', steps: [
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),
       S('#w116phero', 'At a glance', 'Headcount, hours, onboarding in flight and trainings outstanding. Click a tile to jump to it.', OPT),
-      S('#w46body .w47tabs', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline.', OPT),
+      S('#w46body .w47tabs || #w153rail .w153sec', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline. On a computer they are in the menu on the left.', OPT),
       S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; Avenue Academy certificates can be shared here too.', OPT),
       S('#w116ppeople .grid || #w116ppeople', 'People', 'Everyone on the roster with their team, start date and hours this month.', OPT),
       S('#w103scope', 'Scope of work', 'What each person has been working on, from their check-ins.', OPT),
@@ -2016,13 +2016,15 @@
       S('#w93eng', 'Hub engagement', 'Who is using the Hub: last sign-in, visits and time on the Hub.', OPT)
     ] },
     finances: { tab: 'finances', icon: 'scale', hash: '#finances', steps: [
-      S('#finances > .w118mast', 'Finances and budgeting', 'Statements, the ledger and budgets per team. The fiscal year runs October 1 to September 30.'),
+      S('#finances > .w118mast', 'Finance', 'An app of its own, apart from Fundraising: the ledger, each team\u2019s budget and the finance work. The fiscal year runs October 1 to September 30.'),
       S('#finances .fin-head', 'The source', 'Which fiscal year you are looking at and where the budgets come from. Import a statement from here.', OPT),
       S('#w92pills', 'Time frame', 'Last fiscal year, this one, or the forecast.', OPT),
-      S('#w94nav', 'Views', 'The overview, trends, the money map, budget against actual, and every transaction.', OPT),
+      S('#w94nav || #w153rail .w153sec', 'Sections', 'The overview, the tasks, the trends, the money map, the budget against actual, and every transaction. On a computer they are in the menu on the left; the title changes with the section.', OPT),
       S('#finances .fin-kpis', 'The headline', 'Income, spending and net for the fiscal year so far.', OPT),
       S('#w92health', 'Nonprofit health', 'Standard charity-sector measures computed from the ledger, with guidelines for a young Canadian charity.', OPT),
-      S('#w93tasks', 'Finance tasks', 'Every finance task across the Hub in one list.', OPT),
+      S('#w164inbox', 'Requests and emails', 'Reimbursement and purchase requests sent to Finance, and the invoices and receipts the Hub inbox filed. #accounting-finance hears about the ones that need action.', OPT),
+      S('#w153rail .w153it[data-w153sec="tasks"] || #w94nav .w94tab[data-w94tab="tasks"]', 'Tasks', 'Finance\u2019s own board: bills to pay, receipts to file, reimbursements to approve. Invoices and receipts sent to hub@ land here as tasks, with the attachment.', OPT),
+      S('#w93tasks', 'Money work elsewhere', 'Tasks about money on the other teams\u2019 boards, in one list. They stay on those boards.', OPT),
       S('#w93meet', 'Finance meetings', 'The meetings where money was discussed.', OPT)
     ] },
     contentcal: { tab: 'contentcal', icon: 'grid', hash: '#contentcal', steps: [
