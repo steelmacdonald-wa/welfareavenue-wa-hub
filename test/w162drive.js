@@ -73,7 +73,7 @@ const HOOK = `(function(){ window.__rpcLog = []; window.__fnLog = []; window.__f
   await f.ev(() => document.querySelector('[data-w162row="' + 'b'.repeat(32) + '"] [data-w162file]').click());
   await f.page.waitForTimeout(150);
   let form = await f.ev(() => { const x = document.querySelector('[data-w162form]'); return x && { team: x.querySelector('[data-w162team]').value, teams: [...x.querySelectorAll('[data-w162team] option')].map(o => o.textContent), vis: [...x.querySelectorAll('[data-w162vis] option')].map(o => o.value + ':' + o.textContent), v: x.querySelector('[data-w162vis]').value }; });
-  ok('File it opens a form: the team (no board) and who sees it, confidential first', form && form.team === '' && form.teams.length === 8 && form.teams.indexOf('Leadership meeting') > 0 && !form.teams.some(t => /board/i.test(t)) && form.v === 'private' && form.vis.join('|') === 'private:Confidential: the people in it and the leaders|leadership:Leaders only|department:Everyone', form);
+  ok('File it opens a form: the team (no board; Finance too) and who sees it, confidential first, a one-on-one next', form && form.team === '' && form.teams.length === 9 && form.teams.indexOf('Finance') > 0 && form.teams.indexOf('Leadership meeting') > 0 && !form.teams.some(t => /board/i.test(t)) && form.v === 'private' && form.vis.join('|') === 'private:Confidential: the people in it and the leaders|speakers:One-on-one: only the people speaking in it|leadership:Leaders only|department:Everyone', form); /* wave165: Finance, and a one-on-one for its speakers */
   await f.ev(() => document.querySelector('[data-w162save]').click());
   await f.page.waitForTimeout(200);
   let fl = await f.ev(() => window.__fnLog.slice());

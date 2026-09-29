@@ -85,6 +85,7 @@
   function w65SeeRow(r) {
     var v = r.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers */
     if (w65IsAdmin()) return true;
     if (v === 'leadership') return w65IsLeader();
     return false;
@@ -419,8 +420,8 @@
         'Concrete progress on a quarterly goal (something shipped, raised, signed or measured) is recorded as a win and appears under that goal on the department page.')
       + w65Sec(pill('mentions', '#6F64AB'), 'Absent people stay in the loop',
         'If someone on the roster is discussed in a meeting they were not in, a Mentions card appears on their My page with the context and a Got it button.')
-      + w65Sec(pill('department') + pill('leadership', '#6F64AB') + pill('confidential', '#b3402f'), 'Meeting visibility',
-        'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick. Restricted meetings never leak into the chat assistant, agendas or shared suggestions.')
+      + w65Sec(pill('department') + pill('leadership', '#6F64AB') + pill('confidential', '#b3402f') + pill('one-on-one', '#b3402f'), 'Meeting visibility',
+        'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick (and admins). A one-on-one is visible only to the people in it, not even admins. Restricted meetings stay out of agendas and shared suggestions; Ask the Hub answers from one only for the people who can see it.')
       + '</div>'
       + '<div class="m-actions"><button class="btn ghost" id="w65gc">Close</button></div>';
   }

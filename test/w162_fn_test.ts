@@ -1,6 +1,8 @@
 /* w162_fn_test.ts: the loom-pull function against a mock Atlassian MCP server (streamable HTTP, server-sent events, a session
    id) and a mock Supabase (the RPCs the pull calls). Checks the pure helpers (results, ids, arguments, transcripts, deciding)
    and a whole sync run: what is filed and how, what waits for an admin, what is left out, and that no write tool is called.
+   wave165 (loom-pull v2): a one-on-one is filed for the people speaking in it only (visibility speakers), before the sensitive
+   check; the backfill files older recordings as archive-only meetings with a summary (the llm route transcript_archive).
    usage: deno run -A test/w162_fn_test.ts   (needs a deno.json with "nodeModulesDir": "auto" in the working directory) */
 let pass = 0, fail = 0; const out: string[] = [];
 // deno-lint-ignore no-explicit-any
@@ -60,6 +62,7 @@ const TOOLS = [
   { name: 'updateLoomVideoPermissions', inputSchema: { type: 'object', properties: {} } },
 ];
 const calls: J[] = []; const rpcs: J[] = []; let sessionOk = true; let listPages = 0;
+const llmCalls: J[] = []; let LLM_DOWN = false; let LOOMROWS: J[] = [];
 const SECRETS: Record<string, string> = {};
 const mcpAnswer = (id: number, result: J, sse: boolean, extraHeaders: Record<string, string> = {}) => {
   const msg = JSON.stringify({ jsonrpc: '2.0', id, result });
@@ -105,6 +108,13 @@ const server = Deno.serve({ port: 0, onListen: () => {} }, async (req) => {
       return mcpAnswer(m.id, { isError: true, ...text('unknown tool') }, true);
     }
     return new Response('?', { status: 400 });
+  }
+  if (u.pathname === '/rest/v1/loom_videos') return new Response(JSON.stringify(LOOMROWS), { headers: { 'Content-Type': 'application/json' } });
+  if (u.pathname === '/functions/v1/llm') {
+    const b = await req.json().catch(() => ({}));
+    llmCalls.push({ task: req.headers.get('x-wa-task'), caller: req.headers.get('x-wa-caller'), body: b });
+    if (LLM_DOWN) return new Response('down', { status: 502 });
+    return new Response(JSON.stringify({ content: [{ type: 'text', text: '## Summary\nDiscussed: the **serving** on Sunday \u2014 twelve volunteers were confirmed and Mary buys the vegetables.\nDecided: Nothing was decided.\nNext steps: Mary buys the vegetables on Saturday.' }] }), { headers: { 'Content-Type': 'application/json' } });
   }
   const r = u.pathname.match(/^\/rest\/v1\/rpc\/(\w+)$/);
   if (r) {
@@ -187,7 +197,16 @@ const tx = (names: string[], body = 'hello there') => ({ lines: names.map((n, i)
 const d1 = F.classify(vid('Weekly Operations Meeting - September 22, 2026'), tx(['Ahmed Fakhir', 'Eno Moffat']), CTX, 1, 0);
 ok('a weekly team meeting: everyone, its team', d1.status === 'filed' && d1.department === 'opsmtl' && d1.visibility === null, d1);
 const d2 = F.classify(vid('Ian x Robert 1on1'), tx(['Ian Odhiambo', 'Robert Smith']), CTX, 1, 0);
-ok('a one-on-one: confidential to the people in it and the leaders', d2.status === 'filed' && d2.visibility === 'private' && d2.department === 'marketing' && JSON.stringify(d2.allowed) === JSON.stringify(['Ahmed', 'Amanda', 'Ian', 'Kahkashan', 'Robert', 'Shima']), d2);
+ok('v2: a one-on-one is only for the people speaking in it (no leaders)', d2.status === 'filed' && d2.visibility === 'speakers' && d2.department === 'marketing' && JSON.stringify(d2.allowed) === JSON.stringify(['Ian', 'Robert']), d2);
+ok('v2: one-on-one titles (1on1, 1:1, one-on-one, names joined by /, x, & or +)', ['Valex 1on1 - April 14, 2026', 'Ian 1:1', 'One-on-one with Ian', 'Suhaib / Steel - May 26, 2026', 'Amanda x Ian (Rally Paper)', 'Ian /  Kahkashan / Steel - August 3, 2026', 'Valex / Natasha 1on1on1', 'Ahmed & Shima', 'KK + Ian'].every((t) => F.isOneOnOne(t, ['A', 'B'])));
+ok('v2: not one-on-ones (team meetings, a crowd, plain titles)', !F.isOneOnOne('Weekly Operations Meeting - May 11, 2026', ['A', 'B']) && !F.isOneOnOne('Ian 1on1', ['A', 'B', 'C', 'D', 'E']) && !F.isOneOnOne('Ontario Program Planning', ['A', 'B']) && !F.isOneOnOne('Gift basket drive - Outreach strategy + fundraiser', ['A', 'B']));
+ok('v2: the speakers with their roster names and emails; the title names when Loom gives none', (() => { const RR = [{ name: 'Ian', email: 'ian.odhiambo@welfareavenue.com' }, { name: 'Kahkashan', email: 'kahkashan.ansary@welfareavenue.com' }, { name: 'Steel', email: 'steel.macdonald@welfareavenue.com' }];
+  const a = F.speakersAllowed('Ian / Kahkashan / Steel', ['Ian Odhiambo', 'Kahkashan Ansary'], RR); const b = F.speakersAllowed('Ian / Kahkashan / Steel - August 3, 2026', [], RR);
+  return JSON.stringify(a) === JSON.stringify(['Ian', 'ian.odhiambo@welfareavenue.com', 'Kahkashan', 'kahkashan.ansary@welfareavenue.com', 'Steel', 'steel.macdonald@welfareavenue.com']) && b.indexOf('Steel') >= 0 && b.indexOf('Ian') >= 0 && b.indexOf('Kahkashan') >= 0 && b.indexOf('August') < 0; })());
+ok('v2: a voice Loom did not name is added from the title (Suhaib / Steel), and a one-name title takes the people Loom lists, not its recorder', (() => { const RR = [{ name: 'Suhaib', email: 'suhaib.abdillahi@welfareavenue.com' }, { name: 'Steel', email: 'steel.macdonald@welfareavenue.com' }, { name: 'Valex', email: 'valex.sanon@welfareavenue.com' }];
+  const a = F.speakersAllowed('Suhaib / Steel - April 14, 2026', ['Suhaib Abdillahi'], RR); const b = F.speakersAllowed('Valex 1on1 - April 14, 2026', ['Valex Sanon'], RR, ['valex.sanon@welfareavenue.com', 'steel.macdonald@welfareavenue.com', 'loom@welfareavenue.com']);
+  const c = F.speakersAllowed('Ray / Steel - January 28, 2026', [], RR, ['ray.mannie@welfareavenue.com', 'steel.macdonald@welfareavenue.com', 'valex.sanon@welfareavenue.com']);
+  return a.indexOf('Steel') >= 0 && a.indexOf('Suhaib') >= 0 && b.indexOf('Steel') >= 0 && b.indexOf('loom@welfareavenue.com') < 0 && c.indexOf('Ray') >= 0 && c.indexOf('Steel') >= 0 && c.indexOf('Valex') < 0 && F.titleNames('Rami Al-Siq / Steel - May 2') .join('|') === 'Rami Al-Siq|Steel'; })());
 ok('a leadership meeting: leaders only', (() => { const d = F.classify(vid('Leadership Strategy & Discussion'), tx(['Steel MacDonald', 'Ian Odhiambo']), CTX, 1, 0); return d.status === 'filed' && d.department === 'Leadership meeting' && d.visibility === 'leadership'; })());
 ok('a board meeting waits for an admin', F.classify(vid('Board Meeting - September 2026'), tx(['Steel MacDonald', 'Suhaib Abdillahi']), CTX, 1, 0).status === 'needs_look');
 ok('onboarding is not a board meeting', F.classify(vid('Eno Onboarding Setup'), tx(['Valex Sanon', 'Eno Moffat']), CTX, 1, 0).department === 'hr');
@@ -199,10 +218,16 @@ ok('a personal title is left out', F.classify(vid('Sponsor call'), tx(['A', 'B']
 ok('a personal transcript is left out (two signs)', F.classify(vid('Call'), tx(['A', 'B'], 'my sponsor said the big book helps'), CTX, 1, 0).status === 'personal');
 ok('one passing word is not personal', F.classify(vid('Fundraising Meeting'), tx(['Amanda Zoldak', 'Rami'], 'our sponsor for the gala'), CTX, 1, 0).status === 'filed');
 ok('sensitive words wait for an admin', F.classify(vid('Human resources meeting'), tx(['Valex Sanon', 'Tuna Kaynak'], 'the disciplinary process'), CTX, 1, 0).status === 'needs_look');
-ok('a role changing hands waits for an admin, without saying so', (() => { const d = F.classify(vid('Ahmed / Steel'), tx(['Ahmed Fakhir', 'Steel MacDonald'], 'when I step back from the role'), CTX, 1, 0); return d.status === 'needs_look' && !/role|transition|step/i.test(d.reason); })());
-ok('a team is unclear: waits for an admin', F.classify(vid('Ahmed / Shima / Steel'), tx(['Ahmed Fakhir', 'Shima Butera', 'Steel MacDonald']), CTX, 1, 0).status === 'needs_look');
+ok('a role changing hands waits for an admin, without saying so', (() => { const d = F.classify(vid('Operations planning'), tx(['Ahmed Fakhir', 'Steel MacDonald'], 'when I step back from the role'), CTX, 1, 0); return d.status === 'needs_look' && !/role|transition|step/i.test(d.reason); })());
+ok('v2: a one-on-one with sensitive words is still filed, only for its speakers', (() => { const d = F.classify(vid('Ahmed / Steel'), tx(['Ahmed Fakhir', 'Steel MacDonald'], 'when I step back from the role'), CTX, 1, 0); return d.status === 'filed' && d.visibility === 'speakers' && JSON.stringify(d.allowed) === JSON.stringify(['Ahmed', 'Steel']) && !/role|transition|step/i.test(d.reason); })());
+ok('a team is unclear: waits for an admin', F.classify(vid('Planning session'), tx(['Ahmed Fakhir', 'Shima Butera']), CTX, 1, 0).status === 'needs_look');
+ok('v2: a three-way check-in is only for its speakers (under the board when its team is unclear)', (() => { const d = F.classify(vid('Ahmed / Shima / Steel'), tx(['Ahmed Fakhir', 'Shima Butera', 'Steel MacDonald']), CTX, 1, 0); return d.status === 'filed' && d.visibility === 'speakers' && d.department === 'board' && (d.allowed || []).length === 3; })());
 ok('a team meeting Loom keeps to its owner (the default) is still for everyone', (() => { const d = F.classify(vid('Marketing Meeting - September 16', { privacy: 'OWNER' }), tx(['Ian Odhiambo', 'Kahkashan Ansary']), CTX, 1, 0); return d.status === 'filed' && d.visibility === null && d.department === 'marketing'; })());
-ok('invitees by email join the people in a confidential meeting', (() => { const R2 = CTX.roster.concat([{ name: 'Tuna', email: 'tuna.kaynak@welfareavenue.com', department: 'hr' }]); const d = F.classify(vid('Valex / Natasha 1on1', { participants: ['tuna.kaynak@welfareavenue.com', 'kansary@outlook.com'] }), tx(['Valex Sanon', 'Natasha Lee']), { roster: R2, leaders: CTX.leaders }, 1, 0); return d.status === 'filed' && d.visibility === 'private' && d.department === 'hr' && (d.allowed || []).indexOf('Tuna') >= 0; })());
+ok('invitees by email join the people in a confidential meeting', (() => { const R2 = CTX.roster.concat([{ name: 'Tuna', email: 'tuna.kaynak@welfareavenue.com', department: 'hr' }]); const d = F.classify(vid('HR working session', { participants: ['tuna.kaynak@welfareavenue.com', 'kansary@outlook.com'] }), tx(['Valex Sanon', 'Natasha Lee']), { roster: R2, leaders: CTX.leaders }, 1, 0); return d.status === 'filed' && d.visibility === 'private' && d.department === 'hr' && (d.allowed || []).indexOf('Tuna') >= 0; })());
+ok('v2: in a one-on-one, an invitee who did not speak is not in it', (() => { const R2 = CTX.roster.concat([{ name: 'Tuna', email: 'tuna.kaynak@welfareavenue.com', department: 'hr' }, { name: 'Valex', department: 'hr' }]); const d = F.classify(vid('Valex / Natasha 1on1', { participants: ['tuna.kaynak@welfareavenue.com'] }), tx(['Valex Sanon', 'Natasha Lee']), { roster: R2, leaders: CTX.leaders }, 1, 0); return d.status === 'filed' && d.visibility === 'speakers' && (d.allowed || []).indexOf('Tuna') < 0 && (d.allowed || []).indexOf('Valex') >= 0; })());
+ok('v2: Finance meetings and money words go to Finance', F.classify(vid('Finance Meeting - October 1, 2026'), tx(['Amanda Zoldak', 'Steel MacDonald']), CTX, 1, 0).department === 'finance' && F.classify(vid('Budget review'), tx(['Amanda Zoldak', 'Steel MacDonald']), CTX, 1, 0).department === 'finance');
+ok('v2: team meetings in the plural or in French are team meetings', F.classify(vid('Operations Meetings - May 30, 2025'), tx(['Ahmed Fakhir', 'Eno Moffat']), CTX, 1, 0).department === 'opsmtl' && F.classify(vid('Human ressources meeting - May 6, 2026'), tx(['Valex Sanon', 'Tuna Kaynak']), CTX, 1, 0).department === 'hr');
+ok('v2: the archive summary is plain prose (no headings, bold or em dashes)', F.cleanSummary('## Notes\n**Discussed**: the serving \u2014 all set.') === 'Notes\nDiscussed: the serving, all set.');
 ok('a Loom answer shaped like the real one (data.transcriptPhrases, speakerName, ts, value)', (() => { const t = F.transcriptOf({ data: { id: ari(V.ops), isMeeting: true, transcriptPhrases: [{ speakerName: 'Ian Odhiambo', ts: 0.016, value: 'Hello there. ' }, { speakerName: 'Patricia Kamara', ts: 7.115, value: 'Hi Ian. ' }, { speakerName: 'Ian Odhiambo', ts: 3725.2, value: 'Bye.' }] } }); return t.lines.join('|') === '00:00 Ian Odhiambo: Hello there.|00:07 Patricia Kamara: Hi Ian.|1:02:05 Ian Odhiambo: Bye.' && t.speakers.length === 2; })());
 ok('the real video metadata: date, length, meeting, invitees', (() => { const v = F.normVideo({ id: ari(V.ops), name: 'Marketing Meeting', visibility: 'OWNER', url: 'https://www.loom.com/share/' + V.ops, isMeeting: true, collaborators: ['ian.odhiambo@welfareavenue.com'], sourceDuration: 2936.003, createdAt: '2026-09-09T22:15:35.325Z' }); return v.id === V.ops && v.duration_s === 2936 && v.meeting && v.participants[0] === 'ian.odhiambo@welfareavenue.com' && v.created === '2026-09-09T22:15:35.325Z' && v.privacy === 'OWNER'; })());
 ok('shared by someone outside: waits', F.classify(vid('Partner catch-up', { shared: true, owner: 'Pat Outsider' }), tx(['Pat Outsider', 'Steel MacDonald']), CTX, 1, 0).status === 'needs_look');
@@ -220,7 +245,7 @@ ok('the run ended ok', res.status === 'ok', res);
 ok('seen: the owned and shared recordings since the start date', res.counts.seen === LIST.length + 1, res.counts);
 ok('the weekly Operations meeting is filed for everyone under opsmtl', byId(V.ops)?.department === 'opsmtl' && byId(V.ops)?.visibility === 'department' && byId(V.ops)?.body.split('\n')[0] === '00:00 Ahmed Fakhir: Good evening everyone, let us start with the serving on Sunday.', byId(V.ops));
 ok('its date is the Toronto date, its title the Loom name', byId(V.ops)?.meeting_date === '2026-09-22' && byId(V.ops)?.title === LIST[0].name && byId(V.ops)?.added_by === 'Loom pull (scheduled)');
-ok('the one-on-one is confidential with its people and the leaders', byId(V.oneone)?.visibility === 'private' && JSON.stringify(byId(V.oneone)?.allowed_people) === JSON.stringify(['Ahmed', 'Amanda', 'Ian', 'Kahkashan', 'Robert', 'Shima']), byId(V.oneone));
+ok('v2: the one-on-one is only for the people speaking in it', byId(V.oneone)?.visibility === 'speakers' && JSON.stringify(byId(V.oneone)?.allowed_people) === JSON.stringify(['Ian', 'Robert']) && !byId(V.oneone)?.archive_only, byId(V.oneone));
 ok('the leadership meeting is for the leaders', byId(V.lead)?.department === 'Leadership meeting' && byId(V.lead)?.visibility === 'leadership');
 ok('the Toronto check-in (WebVTT) is filed under opsto', byId(V.vtt)?.department === 'opsto' && /^00:01 Tamara Lee: /.test(byId(V.vtt)?.body || ''), byId(V.vtt));
 ok('the board meeting needs a look', byId(V.board)?.status === 'needs_look');
@@ -228,14 +253,14 @@ ok('the solo walkthrough is skipped', byId(V.solo)?.status === 'skipped');
 ok('the meeting without a transcript waits (tried again)', byId(V.none)?.status === 'waiting');
 ok('the personal recording is left out, with no title', byId(V.personal)?.status === 'personal');
 ok('the sensitive HR meeting needs a look', byId(V.sensitive)?.status === 'needs_look');
-ok('the unclear meeting needs a look', byId(V.unclear)?.status === 'needs_look');
+ok('v2: the three-way check-in is filed for its speakers only', byId(V.unclear)?.visibility === 'speakers' && byId(V.unclear)?.department === 'board' && (byId(V.unclear)?.allowed_people || []).length === 3, byId(V.unclear));
 ok('a team meeting Loom keeps to its owner is filed for everyone', byId(V.privateTeam)?.visibility === 'department');
 ok('the shared recording from outside needs a look', byId(V.shared)?.status === 'needs_look');
 ok('a filed one is not read again', !calls.some((c) => c.name === 'getLoomVideo' && String(c.a.videoAri || '').endsWith(V.known)) && !byId(V.known));
 ok('one already in the archive is marked, not filed', rpcs.some((x) => x.fn === 'loom_file_seen' && x.args.p_loom_id === V.inArchive && x.args.p_transcript_id === 7777) && !filed.some((p: J) => p.loom_id === V.inArchive));
 ok('nothing from before the start date', !byId(V.old));
 ok('oldest first', filed.map((p: J) => p.loom_id).indexOf(V.lead) < filed.map((p: J) => p.loom_id).indexOf(V.ops));
-ok('the counts add up', res.counts.filed === 5 && res.counts.needs_look === 4 && res.counts.waiting === 1 && res.counts.skipped === 2 && res.counts.errors === 0, res.counts);
+ok('the counts add up', res.counts.filed === 6 && res.counts.needs_look === 3 && res.counts.waiting === 1 && res.counts.skipped === 2 && res.counts.errors === 0, res.counts);
 
 /* the per-run limit */
 rpcs.length = 0; calls.length = 0;
@@ -244,6 +269,35 @@ const origFetch = globalThis.fetch;
 const res2 = await (async () => { const r = await F.sync(2, 'Loom pull (scheduled)'); return r; })();
 ok('with nothing known, everything is looked at (max 20); two Loom cannot open are errors', res2.counts.errors === 2 && res2.counts.filed + res2.counts.needs_look + res2.counts.waiting + res2.counts.skipped === LIST.length + 1 - 2, res2.counts);
 globalThis.fetch = origFetch;
+
+/* ---------------- v2: the backfill ---------------- */
+rpcs.length = 0; calls.length = 0; llmCalls.length = 0;
+LOOMROWS = [{ loom_id: V.known, status: 'filed', transcript_id: 55 }];
+const bf0 = await F.backfill({ dry_run: true, items: [{ id: V.ops, department: 'opsmtl' }, { id: V.oneone, department: 'marketing', visibility: 'speakers' }] }, 'Steel');
+ok('backfill dry run: would file both, writes nothing', bf0.tally.would_file === 2 && !rpcs.some((x) => x.fn === 'loom_file' || x.fn === 'loom_video_save'), bf0);
+ok('backfill dry run: the one-on-one names its speakers only', JSON.stringify(bf0.items[1].people) === JSON.stringify(['Ian', 'Robert']), bf0.items[1]);
+rpcs.length = 0; llmCalls.length = 0;
+const bf = await F.backfill({ items: [{ id: V.ops, department: 'opsmtl' }, { id: V.oneone, department: 'marketing', visibility: 'speakers' }, { id: V.lead, department: 'Leadership meeting', visibility: 'leadership' }, { id: V.personal, department: 'hr' }, { id: V.none, department: 'marketing' }, { id: V.known, department: 'fundraising' }, { id: 'nope', department: 'hr' }, { id: V.board, department: 'nowhere' }] }, 'Steel');
+const bfiled = rpcs.filter((x) => x.fn === 'loom_file').map((x) => x.args.p);
+const bfBy = (id: string) => bfiled.find((p: J) => p.loom_id === id);
+ok('backfill: every filed one is archive only, with the summary', bfiled.length === 3 && bfiled.every((p: J) => p.archive_only === true && /^Discussed: the serving on Sunday, twelve volunteers/.test(p.ai_summary || '') && p.added_by === 'Loom pull (archive, Steel)'), bfiled.map((p: J) => [p.loom_id, p.archive_only, (p.ai_summary || '').slice(0, 40)]));
+ok('backfill: the team meeting for everyone, the one-on-one for its speakers, the leadership meeting for the leaders', bfBy(V.ops)?.visibility === 'department' && bfBy(V.ops)?.department === 'opsmtl' && bfBy(V.oneone)?.visibility === 'speakers' && JSON.stringify(bfBy(V.oneone)?.allowed_people) === JSON.stringify(['Ian', 'Robert']) && bfBy(V.lead)?.visibility === 'leadership' && bfBy(V.lead)?.department === 'Leadership meeting', bfiled.map((p: J) => [p.loom_id, p.department, p.visibility]));
+ok('backfill: the reason says no tasks come from it', /archive and Ask the Hub only, no tasks/.test(bfBy(V.ops)?.reason || ''));
+ok('backfill: summaries through the router (transcript_archive), with the transcript', llmCalls.length === 3 && llmCalls.every((c) => c.task === 'transcript_archive' && c.caller === 'loom-pull' && /TRANSCRIPT:\n/.test(c.body.messages[0].content)), llmCalls.map((c) => c.task));
+ok('backfill: personal left out (no title kept), no transcript skipped, a filed one not read again', (() => { const it = (id: string) => bf.items.find((x: J) => x.id === id) || {}; return it(V.personal).status === 'personal' && !it(V.personal).title && it(V.none).status === 'no_transcript' && it(V.known).status === 'already' && it(V.known).transcript_id === 55 && !calls.some((c) => c.name === 'getLoomVideo' && String(c.a.videoAri || '').endsWith(V.known)); })(), bf.items);
+ok('backfill: a bad id and an unknown team are errors, not filed', bf.items.filter((x: J) => x.status === 'error').length === 2 && !bfBy(V.board), bf.tally);
+ok('backfill: recordings are read by their ARI (the workspace activation from the list)', calls.filter((c) => c.name === 'getLoomVideo').every((c) => /^ari:cloud:loom:[^:]+:video\/activation\/act123\/[0-9a-f]{32}$/.test(String(c.a.videoAri || ''))) && calls.some((c) => c.name === 'getLoomVideo'), calls.filter((c) => c.name === 'getLoomVideo').map((c) => c.a.videoAri));
+ok('backfill: no write tool was called', calls.every((c) => F.readOnlyTool(c.name)));
+LLM_DOWN = true; rpcs.length = 0; LOOMROWS = [];
+VIDEOS[V.ops].video.description = '### Sunday serving 0:26\n- **Twelve** volunteers confirmed \u2014 Mary buys the vegetables on Saturday morning.';
+const bf2 = await F.backfill({ items: [{ id: V.ops, department: 'opsmtl' }] }, 'Steel');
+ok('backfill: with the router down, Loom\'s own notes (cleaned) are the summary', bf2.items[0].summary === 'loom' && /^Sunday serving 0:26\n- Twelve volunteers confirmed, Mary buys/.test(rpcs.find((x) => x.fn === 'loom_file')?.args.p.ai_summary || ''), [bf2.items[0], rpcs.find((x) => x.fn === 'loom_file')?.args.p.ai_summary]);
+LLM_DOWN = false; delete VIDEOS[V.ops].video.description;
+rpcs.length = 0;
+const bf3 = await F.backfill({ items: [{ id: V.sensitive, department: 'hr' }] }, 'Steel');
+const sp = rpcs.find((x) => x.fn === 'loom_file')?.args.p || {};
+ok('backfill: a meeting given for everyone that may hold something sensitive goes to the leaders', sp.visibility === 'leadership' && /leaders see it/.test(sp.reason || '') && /sensitive/.test(bf3.items[0].raised || ''), [bf3.items[0], sp.visibility]);
+ok('backfill: each answer names the speakers by their roster names', JSON.stringify(bf3.items[0].speaker_names) === JSON.stringify(['Valex', 'Tuna']), bf3.items[0].speaker_names);
 
 /* a refused key */
 Deno.env.set('ATLASSIAN_API_TOKEN', 'wrong');

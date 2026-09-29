@@ -26,6 +26,7 @@
     '.w62chip{display:inline-block;border-radius:999px;padding:1px 10px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle;}' +
     '.w62chip.lead{background:rgba(111,100,171,.14);color:#6F64AB;}' +
     '.w62chip.priv{background:rgba(179,64,47,.12);color:#b3402f;}' +
+    '.w62chip.arch{background:rgba(121,119,115,.14);color:#5f5d59;}' +
     '#w62people{max-height:150px;overflow:auto;border:1px solid #ECEBE3;border-radius:10px;padding:6px 10px;margin-top:6px;}' +
     '#w62people label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}';
   document.head.appendChild(st);
@@ -62,6 +63,7 @@
   function wa62SeeTx(t) {
     var v = t.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers; what came back is theirs */
     if (wa62IsAdmin()) return true;
     var f = wa62First();
     if (f && String(t.added_by || '').toLowerCase().indexOf(f) === 0) return true;
@@ -73,6 +75,7 @@
   function wa62SeeRow(r) {
     var v = r.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers; what came back is theirs */
     if (wa62IsAdmin()) return true;
     if (v === 'leadership') return wa62IsLeader();
     if (v === 'private') return wa62InList(r.allowed_people);
@@ -86,6 +89,11 @@
   }
 
   /* ---- the meeting type picker on the upload form ---- */
+  var W62_NOTES = {
+    leadership: 'Only leaders and admins see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
+    private: 'Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
+    speakers: 'A one-on-one: only the people picked see it and what it creates (you are added), not admins or leaders. Tick everyone who spoke in it. Ask the Hub answers from it only for them.'
+  };
   function wa62Ensure() {
     try {
       var save = document.getElementById('txSave');
@@ -99,6 +107,7 @@
         + '<option value="department">Department meeting (visible to everyone)</option>'
         + '<option value="leadership">Leadership meeting (leaders and admins only)</option>'
         + '<option value="private">Confidential (only the people you pick)</option>'
+        + '<option value="speakers">One-on-one (only the people in it, not even admins)</option>'
         + '</select>'
         + '<div id="w62people" style="display:none">'
         + people.map(function (p) {
@@ -106,12 +115,15 @@
             + esc(p.name) + ' <span style="color:#797773;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
         }).join('')
         + '</div>'
-        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) will see this meeting and the updates, tasks and decisions it creates. It stays out of the chat assistant, agendas and AI suggestions.</p>'
+        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.</p>'
         + '</div>');
       var sel = document.getElementById('w62type');
       sel.addEventListener('change', function () {
-        document.getElementById('w62people').style.display = sel.value === 'private' ? '' : 'none';
-        document.getElementById('w62note').style.display = sel.value === 'department' ? 'none' : '';
+        /* wave165: a one-on-one picks its people too, and each choice says who sees it */
+        document.getElementById('w62people').style.display = (sel.value === 'private' || sel.value === 'speakers') ? '' : 'none';
+        var note = document.getElementById('w62note');
+        note.style.display = sel.value === 'department' ? 'none' : '';
+        if (W62_NOTES[sel.value]) note.textContent = W62_NOTES[sel.value];
       });
     } catch (e) { /* non-fatal */ }
   }
@@ -121,7 +133,7 @@
     var sel = document.getElementById('w62type');
     if (!sel || sel.value === 'department') return payload;
     var patch = { visibility: sel.value };
-    if (sel.value === 'private') {
+    if (sel.value === 'private' || sel.value === 'speakers') {
       var names = [];
       document.querySelectorAll('.w62pcb:checked').forEach(function (c) { names.push(c.value); });
       var mine = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) || (typeof who === 'function' ? who() : '');
@@ -149,13 +161,16 @@
       cache.forEach(function (t) { byId[String(t.id)] = t; });
       document.querySelectorAll('#txList .tx-item').forEach(function (item) {
         var t = byId[String(item.getAttribute('data-tx'))];
-        if (!t || !t.visibility || t.visibility === 'department') return;
+        if (!t) return;
         var head = item.querySelector('.tx-head');
         if (!head || head.querySelector('.w62chip')) return;
-        var chip = t.visibility === 'leadership'
-          ? '<span class="w62chip lead">leadership</span>'
-          : '<span class="w62chip priv">confidential' + (Array.isArray(t.allowed_people) ? ' &middot; ' + t.allowed_people.length : '') + '</span>';
-        head.insertAdjacentHTML('afterbegin', chip);
+        var chip = '';
+        if (t.visibility === 'leadership') chip = '<span class="w62chip lead">leadership</span>';
+        else if (t.visibility === 'private') chip = '<span class="w62chip priv">confidential' + (Array.isArray(t.allowed_people) ? ' &middot; ' + t.allowed_people.length : '') + '</span>';
+        /* wave165: a one-on-one (only its speakers see it) and a meeting kept for the archive and Ask the Hub only */
+        else if (t.visibility === 'speakers') chip = '<span class="w62chip priv" title="Only the people speaking in it see it">one-on-one &middot; only its speakers</span>';
+        if (t.archive_only) chip += '<span class="w62chip arch" title="Kept for the archive and Ask the Hub; no tasks came from it">archive only</span>';
+        if (chip) head.insertAdjacentHTML('afterbegin', chip);
       });
     } catch (e) { /* non-fatal */ }
   }

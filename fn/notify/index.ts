@@ -1,3 +1,5 @@
+// wave165 (29/09/26): a mention from a one-on-one is never sent (the person mentioned did not speak in it) (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches the person mentioned).
 // Welfare Avenue: notify (v11, 26/09/26)
 // v10 (wave138): a task description saves as the person types, so a mention there waits 20 seconds in the
 // background (EdgeRuntime.waitUntil) and quotes the description as it stands then; a mention removed meanwhile
@@ -401,7 +403,7 @@ async function handle(event: string, body: Record<string, unknown>, callerEmail:
     const id = Number(body.mention_id);
     const { data: m } = await svc.from('mentions').select('*').eq('id', id).maybeSingle();
     if (!m) return { error: 'mention not found' };
-    if (m.visibility === 'private') { await log(event, m.person, 'skipped: private meeting'); return { event, outcome: 'private' }; }
+    if (m.visibility === 'private' || m.visibility === 'speakers') { await log(event, m.person, 'skipped: private meeting'); return { event, outcome: 'private' }; }
     const restricted = m.visibility === 'leadership';
     const text = ':speech_balloon: You were mentioned in *' + (m.meeting_title || 'a meeting') + '*'
       + (!restricted && m.quote ? '\n> ' + String(m.quote).slice(0, 200) : '')

@@ -99,7 +99,7 @@ function renderTranscripts() {
       + (r.processed && r.ai_summary ? '<div class="tx-sum">' + esc(r.ai_summary) + '</div>' : '')
       + '<div class="tx-actions">'
       + (r.source_url ? '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;">Source &#8599;</a>' : '')
-      + (!txProcessing(r) ? '<button class="btn ghost mini" data-reproc="' + r.id + '">&#8635; Reprocess</button>' : '')
+      + (!txProcessing(r) && !r.archive_only ? '<button class="btn ghost mini" data-reproc="' + r.id + '">&#8635; Reprocess</button>' : '')
       + deptSel
       + '</div>'
       + '<div class="tx-body">' + escapeHtml(r.body || "") + '</div>'

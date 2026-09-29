@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the daily alerts read open work only (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches the alerts posted in Slack).
 // wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // Welfare Avenue: daily-alerts (v2, 25/07/26)
 // v2: board_only confidentiality tier. Every query on dept_tasks and decisions
@@ -10,6 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -75,10 +78,10 @@ Deno.serve(async (req)=>{
   }, 401);
   // v2: all four queries exclude board_only rows; output goes to staff Slack.
   const [justDueQ, weekOverQ, aging14Q, aging30Q] = await Promise.all([
-    svc.from('dept_tasks').select('id, title, department, owner, due_date').eq('board_only', false).eq('done', false).eq('due_date', isoDaysAgo(1)),
-    svc.from('dept_tasks').select('id, title, department, owner, due_date').eq('board_only', false).eq('done', false).eq('due_date', isoDaysAgo(7)),
-    svc.from('decisions').select('id, title, reason_category, opened_at').eq('board_only', false).eq('done', false).gte('opened_at', isoDaysAgo(14) + 'T00:00:00Z').lt('opened_at', isoDaysAgo(13) + 'T00:00:00Z'),
-    svc.from('decisions').select('id, title, reason_category, opened_at').eq('board_only', false).eq('done', false).gte('opened_at', isoDaysAgo(30) + 'T00:00:00Z').lt('opened_at', isoDaysAgo(29) + 'T00:00:00Z')
+    svc.from('dept_tasks').select('id, title, department, owner, due_date').eq('board_only', false).or(OPEN_VIS).eq('done', false).eq('due_date', isoDaysAgo(1)),
+    svc.from('dept_tasks').select('id, title, department, owner, due_date').eq('board_only', false).or(OPEN_VIS).eq('done', false).eq('due_date', isoDaysAgo(7)),
+    svc.from('decisions').select('id, title, reason_category, opened_at').eq('board_only', false).or(OPEN_VIS).eq('done', false).gte('opened_at', isoDaysAgo(14) + 'T00:00:00Z').lt('opened_at', isoDaysAgo(13) + 'T00:00:00Z'),
+    svc.from('decisions').select('id, title, reason_category, opened_at').eq('board_only', false).or(OPEN_VIS).eq('done', false).gte('opened_at', isoDaysAgo(30) + 'T00:00:00Z').lt('opened_at', isoDaysAgo(29) + 'T00:00:00Z')
   ]);
   const jd = justDueQ.data || [], wo = weekOverQ.data || [], a14 = aging14Q.data || [], a30 = aging30Q.data || [];
   if (!jd.length && !wo.length && !a14.length && !a30.length) return json({

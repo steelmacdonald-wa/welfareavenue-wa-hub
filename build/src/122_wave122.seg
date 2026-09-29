@@ -1943,7 +1943,7 @@
       S('#transcripts > .w118mast', 'Meetings become work', 'Every meeting the Hub has read, and where to add the next one.'),
       S('#txDept', 'Pick the department', 'Choose the team the meeting belongs to, or Leadership to spread it across every team.', OPT),
       S('#txBody', 'Paste the transcript', 'Paste the full transcript from Otter, Plaud, Zoom or Meet. Add the date and a title if the Hub cannot read them from the text.', OPT),
-      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, or confidential to the people you pick. Restricted meetings stay sealed, even from the assistant.', OPT),
+      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, confidential to the people you pick, or a one-on-one only the people in it see (not even admins). Ask the Hub answers from a restricted meeting only for the people who can see it.', OPT),
       S('#txSave', 'Save and review', 'You get a preview of every task, closure, update, decision and mention the AI wants to file. Nothing saves until you approve it.', OPT),
       S('#txSearch || #txFilter', 'Find a meeting', 'Search the archive, or filter it by team.', OPT),
       S('#txList', 'The archive', 'Every transcript shows what it contributed. Use Reprocess if something did not land.', OPT)

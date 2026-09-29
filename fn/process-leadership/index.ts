@@ -1,3 +1,9 @@
+// v4 (29/09/26, wave165): archive-only meetings (the older Loom meetings Steel asked for: "don't create any tasks from them just
+// enhance the "Ask the Hub"") are never processed. A meeting sees only the work it may share: open work, and for a restricted
+// meeting work of its own kind, so nothing restricted from elsewhere leaks into what it files. A one-on-one (visibility speakers,
+// only the people speaking in it) stamps what it files for them (a task also for its owner) and posts nothing in Slack. A
+// restricted meeting's evidence never lands on open work: a leadership meeting still closes open tasks, with a plain note
+// ("Closed in a leadership meeting"); a confidential meeting or a one-on-one closes and decides only work of its own kind.
 // wave164 (29/09/26): Finance is its own team, apart from Fundraising: leadership items about the books can go to finance; Fundraising
 // is called Fundraising.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
@@ -343,19 +349,66 @@ async function processLeadership(transcriptId) {
   if (!tx.body || tx.body.trim().length < 40) throw new Error('transcript body too short to process');
   const isLead = tx.visibility === 'leadership' || /leadership/i.test(String(tx.department || ''));
   if (!isLead) throw new Error('not a leadership meeting');
+  /* v4: kept for the archive and Ask the Hub only */
+  if (tx.archive_only === true) return {
+    note: 'archive only: kept for the archive and Ask the Hub, not processed'
+  };
   if (tx.processed === true) return {
     note: 'already processed'
   };
-  // v2: what the fan-out rows inherit
-  const stampVis = tx.visibility === 'leadership' ? 'leadership' : tx.visibility === 'private' ? 'private' : null;
-  const stampPeople = stampVis === 'private' && Array.isArray(tx.allowed_people) ? tx.allowed_people : null;
+  // v2: what the fan-out rows inherit (v4: a one-on-one's people too)
+  const stampVis = tx.visibility === 'leadership' ? 'leadership' : tx.visibility === 'private' ? 'private' : tx.visibility === 'speakers' ? 'speakers' : null;
+  const stampPeople = (stampVis === 'private' || stampVis === 'speakers') && Array.isArray(tx.allowed_people) ? tx.allowed_people : null;
+  const peopleWith = (owner)=>{
+    if (stampVis !== 'speakers' || !stampPeople) return stampPeople;
+    const o = String(owner || '').trim();
+    return o && stampPeople.indexOf(o) < 0 ? stampPeople.concat([o]) : stampPeople;
+  };
   const restricted = stampVis !== null;
-  const [tasksQ, decQ, rosterQ, projQ] = await Promise.all([
-    svc.from('dept_tasks').select('id, title, department, owner, due_date').is('banked_at', null).eq('done', false),
-    svc.from('decisions').select('id, title, area, owner').eq('done', false),
+  /* v4: what this meeting may see of the boards: open work, and work of its own restricted kind (a one-on-one: every one of its
+     people on it) */
+  const low = (x)=>Array.isArray(x) ? x.map((v)=>String(v || '').trim().toLowerCase()).filter(Boolean) : [];
+  const apLow = low(tx.allowed_people);
+  const sees = (r)=>{
+    const rv = String(r.visibility || '');
+    if (!rv || rv === 'department') return true;
+    if (!stampVis || rv !== stampVis) return false;
+    if (stampVis === 'speakers') { const rap = low(r.allowed_people); return apLow.length > 0 && apLow.every((x)=>rap.indexOf(x) >= 0); }
+    return true;
+  };
+  const [tasksAll, decAll, rosterQ, projQ] = await Promise.all([
+    svc.from('dept_tasks').select('id, title, department, owner, due_date, visibility, allowed_people').is('banked_at', null).eq('done', false),
+    svc.from('decisions').select('id, title, area, owner, visibility, allowed_people').eq('done', false),
     svc.from('team_members').select('name, role, department').eq('active', true),
     svc.from('projects').select('id, name, description, department, parent_id').is('banked_at', null).eq('status', 'active').order('department').order('sort')
   ]);
+  const seenTasks = (tasksAll.data || []).filter(sees);
+  const seenDecs = (decAll.data || []).filter(sees);
+  const taskById = new Map(seenTasks.map((t)=>[
+      Number(t.id),
+      t
+    ]));
+  const decById = new Map(seenDecs.map((d)=>[
+      Number(d.id),
+      d
+    ]));
+  const tasksQ = {
+    data: seenTasks.map((t)=>({
+        id: t.id,
+        title: t.title,
+        department: t.department,
+        owner: t.owner,
+        due_date: t.due_date
+      }))
+  };
+  const decQ = {
+    data: seenDecs.map((d)=>({
+        id: d.id,
+        title: d.title,
+        area: d.area,
+        owner: d.owner
+      }))
+  };
   const openTasksNumbered = (tasksQ.data || []).map((t, i)=>i + 1 + '. task_id ' + t.id + ': ' + t.title + ' (' + t.department + ', owner: ' + (t.owner || 'unassigned') + ')').join('\n');
   const projRows = projQ.data || [];
   const projName = new Map(projRows.map((p)=>[
@@ -430,7 +483,7 @@ async function processLeadership(transcriptId) {
       confidential: t.confidential === true,
       project_id: pid,
       visibility: stampVis,
-      allowed_people: stampPeople
+      allowed_people: peopleWith(t.owner)
     });
     if (!e2) {
       counts.tasks++;
@@ -448,6 +501,12 @@ async function processLeadership(transcriptId) {
   for (const c of (Array.isArray(result.close_tasks) ? result.close_tasks : []).slice(0, 10)){
     const taskId = Number(c.task_id);
     if (!Number.isInteger(taskId) || taskId <= 0) continue;
+    /* v4: only work this meeting may see; a restricted meeting's evidence never lands on open work */
+    const seen = taskById.get(taskId);
+    if (!seen) continue;
+    const ownKind = !!stampVis && String(seen.visibility || '') === stampVis;
+    if (stampVis && !ownKind && stampVis !== 'leadership') continue;
+    const note = stampVis && !ownKind ? 'Closed in a leadership meeting' + (tx.meeting_date ? ' (' + tx.meeting_date + ')' : '') : String(c.evidence || '').slice(0, 600) || null;
     const { data: task } = await svc.from('dept_tasks').select('id, done').eq('id', taskId).maybeSingle();
     if (!task || task.done !== false) continue;
     const { error: e3 } = await svc.from('dept_tasks').update({
@@ -455,7 +514,7 @@ async function processLeadership(transcriptId) {
       closed_at: nowIso,
       updated_at: nowIso,
       updated_by: changedBy,
-      reason_note: String(c.evidence || '').slice(0, 600) || null
+      reason_note: note
     }).eq('id', taskId).eq('done', false);
     if (!e3) {
       counts.closed++;
@@ -484,13 +543,17 @@ async function processLeadership(transcriptId) {
       opened_at: nowIso,
       raised_by: changedBy,
       visibility: stampVis,
-      allowed_people: stampPeople
+      allowed_people: peopleWith(d.owner)
     });
     if (!e4) counts.decisions++;
   }
   for (const d of (Array.isArray(result.decide_decisions) ? result.decide_decisions : []).slice(0, 6)){
     const id = Number(d.id);
     if (!Number.isInteger(id) || id <= 0) continue;
+    /* v4: only decisions this meeting may see; a confidential meeting or a one-on-one decides only its own kind */
+    const sd = decById.get(id);
+    if (!sd) continue;
+    if (stampVis && stampVis !== 'leadership' && String(sd.visibility || '') !== stampVis) continue;
     const { error: e5 } = await svc.from('decisions').update({
       done: true,
       decided_note: String(d.decided_note || '').slice(0, 600) || null,
@@ -522,7 +585,8 @@ async function processLeadership(transcriptId) {
       loomQuiet = true;
     }
   }
-  if (!isTest && !loomQuiet) {
+  /* v4: a one-on-one posts nothing in Slack */
+  if (!isTest && !loomQuiet && stampVis !== 'speakers') {
     const countsLine = counts.updates + ' updates and ' + counts.tasks + ' tasks spread across ' + deptSet.size + ' departments, ' + counts.closed + ' tasks closed, ' + counts.decisions + ' new decisions.';
     if (restricted) {
       await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\nA leadership meeting (' + dateStr + ') was processed: ' + countsLine + ' Details are visible to ' + (stampVis === 'private' ? 'the people on the meeting' : 'leaders and admins') + ' in the Hub.');

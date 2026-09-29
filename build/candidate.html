@@ -2644,7 +2644,7 @@ function renderTranscripts() {
       + (r.processed && r.ai_summary ? '<div class="tx-sum">' + esc(r.ai_summary) + '</div>' : '')
       + '<div class="tx-actions">'
       + (r.source_url ? '<a href="' + esc(r.source_url) + '" target="_blank" rel="noopener" style="font-size:12px;font-weight:600;">Source &#8599;</a>' : '')
-      + (!txProcessing(r) ? '<button class="btn ghost mini" data-reproc="' + r.id + '">&#8635; Reprocess</button>' : '')
+      + (!txProcessing(r) && !r.archive_only ? '<button class="btn ghost mini" data-reproc="' + r.id + '">&#8635; Reprocess</button>' : '')
       + deptSel
       + '</div>'
       + '<div class="tx-body">' + escapeHtml(r.body || "") + '</div>'
@@ -16862,6 +16862,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w62chip{display:inline-block;border-radius:999px;padding:1px 10px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;margin-right:6px;vertical-align:middle;}' +
     '.w62chip.lead{background:rgba(111,100,171,.14);color:#6F64AB;}' +
     '.w62chip.priv{background:rgba(179,64,47,.12);color:#b3402f;}' +
+    '.w62chip.arch{background:rgba(121,119,115,.14);color:#5f5d59;}' +
     '#w62people{max-height:150px;overflow:auto;border:1px solid #ECEBE3;border-radius:10px;padding:6px 10px;margin-top:6px;}' +
     '#w62people label{display:flex;gap:8px;align-items:center;padding:2px 0;font-size:13px;}';
   document.head.appendChild(st);
@@ -16898,6 +16899,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function wa62SeeTx(t) {
     var v = t.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers; what came back is theirs */
     if (wa62IsAdmin()) return true;
     var f = wa62First();
     if (f && String(t.added_by || '').toLowerCase().indexOf(f) === 0) return true;
@@ -16909,6 +16911,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function wa62SeeRow(r) {
     var v = r.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers; what came back is theirs */
     if (wa62IsAdmin()) return true;
     if (v === 'leadership') return wa62IsLeader();
     if (v === 'private') return wa62InList(r.allowed_people);
@@ -16922,6 +16925,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---- the meeting type picker on the upload form ---- */
+  var W62_NOTES = {
+    leadership: 'Only leaders and admins see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
+    private: 'Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.',
+    speakers: 'A one-on-one: only the people picked see it and what it creates (you are added), not admins or leaders. Tick everyone who spoke in it. Ask the Hub answers from it only for them.'
+  };
   function wa62Ensure() {
     try {
       var save = document.getElementById('txSave');
@@ -16935,6 +16943,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         + '<option value="department">Department meeting (visible to everyone)</option>'
         + '<option value="leadership">Leadership meeting (leaders and admins only)</option>'
         + '<option value="private">Confidential (only the people you pick)</option>'
+        + '<option value="speakers">One-on-one (only the people in it, not even admins)</option>'
         + '</select>'
         + '<div id="w62people" style="display:none">'
         + people.map(function (p) {
@@ -16942,12 +16951,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
             + esc(p.name) + ' <span style="color:#797773;font-size:11px">' + esc((typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[p.department]) || p.department || '') + '</span></label>';
         }).join('')
         + '</div>'
-        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) will see this meeting and the updates, tasks and decisions it creates. It stays out of the chat assistant, agendas and AI suggestions.</p>'
+        + '<p class="m-sub" id="w62note" style="display:none;margin:4px 0 0">Only the people picked (plus admins) see this meeting and the updates, tasks and decisions it creates. It stays out of agendas and AI suggestions; Ask the Hub answers from it only for the people who can see it.</p>'
         + '</div>');
       var sel = document.getElementById('w62type');
       sel.addEventListener('change', function () {
-        document.getElementById('w62people').style.display = sel.value === 'private' ? '' : 'none';
-        document.getElementById('w62note').style.display = sel.value === 'department' ? 'none' : '';
+        /* wave165: a one-on-one picks its people too, and each choice says who sees it */
+        document.getElementById('w62people').style.display = (sel.value === 'private' || sel.value === 'speakers') ? '' : 'none';
+        var note = document.getElementById('w62note');
+        note.style.display = sel.value === 'department' ? 'none' : '';
+        if (W62_NOTES[sel.value]) note.textContent = W62_NOTES[sel.value];
       });
     } catch (e) { /* non-fatal */ }
   }
@@ -16957,7 +16969,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sel = document.getElementById('w62type');
     if (!sel || sel.value === 'department') return payload;
     var patch = { visibility: sel.value };
-    if (sel.value === 'private') {
+    if (sel.value === 'private' || sel.value === 'speakers') {
       var names = [];
       document.querySelectorAll('.w62pcb:checked').forEach(function (c) { names.push(c.value); });
       var mine = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.name) || (typeof who === 'function' ? who() : '');
@@ -16985,13 +16997,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       cache.forEach(function (t) { byId[String(t.id)] = t; });
       document.querySelectorAll('#txList .tx-item').forEach(function (item) {
         var t = byId[String(item.getAttribute('data-tx'))];
-        if (!t || !t.visibility || t.visibility === 'department') return;
+        if (!t) return;
         var head = item.querySelector('.tx-head');
         if (!head || head.querySelector('.w62chip')) return;
-        var chip = t.visibility === 'leadership'
-          ? '<span class="w62chip lead">leadership</span>'
-          : '<span class="w62chip priv">confidential' + (Array.isArray(t.allowed_people) ? ' &middot; ' + t.allowed_people.length : '') + '</span>';
-        head.insertAdjacentHTML('afterbegin', chip);
+        var chip = '';
+        if (t.visibility === 'leadership') chip = '<span class="w62chip lead">leadership</span>';
+        else if (t.visibility === 'private') chip = '<span class="w62chip priv">confidential' + (Array.isArray(t.allowed_people) ? ' &middot; ' + t.allowed_people.length : '') + '</span>';
+        /* wave165: a one-on-one (only its speakers see it) and a meeting kept for the archive and Ask the Hub only */
+        else if (t.visibility === 'speakers') chip = '<span class="w62chip priv" title="Only the people speaking in it see it">one-on-one &middot; only its speakers</span>';
+        if (t.archive_only) chip += '<span class="w62chip arch" title="Kept for the archive and Ask the Hub; no tasks came from it">archive only</span>';
+        if (chip) head.insertAdjacentHTML('afterbegin', chip);
       });
     } catch (e) { /* non-fatal */ }
   }
@@ -17391,6 +17406,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function w65SeeRow(r) {
     var v = r.visibility;
     if (!v || v === 'department') return true;
+    if (v === 'speakers') return true; /* wave165: the server shows a one-on-one only to its speakers */
     if (w65IsAdmin()) return true;
     if (v === 'leadership') return w65IsLeader();
     return false;
@@ -17725,8 +17741,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         'Concrete progress on a quarterly goal (something shipped, raised, signed or measured) is recorded as a win and appears under that goal on the department page.')
       + w65Sec(pill('mentions', '#6F64AB'), 'Absent people stay in the loop',
         'If someone on the roster is discussed in a meeting they were not in, a Mentions card appears on their My page with the context and a Got it button.')
-      + w65Sec(pill('department') + pill('leadership', '#6F64AB') + pill('confidential', '#b3402f'), 'Meeting visibility',
-        'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick. Restricted meetings never leak into the chat assistant, agendas or shared suggestions.')
+      + w65Sec(pill('department') + pill('leadership', '#6F64AB') + pill('confidential', '#b3402f') + pill('one-on-one', '#b3402f'), 'Meeting visibility',
+        'Department meetings are visible to everyone. Leadership meetings spread their tasks and updates across ALL departments but stay visible to leaders and admins only. Confidential meetings are visible only to the people you pick (and admins). A one-on-one is visible only to the people in it, not even admins. Restricted meetings stay out of agendas and shared suggestions; Ask the Hub answers from one only for the people who can see it.')
       + '</div>'
       + '<div class="m-actions"><button class="btn ghost" id="w65gc">Close</button></div>';
   }
@@ -18037,6 +18053,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       note.textContent = 'Leadership meeting, open to everyone: its updates, tasks and suggested requests spread across ALL departments, and the whole team can see them.';
     } else if (v === 'private') {
       note.textContent = 'Leadership meeting, confidential: it spreads across ALL departments, but only the people you pick (plus admins) see the meeting and what it files.';
+    } else if (v === 'speakers') {
+      note.textContent = 'Leadership meeting as a one-on-one: it spreads across ALL departments, but only the people you pick see the meeting and what it files, not even admins.';
     } else {
       note.textContent = 'Leadership meeting: its updates, tasks and suggested requests spread across ALL departments. Visible to leaders and admins only.';
     }
@@ -40157,7 +40175,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#transcripts > .w118mast', 'Meetings become work', 'Every meeting the Hub has read, and where to add the next one.'),
       S('#txDept', 'Pick the department', 'Choose the team the meeting belongs to, or Leadership to spread it across every team.', OPT),
       S('#txBody', 'Paste the transcript', 'Paste the full transcript from Otter, Plaud, Zoom or Meet. Add the date and a title if the Hub cannot read them from the text.', OPT),
-      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, or confidential to the people you pick. Restricted meetings stay sealed, even from the assistant.', OPT),
+      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, confidential to the people you pick, or a one-on-one only the people in it see (not even admins). Ask the Hub answers from a restricted meeting only for the people who can see it.', OPT),
       S('#txSave', 'Save and review', 'You get a preview of every task, closure, update, decision and mention the AI wants to file. Nothing saves until you approve it.', OPT),
       S('#txSearch || #txFilter', 'Find a meeting', 'Search the archive, or filter it by team.', OPT),
       S('#txList', 'The archive', 'Every transcript shows what it contributed. Use Reprocess if something did not land.', OPT)
@@ -60759,7 +60777,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var TZ = 'America/Toronto';
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
-  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
+  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['finance', 'Finance'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
   function teamName(k) { for (var i = 0; i < TEAMS.length; i++) if (TEAMS[i][0] === k) return TEAMS[i][1]; try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) return DEPT_LABEL[k]; } catch (e) { /* fine */ } return k || ''; }
   var P = {
     loom: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M5.6 18.4l2.9-2.9M15.5 8.5l2.9-2.9"/>',
@@ -60840,6 +60858,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function chip(v) {
     if (v.status === 'filed') {
       if (v.visibility === 'leadership') return '<span class="chip lead">Leaders</span>';
+      if (v.visibility === 'speakers') return '<span class="chip priv">Only its speakers</span>'; /* wave165 */
       if (v.visibility === 'private') return '<span class="chip priv">Confidential' + (Array.isArray(v.allowed_people) ? ' &middot; ' + v.allowed_people.length : '') + '</span>';
       return '<span class="chip all">Everyone</span>';
     }
@@ -60870,6 +60889,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<label>Team<select data-w162team><option value="">Pick the team</option>' + TEAMS.map(function (t) { return '<option value="' + E(t[0]) + '"' + (t[0] === def ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('') + '</select></label>'
       + '<label>Who sees it<select data-w162vis>'
       + '<option value="private">Confidential: the people in it and the leaders</option>'
+      + '<option value="speakers">One-on-one: only the people speaking in it</option>'
       + '<option value="leadership">Leaders only</option>'
       + '<option value="department">Everyone</option>'
       + '</select></label>'
@@ -60881,6 +60901,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function row(v, canFile) {
     var bits = [day(v.meeting_date || v.recorded_at), mins(v.duration_s)];
     if (v.speakers && v.speakers.length) bits.push(v.speakers.slice(0, 4).join(', ') + (v.speakers.length > 4 ? ' and ' + (v.speakers.length - 4) + ' more' : ''));
+    if (v.masked) bits.push('only the people speaking in it see it'); /* wave165: an admin who was not in a one-on-one sees only that it was filed */
     var sub = bits.filter(Boolean).join(' · ');
     var where = v.status === 'filed' && v.department && v.department !== 'Leadership meeting' ? teamName(v.department) + '. ' : '';
     var acts = '';
@@ -60915,7 +60936,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       h += '<h4>Latest from Loom</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
       if (recent.length > 6) h += '<button type="button" class="more" data-w162more="1">' + (S.showAll ? 'Show fewer' : 'Show all ' + recent.length) + '</button>';
     }
-    h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
+    h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, one-on-ones for the people speaking in them and nobody else (you see yours only), and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
+      + (d.archive_only ? plural(d.archive_only, 'older meeting is', 'older meetings are') + ' kept for the archive and Ask the Hub only (no tasks came from them). ' : '')
       + (c.personal ? plural(c.personal, 'personal recording was', 'personal recordings were') + ' left out; nothing about them is kept. ' : '')
       + 'The Hub only reads Loom, as hub@welfareavenue.com, and never changes anything there. '
       + (d.connected ? 'Connected through Atlassian' + (d.connected_at ? ' since ' + E(day(d.connected_at)) : '') + ' (<button type="button" class="more" data-w162connect="1" style="padding:0">connect again</button>).' : 'Not connected through Atlassian yet.')

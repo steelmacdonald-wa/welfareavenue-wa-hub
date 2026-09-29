@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the meeting summaries and tasks a draft reads are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a draft).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: draft-content (v5, 08/08/26)
@@ -15,6 +17,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -349,13 +352,13 @@ Deno.serve(async (req)=>{
   }
   if (dept) {
     try {
-      const { data: recent } = await svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept).eq('board_only', false).order('meeting_date', {
+      const { data: recent } = await svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept).eq('board_only', false).or(OPEN_VIS).order('meeting_date', {
         ascending: false
       }).limit(3);
       if (recent && recent.length) {
         parts.push('RECENT ' + dept.toUpperCase() + ' MEETING SUMMARIES (context, use only what is relevant):\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 500)).join('\n'));
       }
-      const { data: tasks } = await svc.from('dept_tasks').select('title, owner').is('banked_at', null).eq('department', dept).eq('done', false).eq('board_only', false).limit(12);
+      const { data: tasks } = await svc.from('dept_tasks').select('title, owner').is('banked_at', null).eq('department', dept).eq('done', false).eq('board_only', false).or(OPEN_VIS).limit(12);
       if (tasks && tasks.length) {
         parts.push('OPEN ' + dept.toUpperCase() + ' TASKS:\n' + tasks.map((t)=>'- ' + t.title + ' (' + (t.owner || 'unowned') + ')').join('\n'));
       }

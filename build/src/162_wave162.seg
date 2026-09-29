@@ -17,7 +17,7 @@
   var TZ = 'America/Toronto';
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
-  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
+  var TEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['marketing', 'Marketing, Branding & Web'], ['fundraising', 'Fundraising'], ['finance', 'Finance'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['Leadership meeting', 'Leadership meeting']];
   function teamName(k) { for (var i = 0; i < TEAMS.length; i++) if (TEAMS[i][0] === k) return TEAMS[i][1]; try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[k]) return DEPT_LABEL[k]; } catch (e) { /* fine */ } return k || ''; }
   var P = {
     loom: '<circle cx="12" cy="12" r="3"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.9 2.9M15.5 15.5l2.9 2.9M5.6 18.4l2.9-2.9M15.5 8.5l2.9-2.9"/>',
@@ -98,6 +98,7 @@
   function chip(v) {
     if (v.status === 'filed') {
       if (v.visibility === 'leadership') return '<span class="chip lead">Leaders</span>';
+      if (v.visibility === 'speakers') return '<span class="chip priv">Only its speakers</span>'; /* wave165 */
       if (v.visibility === 'private') return '<span class="chip priv">Confidential' + (Array.isArray(v.allowed_people) ? ' &middot; ' + v.allowed_people.length : '') + '</span>';
       return '<span class="chip all">Everyone</span>';
     }
@@ -128,6 +129,7 @@
       + '<label>Team<select data-w162team><option value="">Pick the team</option>' + TEAMS.map(function (t) { return '<option value="' + E(t[0]) + '"' + (t[0] === def ? ' selected' : '') + '>' + E(t[1]) + '</option>'; }).join('') + '</select></label>'
       + '<label>Who sees it<select data-w162vis>'
       + '<option value="private">Confidential: the people in it and the leaders</option>'
+      + '<option value="speakers">One-on-one: only the people speaking in it</option>'
       + '<option value="leadership">Leaders only</option>'
       + '<option value="department">Everyone</option>'
       + '</select></label>'
@@ -139,6 +141,7 @@
   function row(v, canFile) {
     var bits = [day(v.meeting_date || v.recorded_at), mins(v.duration_s)];
     if (v.speakers && v.speakers.length) bits.push(v.speakers.slice(0, 4).join(', ') + (v.speakers.length > 4 ? ' and ' + (v.speakers.length - 4) + ' more' : ''));
+    if (v.masked) bits.push('only the people speaking in it see it'); /* wave165: an admin who was not in a one-on-one sees only that it was filed */
     var sub = bits.filter(Boolean).join(' · ');
     var where = v.status === 'filed' && v.department && v.department !== 'Leadership meeting' ? teamName(v.department) + '. ' : '';
     var acts = '';
@@ -173,7 +176,8 @@
       h += '<h4>Latest from Loom</h4>' + shown.map(function (v) { return row(v, v.status === 'skipped' || v.status === 'error'); }).join('');
       if (recent.length > 6) h += '<button type="button" class="more" data-w162more="1">' + (S.showAll ? 'Show fewer' : 'Show all ' + recent.length) + '</button>';
     }
-    h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
+    h += '<div class="foot">The weekly team meetings are filed for everyone, leadership meetings for the leaders, one-on-ones for the people speaking in them and nobody else (you see yours only), and everything else as confidential to the people in it and the leaders. Board meetings, anything that may be sensitive and meetings whose team is unclear wait here. '
+      + (d.archive_only ? plural(d.archive_only, 'older meeting is', 'older meetings are') + ' kept for the archive and Ask the Hub only (no tasks came from them). ' : '')
       + (c.personal ? plural(c.personal, 'personal recording was', 'personal recordings were') + ' left out; nothing about them is kept. ' : '')
       + 'The Hub only reads Loom, as hub@welfareavenue.com, and never changes anything there. '
       + (d.connected ? 'Connected through Atlassian' + (d.connected_at ? ' since ' + E(day(d.connected_at)) : '') + ' (<button type="button" class="more" data-w162connect="1" style="padding:0">connect again</button>).' : 'Not connected through Atlassian yet.')

@@ -1,3 +1,5 @@
+// wave165 (29/09/26): shout-outs count the open work people closed (not board-only, leadership, confidential or one-on-one work) (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a shout-out everyone sees).
 // Welfare Avenue: shoutouts (v1, 25/09/26)
 // Steel: "Can you make the did-you-knows give shout-outs to individuals in
 // the organisation for completing projects or doing something amazing?"
@@ -19,6 +21,7 @@ const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const TZ = 'America/Toronto';
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -74,7 +77,7 @@ async function collect(): Promise<Item[]> {
       fallback: (leads.length ? leads.map(first).join(' and ') + ' and the ' : 'The ') + (DEPT[p.department || ''] || 'team') + ' team finished the ' + p.name + ' project.' });
   }
   /* 2. task closers this week */
-  const { data: closed } = await svc.from('dept_tasks').select('updated_by, title').eq('done', true).gte('closed_at', since7);
+  const { data: closed } = await svc.from('dept_tasks').select('updated_by, title').eq('done', true).eq('board_only', false).or(OPEN_VIS).gte('closed_at', since7);
   const byCloser: Record<string, { n: number; titles: string[] }> = {};
   for (const t of (closed || []) as Array<{ updated_by: string | null; title: string }>) {
     const who = String(t.updated_by || '').trim(); if (!who || /^(AI|Chat|Hub|dashboard|automation)/i.test(who)) continue;

@@ -59,6 +59,8 @@ Comments and activity on a task: quotes captured by AI from transcripts and Slac
 - `source_ref`: Id of the source item (for example a transcript id) as text.
 - `source_label`: Readable name of the source, such as a meeting title.
 - `quote`: Verbatim quote from the source that supports the comment.
+- `visibility`: wave165: a note a restricted meeting left on a task is read like that meeting (speakers for a one-on-one); every comment also needs its task to be visible (wa_task_visible).
+- `allowed_people`: wave165: the people who may read a note a restricted meeting left (see task_comments.visibility).
 
 ### `task_due_suggestions`
 
@@ -283,8 +285,9 @@ Meeting transcripts and summaries (from Otter, Plaud, Loom, Slack or email). On 
 - `fts`: Generated full-text search vector used by search_transcripts().
 - `board_only`: When true, only board_circle members can read the transcript.
 - `speakers`: Speaker names extracted from the body by the trigger transcripts_set_speakers (extract_speakers()).
-- `visibility`: Restricted meeting: NULL or department (everyone), leadership, private. wa_stamp_restricted() copies it to the rows the meeting created. CHECK: NULL, empty, department, leadership or private. Never set so far.
-- `allowed_people`: JSON array of names or emails allowed to see a private meeting. Never set so far.
+- `visibility`: Who sees the meeting and what it files: null or department (everyone on staff), leadership (leaders, the board circle, admins), private (the people in allowed_people and the uploader, plus leaders and admins), speakers (wave165: only the people in allowed_people, the ones speaking in a one-on-one; no admin, leader or uploader override).
+- `allowed_people`: Names and emails for private and speakers meetings (for speakers: the people speaking in it, matched to the roster, with every address they sign in with: wa_people_expand, trg_wa165_people).
+- `archive_only`: wave165: kept for the archive, search and Ask the Hub only. Never processed into tasks, updates, decisions, suggestions or ideas (the insert triggers skip it); ai_summary is written when it is filed.
 
 ### `transcript_request_scans`
 
@@ -1043,6 +1046,8 @@ Audit trail of changes made in the Hub (one row per changed field) plus run logs
 - `entity_id`: Id of the changed row as text; for job runs a date or label.
 - `changed_by`: Who made the change: an email, a display name, 'AI: <transcript title>', or a job label such as db-backup v1.
 - `board_only`: When true, only board_circle members can read the row.
+- `visibility`: wave165: the visibility of the meeting a row came from (speakers for a one-on-one, leadership, private); rows with a visibility are read through wa_sees_restricted like the meeting.
+- `allowed_people`: wave165: the people who may read a row that came from a restricted meeting (see change_log.visibility).
 
 ### `site_files`
 
@@ -1530,6 +1535,10 @@ Every run of the Loom pull (wave162): why (schedule, pull now by an admin, check
 
 One row per Connect Loom press (wave162c): the PKCE verifier for the approval that is under way, kept server side and used once when Atlassian sends the admin back (loom-connect). No policies: only the service role reads or writes it; rows older than 15 minutes are ignored and cleared.
 
+### `wa_email_aliases`
+
+wave165: the other addresses a member signs in with (Steel: his gmail). Read only by security definer functions (wa_people_expand); no policy, so no member reads it.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1632,6 +1641,10 @@ Functions:
 - `loom_pull_status()`: The Loom card in the Transcript archive (wave162, admins only): the next scheduled pull (Monday, Wednesday and Friday at 7:30, Toronto), whether the schedule is on, whether Loom is connected through Atlassian's approval (wave162c: the vault holds LOOM_OAUTH_REFRESH, and since when; never the key itself), the last run and the last good one, the last eight runs, counts by status since loom_pull_since, the recordings that need a look, and the latest 30 recordings the pull handled (personal recordings never listed).
 - `loom_video_decide(text, text)`: An admin skips a Loom recording that needed a look (p_action skip) or puts a skipped one back (look). Filing goes through the loom-pull function (action file), which reads the transcript from Loom. Logged in change_log (entity_type loom).
 - `loom_oauth_forget()`: Forgets the Loom connection (wave162c): removes LOOM_OAUTH_REFRESH and LOOM_OAUTH_ACCESS from the vault after loom-connect revoked the key at Atlassian (Disconnect) or when Atlassian says it has lapsed. The client registration (LOOM_OAUTH_CLIENT) stays. The loom-connect and loom-pull functions only.
+- `wa_people_plus(jsonb, text)`: wave165: a people list plus one more name (a task's owner), without duplicates.
+- `wa_people_expand(jsonb)`: wave165: a list of people (names or emails) with every roster email and alias of the ones on the roster added, so a one-on-one's people match however they sign in.
+- `wa_task_visible(bigint)`: wave165: whether the signed-in person may see a task (the task_comments policy uses it; a comment whose task is gone stays readable).
+- `wa_ask_meetings(text, integer)`: wave165: Ask the Hub's meeting search, run as the asker: each word of the question counts by its rarity among the meetings (a word in the title counts double), with the passage around the rarest words; only what the asker may read (wa_sees_restricted, board_only).
 
 - `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
 

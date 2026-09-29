@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the tasks a goal's suggestions read are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a goal's suggestions).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'goals') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: goal-suggest (v1)
@@ -11,6 +13,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -174,11 +177,11 @@ Deno.serve(async (req)=>{
   const { data: projects } = await svc.from('projects').select('id, name, description, department').is('banked_at', null).eq('goal_id', goalId).eq('status', 'active');
   const projIds = (projects || []).map((p)=>p.id);
   const [projTasksQ, deptOpenQ, legacyQ] = await Promise.all([
-    projIds.length ? svc.from('dept_tasks').select('id, title, done, owner, project_id').is('banked_at', null).in('project_id', projIds) : Promise.resolve({
+    projIds.length ? svc.from('dept_tasks').select('id, title, done, owner, project_id').is('banked_at', null).or(OPEN_VIS).in('project_id', projIds) : Promise.resolve({
       data: []
     }),
-    svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).eq('department', goal.department).eq('done', false).is('project_id', null),
-    Array.isArray(goal.task_ids) && goal.task_ids.length ? svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).in('id', goal.task_ids) : Promise.resolve({
+    svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).or(OPEN_VIS).eq('department', goal.department).eq('done', false).is('project_id', null),
+    Array.isArray(goal.task_ids) && goal.task_ids.length ? svc.from('dept_tasks').select('id, title, done, owner').is('banked_at', null).or(OPEN_VIS).in('id', goal.task_ids) : Promise.resolve({
       data: []
     })
   ]);

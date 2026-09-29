@@ -1,4 +1,14 @@
-// Welfare Avenue: loom-pull (v1, 28/09/26, wave162)
+// Welfare Avenue: loom-pull (v2.1, 29/09/26, wave165; v1 28/09/26, wave162)
+// v2.1: Loom's transcript does not always name every voice, so a one-on-one's people are the speakers Loom names, plus the names
+// its title joins (Suhaib / Steel), plus, when that still leaves one person, the people Loom lists on the meeting (not its recorder).
+// v2: Steel (29/09/26): "pull all these in, including July and August but don't create any tasks from them just enhance the
+// "Ask the Hub". 1on1s should be confidential and not searchable by anyone except for those that are speaking in the meeting.
+// Loom gives you those that are speaking in the meeting." A one-on-one (1on1, 1:1, one-on-one, or names joined by /, x, & or +,
+// four speakers at most) is filed for the people speaking in it and nobody else (visibility speakers: their names and emails;
+// no admin, leader or director sees it), before the sensitive check (nobody else reads it anyway). New action backfill
+// {items: [{id, department, visibility}], dry_run?}: the chosen older recordings become archive-only transcripts (never processed
+// into tasks) with a summary for Ask the Hub (llm task transcript_archive). Team meetings named in the plural or in French
+// (Operations Meetings, Human ressources meeting) are recognised; Finance's meetings and money words go to Finance.
 // Steel (28/09/26): "I want to make sure that the hub pulls from loom automatically every monday, wednesday, and friday without
 // the need for claude to be open", and "loom now has abilities to pull transcripts via mcps. It's a native solution to rely on".
 // Reads Loom through the Atlassian Rovo MCP server (v2, https://mcp.atlassian.com/v2/mcp) as hub@welfareavenue.com, the Atlassian account
@@ -14,7 +24,12 @@
 //   sync   : the new recordings since loom_pull_since become transcripts (the schedule, Monday, Wednesday and Friday at 7:30 in
 //            Toronto through call_edge; admins with Pull now). Runs in the background, one run at a time, at most loom_pull_max
 //            recordings and about 100 seconds per run; the rest waits for the next run.
-//   file {loom_id, department, visibility}: an admin files a recording that needed a look (or was skipped)
+//   file {loom_id, department, visibility}: an admin files a recording that needed a look (or was skipped); visibility speakers
+//            files a one-on-one for the people speaking in it
+//   backfill {items: [{id, department, visibility}], dry_run?, budget_ms?} (v2): older recordings become archive-only meetings
+//            with a summary (Loom's notes and the transcript, llm task transcript_archive), within about 100 seconds a call;
+//            the rest come back as 'later' (admins or x-wa-secret). A meeting given for everyone that may hold something
+//            sensitive goes to the leaders instead; each answer names the speakers (roster names)
 // Who sees a filed meeting (Steel, 28/09/26: "Team meetings to all, the rest private"):
 //   - the recurring team meetings (weekly Operations, Fundraising, Marketing, Human resources, Program Development, Toronto
 //     Operations) are visible to everyone, under their team;
@@ -301,7 +316,7 @@ function personName(v: unknown): string {
   if (v && typeof v === 'object') { const o = v as Json; return str(o.name) || str(o.displayName) || str(o.display_name) || str(o.fullName) || [str(o.firstName), str(o.lastName)].filter(Boolean).join(' ') || str(o.email); }
   return '';
 }
-export type Video = { id: string; ari: string; title: string; created: string; duration_s: number | null; owner: string; privacy: string; folder: string; meeting: boolean; participants: string[]; shared: boolean };
+export type Video = { id: string; ari: string; title: string; created: string; duration_s: number | null; owner: string; privacy: string; folder: string; meeting: boolean; participants: string[]; shared: boolean; summary?: string };
 export function normVideo(x: Json, shared = false): Video {
   const created = str(x.createdAt) || str(x.created_at) || str(x.recordedAt) || str(x.recorded_at) || str(x.createdTime) || str(x.created) || str(x.date) || str(x.startTime) || '';
   let dur = num(x.duration) ?? num(x.sourceDuration) ?? num(x.playableDuration) ?? num(x.durationSeconds) ?? num(x.duration_s) ?? num(x.durationInSeconds);
@@ -323,13 +338,14 @@ export function normVideo(x: Json, shared = false): Video {
     meeting: x.isMeeting === true || x.is_meeting === true || x.meeting === true || !!x.meetingId || !!x.meeting_id || /meeting|zoom|google meet|teams call/i.test(typeText),
     participants: (parts || []).map(personName).filter(Boolean).slice(0, 30),
     shared,
+    summary: str(x.description) || str(x.summary) || '',
   };
 }
 function merged(a: Video, b: Video): Video {
   return {
     id: a.id || b.id, ari: a.ari || b.ari, title: b.title || a.title, created: b.created || a.created, duration_s: b.duration_s ?? a.duration_s, owner: b.owner || a.owner,
     privacy: b.privacy || a.privacy, folder: b.folder || a.folder, meeting: a.meeting || b.meeting,
-    participants: b.participants.length ? b.participants : a.participants, shared: a.shared,
+    participants: b.participants.length ? b.participants : a.participants, shared: a.shared, summary: b.summary || a.summary || '',
   };
 }
 
@@ -472,11 +488,12 @@ const SENSITIVE: RegExp[] = [
 export function sensitiveText(text: string): boolean { return SENSITIVE.some((re) => re.test(text)); }
 const TEAM_MEETINGS: Array<[RegExp, string]> = [
   [/\btoronto\b.*\b(operations|ops)\b|\b(operations|ops)\b.*\btoronto\b/i, 'opsto'],
-  [/\b(operations|ops) (team )?(meeting|sync|check-?in)\b/i, 'opsmtl'],
-  [/\bfundraising (team )?meeting\b/i, 'fundraising'],
-  [/\bmarketing (team )?meeting\b/i, 'marketing'],
-  [/\b(human resources|hr) (team )?meeting\b/i, 'hr'],
-  [/\bprogram development (team )?meeting\b/i, 'progdev'],
+  [/\b(operations|ops) (team )?(meetings?|sync|check-?in)\b/i, 'opsmtl'],
+  [/\bfundraising (team )?meetings?\b/i, 'fundraising'],
+  [/\bfinance (team )?meetings?\b/i, 'finance'],
+  [/\bmarketing (team )?meetings?\b/i, 'marketing'],
+  [/\b(human res?sources|hr) (team )?meetings?\b/i, 'hr'],
+  [/\bprogram development (team )?meetings?\b/i, 'progdev'],
 ];
 const LEADERSHIP = /\bleadership\b|\bexec(?:utive)? (?:team|meeting|sync|check-?in)\b|\bco-?eds?\b|\bexecutive directors?\b/i;
 const BOARD = /\bboard\b|\bagm\b|\bannual general\b/i;
@@ -485,10 +502,11 @@ const DEPT_WORDS: Array<[RegExp, string]> = [
   [/\binterview|\bonboard|\bhiring\b|\brecruit|\bhuman resources\b|\bhr\b|\borientation\b/i, 'hr'],
   [/\bprogram development\b|\bprog ?dev\b|\bresearch\b|\bimpact report|\bsurvey\b|\bevaluation\b/i, 'progdev'],
   [/\bmarketing\b|\bbrand|\bcontent\b|\bsocial media\b|\binstagram\b|\btiktok\b|\blinkedin\b|\bwebsite\b|\bnewsletter\b|\bdesign\b|\bcanva\b|\bphoto|\breels?\b/i, 'marketing'],
-  [/\bfundrais|\bgrants?\b|\bdonors?\b|\bdonations?\b|\bgala\b|\bsponsors?\b|\bfinances?\b|\bbudget\b|\baccount(?:ing|ant)\b|\bbookkeep|\brally\b|\bcampaign\b|\bevents?\b/i, 'fundraising'],
+  [/\bfinances?\b|\bbudget\b|\baccount(?:ing|ant)\b|\bbookkeep|\binvoices?\b|\breimburs/i, 'finance'],
+  [/\bfundrais|\bgrants?\b|\bdonors?\b|\bdonations?\b|\bgala\b|\bsponsors?\b|\brally\b|\bcampaign\b|\bevents?\b/i, 'fundraising'],
   [/\boperations\b|\bops\b|\bserving\b|\bkitchen\b|\blogistics\b|\binventory\b|\bvolunteers?\b|\bmontreal\b/i, 'opsmtl'],
 ];
-export const DEPT_LABEL: Record<string, string> = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising and Finances', hr: 'Human Resources', progdev: 'Program Development', board: 'the board', 'Leadership meeting': 'Leadership' };
+export const DEPT_LABEL: Record<string, string> = { opsmtl: 'Operations Montreal', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', progdev: 'Program Development', board: 'the board', 'Leadership meeting': 'Leadership' };
 export type Person = { name: string; email?: string; department?: string };
 export type Ctx = { roster: Person[]; leaders: string[] };
 /* a speaker's roster name: the same full name, or the same first name when the roster has only a first name and it is unique */
@@ -516,6 +534,41 @@ export function allowedFor(v: Video, speakers: string[], ctx: Ctx): string[] {
   const names = peopleIn(v, speakers, ctx).map((p) => p.name).concat(ctx.leaders || []);
   return [...new Set(names.filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }
+/* v2: a one-on-one (the title says so, or it is two to four first names joined by /, x, & or +) with four speakers at most */
+const ONE_ON_ONE = /\b1\s*on\s*1(?:\s*on\s*1)?\b|\b1:1\b|\bone[- ]on[- ]one\b/i;
+const NAMES_JOINED = /^\s*[A-Z][\p{L}'.-]+(?:\s[A-Z][\p{L}'.-]+)?\s*(?:\/|\bx\b|&|\+)\s*[A-Z][\p{L}'.-]+/u;
+export function isOneOnOne(title: string, speakers: string[]): boolean {
+  const t = String(title || '');
+  if ((speakers || []).length > 4) return false;
+  return ONE_ON_ONE.test(t) || NAMES_JOINED.test(t);
+}
+/* the people speaking, matched to the roster: each one's name and email, and anyone unmatched as Loom names them. Loom's
+   transcript does not always name every voice, so the names a one-on-one's title joins (Suhaib / Steel) are added, and when
+   that still leaves one person, the people Loom lists on the meeting (not its recorder) (loom_file adds the other addresses a
+   member signs in with: wa_people_expand) */
+const BOTS = /^(loom|hub|notetaker|recorder|noreply|no-reply|info)@/i;
+export function titleNames(title: string): string[] {
+  const t = String(title || '').replace(/\s+-\s.*$|\s*\(.*$/, '');
+  if (!NAMES_JOINED.test(t)) return [];
+  return t.split(/\s*(?:\/|\bx\b|&|\+|,)\s*/).map((w) => w.replace(/\b1\s*on\s*1(?:\s*on\s*1)?\b|\b1:1\b/gi, '').trim()).filter((w) => /^[A-Z][\p{L}'.-]+(?:\s[A-Z][\p{L}'.-]+)?$/u.test(w) && !/^(Meeting|Check|Weekly|Team|The)$/i.test(w));
+}
+export function speakersAllowed(title: string, speakers: string[], roster: Person[], participants: string[] = []): string[] {
+  const key = (n: string) => { const p = matchRoster(n, roster); return p ? p.name.toLowerCase() : String(n || '').trim().toLowerCase(); };
+  const names: string[] = []; const seen = new Set<string>();
+  const push = (n: string) => { const v = String(n || '').trim(); const k = key(v); if (v && !seen.has(k)) { seen.add(k); names.push(v); } };
+  (speakers || []).forEach(push);
+  titleNames(title).forEach(push);
+  if (!names.length) String(title || '').split(/\s*(?:\/|\bx\b|&|\+|,| - )\s*/).map((w) => w.trim()).filter((w) => /^[A-Z][\p{L}'.-]+(?:\s[A-Z][\p{L}'.-]+)?$/u.test(w) && !/^(Meeting|Check|Weekly|Team|The)$/i.test(w)).forEach(push);
+  if (seen.size < 2) (participants || []).filter((x) => /@/.test(String(x)) && !BOTS.test(String(x))).forEach(push);
+  const out: string[] = [];
+  const add = (x: string) => { const v = String(x || '').trim(); if (v && out.indexOf(v) < 0) out.push(v); };
+  for (const n of names) {
+    const p = matchRoster(n, roster);
+    if (p) { add(p.name); if (p.email) add(p.email); }
+    else add(n);
+  }
+  return out;
+}
 function teamOf(title: string, people: Person[]): string {
   for (const [re, d] of DEPT_WORDS) if (re.test(title)) return d;
   const count: Record<string, number> = {};
@@ -540,6 +593,12 @@ export function classify(v: Video, tx: { lines: string[]; speakers: string[] }, 
   const people = peopleIn(v, tx.speakers, ctx);
   if (!team && !lead && !board && tx.speakers.length < 2) return { status: 'skipped', reason: 'One person speaking: a recording, not a meeting' };
   if (board) return { status: 'needs_look', reason: 'A board meeting: an admin decides where it goes' };
+  /* v2: a one-on-one is only for the people speaking in it (filed before the sensitive check: nobody else reads it) */
+  if (!team && !lead && isOneOnOne(title, tx.speakers)) {
+    const allowed = speakersAllowed(title, tx.speakers, ctx.roster, v.participants);
+    const dept = teamOf(title, people) || 'board';
+    if (allowed.length) return { status: 'filed', reason: 'A one-on-one, so only the people speaking in it see it', department: dept, visibility: 'speakers', allowed };
+  }
   if (sensitiveText(title + '\n' + body)) return { status: 'needs_look', reason: 'May hold something sensitive, so an admin decides who sees it' };
   if (v.shared && v.owner && !matchRoster(v.owner, ctx.roster) && !team) return { status: 'needs_look', reason: 'Shared by someone outside the team' };
   if (lead) return { status: 'filed', reason: 'Leadership meeting, so the leaders see it', department: 'Leadership meeting', visibility: 'leadership' };
@@ -717,9 +776,10 @@ async function sync(runId: number, addedBy: string): Promise<{ status: string; c
   const note = [left ? left + ' more wait for the next pull' : '', ...new Set(notes)].filter(Boolean).join('; ');
   return { status: counts.errors && !counts.filed ? 'error' : (left ? 'partial' : 'ok'), counts, note };
 }
-function filePayload(v: Video, tx: { lines: string[]; speakers: string[] }, dec: Decision, addedBy: string): Json {
+function filePayload(v: Video, tx: { lines: string[]; speakers: string[] }, dec: Decision, addedBy: string, extra: Json = {}): Json {
   const created = isoOrNull(v.created);
   return {
+    ...extra,
     loom_id: v.id, title: v.title || ('Loom meeting ' + torontoDay(created || '')), body: tx.lines.join('\n'), meeting_date: torontoDay(created || ''),
     recorded_at: created, duration_s: v.duration_s, owner_name: v.owner || null, speakers: tx.speakers, loom_privacy: v.privacy || null,
     department: dec.department, visibility: dec.visibility || 'department', allowed_people: dec.allowed || null, reason: dec.reason, added_by: addedBy,
@@ -789,7 +849,7 @@ async function fileOne(body: Json, who: string): Promise<Json> {
   const dept = String(body.department || '');
   if (!DEPT_LABEL[dept] || dept === 'board') throw new Error('Pick the team it belongs to');
   const vis = String(body.visibility || 'private');
-  if (['department', 'leadership', 'private'].indexOf(vis) < 0) throw new Error('Pick who sees it');
+  if (['department', 'leadership', 'private', 'speakers'].indexOf(vis) < 0) throw new Error('Pick who sees it');
   const { data: row } = await svc.from('loom_videos').select('*').eq('loom_id', id).maybeSingle();
   if (row && (row.status === 'filed' || row.status === 'personal')) throw new Error(row.status === 'filed' ? 'That recording is already filed' : 'That recording was left out as personal');
   const ctx = await rpc('loom_pull_context', {}) as Json;
@@ -800,11 +860,129 @@ async function fileOne(body: Json, who: string): Promise<Json> {
   if (personalText(got.tx.lines.join('\n'))) throw new Error('That recording looks personal, so the Hub leaves it out');
   const base: Video = normVideo({ id, name: row ? row.title : '', createdAt: row && row.recorded_at ? row.recorded_at : '', owner: row ? row.owner_name : '' });
   const v = got.meta ? merged(base, got.meta) : base;
-  const allowed = vis === 'private' ? allowedFor(v, got.tx.speakers, people) : undefined;
+  const allowed = vis === 'private' ? allowedFor(v, got.tx.speakers, people) : (vis === 'speakers' ? speakersAllowed(v.title, got.tx.speakers, people.roster, v.participants) : undefined);
   if (vis === 'private' && (!allowed || !allowed.length)) throw new Error('Nobody on the Hub is in it; pick Leaders instead');
+  if (vis === 'speakers' && (!allowed || !allowed.length)) throw new Error('Loom names nobody speaking in it; pick Confidential instead');
   const dec: Decision = { status: 'filed', reason: 'Filed by ' + who, department: vis === 'leadership' && body.department === 'Leadership meeting' ? 'Leadership meeting' : dept, visibility: vis === 'department' ? null : vis, allowed };
   const r = await rpc('loom_file', { p: filePayload(v, got.tx, dec, 'Loom pull (filed by ' + who + ')') }) as Json;
   return { ok: true, transcript_id: r.transcript_id, already: !!r.already };
+}
+
+/* =====================================================================================================================
+   v2: the backfill. Older recordings kept for the archive and Ask the Hub only: never processed into tasks, updates,
+   decisions, suggestions or ideas (transcripts.archive_only; the insert triggers skip them), each with a summary
+   ===================================================================================================================== */
+const ARCHIVE_SYSTEM = `You write the archive summary of one Welfare Avenue meeting. Welfare Avenue is a charity in Montreal and Toronto that serves free meals and runs community programs with volunteers. The Hub keeps this meeting for its archive and for Ask the Hub, which answers staff questions from these summaries later, so keep what someone might ask about.
+
+Write 150 to 300 words as three short paragraphs, each starting with its label:
+Discussed: the topics, with the people, partners, places, events, programs, tools, dates and numbers that came up.
+Decided: what was agreed or decided, or "Nothing was decided."
+Next steps: who took on what, with any dates, or "No next steps were set."
+
+Rules: only what the meeting says; never guess or add. Past tense. Names as the transcript gives them. Plain sentences: no headings, no bullet points, no markdown. Never use em dashes: use commas, colons or parentheses.`;
+/* Loom's notes and the model's text as plain prose: no markdown headings or bold, no em dashes */
+export function cleanSummary(t: string): string {
+  return String(t || '').replace(/\r\n?/g, '\n').replace(/^\s*#{0,6}\s*(?:meeting\s+|archive\s+)?summary:?\s*\n/i, '').replace(/^#{1,6}\s*/gm, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/\s*\u2014\s*/g, ', ').replace(/\n{3,}/g, '\n\n').trim();
+}
+async function summarize(v: Video, lines: string[], team: string): Promise<{ text: string; source: string }> {
+  const notes = cleanSummary(v.summary || '');
+  const head = 'MEETING: ' + (v.title || 'Loom meeting') + ' (' + (DEPT_LABEL[team] || team) + ', ' + torontoDay(isoOrNull(v.created) || '') + ')\n';
+  const all = lines.join('\n');
+  const text = all.length > 60000 ? all.slice(0, 45000) + '\n...\n' + all.slice(-15000) : all;
+  try {
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+      method: 'POST', signal: AbortSignal.timeout(60000),
+      headers: { Authorization: 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'transcript_archive', 'x-wa-caller': 'loom-pull', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 1200, temperature: 0.2, system: ARCHIVE_SYSTEM,
+        messages: [{ role: 'user', content: head + (notes ? '\nLOOM\'S OWN NOTES ON IT:\n' + notes.slice(0, 6000) + '\n' : '') + '\nTRANSCRIPT:\n' + text }] }),
+    });
+    if (res.ok) {
+      const out = await res.json() as Json;
+      const t = cleanSummary(((out.content || []) as Json[]).filter((c) => c && c.type === 'text').map((c) => String(c.text || '')).join('\n'));
+      if (t.length >= 80) return { text: t.slice(0, 6000), source: 'ai' };
+    }
+  } catch (_) { /* Loom's own notes, below */ }
+  if (notes.length >= 80) return { text: notes.slice(0, 6000), source: 'loom' };
+  return { text: '', source: 'none' };
+}
+/* a recording's ARI from its id: the workspace's activation id, read once from a page of the list (getLoomVideo does not
+   resolve a share link) */
+async function loomAri(s: Session, id: string, cache: { act?: string }): Promise<string> {
+  if (!cache.act && s.list) {
+    const d = await s.m.call(String(s.list.name), argsFor(s.list, { cloudId: s.cloudId, limit: 1 }));
+    walk(d, (v) => { if (!cache.act && typeof v === 'string') { const m = v.match(/^ari:cloud:loom:[^:]+:video\/activation\/([^/]+)\/[0-9a-f]{32}$/i); if (m) cache.act = m[1]; } });
+  }
+  return cache.act ? 'ari:cloud:loom:' + s.cloudId + ':video/activation/' + cache.act + '/' + id : '';
+}
+type BackItem = { id: string; department: string; visibility?: string | null };
+async function backfill(body: Json, who: string): Promise<Json> {
+  const items = (Array.isArray(body.items) ? body.items : []) as BackItem[];
+  if (!items.length) throw new Error('No recordings given');
+  if (items.length > 100) throw new Error('At most 100 recordings at a time');
+  const dry = body.dry_run === true;
+  const deadline = Date.now() + Math.max(20000, Math.min(BUDGET_MS, Number(body.budget_ms) || BUDGET_MS));
+  const ctx = await rpc('loom_pull_context', {}) as Json;
+  const roster = (ctx.roster || []) as Person[];
+  const people: Ctx = { roster, leaders: (ctx.leaders || []) as string[] };
+  const s = await connect(ctx);
+  if (!s.get) throw new Error('Loom has no getLoomVideo tool on this server');
+  const ids = items.map((it) => String(it.id || '').toLowerCase());
+  const { data: rows } = await svc.from('loom_videos').select('loom_id, status, transcript_id').in('loom_id', ids);
+  const known = new Map(((rows || []) as Json[]).map((r) => [String(r.loom_id), r]));
+  const cache: { act?: string } = {};
+  const addedBy = 'Loom pull (archive, ' + who + ')';
+  const out: Json[] = [];
+  for (const it of items) {
+    const id = String(it.id || '').toLowerCase();
+    const dept = String(it.department || '');
+    const vis = !it.visibility || it.visibility === 'department' ? null : String(it.visibility);
+    const r: Json = { id, department: dept, visibility: vis || 'department' };
+    try {
+      if (!/^[0-9a-f]{32}$/.test(id)) throw new Error('not a Loom id');
+      if (!DEPT_LABEL[dept]) throw new Error('unknown team ' + dept);
+      if (vis && ['leadership', 'private', 'speakers'].indexOf(vis) < 0) throw new Error('unknown visibility ' + vis);
+      const k = known.get(id) as Json | undefined;
+      if (k && (k.status === 'filed' || k.status === 'personal')) { r.status = k.status === 'filed' ? 'already' : 'personal'; r.transcript_id = k.transcript_id || null; out.push(r); continue; }
+      if (Date.now() > deadline) { r.status = 'later'; out.push(r); continue; }
+      const got = await fetchVideo(s, id, await loomAri(s, id, cache));
+      const v = got.meta ? merged(normVideo({ id }), got.meta) : normVideo({ id });
+      r.title = v.title; r.date = torontoDay(isoOrNull(v.created) || '');
+      if (PERSONAL_TITLE.test(v.title) || personalText(got.tx.lines.join('\n'))) {
+        r.status = 'personal'; r.title = '';
+        if (!dry) await save(v, { status: 'personal', reason: '' }, [], addedBy);
+        out.push(r); continue;
+      }
+      if (!got.tx.lines.length) {
+        r.status = 'no_transcript';
+        if (!dry) await save(v, { status: 'skipped', reason: 'Loom has no transcript for it' }, [], addedBy);
+        out.push(r); continue;
+      }
+      /* a meeting for everyone that may hold something sensitive goes to the leaders instead (an admin can open it up) */
+      let vis2 = vis;
+      if (!vis2 && sensitiveText(v.title + '\n' + got.tx.lines.join('\n'))) { vis2 = 'leadership'; r.raised = 'sensitive, so the leaders see it'; }
+      let allowed: string[] | undefined;
+      if (vis2 === 'speakers') allowed = speakersAllowed(v.title, got.tx.speakers, roster, v.participants);
+      else if (vis2 === 'private') allowed = allowedFor(v, got.tx.speakers, people);
+      if ((vis2 === 'speakers' || vis2 === 'private') && (!allowed || !allowed.length)) throw new Error('nobody on the Hub is speaking in it');
+      r.visibility = vis2 || 'department'; r.speaker_names = got.tx.speakers.slice(0, 8).map((n) => { const m = matchRoster(n, roster); return m ? m.name : n; });
+      r.speakers = got.tx.speakers.length; r.lines = got.tx.lines.length;
+      if (allowed) r.people = allowed.filter((x) => x.indexOf('@') < 0);
+      const sum = await summarize(v, got.tx.lines, dept);
+      r.summary = sum.source; r.summary_chars = sum.text.length;
+      if (dry) { r.status = 'would_file'; out.push(r); continue; }
+      const why = vis2 === 'speakers' ? 'a one-on-one: only the people speaking in it see it' : (vis2 === 'leadership' ? 'the leaders see it' : (vis2 === 'private' ? 'confidential to the people in it and the leaders' : 'everyone sees it'));
+      const dec: Decision = { status: 'filed', reason: 'Kept for the archive and Ask the Hub only, no tasks (' + why + ')', department: dept, visibility: vis2, allowed };
+      const f = await rpc('loom_file', { p: filePayload(v, got.tx, dec, addedBy, { archive_only: true, ai_summary: sum.text || null }) }) as Json;
+      r.status = f && f.already ? 'already' : 'filed'; r.transcript_id = f ? f.transcript_id : null;
+    } catch (e) {
+      if (e instanceof McpError && e.kind === 'refused') throw e;
+      r.status = 'error'; r.error = String((e as Error).message || e).slice(0, 200);
+    }
+    out.push(r);
+  }
+  const tally: Record<string, number> = {};
+  out.forEach((x) => { tally[String(x.status)] = (tally[String(x.status)] || 0) + 1; });
+  return { ok: true, dry_run: dry, tally, items: out };
 }
 
 async function handler(req: Request): Promise<Response> {
@@ -824,6 +1002,7 @@ async function handler(req: Request): Promise<Response> {
       if (who.kind !== 'admin') return json({ error: 'Admins file recordings from the Loom card' }, 403);
       return json(await fileOne(body, who.who));
     }
+    if (action === 'backfill') return json(await backfill(body, who.kind === 'admin' ? who.who : 'automation'));
     if (action === 'sync') {
       const why = who.kind === 'admin' ? 'pull now (' + who.who + ')' : String(body.why || 'schedule').slice(0, 60);
       const runId = await rpc('loom_pull_begin', { p_why: why }) as number | null;
@@ -844,4 +1023,4 @@ async function handler(req: Request): Promise<Response> {
 }
 
 if (Deno.env.get('WA_FN_TEST') !== '1') Deno.serve(handler);
-export { handler, sync, probe, fileOne, connect, listAll, fetchVideo };
+export { handler, sync, probe, fileOne, backfill, connect, listAll, fetchVideo };

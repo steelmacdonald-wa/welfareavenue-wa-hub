@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the weekly digest reads open work only (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches the digest posted in Slack).
 // wave164 (29/09/26): Fundraising is called Fundraising, and Finance (its own team now, apart from Fundraising) has a label.
 // Welfare Avenue: weekly-digest (v2, 25/07/26)
 // v2: board_only confidentiality tier. Every query on dept_updates, decisions
@@ -9,6 +11,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -72,12 +75,12 @@ Deno.serve(async (req)=>{
   const today = new Date().toISOString().slice(0, 10);
   // v2: all six queries exclude board_only rows; output goes to staff Slack.
   const [updatesQ, newDecQ, decidedQ, agingDecQ, overdueQ, closedQ] = await Promise.all([
-    svc.from('dept_updates').select('department').eq('board_only', false).gte('created_at', weekAgo),
-    svc.from('decisions').select('title, reason_category').eq('board_only', false).eq('done', false).gte('opened_at', weekAgo),
-    svc.from('decisions').select('title, decided_note').eq('board_only', false).gte('decided_at', weekAgo),
-    svc.from('decisions').select('title, opened_at').eq('board_only', false).eq('done', false).lt('opened_at', new Date(Date.now() - 14 * 86400000).toISOString()),
-    svc.from('dept_tasks').select('title, department, due_date, owner').eq('board_only', false).eq('done', false).lt('due_date', today),
-    svc.from('dept_tasks').select('id').eq('board_only', false).eq('done', true).gte('closed_at', weekAgo)
+    svc.from('dept_updates').select('department').eq('board_only', false).or(OPEN_VIS).gte('created_at', weekAgo),
+    svc.from('decisions').select('title, reason_category').eq('board_only', false).or(OPEN_VIS).eq('done', false).gte('opened_at', weekAgo),
+    svc.from('decisions').select('title, decided_note').eq('board_only', false).or(OPEN_VIS).gte('decided_at', weekAgo),
+    svc.from('decisions').select('title, opened_at').eq('board_only', false).or(OPEN_VIS).eq('done', false).lt('opened_at', new Date(Date.now() - 14 * 86400000).toISOString()),
+    svc.from('dept_tasks').select('title, department, due_date, owner').eq('board_only', false).or(OPEN_VIS).eq('done', false).lt('due_date', today),
+    svc.from('dept_tasks').select('id').eq('board_only', false).or(OPEN_VIS).eq('done', true).gte('closed_at', weekAgo)
   ]);
   const site = await siteUrl();
   const updByDept = {};

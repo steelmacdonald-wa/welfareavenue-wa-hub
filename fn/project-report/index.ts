@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the tasks a project report reads are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a project report).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'draft') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: project-report (v1, 07/08/26)
@@ -10,6 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -145,7 +148,7 @@ Deno.serve(async (req)=>{
   }, 400);
   const [projQ, tasksQ] = await Promise.all([
     svc.from('projects').select('*').eq('id', pid).maybeSingle(),
-    svc.from('dept_tasks').select('id, title, department, owner, due_date, done, closed_at, status, flag').is('banked_at', null).eq('project_id', pid).order('done').order('due_date', {
+    svc.from('dept_tasks').select('id, title, department, owner, due_date, done, closed_at, status, flag').is('banked_at', null).or(OPEN_VIS).eq('project_id', pid).order('done').order('due_date', {
       ascending: true,
       nullsFirst: false
     }).limit(300)

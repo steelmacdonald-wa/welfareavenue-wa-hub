@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the meetings, updates and tasks a proposal reads are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a proposed goal).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'goals') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: goal-propose (v1)
@@ -10,6 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -168,13 +171,13 @@ Deno.serve(async (req)=>{
   }, 400);
   const [metaQ, txQ, updQ, tasksQ, projQ, goalsQ] = await Promise.all([
     svc.from('dept_meta').select('read, progress, priorities').eq('department', dept).maybeSingle(),
-    svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept).order('meeting_date', {
+    svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept).or(OPEN_VIS).order('meeting_date', {
       ascending: false
     }).limit(8),
-    svc.from('dept_updates').select('entry_label, text').eq('department', dept).order('id', {
+    svc.from('dept_updates').select('entry_label, text').eq('department', dept).or(OPEN_VIS).order('id', {
       ascending: false
     }).limit(10),
-    svc.from('dept_tasks').select('title, status').is('banked_at', null).eq('department', dept).eq('done', false).limit(60),
+    svc.from('dept_tasks').select('title, status').is('banked_at', null).eq('department', dept).eq('done', false).or(OPEN_VIS).limit(60),
     svc.from('projects').select('name, description, status').is('banked_at', null).eq('department', dept),
     svc.from('goals').select('title, detail, measure, quarter, status, department').or('department.eq.' + dept + ',department.eq.org')
   ]);

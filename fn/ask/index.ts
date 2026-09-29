@@ -1,3 +1,10 @@
+// v14 (29/09/26, wave165): the meetings as the asker may read them. Steel: "1on1s should be confidential and not searchable by
+// anyone except for those that are speaking in the meeting", and the older Loom meetings pulled in to "enhance the Ask the Hub".
+// MEETINGS MATCHING THE QUESTION comes from wa_ask_meetings, run as the asker: any of the question's words, ranked by relevance
+// (it used to need every word and took the newest), with each meeting's summary and the passage that matches, from every meeting
+// the asker may read (a one-on-one only for the people who spoke in it; leadership and confidential meetings for their people),
+// the archive-only ones included. Restricted meetings are marked, and the model keeps their details out of anything others read.
+// A call without a person (the trigger secret) keeps the open meetings only. Program Development no longer counts twice.
 // wave164 (29/09/26): Finance is its own team, apart from Fundraising: requests and tasks can go to finance (reimbursements, purchase
 // approvals, invoices and receipts), and Fundraising is called Fundraising.
 // v13 (26/09/26): our story (wave140, the Drive mining). An OUR STORY block from wa_story_context: the moments, year lines,
@@ -78,7 +85,6 @@ async function authorize(req) {
 }
 const DEPTS = [
   'opsmtl',
- 'progdev',
   'progdev',
   'opsto',
   'marketing',
@@ -405,7 +411,7 @@ const OR_MODELS = [
   'deepseek/deepseek-v4-pro-0813',
   'qwen/qwen3.8-27b'
 ];
-const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. For Welfare Avenue's past (what happened when, where, with whom, how many), use the OUR STORY blocks and KEY FACTS: give dates, say so when two sources disagree, include a source or document link when one is listed, and point to the Our story, Partners or Document finder pages (Resources menu) for more. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only.
+const SYSTEM = `You are the assistant for Welfare Avenue's staff Hub, a youth-powered charity in Montreal and Toronto run by co executive directors Steel and Suhaib. Answer ONLY from the provided context: if the context does not contain the answer, say what is missing and where to look. Be concise, under 180 words unless listing items. Cite sources inline like (Ops MTL meeting, Jul 13). When a document from the DRIVE DOCUMENTS block informs your answer, include its link so the reader can open the source in Google Drive. For Welfare Avenue's past (what happened when, where, with whom, how many), use the OUR STORY blocks and KEY FACTS: give dates, say so when two sources disagree, include a source or document link when one is listed, and point to the Our story, Partners or Document finder pages (Resources menu) for more. Never use em dashes anywhere; use commas, colons, or parentheses. Plain text only. A meeting marked ONE-ON-ONE, LEADERS or CONFIDENTIAL is restricted: the person asking may read it and most colleagues may not, so answer them from it but never copy its details into a proposed task or request unless they ask for exactly that, and never suggest sharing it.
 
 You can PROPOSE actions with the action tools: file a new request (create_request), add a task (create_task), close a task, move a task to the bank (bank_task: for work the user wants to park for three months or more; it comes back on its date), complete a request, or change a request status. Nothing you propose happens immediately: the dashboard shows the user a confirmation card and the action only runs if they confirm. Propose an action ONLY when the latest user message asks for it. Draft titles and details faithfully from what the user said; never invent names, amounts, or dates they did not give. For ids, only use ids present in the context lists. In your final answer, tell the user what is ready to confirm below; never say it is already filed, added, closed, or done.
 
@@ -1095,6 +1101,20 @@ function bestSections(body, terms, max) {
   for (const x of keep){ if (x.head && x.head !== last) { text += (text ? '\n' : '') + x.head; last = x.head; } text += (text ? '\n' : '') + x.s; }
   return { text, score: pick.reduce((a, x)=>a + x.sc, 0) };
 }
+/* v14: a meeting as a line of context: its kind when restricted or archive only, its summary, the passage that matches */
+function meetingsText(ms) {
+  const kind = (m)=>{
+    const bits = [];
+    if (m.visibility === 'speakers') bits.push('ONE-ON-ONE: only the people who spoke in it see it');
+    else if (m.visibility === 'leadership') bits.push('LEADERS: leaders only');
+    else if (m.visibility === 'private') bits.push('CONFIDENTIAL: only the people in it and the leaders');
+    if (m.board_only) bits.push('board only');
+    if (m.archive_only) bits.push('kept for the archive, no tasks came from it');
+    return bits.length ? ' [' + bits.join('; ') + ']' : '';
+  };
+  const clean = (t)=>String(t || '').replace(/<\/?b>/g, '').replace(/\s+/g, ' ').trim();
+  return 'MEETINGS MATCHING THE QUESTION (best matches first, each with its summary and the passage that matches the question):\n' + ms.map((m)=>'- ' + (m.title || 'Untitled') + ' (' + (DEPT_LABELS[m.department] || m.department || '') + ', ' + (m.meeting_date || '') + ')' + kind(m) + ': ' + clean(m.ai_summary).slice(0, 1100) + (clean(m.passage) ? ' Passage: "' + clean(m.passage).slice(0, 600) + '"' : '')).join('\n');
+}
 async function buildContext(question, isBoard, acc) {
   const kws = keywords(question);
   const parts = [];
@@ -1102,8 +1122,20 @@ async function buildContext(question, isBoard, acc) {
     const story = await storyBlock(question, acc || { lead: false, docsLead: false });
     if (story) parts.push(story);
   } catch (_) {}
+  /* v14: the meetings that answer the question best, as the asker may read them (wa_ask_meetings runs as the asker) */
+  let meetingsDone = false;
   try {
-    if (kws.length) {
+    if (ASK_AUTH.startsWith('Bearer ') && ASK_WHO && ASK_WHO !== 'system') {
+      const asUser = createClient(SUPABASE_URL, ANON_KEY, { global: { headers: { Authorization: ASK_AUTH } } });
+      const { data: ms, error: mErr } = await asUser.rpc('wa_ask_meetings', { q: question, lim: 7 });
+      if (!mErr && Array.isArray(ms)) {
+        meetingsDone = true;
+        if (ms.length) parts.push(meetingsText(ms));
+      }
+    }
+  } catch (_) { meetingsDone = false; }
+  try {
+    if (kws.length && !meetingsDone) {
       let ftsQ = svc.from('transcripts').select('id,title,meeting_date,department,ai_summary').or(OPEN_VIS).textSearch('fts', kws.join(' '), {
         type: 'websearch'
       });

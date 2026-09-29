@@ -30,6 +30,8 @@
       note.textContent = 'Leadership meeting, open to everyone: its updates, tasks and suggested requests spread across ALL departments, and the whole team can see them.';
     } else if (v === 'private') {
       note.textContent = 'Leadership meeting, confidential: it spreads across ALL departments, but only the people you pick (plus admins) see the meeting and what it files.';
+    } else if (v === 'speakers') {
+      note.textContent = 'Leadership meeting as a one-on-one: it spreads across ALL departments, but only the people you pick see the meeting and what it files, not even admins.';
     } else {
       note.textContent = 'Leadership meeting: its updates, tasks and suggested requests spread across ALL departments. Visible to leaders and admins only.';
     }

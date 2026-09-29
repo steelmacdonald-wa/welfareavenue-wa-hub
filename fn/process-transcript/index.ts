@@ -1,3 +1,12 @@
+// v17 (29/09/26, wave165): one-on-ones only for the people speaking in them, and archive-only meetings. Steel: "1on1s should be
+// confidential and not searchable by anyone except for those that are speaking in the meeting", and for the older Loom meetings
+// "don't create any tasks from them just enhance the "Ask the Hub"". An archive-only meeting (transcripts.archive_only) is never
+// processed (the insert trigger skips it; a direct call answers without writing). A meeting sees only the work it may share:
+// open work, and for a restricted meeting the work of its own kind (a one-on-one: the work of one-on-ones among the same people),
+// so nothing restricted from elsewhere leaks into what it files. A restricted meeting leaves the team's narrative (progress, mood,
+// priorities) alone, routes nothing to serving events, gives no content ideas, closes and decides only work of its own kind (its
+// evidence never lands on open work), and its audit rows follow it. A one-on-one is never escalated to board-only (only its
+// speakers read it anyway) and posts nothing in Slack; other restricted meetings post counts without quoting what Jev dropped.
 // v16 (29/09/26, wave164): Finance is its own team, apart from Fundraising (Steel: "these should be seperate"): a meeting tagged Finance
 // files its tasks and updates under finance (apply_transcript_result maps it too), and Fundraising is called Fundraising. Nothing else changed.
 // v15 (28/09/26, wave162): meetings the Loom pull files (added_by 'Loom pull ...') post the usual Slack line only when app_config
@@ -333,12 +342,13 @@ async function jevCheck(result: Record<string, unknown>, transcript: string, ros
 
 type CloseItem = { task_id?: unknown; evidence?: unknown };
 
-async function applyCloseTasks(result: Record<string, unknown>, dept: string, changedBy: string, boardOnly: boolean): Promise<Array<{ id: number; title: string }>> {
+async function applyCloseTasks(result: Record<string, unknown>, dept: string, changedBy: string, boardOnly: boolean, closable?: Set<number>): Promise<Array<{ id: number; title: string }>> {
   const items = Array.isArray(result.close_tasks) ? (result.close_tasks as CloseItem[]) : [];
   const closed: Array<{ id: number; title: string }> = [];
   for (const item of items) {
     const taskId = Number(item?.task_id);
     if (!Number.isInteger(taskId) || taskId <= 0) continue;
+    if (closable && !closable.has(taskId)) { console.warn('close skipped, not work this meeting may close', taskId); continue; }
     const evidence = String(item?.evidence || '').slice(0, 600);
     const { data: task, error: fetchErr } = await svc.from('dept_tasks')
       .select('id, title, done, department').eq('id', taskId).maybeSingle();
@@ -489,7 +499,7 @@ async function ideasPass(tx: Record<string, unknown>, roster: string[]): Promise
 }
 
 function ideasAllowed(tx: Record<string, unknown>): boolean {
-  return tx.board_only !== true && ['leadership', 'private'].indexOf(String(tx.visibility || '')) < 0;
+  return tx.board_only !== true && tx.archive_only !== true && ['leadership', 'private', 'speakers'].indexOf(String(tx.visibility || '')) < 0;
 }
 
 async function saveIdeas(transcriptId: number, ideas: Idea[], by: string): Promise<{ added: number; banked: number; skipped: number }> {
@@ -505,7 +515,7 @@ async function ideasOnly(transcriptId: number, dryRun: boolean) {
   const { data: tx, error } = await svc.from('transcripts').select('*').eq('id', transcriptId).single();
   if (error || !tx) throw new Error('transcript not found');
   if (deptKey(tx.department) !== 'marketing') throw new Error('content ideas come from Marketing meetings only');
-  if (!ideasAllowed(tx)) return { transcript_id: transcriptId, added: 0, reason: 'restricted meeting' };
+  if (!ideasAllowed(tx)) return { transcript_id: transcriptId, added: 0, reason: tx.archive_only === true ? 'archive-only meeting' : 'restricted meeting' };
   const { data: team } = await svc.from('team_members').select('name').eq('department', 'marketing').eq('active', true);
   const roster = [...new Set([...(team || []).map((m: { name: string }) => m.name), 'Steel MacDonald', 'Suhaib'])];
   const pass = await ideasPass(tx, roster);
@@ -514,20 +524,55 @@ async function ideasOnly(transcriptId: number, dryRun: boolean) {
   return { transcript_id: transcriptId, ...saved, dropped_without_quote: pass.dropped, pieces: pass.pieces };
 }
 
+/* v17: what a meeting may see of the boards. Open work always; a restricted meeting also the work of its own kind (a one-on-one:
+   the work of one-on-ones among the same people, every one of its people being on it) */
+type VisRow = { visibility?: string | null; allowed_people?: unknown };
+const lowerList = (x: unknown): string[] => Array.isArray(x) ? (x as unknown[]).map((v) => String(v || '').trim().toLowerCase()).filter(Boolean) : [];
+export function restrictedVis(tx: Record<string, unknown>): string {
+  const v = String(tx.visibility || '');
+  return ['leadership', 'private', 'speakers'].indexOf(v) >= 0 ? v : '';
+}
+export function seesRow(tx: Record<string, unknown>) {
+  const vis = restrictedVis(tx);
+  const ap = lowerList(tx.allowed_people);
+  return (r: VisRow): boolean => {
+    const rv = String(r.visibility || '');
+    if (!rv || rv === 'department') return true;
+    if (!vis || rv !== vis) return false;
+    if (vis === 'speakers') { const rap = lowerList(r.allowed_people); return ap.length > 0 && ap.every((x) => rap.indexOf(x) >= 0); }
+    return true;
+  };
+}
+/* work of the meeting's own restricted kind (a restricted meeting closes and decides only these) */
+export function ownKind(tx: Record<string, unknown>) {
+  const vis = restrictedVis(tx); const sees = seesRow(tx);
+  return (r: VisRow): boolean => !!vis && String(r.visibility || '') === vis && sees(r);
+}
+const bare = <T extends Record<string, unknown>>(r: T) => { const o: Record<string, unknown> = { ...r }; delete o.visibility; delete o.allowed_people; return o; };
+
 async function processTranscript(transcriptId: number, dryRun = false) {
   const { data: tx, error } = await svc.from('transcripts').select('*').eq('id', transcriptId).single();
   if (error || !tx) throw new Error('transcript not found');
+  /* v17: kept for the archive and Ask the Hub only */
+  if (tx.archive_only === true) return { skipped: true, note: 'archive only: kept for the archive and Ask the Hub, not processed' };
   if (!tx.body || tx.body.trim().length < 40) throw new Error('transcript body too short to process');
   const dept = deptKey(tx.department);
   if (!dept) throw new Error('unknown department: ' + tx.department);
+  const vis = restrictedVis(tx);
+  const sees = seesRow(tx); const own = ownKind(tx);
 
-  const [metaQ, tasksQ, decQ, rosterQ, projQ] = await Promise.all([
+  const [metaQ, tasksAll, decAll, rosterQ, projQ] = await Promise.all([
     svc.from('dept_meta').select('read, progress, priorities').eq('department', dept).maybeSingle(),
-    svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag, banked_at, bank_until').eq('department', dept).eq('done', false),
-    svc.from('decisions').select('id, title, area, owner').eq('done', false),
+    svc.from('dept_tasks').select('id, title, subsection, owner, status, due_date, flag, banked_at, bank_until, visibility, allowed_people').eq('department', dept).eq('done', false),
+    svc.from('decisions').select('id, title, area, owner, visibility, allowed_people').eq('done', false),
     svc.from('team_members').select('name, role').eq('department', dept).eq('active', true),
     svc.from('projects').select('id, name, description, department, parent_id, goal_id').is('banked_at', null).eq('status', 'active').order('department').order('sort'),
   ]);
+  /* v17: only the work this meeting may share (see seesRow) */
+  const seenTasks = ((tasksAll.data || []) as Array<Record<string, unknown>>).filter(sees);
+  const seenDecs = ((decAll.data || []) as Array<Record<string, unknown>>).filter(sees);
+  const tasksQ = { data: seenTasks.map(bare) as Array<{ id: number; title: string; subsection: string | null; owner: string | null; status: string | null; due_date: string | null; flag: boolean | null; banked_at: string | null; bank_until: string | null }> };
+  const decQ = { data: seenDecs.map(bare) };
   const subsections = [...new Set((tasksQ.data || []).map(t => t.subsection).filter(Boolean))];
 
   const openTasksNumbered = (tasksQ.data || []).map((t, i) =>
@@ -577,7 +622,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     /* preview: what the model and Jev would put on the board, nothing written */
     return { dry_run: true, department: dept, model_result: result, jev: jevRep };
   }
-  const boardSensitive = result.board_sensitive === true;
+  /* v17: a one-on-one is only for its speakers already; board-only would lock out the ones not on the board */
+  const boardSensitive = result.board_sensitive === true && vis !== 'speakers';
   const effectiveBoardOnly = tx.board_only === true || boardSensitive;
   if (boardSensitive && tx.board_only !== true) {
     const { error: flagErr } = await svc.from('transcripts').update({ board_only: true }).eq('id', transcriptId);
@@ -589,7 +635,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   const allNew = Array.isArray(result.new_tasks) ? (result.new_tasks as Array<Record<string, unknown>>) : [];
   const routed: Array<{ event: EventRow; title: string }> = [];
   let remainingNew = allNew;
-  if ((dept === 'opsmtl' || dept === 'opsto') && !effectiveBoardOnly && allNew.length && upcomingEvents.length) {
+  if ((dept === 'opsmtl' || dept === 'opsto') && !effectiveBoardOnly && !vis && allNew.length && upcomingEvents.length) {
     const keep: Array<Record<string, unknown>> = [];
     for (const t of allNew) {
       const isEvent = t.event_routing === 'event' && t.confidential !== true;
@@ -614,7 +660,13 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     remainingNew = keep;
   }
 
-  const rpcPayload = { ...result, new_tasks: remainingNew, close_task_ids: [] };
+  const rpcPayload: Record<string, unknown> = { ...result, new_tasks: remainingNew, close_task_ids: [] };
+  if (vis) {
+    /* v17: a restricted meeting leaves the team's narrative alone (every member reads it) and decides only decisions of its own kind */
+    delete rpcPayload.progress; delete rpcPayload.read; delete rpcPayload.priorities;
+    const ownDecs = new Set(seenDecs.filter(own).map((d) => Number(d.id)));
+    rpcPayload.decide_decisions = (Array.isArray(result.decide_decisions) ? result.decide_decisions as Array<Record<string, unknown>> : []).filter((d) => ownDecs.has(Number(d.id)));
+  }
   const { data: applied, error: applyErr } = await svc.rpc('apply_transcript_result', {
     p_transcript_id: transcriptId, p: rpcPayload, p_changed_by: changedBy,
   });
@@ -630,7 +682,15 @@ async function processTranscript(transcriptId: number, dryRun = false) {
     stamps.forEach((s, i) => { if (s.error) console.error('board_only stamp failed for table index ' + i, s.error); });
   }
 
-  const closed = await applyCloseTasks(result, dept, changedBy, effectiveBoardOnly);
+  /* v17: a meeting closes only work it may see; a restricted one only work of its own kind (its evidence never lands on open work) */
+  const closable = new Set(seenTasks.filter((t) => !vis || own(t)).map((t) => Number(t.id)));
+  const closed = await applyCloseTasks(result, dept, changedBy, effectiveBoardOnly, closable);
+  if (vis) {
+    /* v17: the audit rows written after the meeting was marked processed (the closes) follow it too */
+    const { error: stErr } = await svc.from('change_log').update({ visibility: vis, allowed_people: vis === 'leadership' ? null : (tx.allowed_people || null) })
+      .eq('changed_by', changedBy).gte('changed_at', runStartIso).is('visibility', null);
+    if (stErr) console.error('restricted audit stamp failed', stErr);
+  }
 
   // v13: banked tasks the meeting starts now come back on the board
   const bankedIds = new Set((tasksQ.data || []).filter(t => t.banked_at).map(t => Number(t.id)));
@@ -675,7 +735,7 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   let jevLine = '';
   if (jevRep.checked) {
     const bits: string[] = [];
-    if (jevRep.dropped.length) bits.push(jevRep.dropped.length + ' not a firm commitment (left out: ' + jevRep.dropped.slice(0, 3).map(x => '"' + x.slice(0, 50) + '"').join(', ') + (jevRep.dropped.length > 3 ? ', ...' : '') + ')');
+    if (jevRep.dropped.length) bits.push(jevRep.dropped.length + ' not a firm commitment' + (vis ? '' : ' (left out: ' + jevRep.dropped.slice(0, 3).map(x => '"' + x.slice(0, 50) + '"').join(', ') + (jevRep.dropped.length > 3 ? ', ...' : '') + ')'));
     if (jevRep.owners.length) bits.push(jevRep.owners.length + (jevRep.owners.length === 1 ? ' owner corrected' : ' owners corrected'));
     if (jevRep.due_cleared) bits.push(jevRep.due_cleared + (jevRep.due_cleared === 1 ? ' due date cleared' : ' due dates cleared'));
     if (jevRep.projects.length) bits.push(jevRep.projects.length + (jevRep.projects.length === 1 ? ' project corrected' : ' projects corrected'));
@@ -699,7 +759,8 @@ async function processTranscript(transcriptId: number, dryRun = false) {
   if (/^Loom pull/i.test(String(tx.added_by || ''))) {
     try { const { data: cfg } = await svc.from('app_config').select('value').eq('key', 'loom_pull_slack').maybeSingle(); loomQuiet = String(cfg?.value || 'off').trim().toLowerCase() !== 'on'; } catch (_) { loomQuiet = true; }
   }
-  if (!isTest && !loomQuiet) {
+  /* v17: a one-on-one posts nothing in Slack (only its speakers know it happened) */
+  if (!isTest && !loomQuiet && vis !== 'speakers') {
     await postSlack(':large_green_circle: *Welfare Avenue Dashboard*\n*' + label + '* updated from the ' + dateStr + ' meeting: ' + (parts.join(', ') || 'no board changes needed') + '.' + attention + eventLine + jevLine + '\n<' + site + '#team/' + dept + '|Open the ' + label + ' page>');
   }
   return { ...(applied as Record<string, unknown>), tasks_unbanked: unbanked.length, tasks_closed: closed.length, closed_tasks: closed, tasks_routed: routed.length, routed_events: [...new Set(routed.map(x => x.event.id))], tasks_projected: projectedCount, content_ideas: ideasRes, jev: jevRep };

@@ -1,3 +1,7 @@
+// v7 (29/09/26, wave165): one-on-ones (visibility speakers, only the people speaking in them) and archive-only meetings (the older
+// Loom meetings, kept for the archive and Ask the Hub: "don't create any tasks from them") are never scanned, like confidential
+// meetings: no suggested requests, task notes, due dates, goal wins or mentions come from them. The open tasks a meeting may
+// comment on or date are the open ones (visibility none or department), so a restricted task never shows in a suggestion.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Welfare Avenue: transcript-requests (v6, 04/08/26)
 // v6: leadership meetings can be OPEN (visibility department/none while
@@ -22,6 +26,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department';
 const json = (b, s = 200)=>new Response(JSON.stringify(b), {
     status: s,
     headers: {
@@ -362,11 +367,11 @@ Deno.serve(async (req)=>{
   const key = 'hub-router'; /* audit 26/09/26: the llm router holds the model keys */
   const { data: scanned } = await svc.from('transcript_request_scans').select('transcript_id');
   const done = new Set((scanned || []).map((s)=>s.transcript_id));
-  const { data: txs } = await svc.from('transcripts').select('id,title,department,meeting_date,body,ai_summary,board_only,added_by,visibility,speakers').not('ai_summary', 'is', null).order('id', {
+  const { data: txs } = await svc.from('transcripts').select('id,title,department,meeting_date,body,ai_summary,board_only,added_by,visibility,speakers,archive_only').not('ai_summary', 'is', null).order('id', {
     ascending: false
   }).limit(60);
   const fresh = (txs || []).filter((t)=>!done.has(t.id));
-  const restricted = fresh.filter((t)=>t.visibility === 'private');
+  const restricted = fresh.filter((t)=>t.visibility === 'private' || t.visibility === 'speakers' || t.archive_only === true);
   for (const t of restricted){
     await svc.from('transcript_request_scans').upsert({
       transcript_id: t.id,
@@ -396,7 +401,7 @@ Deno.serve(async (req)=>{
   const openReqTxt = (openReqs || []).map((r)=>'id ' + r.id + ': ' + r.title + ' (' + r.department + ', ' + (r.type_key || 'other') + ')').join('\n');
   const { data: pend } = await svc.from('request_suggestions').select('title').eq('status', 'pending').limit(40);
   const tracked = (pend || []).map((r)=>r.title).filter(Boolean);
-  const { data: openTasks } = await svc.from('dept_tasks').select('id,title,department,owner,due_date').is('banked_at', null).eq('done', false).limit(400);
+  const { data: openTasks } = await svc.from('dept_tasks').select('id,title,department,owner,due_date').is('banked_at', null).eq('done', false).or(OPEN_VIS).limit(400);
   const tasksTxt = (openTasks || []).map((t)=>t.id + '. ' + t.title + ' (' + t.department + (t.owner ? ', owner ' + t.owner : '') + ')').join('\n');
   const validIds = new Set((openTasks || []).map((t)=>t.id));
   const noDue = (openTasks || []).filter((t)=>!t.due_date);

@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the tasks a profile lists are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a profile anyone can open).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'profile') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
 // Welfare Avenue: person-profile (v1)
@@ -10,6 +12,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -144,8 +147,8 @@ Deno.serve(async (req)=>{
   }, 404);
   const pat = '%' + String(m.name).trim().split(/\s+/)[0] + '%';
   const [openQ, doneQ, sopQ] = await Promise.all([
-    svc.from('dept_tasks').select('id, title, department, status, project_id').is('banked_at', null).eq('done', false).ilike('owner', pat).limit(120),
-    svc.from('dept_tasks').select('id, title, department, closed_at').eq('done', true).gte('closed_at', fyStart()).ilike('owner', pat).limit(200),
+    svc.from('dept_tasks').select('id, title, department, status, project_id').is('banked_at', null).eq('done', false).or(OPEN_VIS).ilike('owner', pat).limit(120),
+    svc.from('dept_tasks').select('id, title, department, closed_at').eq('done', true).gte('closed_at', fyStart()).or(OPEN_VIS).ilike('owner', pat).limit(200),
     svc.from('sop_event_steps').select('id, template_id, event_id, owner, volunteer_events!inner(status, event_date)').ilike('owner', pat).eq('volunteer_events.status', 'planned').gte('volunteer_events.event_date', new Date().toISOString().slice(0, 10)).limit(300)
   ]);
   const sopSteps = sopQ.data || [];

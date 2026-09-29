@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the meetings and tasks a recommendation reads are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches a recommendation).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // v3 (25/09/26): routed through the Hub model router (llm, task decision; Jev picks the model) and Jev scores the recommended approach against the alternatives (jevScore).
 // Welfare Avenue: recommend-decision (v2, 25/07/26)
@@ -17,6 +19,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -227,7 +230,7 @@ Deno.serve(async (req)=>{
   try {
     const kw = keywords(dec.title);
     if (kw) {
-      let hitsQ = svc.from('transcripts').select('title, meeting_date, department, ai_summary').textSearch('fts', kw, {
+      let hitsQ = svc.from('transcripts').select('title, meeting_date, department, ai_summary').or(OPEN_VIS).textSearch('fts', kw, {
         type: 'websearch'
       });
       if (!boardOnly) hitsQ = hitsQ.eq('board_only', false);
@@ -240,7 +243,7 @@ Deno.serve(async (req)=>{
     }
   } catch (_) {}
   if (dept) {
-    let recentQ = svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept);
+    let recentQ = svc.from('transcripts').select('title, meeting_date, ai_summary').eq('department', dept).or(OPEN_VIS);
     if (!boardOnly) recentQ = recentQ.eq('board_only', false);
     const { data: recent } = await recentQ.order('meeting_date', {
       ascending: false
@@ -248,7 +251,7 @@ Deno.serve(async (req)=>{
     if (recent && recent.length) {
       parts.push('RECENT ' + dept.toUpperCase() + ' MEETINGS:\n' + recent.map((h)=>'- ' + (h.title || 'Untitled') + ' (' + (h.meeting_date || '') + '): ' + (h.ai_summary || '').slice(0, 500)).join('\n'));
     }
-    let tasksQ = svc.from('dept_tasks').select('title, owner, status, subsection').is('banked_at', null).eq('department', dept).eq('done', false);
+    let tasksQ = svc.from('dept_tasks').select('title, owner, status, subsection').is('banked_at', null).eq('department', dept).eq('done', false).or(OPEN_VIS);
     if (!boardOnly) tasksQ = tasksQ.eq('board_only', false);
     const { data: tasks } = await tasksQ.limit(15);
     if (tasks && tasks.length) {

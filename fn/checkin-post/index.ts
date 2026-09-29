@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the tasks a check-out offers to close are the person's own and their team's open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches someone else's check-out).
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Welfare Avenue: checkin-post (v2, 25/09/26: channels + say, for the volunteering recap; v1 25/09/26)
 // Steel: "Check in should send a message in Slack channel
@@ -93,8 +95,9 @@ async function myTasks(m: { id: number; name: string; department: string | null 
   const name = (m ? m.name : fallbackName) || '';
   const first = name.split(' ')[0];
   if (!first) return [];
-  const { data } = await svc.from('dept_tasks').select('id, title, owner, department, subsection, due_date, project_id').is('banked_at', null).eq('done', false).or('owner.ilike.%' + first.replace(/[%,]/g, '') + '%' + (m && m.department ? ',department.eq.' + m.department : '')).order('updated_at', { ascending: false }).limit(60);
-  const rows = (data || []) as Task[];
+  const { data } = await svc.from('dept_tasks').select('id, title, owner, department, subsection, due_date, project_id, visibility').is('banked_at', null).eq('done', false).or('owner.ilike.%' + first.replace(/[%,]/g, '') + '%' + (m && m.department ? ',department.eq.' + m.department : '')).order('updated_at', { ascending: false }).limit(60);
+  /* wave165: another person's restricted task (leadership, confidential, a one-on-one's) never shows; the person's own always does */
+  const rows = ((data || []) as Array<Task & { visibility?: string | null }>).filter(t => !t.visibility || t.visibility === 'department' || (t.owner || '').toLowerCase().includes(first.toLowerCase()));
   /* the person's own first, then their team's */
   const own = rows.filter(t => (t.owner || '').toLowerCase().includes(first.toLowerCase()));
   const team = rows.filter(t => !own.includes(t));

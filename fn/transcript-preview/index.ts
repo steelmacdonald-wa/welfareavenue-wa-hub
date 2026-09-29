@@ -1,3 +1,5 @@
+// wave165 (29/09/26): the tasks and decisions an upload's preview matches against are the open ones (one-on-ones are only for the people speaking in them now: visibility speakers; restricted work never
+// reaches the person uploading).
 // wave136 (26/09/26): for a Marketing meeting the preview also lists the content ideas that will go to the Content calendar's Ideas.
 // wave132 (26/09/26): leaves out what is in the bank (tasks and projects parked for three months or more carry banked_at until they come back).
 // Routed through the Hub model router (llm, task 'transcript_preview') on 25/09/26: OpenRouter picks the model per ai_routes; the request and response shapes are unchanged.
@@ -15,6 +17,7 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY');
 const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 const svc = createClient(SUPABASE_URL, SERVICE_KEY);
+const OPEN_VIS = 'visibility.is.null,visibility.eq.department'; /* wave165: open work only (not leadership, confidential or one-on-one) */
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-wa-secret',
@@ -248,12 +251,12 @@ Deno.serve(async (req)=>{
   const dept = String(body.department || '');
   const isLead = body.visibility === 'leadership' || /leadership/i.test(dept);
   const [tasksQ, typesQ, reqsQ, goalsQ, rosterQ, decQ] = await Promise.all([
-    svc.from('dept_tasks').select('id,title,department,owner').is('banked_at', null).eq('done', false).limit(400),
+    svc.from('dept_tasks').select('id,title,department,owner').is('banked_at', null).eq('done', false).or(OPEN_VIS).limit(400),
     svc.from('request_types').select('key,label,department,description').eq('enabled', true),
     svc.from('dept_requests').select('id,title,department').eq('done', false).limit(50),
     svc.from('goals').select('id,department,quarter,title,measure,status').limit(60),
     svc.from('team_members').select('name,department').eq('active', true),
-    svc.from('decisions').select('id,title').eq('done', false)
+    svc.from('decisions').select('id,title').eq('done', false).or(OPEN_VIS)
   ]);
   const tasksTxt = (tasksQ.data || []).map((t)=>t.id + '. ' + t.title + ' (' + t.department + (t.owner ? ', owner ' + t.owner : '') + ')').join('\n');
   const typesTxt = (typesQ.data || []).map((t)=>'- ' + t.key + ': ' + (t.label || t.key) + ' (actioned by ' + t.department + '). ' + (t.description || '')).join('\n');
