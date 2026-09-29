@@ -26,25 +26,40 @@
 
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
-    top: ['mypage', 'overview', 'calendar'],
+    /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
+    top: ['mypage', 'training', 'overview', 'calendar'],
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
       { key: 'departments', label: 'Departments' },
-      { key: 'goals', label: 'Goals and projects', items: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'] },
-      { key: 'meetings', label: 'Meetings', items: ['agendas', 'transcripts'] },
-      { key: 'inbox', label: 'Requests and inbox', items: ['requests', 'hubmail'] },
-      { key: 'people', label: 'People', items: ['orgchart', 'training', 'crm'] }, /* wave152: the CRM */
-      { key: 'resources', label: 'Resources', items: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: Our story, Partners, Document finder */
+      /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
+      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'] },
+      { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
+      /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
+         app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
+         places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
+      { key: 'apps', label: 'Apps', items: ['orggoals', 'goals', 'projects', 'goalmap', 'crm', 'partners'] },
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
     ],
     /* the Events calendar sits in the Fundraising row for people who can open that team page, else right after the Calendar */
     afterCalendar: ['fundevents'],
+    /* wave163: then The Brain */
+    afterEvents: ['brain'],
     /* pages the older code hides on purpose (merged into others): kept out of sight at the end */
     hidden: ['dashboard', 'create']
   };
+  /* wave163: directors (the board view) open no apps, so Partners (in the CRM for the staff) stays in their menu, in Organization */
+  function directors() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function itemsOf(g) {
+    var ids = g.items || [];
+    if (directors()) {
+      if (g.key === 'org') ids = ids.concat(['partners']);
+      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners'; });
+    }
+    return ids;
+  }
   /* the label each button shows (the older code named a few differently) */
   var LABEL = { transcripts: 'Transcript archive' };
 
@@ -94,7 +109,7 @@
   /* the buttons each group should hold, in order, for this person */
   function wanted(b, g) {
     var out = [];
-    (g.items || []).forEach(function (id) {
+    itemsOf(g).forEach(function (id) {
       var t = tabOf(b, id); if (!t) return;
       if (g.loose && inOpenRow(t)) return;
       out.push(t);
@@ -125,6 +140,7 @@
       var seq = [];
       LAYOUT.top.forEach(function (id) { var t = tabOf(b, id); if (t) seq.push(t); });
       LAYOUT.afterCalendar.forEach(function (id) { var t = tabOf(b, id); if (t && !inOpenRow(t)) { t.classList.remove('w116tool'); seq.push(t); } });
+      (LAYOUT.afterEvents || []).forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       var res = null;
       LAYOUT.groups.forEach(function (g) {
         if (!g.items) { var d = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'); if (d) seq.push(d); return; }
@@ -135,7 +151,7 @@
           if (id && LABEL[id]) relabel(t, LABEL[id]);
           putAt(host, t, i);
         });
-        if (g.key === 'resources') res = host;
+        if (g.key === 'tools') res = host;   /* wave163: Other Tools takes what the layout does not name */
         seq.push(el);
       });
       /* what the layout does not name: an older group (Strategy, More) gives up its buttons and goes;
@@ -183,7 +199,8 @@
   /* true when every page is where the layout wants it (the tests ask this) */
   function ok() {
     var b = bar(); if (!b) return true;
-    for (var i = 0; i < LAYOUT.top.length; i++) { var t = tabOf(b, LAYOUT.top[i]); if (t && t.parentNode !== b) return false; }
+    var loose = LAYOUT.top.concat(LAYOUT.afterEvents || []);
+    for (var i = 0; i < loose.length; i++) { var t = tabOf(b, loose[i]); if (t && t.parentNode !== b) return false; }
     for (var j = 0; j < LAYOUT.groups.length; j++) {
       var g = LAYOUT.groups[j]; if (!g.items) continue;
       var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'), w = wanted(b, g);
@@ -191,7 +208,7 @@
       var host = el ? hostOf(el) : null;
       for (var k = 0; k < w.length; k++) if (w[k].parentNode !== host || host.children[k] !== w[k]) return false;
     }
-    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"]');
+    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"], :scope > .tab-group[data-w42g="goals"], :scope > .tab-group[data-w42g="resources"], :scope > .tab-group[data-w42g="people"], :scope > .tab-group[data-w42g="meetings"], :scope > .tab-group[data-w42g="inbox"]');
   }
   function watch() {
     var b = bar(); if (!b) return;
@@ -300,7 +317,7 @@
     var admin = amAdmin(), me = (typeof who === 'function' ? who() : '');
     var kinds = [
       { k: 'password', title: 'Logins and passwords', note: '<div class="pw-note">Everyone on staff sees this list. Passwords stay hidden: press <b>Request access</b> and an admin approves it, then you can show and copy it. Whoever adds a login can always see it, and every time a password is shown it goes in the audit trail. Keep it to shared team logins (Canva, social accounts, tools); never banking, government or personal credentials. Board viewers never see this page.</div>' },
-      { k: 'video', title: 'Training videos (Loom)', note: '' },
+      /* wave163: Steel: "remove trainings from there"; training videos live in the Avenue Academy (the old rows stay in info_links, unshown) */
       { k: 'folder', title: 'Shared Google Drive folders', note: '' },
       { k: 'link', title: 'Other key links', note: '' }
     ];
@@ -326,7 +343,7 @@
           + (i.notes ? '<div class="nts">' + E(i.notes) + '</div>' : '') + '</div>';
       }).join('') : '<div class="info-row" style="color:var(--wa-muted);">Nothing here yet. Add the first one below.</div>');
     }).join('')
-      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="video">Training video</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
+      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
       + '<input id="ii-label" placeholder="Label, e.g. Canva team login" />'
       + '<input id="ii-url" placeholder="URL (optional for passwords)" />'
       + '<input id="ii-user" placeholder="Username / email (passwords)" />'

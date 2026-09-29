@@ -37,6 +37,14 @@
     ['marketing', 'Marketing'], ['operations', 'Operations'], ['governance', 'Governance'], ['programs', 'Programs'], ['team', 'Team'], ['other', 'Other']];
   var REL = { partner: 'Partner', sponsor: 'Sponsor', funder: 'Funder', 'donor organisation': 'Donor organization', venue: 'Venue', supplier: 'Supplier', collaborator: 'Collaborator' };
   var STATUS = { active: ['Active', TEAL], past: ['Past', MUTED], prospect: ['Prospect', '#B9851B'], declined: ['Declined', FLAG] };
+  /* wave163: Steel: "ensure to distinguish, partner, collaborator, and sponsors" (wa_partners.category, the lesson's definitions);
+     relationship stays the finer detail (a funder or a donor organization is a sponsor; a supplier or a venue can be any of the three) */
+  var PCATS = {
+    partner: ['Partner', 'Partners', GREEN, 'works with us toward a shared goal through joint programs or initiatives, over time, ideally with an MOU or a project agreement.'],
+    collaborator: ['Collaborator', 'Collaborators', PURPLE, 'joins us for an event or an initiative, without a formal agreement.'],
+    sponsor: ['Sponsor', 'Sponsors', '#C87A2F', 'gives money or in-kind support, and gets recognition for it.']
+  };
+  var PCAT_ORDER = ['partner', 'collaborator', 'sponsor'];
   var PKINDS = ['nonprofit', 'business', 'school', 'university', 'student club', 'government', 'funder', 'media', 'community group', 'faith group', 'other'];
   var DTEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
     ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
@@ -139,7 +147,7 @@
   /* ---------- the data ---------- */
   var S = {
     hist: null, years: null, lessons: null, partners: null, docs: null, loading: {}, at: {}, err: {},
-    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pRel: '', pKind: '', pCity: '', pq: '',
+    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pCat: 'all', pRel: '', pKind: '', pCity: '', pq: '',
       dq: '', dTeam: '', dYear: '', dKind: '', dReuse: false, dShow: 40 },
     sheet: null
   };
@@ -181,6 +189,17 @@
       [p.name].concat(Array.isArray(p.aka) ? p.aka : []).forEach(function (n) { var k = fold(n); if (k && k.length > 1 && !PIDX[k]) PIDX[k] = p; });
     });
   }
+  /* the type of a partner: the category, else read from how they help (older rows, the tests' fixture) */
+  function catOf(p) {
+    var c = lower(p && p.category); if (PCATS[c]) return c;
+    var r = lower(p && p.relationship);
+    if (r === 'collaborator') return 'collaborator';
+    if (r === 'sponsor' || r === 'funder' || r === 'donor organisation') return 'sponsor';
+    return 'partner';
+  }
+  /* the finer detail worth showing next to the type (a funder, a venue ...), never the type again */
+  function relDetail(p) { var r = lower(p && p.relationship); return r && !PCATS[r] ? (REL[r] || r) : ''; }
+  function catTag(p) { var c = PCATS[catOf(p)]; return '<span class="w140tag w140cat" style="background:' + c[2] + '1a;color:' + c[2] + '"><i style="background:' + c[2] + '"></i>' + E(c[0]) + '</span>'; }
   function partnerFor(name) { var k = fold(name); return k ? (PIDX[k] || null) : null; }
   function namesOf(p) { return [p.name].concat(Array.isArray(p.aka) ? p.aka : []).map(fold).filter(function (x) { return x && x.length > 2; }); }
 
@@ -283,6 +302,14 @@
     + '.w140kd{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:2px;white-space:nowrap;}'
     + '.w140tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;background:rgba(16,63,57,.08);color:' + GREEN + ';margin-left:6px;vertical-align:2px;}'
     + '.w140tag.lead{background:rgba(111,100,171,.13);color:#5a5095;}.w140tag.hid{background:rgba(179,64,47,.1);color:' + FLAG + ';}.w140tag .w140i{width:12px;height:12px;}'
+    /* wave163: partner, collaborator, sponsor */
+    + '.w140types{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 6px;padding:4px;background:rgba(16,63,57,.06);border-radius:14px;width:fit-content;max-width:100%;box-sizing:border-box;}'
+    + '.w140ty{display:inline-flex;align-items:center;gap:7px;border:none;background:none;border-radius:10px;padding:8px 14px;font-family:' + BODY + ';font-weight:600;font-size:13.5px;color:' + GREEN + ';cursor:pointer;}'
+    + '.w140ty i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}.w140ty em{font-style:normal;font-weight:600;font-size:12px;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w140ty:hover{background:rgba(16,63,57,.06);}.w140ty.on{background:var(--wa-card,' + CREAM + ');box-shadow:0 1px 2px rgba(16,63,57,.08),0 4px 12px rgba(16,63,57,.08);}.w140ty.on em{color:' + GREEN + ';}'
+    + '.w140ty:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '.w140def{font-size:13px;color:var(--wa-muted,' + MUTED + ');margin:4px 2px 14px;line-height:1.5;max-width:820px;}.w140def b{color:var(--wa-text,' + INK + ');font-weight:700;}'
+    + '.w140tag.w140cat i{width:7px;height:7px;border-radius:50%;display:inline-block;}.w140pc .ft .w140cat{margin-left:0;}#w140sheet .sub .w140cat{margin:0 6px 0 0;}'
     + '.w140m{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');margin-top:6px;}'
     + '.w140m .w140i{width:14px;height:14px;}'
     + '.w140pl{border:none;background:rgba(111,100,171,.1);color:#4b4287;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:' + BODY + ';}'
@@ -344,7 +371,8 @@
     + '.w140form .w140fh{grid-column:1 / -1;font-family:' + HEAD + ';font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';margin-top:6px;padding-top:10px;border-top:1px solid rgba(16,63,57,.1);}'
     + '.w140form .w140fh span{font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--wa-muted,' + MUTED + ');margin-left:6px;}'
     + '@media (max-width:760px){.w140stats{grid-template-columns:repeat(2,minmax(0,1fr));}.w140ev{grid-template-columns:44px 16px minmax(0,1fr);gap:0 8px;}.w140ev .d{font-size:14px;}'
-    + '.w140year{padding:14px 14px 6px;}.w140year .yh{flex-direction:column;gap:6px;}.w140year .yh h2{font-size:36px;}.w140form{grid-template-columns:1fr;}.w140q{flex:1 1 100%;}.w140sel{max-width:none;flex:1 1 140px;}}';
+    + '.w140year{padding:14px 14px 6px;}.w140year .yh{flex-direction:column;gap:6px;}.w140year .yh h2{font-size:36px;}.w140form{grid-template-columns:1fr;}.w140q{flex:1 1 100%;}.w140sel{max-width:none;flex:1 1 140px;}'
+    + '.w140types{display:grid;grid-template-columns:1fr 1fr;width:100%;}.w140ty{justify-content:center;padding:9px 8px;font-size:13px;}}';
   document.head.appendChild(css);
   /* ======================= Our story (#ourstory) ======================= */
   var BLURB_S = 'What Welfare Avenue has done since April 2020, from our own documents, posts and designs. Every moment shows where it came from.';
@@ -459,7 +487,7 @@
   }
 
   function paintStory() {
-    var root = mastFor('ourstory', 'Resources', 'Our story', BLURB_S); if (!root) return;
+    var root = mastFor('ourstory', 'Organization', 'Our story', BLURB_S); if (!root) return;   /* wave163: in Organization */
     if (!S.hist || !S.lessons) { root.innerHTML = busy('Loading our story\u2026'); return; }
     if (S.err.hist && !S.hist.length) { root.innerHTML = '<div class="w140empty">Our story could not load (' + E(S.err.hist) + ').</div>'; return; }
     var hs = visibleHist();
@@ -489,7 +517,7 @@
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   }
   /* ======================= Partners (#partners) ======================= */
-  var BLURB_P = 'Every organization Welfare Avenue has worked with, from its first backers in 2020 to today, and the ones we approached: what they did, when, and where it is written down.';
+  var BLURB_P = 'Every organization Welfare Avenue has worked with since 2020, and the ones we approached: our partners, collaborators and sponsors, what they did, when, and where it is written down.';
   var PSETS = [['worked', 'Worked with us'], ['active', 'Active'], ['past', 'Past'], ['prospect', 'Prospects'], ['declined', 'Declined'], ['all', 'All']];
   function inSet(p, set) {
     if (set === 'all') return true;
@@ -504,18 +532,24 @@
   function partnerMatch(p) {
     var u = S.ui;
     if (!inSet(p, u.pSet)) return false;
+    if (u.pCat && u.pCat !== 'all' && catOf(p) !== u.pCat) return false;
     if (u.pRel && p.relationship !== u.pRel) return false;
     if (u.pKind && p.kind !== u.pKind) return false;
     if (u.pCity && fold(p.city) !== fold(u.pCity)) return false;
-    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
+    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, PCATS[catOf(p)][0], p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
     return true;
   }
   function paintPartners() {
-    var root = mastFor('partners', 'Resources', 'Partners', BLURB_P); if (!root) return;
+    var root = mastFor('partners', boardMode() ? 'Organization' : 'CRM', 'Partners', BLURB_P); if (!root) return;   /* wave163: the page lives in the CRM (directors open no apps: it sits in their Organization) */
     if (!S.partners) { root.innerHTML = busy('Loading our partners\u2026'); return; }
     if (S.err.partners && !S.partners.length) { root.innerHTML = '<div class="w140empty">Partners could not load (' + E(S.err.partners) + ').</div>'; return; }
     var u = S.ui, all = S.partners, lead = isLeaderUI();
-    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = all.filter(function (p) { return inSet(p, s[0]); }).length; });
+    /* the counts answer the other filter: each type within the status shown, each status within the type shown */
+    var ofCat = all.filter(function (p) { return u.pCat === 'all' || !u.pCat || catOf(p) === u.pCat; });
+    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = ofCat.filter(function (p) { return inSet(p, s[0]); }).length; });
+    var inStatus = all.filter(function (p) { return inSet(p, u.pSet); });
+    var ccnt = { all: inStatus.length }; PCAT_ORDER.forEach(function (c) { ccnt[c] = inStatus.filter(function (p) { return catOf(p) === c; }).length; });
+    var curCat = PCATS[u.pCat] ? u.pCat : 'all';
     var rels = {}, kinds = {}, cities = {};
     all.forEach(function (p) { if (p.relationship) rels[p.relationship] = 1; if (p.kind) kinds[p.kind] = 1; if (p.city) cities[p.city] = (cities[p.city] || 0) + 1; });
     var focus = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute('data-w140q') : null;
@@ -524,7 +558,12 @@
       var o = { active: 0, past: 1, prospect: 2, declined: 3 };
       return (o[a.status] - o[b.status]) || ((b.last_year || 0) - (a.last_year || 0)) || String(a.name).localeCompare(String(b.name));
     });
-    var html = '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
+    var html = '<div class="w140types" role="group" aria-label="Type">' + [['all', 'Everyone']].concat(PCAT_ORDER.map(function (c) { return [c, PCATS[c][1]]; })).map(function (x) {
+        var on = curCat === x[0], col = PCATS[x[0]] ? PCATS[x[0]][2] : GREEN;
+        return '<button type="button" class="w140ty' + (on ? ' on' : '') + '" data-w140pcat="' + x[0] + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + (PCATS[x[0]] ? '<i style="background:' + col + '"></i>' : '') + E(x[1]) + ' <em>' + ccnt[x[0]] + '</em></button>';
+      }).join('') + '</div>' +
+      '<p class="w140def">' + (curCat === 'all' ? '<b>Partners</b> work with us over time toward a shared goal; <b>collaborators</b> join us for an event or an initiative; <b>sponsors</b> give money or in-kind support and get recognition.' : '<b>A ' + E(PCATS[curCat][0].toLowerCase()) + '</b> ' + E(PCATS[curCat][3])) + '</p>' +
+      '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
       return '<button class="w140st" data-w140pset="' + s + '"><b style="color:' + STATUS[s][1] + '">' + cnt[s] + '</b><span>' + E({ active: 'working with us now', past: 'worked with us before', prospect: 'approached, nothing yet', declined: 'said no' }[s]) + '</span></button>';
     }).join('') + '</div>' +
       '<div class="w140bar"><div class="w140chips">' + PSETS.map(function (s) { return chip(u.pSet === s[0], 'data-w140pset', s[0], s[1], cnt[s[0]]); }).join('') + '</div></div>' +
@@ -536,7 +575,7 @@
       '<div class="w140count">' + plural(list.length, 'organization', 'organizations') + '</div>' +
       (list.length ? '<div class="w140pg">' + list.map(function (p) {
         return '<button class="w140pc" data-w140partner="' + E(p.id) + '"><div class="nm">' + E(p.name) + '</div><div class="sub">' + E([p.kind, p.city].filter(Boolean).join(' \u00b7 ')) + '</div>' +
-          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + statusChip(p.status) + '<span class="w140tag">' + E(REL[p.relationship] || p.relationship) + '</span>' +
+          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + catTag(p) + statusChip(p.status) + (relDetail(p) ? '<span class="w140tag">' + E(relDetail(p)) + '</span>' : '') +
           (yearsText(p) ? '<span class="w140count">' + E(yearsText(p)) + '</span>' : '') + (p.visibility === 'leadership' ? '<span class="w140tag lead">' + I('lock') + 'Leaders</span>' : '') + '</div></button>';
       }).join('') + '</div>' : '<div class="w140empty">No organization matches. Try another word or show all of them.</div>');
     root.innerHTML = html;
@@ -560,9 +599,9 @@
     if (!p) { toastS('That partner is not in the list'); return; }
     var lead = isLeaderUI();
     var ms = partnerMoments(p), ds = partnerDocs(p);
-    var rows = [['Kind', [p.kind, p.city].filter(Boolean).join(' \u00b7 ')], ['How', REL[p.relationship] || p.relationship], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
+    var rows = [['Type', PCATS[catOf(p)][0] + (relDetail(p) ? ' (' + relDetail(p).toLowerCase() + ')' : '')], ['Kind', [p.kind, p.city].filter(Boolean).join(' \u00b7 ')], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
       .filter(function (r) { return r[1]; }).map(function (r) { return '<div class="row"><b>' + E(r[0]) + '</b><span>' + E(r[1]) + '</span></div>'; }).join('');
-    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
+    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + catTag(p) + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
       (p.summary ? '<p style="font-size:14px;line-height:1.55;margin:8px 0 4px">' + E(p.summary) + '</p>' : '') + rows +
       (p.notes ? '<h4>Good to know</h4><p style="font-size:13px;margin:0">' + E(p.notes) + '</p>' : '') +
       '<h4>In our story</h4>' + (ms.length ? ms.slice(0, 14).map(function (h) { return '<div class="row"><b>' + E(yearOf(h)) + '</b><button class="w140mini" style="padding:0;text-align:left" data-w140go="#ourstory/e/' + E(h.id) + '">' + E(h.title) + '</button></div>'; }).join('') : '<p class="w140count">No moment in the timeline names them yet.</p>') +
@@ -628,7 +667,7 @@
     return out;
   }
   function paintDocs() {
-    var root = mastFor('documents', 'Resources', 'Document finder', BLURB_D); if (!root) return;
+    var root = mastFor('documents', 'Other Tools', 'Document finder', BLURB_D); if (!root) return;   /* wave163: in Other Tools */
     if (!S.docs) { root.innerHTML = busy('Loading the document finder\u2026'); return; }
     if (S.err.docs && !S.docs.length) { root.innerHTML = '<div class="w140empty">The document finder could not load (' + E(S.err.docs) + ').</div>'; return; }
     var u = S.ui, lead = isLeaderUI();
@@ -725,13 +764,14 @@
         field('The year in a few lines', area('summary', row.summary), true) + '<div class="err" data-w140err></div></div>';
     } else if (kind === 'partner') {
       row = id ? (S.partners || []).filter(function (x) { return String(x.id) === String(id); })[0] : null;
-      var p = row || { relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
+      var p = row || { category: 'partner', relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
       html = '<h2>' + (row ? 'Edit ' + E(p.name) : 'Add a partner') + '</h2><div class="sub">An organization, never a private person or an individual donor.</div><div class="w140form">' +
         field('Name', inp('name', p.name), true) +
         field('Also written', inp('aka', (p.aka || []).join(', '), 'other names, separated by commas'), true) +
         field('Kind', sel('kind', [['', 'Choose']].concat(PKINDS.map(function (k) { return [k, k.charAt(0).toUpperCase() + k.slice(1)]; })), p.kind || '')) +
         field('City', inp('city', p.city)) +
-        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship)) +
+        field('Type', sel('category', PCAT_ORDER.map(function (c) { return [c, PCATS[c][0]]; }), catOf(p)), false, 'partner: over time, toward a shared goal; collaborator: an event or an initiative; sponsor: money or in-kind support, with recognition') +
+        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship), false, 'the detail: a funder, a venue, a supplier ...') +
         field('Status', sel('status', Object.keys(STATUS).map(function (s) { return [s, STATUS[s][0]]; }), p.status)) +
         field('First year', inp('first_year', p.first_year, '2021')) + field('Last year', inp('last_year', p.last_year, String(yearNow()))) +
         field('What they did with us', area('summary', p.summary), true) +
@@ -791,7 +831,9 @@
       } else if (kind === 'partner') {
         if (!v.name) { showErr('Give the organization\u2019s name.'); return; }
         if (/@|\+?\d[\d\s().-]{7,}\d/.test(v.contact_role || '')) { showErr('Contact takes a role only, never an email or a phone number.'); return; }
-        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
+        if (PCATS[v.relationship] && v.relationship !== v.category) v.relationship = v.category;   /* how they help never contradicts the type */
+        if ((v.relationship === 'funder' || v.relationship === 'donor organisation') && v.category !== 'sponsor') { showErr('A funder or a donor organization is a sponsor: pick Sponsor as the type, or another way they help.'); return; }
+        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, category: PCATS[v.category] ? v.category : 'partner', relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
           summary: v.summary || null, contact_role: v.contact_role || null, visibility: v.visibility, notes: v.notes || null });
         table = 'wa_partners'; cache = 'partners';
       } else if (kind === 'lesson') {
@@ -841,6 +883,7 @@
     if ((el = t.closest('[data-w140hidden]'))) { S.ui.hidden = !S.ui.hidden; paintStory(); return; }
     if ((el = t.closest('[data-w140area]'))) { S.ui.lArea = el.getAttribute('data-w140area'); paintStory(); return; }
     if ((el = t.closest('[data-w140pset]'))) { S.ui.pSet = el.getAttribute('data-w140pset'); paintPartners(); return; }
+    if ((el = t.closest('[data-w140pcat]'))) { S.ui.pCat = el.getAttribute('data-w140pcat'); paintPartners(); return; }
     if ((el = t.closest('[data-w140dreuse]'))) { S.ui.dReuse = !S.ui.dReuse; S.ui.dShow = 40; paintDocs(); return; }
     if ((el = t.closest('[data-w140dmore]'))) { S.ui.dShow += 40; paintDocs(); return; }
   });
@@ -881,9 +924,9 @@
 
   /* ---------- the menu: Resources > Our story, Partners, Document finder ---------- */
   var PAGES = [
-    { id: 'ourstory', label: 'Our story', group: 'resources', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
-    { id: 'partners', label: 'Partners', group: 'resources', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
-    { id: 'documents', label: 'Document finder', group: 'resources', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
+    { id: 'ourstory', label: 'Our story', group: 'org', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
+    { id: 'partners', label: 'Partners', group: 'apps', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
+    { id: 'documents', label: 'Document finder', group: 'tools', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
   ];
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
@@ -918,10 +961,11 @@
         T('#ourstory .w140tabs', 'Lessons learned', 'What we learned from our own events and programs, as advice for next time.', OPT)
       ] };
       if (!W.tours.partners) W.tours.partners = { tab: 'partners', icon: 'handshake', hash: '#partners', steps: [
-        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached.'),
+        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached. The page lives in the CRM.'),
+        T('#partners .w140types', 'Partners, collaborators and sponsors', 'Partners work with us over time toward a shared goal, collaborators join us for an event or an initiative, sponsors give money or in-kind support and get recognition. Pick one to see only them.', OPT),
         T('#partners .w140stats', 'Where each one stands', 'Working with us now, before, approached with nothing yet, or said no.', OPT),
-        T('#partners .w140bar', 'Narrow it down', 'By how they helped, the kind of organization or the city, or search for a name.', OPT),
-        T('#partners .w140pg', 'Every organization', 'What they did with us, how they helped and the years. Open one for the moments and documents it appears in.', OPT)
+        T('#partners .w140bar', 'Narrow it down', 'By where they stand, how they help in detail, the kind of organization or the city, or search for a name.', OPT),
+        T('#partners .w140pg', 'Every organization', 'Its type, where it stands, what they did with us and the years. Open one for the moments and documents it appears in.', OPT)
       ] };
       if (!W.tours.documents) W.tours.documents = { tab: 'documents', icon: 'search', hash: '#documents', steps: [
         T('#documents > .w118mast', 'Document finder', 'Every useful file in our shared drives and Canva, found by what it is about.'),
@@ -935,5 +979,5 @@
 
   /* ---------- test hook ---------- */
   window.w140 = { state: function () { return S; }, load: load, story: paintStory, partners: paintPartners, docs: paintDocs, openStory: openStory, openPartners: openPartners, openDocs: openDocs,
-    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate };
+    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate, catOf: catOf };
 })();

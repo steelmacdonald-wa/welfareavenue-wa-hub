@@ -26,24 +26,39 @@
 
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
-    top: ['mypage', 'overview', 'calendar'],
+    /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
+    top: ['mypage', 'training', 'overview', 'calendar'],
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
       { key: 'departments', label: 'Departments' },
-      { key: 'goals', label: 'Goals and projects', items: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'] },
-      { key: 'meetings', label: 'Meetings', items: ['agendas', 'transcripts'] },
-      { key: 'inbox', label: 'Requests and inbox', items: ['requests', 'hubmail'] },
-      { key: 'people', label: 'People', items: ['orgchart', 'training', 'crm'] }, /* wave152: the CRM */
-      { key: 'resources', label: 'Resources', items: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: Our story, Partners, Document finder */
+      /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
+      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'] },
+      { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
+      /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
+         app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
+         places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
+      { key: 'apps', label: 'Apps', items: ['orggoals', 'goals', 'projects', 'goalmap', 'crm', 'partners'] },
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
     ],
     /* the Events calendar sits in the Fundraising row for people who can open that team page, else right after the Calendar */
     afterCalendar: ['fundevents'],
+    /* wave163: then The Brain */
+    afterEvents: ['brain'],
     /* pages the older code hides on purpose (merged into others): kept out of sight at the end */
     hidden: ['dashboard', 'create']
   };
+  /* wave163: directors (the board view) open no apps, so Partners (in the CRM for the staff) stays in their menu, in Organization */
+  function directors() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function itemsOf(g) {
+    var ids = g.items || [];
+    if (directors()) {
+      if (g.key === 'org') ids = ids.concat(['partners']);
+      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners'; });
+    }
+    return ids;
+  }
   /* the label each button shows (the older code named a few differently) */
   var LABEL = { transcripts: 'Transcript archive' };

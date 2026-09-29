@@ -37,6 +37,14 @@
     ['marketing', 'Marketing'], ['operations', 'Operations'], ['governance', 'Governance'], ['programs', 'Programs'], ['team', 'Team'], ['other', 'Other']];
   var REL = { partner: 'Partner', sponsor: 'Sponsor', funder: 'Funder', 'donor organisation': 'Donor organization', venue: 'Venue', supplier: 'Supplier', collaborator: 'Collaborator' };
   var STATUS = { active: ['Active', TEAL], past: ['Past', MUTED], prospect: ['Prospect', '#B9851B'], declined: ['Declined', FLAG] };
+  /* wave163: Steel: "ensure to distinguish, partner, collaborator, and sponsors" (wa_partners.category, the lesson's definitions);
+     relationship stays the finer detail (a funder or a donor organization is a sponsor; a supplier or a venue can be any of the three) */
+  var PCATS = {
+    partner: ['Partner', 'Partners', GREEN, 'works with us toward a shared goal through joint programs or initiatives, over time, ideally with an MOU or a project agreement.'],
+    collaborator: ['Collaborator', 'Collaborators', PURPLE, 'joins us for an event or an initiative, without a formal agreement.'],
+    sponsor: ['Sponsor', 'Sponsors', '#C87A2F', 'gives money or in-kind support, and gets recognition for it.']
+  };
+  var PCAT_ORDER = ['partner', 'collaborator', 'sponsor'];
   var PKINDS = ['nonprofit', 'business', 'school', 'university', 'student club', 'government', 'funder', 'media', 'community group', 'faith group', 'other'];
   var DTEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
     ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
@@ -139,7 +147,7 @@
   /* ---------- the data ---------- */
   var S = {
     hist: null, years: null, lessons: null, partners: null, docs: null, loading: {}, at: {}, err: {},
-    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pRel: '', pKind: '', pCity: '', pq: '',
+    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pCat: 'all', pRel: '', pKind: '', pCity: '', pq: '',
       dq: '', dTeam: '', dYear: '', dKind: '', dReuse: false, dShow: 40 },
     sheet: null
   };
@@ -181,6 +189,17 @@
       [p.name].concat(Array.isArray(p.aka) ? p.aka : []).forEach(function (n) { var k = fold(n); if (k && k.length > 1 && !PIDX[k]) PIDX[k] = p; });
     });
   }
+  /* the type of a partner: the category, else read from how they help (older rows, the tests' fixture) */
+  function catOf(p) {
+    var c = lower(p && p.category); if (PCATS[c]) return c;
+    var r = lower(p && p.relationship);
+    if (r === 'collaborator') return 'collaborator';
+    if (r === 'sponsor' || r === 'funder' || r === 'donor organisation') return 'sponsor';
+    return 'partner';
+  }
+  /* the finer detail worth showing next to the type (a funder, a venue ...), never the type again */
+  function relDetail(p) { var r = lower(p && p.relationship); return r && !PCATS[r] ? (REL[r] || r) : ''; }
+  function catTag(p) { var c = PCATS[catOf(p)]; return '<span class="w140tag w140cat" style="background:' + c[2] + '1a;color:' + c[2] + '"><i style="background:' + c[2] + '"></i>' + E(c[0]) + '</span>'; }
   function partnerFor(name) { var k = fold(name); return k ? (PIDX[k] || null) : null; }
   function namesOf(p) { return [p.name].concat(Array.isArray(p.aka) ? p.aka : []).map(fold).filter(function (x) { return x && x.length > 2; }); }
 

@@ -72,7 +72,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
     else { const f = await fresh('#mypage');
       const inp = await f.page.$('input[type=search], .wa-toolbar input, #mypage input[type=text]');
       if (inp) { await inp.focus(); await f.page.waitForTimeout(400); }
-      ok("phone: the bottom bar steps aside while typing", !!inp && await f.ev(() => getComputedStyle(document.getElementById('w114bar')).display === 'none'));
+      ok("phone: the bottom bar steps aside while typing (wave163's bar)", !!inp && await f.ev(() => getComputedStyle(document.getElementById('w163bar')).display === 'none'));
       await f.ctx.close(); }
     /* 5: Hub inbox, one header */
     { const f = await fresh('#hubmail');

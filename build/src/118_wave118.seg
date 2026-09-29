@@ -77,24 +77,24 @@
     "\u2736": "star"
   };
   var GLYPH_RE = new RegExp('[' + Object.keys(GLYPHS).map(function (g) { return g.length === 2 ? '\\u{' + g.codePointAt(0).toString(16) + '}' : '\\u' + ('0000' + g.charCodeAt(0).toString(16)).slice(-4); }).join('') + ']', 'u');
-  var MAST = {
+  var MAST = { /* wave163: the crumbs follow the menu (Other Tools, Organization, the Strategy app; Avenue Academy and The Brain at the top) */
     "overview": ["Home", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
     "dashboard": ["Executive dashboard", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
-    "goals": ["Goals and projects", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
-    "requests": ["Requests and inbox", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
-    "transcripts": ["Meetings", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
-    "agendas": ["Meetings", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
+    "goals": ["Strategy", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
+    "requests": ["Other Tools", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
+    "transcripts": ["Other Tools", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
+    "agendas": ["Other Tools", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],
     "finances": ["Fundraising & Finances", "Finances and budgeting", "Statements, the ledger and budgets per team.", true, "Finances and budgeting"],
     "hrcentre": ["Human Resources", "HR centre", "People records, hours, onboarding and policies in one place.", true, "HR centre"],
-    "orgchart": ["People", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
-    "training": ["People", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],
-    "hubmail": ["Requests and inbox", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
+    "orgchart": ["Organization", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
+    "training": ["Home", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],
+    "hubmail": ["Organization", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
     "needsme": ["Home", "Needs me", "Everything waiting on you, in one queue.", true, "Needs me"],
     "activity": ["Admin", "Activity", "Everything that changed on the Hub, newest first.", true, "Activity"],
-    "importantinfo": ["Resources", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
-    "brain": ["Goals and projects", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
-    "create": ["Resources", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
+    "importantinfo": ["Other Tools", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
+    "brain": ["Home", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
+    "create": ["Other Tools", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
   };
   var ADMIN = [ /* audit 26/09/26: People and access first; the menu shows these as the Admin group */
     ["people", "People and access", "#w113card, #w113card + .card", "Everyone on the roster, what they can see, their invitations, and the access requests."],

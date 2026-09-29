@@ -28,20 +28,22 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
 (async () => {
   const browser = await launch();
   /* 1. the menu, for each identity */
+  /* wave163: Avenue Academy under Home, The Brain after the Calendar, then Departments, Other Tools and Organization;
+     the goal pages are the Strategy app and Partners is in the CRM (wave153 keeps them out of the menu) */
   const WANT = {
-    admin: { top: ['mypage', 'overview', 'calendar'], goals: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'], meetings: ['agendas', 'transcripts'], inbox: ['requests', 'hubmail'], people: ['orgchart', 'training'], resources: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave153: the CRM left the menu for its app; wave140: the three Resources pages; wave152: the CRM */
-    member: { top: ['mypage', 'overview', 'calendar'] },
-    leader: { top: ['mypage', 'overview', 'calendar'] },
+    admin: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'], tools: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'], org: ['orgchart', 'ourstory', 'hubmail'] },
+    member: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'] },
+    leader: { top: ['mypage', 'training', 'overview', 'calendar', 'brain'] },
     board: { top: ['overview', 'calendar'] }
   };
   for (const who of ['admin', 'member', 'leader', 'board']) {
     const f = await fresh(browser, { who });
     const m = await f.ev(MENU);
     ok(who + ': the layout holds and no Strategy or More group is left', m.ok && !m.old, m);
-    ok(who + ': Home, the Executive dashboard and the Calendar lead the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
+    ok(who + ': ' + (who === 'board' ? 'the Executive dashboard and the Calendar lead' : 'Home, Avenue Academy, the Executive dashboard, the Calendar and The Brain lead') + ' the menu', WANT[who].top.every((id, i) => m.top[i] === id), m.top);
     if (who === 'admin') {
-      ['goals', 'meetings', 'inbox', 'people', 'resources'].forEach(g => ok('admin: ' + g + ' holds its pages in order', m.groups[g] && JSON.stringify(m.groups[g].items) === JSON.stringify(WANT.admin[g]), m.groups[g]));
-      ok('admin: the group names read as the layout says', m.groups.goals && m.groups.goals.label === 'Goals and projects' && m.groups.inbox.label === 'Requests and inbox' && m.groups.resources.label === 'Resources', m.groups);
+      ['tools', 'org'].forEach(g => ok('admin: ' + g + ' holds its pages in order', m.groups[g] && JSON.stringify(m.groups[g].items) === JSON.stringify(WANT.admin[g]), m.groups[g]));
+      ok('admin: the group names read as the layout says (Other Tools, Organization; no Goals and projects, Meetings, Requests and inbox, People or Resources)', m.groups.tools && m.groups.tools.label === 'Other Tools' && m.groups.org && m.groups.org.label === 'Organization' && !['goals', 'meetings', 'inbox', 'people', 'resources', 'apps'].some(g => m.groups[g]), m.groups);
       /* wave153: the Admin sections live in the Admin centre app; the group stays in the DOM (access and routing) but leaves the menu */
       const adm = await f.ev(() => ({ shown: !!document.querySelector('#tabBar .tab-group[data-w42g="admin"]') && getComputedStyle(document.querySelector('#tabBar .tab-group[data-w42g="admin"]')).display !== 'none', app: window.w153 ? window.w153.items('admin').map(g => g.items.map(i => i.h)).flat() : [] }));
       ok('admin: Admin\'s sections are out of the menu and in the Admin centre app, People and access first, then Activity last', !m.groups.admin && !adm.shown && adm.app[0] === '#adminpanel/people' && adm.app[adm.app.length - 1] === '#activity', adm);
@@ -56,7 +58,7 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
       for (const [h, sel] of [['#orggoals', '#orggoals .crumb'], ['#projects', '#projects .crumb'], ['#bank', '#bank .crumb'], ['#requests', '#requests > .w118mast .crumb'], ['#hubmail', '#hubmail .crumb'], ['#photos', '#photos .crumb'], ['#activity', '#activity > .w118mast .crumb'], ['#overview', '#overview > .w118mast .crumb']]) {
         await f.hash(h, 1500); crumbs[h] = await f.ev(s => { const el = document.querySelector(s); return el ? el.textContent.trim() : null; }, sel);
       }
-      ok('admin: page crumbs name the menu group', crumbs['#orggoals'] === 'Goals and projects' && crumbs['#projects'] === 'Goals and projects' && crumbs['#bank'] === 'Goals and projects' && crumbs['#requests'] === 'Requests and inbox' && crumbs['#hubmail'] === 'Requests and inbox' && crumbs['#photos'] === 'Resources' && crumbs['#activity'] === 'Admin' && crumbs['#overview'] === 'Home', crumbs);
+      ok('admin: page crumbs name the menu group', crumbs['#orggoals'] === 'Strategy' && crumbs['#projects'] === 'Strategy' && crumbs['#bank'] === 'Other Tools' && crumbs['#requests'] === 'Other Tools' && crumbs['#hubmail'] === 'Organization' && crumbs['#photos'] === 'Other Tools' && crumbs['#activity'] === 'Admin' && crumbs['#overview'] === 'Home', crumbs);
       /* the Executive dashboard: Coming up does not repeat the brief's Next up */
       await f.hash('#overview', 2500);
       /* the same event on the same day in both lists would be a repeat (a later serving with the same name is not) */

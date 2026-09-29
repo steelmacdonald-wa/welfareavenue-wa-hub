@@ -133,9 +133,15 @@
     return res;
   };
 
+  /* optional network latency for load-order tests: window.__WA_LAT = ms (each call waits 0.5x to 1.5x of it); unset, calls resolve at once as before */
+  function lag(v) {
+    var L = Number(window.__WA_LAT || 0);
+    if (!L) return Promise.resolve(v);
+    return new Promise(function (r) { setTimeout(function () { r(v); }, Math.round(L * (0.5 + Math.random()))); });
+  }
   Builder.prototype.then = function (onF, onR) {
     var self = this;
-    return Promise.resolve().then(function () { return self._resolve(); }).then(onF, onR);
+    return lag(null).then(function () { return self._resolve(); }).then(onF, onR);
   };
   Builder.prototype.catch = function (onR) { return this.then(null, onR); };
   Builder.prototype.finally = function (fn) { return this.then().finally(fn); };
@@ -159,7 +165,7 @@
         if (fn === "get_my_role") data = role;
         var rpcs = window.__WA_RPCS || {};
         if (Object.prototype.hasOwnProperty.call(rpcs, fn)) data = rpcs[fn];
-        return Promise.resolve({ data: data, error: null });
+        return lag({ data: data, error: null });
       },
       functions: {
         invoke: function (name, opts) {
@@ -167,7 +173,7 @@
         }
       },
       auth: {
-        getSession: function () { return Promise.resolve({ data: { session: session }, error: null }); },
+        getSession: function () { return lag({ data: { session: session }, error: null }); },
         getUser: function () { return Promise.resolve({ data: { user: session.user }, error: null }); },
         onAuthStateChange: function (cb) {
           return { data: { subscription: { unsubscribe: function () {} } } };

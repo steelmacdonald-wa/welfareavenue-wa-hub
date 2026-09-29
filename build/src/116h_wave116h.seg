@@ -204,7 +204,7 @@
     var sec = document.getElementById('hubmail');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'hubmail'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Requests and inbox</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
       main.appendChild(sec);
     }
     return sec;

@@ -1,5 +1,5 @@
   /* ======================= Partners (#partners) ======================= */
-  var BLURB_P = 'Every organization Welfare Avenue has worked with, from its first backers in 2020 to today, and the ones we approached: what they did, when, and where it is written down.';
+  var BLURB_P = 'Every organization Welfare Avenue has worked with since 2020, and the ones we approached: our partners, collaborators and sponsors, what they did, when, and where it is written down.';
   var PSETS = [['worked', 'Worked with us'], ['active', 'Active'], ['past', 'Past'], ['prospect', 'Prospects'], ['declined', 'Declined'], ['all', 'All']];
   function inSet(p, set) {
     if (set === 'all') return true;
@@ -14,18 +14,24 @@
   function partnerMatch(p) {
     var u = S.ui;
     if (!inSet(p, u.pSet)) return false;
+    if (u.pCat && u.pCat !== 'all' && catOf(p) !== u.pCat) return false;
     if (u.pRel && p.relationship !== u.pRel) return false;
     if (u.pKind && p.kind !== u.pKind) return false;
     if (u.pCity && fold(p.city) !== fold(u.pCity)) return false;
-    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
+    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, PCATS[catOf(p)][0], p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
     return true;
   }
   function paintPartners() {
-    var root = mastFor('partners', 'Resources', 'Partners', BLURB_P); if (!root) return;
+    var root = mastFor('partners', boardMode() ? 'Organization' : 'CRM', 'Partners', BLURB_P); if (!root) return;   /* wave163: the page lives in the CRM (directors open no apps: it sits in their Organization) */
     if (!S.partners) { root.innerHTML = busy('Loading our partners…'); return; }
     if (S.err.partners && !S.partners.length) { root.innerHTML = '<div class="w140empty">Partners could not load (' + E(S.err.partners) + ').</div>'; return; }
     var u = S.ui, all = S.partners, lead = isLeaderUI();
-    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = all.filter(function (p) { return inSet(p, s[0]); }).length; });
+    /* the counts answer the other filter: each type within the status shown, each status within the type shown */
+    var ofCat = all.filter(function (p) { return u.pCat === 'all' || !u.pCat || catOf(p) === u.pCat; });
+    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = ofCat.filter(function (p) { return inSet(p, s[0]); }).length; });
+    var inStatus = all.filter(function (p) { return inSet(p, u.pSet); });
+    var ccnt = { all: inStatus.length }; PCAT_ORDER.forEach(function (c) { ccnt[c] = inStatus.filter(function (p) { return catOf(p) === c; }).length; });
+    var curCat = PCATS[u.pCat] ? u.pCat : 'all';
     var rels = {}, kinds = {}, cities = {};
     all.forEach(function (p) { if (p.relationship) rels[p.relationship] = 1; if (p.kind) kinds[p.kind] = 1; if (p.city) cities[p.city] = (cities[p.city] || 0) + 1; });
     var focus = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute('data-w140q') : null;
@@ -34,7 +40,12 @@
       var o = { active: 0, past: 1, prospect: 2, declined: 3 };
       return (o[a.status] - o[b.status]) || ((b.last_year || 0) - (a.last_year || 0)) || String(a.name).localeCompare(String(b.name));
     });
-    var html = '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
+    var html = '<div class="w140types" role="group" aria-label="Type">' + [['all', 'Everyone']].concat(PCAT_ORDER.map(function (c) { return [c, PCATS[c][1]]; })).map(function (x) {
+        var on = curCat === x[0], col = PCATS[x[0]] ? PCATS[x[0]][2] : GREEN;
+        return '<button type="button" class="w140ty' + (on ? ' on' : '') + '" data-w140pcat="' + x[0] + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + (PCATS[x[0]] ? '<i style="background:' + col + '"></i>' : '') + E(x[1]) + ' <em>' + ccnt[x[0]] + '</em></button>';
+      }).join('') + '</div>' +
+      '<p class="w140def">' + (curCat === 'all' ? '<b>Partners</b> work with us over time toward a shared goal; <b>collaborators</b> join us for an event or an initiative; <b>sponsors</b> give money or in-kind support and get recognition.' : '<b>A ' + E(PCATS[curCat][0].toLowerCase()) + '</b> ' + E(PCATS[curCat][3])) + '</p>' +
+      '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
       return '<button class="w140st" data-w140pset="' + s + '"><b style="color:' + STATUS[s][1] + '">' + cnt[s] + '</b><span>' + E({ active: 'working with us now', past: 'worked with us before', prospect: 'approached, nothing yet', declined: 'said no' }[s]) + '</span></button>';
     }).join('') + '</div>' +
       '<div class="w140bar"><div class="w140chips">' + PSETS.map(function (s) { return chip(u.pSet === s[0], 'data-w140pset', s[0], s[1], cnt[s[0]]); }).join('') + '</div></div>' +
@@ -46,7 +57,7 @@
       '<div class="w140count">' + plural(list.length, 'organization', 'organizations') + '</div>' +
       (list.length ? '<div class="w140pg">' + list.map(function (p) {
         return '<button class="w140pc" data-w140partner="' + E(p.id) + '"><div class="nm">' + E(p.name) + '</div><div class="sub">' + E([p.kind, p.city].filter(Boolean).join(' · ')) + '</div>' +
-          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + statusChip(p.status) + '<span class="w140tag">' + E(REL[p.relationship] || p.relationship) + '</span>' +
+          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + catTag(p) + statusChip(p.status) + (relDetail(p) ? '<span class="w140tag">' + E(relDetail(p)) + '</span>' : '') +
           (yearsText(p) ? '<span class="w140count">' + E(yearsText(p)) + '</span>' : '') + (p.visibility === 'leadership' ? '<span class="w140tag lead">' + I('lock') + 'Leaders</span>' : '') + '</div></button>';
       }).join('') + '</div>' : '<div class="w140empty">No organization matches. Try another word or show all of them.</div>');
     root.innerHTML = html;
@@ -70,9 +81,9 @@
     if (!p) { toastS('That partner is not in the list'); return; }
     var lead = isLeaderUI();
     var ms = partnerMoments(p), ds = partnerDocs(p);
-    var rows = [['Kind', [p.kind, p.city].filter(Boolean).join(' · ')], ['How', REL[p.relationship] || p.relationship], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
+    var rows = [['Type', PCATS[catOf(p)][0] + (relDetail(p) ? ' (' + relDetail(p).toLowerCase() + ')' : '')], ['Kind', [p.kind, p.city].filter(Boolean).join(' · ')], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
       .filter(function (r) { return r[1]; }).map(function (r) { return '<div class="row"><b>' + E(r[0]) + '</b><span>' + E(r[1]) + '</span></div>'; }).join('');
-    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
+    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + catTag(p) + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
       (p.summary ? '<p style="font-size:14px;line-height:1.55;margin:8px 0 4px">' + E(p.summary) + '</p>' : '') + rows +
       (p.notes ? '<h4>Good to know</h4><p style="font-size:13px;margin:0">' + E(p.notes) + '</p>' : '') +
       '<h4>In our story</h4>' + (ms.length ? ms.slice(0, 14).map(function (h) { return '<div class="row"><b>' + E(yearOf(h)) + '</b><button class="w140mini" style="padding:0;text-align:left" data-w140go="#ourstory/e/' + E(h.id) + '">' + E(h.title) + '</button></div>'; }).join('') : '<p class="w140count">No moment in the timeline names them yet.</p>') +

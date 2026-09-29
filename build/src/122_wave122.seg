@@ -1116,7 +1116,7 @@
       (!done && pct > 0 ? '<div class="pb"><i style="width:' + pct + '%"></i></div>' : '') + '</div></button>';
   }
   function topHtml() {
-    return '<div class="w122top"><span class="crumb">People &middot; Avenue Academy</span><span class="sp"></span>' +
+    return '<div class="w122top"><span class="crumb">Home &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
@@ -1825,7 +1825,7 @@
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Departments, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
+      S('#w163bar || nav.wa-nav || #w114bar', 'The menu', 'Every Hub page lives here: Home, the Avenue Academy, the Executive dashboard, the Calendar and The Brain at the top, then Departments, Other Tools and Organization. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar. Strategy, the CRM and the other apps open from Apps at the bottom. On a phone, the bar at the bottom has Home, the Calendar, Ask, your team and Menu, which opens everything, with Find a page.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
@@ -2064,10 +2064,9 @@
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
       S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
       S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
-      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Avenue Academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),
-      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, video, folder or link, tagged to a team.', OPT)
+      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, a folder or a link, tagged to a team. Training videos go in the Avenue Academy.', OPT)
     ] },
     photos: { tab: 'photos', icon: 'sparkle', hash: '#photos', steps: [
       S('#photos .w116ptop', 'Photo library', 'Our photos, labelled and cleared for use. Each one says what it is cleared for before you post it.'),

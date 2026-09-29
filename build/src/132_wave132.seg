@@ -457,7 +457,7 @@
     var sec = document.getElementById('bank'); if (!sec) return;
     var m = sec.querySelector(':scope > .w118mast');
     if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w132', 'bank'); sec.insertBefore(m, sec.firstChild); }
-    var html = '<div class="crumb">Goals and projects</div><h1>The bank</h1><p>' + E(BLURB) + '</p>';
+    var html = '<div class="crumb">Other Tools</div><h1>The Task Bank</h1><p>' + E(BLURB) + '</p>';
     if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
   }
   function host() {
@@ -501,7 +501,7 @@
         return '<button type="button" class="w132chip' + (B.team === d ? ' on' : '') + '" data-w132team="' + E(d) + '"><i style="background:' + E(teamColor(d)) + '"></i>' + E(teamShort(d)) + ' <em>' + (counts[d] || 0) + '</em></button>';
       }).join('');
     return '<div class="w132bar"><div class="w132chips" role="group" aria-label="Teams">' + chips + '</div>'
-      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the bank" value="' + E(B.q) + '" aria-label="Search the bank"></label></div>';
+      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the Task Bank" value="' + E(B.q) + '" aria-label="Search the Task Bank"></label></div>';
   }
   function whyHtml(x) {
     return x.note ? '<div class="why">' + I('note') + '<span>' + E(x.note) + '</span></div>' : '<div class="why none">No reason given.</div>';
@@ -588,7 +588,7 @@
     var p = String(h || '').replace(/^#/, '').split('/');
     var t = p[1] && teams().indexOf(p[1]) >= 0 ? p[1] : '';
     B.team = t;
-    try { document.title = 'The bank \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    try { document.title = 'The Task Bank \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
     paint();
     load(!B.data || Date.now() - B.at > 30000).then(function () { if (onPage()) paint(); });
   }
@@ -647,7 +647,7 @@
       + (s.pick === 'custom' ? '<input type="date" class="pick" id="w132day" min="' + E(ymd(addDays(t, 1))) + '" max="' + E(ymd(addDays(t, 1095))) + '" value="' + E(s.custom || '') + '" aria-label="The day it comes back">' : '') + '</div>';
     if (s.kind !== 'date') html += '<div><div class="lb">Why it waits</div><input type="text" id="w132why" maxlength="280" placeholder="For example: after the gala in March, or once the grant decision is in" value="' + E(s.note || '') + '"></div>';
     var d = parseDay(chosenDate()), soft = '';
-    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
+    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
     html += '<div class="soft" id="w132soft">' + E(soft) + '</div><div class="err" id="w132err">' + E(s.err || '') + '</div>';
     return html;
   }
@@ -661,7 +661,7 @@
       el.innerHTML = '<div class="bk" data-w132close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft"></div></div>';
     }
     el.querySelector('.pane').setAttribute('aria-label', title);
-    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
+    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The Task Bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
     el.querySelector('.bd').innerHTML = sheetBody();
     el.querySelector('.ft').innerHTML = '<button type="button" class="w132btn" data-w132close="1">Cancel</button><button type="button" class="w132btn pri" data-w132go="1"' + (s.busy ? ' disabled' : '') + '>' + I(s.kind === 'date' ? 'cal' : 'vault') + E(s.busy ? 'Saving\u2026' : go) + '</button>';
     el.classList.add('on');
@@ -810,7 +810,7 @@
   /* ---------- the menu: Strategy > The bank ---------- */
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
-    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The bank', group: 'strategy', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The Task Bank', group: 'tools', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
     placeTab();
   }
   /* after the five strategy pages, whatever rebuilt the group */
@@ -887,7 +887,7 @@
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t) return;
     if (t.id === 'w132q') { B.q = t.value; paintList(); return; }
-    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
+    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !B.sheet) return;
@@ -932,7 +932,7 @@
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
-        S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
+        S('#bank > .w118mast', 'The Task Bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
         S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team\u2019s board again, marked back from the bank.', OPT),

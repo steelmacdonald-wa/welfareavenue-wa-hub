@@ -116,7 +116,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
     return { btn: !!b, shown: !!b && b.style.display !== 'none', label: b && b.textContent.trim(), group: g && g.getAttribute('data-w42g'), hdr: hdr && hdr.textContent.trim(),
       order: g ? [...g.querySelectorAll('.tab')].map(x => x.getAttribute('data-tab')) : [], layoutOk: !!(window.w134 && window.w134.ok && window.w134.ok()) };
   });
-  ok('the menu has CRM in the People group, after the Org chart and Avenue Academy', m.shown && m.label === 'CRM' && m.group === 'people' && m.order.join(',') === 'orgchart,training,crm', m);
+  ok('wave163: the CRM button sits with the apps\' pages, which wave153 keeps out of the menu (the CRM opens from Apps)', m.label === 'CRM' && m.group === 'apps' && m.order.indexOf('crm') >= 0 && m.order.indexOf('partners') >= 0, m);
   ok('the menu layout still holds (w134.ok)', m.layoutOk, m);
   const a = await f.ev(() => ({
     active: document.getElementById('crm') && document.getElementById('crm').classList.contains('active'),
@@ -126,7 +126,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
     more: ((document.querySelector('#crm [data-w152more]') || {}).textContent || '').trim(), count: (document.querySelector('#crm .w152count') || {}).textContent,
     chips: [...document.querySelectorAll('#crm [data-w152kind]')].map(b => b.textContent.trim())
   }));
-  ok('#crm opens the CRM with its masthead (People > CRM)', a.active && a.crumb === 'People' && a.h1 === 'CRM', a);
+  ok('#crm opens the CRM with its masthead (the crumb names Apps; in the app the app bar names it)', a.active && a.crumb === 'Apps' && a.h1 === 'CRM', a);
   ok('the numbers: contacts (more than one page), volunteers, who served, donors', a.stats.join('|') === '1,049|1,046|71|1' && /donors/.test(a.statTxt[3] || ''), a);
   ok('ten tabs, with the duplicate pairs counted (Gifts since wave153, Email since wave154, Lists and Campaigns since wave155, Forms since wave156, Automations since wave157, Reports since wave160)', a.tabs.length === 10 && /Forms/.test(a.tabs[7]) && /Automations/.test(a.tabs[8]) && /Reports/.test(a.tabs[9]) && /Lists/.test(a.tabs[5]) && /Campaigns/.test(a.tabs[6]) && /Possible duplicates\s*2/.test(a.tabs[1]) && /Sources/.test(a.tabs[2]) && /Gifts/.test(a.tabs[3]) && /Email/.test(a.tabs[4]), a.tabs);
   ok('the list shows 60 at a time, with Show more', a.rows === 60 && /Show 60 more/.test(a.more) && /1,049 contacts/.test(a.count), a);

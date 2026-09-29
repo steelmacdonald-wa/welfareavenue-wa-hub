@@ -24,6 +24,7 @@
     if ((el = t.closest('[data-w140hidden]'))) { S.ui.hidden = !S.ui.hidden; paintStory(); return; }
     if ((el = t.closest('[data-w140area]'))) { S.ui.lArea = el.getAttribute('data-w140area'); paintStory(); return; }
     if ((el = t.closest('[data-w140pset]'))) { S.ui.pSet = el.getAttribute('data-w140pset'); paintPartners(); return; }
+    if ((el = t.closest('[data-w140pcat]'))) { S.ui.pCat = el.getAttribute('data-w140pcat'); paintPartners(); return; }
     if ((el = t.closest('[data-w140dreuse]'))) { S.ui.dReuse = !S.ui.dReuse; S.ui.dShow = 40; paintDocs(); return; }
     if ((el = t.closest('[data-w140dmore]'))) { S.ui.dShow += 40; paintDocs(); return; }
   });
@@ -64,9 +65,9 @@
 
   /* ---------- the menu: Resources > Our story, Partners, Document finder ---------- */
   var PAGES = [
-    { id: 'ourstory', label: 'Our story', group: 'resources', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
-    { id: 'partners', label: 'Partners', group: 'resources', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
-    { id: 'documents', label: 'Document finder', group: 'resources', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
+    { id: 'ourstory', label: 'Our story', group: 'org', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
+    { id: 'partners', label: 'Partners', group: 'apps', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
+    { id: 'documents', label: 'Document finder', group: 'tools', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
   ];
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
@@ -101,10 +102,11 @@
         T('#ourstory .w140tabs', 'Lessons learned', 'What we learned from our own events and programs, as advice for next time.', OPT)
       ] };
       if (!W.tours.partners) W.tours.partners = { tab: 'partners', icon: 'handshake', hash: '#partners', steps: [
-        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached.'),
+        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached. The page lives in the CRM.'),
+        T('#partners .w140types', 'Partners, collaborators and sponsors', 'Partners work with us over time toward a shared goal, collaborators join us for an event or an initiative, sponsors give money or in-kind support and get recognition. Pick one to see only them.', OPT),
         T('#partners .w140stats', 'Where each one stands', 'Working with us now, before, approached with nothing yet, or said no.', OPT),
-        T('#partners .w140bar', 'Narrow it down', 'By how they helped, the kind of organization or the city, or search for a name.', OPT),
-        T('#partners .w140pg', 'Every organization', 'What they did with us, how they helped and the years. Open one for the moments and documents it appears in.', OPT)
+        T('#partners .w140bar', 'Narrow it down', 'By where they stand, how they help in detail, the kind of organization or the city, or search for a name.', OPT),
+        T('#partners .w140pg', 'Every organization', 'Its type, where it stands, what they did with us and the years. Open one for the moments and documents it appears in.', OPT)
       ] };
       if (!W.tours.documents) W.tours.documents = { tab: 'documents', icon: 'search', hash: '#documents', steps: [
         T('#documents > .w118mast', 'Document finder', 'Every useful file in our shared drives and Canva, found by what it is about.'),
@@ -118,5 +120,5 @@
 
   /* ---------- test hook ---------- */
   window.w140 = { state: function () { return S; }, load: load, story: paintStory, partners: paintPartners, docs: paintDocs, openStory: openStory, openPartners: openPartners, openDocs: openDocs,
-    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate };
+    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate, catOf: catOf };
 })();

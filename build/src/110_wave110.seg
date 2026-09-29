@@ -40,7 +40,7 @@
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
-    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', crm: 'CRM', adminpanel: 'Admin'
+    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', adminpanel: 'Admin'
   };
   function me() {
     return {
@@ -249,8 +249,12 @@
       startApp = async function () {
         try { await __sa110.apply(this, arguments); }
         finally {
-          /* every earlier wave's wrapper has resolved by now */
-          setTimeout(w110Reveal, 250);
+          /* every earlier wave's wrapper has resolved by now; wave163: the menu settles first (at most 1.5 s), so the page appears whole */
+          var w163wait = 0;
+          (function w163when() {
+            if (document.documentElement.classList.contains('w163nav') || w163wait >= 1500) { setTimeout(w110Reveal, 60); return; }
+            w163wait += 50; setTimeout(w163when, 50);
+          })();
         }
         try { arm(); } catch (e) { /* non-fatal */ }
         try { await w110Provision(); } catch (e) { /* non-fatal */ }

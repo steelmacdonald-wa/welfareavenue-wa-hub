@@ -46,7 +46,7 @@
     return out;
   }
   function paintDocs() {
-    var root = mastFor('documents', 'Resources', 'Document finder', BLURB_D); if (!root) return;
+    var root = mastFor('documents', 'Other Tools', 'Document finder', BLURB_D); if (!root) return;   /* wave163: in Other Tools */
     if (!S.docs) { root.innerHTML = busy('Loading the document finder…'); return; }
     if (S.err.docs && !S.docs.length) { root.innerHTML = '<div class="w140empty">The document finder could not load (' + E(S.err.docs) + ').</div>'; return; }
     var u = S.ui, lead = isLeaderUI();

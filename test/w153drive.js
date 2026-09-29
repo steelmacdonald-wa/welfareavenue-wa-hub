@@ -59,7 +59,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('it stays in view at the foot of the menu even though the menu is taller than the screen', Math.abs(dockPos.dockBottom - dockPos.navBottom) < 2 && dockPos.navScroll > 900, dockPos);
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(250);
   const pop = await f.ev(() => ({ open: document.getElementById('w153pop').classList.contains('open'), tiles: [...document.querySelectorAll('#w153pop .w153tile')].map(t => t.querySelector('b').textContent + (t.classList.contains('on') ? '*' : '')), expanded: document.querySelector('[data-w153grid]').getAttribute('aria-expanded') }));
-  ok('the 9 dots open the launcher: the Hub (current), the CRM, the HR centre, Finance, the Admin centre', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|CRM|HR centre|Finance|Admin centre', pop);
+  ok('the 9 dots open the launcher: the Hub (current), Strategy (wave163), the CRM, the HR centre, Finance, the Admin centre', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|Strategy|CRM|HR centre|Finance|Admin centre', pop);
   await shot(f, 'apps_launcher');
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(150);
   ok('Escape closes it', await f.ev(() => !document.getElementById('w153pop').classList.contains('open')));
@@ -68,7 +68,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   s = await state(f);
   ok('the CRM opens as an app: #crm, the menu gives way to the CRM rail, Back to the Hub in the dock', s.hash === '#crm' && s.app === 'crm' && /w153app/.test(s.body) && s.tabBar === 'none' && s.railShown !== 'none' && s.back !== 'none', s);
   let r = await rail(f);
-  ok('the rail: Contacts (current), Possible duplicates, Sources, Lists (wave155), Forms (wave156), Gifts, Email (wave154), Campaigns (wave155), Automations (wave157), Reports (wave160, no longer what comes next)', r.join('|') === 'Contacts*|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports' && await f.ev(() => !/Next in the CRM/i.test(document.getElementById('w153rail').innerText)), r);
+  ok('the rail: Contacts (current), Partners (wave163), Possible duplicates, Sources, Lists (wave155), Forms (wave156), Gifts, Email (wave154), Campaigns (wave155), Automations (wave157), Reports (wave160, no longer what comes next)', r.join('|') === 'Contacts*|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports' && await f.ev(() => !/Next in the CRM/i.test(document.getElementById('w153rail').innerText)), r);
   ok('the app bar names the app and the place, with Add a contact', /^CRM Contacts/.test(s.bar) && /Add a contact/.test(s.bar), s.bar);
   ok('Search everything becomes the contact search', /Search contacts/.test(s.ph), s.ph);
   ok('the CRM page keeps its own tab strip out of the way on a wide screen (the rail has it)', await f.ev(() => getComputedStyle(document.querySelector('#crm .w152tabs')).display === 'none'));
@@ -174,18 +174,18 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   f = await fresh(browser, { who: 'admin', width: 390, hash: '#crm', fixture: fixture(), wait: 4000 });
   await f.page.waitForTimeout(1000);
   s = await state(f);
-  const ph = await f.ev(() => ({ menuBtn: getComputedStyle(document.querySelector('#w153bar .w153menu')).display, drawer: document.body.classList.contains('wa-mob-open'), wide: document.documentElement.scrollWidth <= innerWidth + 1, tabs: getComputedStyle(document.querySelector('#crm .w152tabs')).display }));
-  ok('on a phone the CRM opens as an app with Menu in the app bar and its tab strip kept', s.app === 'crm' && ph.menuBtn !== 'none' && !ph.drawer && ph.wide && ph.tabs !== 'none', { s, ph });
-  await click(f, '[data-w153menu]'); await f.page.waitForTimeout(500);
-  const ph2 = await f.ev(() => ({ drawer: document.body.classList.contains('wa-mob-open'), rail: getComputedStyle(document.getElementById('w153rail')).display, items: [...document.querySelectorAll('#w153rail .w153it')].length, dockIn: document.getElementById('w153dock').getBoundingClientRect().bottom <= innerHeight + 1 }));
-  ok('Menu opens the drawer with the CRM rail and the dock at its foot', ph2.drawer && ph2.rail !== 'none' && ph2.items === 10 && ph2.dockIn, ph2);
+  /* wave163: on a phone the bottom bar's Menu opens the sheet, which inside an app is the app's menu (the app bar's own Menu button is gone) */
+  const ph = await f.ev(() => ({ menuBtn: getComputedStyle(document.querySelector('#w153bar .w153menu')).display, bar: getComputedStyle(document.getElementById('w163bar')).display, drawer: document.body.classList.contains('wa-mob-open'), wide: document.documentElement.scrollWidth <= innerWidth + 1, tabs: getComputedStyle(document.querySelector('#crm .w152tabs')).display }));
+  ok('on a phone the CRM opens as an app, the bottom bar in place of the app bar\'s Menu, and its tab strip kept', s.app === 'crm' && ph.menuBtn === 'none' && ph.bar !== 'none' && !ph.drawer && ph.wide && ph.tabs !== 'none', { s, ph });
+  await click(f, '#w163bar [data-w163slot="menu"]'); await f.page.waitForTimeout(500);
+  const ph2 = await f.ev(() => { const sh = document.getElementById('w163sheet'); return { on: sh.classList.contains('on'), title: sh.querySelector('.hd h2').textContent, items: sh.querySelectorAll('.it').length, back: !!sh.querySelector('.back') }; });
+  ok('Menu opens the sheet with the CRM\'s menu and Back to the Hub', ph2.on && ph2.title === 'CRM' && ph2.items === 11 && ph2.back, ph2);
   await shot(f, 'apps_phone_rail');
-  await click(f, '#w153rail [data-w153go="#crm/sources"]'); await f.page.waitForTimeout(800);
-  ok('a rail item closes the drawer and opens the page', await f.ev(() => !document.body.classList.contains('wa-mob-open') && location.hash === '#crm/sources'));
-  await click(f, '[data-w153menu]'); await f.page.waitForTimeout(300);
-  await click(f, '[data-w153grid]'); await f.page.waitForTimeout(300);
-  const ph3 = await f.ev(() => { const p = document.getElementById('w153pop').getBoundingClientRect(); return { open: document.getElementById('w153pop').classList.contains('open'), fits: p.left >= 0 && p.right <= innerWidth + 1 && p.top >= 0 }; });
-  ok('the launcher fits the phone screen', ph3.open && ph3.fits, ph3);
+  await f.ev(() => { const r = [...document.querySelectorAll('#w163sheet .it')].filter(x => /Sources/.test(x.textContent))[0]; if (r) r.click(); }); await f.page.waitForTimeout(900);
+  ok('an item closes the sheet and opens the page', await f.ev(() => !document.getElementById('w163sheet').classList.contains('on') && location.hash === '#crm/sources'));
+  await click(f, '#w163bar [data-w163slot="menu"]'); await f.page.waitForTimeout(300);
+  const ph3 = await f.ev(() => { const a = document.querySelector('#w163sheet .apps'); const r = a ? a.getBoundingClientRect() : null; return { tiles: document.querySelectorAll('#w163sheet .app').length, fits: !!r && r.left >= 0 && r.right <= innerWidth + 1 }; });
+  ok('the apps in the sheet fit the phone screen', ph3.tiles >= 5 && ph3.fits, ph3);
   await shot(f, 'apps_phone_launcher');
   ok('no page errors (phone)', (f.errs || []).length === 0, f.errs);
   await f.close();

@@ -502,7 +502,7 @@
     if (!sec) { sec = document.createElement('section'); sec.id = 'photos'; sec.className = 'panel'; main.appendChild(sec); }
     sec.setAttribute('data-w118c', '1');
     if (!sec.querySelector('.w118chost')) {
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Resources</div><h2>Photo library</h2><p>' + E(INTRO) + '</p><button class="w43help" data-w118chelp="1" type="button">&#63; How this page works</button></div><div class="w118chost"><p class="read">Loading the photo library...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Other Tools</div><h2>Photo library</h2><p>' + E(INTRO) + '</p><button class="w43help" data-w118chelp="1" type="button">&#63; How this page works</button></div><div class="w118chost"><p class="read">Loading the photo library...</p></div>';
     }
     return sec;
   }

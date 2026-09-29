@@ -106,7 +106,7 @@ const card = (f, h) => f.ev(x => { const c = [...document.querySelectorAll('#crm
     rail: [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim() + (a.classList.contains('on') ? '*' : '')), next: /Next in the CRM/i.test((document.getElementById('w153rail') || {}).innerText || ''),
     rpc: window.__rpc.filter(x => x.fn === 'crm_report') }));
   ok('the CRM has ten tabs and #crm/reports marks Reports', b.tabs.length === 10 && b.tabs[9] === 'Reports*', b.tabs);
-  ok('the rail lists Reports as its own group (no longer “next”)', b.rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports*' && !b.next, b);
+  ok('the rail lists Reports as its own group (no longer “next”)', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports*' && !b.next, b);   /* wave163: Partners */
   ok('the report is asked for once, for this year (no year given)', b.rpc.length === 1 && b.rpc[0].args.p_fy === null, b.rpc);
   let t = await txt(f);
   ok('the title says the year is still running, to the day', /Fiscal year 2025-26\s*so far, to 25 Sep 2026/i.test(t), t.slice(0, 300));

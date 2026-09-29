@@ -30,7 +30,9 @@
     + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
     + '.w153ai .w153i{width:18px;height:18px;}'
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
-    + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"]{display:none !important;}'
+    /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
+    + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
+    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -53,8 +55,9 @@
     + 'body.w153app #w153bar{display:flex;}'
     + '#w153bar .w153bc{display:flex;align-items:center;gap:10px;min-width:0;}'
     + '#w153bar .w153bc b{font-family:' + HEAD + ';font-weight:600;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';}'
-    + '#w153bar .w153bc span{font-size:13.5px;color:' + MUTED + ';}'
-    + '#w153bar .w153bc span::before{content:"\\203A";margin:0 8px 0 2px;color:rgba(16,63,57,.35);}'
+    /* wave163: the arrow and the grey go to where you are, never to the app's icon tile (it read ›, a faded icon) */
+    + '#w153bar .w153bc > span:not(.w153ai){font-size:13.5px;color:' + MUTED + ';}'
+    + '#w153bar .w153bc > span:not(.w153ai)::before{content:"\\203A";margin:0 8px 0 2px;color:rgba(16,63,57,.35);}'
     + '#w153bar .w153acts{margin-left:auto;display:flex;gap:8px;align-items:center;}'
     + '#w153bar .w153btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:8px 14px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;}'
     + '#w153bar .w153btn:hover{background:#0c332e;}'

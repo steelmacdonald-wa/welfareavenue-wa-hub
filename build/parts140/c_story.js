@@ -111,7 +111,7 @@
   }
 
   function paintStory() {
-    var root = mastFor('ourstory', 'Resources', 'Our story', BLURB_S); if (!root) return;
+    var root = mastFor('ourstory', 'Organization', 'Our story', BLURB_S); if (!root) return;   /* wave163: in Organization */
     if (!S.hist || !S.lessons) { root.innerHTML = busy('Loading our story…'); return; }
     if (S.err.hist && !S.hist.length) { root.innerHTML = '<div class="w140empty">Our story could not load (' + E(S.err.hist) + ').</div>'; return; }
     var hs = visibleHist();

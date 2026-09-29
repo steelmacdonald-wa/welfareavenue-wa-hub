@@ -105,7 +105,7 @@
   /* ---------- the menu: Strategy > The bank ---------- */
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
-    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The bank', group: 'strategy', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The Task Bank', group: 'tools', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
     placeTab();
   }
   /* after the five strategy pages, whatever rebuilt the group */

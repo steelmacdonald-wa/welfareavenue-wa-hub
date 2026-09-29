@@ -98,7 +98,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   ok('the custom fields card lists the fields, their kind, the forms using them and how many contacts have them', b.fields.length === 3 && /Instagram · Short answer · in Volunteer with Welfare Avenue/.test(b.fields[0]) && /1 contact/.test(b.fields[0]) && /Rally Paper team · One choice/.test(b.fields[2]), b.fields);
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
   const nextUp = await f.ev(() => (document.querySelector('#w153rail .w153next') || {}).innerText || '');
-  ok('the CRM rail lists Forms under Contacts', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports', rail);
+  ok('the CRM rail lists Forms under Contacts', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports', rail);   /* wave163: Partners */
   ok('nothing is left “to come” in the rail (Reports arrived in wave160)', nextUp === '', nextUp);
   await shot(f, 'forms_list');
 

@@ -30612,7 +30612,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('projects');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'projects'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Goals and projects</div><h2>Projects</h2><p>Every active project by team, with its status, the goal it serves and its open work. Open a project for the full picture.</p></div><div class="card" id="w116projhost"><p class="read">Loading projects...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Strategy</div><h2>Projects</h2><p>Every active project by team, with its status, the goal it serves and its open work. Open a project for the full picture.</p></div><div class="card" id="w116projhost"><p class="read">Loading projects...</p></div>';
       var goals = document.getElementById('goals');
       if (goals && goals.parentNode === main) goals.insertAdjacentElement('afterend', sec); else main.appendChild(sec);
     }
@@ -31876,8 +31876,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return sec;
   }
   function ensurePanels() {
-    panel('orggoals', 'Goals and projects', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
-    panel('goalmap', 'Goals and projects', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
+    panel('orggoals', 'Strategy', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
+    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
   }
   function visiblePanel(id) { var s = document.getElementById(id); return !!(s && s.classList.contains('active')); }
   async function showOrg() { ensurePanels(); if (!visiblePanel('orggoals')) return; M.org.host = document.getElementById('w116orghost'); if (!M.org.host) return; if (!M.loaded) M.org.host.innerHTML = '<p class="read">Loading goals...</p>'; await load(); try { if (typeof wa30LoadIdeas === 'function') await wa30LoadIdeas(); } catch (e) { /* fine */ } renderOrg(); }
@@ -32565,7 +32565,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('hubmail');
     if (!sec) {
       sec = document.createElement('section'); sec.id = 'hubmail'; sec.className = 'panel';
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Requests and inbox</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Organization</div><h2>Hub inbox</h2><p>What the team cc\'s to hub@welfareavenue.com, filed automatically: invoices to Finance, meeting summaries through the transcript pipeline, everything else as team updates. The trail lives here, with Undo.</p></div><div class="card" id="w116mailhost"><p class="read">Loading...</p></div>';
       main.appendChild(sec);
     }
     return sec;
@@ -39310,7 +39310,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       (!done && pct > 0 ? '<div class="pb"><i style="width:' + pct + '%"></i></div>' : '') + '</div></button>';
   }
   function topHtml() {
-    return '<div class="w122top"><span class="crumb">People &middot; Avenue Academy</span><span class="sp"></span>' +
+    return '<div class="w122top"><span class="crumb">Home &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
@@ -40019,7 +40019,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Departments, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
+      S('#w163bar || nav.wa-nav || #w114bar', 'The menu', 'Every Hub page lives here: Home, the Avenue Academy, the Executive dashboard, the Calendar and The Brain at the top, then Departments, Other Tools and Organization. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar. Strategy, the CRM and the other apps open from Apps at the bottom. On a phone, the bar at the bottom has Home, the Calendar, Ask, your team and Menu, which opens everything, with Find a page.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
       S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
@@ -40258,10 +40258,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
       S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
       S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
-      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Avenue Academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),
-      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, video, folder or link, tagged to a team.', OPT)
+      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, a folder or a link, tagged to a team. Training videos go in the Avenue Academy.', OPT)
     ] },
     photos: { tab: 'photos', icon: 'sparkle', hash: '#photos', steps: [
       S('#photos .w116ptop', 'Photo library', 'Our photos, labelled and cleared for use. Each one says what it is cleared for before you post it.'),
@@ -44884,24 +44883,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     "\u2736": "star"
   };
   var GLYPH_RE = new RegExp('[' + Object.keys(GLYPHS).map(function (g) { return g.length === 2 ? '\\u{' + g.codePointAt(0).toString(16) + '}' : '\\u' + ('0000' + g.charCodeAt(0).toString(16)).slice(-4); }).join('') + ']', 'u');
-  var MAST = {
+  var MAST = { /* wave163: the crumbs follow the menu (Other Tools, Organization, the Strategy app; Avenue Academy and The Brain at the top) */
     "overview": ["Home", "Executive dashboard", "Where Welfare Avenue stands: the calls waiting on the executives, what is going well, what to watch and what is coming.", false, "Executive dashboard"],
     "dashboard": ["Executive dashboard", "Delivery numbers", "How fast work moves: time to close, open workload and aging, team by team.", false, "Delivery numbers"],
-    "goals": ["Goals and projects", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
-    "requests": ["Requests and inbox", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
-    "transcripts": ["Meetings", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
-    "agendas": ["Meetings", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
+    "goals": ["Strategy", "Department goals", "Every team's goals for the quarter, with the projects and tasks that carry them.", true, "Department goals"],
+    "requests": ["Other Tools", "Requests", "Ask another team for something and follow it through to done.", true, "Department requests"],
+    "transcripts": ["Other Tools", "Transcript archive", "Every meeting the Hub has read, and where to add the next one.", false, "Transcript archive"],
+    "agendas": ["Other Tools", "Agendas", "Build the agenda, run the meeting, tick items off as they happen.", true, "Agendas"],
     "volunteering": ["Operations Montreal", "Volunteering", "Serving events, sign-ups and the volunteer records for Montreal.", true, "Volunteering"],
     "finances": ["Fundraising & Finances", "Finances and budgeting", "Statements, the ledger and budgets per team.", true, "Finances and budgeting"],
     "hrcentre": ["Human Resources", "HR centre", "People records, hours, onboarding and policies in one place.", true, "HR centre"],
-    "orgchart": ["People", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
-    "training": ["People", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],
-    "hubmail": ["Requests and inbox", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
+    "orgchart": ["Organization", "Org chart", "Who reports to whom, team by team, with the open positions. Click anyone for their reporting line and profile.", true, "Organization chart"],
+    "training": ["Home", "Avenue Academy", "Onboarding, Learning Avenues, a tour of every page, and your progress.", false, "Avenue Academy"],
+    "hubmail": ["Organization", "Hub inbox", "What arrived at hub@ and where each email was filed.", false, "Hub inbox"],
     "needsme": ["Home", "Needs me", "Everything waiting on you, in one queue.", true, "Needs me"],
     "activity": ["Admin", "Activity", "Everything that changed on the Hub, newest first.", true, "Activity"],
-    "importantinfo": ["Resources", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
-    "brain": ["Goals and projects", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
-    "create": ["Resources", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
+    "importantinfo": ["Other Tools", "Important info", "The standing facts and links everyone should know.", true, "Important info"],
+    "brain": ["Home", "The Brain", "How work flows through Welfare Avenue: from a conversation to a task to a project to a goal.", true, "The Brain"],
+    "create": ["Other Tools", "Create studio", "Emails, one-pagers and posts in the Welfare Avenue brand.", true, "Create branded content"]
   };
   var ADMIN = [ /* audit 26/09/26: People and access first; the menu shows these as the Admin group */
     ["people", "People and access", "#w113card, #w113card + .card", "Everyone on the roster, what they can see, their invitations, and the access requests."],
@@ -45966,7 +45965,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!sec) { sec = document.createElement('section'); sec.id = 'photos'; sec.className = 'panel'; main.appendChild(sec); }
     sec.setAttribute('data-w118c', '1');
     if (!sec.querySelector('.w118chost')) {
-      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Resources</div><h2>Photo library</h2><p>' + E(INTRO) + '</p><button class="w43help" data-w118chelp="1" type="button">&#63; How this page works</button></div><div class="w118chost"><p class="read">Loading the photo library...</p></div>';
+      sec.innerHTML = '<div class="w116ptop"><div class="crumb">Other Tools</div><h2>Photo library</h2><p>' + E(INTRO) + '</p><button class="w43help" data-w118chelp="1" type="button">&#63; How this page works</button></div><div class="w118chost"><p class="read">Loading the photo library...</p></div>';
     }
     return sec;
   }
@@ -46886,20 +46885,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* the pages, grouped the way the menu groups them; 'team' is the team-page router and follows the department pages */
   var GROUPS = [ /* wave134: the same groups as the menu */
-    ['Everyday', ['mypage', 'overview', 'dashboard', 'calendar']],
+    /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
+    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
     ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
     ['Board', ['board', 'governance', 'committees']],
-    ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
-    ['Meetings', ['agendas', 'transcripts']],
-    ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training', 'crm']],
-    ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
+    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
+    ['Organization', ['orgchart', 'ourstory', 'hubmail']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['CRM', ['crm', 'partners']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
@@ -49234,20 +49233,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var TEAMS = (window.WA_TEAMS && window.WA_TEAMS.order) || ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
   var RANK = { viewer: 0, member: 1, leader: 2, admin: 3 };
   var GROUPS = [ /* wave134: the same groups as the menu */
-    ['Everyday', ['mypage', 'overview', 'dashboard', 'calendar']],
+    /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
+    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
     ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
     ['Board', ['board', 'governance', 'committees']],
-    ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
-    ['Meetings', ['agendas', 'transcripts']],
-    ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training', 'crm']],
-    ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
+    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
+    ['Organization', ['orgchart', 'ourstory', 'hubmail']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['CRM', ['crm', 'partners']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',
@@ -51095,7 +51094,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('bank'); if (!sec) return;
     var m = sec.querySelector(':scope > .w118mast');
     if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w132', 'bank'); sec.insertBefore(m, sec.firstChild); }
-    var html = '<div class="crumb">Goals and projects</div><h1>The bank</h1><p>' + E(BLURB) + '</p>';
+    var html = '<div class="crumb">Other Tools</div><h1>The Task Bank</h1><p>' + E(BLURB) + '</p>';
     if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
   }
   function host() {
@@ -51139,7 +51138,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         return '<button type="button" class="w132chip' + (B.team === d ? ' on' : '') + '" data-w132team="' + E(d) + '"><i style="background:' + E(teamColor(d)) + '"></i>' + E(teamShort(d)) + ' <em>' + (counts[d] || 0) + '</em></button>';
       }).join('');
     return '<div class="w132bar"><div class="w132chips" role="group" aria-label="Teams">' + chips + '</div>'
-      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the bank" value="' + E(B.q) + '" aria-label="Search the bank"></label></div>';
+      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the Task Bank" value="' + E(B.q) + '" aria-label="Search the Task Bank"></label></div>';
   }
   function whyHtml(x) {
     return x.note ? '<div class="why">' + I('note') + '<span>' + E(x.note) + '</span></div>' : '<div class="why none">No reason given.</div>';
@@ -51226,7 +51225,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var p = String(h || '').replace(/^#/, '').split('/');
     var t = p[1] && teams().indexOf(p[1]) >= 0 ? p[1] : '';
     B.team = t;
-    try { document.title = 'The bank \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    try { document.title = 'The Task Bank \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
     paint();
     load(!B.data || Date.now() - B.at > 30000).then(function () { if (onPage()) paint(); });
   }
@@ -51285,7 +51284,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + (s.pick === 'custom' ? '<input type="date" class="pick" id="w132day" min="' + E(ymd(addDays(t, 1))) + '" max="' + E(ymd(addDays(t, 1095))) + '" value="' + E(s.custom || '') + '" aria-label="The day it comes back">' : '') + '</div>';
     if (s.kind !== 'date') html += '<div><div class="lb">Why it waits</div><input type="text" id="w132why" maxlength="280" placeholder="For example: after the gala in March, or once the grant decision is in" value="' + E(s.note || '') + '"></div>';
     var d = parseDay(chosenDate()), soft = '';
-    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
+    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
     html += '<div class="soft" id="w132soft">' + E(soft) + '</div><div class="err" id="w132err">' + E(s.err || '') + '</div>';
     return html;
   }
@@ -51299,7 +51298,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       el.innerHTML = '<div class="bk" data-w132close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft"></div></div>';
     }
     el.querySelector('.pane').setAttribute('aria-label', title);
-    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
+    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The Task Bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
     el.querySelector('.bd').innerHTML = sheetBody();
     el.querySelector('.ft').innerHTML = '<button type="button" class="w132btn" data-w132close="1">Cancel</button><button type="button" class="w132btn pri" data-w132go="1"' + (s.busy ? ' disabled' : '') + '>' + I(s.kind === 'date' ? 'cal' : 'vault') + E(s.busy ? 'Saving\u2026' : go) + '</button>';
     el.classList.add('on');
@@ -51448,7 +51447,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- the menu: Strategy > The bank ---------- */
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
-    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The bank', group: 'strategy', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
+    if (!WA_NAV.pages.some(function (p) { return p.id === 'bank'; })) WA_NAV.register({ id: 'bank', label: 'The Task Bank', group: 'tools', dot: VAULT, gate: 'member', onShow: function (h) { route(h); } });
     placeTab();
   }
   /* after the five strategy pages, whatever rebuilt the group */
@@ -51525,7 +51524,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t) return;
     if (t.id === 'w132q') { B.q = t.value; paintList(); return; }
-    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
+    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !B.sheet) return;
@@ -51570,7 +51569,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
-        S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
+        S('#bank > .w118mast', 'The Task Bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
         S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team\u2019s board again, marked back from the bank.', OPT),
@@ -52451,25 +52450,40 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the layout: the one list of where every page sits in the menu ---------- */
   var LAYOUT = {
-    top: ['mypage', 'overview', 'calendar'],
+    /* wave163 (29/09/26): Steel: "Put Avenue Academy below Home"; The Brain moves up under the Calendar */
+    top: ['mypage', 'training', 'overview', 'calendar'],
     groups: [
       /* directors (the board view) cannot open the Board & Governance team page, so its two pages get a group */
       { key: 'board', label: 'Board', items: ['governance', 'committees'], loose: true },
       /* the team rows are built by wave116 (and flattened by wave127 for people who cannot open a team page) */
       { key: 'departments', label: 'Departments' },
-      { key: 'goals', label: 'Goals and projects', items: ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank'] },
-      { key: 'meetings', label: 'Meetings', items: ['agendas', 'transcripts'] },
-      { key: 'inbox', label: 'Requests and inbox', items: ['requests', 'hubmail'] },
-      { key: 'people', label: 'People', items: ['orgchart', 'training', 'crm'] }, /* wave152: the CRM */
-      { key: 'resources', label: 'Resources', items: ['importantinfo', 'ourstory', 'partners', 'documents', 'photos'] }, /* wave140: Our story, Partners, Document finder */
+      /* wave163: Steel's two sections; Requests joins Other Tools (his choice); a page the layout does not name lands in Other Tools */
+      { key: 'tools', label: 'Other Tools', items: ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests'] },
+      { key: 'org', label: 'Organization', items: ['orgchart', 'ourstory', 'hubmail'] },
+      /* the Strategy and CRM apps' pages: kept together out of sight (wave153 hides the group); each is reached through its
+         app, and the buttons stay because they carry the access rule and the routing. The HR centre and Finance keep their
+         places in the Human Resources and Fundraising rows (wave116), hidden the same way. */
+      { key: 'apps', label: 'Apps', items: ['orggoals', 'goals', 'projects', 'goalmap', 'crm', 'partners'] },
       /* Admin's own sections (wave118's links) follow the Admin page button, which the menu keeps out of sight */
       { key: 'admin', label: 'Admin', items: ['adminpanel', 'activity'] }
     ],
     /* the Events calendar sits in the Fundraising row for people who can open that team page, else right after the Calendar */
     afterCalendar: ['fundevents'],
+    /* wave163: then The Brain */
+    afterEvents: ['brain'],
     /* pages the older code hides on purpose (merged into others): kept out of sight at the end */
     hidden: ['dashboard', 'create']
   };
+  /* wave163: directors (the board view) open no apps, so Partners (in the CRM for the staff) stays in their menu, in Organization */
+  function directors() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function itemsOf(g) {
+    var ids = g.items || [];
+    if (directors()) {
+      if (g.key === 'org') ids = ids.concat(['partners']);
+      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners'; });
+    }
+    return ids;
+  }
   /* the label each button shows (the older code named a few differently) */
   var LABEL = { transcripts: 'Transcript archive' };
 
@@ -52519,7 +52533,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* the buttons each group should hold, in order, for this person */
   function wanted(b, g) {
     var out = [];
-    (g.items || []).forEach(function (id) {
+    itemsOf(g).forEach(function (id) {
       var t = tabOf(b, id); if (!t) return;
       if (g.loose && inOpenRow(t)) return;
       out.push(t);
@@ -52550,6 +52564,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var seq = [];
       LAYOUT.top.forEach(function (id) { var t = tabOf(b, id); if (t) seq.push(t); });
       LAYOUT.afterCalendar.forEach(function (id) { var t = tabOf(b, id); if (t && !inOpenRow(t)) { t.classList.remove('w116tool'); seq.push(t); } });
+      (LAYOUT.afterEvents || []).forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       var res = null;
       LAYOUT.groups.forEach(function (g) {
         if (!g.items) { var d = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'); if (d) seq.push(d); return; }
@@ -52560,7 +52575,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           if (id && LABEL[id]) relabel(t, LABEL[id]);
           putAt(host, t, i);
         });
-        if (g.key === 'resources') res = host;
+        if (g.key === 'tools') res = host;   /* wave163: Other Tools takes what the layout does not name */
         seq.push(el);
       });
       /* what the layout does not name: an older group (Strategy, More) gives up its buttons and goes;
@@ -52608,7 +52623,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* true when every page is where the layout wants it (the tests ask this) */
   function ok() {
     var b = bar(); if (!b) return true;
-    for (var i = 0; i < LAYOUT.top.length; i++) { var t = tabOf(b, LAYOUT.top[i]); if (t && t.parentNode !== b) return false; }
+    var loose = LAYOUT.top.concat(LAYOUT.afterEvents || []);
+    for (var i = 0; i < loose.length; i++) { var t = tabOf(b, loose[i]); if (t && t.parentNode !== b) return false; }
     for (var j = 0; j < LAYOUT.groups.length; j++) {
       var g = LAYOUT.groups[j]; if (!g.items) continue;
       var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'), w = wanted(b, g);
@@ -52616,7 +52632,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var host = el ? hostOf(el) : null;
       for (var k = 0; k < w.length; k++) if (w[k].parentNode !== host || host.children[k] !== w[k]) return false;
     }
-    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"]');
+    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"], :scope > .tab-group[data-w42g="goals"], :scope > .tab-group[data-w42g="resources"], :scope > .tab-group[data-w42g="people"], :scope > .tab-group[data-w42g="meetings"], :scope > .tab-group[data-w42g="inbox"]');
   }
   function watch() {
     var b = bar(); if (!b) return;
@@ -52725,7 +52741,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var admin = amAdmin(), me = (typeof who === 'function' ? who() : '');
     var kinds = [
       { k: 'password', title: 'Logins and passwords', note: '<div class="pw-note">Everyone on staff sees this list. Passwords stay hidden: press <b>Request access</b> and an admin approves it, then you can show and copy it. Whoever adds a login can always see it, and every time a password is shown it goes in the audit trail. Keep it to shared team logins (Canva, social accounts, tools); never banking, government or personal credentials. Board viewers never see this page.</div>' },
-      { k: 'video', title: 'Training videos (Loom)', note: '' },
+      /* wave163: Steel: "remove trainings from there"; training videos live in the Avenue Academy (the old rows stay in info_links, unshown) */
       { k: 'folder', title: 'Shared Google Drive folders', note: '' },
       { k: 'link', title: 'Other key links', note: '' }
     ];
@@ -52751,7 +52767,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           + (i.notes ? '<div class="nts">' + E(i.notes) + '</div>' : '') + '</div>';
       }).join('') : '<div class="info-row" style="color:var(--wa-muted);">Nothing here yet. Add the first one below.</div>');
     }).join('')
-      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="video">Training video</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
+      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
       + '<input id="ii-label" placeholder="Label, e.g. Canva team login" />'
       + '<input id="ii-url" placeholder="URL (optional for passwords)" />'
       + '<input id="ii-user" placeholder="Username / email (passwords)" />'
@@ -53516,6 +53532,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     ['marketing', 'Marketing'], ['operations', 'Operations'], ['governance', 'Governance'], ['programs', 'Programs'], ['team', 'Team'], ['other', 'Other']];
   var REL = { partner: 'Partner', sponsor: 'Sponsor', funder: 'Funder', 'donor organisation': 'Donor organization', venue: 'Venue', supplier: 'Supplier', collaborator: 'Collaborator' };
   var STATUS = { active: ['Active', TEAL], past: ['Past', MUTED], prospect: ['Prospect', '#B9851B'], declined: ['Declined', FLAG] };
+  /* wave163: Steel: "ensure to distinguish, partner, collaborator, and sponsors" (wa_partners.category, the lesson's definitions);
+     relationship stays the finer detail (a funder or a donor organization is a sponsor; a supplier or a venue can be any of the three) */
+  var PCATS = {
+    partner: ['Partner', 'Partners', GREEN, 'works with us toward a shared goal through joint programs or initiatives, over time, ideally with an MOU or a project agreement.'],
+    collaborator: ['Collaborator', 'Collaborators', PURPLE, 'joins us for an event or an initiative, without a formal agreement.'],
+    sponsor: ['Sponsor', 'Sponsors', '#C87A2F', 'gives money or in-kind support, and gets recognition for it.']
+  };
+  var PCAT_ORDER = ['partner', 'collaborator', 'sponsor'];
   var PKINDS = ['nonprofit', 'business', 'school', 'university', 'student club', 'government', 'funder', 'media', 'community group', 'faith group', 'other'];
   var DTEAMS = [['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto'], ['progdev', 'Program Development'], ['marketing', 'Marketing'],
     ['fundraising', 'Fundraising & Finances'], ['hr', 'Human Resources'], ['board', 'Board'], ['leadership', 'Leadership'], ['general', 'General']];
@@ -53618,7 +53642,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- the data ---------- */
   var S = {
     hist: null, years: null, lessons: null, partners: null, docs: null, loading: {}, at: {}, err: {},
-    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pRel: '', pKind: '', pCity: '', pq: '',
+    ui: { tab: 'timeline', kind: '', city: '', q: '', order: 'asc', hidden: false, lArea: '', lq: '', pSet: 'worked', pCat: 'all', pRel: '', pKind: '', pCity: '', pq: '',
       dq: '', dTeam: '', dYear: '', dKind: '', dReuse: false, dShow: 40 },
     sheet: null
   };
@@ -53660,6 +53684,17 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       [p.name].concat(Array.isArray(p.aka) ? p.aka : []).forEach(function (n) { var k = fold(n); if (k && k.length > 1 && !PIDX[k]) PIDX[k] = p; });
     });
   }
+  /* the type of a partner: the category, else read from how they help (older rows, the tests' fixture) */
+  function catOf(p) {
+    var c = lower(p && p.category); if (PCATS[c]) return c;
+    var r = lower(p && p.relationship);
+    if (r === 'collaborator') return 'collaborator';
+    if (r === 'sponsor' || r === 'funder' || r === 'donor organisation') return 'sponsor';
+    return 'partner';
+  }
+  /* the finer detail worth showing next to the type (a funder, a venue ...), never the type again */
+  function relDetail(p) { var r = lower(p && p.relationship); return r && !PCATS[r] ? (REL[r] || r) : ''; }
+  function catTag(p) { var c = PCATS[catOf(p)]; return '<span class="w140tag w140cat" style="background:' + c[2] + '1a;color:' + c[2] + '"><i style="background:' + c[2] + '"></i>' + E(c[0]) + '</span>'; }
   function partnerFor(name) { var k = fold(name); return k ? (PIDX[k] || null) : null; }
   function namesOf(p) { return [p.name].concat(Array.isArray(p.aka) ? p.aka : []).map(fold).filter(function (x) { return x && x.length > 2; }); }
 
@@ -53762,6 +53797,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w140kd{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:2px;white-space:nowrap;}'
     + '.w140tag{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;border-radius:6px;padding:2px 6px;background:rgba(16,63,57,.08);color:' + GREEN + ';margin-left:6px;vertical-align:2px;}'
     + '.w140tag.lead{background:rgba(111,100,171,.13);color:#5a5095;}.w140tag.hid{background:rgba(179,64,47,.1);color:' + FLAG + ';}.w140tag .w140i{width:12px;height:12px;}'
+    /* wave163: partner, collaborator, sponsor */
+    + '.w140types{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 6px;padding:4px;background:rgba(16,63,57,.06);border-radius:14px;width:fit-content;max-width:100%;box-sizing:border-box;}'
+    + '.w140ty{display:inline-flex;align-items:center;gap:7px;border:none;background:none;border-radius:10px;padding:8px 14px;font-family:' + BODY + ';font-weight:600;font-size:13.5px;color:' + GREEN + ';cursor:pointer;}'
+    + '.w140ty i{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}.w140ty em{font-style:normal;font-weight:600;font-size:12px;color:var(--wa-muted,' + MUTED + ');}'
+    + '.w140ty:hover{background:rgba(16,63,57,.06);}.w140ty.on{background:var(--wa-card,' + CREAM + ');box-shadow:0 1px 2px rgba(16,63,57,.08),0 4px 12px rgba(16,63,57,.08);}.w140ty.on em{color:' + GREEN + ';}'
+    + '.w140ty:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+    + '.w140def{font-size:13px;color:var(--wa-muted,' + MUTED + ');margin:4px 2px 14px;line-height:1.5;max-width:820px;}.w140def b{color:var(--wa-text,' + INK + ');font-weight:700;}'
+    + '.w140tag.w140cat i{width:7px;height:7px;border-radius:50%;display:inline-block;}.w140pc .ft .w140cat{margin-left:0;}#w140sheet .sub .w140cat{margin:0 6px 0 0;}'
     + '.w140m{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');margin-top:6px;}'
     + '.w140m .w140i{width:14px;height:14px;}'
     + '.w140pl{border:none;background:rgba(111,100,171,.1);color:#4b4287;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;cursor:pointer;font-family:' + BODY + ';}'
@@ -53823,7 +53866,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w140form .w140fh{grid-column:1 / -1;font-family:' + HEAD + ';font-weight:600;font-size:15px;text-transform:uppercase;letter-spacing:.4px;color:' + GREEN + ';margin-top:6px;padding-top:10px;border-top:1px solid rgba(16,63,57,.1);}'
     + '.w140form .w140fh span{font-family:' + BODY + ';text-transform:none;letter-spacing:0;font-weight:500;font-size:12px;color:var(--wa-muted,' + MUTED + ');margin-left:6px;}'
     + '@media (max-width:760px){.w140stats{grid-template-columns:repeat(2,minmax(0,1fr));}.w140ev{grid-template-columns:44px 16px minmax(0,1fr);gap:0 8px;}.w140ev .d{font-size:14px;}'
-    + '.w140year{padding:14px 14px 6px;}.w140year .yh{flex-direction:column;gap:6px;}.w140year .yh h2{font-size:36px;}.w140form{grid-template-columns:1fr;}.w140q{flex:1 1 100%;}.w140sel{max-width:none;flex:1 1 140px;}}';
+    + '.w140year{padding:14px 14px 6px;}.w140year .yh{flex-direction:column;gap:6px;}.w140year .yh h2{font-size:36px;}.w140form{grid-template-columns:1fr;}.w140q{flex:1 1 100%;}.w140sel{max-width:none;flex:1 1 140px;}'
+    + '.w140types{display:grid;grid-template-columns:1fr 1fr;width:100%;}.w140ty{justify-content:center;padding:9px 8px;font-size:13px;}}';
   document.head.appendChild(css);
   /* ======================= Our story (#ourstory) ======================= */
   var BLURB_S = 'What Welfare Avenue has done since April 2020, from our own documents, posts and designs. Every moment shows where it came from.';
@@ -53938,7 +53982,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   function paintStory() {
-    var root = mastFor('ourstory', 'Resources', 'Our story', BLURB_S); if (!root) return;
+    var root = mastFor('ourstory', 'Organization', 'Our story', BLURB_S); if (!root) return;   /* wave163: in Organization */
     if (!S.hist || !S.lessons) { root.innerHTML = busy('Loading our story\u2026'); return; }
     if (S.err.hist && !S.hist.length) { root.innerHTML = '<div class="w140empty">Our story could not load (' + E(S.err.hist) + ').</div>'; return; }
     var hs = visibleHist();
@@ -53968,7 +54012,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
   }
   /* ======================= Partners (#partners) ======================= */
-  var BLURB_P = 'Every organization Welfare Avenue has worked with, from its first backers in 2020 to today, and the ones we approached: what they did, when, and where it is written down.';
+  var BLURB_P = 'Every organization Welfare Avenue has worked with since 2020, and the ones we approached: our partners, collaborators and sponsors, what they did, when, and where it is written down.';
   var PSETS = [['worked', 'Worked with us'], ['active', 'Active'], ['past', 'Past'], ['prospect', 'Prospects'], ['declined', 'Declined'], ['all', 'All']];
   function inSet(p, set) {
     if (set === 'all') return true;
@@ -53983,18 +54027,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function partnerMatch(p) {
     var u = S.ui;
     if (!inSet(p, u.pSet)) return false;
+    if (u.pCat && u.pCat !== 'all' && catOf(p) !== u.pCat) return false;
     if (u.pRel && p.relationship !== u.pRel) return false;
     if (u.pKind && p.kind !== u.pKind) return false;
     if (u.pCity && fold(p.city) !== fold(u.pCity)) return false;
-    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
+    if (u.pq) { var hay = fold([p.name, (p.aka || []).join(' '), p.summary, p.kind, p.city, p.relationship, PCATS[catOf(p)][0], p.contact_role].join(' ')); if (!fold(u.pq).split(/\s+/).filter(Boolean).every(function (t) { return hay.indexOf(t) >= 0; })) return false; }
     return true;
   }
   function paintPartners() {
-    var root = mastFor('partners', 'Resources', 'Partners', BLURB_P); if (!root) return;
+    var root = mastFor('partners', boardMode() ? 'Organization' : 'CRM', 'Partners', BLURB_P); if (!root) return;   /* wave163: the page lives in the CRM (directors open no apps: it sits in their Organization) */
     if (!S.partners) { root.innerHTML = busy('Loading our partners\u2026'); return; }
     if (S.err.partners && !S.partners.length) { root.innerHTML = '<div class="w140empty">Partners could not load (' + E(S.err.partners) + ').</div>'; return; }
     var u = S.ui, all = S.partners, lead = isLeaderUI();
-    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = all.filter(function (p) { return inSet(p, s[0]); }).length; });
+    /* the counts answer the other filter: each type within the status shown, each status within the type shown */
+    var ofCat = all.filter(function (p) { return u.pCat === 'all' || !u.pCat || catOf(p) === u.pCat; });
+    var cnt = {}; PSETS.forEach(function (s) { cnt[s[0]] = ofCat.filter(function (p) { return inSet(p, s[0]); }).length; });
+    var inStatus = all.filter(function (p) { return inSet(p, u.pSet); });
+    var ccnt = { all: inStatus.length }; PCAT_ORDER.forEach(function (c) { ccnt[c] = inStatus.filter(function (p) { return catOf(p) === c; }).length; });
+    var curCat = PCATS[u.pCat] ? u.pCat : 'all';
     var rels = {}, kinds = {}, cities = {};
     all.forEach(function (p) { if (p.relationship) rels[p.relationship] = 1; if (p.kind) kinds[p.kind] = 1; if (p.city) cities[p.city] = (cities[p.city] || 0) + 1; });
     var focus = document.activeElement && document.activeElement.getAttribute ? document.activeElement.getAttribute('data-w140q') : null;
@@ -54003,7 +54053,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var o = { active: 0, past: 1, prospect: 2, declined: 3 };
       return (o[a.status] - o[b.status]) || ((b.last_year || 0) - (a.last_year || 0)) || String(a.name).localeCompare(String(b.name));
     });
-    var html = '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
+    var html = '<div class="w140types" role="group" aria-label="Type">' + [['all', 'Everyone']].concat(PCAT_ORDER.map(function (c) { return [c, PCATS[c][1]]; })).map(function (x) {
+        var on = curCat === x[0], col = PCATS[x[0]] ? PCATS[x[0]][2] : GREEN;
+        return '<button type="button" class="w140ty' + (on ? ' on' : '') + '" data-w140pcat="' + x[0] + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + (PCATS[x[0]] ? '<i style="background:' + col + '"></i>' : '') + E(x[1]) + ' <em>' + ccnt[x[0]] + '</em></button>';
+      }).join('') + '</div>' +
+      '<p class="w140def">' + (curCat === 'all' ? '<b>Partners</b> work with us over time toward a shared goal; <b>collaborators</b> join us for an event or an initiative; <b>sponsors</b> give money or in-kind support and get recognition.' : '<b>A ' + E(PCATS[curCat][0].toLowerCase()) + '</b> ' + E(PCATS[curCat][3])) + '</p>' +
+      '<div class="w140stats">' + ['active', 'past', 'prospect', 'declined'].map(function (s) {
       return '<button class="w140st" data-w140pset="' + s + '"><b style="color:' + STATUS[s][1] + '">' + cnt[s] + '</b><span>' + E({ active: 'working with us now', past: 'worked with us before', prospect: 'approached, nothing yet', declined: 'said no' }[s]) + '</span></button>';
     }).join('') + '</div>' +
       '<div class="w140bar"><div class="w140chips">' + PSETS.map(function (s) { return chip(u.pSet === s[0], 'data-w140pset', s[0], s[1], cnt[s[0]]); }).join('') + '</div></div>' +
@@ -54015,7 +54070,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w140count">' + plural(list.length, 'organization', 'organizations') + '</div>' +
       (list.length ? '<div class="w140pg">' + list.map(function (p) {
         return '<button class="w140pc" data-w140partner="' + E(p.id) + '"><div class="nm">' + E(p.name) + '</div><div class="sub">' + E([p.kind, p.city].filter(Boolean).join(' \u00b7 ')) + '</div>' +
-          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + statusChip(p.status) + '<span class="w140tag">' + E(REL[p.relationship] || p.relationship) + '</span>' +
+          (p.summary ? '<div class="sm">' + E(p.summary) + '</div>' : '') + '<div class="ft">' + catTag(p) + statusChip(p.status) + (relDetail(p) ? '<span class="w140tag">' + E(relDetail(p)) + '</span>' : '') +
           (yearsText(p) ? '<span class="w140count">' + E(yearsText(p)) + '</span>' : '') + (p.visibility === 'leadership' ? '<span class="w140tag lead">' + I('lock') + 'Leaders</span>' : '') + '</div></button>';
       }).join('') + '</div>' : '<div class="w140empty">No organization matches. Try another word or show all of them.</div>');
     root.innerHTML = html;
@@ -54039,9 +54094,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!p) { toastS('That partner is not in the list'); return; }
     var lead = isLeaderUI();
     var ms = partnerMoments(p), ds = partnerDocs(p);
-    var rows = [['Kind', [p.kind, p.city].filter(Boolean).join(' \u00b7 ')], ['How', REL[p.relationship] || p.relationship], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
+    var rows = [['Type', PCATS[catOf(p)][0] + (relDetail(p) ? ' (' + relDetail(p).toLowerCase() + ')' : '')], ['Kind', [p.kind, p.city].filter(Boolean).join(' \u00b7 ')], ['Years', yearsText(p)], ['Contact', p.contact_role || '']]
       .filter(function (r) { return r[1]; }).map(function (r) { return '<div class="row"><b>' + E(r[0]) + '</b><span>' + E(r[1]) + '</span></div>'; }).join('');
-    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
+    var html = '<h2>' + E(p.name) + '</h2><div class="sub">' + catTag(p) + statusChip(p.status) + (p.aka && p.aka.length ? ' Also written ' + E(p.aka.join(', ')) : '') + '</div>' +
       (p.summary ? '<p style="font-size:14px;line-height:1.55;margin:8px 0 4px">' + E(p.summary) + '</p>' : '') + rows +
       (p.notes ? '<h4>Good to know</h4><p style="font-size:13px;margin:0">' + E(p.notes) + '</p>' : '') +
       '<h4>In our story</h4>' + (ms.length ? ms.slice(0, 14).map(function (h) { return '<div class="row"><b>' + E(yearOf(h)) + '</b><button class="w140mini" style="padding:0;text-align:left" data-w140go="#ourstory/e/' + E(h.id) + '">' + E(h.title) + '</button></div>'; }).join('') : '<p class="w140count">No moment in the timeline names them yet.</p>') +
@@ -54107,7 +54162,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return out;
   }
   function paintDocs() {
-    var root = mastFor('documents', 'Resources', 'Document finder', BLURB_D); if (!root) return;
+    var root = mastFor('documents', 'Other Tools', 'Document finder', BLURB_D); if (!root) return;   /* wave163: in Other Tools */
     if (!S.docs) { root.innerHTML = busy('Loading the document finder\u2026'); return; }
     if (S.err.docs && !S.docs.length) { root.innerHTML = '<div class="w140empty">The document finder could not load (' + E(S.err.docs) + ').</div>'; return; }
     var u = S.ui, lead = isLeaderUI();
@@ -54204,13 +54259,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         field('The year in a few lines', area('summary', row.summary), true) + '<div class="err" data-w140err></div></div>';
     } else if (kind === 'partner') {
       row = id ? (S.partners || []).filter(function (x) { return String(x.id) === String(id); })[0] : null;
-      var p = row || { relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
+      var p = row || { category: 'partner', relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
       html = '<h2>' + (row ? 'Edit ' + E(p.name) : 'Add a partner') + '</h2><div class="sub">An organization, never a private person or an individual donor.</div><div class="w140form">' +
         field('Name', inp('name', p.name), true) +
         field('Also written', inp('aka', (p.aka || []).join(', '), 'other names, separated by commas'), true) +
         field('Kind', sel('kind', [['', 'Choose']].concat(PKINDS.map(function (k) { return [k, k.charAt(0).toUpperCase() + k.slice(1)]; })), p.kind || '')) +
         field('City', inp('city', p.city)) +
-        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship)) +
+        field('Type', sel('category', PCAT_ORDER.map(function (c) { return [c, PCATS[c][0]]; }), catOf(p)), false, 'partner: over time, toward a shared goal; collaborator: an event or an initiative; sponsor: money or in-kind support, with recognition') +
+        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship), false, 'the detail: a funder, a venue, a supplier ...') +
         field('Status', sel('status', Object.keys(STATUS).map(function (s) { return [s, STATUS[s][0]]; }), p.status)) +
         field('First year', inp('first_year', p.first_year, '2021')) + field('Last year', inp('last_year', p.last_year, String(yearNow()))) +
         field('What they did with us', area('summary', p.summary), true) +
@@ -54270,7 +54326,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       } else if (kind === 'partner') {
         if (!v.name) { showErr('Give the organization\u2019s name.'); return; }
         if (/@|\+?\d[\d\s().-]{7,}\d/.test(v.contact_role || '')) { showErr('Contact takes a role only, never an email or a phone number.'); return; }
-        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
+        if (PCATS[v.relationship] && v.relationship !== v.category) v.relationship = v.category;   /* how they help never contradicts the type */
+        if ((v.relationship === 'funder' || v.relationship === 'donor organisation') && v.category !== 'sponsor') { showErr('A funder or a donor organization is a sponsor: pick Sponsor as the type, or another way they help.'); return; }
+        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, category: PCATS[v.category] ? v.category : 'partner', relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
           summary: v.summary || null, contact_role: v.contact_role || null, visibility: v.visibility, notes: v.notes || null });
         table = 'wa_partners'; cache = 'partners';
       } else if (kind === 'lesson') {
@@ -54320,6 +54378,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w140hidden]'))) { S.ui.hidden = !S.ui.hidden; paintStory(); return; }
     if ((el = t.closest('[data-w140area]'))) { S.ui.lArea = el.getAttribute('data-w140area'); paintStory(); return; }
     if ((el = t.closest('[data-w140pset]'))) { S.ui.pSet = el.getAttribute('data-w140pset'); paintPartners(); return; }
+    if ((el = t.closest('[data-w140pcat]'))) { S.ui.pCat = el.getAttribute('data-w140pcat'); paintPartners(); return; }
     if ((el = t.closest('[data-w140dreuse]'))) { S.ui.dReuse = !S.ui.dReuse; S.ui.dShow = 40; paintDocs(); return; }
     if ((el = t.closest('[data-w140dmore]'))) { S.ui.dShow += 40; paintDocs(); return; }
   });
@@ -54360,9 +54419,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- the menu: Resources > Our story, Partners, Document finder ---------- */
   var PAGES = [
-    { id: 'ourstory', label: 'Our story', group: 'resources', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
-    { id: 'partners', label: 'Partners', group: 'resources', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
-    { id: 'documents', label: 'Document finder', group: 'resources', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
+    { id: 'ourstory', label: 'Our story', group: 'org', dot: GOLD, gate: 'member', onShow: function (h) { openStory(h); } },
+    { id: 'partners', label: 'Partners', group: 'apps', dot: PURPLE, gate: 'member', onShow: function (h) { openPartners(h); } },
+    { id: 'documents', label: 'Document finder', group: 'tools', dot: TEAL, gate: 'member', onShow: function (h) { openDocs(h); } }
   ];
   function register() {
     if (!window.WA_NAV || typeof WA_NAV.register !== 'function') return;
@@ -54397,10 +54456,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         T('#ourstory .w140tabs', 'Lessons learned', 'What we learned from our own events and programs, as advice for next time.', OPT)
       ] };
       if (!W.tours.partners) W.tours.partners = { tab: 'partners', icon: 'handshake', hash: '#partners', steps: [
-        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached.'),
+        T('#partners > .w118mast', 'Partners', 'Every organization we have worked with, and the ones we approached. The page lives in the CRM.'),
+        T('#partners .w140types', 'Partners, collaborators and sponsors', 'Partners work with us over time toward a shared goal, collaborators join us for an event or an initiative, sponsors give money or in-kind support and get recognition. Pick one to see only them.', OPT),
         T('#partners .w140stats', 'Where each one stands', 'Working with us now, before, approached with nothing yet, or said no.', OPT),
-        T('#partners .w140bar', 'Narrow it down', 'By how they helped, the kind of organization or the city, or search for a name.', OPT),
-        T('#partners .w140pg', 'Every organization', 'What they did with us, how they helped and the years. Open one for the moments and documents it appears in.', OPT)
+        T('#partners .w140bar', 'Narrow it down', 'By where they stand, how they help in detail, the kind of organization or the city, or search for a name.', OPT),
+        T('#partners .w140pg', 'Every organization', 'Its type, where it stands, what they did with us and the years. Open one for the moments and documents it appears in.', OPT)
       ] };
       if (!W.tours.documents) W.tours.documents = { tab: 'documents', icon: 'search', hash: '#documents', steps: [
         T('#documents > .w118mast', 'Document finder', 'Every useful file in our shared drives and Canva, found by what it is about.'),
@@ -54414,7 +54474,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- test hook ---------- */
   window.w140 = { state: function () { return S; }, load: load, story: paintStory, partners: paintPartners, docs: paintDocs, openStory: openStory, openPartners: openPartners, openDocs: openDocs,
-    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate };
+    edit: editForm, save: saveEdit, close: closeSheet, results: docResults, partnerFor: partnerFor, fmtRange: fmtRange, readDate: readDate, catOf: catOf };
 })();
 /* =====================================================================
    WA v143 the board pack (26/09/26)
@@ -56314,7 +56374,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var sec = document.getElementById('crm'); if (!sec) return null;
     var m = sec.querySelector(':scope > .w118mast');
     if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w152', 'crm'); sec.insertBefore(m, sec.firstChild); }
-    var html = '<div class="crumb">People</div><h1>CRM</h1><p>Everyone Welfare Avenue knows (volunteers, donors, partners and the team) in one place, with what they have done with us and when we last heard from them.</p>';
+    var html = '<div class="crumb">Apps</div><h1>CRM</h1><p>Everyone Welfare Avenue knows (volunteers, donors, partners and the team) in one place, with what they have done with us and when we last heard from them.</p>';
     if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
     var h = sec.querySelector(':scope > .w152root');
     if (!h) { h = document.createElement('div'); h.className = 'w152root'; sec.appendChild(h); }
@@ -60157,7 +60217,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     star: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     x: '<path d="M6 6l12 12M18 6 6 18"/>',
-    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    /* wave163: the Strategy app and Partners in the CRM */
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.3"/>',
+    flag: '<path d="M6 21V3.5"/><path d="M6 4.5h11l-2.3 4.2L17 13H6"/>',
+    layers: '<path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12 8.5 4.2 8.5-4.2"/><path d="m3.5 16.2 8.5 4.3 8.5-4.3"/>',
+    tree: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v10M12 11.5H5V17M12 11.5h7V17"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -60170,11 +60236,25 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return list.map(function (a) { return { h: '#adminpanel/' + a[0], l: a[1], ic: { people: 'people', access: 'key', security: 'shield', ai: 'star', adoption: 'chart', accounts: 'mail', loading: 'bell', change: 'form' }[a[0]] || 'star', page: 'adminpanel' }; });
   }
   var APPS = {
-    hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, meetings, goals and everything else', pages: [] },
-    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm',
+    hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, tools, the organization and everything else', pages: [] },
+    /* wave163: Steel: "Could you add the following pages to an App called strategy" (Organizational goals, Department goals,
+       Projects, Goal alignment); a project's own page (#project/...) opens inside it too, with Projects marked */
+    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'Goals, projects and how they line up', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
+      groups: function () {
+        return [{ label: 'Goals and projects', items: [
+          { h: '#orggoals', l: 'Organizational goals', ic: 'target', page: 'orggoals' },
+          { h: '#goals', l: 'Department goals', ic: 'flag', page: 'goals' },
+          { h: '#projects', l: 'Projects', ic: 'layers', page: 'projects' },
+          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' }
+        ] }];
+      }
+    },
+    /* wave163: Steel: "move partners to the CRM for now" (Partners, collaborators and sponsors: #partners) */
+    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, partners, gifts, email', pages: ['crm', 'partners'], home: '#crm',
       groups: function () {
         return [{ label: 'Contacts', items: [
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
+          { h: '#partners', l: 'Partners', ic: 'link', page: 'partners' },
           { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' },
           { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' },
@@ -60189,7 +60269,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
         ] }];
       },
-      actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
+      actions: [{ k: 'add', l: 'Add a contact', ic: 'plus', page: 'crm' }]   /* wave163: on the contacts page only (Partners has its own Add a partner) */
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
       groups: function () {
@@ -60224,7 +60304,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       }
     }
   };
-  var ORDER = ['hub', 'crm', 'hr', 'finance', 'admin'];
+  var ORDER = ['hub', 'strategy', 'crm', 'hr', 'finance', 'admin'];
 
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }
@@ -60284,7 +60364,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
     + '.w153ai .w153i{width:18px;height:18px;}'
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
-    + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"]{display:none !important;}'
+    /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
+    + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
+    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -60307,8 +60389,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + 'body.w153app #w153bar{display:flex;}'
     + '#w153bar .w153bc{display:flex;align-items:center;gap:10px;min-width:0;}'
     + '#w153bar .w153bc b{font-family:' + HEAD + ';font-weight:600;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';}'
-    + '#w153bar .w153bc span{font-size:13.5px;color:' + MUTED + ';}'
-    + '#w153bar .w153bc span::before{content:"\\203A";margin:0 8px 0 2px;color:rgba(16,63,57,.35);}'
+    /* wave163: the arrow and the grey go to where you are, never to the app's icon tile (it read \u203a, a faded icon) */
+    + '#w153bar .w153bc > span:not(.w153ai){font-size:13.5px;color:' + MUTED + ';}'
+    + '#w153bar .w153bc > span:not(.w153ai)::before{content:"\\203A";margin:0 8px 0 2px;color:rgba(16,63,57,.35);}'
     + '#w153bar .w153acts{margin-left:auto;display:flex;gap:8px;align-items:center;}'
     + '#w153bar .w153btn{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:8px 14px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;}'
     + '#w153bar .w153btn:hover{background:#0c332e;}'
@@ -60388,6 +60471,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function firstOfPage(app, pg) { var gs = items(app); for (var i = 0; i < gs.length; i++) for (var j = 0; j < gs[i].items.length; j++) if (pageOf(gs[i].items[j].h) === pg) return gs[i].items[j]; return null; }
   function isOn(app, it) {
     var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);
+    if (app === 'strategy' && pg === 'project') return ip === 'projects';   /* wave163: a project's own page marks Projects */
     if (ip !== pg) return false;
     if (it.sec) return secNow(ip) === it.sec;
     if (app === 'crm' && ip === 'crm') return (isub || 'contacts') === (sub === 'c' || !sub ? 'contacts' : sub);
@@ -60423,7 +60507,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var a = APPS[app], where = whereNow(app);
     b.innerHTML = '<div class="w153bc"><span class="w153ai" style="background:' + a.color + ';width:28px;height:28px;border-radius:8px">' + I(a.ic) + '</span><b>' + E(a.label) + '</b>' + (where ? '<span>' + E(where) + '</span>' : '') + '</div>' +
       '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
-      (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
+      (a.actions || []).filter(function (x) { return !x.page || x.page === pageOf(hashNow()); }).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
   }
   function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() + '/' + SEC[pg].count() : '') + '|' + (S.app || ''); }
   function paint() {
@@ -60599,8 +60683,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var W = window.w122; if (!W || !W.tours || W.tours.apps) return;
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
-        T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. The CRM, the HR centre, Finance and the Admin centre live there now, each a place of its own with its own menu; the Hub\u2019s menu keeps the rest.'),
-        T('#w153pop', 'The launcher', 'The Hub, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
+        T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. Strategy (the goals and projects), the CRM (with Partners), the HR centre, Finance and the Admin centre live there, each a place of its own with its own menu; the Hub\u2019s menu keeps the rest.'),
+        T('#w153pop', 'The launcher', 'The Hub, Strategy, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
         T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app\u2019s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
@@ -60611,7 +60695,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS };
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go };   /* wave163: order, icon, isOn, owner and go for the phone menu */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();
 /* =====================================================================
@@ -60940,6 +61024,435 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w162 = { load: load, state: function () { return S; }, paint: paint, html: html };
 })();
 /* =====================================================================
+   WA v163 the menu's new shape, the Strategy app, Partners in the CRM, and a menu that stays still (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "Could you add the following pages to an App called strategy" (Organizational goals, Department
+   goals, Projects, Goal alignment); "Put Avenue Academy below Home"; a section "Other Tools" (Important Info, The Task
+   Bank (previously The bank), Agenda, Document Finder, Transcript Archive, Photo Library) and a section "Organization"
+   (Org Chart, Our Story, Hub Inbox); "move partners to the CRM for now"; "remove trainings from" Important info; and
+   "when the page loads the website keeps reordering the menu based on all the pushs and updates I've made. Could you
+   please have that stop". His choices: The Brain stays in the Hub, under the Calendar; Requests joins Other Tools.
+   Earlier the same day: "ensure to distinguish, partner, collaborator, and sponsors" (the Partners page, wave140).
+
+   Where each change lives (the older waves hold their own pages; this segment only keeps the menu still):
+   - wave134 (parts134): the layout (Avenue Academy under Home, The Brain after the Calendar, Other Tools, Organization,
+     the apps' pages kept together out of sight; Other Tools takes any page the layout does not name) and Important info
+     without its Training videos section.
+   - wave153 (parts153): the Strategy app (its four pages, and a project's own page with Projects marked) and Partners in
+     the CRM's rail; the apps' pages never show in the Hub menu.
+   - wave140 (parts140): Partners shows partner, collaborator and sponsor (wa_partners.category).
+   - The crumbs, the access profile editor's groups, the tours and The Task Bank's name in 110, 116d, 116f, 116h, 118,
+     118c, 122, 127, 131, 132 and 152.
+   - Here: the menu stays out of sight until it has its final shape. Each wave that shapes the menu runs after its own
+     data arrives, so on a slow load the page used to show the menu while it was still being put together (the loading
+     screen lifts after 9 seconds at the latest). Now the menu shows once, whole: after the last wave has run, the layout
+     is applied one final time and the menu shows when it has been still for a moment (at most 2.5 seconds later; if the
+     Hub never finishes starting, after 20 seconds anyway). wave110 waits for it (at most 1.5 seconds) before it lifts
+     the loading screen, so on a normal load nothing changes but the order: the whole page appears at once.
+   ===================================================================== */
+(function () {
+  if (window.__wa163) return; window.__wa163 = true;
+  var GOLD = '#DCA527';
+  var G = { ready: false, why: '', t0: (function () { try { return performance.now(); } catch (e) { return Date.now(); } })(), at: null, settling: false, after: 0 };
+
+  /* ---------- the menu stays out of sight until it is whole ---------- */
+  var css = ''
+    + 'html:not(.w163nav) nav.wa-nav > *:not(.w114brand){visibility:hidden !important;}'
+    + 'nav.wa-nav #tabBar,nav.wa-nav #w153rail,nav.wa-nav #w153dock{transition:opacity .18s ease;}'
+    + 'html:not(.w163nav) nav.wa-nav #tabBar,html:not(.w163nav) nav.wa-nav #w153rail,html:not(.w163nav) nav.wa-nav #w153dock{opacity:0;}'
+    + '@media (prefers-reduced-motion: reduce){nav.wa-nav #tabBar,nav.wa-nav #w153rail,nav.wa-nav #w153dock{transition:none !important;}}';
+  if (!document.getElementById('wa163css')) { var st = document.createElement('style'); st.id = 'wa163css'; st.textContent = css; document.head.appendChild(st); }
+
+  function markReady(why) {
+    if (G.ready) return;
+    G.ready = true; G.why = why; G.at = Math.round((function () { try { return performance.now(); } catch (e) { return Date.now(); } })() - G.t0);
+    try { document.documentElement.classList.add('w163nav'); } catch (e) { /* fine */ }
+    try { document.dispatchEvent(new CustomEvent('wa163nav', { detail: { why: why } })); } catch (e) { /* fine */ }
+    /* from now on, count what still moves (the tests read it; nothing should) */
+    try {
+      var bar = document.getElementById('tabBar');
+      var moved = function (n) { return n && n.nodeType === 1 && n.classList && (n.classList.contains('tab') || n.classList.contains('tab-group') || n.classList.contains('w42d')); };
+      if (bar) new MutationObserver(function (list) { list.forEach(function (m) { if (m.type !== 'childList') return; if (Array.prototype.some.call(m.addedNodes, moved) || Array.prototype.some.call(m.removedNodes, moved)) G.after++; }); }).observe(bar, { childList: true, subtree: true });   /* a page moving in or out (a count badge is not a move) */
+    } catch (e) { /* fine */ }
+  }
+  /* the last wave has run: apply the layout one final time, then show the menu once it has been still for a moment */
+  function settle(why) {
+    if (G.ready || G.settling) return;
+    G.settling = true;
+    try { if (window.WA_NAV && WA_NAV.applyLayout) WA_NAV.applyLayout(); } catch (e) { /* fine */ }
+    var bar = document.getElementById('tabBar');
+    if (!bar) { markReady(why + ', no menu'); return; }
+    var now = function () { try { return performance.now(); } catch (e) { return Date.now(); } };
+    var start = now(), last = now();
+    var mo = new MutationObserver(function () { last = now(); });
+    try { mo.observe(bar, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] }); } catch (e) { /* fine */ }
+    (function check() {
+      if (G.ready) { mo.disconnect(); return; }
+      if (now() - last >= 140 || now() - start > 2500) { mo.disconnect(); markReady(why); return; }
+      setTimeout(check, 40);
+    })();
+  }
+  if (typeof startApp === 'function') {
+    var __sa163 = startApp;
+    startApp = async function () {
+      /* directors (the board view) open no apps: wave153 leaves Partners in their menu (wave134 puts it in Organization) */
+      try { if (typeof MODE !== 'undefined' && MODE === 'board') document.documentElement.classList.add('w163dir'); } catch (e) { /* fine */ }
+      try { return await __sa163.apply(this, arguments); }
+      finally { try { settle('the Hub started'); } catch (e) { markReady('the Hub started (settle failed)'); } }
+    };
+  }
+  /* if the Hub never finishes starting (a request that hangs), the menu shows anyway */
+  setTimeout(function () { markReady('failsafe'); }, 20000);
+
+  /* ---------- the phone menu (wave163b) ----------
+     Steel (29/09/26): "the mobile layout of the menu at the bottom needs some serious testing and redesign to make it
+     more intuitive". Tested first: Ask read as a menu button (the striped E in a gold circle), Teams and More opened the
+     same long drawer, the apps sat at the bottom of it, and nothing lit up on most pages. His choice: a new bar, Home,
+     Calendar, Ask, My team and Menu, with Menu opening a full-screen sheet (Find a page, the apps as tiles, then every
+     section) and the page you are on always lit.
+     - The bar (#w163bar, phones and narrow windows up to 900 px) replaces wave114's #w114bar, which stays in the page
+       hidden (its drawer still opens from the older places). Home is the Executive dashboard for directors (they have no
+       Home); My team opens your own team's page (directors: the Board overview; no team page: the sheet at Departments).
+     - The sheet (#w163sheet) is drawn from the menu itself each time it opens, so it always shows what your access
+       opens, in the menu's order: the top pages, Departments (each team with its own pages as chips; yours says so),
+       Other Tools and Organization. Inside an app it shows that app's menu instead, with Back to the Hub. A choice in it
+       presses the same button the menu would, so every page opens exactly as it does from the menu.
+     - Typing hides the bar (as wave130 does for the old one); Esc, the close button or any choice closes the sheet. */
+  var PH = { open: false, q: '', lastFocus: null, built: 0 };
+  var GREEN = '#103F39', CREAM = '#FFFAF2', INK = '#1F201E', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var PI = {
+    home: '<path d="M4 11.2 12 4.5l8 6.7"/><path d="M6.3 9.8v9.7h11.4V9.8"/><path d="M10 19.5v-5h4v5"/>',
+    chart: '<path d="M4 19.5h16"/><path d="M7 16V10M12 16V5.5M17 16v-7"/>',
+    cal: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.6"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="M8 14h2.5M13.5 14H16M8 17h2.5"/>',
+    ask: '<path d="M4.5 18.8V7.2A2.7 2.7 0 0 1 7.2 4.5h9.6a2.7 2.7 0 0 1 2.7 2.7v6.6a2.7 2.7 0 0 1-2.7 2.7H8.6z"/><path d="M12 7.6l.9 2 2 .9-2 .9-.9 2-.9-2-2-.9 2-.9z" fill="currentColor" stroke="none"/>',
+    team: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.2 19.5c.7-3.2 3-5 5.8-5s5.1 1.8 5.8 5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M16.4 14.4c2.2.2 3.8 1.7 4.4 4.6"/>',
+    menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    chev: '<path d="m9 5 7 7-7 7"/>',
+    back: '<path d="m10 6-6 6 6 6"/><path d="M4 12h16"/>'
+  };
+  function PIc(n, cls) { return '<svg class="w163i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (PI[n] || '') + '</svg>'; }
+  function Esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function foldS(s) { try { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim(); } catch (e) { return String(s || '').toLowerCase().trim(); } }
+
+  var pcss = ''
+    + '#w163bar,#w163sheet{display:none;}'
+    + '@media (max-width:900px){'
+    /* the new bar takes the old one's place */
+    + '#w114bar{display:none !important;}'
+    + '#w163bar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;position:fixed;left:0;right:0;bottom:0;z-index:92;background:var(--wa-card,' + CREAM + ');border-top:1px solid rgba(16,63,57,.10);box-shadow:0 -6px 22px rgba(16,63,57,.07);padding:6px 4px calc(8px + env(safe-area-inset-bottom));font-family:' + BODY + ';}'
+    + '#w163bar.n4{grid-template-columns:repeat(4,minmax(0,1fr));}'
+    + '#w163bar button{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;min-height:52px;background:none;border:none;padding:0;margin:0;cursor:pointer;color:' + MUTED + ';font-family:' + BODY + ';font-size:11.5px;font-weight:600;letter-spacing:.1px;-webkit-tap-highlight-color:transparent;}'
+    + '#w163bar button .pill{display:flex;align-items:center;justify-content:center;width:52px;height:30px;border-radius:15px;transition:background .18s ease;}'
+    + '#w163bar button .w163i{width:23px;height:23px;}'
+    + '#w163bar button.on{color:' + GREEN + ';font-weight:700;}'
+    + '#w163bar button.on .pill{background:rgba(16,63,57,.12);}'
+    + '#w163bar button:focus-visible{outline:none;}#w163bar button:focus-visible .pill{box-shadow:0 0 0 2px ' + GOLD + ';}'
+    + '#w163bar button.ask{color:' + GREEN + ';}'
+    + '#w163bar button.ask .pill{width:54px;height:54px;border-radius:50%;background:' + GOLD + ';margin-top:-26px;box-shadow:0 8px 20px rgba(16,63,57,.28);border:3px solid var(--wa-card,' + CREAM + ');}'
+    + '#w163bar button.ask .w163i{width:26px;height:26px;}'
+    /* typing, the sheet and Ask the Hub (full screen on a phone: the old bar sat on its message box) put the bar away */
+    + 'body.w130typing #w163bar,body.w163sheet #w163bar,body.w163chat #w163bar{display:none !important;}'
+    /* the app bar's own Menu button: the bar's Menu does it now */
+    + '#w153bar .w153menu{display:none !important;}'
+    /* the sheet */
+    + '#w163sheet{display:flex;flex-direction:column;position:fixed;inset:0;z-index:260;background:' + CREAM + ';color:' + INK + ';font-family:' + BODY + ';transform:translateY(100%);visibility:hidden;transition:transform .26s cubic-bezier(.2,.8,.2,1),visibility 0s linear .26s;}'
+    + '#w163sheet.on{transform:none;visibility:visible;transition:transform .26s cubic-bezier(.2,.8,.2,1),visibility 0s;}'
+    + '#w163sheet .hd{display:flex;align-items:center;gap:10px;padding:calc(14px + env(safe-area-inset-top)) 16px 10px;}'
+    + '#w163sheet .hd h2{flex:1;margin:0;font-family:' + HEAD + ';font-weight:600;font-size:28px;letter-spacing:.8px;text-transform:uppercase;color:' + GREEN + ';line-height:1;}'
+    + '#w163sheet .hd .x{width:42px;height:42px;border-radius:50%;border:none;background:rgba(16,63,57,.08);color:' + GREEN + ';display:flex;align-items:center;justify-content:center;cursor:pointer;}'
+    + '#w163sheet .hd .x .w163i{width:22px;height:22px;}'
+    + '#w163sheet .q{margin:0 16px 10px;display:flex;align-items:center;gap:8px;background:rgba(16,63,57,.05);border:1px solid rgba(16,63,57,.16);border-radius:14px;padding:0 12px;}'
+    + '#w163sheet .q .w163i{width:18px;height:18px;color:' + MUTED + ';flex:0 0 auto;}'
+    + '#w163sheet .q input{flex:1;min-width:0;border:none;background:none;outline:none;font:500 16px ' + BODY + ';color:' + INK + ';padding:12px 0;}'
+    + '#w163sheet .bd{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 0 calc(24px + env(safe-area-inset-bottom));}'
+    + '#w163sheet .apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px 8px;padding:4px 16px 10px;}'
+    + '#w163sheet .app{display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;padding:4px 0;cursor:pointer;font:600 12px ' + BODY + ';color:' + INK + ';text-align:center;line-height:1.2;border-radius:14px;}'
+    + '#w163sheet .app .t{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:' + CREAM + ';box-shadow:0 4px 12px rgba(16,63,57,.14);}'
+    + '#w163sheet .app .t svg{width:24px;height:24px;}'
+    + '#w163sheet .app.on .t{box-shadow:0 0 0 3px ' + CREAM + ',0 0 0 5px ' + GREEN + ';}'
+    + '#w163sheet .app.on{color:' + GREEN + ';font-weight:700;}'
+    + '#w163sheet .sh{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:' + MUTED + ';padding:14px 20px 6px;}'
+    + '#w163sheet .it{display:flex;align-items:center;gap:12px;width:100%;min-height:48px;box-sizing:border-box;padding:8px 18px 8px 20px;border:none;background:none;text-align:left;cursor:pointer;font:500 15.5px ' + BODY + ';color:' + INK + ';}'
+    + '#w163sheet .it .dot{width:10px;height:10px;border-radius:3px;flex:0 0 auto;}'
+    + '#w163sheet .it .ai{width:22px;height:22px;flex:0 0 auto;color:' + MUTED + ';}'
+    + '#w163sheet .it .lb{flex:1;min-width:0;}'
+    + '#w163sheet .it .lb small{display:block;font-size:12px;font-weight:500;color:' + MUTED + ';margin-top:1px;}'
+    + '#w163sheet .it .w163i.ch{width:16px;height:16px;color:rgba(16,63,57,.35);flex:0 0 auto;}'
+    + '#w163sheet .it .n{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:' + GOLD + ';color:' + GREEN + ';font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;}'
+    + '#w163sheet .it .mine{font-size:10.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';background:rgba(220,165,39,.25);border-radius:6px;padding:2px 6px;}'
+    + '#w163sheet .it.on{background:rgba(16,63,57,.08);color:' + GREEN + ';font-weight:700;box-shadow:inset 3px 0 0 ' + GOLD + ';}'
+    + '#w163sheet .it:active{background:rgba(16,63,57,.06);}'
+    + '#w163sheet .chips{display:flex;flex-wrap:wrap;gap:6px;padding:0 18px 8px 42px;margin-top:-4px;}'
+    + '#w163sheet .chip{border:1px solid rgba(16,63,57,.16);background:rgba(16,63,57,.04);border-radius:999px;padding:6px 11px;font:600 12.5px ' + BODY + ';color:' + GREEN + ';cursor:pointer;}'
+    + '#w163sheet .chip.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '#w163sheet .back{display:flex;align-items:center;gap:8px;margin:2px 16px 6px;border:none;background:rgba(16,63,57,.07);color:' + GREEN + ';border-radius:12px;padding:11px 14px;font:700 14px ' + BODY + ';cursor:pointer;}'
+    + '#w163sheet .back .w163i{width:18px;height:18px;}'
+    + '#w163sheet .none{padding:18px 20px;color:' + MUTED + ';font-size:14px;}'
+    + '#w163sheet .it:focus-visible,#w163sheet .chip:focus-visible,#w163sheet .app:focus-visible,#w163sheet .x:focus-visible,#w163sheet .back:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:-2px;}'
+    + 'body.w163sheet{overflow:hidden;}'
+    + '}'
+    + '@media (prefers-reduced-motion: reduce){#w163sheet,#w163sheet.on{transition:none !important;}#w163bar button .pill{transition:none !important;}}';
+  if (!document.getElementById('wa163pcss')) { var pst = document.createElement('style'); pst.id = 'wa163pcss'; pst.textContent = pcss; document.head.appendChild(pst); }
+
+  /* ---------- reading the menu ---------- */
+  function tabBar() { return document.getElementById('tabBar'); }
+  function tabEl(id) { var b = tabBar(); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }
+  function shownEl(el) { if (!el) return false; if (el.style && el.style.display === 'none') return false; try { return getComputedStyle(el).display !== 'none'; } catch (e) { return true; } }
+  function labelOf(el) { var t = ''; if (!el) return t; el.childNodes.forEach(function (n) { if (n.nodeType === 3) t += n.textContent; else if (n.nodeType === 1 && !n.classList.contains('tabdot') && !n.classList.contains('w134n') && !n.classList.contains('caret') && n.tagName !== 'svg') t += n.textContent; }); return t.replace(/\s+/g, ' ').trim(); }
+  function dotOf(el) { var d = el && el.querySelector('.tabdot'); return d ? (d.style.background || d.style.backgroundColor || '') : ''; }
+  function badgeOf(el) { var n = el && el.querySelector('.w134n'); return n ? (n.textContent || '').trim() : ''; }
+  function boardView() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function hashRoot() { var h = ''; try { h = decodeURIComponent(location.hash || ''); } catch (e) { h = location.hash || ''; } return h.replace(/^#/, '').split('/'); }
+  function activeId() { var t = document.querySelector('#tabBar .tab.active'); return t ? t.getAttribute('data-tab') : ''; }
+  /* the page you are on as the menu names it (Home has no marked button: its panel says so) */
+  function curId() {
+    var a = activeId(); if (a) return a;
+    var p = document.querySelector('.panel.active'); if (p && p.id && tabEl(p.id)) return p.id;
+    return hashRoot()[0] || 'mypage';
+  }
+  /* the signed-in person's team: their roster department, when it has a team page they can open */
+  function myTeamId() {
+    if (boardView()) return shownEl(tabEl('governance')) ? 'governance' : '';
+    var d = '';
+    try { d = (typeof WA_ME !== 'undefined' && WA_ME && WA_ME.department) || ''; } catch (e) { d = ''; }
+    if (!d) { try { var em = String((USER && USER.email) || '').toLowerCase(); var m = (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (x) { return String(x.email || '').toLowerCase() === em; })[0]; d = (m && m.department) || ''; } catch (e) { d = ''; } }
+    return d && shownEl(tabEl(d)) ? d : '';
+  }
+  /* which bar button the page you are on belongs to */
+  function barKey() {
+    if (PH.open) return 'menu';
+    var p = hashRoot(), root = p[0] || '', act = curId();
+    var first = shownEl(tabEl('mypage')) ? 'mypage' : 'overview';
+    if (act === first || (!root && first === 'mypage')) return 'home';
+    if (act === 'calendar') return 'cal';
+    var mine = myTeamId();
+    if (mine) {
+      if (act === mine || (root === 'team' && p[1] === mine)) return 'team';
+      var t = tabEl(act), row = t && t.closest ? t.closest('.w42d') : null, main = row ? row.querySelector(':scope > .tab') : null;
+      if (main && main.getAttribute('data-tab') === mine) return 'team';
+    }
+    return 'menu';
+  }
+
+  /* ---------- the bar ---------- */
+  function slots() {
+    var out = [];
+    if (shownEl(tabEl('mypage'))) out.push({ k: 'home', l: 'Home', ic: 'home', tab: 'mypage' });
+    else if (tabEl('overview') && shownEl(tabEl('overview'))) out.push({ k: 'home', l: 'Dashboard', ic: 'chart', tab: 'overview' });
+    if (shownEl(tabEl('calendar'))) out.push({ k: 'cal', l: 'Calendar', ic: 'cal', tab: 'calendar' });
+    if (document.getElementById('waChatBtn')) out.push({ k: 'ask', l: 'Ask', ic: 'ask' });
+    var mine = myTeamId();
+    out.push({ k: 'team', l: boardView() ? 'Board' : (mine ? 'My team' : 'Teams'), ic: 'team', tab: mine || '' });
+    out.push({ k: 'menu', l: 'Menu', ic: 'menu' });
+    return out;
+  }
+  function paintBar() {
+    var bar = document.getElementById('w163bar');
+    if (!bar) {
+      bar = document.createElement('nav'); bar.id = 'w163bar'; bar.setAttribute('aria-label', 'Hub');
+      document.body.appendChild(bar);
+    }
+    var ss = slots(), key = barKey();
+    var sig = ss.map(function (s) { return s.k + ':' + s.l + ':' + (s.tab || ''); }).join('|') + '#' + key;
+    if (bar.getAttribute('data-sig') === sig) return;
+    bar.setAttribute('data-sig', sig);
+    bar.classList.toggle('n4', ss.length === 4);
+    bar.innerHTML = ss.map(function (s) {
+      var on = s.k !== 'ask' && s.k === key;
+      return '<button type="button" class="' + (s.k === 'ask' ? 'ask' : '') + (on ? ' on' : '') + '" data-w163slot="' + s.k + '"' + (s.tab ? ' data-tab-go="' + Esc(s.tab) + '"' : '') + (on ? ' aria-current="page"' : '') + (s.k === 'menu' ? ' aria-haspopup="dialog" aria-expanded="' + (PH.open ? 'true' : 'false') + '"' : '') + (s.k === 'ask' ? ' aria-label="Ask the Hub"' : '') + '><span class="pill">' + PIc(s.ic) + '</span>' + Esc(s.l) + '</button>';
+    }).join('');
+  }
+  function press(el) { if (!el) return false; try { el.click(); return true; } catch (e) { return false; } }
+  function slotGo(k, btn) {
+    if (k === 'menu') { if (PH.open) closeSheet(); else openSheet(); return; }
+    if (k === 'ask') { closeSheet(true); press(document.getElementById('waChatBtn')); return; }
+    var id = btn && btn.getAttribute('data-tab-go');
+    if (k === 'team' && !id) { openSheet('departments'); return; }
+    closeSheet(true);
+    if (id) {
+      /* inside an app a Hub page takes you out of it (wave153's rule); the menu's own button does the rest */
+      if (!press(tabEl(id))) location.hash = '#' + id;
+    }
+  }
+
+  /* ---------- the sheet ---------- */
+  function ensureSheet() {
+    var s = document.getElementById('w163sheet');
+    if (s) return s;
+    s = document.createElement('div'); s.id = 'w163sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true'); s.setAttribute('aria-label', 'Menu'); s.tabIndex = -1;
+    s.innerHTML = '<div class="hd"><h2>Menu</h2><button type="button" class="x" data-w163close="1" aria-label="Close the menu">' + PIc('x') + '</button></div>' +
+      '<label class="q">' + PIc('search') + '<input type="search" data-w163q="1" placeholder="Find a page" aria-label="Find a page" autocomplete="off" enterkeyhint="go"></label>' +
+      '<div class="bd" data-w163bd="1"></div>';
+    document.body.appendChild(s);
+    return s;
+  }
+  /* every place the menu offers, in the menu's order, as {k: an id, l: label, sec: section, dot, badge, on, el: the button to press, go: an app address, sub: [chips], mine} */
+  function hubItems() {
+    var b = tabBar(); if (!b) return [];
+    var act = curId(), mine = myTeamId(), out = [];
+    function add(el, sec) {
+      if (!shownEl(el)) return;
+      var id = el.getAttribute('data-tab');
+      out.push({ k: id, l: labelOf(el), sec: sec, dot: dotOf(el), badge: badgeOf(el), on: id === act, el: el });
+    }
+    Array.prototype.forEach.call(b.children, function (el) {
+      if (el.classList.contains('tab')) { add(el, ''); return; }
+      if (!el.classList.contains('tab-group') || !shownEl(el)) return;
+      var h = el.querySelector(':scope > .tab-group-h'), sec = h ? labelOf(h) : '';
+      var host = el.querySelector(':scope > .tab-group-p') || el;
+      Array.prototype.forEach.call(host.children, function (c) {
+        if (c.classList.contains('w42d')) {
+          var main = c.querySelector(':scope > .tab');
+          /* a team page this person cannot open (wave127 flattens the row): its own pages stand alone */
+          if (!main || !shownEl(main)) { Array.prototype.forEach.call(c.querySelectorAll('.tab'), function (t) { if (t !== main) add(t, sec); }); return; }
+          var id = main.getAttribute('data-tab');
+          var subs = Array.prototype.filter.call(c.querySelectorAll('.w42sub .tab'), shownEl).map(function (t) { return { k: t.getAttribute('data-tab'), l: labelOf(t), el: t, on: t.getAttribute('data-tab') === act }; });
+          out.push({ k: id, l: labelOf(main), sec: sec, dot: dotOf(main), badge: badgeOf(main), on: id === act, el: main, sub: subs, mine: (id === mine) });
+          return;
+        }
+        if (c.classList.contains('tab')) add(c, sec);
+      });
+    });
+    /* directors: their team is the board (the Board group's first page) */
+    if (boardView()) out.forEach(function (it) { if (it.k === mine) it.mine = true; });
+    return out;
+  }
+  function appList() {
+    var A = window.WA_APP; if (!A || !A.order) return [];
+    return A.order.filter(function (id) { try { return A.ok(id); } catch (e) { return false; } }).map(function (id) { return A.apps[id]; });
+  }
+  function appItems(app) {
+    var A = window.WA_APP; if (!A) return [];
+    var out = [];
+    try { A.items(app).forEach(function (g) { g.items.forEach(function (it) { out.push({ k: it.h + (it.sec ? '|' + it.sec : ''), l: it.l, sec: g.label, go: it.h, gsec: it.sec || '', ic: it.ic, on: !!(A.isOn && A.isOn(app, it)), app: app }); }); }); } catch (e) { /* fine */ }
+    return out;
+  }
+  function rowHtml(it, i) {
+    var lead = it.ic && window.WA_APP && window.WA_APP.icon ? '<span class="ai">' + window.WA_APP.icon(it.ic) + '</span>' : '<i class="dot" style="background:' + Esc(it.dot || 'rgba(16,63,57,.35)') + '"></i>';
+    return '<button type="button" class="it' + (it.on ? ' on' : '') + '" data-w163i="' + i + '"' + (it.on ? ' aria-current="page"' : '') + '>' + lead +
+      '<span class="lb">' + Esc(it.l) + (it.hint ? '<small>' + Esc(it.hint) + '</small>' : '') + '</span>' +
+      (it.mine ? '<span class="mine">' + (boardView() ? 'Yours' : 'Your team') + '</span>' : '') + (it.badge ? '<span class="n">' + Esc(it.badge) + '</span>' : '') + PIc('chev', 'ch') + '</button>' +
+      (it.sub && it.sub.length && !PH.q ? '<div class="chips">' + it.sub.map(function (s, j) { return '<button type="button" class="chip' + (s.on ? ' on' : '') + '" data-w163i="' + i + '" data-w163sub="' + j + '">' + Esc(s.l) + '</button>'; }).join('') + '</div>' : '');
+  }
+  function paintSheet(scrollTo) {
+    var s = ensureSheet(), bd = s.querySelector('[data-w163bd]'); if (!bd) return;
+    var A = window.WA_APP, app = null;
+    try { app = A && A.current ? A.current() : null; } catch (e) { app = null; }
+    var apps = appList(), q = foldS(PH.q), list = [], html = '';
+    var h2 = s.querySelector('.hd h2'); if (h2) h2.textContent = app && A.apps[app] ? A.apps[app].label : 'Menu';
+    if (q) {
+      /* Find a page: the Hub's pages, their teams' own pages and every app's pages this person can open */
+      hubItems().forEach(function (it) {
+        list.push(it);
+        (it.sub || []).forEach(function (sb) { list.push({ k: sb.k, l: sb.l, sec: it.l, el: sb.el, on: sb.on }); });
+      });
+      apps.forEach(function (a) { if (a.id !== 'hub') appItems(a.id).forEach(function (it) { it.hint = a.label; list.push(it); }); });
+      var words = q.split(/\s+/).filter(Boolean);
+      list = list.filter(function (it) { var hay = foldS(it.l + ' ' + (it.sec || '') + ' ' + (it.hint || '')); return words.every(function (w) { return hay.indexOf(w) >= 0; }); });
+      list.forEach(function (it) { if (!it.hint) it.hint = it.sec || ''; });
+      html = list.length ? list.map(rowHtml).join('') : '<div class="none">No page is called that. Try another word.</div>';
+    } else {
+      html += apps.length > 1 ? '<div class="sh">Apps</div><div class="apps" role="list">' + apps.map(function (a) {
+        var on = (app || 'hub') === a.id;
+        return '<button type="button" class="app' + (on ? ' on' : '') + '" role="listitem" data-w163app="' + Esc(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="t" style="background:' + Esc(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + Esc(a.label) + '</button>';
+      }).join('') + '</div>' : '';
+      if (app) {
+        html += '<button type="button" class="back" data-w163back="1">' + PIc('back') + ' Back to the Hub</button>';
+        list = appItems(app);
+      } else list = hubItems();
+      var sec = null;
+      list.forEach(function (it, i) {
+        if (it.sec !== sec) { sec = it.sec; if (sec) html += '<div class="sh" data-w163sec="' + Esc(foldS(sec)) + '">' + Esc(sec) + '</div>'; }
+        html += rowHtml(it, i);
+      });
+      if (!list.length) html += '<div class="none">The menu is still loading.</div>';
+    }
+    PH.items = list;
+    bd.innerHTML = html;
+    PH.built++;
+    if (scrollTo) { var t = bd.querySelector('[data-w163sec="' + scrollTo + '"]'); if (t) { try { bd.scrollTop = t.offsetTop - 8; } catch (e) { /* fine */ } } }
+    else if (!q) { var on = bd.querySelector('.it.on'); if (on && on.offsetTop > bd.clientHeight - 80) { try { bd.scrollTop = on.offsetTop - 120; } catch (e) { /* fine */ } } }
+  }
+  function openSheet(scrollTo) {
+    var s = ensureSheet();
+    PH.lastFocus = document.activeElement;
+    PH.q = ''; var inp = s.querySelector('[data-w163q]'); if (inp) inp.value = '';
+    try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
+    PH.open = true;
+    paintSheet(scrollTo ? foldS(scrollTo) : '');
+    s.classList.add('on'); document.body.classList.add('w163sheet');
+    paintBar();
+    try { s.focus({ preventScroll: true }); } catch (e) { /* fine */ }
+  }
+  function closeSheet(quiet) {
+    var s = document.getElementById('w163sheet');
+    if (!PH.open) return;
+    PH.open = false;
+    if (s) s.classList.remove('on');
+    document.body.classList.remove('w163sheet');
+    paintBar();
+    if (!quiet && PH.lastFocus && PH.lastFocus.focus) { try { PH.lastFocus.focus({ preventScroll: true }); } catch (e) { /* fine */ } }
+  }
+  function choose(i, j) {
+    var it = PH.items && PH.items[i]; if (!it) return;
+    closeSheet(true);
+    if (j != null && it.sub && it.sub[j]) { press(it.sub[j].el); return; }
+    if (it.el) { press(it.el); return; }
+    if (it.go && window.WA_APP && window.WA_APP.go) { window.WA_APP.go(it.go, it.gsec || null); return; }
+    if (it.go) location.hash = it.go;
+  }
+
+  /* ---------- wiring ---------- */
+  document.addEventListener('click', function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target : null; if (!t) return;
+    var el;
+    if ((el = t.closest('#w163bar [data-w163slot]'))) { ev.preventDefault(); slotGo(el.getAttribute('data-w163slot'), el); return; }
+    if (!t.closest('#w163sheet')) return;
+    if ((el = t.closest('[data-w163close]'))) { ev.preventDefault(); closeSheet(); return; }
+    if ((el = t.closest('[data-w163back]'))) { ev.preventDefault(); closeSheet(true); try { window.WA_APP.close(); } catch (e) { location.hash = '#mypage'; } return; }
+    if ((el = t.closest('[data-w163app]'))) { ev.preventDefault(); var id = el.getAttribute('data-w163app'); closeSheet(true); try { if (id === 'hub') window.WA_APP.close(); else window.WA_APP.open(id); } catch (e) { /* fine */ } return; }
+    if ((el = t.closest('[data-w163i]'))) { ev.preventDefault(); var sub = el.getAttribute('data-w163sub'); choose(Number(el.getAttribute('data-w163i')), sub == null ? null : Number(sub)); return; }
+  });
+  document.addEventListener('input', function (ev) {
+    if (!ev.target || !ev.target.hasAttribute || !ev.target.hasAttribute('data-w163q')) return;
+    PH.q = ev.target.value || ''; paintSheet('');
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (!PH.open) return;
+    if (ev.key === 'Escape') { ev.preventDefault(); closeSheet(); return; }
+    if (ev.key === 'Enter' && ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-w163q') && PH.q && PH.items && PH.items.length) { ev.preventDefault(); choose(0, null); }
+  });
+  window.addEventListener('hashchange', function () { if (PH.open) closeSheet(true); setTimeout(paintBar, 0); });
+  if (typeof showPanel === 'function') {
+    var __sp163 = showPanel;
+    showPanel = function () { var r = __sp163.apply(this, arguments); try { setTimeout(paintBar, 0); } catch (e) { /* fine */ } return r; };
+  }
+  /* Ask the Hub opens full screen on a phone: while it is open the bar steps aside, so its message box is reachable */
+  function chatOpen() { var p = document.getElementById('waChatPanel'); if (!p || p.style.display === 'none') return false; try { return getComputedStyle(p).display !== 'none'; } catch (e) { return false; } }
+  function watchChat() {
+    var p = document.getElementById('waChatPanel'); if (!p) return false;
+    if (p.__w163) return true; p.__w163 = true;
+    var f = function () { document.body.classList.toggle('w163chat', chatOpen()); };
+    try { new MutationObserver(f).observe(p, { attributes: true, attributeFilter: ['style', 'class'] }); } catch (e) { /* fine */ }
+    f(); return true;
+  }
+  /* the bar follows the menu: drawn at once (Home and Menu work before the Hub has started), again when the menu is whole */
+  function initPhone() { try { paintBar(); watchChat(); } catch (e) { /* fine */ } }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPhone); else initPhone();
+  document.addEventListener('wa163nav', function () { try { paintBar(); if (PH.open) paintSheet(''); } catch (e) { /* fine */ } });
+  document.addEventListener('wa153app', function () { try { paintBar(); if (PH.open) paintSheet(''); } catch (e) { /* fine */ } });
+  /* the chat button can arrive after the bar (waves 75 and 117 draw it on timers) */
+  var phTries = 0, phIv = setInterval(function () { phTries++; var w = false; try { paintBar(); w = watchChat(); } catch (e) { /* fine */ } if (phTries > 20 || (w && document.getElementById('waChatBtn') && G.ready)) clearInterval(phIv); }, 500);
+
+  /* ---------- test hook ---------- */
+  window.w163 = { state: function () { return G; }, ready: function () { return G.ready; }, settle: settle,
+    phone: { state: function () { return PH; }, open: openSheet, close: closeSheet, bar: paintBar, key: barKey, team: myTeamId, items: hubItems } };
+})();
+/* =====================================================================
    WA v110 boot veil + self-provisioning + access requests (08/08/26)
    =====================================================================
    1. Boot veil (with the head CSS in 000_head_base): html.wa-ready is
@@ -60981,7 +61494,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
-    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The bank', crm: 'CRM', adminpanel: 'Admin'
+    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', adminpanel: 'Admin'
   };
   function me() {
     return {
@@ -61190,8 +61703,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       startApp = async function () {
         try { await __sa110.apply(this, arguments); }
         finally {
-          /* every earlier wave's wrapper has resolved by now */
-          setTimeout(w110Reveal, 250);
+          /* every earlier wave's wrapper has resolved by now; wave163: the menu settles first (at most 1.5 s), so the page appears whole */
+          var w163wait = 0;
+          (function w163when() {
+            if (document.documentElement.classList.contains('w163nav') || w163wait >= 1500) { setTimeout(w110Reveal, 60); return; }
+            w163wait += 50; setTimeout(w163when, 50);
+          })();
         }
         try { arm(); } catch (e) { /* non-fatal */ }
         try { await w110Provision(); } catch (e) { /* non-fatal */ }

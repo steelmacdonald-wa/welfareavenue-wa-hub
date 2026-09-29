@@ -117,7 +117,7 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   ok('the counts: in it now, finished, emails sent, and the one that needs a look', /1 person in it now/.test(b.rows[1]) && /3 finished/.test(b.rows[1]) && /3 emails sent/.test(b.rows[1]) && /1 needs a look/.test(b.rows[1]) && /6 steps · 3 emails/.test(b.rows[0]), b.rows);
   ok('the test-mode notice says emails only reach the test addresses', /test mode/i.test(b.note) && /test addresses/.test(b.note), b.note);
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
-  ok('the CRM rail lists Automations under Email, after Campaigns', rail.join('|') === 'Contacts|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports', rail);
+  ok('the CRM rail lists Automations under Email, after Campaigns', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports', rail);   /* wave163: Partners */
   await shot(f, 'autos_list');
 
   /* the editor */

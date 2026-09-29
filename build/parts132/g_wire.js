@@ -63,7 +63,7 @@
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t) return;
     if (t.id === 'w132q') { B.q = t.value; paintList(); return; }
-    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
+    if (t.id === 'w132day' && B.sheet) { B.sheet.custom = t.value; var d = parseDay(t.value), s = document.getElementById('w132soft'); if (s) s.textContent = d && daysBetween(today(), d) < 60 && daysBetween(today(), d) > 0 ? 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.' : ''; var sp = document.querySelector('#w132sheet [data-w132pick="custom"] span'); if (sp && d) sp.textContent = fmtDay(d, true); }
   });
   document.addEventListener('change', function (e) {
     var t = e.target; if (!t || !B.sheet) return;
@@ -108,7 +108,7 @@
       var OPT = { opt: 1 };
       var S = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       if (!W.tours.bank) W.tours.bank = { tab: 'bank', icon: 'box', hash: '#bank', steps: [
-        S('#bank > .w118mast', 'The bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
+        S('#bank > .w118mast', 'The Task Bank', 'Work that cannot start for three months or more waits here, out of every board, list and count, and comes back on its own date.'),
         S('#w132 .w132top', 'At a glance', 'How much is waiting, what comes back in the next 30 days, and what came back lately. Put something new straight in with the button.', OPT),
         S('#w132 details.w132how', 'How it works', 'Move a task from its drawer, or a whole project from its page. The Hub also banks what a meeting puts off, and content ideas for later in the year wait here until their time.', OPT),
         S('#w132back', 'Back from the bank', 'What came back in the last two weeks. It is on its team’s board again, marked back from the bank.', OPT),

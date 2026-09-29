@@ -53,7 +53,7 @@
       + (s.pick === 'custom' ? '<input type="date" class="pick" id="w132day" min="' + E(ymd(addDays(t, 1))) + '" max="' + E(ymd(addDays(t, 1095))) + '" value="' + E(s.custom || '') + '" aria-label="The day it comes back">' : '') + '</div>';
     if (s.kind !== 'date') html += '<div><div class="lb">Why it waits</div><input type="text" id="w132why" maxlength="280" placeholder="For example: after the gala in March, or once the grant decision is in" value="' + E(s.note || '') + '"></div>';
     var d = parseDay(chosenDate()), soft = '';
-    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
+    if (d && daysBetween(t, d) < 60 && daysBetween(t, d) > 0) soft = 'The Task Bank is for work that waits three months or more. For anything sooner, a due date keeps it on the board.';
     html += '<div class="soft" id="w132soft">' + E(soft) + '</div><div class="err" id="w132err">' + E(s.err || '') + '</div>';
     return html;
   }
@@ -67,7 +67,7 @@
       el.innerHTML = '<div class="bk" data-w132close="1"></div><div class="pane" role="dialog" aria-modal="true"><div class="ph"></div><div class="bd"></div><div class="ft"></div></div>';
     }
     el.querySelector('.pane').setAttribute('aria-label', title);
-    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
+    el.querySelector('.ph').innerHTML = '<div style="min-width:0"><div class="kk">' + I('vault') + 'The Task Bank</div><h2>' + E(title) + '</h2>' + (sub ? '<div class="sub">' + E(sub) + '</div>' : '') + '</div><span class="sp"></span><button type="button" class="xb" data-w132close="1" aria-label="Close">' + I('x') + '</button>';
     el.querySelector('.bd').innerHTML = sheetBody();
     el.querySelector('.ft').innerHTML = '<button type="button" class="w132btn" data-w132close="1">Cancel</button><button type="button" class="w132btn pri" data-w132go="1"' + (s.busy ? ' disabled' : '') + '>' + I(s.kind === 'date' ? 'cal' : 'vault') + E(s.busy ? 'Saving…' : go) + '</button>';
     el.classList.add('on');

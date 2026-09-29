@@ -1234,6 +1234,8 @@ Our story (page #ourstory): what Welfare Avenue has done since March 2020, refin
 Partners (page #partners): every organisation Welfare Avenue has worked with, sponsored by or approached, refined from its Drive, Canva designs and posts (wave140), with what they did, the years and the sources. Leaders correct and add.
 
 - `status`: active: working together now; past: worked together before; prospect: approached or planned, nothing yet; declined: said no.
+- `category`: What kind of relationship it is (wave163), as the Avenue Academy lesson Our partners and how we work with them defines it: partner (works with us toward a shared goal through joint programs or initiatives, over time, ideally in an MOU or a project agreement), collaborator (joins us for an event or initiative without a formal agreement) or sponsor (gives money or in-kind support and gets recognition). The Partners page groups by it; relationship keeps the finer detail.
+- `relationship`: How they help, the finer detail under category: partner, collaborator, sponsor, funder, donor organisation, supplier or venue (a funder or a donor organisation is a sponsor; a supplier or a venue can be any of the three).
 
 ### `wa_lessons`
 
@@ -1524,6 +1526,10 @@ Every Loom recording the Loom pull has looked at (wave162), one row per Loom vid
 
 Every run of the Loom pull (wave162): why (schedule, pull now by an admin, check), when, what it did (seen, filed, needs a look, skipped, waiting, errors) and how it ended: ok, partial (more left for next time), error, no_key (the Atlassian API token is not set yet) or refused (Atlassian refused the token, for example once it expires). Admins read it; the loom-pull function writes it.
 
+### `loom_oauth_pending`
+
+One row per Connect Loom press (wave162c): the PKCE verifier for the approval that is under way, kept server side and used once when Atlassian sends the admin back (loom-connect). No policies: only the service role reads or writes it; rows older than 15 minutes are ignored and cleared.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1623,8 +1629,9 @@ Functions:
 - `loom_pull_known(text[])`: For a list of Loom ids: what the pull already knows about each (status, attempts) and which are already in the transcript archive (by their Loom link), so nothing is filed twice. The loom-pull function only.
 - `loom_video_save(jsonb)`: Records what the Loom pull decided about a recording that was not filed (needs a look, skipped, waiting, error, personal); a personal recording keeps only its id and dates. Never changes a filed row. The loom-pull function only.
 - `loom_file(jsonb)`: Files a Loom recording as a transcript (wave162): one transaction inserts the transcripts row (which starts the normal pipeline through its triggers) and marks the recording filed; if the archive already has that Loom link, nothing is inserted. Checks the team, the visibility and that a confidential meeting names its people. Logged in change_log (entity_type loom). The loom-pull function only.
-- `loom_pull_status()`: The Loom card in the Transcript archive (wave162, admins only): the next scheduled pull (Monday, Wednesday and Friday at 7:30, Toronto), whether the schedule is on, the last run and the last good one, the last eight runs, counts by status since loom_pull_since, the recordings that need a look, and the latest 30 recordings the pull handled (personal recordings never listed).
+- `loom_pull_status()`: The Loom card in the Transcript archive (wave162, admins only): the next scheduled pull (Monday, Wednesday and Friday at 7:30, Toronto), whether the schedule is on, whether Loom is connected through Atlassian's approval (wave162c: the vault holds LOOM_OAUTH_REFRESH, and since when; never the key itself), the last run and the last good one, the last eight runs, counts by status since loom_pull_since, the recordings that need a look, and the latest 30 recordings the pull handled (personal recordings never listed).
 - `loom_video_decide(text, text)`: An admin skips a Loom recording that needed a look (p_action skip) or puts a skipped one back (look). Filing goes through the loom-pull function (action file), which reads the transcript from Loom. Logged in change_log (entity_type loom).
+- `loom_oauth_forget()`: Forgets the Loom connection (wave162c): removes LOOM_OAUTH_REFRESH and LOOM_OAUTH_ACCESS from the vault after loom-connect revoked the key at Atlassian (Disconnect) or when Atlassian says it has lapsed. The client registration (LOOM_OAUTH_CLIENT) stays. The loom-connect and loom-pull functions only.
 
 - `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
 

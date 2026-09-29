@@ -85,7 +85,7 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
       await shot(f, 'top');
       const s = await f.ev(new Function(vis + `
         const tab = document.querySelector('#tabBar .tab[data-tab="bank"]'); const host = tab && tab.closest('.tab-group');
-        const strat = Array.from(document.querySelectorAll('#tabBar .tab-group[data-w42g="goals"] .tab')).map(t => t.getAttribute('data-tab'));
+        const strat = Array.from(document.querySelectorAll('#tabBar .tab-group[data-w42g="tools"] .tab')).map(t => t.getAttribute('data-tab'));
         return { tab: !!tab, label: tab && tab.textContent.trim(), group: host && host.getAttribute('data-w42g'), strat, active: (document.querySelector('.panel.active') || {}).id,
           mast: (document.querySelector('#bank > .w118mast h1') || {}).textContent, crumb: (document.querySelector('#bank > .w118mast .crumb') || {}).textContent,
           stats: Array.from(document.querySelectorAll('#w132 .w132st')).map(x => x.innerText.replace(/\\s+/g, ' ').trim()), add: vis(document.querySelector('#w132 [data-w132new]')),
@@ -93,10 +93,10 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
           chips: Array.from(document.querySelectorAll('#w132 .w132chip')).map(x => x.textContent.replace(/\\s+/g, ' ').trim()),
           groups: Array.from(document.querySelectorAll('#w132 .w132grp h3')).map(h => h.firstChild.textContent.trim()),
           items: Array.from(document.querySelectorAll('#w132 .w132it .tt')).map(x => x.textContent), title: document.title };`));
-      /* wave134: the menu groups are Goals and projects (orggoals, goals, projects, goalmap, brain, bank) */
-      ok("The bank sits last in Goals and projects", s.tab && s.label === 'The bank' && s.group === 'goals' && s.strat[s.strat.length - 1] === 'bank' && s.strat.indexOf('goalmap') >= 0 && s.strat.indexOf('goalmap') < s.strat.length - 1, s);
-      ok("the page opens with its masthead", s.active === 'bank' && s.mast === 'The bank' && s.crumb === 'Goals and projects', s);
-      ok("the tab title says The bank", /The bank/.test(s.title), s.title);
+      /* wave163: The Task Bank (Steel: "previously The bank") sits second in Other Tools, after Important info */
+      ok("The Task Bank sits second in Other Tools", s.tab && s.label === 'The Task Bank' && s.group === 'tools' && s.strat[0] === 'importantinfo' && s.strat[1] === 'bank', s);
+      ok("the page opens with its masthead", s.active === 'bank' && s.mast === 'The Task Bank' && s.crumb === 'Other Tools', s);
+      ok("the tab title says The Task Bank", /The Task Bank/.test(s.title), s.title);
       ok("three numbers: in the bank, coming back in 30 days, back lately", s.stats.length === 3 && /^5 in the bank \(4 tasks, 1 project\)/.test(s.stats[0]) && /^1 coming back in the next 30 days/.test(s.stats[1]) && /^2 back in the last two weeks/.test(s.stats[2]), s.stats);
       ok("Put something in the bank, and how it works", s.add && s.how, s);
       ok("back from the bank lists what came back", s.back.join('|') === 'Update the media kit|Website Redesign', s.back);
@@ -263,8 +263,8 @@ function ok(name, cond, extra) { if (cond) { pass++; out.push("PASS " + name); }
       if (CASE === 'admin') {
         await f.hash('#adminpanel/access');
         await click(f, '#w131card [data-w131prof="marketing"]', 700);
-        const a = await f.ev(() => { const txt = (document.getElementById('w131sheet') || {}).innerText || ''; const i = txt.indexOf('The bank'); return { has: i >= 0, near: i >= 0 ? txt.slice(Math.max(0, i - 120), i + 40).replace(/\s+/g, ' ') : txt.slice(0, 300) }; });
-        ok("a profile lists The bank with the strategy pages", a.has && /Goal alignment/.test(a.near), a);
+        const a = await f.ev(() => { const txt = (document.getElementById('w131sheet') || {}).innerText || ''; const i = txt.indexOf('The Task Bank'); return { has: i >= 0, near: i >= 0 ? txt.slice(Math.max(0, i - 120), i + 40).replace(/\s+/g, ' ') : txt.slice(0, 300) }; });
+        ok("a profile lists The Task Bank in Other Tools", a.has && /OTHER TOOLS|Other Tools/.test(a.near), a);
       }
       await f.ctx.close();
     }

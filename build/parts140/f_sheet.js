@@ -56,13 +56,14 @@
         field('The year in a few lines', area('summary', row.summary), true) + '<div class="err" data-w140err></div></div>';
     } else if (kind === 'partner') {
       row = id ? (S.partners || []).filter(function (x) { return String(x.id) === String(id); })[0] : null;
-      var p = row || { relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
+      var p = row || { category: 'partner', relationship: 'partner', status: 'active', visibility: 'everyone', aka: [] };
       html = '<h2>' + (row ? 'Edit ' + E(p.name) : 'Add a partner') + '</h2><div class="sub">An organization, never a private person or an individual donor.</div><div class="w140form">' +
         field('Name', inp('name', p.name), true) +
         field('Also written', inp('aka', (p.aka || []).join(', '), 'other names, separated by commas'), true) +
         field('Kind', sel('kind', [['', 'Choose']].concat(PKINDS.map(function (k) { return [k, k.charAt(0).toUpperCase() + k.slice(1)]; })), p.kind || '')) +
         field('City', inp('city', p.city)) +
-        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship)) +
+        field('Type', sel('category', PCAT_ORDER.map(function (c) { return [c, PCATS[c][0]]; }), catOf(p)), false, 'partner: over time, toward a shared goal; collaborator: an event or an initiative; sponsor: money or in-kind support, with recognition') +
+        field('How they help', sel('relationship', Object.keys(REL).map(function (r) { return [r, REL[r]]; }), p.relationship), false, 'the detail: a funder, a venue, a supplier ...') +
         field('Status', sel('status', Object.keys(STATUS).map(function (s) { return [s, STATUS[s][0]]; }), p.status)) +
         field('First year', inp('first_year', p.first_year, '2021')) + field('Last year', inp('last_year', p.last_year, String(yearNow()))) +
         field('What they did with us', area('summary', p.summary), true) +
@@ -122,7 +123,9 @@
       } else if (kind === 'partner') {
         if (!v.name) { showErr('Give the organization’s name.'); return; }
         if (/@|\+?\d[\d\s().-]{7,}\d/.test(v.contact_role || '')) { showErr('Contact takes a role only, never an email or a phone number.'); return; }
-        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
+        if (PCATS[v.relationship] && v.relationship !== v.category) v.relationship = v.category;   /* how they help never contradicts the type */
+        if ((v.relationship === 'funder' || v.relationship === 'donor organisation') && v.category !== 'sponsor') { showErr('A funder or a donor organization is a sponsor: pick Sponsor as the type, or another way they help.'); return; }
+        row = stamp({ name: v.name, aka: list(v.aka), kind: v.kind || null, city: v.city || null, category: PCATS[v.category] ? v.category : 'partner', relationship: v.relationship, status: v.status, first_year: yearNum(v.first_year), last_year: yearNum(v.last_year),
           summary: v.summary || null, contact_role: v.contact_role || null, visibility: v.visibility, notes: v.notes || null });
         table = 'wa_partners'; cache = 'partners';
       } else if (kind === 'lesson') {

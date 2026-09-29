@@ -45,7 +45,7 @@
   /* the buttons each group should hold, in order, for this person */
   function wanted(b, g) {
     var out = [];
-    (g.items || []).forEach(function (id) {
+    itemsOf(g).forEach(function (id) {
       var t = tabOf(b, id); if (!t) return;
       if (g.loose && inOpenRow(t)) return;
       out.push(t);
@@ -76,6 +76,7 @@
       var seq = [];
       LAYOUT.top.forEach(function (id) { var t = tabOf(b, id); if (t) seq.push(t); });
       LAYOUT.afterCalendar.forEach(function (id) { var t = tabOf(b, id); if (t && !inOpenRow(t)) { t.classList.remove('w116tool'); seq.push(t); } });
+      (LAYOUT.afterEvents || []).forEach(function (id) { var t = tabOf(b, id); if (t) { t.classList.remove('w116tool'); seq.push(t); } });
       var res = null;
       LAYOUT.groups.forEach(function (g) {
         if (!g.items) { var d = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'); if (d) seq.push(d); return; }
@@ -86,7 +87,7 @@
           if (id && LABEL[id]) relabel(t, LABEL[id]);
           putAt(host, t, i);
         });
-        if (g.key === 'resources') res = host;
+        if (g.key === 'tools') res = host;   /* wave163: Other Tools takes what the layout does not name */
         seq.push(el);
       });
       /* what the layout does not name: an older group (Strategy, More) gives up its buttons and goes;
@@ -134,7 +135,8 @@
   /* true when every page is where the layout wants it (the tests ask this) */
   function ok() {
     var b = bar(); if (!b) return true;
-    for (var i = 0; i < LAYOUT.top.length; i++) { var t = tabOf(b, LAYOUT.top[i]); if (t && t.parentNode !== b) return false; }
+    var loose = LAYOUT.top.concat(LAYOUT.afterEvents || []);
+    for (var i = 0; i < loose.length; i++) { var t = tabOf(b, loose[i]); if (t && t.parentNode !== b) return false; }
     for (var j = 0; j < LAYOUT.groups.length; j++) {
       var g = LAYOUT.groups[j]; if (!g.items) continue;
       var el = b.querySelector('.tab-group[data-w42g="' + g.key + '"]'), w = wanted(b, g);
@@ -142,7 +144,7 @@
       var host = el ? hostOf(el) : null;
       for (var k = 0; k < w.length; k++) if (w[k].parentNode !== host || host.children[k] !== w[k]) return false;
     }
-    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"]');
+    return !b.querySelector(':scope > .tab-group[data-w42g="strategy"], :scope > .tab-group[data-w42g="more"], :scope > .tab-group[data-w42g="goals"], :scope > .tab-group[data-w42g="resources"], :scope > .tab-group[data-w42g="people"], :scope > .tab-group[data-w42g="meetings"], :scope > .tab-group[data-w42g="inbox"]');
   }
   function watch() {
     var b = bar(); if (!b) return;

@@ -33,20 +33,20 @@
 
   /* the pages, grouped the way the menu groups them; 'team' is the team-page router and follows the department pages */
   var GROUPS = [ /* wave134: the same groups as the menu */
-    ['Everyday', ['mypage', 'overview', 'dashboard', 'calendar']],
+    /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
+    ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
     ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
     ['Board', ['board', 'governance', 'committees']],
-    ['Goals and projects', ['orggoals', 'goals', 'projects', 'goalmap', 'brain', 'bank']],
-    ['Meetings', ['agendas', 'transcripts']],
-    ['Requests and inbox', ['requests', 'hubmail']],
-    ['People', ['orgchart', 'training', 'crm']],
-    ['Resources', ['importantinfo', 'ourstory', 'partners', 'documents', 'photos', 'create']],
+    ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
+    ['Organization', ['orgchart', 'ourstory', 'hubmail']],
+    ['Strategy', ['orggoals', 'goals', 'projects', 'goalmap']],
+    ['CRM', ['crm', 'partners']],
     ['Admin', ['adminpanel', 'activity']]
   ];
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The bank',
+    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising & Finances',
     fundevents: 'Events calendar', finances: 'Finances', hr: 'Human Resources', hrcentre: 'HR centre',

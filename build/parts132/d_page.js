@@ -5,7 +5,7 @@
     var sec = document.getElementById('bank'); if (!sec) return;
     var m = sec.querySelector(':scope > .w118mast');
     if (!m) { m = document.createElement('div'); m.className = 'w118mast'; m.setAttribute('data-w132', 'bank'); sec.insertBefore(m, sec.firstChild); }
-    var html = '<div class="crumb">Goals and projects</div><h1>The bank</h1><p>' + E(BLURB) + '</p>';
+    var html = '<div class="crumb">Other Tools</div><h1>The Task Bank</h1><p>' + E(BLURB) + '</p>';
     if (m.getAttribute('data-h') !== html) { m.innerHTML = html; m.setAttribute('data-h', html); }
   }
   function host() {
@@ -49,7 +49,7 @@
         return '<button type="button" class="w132chip' + (B.team === d ? ' on' : '') + '" data-w132team="' + E(d) + '"><i style="background:' + E(teamColor(d)) + '"></i>' + E(teamShort(d)) + ' <em>' + (counts[d] || 0) + '</em></button>';
       }).join('');
     return '<div class="w132bar"><div class="w132chips" role="group" aria-label="Teams">' + chips + '</div>'
-      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the bank" value="' + E(B.q) + '" aria-label="Search the bank"></label></div>';
+      + '<label class="w132q">' + I('search') + '<input type="search" id="w132q" placeholder="Search the Task Bank" value="' + E(B.q) + '" aria-label="Search the Task Bank"></label></div>';
   }
   function whyHtml(x) {
     return x.note ? '<div class="why">' + I('note') + '<span>' + E(x.note) + '</span></div>' : '<div class="why none">No reason given.</div>';
@@ -136,7 +136,7 @@
     var p = String(h || '').replace(/^#/, '').split('/');
     var t = p[1] && teams().indexOf(p[1]) >= 0 ? p[1] : '';
     B.team = t;
-    try { document.title = 'The bank · Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    try { document.title = 'The Task Bank · Welfare Avenue Hub'; } catch (e) { /* fine */ }
     paint();
     load(!B.data || Date.now() - B.at > 30000).then(function () { if (onPage()) paint(); });
   }

@@ -28,7 +28,7 @@ function fixture() {
     P(11, 'Sportira', 'active', 'sponsor', 'business', { aka: ['Sportira Inc'], notes: 'The 2022 letter is a PDF with no text.' }),
     P(12, 'Vanier College Student Association', 'active', 'funder', 'student club', { aka: ['VCSA'] }),
     P(13, 'Moisson Montréal', 'prospect', 'partner', 'nonprofit', { first_year: 2022, last_year: 2022 }),
-    P(14, 'Hotel Zero1', 'past', 'venue', 'business', { first_year: 2022, last_year: 2023 }),
+    P(14, 'Hotel Zero1', 'past', 'venue', 'business', { first_year: 2022, last_year: 2023, category: 'collaborator' }),   /* wave163: the others have no category (read from how they help) */
     P(15, 'A company that said no', 'declined', 'sponsor', 'business'),
     P(16, 'A leadership-only funder', 'active', 'funder', 'funder', { visibility: 'leadership', sources: [LEAD_SRC] })
   ];
@@ -158,6 +158,39 @@ const titles = f => f.ev(() => [...document.querySelectorAll('#ourstory .w140ev 
   const q3 = await f.ev(() => [...document.querySelectorAll('#partners .w140pc .nm')].map(x => x.textContent));
   ok('partner search finds another name a partner goes by', q3.length === 1 && q3[0] === 'Vanier College Student Association', q3);
 
+  /* wave163: partner, collaborator, sponsor */
+  await typeQ(f, 'partners', '');
+  await f.ev(() => document.querySelector('.w140chip[data-w140pset="worked"]').click()); await f.page.waitForTimeout(150);
+  const ty = await f.ev(() => ({ tabs: [...document.querySelectorAll('#partners .w140ty')].map(b => b.textContent.replace(/\s+/g, ' ').trim() + (b.classList.contains('on') ? '*' : '')), def: (document.querySelector('#partners .w140def') || {}).textContent || '',
+    tags: [...document.querySelectorAll('#partners .w140pc')].map(c => c.querySelector('.nm').textContent + ':' + [...c.querySelectorAll('.ft .w140tag')].map(t => t.textContent.trim()).join('/')) }));
+  ok('the type switch: Everyone, Partners, Collaborators and Sponsors, counted within Worked with us', ty.tabs.join('|') === 'Everyone 4*|Partners 0|Collaborators 1|Sponsors 3' && /collaborators/.test(ty.def) && /sponsors/.test(ty.def), ty);
+  ok('each card names its type, then the detail when it adds one (a funder, a venue)', ty.tags.indexOf('Sportira:Sponsor') >= 0 && ty.tags.indexOf('Vanier College Student Association:Sponsor/Funder') >= 0 && ty.tags.indexOf('Hotel Zero1:Collaborator/Venue') >= 0, ty.tags);
+  await f.ev(() => document.querySelector('#partners [data-w140pcat="sponsor"]').click()); await f.page.waitForTimeout(150);
+  const ty2 = await f.ev(() => ({ cards: [...document.querySelectorAll('#partners .w140pc .nm')].map(x => x.textContent).sort(), def: (document.querySelector('#partners .w140def') || {}).textContent || '', pressed: (document.querySelector('#partners .w140ty.on') || {}).getAttribute('aria-pressed'), chips: [...document.querySelectorAll('#partners .w140chip[data-w140pset]')].map(c => c.textContent.replace(/\s+/g, ' ').trim()) }));
+  ok('Sponsors shows the sponsors only, says what a sponsor is, and the status chips count sponsors', ty2.cards.join('|') === 'A leadership-only funder|Sportira|Vanier College Student Association' && /^A sponsor gives money/.test(ty2.def) && ty2.pressed === 'true' && ty2.chips.join('|') === 'Worked with us 3|Active 3|Past 0|Prospects 0|Declined 1|All 4', ty2);
+  await f.ev(() => document.querySelector('#partners [data-w140pcat="all"]').click()); await f.page.waitForTimeout(100);
+  await f.ev(() => document.querySelector('.w140chip[data-w140pset="all"]').click()); await f.page.waitForTimeout(100);
+  await typeQ(f, 'partners', 'collaborator');
+  const ty3 = await f.ev(() => [...document.querySelectorAll('#partners .w140pc .nm')].map(x => x.textContent));
+  ok('search finds a partner by its type', ty3.length === 1 && ty3[0] === 'Hotel Zero1', ty3);
+  await typeQ(f, 'partners', '');
+  await f.hash('#partners/14', 1200);
+  const sh = await f.ev(() => { const s = document.getElementById('w140sheet'); return { rows: s ? [...s.querySelectorAll('.row')].map(r => [...r.children].map(c => c.textContent.trim()).join(': ')) : [], sub: s ? ((s.querySelector('.sub') || {}).textContent || '') : '' }; });
+  ok('the sheet says the type first, with the detail', sh.rows[0] === 'Type: Collaborator (venue)' && /Collaborator/.test(sh.sub), sh);
+  await f.ev(() => document.querySelector('#w140sheet [data-w140edit="partner"]').click()); await f.page.waitForTimeout(250);
+  const ed = await f.ev(() => { const s = document.getElementById('w140sheet'); const c = s && s.querySelector('[data-f="category"]'); return { has: !!c, v: c && c.value, opts: c ? [...c.options].map(o => o.textContent) : [] }; });
+  ok('the edit form has a Type (partner, collaborator, sponsor) set to the partner\'s', ed.has && ed.v === 'collaborator' && ed.opts.join('|') === 'Partner|Collaborator|Sponsor', ed);
+  await f.ev(() => { const s = document.getElementById('w140sheet'); s.querySelector('[data-f="relationship"]').value = 'funder'; s.querySelector('[data-w140save]').click(); }); await f.page.waitForTimeout(200);
+  const er = await f.ev(() => (document.querySelector('#w140sheet [data-w140err]') || {}).textContent || '');
+  ok('a funder that is not a sponsor is refused', /is a sponsor/.test(er), er);
+  await f.ev(() => { const s = document.getElementById('w140sheet'); s.querySelector('[data-f="category"]').value = 'sponsor'; s.querySelector('[data-w140save]').click(); }); await f.page.waitForTimeout(450);
+  const up = await f.ev(() => window.__W.filter(x => x.table === 'wa_partners').map(x => ({ op: x.op, p: x.p })));
+  const last = up.length ? up[up.length - 1].p : {};
+  ok('saving writes the type (category) with the detail', last.category === 'sponsor' && last.relationship === 'funder', up);
+  await f.hash('#partners', 1000);
+  const ty4 = await f.ev(() => { const c = [...document.querySelectorAll('#partners .w140pc')].filter(x => x.querySelector('.nm').textContent === 'Hotel Zero1')[0]; return c ? [...c.querySelectorAll('.ft .w140tag')].map(t => t.textContent.trim()).join('/') : null; });
+  ok('the card follows the edit', ty4 === 'Sponsor/Funder', ty4);
+
   /* documents */
   await f.hash('#documents', 1200);
   const d = await f.ev(() => ({ n: document.querySelectorAll('#documents .w140doc').length, count: (document.querySelector('#documents .w140count') || {}).textContent, cv: !!document.querySelector('#documents .w140doc .ic.cv'), lead: document.querySelectorAll('#documents .w140tag.lead').length, kinds: [...document.querySelectorAll('[data-w140dkind] option')].map(o => o.textContent) }));
@@ -194,10 +227,10 @@ const titles = f => f.ev(() => [...document.querySelectorAll('#ourstory .w140ev 
   const n = await f.ev(() => {
     const g = id => { const b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); const grp = b && b.closest('.tab-group'); return b ? { label: b.textContent.trim(), group: grp ? grp.getAttribute('data-w42g') : null } : null; };
     const T = (window.w122 && window.w122.tours) || {};
-    return { story: g('ourstory'), partners: g('partners'), docs: g('documents'), tours: ['ourstory', 'partners', 'documents'].map(k => T[k] ? T[k].steps.length : 0) };
+    return { story: g('ourstory'), partners: g('partners'), docs: g('documents'), crm: !!(window.WA_APP && window.WA_APP.apps.crm.pages.indexOf('partners') >= 0), tours: ['ourstory', 'partners', 'documents'].map(k => T[k] ? T[k].steps.length : 0) };
   });
-  ok('the three pages sit under Resources in the menu', n.story && n.story.label === 'Our story' && n.partners && n.partners.label === 'Partners' && n.docs && n.docs.label === 'Document finder' && n.story.group === n.docs.group && n.story.group, n);
-  ok('each page has its tour', n.tours.join() === '7,4,4', n);
+  ok('wave163: Our story sits in Organization, the Document finder in Other Tools, Partners in the CRM (out of the menu)', n.story && n.story.label === 'Our story' && n.story.group === 'org' && n.docs && n.docs.label === 'Document finder' && n.docs.group === 'tools' && n.partners && n.partners.group === 'apps' && n.crm, n);
+  ok('each page has its tour (Partners with its types stop)', n.tours.join() === '7,5,4', n);
   const tourSel = await f.ev(async () => {
     const miss = [];
     for (const k of ['ourstory', 'partners', 'documents']) {

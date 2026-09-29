@@ -64,7 +64,13 @@
     star: '<path d="M12 3.5 13.8 9.2 19.5 11 13.8 12.8 12 18.5 10.2 12.8 4.5 11 10.2 9.2z"/>',
     search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     x: '<path d="M6 6l12 12M18 6 6 18"/>',
-    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>'
+    bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+    /* wave163: the Strategy app and Partners in the CRM */
+    target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1.3"/>',
+    flag: '<path d="M6 21V3.5"/><path d="M6 4.5h11l-2.3 4.2L17 13H6"/>',
+    layers: '<path d="m12 3.5 8.5 4.3L12 12 3.5 7.8z"/><path d="m3.5 12 8.5 4.2 8.5-4.2"/><path d="m3.5 16.2 8.5 4.3 8.5-4.3"/>',
+    tree: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v10M12 11.5H5V17M12 11.5h7V17"/>',
+    link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -77,11 +83,25 @@
     return list.map(function (a) { return { h: '#adminpanel/' + a[0], l: a[1], ic: { people: 'people', access: 'key', security: 'shield', ai: 'star', adoption: 'chart', accounts: 'mail', loading: 'bell', change: 'form' }[a[0]] || 'star', page: 'adminpanel' }; });
   }
   var APPS = {
-    hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, meetings, goals and everything else', pages: [] },
-    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, gifts, email', pages: ['crm'], home: '#crm',
+    hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, tools, the organization and everything else', pages: [] },
+    /* wave163: Steel: "Could you add the following pages to an App called strategy" (Organizational goals, Department goals,
+       Projects, Goal alignment); a project's own page (#project/...) opens inside it too, with Projects marked */
+    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'Goals, projects and how they line up', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
+      groups: function () {
+        return [{ label: 'Goals and projects', items: [
+          { h: '#orggoals', l: 'Organizational goals', ic: 'target', page: 'orggoals' },
+          { h: '#goals', l: 'Department goals', ic: 'flag', page: 'goals' },
+          { h: '#projects', l: 'Projects', ic: 'layers', page: 'projects' },
+          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' }
+        ] }];
+      }
+    },
+    /* wave163: Steel: "move partners to the CRM for now" (Partners, collaborators and sponsors: #partners) */
+    crm: { id: 'crm', label: 'CRM', color: TEAL, ic: 'people', blurb: 'Contacts, partners, gifts, email', pages: ['crm', 'partners'], home: '#crm',
       groups: function () {
         return [{ label: 'Contacts', items: [
           { h: '#crm', l: 'Contacts', ic: 'people', page: 'crm' },
+          { h: '#partners', l: 'Partners', ic: 'link', page: 'partners' },
           { h: '#crm/dupes', l: 'Possible duplicates', ic: 'merge', page: 'crm' },
           { h: '#crm/sources', l: 'Sources', ic: 'db', page: 'crm' },
           { h: '#crm/lists', l: 'Lists', ic: 'list', page: 'crm' },
@@ -96,7 +116,7 @@
           { h: '#crm/reports', l: 'Reports', ic: 'chart', page: 'crm' }
         ] }];
       },
-      actions: [{ k: 'add', l: 'Add a contact', ic: 'plus' }]
+      actions: [{ k: 'add', l: 'Add a contact', ic: 'plus', page: 'crm' }]   /* wave163: on the contacts page only (Partners has its own Add a partner) */
     },
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
       groups: function () {
@@ -131,7 +151,7 @@
       }
     }
   };
-  var ORDER = ['hub', 'crm', 'hr', 'finance', 'admin'];
+  var ORDER = ['hub', 'strategy', 'crm', 'hr', 'finance', 'admin'];
 
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }

@@ -74,7 +74,7 @@
     var admin = amAdmin(), me = (typeof who === 'function' ? who() : '');
     var kinds = [
       { k: 'password', title: 'Logins and passwords', note: '<div class="pw-note">Everyone on staff sees this list. Passwords stay hidden: press <b>Request access</b> and an admin approves it, then you can show and copy it. Whoever adds a login can always see it, and every time a password is shown it goes in the audit trail. Keep it to shared team logins (Canva, social accounts, tools); never banking, government or personal credentials. Board viewers never see this page.</div>' },
-      { k: 'video', title: 'Training videos (Loom)', note: '' },
+      /* wave163: Steel: "remove trainings from there"; training videos live in the Avenue Academy (the old rows stay in info_links, unshown) */
       { k: 'folder', title: 'Shared Google Drive folders', note: '' },
       { k: 'link', title: 'Other key links', note: '' }
     ];
@@ -100,7 +100,7 @@
           + (i.notes ? '<div class="nts">' + E(i.notes) + '</div>' : '') + '</div>';
       }).join('') : '<div class="info-row" style="color:var(--wa-muted);">Nothing here yet. Add the first one below.</div>');
     }).join('')
-      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="video">Training video</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
+      + '<div class="info-add"><select id="ii-kind"><option value="password">Password / login</option><option value="folder">Drive folder</option><option value="link">Other link</option></select>'
       + '<input id="ii-label" placeholder="Label, e.g. Canva team login" />'
       + '<input id="ii-url" placeholder="URL (optional for passwords)" />'
       + '<input id="ii-user" placeholder="Username / email (passwords)" />'

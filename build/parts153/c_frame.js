@@ -48,6 +48,7 @@
   function firstOfPage(app, pg) { var gs = items(app); for (var i = 0; i < gs.length; i++) for (var j = 0; j < gs[i].items.length; j++) if (pageOf(gs[i].items[j].h) === pg) return gs[i].items[j]; return null; }
   function isOn(app, it) {
     var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);
+    if (app === 'strategy' && pg === 'project') return ip === 'projects';   /* wave163: a project's own page marks Projects */
     if (ip !== pg) return false;
     if (it.sec) return secNow(ip) === it.sec;
     if (app === 'crm' && ip === 'crm') return (isub || 'contacts') === (sub === 'c' || !sub ? 'contacts' : sub);
@@ -83,7 +84,7 @@
     var a = APPS[app], where = whereNow(app);
     b.innerHTML = '<div class="w153bc"><span class="w153ai" style="background:' + a.color + ';width:28px;height:28px;border-radius:8px">' + I(a.ic) + '</span><b>' + E(a.label) + '</b>' + (where ? '<span>' + E(where) + '</span>' : '') + '</div>' +
       '<div class="w153acts"><button type="button" class="w153menu" data-w153menu="1">' + I('menu') + ' Menu</button>' +
-      (a.actions || []).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
+      (a.actions || []).filter(function (x) { return !x.page || x.page === pageOf(hashNow()); }).map(function (x) { return '<button type="button" class="w153btn" data-w153act="' + E(x.k) + '">' + I(x.ic) + ' ' + E(x.l) + '</button>'; }).join('') + '</div>';
   }
   function sig() { var h = hashNow(), pg = pageOf(h); return h + '|' + (SEC[pg] ? SEC[pg].now() + '/' + SEC[pg].count() : '') + '|' + (S.app || ''); }
   function paint() {

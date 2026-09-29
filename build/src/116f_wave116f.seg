@@ -755,8 +755,8 @@
     return sec;
   }
   function ensurePanels() {
-    panel('orggoals', 'Goals and projects', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
-    panel('goalmap', 'Goals and projects', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
+    panel('orggoals', 'Strategy', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
+    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
   }
   function visiblePanel(id) { var s = document.getElementById(id); return !!(s && s.classList.contains('active')); }
   async function showOrg() { ensurePanels(); if (!visiblePanel('orggoals')) return; M.org.host = document.getElementById('w116orghost'); if (!M.org.host) return; if (!M.loaded) M.org.host.innerHTML = '<p class="read">Loading goals...</p>'; await load(); try { if (typeof wa30LoadIdeas === 'function') await wa30LoadIdeas(); } catch (e) { /* fine */ } renderOrg(); }
