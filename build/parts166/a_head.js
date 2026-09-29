@@ -42,6 +42,8 @@
     return d === 0 ? 'today' : (d === 1 ? 'yesterday' : d + ' days ago');
   }
   function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  /* wave168: a person's photo on the leads' card, only from the Hub's own storage (Slack and Google photos are copied there) */
+  function ownImg(u) { return /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\/storage\/v1\/object\/public\/[\w./%-]+$/.test(String(u || '')); }
   function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
   function meName() { try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; return (m && m.name) || ''; } catch (e) { return ''; } }
 

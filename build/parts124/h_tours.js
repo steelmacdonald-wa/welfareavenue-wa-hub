@@ -18,9 +18,9 @@
         S('#fundevents > .w118mast', 'Events calendar', 'The year’s fundraising events, season by season, from the 2026-27 plan.'),
         S('#w124fund .w124goals', 'The goals', 'What the events raised this fiscal year (from October 1) against the minimum, healthy and target amounts.', OPT),
         S('#w124fund .w124sw', 'The year at a glance', 'Every dated event on one line, month by month. The mark before October is where the fiscal year starts.', OPT),
-        S('#w124fund .w124evs', 'Season by season', 'Each card shows the partners, the target, where it stands and links to its project board and SOP. Open one for the details.', OPT),
+        S('#w124fund .w124evs', 'Season by season', 'Each card shows its photo, the partners, the target, where it stands and links to its project board and SOP. Open one for its page: the photos, past fundraisers like it (their posters open full size) and the details.', OPT),
         S('#w124fund .w124ideas', 'Ideas', 'Ideas parked for later. Open one to give it a season and a date.', OPT),
-        S('#w124fund [data-w124fadd]', 'Add and update', 'Leaders and the fundraising team add events, edit them and record what each one raised once it is done.', OPT)
+        S('#w124fund [data-w124fadd]', 'Add and update', 'Leaders and the fundraising team add events, edit them (a cover photo from the Photo library, the photos shown and past fundraisers like it) and record what each one raised once it is done.', OPT)
       ] };
     } catch (e) { /* fine */ }
   }

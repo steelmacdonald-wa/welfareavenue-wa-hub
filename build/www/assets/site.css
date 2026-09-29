@@ -283,3 +283,22 @@ details.more>.in{padding:0 20px 20px}
 /* Fundraisers coming up (wave162) */
 .fundnext{display:grid;gap:18px;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));list-style:none;margin:0;padding:0}
 .fundnext .card p:last-child{margin-bottom:0}
+/* wave168: the events page opens on a photo; fundraisers coming up show their last edition (or the brand's E); posters we do not have are branded */
+.page-hero.photo{position:relative;overflow:hidden;padding:150px 0 60px;min-height:440px;display:flex;align-items:flex-end}
+.page-hero.photo .ph-img{position:absolute;inset:0}
+.page-hero.photo .ph-img img{width:100%;height:100%;object-fit:cover;display:block}
+.page-hero.photo .ph-img img.pos-top{object-position:50% 30%}
+.page-hero.photo .ph-img:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.35) 0%,rgba(16,63,57,.6) 45%,rgba(16,63,57,.94) 100%)}
+.page-hero.photo .wrap{position:relative;width:100%}
+.page-hero.photo h1{text-shadow:0 2px 24px rgba(0,0,0,.25)}
+.page-hero.photo .doodle{position:absolute;right:max(16px,calc(50% - 560px));top:96px;width:64px;height:auto;transform:rotate(12deg);z-index:1}
+@media (max-width:759px){.page-hero.photo{padding-top:120px;min-height:380px}.page-hero.photo .doodle{width:48px;top:84px}}
+.fundnext .card.media{padding-top:0;overflow:hidden;display:flex;flex-direction:column}
+.fundnext .cm{position:relative;margin:0 -24px 18px;aspect-ratio:16/10;overflow:hidden;background:var(--green)}
+.fundnext .cm img{width:100%;height:100%;object-fit:cover;display:block}
+.fundnext .cm .tag{position:absolute;left:12px;bottom:10px;font-family:var(--hf);font-weight:600;font-size:14px;letter-spacing:1px;text-transform:uppercase;background:rgba(16,63,57,.82);color:var(--cream);border-radius:999px;padding:4px 12px}
+.fundnext .cm.brand{display:flex;align-items:flex-end;justify-content:space-between;padding:0 20px 18px;background:linear-gradient(135deg,#1d5a51 0%,var(--green) 100%);color:var(--gold)}
+.fundnext .cm.brand .e{width:96px;height:auto}
+.fundnext .cm.brand .s{width:40px;height:auto;align-self:flex-start;margin-top:18px;transform:rotate(12deg)}
+.posters .ph{flex-direction:column;align-items:flex-start;justify-content:space-between;background:linear-gradient(135deg,#1d5a51 0%,var(--green) 100%)}
+.posters .ph .e{width:84px;height:auto;color:var(--gold)}

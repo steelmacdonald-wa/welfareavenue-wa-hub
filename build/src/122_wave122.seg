@@ -2088,7 +2088,7 @@
       S('#photos .w116ptop', 'Photo library', 'Our photos, labelled and cleared for use. Each one says what it is cleared for before you post it.'),
       S('#w118cq || #photos .srch', 'Search', 'Search titles, alt text, captions, tags, places, sets and years.', OPT),
       S('#w118cscene', 'Scene and order', 'Filter by scene (serving, volunteers, food, media, portraits, setup) and choose the order.', OPT),
-      S('#photos .chips', 'Cleared for use', 'Ready is fine for public use; Crop first names the edge to crop; Consent needed means someone recognizable has to agree before public use.', OPT),
+      S('#photos .chips', 'Cleared for use', 'Ready is fine for public use (and only Ready photos can be a fundraising event\u2019s cover or a form\u2019s photo); Crop first names the edge to crop; Consent needed means someone recognizable has to agree before public use.', OPT),
       S('#photos .grid', 'The photos', 'Grouped by year, newest first. Open a photo for its alt text, caption and downloads, or to use it in the Create studio or a post.', OPT),
       S('#photos .add', 'Add photos', 'Staff can add photos: the Hub makes three sizes, strips location data and suggests labels for you to check.', OPT)
     ] },

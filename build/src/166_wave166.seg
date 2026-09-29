@@ -42,6 +42,8 @@
     return d === 0 ? 'today' : (d === 1 ? 'yesterday' : d + ' days ago');
   }
   function initials(n) { return String(n || '?').trim().split(/\s+/).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join(''); }
+  /* wave168: a person's photo on the leads' card, only from the Hub's own storage (Slack and Google photos are copied there) */
+  function ownImg(u) { return /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\/storage\/v1\/object\/public\/[\w./%-]+$/.test(String(u || '')); }
   function teamName(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
   function meName() { try { var m = (typeof wa28Me === 'function') ? wa28Me() : null; return (m && m.name) || ''; } catch (e) { return ''; } }
 
@@ -432,7 +434,7 @@
     }).join('');
     var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
     return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
-      + '<div class="w166top"><div class="w166av">' + E(initials(p.name)) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
+      + '<div class="w166top"><div class="w166av"' + (ownImg(p.avatar_url) ? ' style="background:' + GREEN + ' url(\'' + E(p.avatar_url) + '\') center/cover"' : '') + '>' + (ownImg(p.avatar_url) ? '' : E(initials(p.name))) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
       + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
       + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
       + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')

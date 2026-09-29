@@ -18,7 +18,7 @@
   function feCard(f) {
     var proj = f.project_id ? C.projects.filter(function (p) { return String(p.id) === String(f.project_id); })[0] : null;
     var tg = targetText(f);
-    return '<div class="w124fe" data-w124fund="' + f.id + '" tabindex="0" role="button"><div class="hd">' + stTag(f.status) + '<span class="sp"></span><span class="when">' + I('clock') + E(fundWhen(f)) + '</span></div>'
+    return '<div class="w124fe" data-w124fund="' + f.id + '" tabindex="0" role="button">' + cardCover(f) + '<div class="hd">' + stTag(f.status) + '<span class="sp"></span><span class="when">' + I('clock') + E(fundWhen(f)) + '</span></div>'
       + '<h4>' + E(f.title) + '</h4>'
       + (f.partners ? '<div class="pt"><b>Partners:</b> ' + E(f.partners) + '</div>' : '')
       + (tg || f.raised != null ? '<div class="tg">' + (tg ? '<span>' + E(tg) + '</span>' : '') + (f.raised != null ? '<span class="raised">' + (tg ? '· ' : '') + 'raised ' + E(money(f.raised)) + '</span>' : '') + '</div>' : '')

@@ -366,6 +366,16 @@ FUND_PHOTOS = [  # (key, source under ev-src, caption, alt)
 ]
 EVENT_PHOTO = {14: '2025-12-gift-baskets-bags', 15: '2026-08-flag-football-team-in-yellow'}  # past events without a poster
 
+# wave168 (29/09/26): the events page opens on a photo, and each fundraiser coming up shows its last edition's photo when we
+# have one (said so on the photo), or the brand's green with the E that moves when we do not. Same order as FUNDRAISERS_NEXT.
+EVENTS_HERO = '2026-08-flag-football-celebration'
+FUND_NEXT_MEDIA = [
+    None,
+    ('2025-12-gift-baskets-the-crew', {'en': 'The 2025 drive', 'fr': 'La collecte 2025'}),
+    ('2026-08-flag-football-team-in-yellow', {'en': 'The 2026 tournament', 'fr': 'Le tournoi 2026'}),
+    None,
+]
+
 # Fundraisers coming up (wave162, 28/09/26), from the Hub's fundraising calendar (fund_events 3, 4, 13 and 14, the
 # 2026-27 plan). Only the recurring ones with a season set; dates firm up closer to each event.
 FUNDRAISERS_NEXT = [

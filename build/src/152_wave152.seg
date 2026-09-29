@@ -2046,6 +2046,34 @@
   LOADERS.cfields = function () { return db.from('crm_fields').select('*').order('sort', { ascending: true }).order('id', { ascending: true }); };
   LOADERS.fevents = function () { return db.from('volunteer_events').select('id,event_date,status,kind,location,title').eq('status', 'planned').gte('event_date', today()).order('event_date', { ascending: true }).limit(24); };
   var FKIND = { volunteer: ['Volunteer application', TEAL], newsletter: ['Newsletter sign-up', PURPLE], general: ['General', MUTED] };
+  /* wave168: every form's page opens with a photo from the Photo library behind the logo and the title (crm_forms.cover_photo_id;
+     none uses the kind's default, as form-submit does) */
+  var COVER_KIND = { volunteer: 9, newsletter: 3, general: 26 };
+  var PSTORE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
+  var LOCKUP_IMG = PSTORE + 'brand/logo-lockup-cream-600.png';
+  var EYEBROW = { en: { volunteer: 'Volunteer with us', newsletter: 'Stay in touch', general: 'Welfare Avenue' }, fr: { volunteer: 'B\u00e9n\u00e9volat', newsletter: 'Restez au courant', general: 'Welfare Avenue' } };
+  function photoById(id) { return (S.wphotos || []).filter(function (p) { return String(p.id) === String(id); })[0] || null; }
+  function coverOf(f) { return (f && f.cover_photo_id ? photoById(f.cover_photo_id) : null) || photoById(COVER_KIND[f && f.kind] || 26); }
+  function loadPhotos168() {
+    if (S.wphotos || S.wphotosBusy) return;
+    S.wphotosBusy = true;
+    Promise.resolve(db.from('wa_photos').select('id,key,title,alt_text,path_web,path_thumb,focal_x,focal_y,orientation,usage,scene,is_pick,taken_on').eq('usage', 'ready')).then(function (r) {
+      var rows = ((r && r.data) || []).filter(function (p) { return p.path_web && p.orientation !== 'portrait'; });
+      rows.sort(function (a, b) { return (b.is_pick ? 1 : 0) - (a.is_pick ? 1 : 0) || String(b.taken_on || '').localeCompare(String(a.taken_on || '')); });
+      S.wphotos = rows; S.wphotosBusy = false; if (FM.f) paint();
+    }).catch(function () { S.wphotos = []; S.wphotosBusy = false; });
+  }
+  function coverPickHtml(f) {
+    loadPhotos168();
+    var cur = f.cover_photo_id ? photoById(f.cover_photo_id) : null, shown = coverOf(f);
+    var h = '<h4 class="w156h4">Cover photo</h4><div class="w156box w168cov">';
+    if (shown) h += '<div class="w168now"><span class="im" style="background-image:url(\'' + E(PSTORE + (shown.path_thumb || shown.path_web)) + '\')"></span><div><b>' + E(shown.title || '') + '</b><span class="m">' + (cur ? 'Chosen for this form' : 'The default for ' + (f.kind === 'volunteer' ? 'a volunteer' : f.kind === 'newsletter' ? 'a newsletter' : 'a general') + ' form') + '</span>'
+      + (cur ? '<button class="w152btn ghost" data-w168cov="">Use the default</button>' : '') + '</div></div>';
+    if (!S.wphotos) return h + '<p class="m">Loading the Photo library\u2026</p></div>';
+    return h + '<div class="w168grid" role="list">' + S.wphotos.map(function (p) {
+      return '<button type="button" role="listitem" class="w168th' + (shown && p.id === shown.id ? ' on' : '') + '" data-w168cov="' + E(p.id) + '" title="' + E(p.title || '') + '" aria-label="' + E('Use ' + (p.title || 'this photo')) + '" style="background-image:url(\'' + E(PSTORE + (p.path_thumb || p.path_web)) + '\')"></button>';
+    }).join('') + '</div><p class="m">From the Photo library, the photos ready to use. It sits behind the logo and the title at the top of the page.</p></div>';
+  }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
   var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (MTL volunteering)']];
@@ -2164,7 +2192,7 @@
       '<label class="w155lb">Web address<span class="w156url">hub.welfareavenue.com/f/<input class="w152in" data-w156k="slug" value="' + E(f.slug) + '"' + (live ? ' disabled title="Live forms keep their address; close the form to change it"' : '') + ' aria-label="The last part of the web address"></span></label>' +
       '<div class="w155two"><label class="w155lb">Kind<select class="w152sel" data-w156k="kind">' + kinds + '</select></label>' +
       '<label class="w155lb">Language<select class="w152sel" data-w156k="lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></label></div>' +
-      inp('intro', 'What it is for (under the title)', 'A sentence or two', true) +
+      inp('intro', 'What it is for (under the title)', 'A sentence or two', true) + coverPickHtml(f) +
       (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to MTL volunteering (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
         '<div class="w155two"><label class="w155lb">City written on new contacts<input class="w152in" data-w156set="city" value="' + E(f.settings.city || '') + '" placeholder="Montreal"></label>' +
         '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="toronto"></label></div></div>' :
@@ -2190,6 +2218,12 @@
     return '';
   }
   /* ---------- the preview: the questions as people will see them ---------- */
+  function bandHtml168(f) {
+    var c = coverOf(f), ey = (EYEBROW[f.lang] || EYEBROW.en)[f.kind] || 'Welfare Avenue';
+    var bg = c ? ' style="background-image:url(\'' + E(PSTORE + c.path_web) + '\');background-position:' + Math.round(100 * (c.focal_x == null ? 0.5 : c.focal_x)) + '% ' + Math.round(100 * (c.focal_y == null ? 0.5 : c.focal_y)) + '%"' : '';
+    return '<div class="w156sheet"><div class="w156band"' + bg + '><div class="w168top"><img src="' + LOCKUP_IMG + '" alt="Welfare Avenue"><img class="w168star" src="' + PSTORE + 'brand/doodle-star-gold.png" alt=""></div>'
+      + '<div class="w168ey">' + E(ey) + '</div><div class="w156t">' + E(f.title || 'Untitled form') + '</div></div>';
+  }
   function previewHtml156() {
     var f = FM.f, evs = S.fevents || [];
     var one = function (q) {
@@ -2205,7 +2239,7 @@
       return head + '<input class="w152in" disabled>';
     };
     return '<div class="w154card w156pv"><h3>' + I('eye') + ' Preview</h3>' + (f.status !== 'published' ? '<p class="m">Not live yet: only the team sees this form.</p>' : '<p class="m">Live at <a href="' + E(FORM_HOST + f.slug) + '" target="_blank" rel="noopener">hub.welfareavenue.com/f/' + E(f.slug) + '</a>.</p>') +
-      '<div class="w156sheet"><div class="w156band">Welfare Avenue</div><div class="w156page"><div class="w156t">' + E(f.title || 'Untitled form') + '</div><i class="w156rule"></i>' + (f.intro ? '<p>' + E(f.intro) + '</p>' : '') +
+      bandHtml168(f) + '<div class="w156page"><i class="w156rule"></i>' + (f.intro ? '<p>' + E(f.intro) + '</p>' : '') +
       f.questions.map(function (q) { return '<div class="w156pq">' + one(q) + '</div>'; }).join('') +
       (f.consent && f.consent.ask ? '<div class="w156pq w156pcons"><span class="w156pb">' + E(f.consent.label || CONSENT_DEFAULT) + (f.consent.required ? '<span class="w156req">*</span>' : '') + '</span></div>' : '') +
       '<span class="w156send">' + (f.lang === 'fr' ? 'Envoyer' : 'Send') + '</span></div></div></div>';
@@ -2317,7 +2351,7 @@
       var tags = String(f._tags || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
       var row = { slug: f.slug, title: String(f.title).trim(), intro: String(f.intro || '').trim() || null, lang: f.lang === 'fr' ? 'fr' : 'en', kind: FKIND[f.kind] ? f.kind : 'general',
         questions: cleanQuestions(f.questions), consent: f.consent.ask ? { ask: true, required: !!f.consent.required, label: String(f.consent.label || '').trim() || CONSENT_DEFAULT } : { ask: false },
-        thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), updated_by: actor() };
+        thank_you: String(f.thank_you || '').trim() || null, settings: Object.assign({}, f.settings, { tags: tags }), cover_photo_id: f.cover_photo_id ? Number(f.cover_photo_id) : null, updated_by: actor() };
       if (row.kind !== 'volunteer') delete row.settings.volunteer_record;
       var q = f.id ? db.from('crm_forms').update(row).eq('id', f.id).select().single() : db.from('crm_forms').insert(Object.assign({ status: 'draft', created_by: actor() }, row)).select().single();
       return Promise.resolve(q).then(function (r) {
@@ -2384,8 +2418,14 @@
     + '.w156ck{display:flex;align-items:center;gap:7px;font-size:13.5px;margin:0 0 8px;cursor:pointer;}.w156ck input{width:16px;height:16px;accent-color:' + GREEN + ';}.w156qh .w156ck{margin:0;}'
     + '.w156box{border:1px dashed rgba(16,63,57,.2);border-radius:12px;padding:10px 12px;margin:0 0 12px;}.w156h4{font-family:' + HEAD + ';font-size:17px;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:18px 0 8px;}'
     + '.w156url{display:flex;align-items:center;gap:4px;font-size:14px;font-weight:500;letter-spacing:0;text-transform:none;color:var(--wa-muted,' + MUTED + ');}.w156url .w152in{flex:1;min-width:0;}'
-    + '.w156sheet{border-radius:16px;overflow:hidden;border:1px solid rgba(16,63,57,.12);background:rgba(16,63,57,.05);}.w156band{background:' + GREEN + ';color:' + CREAM + ';font-family:' + HEAD + ';font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:14px 16px 26px;}'
-    + '.w156page{background:' + CREAM + ';margin:-14px 12px 12px;border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(16,63,57,.08);}.w156t{font-family:' + HEAD + ';font-weight:700;font-size:24px;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;}'
+    + '.w156sheet{border-radius:16px;overflow:hidden;border:1px solid rgba(16,63,57,.12);background:rgba(16,63,57,.05);}.w156band{position:relative;background:' + GREEN + ' center/cover no-repeat;color:' + CREAM + ';padding:12px 16px 30px;min-height:150px;display:flex;flex-direction:column;}'
+    + '.w156band:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.5),rgba(16,63,57,.92));}.w156band > *{position:relative;}'
+    + '.w168top{display:flex;align-items:center;justify-content:space-between;}.w168top img{height:30px;width:auto;}.w168top .w168star{height:30px;transform:rotate(12deg);}'
+    + '.w168ey{margin-top:auto;padding-top:18px;font-size:10.5px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + GOLD + ';}.w156band .w156t{color:' + CREAM + ';font-size:26px;}'
+    + '.w168cov .w168now{display:flex;gap:10px;align-items:center;margin:0 0 10px;}.w168cov .w168now .im{flex:0 0 96px;height:60px;border-radius:10px;background:' + GREEN + ' center/cover;}.w168cov .w168now b{display:block;font-size:13.5px;}.w168cov .w168now .w152btn{margin-top:6px;}'
+    + '.w168grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:6px;max-height:232px;overflow-y:auto;padding:2px;}'
+    + '.w168th{aspect-ratio:3/2;border:2px solid transparent;border-radius:9px;background:' + GREEN + ' center/cover;cursor:pointer;padding:0;}.w168th:hover{border-color:' + GOLD + ';}.w168th.on{border-color:' + GOLD + ';box-shadow:0 0 0 2px ' + GREEN + ';}.w168th:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
+    + '.w156page{background:' + CREAM + ';margin:-18px 12px 12px;border-radius:14px;padding:18px;box-shadow:0 6px 18px rgba(16,63,57,.08);position:relative;}.w156t{font-family:' + HEAD + ';font-weight:700;font-size:24px;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;}'
     + '.w156rule{display:block;width:44px;height:3px;border-radius:3px;background:' + GOLD + ';margin:8px 0 10px;}.w156page p{font-size:13.5px;margin:0 0 12px;color:#3d3c39;}'
     + '.w156pq{margin:0 0 12px;}.w156pl{font-weight:600;font-size:13.5px;margin-bottom:4px;}.w156req{color:' + FLAG + ';margin-left:2px;}.w156pc{display:flex;flex-wrap:wrap;gap:6px;}'
     + '.w156pr,.w156pb{border:1px solid rgba(16,63,57,.18);border-radius:10px;padding:6px 10px;font-size:13px;background:' + CREAM + ';}.w156pr:before{content:"\\25CB  ";color:' + MUTED + ';}.w156pb:before{content:"\\2610  ";color:' + MUTED + ';}'
@@ -2413,6 +2453,7 @@
     if ((el = t.closest('[data-w156qadd]'))) { e.preventDefault(); f.questions.push({ id: '', type: 'text', label: '', required: false, to: '', _opts: '' }); paint(); var qs = document.querySelectorAll('#crm [data-w156qi] [data-w156qk="label"]'); if (qs.length) qs[qs.length - 1].focus(); return; }
     if ((el = t.closest('[data-w156qmv]'))) { e.preventDefault(); var i = qAt(el), j = i + Number(el.getAttribute('data-w156qmv')); if (i < 0 || j < 0 || j >= f.questions.length) return; var tmp = f.questions[i]; f.questions[i] = f.questions[j]; f.questions[j] = tmp; paint(); return; }
     if ((el = t.closest('[data-w156qdel]'))) { e.preventDefault(); var k = qAt(el); if (k >= 0) f.questions.splice(k, 1); paint(); return; }
+    if ((el = t.closest('[data-w168cov]'))) { e.preventDefault(); var cv = el.getAttribute('data-w168cov'); f.cover_photo_id = cv ? Number(cv) : null; paint(); return; }
     if ((el = t.closest('[data-w156save]'))) { e.preventDefault(); saveForm().then(function (id) { if (id) { FM.msg = 'Saved.'; paint(); } }); return; }
     if ((el = t.closest('[data-w156pub]'))) { e.preventDefault(); FM.confirm = 'publish'; paint(); return; }
     if ((el = t.closest('[data-w156pubok]'))) { e.preventDefault(); el.disabled = true; setStatus('published'); return; }
@@ -2428,6 +2469,8 @@
     if (t.hasAttribute('data-w156k')) {
       key = t.getAttribute('data-w156k'); f[key] = t.value;
       if (key === 'kind' && e.type === 'change') { if (t.value === 'volunteer' && f.settings.volunteer_record == null) f.settings.volunteer_record = true; paint(); }
+      else if (key === 'lang' && e.type === 'change') paint();
+      else if (key === 'title' || key === 'intro') previewSoon156();
       return;
     }
     if (t.hasAttribute('data-w156set')) { key = t.getAttribute('data-w156set'); f.settings[key] = t.type === 'checkbox' ? t.checked : t.value; return; }
@@ -3985,7 +4028,7 @@
         T('#crm .w152tabs [data-w152go="#crm/email"]', 'Email', 'The Email tab (wave154): sending from welfareavenue.com, the templates in the brand, who can be emailed today, and every message the Hub sent with what happened to it. A contact\u2019s page has Send an email from the Hub.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/lists"]', 'Lists', 'Lists (wave155): groups of conditions (and inside a group, or between groups) over type, role, servings, gifts, tags, city, email permission and email activity. A live list follows the data; a fixed one keeps its people.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/campaigns"]', 'Campaigns', 'Campaigns (wave155): one message to a list, person by person, through the consent rule, at up to 80 a day on Resend\u2019s free plan. Preview, send yourself a test, see who gets it and why others are held back, then follow the opens and clicks.', OPT),
-        T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM\u2019s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it.', OPT),
+        T('#crm .w152tabs [data-w152go="#crm/forms"]', 'Forms', 'Forms (wave156): the CRM\u2019s own forms at hub.welfareavenue.com/f/. Each question saves to a place in the CRM (name, email, phone, volunteer roles, a sign-up for each date picked, a custom field), the email permission is kept with the words people agreed to, and every answer is listed with what the Hub did with it. Each form opens on a photo from the Photo library behind our logo (wave168: pick it under Cover photo, or keep the default for its kind); the preview shows it.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/gifts"]', 'Gifts', 'Gifts (wave153, recording since wave158): every gift with its donor, campaign and receipt. Record a gift that came by cheque, e-transfer or cash; say when it is a registration or a ticket and what the person received, so the receipt shows the right eligible amount. Receipts shows the settings, who is owed a receipt for the year and the receipts the Hub issued; once an admin turns receipts on (the treasurer and Steel decide), admins issue them with their PDF, one per donor at year-end, and replace or cancel them with the reason.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/automations"]', 'Automations', 'Automations (wave157): when someone fills in a form, gets a tag, gives, or has a serving coming, the Hub runs the steps for them: emails through the permission rule (8 am to 8 pm), waits, a yes and a no path on an opened email, tags, a task on a team\u2019s board, a notice. They start as drafts; Try it on me runs one on your own contact.', OPT),
         T('#crm .w152tabs [data-w152go="#crm/reports"]', 'Reports', 'Reports (wave160): a fiscal year at a glance, against the year before. Gifts by month, kind, campaign and size; donors who gave for the first time, again, or not yet this year (made into a list in one click); volunteers new and returning, by month and role; email permission today. The year in a few lines is ready to copy for the board, and the page prints.', OPT),

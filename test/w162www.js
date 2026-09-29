@@ -215,6 +215,17 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     await page.waitForTimeout(300);
     const brokenF = await page.evaluate(() => Array.from(document.querySelectorAll('#fundphotos img, #past img')).filter(i => !(i.complete && i.naturalWidth > 0)).map(i => i.getAttribute('src')));
     ok(!brokenF.length, 'events: every fundraiser photo and poster loads ' + brokenF.join(' '));
+    /* wave168: the page opens on a photo; fundraisers coming up show their last edition or the brand's E; a past event with no poster is branded */
+    const w168 = await page.evaluate(() => {
+      const hero = document.querySelector('.page-hero.photo'), him = hero && hero.querySelector('.ph-img img');
+      const cards = Array.from(document.querySelectorAll('#fundraisers .fundnext li')).map(li => { const cm = li.querySelector('.cm'); const im = cm && cm.querySelector('img:not(.s)'); return { brand: !!(cm && cm.classList.contains('brand')), e: !!(cm && cm.querySelector('svg.e')), img: im ? { alt: im.alt, ok: im.complete && im.naturalWidth > 0, src: im.getAttribute('src') } : null, tag: (cm && cm.querySelector('.tag') || {}).textContent || '' }; });
+      const ph = document.querySelector('#past .ph');
+      return { hero: !!hero, heroImg: him && { alt: him.alt, ok: him.complete && him.naturalWidth > 0, eager: him.getAttribute('fetchpriority') === 'high' }, doodle: !!(hero && hero.querySelector('img.doodle')), h1: (hero && hero.querySelector('h1') || {}).textContent, cards, ph: ph && { e: !!ph.querySelector('svg.e'), t: ph.textContent.trim() } };
+    });
+    ok(w168.hero && w168.heroImg && w168.heroImg.ok && w168.heroImg.eager && /celebrates/.test(w168.heroImg.alt) && w168.doodle && w168.h1 === 'Events and photos', 'events (wave168): opens on a photo with the star, the title over it ' + JSON.stringify(w168.heroImg));
+    ok(w168.cards.length === 4 && w168.cards[0].brand && w168.cards[0].e && !w168.cards[0].img && w168.cards[1].img && w168.cards[1].img.ok && /gift-baskets-the-crew/.test(w168.cards[1].img.src) && w168.cards[1].tag === 'The 2025 drive' && w168.cards[1].img.alt.length > 20
+      && w168.cards[2].img && /flag-football-team-in-yellow/.test(w168.cards[2].img.src) && w168.cards[2].tag === 'The 2026 tournament' && w168.cards[3].brand && w168.cards[3].e, 'events (wave168): fundraisers coming up with last year\'s photo (said so) or the brand\'s E ' + JSON.stringify(w168.cards));
+    ok(w168.ph && w168.ph.e && w168.ph.t === 'Rally Paper 2026', 'events (wave168): a past event without a poster is branded with the E ' + JSON.stringify(w168.ph));
     const past = await page.evaluate(() => Array.from(document.querySelectorAll('#past li .t')).slice(0, 3).map(t => t.textContent));
     ok(past[0] === 'Rally Paper 2026' && /Flag Football Tournament/.test(past[1]) && past[2] === 'Holiday Gift Baskets', 'events: newest past events first (' + past.join(' | ') + ')');
     const dates = await page.$$eval('#past .m', ms => ms.map(m => m.textContent));

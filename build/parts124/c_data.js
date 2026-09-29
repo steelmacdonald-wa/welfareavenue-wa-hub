@@ -32,13 +32,18 @@
         q(db.from('hub_settings').select('value').eq('key', 'fund_goals').maybeSingle()),
         staffOk() ? q(db.from('hub_birthdays').select('*')) : Promise.resolve({ data: [] }),
         staffOk() ? q(db.from('projects').select('id, name, department, status, parent_id').eq('department', 'fundraising')) : Promise.resolve({ data: [] }),
-        staffOk() || boardOk() ? q(db.from('board_meetings').select('id, meets_at, kind, title, status, agenda_url, notes_url, note').order('meets_at')) : Promise.resolve({ data: [] })
+        staffOk() || boardOk() ? q(db.from('board_meetings').select('id, meets_at, kind, title, status, agenda_url, notes_url, note').order('meets_at')) : Promise.resolve({ data: [] }),
+        /* wave168: the Photo library and the website's past fundraisers, for the events' photos */
+        staffOk() || boardOk() ? q(db.from('wa_photos').select('id, key, title, alt_text, path_web, path_thumb, focal_x, focal_y, taken_on, series, usage, orientation')) : Promise.resolve({ data: [] }),
+        staffOk() || boardOk() ? q(db.from('site_events').select('id, kind, title, starts_at, poster_url, hero_url').eq('kind', 'fundraising').order('starts_at')) : Promise.resolve({ data: [] })
       ]);
       if (a[0].data) C.fund = a[0].data;
       C.goals = (a[1].data && a[1].data.value) || C.goals || { minimum: 10000, healthy: 15000, target: 20000, notes: [], planning: [] };
       if (a[2].data) C.bdays = a[2].data;
       if (a[3].data) C.projects = a[3].data;
       if (Array.isArray(a[4].data)) C.boardMeets = a[4].data.filter(function (m) { return m && m.meets_at && lower(m.status) !== 'cancelled'; });
+      if (Array.isArray(a[5].data)) C.photos = a[5].data;
+      if (Array.isArray(a[6].data)) C.siteEv = a[6].data;
       C.loadedBase = Date.now();
     })();
     try { await C.loadingBase; } finally { C.loadingBase = null; }

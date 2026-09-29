@@ -149,6 +149,23 @@ def page_hero(over, title, lede):
     return ('<section class="page-hero"><div class="wrap"><p class="over">%s</p><h1>%s</h1>%s</div></section>\n'
             % (e(over), e(title), ('<p class="lede">%s</p>' % e(lede)) if lede else ''))
 
+def e_svg(cls='e'):
+    # the brand's E (the one that moves), drawn in the text colour; decorative
+    return '<svg class="%s" viewBox="0 0 825 345" aria-hidden="true" focusable="false"><path fill="currentColor" d="%s"/></svg>' % (cls, E_PATH)
+
+DOODLE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/'
+
+def page_hero_photo(over, title, lede, key, alt, pos='center'):
+    # wave168: a page that opens on a photo behind the green, with a gold star (no inline style: the crop is a class)
+    return ('<section class="page-hero photo"><div class="ph-img">%s</div><img class="doodle" src="%sdoodle-star-gold.png" alt="" width="64" height="68">'
+            '<div class="wrap"><p class="over">%s</p><h1>%s</h1>%s</div></section>\n'
+            % (img(key, alt, '100vw', cls='pos-' + pos, eager=True), DOODLE, e(over), e(title), ('<p class="lede">%s</p>' % e(lede)) if lede else ''))
+
+def fund_alt(key, lang):
+    for k, _, cap, alt in C.FUND_PHOTOS:
+        if k == key: return alt[lang]
+    return ''
+
 def quote(q, lang):
     tr = q['tr'][lang]
     return ('<figure class="quote"><blockquote lang="%s"><p>%s</p></blockquote>%s<figcaption><b>%s</b>, %s</figcaption></figure>'
@@ -424,13 +441,21 @@ def events(lang):
             pic = '<button type="button" data-full="%s" data-title="%s" data-caption="%s" data-alt="%s">%s</button>' % (
                 big(name), e(title[lang]), e(meta + '. ' + note[lang]), e(title[lang]), img(name, title[lang], '(min-width: 1080px) 25vw, (min-width: 760px) 33vw, 50vw'))
         else:
-            pic = '<div class="ph" aria-hidden="true">%s</div>' % e(title[lang])
+            pic = '<div class="ph" aria-hidden="true">%s<span>%s</span></div>' % (e_svg(), e(title[lang]))
         posters.append('<li>%s<p class="t">%s</p><p class="m">%s</p><p class="fine mb0">%s</p></li>' % (pic, e(title[lang]), e(meta), e(note[lang])))
-    body = (page_hero(T['over'], T['title'], T['lede']) +
+    def fund_card(i, item):
+        ti, w, no = item
+        m = C.FUND_NEXT_MEDIA[i] if i < len(C.FUND_NEXT_MEDIA) else None
+        if m:
+            top = '<div class="cm">%s<span class="tag">%s</span></div>' % (img(m[0], fund_alt(m[0], lang), '(min-width: 1080px) 25vw, (min-width: 560px) 50vw, 100vw'), e(m[1][lang]))
+        else:
+            top = '<div class="cm brand" aria-hidden="true">%s<img class="s" src="%s%s" alt="" width="40" height="42" loading="lazy"></div>' % (e_svg(), DOODLE, ['doodle-star-gold.png', 'doodle-flowers-gold.png', 'doodle-heart-purple.png', 'doodle-asterisk-cream.png'][i % 4])
+        return '<li class="card media">%s<p class="num">%s</p><h3>%s</h3><p>%s</p></li>' % (top, e(w[lang]), e(ti[lang]), e(no[lang]))
+    body = (page_hero_photo(T['over'], T['title'], T['lede'], C.EVENTS_HERO, fund_alt(C.EVENTS_HERO, lang), 'top') +
         '<section class="band on-cream"><div class="wrap grid2"><div><h2>%s</h2>%s%s</div><div>%s</div></div></section>\n'
         % (e(T['next_h']), rule(), upcoming_box(lang, 'all', 6, 'volunteer#apply', T['next_note']), img('2023-10-autumn-crew-behind-the-table', C.PHOTOS_NEW[9][2][lang], eager=True)) +
         '<section class="band on-green" id="fundraisers"><div class="wrap"><h2>%s</h2>%s<ul class="fundnext mt2">%s</ul><div class="cta mt3"><p class="lede mb0">%s</p><div class="btns">%s</div></div></div></section>\n'
-        % (e(T['fund_h']), rule(), ''.join('<li class="card"><p class="num">%s</p><h3>%s</h3><p>%s</p></li>' % (e(w[lang]), e(ti[lang]), e(no[lang])) for ti, w, no in C.FUNDRAISERS_NEXT),
+        % (e(T['fund_h']), rule(), ''.join(fund_card(i, x) for i, x in enumerate(C.FUNDRAISERS_NEXT)),
            e(T['fund_p']), btn(url('contact', lang), T['fund_btn'])) +
         '<section class="band on-soft" id="photos"><div class="wrap"><h2>%s</h2>%s<p class="maxw">%s</p><div class="gallery mt2" data-lb-group>%s</div></div></section>\n'
         % (e(T['photos_h']), rule(), e(T['photos_p']), gal) +

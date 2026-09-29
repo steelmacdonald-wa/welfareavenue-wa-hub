@@ -530,7 +530,7 @@ Master onboarding checklist in sections WEEK 1 to WEEK 4 and 60 DAYS, originally
 - `parent_id`: Parent step (onboarding_template.id) for sub-steps.
 - `content_pending`: True when the step's content is still to be written.
 - `academy_path`: wave166: the step is done in the Avenue Academy, by finishing a Learning Avenue: an academy_paths key, 'team' (one of the avenues of the person's team, or any avenue when their team has none) or 'any' (an avenue besides the three everyone does and the one that counted for 'team'). The step ticks itself (wa166_onb_sync, trg_wa166_tp_onb).
-- `training_id`: wave166: the step is done in the Avenue Academy, by finishing this module (trainings.id). The step ticks itself (wa166_onb_sync, trg_wa166_tp_onb).
+- `training_id`: wave166: the step is done in the Avenue Academy, by finishing this module (trainings.id). The step ticks itself (wa166_onb_sync, trg_wa166_tp_onb). wave167: each week opens with a lesson step (wa167w1 to wa167w4) that ticks itself when its knowledge check is passed.
 
 ### `onboarding_update_acks`
 
@@ -830,6 +830,9 @@ Fundraising events calendar (plan 2026-27) with timing, partners, targets, statu
 - `sop_training_id`: trainings.id of the SOP lesson for the event (a trainings row with kind = sop). Foreign key (on delete set null).
 - `source`: plan or plan + tasks (how the row was seeded).
 - `lead`: Unused (NULL in every row).
+- `cover_photo_id`: wave168: the event's cover (wa_photos.id): on its card in the Events calendar and at the top of its page. A photo from an earlier edition says so.
+- `photo_series`: wave168: the Photo library series shown as the event's photos (wa_photos.series): its own, or last year's edition.
+- `past_site_events`: wave168: the website's past fundraisers like this one (site_events.id), shown with their posters on the event's page.
 
 ### `finance_budgets`
 
@@ -1457,6 +1460,7 @@ The CRM's forms (wave156), shown to the public at hub.welfareavenue.com/f/<slug>
 - `questions`: The questions in order: {"id", "type" (text, long_text, email, phone, choice, multi, yes_no, date, number, serving_dates), "label", "help", "required", "options", "to"}. to says where the answer is saved: contact.first_name, contact.last_name, contact.email, contact.phone, contact.city, contact.province, contact.postal_code, contact.address, contact.language, volunteer.roles, volunteer.dates (serving_dates: a sign-up on each picked event's roster), field:<crm_fields.key>, note (the timeline entry) or nothing (kept on the submission only).
 - `consent`: The email permission question: {"ask": true, "required": false, "label": the words shown next to the box}. A ticked box records express consent with those words (CASL); the box is never ticked in advance.
 - `settings`: volunteer_record (true: an application also creates or updates the MTL volunteering record), serving_location (the events a serving_dates question offers), city (written on new contacts), tags (added to the contact), confirm and confirm_template (a confirmation email through mail-send; off unless Steel turns it on).
+- `cover_photo_id`: wave168: the photo at the top of the form's public page (wa_photos.id); none uses the default for the form's kind (form-submit).
 
 ### `crm_form_submissions`
 

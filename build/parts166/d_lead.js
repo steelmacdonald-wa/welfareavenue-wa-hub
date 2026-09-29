@@ -68,7 +68,7 @@
     }).join('');
     var sub = [p.title, teamName(p.department), p.via].filter(Boolean).map(E).join(' &middot; ');
     return '<div class="w166p" data-w166p="' + E(p.onboarding_id) + '">'
-      + '<div class="w166top"><div class="w166av">' + E(initials(p.name)) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
+      + '<div class="w166top"><div class="w166av"' + (ownImg(p.avatar_url) ? ' style="background:' + GREEN + ' url(\'' + E(p.avatar_url) + '\') center/cover"' : '') + '>' + (ownImg(p.avatar_url) ? '' : E(initials(p.name))) + '</div><div class="w166who"><b>' + E(p.name) + '</b><span>' + sub + '</span></div>'
       + '<div class="w166day">Day ' + E(p.day) + '<span>' + E(weekOf(p.day)) + '</span></div></div>'
       + '<div class="w166bar" title="' + pct + '% of their plan"><i style="width:' + pct + '%"></i></div>'
       + '<div class="w166sum">' + p.done + ' of ' + p.total + ' steps &middot; ' + status + (p.last_done_at ? ' &middot; last step ' + E(ago(p.last_done_at)) : ' &middot; no step ticked yet')

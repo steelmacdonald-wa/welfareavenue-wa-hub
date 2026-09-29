@@ -10,16 +10,28 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <!-- Welfare Avenue: the public page of the CRM's forms (wave156, 28/09/26). Served for every /f/<slug> by a Netlify
      rewrite (_redirects). Reads the published form from the form-submit function and posts the answers back to it.
-     A draft is not found here; staff see drafts in the Hub (CRM, Forms). Built by build/f/make.py from build/f/src.html. -->
+     A draft is not found here; staff see drafts in the Hub (CRM, Forms). Built by build/f/make.py from build/f/src.html.
+     wave168 (29/09/26): the brand up front: the form's cover photo from the Photo library behind the lockup, a doodle, what
+     the form is for and its title; the E that moves on the thank-you; the brand line at the foot. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--cream);color:var(--ink);font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.5}
-.band{background:var(--green);color:var(--cream);padding:22px 16px 64px}
-.band .in{max-width:680px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.band{position:relative;background:var(--green) center/cover no-repeat;color:var(--cream);padding:22px 16px 96px;min-height:330px;display:flex;flex-direction:column;overflow:hidden}
+.band:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.55) 0%,rgba(16,63,57,.62) 40%,rgba(16,63,57,.94) 100%)}
+.band.ph{background-image:none!important}
+.band > *{position:relative}
+.band .in{width:100%;max-width:680px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.band .hx{width:100%;max-width:680px;margin:auto auto 0;padding-top:34px}
+.band .ey{font-size:12.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold);margin:0 0 6px}
+.band h1{color:var(--cream);font-size:46px;margin:0;text-shadow:0 2px 18px rgba(0,0,0,.25)}
+.band .star{width:58px;height:auto;transform:rotate(12deg);opacity:.95}
+.band .fade{opacity:0;transition:opacity .5s ease}
+.band.ready .fade{opacity:1}
 .lockup{height:58px;width:auto;display:block;color:var(--cream)}
 .lang{font-size:13px;opacity:.85}
-main{max-width:680px;margin:-44px auto 0;padding:0 16px 40px}
+main{max-width:680px;margin:-64px auto 0;padding:0 16px 40px;position:relative}
+@media (max-width:560px){.band{min-height:260px;padding-bottom:84px}.band h1{font-size:36px}.lockup{height:48px}.band .star{width:44px}}
 .card{background:var(--card);border-radius:20px;box-shadow:0 1px 2px rgba(16,63,57,.06),0 12px 32px rgba(16,63,57,.08);padding:28px 24px}
 @media (min-width:640px){.card{padding:36px 40px}}
 h1{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:34px;line-height:1.05;letter-spacing:.2px;text-transform:uppercase;color:var(--green);margin:0 0 6px}
@@ -54,9 +66,12 @@ button[disabled]{opacity:.6;cursor:progress}
 .banner{border-radius:12px;padding:12px 14px;margin:0 0 18px;font-size:15px}
 .banner.warn{background:rgba(179,64,47,.08);color:#7e2b1f}
 .banner.info{background:rgba(220,165,39,.18)}
-.done{text-align:left}
+.done{text-align:left;position:relative}
 .done h1{margin-top:4px}
 .done p{white-space:pre-line}
+.done .e{display:block;width:120px;height:auto;margin:4px 0 14px}
+.done .heart{position:absolute;right:-6px;top:-10px;width:70px;height:auto;transform:rotate(10deg)}
+.brandline{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:var(--green);margin:0 0 6px}
 .loading{color:var(--muted)}
 footer{max-width:680px;margin:0 auto;padding:0 16px 40px;font-size:13px;color:var(--muted)}
 footer a{color:var(--green)}
@@ -64,7 +79,7 @@ a{color:var(--green)}
 </style>
 </head>
 <body>
-<div class="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a></div></div>
+<div class="band ph" id="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a><img class="star fade" src="%%ST%%brand/doodle-star-gold.png" alt=""></div><div class="hx"><p class="ey fade" id="ey"></p><h1 id="ht"></h1></div></div>
 <main><div class="card" id="app" aria-live="polite"><p class="loading">Loading the form…</p></div></main>
 <footer id="foot"></footer>
 <script>
@@ -78,16 +93,17 @@ a{color:var(--green)}
       expired: 'This page was open a long time, so we refreshed it. Please check your answers and send again.', server: 'Something went wrong on our side. Please try again in a minute.',
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
       yes: 'Yes', no: 'No', thanks: 'Thank you!', charity: 'Registered charity', privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.',
-      back: 'Visit welfareavenue.com', select: 'Choose…' },
+      back: 'Visit welfareavenue.com', select: 'Choose…', ey_volunteer: 'Volunteer with us', ey_newsletter: 'Stay in touch', ey_general: 'Welfare Avenue', brand: 'Service is solidarity, not charity.' },
     fr: { loading: 'Chargement du formulaire…', nf: 'Ce formulaire n’est pas disponible.', nfh: 'Il a peut-être été déplacé ou retiré. Vous pouvez nous écrire à ', closed: 'Ce formulaire est fermé.', closedh: 'Il n’accepte plus de réponses. Merci de votre intérêt; vous pouvez nous écrire à ',
       optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous l’avons actualisée. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
       yes: 'Oui', no: 'Non', thanks: 'Merci!', charity: 'Organisme de bienfaisance enregistré', privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.',
-      back: 'Visiter welfareavenue.com', select: 'Choisir…' }
+      back: 'Visiter welfareavenue.com', select: 'Choisir…', ey_volunteer: 'Bénévolat', ey_newsletter: 'Restez au courant', ey_general: 'Welfare Avenue', brand: '' }
   };
-  var app = document.getElementById('app'), foot = document.getElementById('foot');
+  var ST = '%%ST%%', COVER = { url: ST + 'photos/web/2024-07-summer-team-under-the-tent.jpg', fx: 0.5, fy: 0.52 };
+  var app = document.getElementById('app'), foot = document.getElementById('foot'), band = document.getElementById('band');
   var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, done: false, banner: '' };
   function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
@@ -104,23 +120,42 @@ a{color:var(--green)}
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; });
     });
   }
+  /* wave168: the photo hero (the form's cover, or the team under the tent), what the form is for and the title */
+  function hero(title, cover, kind, eyText) {
+    var ht = document.getElementById('ht'), ey = document.getElementById('ey');
+    if (ht) ht.textContent = title || '';
+    if (ey) ey.textContent = eyText != null ? eyText : (kind ? t('ey_' + kind) : '');
+    var c = cover && cover.url ? cover : COVER;
+    if (band.__url === c.url) return;
+    band.__url = c.url;
+    var im = new Image();
+    im.onload = function () {
+      band.style.backgroundImage = 'url("' + c.url.replace(/"/g, '') + '")';
+      band.style.backgroundPosition = Math.round(100 * (c.fx == null ? 0.5 : c.fx)) + '% ' + Math.round(100 * (c.fy == null ? 0.5 : c.fy)) + '%';
+      band.classList.remove('ph'); band.classList.add('ready');
+    };
+    im.onerror = function () { band.classList.add('ready'); };
+    im.src = c.url;
+  }
   function footer() {
     var o = S.org || {};
-    foot.innerHTML = E(o.name || 'Welfare Avenue') + (o.charity ? ' · ' + E(t('charity')) + ' ' + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
+    foot.innerHTML = (t('brand') ? '<p class="brandline">' + E(t('brand')) + '</p>' : '') + E(o.name || 'Welfare Avenue') + (o.charity ? ' · ' + E(t('charity')) + ' ' + E(o.charity) : '') + (o.address ? ' · ' + E(String(o.address).replace(/^Welfare Avenue,\s*/, '')) : '') +
       (o.email ? ' · <a href="mailto:' + E(o.email) + '">' + E(o.email) + '</a>' : '') + (S.form ? '<br>' + E(t('privacy')) : '');
   }
-  function message(title, text) {
+  function message(title, text, cover, eyText) {
     var mail = (S.org && S.org.email) || 'info@welfareavenue.com';
-    app.innerHTML = '<h1>' + E(title) + '</h1><div class="rule"></div><p>' + E(text) + '<a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p>';
+    hero(title, cover || null, null, eyText || '');
+    app.innerHTML = '<div class="rule"></div><p>' + E(text) + '<a href="mailto:' + E(mail) + '">' + E(mail) + '</a>.</p>';
     footer();
   }
   function load(keep) {
     return call('GET').then(function (r) {
       if (r.status === 404) { message(t('nf'), t('nfh')); return; }
-      if (r.body && r.body.closed) { S.org = r.body.org; S.lang = r.body.lang || 'en'; document.documentElement.lang = S.lang; message(t('closed'), t('closedh')); return; }
+      if (r.body && r.body.closed) { S.org = r.body.org; S.lang = r.body.lang || 'en'; document.documentElement.lang = S.lang; message(t('closed'), t('closedh'), r.body.cover, r.body.title); return; }
       if (r.status !== 200 || !r.body.form) { app.innerHTML = '<div class="banner warn">' + E(t('server')) + '</div>'; return; }
       S.form = r.body.form; S.org = r.body.org; S.token = r.body.token; S.lang = S.form.lang || 'en';
       document.documentElement.lang = S.lang; document.title = S.form.title + ' · Welfare Avenue';
+      hero(S.form.title, S.form.cover, S.form.kind);
       if (!keep) render(); else { S.banner = t('expired'); render(keep); }
     }).catch(function () { app.innerHTML = '<div class="banner warn">' + E(t('offline')) + '</div>'; });
   }
@@ -158,7 +193,7 @@ a{color:var(--green)}
   function render(keep) {
     var f = S.form, c = f.consent || {};
     var cerr = S.errors._consent;
-    app.innerHTML = '<form id="waf" novalidate>' + '<h1>' + E(f.title) + '</h1><div class="rule"></div>' + (f.intro ? '<p class="intro">' + E(f.intro) + '</p>' : '') +
+    app.innerHTML = '<form id="waf" novalidate>' + '<div class="rule"></div>' + (f.intro ? '<p class="intro">' + E(f.intro) + '</p>' : '') +
       (S.banner ? '<div class="banner ' + (Object.keys(S.errors).length ? 'warn' : 'info') + '" role="alert">' + E(S.banner) + '</div>' : '') +
       f.questions.map(function (q) { return field(q, keep); }).join('') +
       (c.ask ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent"><label class="choice"><input type="checkbox" id="q__consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="q__consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' +
@@ -208,12 +243,13 @@ a{color:var(--green)}
       if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = t('fix'); render(a); focusFirst(); return; }
       if (r.status === 400 && r.body.error === 'expired') { S.errors = {}; load(a); return; }
       if (r.status === 404) { message(t('nf'), t('nfh')); return; }
-      if (r.status === 410) { message(t('closed'), t('closedh')); return; }
+      if (r.status === 410) { message(t('closed'), t('closedh'), S.form && S.form.cover, S.form && S.form.title); return; }
       S.banner = r.status === 429 ? t('rate') : t('server'); S.errors = {}; render(a);
     }).catch(function () { S.sending = false; S.banner = t('offline'); render(a); });
   }
   function thanks(msg) {
-    app.innerHTML = '<div class="done"><h1>' + E(t('thanks')) + '</h1><div class="rule"></div><p>' + E(msg) + '</p><p><a href="https://welfareavenue.com">' + E(t('back')) + '</a></p></div>';
+    hero(t('thanks'), S.form && S.form.cover, S.form && S.form.kind);
+    app.innerHTML = '<div class="done"><img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><img class="e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><p>' + E(msg) + '</p><p><a href="https://welfareavenue.com">' + E(t('back')) + '</a></p></div>';
     try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
   }
   if (!slug()) { message(t('nf'), t('nfh')); return; }

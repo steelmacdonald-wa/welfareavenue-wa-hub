@@ -18,6 +18,7 @@ svg = ('<svg class="lockup" viewBox="' + vb + '" xmlns="http://www.w3.org/2000/s
 key = open('/tmp/anon.key').read().strip()
 src = open(os.path.join(HERE, 'src.html'), encoding='utf8').read()
 out = src.replace('%%LOCKUP_SVG%%', svg).replace('%%SUPABASE_URL%%', 'https://zwnmulmnvopclzcvytce.supabase.co').replace('%%ANON_KEY%%', key)
+out = out.replace('%%ST%%', 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/')   # wave168: photos and brand art
 assert '%%' not in out, 'a placeholder is left'
 open(os.path.join(HERE, 'index.html'), 'w', encoding='utf8').write(out)
 print('build/f/index.html', len(out.encode('utf8')), 'bytes')

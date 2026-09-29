@@ -1,4 +1,4 @@
-// Welfare Avenue: form-submit (v3, 28/09/26, wave156; v3 wave162: the website preview origin)
+// Welfare Avenue: form-submit (v4, 29/09/26, wave156; v3 wave162: the website preview origin; v4 wave168: the form's cover photo)
 // The public side of the CRM's forms, shown at hub.welfareavenue.com/f/<slug> (Steel, 28/09/26).
 //   GET  ?slug=<slug>  The published form: questions, the email permission question, the thank-you, the open serving
 //        dates for a serving_dates question, the charity's name and address (CASL), and a signed token. A draft is
@@ -83,10 +83,26 @@ async function org(): Promise<Json> {
   const m: Record<string, string> = {}; (data || []).forEach((r: Json) => { m[r.key] = r.value; });
   return { name: m.mail_from_name || 'Welfare Avenue', address: m.mail_postal_address || '', email: m.mail_reply_to || 'info@welfareavenue.com', charity: m.mail_charity_number || '' };
 }
+// v4 (wave168): the photo at the top of the public page: the form's cover (crm_forms.cover_photo_id, a Photo library photo),
+// or the default for its kind. Only photos marked ready (team, volunteers, food; no close-ups of the people we serve): a
+// cover that stopped being ready gives way to the default. Only the public web size, where to hold the crop and the words
+// for screen readers.
+const COVER_BY_KIND: Record<string, number> = { volunteer: 9, newsletter: 3, general: 26 };
+const STORAGE = SUPABASE_URL + '/storage/v1/object/public/content-images/';
+async function photoOut(id: number): Promise<Json> {
+  if (!id) return null;
+  const { data } = await svc.from('wa_photos').select('path_web,focal_x,focal_y,alt_text,usage').eq('id', id).maybeSingle();
+  if (!data || !data.path_web || data.usage !== 'ready') return null;
+  return { url: STORAGE + String(data.path_web).replace(/^\/+/, ''), fx: data.focal_x ?? 0.5, fy: data.focal_y ?? 0.5, alt: data.alt_text || '' };
+}
+async function coverOf(form: Json): Promise<Json> {
+  const own = Number(form.cover_photo_id || 0), def = Number(COVER_BY_KIND[String(form.kind)] || COVER_BY_KIND.general);
+  return (own ? await photoOut(own) : null) || await photoOut(def);
+}
 async function publicForm(form: Json): Promise<Json> {
   const dates = (form.questions || []).some((q: Json) => q.type === 'serving_dates') ? await openDates(form) : [];
   return {
-    slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '',
+    slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '', cover: await coverOf(form),
     questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => ({
       id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
       options: q.type === 'serving_dates' ? dates : opts(q)
@@ -173,7 +189,7 @@ Deno.serve(async (req: Request) => {
       const slug = new URL(req.url).searchParams.get('slug') || '';
       const form = await loadForm(slug);
       if (!form || form.status === 'draft') return reply(req, { error: 'not_found' }, 404);
-      if (form.status === 'closed') return reply(req, { closed: true, title: form.title, lang: form.lang, org: await org() });
+      if (form.status === 'closed') return reply(req, { closed: true, title: form.title, lang: form.lang, kind: form.kind, cover: await coverOf(form), org: await org() });
       const ts = Math.floor(Date.now() / 1000);
       const token = ts + '.' + (await hmac(await secret('WA_FORM_SECRET'), 'form|' + form.slug + '|' + ts)).slice(0, 32);
       return reply(req, { form: await publicForm(form), org: await org(), token });

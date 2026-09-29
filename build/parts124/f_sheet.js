@@ -100,11 +100,12 @@
     if (proj) acts.push('<a class="w124btn ghost" data-w124go="#project/' + proj.id + '">' + I('board') + 'Project board</a>');
     if (f.sop_training_id) acts.push('<a class="w124btn ghost" data-w124go="#training/t/' + f.sop_training_id + '">' + I('doc') + 'SOP</a>');
     if (!onFund()) acts.push('<a class="w124btn ghost" data-w124go="#fundevents">Events calendar</a>');
-    var html = top('<span class="tag" style="--bg:' + STATUS[f.status][1] + ';--ink:' + STATUS[f.status][2] + '">' + E(STATUS[f.status][0]) + '</span>' + layerTag('fund')) + '<h2>' + E(f.title) + '</h2>'
+    var html = top('<span class="tag" style="--bg:' + STATUS[f.status][1] + ';--ink:' + STATUS[f.status][2] + '">' + E(STATUS[f.status][0]) + '</span>' + layerTag('fund')) + sheetHero(f) + '<h2>' + E(f.title) + '</h2>'
       + '<div class="kv">' + rows.join('') + '</div>'
       + (f.result_note ? '<div class="note"><b>Result:</b> ' + E(f.result_note) + '</div>' : '')
       + (f.notes ? '<div class="note">' + E(f.notes) + '</div>' : '')
       + (pastDue(f) ? '<p class="err">The date has passed: record how it went, so the year’s total stays right.</p>' : '')
+      + sheetMedia(f)
       + (acts.length ? '<div class="acts">' + acts.join('') + '</div>' : '');
     openSheet(html, 'view');
   }
@@ -125,7 +126,8 @@
         + '<div class="two"><div><label class="f" for="w124fmin">Target from ($)<span class="op">optional</span></label><input type="number" id="w124fmin" name="target_min" min="0" step="100" value="' + E(f.target_min == null ? '' : f.target_min) + '"></div><div><label class="f" for="w124fmax">Target up to ($)<span class="op">optional</span></label><input type="number" id="w124fmax" name="target_max" min="0" step="100" value="' + E(f.target_max == null ? '' : f.target_max) + '"></div></div>'
         + '<div class="two"><div><label class="f" for="w124fl">Lead<span class="op">optional</span></label><input type="text" id="w124fl" name="lead" maxlength="80" value="' + E(f.lead || '') + '" list="w124people"></div><div><label class="f" for="w124fpr">Project board<span class="op">optional</span></label><select id="w124fpr" name="project_id">' + projOpts + '</select></div></div>'
         + '<datalist id="w124people">' + members().filter(function (m) { return m.active !== false; }).map(function (m) { return '<option value="' + E(m.name) + '">'; }).join('') + '</datalist>'
-        + '<label class="f" for="w124fn">Notes<span class="op">optional</span></label><textarea id="w124fn" name="notes">' + E(f.notes || '') + '</textarea>')
+        + '<label class="f" for="w124fn">Notes<span class="op">optional</span></label><textarea id="w124fn" name="notes">' + E(f.notes || '') + '</textarea>'
+        + mediaForm(f))
       + '<div class="two"><div><label class="f" for="w124fr">Raised ($)' + (doneMode ? '' : '<span class="op">once it has happened</span>') + '</label><input type="number" id="w124fr" name="raised" min="0" step="1" value="' + E(f.raised == null ? '' : f.raised) + '"></div><div></div></div>'
       + '<label class="f" for="w124frn">How it went<span class="op">optional</span></label><textarea id="w124frn" name="result_note" placeholder="Turnout, what worked, what to change next time">' + E(f.result_note || '') + '</textarea>'
       + '<p class="err" data-w124ferr style="display:none"></p>'
@@ -156,6 +158,9 @@
       row.target_min = num(fd.target_min); row.target_max = num(fd.target_max); row.raised = num(fd.raised);
       row.result_note = String(fd.result_note || '').trim() || null; row.notes = String(fd.notes || '').trim() || null;
       row.project_id = fd.project_id ? Number(fd.project_id) : null;
+      /* wave168: the photos */
+      row.cover_photo_id = fd.cover_photo_id ? Number(fd.cover_photo_id) : null; row.photo_series = fd.photo_series || null;
+      if (form.querySelector('[data-w168past]')) { var pastIds = Array.prototype.map.call(form.querySelectorAll('input[name=past_site]:checked'), function (x) { return Number(x.value); }); row.past_site_events = pastIds.length ? pastIds : null; }
       if (row.precision === 'day') { if (!fd.d1) { fail('Pick the date.'); return; } row.start_date = fd.d1; row.end_date = fd.d2 && fd.d2 > fd.d1 ? fd.d2 : null; row.timing = MONTHS[parseDay(fd.d1).getMonth()]; }
       else if (row.precision === 'month') { if (!fd.m1) { fail('Pick the month.'); return; } row.start_date = firstOfMonth(fd.m1); row.end_date = lastOfMonth(fd.m1); row.timing = MONTHS[Number(fd.m1.slice(5)) - 1]; }
       else if (row.precision === 'range' || row.precision === 'season') { if (!fd.m1 || !fd.m2) { fail('Pick the first and last month.'); return; } if (fd.m2 < fd.m1) { fail('The last month is before the first.'); return; } row.start_date = firstOfMonth(fd.m1); row.end_date = lastOfMonth(fd.m2); row.timing = MONTHS[Number(fd.m1.slice(5)) - 1].slice(0, 3) + ' to ' + MONTHS[Number(fd.m2.slice(5)) - 1].slice(0, 3); }
