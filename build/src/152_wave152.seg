@@ -818,7 +818,7 @@
     var html = '<h2>' + (isNew ? 'Add a contact' : 'Edit ' + E(x.full_name)) + '</h2>' +
       '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so MTL volunteering sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
       '<div class="w152form">' +
-      (c && c.volunteer_id ? '<div class="note">' + I('link') + ' Their name, emails, phones and address are saved on their volunteer record as well, so MTL volunteering and the CRM stay the same person.</div>' : '') +
+      (c && c.volunteer_id ? '<div class="note">' + I('link') + ' One record: this contact is also their volunteer record, so the Volunteer Manager shows the same name, emails, phones, address, tags and notes.</div>' : '') +
       field('Full name', inp('full_name', x.full_name, 'First and last name'), true) +
       field('Emails', inp('emails', x.emails.join(', '), 'name@example.com'), false, 'separated by commas; the first one is used') +
       field('Phones', inp('phones', x.phones.join(', '), '514 555 0123'), false, 'separated by commas') +
@@ -941,11 +941,7 @@
         contactSheet(newId); repaintBehind();
         return;
       }
-      if (c.volunteer_id) {
-        /* their volunteer record carries the name, emails, phones and address (MTL volunteering reads it) */
-        var vu = await db.from('volunteer_people').update({ full_name: row.full_name, emails: emails, phones: phones, address: row.address }).eq('id', c.volunteer_id).select('id');
-        if (vu && vu.error) throw vu.error;
-      }
+      /* wave176: one record: the contact is the person, and the Volunteer Manager reads the same row (no second copy to write) */
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;
       if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }

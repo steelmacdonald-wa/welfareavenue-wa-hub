@@ -209,7 +209,7 @@ const sheet = f => f.ev(() => { const s = document.getElementById('w152sheet'); 
   await f.page.waitForTimeout(500);
   w = await W(f);
   const vu = w.filter(x => x.table === 'volunteer_people' && x.op === 'update'), cu = w.filter(x => x.table === 'crm_contacts' && x.op === 'update' && x.p.full_name);
-  ok('saving updates their volunteer record (name, emails, phones, address)', vu.length === 1 && JSON.stringify(vu[0].p.emails) === '["amara.okafor@example.com","amara@work.example"]' && vu[0].p.phones.length === 2 && vu[0].p.address === '12 Rue Example', vu);
+  ok('saving writes the one record only (wave176: the Volunteer Manager reads the same contact)', vu.length === 0, vu);
   ok('and the contact, keeping volunteer and adding donor', cu.length === 1 && cu[0].p.kinds.join(',') === 'volunteer,donor' && cu[0].p.first_name === 'Amara' && cu[0].p.language === 'fr' && cu[0].p.updated_by === 'steel.macdonald@welfareavenue.com', cu);
   s = await sheet(f);
   ok('back on their page with the new details and kinds', /amara@work\.example/.test(s) && /514 555 0199/.test(s) && (await f.ev(() => [...document.querySelectorAll('#w152sheet .w152hd .w152kd')].map(k => k.textContent).join(','))) === 'Volunteer,Donor', s.slice(0, 300));

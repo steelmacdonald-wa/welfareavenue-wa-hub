@@ -32,7 +32,7 @@
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
     /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
     + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
-    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* directors keep Partners in their menu (they open no apps) */
+    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -67,6 +67,8 @@
     + '#w153bar .w153menu{display:none;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.18);border-radius:999px;padding:7px 12px;background:none;color:' + GREEN + ';font-family:' + BODY + ';font-size:12.5px;font-weight:700;cursor:pointer;}'
     + 'body.w153app.w153crm #crm > .w118mast .crumb{display:none;}'
     + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
+    /* wave176: the Volunteer Manager's rail repeats the page's chips (Text volunteers is in the app bar) */
+    + '@media (min-width:901px){body.w153app.w153volunteer #volunteering .vl-sub{display:none;}}'
     /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
        menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
     + 'body.w153app main .panel > .w118mast .crumb{display:none;}'

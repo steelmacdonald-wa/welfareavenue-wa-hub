@@ -72,7 +72,11 @@
     tree: '<circle cx="12" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="12" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><path d="M12 7v10M12 11.5H5V17M12 11.5h7V17"/>',
     link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>',
     /* wave164: Finance's Tasks */
-    check: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="m8.5 12.3 2.4 2.4 4.6-4.9"/>'
+    check: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><path d="m8.5 12.3 2.4 2.4 4.6-4.9"/>',
+    /* wave176: the Volunteer Manager */
+    cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
+    pot: '<path d="M4 10.5h16l-1.5 8a2 2 0 0 1-2 1.5h-9a2 2 0 0 1-2-1.5z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/>',
+    box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -151,13 +155,28 @@
         ] }];
       }
     },
+    /* wave176: Steel (30/09/26): "I'd like the MTL Volunteering to be it's own app now, it's big enough that it should be it's own app."
+       The Volunteering page (#volunteering and its views: the calendar and each serving, the SOP, volunteers, inventory, recipes) */
+    volunteer: { id: 'volunteer', label: 'Volunteer Manager', color: '#3E7C3A', ic: 'heart', blurb: 'MTL servings, rosters, texts and volunteers', pages: ['volunteering'], home: '#volunteering',
+      groups: function () {
+        return [{ label: 'Servings', items: [
+          { h: '#volunteering', l: 'Calendar', ic: 'cal', page: 'volunteering' },
+          { h: '#volunteering/sop', l: 'The SOP', ic: 'clip', page: 'volunteering' },
+          { h: '#volunteering/recipes', l: 'Recipes', ic: 'pot', page: 'volunteering' },
+          { h: '#volunteering/inventory', l: 'Inventory', ic: 'box', page: 'volunteering' }
+        ] }, { label: 'People', items: [
+          { h: '#volunteering/people', l: 'Volunteers', ic: 'people', page: 'volunteering' }
+        ] }];
+      },
+      actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]
+    },
     admin: { id: 'admin', label: 'Admin centre', color: SLATE, ic: 'shield', blurb: 'Access, security, the AI models, the Hub itself', pages: ['adminpanel', 'activity'], home: '#adminpanel/people',
       groups: function () {
         return [{ label: 'Admin', items: adminSections() }, { label: 'Audit', items: [{ h: '#activity', l: 'Activity', ic: 'list', page: 'activity' }] }];
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'crm', 'hr', 'finance', 'admin'];
+  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'hr', 'finance', 'admin'];
 
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }

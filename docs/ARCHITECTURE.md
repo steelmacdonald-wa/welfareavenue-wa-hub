@@ -165,3 +165,5 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#dashboard` | alias of the Executive dashboard numbers | hidden tab | 000, 111 |
 | `#person/<name>` | none | links | 033, 036, 116c, 116k, 133 |
 | `#confirm/<token>` | none (public) | links in texts | 031 |
+
+- **One record per person (wave176).** The CRM contact (crm_contacts) is the person: name, emails, phones, address, notes, tags, organization. volunteer_profiles holds what is about volunteering (roles, car, review, Quo, applied), linked by crm_contacts.volunteer_id; volunteer_people is a view of the two with instead-of triggers (wa176_vp_write), so the Volunteer Manager and the CRM read and write the same row. The Volunteer Manager is an app in the launcher (parts153 APPS.volunteer, page volunteering).

@@ -1371,6 +1371,7 @@ The CRM (wave150/152): one row per person Welfare Avenue knows (volunteers, dono
 - `implied_consent_until`: The day implied consent runs out (two years after the last gift, membership or volunteering).
 - `merged_into`: Set when this row was merged into another contact (crm_merge_contacts); the row stays for the record.
 - `last_activity_at`: The last outward or inward touch logged on their timeline (not internal notes).
+- `organization`: wave176: the organization the person gave (free text, for example a school or employer), shared with the Volunteer Manager. Partners with a record are in crm_contact_orgs.
 
 ### `crm_contact_orgs`
 
@@ -1632,6 +1633,14 @@ wave175: a volunteer's Google account (auth.users) linked to their volunteer rec
 
 wave175: every letter of volunteer hours issued from the volunteer page (reference WA-VH-xxxxxx printed on it), so staff can confirm one when a school or employer asks. Staff read.
 
+### `volunteer_profiles`
+
+wave176: what is about volunteering for a person (roles, car, review flag and note, the Quo contact, when they applied and joined); the person themselves (name, emails, phones, address, notes, tags, organization) is their CRM contact (crm_contacts.volunteer_id = id). Same ids as the old volunteer_people, so roster rows, texts, accounts and letters keep their links. Read and write the person through the volunteer_people view. Staff only.
+
+### `volunteer_people` (view)
+
+wave176: the volunteer directory as one record per person: the volunteering profile (volunteer_profiles) joined to the person's CRM contact. Reading and writing it reads and writes both (instead-of triggers): the name, emails, phones, address, notes, tags and organization are the contact's, so the CRM and the Volunteer Manager always show the same. Staff only (functions and the service role read it too). contact_id is the CRM contact.
+
 ### `hub_announcement_answers`
 
 wave180: each person's answer to an announcement's poll or short form (one per person, changed until it closes). A person reads only their own; the totals and who answered come from wa180_results. Written by wa180_answer only.
@@ -1787,6 +1796,8 @@ Functions:
 - `volunteer_me_link(text)`: wave175: links the signed-in Google account to the volunteer of a personal link (/c/<token>): the link proves who they are. Refuses an account already linked to someone else. Logged.
 - `volunteer_me_signup(bigint, text)`: wave175: the signed-in volunteer takes an open spot: an upcoming service within vol_signup_days, a role in vol_signup_roles, while the role is under its vol_role_targets count; not twice on the same serving. Adds a roster row (status TBD, detail.source self sign-up) so the usual texts apply (a sign-up notice, the confirmation 7 days before). Logged.
 - `volunteer_me_letter()`: wave175: a letter of volunteer hours for the signed-in volunteer (servings, hours, first and last serving, roles), recorded in volunteer_hour_letters with a reference (WA-VH-xxxxxx) staff can check.
+- `wa176_vp_write()`: wave176: writes through the volunteer_people view: a new volunteer gets a profile and a contact (or the existing contact with their email, a donor who now volunteers); an edit goes to the profile (roles, car, review, Quo, applied) and to the contact (name, emails, phones, address, notes, tags, organization); deleting removes the profile and leaves the person in the CRM. Staff and the service role only.
+- `volunteer_merge(bigint, bigint)`: wave176: merges two volunteers into one: their roster rows, texts, history, accounts and letters move to the kept one, the volunteering profiles combine (roles, car, Quo, applied), and the dropped person's CRM contact is merged into the kept contact (crm_merge_contacts: emails, phones, tags, notes, gifts, history). Staff; logged.
 - `wa180_my_teams()`: wave180: the signed-in person's teams (their roster rows; an alias counts as the Welfare Avenue address it belongs to).
 - `wa180_is_hr()`: wave180: the signed-in person has the HR access profile (and is not blocked).
 - `wa180_can_post(text, text[])`: wave180: may the signed-in person post an announcement to this audience: admins and HR to anyone; leaders to everyone, the leaders, or their own team(s).

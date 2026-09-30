@@ -161,7 +161,9 @@ function wa26PersonModal(pid) {
   var p = null;
   WA_VOL_PEOPLE.forEach(function (x) { if (String(x.id) === String(pid)) p = x; });
   if (!p) return;
+  /* wave176: one record: the person is their CRM contact (the same name, emails, phones, address, tags and notes in both apps) */
   openModal('<h3>Edit volunteer</h3>' +
+    '<p class="read" style="font-size:12.5px;margin:0 0 8px">One record: these details are also this person\u2019s contact in the CRM, so a change here shows there too, and the other way round.' + (p.contact_id ? ' <a href="#crm/c/' + esc(String(p.contact_id)) + '" data-w176crm="1" style="color:#103F39;font-weight:600">Open in the CRM</a>' : '') + '</p>' +
     '<label>Full name</label><input type="text" id="p26Name" value="' + esc(p.full_name || '') + '" />' +
     '<div class="m-row"><div><label>Phones (comma separated)</label><input type="text" id="p26Phones" value="' + esc((p.phones || []).join(', ')) + '" /></div>' +
     '<div><label>Emails (comma separated)</label><input type="text" id="p26Emails" value="' + esc((p.emails || []).join(', ')) + '" /></div></div>' +
@@ -172,6 +174,8 @@ function wa26PersonModal(pid) {
     (p.needs_review ? '<label style="display:flex;gap:7px;align-items:center;margin-top:8px"><input type="checkbox" id="p26Clr" style="width:15px;height:15px" /> Clear the review flag (' + esc(p.review_note || 'needs review') + ')</label>' : '') +
     '<div class="m-actions"><button class="btn" id="p26Save">Save</button> <button class="btn ghost" id="p26Cancel">Cancel</button></div>');
   var cancel = document.getElementById('p26Cancel');
+  var w176 = document.querySelector('[data-w176crm]');
+  if (w176) w176.addEventListener('click', function () { try { closeModal(); } catch (e) { /* fine */ } });
   if (cancel) cancel.addEventListener('click', function () { closeModal(); });
   var save = document.getElementById('p26Save');
   if (save) save.addEventListener('click', async function () {

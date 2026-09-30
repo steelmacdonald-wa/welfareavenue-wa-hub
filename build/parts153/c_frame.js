@@ -144,6 +144,7 @@
     try { document.body.classList.remove('wa-mob-open'); } catch (e) { /* fine */ }
   }
   function act(k) {
+    if (S.app === 'volunteer' && k === 'text') { try { if (typeof waTxtModal === 'function') waTxtModal(); } catch (e) { /* fine */ } return; }
     if (S.app === 'crm' && k === 'add') {
       if (pageOf(hashNow()) !== 'crm' || (hashNow().split('/')[1] || '') !== '') location.hash = '#crm';
       var tries = 0, iv = setInterval(function () { tries++; var b = document.querySelector('#crm [data-w152add]'); if (b) { clearInterval(iv); b.click(); } else if (tries > 40) clearInterval(iv); }, 100);
