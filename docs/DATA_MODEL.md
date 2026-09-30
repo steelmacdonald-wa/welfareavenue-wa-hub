@@ -734,6 +734,11 @@ Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind serv
 - `season`: Winter, Spring, Summer or Fall.
 - `title`: Optional title; readers show Sunday serving when NULL and kind = service.
 - `itinerary_url`: Link to the day's itinerary document.
+- `format`: wave171: how the food is made: home_cooked (cooks cook at home, the pickup driver collects it; the standard since 2023) or community_kitchen (volunteers cook together at a community kitchen, for example La Poubelle Magnifique, 1221 Rue Crescent). Null = not set yet (a gap on the calendar for an upcoming serving).
+- `kitchen_place`: wave171, community_kitchen servings: the kitchen (name and address).
+- `kitchen_contact`: wave171, community_kitchen servings: who to reach at the kitchen (a name; no personal phone numbers here).
+- `kitchen_shift`: wave171, community_kitchen servings: the cooking shift (for example 9:00 to 12:30).
+- `ingredients_note`: wave171, community_kitchen servings: when and where the ingredients arrive, and fridge space.
 
 ### `event_roster`
 
@@ -752,7 +757,7 @@ Who is rostered for each volunteer event and in which role, with their confirmat
 
 ### `volunteer_event_summary` (view)
 
-One row per volunteer event with roster size, confirmed count, run-sheet steps total and done, and extra to-dos total and open. Read by the volunteering page. Runs with the caller's rights.
+One row per volunteering event with its roster and checklist counts (security invoker: staff read). wave171 adds format, roster_by_link (confirmed on the text link or by replying YES), roster_declined (Unavailable) and roster_texted (sent a confirmation text).
 
 ### `volunteer_inventory`
 
@@ -768,11 +773,17 @@ Recipe list for serving days, each linked to a Google Drive document; assignable
 
 ### `quo_messages`
 
-Log of SMS messages sent to volunteers through Quo (OpenPhone) by quo-send, or recorded as a dry run.
+Every text to or from the ops line through Quo (OpenPhone): staff sends (quo-send), the automatic confirmation texts (wave171, kind confirm), acknowledgements (ack) and every incoming text (direction in, from the quo-events webhook). Written by quo-send, quo-events and wa171_* functions with the service role; staff read.
 
 - `batch_id`: Groups the messages of one send.
-- `status`: dry_run or sent (failed sends record error).
+- `status`: dry_run, queued (waiting for quo-send drain), sent, failed, skipped (sms_mode or the rules held it back; error says why) or received (inbound).
 - `sent_by`: Who sent it (a name or system).
+- `direction`: wave171: out (the ops line texted someone) or in (someone texted the ops line).
+- `kind`: wave171: manual (a staff send), confirm (the confirmation text with the personal link, at most one live per roster row), confirm_test (a test to the test phones), inbound (a text received), ack (the short thank-you after a YES or NO).
+- `roster_id`: wave171: the event_roster row the text is about (a confirmation, or the row an incoming reply was matched to).
+- `quo_id`: wave171: Quo's id for the message (incoming: used to ignore a webhook delivered twice).
+- `handled`: wave171, incoming texts: what the Hub did: confirmed, declined, opted_out, opted_in, question (for a person to answer), stored (texts are off, or test mode and not a test phone) or unmatched (no volunteer with that number).
+- `sent_at`: wave171: when Quo accepted the text.
 
 ### `sop_template`
 
@@ -1553,6 +1564,12 @@ wave165: the other addresses a member signs in with (Steel: his gmail). Read onl
 
 wave169: a training or a Learning Avenue assigned to everyone (the whole team, not the board), teams or people, from the HR centre or the Avenue Academy (academy_assign); include_new gives it to people who join later (trg_wa169_member_assign), due_days is their time to finish. The rows in training_progress carry it (assignment_id, due_date).
 
+### `volunteer_role_guides`
+
+wave171: what a volunteer sees after confirming on hub.welfareavenue.com/c/<token>: per roster role, the label (English and French), a Photo library photo (only a ready one is ever shown), what to expect, what to bring and when to arrive. Staff edit (Texts settings on an event); the public page reads it only through volunteer_confirm_get.
+
+- `photo_id`: The role's photo (wa_photos.id); shown only while that photo is ready.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1672,8 +1689,19 @@ Functions:
 - `academy_assign_end(bigint)`: wave169: stop an assignment; rows nobody started are removed, started ones keep their progress.
 - `academy_assignments_list()`: wave169: the assignments (running, and stopped in the last 30 days) with each person's progress, for HR, leaders and admins.
 - `wa169_onb_avenue_sync()`: wave169: the Learning Avenue Your onboarding is the master onboarding's Academy modules, in the master's order (trg_wa169_onb_avenue on onboarding_template).
-- `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
+- `wa171_role_label(text, text)`: wave171: a roster role's label in English or French (volunteer_role_guides, else the role code in words).
+- `wa171_date_words(date, text)`: wave171: a date in words for a text (Sunday, October 4 / dimanche 4 octobre).
+- `wa171_digits(text)`: wave171: a phone number's last 10 digits (how every Hub table matches numbers), or null.
+- `wa171_test_phone(text)`: wave171: true when the number is one of app_config sms_test_phones (the only numbers texted while sms_mode is test).
+- `wa171_lang(bigint)`: wave171: the language to text a volunteer in (fr when their CRM contact says so, else en).
+- `wa171_opted_out(bigint, text)`: wave171: true when the volunteer (or anyone with that number) replied STOP or was marked no texts in the CRM (crm_contacts.sms_opt_out).
+- `wa171_roster_phone(bigint)`: wave171: the number to text for a roster row (the volunteer's first phone, else the phone on the row), 10 digits.
+- `wa171_confirm_text(bigint, boolean)`: wave171: the confirmation text for a roster row, in the volunteer's language, with their personal link (p_test adds ?test=1: the page then saves nothing).
+- `volunteer_confirm_get(text)`: wave31, wave171: what the public confirm page (hub.welfareavenue.com/c/<token>) shows for one roster row: first name, role (both languages), date, place, the format, the state (open, confirmed, declined), the role's ready photo and what to expect. Anonymous by design; the unguessable token is the key. Never returns a phone, an email or anyone else on the roster.
+- `volunteer_confirm_submit(text, jsonb)`: wave31, wave171: the volunteer's answer from the confirm page (or a YES/NO text, via reply): attending yes sets the roster row Confirmed, no sets it Unavailable, with confirmed_at, confirm_status and the answers (confirm, with via and at); logged in change_log. Refused for a past or cancelled serving. Anonymous by design; the token is the key.
+- `wa171_queue_confirms(bigint, bigint[], text)`: wave171: queues the confirmation text (kind confirm, status queued) for roster rows of upcoming servings that are not confirmed, declined or cancelled and were never texted: with no event or rows, those 7 days out (from 10 am Toronto on day 7, sms_confirm_days and sms_confirm_hour) or closer; with an event or rows, just those. Skips rows with no phone, anyone who opted out, and in test mode every number but sms_test_phones. Nothing is queued while sms_mode is off. Internal: called by wa171_sms_tick and wa171_text_to_confirm.
+- `wa171_sms_tick()`: wave171: the every-15-minutes tick (cron wa-sms-tick): while sms_mode is test or live and between 8 am and 8 pm Toronto, queues the confirmation texts that are due and asks quo-send to send what is queued.
+- `wa171_text_to_confirm(bigint, bigint[])`: wave171: Text to confirm on an event page: queues the confirmation text now for the chosen roster rows (or everyone on the serving not yet confirmed and never texted) and asks quo-send to send. Leaders, HR and admins only; sms_mode still decides (off: nothing; test: the test phones only). Logged.
+- `wa171_sms_mode_set(text)`: wave171: an admin switches the volunteer texts off, test (only sms_test_phones get texts) or live; logged in change_log. Switching off skips anything still queued. The assistant never calls it.
+- `wa171_inbound(jsonb)`: wave171: files an incoming text ({phone, text, quo_id, at}) in quo_messages (direction in, once per quo_id) matched to the volunteer and their next serving, then acts on keywords: STOP/ARRET always sets crm_contacts.sms_opt_out; while sms_mode is live (or test, for the test phones) YES/OUI confirms the roster row, NO/NON marks it Unavailable (both queue a short thank-you, kind ack), START opts back in; anything else is a question for the team (wave169b). Service role only (quo-events).
 
-### `www_files` (wave162)
-The public website (the new welfareavenue.com) as built by `build/www/make.py`; the `www-sync` function deploys it to its own Netlify site (`welfareavenue-www`). RLS on with no policies, and no grants to anon or authenticated: service role only.
-- `path` text and `part` int (the primary key together; a file split into parts is joined in part order), `content` text, `encoding` text (`utf8` for text, `base64` for images), `md5` text (of the file's bytes, checked when the stage is copied in), `updated_at`.

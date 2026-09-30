@@ -1,4 +1,5 @@
-// Welfare Avenue: host-sync (v7, 28/09/26)
+// Welfare Avenue: host-sync (v8, 30/09/26)
+// v8 (wave171): also deploys the volunteer confirm page /c/index.html (served for every /c/<token> by _redirects).
 // v7 (wave161c, wave162): also deploys give/embed.js and give/embed.css, the donation popup the website loads (site_files
 // paths 'give/embed.js' and 'give/embed.css'; real files, so the /give/* rewrite does not touch them).
 // v6 (wave161): also deploys the public donation page /give/index.html (served for /give and every /give/<path> by the
@@ -112,7 +113,7 @@ Deno.serve(async (req: Request) => {
     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
   } catch (_) { /* headers optional */ }
   // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page
-  for (const extra of ['f/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects']) {
+  for (const extra of ['f/index.html', 'c/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
       if (ex && ex.length) deployFiles['/' + extra] = new TextEncoder().encode(ex.map((r: { content: string }) => r.content).join(''));
@@ -125,7 +126,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v7'
+      changed_by: 'host-sync v8'
     });
   } catch (_) { /* audit only */ }
 

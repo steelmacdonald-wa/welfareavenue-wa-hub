@@ -190,6 +190,8 @@
 167_wave167
 # 169_wave169: the master onboarding runs the Academy (what people see each week, edited and previewed from the HR centre; steps done in the Academy) and trainings are assigned to the organization (everyone, teams or people, with a due date and a note) by HR from the HR centre and by leaders from the Academy, where people see Assigned to you. The changes also live in 046, 047, 122, 166 and 167.
 169_wave169
+# 171_wave171: volunteers confirm by text (planned as wave169a: the Texts card on an event, the tags on the roster, Text to confirm, Text settings), the serving's format, the next serving's confirmations on Home and the Executive dashboard. The public confirm page is build/c (hub.welfareavenue.com/c/<token>); the database functions are wa171_*.
+171_wave171
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

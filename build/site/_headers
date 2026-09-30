@@ -3,7 +3,8 @@
 # the form pages keep the strict policy, and the donation page (/give, wave161b) also allows Stripe's embedded form
 # (Stripe's documented hosts for Checkout, Stripe.js and Link). Since wave161c the donation page may be framed by
 # welfareavenue.com, www and the new site's preview address (the popup, give/embed.js and give/embed.css);
-# X-Frame-Options DENY stays on the Hub and the form pages only.
+# X-Frame-Options DENY stays on the Hub, the form pages and the volunteer confirm page (/c/*, wave169a: the Hub's strict
+# policy; the page itself sets no-referrer so the personal link never leaks) only.
 /*
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   X-Content-Type-Options: nosniff
@@ -16,6 +17,9 @@
   X-Frame-Options: DENY
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 /f/*
+  X-Frame-Options: DENY
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+/c/*
   X-Frame-Options: DENY
   Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob: https://zwnmulmnvopclzcvytce.supabase.co; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co wss://zwnmulmnvopclzcvytce.supabase.co https://www.googleapis.com; frame-src 'self' https://www.loom.com https://www.youtube-nocookie.com https://player.vimeo.com https://docs.google.com https://drive.google.com https://zwnmulmnvopclzcvytce.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
 /give

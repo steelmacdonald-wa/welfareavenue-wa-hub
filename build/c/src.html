@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Welfare Avenue: confirm your spot</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the volunteer confirm page (wave171, planned as wave169a, 30/09/26). Served for every /c/<token> by a Netlify rewrite
+     (_redirects). The confirmation text sends each volunteer their own link; the page reads their spot with
+     volunteer_confirm_get (the token is the key: first name, role, date and place, never a phone or anyone else),
+     Confirm or I can't make it calls volunteer_confirm_submit, and the Hub's roster and dashboards show it at once.
+     After confirming: what to expect in their role, with the role's photo from the Photo library. English and French.
+     ?test=1 (the admins' test text) shows everything and saves nothing. Built by build/c/make.py from build/c/src.html. -->
+<style>
+:root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--cream);color:var(--ink);font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;font-size:16px;line-height:1.5}
+.band{position:relative;background:var(--green) center/cover no-repeat;color:var(--cream);padding:18px 16px 92px;min-height:300px;display:flex;flex-direction:column;overflow:hidden}
+.band:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.5) 0%,rgba(16,63,57,.6) 40%,rgba(16,63,57,.95) 100%)}
+.band.ph{background-image:none!important}
+.band > *{position:relative}
+.band .in{width:100%;max-width:560px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.band .hx{width:100%;max-width:560px;margin:auto auto 0;padding-top:30px}
+.band .ey{font-size:12.5px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--gold);margin:0 0 6px}
+.band h1{color:var(--cream);font-size:42px;margin:0;text-shadow:0 2px 18px rgba(0,0,0,.25)}
+.band .star{width:52px;height:auto;transform:rotate(12deg);opacity:.95}
+.lockup{height:52px;width:auto;display:block;color:var(--cream)}
+.langs{display:flex;gap:6px;align-items:center}
+.langs button{background:transparent;border:1px solid rgba(255,250,242,.5);color:var(--cream);border-radius:999px;padding:3px 10px;font:inherit;font-size:13px;cursor:pointer;min-width:0;margin:0}
+.langs button.on{background:var(--cream);color:var(--green);border-color:var(--cream)}
+main{max-width:560px;margin:-62px auto 0;padding:0 16px 36px;position:relative}
+@media (max-width:480px){.band{min-height:250px;padding-bottom:80px}.band h1{font-size:34px}.lockup{height:44px}.band .star{width:40px}}
+.card{background:var(--card);border-radius:20px;box-shadow:0 1px 2px rgba(16,63,57,.06),0 12px 32px rgba(16,63,57,.08);padding:24px 20px}
+@media (min-width:560px){.card{padding:32px 34px}}
+h1,h2{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;line-height:1.05;letter-spacing:.2px;text-transform:uppercase;color:var(--green);margin:0 0 6px}
+h2{font-size:30px}
+h3{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:21px;text-transform:uppercase;letter-spacing:.3px;color:var(--green);margin:22px 0 8px}
+.rule{width:56px;height:4px;border-radius:4px;background:var(--gold);margin:10px 0 16px}
+.spot{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0 0 18px;font-size:16px}
+.spot dt{color:var(--muted);font-size:14px;padding-top:1px}
+.spot dd{margin:0;font-weight:600}
+.pill{display:inline-block;border-radius:999px;padding:2px 10px;font-size:13px;font-weight:600;background:rgba(220,165,39,.22);color:var(--ink)}
+button{font:inherit;font-weight:600;font-size:18px;border:0;border-radius:999px;padding:15px 28px;background:var(--gold);color:var(--ink);cursor:pointer;width:100%;margin-top:6px}
+button:hover{filter:brightness(1.04)}
+button:focus-visible,a:focus-visible{outline:3px solid var(--green);outline-offset:3px}
+button[disabled]{opacity:.6;cursor:progress}
+.no{display:block;text-align:center;margin:14px 0 0;color:var(--green);font-size:15px;background:none;border:0;padding:6px;width:100%;font-weight:500;text-decoration:underline;cursor:pointer}
+.banner{border-radius:12px;padding:12px 14px;margin:0 0 16px;font-size:15px}
+.banner.warn{background:rgba(179,64,47,.08);color:#7e2b1f}
+.banner.info{background:rgba(220,165,39,.18)}
+.ok{display:flex;gap:14px;align-items:center;margin:0 0 6px}
+.ok .tick{flex:none;width:52px;height:52px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center}
+.ok .tick svg{width:28px;height:28px}
+.ok p{margin:0;color:var(--muted);font-size:14px}
+.photo{margin:18px -20px 0;height:210px;background:var(--green) center/cover no-repeat;position:relative}
+@media (min-width:560px){.photo{margin:20px -34px 0;height:240px}}
+.photo .cap{position:absolute;left:14px;bottom:10px;background:rgba(16,63,57,.85);color:var(--cream);border-radius:999px;padding:3px 12px;font-size:13px}
+ul.steps{list-style:none;padding:0;margin:0}
+ul.steps li{position:relative;padding:8px 0 8px 34px;border-top:1px solid var(--line)}
+ul.steps li:first-child{border-top:0}
+ul.steps li:before{content:attr(data-n);position:absolute;left:0;top:8px;width:24px;height:24px;border-radius:50%;background:rgba(220,165,39,.28);color:var(--green);font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+.kv{margin:10px 0 0;padding:12px 14px;background:rgba(16,63,57,.05);border-radius:12px}
+.kv b{display:block;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px}
+.call{margin:18px 0 0;font-size:15px}
+.call a,.nw{white-space:nowrap}
+.done-e{display:block;width:92px;height:auto;margin:0 0 6px}
+.heart{position:absolute;right:14px;top:-18px;width:62px;height:auto;transform:rotate(10deg)}
+.brandline{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:var(--green);margin:22px 0 0}
+.loading{color:var(--muted)}
+footer{max-width:560px;margin:0 auto;padding:0 16px 36px;font-size:13px;color:var(--muted)}
+a{color:var(--green)}
+</style>
+</head>
+<body>
+<div class="band ph" id="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a><div class="langs" id="langs"><button type="button" data-l="en">EN</button><button type="button" data-l="fr">FR</button></div></div><div class="hx"><p class="ey" id="ey"></p><h1 id="ht"></h1></div></div>
+<main><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></main>
+<footer id="foot"></footer>
+<script>
+(function () {
+  var API = '%%SUPABASE_URL%%/rest/v1/rpc/';
+  var KEY = '%%ANON_KEY%%';
+  var ST = '%%ST%%';
+  var OPS = '438-808-7754', OPS_TEL = '+14388087754';
+  var TX = {
+    en: { loading: 'Loading…', ey: 'Your volunteer spot', title: 'See you there?', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.',
+      role: 'Role', date: 'Date', place: 'Where', format: 'Format', home: 'Home-cooked', kitchen: 'Community kitchen', shift: 'Kitchen shift',
+      confirm: 'Confirm, I will be there', cant: 'I can’t make it', saving: 'Saving…',
+      okT: 'You’re confirmed!', okP: 'Thank you. The team can see it now.', okWhen: 'Confirmed',
+      expect: 'What to expect as', bring: 'What to bring', arrive: 'When to arrive', photo: 'The team in action',
+      noT: 'Thanks for letting us know', noP: 'We have taken you off this serving. We hope to see you at another one soon.', changed: 'Changed your mind?', again: 'I can come after all',
+      call: 'Questions? Text or call Welfare Avenue at ', past: 'This serving has already happened. Thank you for being part of it.', cancelled: 'This serving was cancelled. We will be in touch about the next one.',
+      nf: 'We could not find this link.', nfh: 'It may be mistyped or out of date. Text us at ', offline: 'We could not reach Welfare Avenue. Check your connection and try again.',
+      test: 'Test link: nothing is saved.', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001' },
+    fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', title: 'On se voit là-bas?', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
+      role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
+      confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
+      okT: 'C’est confirmé!', okP: 'Merci. L’équipe le voit dès maintenant.', okWhen: 'Confirmé',
+      expect: 'À quoi vous attendre :', bring: 'Quoi apporter', arrive: 'Quand arriver', photo: 'L’équipe en action',
+      noT: 'Merci de nous avoir prévenus', noP: 'Nous vous avons retiré de ce service. Au plaisir de vous voir à un prochain.', changed: 'Vous avez changé d’idée?', again: 'Finalement, je peux venir',
+      call: 'Des questions? Textez ou appelez Welfare Avenue au ', past: 'Ce service a déjà eu lieu. Merci d’en avoir fait partie.', cancelled: 'Ce service a été annulé. Nous vous écrirons pour le prochain.',
+      nf: 'Nous n’avons pas trouvé ce lien.', nfh: 'Il est peut-être mal copié ou expiré. Textez-nous au ', offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.',
+      test: 'Lien de test : rien n’est enregistré.', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001' }
+  };
+  var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
+  var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
+  var q = new URLSearchParams(location.search);
+  var S = { d: null, lang: 'en', busy: false, err: '', test: q.get('test') === '1', chosen: false };
+  function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function token() {
+    var m = location.pathname.match(/\/c\/([A-Za-z0-9]{12,40})\/?$/);
+    return m ? m[1] : (q.get('t') || '');
+  }
+  function rpc(fn, body) {
+    return fetch(API + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, body: j }; }); });
+  }
+  function day(iso) {
+    var d = new Date(String(iso) + 'T12:00:00');
+    if (isNaN(d)) return String(iso || '');
+    try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); }
+  }
+  function when(iso) {
+    var d = new Date(iso); if (isNaN(d)) return '';
+    try { return d.toLocaleString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
+  }
+  function roleName() { var d = S.d || {}; return (S.lang === 'fr' ? d.role_fr : d.role_en) || d.role || ''; }
+  function photoUrl(p) { return ST + String(p.path || '').replace(/^\/+/, ''); }
+  function setBand(photo) {
+    var p = photo || DEF_PHOTO;
+    var img = new Image();
+    img.onload = function () { band.style.backgroundImage = 'url("' + photoUrl(p) + '")'; band.style.backgroundPosition = Math.round((p.fx == null ? 0.5 : p.fx) * 100) + '% ' + Math.round((p.fy == null ? 0.5 : p.fy) * 100) + '%'; band.classList.remove('ph'); };
+    img.src = photoUrl(p);
+  }
+  function langButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-l') === S.lang); b.setAttribute('aria-pressed', b.getAttribute('data-l') === S.lang ? 'true' : 'false'); });
+    document.documentElement.lang = S.lang;
+  }
+  function footer() {
+    foot.innerHTML = (t('brand') ? '<p class="brandline">' + E(t('brand')) + '</p>' : '') + '<p>Welfare Avenue · ' + E(t('charity')) + '</p>';
+  }
+  function spotHtml() {
+    var d = S.d;
+    var h = '<dl class="spot"><dt>' + E(t('role')) + '</dt><dd>' + E(roleName()) + '</dd><dt>' + E(t('date')) + '</dt><dd>' + E(day(d.event_date)) + '</dd><dt>' + E(t('place')) + '</dt><dd>' + E(d.location || 'Montreal') + '</dd>';
+    if (d.format) h += '<dt>' + E(t('format')) + '</dt><dd><span class="pill">' + E(d.format === 'community_kitchen' ? t('kitchen') : t('home')) + '</span>' + (d.kitchen_place ? '<br><span style="font-weight:500">' + E(d.kitchen_place) + '</span>' : '') + '</dd>';
+    if (d.kitchen_shift) h += '<dt>' + E(t('shift')) + '</dt><dd>' + E(d.kitchen_shift) + '</dd>';
+    return h + '</dl>';
+  }
+  function guideHtml() {
+    var d = S.d, g = d.guide || {}, fr = S.lang === 'fr';
+    var steps = (fr ? g.expect_fr : g.expect_en) || [];
+    var bring = fr ? g.bring_fr : g.bring_en, arrive = fr ? g.arrive_fr : g.arrive_en;
+    var ph = d.photo || DEF_PHOTO;
+    var h = '<div class="photo" role="img" aria-label="' + E(ph.alt || t('photo')) + '" style="background-image:url(&quot;' + E(photoUrl(ph)) + '&quot;);background-position:' + Math.round((ph.fx == null ? 0.5 : ph.fx) * 100) + '% ' + Math.round((ph.fy == null ? 0.5 : ph.fy) * 100) + '%"><span class="cap">' + E(roleName()) + '</span></div>';
+    h += '<h3>' + E(t('expect')) + ' ' + E(fr ? roleName().toLowerCase() : roleName().toLowerCase()) + '</h3>';
+    if (steps.length) h += '<ul class="steps">' + steps.map(function (s, i) { return '<li data-n="' + (i + 1) + '">' + E(s) + '</li>'; }).join('') + '</ul>';
+    if (bring) h += '<div class="kv"><b>' + E(t('bring')) + '</b>' + E(bring) + '</div>';
+    if (arrive) h += '<div class="kv"><b>' + E(t('arrive')) + '</b>' + E(arrive) + '</div>';
+    return h;
+  }
+  function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
+  function tick() { return '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFAF2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'; }
+  function paint() {
+    langButtons(); footer();
+    var ey = document.getElementById('ey'), ht = document.getElementById('ht');
+    if (!S.d) return;
+    var d = S.d;
+    ey.textContent = t('ey'); ht.textContent = roleName();
+    var test = S.test ? '<div class="banner info">' + E(t('test')) + '</div>' : '';
+    var err = S.err ? '<div class="banner warn">' + E(S.err) + '</div>' : '';
+    if (d.cancelled) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('cancelled')) + '</div>' + callHtml(); return; }
+    if (d.past) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('past')) + '</div>' + callHtml(); return; }
+    if (d.state === 'confirmed') {
+      app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
+        + spotHtml() + guideHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
+    } else if (d.state === 'declined') {
+      app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
+        + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + callHtml();
+    } else {
+      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t('intro')) + '</p>' + spotHtml()
+        + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('confirm')) + '</button>'
+        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + callHtml();
+    }
+  }
+  function answer(att) {
+    if (S.busy) return;
+    S.err = '';
+    if (S.test) { S.d.state = att === 'yes' ? 'confirmed' : 'declined'; S.d.confirmed_at = new Date().toISOString(); paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ } return; }
+    S.busy = true; paint();
+    rpc('volunteer_confirm_submit', { p_token: token(), p: { attending: att, via: 'link', lang: S.lang } }).then(function (r) {
+      S.busy = false;
+      if (r.ok && r.body && r.body.ok) { S.d.state = r.body.state; S.d.confirmed_at = new Date().toISOString(); }
+      else if (r.body && r.body.reason === 'past') { S.d.past = true; }
+      else { S.err = t('offline'); }
+      paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+    }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
+  }
+  app.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
+    if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no');
+  });
+  document.getElementById('langs').addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;
+    S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
+    if (S.d) paint(); else langButtons();
+  });
+  function notFound(msg) {
+    document.getElementById('ey').textContent = 'Welfare Avenue';
+    app.innerHTML = '<h2>' + E(msg || t('nf')) + '</h2><div class="rule"></div><p>' + E(t('nfh')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>';
+    footer(); langButtons();
+  }
+  try { var saved = localStorage.getItem('wa_lang'); if (saved === 'fr' || saved === 'en') { S.lang = saved; S.chosen = true; } } catch (e) { /* fine */ }
+  if (!S.chosen && q.get('lang') === 'fr') S.lang = 'fr';
+  if (!S.chosen && !q.get('lang') && /^fr\b/i.test(navigator.language || '')) S.lang = 'fr';
+  langButtons();
+  var tk = token();
+  if (!tk) { notFound(); return; }
+  rpc('volunteer_confirm_get', { p_token: tk }).then(function (r) {
+    if (!r.ok) { notFound(t('offline')); return; }
+    if (!r.body) { notFound(); return; }
+    S.d = r.body;
+    if (!S.chosen && r.body.lang === 'fr') S.lang = 'fr';
+    setBand(r.body.photo);
+    paint();
+  }).catch(function () { notFound(t('offline')); });
+})();
+</script>
+</body>
+</html>
