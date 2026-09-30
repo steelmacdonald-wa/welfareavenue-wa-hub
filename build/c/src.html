@@ -18,7 +18,9 @@
      wave172 (30/09/26): a serving more than 7 days away shows "You're signed up" (confirming opens 7 days before, when the
      confirmation text comes); each role's own questions (a cook's recipe, a server's donations, a new driver's car, how a
      photographer will share) saved by volunteer_confirm_details; the role's forms and guides (links); Add to calendar
-     (Google Calendar or an .ics file) for this serving and the person's other servings; the survey after the serving. -->
+     (Google Calendar or an .ics file) for this serving and the person's other servings; the survey after the serving.
+     wave173 (30/09/26): cooks say how their food reaches us: pickup from their address in the pickup areas (the old website's
+     list) or drop-off at the serving by noon, and whether they stay to serve. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -132,10 +134,15 @@ a{color:var(--green)}
       nf: 'We could not find this link.', nfh: 'It may be mistyped or out of date. Text us at ', offline: 'We could not reach Welfare Avenue. Check your connection and try again.',
       test: 'Test link: nothing is saved.', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001',
       yours: 'A few details for your role', save: 'Save', savedOk: 'Saved. Thank you!',
-      dish: 'Which dish will you cook?', dishPick: 'Choose a recipe…', dishNone: 'Not sure yet', taken1: '1 cook already', takenN: '{n} cooks already', seeRecipe: 'See the recipe',
+      dish: 'Which dish would you prefer to cook?', dishPick: 'Choose a recipe…', dishNone: 'Not sure yet', taken1: '1 cook already', takenN: '{n} cooks already', seeRecipe: 'See the recipe',
       don: 'Bringing anything to donate? (optional)', donPh: 'For example: two bags of winter clothes, toiletries',
       car: 'Your car', carOnFile: 'Car on file:', carChange: 'Update it if it has changed.', carType: 'Type of car', carModel: 'Make and model', carPick: 'Choose…', carPh: 'For example: Toyota Corolla',
       carTypes: ['Sedan', 'Hatchback', 'SUV', 'Minivan', 'Pickup truck', 'Van'],
+      food: 'How does your food reach us?', fPick: 'Pick it up from my home', fPickS: 'If you live in one of our pickup areas', fDrop: 'I will drop it off at {p} by {t}', fDropS: 'Anyone can drop off, wherever they live',
+      area: 'Your neighbourhood', areaPick: 'Choose your neighbourhood…', areaOther: 'My area is not listed', areaNo: 'We can only pick up in these areas. You are welcome to drop your food off at {p} by {t} instead.',
+      addr: 'Street address for the pickup', addrPh: 'For example: 2067 Rue Sanguinet, apt 3', postal: 'Postal code', postalPh: 'H2X 3G6',
+      stay: 'Would you like to stay and serve with the team?', stayY: 'Yes, I will stay and serve', stayN: 'No, just dropping off',
+      errAddr: 'Please enter the street address for the pickup.', errArea: 'Please choose a neighbourhood in our pickup areas, or drop off instead.', errPostal: 'Please check the postal code (for example H2X 3G6).', errPick: 'Please tell us whether we pick up or you drop off.',
       share: 'How will you share your photos with us?', shareOpts: [['album', 'The shared Google Photos album'], ['drive', 'The Drive folder'], ['email', 'By email to marketing@welfareavenue.com']],
       links: 'Your forms and guides', wBefore: 'Before the serving', wDuring: 'During the serving', wAfter: 'After the serving',
       calT: 'Add to your calendar', calG: 'Google Calendar', calI: 'Apple or Outlook (.ics)',
@@ -154,10 +161,15 @@ a{color:var(--green)}
       nf: 'Nous n’avons pas trouvé ce lien.', nfh: 'Il est peut-être mal copié ou expiré. Textez-nous au ', offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.',
       test: 'Lien de test : rien n’est enregistré.', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001',
       yours: 'Quelques détails pour votre rôle', save: 'Enregistrer', savedOk: 'C’est enregistré. Merci!',
-      dish: 'Quel plat allez-vous cuisiner?', dishPick: 'Choisir une recette…', dishNone: 'Je ne sais pas encore', taken1: 'déjà 1 cuisinier ou cuisinière', takenN: 'déjà {n} en cuisine', seeRecipe: 'Voir la recette',
+      dish: 'Quel plat préféreriez-vous cuisiner?', dishPick: 'Choisir une recette…', dishNone: 'Je ne sais pas encore', taken1: 'déjà 1 cuisinier ou cuisinière', takenN: 'déjà {n} en cuisine', seeRecipe: 'Voir la recette',
       don: 'Vous apportez quelque chose à donner? (facultatif)', donPh: 'Par exemple : deux sacs de vêtements d’hiver, des articles d’hygiène',
       car: 'Votre voiture', carOnFile: 'Voiture au dossier :', carChange: 'Mettez-la à jour si elle a changé.', carType: 'Type de voiture', carModel: 'Marque et modèle', carPick: 'Choisir…', carPh: 'Par exemple : Toyota Corolla',
       carTypes: ['Berline', 'Hatchback', 'VUS', 'Fourgonnette', 'Camionnette', 'Camion'],
+      food: 'Comment votre plat nous parvient-il?', fPick: 'Venez le chercher chez moi', fPickS: 'Si vous habitez un de nos secteurs de collecte', fDrop: 'Je le dépose au {p} avant {t}', fDropS: 'Tout le monde peut déposer, peu importe le quartier',
+      area: 'Votre quartier', areaPick: 'Choisir votre quartier…', areaOther: 'Mon quartier n’est pas dans la liste', areaNo: 'Nous passons seulement dans ces secteurs. Vous pouvez plutôt déposer votre plat au {p} avant {t}.',
+      addr: 'Adresse pour la collecte', addrPh: 'Par exemple : 2067, rue Sanguinet, app. 3', postal: 'Code postal', postalPh: 'H2X 3G6',
+      stay: 'Voulez-vous rester pour servir avec l’équipe?', stayY: 'Oui, je reste pour servir', stayN: 'Non, je dépose seulement',
+      errAddr: 'Veuillez entrer l’adresse pour la collecte.', errArea: 'Veuillez choisir un quartier de nos secteurs de collecte, ou déposer votre plat.', errPostal: 'Veuillez vérifier le code postal (par exemple H2X 3G6).', errPick: 'Dites-nous si nous passons le chercher ou si vous le déposez.',
       share: 'Comment allez-vous nous transmettre vos photos?', shareOpts: [['album', 'L’album Google Photos partagé'], ['drive', 'Le dossier Drive'], ['email', 'Par courriel à marketing@welfareavenue.com']],
       links: 'Vos formulaires et guides', wBefore: 'Avant le service', wDuring: 'Pendant le service', wAfter: 'Après le service',
       calT: 'Ajouter à votre agenda', calG: 'Google Agenda', calI: 'Apple ou Outlook (.ics)',
@@ -249,6 +261,9 @@ a{color:var(--green)}
       var pick = d.recipes.filter(function (r) { return String(r.id) === cur; })[0];
       if (pick && safeUrl(pick.url)) h += '<p style="margin:2px 0 0;font-size:14px"><a href="' + E(safeUrl(pick.url)) + '" target="_blank" rel="noopener">' + E(t('seeRecipe')) + ': ' + E(pick.name) + '</a></p>';
       h += '</div>';
+      h += foodHtml(val);
+    } else if (role === 'cook') {
+      h += foodHtml(val);
     } else if (role === 'server') {
       h += '<div class="q"><label class="l" for="don">' + E(t('don')) + '</label><textarea id="don" maxlength="300" placeholder="' + E(t('donPh')) + '">' + E(val('donations')) + '</textarea></div>';
     } else if (role === 'driver') {
@@ -261,13 +276,49 @@ a{color:var(--green)}
       h += '<div class="q"><label class="l">' + E(t('share')) + '</label>' + t('shareOpts').map(function (o) { return '<label class="opt"><input type="radio" name="share" value="' + o[0] + '"' + (sh === o[0] ? ' checked' : '') + '><span>' + E(o[1]) + '</span></label>'; }).join('') + '</div>';
     }
     if (!h) return '';
-    return '<div class="sec"><h3>' + E(t('yours')) + '</h3>' + h + '<button type="button" class="sec2" id="save"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('save')) + '</button>' + (S.saved ? '<p class="saved" role="status">' + E(t('savedOk')) + '</p>' : '') + '</div>';
+    return '<div class="sec"><h3>' + E(t('yours')) + '</h3>' + h + (S.derr ? '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.derr) + '</div>' : '') + '<button type="button" class="sec2" id="save"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('save')) + '</button>' + (S.saved ? '<p class="saved" role="status">' + E(t('savedOk')) + '</p>' : '') + '</div>';
+  }
+  /* wave173: a cook's pickup (an address in the pickup areas) or drop-off (and staying to serve) */
+  function dropTime() {
+    var tm = String(((S.d || {}).cook_pickup || {}).dropoff_time || '12:00'); var m = tm.match(/^(\d{1,2}):(\d{2})$/); if (!m) return tm;
+    var hh = Number(m[1]), mm = m[2];
+    if (S.lang === 'fr') return hh + ' h' + (mm === '00' ? '' : ' ' + mm);
+    return (hh % 12 || 12) + ':' + mm + (hh < 12 ? ' am' : ' pm');
+  }
+  function fill(k) { var cp = (S.d || {}).cook_pickup || {}; return t(k).replace('{p}', cp.dropoff_place || '1500 Rue Berri').replace('{t}', dropTime()); }
+  function foodHtml(val) {
+    var cp = S.d.cook_pickup; if (!cp) return '';
+    var mode = val('pickup'), area = val('neighbourhood'), areas = cp.areas || [];
+    var h = '<div class="q"><label class="l">' + E(t('food')) + '</label>'
+      + '<label class="opt"><input type="radio" name="food" value="pickup"' + (mode === 'pickup' ? ' checked' : '') + '><span>' + E(t('fPick')) + '<br><small style="margin:0;white-space:normal">' + E(t('fPickS')) + '</small></span></label>'
+      + '<label class="opt"><input type="radio" name="food" value="dropoff"' + (mode === 'dropoff' ? ' checked' : '') + '><span>' + E(fill('fDrop')) + '<br><small style="margin:0;white-space:normal">' + E(t('fDropS')) + '</small></span></label></div>';
+    if (mode === 'pickup') {
+      h += '<div class="q"><label class="l" for="area">' + E(t('area')) + '</label><select id="area"><option value="">' + E(t('areaPick')) + '</option>'
+        + areas.map(function (a) { return '<option' + (a === area ? ' selected' : '') + '>' + E(a) + '</option>'; }).join('')
+        + '<option value="__other"' + (area === '__other' ? ' selected' : '') + '>' + E(t('areaOther')) + '</option></select>';
+      if (area === '__other') h += '<div class="banner info" style="margin:10px 0 0">' + E(fill('areaNo')) + '</div>';
+      h += '</div>';
+      if (area !== '__other') h += '<div class="q"><label class="l" for="addr">' + E(t('addr')) + '</label><input type="text" id="addr" maxlength="160" autocomplete="street-address" placeholder="' + E(t('addrPh')) + '" value="' + E(val('address')) + '">'
+        + '<label class="l" for="postal" style="margin-top:10px">' + E(t('postal')) + '</label><input type="text" id="postal" maxlength="7" autocomplete="postal-code" placeholder="' + E(t('postalPh')) + '" value="' + E(val('postal_code')) + '" style="max-width:180px"></div>';
+    } else if (mode === 'dropoff') {
+      var st = val('stay_to_serve');
+      h += '<div class="q"><label class="l">' + E(t('stay')) + '</label>'
+        + '<label class="opt"><input type="radio" name="stay" value="yes"' + (st === true || st === 'yes' ? ' checked' : '') + '><span>' + E(t('stayY')) + '</span></label>'
+        + '<label class="opt"><input type="radio" name="stay" value="no"' + (st === false || st === 'no' ? ' checked' : '') + '><span>' + E(t('stayN')) + '</span></label></div>';
+    }
+    return h;
   }
   function readForm() {
     var d = S.d, role = String(d.role || '').toLowerCase(), p = {};
     function v(id) { var el = document.getElementById(id); return el ? el.value : undefined; }
     function r(name) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : undefined; }
     if (role === 'cook') { var dish = r('dish'); if (dish !== undefined) p.recipe_id = dish === '' ? null : Number(dish); }
+    if (role === 'cook' && d.cook_pickup) {
+      var fm = r('food');
+      if (fm) p.pickup = fm;
+      if (fm === 'pickup') { var ar = v('area'); if (ar !== undefined) p.neighbourhood = ar; if (v('addr') !== undefined) p.address = v('addr'); if (v('postal') !== undefined) p.postal_code = v('postal'); }
+      if (fm === 'dropoff') { var sy = r('stay'); if (sy) p.stay_to_serve = sy === 'yes'; }
+    }
     if (role === 'server') p.donations = v('don') || '';
     if (role === 'driver') { p.vehicle = v('vehicle') || ''; p.model = v('model') || ''; }
     if (role === 'photographer') { var s = r('share'); if (s) p.photos_share = s; }
@@ -355,13 +406,24 @@ a{color:var(--green)}
   }
   function save() {
     if (S.busy) return;
-    var p = readForm(); S.form = Object.assign({}, S.form, p); S.saved = false; S.err = '';
+    var p = readForm(); S.form = Object.assign({}, S.form, p); S.saved = false; S.err = ''; S.derr = '';
+    if (String(S.d.role || '').toLowerCase() === 'cook' && S.d.cook_pickup) {
+      var pk = S.form.pickup || (S.d.details || {}).pickup;
+      if (!pk) { S.derr = t('errPick'); paint(); return; }
+      if (pk === 'pickup') {
+        if (!S.form.neighbourhood || S.form.neighbourhood === '__other') { S.derr = t('errArea'); paint(); return; }
+        if (!String(S.form.address || '').trim()) { S.derr = t('errAddr'); paint(); return; }
+        if (String(S.form.postal_code || '').trim() && !/^[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d$/.test(String(S.form.postal_code).trim())) { S.derr = t('errPostal'); paint(); return; }
+        p.pickup = 'pickup'; p.neighbourhood = S.form.neighbourhood; p.address = S.form.address; p.postal_code = S.form.postal_code || '';
+      }
+    }
     var apply = function () {
       var x = S.d.details = S.d.details || {};
       if ('recipe_id' in p) x.recipe_id = p.recipe_id;
       if ('donations' in p) x.donations = p.donations;
       if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
       if ('photos_share' in p) x.photos_share = p.photos_share;
+      if ('pickup' in p) { x.pickup = p.pickup; if (p.pickup === 'pickup') { x.neighbourhood = p.neighbourhood; x.address = p.address; x.postal_code = p.postal_code; } if ('stay_to_serve' in p) x.stay_to_serve = p.stay_to_serve; }
       S.form = {}; S.saved = true;
     };
     if (S.test) { apply(); paint(); return; }
@@ -370,6 +432,9 @@ a{color:var(--green)}
       S.busy = false;
       if (r.ok && r.body && r.body.ok) apply();
       else if (r.body && r.body.reason === 'past') S.d.past = true;
+      else if (r.body && r.body.reason === 'area') S.derr = t('errArea');
+      else if (r.body && r.body.reason === 'address') S.derr = t('errAddr');
+      else if (r.body && r.body.reason === 'postal') S.derr = t('errPostal');
       else S.err = t('offline');
       paint();
     }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
@@ -386,7 +451,7 @@ a{color:var(--green)}
   });
   app.addEventListener('change', function (e) {
     var el = e.target; if (!el) return;
-    if (el.name === 'dish') { S.form = Object.assign({}, S.form, readForm()); S.saved = false; paint(); }
+    if (el.name === 'dish' || el.name === 'food' || el.name === 'stay' || el.id === 'area') { S.form = Object.assign({}, S.form, readForm()); if (el.name === 'food') S.form.pickup = el.value; if (el.id === 'area') S.form.neighbourhood = el.value; S.saved = false; paint(); }
   });
   document.getElementById('langs').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;

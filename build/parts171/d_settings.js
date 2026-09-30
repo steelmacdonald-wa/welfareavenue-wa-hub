@@ -56,6 +56,30 @@
     });
     return { links: out, bad: bad };
   }
+  /* wave173: where drivers pick up cooks' food, and the drop-off for everyone else (staff edit) */
+  function cookHtml() {
+    return '<div class="w171h" style="margin-top:18px">Cooks: pickup areas and the drop-off</div>'
+      + '<p class="w171note">Cooks choose pickup from home only in these neighbourhoods; anyone else drops their food off. From the old website.</p>'
+      + '<label class="f">Pickup areas, one per line</label><textarea id="w171areas" style="min-height:120px">' + E(S.cfg.cook_pickup_areas || '') + '</textarea>'
+      + '<div class="two"><div><label class="f">Drop-off place</label><input type="text" id="w171dplace" value="' + E(S.cfg.cook_dropoff_place || '') + '"></div>'
+      + '<div><label class="f">Drop off by (24 h, for example 12:00)</label><input type="text" id="w171dtime" value="' + E(S.cfg.cook_dropoff_time || '') + '"></div></div>'
+      + '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w171cooksave="1">Save the pickup areas</button></div>';
+  }
+  async function cookSave(btn) {
+    var areas = ((document.getElementById('w171areas') || {}).value || '').split('\n').map(function (x) { return x.trim(); }).filter(Boolean).join('\n');
+    var place = ((document.getElementById('w171dplace') || {}).value || '').trim();
+    var time = ((document.getElementById('w171dtime') || {}).value || '').trim();
+    if (!areas || !place) { T('The areas and the drop-off place are needed'); return; }
+    if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(time)) { T('The time looks like 12:00'); return; }
+    btn.disabled = true;
+    try {
+      var now = new Date().toISOString();
+      var rows = [['cook_pickup_areas', areas], ['cook_dropoff_place', place], ['cook_dropoff_time', time]];
+      for (var i = 0; i < rows.length; i++) { var r = await db.from('app_config').update({ value: rows[i][1], updated_at: now }).eq('key', rows[i][0]); if (r.error) throw r.error; S.cfg[rows[i][0]] = rows[i][1]; }
+      T('Pickup areas saved');
+    } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
+    btn.disabled = false;
+  }
   function modeHtml(cn) {
     var m = S.mode || 'off';
     var opt = function (v, t, d) { return '<label class="' + (m === v ? 'on' : '') + '"><input type="radio" name="w171mode" value="' + v + '"' + (m === v ? ' checked' : '') + (cn.admin ? '' : ' disabled') + '><span><b>' + t + '</b><small>' + d + '</small></span></label>'; };
@@ -79,6 +103,7 @@
       + modeHtml(cn)
       + '<label class="f">Test phone</label><input type="text" id="w171tp" value="' + E(S.cfg.sms_test_phones || '') + '"' + (cn.admin ? '' : ' disabled') + ' placeholder="438 555 0100">'
       + surveyHtml(cn)
+      + cookHtml()
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'

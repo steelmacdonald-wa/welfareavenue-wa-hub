@@ -26,6 +26,8 @@
     if (isOff(r) || isDecl(r)) return '';
     var c = r.confirm || {}, out = [];
     if (r.recipe_id && lower(r.role) === 'cook') out.push('Cooking: ' + recipeName(r.recipe_id));
+    if (lower(r.role) === 'cook' && c.cook_location === 'home' && c.neighbourhood) out.push('Pickup: ' + c.neighbourhood + (c.address ? ' \u00b7 ' + c.address : ''));
+    if (lower(r.role) === 'cook' && c.cook_location === 'drop off') out.push('Drops off' + (c.stay_to_serve === true ? ' \u00b7 staying to serve' : c.stay_to_serve === false ? ' \u00b7 not staying' : ''));
     if (c.donations) out.push('Bringing to donate: ' + c.donations);
     if (c.vehicle || c.model) out.push('Car: ' + [c.vehicle, c.model].filter(Boolean).join(' '));
     if (c.photos_share) out.push('Photos by ' + (SHARE[c.photos_share] || c.photos_share));

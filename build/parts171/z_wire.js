@@ -40,6 +40,7 @@
     if ((b = t.closest('[data-w171fsave]'))) { e.preventDefault(); fmtSave(b); return; }
     if ((b = t.closest('[data-w171gsave]'))) { e.preventDefault(); saveGuide(b); return; }
     if ((b = t.closest('[data-w171svsave]'))) { e.preventDefault(); surveySave(b); return; }
+    if ((b = t.closest('[data-w171cooksave]'))) { e.preventDefault(); cookSave(b); return; }
     if ((b = t.closest('[data-w171pic]'))) {
       e.preventDefault(); S.set.photo = Number(b.getAttribute('data-w171pic'));
       document.querySelectorAll('[data-w171pic]').forEach(function (x) { x.classList.toggle('on', x === b); }); return;

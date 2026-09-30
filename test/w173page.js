@@ -1,4 +1,4 @@
-/* w172page.js: the volunteer confirm page (build/c/index.html, wave171 and wave172), offline. The page is served at
+/* w173page.js: the volunteer confirm page (build/c/index.html, waves 171 to 173), offline. The page is served at
    https://hub.welfareavenue.com/c/<token> by route interception and the two RPCs are stubbed: an open spot shows the
    first name, role, date, place and format with Confirm and I can't make it; Confirm sends the token and attending yes
    and shows "You're confirmed" with what to expect, the role's photo, what to bring and when to arrive; reopening a
@@ -121,7 +121,7 @@ const TOK = 'abcdef1234567890ab';
     const EVS = [{ token: TOK, date: '2026-11-15', role: 'cook', role_en: 'Cook', role_fr: 'Bénévole en cuisine', location: 'Montreal', state: 'early', current: true },
                  { token: 'zzzz1234567890ab', date: '2026-12-13', role: 'server', role_en: 'Server', role_fr: 'Bénévole au service', location: 'Montreal', state: 'early', current: false }];
     const RECIPES = [{ id: 1, name: 'Chana Masala and Naan', url: 'https://drive.google.com/file/d/a/view', taken: 2 }, { id: 2, name: 'Pasta Primavera', url: 'https://drive.google.com/file/d/b/view', taken: 0 }];
-    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ state: 'early', event_date: '2026-11-15', opens_on: '2026-11-08', events: EVS, recipes: RECIPES }) } : { body: { ok: true } });
+    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ state: 'early', event_date: '2026-11-15', opens_on: '2026-11-08', events: EVS, recipes: RECIPES, details: { address: '2067 Sanguinet, H2X 3G6' }, cook_pickup: { areas: ['All downtown Montreal districts', 'Le Plateau', 'Villeray'], dropoff_place: '1500 Rue Berri, Montréal, QC H2L 2C4', dropoff_time: '12:00' } }) } : { body: { ok: true } });
     t = await text(f.page);
     ok('early: signed up, confirming later', /You.re signed up!/i.test(t) && /We will text you on Sunday, November 8 to confirm/.test(t) && !(await f.page.$('#yes')), t.slice(0, 500));
     ok('early: I can’t make it stays', !!(await f.page.$('#cant')));
@@ -131,12 +131,32 @@ const TOK = 'abcdef1234567890ab';
     await f.page.click('.cal button[data-ics]'); const d1 = await dl;
     let icsText = ''; if (d1) { const pth = await d1.path(); icsText = fs.readFileSync(pth, 'utf8'); }
     ok('early: the .ics file', /BEGIN:VEVENT/.test(icsText) && /DTSTART;VALUE=DATE:20261115/.test(icsText) && /Welfare Avenue serving: Cook/.test(icsText), icsText.slice(0, 300));
-    ok('cook: the recipes, with how many already chose them', /Which dish will you cook/i.test(t) && /Chana Masala and Naan/.test(t) && /2 cooks already/.test(t));
+    ok('cook: the recipes, with how many already chose them', /Which dish would you prefer to cook/i.test(t) && /Chana Masala and Naan/.test(t) && /2 cooks already/.test(t));
     await f.page.check('input[name="dish"][value="2"]'); await f.page.waitForTimeout(150);
     ok('cook: the chosen recipe links to itself', await f.page.evaluate(() => /Pasta Primavera/.test(document.body.innerText) && !!document.querySelector('a[href="https://drive.google.com/file/d/b/view"]')));
+    ok('cook (173): how the food reaches us', /How does your food reach us/i.test(await text(f.page)) && /I will drop it off at 1500 Rue Berri, Montréal, QC H2L 2C4 by 12:00 pm/.test(await text(f.page)));
+    await f.page.click('#save'); await f.page.waitForTimeout(200);
+    ok('cook (173): asks pickup or drop-off first', /Please tell us whether we pick up or you drop off/.test(await text(f.page)) && f.calls.filter(c => c.url.endsWith('volunteer_confirm_details')).length === 0);
+    await f.page.check('input[name="food"][value="pickup"]'); await f.page.waitForTimeout(150);
+    ok('cook (173): the pickup areas', await f.page.evaluate(() => { const o = Array.prototype.map.call(document.querySelectorAll('#area option'), x => x.textContent); return o.indexOf('Le Plateau') >= 0 && o.indexOf('Villeray') >= 0 && o.indexOf('My area is not listed') >= 0; }));
+    ok('cook (173): the address on file is filled in', await f.page.evaluate(() => document.getElementById('addr').value === '2067 Sanguinet, H2X 3G6'));
+    await f.page.selectOption('#area', '__other'); await f.page.waitForTimeout(150);
+    ok('cook (173): outside the areas, drop off instead', /We can only pick up in these areas/.test(await text(f.page)) && !(await f.page.$('#addr')));
+    await f.page.click('#save'); await f.page.waitForTimeout(200);
+    ok('cook (173): outside the areas cannot save a pickup', /Please choose a neighbourhood in our pickup areas/.test(await text(f.page)) && f.calls.filter(c => c.url.endsWith('volunteer_confirm_details')).length === 0);
+    await f.page.selectOption('#area', 'Le Plateau'); await f.page.waitForTimeout(150);
+    await f.page.fill('#addr', ''); await f.page.click('#save'); await f.page.waitForTimeout(200);
+    ok('cook (173): the address is needed', /Please enter the street address/.test(await text(f.page)));
+    await f.page.fill('#addr', '123 Rue Rachel Est'); await f.page.fill('#postal', 'h2j2h8');
     await f.page.click('#save'); await f.page.waitForTimeout(300);
     let det = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[0];
     ok('cook: saves the recipe', det && det.body.p_token === TOK && det.body.p.recipe_id === 2, det && det.body);
+    ok('cook (173): saves the pickup', det && det.body.p.pickup === 'pickup' && det.body.p.neighbourhood === 'Le Plateau' && det.body.p.address === '123 Rue Rachel Est' && det.body.p.postal_code === 'h2j2h8', det && det.body);
+    await f.page.check('input[name="food"][value="dropoff"]'); await f.page.waitForTimeout(150);
+    ok('cook (173): drop-off asks about serving', /Would you like to stay and serve with the team/.test(await text(f.page)));
+    await f.page.check('input[name="stay"][value="yes"]'); await f.page.click('#save'); await f.page.waitForTimeout(300);
+    const det2 = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[1];
+    ok('cook (173): saves the drop-off and staying to serve', det2 && det2.body.p.pickup === 'dropoff' && det2.body.p.stay_to_serve === true && !('address' in det2.body.p), det2 && det2.body);
     ok('cook: saved', /Saved\. Thank you!/.test(await text(f.page)));
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/06-early-cook.png', fullPage: true });
     await f.ctx.close();

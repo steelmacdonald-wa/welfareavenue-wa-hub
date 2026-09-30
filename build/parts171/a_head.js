@@ -23,6 +23,8 @@
    wave172 (30/09/26): the roster cards also say what volunteers told us on their page (a cook's recipe, a server's
    donations, a new driver's car, how a photographer will share) and when the sign-up notice and the survey went; Text
    settings gains the survey (link, roles, hour) and each role's forms and guides (links).
+   wave173 (30/09/26): a cook's pickup (neighbourhood and address) or drop-off (and staying to serve) on their card; Text
+   settings holds the pickup areas and the drop-off.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
