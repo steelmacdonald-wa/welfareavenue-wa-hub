@@ -28,6 +28,20 @@
   };
   var DEF = /*JOURNEY_DEFAULTS*/null;
   var ORDER = ['WEEK 1', 'WEEK 2', 'WEEK 3', 'WEEK 4', '60 DAYS'];
+  /* wave169: any week HR adds to the master (90 DAYS, 6 MONTHS...) gets a readable name and its place in time, as its due date does */
+  function daysOf(name) {
+    var u = String(name || '').toUpperCase().trim(), n = parseInt(u.replace(/[^0-9]/g, ''), 10);
+    if (/^WEEK\s+\d+$/.test(u)) return 7 * n;
+    if (/^\d+\s+DAYS?$/.test(u)) return n;
+    if (/^\d+\s+MONTHS?$/.test(u)) return 30 * n;
+    return 9999;
+  }
+  function lab(name) {
+    var u = String(name || '').trim(), m = /^WEEK\s+(\d+)$/i.exec(u);
+    if (m) return 'Week ' + m[1];
+    m = /^(\d+)\s+(DAYS?|MONTHS?)$/i.exec(u); if (m) return m[1] + ' ' + m[2].toLowerCase();
+    return u.charAt(0) + u.slice(1).toLowerCase();
+  }
   var LABEL = { 'WEEK 1': 'Week 1', 'WEEK 2': 'Week 2', 'WEEK 3': 'Week 3', 'WEEK 4': 'Week 4', '60 DAYS': '60 days' };
   var S = { cfg: null, cfgAt: 0, ppl: null, pplAt: 0, story: null, storyI: 0, wk: null, onb: null, counts: {}, restore: null, first: true };
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }

@@ -986,8 +986,8 @@
       return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
     } catch (e) { return null; }
   }
-  function orgState() {
-    var o = orgMine(); if (!o) return { has: false };
+  function orgState(oo) {
+    var o = oo || orgMine(); if (!o) return { has: false };   /* wave169: the plan sheet can show a preview's onboarding */
     var map = {}; try { map = wa37StepsFor(o.id) || {}; } catch (e) { map = {}; }
     var weeks = []; try { weeks = wa37Weeks() || []; } catch (e) { weeks = []; }
     var total = 0, done = 0, next = null, nextWeek = null, curWeek = null;
@@ -1124,6 +1124,7 @@
   function topHtml() {
     return '<div class="w122top"><span class="crumb">Home &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
+      (window.w169 && w169.can() ? '<button class="w122btn soft sm" data-w169assign="">' + ic('user') + ' Assign a training</button>' : '') +   /* wave169 */
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
   }
@@ -1176,7 +1177,7 @@
       }).join('') + '</div>';
     } else h += '<div class="empty">There are no policies waiting for you.</div>';
     h += '</div></div>';
-    if (isLeader()) h += '<div class="hrrow"><span>HR tools:</span><a class="w122lnk" href="#hrcentre/onboarding">Onboarding board and master plan</a><a class="w122lnk" href="#hrcentre/training">Assign trainings in bulk</a></div>';
+    if (isLeader() || (window.w169 && w169.can())) h += '<div class="hrrow"><span>HR tools:</span><a class="w122lnk" href="#hrcentre/onboarding">Onboarding board and master onboarding</a>' + (window.w169 ? '<button class="w122lnk" data-w169assign="">Assign a training</button><a class="w122lnk" href="#hrcentre/training">Trainings assigned to the organization</a>' : '<a class="w122lnk" href="#hrcentre/training">Assign trainings in bulk</a>') + '</div>';   /* wave169 */
     return h + '</section>';
   }
   function titleCase(s) { return String(s || '').toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }
@@ -1210,7 +1211,8 @@
     var seen = {}, out = [];
     function add(t, tag) { if (!t || seen[t.id] || !visibleT(t) || isDone(t.id)) return; seen[t.id] = 1; out.push({ t: t, tag: tag }); }
     var n = me().name.toLowerCase();
-    var mineRows = A.prog.filter(function (p) { return String(p.person_name).toLowerCase() === n && p.status !== 'done'; });
+    var hasMine = !!(window.w169 && window.w169.homeHtml);   /* wave169: assigned trainings have their own section, Assigned to you */
+    var mineRows = A.prog.filter(function (p) { return String(p.person_name).toLowerCase() === n && p.status !== 'done' && !(hasMine && (p.assignment_id || p.assigned_by)); });
     mineRows.filter(function (p) { return p.started_at || p.pct; }).sort(function (a, b) { return String(b.updated_at || '').localeCompare(String(a.updated_at || '')); })
       .forEach(function (p) { add(A.byId[String(p.training_id)], '<span class="tag">In progress</span>'); });
     mineRows.filter(function (p) { return p.assigned_by; }).forEach(function (p) { add(A.byId[String(p.training_id)]); });
@@ -1222,7 +1224,7 @@
   function nextHtml(s) {
     var list = upNext(s);
     if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a Learning Avenue or the library below.</div></div></div></section>';
-    return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">What you started, what was assigned to you, and what is recommended.</div></div></div>' +
+    return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">' + (window.w169 ? 'What you started, and what is recommended for you.' : 'What you started, what was assigned to you, and what is recommended.') + '</div></div></div>' +
       '<div class="w122scroll">' + list.map(function (x) { return cardHtml(x.t, { tag: x.tag }); }).join('') + '</div></section>';
   }
   function pathsHtml(s) {
@@ -1329,7 +1331,7 @@
     if (!staffOk()) return '<div class="w122none">The Avenue Academy is available to staff accounts.</div>';
     if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The Avenue Academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
-    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
+    return topHtml() + onbHtml(s.onb) + (window.w169 && w169.homeHtml ? w169.homeHtml() : '') + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
   var paintQ = null;
   function paint() {
@@ -1394,7 +1396,7 @@
     if (p) { var items = pathItems(p); var i = items.indexOf(t); if (i >= 0) idx = ' &middot; ' + (i + 1) + ' of ' + items.length; }
     return '<div class="hd"><div class="hi"><div class="kk">' + kindChip(t) + (p ? '<span>' + E(p.title) + idx + '</span>' : (t.category ? '<span>' + E(t.category) + '</span>' : '')) +
       '<span>' + ic('clock') + ' ' + mins(minutesOf(t)) + '</span><span>' + ic('bolt') + ' ' + xpFor(t) + ' XP</span></div><h2>' + E(sub || t.title) + '</h2></div>' +
-      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '') +
+      '<div class="acts">' + (t.id && window.w169 && w169.can() && kindOf(t) !== 'tour' ? '<button class="w122btn soft sm" data-w169assign="t:' + E(t.id) + '">' + ic('user') + ' Assign</button>' : (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '')) +   /* wave169 */
       (kindOf(t) === 'sop' ? (t.id && canEditSop(t) ? '<button class="w122btn soft sm" data-w122sopedit="1">' + ic('edit') + ' Edit</button>' : '') : (isLeader() && t.id && kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '')) +
       '<button class="xb" data-w122x="1" title="Close (Esc)">' + ic('x') + '</button></div></div>';
   }
@@ -1649,7 +1651,7 @@
   }
   function renderPath(sh) {
     var p = R.path, ps = pathState(p), col = p.color || GREEN, cert = A.myAwards['cert:' + p.key];
-    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
+    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts">' + (window.w169 && window.w169.can() && p.key !== 'tours' ? '<button class="w122btn soft sm" data-w169assign="p:' + E(p.key) + '">' + ic('user') + ' Assign</button>' : '') + '<button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="pr"><i style="width:' + ps.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap">' +
       '<div class="phero" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')"><span class="big">' + ic(p.icon || 'book') + '</span><h3>' + E(p.title) + '</h3><p>' + E(p.blurb || '') + '</p><div class="bar"><i style="width:' + ps.pct + '%"></i></div><div style="font-size:13px">' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; about ' + mins(ps.minsLeft) + ' left' : '') + '</div></div>' +
       (cert ? '<div class="callout tip">' + ic('seal') + '<div><b>Certified</b>You earned the ' + E(p.cert_title || p.title) + ' certificate on ' + E(fmtDate(cert.earned_at)) + '. <button class="w122lnk" data-w122cert="cert:' + E(p.key) + '">View it</button></div></div>' : '<div class="callout info">' + ic('seal') + '<div><b>' + E(p.cert_title || p.title) + ' certificate</b>Finish every item to earn it.</div></div>') +
@@ -1664,10 +1666,11 @@
   /* ---------- the onboarding plan ---------- */
   function openOnb() { stopTimer(); R = { mode: 'onb', secs: 0, open: {} }; renderSheet(); }
   function renderOnb(sh) {
-    var g = orgState();
+    var pv = window.__w169view || null, pvb = pv && window.w169 && typeof w169.banner === 'function' ? w169.banner() : '';   /* wave169: HR's preview */
+    var g = orgState(pv);
     if (!g.has) { sh.innerHTML = '<div class="hd"><div class="hi"><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div><div class="bd"><div class="main"><div class="wrap"><p class="prose">HR has not assigned your onboarding plan yet.</p></div></div></div>'; return; }
-    var inner = ''; try { inner = wa37Checklist(g.o, true) || ''; } catch (e) { inner = '<p>The plan could not load.</p>'; }
-    sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('list') + ' Onboarding</span><span>' + g.done + ' of ' + g.total + ' steps</span></div><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
+    var inner = ''; try { inner = wa37Checklist(g.o, !pv) || ''; } catch (e) { inner = '<p>The plan could not load.</p>'; }
+    sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('list') + ' Onboarding</span><span>' + g.done + ' of ' + g.total + ' steps</span></div><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' + pvb +
       '<div class="pr"><i style="width:' + g.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap"><div class="prose"><p>Work top to bottom and tick each step as you go. Big steps fold their details away; open a week to see everything in it. Lean on your onboarding channel whenever something is unclear.</p></div><div class="onbwrap">' + inner + '</div></div></div></div>' +
       '<div class="ft"><div class="st">' + (g.complete ? '<span class="ok">' + ic('check') + ' Complete</span>' : g.done + ' of ' + g.total + ' done') + '</div><span class="sp"></span><button class="w122btn" data-w122x="1">Done</button></div>';
     /* keep the weeks the person had open */

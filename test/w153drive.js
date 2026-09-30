@@ -158,7 +158,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('a member on the HR profile: the dock, with the Hub, the CRM and the HR centre (no Finance, no Admin centre)', m.dock && m.apps.join() === 'hub,crm,hr' && !m.fin && !m.adm, m);
   await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   r = await rail(f);
-  ok('their HR centre shows its notice (admins and leaders), so the rail is the page alone, nothing from the Hub', r.join('|') === 'HR centre*', r);
+  ok('their HR centre is the whole HR centre (wave169: HR\'s own profile), so the rail is its sections, nothing from the Hub', /^People/.test(r[0] || '') && r.indexOf('Onboarding') > 0 && r.indexOf('Training') > 0 && r.indexOf('Recruitment') > 0 && !r.some(x => /^Home|^Avenue Academy/.test(x)), r);
   ok('no page errors (member)', (f.errs || []).length === 0, f.errs);
   await f.close();
 

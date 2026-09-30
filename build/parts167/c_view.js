@@ -36,7 +36,7 @@
     var lane = n > 1 ? Math.round(100 * ci / (n - 1)) : 0;
     return '<nav class="w167road" aria-label="Your onboarding, week by week"><div class="lane"><i style="width:' + lane + '%"></i></div><div class="stops">'
       + J.weeks.map(function (w) {
-        var m = w.meta || {}, pct = w.total ? Math.round(100 * w.done / w.total) : 0, lbl = LABEL[w.name] || w.name;
+        var m = w.meta || {}, pct = w.total ? Math.round(100 * w.done / w.total) : 0, lbl = lab(w.name);
         return '<button type="button" class="w167stop' + (w.complete ? ' done' : '') + (w.name === S.wk ? ' on' : '') + (w.name === cur && !J.complete ? ' cur' : '') + '" data-w167wk="' + E(w.name) + '" aria-pressed="' + (w.name === S.wk ? 'true' : 'false') + '" aria-label="' + E(lbl + ': ' + (m.title || '') + ', ' + w.done + ' of ' + w.total + ' done') + '">'
           + (w.name === cur && !J.complete ? '<img class="e" src="' + BR.e + '" alt="">' : '')
           + '<span class="pic" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"></span>'
@@ -45,14 +45,14 @@
   }
   function featHtml(w) {
     var x = w.lesson; if (!x || !x.t.training_id) return '';
-    var ls = x.ls || {}, done = !!x.done, title = String(x.t.name).replace(/^Start here:\s*/i, ''), num = String(LABEL[w.name] || '').replace(/\D/g, '') || '&#9733;';
+    var ls = x.ls || {}, done = !!x.done, title = String(x.t.name).replace(/^Start here:\s*/i, ''), num = String(lab(w.name)).replace(/\D/g, '') || '&#9733;';
     return '<div class="w167feat' + (done ? ' ok' : '') + '"><div class="ic">' + (done ? '&#10003;' : num) + '</div><div class="tx"><span>' + (done ? 'Done: you passed its knowledge check' : 'Start here') + '</span><b>' + E(title) + '</b>'
       + '<em>' + (ls.mins ? ls.mins + '-minute lesson with photos' : 'A short lesson with photos') + ' &middot; a knowledge check at the end &middot; it ticks itself</em></div>'
       + '<button type="button" class="w167btn' + (done ? ' ghost' : '') + '" data-w166open="t:' + E(x.t.training_id) + '">' + (done ? 'Open it again' : 'Start the lesson') + '</button></div>';
   }
   function weekHeadHtml(J, w) {
     if (!w) return '';
-    var m = w.meta || {}, lbl = LABEL[w.name] || w.name, pct = w.total ? Math.round(100 * w.done / w.total) : 0;
+    var m = w.meta || {}, lbl = lab(w.name), pct = w.total ? Math.round(100 * w.done / w.total) : 0;
     var k = lbl + (w.complete ? ' &middot; done' : (w.due ? ' &middot; due ' + E(fmtDay(w.due)) : ''));
     var li = function (s) { return '<li>' + E(s) + '</li>'; };
     return '<header class="w167ban" style="' + (m.photo ? 'background-image:url(\'' + E(photoUrl(m.photo)) + '\');background-position:' + bgPos(m) : '') + '"><img class="dd" src="' + BR.ast + '" alt="">'

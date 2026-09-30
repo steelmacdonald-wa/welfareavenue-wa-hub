@@ -1,0 +1,1039 @@
+/* =====================================================================
+   WA v169 The master onboarding runs the Academy, and trainings are assigned to the organization (29/09/26)
+   =====================================================================
+   Steel (29/09/26): "the master onboarding in the hr center that controls the onboarding. I want to make that's synced to
+   what people see on their Avenue Academy page. Also, I want HR to have the ability to assign trainings to the org through
+   that same page in the hr center. Leaders should have that ability on the Avenue Academy page as well".
+
+   What changed where:
+   - The master onboarding (HR centre, #hrcentre/onboarding; 037, 044, 046, 047, 057 draw it): each week says what people
+     see for it in the Academy (the journey's stop: its title, photo, what they will learn, why it matters and the lesson that
+     opens it) and edits it in place (onboarding_journey_save into app_config.onboarding_journey, which the journey reads);
+     each step says when it is done in the Avenue Academy (a module or a Learning Avenue: training_id, academy_path) and the
+     step's editor sets it; "Preview what a new person sees" opens the journey as a new person sees it on day one, and each
+     person on the board has "Journey", their own journey as they see it (read only).
+   - The database (wa169_sync_assign): a step moved to another week takes that week's due date in every plan in progress; a
+     step newly linked to the Academy ticks itself for those who already did it; the Learning Avenue Your onboarding is the
+     master's own Academy modules in the master's order; weeks HR adds (90 DAYS, 6 MONTHS) get their own due dates.
+   - Assigning trainings (academy_assignments, academy_assign): a module or a Learning Avenue, to everyone (the whole team,
+     not the board), teams or people, with an optional due date and a note; people who join later get it too. From the HR
+     centre (the Onboarding and Training views: Assign trainings to the organization, with each assignment's progress, See
+     who and Stop) and, for leaders, from the Avenue Academy (HR tools, and Assign on a module or a Learning Avenue).
+   - What people see (the Academy's home): Assigned to you, with the due date, who asked and why, and how far they are.
+   - Elsewhere: the journey (parts167: the preview, weeks HR adds, reloading its settings), the Academy (122: the hooks),
+     Hub module 7, the HR centre and Academy tours, the access profiles.
+   ===================================================================== */
+(function () {
+  if (window.__wa169) return; window.__wa169 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2', PURPLE = '#6F64AB', INK = '#1F201E';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var PSTORE = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
+  var BR = { star: PSTORE + 'brand/doodle-star-gold.png', e: PSTORE + 'brand/e-large-gold-600.png', heart: PSTORE + 'brand/doodle-heart-purple.png', ast: PSTORE + 'brand/doodle-asterisk-cream.png' };
+  var SAMPLE_ID = 'w169sample';
+  var S = { tr: null, paths: null, catAt: 0, catP: null, list: null, listAt: 0, listP: null, cfg: null, cfgAt: 0, cfgP: null, photos: null, photosP: null, mine: null, mineAt: 0, mineP: null, open: {}, busy: false };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function fmtDay(iso) {
+    if (!iso) return '';
+    try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function profile() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile) || ''; } catch (e) { return ''; } }
+  /* HR (its access profile), leaders and admins: the same rule as wa169_can_assign in the database */
+  function canAssign() { var r = role(); return r === 'admin' || r === 'leader' || (profile() === 'hr' && r !== 'blocked' && r !== 'viewer'); }
+  function meRow() { try { return (typeof wa28Me === 'function') ? wa28Me() : null; } catch (e) { return null; } }
+  function meName() { var m = meRow(); return (m && m.name) || ''; }
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && m.email; }); } catch (e) { return []; } }
+  function teamName(d) {
+    try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || (d === 'exec' ? 'Executive team' : d) || ''; } catch (e) { return d || ''; }
+  }
+  function teams() {
+    var seen = {}, order = (window.WA_TEAMS && WA_TEAMS.order) ? WA_TEAMS.order.slice() : [];
+    members().forEach(function (m) { if (m.department) seen[m.department] = (seen[m.department] || 0) + 1; });
+    Object.keys(seen).forEach(function (d) { if (order.indexOf(d) < 0) order.push(d); });
+    return order.filter(function (d) { return seen[d]; }).map(function (d) { return { key: d, label: teamName(d), n: seen[d] }; });
+  }
+  /* a week's due date, as the database counts it (onb_due): WEEK n, "90 DAYS", "6 MONTHS" */
+  function daysOf(name) {
+    var u = String(name || '').toUpperCase().trim(), n = parseInt(u.replace(/[^0-9]/g, ''), 10);
+    if (/^WEEK\s+\d+$/.test(u)) return 7 * n;
+    if (/^\d+\s+DAYS?$/.test(u)) return n;
+    if (/^\d+\s+MONTHS?$/.test(u)) return 30 * n;
+    return 90;
+  }
+  function lab(name) {
+    var u = String(name || '').trim(), m = /^WEEK\s+(\d+)$/i.exec(u);
+    if (m) return 'Week ' + m[1];
+    m = /^(\d+)\s+(DAYS?|MONTHS?)$/i.exec(u); if (m) return m[1] + ' ' + m[2].toLowerCase();
+    return u.charAt(0) + u.slice(1).toLowerCase();
+  }
+  function photoUrl(path) { return /^https?:/.test(String(path || '')) ? String(path) : PSTORE + String(path || '').replace(/^\/+/, ''); }
+  function pos(fx, fy) { return Math.round(100 * (fx == null ? 0.5 : fx)) + '% ' + Math.round(100 * (fy == null ? 0.5 : fy)) + '%'; }
+
+  var CSS = ''
+    /* the master: what people see, week by week */
+    + '#w46master .w169tt{display:inline-flex;align-items:center;gap:6px;margin-left:10px;padding:2px 10px 2px 3px;border-radius:999px;background:rgba(16,63,57,.08);color:' + GREEN + ';font-size:11.5px;font-weight:700;letter-spacing:.2px;vertical-align:middle;}'
+    + '#w46master .w169tt i{display:inline-block;width:22px;height:22px;border-radius:50%;background:' + GREEN + ' center/cover no-repeat;}'
+    + '#w46master .w169see{display:flex;gap:14px;align-items:stretch;margin:10px 0 12px;padding:10px;border-radius:14px;background:' + CREAM + ';border:1px dashed rgba(16,63,57,.22);}'
+    + '#w46master .w169see .ph{flex:0 0 132px;min-height:84px;border-radius:10px;background:' + GREEN + ' center/cover no-repeat;position:relative;overflow:hidden;}'
+    + '#w46master .w169see .ph.none{display:flex;align-items:center;justify-content:center;color:rgba(255,250,242,.7);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}'
+    + '#w46master .w169see .tx{flex:1;min-width:0;font-size:12.5px;color:#3d3c39;}'
+    + '#w46master .w169see .tx .k{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + TEAL + ';}'
+    + '#w46master .w169see .tx b{display:block;font-family:' + HEAD + ';font-size:20px;font-weight:700;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;margin:2px 0 4px;}'
+    + '#w46master .w169see .tx ul{margin:2px 0 0 16px;padding:0;}#w46master .w169see .tx li{margin:1px 0;}'
+    + '#w46master .w169see .tx .why{margin-top:4px;color:' + MUTED + ';}'
+    + '#w46master .w169see .ac{display:flex;flex-direction:column;gap:6px;align-items:flex-end;justify-content:center;}'
+    + '.w169pill{display:inline-flex;align-items:center;gap:6px;border:1px solid ' + GREEN + ';background:' + CREAM + ';color:' + GREEN + ' !important;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none !important;font-family:inherit;white-space:nowrap;}'
+    + '.w169pill:hover{background:' + GREEN + ';color:' + CREAM + ' !important;}'
+    + '.w169pill.gold{border-color:' + GOLD + ';background:' + GOLD + ';color:' + GREEN + ' !important;}.w169pill.gold:hover{background:#c9951f;}'
+    + '#w46master .w169chip{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:1px 8px;border-radius:999px;background:rgba(42,140,122,.12);color:' + TEAL + ';font-size:10.5px;font-weight:700;vertical-align:middle;}'
+    + '#w46master .w169chip.op{background:rgba(220,165,39,.2);color:#8a6512;}'
+    + '.w169bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;}'
+    + '@media (max-width:760px){#w46master .w169see{flex-direction:column;}#w46master .w169see .ph{flex-basis:auto;height:110px;}#w46master .w169see .ac{align-items:flex-start;flex-direction:row;}}'
+    /* the week editor and the assign form (in the Hub's modal) */
+    + '#modalBox .w169f label{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:12px 0 4px;}'
+    + '#modalBox .w169f label .op{font-weight:500;text-transform:none;letter-spacing:0;color:' + MUTED + ';margin-left:6px;}'
+    + '#modalBox .w169f input[type=text],#modalBox .w169f input[type=search],#modalBox .w169f input[type=date],#modalBox .w169f textarea,#modalBox .w169f select{width:100%;box-sizing:border-box;border:1px solid #DEE0D8;border-radius:10px;padding:8px 10px;font:inherit;font-size:13.5px;background:' + CREAM + ';}'
+    + '#modalBox .w169f .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}'
+    + '#modalBox .w169pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:6px;max-height:176px;overflow-y:auto;padding:2px;}'
+    + '#modalBox .w169pic{aspect-ratio:3/2;border:2px solid transparent;border-radius:9px;background:' + GREEN + ' center/cover no-repeat;cursor:pointer;padding:0;}'
+    + '#modalBox .w169pic.on{border-color:' + GOLD + ';box-shadow:0 0 0 2px ' + GREEN + ';}#modalBox .w169pic:hover{border-color:' + GOLD + ';}'
+    + '#modalBox .w169prev{margin:14px 0 4px;border-radius:16px;overflow:hidden;border:1px solid rgba(16,63,57,.14);}'
+    + '#modalBox .w169prev .bn{position:relative;min-height:112px;padding:16px 18px;background:' + GREEN + ' center/cover no-repeat;color:' + CREAM + ';display:flex;flex-direction:column;justify-content:flex-end;}'
+    + '#modalBox .w169prev .bn:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.25),rgba(16,63,57,.9));}'
+    + '#modalBox .w169prev .bn > *{position:relative;}#modalBox .w169prev .bn .k{font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '#modalBox .w169prev .bn h4{margin:2px 0 0;font-family:' + HEAD + ';font-size:26px;font-weight:700;text-transform:uppercase;line-height:1;}'
+    + '#modalBox .w169prev .bd{display:grid;grid-template-columns:1.2fr 1fr;gap:12px;padding:12px 16px;background:' + CREAM + ';font-size:12.5px;}'
+    + '#modalBox .w169prev .bd h5{margin:0 0 4px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';}#modalBox .w169prev .bd ul{margin:0 0 0 16px;padding:0;}'
+    + '#modalBox .w169note{font-size:12px;color:' + MUTED + ';margin:6px 0 0;}'
+    + '#modalBox .w169err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    /* the assign form */
+    + '#modalBox .w169what{max-height:220px;overflow-y:auto;border:1px solid #E7E2D6;border-radius:12px;margin-top:6px;background:' + CREAM + ';}'
+    + '#modalBox .w169what button{display:flex;width:100%;gap:10px;align-items:center;text-align:left;border:0;border-bottom:1px solid #F1EEE5;background:none;padding:8px 10px;font:inherit;font-size:13px;cursor:pointer;color:' + INK + ';}'
+    + '#modalBox .w169what button:hover{background:rgba(16,63,57,.05);}#modalBox .w169what button.on{background:rgba(220,165,39,.18);}'
+    + '#modalBox .w169what .ic{flex:0 0 30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:' + CREAM + ';font-size:12px;font-weight:800;background:' + TEAL + ';}'
+    + '#modalBox .w169what .ic.av{background:' + GREEN + ';}#modalBox .w169what .tx{flex:1;min-width:0;}#modalBox .w169what .tx span{display:block;font-size:11.5px;color:' + MUTED + ';}'
+    + '#modalBox .w169what .gh{padding:6px 10px;font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';background:#FAF8F2;}'
+    + '#modalBox .w169seg{display:inline-flex;border:1px solid ' + GREEN + ';border-radius:999px;overflow:hidden;}'
+    + '#modalBox .w169seg button{border:0;background:' + CREAM + ';color:' + GREEN + ';padding:6px 14px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}'
+    + '#modalBox .w169seg button.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#modalBox .w169chk{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}'
+    + '#modalBox .w169chk label{display:inline-flex !important;align-items:center;gap:6px;margin:0 !important;padding:5px 10px;border:1px solid #DEE0D8;border-radius:999px;background:' + CREAM + ';font-size:12.5px !important;font-weight:600 !important;letter-spacing:0 !important;text-transform:none !important;color:' + INK + ' !important;cursor:pointer;}'
+    + '#modalBox .w169chk input{accent-color:' + GREEN + ';}#modalBox .w169chk label.on{border-color:' + GREEN + ';background:rgba(16,63,57,.07);}'
+    + '#modalBox .w169ppl{max-height:180px;overflow-y:auto;}'
+    + '#modalBox .w169sum{margin:14px 0 0;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.06);font-size:13px;color:' + GREEN + ';font-weight:600;}'
+    + '#modalBox .w169ck{display:flex !important;gap:8px;align-items:center;text-transform:none !important;letter-spacing:0 !important;font-weight:500 !important;font-size:13px !important;color:' + INK + ' !important;}'
+    + '#modalBox .w169picked{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12.5px;min-height:26px;}'
+    + '#modalBox .w169tag{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 11px;border-radius:999px;background:rgba(220,165,39,.22);color:#6b4d0e;font-weight:700;}'
+    + '#modalBox .w169tag button{border:0;background:rgba(16,63,57,.12);color:' + GREEN + ';border-radius:50%;width:20px;height:20px;padding:0;cursor:pointer;font-size:14px;line-height:20px;}'
+    + '#modalBox .w169quick{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:38px;}'
+    /* over the Academy's sheet (Assign on a module or a Learning Avenue) */
+    + '#modalBack.w169top{z-index:2147481000 !important;}'
+    /* the assignments card (HR centre) */
+    + '.w169card .w169lead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:0 0 12px;}'
+    + '.w169card .w169lead p{margin:0;max-width:640px;font-size:13px;color:#3d3c39;}'
+    + '.w169list{display:grid;gap:10px;}'
+    + '.w169a{border:1px solid #E7E2D6;border-radius:14px;background:' + CREAM + ';padding:12px 14px;}'
+    + '.w169a.off{opacity:.62;}'
+    + '.w169a .t{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;}'
+    + '.w169a .t b{font-size:14px;color:' + INK + ';}.w169a .t .k{display:inline-block;margin-left:6px;font-size:10.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + TEAL + ';}'
+    + '.w169a .m{font-size:12px;color:' + MUTED + ';margin:3px 0 8px;}.w169a .m .late{color:' + FLAG + ';font-weight:700;}'
+    + '.w169a .pb{height:8px;border-radius:99px;background:#EFEBE1;overflow:hidden;}.w169a .pb i{display:block;height:100%;background:linear-gradient(90deg,' + TEAL + ',' + GREEN + ');border-radius:99px;}'
+    + '.w169a .n{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:6px;font-size:12px;color:#3d3c39;}'
+    + '.w169a .n .acts{display:flex;gap:8px;}'
+    + '.w169a .n a{cursor:pointer;color:' + GREEN + ';font-weight:700;text-decoration:underline;}.w169a .n a.stop{color:' + FLAG + ';}'
+    + '.w169who{margin-top:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:6px;}'
+    + '.w169who div{display:flex;gap:8px;align-items:center;justify-content:space-between;font-size:12.5px;padding:5px 9px;border-radius:9px;background:#FAF8F2;}'
+    + '.w169who em{font-style:normal;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap;}'
+    + '.w169who em.ok{background:rgba(16,63,57,.1);color:' + GREEN + ';}.w169who em.go{background:rgba(220,165,39,.22);color:#8a6512;}.w169who em.no{background:#EFEBE1;color:' + MUTED + ';}.w169who em.late{background:rgba(179,64,47,.12);color:' + FLAG + ';}'
+    + '.w169empty{font-size:13px;color:' + MUTED + ';padding:10px 0;}'
+    + '.w169a .nt{font-size:12.5px;font-style:italic;color:#3d3c39;margin:-4px 0 8px;}'
+    + '.w169a .sure{font-size:12px;color:' + FLAG + ';font-weight:600;}'
+    + '.w169chip0{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.3px;padding:2px 9px;border-radius:999px;background:#EFEBE1;color:' + MUTED + ';}'
+    + '#hrcentre .w169card .w169lead p{font-size:13.5px;}'
+    /* the Academy: assigned to you */
+    + '#w169mine{margin:0 0 26px;}'
+    /* a modal open on a phone: the bar at the bottom steps aside, so the form's buttons are never under it */
+    + '@media (max-width:900px){body:has(#modalBack[style*="flex"]) #w163bar{display:none !important;}}'
+    + '#w169mine .w169g{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}'
+    + '#w169mine .w169m{position:relative;display:flex;flex-direction:column;gap:6px;border-radius:18px;padding:14px 16px 14px 18px;background:' + CREAM + ';border:1px solid #E7E2D6;box-shadow:0 10px 26px -20px rgba(16,63,57,.6);text-decoration:none;color:inherit;overflow:hidden;}'
+    + '#w169mine .w169m:before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:' + GOLD + ';}'
+    + '#w169mine .w169m.late:before{background:' + FLAG + ';}#w169mine .w169m.done:before{background:' + TEAL + ';}'
+    + '#w169mine .w169m .k{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + TEAL + ';}'
+    + '#w169mine .w169m b{font-size:15px;color:' + INK + ';line-height:1.25;}'
+    + '#w169mine .w169m .due{font-size:12px;font-weight:700;color:#8a6512;}#w169mine .w169m.late .due{color:' + FLAG + ';}#w169mine .w169m.done .due{color:' + TEAL + ';}'
+    + '#w169mine .w169m .why{font-size:12.5px;color:#3d3c39;font-style:italic;}'
+    + '#w169mine .w169m .by{font-size:11.5px;color:' + MUTED + ';}'
+    + '#w169mine .w169m .pb{height:6px;border-radius:99px;background:#EFEBE1;overflow:hidden;}#w169mine .w169m .pb i{display:block;height:100%;background:' + GREEN + ';}'
+    + '#w169mine .w169m .go{align-self:flex-start;margin-top:4px;display:inline-flex;align-items:center;gap:6px;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ';font-size:12.5px;font-weight:700;padding:6px 14px;}'
+    + '#w169mine .w169m.done .go{background:rgba(16,63,57,.1);color:' + GREEN + ';}'
+    /* the preview banner */
+    + '.w169pv{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin:0 0 12px;padding:10px 14px;border-radius:14px;background:' + PURPLE + ';color:' + CREAM + ';font-size:13px;}'
+    + '.w169pv b{font-weight:800;}.w169pv button{border:0;border-radius:999px;background:' + CREAM + ';color:' + PURPLE + ';font:inherit;font-size:12.5px;font-weight:800;padding:6px 14px;cursor:pointer;}'
+    + '#w122sheet .w169pv{margin:10px 18px 0;}'
+    + '.w169pvon #w166help,.w169pvon [data-w166help],.w169pvon .w166helpbox{display:none !important;}';
+  if (!document.getElementById('wa169css')) { var st = document.createElement('style'); st.id = 'wa169css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- data ---------- */
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+  /* the Academy's trainings and Learning Avenues (the Academy's own copy when it has loaded, else a light read) */
+  function loadCatalog(force) {
+    var A = (window.w122 && w122.A) || null;
+    if (!force && A && A.trainings && A.trainings.length) { S.tr = A.trainings; S.paths = A.paths || S.paths; if (S.paths) return Promise.resolve(); }
+    if (S.catP) return S.catP;
+    if (!force && S.tr && S.paths && Date.now() - S.catAt < 300000) return Promise.resolve();
+    S.catP = Promise.all([
+      q(db.from('trainings').select('id, title, kind, path_group, minutes, category, sort, active, key, body').eq('active', true).order('sort').order('id')),
+      q(db.from('academy_paths').select('key, name, title, dept, required, sort, active, color').eq('active', true).order('sort'))
+    ]).then(function (r) {
+      if (Array.isArray(r[0].data)) S.tr = r[0].data;
+      if (Array.isArray(r[1].data)) S.paths = r[1].data;
+      S.catAt = Date.now(); S.catP = null;
+    });
+    return S.catP;
+  }
+  function trById(id) { return (S.tr || []).filter(function (t) { return String(t.id) === String(id); })[0] || null; }
+  function pathByKey(k) { return (S.paths || []).filter(function (p) { return p.key === k; })[0] || null; }
+  function planned(t) { try { var b = typeof t.body === 'string' ? JSON.parse(t.body) : t.body; return !!(b && b.planned); } catch (e) { return false; } }
+  function pathModules(p) {
+    if (!p) return [];
+    return (S.tr || []).filter(function (t) { return t.path_group === p.name && t.active !== false && String(t.kind || '') !== 'tour' && !planned(t); });
+  }
+  /* what can be assigned: any module people can finish (videos, lessons, reading, documents, SOPs); page tours are not (the
+     Hub first steps cover them, and not every page is open to everyone) */
+  function assignable(t) { return !!t && t.active !== false && !planned(t) && String(t.kind || '') !== 'tour'; }
+  function kindOfT(t) { try { if (window.w122 && typeof w122.kindOf === 'function') return w122.kindOf(t); } catch (e) { /* fine */ } return String((t && t.kind) || 'read'); }
+  var KIND_L = { video: 'Video', lesson: 'Lesson', read: 'Reading', doc: 'Document', sop: 'SOP', tour: 'Page tour' };
+  function kindLabel(t) { return KIND_L[kindOfT(t)] || 'Module'; }
+  function minsOf(t) { var n = Number(t && t.minutes); return n > 0 ? n : 0; }
+  /* the modules an assignment of v ('t:<id>' or 'p:<key>') covers, as wa169_modules counts them */
+  function modulesOf(v) {
+    v = String(v || '');
+    if (v.indexOf('t:') === 0) { var t = trById(v.slice(2)); return t ? [t] : []; }
+    if (v.indexOf('p:') === 0) return pathModules(pathByKey(v.slice(2)));
+    return [];
+  }
+  function titleOf(v) {
+    v = String(v || '');
+    if (v.indexOf('t:') === 0) { var t = trById(v.slice(2)); return t ? t.title : 'A module'; }
+    var p = pathByKey(v.slice(2)); return p ? (p.title || p.name) : 'A Learning Avenue';
+  }
+  /* who has already finished a module (the Academy's own rows: done by name or by email) */
+  function doneSet() {
+    var out = {}, prog = (window.w122 && w122.A && w122.A.prog) || [];
+    prog.forEach(function (p) { if (p.status === 'done') { out[String(p.training_id) + '|' + lower(p.person_name)] = 1; if (p.email) out[String(p.training_id) + '|' + lower(p.email)] = 1; } });
+    return out;
+  }
+  /* the assignments with each person's progress (HR, leaders and admins) */
+  function loadList(force) {
+    if (!canAssign()) { S.list = []; return Promise.resolve([]); }
+    if (S.listP) return S.listP;
+    if (!force && S.list && Date.now() - S.listAt < 60000) return Promise.resolve(S.list);
+    S.listP = q(db.rpc('academy_assignments_list')).then(function (r) {
+      var v = r && r.data; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+      S.list = Array.isArray(v) ? v : (S.list || []); S.listAt = Date.now(); S.listP = null; return S.list;
+    });
+    return S.listP;
+  }
+  /* what people see each week (app_config.onboarding_journey), the journey's own copy when it has one */
+  function loadCfg(force) {
+    if (!force && S.cfg && Date.now() - S.cfgAt < 120000) return Promise.resolve(S.cfg);
+    if (S.cfgP) return S.cfgP;
+    S.cfgP = q(db.from('app_config').select('value').eq('key', 'onboarding_journey')).then(function (r) {
+      var v = r && r.data && r.data[0] && r.data[0].value;
+      if (v) { try { S.cfg = typeof v === 'string' ? JSON.parse(v) : v; } catch (e) { /* keep */ } }
+      if (!S.cfg && window.w167 && typeof w167.cfg === 'function') S.cfg = w167.cfg();
+      S.cfgAt = Date.now(); S.cfgP = null; return S.cfg;
+    });
+    return S.cfgP;
+  }
+  function weekCfg(section) {
+    var c = S.cfg || (window.w167 && typeof w167.cfg === 'function' ? w167.cfg() : null) || {};
+    var w = (c.weeks && c.weeks[section]) || null;
+    if (!w && window.w167 && typeof w167.cfg === 'function') { var d = w167.cfg(); w = (d.weeks && d.weeks[section]) || null; }
+    return w;
+  }
+  /* the Photo library's ready photos, for a week's photo */
+  function loadPhotos() {
+    if (S.photos) return Promise.resolve(S.photos);
+    if (S.photosP) return S.photosP;
+    S.photosP = q(db.from('wa_photos').select('id, title, alt_text, path_web, path_thumb, focal_x, focal_y, orientation, usage, is_pick, taken_on').eq('usage', 'ready')).then(function (r) {
+      var rows = ((r && r.data) || []).filter(function (p) { return p.path_web && p.orientation !== 'portrait'; });
+      rows.sort(function (a, b) { return (b.is_pick ? 1 : 0) - (a.is_pick ? 1 : 0) || String(b.taken_on || '').localeCompare(String(a.taken_on || '')); });
+      S.photos = rows; S.photosP = null; return rows;
+    });
+    return S.photosP;
+  }
+  /* my assignments: the assignments that name me (readable to me) and my rows that carry them */
+  function loadMine(force) {
+    if (S.mineP) return S.mineP;
+    if (!force && S.mine && Date.now() - S.mineAt < 60000) return Promise.resolve(S.mine);
+    S.mineP = q(db.from('academy_assignments').select('*').eq('active', true)).then(function (r) {
+      S.mine = Array.isArray(r && r.data) ? r.data : (S.mine || []); S.mineAt = Date.now(); S.mineP = null; return S.mine;
+    });
+    return S.mineP;
+  }
+  /* who an assignment reaches, as the database counts it (wa169_targets): active people with a sign-in; everyone leaves out the board */
+  function targetsOf(aud, teamKeys, emails) {
+    var ms = members();
+    if (aud === 'everyone') return ms.filter(function (m) { return m.department !== 'board'; });
+    if (aud === 'team') return ms.filter(function (m) { return teamKeys.indexOf(m.department) >= 0; });
+    return ms.filter(function (m) { return emails.indexOf(lower(m.email)) >= 0; });
+  }
+
+  /* ---------- the master onboarding (HR centre): what people see, week by week, and where each step is done ---------- */
+  function tmplOf(id) { try { return (WA37.tmpl || []).filter(function (t) { return String(t.id) === String(id); })[0] || null; } catch (e) { return null; } }
+  var AVENUE_WORDS = { team: 'their team\u2019s Learning Avenue', any: 'a Learning Avenue they choose' };
+  function linkWords(t) {
+    if (!t) return '';
+    if (t.training_id) { var tr = trById(t.training_id); return tr ? tr.title : 'an Academy module'; }
+    if (t.academy_path) { if (AVENUE_WORDS[t.academy_path]) return AVENUE_WORDS[t.academy_path]; var p = pathByKey(t.academy_path); return p ? p.title : t.academy_path; }
+    return '';
+  }
+  function seeHtml(section) {
+    var w = weekCfg(section) || {}, lesson = w.lesson ? tmplOf(w.lesson) : null;
+    var ph = w.photo ? '<div class="ph" style="background-image:url(\'' + E(photoUrl(w.photo)) + '\');background-position:' + pos(w.fx, w.fy) + '"></div>' : '<div class="ph none">No photo yet</div>';
+    return '<div class="w169see" data-w169sec="' + E(section) + '">' + ph + '<div class="tx"><span class="k">What people see in the Academy: ' + E(lab(section)) + '</span><b>' + E(w.title || lab(section)) + '</b>'
+      + (w.learn && w.learn.length ? '<ul>' + w.learn.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>' : '<div class="why">No goals yet: people see the steps only.</div>')
+      + (w.why ? '<div class="why">Why it matters: ' + E(w.why) + '</div>' : '')
+      + (lesson ? '<div class="why">Opens with: ' + E(lesson.name) + '</div>' : '') + '</div>'
+      + '<div class="ac"><button type="button" class="w169pill" data-w169week="' + E(section) + '">Edit what people see</button></div></div>';
+  }
+  function decorateMaster() {
+    var host = document.getElementById('w46master'); if (!host) return;
+    var bar = host.parentElement && host.parentElement.querySelector('.w169bar');
+    if (!bar && host.parentElement) {
+      host.insertAdjacentHTML('beforebegin', '<div class="w169bar"><button type="button" class="w169pill gold" data-w169preview="' + SAMPLE_ID + '">Preview what a new person sees</button>'
+        + '<span style="font-size:12px;color:' + MUTED + '">The master is the onboarding: what you change here is what people see in the Avenue Academy, at once.</span></div>');
+    }
+    Array.prototype.forEach.call(host.querySelectorAll('details.w46wk'), function (d) {
+      var sm = d.querySelector('summary'); if (!sm) return;
+      var section = String((sm.childNodes[0] && sm.childNodes[0].nodeType === 3 ? sm.childNodes[0].textContent : '') || '').trim(); if (!section) return;
+      var w = weekCfg(section) || {}, html = seeHtml(section);
+      var tt = sm.querySelector('.w169tt'), ttHtml = '<i style="' + (w.photo ? 'background-image:url(\'' + E(photoUrl(w.photo)) + '\')' : '') + '"></i>' + E(w.title || lab(section));
+      if (!tt) { sm.childNodes[0].after(document.createRange().createContextualFragment('<span class="w169tt" title="What people see in the Academy">' + ttHtml + '</span>')); }
+      else if (tt.getAttribute('data-h') !== ttHtml) { tt.innerHTML = ttHtml; }
+      if (tt) tt.setAttribute('data-h', ttHtml); else { var nt = sm.querySelector('.w169tt'); if (nt) nt.setAttribute('data-h', ttHtml); }
+      var see = d.querySelector(':scope > .w169see');
+      if (!see) sm.insertAdjacentHTML('afterend', html);
+      else if (see.getAttribute('data-h') !== html) { see.outerHTML = html; }
+      var see2 = d.querySelector(':scope > .w169see'); if (see2) see2.setAttribute('data-h', html);
+      /* the steps: done in the Academy, and the lesson that opens the week */
+      Array.prototype.forEach.call(d.querySelectorAll('.w46st'), function (row) {
+        var ed = row.querySelector('[data-w37e]'); if (!ed) return;
+        var t = tmplOf(ed.getAttribute('data-w37e')), nm = row.querySelector('.nm'); if (!t || !nm) return;
+        var chip = (t.training_id || t.academy_path ? '<span class="w169chip" title="Ticks itself when they finish it in the Avenue Academy">Academy: ' + E(linkWords(t)) + '</span>' : '')
+          + (w.lesson && String(w.lesson) === String(t.id) ? '<span class="w169chip op">Opens the week</span>' : '');
+        var cur = nm.querySelector('.w169chips');
+        if (!cur) { if (chip) nm.insertAdjacentHTML('beforeend', '<span class="w169chips">' + chip + '</span>'); }
+        else if (cur.innerHTML !== chip) cur.innerHTML = chip;
+      });
+    });
+  }
+
+  /* the board: each person's journey as they see it */
+  function decorateBoard() {
+    var body = document.getElementById('w46body'); if (!body) return;
+    Array.prototype.forEach.call(body.querySelectorAll('[data-w46kit]'), function (kit) {
+      var row = kit.parentElement; if (!row || row.querySelector('[data-w169preview]')) return;
+      var name = kit.getAttribute('data-w46kit'), o = null;
+      try { o = (WA37.onbs || []).filter(function (x) { return x.status === 'active' && lower(x.person_name) === lower(name); })[0] || null; } catch (e) { o = null; }
+      if (o) kit.insertAdjacentHTML('beforebegin', '<a data-w169preview="' + E(o.id) + '" title="Their onboarding as they see it in the Avenue Academy (read only)">Journey</a> ');
+    });
+  }
+
+  /* ---------- the week editor: what people see ---------- */
+  var WK = null;
+  function openWeek(section) {
+    if (!canAssign()) { T('Only HR, leaders and admins can change the onboarding'); return; }
+    lift(false);
+    var w = weekCfg(section) || {};
+    WK = { section: section, title: w.title || '', photo: w.photo || '', fx: w.fx, fy: w.fy, photoId: null, learn: (w.learn || []).slice(0, 3), why: w.why || '', lesson: w.lesson || '' };
+    while (WK.learn.length < 3) WK.learn.push('');
+    paintWeek();
+    loadPhotos().then(function (rows) {
+      if (!WK) return;
+      var hit = rows.filter(function (p) { return p.path_web === WK.photo; })[0]; if (hit) WK.photoId = hit.id;
+      paintWeek(true);
+    });
+  }
+  function weekPrev() {
+    var bg = WK.photo ? ' style="background-image:url(\'' + E(photoUrl(WK.photo)) + '\');background-position:' + pos(WK.fx, WK.fy) + '"' : '';
+    var goals = WK.learn.filter(function (x) { return String(x).trim(); });
+    return '<div class="w169prev"><div class="bn"' + bg + '><span class="k">' + E(lab(WK.section)) + '</span><h4>' + E(WK.title || lab(WK.section)) + '</h4></div>'
+      + '<div class="bd"><div><h5>By the end of this week you will</h5>' + (goals.length ? '<ul>' + goals.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>' : '<span style="color:' + MUTED + '">No goals yet.</span>') + '</div>'
+      + '<div><h5>Why it matters</h5>' + (WK.why ? E(WK.why) : '<span style="color:' + MUTED + '">Not said yet.</span>') + '</div></div></div>';
+  }
+  function paintWeek(keepFocus) {
+    if (!WK) return;
+    var steps = [];
+    try { steps = (WA37.tmpl || []).filter(function (t) { return t.active !== false && t.section === WK.section && t.training_id; }); } catch (e) { steps = []; }
+    var photos = S.photos;
+    var html = '<h3>What people see: ' + E(lab(WK.section)) + '</h3>'
+      + '<p class="m-sub">This is the week as people see it in the Avenue Academy: its stop on the avenue and the top of the week. The steps come from the master below it.</p>'
+      + '<div class="w169f"><label for="w169wt">Title<span class="op">a few words, like Get set up</span></label><input type="text" id="w169wt" maxlength="40" value="' + E(WK.title) + '">'
+      + '<label>Photo<span class="op">from the Photo library, the photos ready to use</span></label>'
+      + (photos ? '<div class="w169pics">' + photos.map(function (p) { return '<button type="button" class="w169pic' + (String(p.id) === String(WK.photoId) || (!WK.photoId && p.path_web === WK.photo) ? ' on' : '') + '" data-w169pic="' + E(p.id) + '" title="' + E(p.title || '') + '" aria-label="' + E('Use ' + (p.title || 'this photo')) + '" style="background-image:url(\'' + E(PSTORE + (p.path_thumb || p.path_web)) + '\')"></button>'; }).join('') + '</div>' : '<p class="w169note">Loading the Photo library\u2026</p>')
+      + '<label>By the end of this week they will<span class="op">up to three</span></label>'
+      + WK.learn.map(function (x, i) { return '<input type="text" data-w169learn="' + i + '" maxlength="140" value="' + E(x) + '" placeholder="' + ['Set up their accounts', 'Find their way around the Hub', 'Meet their team'][i] + '" style="margin-top:' + (i ? 6 : 0) + 'px">'; }).join('')
+      + '<label for="w169wy">Why it matters<span class="op">one or two sentences</span></label><textarea id="w169wy" rows="3" maxlength="320">' + E(WK.why) + '</textarea>'
+      + '<label for="w169wl">The lesson that opens the week<span class="op">an Academy step of this week, shown as Start here</span></label><select id="w169wl"><option value="">None</option>'
+      + steps.map(function (t) { return '<option value="' + E(t.id) + '"' + (String(t.id) === String(WK.lesson) ? ' selected' : '') + '>' + E(t.name) + '</option>'; }).join('') + '</select>'
+      + '<div id="w169wprev">' + weekPrev() + '</div><p class="w169err" id="w169werr" hidden></p></div>'
+      + '<div class="m-actions"><button class="btn" id="w169wsave">Save</button> <button class="btn ghost" id="w169wx">Cancel</button></div>';
+    var box = document.getElementById('modalBox');
+    var active = keepFocus && document.activeElement && box && box.contains(document.activeElement) ? document.activeElement : null;
+    var aid = active ? (active.id || (active.getAttribute('data-w169learn') != null ? 'l' + active.getAttribute('data-w169learn') : '')) : '';
+    openModal(html);
+    if (aid) { var el = aid.charAt(0) === 'l' && aid.length < 3 ? document.querySelector('#modalBox [data-w169learn="' + aid.slice(1) + '"]') : document.getElementById(aid); if (el) el.focus(); }
+  }
+  function readWeek() {
+    if (!WK) return;
+    var t = document.getElementById('w169wt'), y = document.getElementById('w169wy'), l = document.getElementById('w169wl');
+    if (t) WK.title = t.value; if (y) WK.why = y.value; if (l) WK.lesson = l.value;
+    Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w169learn]'), function (el) { WK.learn[Number(el.getAttribute('data-w169learn'))] = el.value; });
+  }
+  function saveWeek() {
+    readWeek();
+    var err = document.getElementById('w169werr');
+    if (!String(WK.title || '').trim()) { if (err) { err.hidden = false; err.textContent = 'Give the week a title.'; } return; }
+    var btn = document.getElementById('w169wsave'); if (btn) btn.disabled = true;
+    var body = { title: WK.title.trim(), learn: WK.learn.map(function (x) { return String(x || '').trim(); }).filter(Boolean), why: String(WK.why || '').trim(), lesson: WK.lesson || null };
+    if (WK.photoId) body.photo_id = WK.photoId;
+    q(db.rpc('onboarding_journey_save', { p_section: WK.section, p_week: body })).then(function (r) {
+      if (r.error) { if (btn) btn.disabled = false; if (err) { err.hidden = false; err.textContent = 'It did not save: ' + String(r.error.message || r.error).slice(0, 160); } return; }
+      var saved = r.data && typeof r.data === 'object' ? r.data : null;
+      S.cfg = S.cfg || { v: 1, weeks: {} }; S.cfg.weeks = S.cfg.weeks || {};
+      S.cfg.weeks[WK.section] = Object.assign({}, S.cfg.weeks[WK.section] || {}, saved || body, saved ? {} : { photo: WK.photo, fx: WK.fx, fy: WK.fy });
+      S.cfgAt = Date.now();
+      try { if (window.w167 && typeof w167.reloadCfg === 'function') w167.reloadCfg(S.cfg); } catch (e) { /* the journey reads it next time */ }
+      var sec = WK.section; WK = null;
+      try { closeModal(); } catch (e) { /* fine */ }
+      T('Saved: people see it in the Academy now');
+      decorateMaster();
+      var d = Array.prototype.filter.call(document.querySelectorAll('#w46master details.w46wk'), function (x) { var s0 = x.querySelector('summary'); return s0 && String(s0.childNodes[0] && s0.childNodes[0].textContent || '').trim() === sec; })[0];
+      if (d) d.open = true;
+    });
+  }
+
+  /* ---------- a step's editor: where it is done (the Avenue Academy) ---------- */
+  function academySelect(t) {
+    var cur = t ? (t.training_id ? 't:' + t.training_id : (t.academy_path ? 'p:' + t.academy_path : '')) : '';
+    var paths = (S.paths || []).filter(function (p) { return ['tours', 'firstweek'].indexOf(p.key) < 0; });
+    var mods = (S.tr || []).filter(function (x) { return assignable(x) && String(x.kind || '') !== 'tour'; }).slice().sort(function (a, b) { return String(a.path_group || '~').localeCompare(String(b.path_group || '~')) || String(a.title).localeCompare(String(b.title)); });
+    var groups = {}; mods.forEach(function (x) { var g = x.path_group || 'In the library'; (groups[g] = groups[g] || []).push(x); });
+    return '<label for="w169ac" style="margin-top:10px">Done in the Avenue Academy<span class="op">the step ticks itself when they finish it there</span></label><select id="w169ac" class="w36sel" style="width:100%">'
+      + '<option value="">Not an Academy step (they tick it)</option>'
+      + '<optgroup label="A Learning Avenue">' + paths.map(function (p) { return '<option value="p:' + E(p.key) + '"' + (cur === 'p:' + p.key ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('')
+      + '<option value="p:team"' + (cur === 'p:team' ? ' selected' : '') + '>Their team\u2019s Learning Avenue</option><option value="p:any"' + (cur === 'p:any' ? ' selected' : '') + '>A Learning Avenue they choose</option></optgroup>'
+      + Object.keys(groups).map(function (g) { return '<optgroup label="' + E(g) + '">' + groups[g].map(function (x) { return '<option value="t:' + E(x.id) + '"' + (cur === 't:' + x.id ? ' selected' : '') + '>' + E(x.title) + '</option>'; }).join('') + '</optgroup>'; }).join('')
+      + '</select>';
+  }
+  function academyValue() {
+    var v = (document.getElementById('w169ac') || {}).value || '';
+    return { training_id: v.indexOf('t:') === 0 ? Number(v.slice(2)) : null, academy_path: v.indexOf('p:') === 0 ? v.slice(2) : null };
+  }
+  function secSelect(id, current) {
+    var secs = [];
+    try { (WA37.tmpl || []).forEach(function (t) { if (t.active !== false && secs.indexOf(t.section) < 0) secs.push(t.section); }); } catch (e) { /* none */ }
+    if (current && secs.indexOf(current) < 0) secs.push(current);
+    secs.sort(function (a, b) { return daysOf(a) - daysOf(b) || a.localeCompare(b); });
+    return '<select id="' + id + '" class="w36sel">' + secs.map(function (s) { return '<option value="' + E(s) + '"' + (s === current ? ' selected' : '') + '>' + E(s) + '</option>'; }).join('') + '</select>';
+  }
+  function editStep(tid) {
+    var t = tmplOf(tid); if (!t) return;
+    loadCatalog().then(function () {
+      openModal('<h3>Edit this onboarding step</h3>'
+        + '<p class="m-sub">Changes reach everyone at once, onboardings in progress included, and what they see in the Avenue Academy.</p>'
+        + '<div class="w169f"><label for="w44en">Step name</label><input type="text" id="w44en" value="' + E(t.name) + '" />'
+        + '<label for="w44ed">Instructions<span class="op">links welcome, markdown works</span></label><textarea id="w44ed" rows="6">' + E(t.description || '') + '</textarea>'
+        + '<label for="w44el">Add a link<span class="op">appended to the instructions</span></label><input type="text" id="w44el" placeholder="https://..." />'
+        + academySelect(t)
+        + '<div class="row2" style="margin-top:4px"><div><label for="w44ew">Week</label>' + secSelect('w44ew', t.section) + '</div>'
+        + '<div><label for="w44ep">Priority</label><select id="w44ep" class="w36sel"><option value="">Normal</option><option value="high"' + (t.priority === 'high' ? ' selected' : '') + '>Important</option></select></div></div>'
+        + '<label for="w44eo">Position<span class="op">smaller numbers first within the week; subtasks keep their parent</span></label><input type="text" id="w44eo" inputmode="numeric" value="' + (t.sort || 0) + '" style="max-width:120px" />'
+        + '<p class="w169err" id="w169serr" hidden></p></div>'
+        + '<div class="m-actions"><button class="btn" id="w44es">Save</button> <button class="btn ghost" id="w44ec">Cancel</button></div>');
+      document.getElementById('w44ec').addEventListener('click', function () { try { wa37Master(); } catch (e) { closeModal(); } });
+      document.getElementById('w44es').addEventListener('click', async function () {
+        var nm = (document.getElementById('w44en').value || '').trim(), err = document.getElementById('w169serr');
+        if (!nm) { err.hidden = false; err.textContent = 'The step needs a name.'; return; }
+        var desc = (document.getElementById('w44ed').value || '').trim(), link = (document.getElementById('w44el').value || '').trim();
+        if (link) { if (link.indexOf('http') !== 0) link = 'https://' + link; if (desc.indexOf(link) < 0) desc = (desc ? desc + '\n\n' : '') + '[Open the link](' + link + ')'; }
+        var srt = parseInt(document.getElementById('w44eo').value, 10), ac = academyValue();
+        this.disabled = true;
+        var r = await db.from('onboarding_template').update({
+          name: nm, description: desc || null, section: document.getElementById('w44ew').value, sort: isNaN(srt) ? (t.sort || 0) : srt,
+          priority: document.getElementById('w44ep').value || null, content_pending: false, training_id: ac.training_id, academy_path: ac.academy_path,
+          updated_at: new Date().toISOString()
+        }).eq('id', tid);
+        if (r && r.error) { this.disabled = false; err.hidden = false; err.textContent = 'It did not save: ' + String(r.error.message || r.error).slice(0, 160); return; }
+        try { await wa37Load(true); } catch (e) { /* the next load */ }
+        T('Saved to the master, every onboarding in progress and the Academy');
+        try { wa37Master(); } catch (e) { closeModal(); }
+      });
+    });
+  }
+  function addStep(section) {
+    var parents = [];
+    try { parents = (WA37.tmpl || []).filter(function (t) { return t.section === section && !t.parent_id && t.active !== false; }); } catch (e) { parents = []; }
+    loadCatalog().then(function () {
+      openModal('<h3>Add a step to ' + E(section) + '</h3>'
+        + '<p class="m-sub">Everyone still onboarding gets it at once, unticked (ticked already when it is an Academy module they finished).</p>'
+        + '<div class="w169f"><label for="w44an">Step name</label><input type="text" id="w44an" placeholder="What they need to do" />'
+        + '<label for="w44ad">Instructions<span class="op">optional, markdown works</span></label><textarea id="w44ad" rows="5"></textarea>'
+        + '<label for="w44al">Add a link<span class="op">appended to the instructions</span></label><input type="text" id="w44al" placeholder="https://..." />'
+        + academySelect(null)
+        + '<div class="row2" style="margin-top:4px"><div><label for="w44aw">Week</label>' + secSelect('w44aw', section) + '</div>'
+        + '<div><label for="w44app">Priority</label><select id="w44app" class="w36sel"><option value="">Normal</option><option value="high">Important</option></select></div></div>'
+        + '<label for="w44ap">Sits under</label><select id="w44ap" class="w36sel" style="width:100%"><option value="">Top level</option>'
+        + parents.map(function (p) { return '<option value="' + E(p.id) + '">' + E(p.name) + '</option>'; }).join('') + '</select>'
+        + '<p class="w169err" id="w169serr" hidden></p></div>'
+        + '<div class="m-actions"><button class="btn" id="w44as2">Add it</button> <button class="btn ghost" id="w44ac">Cancel</button></div>');
+      document.getElementById('w44ac').addEventListener('click', function () { try { wa37Master(); } catch (e) { closeModal(); } });
+      document.getElementById('w44as2').addEventListener('click', async function () {
+        var nm = (document.getElementById('w44an').value || '').trim(), err = document.getElementById('w169serr');
+        if (!nm) { err.hidden = false; err.textContent = 'Give the step a name.'; return; }
+        var sec = document.getElementById('w44aw').value, desc = (document.getElementById('w44ad').value || '').trim(), link = (document.getElementById('w44al').value || '').trim();
+        if (link) { if (link.indexOf('http') !== 0) link = 'https://' + link; desc = (desc ? desc + '\n\n' : '') + '[Open the link](' + link + ')'; }
+        var parent = document.getElementById('w44ap').value || null, maxSort = 0, ac = academyValue();
+        try { (WA37.tmpl || []).forEach(function (t) { if (t.section === sec && t.sort > maxSort) maxSort = t.sort; }); } catch (e) { /* none */ }
+        this.disabled = true;
+        var r = await db.from('onboarding_template').insert({
+          id: 'wa' + Math.random().toString(36).slice(2, 10), section: sec, name: nm, description: desc || null, parent_id: parent,
+          priority: document.getElementById('w44app').value || null, sort: maxSort + 10, active: true, content_pending: false,
+          training_id: ac.training_id, academy_path: ac.academy_path
+        });
+        if (r && r.error) { this.disabled = false; err.hidden = false; err.textContent = 'It was not added: ' + String(r.error.message || r.error).slice(0, 160); return; }
+        try { await wa37Load(true); } catch (e) { /* the next load */ }
+        T('Added to the master, every onboarding in progress and the Academy');
+        try { wa37Master(); } catch (e) { closeModal(); }
+      });
+    });
+  }
+  /* the master's step editor and add form are these from now on (wave44's, with where the step is done) */
+  if (typeof wa37EditStep === 'function') wa37EditStep = editStep;
+  if (typeof wa37AddStep === 'function') wa37AddStep = addStep;
+
+  /* ---------- assigning trainings to the organization (HR, leaders and admins) ---------- */
+  var AS = null;   /* the open form: picks, audience, teams, people, include_new, due, note, q, pq */
+  /* the Hub's modal sits under the Academy's sheet: lift it while the form is open over a module or an avenue */
+  function lift(on) { var b = document.getElementById('modalBack'); if (b) b.classList.toggle('w169top', !!on); }
+  function sheetUp() { var el = document.getElementById('w122sheet'); return !!(el && el.classList.contains('on')); }
+  function closeForm() { AS = null; lift(false); try { closeModal(); } catch (e) { /* none open */ } }
+  function prepare() {
+    var p = [];
+    try { if (window.w122 && typeof w122.load === 'function') p.push(w122.load()); } catch (e) { /* the light read below */ }
+    return Promise.all(p).then(function () { return loadCatalog(); }, function () { return loadCatalog(); });
+  }
+  function openAssign(preset) {
+    if (!canAssign()) { T('Only HR, leaders and admins can assign trainings'); return; }
+    var picks = [], ppl = [];
+    if (typeof preset === 'string' && /^(t|p):/.test(preset)) picks = [preset];
+    else if (preset && typeof preset === 'object') { if (preset.pick) picks = [preset.pick]; if (preset.people) ppl = preset.people.map(lower); }
+    AS = { picks: picks, aud: ppl.length ? 'people' : 'everyone', teams: [], people: ppl, include_new: true, due: '', note: '', q: '', pq: '', busy: false, err: '' };
+    lift(sheetUp());
+    openModal('<h3>Assign a training</h3><p class="w169note">Loading the Avenue Academy\u2026</p>');
+    prepare().then(function () { if (AS) paintForm(); });
+  }
+  function itemsHtml() {
+    var q = lower(AS.q).trim(), on = {}; AS.picks.forEach(function (v) { on[v] = 1; });
+    function hit(title, sub) { return !q || lower(title + ' ' + sub).indexOf(q) >= 0; }
+    function btn(v, ic, cls, title, sub) {
+      return '<button type="button" data-w169pick="' + E(v) + '"' + (on[v] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '><span class="ic' + cls + '">' + (on[v] ? '&#10003;' : ic) + '</span><span class="tx">' + E(title) + '<span>' + E(sub) + '</span></span></button>';
+    }
+    var paths = (S.paths || []).filter(function (p) { return p.key !== 'tours' && p.active !== false && pathModules(p).length; });
+    var h = '', av = paths.filter(function (p) { var mods = pathModules(p); return hit(p.title || p.name, 'Learning Avenue ' + mods.map(function (t) { return t.title; }).join(' ')); });
+    if (av.length) h += '<div class="gh">Learning Avenues</div>' + av.map(function (p) {
+      var mods = pathModules(p), mins = mods.reduce(function (a, t) { return a + minsOf(t); }, 0);
+      return btn('p:' + p.key, 'A', ' av', p.title || p.name, 'Learning Avenue \u00b7 ' + plural(mods.length, 'module') + (mins ? ' \u00b7 about ' + mins + ' min' : '') + (p.required ? ' \u00b7 required for everyone' : ''));
+    }).join('');
+    var groups = {}, order = [];
+    (S.tr || []).filter(assignable).forEach(function (t) { var g = t.path_group || 'In the library'; if (!groups[g]) { groups[g] = []; order.push(g); } groups[g].push(t); });
+    order.sort(function (a, b) { return (a === 'In the library') - (b === 'In the library') || a.localeCompare(b); });
+    order.forEach(function (g) {
+      var list = groups[g].filter(function (t) { return hit(t.title, g + ' ' + kindLabel(t)); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0) || String(a.title).localeCompare(String(b.title)); });
+      if (!list.length) return;
+      h += '<div class="gh">' + E(g) + '</div>' + list.map(function (t) { return btn('t:' + t.id, E(kindLabel(t).charAt(0)), '', t.title, kindLabel(t) + (minsOf(t) ? ' \u00b7 ' + minsOf(t) + ' min' : '')); }).join('');
+    });
+    return h || '<div class="gh">Nothing matches \u201c' + E(AS.q) + '\u201d</div>';
+  }
+  function pickedHtml() {
+    if (!AS.picks.length) return '<span style="color:' + MUTED + '">Nothing picked yet: pick one or more below.</span>';
+    return AS.picks.map(function (v) { return '<span class="w169tag">' + E(titleOf(v)) + ' <button type="button" data-w169unpick="' + E(v) + '" aria-label="' + E('Remove ' + titleOf(v)) + '">&times;</button></span>'; }).join('');
+  }
+  function whoHtml() {
+    var ms = members().filter(function (m) { return m.department !== 'board'; });
+    if (AS.aud === 'everyone') return '<p class="w169note">The whole team: ' + plural(ms.length, 'person', 'people') + ' with a sign-in. The board is not included.</p>';
+    if (AS.aud === 'team') {
+      return '<div class="w169chk">' + teams().filter(function (x) { return x.key !== 'board'; }).map(function (x) {
+        var on = AS.teams.indexOf(x.key) >= 0;
+        return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-w169team="' + E(x.key) + '"' + (on ? ' checked' : '') + '> ' + E(x.label) + ' <span style="color:' + MUTED + ';font-weight:500">' + x.n + '</span></label>';
+      }).join('') + '</div>';
+    }
+    return '<input type="search" id="w169apq" placeholder="Search people by name or team" value="' + E(AS.pq) + '" style="margin-top:8px">'
+      + '<div class="w169chk w169ppl" id="w169appl">' + peopleHtml() + '</div>';
+  }
+  /* the people to pick from: the ones picked first, then the search */
+  function peopleHtml() {
+    var q = lower(AS.pq).trim(), ms = members().filter(function (m) { return m.department !== 'board'; });
+    var list = ms.slice().sort(function (a, b) { var sa = AS.people.indexOf(lower(a.email)) >= 0, sb = AS.people.indexOf(lower(b.email)) >= 0; return (sb - sa) || String(a.name).localeCompare(String(b.name)); })
+      .filter(function (m) { return AS.people.indexOf(lower(m.email)) >= 0 || !q || lower(m.name + ' ' + teamName(m.department) + ' ' + (m.role || '')).indexOf(q) >= 0; });
+    if (!list.length) return '<span class="w169note">Nobody matches \u201c' + E(AS.pq) + '\u201d.</span>';
+    return list.map(function (m) {
+      var on = AS.people.indexOf(lower(m.email)) >= 0;
+      return '<label class="' + (on ? 'on' : '') + '"><input type="checkbox" data-w169person="' + E(lower(m.email)) + '"' + (on ? ' checked' : '') + '> ' + E(m.name) + ' <span style="color:' + MUTED + ';font-weight:500">' + E(teamName(m.department)) + '</span></label>';
+    }).join('');
+  }
+  function targetsNow() {
+    var ms = targetsOf(AS.aud, AS.teams, AS.people);
+    return ms.filter(function (m) { return AS.aud !== 'everyone' || m.department !== 'board'; });
+  }
+  function summary() {
+    if (!AS.picks.length) return 'Pick what to assign.';
+    var tg = targetsNow();
+    if (!tg.length) return AS.aud === 'team' ? 'Pick at least one team.' : AS.aud === 'people' ? 'Pick at least one person.' : 'Nobody to assign it to.';
+    var mods = {}; AS.picks.forEach(function (v) { modulesOf(v).forEach(function (t) { mods[String(t.id)] = t; }); });
+    var ids = Object.keys(mods), done = doneSet(), all = 0, some = 0;
+    tg.forEach(function (m) {
+      var d = ids.filter(function (id) { return done[id + '|' + lower(m.name)] || done[id + '|' + lower(m.email)]; }).length;
+      if (ids.length && d >= ids.length) all++; else if (d) some++;
+    });
+    var what = AS.picks.length === 1 ? titleOf(AS.picks[0]) : plural(AS.picks.length, 'training');
+    var s = what + ' (' + plural(ids.length, 'module') + ') to ' + plural(tg.length, 'person', 'people');
+    if (AS.due) s += ', due ' + fmtDay(AS.due);
+    s += '.';
+    if (all) s += ' ' + plural(all, 'person has', 'people have') + ' already done ' + (ids.length === 1 ? 'it' : 'all of it') + ', so ' + (tg.length - all) + ' get' + (tg.length - all === 1 ? 's' : '') + ' it.';
+    if (some) s += ' ' + (some === 1 ? 'One person has' : some + ' people have') + ' done part of it: what they finished stays done.';
+    if ((AS.aud === 'everyone' || AS.aud === 'team') && AS.include_new) s += ' People who join ' + (AS.aud === 'team' ? 'these teams ' : '') + 'later get it too.';
+    return s;
+  }
+  function paintForm(keep) {
+    if (!AS) return;
+    var box = document.getElementById('modalBox');
+    var act = keep && box && document.activeElement && box.contains(document.activeElement) ? document.activeElement : null;
+    var aid = act ? act.id : '', pos0 = act && act.selectionStart != null ? act.selectionStart : null;
+    var whatTop = box && box.querySelector('#w169awh') ? box.querySelector('#w169awh').scrollTop : 0;
+    var today = todayIso();
+    var html = '<h3>Assign a training</h3>'
+      + '<p class="m-sub">It shows at the top of their Avenue Academy, under Assigned to you, with your note and the due date. What someone already finished stays done, and nobody is asked twice.</p>'
+      + '<div class="w169f">'
+      + '<label for="w169aq">What<span class="op">one or more: a Learning Avenue, or modules</span></label>'
+      + '<div class="w169picked" id="w169apk">' + pickedHtml() + '</div>'
+      + '<input type="search" id="w169aq" placeholder="Search the Avenue Academy" value="' + E(AS.q) + '" style="margin-top:8px">'
+      + '<div class="w169what" id="w169awh">' + itemsHtml() + '</div>'
+      + '<label>Who it is for</label>'
+      + '<div class="w169seg" role="group" aria-label="Who it is for">' + [['everyone', 'Everyone'], ['team', 'Teams'], ['people', 'People']].map(function (x) { return '<button type="button" data-w169aud="' + x[0] + '"' + (AS.aud === x[0] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + x[1] + '</button>'; }).join('') + '</div>'
+      + '<div id="w169awho">' + whoHtml() + '</div>'
+      + (AS.aud !== 'people' ? '<label class="w169ck" style="margin-top:10px"><input type="checkbox" id="w169anew"' + (AS.include_new ? ' checked' : '') + '> People who join ' + (AS.aud === 'team' ? 'these teams ' : '') + 'later get it too</label>' : '')
+      + '<div class="row2"><div><label for="w169adue">Due<span class="op">optional</span></label><input type="date" id="w169adue" min="' + today + '" value="' + E(AS.due) + '"></div>'
+      + '<div><label>&nbsp;</label><div class="w169quick">' + [[7, 'In a week'], [14, 'In two weeks'], [30, 'In 30 days']].map(function (x) { var d = addDays(today, x[0]); return '<button type="button" class="w169pill' + (AS.due === d ? ' gold' : '') + '" data-w169due="' + d + '">' + x[1] + '</button>'; }).join('') + (AS.due ? '<button type="button" class="w169pill" data-w169due="">No due date</button>' : '') + '</div></div></div>'
+      + '<label for="w169anote">A note for them<span class="op">optional: why it matters, in a sentence</span></label><textarea id="w169anote" rows="2" maxlength="400" placeholder="For example: We are all using the new CRM from November.">' + E(AS.note) + '</textarea>'
+      + '<div class="w169sum" id="w169asum">' + E(summary()) + '</div>'
+      + '<p class="w169err" id="w169aerr"' + (AS.err ? '' : ' hidden') + '>' + E(AS.err) + '</p></div>'
+      + '<div class="m-actions"><button class="btn" id="w169ago"' + (AS.busy ? ' disabled' : '') + '>' + (AS.busy ? 'Assigning\u2026' : 'Assign') + '</button> <button class="btn ghost" id="w169ax">Cancel</button></div>';
+    openModal(html);
+    var w = document.getElementById('w169awh'); if (w) w.scrollTop = whatTop;
+    if (aid) { var el = document.getElementById(aid); if (el) { el.focus(); if (pos0 != null) try { el.setSelectionRange(pos0, pos0); } catch (e) { /* date inputs */ } } }
+  }
+  /* small repaints that keep the typing where it is */
+  function paintPart(id, html) { var el = document.getElementById(id); if (el && el.innerHTML !== html) el.innerHTML = html; }
+  function paintSum() { paintPart('w169asum', E(summary())); paintPart('w169apk', pickedHtml()); }
+  function readForm() {
+    if (!AS) return;
+    var n = document.getElementById('w169anote'), d = document.getElementById('w169adue'), nw = document.getElementById('w169anew');
+    if (n) AS.note = n.value; if (d) AS.due = d.value; if (nw) AS.include_new = !!nw.checked;
+  }
+  function submitAssign() {
+    if (!AS || AS.busy) return;
+    readForm();
+    var err = '';
+    if (!AS.picks.length) err = 'Pick what to assign: a Learning Avenue or a module.';
+    else if (AS.aud === 'team' && !AS.teams.length) err = 'Pick at least one team.';
+    else if (AS.aud === 'people' && !AS.people.length) err = 'Pick at least one person.';
+    else if (AS.due && AS.due < todayIso()) err = 'The due date has passed: pick a later one.';
+    if (err) { AS.err = err; var e1 = document.getElementById('w169aerr'); if (e1) { e1.hidden = false; e1.textContent = err; } return; }
+    AS.busy = true; AS.err = '';
+    var b = document.getElementById('w169ago'); if (b) { b.disabled = true; b.textContent = 'Assigning\u2026'; }
+    var base = { audience: AS.aud, teams: AS.aud === 'team' ? AS.teams.slice() : [], people: AS.aud === 'people' ? AS.people.slice() : [], include_new: AS.aud === 'people' ? false : !!AS.include_new, due_date: AS.due || null, note: String(AS.note || '').trim() || null };
+    var picks = AS.picks.slice(), done = [], people = 0, i = 0;
+    function next() {
+      if (i >= picks.length) return finish();
+      var v = picks[i++], p = Object.assign({}, base, v.indexOf('t:') === 0 ? { training_id: Number(v.slice(2)) } : { path_key: v.slice(2) });
+      return q(db.rpc('academy_assign', { p: p })).then(function (r) {
+        if (r.error) { throw new Error(String(r.error.message || r.error)); }
+        var d = r.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+        done.push(v); people = Math.max(people, Number(d && d.people) || 0);
+        return next();
+      });
+    }
+    function finish() {
+      var msg = done.length === 1 ? 'Assigned: ' + titleOf(done[0]) + ' to ' + plural(people, 'person', 'people') : 'Assigned ' + plural(done.length, 'training') + ' to ' + plural(people, 'person', 'people');
+      closeForm(); T(msg); refreshAll();
+    }
+    next().catch(function (e) {
+      if (!AS) return;
+      AS.busy = false;
+      AS.picks = AS.picks.filter(function (v) { return done.indexOf(v) < 0; });
+      AS.err = (done.length ? 'Assigned ' + done.map(titleOf).join(', ') + '; the rest did not go: ' : 'It did not go: ') + String(e && e.message || e).replace(/^.*?:\s*(?=[A-Z])/, '').slice(0, 180);
+      paintForm();
+      if (done.length) refreshAll();
+    });
+  }
+  /* after a change: the lists, the Academy, the HR centre's training table */
+  function refreshAll() {
+    S.listAt = 0; S.mineAt = 0;
+    loadList(true).then(function () { paintCards(); });
+    loadMine(true);
+    try { if (window.w122 && typeof w122.load === 'function') w122.load(true).then(function () { try { w122.paint(); } catch (e) { /* not mounted */ } }); } catch (e) { /* fine */ }
+    try { if (typeof wa36Load === 'function') wa36Load(true); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- the assignments in the HR centre ---------- */
+  function audText(a) {
+    if (a.audience === 'everyone') return 'Everyone' + (a.include_new ? ', new people too' : '');
+    if (a.audience === 'team') return (a.teams || []).map(teamName).join(', ') + (a.include_new ? ', new people too' : '');
+    var n = (a.people || []).length;
+    if (n <= 3) { var names = (a.people || []).map(function (em) { var m = members().filter(function (x) { return lower(x.email) === lower(em); })[0]; return m ? first(m.name) : em.split('@')[0]; }); return names.join(', '); }
+    return plural(n, 'person', 'people');
+  }
+  function stateOf(p, a) {
+    var total = Number(p.total) || 0, done = Number(p.done) || 0, today = todayIso();
+    if (total && done >= total) return { k: 'ok', t: 'Done' };
+    var due = p.due || a.due_date;
+    if (a.active && due && String(due) < today) return { k: 'late', t: 'Late' + (done ? ': ' + done + ' of ' + total : '') };
+    if (done || p.started) return { k: 'go', t: total > 1 ? done + ' of ' + total : 'Started' };
+    return { k: 'no', t: 'Not started' };
+  }
+  function itemHtml(a, compact) {
+    var ps = a.people_state || [], n = ps.length, st = ps.map(function (p) { return stateOf(p, a); });
+    var ok = st.filter(function (x) { return x.k === 'ok'; }).length, late = st.filter(function (x) { return x.k === 'late'; }).length, go = st.filter(function (x) { return x.k === 'go'; }).length;
+    var pct = n ? Math.round(100 * ok / n) : 0, open = !!S.open[a.id], sure = S.sure === a.id;
+    var kind = a.path_key ? 'Learning Avenue \u00b7 ' + plural(Number(a.modules) || 0, 'module') : 'Module';
+    var meta = [audText(a), (a.assigned_by ? 'by ' + first(a.assigned_by) : '') + (a.created_at ? ', ' + fmtDay(a.created_at) : ''), a.due_date ? 'due ' + fmtDay(a.due_date) : 'no due date'].filter(Boolean);
+    var h = '<div class="w169a' + (a.active ? '' : ' off') + '" data-w169aid="' + E(a.id) + '"><div class="t"><div><b>' + E(a.title || 'A training') + '</b><span class="k">' + E(kind) + '</span></div>'
+      + (a.active ? '' : '<span class="w169chip0">Stopped' + (a.ended_at ? ' ' + E(fmtDay(a.ended_at)) : '') + (a.ended_by ? ' by ' + E(first(a.ended_by)) : '') + '</span>') + '</div>'
+      + '<div class="m">' + E(meta.join(' \u00b7 ')) + (late ? ' \u00b7 <span class="late">' + plural(late, 'person', 'people') + ' late</span>' : '') + '</div>'
+      + (a.note && !compact ? '<div class="nt">\u201c' + E(a.note) + '\u201d</div>' : '')
+      + '<div class="pb" title="' + ok + ' of ' + n + ' done"><i style="width:' + pct + '%"></i></div>'
+      + '<div class="n"><span><b>' + ok + '</b> of ' + plural(n, 'person', 'people') + ' done' + (go ? ' \u00b7 ' + go + ' on the way' : '') + '</span>'
+      + (compact ? '' : '<span class="acts">' + (n ? '<a data-w169who="' + E(a.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? 'Hide who' : 'See who') + '</a>' : '')
+        + (a.active ? (sure ? '<span class="sure">Stop it? Nobody who has not started keeps it; what people started stays. <a data-w169stop="' + E(a.id) + '" role="button" tabindex="0" class="stop">Yes, stop it</a> <a data-w169keep="1" role="button" tabindex="0">Keep it</a></span>' : '<a data-w169stopask="' + E(a.id) + '" role="button" tabindex="0" class="stop">Stop</a>') : '') + '</span>')
+      + '</div>';
+    if (open && !compact) h += '<div class="w169who">' + ps.map(function (p, i) { return '<div><span>' + E(p.name) + ' <span style="color:' + MUTED + ';font-size:11px">' + E(teamName(p.department)) + '</span></span><em class="' + st[i].k + '">' + E(st[i].t) + '</em></div>'; }).join('') + '</div>';
+    return h + '</div>';
+  }
+  function cardHtml(view) {
+    var list = S.list, full = view === 'training';
+    var act = (list || []).filter(function (a) { return a.active; }), shown = full ? (list || []) : act.slice(0, 3);
+    var lead = full
+      ? '<p>Every training assigned to everyone, a team or a group of people, with how far people are. Assigned trainings show at the top of each person\u2019s Avenue Academy with the note and the due date, and people who join later get the ones meant for them.</p>'
+      : '<p>Give the whole organization, a team or a few people a module or a Learning Avenue, with a due date and a note. It shows at the top of their Avenue Academy, under Assigned to you. Leaders can assign from the Avenue Academy too.</p>';
+    var h = '<h3>' + (full ? 'Trainings assigned to the organization' : 'Assign trainings to the organization') + '</h3>'
+      + '<div class="w169lead">' + lead + '<span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="w169pill gold" data-w169assign="">Assign a training</button>'
+      + (!full && act.length ? '<button type="button" class="w169pill" data-w169tv="training">See every assignment (' + act.length + ')</button>' : '') + '</span></div>';
+    if (list === null) h += '<div class="w169empty">Loading the assignments\u2026</div>';
+    else if (!shown.length) h += '<div class="w169empty">' + (full && list.length ? 'Nothing is assigned right now.' : 'Nothing is assigned to the organization yet. Assign a training and it shows here with how far people are.') + '</div>';
+    else h += '<div class="w169list">' + shown.map(function (a) { return itemHtml(a, !full); }).join('') + '</div>';
+    return h;
+  }
+  /* the two cards: in the Onboarding view after the master onboarding, and first in the Training view */
+  function sectionByH3(re) { var body = document.getElementById('w46body'); if (!body) return null; return Array.prototype.filter.call(body.querySelectorAll('.w46sec'), function (s) { var h = s.querySelector(':scope > h3'); return h && re.test(h.textContent || ''); })[0] || null; }
+  function placeCard(id, view, anchor, where) {
+    var el = document.getElementById(id);
+    if (!anchor) { return el; }
+    if (!el) { el = document.createElement('div'); el.className = 'w46sec w169card'; el.id = id; }
+    var want = where === 'after' ? anchor.nextElementSibling : anchor;
+    if (where === 'after' ? el !== want : el.nextElementSibling !== anchor) anchor.insertAdjacentElement(where === 'after' ? 'afterend' : 'beforebegin', el);
+    var html = cardHtml(view);
+    if (el.getAttribute('data-h') !== html) { el.innerHTML = html; el.setAttribute('data-h', html); }
+    return el;
+  }
+  function paintCards() {
+    if (!canAssign()) return;
+    var master = sectionByH3(/^Master onboarding/), tr = sectionByH3(/^Trainings across the team$|^Trainings$|^Training$/);
+    if (!master && !tr) return;
+    if (S.list === null && !S.listP) loadList(false).then(function () { paintCards(); });
+    /* wave47 puts its chart in the Training view's first section: that is the Trainings section's, not this card's */
+    var cT = document.getElementById('w169cardT');
+    if (cT && tr) Array.prototype.forEach.call(cT.querySelectorAll(':scope > .w47chart'), function (ch) { var tiles = tr.querySelector(':scope > .w44tiles'); if (tiles) tiles.insertAdjacentElement('afterend', ch); else tr.appendChild(ch); });
+    placeCard('w169cardO', 'onboarding', master, 'after');
+    placeCard('w169cardT', 'training', tr, 'before');
+  }
+  function stopAssign(id) {
+    S.sure = null;
+    q(db.rpc('academy_assign_end', { p_id: Number(id) })).then(function (r) {
+      if (r.error) { T('It did not stop: ' + String(r.error.message || r.error).slice(0, 120)); return; }
+      var d = r.data; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = null; } }
+      T('Stopped' + (d && d.removed != null ? ': ' + plural(Number(d.removed) || 0, 'person', 'people') + ' had not started, ' + (Number(d.kept) || 0) + ' keep what they started' : ''));
+      refreshAll();
+    });
+  }
+  /* ---------- the Avenue Academy: Assigned to you ---------- */
+  function acadMe() {
+    var m = meRow(), name = m && m.name ? m.name : '', em = '';
+    try { em = lower((USER && USER.email) || ''); if (!name) { var full = String((USER && USER.name) || ''); name = full ? full.split(' ')[0] : em.split('@')[0]; } } catch (e) { /* fine */ }
+    return { name: name, email: em };
+  }
+  function doneAt(prog, n, tid) {
+    for (var i = 0; i < prog.length; i++) { var p = prog[i]; if (String(p.training_id) === String(tid) && lower(p.person_name) === n) return p.status === 'done' ? (p.done_at || p.updated_at || 'done') : null; }
+    return null;
+  }
+  function rowOf(prog, n, tid) { for (var i = 0; i < prog.length; i++) { var p = prog[i]; if (String(p.training_id) === String(tid) && lower(p.person_name) === n) return p; } return null; }
+  /* my assigned trainings, grouped: one card per assignment (a Learning Avenue is one card), and one per training someone
+     assigned by hand (the older way) */
+  function mineCards() {
+    var A = window.w122 && w122.A; if (!A || !A.loaded || !Array.isArray(A.prog)) return null;
+    loadCatalog();
+    var me = acadMe(), n = lower(me.name); if (!n) return null;
+    var prog = A.prog, today = todayIso(), groups = {}, order = [];
+    prog.forEach(function (p) {
+      if (lower(p.person_name) !== n) return;
+      var key = p.assignment_id ? 'a' + p.assignment_id : (p.assigned_by && p.status !== 'done' ? 't' + p.training_id : null);
+      if (!key) return;
+      if (!groups[key]) { groups[key] = { key: key, aid: p.assignment_id || null, rows: [] }; order.push(key); }
+      groups[key].rows.push(p);
+    });
+    var cards = [];
+    order.forEach(function (k) {
+      var g = groups[k], a = null;
+      if (g.aid) a = (S.mine || []).filter(function (x) { return String(x.id) === String(g.aid); })[0] || null;
+      var v = null;
+      if (a) v = a.training_id ? 't:' + a.training_id : 'p:' + a.path_key;
+      else if (g.rows.length > 1) {
+        var grp = null, same = g.rows.every(function (r) { var t = trById(r.training_id); if (!t || !t.path_group) return false; if (grp === null) grp = t.path_group; return t.path_group === grp; });
+        var pth = same ? (S.paths || []).filter(function (p) { return p.name === grp; })[0] : null;
+        v = pth ? 'p:' + pth.key : 't:' + g.rows[0].training_id;
+      } else v = 't:' + g.rows[0].training_id;
+      var mods = modulesOf(v); if (!mods.length) return;
+      var done = 0, last = null, started = false;
+      mods.forEach(function (t) {
+        var d = doneAt(prog, n, t.id); if (d) { done++; if (!last || String(d) > String(last)) last = d; }
+        else { var r = rowOf(prog, n, t.id); if (r && (r.started_at || Number(r.pct) > 0)) started = true; }
+      });
+      var complete = done >= mods.length;
+      /* a finished card stays two weeks, then leaves the list */
+      if (complete && (!last || last === 'done' || String(last).slice(0, 10) < addDays(today, -14))) return;
+      var due = null; g.rows.forEach(function (r) { if (r.status !== 'done' && r.due_date && (!due || String(r.due_date) < due)) due = String(r.due_date).slice(0, 10); });
+      if (!due && a && a.due_date && !complete) due = String(a.due_date).slice(0, 10);
+      var note = (a && a.note) || g.rows.map(function (r) { return r.note; }).filter(Boolean)[0] || '';
+      var by = (a && a.assigned_by) || g.rows.map(function (r) { return r.assigned_by; }).filter(Boolean)[0] || '';
+      var mins = mods.filter(function (t) { return !doneAt(prog, n, t.id); }).reduce(function (s, t) { return s + minsOf(t); }, 0);
+      var nextT = mods.filter(function (t) { return !doneAt(prog, n, t.id); })[0] || mods[0];
+      cards.push({ v: v, title: titleOf(v), avenue: v.indexOf('p:') === 0, mods: mods, done: done, total: mods.length, complete: complete, last: last, started: started || done > 0,
+        due: due, late: !complete && due && due < today, note: note, by: by, mins: mins, next: nextT });
+    });
+    cards.sort(function (x, y) { return (x.complete - y.complete) || ((y.late ? 1 : 0) - (x.late ? 1 : 0)) || ((x.due ? 0 : 1) - (y.due ? 0 : 1)) || String(x.due || '').localeCompare(String(y.due || '')) || String(x.title).localeCompare(String(y.title)); });
+    return cards;
+  }
+  function dueText(c) {
+    if (c.complete) return 'Done' + (c.last && c.last !== 'done' ? ' ' + fmtDay(c.last) : '');
+    if (c.late) return 'Late: it was due ' + fmtDay(c.due);
+    if (c.due) { var d = Math.round((new Date(c.due + 'T12:00:00Z') - new Date(todayIso() + 'T12:00:00Z')) / 86400000); return 'Due ' + fmtDay(c.due) + (d === 0 ? ', today' : d === 1 ? ', tomorrow' : d > 1 && d <= 7 ? ', in ' + d + ' days' : ''); }
+    return 'No due date';
+  }
+  function homeHtml() {
+    if (S.mine === null || (Date.now() - S.mineAt > 60000 && !S.mineP)) {
+      if (!S.mineP) loadMine().then(function () { try { if (window.w122 && typeof w122.paint === 'function') w122.paint(); } catch (e) { /* not mounted */ } });
+    }
+    var cards = mineCards(); if (!cards || !cards.length) return '';
+    var todo = cards.filter(function (c) { return !c.complete; }), late = todo.filter(function (c) { return c.late; }).length;
+    var sub = todo.length ? todo.length + ' to do' + (late ? ', ' + late + ' late' : '') + ', from the people you work with.' : 'All done. Thank you!';
+    var shown = S.mineAll ? cards : cards.slice(0, 6);
+    return '<section class="w122sec" id="w169mine" data-sec="assigned"><div class="w122sech"><div><h2>Assigned to you</h2><div class="sub">' + E(sub) + '</div></div>'
+      + (cards.length > 6 ? '<button type="button" class="w169pill" data-w169mineall="1">' + (S.mineAll ? 'Show fewer' : 'Show all ' + cards.length) + '</button>' : '') + '</div>'
+      + '<div class="w169g">' + shown.map(function (c) {
+        var href = c.avenue ? '#training/p/' + c.v.slice(2) : '#training/t/' + c.v.slice(2);
+        var pct = c.total ? Math.round(100 * c.done / c.total) : 0;
+        var k = c.avenue ? 'Learning Avenue \u00b7 ' + c.done + ' of ' + c.total + ' done' : kindLabel(c.mods[0]) + (minsOf(c.mods[0]) ? ' \u00b7 ' + minsOf(c.mods[0]) + ' min' : '');
+        var go = c.complete ? 'Open it again' : (c.started ? 'Continue' : 'Start') + (c.avenue && c.next && !c.complete ? ': ' + String(c.next.title).slice(0, 34) + (String(c.next.title).length > 34 ? '\u2026' : '') : '');
+        return '<a class="w169m' + (c.complete ? ' done' : c.late ? ' late' : '') + '" href="' + E(href) + '"><span class="k">' + E(k) + '</span><b>' + E(c.title) + '</b>'
+          + '<span class="due">' + E(dueText(c)) + (!c.complete && c.mins ? ' \u00b7 about ' + c.mins + ' min' : '') + '</span>'
+          + (c.note ? '<span class="why">\u201c' + E(c.note) + '\u201d</span>' : '')
+          + (c.by ? '<span class="by">From ' + E(first(c.by)) + '</span>' : '')
+          + (c.avenue ? '<span class="pb"><i style="width:' + pct + '%"></i></span>' : '')
+          + '<span class="go">' + E(go) + '</span></a>';
+      }).join('') + '</div></section>';
+  }
+  /* ---------- the preview: the onboarding as a new person sees it on day one, or as someone on the board sees theirs ---------- */
+  var PV = { from: null };
+  /* a new person who started today, with no name and nothing done yet (the journey greets them as "friend") */
+  function sampleOnb() { return { id: SAMPLE_ID, person_name: '', member_id: null, started_at: todayIso() + 'T09:00:00', status: 'active', completed_at: null }; }
+  /* their plan: every step of the master, due as the database would set it (onb_due) */
+  function sampleSteps() {
+    var m = {}, today = todayIso();
+    try {
+      (WA37.tmpl || []).forEach(function (t) {
+        if (t.active === false) return;
+        m[t.id] = { id: 'w169s-' + t.id, onboarding_id: SAMPLE_ID, template_id: t.id, done: false, done_at: null, done_by: null, due_date: addDays(today, daysOf(t.section)) };
+      });
+    } catch (e) { /* none */ }
+    return m;
+  }
+  var __sf169 = (typeof wa37StepsFor === 'function') ? wa37StepsFor : null;
+  if (__sf169) wa37StepsFor = function (onbId) { if (String(onbId) === SAMPLE_ID) return sampleSteps(); return __sf169.apply(this, arguments); };
+
+  function preview(id) {
+    if (!canAssign()) { T('Only HR, leaders and admins can preview the onboarding'); return; }
+    var o = null;
+    if (String(id) === SAMPLE_ID) o = sampleOnb();
+    else { try { o = (WA37.onbs || []).filter(function (x) { return String(x.id) === String(id); })[0] || null; } catch (e) { o = null; } }
+    if (!o) { T('That onboarding is not here any more'); return; }
+    var h = location.hash || '';
+    PV.from = h && h.indexOf('#training') !== 0 ? h : '#hrcentre/onboarding';
+    window.__w169view = o;
+    document.body.classList.add('w169pvon');
+    try { var st = window.w167 && w167.state ? w167.state() : null; if (st) { st.onb = null; st.wk = null; } } catch (e) { /* fine */ }
+    if (h === '#training/onboarding') { try { if (typeof applyHash === 'function') applyHash(); } catch (e) { /* fine */ } }
+    else location.hash = '#training/onboarding';
+  }
+  function endPreview(back) {
+    if (!window.__w169view) return;
+    window.__w169view = null;
+    document.body.classList.remove('w169pvon');
+    try { var st = window.w167 && w167.state ? w167.state() : null; if (st) { st.onb = null; st.wk = null; } } catch (e) { /* fine */ }
+    var to = PV.from; PV.from = null;
+    if (back && to && (location.hash || '') !== to) location.hash = to;
+  }
+  /* leaving the plan ends the preview; closing it goes back to where it was opened (the HR centre) */
+  window.addEventListener('hashchange', function () {
+    if (!window.__w169view) return;
+    var h = location.hash || '';
+    if (h === '#training/onboarding') return;
+    endPreview(h === '#training' || h === '' || h === '#');
+  });
+  function bannerHtml() {
+    var o = window.__w169view; if (!o) return '';
+    var sample = String(o.id) === SAMPLE_ID;
+    return '<div class="w169pv" role="status"><span><b>Preview</b> \u00b7 ' + (sample ? 'what a new person sees on their first day in the Avenue Academy.' : 'what ' + E(first(o.person_name) || 'they') + ' sees in the Avenue Academy today.')
+      + ' Read only: nothing is ticked or sent from here.</span><button type="button" data-w169pvx="1">Back to the ' + (sample ? 'master onboarding' : 'HR centre') + '</button></div>';
+  }
+  /* ---------- the HR centre: one pass after it changes ---------- */
+  var hrQ = null;
+  function decorateHr() {
+    var body = document.getElementById('w46body'); if (!body || !body.querySelector('.w46sec')) return;
+    if (!canAssign()) return;
+    if (!S.tr && !S.catP) loadCatalog().then(soonHr);
+    if (!S.cfg && !S.cfgP) loadCfg().then(soonHr);
+    try { decorateMaster(); } catch (e) { /* fine */ }
+    try { decorateBoard(); } catch (e) { /* fine */ }
+    try { paintCards(); } catch (e) { /* fine */ }
+    var bk = body.querySelector('[data-w57bulk]'), bt = 'Assign trainings (everyone, teams or people)';
+    if (bk && bk.textContent !== bt) bk.textContent = bt;
+  }
+  function soonHr() { clearTimeout(hrQ); hrQ = setTimeout(function () { try { decorateHr(); } catch (e) { /* fine */ } }, 120); }
+  function watchHr() {
+    var panel = document.getElementById('hrcentre'); if (!panel || panel.dataset.w169mo) return;
+    panel.dataset.w169mo = '1';
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var t = muts[i].target;
+        if (t && t.closest && (t.closest('.w169card') || t.closest('.w169see') || t.closest('.w169tt') || t.closest('.w169chips'))) continue;
+        soonHr(); return;
+      }
+    }).observe(panel, { childList: true, subtree: true });
+    soonHr();
+  }
+  watchHr();
+  if (typeof startApp === 'function') {
+    var __sa169 = startApp;
+    startApp = async function () { var out = await __sa169.apply(this, arguments); try { watchHr(); addTours(); } catch (e) { /* fine */ } return out; };
+  }
+
+  /* ---------- clicks, typing and choices ---------- */
+  function attr(el, a) { return el ? el.getAttribute(a) : null; }
+  function stop(e) { e.preventDefault(); e.stopPropagation(); }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w169assign]'))) { stop(e); openAssign(attr(el, 'data-w169assign') || ''); return; }
+    if ((el = t.closest('[data-w57bulk]')) && canAssign()) { stop(e); openAssign(''); return; }
+    if ((el = t.closest('[data-w169week]'))) { stop(e); openWeek(attr(el, 'data-w169week')); return; }
+    if ((el = t.closest('[data-w169preview]'))) { stop(e); preview(attr(el, 'data-w169preview')); return; }
+    if ((el = t.closest('[data-w169pvx]'))) { stop(e); endPreview(true); return; }
+    if ((el = t.closest('[data-w169mineall]'))) { stop(e); S.mineAll = !S.mineAll; try { w122.paint(); } catch (x) { /* fine */ } return; }
+    if ((el = t.closest('[data-w169tv]'))) { stop(e); var tab = document.querySelector('#w46body .w47tab[data-w47v="' + attr(el, 'data-w169tv') + '"]'); if (tab) { tab.click(); try { tab.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (x) { /* fine */ } } return; }
+    if ((el = t.closest('[data-w169who]'))) { stop(e); var id = attr(el, 'data-w169who'); S.open[id] = !S.open[id]; paintCards(); return; }
+    if ((el = t.closest('[data-w169stopask]'))) { stop(e); S.sure = Number(attr(el, 'data-w169stopask')); paintCards(); return; }
+    if ((el = t.closest('[data-w169keep]'))) { stop(e); S.sure = null; paintCards(); return; }
+    if ((el = t.closest('[data-w169stop]'))) { stop(e); if (!el.dataset.busy) { el.dataset.busy = '1'; stopAssign(attr(el, 'data-w169stop')); } return; }
+    /* the week editor */
+    if (WK) {
+      if ((el = t.closest('[data-w169pic]'))) {
+        stop(e); readWeek();
+        var p = (S.photos || []).filter(function (x) { return String(x.id) === String(attr(el, 'data-w169pic')); })[0];
+        if (p) { WK.photoId = p.id; WK.photo = p.path_web; WK.fx = p.focal_x; WK.fy = p.focal_y; }
+        Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w169pic]'), function (b) { b.classList.toggle('on', b === el); });
+        paintPart('w169wprev', weekPrev()); return;
+      }
+      if (t.closest('#w169wsave')) { stop(e); saveWeek(); return; }
+      if (t.closest('#w169wx')) { stop(e); WK = null; lift(false); try { closeModal(); } catch (x) { /* fine */ } return; }
+    }
+    /* the assign form */
+    if (AS) {
+      if ((el = t.closest('[data-w169pick]'))) {
+        stop(e); var v = attr(el, 'data-w169pick'), i = AS.picks.indexOf(v);
+        if (i >= 0) AS.picks.splice(i, 1); else AS.picks.push(v);
+        AS.err = ''; var er = document.getElementById('w169aerr'); if (er) er.hidden = true;
+        paintPart('w169awh', itemsHtml()); paintSum(); return;
+      }
+      if ((el = t.closest('[data-w169unpick]'))) { stop(e); var u = AS.picks.indexOf(attr(el, 'data-w169unpick')); if (u >= 0) AS.picks.splice(u, 1); paintPart('w169awh', itemsHtml()); paintSum(); return; }
+      if ((el = t.closest('[data-w169aud]'))) { stop(e); readForm(); AS.aud = attr(el, 'data-w169aud'); AS.err = ''; paintForm(); return; }
+      if ((el = t.closest('[data-w169due]'))) { stop(e); readForm(); AS.due = attr(el, 'data-w169due') || ''; paintForm(); return; }
+      if (t.closest('#w169ago')) { stop(e); submitAssign(); return; }
+      if (t.closest('#w169ax')) { stop(e); closeForm(); return; }
+    }
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target; if (!t || !t.matches || !t.matches('[data-w169who],[data-w169stopask],[data-w169keep],[data-w169stop]')) return;
+    e.preventDefault(); t.click();
+  }, true);
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t) return;
+    if (AS) {
+      if (t.id === 'w169aq') { AS.q = t.value; paintPart('w169awh', itemsHtml()); var w = document.getElementById('w169awh'); if (w) w.scrollTop = 0; return; }
+      if (t.id === 'w169apq') { AS.pq = t.value; paintPart('w169appl', peopleHtml()); return; }
+      if (t.id === 'w169anote') { AS.note = t.value; return; }
+    }
+    if (WK && t.closest && t.closest('#modalBox') && (t.id === 'w169wt' || t.id === 'w169wy' || t.hasAttribute('data-w169learn'))) { readWeek(); paintPart('w169wprev', weekPrev()); }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (AS) {
+      var k;
+      if ((k = attr(t, 'data-w169team'))) { var i = AS.teams.indexOf(k); if (t.checked && i < 0) AS.teams.push(k); if (!t.checked && i >= 0) AS.teams.splice(i, 1); if (t.parentElement) t.parentElement.classList.toggle('on', t.checked); paintSum(); return; }
+      if ((k = attr(t, 'data-w169person'))) { var j = AS.people.indexOf(k); if (t.checked && j < 0) AS.people.push(k); if (!t.checked && j >= 0) AS.people.splice(j, 1); if (t.parentElement) t.parentElement.classList.toggle('on', t.checked); paintSum(); return; }
+      if (t.id === 'w169anew') { AS.include_new = !!t.checked; paintSum(); return; }
+      if (t.id === 'w169adue') { readForm(); paintForm(true); return; }
+    }
+    if (WK && t.id === 'w169wl') readWeek();
+  }, true);
+
+  /* ---------- the tours ---------- */
+  function addTours() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT) return;
+      var put = function (tour, after, step, flag) {
+        var x = TT[tour]; if (!x || x[flag]) return;
+        var i = -1; x.steps.forEach(function (s, k) { if (s.s === after) i = k; });
+        x.steps.splice(i >= 0 ? i + 1 : x.steps.length, 0, step); x[flag] = true;
+      };
+      put('hrcentre', '#w46body .w47tabs || #w153rail .w153sec', { s: '#w46body .w169bar', t: 'The onboarding people see', p: 'The master onboarding is the onboarding: each week says what people see for it in the Avenue Academy (its title, photo, goals, why it matters and the lesson that opens it), and Edit what people see changes it at once. Preview what a new person sees opens the journey as it looks on day one; Journey, next to each person on the board, shows theirs.', opt: 1 }, '__w169a');
+      put('hrcentre', '#w46body .w169bar', { s: '#w169cardO || #w169cardT', t: 'Assign trainings to the organization', p: 'A module or a Learning Avenue for everyone, a team or a few people, with a due date and a note. It shows at the top of their Avenue Academy, and people who join later get it too. The Training view lists every assignment: who is done, on the way, late or not started, and Stop.', opt: 1 }, '__w169b');
+      put('academy', '#w122 .w122onb', { s: '#w169mine', t: 'Assigned to you', p: 'Trainings your team asked you to take, with the due date, who asked and why. Late ones come first, and a finished one stays two weeks. HR and leaders assign from Assign a training at the top, or Assign on a module or a Learning Avenue.', opt: 1 }, '__w169c');
+      var nx = TT.academy && TT.academy.steps ? TT.academy.steps.filter(function (s) { return s.s === '#w122 [data-sec="next"]'; })[0] : null;
+      if (nx && /assigned to you/.test(nx.p)) nx.p = 'What you started, and what is recommended for you and your team.';
+    } catch (e) { /* fine */ }
+  }
+  addTours(); setTimeout(addTours, 1500);
+
+  window.w169 = { can: canAssign, homeHtml: homeHtml, banner: bannerHtml, preview: preview, endPreview: endPreview, openAssign: openAssign, openWeek: openWeek,
+    decorate: decorateHr, cards: paintCards, sample: SAMPLE_ID, state: function () { return S; } };
+})();

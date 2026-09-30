@@ -61,7 +61,8 @@
   function wa46IsHr() {
     try {
       if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) {
-        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader';
+        /* wave169: and HR's own access profile, as that profile says ("Use the HR centre: onboarding plans, hours, recruitment and policies") */
+        return WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader' || (WA40_MINE.profile === 'hr' && WA40_MINE.role !== 'blocked' && WA40_MINE.role !== 'viewer');
       }
     } catch (e) { /* fall through */ }
     return false;
@@ -233,7 +234,7 @@
 
   function wa46MasterHtml() {
     var html = '<div class="w46sec"><h3>Master onboarding</h3>'
-      + '<p class="m-sub" style="margin:0 0 6px">Changes flow to everyone still mid-onboarding. Edit a step for its name, instructions, link, week, position and priority. Retiring removes it from active onboardings.</p><div id="w46master">';
+      + '<p class="m-sub" style="margin:0 0 6px">Changes flow to everyone still mid-onboarding, and to what they see in the Avenue Academy. Edit a step for its name, instructions, link, where it is done in the Avenue Academy, week, position and priority. Retiring removes it from active onboardings.</p><div id="w46master">';
     html += wa46MasterInner();
     html += '</div></div>';
     return html;
@@ -274,7 +275,7 @@
     });
     var people = (typeof WA28_PEOPLE !== 'undefined' ? WA28_PEOPLE : []).slice();
     people.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
-    var html = '<div class="w46sec"><h3>Training</h3><div class="w44tiles">'
+    var html = '<div class="w46sec"><h3>Trainings across the team</h3><div class="w44tiles">'   /* wave169: a title starting "Trainings", which wave47's Training view looks for (it showed under Onboarding); not the bare "Trainings" that would bring back wave67's whole catalog here (the Academy is the catalog) */
       + '<div class="w44tile"><b>' + trainings.length + '</b><span>in the catalog</span></div>'
       + '<div class="w44tile"><b>' + Object.keys(peopleCovered).length + '</b><span>people with assignments</span></div>'
       + '<div class="w44tile"><b>' + (prog.length ? Math.round(100 * doneN / prog.length) : 0) + '%</b><span>org completion</span></div>'
@@ -361,7 +362,7 @@
   async function wa46Render() {
     var panel = document.getElementById('hrcentre');
     if (!panel) return;
-    if (!wa46IsHr()) { panel.innerHTML = '<div class="card"><h2>HR centre</h2><p class="read">This page is for admins and leaders.</p></div>'; return; }
+    if (!wa46IsHr()) { panel.innerHTML = '<div class="card"><h2>HR centre</h2><p class="read">This page is for the HR team, and for admins and leaders.</p></div>'; return; }
     panel.innerHTML = '<div class="card"><h2>HR centre <button class="w43help" data-w46help="1">&#63; How this page works</button></h2>'
       + '<p class="read">Onboarding, trainings and recruitment for the whole organization. Personal training lives in the Avenue Academy.</p>'
       + '<div id="w46body">Loading...</div></div>';
@@ -420,8 +421,8 @@
         openModal('<h3>HR centre</h3><div class="w43hm">'
           + '<p>The organization view of people operations. Regular members never see this page; their own training and onboarding live in the Avenue Academy.</p>'
           + '<p>Onboarding: who is mid-onboarding, their progress and pace, who is asking for help. Assign an onboarding from the dropdown; the Welcome kit opens with the onboarding email, channel message and setup checklist prefilled.</p>'
-          + '<p>Master onboarding: the program itself. Open a week, edit any step (name, instructions, link, week, position, priority), add steps and subtasks, retire what no longer fits. Changes reach everyone mid-onboarding instantly.</p>'
-          + '<p>Trainings: catalog editing, and per-person assignment with the Assign trainings buttons.</p>'
+          + '<p>Master onboarding: the program itself, and what people see in the Avenue Academy. Each week shows what people see for it (its title, photo, goals, why it matters and the lesson that opens it): Edit what people see changes it. Edit any step (name, instructions, link, where it is done in the Avenue Academy, week, position, priority), add steps and subtasks, retire what no longer fits. Changes reach everyone mid-onboarding instantly. Preview what a new person sees shows the journey as it looks on day one; Journey, next to each person on the board, shows theirs.</p>'
+          + '<p>Trainings: Assign a training gives a module or a Learning Avenue to everyone, a team or a few people, with a due date and a note; it shows at the top of their Avenue Academy, and people who join later get it too. The Training view lists every assignment with who is done, late or not started. Catalog editing and per-person assignment are there too.</p>'
           + '<p>Recruitment: every hiring request with its stage, days in stage and total days open, plus average days to hire. Change stages here; every change is logged, which is what powers the timing data.</p>'
           + '</div><div class="m-actions"><button class="btn" id="w46hc">Got it</button></div>');
         var c = document.getElementById('w46hc');

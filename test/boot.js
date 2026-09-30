@@ -3,7 +3,7 @@
    const browser = await launch();
    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: <object>, init: '<js>' });
    f.page, f.ev(fn, arg), f.hash('#x'), f.close()
-   Identities: admin (an admin), member (a member on the HR profile), leader, board (a board viewer).
+   Identities: admin (an admin), member (a member on the HR profile), leader, board (a board viewer), plain (a member on a team profile).
    The fixture defaults to test/fixture_live.json when present, else the scratchpad copy, else test/fixture.json.
    Clock fixed at 2026-09-25 16:00 Toronto; all network except the page and the stubbed libraries is blocked. */
 const fs = require('fs');
@@ -15,7 +15,8 @@ const WHO = {
   admin: { email: 'steel.macdonald@welfareavenue.com', name: 'Steel MacDonald', role: 'staff', patch: [] },
   member: { email: 'samson.jules@welfareavenue.com', name: 'Samson Jules', role: 'staff', patch: [{ email: 'samson.jules@welfareavenue.com', role: 'member', profile: 'hr' }] },
   leader: { role: 'staff', patch: [], pick: 'leader' },
-  board: { email: 'consult.tamaraangeline@gmail.com', name: 'Tamara Angeline', role: 'board', patch: [] }
+  board: { email: 'consult.tamaraangeline@gmail.com', name: 'Tamara Angeline', role: 'board', patch: [] },
+  plain: { email: 'joy.dumansi@welfareavenue.com', name: 'Joy Dumansi', role: 'staff', patch: [{ email: 'joy.dumansi@welfareavenue.com', role: 'member', profile: 'marketing' }] }   /* wave169: a member with no HR or leader access */
 };
 
 function loadFixture(p) {

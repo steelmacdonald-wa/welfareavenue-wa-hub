@@ -86,6 +86,7 @@
 
   /* ---------- a week finished, or the whole plan ---------- */
   function celebrateCheck(J) {
+    if (window.__w169view) return;   /* wave169: nothing is celebrated in a preview */
     var key = String(J.o.id), prev = S.counts[key], now = { __all: J.complete };
     J.weeks.forEach(function (w) { now[w.name] = w.complete; });
     S.counts[key] = now;
@@ -99,12 +100,12 @@
     var mark = 'w167cel:' + J.o.id + ':' + kind; if (lsGet(mark)) return; lsSet(mark, '1');
     var idx = -1; J.weeks.forEach(function (w, i) { if (w.name === kind) idx = i; });
     var w = J.byName[kind], nxt = idx >= 0 ? J.weeks.slice(idx + 1).filter(function (x) { return !x.complete; })[0] : null;
-    var title = kind === 'all' ? 'You are onboarded!' : (LABEL[kind] || kind) + ' done!';
+    var title = kind === 'all' ? 'You are onboarded!' : lab(kind) + ' done!';
     var text = kind === 'all' ? 'Every step of your plan is done. Thank you for the care you put into it; your lead and HR can see it too.'
-      : 'Every step of ' + ((w && w.meta && w.meta.title) || LABEL[kind] || kind) + ' is done.' + (nxt ? ' Next stop: ' + ((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '.' : '');
+      : 'Every step of ' + ((w && w.meta && w.meta.title) || lab(kind)) + ' is done.' + (nxt ? ' Next stop: ' + ((nxt.meta && nxt.meta.title) || lab(nxt.name)) + '.' : '');
     var el = document.createElement('div'); el.className = 'w167cel'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', title);
     el.innerHTML = '<canvas></canvas><div class="cd"><img class="fl" src="' + BR.flowers + '" alt=""><img class="e" src="' + BR.e + '" alt=""><h3>' + E(title) + '</h3><p>' + E(text) + '</p><div class="bt">'
-      + (nxt ? '<button type="button" class="w167btn" data-w167wk="' + E(nxt.name) + '" data-w167celx="1">Next stop: ' + E((nxt.meta && nxt.meta.title) || LABEL[nxt.name]) + '</button>' : '')
+      + (nxt ? '<button type="button" class="w167btn" data-w167wk="' + E(nxt.name) + '" data-w167celx="1">Next stop: ' + E((nxt.meta && nxt.meta.title) || lab(nxt.name)) + '</button>' : '')
       + '<button type="button" class="w167btn green" data-w167celx="1">' + (nxt ? 'Stay here' : 'Keep going') + '</button></div></div>';
     sh.appendChild(el);
     confetti(el.querySelector('canvas'));
@@ -175,5 +176,10 @@
   loadCfg();
 
   /* ---------- test hook ---------- */
-  window.w167 = { state: function () { return S; }, sync: sync, refresh: refresh, select: select, journeyOf: journeyOf, planOnb: planOnb, celebrate: celebrate, cfg: cfg, peopleFor: peopleFor, continueNext: continueNext };
+  /* wave169: HR changed what people see for a week in the master onboarding: read the settings again and redraw */
+  function reloadCfg(v) {
+    if (v && typeof v === 'object') { S.cfg = v; S.cfgAt = Date.now(); refresh(); return Promise.resolve(S.cfg); }
+    S.cfgAt = 0; return loadCfg().then(function () { refresh(); return S.cfg; });
+  }
+  window.w167 = { state: function () { return S; }, sync: sync, refresh: refresh, select: select, journeyOf: journeyOf, planOnb: planOnb, celebrate: celebrate, cfg: cfg, peopleFor: peopleFor, continueNext: continueNext, reloadCfg: reloadCfg };
 })();

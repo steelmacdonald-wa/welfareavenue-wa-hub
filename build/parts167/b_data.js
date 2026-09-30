@@ -37,6 +37,7 @@
   }
   function planOnb() {
     try {
+      if (window.__w169view) return window.__w169view;   /* wave169: HR previews someone's journey, or a new person's */
       if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
       var n = myName().toLowerCase();
       return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
@@ -74,6 +75,6 @@
       var lesson = meta.lesson ? wk.steps.filter(function (x) { return String(x.t.id) === String(meta.lesson); })[0] || null : null;
       byName[wk.name] = { name: wk.name, steps: wk.steps, done: d, total: wk.steps.length, complete: d >= wk.steps.length, due: due || anyDue, meta: meta, lesson: lesson };
     });
-    var list = ORDER.filter(function (k) { return byName[k]; }).concat(Object.keys(byName).filter(function (k) { return ORDER.indexOf(k) < 0; })).map(function (k) { return byName[k]; });
+    var list = Object.keys(byName).sort(function (a, b) { return (daysOf(a) - daysOf(b)) || a.localeCompare(b); }).map(function (k) { return byName[k]; });   /* wave169: in time order, weeks HR adds included */
     return { o: o, weeks: list, byName: byName, total: total, done: done, pct: total ? Math.round(100 * done / total) : 0, next: next, nextWk: nextWk, day: dayN(o.started_at), complete: total > 0 && done >= total };
   }

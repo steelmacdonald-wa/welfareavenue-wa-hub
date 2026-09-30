@@ -268,7 +268,7 @@
         var t = x.t, s = x.s, ls = x.ls, done = x.done, acad = !!(t.training_id || t.academy_path);
         var due = '';
         if (!done && s.due_date) due = '<span class="w44due' + (String(s.due_date) < today ? ' late' : '') + '">due ' + E(String(s.due_date)) + '</span>';
-        html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (done ? ' done' : '') + '" data-w166t="' + E(t.id) + '">'
+        html += '<div class="w37step' + (t.parent_id ? ' child' : '') + (done ? ' done' : '') + '" data-w166t="' + E(t.id) + '" data-w57id="' + E(t.id) + '">'
           + '<input type="checkbox" data-w37chk="' + s.id + '"' + (done ? ' checked' : '') + (canTick && !(ls && ls.done) ? '' : ' disabled')
           + (acad ? ' title="' + (ls && ls.done ? 'Done in the Avenue Academy' : 'Ticks itself when it is finished in the Avenue Academy') + '"' : '') + ' />'
           + '<div style="flex:1;min-width:0"><div class="nm">' + E(t.name)
@@ -298,6 +298,7 @@
   /* the plan sheet in the Academy: which onboarding it shows (the Academy's own choice: the person's, not cancelled) */
   function planOnb() {
     try {
+      if (window.__w169view) return window.__w169view;   /* wave169: HR previews someone's plan, or a new person's */
       if (typeof WA37 === 'undefined' || !WA37.onbs) return null;
       var n = myName().toLowerCase();
       return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
@@ -321,7 +322,7 @@
     var o = planOnb(); if (!o) return;
     var open = [].map.call(wrap.querySelectorAll('details.w37week'), function (d) { return d.open; });
     var main = sh.querySelector('.main'), top = main ? main.scrollTop : 0;
-    wrap.innerHTML = checklist(o, true);
+    wrap.innerHTML = checklist(o, !window.__w169view);   /* wave169: a preview is read only */
     [].forEach.call(wrap.querySelectorAll('details.w37week'), function (d, i) { if (open[i] != null) d.open = open[i]; });
     if (main) main.scrollTop = top;
     syncHead();
@@ -334,7 +335,7 @@
     wrap.setAttribute('data-w166', '1');
     var intro = sh.querySelector('.main .prose p');
     if (intro && intro.textContent.indexOf('Avenue Academy') < 0) intro.insertAdjacentHTML('beforeend', ' Steps marked Avenue Academy tick themselves when you finish the module or the avenue here, and the videos play inside the Hub.');
-    var mine = planOnb(); if (mine && mine.status !== 'active') mine = null;
+    var mine = planOnb(); if (mine && (mine.status !== 'active' || window.__w169view)) mine = null;   /* wave169: no help form in a preview */
     if (mine) {
       /* the Academy's sheet sits above every modal, so the form opens right here */
       var left = planStates(mine).reduce(function (a, wk) { return a.concat(wk.steps.filter(function (x) { return !x.done; }).map(function (x) { return x.t; })); }, []);

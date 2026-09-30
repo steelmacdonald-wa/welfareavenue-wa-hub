@@ -56,7 +56,8 @@
 
   function wa47IsHr() {
     try {
-      return typeof WA40_MINE !== 'undefined' && WA40_MINE && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader');
+      /* wave169: and HR's own access profile, as in wave46 */
+      return typeof WA40_MINE !== 'undefined' && WA40_MINE && (WA40_MINE.role === 'admin' || WA40_MINE.role === 'leader' || (WA40_MINE.profile === 'hr' && WA40_MINE.role !== 'blocked' && WA40_MINE.role !== 'viewer'));
     } catch (e) { return false; }
   }
   function wa47Days(a, b) {

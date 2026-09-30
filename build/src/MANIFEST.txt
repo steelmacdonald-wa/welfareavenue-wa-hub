@@ -188,6 +188,8 @@
 166_wave166
 # 167_wave167: the onboarding journey: the plan in the Avenue Academy as a branded, photo-led road of weeks (welcome, the avenue, each week's goals, why and opening lesson, your people, our numbers, our story, celebrations); lesson photos live in 122.
 167_wave167
+# 169_wave169: the master onboarding runs the Academy (what people see each week, edited and previewed from the HR centre; steps done in the Academy) and trainings are assigned to the organization (everyone, teams or people, with a due date and a note) by HR from the HR centre and by leaders from the Academy, where people see Assigned to you. The changes also live in 046, 047, 122, 166 and 167.
+169_wave169
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

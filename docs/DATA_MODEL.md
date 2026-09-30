@@ -687,6 +687,8 @@ Per-person progress on one training: status, percent, last step, score and time 
 - `email`: Learner email; filled only on newer rows.
 - `status`: assigned, started or done. No CHECK.
 - `data`: JSON learner state, such as {seen, quizTries}.
+- `assignment_id`: wave169: the assignment that put this training on the person's list (academy_assignments.id); null for a person's own start or an older one-to-one assignment.
+- `due_date`: wave169: when the assignment asks for it to be done (the earliest when two assignments ask).
 
 ### `training_categories`
 
@@ -1547,6 +1549,10 @@ One row per Connect Loom press (wave162c): the PKCE verifier for the approval th
 
 wave165: the other addresses a member signs in with (Steel: his gmail). Read only by security definer functions (wa_people_expand); no policy, so no member reads it.
 
+### `academy_assignments`
+
+wave169: a training or a Learning Avenue assigned to everyone (the whole team, not the board), teams or people, from the HR centre or the Avenue Academy (academy_assign); include_new gives it to people who join later (trg_wa169_member_assign), due_days is their time to finish. The rows in training_progress carry it (assignment_id, due_date).
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1661,6 +1667,11 @@ Functions:
 - `onboarding_lead_view()`: wave166: the signed-in lead's people with an onboarding in progress: those who report to them in the org chart, or without a manager there the leaders of their team, or without either the admins. Home shows it.
 - `onboarding_lead_tick(bigint, boolean)`: wave166: a lead ticks one of their moments (an HR setup step whose who is lead) for a person they are onboarding; admins can tick any step.
 - `onboarding_help_resolve(bigint)`: wave166: the person's lead or a leader marks a help request on an onboarding step as dealt with.
+- `onboarding_journey_save(text, jsonb)`: wave169: HR, leaders and admins set what people see for a week of the onboarding (title, photo from the Photo library, what they will learn, why it matters, the lesson that opens it) in app_config.onboarding_journey.
+- `academy_assign(jsonb)`: wave169: assign a training or a Learning Avenue (HR, leaders and admins); writes the assignment and the people's rows.
+- `academy_assign_end(bigint)`: wave169: stop an assignment; rows nobody started are removed, started ones keep their progress.
+- `academy_assignments_list()`: wave169: the assignments (running, and stopped in the last 30 days) with each person's progress, for HR, leaders and admins.
+- `wa169_onb_avenue_sync()`: wave169: the Learning Avenue Your onboarding is the master onboarding's Academy modules, in the master's order (trg_wa169_onb_avenue on onboarding_template).
 - `www_upcoming(int)`: The public website's next servings and fundraisers (wave162): planned Sunday servings (date, city, title) from today in Toronto time, up to 12, and published upcoming fundraisers from `site_events` (from 12 hours ago, up to 6), as JSON with `as_of`. Security definer, stable, `search_path` pinned; granted to anon because it shows only what the old website already showed.
 
 ### `www_files` (wave162)
