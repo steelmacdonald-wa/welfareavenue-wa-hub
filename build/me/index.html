@@ -209,6 +209,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
       and: 'and', out: 'Sign out', signedAs: 'Signed in as {e}',
       notT: 'We couldn’t find your volunteer record', notP: 'No volunteer record uses {e}. Open the link from any of our texts and tap “Save to my account”, or text us and we will link it.', other: 'Use another Google account',
       hookT: 'Volunteer accounts aren’t open yet', hookP: 'We are switching them on soon. Your text links work as always.',
+      soonT: 'Volunteer accounts are coming soon', soonP: 'You will be able to sign in on welfareavenue.com to see your servings, your hours and a letter of your hours. Until then, the link in our texts has everything for your next serving: confirm, see your role and add it to your calendar.',
       linkedOther: 'That link belongs to another volunteer, so we didn’t add it to your account.', linkedOk: 'Saved to your account.',
       err: 'We could not reach Welfare Avenue. Check your connection and try again.', signinErr: 'Sign-in did not go through. Please try again.',
       call: 'Questions? Text or call Welfare Avenue at ', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001' },
@@ -232,6 +233,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
       and: 'et', out: 'Se déconnecter', signedAs: 'Connecté avec {e}',
       notT: 'Nous n’avons pas trouvé votre dossier de bénévole', notP: 'Aucun dossier de bénévole n’utilise {e}. Ouvrez le lien d’un de nos textos et touchez « Enregistrer dans mon compte », ou textez-nous et nous ferons le lien.', other: 'Utiliser un autre compte Google',
       hookT: 'Les comptes bénévoles ne sont pas encore ouverts', hookP: 'Nous les activons bientôt. Vos liens par texto fonctionnent comme d’habitude.',
+      soonT: 'Les comptes bénévoles arrivent bientôt', soonP: 'Vous pourrez vous connecter sur welfareavenue.com pour voir vos services, vos heures et une lettre de vos heures. D’ici là, le lien de nos textos contient tout pour votre prochain service : confirmer, voir votre rôle et l’ajouter à votre agenda.',
       linkedOther: 'Ce lien appartient à un autre bénévole, nous ne l’avons donc pas ajouté à votre compte.', linkedOk: 'Enregistré dans votre compte.',
       err: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', signinErr: 'La connexion n’a pas fonctionné. Veuillez réessayer.',
       call: 'Des questions? Textez ou appelez Welfare Avenue au ', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001' }
@@ -291,7 +293,12 @@ ul.team li,ul.notes li{margin:0 0 5px}
   }
 
   /* ---------- the page ---------- */
+  /* wave176: the Hub's Google sign-in is for the team only (its Google app is Internal, wave175b), so volunteers can't sign in
+     here: the page says accounts are coming to welfareavenue.com. ?try=1 opens it for testing on this browser. */
+  if (q.get('try') === '1') store('wa_vol_try', 1);
+  var OPEN = location.hostname !== 'hub.welfareavenue.com' || !!load('wa_vol_try');
   function signinHtml() {
+    if (!OPEN) return '<h2>' + E(t('soonT')) + '</h2><div class="rule"></div><p>' + E(t('soonP')) + '</p>' + callHtml();
     var g = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.7 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
     return '<h2>' + E(t('inT')) + '</h2><div class="rule"></div>' + (S.note ? '<div class="banner ' + S.noteKind + '">' + E(S.note) + '</div>' : '')
       + '<p>' + E(q.get('link') ? t('linkNote') : t('inP')) + '</p><button type="button" class="gbtn" id="signin">' + g + E(t('inBtn')) + '</button><p class="small" style="margin:12px 0 0">' + E(t('inNote')) + '</p>' + callHtml();

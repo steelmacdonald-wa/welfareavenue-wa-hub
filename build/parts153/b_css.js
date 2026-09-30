@@ -69,6 +69,8 @@
     + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
     /* wave176: the Volunteer Manager's rail repeats the page's chips (Text volunteers is in the app bar) */
     + '@media (min-width:901px){body.w153app.w153volunteer #volunteering .vl-sub{display:none;}}'
+    /* wave176 refresh: in its own app the rail and the masthead say where you are, so the card's repeat title and intro go on wide screens */
+    + '@media (min-width:901px){body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim],body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim] + p.w85p,body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim] + p.w85p + p.read{display:none;}}'
     /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
        menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
     + 'body.w153app main .panel > .w118mast .crumb{display:none;}'

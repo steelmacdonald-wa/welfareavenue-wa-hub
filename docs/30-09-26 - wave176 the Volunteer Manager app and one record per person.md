@@ -58,3 +58,36 @@ His answers:
   - `test/w176drive.js` (12).
   - w152 (68), w153 (44) and w163 (38), updated for the app and the single write.
   - The regression set is green.
+
+## Full test and refresh (30/09/26, later)
+
+Steel: "really take your time to test it through please and have a full refresh of it".
+
+### What was tested
+
+- **Every drive test (72 files), on the new build and on the build before wave176.** The only differences are the tests updated for wave176 (w152, w153, w163, w176), which now pass. The 28 older files that fail do so the same way on both builds (tests that fell behind earlier waves, not this change).
+- **The live database (read only, and rolled back):**
+  - 443 volunteer profiles, 443 rows in the view, none without a contact, none with two, none linked to a merged contact.
+  - 1,016 roster rows, none pointing at a missing person.
+  - The functions that read volunteers run: the roster phone, the confirm page and its details, an incoming text, the CRM report (2025-26: 69 new volunteers), a merge.
+  - An edit in the Volunteer Manager shows in the CRM, and the other way round; deleting a volunteer keeps their contact.
+  - Access: nobody signed out, and no volunteer account, can read the view, the profiles or the contacts; a signed-in account that isn't team sees no rows.
+- **Live, in the browser, after a hard refresh:** the launcher, every page of the Volunteer Manager, the volunteer editor, the CRM contact, a serving's Texts and Survey and itinerary cards, a test confirm link, /me and /privacy. No page errors.
+
+### Found and fixed
+
+- **The CRM's source file was behind its build file.** Wave176's change to the CRM (one write, the new note) was made in the assembled file only, so re-running the CRM's assembler would have brought back the second write. The source (`parts152/d_sheet.js`) now carries it. Older segments 122, 123 and 129 have the same kind of drift from earlier waves; ARCHITECTURE.md now says not to re-run those three assemblers.
+- **/me offered a Google sign-in that volunteers can't complete** (the Hub's Google app is team only since wave175b). Signed out, it now says volunteer accounts are coming to welfareavenue.com and that the link in our texts has everything for the next serving. `?try=1` opens the sign-in on one browser for testing; anyone already signed in is unaffected.
+
+### Refresh
+
+- **The name:** the CRM, its forms, its reports and the access screens say "the Volunteer Manager" instead of "MTL volunteering".
+- **CRM to Volunteer Manager:** a volunteer's contact has "Open in the Volunteer Manager", which lands on that person's editor (the editor already links back with "Open in the CRM").
+- **Less repetition:** inside the app on a computer, the page's second title and intro give way to the masthead and the rail. Phones are unchanged.
+
+### For Steel
+
+- **53 contacts from Keela are tagged volunteer but have no volunteer record,** so they are in the CRM but not in the Volunteer Manager (plus 1 from the old website that looks like a duplicate of an existing volunteer). They were like this before wave176. They can be added to the Volunteer Manager, or have the volunteer tag removed.
+- **41 possible duplicate pairs** are waiting in the CRM's Possible duplicates.
+
+Live Hub md5 b73865396ade0028a6fb55e682bb5bd9; /me 1d4fb836572a43b61bee68e76ecf9b16.

@@ -97,7 +97,7 @@
     var pr = [['express', 'said yes to our emails'], ['implied', 'with an implied consent that has not run out'], ['unknown', 'with no permission on file yet'], ['none', 'with no consent'], ['unsub', 'who unsubscribed'], ['bounced', 'whose address bounces']]
       .filter(function (x) { return perm[x[0]]; }).map(function (x) { return '<div class="w152srow"><b>' + perm[x[0]] + '</b><div><div class="tt">' + permChip(x[0]) + '</div><p>' + E('Contacts ' + x[1] + '.') + '</p></div><span></span></div>'; }).join('');
     var rev = all.filter(function (c) { return c.volunteer_needs_review; }).length, noEm = all.filter(function (c) { return !c.emails.length; }).length, noPh = all.filter(function (c) { return !c.phones.length; }).length, pairs = S.dupes ? dupePairs().length : 0;
-    var tidy = [[pairs, 'possible duplicates', 'Same email or phone on two contacts.', '#crm/dupes'], [rev, 'volunteer records to review', 'Flagged in MTL volunteering when they were imported.', ''],
+    var tidy = [[pairs, 'possible duplicates', 'Same email or phone on two contacts.', '#crm/dupes'], [rev, 'volunteer records to review', 'Flagged in the Volunteer Manager when they were imported.', ''],
       [noEm, 'contacts with no email', '', ''], [noPh, 'contacts with no phone', '', '']].map(function (x) {
       return '<div class="w152srow"><b>' + x[0] + '</b><div><div class="tt">' + E(x[1].charAt(0).toUpperCase() + x[1].slice(1)) + '</div>' + (x[2] ? '<p>' + E(x[2]) + '</p>' : '') + '</div>' + (x[3] && x[0] ? '<button class="w152mini" data-w152go="' + x[3] + '">Check them ' + I('arrow') + '</button>' : '<span></span>') + '</div>';
     }).join('');

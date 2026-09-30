@@ -105,6 +105,20 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
       ok('edit: one record with the CRM, and a link to it', /One record: these details are also this person.s contact in the CRM/.test(m) && await f.ev(() => /^#crm\/c\/70\d\d$/.test((document.querySelector('[data-w176crm]') || {}).getAttribute ? document.querySelector('[data-w176crm]').getAttribute('href') : '')), m.slice(0, 300));
       await f.ev(() => closeModal());
     } else ok('edit: a volunteer row to edit', false);
+    await f.hash('#volunteering', 1500);
+    ok('refresh: the repeat title and intro give way to the masthead in the app', await f.ev(() => { const h = document.querySelector('#volunteering > .card > h2[data-w118slim]'); const r = h && h.nextElementSibling && h.nextElementSibling.nextElementSibling; return !!h && getComputedStyle(h).display === 'none' && (!r || !r.classList.contains('read') || getComputedStyle(r).display === 'none') && getComputedStyle(document.querySelector('#volunteering .w118mast')).display !== 'none'; }));
+    /* the CRM contact's button opens the same person in the Volunteer Manager */
+    if (pid) {
+      await f.hash('#crm', 2500);
+      await f.ev(p => { const root = document.querySelector('.w152root'); const b = document.createElement('button'); b.id = 't176go'; b.className = 'w152mini'; b.setAttribute('data-w152go', '#volunteering/people'); b.setAttribute('data-w176vid', p); b.textContent = 'Open in the Volunteer Manager'; (root || document.body).appendChild(b); }, pid);
+      const hasRoot = await f.ev(() => !!document.querySelector('.w152root #t176go'));
+      if (hasRoot) {
+        await f.page.click('#t176go'); await f.page.waitForTimeout(2500);
+        const m2 = await text(f, '#modalBox');
+        ok('CRM: Open in the Volunteer Manager lands on that person\'s editor', /#volunteering\/people/.test(await f.ev(() => location.hash)) && /Edit volunteer/i.test(m2) && /One record/.test(m2), { h: await f.ev(() => location.hash), m2 });
+        await f.ev(() => { try { closeModal(); } catch (e) { /* fine */ } });
+      } else ok('CRM: its page renders', false);
+    }
     await f.hash('#volunteering/e/900', 2200);
     ok('a serving opens inside the app with Calendar marked', await f.ev(() => document.body.classList.contains('w153volunteer') && /Calendar/.test((document.querySelector('#w153rail .w153it.on') || {}).textContent || '')));
     await f.hash('#mypage', 1500);

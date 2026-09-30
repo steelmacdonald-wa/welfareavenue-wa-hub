@@ -193,7 +193,7 @@
     return '<section class="w154card wide"><h3>' + I('note') + ' How it is counted</h3><p class="w160note">' + E([
       'A fiscal year runs from 1 October to 30 September; ' + d.label + ' began on ' + fmtDay(d.from) + '.',
       d.in_progress ? 'While a year is running, it is compared with the year before at the same date (' + fmtDay(((d.gifts || {}).prev_to_date || {}).through) + ').' : '',
-      'A gift counts on the day it was received. A serving is someone confirmed on the roster of a completed event in MTL volunteering, the old website’s events included.',
+      'A gift counts on the day it was received. A serving is someone confirmed on the roster of a completed event in the Volunteer Manager, the old website’s events included.',
       'A first-time donor gave for the first time in the year; a retained donor gave in both years; a donor who came back after a gap last gave before the year before.',
       'Someone on two volunteer records counts twice until the records are merged in Possible duplicates.',
       'The numbers follow what the CRM holds today: a gift or a roster added later changes them.'].filter(Boolean).join(' ')) + '</p></section>';

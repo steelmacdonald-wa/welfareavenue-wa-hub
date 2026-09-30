@@ -72,10 +72,10 @@
     if (c.kinds.indexOf('volunteer') >= 0 || c.volunteer_id) {
       if (c._roles.length) out.push('<div class="w152line">' + c._roles.map(function (r) { return '<span class="w152rl">' + E(roleName(r)) + '</span>'; }).join(' ') + '</div>');
       var hs = Number(c.hub_servings) || 0, ls = Number(c.legacy_servings) || 0, lh = Number(c.legacy_hours) || 0;
-      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> with us (MTL volunteering)' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') + (lh && !ls ? ' · ' + lh.toLocaleString('en-CA') + ' hours on the old website’s records' : '') : 'No serving with us yet') + '</div>');
-      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website, not yet in MTL volunteering' + (lh ? ' (' + lh.toLocaleString('en-CA') + ' hours)' : '') + '</div>');
+      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> with us (Volunteer Manager)' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') + (lh && !ls ? ' · ' + lh.toLocaleString('en-CA') + ' hours on the old website’s records' : '') : 'No serving with us yet') + '</div>');
+      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website, not yet in the Volunteer Manager' + (lh ? ' (' + lh.toLocaleString('en-CA') + ' hours)' : '') + '</div>');
       if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
-      if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in MTL volunteering.</div>');
+      if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in the Volunteer Manager.</div>');
     }
     if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b>' + money(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
     if (c.kinds.indexOf('staff') >= 0 || c.kinds.indexOf('alumni') >= 0) out.push('<div class="w152line">' + (c.kinds.indexOf('staff') >= 0 ? 'On the team' : 'Was on the team') + ' (the Hub roster)</div>');
@@ -104,7 +104,7 @@
     }
     var links = [];
     links.push('<button class="w152mini" data-w152linkorg="' + E(c.id) + '">' + I('link') + 'Link an organization</button>');
-    if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people">' + I('arrow') + 'MTL volunteering</button>');
+    if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people" data-w176vid="' + E(String(c.volunteer_id)) + '">' + I('arrow') + 'Open in the Volunteer Manager</button>');
     var mem = c.member_id && typeof MEMBER_BY_ID !== 'undefined' && MEMBER_BY_ID ? MEMBER_BY_ID[c.member_id] : null;
     if (mem && mem.name) links.push('<button class="w152mini" data-w152go="#person/' + E(encodeURIComponent(mem.name)) + '">' + I('arrow') + 'Their Hub profile</button>');
     out.push('<div class="w152line">' + links.join(' ') + '</div>');
@@ -163,7 +163,7 @@
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
       var old = r.detail && r.detail.source === 'old website';
-      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · ') + (old && Number(r.detail.hours) ? ' · ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in MTL volunteering' : 'MTL volunteering' });
+      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' · ') + (old && Number(r.detail.hours) ? ' · ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
     });
     out.sort(function (a, b) { return ((a.undated ? 1 : 0) - (b.undated ? 1 : 0)) || String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
     return out;
@@ -246,7 +246,7 @@
   function nameParts(n) { var p = String(n || '').trim().split(/\s+/); return { first: p[0] || null, last: p.length > 1 ? p.slice(1).join(' ') : null }; }
   function kindsBoxes(c, isNew) {
     var fixed = [];
-    if (!isNew && c && c.volunteer_id) fixed.push('Volunteer (from MTL volunteering)');
+    if (!isNew && c && c.volunteer_id) fixed.push('Volunteer (from the Volunteer Manager)');
     if (!isNew && c && c.kinds.indexOf('staff') >= 0) fixed.push('Staff (from the roster)');
     if (!isNew && c && c.kinds.indexOf('alumni') >= 0) fixed.push('Alumni (from the roster)');
     var list = (isNew ? ['volunteer'] : []).concat(KIND_HAND);
@@ -258,9 +258,9 @@
     var c = id ? contact(id) : null, isNew = !c;
     var x = c || { full_name: '', emails: [], phones: [], kinds: [], tags: [] };
     var html = '<h2>' + (isNew ? 'Add a contact' : 'Edit ' + E(x.full_name)) + '</h2>' +
-      '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so MTL volunteering sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
+      '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so the Volunteer Manager sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
       '<div class="w152form">' +
-      (c && c.volunteer_id ? '<div class="note">' + I('link') + ' Their name, emails, phones and address are saved on their volunteer record as well, so MTL volunteering and the CRM stay the same person.</div>' : '') +
+      (c && c.volunteer_id ? '<div class="note">' + I('link') + ' One record: this contact is also their volunteer record, so the Volunteer Manager shows the same name, emails, phones, address, tags and notes.</div>' : '') +
       field('Full name', inp('full_name', x.full_name, 'First and last name'), true) +
       field('Emails', inp('emails', x.emails.join(', '), 'name@example.com'), false, 'separated by commas; the first one is used') +
       field('Phones', inp('phones', x.phones.join(', '), '514 555 0123'), false, 'separated by commas') +
@@ -383,11 +383,7 @@
         contactSheet(newId); repaintBehind();
         return;
       }
-      if (c.volunteer_id) {
-        /* their volunteer record carries the name, emails, phones and address (MTL volunteering reads it) */
-        var vu = await db.from('volunteer_people').update({ full_name: row.full_name, emails: emails, phones: phones, address: row.address }).eq('id', c.volunteer_id).select('id');
-        if (vu && vu.error) throw vu.error;
-      }
+      /* wave176: one record: the contact is the person, and the Volunteer Manager reads the same row (no second copy to write) */
       var res = await db.from('crm_contacts').update(row).eq('id', c.id).select('id');
       if (res && res.error) throw res.error;
       if (res && Array.isArray(res.data) && !res.data.length) { showErr('Could not save: the CRM is not open to you.'); return; }

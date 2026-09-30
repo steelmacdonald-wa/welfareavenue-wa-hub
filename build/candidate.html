@@ -47145,7 +47145,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
-    opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
+    opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
     fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
@@ -49493,7 +49493,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
-    opsmtl: 'Operations Montreal', volunteering: 'MTL volunteering', progdev: 'Program Development', opsto: 'Operations Toronto',
+    opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
     fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
@@ -56437,7 +56437,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var SOURCES = {
     django_website_export: ['Old website sign-ups', 'Everyone who signed up to volunteer on welfareavenue.com before July 2026 (the Django site).'],
     hub_roster: ['Hub roster', 'Staff and alumni from the Hub roster.'],
-    hub_volunteers: ['MTL volunteering', 'Volunteers added in MTL volunteering since the import.'],
+    hub_volunteers: ['Volunteer Manager', 'Volunteers added in the Volunteer Manager since the import.'],
     hub: ['Added in the CRM', 'Contacts someone added on this page.'],
     zeffy: ['Zeffy', 'Donors from Zeffy.'],
     website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],
@@ -57018,10 +57018,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (c.kinds.indexOf('volunteer') >= 0 || c.volunteer_id) {
       if (c._roles.length) out.push('<div class="w152line">' + c._roles.map(function (r) { return '<span class="w152rl">' + E(roleName(r)) + '</span>'; }).join(' ') + '</div>');
       var hs = Number(c.hub_servings) || 0, ls = Number(c.legacy_servings) || 0, lh = Number(c.legacy_hours) || 0;
-      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> with us (MTL volunteering)' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') + (lh && !ls ? ' \u00b7 ' + lh.toLocaleString('en-CA') + ' hours on the old website\u2019s records' : '') : 'No serving with us yet') + '</div>');
-      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website, not yet in MTL volunteering' + (lh ? ' (' + lh.toLocaleString('en-CA') + ' hours)' : '') + '</div>');
+      out.push('<div class="w152line">' + (hs ? '<b>' + plural(hs, 'serving', 'servings') + '</b> with us (Volunteer Manager)' + (c.last_serving_on ? ', the last on ' + E(fmtDay(c.last_serving_on)) : '') + (lh && !ls ? ' \u00b7 ' + lh.toLocaleString('en-CA') + ' hours on the old website\u2019s records' : '') : 'No serving with us yet') + '</div>');
+      if (ls) out.push('<div class="w152line"><b>' + plural(ls, 'serving', 'servings') + '</b> on the old website, not yet in the Volunteer Manager' + (lh ? ' (' + lh.toLocaleString('en-CA') + ' hours)' : '') + '</div>');
       if (c.last_applied) out.push('<div class="w152line"><span class="m">Last signed up on the old website on ' + E(fmtDay(c.last_applied)) + '</span></div>');
-      if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in MTL volunteering.</div>');
+      if (c.volunteer_needs_review) out.push('<div class="w152line" style="color:' + FLAG + '">' + I('alert') + ' Their volunteer record needs a review in the Volunteer Manager.</div>');
     }
     if (Number(c.donation_count) > 0) out.push('<div class="w152line"><b>' + money(c.donation_total) + '</b> over ' + plural(Number(c.donation_count), 'gift', 'gifts') + (c.last_donation_at ? ', the last on ' + E(fmtDay(c.last_donation_at)) : '') + '</div>');
     if (c.kinds.indexOf('staff') >= 0 || c.kinds.indexOf('alumni') >= 0) out.push('<div class="w152line">' + (c.kinds.indexOf('staff') >= 0 ? 'On the team' : 'Was on the team') + ' (the Hub roster)</div>');
@@ -57050,7 +57050,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     var links = [];
     links.push('<button class="w152mini" data-w152linkorg="' + E(c.id) + '">' + I('link') + 'Link an organization</button>');
-    if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people">' + I('arrow') + 'MTL volunteering</button>');
+    if (c.volunteer_id) links.push('<button class="w152mini" data-w152go="#volunteering/people" data-w176vid="' + E(String(c.volunteer_id)) + '">' + I('arrow') + 'Open in the Volunteer Manager</button>');
     var mem = c.member_id && typeof MEMBER_BY_ID !== 'undefined' && MEMBER_BY_ID ? MEMBER_BY_ID[c.member_id] : null;
     if (mem && mem.name) links.push('<button class="w152mini" data-w152go="#person/' + E(encodeURIComponent(mem.name)) + '">' + I('arrow') + 'Their Hub profile</button>');
     out.push('<div class="w152line">' + links.join(' ') + '</div>');
@@ -57109,7 +57109,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       else return;
       var nm = e.title || (lower(e.kind) === 'service' || !e.kind ? 'Serving' : e.kind);
       var old = r.detail && r.detail.source === 'old website';
-      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' \u00b7 ') + (old && Number(r.detail.hours) ? ' \u00b7 ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in MTL volunteering' : 'MTL volunteering' });
+      out.push({ at: e.event_date, icon: 'hand2', t: t, p: [nm, e.location].filter(Boolean).join(' \u00b7 ') + (old && Number(r.detail.hours) ? ' \u00b7 ' + Number(r.detail.hours) + ' hours' : ''), faint: st !== 'Confirmed', by: old ? 'The old website, now in the Volunteer Manager' : 'MTL volunteering' });
     });
     out.sort(function (a, b) { return ((a.undated ? 1 : 0) - (b.undated ? 1 : 0)) || String(dayOf(b.at)).localeCompare(String(dayOf(a.at))) || String(b.at || '').localeCompare(String(a.at || '')); });
     return out;
@@ -57192,7 +57192,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function nameParts(n) { var p = String(n || '').trim().split(/\s+/); return { first: p[0] || null, last: p.length > 1 ? p.slice(1).join(' ') : null }; }
   function kindsBoxes(c, isNew) {
     var fixed = [];
-    if (!isNew && c && c.volunteer_id) fixed.push('Volunteer (from MTL volunteering)');
+    if (!isNew && c && c.volunteer_id) fixed.push('Volunteer (from the Volunteer Manager)');
     if (!isNew && c && c.kinds.indexOf('staff') >= 0) fixed.push('Staff (from the roster)');
     if (!isNew && c && c.kinds.indexOf('alumni') >= 0) fixed.push('Alumni (from the roster)');
     var list = (isNew ? ['volunteer'] : []).concat(KIND_HAND);
@@ -57204,7 +57204,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var c = id ? contact(id) : null, isNew = !c;
     var x = c || { full_name: '', emails: [], phones: [], kinds: [], tags: [] };
     var html = '<h2>' + (isNew ? 'Add a contact' : 'Edit ' + E(x.full_name)) + '</h2>' +
-      '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so MTL volunteering sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
+      '<div class="sub">' + (isNew ? 'Someone we know: a donor, a partner\u2019s contact, a supporter. A new volunteer also gets a volunteer record, so the Volunteer Manager sees them.' : 'Their details, as the whole team will see them.') + '</div>' +
       '<div class="w152form">' +
       (c && c.volunteer_id ? '<div class="note">' + I('link') + ' One record: this contact is also their volunteer record, so the Volunteer Manager shows the same name, emails, phones, address, tags and notes.</div>' : '') +
       field('Full name', inp('full_name', x.full_name, 'First and last name'), true) +
@@ -57535,7 +57535,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var pr = [['express', 'said yes to our emails'], ['implied', 'with an implied consent that has not run out'], ['unknown', 'with no permission on file yet'], ['none', 'with no consent'], ['unsub', 'who unsubscribed'], ['bounced', 'whose address bounces']]
       .filter(function (x) { return perm[x[0]]; }).map(function (x) { return '<div class="w152srow"><b>' + perm[x[0]] + '</b><div><div class="tt">' + permChip(x[0]) + '</div><p>' + E('Contacts ' + x[1] + '.') + '</p></div><span></span></div>'; }).join('');
     var rev = all.filter(function (c) { return c.volunteer_needs_review; }).length, noEm = all.filter(function (c) { return !c.emails.length; }).length, noPh = all.filter(function (c) { return !c.phones.length; }).length, pairs = S.dupes ? dupePairs().length : 0;
-    var tidy = [[pairs, 'possible duplicates', 'Same email or phone on two contacts.', '#crm/dupes'], [rev, 'volunteer records to review', 'Flagged in MTL volunteering when they were imported.', ''],
+    var tidy = [[pairs, 'possible duplicates', 'Same email or phone on two contacts.', '#crm/dupes'], [rev, 'volunteer records to review', 'Flagged in the Volunteer Manager when they were imported.', ''],
       [noEm, 'contacts with no email', '', ''], [noPh, 'contacts with no phone', '', '']].map(function (x) {
       return '<div class="w152srow"><b>' + x[0] + '</b><div><div class="tt">' + E(x[1].charAt(0).toUpperCase() + x[1].slice(1)) + '</div>' + (x[2] ? '<p>' + E(x[2]) + '</p>' : '') + '</div>' + (x[3] && x[0] ? '<button class="w152mini" data-w152go="' + x[3] + '">Check them ' + I('arrow') + '</button>' : '<span></span>') + '</div>';
     }).join('');
@@ -58460,7 +58460,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
-  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (MTL volunteering)']];
+  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)']];
   var FTYPE_OF = { text: 'text', long_text: 'long_text', email: 'text', phone: 'text', choice: 'choice', multi: 'multi', yes_no: 'yes_no', date: 'date', number: 'number' };
   var FTYPE_NAME = { text: 'Short answer', long_text: 'Long answer', number: 'Number', date: 'Date', choice: 'One choice', multi: 'Several choices', yes_no: 'Yes or no' };
   var CONTACT_TO = { 'contact.first_name': 'First name', 'contact.last_name': 'Last name', 'contact.email': 'Email', 'contact.phone': 'Phone', 'contact.city': 'City', 'contact.province': 'Province', 'contact.postal_code': 'Postal code', 'contact.address': 'Address', 'contact.language': 'Language (en or fr)' };
@@ -58562,7 +58562,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<input class="w152in" data-w156qk="label" value="' + E(q.label) + '" placeholder="The question, as people will read it" aria-label="The question">' +
       '<input class="w152in" data-w156qk="help" value="' + E(q.help || '') + '" placeholder="A line of help under it (optional)" aria-label="Help">' +
       (hasOpts ? '<textarea class="w152in" data-w156qk="_opts" rows="4" placeholder="One choice per line. To save a code instead of the words: code | words" aria-label="Choices">' + E(q._opts || '') + '</textarea>' : '') +
-      (q.type === 'serving_dates' ? '<p class="m">People see the planned servings of MTL volunteering from today on; each date they tick becomes a sign-up on that event\u2019s roster, to be confirmed by the team.</p>' : '') +
+      (q.type === 'serving_dates' ? '<p class="m">People see the planned servings in the Volunteer Manager from today on; each date they tick becomes a sign-up on that event\u2019s roster, to be confirmed by the team.</p>' : '') +
       '<label class="w155lb">Saves to<select class="w152sel" data-w156qk="to">' + tos + '</select></label></div>';
   }
   function editorHtml156() {
@@ -58577,7 +58577,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w155two"><label class="w155lb">Kind<select class="w152sel" data-w156k="kind">' + kinds + '</select></label>' +
       '<label class="w155lb">Language<select class="w152sel" data-w156k="lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></label></div>' +
       inp('intro', 'What it is for (under the title)', 'A sentence or two', true) + coverPickHtml(f) +
-      (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to MTL volunteering (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
+      (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to the Volunteer Manager (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
         '<div class="w155two"><label class="w155lb">City written on new contacts<input class="w152in" data-w156set="city" value="' + E(f.settings.city || '') + '" placeholder="Montreal"></label>' +
         '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="toronto"></label></div></div>' :
         '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +
@@ -59940,7 +59940,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<section class="w154card wide"><h3>' + I('note') + ' How it is counted</h3><p class="w160note">' + E([
       'A fiscal year runs from 1 October to 30 September; ' + d.label + ' began on ' + fmtDay(d.from) + '.',
       d.in_progress ? 'While a year is running, it is compared with the year before at the same date (' + fmtDay(((d.gifts || {}).prev_to_date || {}).through) + ').' : '',
-      'A gift counts on the day it was received. A serving is someone confirmed on the roster of a completed event in MTL volunteering, the old website\u2019s events included.',
+      'A gift counts on the day it was received. A serving is someone confirmed on the roster of a completed event in the Volunteer Manager, the old website\u2019s events included.',
       'A first-time donor gave for the first time in the year; a retained donor gave in both years; a donor who came back after a gap last gave before the year before.',
       'Someone on two volunteer records counts twice until the records are merged in Possible duplicates.',
       'The numbers follow what the CRM holds today: a gift or a roster added later changes them.'].filter(Boolean).join(' ')) + '</p></section>';
@@ -60317,7 +60317,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w152go]'))) {
       e.preventDefault(); v = el.getAttribute('data-w152go');
       if (S.sheet) closeSheet(true);
-      go(v); return;
+      go(v);
+      /* wave176: from a contact, open that person's editor in the Volunteer Manager once its list has loaded */
+      var vid = el.getAttribute('data-w176vid');
+      if (vid) {
+        var tries = 0, tick = function () {
+          var list = (typeof WA_VOL_PEOPLE !== 'undefined' && WA_VOL_PEOPLE) || [];
+          if (list.some(function (x) { return String(x.id) === String(vid); }) && typeof wa26PersonModal === 'function') { try { wa26PersonModal(vid); } catch (x) { /* non-fatal */ } return; }
+          if (++tries < 40) setTimeout(tick, 250);
+        };
+        setTimeout(tick, 250);
+      }
+      return;
     }
     if ((el = t.closest('[data-w152set]'))) {
       v = el.getAttribute('data-w152set');
@@ -60716,6 +60727,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '@media (min-width:901px){body.w153app.w153crm #crm .w152tabs{display:none;}}'
     /* wave176: the Volunteer Manager's rail repeats the page's chips (Text volunteers is in the app bar) */
     + '@media (min-width:901px){body.w153app.w153volunteer #volunteering .vl-sub{display:none;}}'
+    /* wave176 refresh: in its own app the rail and the masthead say where you are, so the card's repeat title and intro go on wide screens */
+    + '@media (min-width:901px){body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim],body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim] + p.w85p,body.w153app.w153volunteer #volunteering > .card > h2[data-w118slim] + p.w85p + p.read{display:none;}}'
     /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
        menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
     + 'body.w153app main .panel > .w118mast .crumb{display:none;}'

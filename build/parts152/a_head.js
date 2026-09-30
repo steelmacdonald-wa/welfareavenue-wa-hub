@@ -49,7 +49,7 @@
   var SOURCES = {
     django_website_export: ['Old website sign-ups', 'Everyone who signed up to volunteer on welfareavenue.com before July 2026 (the Django site).'],
     hub_roster: ['Hub roster', 'Staff and alumni from the Hub roster.'],
-    hub_volunteers: ['MTL volunteering', 'Volunteers added in MTL volunteering since the import.'],
+    hub_volunteers: ['Volunteer Manager', 'Volunteers added in the Volunteer Manager since the import.'],
     hub: ['Added in the CRM', 'Contacts someone added on this page.'],
     zeffy: ['Zeffy', 'Donors from Zeffy.'],
     website: ['Website forms', 'People who wrote to us or signed up on welfareavenue.com.'],

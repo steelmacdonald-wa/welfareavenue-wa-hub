@@ -30,7 +30,18 @@
     if ((el = t.closest('[data-w152go]'))) {
       e.preventDefault(); v = el.getAttribute('data-w152go');
       if (S.sheet) closeSheet(true);
-      go(v); return;
+      go(v);
+      /* wave176: from a contact, open that person's editor in the Volunteer Manager once its list has loaded */
+      var vid = el.getAttribute('data-w176vid');
+      if (vid) {
+        var tries = 0, tick = function () {
+          var list = (typeof WA_VOL_PEOPLE !== 'undefined' && WA_VOL_PEOPLE) || [];
+          if (list.some(function (x) { return String(x.id) === String(vid); }) && typeof wa26PersonModal === 'function') { try { wa26PersonModal(vid); } catch (x) { /* non-fatal */ } return; }
+          if (++tries < 40) setTimeout(tick, 250);
+        };
+        setTimeout(tick, 250);
+      }
+      return;
     }
     if ((el = t.closest('[data-w152set]'))) {
       v = el.getAttribute('data-w152set');

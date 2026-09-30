@@ -47,7 +47,7 @@
   }
   var FSTAT = { draft: ['Draft', MUTED], published: ['Live', GREEN], closed: ['Closed', FLAG] };
   var SUBST = { processed: ['In the CRM', GREEN], received: ['Received', '#B9851B'], error: ['Needs a look', FLAG], spam: ['Spam', MUTED], test: ['Test', PURPLE] };
-  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (MTL volunteering)']];
+  var QTYPES = [['text', 'Short answer'], ['long_text', 'Long answer'], ['email', 'Email'], ['phone', 'Phone'], ['choice', 'One choice'], ['multi', 'Several choices'], ['yes_no', 'Yes or no'], ['date', 'Date'], ['number', 'Number'], ['serving_dates', 'Serving dates (Volunteer Manager)']];
   var FTYPE_OF = { text: 'text', long_text: 'long_text', email: 'text', phone: 'text', choice: 'choice', multi: 'multi', yes_no: 'yes_no', date: 'date', number: 'number' };
   var FTYPE_NAME = { text: 'Short answer', long_text: 'Long answer', number: 'Number', date: 'Date', choice: 'One choice', multi: 'Several choices', yes_no: 'Yes or no' };
   var CONTACT_TO = { 'contact.first_name': 'First name', 'contact.last_name': 'Last name', 'contact.email': 'Email', 'contact.phone': 'Phone', 'contact.city': 'City', 'contact.province': 'Province', 'contact.postal_code': 'Postal code', 'contact.address': 'Address', 'contact.language': 'Language (en or fr)' };
@@ -149,7 +149,7 @@
       '<input class="w152in" data-w156qk="label" value="' + E(q.label) + '" placeholder="The question, as people will read it" aria-label="The question">' +
       '<input class="w152in" data-w156qk="help" value="' + E(q.help || '') + '" placeholder="A line of help under it (optional)" aria-label="Help">' +
       (hasOpts ? '<textarea class="w152in" data-w156qk="_opts" rows="4" placeholder="One choice per line. To save a code instead of the words: code | words" aria-label="Choices">' + E(q._opts || '') + '</textarea>' : '') +
-      (q.type === 'serving_dates' ? '<p class="m">People see the planned servings of MTL volunteering from today on; each date they tick becomes a sign-up on that event’s roster, to be confirmed by the team.</p>' : '') +
+      (q.type === 'serving_dates' ? '<p class="m">People see the planned servings in the Volunteer Manager from today on; each date they tick becomes a sign-up on that event’s roster, to be confirmed by the team.</p>' : '') +
       '<label class="w155lb">Saves to<select class="w152sel" data-w156qk="to">' + tos + '</select></label></div>';
   }
   function editorHtml156() {
@@ -164,7 +164,7 @@
       '<div class="w155two"><label class="w155lb">Kind<select class="w152sel" data-w156k="kind">' + kinds + '</select></label>' +
       '<label class="w155lb">Language<select class="w152sel" data-w156k="lang"><option value="en"' + (f.lang === 'en' ? ' selected' : '') + '>English</option><option value="fr"' + (f.lang === 'fr' ? ' selected' : '') + '>French</option></select></label></div>' +
       inp('intro', 'What it is for (under the title)', 'A sentence or two', true) + coverPickHtml(f) +
-      (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to MTL volunteering (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
+      (vol ? '<div class="w156box"><label class="w156ck"><input type="checkbox" data-w156set="volunteer_record"' + (f.settings.volunteer_record ? ' checked' : '') + '> Add them to the Volunteer Manager (a volunteer record to review, and sign-ups for the dates they pick)</label>' +
         '<div class="w155two"><label class="w155lb">City written on new contacts<input class="w152in" data-w156set="city" value="' + E(f.settings.city || '') + '" placeholder="Montreal"></label>' +
         '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="toronto"></label></div></div>' :
         '<label class="w155lb">Tags to add<input class="w152in" data-w156k="_tags" value="' + E(f._tags || '') + '" placeholder="newsletter"></label>') +

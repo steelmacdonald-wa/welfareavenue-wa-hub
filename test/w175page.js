@@ -21,6 +21,8 @@ function me(over) {
 }
 async function open(browser, url, handlers, opts, preset) {
   const ctx = await browser.newContext(Object.assign({ viewport: { width: 1100, height: 900 } }, opts || {}));
+  /* wave176: volunteer sign-in is closed on hub.welfareavenue.com unless this browser opted in with ?try=1 */
+  if (!handlers.__closed) await ctx.addInitScript(() => { try { localStorage.setItem('wa_vol_try', '1'); } catch (e) { /* fine */ } });
   const page = await ctx.newPage();
   const calls = [], errors = [], navs = [];
   page.on('pageerror', e => errors.push(String(e)));
@@ -50,6 +52,15 @@ const SESS = { wa_vol_auth: { access_token: 'AT-saved', refresh_token: 'RT0', ex
 (async () => {
   const browser = await chromium.launch();
   try {
+    /* 0. wave176: on the Hub, volunteers are told accounts are coming (the Hub's Google app is team only) */
+    let f0 = await open(browser, 'https://hub.welfareavenue.com/me/', { __closed: true, volunteer_me: () => ({ signed_in: false }) });
+    let t0 = await text(f0.page);
+    ok('closed: coming soon, no Google button', /coming soon/i.test(t0) && /welfareavenue\.com/.test(t0) && !(await f0.page.$('#signin')), t0);
+    await f0.page.goto('https://hub.welfareavenue.com/me/?try=1'); await f0.page.waitForTimeout(400);
+    ok('closed: ?try=1 opens it on this browser', !!(await f0.page.$('#signin')) && await f0.page.evaluate(() => localStorage.getItem('wa_vol_try') === '1'));
+    ok('closed: no page errors', f0.errors.length === 0, f0.errors);
+    await f0.ctx.close();
+
     /* 1. signed out, then the Google sign-in */
     let f = await open(browser, 'https://hub.welfareavenue.com/me/', { volunteer_me: () => ({ signed_in: false }) });
     let t = await text(f.page);

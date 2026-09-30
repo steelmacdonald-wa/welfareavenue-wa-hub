@@ -15,6 +15,7 @@ The page is assembled from 157 segments in `build/src/*.seg`. Each segment after
 3. Some segments are generated. Do not edit them by hand; edit the parts and re-run the assembler:
    - `build/partsNNN/*.js` plus `assemble.py` produce `src/NNN_waveNNN.seg` for waves 122 to 134 (non-ASCII is escaped).
    - `build/w118c/*.js` plus `assemble.py` produce `118c_wave118c.seg` (it embeds `data/photo_label_spec.json`).
+   - Drift check (30/09/26): the parts of 152, 153 and 171 match their segments. The parts of **122, 123 and 129 are stale** (waves 149 and 170 edited those segments directly), so do not run their `assemble.py` until the parts are brought up to date; edit those three segments by hand. Before re-running any assembler, run it and check `git status`: a segment that changes you did not mean to change is drift.
    - `117_wave117.seg` and `118_wave118.seg` were generated once (the generators are in `build/archive/`); both have been edited since, so the segments are the source.
 4. Deploy: `deploy_stage.py` splits the build into 10 parts and posts them to a stage table; `deploy_gate.py` prints a guarded SQL block that checks md5s and markers and swaps the parts into `public.site_files`; the `host-sync` edge function publishes it. `HUB_RELEASE_CHECKLIST.md` lists the rest.
 
