@@ -13,8 +13,11 @@
    announcement" (leaders, HR, admins; also from What's new on the Executive dashboard) writes it: who it is for, the poll or
    the form, anonymous, the totals, when answers close, pinned, when it comes down, and the one Slack post.
    #announce/<id> (the Slack post's link) opens one on Home; #announce/all opens them all.
+   wave180d (30/09/26), Steel: "Actually last question it should be emailed as well": each one is also emailed once to the
+   people it is for, from hub@welfareavenue.com with replies to the poster ("Email it to them too", on by default); the link
+   in the email opens it on Home, through the sign-in when needed. The poster, leaders, HR and admins see where it went.
    Data: hub_announcements (row security: the people it is for, the poster, leaders, HR, admins), hub_announcement_answers
-   (own rows), wa180_answer and wa180_results; team-inbox posts the Slack message (event announcement).
+   (own rows), wa180_answer and wa180_results; team-inbox posts the Slack message and sends the email (event announcement).
    ===================================================================== */
 (function () {
   if (window.__wa180) return; window.__wa180 = true;
@@ -101,6 +104,7 @@
     + '#modalBox .w180rq{margin:0 0 16px;padding:0 0 12px;border-bottom:1px solid ' + LINE + ';}#modalBox .w180rq:last-child{border-bottom:0;}'
     + '#modalBox .w180rq h4{margin:0 0 8px;font-size:14px;color:' + INK + ';}'
     + '#modalBox .w180names{font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    + '#modalBox .w180sent{font-size:12.5px;color:' + GREEN + ';background:rgba(16,63,57,.05);border-radius:10px;padding:7px 11px;margin:0 0 12px;line-height:1.45;}#modalBox .w180sent.warn{color:#6b4d0e;background:rgba(220,165,39,.16);}'
     + '#modalBox .w180vals{margin:0;padding:0;list-style:none;}#modalBox .w180vals li{padding:7px 10px;border-radius:10px;background:rgba(16,63,57,.04);margin:0 0 5px;font-size:13px;white-space:pre-wrap;word-wrap:break-word;}#modalBox .w180vals li b{display:block;font-size:11.5px;color:' + GREEN + ';}'
     + '#modalBox details.w180miss summary{cursor:pointer;font-size:13px;font-weight:700;color:' + GREEN + ';}#modalBox details.w180miss p{font-size:12.5px;color:' + INK + ';margin:6px 0 0;}'
     + '#modalBox .w180all .w180it{cursor:pointer;}#modalBox .w180all .w180it:hover{border-color:rgba(16,63,57,.35);}'
@@ -160,7 +164,7 @@
   function kindOf(a) { return a.ask ? (a.ask.type === 'poll' ? 'poll' : 'form') : 'news'; }
 
   /* ---------- the data: the announcements this person may see, and their own answers ---------- */
-  var COLS = 'id, kind, title, body, department, link, pinned, happened_at, expires_at, created_by, created_name, created_at, audience, teams, ask, anonymous, show_results, closes_at, post_slack, slack';
+  var COLS = 'id, kind, title, body, department, link, pinned, happened_at, expires_at, created_by, created_name, created_at, audience, teams, ask, anonymous, show_results, closes_at, post_slack, slack, post_email, emailed';
   function load(force) {
     if (S.listP) return S.listP;
     if (!force && S.list && Date.now() - S.listAt < 45000) return Promise.resolve(S.list);
@@ -182,6 +186,16 @@
       var x = r && r.data && !Array.isArray(r.data) ? r.data : (r && Array.isArray(r.data) ? r.data[0] : null);
       if (x) { (S.list = S.list || []).push(x); return x; }
       return null;
+    });
+  }
+  /* where it went (the Slack post, the email), fresh for the poster, leaders, HR and admins */
+  var SENT_KEYS = ['post_slack', 'slack', 'post_email', 'emailed'];
+  function delivery(a) {
+    if (!a || !a.id) return Promise.resolve(a);
+    return q(db.from('hub_announcements').select(SENT_KEYS.join(', ')).eq('id', Number(a.id)).maybeSingle()).then(function (r) {
+      var x = r && r.data && !Array.isArray(r.data) ? r.data : null, b = byId(a.id);
+      if (x) SENT_KEYS.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(x, k)) { a[k] = x[k]; if (b && b !== a) b[k] = x[k]; } });
+      return a;
     });
   }
   function cleanErr(m) { return String(m || 'Something went wrong').replace(/^.*?ERROR:\s*/, '').replace(/\s*CONTEXT:[\s\S]*$/, ''); }
@@ -290,7 +304,7 @@
     var shown = list.slice(0, 3), all = allList().length;
     var h = '<div class="w180hd"><h3>Announcements</h3>' + (n ? '<span class="w180cnt">' + n + ' to answer</span>' : '') + '<span class="sp"></span>'
       + (cp ? '<button type="button" class="w180btn sm" data-w180post>Post an announcement</button>' : '') + '</div>';
-    if (!list.length) return h + '<div class="w180empty"><span>Nothing posted for you right now. What you post shows here for the people it is for, with one Slack post.</span>' + (all ? '<button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button>' : '') + '</div>';
+    if (!list.length) return h + '<div class="w180empty"><span>Nothing posted for you right now. What you post shows here for the people it is for, with one Slack post and an email.</span>' + (all ? '<button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button>' : '') + '</div>';
     h += shown.map(itemHtml).join('');
     if (all > shown.length) h += '<p class="w180more"><button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button></p>';
     return h;
@@ -332,6 +346,25 @@
       + (a.ask && a.closes_at ? (closed(a) ? ' \u00b7 closed ' : ' \u00b7 closes ') + E(dayLabel(a.closes_at)) : '') + (a.anonymous ? ' \u00b7 anonymous' : '') + '</p>'
       + (a.body ? '<p class="body" style="font-size:13.5px;line-height:1.5;white-space:pre-wrap;margin:0 0 10px">' + E(a.body) + '</p>' : '');
   }
+  /* where it went: the Slack post and the email (the poster, leaders, HR and admins see it) */
+  function deliveryHtml(a) {
+    var bits = [], warn = false;
+    if (a.post_slack) {
+      var sl = a.slack || null, posts = sl && Array.isArray(sl.posts) ? sl.posts : [];
+      if (!sl) bits.push('Slack: on its way');
+      else if (posts.length) bits.push('Posted in ' + posts.map(function (p) { return '#' + p.channel; }).join(', '));
+      else { warn = true; bits.push('Not posted in Slack' + (sl.errors && sl.errors[0] && sl.errors[0].error ? ': ' + sl.errors[0].error : '')); }
+    }
+    if (a.post_email) {
+      var em = a.emailed || null, st = em && em.state, n = Number(em && em.sent) || 0, of = Number(em && em.to_count) || 0;
+      if (!em || st === 'sending') bits.push('The email is going out' + (of ? ' to ' + plural(of, 'person', 'people') : ''));
+      else if (st === 'sent') bits.push('Emailed to ' + plural(n, 'person', 'people'));
+      else if (st === 'partly sent') { warn = true; bits.push('Emailed to ' + n + ' of ' + plural(of, 'person', 'people') + (em.failed && em.failed.length ? '; not to ' + em.failed.join(', ') : '')); }
+      else if (st === 'skipped') { warn = true; bits.push('Not emailed: ' + (em.skipped || 'skipped')); }
+      else { warn = true; bits.push('The email did not go out' + (em.error ? ': ' + String(em.error).slice(0, 140) : '')); }
+    }
+    return bits.length ? '<p class="w180sent' + (warn ? ' warn' : '') + '">' + E(bits.join(' \u00b7 ')) + '</p>' : '';
+  }
   function repaint(id) {
     paintCard();
     var a = byId(id); if (!a) return;
@@ -339,11 +372,13 @@
   }
   function openItem(id) {
     return load(false).then(function () { return loadOne(id); }).then(function (a) {
+      return a && manages(a) ? delivery(a) : a;
+    }).then(function (a) {
       if (!a) { T('That announcement is not for you, or it was taken down'); return; }
       if (a.ask && a.ask.type === 'form' && openAsk(a) && forMe(a) && !S.mine[a.id]) return openForm(a);
       if (a.ask && a.ask.type === 'form') return openResults(a);
       if (a.ask && manages(a) && !(openAsk(a) && forMe(a) && !S.mine[a.id])) return openResults(a);
-      openWin(headHtml(a) + (a.ask ? '<div data-w180slot="' + E(a.id) + '">' + pollHtml(a) + '</div>' : '')
+      openWin(headHtml(a) + (manages(a) ? deliveryHtml(a) : '') + (a.ask ? '<div data-w180slot="' + E(a.id) + '">' + pollHtml(a) + '</div>' : '')
         + (a.link ? '<p><a class="w180lnk" href="' + E(a.link) + '"' + (/^https?:/i.test(a.link) ? ' target="_blank" rel="noopener"' : '') + '>Open the link</a></p>' : '')
         + '<div class="w180foot">' + (a.ask && manages(a) ? '<button type="button" class="w180btn ghost sm" data-w180res="' + E(a.id) + '">See the answers</button><span class="sp"></span>' : '') + '<button type="button" class="w180btn sm" data-w180close>Close</button></div>', false);
       if (a.ask && a.ask.type === 'poll' && (S.mine[a.id] || closed(a)) && !S.res[a.id]) results(a.id).then(function () { repaint(a.id); });
@@ -422,7 +457,7 @@
     }
     if (r.manage) {
       var pc = r.audience ? Math.min(100, Math.round(100 * r.answered / r.audience)) : 0;
-      h += '<div class="w180prog"><span><b>' + r.answered + '</b>' + (r.audience ? ' of ' + r.audience : '') + ' answered</span><span class="t"><i style="width:' + pc + '%"></i></span></div>';
+      h += '<div class="w180prog"><span><b>' + r.answered + '</b>' + (r.audience ? ' of ' + r.audience : '') + ' answered</span><span class="t"><i style="width:' + pc + '%"></i></span></div>' + (manages(a) ? deliveryHtml(a) : '');
     } else h += '<p class="sub">' + plural(r.answered, 'person has', 'people have') + ' answered.</p>';
     h += (r.questions || []).map(function (qr) {
       return '<div class="w180rq"><h4>' + E(qr.label) + '</h4>' + (qr.options ? barsHtml(qr, m ? m[qr.id] : undefined) : valsHtml(qr)) + '</div>';
@@ -445,7 +480,8 @@
   function openResults(a) {
     S.resId = a.id;
     openWin(headHtml(a) + '<p class="sub">Loading the answers\u2026</p>', true);
-    return results(a.id, true).then(function (r) {
+    return Promise.all([results(a.id, true), manages(a) ? delivery(a) : null]).then(function (both) {
+      var r = both[0];
       if (S.resId !== a.id) return;
       if (!r || !r.ok) { setWin(headHtml(a) + '<p class="w180err">' + E((r && r.error) || 'The answers did not load.') + '</p><div class="w180foot"><button type="button" class="w180btn sm" data-w180close>Close</button></div>'); return; }
       setWin(resultsHtml(a, r));
@@ -492,17 +528,28 @@
     });
   }
 
-  /* ---------- posting: who it is for, the poll or the short form, and the one Slack post ---------- */
+  /* ---------- posting: who it is for, the poll or the short form, the one Slack post and the email (wave180d) ---------- */
   function newDraft() {
     var own = postTeams(), lead = !isAdmin() && !isHr();
     return { title: '', body: '', link: '', audience: lead && own.length ? 'teams' : 'everyone', teams: lead && own.length ? [own[0]] : [], ask: 'none',
       poll: { question: '', options: ['', ''], multi: false }, form: { questions: [{ id: 'q1', label: '', type: 'short', required: true, options: '' }] },
-      anonymous: false, show_results: true, closes: '', pinned: false, expires: '', slack: true };
+      anonymous: false, show_results: true, closes: '', pinned: false, expires: '', slack: true, email: true };
   }
   function slackWhere(d) {
     if (d.audience === 'everyone') return '#general';
     if (d.audience === 'leaders') return '#leaders';
     return d.teams.length ? (d.teams.length === 1 ? 'the ' + teamName(d.teams[0]) + ' channel' : 'each team\u2019s channel') : 'the team\u2019s channel';
+  }
+  /* how it reaches them, in one line: "goes once to Slack and is emailed to them" */
+  function reachLine(d) {
+    if (d.slack && d.email) return ', goes once to Slack and is emailed to them';
+    return d.slack ? ', and goes once to Slack' : d.email ? ', and is emailed to them' : '';
+  }
+  function reachToast(d) {
+    if (d.slack && d.email) return 'Posted, and on its way to ' + slackWhere(d) + ' and by email';
+    if (d.slack) return 'Posted, and on its way to ' + slackWhere(d);
+    if (d.email) return 'Posted, and on its way by email';
+    return 'Posted';
   }
   function editorHtml(d) {
     if (d.ask === 'poll') {
@@ -528,7 +575,7 @@
   function postHtml(d) {
     var own = postTeams(), lead = !isAdmin() && !isHr();
     var aud = [['everyone', 'Everyone'], ['leaders', 'The leaders'], ['teams', lead ? 'My team' + (own.length > 1 ? 's' : '') : 'Some teams']];
-    var h = '<h3>Post an announcement</h3><p class="sub">It shows at the top of Home for the people it is for' + (d.slack ? ', and goes once to Slack' : '') + '. You can add a poll or a short form they answer right there.</p>'
+    var h = '<h3>Post an announcement</h3><p class="sub">It shows at the top of Home for the people it is for' + reachLine(d) + '. You can add a poll or a short form they answer right there.</p>'
       + '<form class="w180f" data-w180postform novalidate>'
       + '<label class="l" for="w180pt">Headline<span class="req" aria-hidden="true">*</span></label><input type="text" id="w180pt" maxlength="200" placeholder="The gala moves to November 21" value="' + E(d.title) + '">'
       + '<label class="l" for="w180pb">Detail<span class="op">optional</span></label><textarea id="w180pb" maxlength="2000" rows="3" placeholder="A line or two of context.">' + E(d.body) + '</textarea>'
@@ -551,6 +598,7 @@
       + '<div class="w180row"><div><label class="l" for="w180pe">Comes down on<span class="op">optional</span></label><input type="date" id="w180pe" min="' + plusDays(1) + '" value="' + E(d.expires) + '"></div>'
       + '<div><label class="l">&nbsp;</label><label class="w180ck" style="margin-top:6px"><input type="checkbox" id="w180pp"' + (d.pinned ? ' checked' : '') + '> Pin it to the top of Home</label></div></div>'
       + '<label class="w180ck"><input type="checkbox" id="w180ps"' + (d.slack ? ' checked' : '') + '> Post it once in Slack too, in ' + E(slackWhere(d)) + '</label>'
+      + '<label class="w180ck"><input type="checkbox" id="w180pem"' + (d.email ? ' checked' : '') + '> Email it to them too, from hub@welfareavenue.com (replies come to you)</label>'
       + '<p class="w180err" data-w180perr hidden></p>'
       + '<div class="w180foot"><button type="button" class="w180btn ghost sm" data-w180close>Cancel</button><button type="submit" class="w180btn"' + (S.busy.post ? ' disabled' : '') + '>' + (S.busy.post ? 'Posting\u2026' : 'Post it') + '</button></div></form>';
     return h;
@@ -566,7 +614,7 @@
   /* what is typed goes into the draft before anything redraws the form */
   function syncDraft() {
     var d = S.draft; if (!d || !document.querySelector('#modalBox [data-w180postform]')) return d;
-    d.title = v('w180pt'); d.body = v('w180pb'); d.link = v('w180pl'); d.expires = v('w180pe'); d.pinned = ck('w180pp'); d.slack = ck('w180ps');
+    d.title = v('w180pt'); d.body = v('w180pb'); d.link = v('w180pl'); d.expires = v('w180pe'); d.pinned = ck('w180pp'); d.slack = ck('w180ps'); d.email = ck('w180pem');
     if (document.getElementById('w180pc')) { d.closes = v('w180pc'); d.anonymous = ck('w180pa'); d.show_results = ck('w180pr'); }
     if (d.ask === 'poll' && document.getElementById('w180pq')) {
       d.poll.question = v('w180pq'); d.poll.multi = ck('w180pm');
@@ -628,7 +676,7 @@
     return { row: { kind: 'general', title: title, body: body || null, link: link || null, pinned: !!d.pinned, happened_at: todayIso(), expires_at: d.expires || null,
       created_by: myEmail(), created_name: meName(), audience: d.audience, teams: d.audience === 'teams' ? d.teams.slice() : [],
       department: d.audience === 'teams' && d.teams.length === 1 ? d.teams[0] : null, ask: ask, anonymous: ask ? !!d.anonymous : false,
-      show_results: ask ? !!d.show_results : true, closes_at: ask && d.closes ? endOfDay(d.closes) : null, post_slack: !!d.slack } };
+      show_results: ask ? !!d.show_results : true, closes_at: ask && d.closes ? endOfDay(d.closes) : null, post_slack: !!d.slack, post_email: !!d.email } };
   }
   function submitPost() {
     var d = syncDraft(), b = buildRow(d), err = document.querySelector('#modalBox [data-w180perr]');
@@ -645,7 +693,7 @@
       }
       var row = Object.assign({}, b.row, { id: r.data.id, created_at: r.data.created_at || new Date().toISOString() });
       (S.list = S.list || []).unshift(row); S.draft = null;
-      closeModal(); T(b.row.post_slack ? 'Posted, and on its way to ' + slackWhere(d) : 'Posted');
+      closeModal(); T(reachToast(d));
       paintCard();
       try { if (window.w116News && w116News.refresh) w116News.refresh(); } catch (e) { /* fine */ }
     });
@@ -734,7 +782,7 @@
     var t = e.target; if (!t || !t.closest || !t.closest('#modalBox [data-w180postform]')) return;
     var d = S.draft; if (!d) return;
     if (t.hasAttribute('data-w180qt')) { syncDraft(); var i = Number(t.getAttribute('data-w180qt')); if (d.form.questions[i]) d.form.questions[i].type = t.value; redrawPost((t.value === 'one' || t.value === 'several') ? '[data-w180qo="' + i + '"]' : null); return; }
-    if (t.id === 'w180ps') { syncDraft(); redrawPost(); return; }
+    if (t.id === 'w180ps' || t.id === 'w180pem') { syncDraft(); redrawPost(); return; }
   }, true);
   document.addEventListener('submit', function (e) {
     var f = e.target; if (!f || !f.matches) return;
@@ -758,6 +806,20 @@
     return true;
   }
   window.addEventListener('hashchange', function () { try { fromHash(); } catch (e) { /* fine */ } });
+  /* the email's (or Slack's) link through the sign-in: Google brings people back without the address, so this tab keeps it
+     until the Hub opens (15 minutes at most) */
+  function keepPending() { var id = hashId(); if (!id) return; try { sessionStorage.setItem('w180pend', JSON.stringify({ id: id, t: Date.now() })); } catch (e) { /* fine */ } }
+  function takePending() {
+    var v = null;
+    try {
+      var raw = sessionStorage.getItem('w180pend'); sessionStorage.removeItem('w180pend');
+      var o = raw ? JSON.parse(raw) : null;
+      var age = o ? Date.now() - Number(o.t || 0) : -1e12;
+      if (o && /^(\d+|all)$/.test(String(o.id)) && age > -60000 && age < 15 * 60000) v = String(o.id);
+    } catch (e) { /* fine */ }
+    return v;
+  }
+  keepPending();
 
   /* ---------- Home: the card after every render ---------- */
   if (typeof renderMyPage === 'function') {
@@ -775,8 +837,9 @@
   if (typeof startApp === 'function') {
     var __sa180 = startApp;
     startApp = async function () {
-      var pend = hashId();
+      var pend = hashId(), kept = takePending();
       if (pend) { try { history.replaceState(null, '', '#mypage'); } catch (e) { /* fine */ } }
+      pend = pend || kept;
       var out = await __sa180.apply(this, arguments);
       try { addTour(); if (pend) setTimeout(function () { if (pend === 'all') openAll(); else openItem(pend); }, 600); } catch (e) { /* fine */ }
       return out;
@@ -792,7 +855,7 @@
       var TT = window.w122 && window.w122.tours; if (!TT || !TT.home || !TT.home.steps || TT.home.__w180) return;
       var hs = TT.home.steps, i = -1;
       hs.forEach(function (x, k) { if (x.s === '#mpBody .mp-chips') i = k; });
-      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w180card', t: 'Announcements', p: 'What your leaders, HR and the admins posted for you: news, and polls or short forms you answer right here (a tap for a poll). The totals show once you answer, when the poster shares them. Leaders, HR and admins post from here: it shows at the top of Home for the people it is for and goes once to Slack.', opt: 1 });
+      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w180card', t: 'Announcements', p: 'What your leaders, HR and the admins posted for you: news, and polls or short forms you answer right here (a tap for a poll). The totals show once you answer, when the poster shares them. Leaders, HR and admins post from here: it shows at the top of Home for the people it is for, goes once to Slack and is emailed to them.', opt: 1 });
       TT.home.__w180 = true;
     } catch (e) { /* fine */ }
   }

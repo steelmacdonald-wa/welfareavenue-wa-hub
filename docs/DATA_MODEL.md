@@ -616,7 +616,7 @@ Birthdays people chose to share (month and day, no year). share: everyone, team 
 
 ### `hub_announcements`
 
-Announcements (wave116g; wave180: for everyone, the leaders or some teams, with a poll or a short form the team answers). Shown at the top of Home for the people they are for and in What's new on the Executive dashboard; each gets one Slack post. Posted by leaders (to everyone, the leaders or their own team), HR and admins (to anyone); read by the people they are for, the poster, leaders, HR and admins.
+Announcements (wave116g; wave180: for everyone, the leaders or some teams, with a poll or a short form the team answers). Shown at the top of Home for the people they are for and in What's new on the Executive dashboard; each gets one Slack post and an email (wave180d). Posted by leaders (to everyone, the leaders or their own team), HR and admins (to anyone); read by the people they are for, the poster, leaders, HR and admins.
 
 - `department`: Team code the announcement is about, or NULL for everyone.
 - `audience`: wave180: who it is for: everyone (anyone on the Hub), leaders (leaders and admins) or teams (the teams in teams).
@@ -629,6 +629,8 @@ Announcements (wave116g; wave180: for everyone, the leaders or some teams, with 
 - `slack`: wave180: what the Slack post did: {posts: [{channel, ts, url}], errors, at} (team-inbox).
 - `created_name`: wave180: the poster's name as it shows (created_by is their email).
 - `updated_at`: wave180: last change (closing it, taking it down).
+- `post_email`: wave180d: email it once to each person it is for when it is posted (from hub@welfareavenue.com, replies to the poster; team-inbox, event announcement).
+- `emailed`: wave180d: what the email did (team-inbox): {state, sent, to_count, failed: [names], skipped, at}. No addresses are kept here.
 
 ### `hub_connections`
 
@@ -1794,5 +1796,6 @@ Functions:
 - `trg_wa180_touch()`: wave180: keeps hub_announcements.updated_at.
 - `wa180_answer(bigint, jsonb)`: wave180: answer (or change the answer to) an announcement's poll or short form, as the signed-in person: it must be for them, open (not closed or taken down), and the answer is checked against the ask. Returns the answer kept and the results they may see.
 - `wa180_results(bigint)`: wave180: an announcement's results as the signed-in person may see them: the poster, leaders, HR and admins see the totals, the names (unless anonymous), the text answers, each person's answer (rows, for the CSV; no name or time when anonymous), how many it is for and who has not answered (a count only when anonymous); the people it is for see the totals once they have answered or it has closed, when the poster allows; nobody else sees anything.
-- `trg_wa180_announce_post()`: wave180: a new announcement with post_slack asks team-inbox to post it once in Slack.
+- `trg_wa180_announce_post()`: wave180: a new announcement with post_slack or post_email asks team-inbox to post it once in Slack and email it to the people it is for.
+- `wa180_audience(text, text[])`: wave180d: the people an announcement is for, from the active roster (everyone: the team without the board; leaders: leaders and admins; teams: the people on those teams). team-inbox emails them; wa180_results counts them. Server only.
 

@@ -8,6 +8,25 @@
       + (a.ask && a.closes_at ? (closed(a) ? ' · closed ' : ' · closes ') + E(dayLabel(a.closes_at)) : '') + (a.anonymous ? ' · anonymous' : '') + '</p>'
       + (a.body ? '<p class="body" style="font-size:13.5px;line-height:1.5;white-space:pre-wrap;margin:0 0 10px">' + E(a.body) + '</p>' : '');
   }
+  /* where it went: the Slack post and the email (the poster, leaders, HR and admins see it) */
+  function deliveryHtml(a) {
+    var bits = [], warn = false;
+    if (a.post_slack) {
+      var sl = a.slack || null, posts = sl && Array.isArray(sl.posts) ? sl.posts : [];
+      if (!sl) bits.push('Slack: on its way');
+      else if (posts.length) bits.push('Posted in ' + posts.map(function (p) { return '#' + p.channel; }).join(', '));
+      else { warn = true; bits.push('Not posted in Slack' + (sl.errors && sl.errors[0] && sl.errors[0].error ? ': ' + sl.errors[0].error : '')); }
+    }
+    if (a.post_email) {
+      var em = a.emailed || null, st = em && em.state, n = Number(em && em.sent) || 0, of = Number(em && em.to_count) || 0;
+      if (!em || st === 'sending') bits.push('The email is going out' + (of ? ' to ' + plural(of, 'person', 'people') : ''));
+      else if (st === 'sent') bits.push('Emailed to ' + plural(n, 'person', 'people'));
+      else if (st === 'partly sent') { warn = true; bits.push('Emailed to ' + n + ' of ' + plural(of, 'person', 'people') + (em.failed && em.failed.length ? '; not to ' + em.failed.join(', ') : '')); }
+      else if (st === 'skipped') { warn = true; bits.push('Not emailed: ' + (em.skipped || 'skipped')); }
+      else { warn = true; bits.push('The email did not go out' + (em.error ? ': ' + String(em.error).slice(0, 140) : '')); }
+    }
+    return bits.length ? '<p class="w180sent' + (warn ? ' warn' : '') + '">' + E(bits.join(' · ')) + '</p>' : '';
+  }
   function repaint(id) {
     paintCard();
     var a = byId(id); if (!a) return;
@@ -15,11 +34,13 @@
   }
   function openItem(id) {
     return load(false).then(function () { return loadOne(id); }).then(function (a) {
+      return a && manages(a) ? delivery(a) : a;
+    }).then(function (a) {
       if (!a) { T('That announcement is not for you, or it was taken down'); return; }
       if (a.ask && a.ask.type === 'form' && openAsk(a) && forMe(a) && !S.mine[a.id]) return openForm(a);
       if (a.ask && a.ask.type === 'form') return openResults(a);
       if (a.ask && manages(a) && !(openAsk(a) && forMe(a) && !S.mine[a.id])) return openResults(a);
-      openWin(headHtml(a) + (a.ask ? '<div data-w180slot="' + E(a.id) + '">' + pollHtml(a) + '</div>' : '')
+      openWin(headHtml(a) + (manages(a) ? deliveryHtml(a) : '') + (a.ask ? '<div data-w180slot="' + E(a.id) + '">' + pollHtml(a) + '</div>' : '')
         + (a.link ? '<p><a class="w180lnk" href="' + E(a.link) + '"' + (/^https?:/i.test(a.link) ? ' target="_blank" rel="noopener"' : '') + '>Open the link</a></p>' : '')
         + '<div class="w180foot">' + (a.ask && manages(a) ? '<button type="button" class="w180btn ghost sm" data-w180res="' + E(a.id) + '">See the answers</button><span class="sp"></span>' : '') + '<button type="button" class="w180btn sm" data-w180close>Close</button></div>', false);
       if (a.ask && a.ask.type === 'poll' && (S.mine[a.id] || closed(a)) && !S.res[a.id]) results(a.id).then(function () { repaint(a.id); });
@@ -98,7 +119,7 @@
     }
     if (r.manage) {
       var pc = r.audience ? Math.min(100, Math.round(100 * r.answered / r.audience)) : 0;
-      h += '<div class="w180prog"><span><b>' + r.answered + '</b>' + (r.audience ? ' of ' + r.audience : '') + ' answered</span><span class="t"><i style="width:' + pc + '%"></i></span></div>';
+      h += '<div class="w180prog"><span><b>' + r.answered + '</b>' + (r.audience ? ' of ' + r.audience : '') + ' answered</span><span class="t"><i style="width:' + pc + '%"></i></span></div>' + (manages(a) ? deliveryHtml(a) : '');
     } else h += '<p class="sub">' + plural(r.answered, 'person has', 'people have') + ' answered.</p>';
     h += (r.questions || []).map(function (qr) {
       return '<div class="w180rq"><h4>' + E(qr.label) + '</h4>' + (qr.options ? barsHtml(qr, m ? m[qr.id] : undefined) : valsHtml(qr)) + '</div>';
@@ -121,7 +142,8 @@
   function openResults(a) {
     S.resId = a.id;
     openWin(headHtml(a) + '<p class="sub">Loading the answers…</p>', true);
-    return results(a.id, true).then(function (r) {
+    return Promise.all([results(a.id, true), manages(a) ? delivery(a) : null]).then(function (both) {
+      var r = both[0];
       if (S.resId !== a.id) return;
       if (!r || !r.ok) { setWin(headHtml(a) + '<p class="w180err">' + E((r && r.error) || 'The answers did not load.') + '</p><div class="w180foot"><button type="button" class="w180btn sm" data-w180close>Close</button></div>'); return; }
       setWin(resultsHtml(a, r));

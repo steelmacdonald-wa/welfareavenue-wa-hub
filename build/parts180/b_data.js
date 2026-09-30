@@ -51,7 +51,7 @@
   function kindOf(a) { return a.ask ? (a.ask.type === 'poll' ? 'poll' : 'form') : 'news'; }
 
   /* ---------- the data: the announcements this person may see, and their own answers ---------- */
-  var COLS = 'id, kind, title, body, department, link, pinned, happened_at, expires_at, created_by, created_name, created_at, audience, teams, ask, anonymous, show_results, closes_at, post_slack, slack';
+  var COLS = 'id, kind, title, body, department, link, pinned, happened_at, expires_at, created_by, created_name, created_at, audience, teams, ask, anonymous, show_results, closes_at, post_slack, slack, post_email, emailed';
   function load(force) {
     if (S.listP) return S.listP;
     if (!force && S.list && Date.now() - S.listAt < 45000) return Promise.resolve(S.list);
@@ -73,6 +73,16 @@
       var x = r && r.data && !Array.isArray(r.data) ? r.data : (r && Array.isArray(r.data) ? r.data[0] : null);
       if (x) { (S.list = S.list || []).push(x); return x; }
       return null;
+    });
+  }
+  /* where it went (the Slack post, the email), fresh for the poster, leaders, HR and admins */
+  var SENT_KEYS = ['post_slack', 'slack', 'post_email', 'emailed'];
+  function delivery(a) {
+    if (!a || !a.id) return Promise.resolve(a);
+    return q(db.from('hub_announcements').select(SENT_KEYS.join(', ')).eq('id', Number(a.id)).maybeSingle()).then(function (r) {
+      var x = r && r.data && !Array.isArray(r.data) ? r.data : null, b = byId(a.id);
+      if (x) SENT_KEYS.forEach(function (k) { if (Object.prototype.hasOwnProperty.call(x, k)) { a[k] = x[k]; if (b && b !== a) b[k] = x[k]; } });
+      return a;
     });
   }
   function cleanErr(m) { return String(m || 'Something went wrong').replace(/^.*?ERROR:\s*/, '').replace(/\s*CONTEXT:[\s\S]*$/, ''); }

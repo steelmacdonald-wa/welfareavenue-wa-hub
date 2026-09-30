@@ -4,7 +4,8 @@
    sees the results and who has not answered; leaders post to their own team or everyone, HR and admins to anyone.
    The roster is the live team (scratchpad fx169.json); the announcements and answers are made up. The database calls
    (wa180_answer, wa180_results, the insert and updates of hub_announcements) are caught by a spy that answers as the database
-   does. Uses test/boot.js (stubbed Supabase, clock fixed 25/09/26 16:00 Toronto). CAND=<file>; SHOTS=1 saves screenshots. */
+   does. wave180d: where it went (the Slack post and the email), the email box on the post form, the link kept through the
+   sign-in. Uses test/boot.js (stubbed Supabase, clock fixed 25/09/26 16:00 Toronto). CAND=<file>; SHOTS=1 saves screenshots. */
 const fs = require('fs');
 const { launch, fresh, loadFixture } = require('./boot');
 const SP = '/tmp/claude-0/-home-claude/4ca49ca1-5fe5-5291-ac38-6e2e0a16ba96/scratchpad/';
@@ -14,8 +15,8 @@ const ROSTER = JSON.parse(fs.readFileSync(SP + 'fx169.json', 'utf8'));
 const clone = o => JSON.parse(JSON.stringify(o));
 const STEEL = 'steel.macdonald@welfareavenue.com';
 const A = [
-  { id: 101, kind: 'general', title: 'Saturday serving start time', body: 'We are moving the Saturday serving earlier in October.', audience: 'teams', teams: ['opsmtl'], ask: { type: 'poll', question: 'Which start time works for you?', options: ['9 am', '10 am', '11 am'], multi: false }, anonymous: false, show_results: true, closes_at: '2026-09-28T03:59:00Z', pinned: false, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-25T15:00:00Z', post_slack: true, slack: null, link: null, department: 'opsmtl' },
-  { id: 102, kind: 'general', title: 'Gala volunteers survey', body: null, audience: 'everyone', teams: [], ask: { type: 'form', questions: [{ id: 'q1', label: 'What would you like to do at the gala?', type: 'short', required: true }, { id: 'q2', label: 'Which shift?', type: 'one', options: ['Setup', 'Evening'] }, { id: 'q3', label: 'Can you bring a friend?', type: 'yesno' }] }, anonymous: true, show_results: true, closes_at: null, pinned: false, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-24T14:00:00Z', post_slack: true, slack: null, link: null, department: null },
+  { id: 101, kind: 'general', title: 'Saturday serving start time', body: 'We are moving the Saturday serving earlier in October.', audience: 'teams', teams: ['opsmtl'], ask: { type: 'poll', question: 'Which start time works for you?', options: ['9 am', '10 am', '11 am'], multi: false }, anonymous: false, show_results: true, closes_at: '2026-09-28T03:59:00Z', pinned: false, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-25T15:00:00Z', post_slack: true, slack: { posts: [{ team: 'opsmtl', channel: 'operations-mtl' }], errors: [], at: '2026-09-25T15:00:05Z' }, post_email: true, emailed: { state: 'sent', sent: 4, to_count: 4, failed: [], at: '2026-09-25T15:00:09Z' }, link: null, department: 'opsmtl' },
+  { id: 102, kind: 'general', title: 'Gala volunteers survey', body: null, audience: 'everyone', teams: [], ask: { type: 'form', questions: [{ id: 'q1', label: 'What would you like to do at the gala?', type: 'short', required: true }, { id: 'q2', label: 'Which shift?', type: 'one', options: ['Setup', 'Evening'] }, { id: 'q3', label: 'Can you bring a friend?', type: 'yesno' }] }, anonymous: true, show_results: true, closes_at: null, pinned: false, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-24T14:00:00Z', post_slack: true, slack: null, post_email: true, emailed: { state: 'partly sent', sent: 27, to_count: 29, failed: ['Mary', 'Ola'], at: '2026-09-24T14:00:20Z' }, link: null, department: null },
   { id: 103, kind: 'general', title: 'Sponsor packages', body: null, audience: 'teams', teams: ['fundraising'], ask: { type: 'poll', question: 'Which tiers should we keep?', options: ['Gold', 'Silver', 'Bronze'], multi: true }, anonymous: false, show_results: true, closes_at: null, pinned: false, expires_at: null, created_by: 'amanda.zoldak@welfareavenue.com', created_name: 'Amanda', created_at: '2026-09-23T14:00:00Z', post_slack: true, slack: null, link: null, department: 'fundraising' },
   { id: 104, kind: 'general', title: 'The Hub has announcements now', body: 'Leaders can post news, polls and short forms here.', audience: 'everyone', teams: [], ask: null, anonymous: false, show_results: true, closes_at: null, pinned: true, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-22T14:00:00Z', post_slack: false, slack: null, link: null, department: null },
   { id: 105, kind: 'general', title: 'Leadership retreat date', body: null, audience: 'leaders', teams: [], ask: { type: 'poll', question: 'Which weekend?', options: ['Oct 17', 'Oct 24'], multi: false }, anonymous: false, show_results: true, closes_at: '2026-09-24T12:00:00Z', pinned: false, expires_at: null, created_by: STEEL, created_name: 'Steel', created_at: '2026-09-21T14:00:00Z', post_slack: true, slack: null, link: null, department: null },
@@ -150,6 +151,8 @@ const modal = f => f.ev(() => { const b = document.getElementById('modalBack'), 
     const r1 = await f.ev(() => ({ prog: (document.querySelector('#modalBox .w180prog') || {}).textContent, miss: (document.querySelector('#modalBox details.w180miss') || {}).textContent, btns: [...document.querySelectorAll('#modalBox .w180foot button')].map(b => b.textContent) }));
     ok('4.1 See the answers: how many of how many, the totals with names, who has not answered', m.open && m.wide && /1 of 5 answered/.test(r1.prog || '') && /4 not answered yet/.test(r1.miss || '') && /Eno Moffat/.test(r1.miss || '') && /Eleftherios Katsipis/.test(m.txt), r1);
     ok('4.2 the poster can download the answers, close the answers and take it down', r1.btns.join('|') === 'Download the answers (CSV)|Close the answers now|Take it down|Close', r1.btns);
+    const sent1 = await f.ev(() => { const e = document.querySelector('#modalBox .w180sent'); return e ? { t: e.textContent, warn: e.classList.contains('warn') } : null; });
+    ok('4.8 (wave180d) See the answers says where it went: the Slack post and the email', sent1 && sent1.t === 'Posted in #operations-mtl · Emailed to 4 people' && !sent1.warn, sent1);
     await f.ev(() => { window.__csv = null; const o = URL.createObjectURL; URL.createObjectURL = function (b) { b.text().then(t => { window.__csv = t; }); return o.call(URL, b); }; });
     await click(f, '#modalBox [data-w180csv="101"]', 500);
     const csv = await f.ev(() => window.__csv);
@@ -168,6 +171,12 @@ const modal = f => f.ev(() => { const b = document.getElementById('modalBack'), 
     await click(f, '#modalBox [data-w180open="102"]', 900);
     m = await modal(f);
     ok('4.7 an anonymous form: the totals and the text answers, no names, a count of who has not answered', m.open && m.wide && /2 of 30 answered/.test(m.txt) && /Welcome desk/.test(m.txt) && /28 people have not answered yet\. It is anonymous, so the names stay hidden\./.test(m.txt) && !/w180names/.test(m.html), m.txt.slice(0, 400));
+    const sent2 = await f.ev(() => { const e = document.querySelector('#modalBox .w180sent'); return e ? { t: e.textContent, warn: e.classList.contains('warn') } : null; });
+    ok('4.9 (wave180d) an email that did not reach everyone says who it missed', sent2 && sent2.t === 'Slack: on its way · Emailed to 27 of 29 people; not to Mary, Ola' && sent2.warn, sent2);
+    await f.ev(() => closeModal());
+    await f.ev(() => w180.open(104)); await f.page.waitForTimeout(700);
+    const sent3 = await f.ev(() => ({ open: !!document.querySelector('#modalBox .w180m'), line: !!document.querySelector('#modalBox .w180sent') }));
+    ok('4.10 (wave180d) news posted before the email existed shows no email line', sent3.open && !sent3.line, sent3);
     await f.ev(() => closeModal());
     await shot(f, 's4_results');
 
@@ -176,6 +185,8 @@ const modal = f => f.ev(() => { const b = document.getElementById('modalBack'), 
     m = await modal(f);
     const seg = await f.ev(() => [...document.querySelectorAll('#modalBox [data-w180aud]')].map(b => b.textContent + (b.classList.contains('on') ? '*' : '') + (b.disabled ? '!' : '')));
     ok('5.1 Post an announcement: the form, for everyone by default (an admin)', m.open && /Post an announcement/.test(m.txt) && seg.join('|') === 'Everyone*|The leaders|Some teams' && /Post it once in Slack too, in #general/.test(m.txt), seg);
+    const em1 = await f.ev(() => ({ on: !!(document.getElementById('w180pem') || {}).checked, lab: ((document.getElementById('w180pem') || {}).closest && document.getElementById('w180pem').closest('label').textContent) || '', sub: (document.querySelector('#modalBox .w180m .sub') || {}).textContent }));
+    ok('5.9 (wave180d) Email it to them too is on by default, and the form says so', em1.on && em1.lab === ' Email it to them too, from hub@welfareavenue.com (replies come to you)' && /for the people it is for, goes once to Slack and is emailed to them\./.test(em1.sub || ''), em1);
     await click(f, '#modalBox [data-w180postform] button[type=submit]', 300);
     ok('5.2 no headline, no post', /Give it a headline\./.test((await modal(f)).txt) && (await writes(f)).length === 2, '');
     await type(f, '#w180pt', 'Pick the October serving times');
@@ -195,18 +206,51 @@ const modal = f => f.ev(() => { const b = document.getElementById('modalBack'), 
     await type(f, '#modalBox [data-w180popt="2"]', '11 am');
     await f.ev(() => { const x = document.getElementById('w180pm'); x.checked = true; });
     await type(f, '#w180pc', '2026-10-02', 'change');
-    const where = await f.ev(() => document.querySelector('#modalBox label.w180ck:last-of-type') && [...document.querySelectorAll('#modalBox label.w180ck')].map(l => l.textContent).pop());
+    const where = await f.ev(() => { const x = document.getElementById('w180ps'); return x && x.closest('label') ? x.closest('label').textContent : null; });
     ok('5.5 the Slack line says where it goes', /each team’s channel/.test(where || ''), where);
     await shot(f, 's5_post');
+    await f.ev(() => { window.__toasts = []; const ot = window.toast; window.toast = function (m) { window.__toasts.push(String(m)); return ot && ot.apply(this, arguments); }; });
     await click(f, '#modalBox [data-w180postform] button[type=submit]', 800);
     w = await writes(f);
     const ins = w.filter(x => x.m === 'insert')[0];
     ok('5.6 Post it writes the announcement as the database checks it', ins && ins.row.title === 'Pick the October serving times' && ins.row.body === 'Two teams, one vote.' && ins.row.audience === 'teams' && JSON.stringify(ins.row.teams) === '["opsmtl","progdev"]'
       && JSON.stringify(ins.row.ask) === JSON.stringify({ type: 'poll', question: 'Which Saturday time?', options: ['9 am', '10 am', '11 am'], multi: true }) && ins.row.post_slack === true && ins.row.created_by === STEEL && ins.row.anonymous === false && ins.row.show_results === true
-      && ins.row.closes_at === '2026-10-03T03:59:00.000Z', ins && ins.row);
+      && ins.row.closes_at === '2026-10-03T03:59:00.000Z' && ins.row.post_email === true, ins && ins.row);
+    const toasts1 = await f.ev(() => window.__toasts || []);
+    ok('5.10 (wave180d) the toast says where it went: Slack and email', toasts1.indexOf('Posted, and on its way to each team’s channel and by email') >= 0, toasts1);
     c = await card(f); m = await modal(f);
     ok('5.7 it closes and shows on Home at once, after the pinned one', !m.open && c.items[0].id === '104' && c.items[1] && c.items[1].id === '903', c.items.map(i => i.id));
+    /* wave180d: unticked, it is not emailed */
+    await click(f, '#w180card [data-w180post]', 600);
+    await type(f, '#w180pt', 'Slack only, please');
+    await f.ev(() => { const x = document.getElementById('w180pem'); x.checked = false; x.dispatchEvent(new Event('change', { bubbles: true })); });
+    await f.page.waitForTimeout(250);
+    const em2 = await f.ev(() => ({ on: !!(document.getElementById('w180pem') || {}).checked, sub: (document.querySelector('#modalBox .w180m .sub') || {}).textContent, title: (document.getElementById('w180pt') || {}).value }));
+    ok('5.11 (wave180d) unticked: the form says Slack only, and what is typed stays', !em2.on && /for the people it is for, and goes once to Slack\./.test(em2.sub || '') && em2.title === 'Slack only, please', em2);
+    await click(f, '#modalBox [data-w180postform] button[type=submit]', 800);
+    w = await writes(f);
+    const ins2 = w.filter(x => x.m === 'insert')[1];
+    const toasts2 = await f.ev(() => window.__toasts || []);
+    ok('5.12 (wave180d) then the row says no email, and the toast says Slack only', ins2 && ins2.row.post_email === false && ins2.row.post_slack === true && toasts2.indexOf('Posted, and on its way to #general') >= 0, { row: ins2 && ins2.row, toasts2 });
     ok('5.8 no page errors (Steel)', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+
+  /* ---------- 6b. (wave180d) the email's link through the sign-in: Google brings people back without the address ---------- */
+  {
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx([]), wait: 5200, candidate: CAND, init: INIT + "\n;try { sessionStorage.setItem('w180pend', JSON.stringify({ id: '102', t: Date.now() - 60000 })); } catch (e) {}" });
+    await f.page.waitForTimeout(1500);
+    const m = await modal(f);
+    const left = await f.ev(() => { try { return sessionStorage.getItem('w180pend'); } catch (e) { return 'x'; } });
+    ok('6.5 (wave180d) after the sign-in, the link it came in on opens (once)', m.open && /Gala volunteers survey/.test(m.txt) && left === null, { open: m.open, left });
+    ok('6.6 (wave180d) no page errors', f.errs.length === 0, f.errs);
+    await f.close();
+  }
+  {
+    const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#mypage', fixture: fx([]), wait: 5200, candidate: CAND, init: INIT + "\n;try { sessionStorage.setItem('w180pend', JSON.stringify({ id: '102', t: Date.now() - 20 * 60000 })); } catch (e) {}" });
+    await f.page.waitForTimeout(1500);
+    const m = await modal(f);
+    ok('6.7 (wave180d) an address kept longer than 15 minutes ago is dropped', !m.open, m.txt.slice(0, 80));
     await f.close();
   }
 
@@ -250,6 +294,11 @@ const modal = f => f.ev(() => { const b = document.getElementById('modalBack'), 
     const e1 = await f.ev(() => (document.querySelector('#w180card [data-w180id="107"] .w180err') || {}).textContent);
     ok('7.5 a refused answer says why', e1 === 'It closed on September 25.', e1);
     await f.ev(() => { window.__ANS_ERR = null; });
+    await f.ev(() => { try { closeModal(); } catch (e) {} });
+    await f.ev(() => { const r = JSON.parse(JSON.stringify(window.__R180[102])); r.manage = false; delete r.audience; delete r.missing_count; delete r.missing; delete r.rows; window.__R180[102] = r; });   /* as the database answers Joy */
+    await f.ev(() => w180.open(102)); await f.page.waitForTimeout(900);
+    const js = await f.ev(() => ({ open: !!document.querySelector('#modalBox .w180m'), line: !!document.querySelector('#modalBox .w180sent'), slackEmail: /Emailed|Slack/.test((document.getElementById('modalBox') || {}).textContent || '') }));
+    ok('7.7 (wave180d) Joy does not see where it went (the poster, leaders, HR and admins do)', js.open && !js.line && !js.slackEmail, js);
     ok('7.6 no page errors (Joy)', f.errs.length === 0, f.errs);
     await f.close();
   }

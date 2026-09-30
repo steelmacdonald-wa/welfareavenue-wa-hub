@@ -76,7 +76,7 @@
     var shown = list.slice(0, 3), all = allList().length;
     var h = '<div class="w180hd"><h3>Announcements</h3>' + (n ? '<span class="w180cnt">' + n + ' to answer</span>' : '') + '<span class="sp"></span>'
       + (cp ? '<button type="button" class="w180btn sm" data-w180post>Post an announcement</button>' : '') + '</div>';
-    if (!list.length) return h + '<div class="w180empty"><span>Nothing posted for you right now. What you post shows here for the people it is for, with one Slack post.</span>' + (all ? '<button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button>' : '') + '</div>';
+    if (!list.length) return h + '<div class="w180empty"><span>Nothing posted for you right now. What you post shows here for the people it is for, with one Slack post and an email.</span>' + (all ? '<button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button>' : '') + '</div>';
     h += shown.map(itemHtml).join('');
     if (all > shown.length) h += '<p class="w180more"><button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button></p>';
     return h;

@@ -13,8 +13,11 @@
    announcement" (leaders, HR, admins; also from What's new on the Executive dashboard) writes it: who it is for, the poll or
    the form, anonymous, the totals, when answers close, pinned, when it comes down, and the one Slack post.
    #announce/<id> (the Slack post's link) opens one on Home; #announce/all opens them all.
+   wave180d (30/09/26), Steel: "Actually last question it should be emailed as well": each one is also emailed once to the
+   people it is for, from hub@welfareavenue.com with replies to the poster ("Email it to them too", on by default); the link
+   in the email opens it on Home, through the sign-in when needed. The poster, leaders, HR and admins see where it went.
    Data: hub_announcements (row security: the people it is for, the poster, leaders, HR, admins), hub_announcement_answers
-   (own rows), wa180_answer and wa180_results; team-inbox posts the Slack message (event announcement).
+   (own rows), wa180_answer and wa180_results; team-inbox posts the Slack message and sends the email (event announcement).
    ===================================================================== */
 (function () {
   if (window.__wa180) return; window.__wa180 = true;
@@ -101,6 +104,7 @@
     + '#modalBox .w180rq{margin:0 0 16px;padding:0 0 12px;border-bottom:1px solid ' + LINE + ';}#modalBox .w180rq:last-child{border-bottom:0;}'
     + '#modalBox .w180rq h4{margin:0 0 8px;font-size:14px;color:' + INK + ';}'
     + '#modalBox .w180names{font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    + '#modalBox .w180sent{font-size:12.5px;color:' + GREEN + ';background:rgba(16,63,57,.05);border-radius:10px;padding:7px 11px;margin:0 0 12px;line-height:1.45;}#modalBox .w180sent.warn{color:#6b4d0e;background:rgba(220,165,39,.16);}'
     + '#modalBox .w180vals{margin:0;padding:0;list-style:none;}#modalBox .w180vals li{padding:7px 10px;border-radius:10px;background:rgba(16,63,57,.04);margin:0 0 5px;font-size:13px;white-space:pre-wrap;word-wrap:break-word;}#modalBox .w180vals li b{display:block;font-size:11.5px;color:' + GREEN + ';}'
     + '#modalBox details.w180miss summary{cursor:pointer;font-size:13px;font-weight:700;color:' + GREEN + ';}#modalBox details.w180miss p{font-size:12.5px;color:' + INK + ';margin:6px 0 0;}'
     + '#modalBox .w180all .w180it{cursor:pointer;}#modalBox .w180all .w180it:hover{border-color:rgba(16,63,57,.35);}'

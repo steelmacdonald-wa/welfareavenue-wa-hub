@@ -1,4 +1,8 @@
-// Welfare Avenue: team-inbox (v1.4, 30/09/26, wave180: an announcement is posted once in Slack when it is posted (event announcement,
+// Welfare Avenue: team-inbox (v1.5, 30/09/26, wave180d: an announcement is also emailed once to each person it is for, from
+// hub@welfareavenue.com as "<the poster> via the Hub" with replies to the poster (Welfare Avenue addresses only, never the poster,
+// at most hub_settings.team_inbox.announce_email_daily (5) a day from one person); what it did is kept in hub_announcements.emailed;
+// the poster can untick it (post_email). Steel (30/09/26): "Actually last question it should be emailed as well".
+// v1.4, 30/09/26, wave180: an announcement is posted once in Slack when it is posted (event announcement,
 // from the hub_announcements insert trigger): the teams' channels, #general for everyone, #leaders for the leaders
 // (hub_settings.team_inbox.announce), with a link to answer its poll or short form in the Hub; what it did is kept in
 // hub_announcements.slack. Steel (30/09/26) chose "Home + one Slack post". v1.3, 30/09/26, wave170: an email sent to info@ (the Hub inbox, mailbox info) and an email someone sent
@@ -36,6 +40,8 @@
 //   jev_dry  {mail_id}           what Jev decides for an email (no post; leaders)
 //   test     {department}        a test line in that team's channel (leaders)
 //   repost   {request_id}        post a request that could not be posted before
+//   announce_dry {id} or {draft}  where an announcement would be posted, who it would be emailed to, the
+//                                Slack text and the email (subject, text, html); nothing is written or sent (leaders)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -56,7 +62,7 @@ const TEAMS: Record<string, string> = {
   opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing',
   fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board & Governance',
 };
-type Settings = { channels: Record<string, string[]>; post_requests: boolean; thread_updates: boolean; dm_requester: boolean; email_mode: Record<string, string>; announce: Record<string, string> };
+type Settings = { channels: Record<string, string[]>; post_requests: boolean; thread_updates: boolean; dm_requester: boolean; email_mode: Record<string, string>; announce: Record<string, string>; announce_email_daily: number };
 const DEFAULT_CHANNELS: Record<string, string[]> = {
   opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'],
   marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'],
@@ -86,6 +92,7 @@ async function settings(): Promise<Settings> {
     dm_requester: v.dm_requester !== false,
     email_mode: { ...((v.email_mode || {}) as Record<string, string>) },
     announce: { everyone: 'general', leaders: 'leaders', ...((v.announce || {}) as Record<string, string>) },
+    announce_email_daily: Math.max(1, Math.min(50, Number(v.announce_email_daily) || 5)),
   };
 }
 
@@ -547,8 +554,11 @@ async function caller(req: Request): Promise<{ email: string; name: string; role
   return { email, name: md.full_name || md.name || email.split('@')[0], role: String((role && role.role) || 'member') };
 }
 
-/* ---------- v1.4 (wave180): an announcement, posted once in Slack ---------- */
-type Ann = { id: number; title: string; body: string | null; audience: string; teams: string[] | null; ask: Record<string, unknown> | null; closes_at: string | null; post_slack: boolean; slack: Record<string, unknown> | null; created_by: string | null; created_name: string | null; anonymous: boolean };
+/* ---------- v1.4 (wave180): an announcement, posted once in Slack; v1.5 (wave180d): and emailed once ---------- */
+type Ann = { id: number; title: string; body: string | null; audience: string; teams: string[] | null; ask: Record<string, unknown> | null; closes_at: string | null;
+  post_slack: boolean; slack: Record<string, unknown> | null; post_email: boolean; emailed: Record<string, unknown> | null;
+  created_by: string | null; created_name: string | null; anonymous: boolean; show_results: boolean; link: string | null };
+const ANN_COLS = 'id, title, body, audience, teams, ask, closes_at, post_slack, slack, post_email, emailed, created_by, created_name, anonymous, show_results, link';
 function annText(a: Ann, name: string): string {
   const lines: string[] = [];
   const ask = a.ask || null;
@@ -560,22 +570,30 @@ function annText(a: Ann, name: string): string {
   lines.push('_From ' + sx(name) + ', in the Hub_');
   return lines.join('\n');
 }
-async function announcement(id: number, dry = false): Promise<Record<string, unknown>> {
-  const { data } = await svc.from('hub_announcements').select('id, title, body, audience, teams, ask, closes_at, post_slack, slack, created_by, created_name, anonymous').eq('id', id).maybeSingle();
-  const a = data as Ann | null;
-  if (!a) return { error: 'announcement not found' };
-  if (!a.post_slack && !dry) return { skipped: 'not for Slack' };
-  if (!dry && a.slack && (a.slack as Record<string, unknown>).at) return { skipped: 'already posted' };
+/* the poster's Welfare Avenue address: Steel may sign in with his gmail (wa_email_aliases, as mybox_me reads it) */
+async function posterEmail(a: Ann): Promise<string | null> {
+  const by = String(a.created_by || '').toLowerCase().trim();
+  if (!by || by.endsWith('@welfareavenue.com')) return by || null;
+  const { data } = await svc.from('wa_email_aliases').select('email, aliases');
+  const hit = ((data || []) as Array<{ email: string; aliases: string[] | null }>).find(r => (r.aliases || []).some(x => String(x || '').toLowerCase() === by));
+  return hit && hit.email ? String(hit.email).toLowerCase() : (/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(by) ? by : null);
+}
+/* the poster's name from their sign-in (not the name the page sent), so nobody posts as someone else */
+async function posterName(a: Ann): Promise<string> {
+  const wa = await posterEmail(a);
+  return (await nameFor(wa)) || (await nameFor(a.created_by)) || String(a.created_name || '').trim() || 'the Hub';
+}
+
+async function slackPart(a: Ann, name: string, dry: boolean): Promise<Record<string, unknown>> {
   const s = await settings();
   const chains: Array<{ team: string; chain: string[] }> = a.audience === 'everyone' ? [{ team: 'everyone', chain: [s.announce.everyone || 'general'] }]
     : a.audience === 'leaders' ? [{ team: 'leaders', chain: [s.announce.leaders || 'leaders'] }]
     : (a.teams || []).map(t => ({ team: t, chain: s.channels[t] || [] }));
-  const name = a.created_name || (await nameFor(a.created_by)) || 'the Hub';
   const text = annText(a, name);
   if (dry) {
     const out: Array<Record<string, unknown>> = [];
     for (const c of chains) { const r = c.chain.length ? await resolve(c.chain, false) : { ch: null, tried: [] as Array<{ name: string; state: string }> }; out.push({ team: c.team, channel: r.ch ? r.ch.name : null, tried: r.tried }); }
-    return { dry: true, channels: out, text };
+    return { channels: out, text };
   }
   const posts: Array<Record<string, unknown>> = [], errors: Array<Record<string, unknown>> = [], seen = new Set<string>();
   for (const c of chains) {
@@ -589,9 +607,293 @@ async function announcement(id: number, dry = false): Promise<Record<string, unk
     else errors.push({ team: c.team, error: 'Slack refused: ' + out.error });
   }
   const rec = { posts, errors, at: new Date().toISOString() };
-  await svc.from('hub_announcements').update({ slack: rec }).eq('id', id);
-  await log('announcement', String(id), 'slack', (posts.map(p => '#' + p.channel).join(', ') || 'not posted') + (errors.length ? ' | ' + errors.map(e => e.team + ': ' + e.error).join('; ') : ''));
+  await svc.from('hub_announcements').update({ slack: rec }).eq('id', a.id);
+  await log('announcement', String(a.id), 'slack', (posts.map(p => '#' + p.channel).join(', ') || 'not posted') + (errors.length ? ' | ' + errors.map(e => e.team + ': ' + e.error).join('; ') : ''));
   return { ok: true, ...rec };
+}
+
+/* ---------- v1.5 (wave180d): the email, once, to each person it is for ----------
+   From hub@welfareavenue.com as "<the poster> via the Hub", replies to the poster; one message per person (nobody sees the list);
+   only Welfare Avenue addresses; never the poster; at most settings.announce_email_daily (5) emailed announcements a day from
+   one person, so a slip cannot flood the team. What it did is kept in hub_announcements.emailed (counts and names, no addresses). */
+const HUB_MAIL = 'hub@welfareavenue.com';
+const WA_DOMAIN = '@welfareavenue.com';
+const CREAM = '#FFFAF2', GREEN = '#103F39', INK = '#1F201E', GOLD = '#DCA527', MUTED = '#51625D';
+const HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+const BODYF = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+const LOGO_CREAM = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/logo-primary-cream-600.png';
+const TEAM_LABEL: Record<string, string> = { ...TEAMS, board: 'the board', exec: 'the Executive team' };
+
+function b64bytes(bytes: Uint8Array): string { let s = ''; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s); }
+function b64url(bytes: Uint8Array): string { return b64bytes(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+function b64lines(s: string): string { return b64bytes(new TextEncoder().encode(s)).replace(/.{76}/g, '$&\r\n').replace(/\r\n$/, ''); }
+function oneLine(s: unknown): string { return String(s == null ? '' : s).replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim(); }
+function mimeWord(s: string): string { const t = oneLine(s); return /^[\x20-\x7e]*$/.test(t) ? t : '=?UTF-8?B?' + b64bytes(new TextEncoder().encode(t)) + '?='; }
+function mailbox(name: string, email: string): string {
+  const n = oneLine(name).replace(/["\\<>]/g, '');
+  return n ? (/^[\x20-\x7e]*$/.test(n) ? '"' + n + '"' : mimeWord(n)) + ' <' + email + '>' : email;
+}
+function ea(s: unknown): string { return sx(s).replace(/"/g, '&quot;'); }
+function firstOf(name: string | null | undefined): string { return oneLine(name).split(' ')[0] || ''; }
+function longDay(iso: string): string {
+  const d = new Date(iso); if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', timeZone: TZ });
+}
+function closesLine(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  const hh = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ });
+  return 'Answers close ' + (/^23:/.test(hh) ? 'at the end of ' + longDay(iso) : longDay(iso) + ' at ' + d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: TZ }).replace(/\.$/, '')) + '.';
+}
+function forWhom(a: Ann): string {
+  if (a.audience === 'everyone') return 'everyone on the team';
+  if (a.audience === 'leaders') return 'the leaders';
+  const ts = (a.teams || []).filter(Boolean);
+  if (ts.length === 1) return ts[0] === 'board' || ts[0] === 'exec' ? TEAM_LABEL[ts[0]] : 'the ' + (TEAM_LABEL[ts[0]] || ts[0]) + ' team';
+  const ls = ts.map(t => TEAM_LABEL[t] || t);
+  return ls.length ? ls.slice(0, -1).join(', ') + ' and ' + ls[ls.length - 1] : 'your team';
+}
+async function siteUrl(): Promise<string> {
+  const { data } = await svc.from('app_config').select('value').eq('key', 'site_url').maybeSingle();
+  return String((data && data.value) || SITE).replace(/\/+$/, '');
+}
+function extLink(l: string | null, site: string): string | null {
+  const t = String(l || '').trim();
+  if (/^#[A-Za-z0-9/_-]*$/.test(t)) return site + '/' + t;
+  if (/^https?:\/\/[^\s"<>]+$/i.test(t)) return t;
+  return null;
+}
+function paras(s: string | null): string[] { return String(s || '').replace(/\r/g, '').split(/\n\s*\n/).map(p => p.trim()).filter(Boolean); }
+
+type AnnMail = { subject: string; text: string; html: string };
+function emailParts(a: Ann, poster: string, first: string, site: string): AnnMail {
+  const ask = a.ask || null;
+  const kind = ask ? (ask.type === 'poll' ? 'poll' : 'form') : 'news';
+  const pf = firstOf(poster) || poster;
+  const title = clip(oneLine(a.title), 200);
+  const subject = clip((kind === 'poll' ? 'Poll: ' : kind === 'form' ? 'Short form: ' : '') + oneLine(a.title), 160);
+  const url = site + '/#announce/' + a.id;
+  const cta = kind === 'poll' ? 'Answer the poll' : kind === 'form' ? 'Answer the form' : 'Open it in the Hub';
+  const over = (kind === 'poll' ? 'A poll from ' : kind === 'form' ? 'A short form from ' : 'An announcement from ') + pf;
+  const meta = 'From ' + poster + ', for ' + forWhom(a);
+  const closes = ask ? closesLine(a.closes_at) : '';
+  const privacy = ask ? (a.anonymous ? 'Anonymous: ' + pf + ' sees the totals, not who answered what.' : pf + ' sees your name with your answer' + (kind === 'form' ? 's' : '') + '.') : '';
+  const more = extLink(a.link, site);
+  const body = paras(a.body);
+  let askTitle = '', askNote = '', items: string[] = [];
+  if (ask && kind === 'poll') {
+    askTitle = clip(oneLine(ask.question), 300);
+    askNote = ask.multi ? 'Pick one or more' : 'Pick one';
+    items = (Array.isArray(ask.options) ? ask.options as unknown[] : []).map(o => clip(oneLine(o), 120)).filter(Boolean);
+  } else if (ask && kind === 'form') {
+    const qs = Array.isArray(ask.questions) ? ask.questions as Array<Record<string, unknown>> : [];
+    askTitle = 'A short form, ' + qs.length + ' question' + (qs.length === 1 ? '' : 's');
+    askNote = qs.some(q => q && q.required) ? 'The ones marked * need an answer' : '';
+    items = qs.map(q => clip(oneLine(q && q.label), 200) + (q && q.required ? ' *' : '')).filter(x => x.trim());
+  }
+  const pre = clip(body[0] || askTitle || title, 110) + (closes ? ' ' + closes : '');
+
+  /* the plain version */
+  const t: string[] = [];
+  t.push('Hi ' + (first || 'there') + ',', '', title, meta, '');
+  for (const p of body) t.push(p, '');
+  if (askTitle) {
+    t.push((kind === 'poll' ? 'Poll: ' : '') + askTitle + (askNote ? ' (' + askNote.toLowerCase() + ')' : ''));
+    items.forEach((x, i) => t.push((kind === 'form' ? (i + 1) + '. ' : '- ') + x));
+    t.push('');
+  }
+  if (closes) t.push(closes);
+  if (privacy) t.push(privacy);
+  if (closes || privacy) t.push('');
+  t.push(cta + ': ' + url);
+  if (more) t.push('More: ' + more);
+  t.push('', '--', 'Sent by the Hub on behalf of ' + pf + '. Reply to this email and it goes to ' + pf + '.', site.replace(/^https?:\/\//, ''));
+  const text = t.join('\n');
+
+  /* the branded version */
+  const P = 'margin:0 0 16px;font-family:' + BODYF + ';font-size:16px;line-height:26px;color:' + INK + ';';
+  const SMALL = 'margin:0 0 10px;font-family:' + BODYF + ';font-size:14px;line-height:21px;color:' + MUTED + ';';
+  let inner = '<p style="' + P + '">Hi ' + sx(first || 'there') + ',</p>'
+    + '<h1 style="margin:0 0 6px;font-family:' + HEAD + ';font-weight:600;font-size:32px;line-height:36px;color:' + GREEN + ';">' + sx(title) + '</h1>'
+    + '<p style="margin:0 0 22px;font-family:' + BODYF + ';font-size:13px;line-height:20px;color:' + MUTED + ';">' + sx(meta) + '</p>'
+    + body.map(p => '<p style="' + P + '">' + sx(p).replace(/\n/g, '<br>') + '</p>').join('');
+  if (askTitle) {
+    inner += '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 20px;background-color:#ffffff;border:1px solid rgba(16,63,57,.14);border-radius:8px;"><tr><td style="padding:18px 22px 10px;">'
+      + '<div style="font-family:' + BODYF + ';font-weight:700;font-size:16px;line-height:24px;color:' + GREEN + ';">' + sx(askTitle) + '</div>'
+      + (askNote ? '<div style="font-family:' + BODYF + ';font-size:13px;line-height:20px;color:' + MUTED + ';margin:2px 0 8px;">' + sx(askNote) + '</div>' : '')
+      + (items.length ? '<' + (kind === 'form' ? 'ol' : 'ul') + ' style="margin:6px 0 10px 20px;padding:0;">' + items.map(x => '<li style="margin:0 0 6px;font-family:' + BODYF + ';font-size:15px;line-height:22px;color:' + INK + ';">' + sx(x) + '</li>').join('') + '</' + (kind === 'form' ? 'ol' : 'ul') + '>' : '')
+      + '</td></tr></table>';
+  }
+  if (closes) inner += '<p style="margin:0 0 6px;font-family:' + BODYF + ';font-size:15px;line-height:22px;font-weight:700;color:' + GREEN + ';">' + sx(closes) + '</p>';
+  if (privacy) inner += '<p style="' + SMALL + '">' + sx(privacy) + '</p>';
+  inner += '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 22px;"><tr><td style="background-color:' + GOLD + ';border-radius:6px;">'
+    + '<a href="' + ea(url) + '" style="display:inline-block;padding:13px 26px;font-family:' + HEAD + ';font-weight:600;font-size:18px;letter-spacing:1px;text-transform:uppercase;color:' + GREEN + ';text-decoration:none;">' + sx(cta) + '</a></td></tr></table>';
+  if (more) inner += '<p style="' + SMALL + '">More: <a href="' + ea(more) + '" style="color:' + GREEN + ';text-decoration:underline;">' + sx(clip(more.replace(/^https?:\/\//, ''), 80)) + '</a></p>';
+  const html = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>' + sx(subject) + '</title>'
+    + '<style>body{margin:0;padding:0;background:' + CREAM + ';}table{border-collapse:collapse;}@media only screen and (max-width:620px){.wa-wrap{width:100% !important;}.wa-pad{padding-left:20px !important;padding-right:20px !important;}}</style></head>'
+    + '<body style="margin:0;padding:0;background-color:' + CREAM + ';">'
+    + '<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:' + CREAM + ';font-size:1px;line-height:1px;">' + sx(pre) + '</div>'
+    + '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:' + CREAM + ';"><tr><td align="center" style="padding:24px 12px;">'
+    + '<table role="presentation" class="wa-wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;">'
+    + '<tr><td class="wa-pad" style="background-color:' + GREEN + ';border-radius:8px 8px 0 0;padding:24px 36px 20px 36px;">'
+    + '<img src="' + LOGO_CREAM + '" width="150" alt="Welfare Avenue" style="display:block;border:0;width:150px;height:auto;">'
+    + '<div style="padding:18px 0 0;font-family:' + BODYF + ';font-weight:700;font-size:11px;line-height:14px;letter-spacing:2px;color:' + GOLD + ';text-transform:uppercase;">' + sx(over) + '</div></td></tr>'
+    + '<tr><td class="wa-pad" style="background-color:' + CREAM + ';padding:30px 36px 10px 36px;border-left:1px solid rgba(16,63,57,.12);border-right:1px solid rgba(16,63,57,.12);">' + inner + '</td></tr>'
+    + '<tr><td class="wa-pad" style="background-color:' + GREEN + ';border-radius:0 0 8px 8px;padding:20px 36px 22px 36px;">'
+    + '<div style="font-family:' + BODYF + ';font-size:13px;line-height:20px;color:' + CREAM + ';">Sent by the Hub on behalf of ' + sx(pf) + '. Reply to this email and it goes to ' + sx(pf) + '.</div>'
+    + '<div style="padding-top:8px;font-family:' + BODYF + ';font-size:13px;line-height:20px;"><a href="' + ea(site) + '" style="color:' + CREAM + ';text-decoration:underline;">' + sx(site.replace(/^https?:\/\//, '')) + '</a></div>'
+    + '</td></tr></table></td></tr></table></body></html>';
+  return { subject, text, html };
+}
+function mimeOf(from: string, to: string, replyTo: string | null, m: AnnMail): string {
+  const boundary = 'wa180' + crypto.randomUUID().replace(/-/g, '');
+  return [
+    'From: ' + from,
+    'To: ' + to,
+    ...(replyTo ? ['Reply-To: ' + replyTo] : []),
+    'Subject: ' + mimeWord(m.subject),
+    'MIME-Version: 1.0',
+    'Auto-Submitted: auto-generated',
+    'X-Auto-Response-Suppress: OOF, AutoReply',
+    'Content-Type: multipart/alternative; boundary="' + boundary + '"',
+    '',
+    '--' + boundary,
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64lines(m.text),
+    '--' + boundary,
+    'Content-Type: text/html; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+    '',
+    b64lines(m.html),
+    '--' + boundary + '--',
+    ''
+  ].join('\r\n');
+}
+function pemToDer(pem: string): ArrayBuffer { const b = pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, ''); const raw = atob(b); const out = new Uint8Array(new ArrayBuffer(raw.length)); for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i); return out.buffer; }
+let GTOK: { t: string; exp: number } | null = null;
+/* hub@'s own Gmail through the service account (domain-wide delegation, gmail.send), as hub-invite sends the invitations */
+async function gmailToken(): Promise<string> {
+  if (GTOK && GTOK.exp > Date.now() + 60000) return GTOK.t;
+  const sa = JSON.parse(await getSecret('GOOGLE_SA_KEY'));
+  const now = Math.floor(Date.now() / 1000), enc = new TextEncoder();
+  const head = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: HUB_MAIL, scope: 'https://www.googleapis.com/auth/gmail.send', aud: sa.token_uri, iat: now, exp: now + 3600 })));
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(head + '.' + claims)));
+  const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: head + '.' + claims + '.' + b64url(sig) }) });
+  const b = await res.json();
+  if (!b.access_token) throw new Error('Google refused hub@ sending: ' + String(b.error_description || b.error || res.status).slice(0, 160));
+  GTOK = { t: String(b.access_token), exp: Date.now() + 3500 * 1000 };
+  return GTOK.t;
+}
+async function gmailSend(mime: string): Promise<{ ok: boolean; error?: string }> {
+  const raw = b64url(new TextEncoder().encode(mime));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', { method: 'POST', headers: { Authorization: 'Bearer ' + (await gmailToken()), 'Content-Type': 'application/json' }, body: JSON.stringify({ raw }) });
+    const txt = await res.text();
+    if (res.ok) return { ok: true };
+    const busy = res.status === 429 || res.status >= 500 || (res.status === 403 && /rate ?limit/i.test(txt));
+    if (busy && attempt < 2) { await new Promise(r => setTimeout(r, 1500 * (attempt + 1))); continue; }
+    return { ok: false, error: 'Gmail answered ' + res.status + ': ' + txt.replace(/\s+/g, ' ').slice(0, 160) };
+  }
+  return { ok: false, error: 'Gmail was busy' };
+}
+async function emailPart(a: Ann, poster: string, dry: boolean): Promise<Record<string, unknown>> {
+  const site = await siteUrl();
+  const { data, error } = await svc.rpc('wa180_audience', { p_audience: a.audience, p_teams: a.teams || [] });
+  if (error) throw new Error('who it is for: ' + error.message);
+  const by = String(a.created_by || '').toLowerCase().trim();
+  const reply = await posterEmail(a);   /* replies go to the poster's Welfare Avenue address */
+  const seen = new Set<string>(), to: Array<{ email: string; name: string }> = [];
+  let notWa = 0, poster_left_out = 0;
+  for (const p of ((data || []) as Array<{ email: string; name: string | null }>)) {
+    const e = String(p.email || '').toLowerCase().trim();
+    if (!e || seen.has(e)) continue;
+    seen.add(e);
+    if (e === by || (!!reply && e === reply) || oneLine(p.name).toLowerCase() === poster.toLowerCase()) { poster_left_out++; continue; }
+    if (!e.endsWith(WA_DOMAIN)) { notWa++; continue; }
+    to.push({ email: e, name: oneLine(p.name) });
+  }
+  const from = mailbox(poster + ' via the Hub', HUB_MAIL);
+  if (dry) {
+    const m = emailParts(a, poster, firstOf(to[0] && to[0].name) || 'there', site);
+    let can_send: boolean | string = true;   /* Google gives hub@ a sending token (nothing is sent) */
+    try { await gmailToken(); } catch (e) { can_send = String((e as Error).message || e).slice(0, 200); }
+    return { to_count: to.length, to_names: to.map(p => p.name), not_wa: notWa, poster_left_out, from: poster + ' via the Hub <' + HUB_MAIL + '>', reply_to: reply, can_send, subject: m.subject, text: m.text, html: m.html };
+  }
+  /* claim it first, so two runs never both send */
+  const claim = await svc.from('hub_announcements').update({ emailed: { state: 'sending', to_count: to.length, started: new Date().toISOString() } }).eq('id', a.id).is('emailed', null).select('id');
+  if (claim.error || !claim.data || !claim.data.length) return { skipped: 'already emailed' };
+  const done = async (rec: Record<string, unknown>, line: string) => {
+    const full = { ...rec, not_wa: notWa, at: new Date().toISOString() };
+    await svc.from('hub_announcements').update({ emailed: full }).eq('id', a.id);
+    await log('announcement', String(a.id), 'email', line);
+    return full;
+  };
+  const s = await settings();
+  const cap = s.announce_email_daily;
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { data: recent } = await svc.from('hub_announcements').select('id, emailed').eq('created_by', a.created_by || '').neq('id', a.id).gte('created_at', since);
+  const today = ((recent || []) as Array<{ emailed: Record<string, unknown> | null }>).filter(r => r.emailed && Number(r.emailed.sent || 0) > 0).length;
+  if (today >= cap) return await done({ state: 'skipped', skipped: 'the daily limit: ' + cap + ' emailed announcements a day from one person', sent: 0, to_count: to.length, failed: [] }, 'not emailed: the daily limit (' + cap + ')');
+  if (!to.length) return await done({ state: 'skipped', skipped: 'nobody to email', sent: 0, to_count: 0, failed: [] }, 'not emailed: nobody to email');
+  try { await gmailToken(); } catch (e) {
+    const msg = String((e as Error).message || e).slice(0, 200);
+    return await done({ state: 'failed', sent: 0, to_count: to.length, failed: to.map(p => p.name), error: msg }, 'not emailed: ' + msg);
+  }
+  let sent = 0, next = 0, firstErr = '';
+  const failed: string[] = [];
+  const worker = async () => {
+    while (next < to.length) {
+      const p = to[next++];
+      try {
+        const r = await gmailSend(mimeOf(from, mailbox(p.name, p.email), reply, emailParts(a, poster, firstOf(p.name), site)));
+        if (r.ok) sent++; else { failed.push(p.name || 'someone'); if (!firstErr) firstErr = r.error || ''; }
+      } catch (e) { failed.push(p.name || 'someone'); if (!firstErr) firstErr = String((e as Error).message || e).slice(0, 160); }
+    }
+  };
+  await Promise.all([worker(), worker()]);
+  failed.sort();
+  return await done({ state: failed.length ? (sent ? 'partly sent' : 'failed') : 'sent', sent, to_count: to.length, failed, ...(firstErr ? { error: firstErr } : {}) },
+    'emailed ' + sent + ' of ' + to.length + (failed.length ? ' | not sent to ' + failed.length + ': ' + firstErr : ''));
+}
+
+async function announcement(id: number, dry = false, draft: Ann | null = null): Promise<Record<string, unknown>> {
+  let a: Ann | null = draft;
+  if (!a) { const { data } = await svc.from('hub_announcements').select(ANN_COLS).eq('id', id).maybeSingle(); a = data as Ann | null; }
+  if (!a) return { error: 'announcement not found' };
+  const name = await posterName(a);
+  if (dry) {
+    let slackOut: Record<string, unknown>, emailOut: Record<string, unknown>;
+    try { slackOut = await slackPart(a, name, true); } catch (e) { slackOut = { error: String((e as Error).message || e).slice(0, 200) }; }
+    try { emailOut = await emailPart(a, name, true); } catch (e) { emailOut = { error: String((e as Error).message || e).slice(0, 200) }; }
+    return { dry: true, poster: name, slack: slackOut, email: emailOut };
+  }
+  const out: Record<string, unknown> = { ok: true };
+  if (!a.post_slack) out.slack = { skipped: 'not for Slack' };
+  else if (a.slack && (a.slack as Record<string, unknown>).at) out.slack = { skipped: 'already posted' };
+  else { try { out.slack = await slackPart(a, name, false); } catch (e) { out.slack = { error: String((e as Error).message || e).slice(0, 200) }; await log('announcement', String(a.id), 'slack', 'error: ' + String((e as Error).message || e)); } }
+  if (!a.post_email) out.email = { skipped: 'not by email' };
+  else if (a.emailed) out.email = { skipped: 'already emailed' };
+  else {
+    try { out.email = await emailPart(a, name, false); }
+    catch (e) {
+      const msg = String((e as Error).message || e).slice(0, 200);
+      out.email = { error: msg };
+      await svc.from('hub_announcements').update({ emailed: { state: 'failed', sent: 0, error: msg, at: new Date().toISOString() } }).eq('id', a.id);
+      await log('announcement', String(a.id), 'email', 'error: ' + msg);
+    }
+  }
+  return out;
+}
+/* a draft from the post form, for a dry run (nothing is written or sent) */
+function draftAnn(d: Record<string, unknown>, me: { email: string; name: string }): Ann {
+  const teams = Array.isArray(d.teams) ? (d.teams as unknown[]).map(String).filter(t => !!TEAM_LABEL[t]) : [];
+  return { id: 0, title: String(d.title || 'A headline'), body: d.body ? String(d.body) : null, audience: ['everyone', 'leaders', 'teams'].includes(String(d.audience)) ? String(d.audience) : 'everyone', teams,
+    ask: d.ask && typeof d.ask === 'object' ? d.ask as Record<string, unknown> : null, closes_at: d.closes_at ? String(d.closes_at) : null, post_slack: true, slack: null, post_email: true, emailed: null,
+    created_by: me.email, created_name: me.name, anonymous: !!d.anonymous, show_results: d.show_results !== false, link: d.link ? String(d.link) : null };
 }
 
 async function work(event: string, b: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -648,8 +950,9 @@ Deno.serve(async (req: Request) => {
       const res = await resolve(chain, false);
       return json({ ok: true, chain, channel: res.ch ? res.ch.name : null, tried: res.tried, text: await requestText(r, rt) });
     }
-    if (action === 'announce_dry') {   /* v1.4: where an announcement would be posted, and the text; nothing is sent */
+    if (action === 'announce_dry') {   /* v1.4, v1.5: where an announcement would be posted, who it would be emailed to, and the words; nothing is sent */
       if (!leader) return json({ error: 'leaders and admins only' }, 403);
+      if (body.draft && typeof body.draft === 'object') return json(await announcement(0, true, draftAnn(body.draft as Record<string, unknown>, me)));
       return json(await announcement(Number(body.id), true));
     }
     if (action === 'jev_dry') {

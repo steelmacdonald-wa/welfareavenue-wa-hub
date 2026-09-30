@@ -81,7 +81,7 @@
     var t = e.target; if (!t || !t.closest || !t.closest('#modalBox [data-w180postform]')) return;
     var d = S.draft; if (!d) return;
     if (t.hasAttribute('data-w180qt')) { syncDraft(); var i = Number(t.getAttribute('data-w180qt')); if (d.form.questions[i]) d.form.questions[i].type = t.value; redrawPost((t.value === 'one' || t.value === 'several') ? '[data-w180qo="' + i + '"]' : null); return; }
-    if (t.id === 'w180ps') { syncDraft(); redrawPost(); return; }
+    if (t.id === 'w180ps' || t.id === 'w180pem') { syncDraft(); redrawPost(); return; }
   }, true);
   document.addEventListener('submit', function (e) {
     var f = e.target; if (!f || !f.matches) return;
@@ -105,6 +105,20 @@
     return true;
   }
   window.addEventListener('hashchange', function () { try { fromHash(); } catch (e) { /* fine */ } });
+  /* the email's (or Slack's) link through the sign-in: Google brings people back without the address, so this tab keeps it
+     until the Hub opens (15 minutes at most) */
+  function keepPending() { var id = hashId(); if (!id) return; try { sessionStorage.setItem('w180pend', JSON.stringify({ id: id, t: Date.now() })); } catch (e) { /* fine */ } }
+  function takePending() {
+    var v = null;
+    try {
+      var raw = sessionStorage.getItem('w180pend'); sessionStorage.removeItem('w180pend');
+      var o = raw ? JSON.parse(raw) : null;
+      var age = o ? Date.now() - Number(o.t || 0) : -1e12;
+      if (o && /^(\d+|all)$/.test(String(o.id)) && age > -60000 && age < 15 * 60000) v = String(o.id);
+    } catch (e) { /* fine */ }
+    return v;
+  }
+  keepPending();
 
   /* ---------- Home: the card after every render ---------- */
   if (typeof renderMyPage === 'function') {
@@ -122,8 +136,9 @@
   if (typeof startApp === 'function') {
     var __sa180 = startApp;
     startApp = async function () {
-      var pend = hashId();
+      var pend = hashId(), kept = takePending();
       if (pend) { try { history.replaceState(null, '', '#mypage'); } catch (e) { /* fine */ } }
+      pend = pend || kept;
       var out = await __sa180.apply(this, arguments);
       try { addTour(); if (pend) setTimeout(function () { if (pend === 'all') openAll(); else openItem(pend); }, 600); } catch (e) { /* fine */ }
       return out;
@@ -139,7 +154,7 @@
       var TT = window.w122 && window.w122.tours; if (!TT || !TT.home || !TT.home.steps || TT.home.__w180) return;
       var hs = TT.home.steps, i = -1;
       hs.forEach(function (x, k) { if (x.s === '#mpBody .mp-chips') i = k; });
-      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w180card', t: 'Announcements', p: 'What your leaders, HR and the admins posted for you: news, and polls or short forms you answer right here (a tap for a poll). The totals show once you answer, when the poster shares them. Leaders, HR and admins post from here: it shows at the top of Home for the people it is for and goes once to Slack.', opt: 1 });
+      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w180card', t: 'Announcements', p: 'What your leaders, HR and the admins posted for you: news, and polls or short forms you answer right here (a tap for a poll). The totals show once you answer, when the poster shares them. Leaders, HR and admins post from here: it shows at the top of Home for the people it is for, goes once to Slack and is emailed to them.', opt: 1 });
       TT.home.__w180 = true;
     } catch (e) { /* fine */ }
   }

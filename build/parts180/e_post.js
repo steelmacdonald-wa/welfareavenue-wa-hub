@@ -1,14 +1,25 @@
-  /* ---------- posting: who it is for, the poll or the short form, and the one Slack post ---------- */
+  /* ---------- posting: who it is for, the poll or the short form, the one Slack post and the email (wave180d) ---------- */
   function newDraft() {
     var own = postTeams(), lead = !isAdmin() && !isHr();
     return { title: '', body: '', link: '', audience: lead && own.length ? 'teams' : 'everyone', teams: lead && own.length ? [own[0]] : [], ask: 'none',
       poll: { question: '', options: ['', ''], multi: false }, form: { questions: [{ id: 'q1', label: '', type: 'short', required: true, options: '' }] },
-      anonymous: false, show_results: true, closes: '', pinned: false, expires: '', slack: true };
+      anonymous: false, show_results: true, closes: '', pinned: false, expires: '', slack: true, email: true };
   }
   function slackWhere(d) {
     if (d.audience === 'everyone') return '#general';
     if (d.audience === 'leaders') return '#leaders';
     return d.teams.length ? (d.teams.length === 1 ? 'the ' + teamName(d.teams[0]) + ' channel' : 'each team’s channel') : 'the team’s channel';
+  }
+  /* how it reaches them, in one line: "goes once to Slack and is emailed to them" */
+  function reachLine(d) {
+    if (d.slack && d.email) return ', goes once to Slack and is emailed to them';
+    return d.slack ? ', and goes once to Slack' : d.email ? ', and is emailed to them' : '';
+  }
+  function reachToast(d) {
+    if (d.slack && d.email) return 'Posted, and on its way to ' + slackWhere(d) + ' and by email';
+    if (d.slack) return 'Posted, and on its way to ' + slackWhere(d);
+    if (d.email) return 'Posted, and on its way by email';
+    return 'Posted';
   }
   function editorHtml(d) {
     if (d.ask === 'poll') {
@@ -34,7 +45,7 @@
   function postHtml(d) {
     var own = postTeams(), lead = !isAdmin() && !isHr();
     var aud = [['everyone', 'Everyone'], ['leaders', 'The leaders'], ['teams', lead ? 'My team' + (own.length > 1 ? 's' : '') : 'Some teams']];
-    var h = '<h3>Post an announcement</h3><p class="sub">It shows at the top of Home for the people it is for' + (d.slack ? ', and goes once to Slack' : '') + '. You can add a poll or a short form they answer right there.</p>'
+    var h = '<h3>Post an announcement</h3><p class="sub">It shows at the top of Home for the people it is for' + reachLine(d) + '. You can add a poll or a short form they answer right there.</p>'
       + '<form class="w180f" data-w180postform novalidate>'
       + '<label class="l" for="w180pt">Headline<span class="req" aria-hidden="true">*</span></label><input type="text" id="w180pt" maxlength="200" placeholder="The gala moves to November 21" value="' + E(d.title) + '">'
       + '<label class="l" for="w180pb">Detail<span class="op">optional</span></label><textarea id="w180pb" maxlength="2000" rows="3" placeholder="A line or two of context.">' + E(d.body) + '</textarea>'
@@ -57,6 +68,7 @@
       + '<div class="w180row"><div><label class="l" for="w180pe">Comes down on<span class="op">optional</span></label><input type="date" id="w180pe" min="' + plusDays(1) + '" value="' + E(d.expires) + '"></div>'
       + '<div><label class="l">&nbsp;</label><label class="w180ck" style="margin-top:6px"><input type="checkbox" id="w180pp"' + (d.pinned ? ' checked' : '') + '> Pin it to the top of Home</label></div></div>'
       + '<label class="w180ck"><input type="checkbox" id="w180ps"' + (d.slack ? ' checked' : '') + '> Post it once in Slack too, in ' + E(slackWhere(d)) + '</label>'
+      + '<label class="w180ck"><input type="checkbox" id="w180pem"' + (d.email ? ' checked' : '') + '> Email it to them too, from hub@welfareavenue.com (replies come to you)</label>'
       + '<p class="w180err" data-w180perr hidden></p>'
       + '<div class="w180foot"><button type="button" class="w180btn ghost sm" data-w180close>Cancel</button><button type="submit" class="w180btn"' + (S.busy.post ? ' disabled' : '') + '>' + (S.busy.post ? 'Posting…' : 'Post it') + '</button></div></form>';
     return h;
@@ -72,7 +84,7 @@
   /* what is typed goes into the draft before anything redraws the form */
   function syncDraft() {
     var d = S.draft; if (!d || !document.querySelector('#modalBox [data-w180postform]')) return d;
-    d.title = v('w180pt'); d.body = v('w180pb'); d.link = v('w180pl'); d.expires = v('w180pe'); d.pinned = ck('w180pp'); d.slack = ck('w180ps');
+    d.title = v('w180pt'); d.body = v('w180pb'); d.link = v('w180pl'); d.expires = v('w180pe'); d.pinned = ck('w180pp'); d.slack = ck('w180ps'); d.email = ck('w180pem');
     if (document.getElementById('w180pc')) { d.closes = v('w180pc'); d.anonymous = ck('w180pa'); d.show_results = ck('w180pr'); }
     if (d.ask === 'poll' && document.getElementById('w180pq')) {
       d.poll.question = v('w180pq'); d.poll.multi = ck('w180pm');
@@ -134,7 +146,7 @@
     return { row: { kind: 'general', title: title, body: body || null, link: link || null, pinned: !!d.pinned, happened_at: todayIso(), expires_at: d.expires || null,
       created_by: myEmail(), created_name: meName(), audience: d.audience, teams: d.audience === 'teams' ? d.teams.slice() : [],
       department: d.audience === 'teams' && d.teams.length === 1 ? d.teams[0] : null, ask: ask, anonymous: ask ? !!d.anonymous : false,
-      show_results: ask ? !!d.show_results : true, closes_at: ask && d.closes ? endOfDay(d.closes) : null, post_slack: !!d.slack } };
+      show_results: ask ? !!d.show_results : true, closes_at: ask && d.closes ? endOfDay(d.closes) : null, post_slack: !!d.slack, post_email: !!d.email } };
   }
   function submitPost() {
     var d = syncDraft(), b = buildRow(d), err = document.querySelector('#modalBox [data-w180perr]');
@@ -151,7 +163,7 @@
       }
       var row = Object.assign({}, b.row, { id: r.data.id, created_at: r.data.created_at || new Date().toISOString() });
       (S.list = S.list || []).unshift(row); S.draft = null;
-      closeModal(); T(b.row.post_slack ? 'Posted, and on its way to ' + slackWhere(d) : 'Posted');
+      closeModal(); T(reachToast(d));
       paintCard();
       try { if (window.w116News && w116News.refresh) w116News.refresh(); } catch (e) { /* fine */ }
     });
