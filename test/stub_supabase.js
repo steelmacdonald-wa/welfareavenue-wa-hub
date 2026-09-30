@@ -173,13 +173,13 @@
         }
       },
       auth: {
-        getSession: function () { return lag({ data: { session: session }, error: null }); },
+        getSession: function () { var out = false; try { out = sessionStorage.getItem("stub_signed_out") === "1"; } catch (e) {} return lag({ data: { session: out ? null : session }, error: null }); },
         getUser: function () { return Promise.resolve({ data: { user: session.user }, error: null }); },
         onAuthStateChange: function (cb) {
           return { data: { subscription: { unsubscribe: function () {} } } };
         },
         signInWithOAuth: function () { return Promise.resolve({ data: null, error: null }); },
-        signOut: function () { return Promise.resolve({ error: null }); }
+        signOut: function () { try { sessionStorage.setItem("stub_signed_out", "1"); } catch (e) {} return Promise.resolve({ error: null }); }
       },
       storage: {
         from: function (bucket) {

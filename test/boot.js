@@ -67,7 +67,7 @@ async function fresh(browser, o) {
   });
   if (o.beforeGoto) await o.beforeGoto(page);   /* wave167: extra routes (screenshots with real pictures) win over the block above */
   await page.goto('http://wahub.test/' + (o.hash || ''), { waitUntil: 'domcontentloaded' });
-  await page.waitForFunction(() => { const g = document.getElementById('gate'); return g && g.style.display === 'none'; }, null, { timeout: 30000 });
+  if (!o.gateOk) await page.waitForFunction(() => { const g = document.getElementById('gate'); return g && g.style.display === 'none'; }, null, { timeout: 30000 });   /* wave175b: gateOk when the test expects the sign-in gate */
   await page.waitForTimeout(o.wait || 3800);
   return {
     page, ctx, errs,

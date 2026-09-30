@@ -1,4 +1,5 @@
-// Welfare Avenue: host-sync (v9, 30/09/26)
+// Welfare Avenue: host-sync (v10, 30/09/26)
+// v10 (wave175b): also deploys the privacy notice /privacy/index.html (Google's sign-in screen links to it).
 // v9 (wave175): also deploys the volunteer account page /me/index.html (served for /me and /me/* by _redirects).
 // v8 (wave171): also deploys the volunteer confirm page /c/index.html (served for every /c/<token> by _redirects).
 // v7 (wave161c, wave162): also deploys give/embed.js and give/embed.css, the donation popup the website loads (site_files
@@ -114,7 +115,7 @@ Deno.serve(async (req: Request) => {
     if (hd && hd.length) deployFiles['/_headers'] = new TextEncoder().encode(hd.map((r: { content: string }) => r.content).join(''));
   } catch (_) { /* headers optional */ }
   // v5: the public form page and the rewrite that serves it for every /f/<slug>; v6: the donation page
-  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects']) {
+  for (const extra of ['f/index.html', 'c/index.html', 'me/index.html', 'privacy/index.html', 'give/index.html', 'give/embed.js', 'give/embed.css', '_redirects']) {
     try {
       const { data: ex } = await svc.from('site_files').select('part, content').eq('path', extra).order('part', { ascending: true });
       if (ex && ex.length) deployFiles['/' + extra] = new TextEncoder().encode(ex.map((r: { content: string }) => r.content).join(''));
@@ -127,7 +128,7 @@ Deno.serve(async (req: Request) => {
     await svc.from('change_log').insert({
       entity_type: 'site_deploy', entity_id: String(netlify.deploy_id || 'storage-only'), field: 'published',
       old_value: null, new_value: 'bytes=' + html.length + ' files=' + Object.keys(deployFiles).length + ' storage=' + (storageOk ? 'ok' : 'fail') + ' netlify=' + (netlify.state || netlify.error || netlify.skipped || 'n/a'),
-      changed_by: 'host-sync v9'
+      changed_by: 'host-sync v10'
     });
   } catch (_) { /* audit only */ }
 

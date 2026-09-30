@@ -1022,8 +1022,20 @@ function showGate(kind, email) {
   const alt = document.getElementById("gateAlt");
   g.style.display = "flex";
   if (kind === "denied") {
-    msg.innerHTML = "The account <b>" + esc(email) + "</b> does not have access to this board. Staff use a welfareavenue.com account; board members need Steel or Suhaib to add their email first.";
-    alt.style.display = "block";
+    /* wave175b: an account that is not on the team is signed out at once (never left signed in on the Hub); the
+       message shows on the sign-in screen after the reload */
+    try { sessionStorage.setItem("wa_gate_denied", String(email || "")); } catch (e) { /* fine */ }
+    msg.textContent = "Signing out…";
+    try { Object.keys(localStorage).filter(function (k) { return /^sb-.*-auth-token/.test(k); }).forEach(function (k) { localStorage.removeItem(k); }); } catch (e) { /* fine */ }
+    signOutAll();
+    return;
+  }
+  /* wave175b: the sign-in screen shows at once rather than after the loading screen's 9 second failsafe */
+  try { document.documentElement.classList.add("wa-ready"); } catch (e) { /* fine */ }
+  let denied = null;
+  try { denied = sessionStorage.getItem("wa_gate_denied"); sessionStorage.removeItem("wa_gate_denied"); } catch (e) { /* fine */ }
+  if (kind === "signin" && denied !== null) {
+    msg.innerHTML = "The account <b>" + esc(denied) + "</b> is not on the Welfare Avenue team, so it was signed out. The Hub is for staff (a welfareavenue.com account) and board members Steel or Suhaib have added. Volunteers and donors sign in on welfareavenue.com.";
   } else if (kind === "error") {
     msg.textContent = "Could not reach the cloud. Check the connection and reload.";
   }

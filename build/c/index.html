@@ -464,7 +464,8 @@ ul.team li,ul.notes li{margin:0 0 5px}
   }
   function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   /* wave175: keep it in their Google account (hub.welfareavenue.com/me) */
-  function acctHtml() { return S.test ? '' : '<div class="soon" style="margin:18px 0 0"><img src="' + ST + 'brand/doodle-heart-purple.png" alt="" style="width:28px;height:auto;flex:none"><div><a href="/me/?link=' + encodeURIComponent(token()) + '" style="font-weight:700">' + E(t('acct')) + '</a><br><span style="font-size:14px">' + E(t('acctP')) + '</span></div></div>'; }
+  var ACCT_ON = false;   /* wave175b: off until volunteer sign-in moves to welfareavenue.com (Steel, 30/09/26: the Hub is staff-only) */
+  function acctHtml() { return S.test || !ACCT_ON ? '' : '<div class="soon" style="margin:18px 0 0"><img src="' + ST + 'brand/doodle-heart-purple.png" alt="" style="width:28px;height:auto;flex:none"><div><a href="/me/?link=' + encodeURIComponent(token()) + '" style="font-weight:700">' + E(t('acct')) + '</a><br><span style="font-size:14px">' + E(t('acctP')) + '</span></div></div>'; }
   function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
   /* ---------- wave174: the survey, tailored to the role ---------- */
   function svLabel(o) { return (S.lang === 'fr' ? o.fr : o.en) || o.en || ''; }
