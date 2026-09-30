@@ -1,4 +1,7 @@
-// Welfare Avenue: team-inbox (v1.3, 30/09/26, wave170: an email sent to info@ (the Hub inbox, mailbox info) and an email someone sent
+// Welfare Avenue: team-inbox (v1.4, 30/09/26, wave180: an announcement is posted once in Slack when it is posted (event announcement,
+// from the hub_announcements insert trigger): the teams' channels, #general for everyone, #leaders for the leaders
+// (hub_settings.team_inbox.announce), with a link to answer its poll or short form in the Hub; what it did is kept in
+// hub_announcements.slack. Steel (30/09/26) chose "Home + one Slack post". v1.3, 30/09/26, wave170: an email sent to info@ (the Hub inbox, mailbox info) and an email someone sent
 // to a team from their inbox assistant (mailbox person, filed.type forward) always go out, with the one-line ask: a DM to the person
 // it is for (assignee_email), else a post in the team's channel; an info@ email someone on the team is already on (filed.on_thread) is
 // filed quietly. Steel: "with info@welfareavenue.com we get a few emails there as well
@@ -53,7 +56,7 @@ const TEAMS: Record<string, string> = {
   opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing',
   fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board & Governance',
 };
-type Settings = { channels: Record<string, string[]>; post_requests: boolean; thread_updates: boolean; dm_requester: boolean; email_mode: Record<string, string> };
+type Settings = { channels: Record<string, string[]>; post_requests: boolean; thread_updates: boolean; dm_requester: boolean; email_mode: Record<string, string>; announce: Record<string, string> };
 const DEFAULT_CHANNELS: Record<string, string[]> = {
   opsmtl: ['operations-mtl'], progdev: ['program-development'], opsto: ['toronto-operations', 'general-toronto'],
   marketing: ['social-media'], fundraising: ['fundraising'], finance: ['accounting-finance'], hr: ['human-resources'], board: ['board-of-directors'],
@@ -82,6 +85,7 @@ async function settings(): Promise<Settings> {
     thread_updates: v.thread_updates !== false,
     dm_requester: v.dm_requester !== false,
     email_mode: { ...((v.email_mode || {}) as Record<string, string>) },
+    announce: { everyone: 'general', leaders: 'leaders', ...((v.announce || {}) as Record<string, string>) },
   };
 }
 
@@ -543,7 +547,55 @@ async function caller(req: Request): Promise<{ email: string; name: string; role
   return { email, name: md.full_name || md.name || email.split('@')[0], role: String((role && role.role) || 'member') };
 }
 
+/* ---------- v1.4 (wave180): an announcement, posted once in Slack ---------- */
+type Ann = { id: number; title: string; body: string | null; audience: string; teams: string[] | null; ask: Record<string, unknown> | null; closes_at: string | null; post_slack: boolean; slack: Record<string, unknown> | null; created_by: string | null; created_name: string | null; anonymous: boolean };
+function annText(a: Ann, name: string): string {
+  const lines: string[] = [];
+  const ask = a.ask || null;
+  lines.push(':mega: *' + sx(clip(a.title, 200)) + '*');
+  if (a.body) lines.push(sx(clip(a.body, 600)));
+  if (ask && ask.type === 'poll') lines.push(':bar_chart: *' + sx(clip(String(ask.question || ''), 200)) + '*' + (a.anonymous ? ' _(anonymous)_' : ''));
+  if (ask && ask.type === 'form') { const n = Array.isArray(ask.questions) ? (ask.questions as unknown[]).length : 0; lines.push(':memo: *A short form*, ' + n + ' question' + (n === 1 ? '' : 's') + (a.anonymous ? ' _(anonymous)_' : '')); }
+  lines.push(link('#announce/' + a.id, ask ? (ask.type === 'poll' ? 'Answer the poll in the Hub' : 'Answer it in the Hub') : 'Open it in the Hub') + (a.closes_at ? ' · closes ' + day(a.closes_at) : ''));
+  lines.push('_From ' + sx(name) + ', in the Hub_');
+  return lines.join('\n');
+}
+async function announcement(id: number, dry = false): Promise<Record<string, unknown>> {
+  const { data } = await svc.from('hub_announcements').select('id, title, body, audience, teams, ask, closes_at, post_slack, slack, created_by, created_name, anonymous').eq('id', id).maybeSingle();
+  const a = data as Ann | null;
+  if (!a) return { error: 'announcement not found' };
+  if (!a.post_slack && !dry) return { skipped: 'not for Slack' };
+  if (!dry && a.slack && (a.slack as Record<string, unknown>).at) return { skipped: 'already posted' };
+  const s = await settings();
+  const chains: Array<{ team: string; chain: string[] }> = a.audience === 'everyone' ? [{ team: 'everyone', chain: [s.announce.everyone || 'general'] }]
+    : a.audience === 'leaders' ? [{ team: 'leaders', chain: [s.announce.leaders || 'leaders'] }]
+    : (a.teams || []).map(t => ({ team: t, chain: s.channels[t] || [] }));
+  const name = a.created_name || (await nameFor(a.created_by)) || 'the Hub';
+  const text = annText(a, name);
+  if (dry) {
+    const out: Array<Record<string, unknown>> = [];
+    for (const c of chains) { const r = c.chain.length ? await resolve(c.chain, false) : { ch: null, tried: [] as Array<{ name: string; state: string }> }; out.push({ team: c.team, channel: r.ch ? r.ch.name : null, tried: r.tried }); }
+    return { dry: true, channels: out, text };
+  }
+  const posts: Array<Record<string, unknown>> = [], errors: Array<Record<string, unknown>> = [], seen = new Set<string>();
+  for (const c of chains) {
+    if (!c.chain.length) { errors.push({ team: c.team, error: 'no channel set' }); continue; }
+    const r = await resolve(c.chain);
+    if (!r.ch) { errors.push({ team: c.team, error: 'could not post: ' + r.tried.map(t => '#' + t.name + ' (' + t.state + ')').join(', ') }); continue; }
+    if (seen.has(r.ch.id)) continue;
+    seen.add(r.ch.id);
+    const out = await postTo(r.ch, text);
+    if (out.ok) posts.push({ team: c.team, channel: r.ch.name, channel_id: r.ch.id, ts: out.ts, url: permalink(r.ch.id, out.ts!) });
+    else errors.push({ team: c.team, error: 'Slack refused: ' + out.error });
+  }
+  const rec = { posts, errors, at: new Date().toISOString() };
+  await svc.from('hub_announcements').update({ slack: rec }).eq('id', id);
+  await log('announcement', String(id), 'slack', (posts.map(p => '#' + p.channel).join(', ') || 'not posted') + (errors.length ? ' | ' + errors.map(e => e.team + ': ' + e.error).join('; ') : ''));
+  return { ok: true, ...rec };
+}
+
 async function work(event: string, b: Record<string, unknown>): Promise<Record<string, unknown>> {
+  if (event === 'announcement') return announcement(Number(b.id));
   if (event === 'request_new') return requestNew(Number(b.request_id));
   if (event === 'request_update') return requestUpdate(b);
   if (event === 'request_note') return requestNote(Number(b.note_id));
@@ -595,6 +647,10 @@ Deno.serve(async (req: Request) => {
       const chain = chainFor(s, r, rt);
       const res = await resolve(chain, false);
       return json({ ok: true, chain, channel: res.ch ? res.ch.name : null, tried: res.tried, text: await requestText(r, rt) });
+    }
+    if (action === 'announce_dry') {   /* v1.4: where an announcement would be posted, and the text; nothing is sent */
+      if (!leader) return json({ error: 'leaders and admins only' }, 403);
+      return json(await announcement(Number(body.id), true));
     }
     if (action === 'jev_dry') {
       if (!leader) return json({ error: 'leaders and admins only' }, 403);

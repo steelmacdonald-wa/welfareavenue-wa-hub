@@ -32273,7 +32273,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var a = await db.from('hub_announcements').select('*').order('created_at', { ascending: false }).limit(60);
       N.manual = ((a && a.data) || []).filter(function (x) { return !x.expires_at || new Date(x.expires_at) > new Date(); });
-      N.manual.forEach(function (x) { items.push({ id: 'a' + x.id, kind: KINDS[x.kind] ? x.kind : 'general', title: x.title, body: x.body || '', when: x.happened_at || x.created_at, dept: x.department, link: x.link, pinned: !!x.pinned, manual: x, by: x.created_by }); });
+      N.manual.forEach(function (x) { items.push({ id: 'a' + x.id, kind: KINDS[x.kind] ? x.kind : 'general', title: x.title, body: x.body || '', when: x.happened_at || x.created_at, dept: x.department, link: x.link || (x.ask ? '#announce/' + x.id : null), pinned: !!x.pinned, manual: x, by: x.created_name || x.created_by }); });   /* wave180: a poll or a form opens where it is answered */
     } catch (e) { /* none */ }
     try {
       var ch = (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.changed_at && c.changed_at.slice(0, 10) >= since; });
@@ -65128,6 +65128,808 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   /* ---------- test hook ---------- */
   window.w171 = { state: function () { return S; }, paintCard: paintCard, decorateCards: decorateCards, decorateMast: decorateMast, decorateCalendar: decorateCalendar,
     paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w175: W5, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
+})();
+/* =====================================================================
+   WA v180 Announcements that lead to a poll or a short form (30/09/26)
+   =====================================================================
+   Steel (29/09/26): "I'd also like for leaders to be able ot make announcements that lead to forms or polls that our team can
+   answer." His answers (30/09/26): the top of Home plus one Slack post (the team's channel, #general for everyone, #leaders
+   for the leaders); polls (one or several choices, named or anonymous) and short forms (up to 8 questions) answered inside
+   the Hub, the poster sees the results and who has not answered; leaders post to their own team or everyone, HR and admins
+   to anyone. Numbered 180: another session ships wave171 onwards tonight.
+
+   Where: a card at the top of Home (#w180card) with the announcements for this person: a poll answered with a tap, a short
+   form in a window, the totals once answered (when the poster allows), and for the poster, leaders, HR and admins "See the
+   answers" (the totals, who chose what unless anonymous, the text answers, who has not answered, a CSV). "Post an
+   announcement" (leaders, HR, admins; also from What's new on the Executive dashboard) writes it: who it is for, the poll or
+   the form, anonymous, the totals, when answers close, pinned, when it comes down, and the one Slack post.
+   #announce/<id> (the Slack post's link) opens one on Home; #announce/all opens them all.
+   Data: hub_announcements (row security: the people it is for, the poster, leaders, HR, admins), hub_announcement_answers
+   (own rows), wa180_answer and wa180_results; team-inbox posts the Slack message (event announcement).
+   ===================================================================== */
+(function () {
+  if (window.__wa180) return; window.__wa180 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2', PURPLE = '#6F64AB', INK = '#1F201E', SAND = '#F4F2EA';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var ALL_TEAMS = ['opsmtl', 'opsto', 'progdev', 'marketing', 'fundraising', 'finance', 'hr', 'exec', 'board'];
+  var QTYPES = [['short', 'Short answer'], ['long', 'Paragraph'], ['one', 'One choice'], ['several', 'Several choices'], ['yesno', 'Yes or no'], ['date', 'Date'], ['number', 'Number']];
+  var S = { list: null, listAt: 0, listP: null, mine: {}, res: {}, sel: {}, busy: {}, draft: null, errs: {}, just: {} };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function initials(n) { var p = String(n || '?').trim().split(/[\s@._-]+/).filter(Boolean); return ((p[0] || '?').charAt(0) + (p[1] ? p[1].charAt(0) : '')).toUpperCase(); }
+  function ago(iso) {
+    if (!iso) return '';
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    var d = Math.round(s / 86400); if (d < 7) return d === 1 ? 'yesterday' : d + ' days ago';
+    return dayLabel(iso);
+  }
+  function dayLabel(iso) { try { return new Date(/^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? iso + 'T12:00:00Z' : iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: /^\d{4}-\d{2}-\d{2}$/.test(String(iso)) ? 'UTC' : 'America/Toronto' }); } catch (e) { return String(iso || '').slice(0, 10); } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function plusDays(n) { var d = new Date(todayIso() + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
+
+  var CSS = ''
+    /* the card on Home */
+    + '#w180card{margin:12px 0;}'
+    + '#w180card .w180hd{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:0 0 10px;}'
+    + '#w180card .w180hd h3{margin:0;}#w180card .w180hd .sp{flex:1;}'
+    + '#w180card .w180cnt{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:2px 9px;}'
+    + '.w180btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ' !important;font:inherit;font-size:13px;font-weight:700;padding:8px 16px;cursor:pointer;text-decoration:none !important;white-space:nowrap;}'
+    + '.w180btn:hover{background:#0b2f2a;}.w180btn[disabled]{opacity:.55;cursor:default;}'
+    + '.w180btn.gold{background:' + GOLD + ';color:' + GREEN + ' !important;}.w180btn.gold:hover{background:#c9951f;}'
+    + '.w180btn.ghost{background:transparent;color:' + GREEN + ' !important;border:1px solid rgba(16,63,57,.35);}.w180btn.ghost:hover{background:rgba(16,63,57,.07);}'
+    + '.w180btn.sm{font-size:12px;padding:6px 12px;}'
+    + '.w180lnk{border:0;background:none;padding:0;font:inherit;color:' + GREEN + ';font-weight:700;text-decoration:underline;cursor:pointer;}'
+    + '.w180it{position:relative;background:' + CREAM + ';border:1px solid ' + LINE + ';border-radius:16px;padding:14px 16px;margin:0 0 10px;}'
+    + '.w180it.pin{border-color:rgba(220,165,39,.7);box-shadow:inset 4px 0 0 ' + GOLD + ';}'
+    + '.w180it .top{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;font-size:12px;color:' + MUTED + ';}'
+    + '.w180av{flex:0 0 26px;width:26px;height:26px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:inline-flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:800;}'
+    + '.w180it .who{display:inline-flex;align-items:center;gap:8px;}.w180it .who b{color:' + INK + ';font-size:12.5px;}'
+    + '.w180it h4{margin:8px 0 4px;font-size:16.5px;line-height:1.3;color:' + INK + ';}'
+    + '.w180it .body{margin:0 0 8px;font-size:13.5px;line-height:1.5;color:#2b2b28;white-space:pre-wrap;word-wrap:break-word;}'
+    + '.w180chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(16,63,57,.08);color:' + GREEN + ';white-space:nowrap;}'
+    + '.w180chip.gold{background:rgba(220,165,39,.22);color:#6b4d0e;}.w180chip.purple{background:rgba(111,100,171,.14);color:' + PURPLE + ';}.w180chip.flag{background:rgba(179,64,47,.12);color:' + FLAG + ';}.w180chip.teal{background:rgba(42,140,122,.14);color:' + GREEN + ';}'
+    + '.w180q{font-weight:700;font-size:14px;color:' + GREEN + ';margin:8px 0 8px;}'
+    + '.w180opts{display:flex;flex-wrap:wrap;gap:8px;}'
+    + '.w180opt{border:1.5px solid rgba(16,63,57,.3);background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:8px 16px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;}'
+    + '.w180opt:hover{border-color:' + GREEN + ';}.w180opt.on{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}.w180opt[disabled]{opacity:.6;cursor:default;}'
+    + '.w180acts{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:10px;}'
+    + '.w180bars{margin:8px 0 0;}'
+    + '.w180bar{margin:0 0 8px;}.w180bar .l{display:flex;justify-content:space-between;gap:10px;font-size:13px;color:' + INK + ';margin:0 0 3px;}.w180bar .l b{color:' + GREEN + ';}'
+    + '.w180bar .t{height:10px;border-radius:999px;background:rgba(16,63,57,.08);overflow:hidden;}.w180bar .t i{display:block;height:100%;border-radius:999px;background:' + TEAL + ';}'
+    + '.w180bar.me .t i{background:' + GOLD + ';}.w180bar .n{font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    + '.w180done{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:12.5px;color:' + GREEN + ';font-weight:600;margin-top:8px;}'
+    + '.w180err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    + '#w180card .w180more{text-align:center;margin:4px 0 0;}'
+    + '#w180card .w180empty{padding:12px 14px;border:1px dashed rgba(16,63,57,.25);border-radius:14px;font-size:13px;color:' + MUTED + ';display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;}'
+    /* the windows (answer, results, all, post) */
+    + '#modalBox.w180wide{max-width:760px;}'
+    + '#modalBox .w180m h3{margin:0 0 4px;font-family:' + HEAD + ';font-size:26px;text-transform:uppercase;color:' + GREEN + ';line-height:1.05;}'
+    + '#modalBox .w180m .sub{font-size:12.5px;color:' + MUTED + ';margin:0 0 12px;}'
+    + '#modalBox .w180f label.l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:14px 0 5px;}'
+    + '#modalBox .w180f label.l .op{font-weight:500;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:6px;}'
+    + '#modalBox .w180f label.l .req{color:' + FLAG + ';margin-left:3px;}'
+    + '#modalBox .w180f input[type=text],#modalBox .w180f input[type=date],#modalBox .w180f input[type=number],#modalBox .w180f textarea,#modalBox .w180f select{width:100%;box-sizing:border-box;border:1px solid #DEE0D8;border-radius:10px;padding:8px 10px;font:inherit;font-size:13.5px;background:' + CREAM + ';color:' + INK + ';}'
+    + '#modalBox .w180f textarea{min-height:64px;resize:vertical;}'
+    + '#modalBox .w180seg{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '#modalBox .w180seg button{border:1px solid rgba(16,63,57,.3);background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:6px 13px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;}'
+    + '#modalBox .w180seg button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}#modalBox .w180seg button[disabled]{opacity:.45;cursor:default;}'
+    + '#modalBox .w180ck{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:' + INK + ';margin:8px 0 0;line-height:1.35;}#modalBox .w180ck input{accent-color:' + GREEN + ';margin-top:2px;}'
+    + '#modalBox .w180row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}'
+    + '#modalBox .w180ed{margin:10px 0 0;padding:12px;border-radius:14px;background:' + SAND + ';border:1px solid ' + LINE + ';}'
+    + '#modalBox .w180oped{display:flex;gap:6px;align-items:center;margin:0 0 6px;}#modalBox .w180oped input{flex:1;}'
+    + '#modalBox .w180x{border:0;background:rgba(16,63,57,.08);color:' + GREEN + ';width:30px;height:30px;flex:0 0 30px;border-radius:50%;font-size:17px;line-height:30px;cursor:pointer;}'
+    + '#modalBox .w180qed{padding:10px 12px;border-radius:12px;background:' + CREAM + ';border:1px solid ' + LINE + ';margin:0 0 8px;}'
+    + '#modalBox .w180qed .h{display:flex;gap:8px;align-items:center;}#modalBox .w180qed .h input{flex:1;}#modalBox .w180qed .h select{width:auto;flex:0 0 150px;}'
+    + '#modalBox .w180foot{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center;margin-top:18px;}#modalBox .w180foot .sp{flex:1;}'
+    + '#modalBox .w180ans{margin:0 0 14px;}#modalBox .w180ans .qq{font-weight:700;font-size:14px;color:' + INK + ';margin:0 0 6px;}'
+    + '#modalBox .w180prog{display:flex;align-items:center;gap:10px;margin:4px 0 12px;font-size:13px;color:' + INK + ';}#modalBox .w180prog .t{flex:1;height:10px;border-radius:999px;background:rgba(16,63,57,.08);overflow:hidden;}#modalBox .w180prog .t i{display:block;height:100%;background:' + GREEN + ';}'
+    + '#modalBox .w180rq{margin:0 0 16px;padding:0 0 12px;border-bottom:1px solid ' + LINE + ';}#modalBox .w180rq:last-child{border-bottom:0;}'
+    + '#modalBox .w180rq h4{margin:0 0 8px;font-size:14px;color:' + INK + ';}'
+    + '#modalBox .w180names{font-size:11.5px;color:' + MUTED + ';margin-top:3px;}'
+    + '#modalBox .w180vals{margin:0;padding:0;list-style:none;}#modalBox .w180vals li{padding:7px 10px;border-radius:10px;background:rgba(16,63,57,.04);margin:0 0 5px;font-size:13px;white-space:pre-wrap;word-wrap:break-word;}#modalBox .w180vals li b{display:block;font-size:11.5px;color:' + GREEN + ';}'
+    + '#modalBox details.w180miss summary{cursor:pointer;font-size:13px;font-weight:700;color:' + GREEN + ';}#modalBox details.w180miss p{font-size:12.5px;color:' + INK + ';margin:6px 0 0;}'
+    + '#modalBox .w180all .w180it{cursor:pointer;}#modalBox .w180all .w180it:hover{border-color:rgba(16,63,57,.35);}'
+    + '@media (max-width:760px){#modalBox .w180row{grid-template-columns:1fr;}#modalBox .w180qed .h{flex-wrap:wrap;}#modalBox .w180qed .h select{flex:1 1 100%;}#w180card .w180hd .w180btn{padding:6px 12px;font-size:12px;}.w180opt{padding:8px 13px;}}';
+  if (!document.getElementById('wa180css')) { var st = document.createElement('style'); st.id = 'wa180css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- who is looking (the same rules as the database: wa180_can_post, wa180_for_me, wa180_manages) ---------- */
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function profile() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile) || ''; } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff !== 'function' || isStaff(); } catch (e) { return true; } }
+  function isAdmin() { return role() === 'admin'; }
+  function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
+  function isHr() { var r = role(); return profile() === 'hr' && r !== 'blocked' && r !== 'viewer'; }
+  function manager() { return isLeader() || isHr(); }
+  function canPost() { return staff() && (isLeader() || isHr()); }
+  function myEmail() { try { return lower((typeof USER !== 'undefined' && USER && USER.email) || ''); } catch (e) { return ''; } }
+  function meRow() { try { return (typeof wa28Me === 'function') ? wa28Me() : null; } catch (e) { return null; } }
+  function meName() { var m = meRow(); if (m && m.name) return m.name; try { return (USER && USER.name) || myEmail().split('@')[0]; } catch (e) { return myEmail().split('@')[0]; } }
+  function myEmails() { var out = [myEmail()], m = meRow(); if (m && m.email) out.push(lower(m.email)); return out.filter(Boolean); }
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false; }); } catch (e) { return []; } }
+  function myTeams() {
+    var out = [], em = myEmails();
+    members().forEach(function (m) { if (m.department && m.email && em.indexOf(lower(m.email)) >= 0 && out.indexOf(m.department) < 0) out.push(m.department); });
+    var me = meRow(); if (me && me.department && out.indexOf(me.department) < 0) out.push(me.department);
+    return out;
+  }
+  function postTeams() { if (isAdmin() || isHr()) return ALL_TEAMS.slice(); if (isLeader()) return myTeams().filter(function (t) { return ALL_TEAMS.indexOf(t) >= 0; }); return []; }
+  function teamName(d) {
+    if (d === 'exec') return 'Executive team'; if (d === 'board') return 'Board';
+    try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; }
+  }
+  function nameFor(email) {
+    var em = lower(email); if (!em) return 'Someone';
+    var m = members().filter(function (x) { return lower(x.email) === em; })[0];
+    return (m && m.name) || em.split('@')[0].split('.').map(function (s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }).join(' ');
+  }
+  function mine(a) { return myEmails().indexOf(lower(a.created_by)) >= 0; }
+  function manages(a) { return manager() || mine(a); }
+  function forMe(a) {
+    if (mine(a)) return true;
+    if (a.audience === 'everyone' || !a.audience) return staff();   /* everyone is the team: board viewers see what is for the board */
+    if (a.audience === 'leaders') return isLeader();
+    var t = a.teams || [], mt = myTeams();
+    if (t.some(function (x) { return mt.indexOf(x) >= 0; })) return true;
+    return t.indexOf('board') >= 0 && !staff();
+  }
+  function live(a) { return !a.expires_at || String(a.expires_at).slice(0, 10) > todayIso(); }
+  function closed(a) { return !!(a.closes_at && new Date(a.closes_at).getTime() <= Date.now()); }
+  function openAsk(a) { return !!(a && a.ask && !closed(a) && live(a)); }
+  function answered(a) { return !!S.mine[a.id]; }
+  function audienceLabel(a) {
+    if (a.audience === 'leaders') return 'Leaders';
+    if (a.audience === 'teams') return (a.teams || []).map(teamName).join(', ') || 'Some teams';
+    return 'Everyone';
+  }
+  function kindOf(a) { return a.ask ? (a.ask.type === 'poll' ? 'poll' : 'form') : 'news'; }
+
+  /* ---------- the data: the announcements this person may see, and their own answers ---------- */
+  var COLS = 'id, kind, title, body, department, link, pinned, happened_at, expires_at, created_by, created_name, created_at, audience, teams, ask, anonymous, show_results, closes_at, post_slack, slack';
+  function load(force) {
+    if (S.listP) return S.listP;
+    if (!force && S.list && Date.now() - S.listAt < 45000) return Promise.resolve(S.list);
+    S.listP = Promise.all([
+      q(db.from('hub_announcements').select(COLS).order('created_at', { ascending: false }).limit(80)),
+      q(db.from('hub_announcement_answers').select('announcement_id, answers, updated_at').limit(500))
+    ]).then(function (r) {
+      if (Array.isArray(r[0].data)) S.list = r[0].data; else if (!S.list) S.list = [];
+      if (Array.isArray(r[1].data)) { var m = {}; r[1].data.forEach(function (x) { m[x.announcement_id] = x.answers; }); S.mine = m; }
+      S.listAt = Date.now(); S.listP = null;
+      return S.list;
+    });
+    return S.listP;
+  }
+  function byId(id) { return (S.list || []).filter(function (a) { return String(a.id) === String(id); })[0] || null; }
+  function loadOne(id) {
+    var a = byId(id); if (a) return Promise.resolve(a);
+    return q(db.from('hub_announcements').select(COLS).eq('id', Number(id)).maybeSingle()).then(function (r) {
+      var x = r && r.data && !Array.isArray(r.data) ? r.data : (r && Array.isArray(r.data) ? r.data[0] : null);
+      if (x) { (S.list = S.list || []).push(x); return x; }
+      return null;
+    });
+  }
+  function cleanErr(m) { return String(m || 'Something went wrong').replace(/^.*?ERROR:\s*/, '').replace(/\s*CONTEXT:[\s\S]*$/, ''); }
+  function results(id, force) {
+    var c = S.res[id];
+    if (!force && c && Date.now() - c.__at < 20000) return Promise.resolve(c);
+    return q(db.rpc('wa180_results', { p_id: Number(id) })).then(function (r) {
+      var v = r && r.data; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+      if (v && v.ok) { v.__at = Date.now(); S.res[id] = v; if (v.mine) S.mine[id] = v.mine; return v; }
+      return { ok: false, error: (v && v.error) || cleanErr(r && r.error && r.error.message) || 'The results did not load.' };
+    });
+  }
+  function answer(id, answers) {
+    return q(db.rpc('wa180_answer', { p_id: Number(id), p_answers: answers })).then(function (r) {
+      if (r && r.error) throw new Error(cleanErr(r.error.message || r.error.details));
+      var v = r && r.data; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }
+      if (!v || !v.ok) throw new Error('The answer did not go through. Try again.');
+      S.mine[id] = v.answers || answers; S.just[id] = true;
+      if (v.results && v.results.ok) { v.results.__at = Date.now(); S.res[id] = v.results; }
+      return v;
+    });
+  }
+  function patch(id, p) {
+    return q(db.from('hub_announcements').update(p).eq('id', Number(id))).then(function (r) {
+      if (r && r.error) throw new Error(cleanErr(r.error.message));
+      var a = byId(id); if (a) Object.keys(p).forEach(function (k) { a[k] = p[k]; });
+      return a;
+    });
+  }
+
+  /* ---------- the totals (bars) ---------- */
+  function barsHtml(qr, mineVal) {
+    var opts = qr.options || [], total = opts.reduce(function (s, o) { return s + (Number(o.count) || 0); }, 0), mineIdx = [];
+    if (Array.isArray(mineVal)) mineIdx = mineVal.map(Number); else if (typeof mineVal === 'number') mineIdx = [mineVal]; else if (mineVal === true) mineIdx = [0]; else if (mineVal === false) mineIdx = [1];
+    return '<div class="w180bars">' + opts.map(function (o, i) {
+      var n = Number(o.count) || 0, pc = total ? Math.round(100 * n / total) : 0;
+      return '<div class="w180bar' + (mineIdx.indexOf(i) >= 0 ? ' me' : '') + '"><div class="l"><span>' + E(o.label) + (mineIdx.indexOf(i) >= 0 ? ' <span class="w180chip gold">you</span>' : '') + '</span><b>' + n + (total ? ' \u00b7 ' + pc + '%' : '') + '</b></div><div class="t"><i style="width:' + pc + '%"></i></div>'
+        + (Array.isArray(o.names) && o.names.length ? '<div class="n w180names">' + E(o.names.join(', ')) + '</div>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  function choiceLabels(a, idx) { var o = (a.ask && a.ask.options) || []; return (Array.isArray(idx) ? idx : [idx]).map(function (i) { return o[i]; }).filter(Boolean).join(', '); }
+
+  /* ---------- a poll, answered with a tap ---------- */
+  function pollHtml(a) {
+    var ask = a.ask, m = S.mine[a.id], cl = closed(a), res = S.res[a.id], sel = S.sel[a.id], multi = !!ask.multi;
+    var editing = !!(sel && sel.edit), canVote = openAsk(a) && forMe(a) && (!m || editing);
+    var h = '<div class="w180q">' + E(ask.question) + (multi ? ' <span class="w180chip">pick any</span>' : '') + '</div>';
+    if (canVote) {
+      var picks = (sel && sel.picks) || (m && m.choice) || [];
+      h += '<div class="w180opts" role="group" aria-label="' + E(ask.question) + '">' + ask.options.map(function (o, i) {
+        var on = picks.indexOf(i) >= 0;
+        return '<button type="button" class="w180opt' + (on ? ' on' : '') + '" data-w180vote="' + E(a.id) + '" data-i="' + i + '" aria-pressed="' + on + '"' + (S.busy['v' + a.id] ? ' disabled' : '') + '>' + E(o) + '</button>';
+      }).join('') + '</div>';
+      if (multi || editing) h += '<div class="w180acts">' + (multi ? '<button type="button" class="w180btn sm" data-w180send="' + E(a.id) + '"' + (!picks.length || S.busy['v' + a.id] ? ' disabled' : '') + '>' + (S.busy['v' + a.id] ? 'Sending\u2026' : 'Send my answer') + '</button>' : '')
+        + (editing ? '<button type="button" class="w180lnk" data-w180keep="' + E(a.id) + '">Keep my answer</button>' : '') + '</div>';
+      return h;
+    }
+    if (res && res.visible && res.questions && res.questions[0]) h += barsHtml(res.questions[0], m && m.choice);
+    if (m) h += '<div class="w180done">\u2713 You chose ' + E(choiceLabels(a, m.choice)) + (openAsk(a) ? ' \u00b7 <button type="button" class="w180lnk" data-w180change="' + E(a.id) + '">Change my answer</button>' : '') + '</div>';
+    else if (cl) h += '<div class="w180done" style="color:' + MUTED + '">Closed ' + E(dayLabel(a.closes_at)) + '</div>';
+    if (m && !(res && res.visible) && !a.show_results && !manages(a)) h += '<div class="w180names" style="font-size:12px;color:' + MUTED + ';margin-top:4px">' + E(first(a.created_name || nameFor(a.created_by))) + ' keeps the totals for now.</div>';
+    return h;
+  }
+  /* ---------- a short form: answered in a window ---------- */
+  function formStub(a) {
+    var qs = (a.ask && a.ask.questions) || [], m = S.mine[a.id], res = S.res[a.id];
+    var h = '';
+    if (openAsk(a) && forMe(a) && !m) h += '<div class="w180acts"><button type="button" class="w180btn gold" data-w180form="' + E(a.id) + '">Answer (' + plural(qs.length, 'question') + ')</button></div>';
+    else if (m) h += '<div class="w180done">\u2713 You answered' + (openAsk(a) ? ' \u00b7 <button type="button" class="w180lnk" data-w180form="' + E(a.id) + '">Change my answers</button>' : '') + (a.show_results && !manages(a) ? ' \u00b7 <button type="button" class="w180lnk" data-w180res="' + E(a.id) + '">See the totals</button>' : '') + '</div>';
+    else if (closed(a)) h += '<div class="w180done" style="color:' + MUTED + '">Closed ' + E(dayLabel(a.closes_at)) + (a.show_results && !manages(a) ? ' \u00b7 <button type="button" class="w180lnk" data-w180res="' + E(a.id) + '">See the totals</button>' : '') + '</div>';
+    return h;
+  }
+
+  /* ---------- one announcement ---------- */
+  function itemHtml(a) {
+    var ask = a.ask || null, res = S.res[a.id], who = a.created_name || nameFor(a.created_by), chips = [];
+    chips.push('<span class="w180chip purple">' + E(audienceLabel(a)) + '</span>');
+    if (ask) chips.push('<span class="w180chip gold">' + (ask.type === 'poll' ? 'Poll' : 'Short form') + (a.anonymous ? ', anonymous' : '') + '</span>');
+    if (ask && closed(a)) chips.push('<span class="w180chip">Closed</span>'); else if (ask && a.closes_at) chips.push('<span class="w180chip">Closes ' + E(dayLabel(a.closes_at)) + '</span>');
+    if (a.pinned) chips.push('<span class="w180chip teal">Pinned</span>');
+    var h = '<article class="w180it' + (a.pinned ? ' pin' : '') + '" data-w180id="' + E(a.id) + '">'
+      + '<div class="top"><span class="who"><span class="w180av" aria-hidden="true">' + E(initials(who)) + '</span><b>' + E(who) + '</b></span><span>' + E(ago(a.created_at)) + '</span>' + chips.join('') + '</div>'
+      + '<h4>' + E(a.title) + '</h4>' + (a.body ? '<p class="body">' + E(a.body) + '</p>' : '')
+      + (a.link ? '<p style="margin:0 0 6px"><a class="w180lnk" href="' + E(a.link) + '"' + (/^https?:/i.test(a.link) ? ' target="_blank" rel="noopener"' : '') + '>Open the link</a></p>' : '');
+    if (ask && ask.type === 'poll') h += pollHtml(a); else if (ask) h += formStub(a);
+    if (ask && manages(a)) h += '<div class="w180acts"><button type="button" class="w180lnk" data-w180res="' + E(a.id) + '">See the answers' + (res && res.manage ? ' (' + res.answered + (res.audience ? ' of ' + res.audience : '') + ')' : '') + '</button></div>';
+    if (S.errs[a.id]) h += '<p class="w180err">' + E(S.errs[a.id]) + '</p>';
+    return h + '</article>';
+  }
+
+  /* ---------- Home: the card ---------- */
+  function homeList() {
+    return (S.list || []).filter(function (a) { return live(a) && forMe(a); }).sort(function (x, y) {
+      var p = (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0); if (p) return p;
+      var w = (waiting(y) ? 1 : 0) - (waiting(x) ? 1 : 0); if (w) return w;
+      return new Date(y.created_at) - new Date(x.created_at);
+    });
+  }
+  /* what waits on an answer; one answered just now keeps its place until the page reloads (the totals show where it was) */
+  function waiting(a) { return (openAsk(a) && !answered(a)) || !!S.just[a.id]; }
+  function toAnswer() { return homeList().filter(function (a) { return openAsk(a) && !answered(a); }); }
+  function allList() { return (S.list || []).filter(function (a) { return manages(a) || (forMe(a) && live(a)); }).sort(function (x, y) { return new Date(y.created_at) - new Date(x.created_at); }); }
+  function cardHtml() {
+    var list = homeList(), n = toAnswer().length, cp = canPost();
+    if (!list.length && !cp) return '';
+    var shown = list.slice(0, 3), all = allList().length;
+    var h = '<div class="w180hd"><h3>Announcements</h3>' + (n ? '<span class="w180cnt">' + n + ' to answer</span>' : '') + '<span class="sp"></span>'
+      + (cp ? '<button type="button" class="w180btn sm" data-w180post>Post an announcement</button>' : '') + '</div>';
+    if (!list.length) return h + '<div class="w180empty"><span>Nothing posted for you right now. What you post shows here for the people it is for, with one Slack post.</span>' + (all ? '<button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button>' : '') + '</div>';
+    h += shown.map(itemHtml).join('');
+    if (all > shown.length) h += '<p class="w180more"><button type="button" class="w180lnk" data-w180all>See all announcements (' + all + ')</button></p>';
+    return h;
+  }
+  function paintCard() {
+    var body = document.getElementById('mpBody'), el = document.getElementById('w180card');
+    var html = S.list ? cardHtml() : '';
+    if (!body || !html) { if (el) el.remove(); return; }
+    /* at the top of Home: right after the line of who is online (before the getting-started list and the other cards) */
+    var a = body.querySelector(':scope > .mp-online') || body.querySelector(':scope > .mp-chips') || body.querySelector(':scope > .mp-head');
+    if (!el) { el = document.createElement('div'); el.id = 'w180card'; el.className = 'mp-sec'; }
+    if (a) { if (a.nextSibling !== el) body.insertBefore(el, a.nextSibling); } else if (el.parentNode !== body) body.insertBefore(el, body.firstChild);
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+    warm();
+    /* who may post and manage comes with the person's access (WA40_MINE), which can arrive after Home first draws */
+    if ((typeof WA40_MINE === 'undefined' || !WA40_MINE) && !S.waitMine) {
+      S.waitMine = 1; var n = 0, tm = setInterval(function () { n++; if ((typeof WA40_MINE !== 'undefined' && WA40_MINE) || n > 50) { clearInterval(tm); S.waitMine = 0; paintCard(); } }, 400);
+    }
+  }
+  /* the totals for the polls on the card (answered, closed, or the poster's), loaded once */
+  function warm() {
+    homeList().slice(0, 3).forEach(function (a) {
+      if (!a.ask || S.res[a.id] || S.busy['r' + a.id]) return;
+      if (!(manages(a) || ((answered(a) || closed(a)) && a.show_results && a.ask.type === 'poll'))) return;
+      S.busy['r' + a.id] = 1;
+      results(a.id).then(function (v) { S.busy['r' + a.id] = 0; if (!v || !v.ok) S.res[a.id] = { ok: false, failed: true, __at: Date.now() }; paintCard(); },
+        function () { S.busy['r' + a.id] = 0; S.res[a.id] = { ok: false, failed: true, __at: Date.now() }; });
+    });
+  }
+  function refreshCard(force) { return load(force).then(function () { paintCard(); }, function () { /* offline */ }); }
+
+  /* ---------- the windows: one announcement, a short form, the answers, all of them ---------- */
+  function wide(on) { var b = document.getElementById('modalBox'); if (b) b.classList.toggle('w180wide', !!on); }
+  function openWin(html, isWide) { openModal('<div class="w180m">' + html + '</div>'); wide(isWide); }
+  function setWin(html) { var m = document.querySelector('#modalBox .w180m'); if (m) m.innerHTML = html; }
+  function headHtml(a) {
+    var who = a.created_name || nameFor(a.created_by);
+    return '<h3>' + E(a.title) + '</h3><p class="sub">From ' + E(who) + ' \u00b7 ' + E(ago(a.created_at)) + ' \u00b7 for ' + E(audienceLabel(a))
+      + (a.ask && a.closes_at ? (closed(a) ? ' \u00b7 closed ' : ' \u00b7 closes ') + E(dayLabel(a.closes_at)) : '') + (a.anonymous ? ' \u00b7 anonymous' : '') + '</p>'
+      + (a.body ? '<p class="body" style="font-size:13.5px;line-height:1.5;white-space:pre-wrap;margin:0 0 10px">' + E(a.body) + '</p>' : '');
+  }
+  function repaint(id) {
+    paintCard();
+    var a = byId(id); if (!a) return;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-w180slot="' + id + '"]'), function (el) { el.innerHTML = pollHtml(a) + (S.errs[a.id] ? '<p class="w180err">' + E(S.errs[a.id]) + '</p>' : ''); });
+  }
+  function openItem(id) {
+    return load(false).then(function () { return loadOne(id); }).then(function (a) {
+      if (!a) { T('That announcement is not for you, or it was taken down'); return; }
+      if (a.ask && a.ask.type === 'form' && openAsk(a) && forMe(a) && !S.mine[a.id]) return openForm(a);
+      if (a.ask && a.ask.type === 'form') return openResults(a);
+      if (a.ask && manages(a) && !(openAsk(a) && forMe(a) && !S.mine[a.id])) return openResults(a);
+      openWin(headHtml(a) + (a.ask ? '<div data-w180slot="' + E(a.id) + '">' + pollHtml(a) + '</div>' : '')
+        + (a.link ? '<p><a class="w180lnk" href="' + E(a.link) + '"' + (/^https?:/i.test(a.link) ? ' target="_blank" rel="noopener"' : '') + '>Open the link</a></p>' : '')
+        + '<div class="w180foot">' + (a.ask && manages(a) ? '<button type="button" class="w180btn ghost sm" data-w180res="' + E(a.id) + '">See the answers</button><span class="sp"></span>' : '') + '<button type="button" class="w180btn sm" data-w180close>Close</button></div>', false);
+      if (a.ask && a.ask.type === 'poll' && (S.mine[a.id] || closed(a)) && !S.res[a.id]) results(a.id).then(function () { repaint(a.id); });
+    });
+  }
+
+  /* a short form */
+  function pillsHtml(qq, v) {
+    var opts = qq.type === 'yesno' ? ['Yes', 'No'] : (qq.options || []), multi = qq.type === 'several';
+    var cur = qq.type === 'yesno' ? (v === true ? [0] : v === false ? [1] : []) : (Array.isArray(v) ? v : (typeof v === 'number' ? [v] : []));
+    return '<div class="w180opts" role="group" aria-labelledby="w180al_' + E(qq.id) + '">' + opts.map(function (o, i) {
+      var on = cur.indexOf(i) >= 0;
+      return '<button type="button" class="w180opt' + (on ? ' on' : '') + '" data-w180pick="' + E(qq.id) + '" data-i="' + i + '" data-multi="' + (multi ? 1 : 0) + '" aria-pressed="' + on + '">' + E(o) + '</button>';
+    }).join('') + '</div>';
+  }
+  function qHtml(qq, v) {
+    var id = 'w180a_' + qq.id, mark = qq.required ? '<span class="req" aria-hidden="true">*</span>' : '<span class="op">optional</span>';
+    var lab = '<label class="l" id="w180al_' + E(qq.id) + '"' + (/^(short|long|date|number)$/.test(qq.type) ? ' for="' + id + '"' : '') + '>' + E(qq.label) + mark + (qq.type === 'several' ? '<span class="op">pick any</span>' : '') + '</label>';
+    var inp;
+    if (qq.type === 'short') inp = '<input type="text" id="' + id + '" data-w180q="' + E(qq.id) + '" maxlength="300" value="' + E(v || '') + '"' + (qq.required ? ' aria-required="true"' : '') + '>';
+    else if (qq.type === 'long') inp = '<textarea id="' + id + '" data-w180q="' + E(qq.id) + '" maxlength="3000" rows="4"' + (qq.required ? ' aria-required="true"' : '') + '>' + E(v || '') + '</textarea>';
+    else if (qq.type === 'date') inp = '<input type="date" id="' + id + '" data-w180q="' + E(qq.id) + '" value="' + E(v || '') + '" style="max-width:220px">';
+    else if (qq.type === 'number') inp = '<input type="number" id="' + id + '" data-w180q="' + E(qq.id) + '" step="any" value="' + E(v == null ? '' : v) + '" style="max-width:220px">';
+    else inp = pillsHtml(qq, v);
+    return '<div class="w180ans">' + lab + inp + '</div>';
+  }
+  function openForm(a) {
+    var qs = (a.ask && a.ask.questions) || [], who = first(a.created_name || nameFor(a.created_by));
+    S.formId = a.id; S.formAns = JSON.parse(JSON.stringify(S.mine[a.id] || {}));
+    openWin(headHtml(a) + '<form class="w180f" data-w180formbox="' + E(a.id) + '" novalidate>' + qs.map(function (qq) { return qHtml(qq, S.formAns[qq.id]); }).join('')
+      + '<p class="w180err" data-w180ferr hidden></p>'
+      + '<p class="w180names" style="font-size:12px;margin:14px 0 0">' + (a.anonymous ? 'Anonymous: ' + E(who) + ' sees the totals, not who answered what.' : E(who) + ' sees your name with your answers.') + (a.closes_at ? ' You can change them until ' + E(dayLabel(a.closes_at)) + '.' : ' You can change them later.') + '</p>'
+      + '<div class="w180foot" style="margin-top:10px"><button type="button" class="w180btn ghost sm" data-w180close>Cancel</button><button type="submit" class="w180btn">' + (S.mine[a.id] ? 'Save my answers' : 'Send my answers') + '</button></div></form>', false);
+  }
+  function formValues(a) {
+    var out = {}, qs = (a.ask && a.ask.questions) || [];
+    qs.forEach(function (qq) {
+      if (/^(short|long|date|number)$/.test(qq.type)) {
+        var el = document.querySelector('#modalBox [data-w180q="' + qq.id + '"]'); if (!el) return;
+        var v = String(el.value || '').trim(); if (!v) return;
+        if (qq.type === 'number') { var n = Number(v); if (!isNaN(n)) out[qq.id] = n; } else out[qq.id] = v;
+      } else if (S.formAns && S.formAns[qq.id] !== undefined && S.formAns[qq.id] !== null && !(Array.isArray(S.formAns[qq.id]) && !S.formAns[qq.id].length)) out[qq.id] = S.formAns[qq.id];
+    });
+    return out;
+  }
+  function submitForm(id) {
+    var a = byId(id); if (!a) return;
+    var vals = formValues(a), err = document.querySelector('#modalBox [data-w180ferr]');
+    var miss = ((a.ask && a.ask.questions) || []).filter(function (qq) { return qq.required && vals[qq.id] === undefined; });
+    if (miss.length) { if (err) { err.hidden = false; err.textContent = 'Please answer: ' + miss.map(function (qq) { return qq.label; }).join('; '); } return; }
+    if (!Object.keys(vals).length) { if (err) { err.hidden = false; err.textContent = 'Answer at least one question.'; } return; }
+    var btn = document.querySelector('#modalBox [data-w180formbox] button[type=submit]'); if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+    answer(id, vals).then(function () {
+      closeModal(); T('Thanks, your answers are in'); delete S.errs[id]; paintCard();
+    }, function (e) {
+      if (btn) { btn.disabled = false; btn.textContent = S.mine[id] ? 'Save my answers' : 'Send my answers'; }
+      if (err) { err.hidden = false; err.textContent = e.message; }
+    });
+  }
+
+  /* the answers: the totals, who chose what (unless anonymous), the text answers, who has not answered, a CSV */
+  function valText(qr, v) {
+    if (qr.type === 'date') return dayLabel(String(v));
+    return String(v);
+  }
+  function valsHtml(qr) {
+    if (!Array.isArray(qr.values)) return '<p class="sub" style="margin:0">' + plural(Number(qr.count) || 0, 'answer') + '.</p>';
+    if (!qr.values.length) return '<p class="sub" style="margin:0">No answers yet.</p>';
+    return '<ul class="w180vals">' + qr.values.map(function (x) { return '<li>' + (x.name ? '<b>' + E(x.name) + '</b>' : '') + E(valText(qr, x.v)) + '</li>'; }).join('') + '</ul>';
+  }
+  function resultsHtml(a, r) {
+    var h = headHtml(a), m = S.mine[a.id] || r.mine || null;
+    if (!r.visible) {
+      return h + '<p>' + (m ? 'Your answer is in.' : (closed(a) ? 'It closed before you answered.' : 'You have not answered yet.')) + (a.show_results ? '' : ' ' + E(first(a.created_name || nameFor(a.created_by))) + ' keeps the totals for now.') + '</p>'
+        + '<div class="w180foot">' + (openAsk(a) && forMe(a) && a.ask.type === 'form' ? '<button type="button" class="w180btn gold sm" data-w180form="' + E(a.id) + '">' + (m ? 'Change my answers' : 'Answer') + '</button>' : '') + '<button type="button" class="w180btn sm" data-w180close>Close</button></div>';
+    }
+    if (r.manage) {
+      var pc = r.audience ? Math.min(100, Math.round(100 * r.answered / r.audience)) : 0;
+      h += '<div class="w180prog"><span><b>' + r.answered + '</b>' + (r.audience ? ' of ' + r.audience : '') + ' answered</span><span class="t"><i style="width:' + pc + '%"></i></span></div>';
+    } else h += '<p class="sub">' + plural(r.answered, 'person has', 'people have') + ' answered.</p>';
+    h += (r.questions || []).map(function (qr) {
+      return '<div class="w180rq"><h4>' + E(qr.label) + '</h4>' + (qr.options ? barsHtml(qr, m ? m[qr.id] : undefined) : valsHtml(qr)) + '</div>';
+    }).join('');
+    if (r.manage) {
+      if (a.anonymous) h += '<p class="sub">' + plural(Number(r.missing_count) || 0, 'person has', 'people have') + ' not answered yet. It is anonymous, so the names stay hidden.</p>';
+      else if (r.missing && r.missing.length) h += '<details class="w180miss"><summary>' + r.missing.length + ' not answered yet</summary><p>' + E(r.missing.join(', ')) + '</p></details>';
+      else if (r.audience) h += '<p class="sub">Everyone it is for has answered.</p>';
+    }
+    h += '<div class="w180foot">';
+    if (openAsk(a) && forMe(a)) h += a.ask.type === 'form' ? '<button type="button" class="w180btn ghost sm" data-w180form="' + E(a.id) + '">' + (m ? 'Change my answers' : 'Answer') + '</button>' : '';
+    if (r.manage && (mine(a) || isAdmin())) {
+      if (Array.isArray(r.rows) && r.rows.length) h += '<button type="button" class="w180btn ghost sm" data-w180csv="' + E(a.id) + '">Download the answers (CSV)</button>';
+      if (openAsk(a)) h += '<button type="button" class="w180btn ghost sm" data-w180shut="' + E(a.id) + '">Close the answers now</button>';
+      if (live(a)) h += '<button type="button" class="w180btn ghost sm" data-w180down="' + E(a.id) + '">' + (S.busy['down' + a.id] ? 'Press again to take it down' : 'Take it down') + '</button>';
+    } else if (r.manage && Array.isArray(r.rows) && r.rows.length) h += '<button type="button" class="w180btn ghost sm" data-w180csv="' + E(a.id) + '">Download the answers (CSV)</button>';
+    h += '<span class="sp"></span><button type="button" class="w180btn sm" data-w180close>Close</button></div>';
+    return h;
+  }
+  function openResults(a) {
+    S.resId = a.id;
+    openWin(headHtml(a) + '<p class="sub">Loading the answers\u2026</p>', true);
+    return results(a.id, true).then(function (r) {
+      if (S.resId !== a.id) return;
+      if (!r || !r.ok) { setWin(headHtml(a) + '<p class="w180err">' + E((r && r.error) || 'The answers did not load.') + '</p><div class="w180foot"><button type="button" class="w180btn sm" data-w180close>Close</button></div>'); return; }
+      setWin(resultsHtml(a, r));
+    });
+  }
+  function csvFor(a, r) {
+    var qs = a.ask.type === 'poll' ? [{ id: 'choice', label: a.ask.question, type: a.ask.multi ? 'several' : 'one', options: a.ask.options }] : (a.ask.questions || []);
+    var cell = function (s) { s = String(s == null ? '' : s); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    var head = (a.anonymous ? [] : ['Name']).concat(['Answered']).concat(qs.map(function (qq) { return qq.label; }));
+    var lines = [head.map(cell).join(',')];
+    (r.rows || []).forEach(function (row) {
+      var ans = row.answers || {};
+      var vals = qs.map(function (qq) {
+        var v = ans[qq.id]; if (v === undefined || v === null) return '';
+        if (qq.type === 'one') return (qq.options || [])[v] || '';
+        if (qq.type === 'several') return (Array.isArray(v) ? v : [v]).map(function (i) { return (qq.options || [])[i]; }).filter(Boolean).join('; ');
+        if (qq.type === 'yesno') return v === true ? 'Yes' : 'No';
+        return String(v);
+      });
+      lines.push((a.anonymous ? [] : [row.name || '']).concat([String(row.at || '').slice(0, 16).replace('T', ' ')]).concat(vals).map(cell).join(','));
+    });
+    return lines.join('\r\n') + '\r\n';
+  }
+  function downloadCsv(a) {
+    var r = S.res[a.id]; if (!r || !r.rows) return;
+    try {
+      var blob = new Blob(['\ufeff' + csvFor(a, r)], { type: 'text/csv;charset=utf-8' }), url = URL.createObjectURL(blob), link = document.createElement('a');
+      link.href = url; link.download = todayIso() + ' - ' + String(a.title).replace(/[\\/:*?"<>|]+/g, ' ').slice(0, 60).trim() + ' - answers.csv';
+      document.body.appendChild(link); link.click(); setTimeout(function () { URL.revokeObjectURL(url); link.remove(); }, 1500);
+    } catch (e) { T('The download did not start'); }
+  }
+
+  /* every announcement this person may see */
+  function rowHtml(a) {
+    var st = !live(a) ? '<span class="w180chip">Taken down</span>' : !a.ask ? '' : closed(a) ? '<span class="w180chip">Closed</span>' : S.mine[a.id] ? '<span class="w180chip teal">You answered</span>' : forMe(a) ? '<span class="w180chip gold">To answer</span>' : '';
+    return '<article class="w180it" data-w180open="' + E(a.id) + '" tabindex="0" role="button" aria-label="' + E(a.title) + '"><div class="top"><span class="who"><span class="w180av" aria-hidden="true">' + E(initials(a.created_name || nameFor(a.created_by))) + '</span><b>' + E(a.created_name || nameFor(a.created_by)) + '</b></span><span>' + E(ago(a.created_at)) + '</span><span class="w180chip purple">' + E(audienceLabel(a)) + '</span>' + (a.ask ? '<span class="w180chip gold">' + (a.ask.type === 'poll' ? 'Poll' : 'Short form') + '</span>' : '') + st + '</div><h4 style="margin-bottom:0">' + E(a.title) + '</h4></article>';
+  }
+  function openAll() {
+    openWin('<h3>Announcements</h3><p class="sub">Loading\u2026</p>', true);
+    load(true).then(function () {
+      var list = allList();
+      setWin('<h3>Announcements</h3><p class="sub">' + (manager() ? 'Everything posted, newest first.' : 'What was posted for you, newest first.') + '</p><div class="w180all">'
+        + (list.length ? list.map(rowHtml).join('') : '<p>Nothing posted yet.</p>') + '</div><div class="w180foot">' + (canPost() ? '<button type="button" class="w180btn ghost sm" data-w180post>Post an announcement</button>' : '') + '<span class="sp"></span><button type="button" class="w180btn sm" data-w180close>Close</button></div>');
+    });
+  }
+
+  /* ---------- posting: who it is for, the poll or the short form, and the one Slack post ---------- */
+  function newDraft() {
+    var own = postTeams(), lead = !isAdmin() && !isHr();
+    return { title: '', body: '', link: '', audience: lead && own.length ? 'teams' : 'everyone', teams: lead && own.length ? [own[0]] : [], ask: 'none',
+      poll: { question: '', options: ['', ''], multi: false }, form: { questions: [{ id: 'q1', label: '', type: 'short', required: true, options: '' }] },
+      anonymous: false, show_results: true, closes: '', pinned: false, expires: '', slack: true };
+  }
+  function slackWhere(d) {
+    if (d.audience === 'everyone') return '#general';
+    if (d.audience === 'leaders') return '#leaders';
+    return d.teams.length ? (d.teams.length === 1 ? 'the ' + teamName(d.teams[0]) + ' channel' : 'each team\u2019s channel') : 'the team\u2019s channel';
+  }
+  function editorHtml(d) {
+    if (d.ask === 'poll') {
+      return '<div class="w180ed"><label class="l" for="w180pq">The question<span class="req" aria-hidden="true">*</span></label><input type="text" id="w180pq" maxlength="300" placeholder="Which start time works for you?" value="' + E(d.poll.question) + '">'
+        + '<label class="l">The choices<span class="op">2 to 8</span></label>' + d.poll.options.map(function (o, i) {
+          return '<div class="w180oped"><input type="text" data-w180popt="' + i + '" maxlength="120" placeholder="Choice ' + (i + 1) + '" value="' + E(o) + '" aria-label="Choice ' + (i + 1) + '">' + (d.poll.options.length > 2 ? '<button type="button" class="w180x" data-w180delopt="' + i + '" aria-label="Remove choice ' + (i + 1) + '">&times;</button>' : '') + '</div>';
+        }).join('')
+        + (d.poll.options.length < 8 ? '<button type="button" class="w180lnk" data-w180addopt>Add a choice</button>' : '')
+        + '<label class="w180ck"><input type="checkbox" id="w180pm"' + (d.poll.multi ? ' checked' : '') + '> People can pick more than one</label></div>';
+    }
+    if (d.ask === 'form') {
+      return '<div class="w180ed">' + d.form.questions.map(function (qq, i) {
+        var choice = qq.type === 'one' || qq.type === 'several';
+        return '<div class="w180qed"><div class="h"><input type="text" data-w180ql="' + i + '" maxlength="300" placeholder="Question ' + (i + 1) + '" value="' + E(qq.label) + '" aria-label="Question ' + (i + 1) + '">'
+          + '<select data-w180qt="' + i + '" aria-label="Kind of answer">' + QTYPES.map(function (t) { return '<option value="' + t[0] + '"' + (qq.type === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>'
+          + (d.form.questions.length > 1 ? '<button type="button" class="w180x" data-w180delq="' + i + '" aria-label="Remove question ' + (i + 1) + '">&times;</button>' : '') + '</div>'
+          + (choice ? '<textarea data-w180qo="' + i + '" rows="3" placeholder="The choices, one per line (2 to 10)" aria-label="The choices for question ' + (i + 1) + '" style="margin-top:6px">' + E(qq.options) + '</textarea>' : '')
+          + '<label class="w180ck"><input type="checkbox" data-w180qr="' + i + '"' + (qq.required ? ' checked' : '') + '> Everyone must answer this one</label></div>';
+      }).join('') + (d.form.questions.length < 8 ? '<button type="button" class="w180lnk" data-w180addq>Add a question</button>' : '') + '</div>';
+    }
+    return '';
+  }
+  function postHtml(d) {
+    var own = postTeams(), lead = !isAdmin() && !isHr();
+    var aud = [['everyone', 'Everyone'], ['leaders', 'The leaders'], ['teams', lead ? 'My team' + (own.length > 1 ? 's' : '') : 'Some teams']];
+    var h = '<h3>Post an announcement</h3><p class="sub">It shows at the top of Home for the people it is for' + (d.slack ? ', and goes once to Slack' : '') + '. You can add a poll or a short form they answer right there.</p>'
+      + '<form class="w180f" data-w180postform novalidate>'
+      + '<label class="l" for="w180pt">Headline<span class="req" aria-hidden="true">*</span></label><input type="text" id="w180pt" maxlength="200" placeholder="The gala moves to November 21" value="' + E(d.title) + '">'
+      + '<label class="l" for="w180pb">Detail<span class="op">optional</span></label><textarea id="w180pb" maxlength="2000" rows="3" placeholder="A line or two of context.">' + E(d.body) + '</textarea>'
+      + '<label class="l">Who it is for</label><div class="w180seg" role="group" aria-label="Who it is for">' + aud.map(function (x) {
+        var off = x[0] === 'teams' && !own.length;
+        return '<button type="button" data-w180aud="' + x[0] + '"' + (d.audience === x[0] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + (off ? ' disabled' : '') + '>' + E(x[1]) + '</button>';
+      }).join('') + '</div>'
+      + (d.audience === 'teams' ? '<div class="w180seg" role="group" aria-label="The teams" style="margin-top:8px">' + own.map(function (t) {
+        var on = d.teams.indexOf(t) >= 0;
+        return '<button type="button" data-w180team="' + t + '"' + (on ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + E(teamName(t)) + '</button>';
+      }).join('') + '</div>' : '')
+      + '<label class="l">What should they answer?</label><div class="w180seg" role="group" aria-label="What should they answer">' + [['none', 'Nothing, it is news'], ['poll', 'A poll'], ['form', 'A short form']].map(function (x) {
+        return '<button type="button" data-w180askt="' + x[0] + '"' + (d.ask === x[0] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + E(x[1]) + '</button>';
+      }).join('') + '</div>'
+      + editorHtml(d)
+      + (d.ask !== 'none' ? '<div class="w180row"><div><label class="l" for="w180pc">Answers close on<span class="op">optional</span></label><input type="date" id="w180pc" min="' + todayIso() + '" value="' + E(d.closes) + '"></div><div></div></div>'
+        + '<label class="w180ck"><input type="checkbox" id="w180pa"' + (d.anonymous ? ' checked' : '') + '> Anonymous: you see the totals, not who answered what</label>'
+        + '<label class="w180ck"><input type="checkbox" id="w180pr"' + (d.show_results ? ' checked' : '') + '> Show people the totals once they answer</label>' : '')
+      + '<label class="l" for="w180pl">A link<span class="op">optional</span></label><input type="text" id="w180pl" maxlength="500" placeholder="#team/fundraising or https://\u2026" value="' + E(d.link) + '">'
+      + '<div class="w180row"><div><label class="l" for="w180pe">Comes down on<span class="op">optional</span></label><input type="date" id="w180pe" min="' + plusDays(1) + '" value="' + E(d.expires) + '"></div>'
+      + '<div><label class="l">&nbsp;</label><label class="w180ck" style="margin-top:6px"><input type="checkbox" id="w180pp"' + (d.pinned ? ' checked' : '') + '> Pin it to the top of Home</label></div></div>'
+      + '<label class="w180ck"><input type="checkbox" id="w180ps"' + (d.slack ? ' checked' : '') + '> Post it once in Slack too, in ' + E(slackWhere(d)) + '</label>'
+      + '<p class="w180err" data-w180perr hidden></p>'
+      + '<div class="w180foot"><button type="button" class="w180btn ghost sm" data-w180close>Cancel</button><button type="submit" class="w180btn"' + (S.busy.post ? ' disabled' : '') + '>' + (S.busy.post ? 'Posting\u2026' : 'Post it') + '</button></div></form>';
+    return h;
+  }
+  function openPost() {
+    if (!canPost()) { T('Leaders, HR and admins post announcements'); return; }
+    S.draft = S.draft || newDraft();
+    openWin(postHtml(S.draft), false);
+    setTimeout(function () { var t = document.getElementById('w180pt'); if (t) { try { t.focus(); } catch (e) { /* fine */ } } }, 30);
+  }
+  function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  function ck(id) { var el = document.getElementById(id); return !!(el && el.checked); }
+  /* what is typed goes into the draft before anything redraws the form */
+  function syncDraft() {
+    var d = S.draft; if (!d || !document.querySelector('#modalBox [data-w180postform]')) return d;
+    d.title = v('w180pt'); d.body = v('w180pb'); d.link = v('w180pl'); d.expires = v('w180pe'); d.pinned = ck('w180pp'); d.slack = ck('w180ps');
+    if (document.getElementById('w180pc')) { d.closes = v('w180pc'); d.anonymous = ck('w180pa'); d.show_results = ck('w180pr'); }
+    if (d.ask === 'poll' && document.getElementById('w180pq')) {
+      d.poll.question = v('w180pq'); d.poll.multi = ck('w180pm');
+      Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w180popt]'), function (el) { d.poll.options[Number(el.getAttribute('data-w180popt'))] = el.value; });
+    }
+    if (d.ask === 'form') {
+      Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w180ql]'), function (el) { var i = Number(el.getAttribute('data-w180ql')); if (d.form.questions[i]) d.form.questions[i].label = el.value; });
+      Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w180qo]'), function (el) { var i = Number(el.getAttribute('data-w180qo')); if (d.form.questions[i]) d.form.questions[i].options = el.value; });
+      Array.prototype.forEach.call(document.querySelectorAll('#modalBox [data-w180qr]'), function (el) { var i = Number(el.getAttribute('data-w180qr')); if (d.form.questions[i]) d.form.questions[i].required = el.checked; });
+    }
+    return d;
+  }
+  function redrawPost(focusSel) {
+    var box = document.querySelector('#modalBox .w180m'); if (!box) return;
+    var y = document.getElementById('modalBox') ? document.getElementById('modalBox').scrollTop : 0;
+    box.innerHTML = postHtml(S.draft);
+    try { document.getElementById('modalBox').scrollTop = y; } catch (e) { /* fine */ }
+    if (focusSel) { var f = document.querySelector('#modalBox ' + focusSel); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
+  }
+  /* end of that day in Toronto (EDT or EST), for "Answers close on" */
+  function endOfDay(day) {
+    var off = '-04:00';
+    try {
+      var p = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Toronto', timeZoneName: 'shortOffset' }).formatToParts(new Date(day + 'T16:00:00Z')).filter(function (x) { return x.type === 'timeZoneName'; })[0];
+      var m = p && /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(p.value); if (m) off = m[1] + ('0' + m[2]).slice(-2) + ':' + (m[3] || '00');
+    } catch (e) { /* fine */ }
+    return new Date(day + 'T23:59:00' + off).toISOString();
+  }
+  function buildRow(d) {
+    var title = String(d.title || '').trim(), body = String(d.body || '').trim(), link = String(d.link || '').trim();
+    if (!title) return { err: 'Give it a headline.' };
+    if (d.audience === 'teams' && !d.teams.length) return { err: 'Pick the team it is for.' };
+    if (link && !/^(#|https?:\/\/)/i.test(link)) return { err: 'A link starts with # (a Hub page) or https://.' };
+    var ask = null;
+    if (d.ask === 'poll') {
+      var opts = d.poll.options.map(function (o) { return String(o || '').trim(); }).filter(Boolean);
+      if (!String(d.poll.question || '').trim()) return { err: 'Write the poll\u2019s question.' };
+      if (opts.length < 2) return { err: 'A poll needs at least two choices.' };
+      if (opts.some(function (o, i) { return opts.indexOf(o) !== i; })) return { err: 'Two choices are the same.' };
+      ask = { type: 'poll', question: String(d.poll.question).trim(), options: opts, multi: !!d.poll.multi };
+    } else if (d.ask === 'form') {
+      var qs = [], bad = null;
+      d.form.questions.forEach(function (qq, i) {
+        if (bad) return;
+        var label = String(qq.label || '').trim(); if (!label) { bad = 'Write question ' + (i + 1) + '.'; return; }
+        var x = { id: 'q' + (i + 1), label: label, type: qq.type, required: !!qq.required };
+        if (qq.type === 'one' || qq.type === 'several') {
+          var o = String(qq.options || '').split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean);
+          if (o.length < 2 || o.length > 10) { bad = 'Question ' + (i + 1) + ' needs 2 to 10 choices, one per line.'; return; }
+          x.options = o;
+        }
+        qs.push(x);
+      });
+      if (bad) return { err: bad };
+      ask = { type: 'form', questions: qs };
+    }
+    if (d.closes && d.closes < todayIso()) return { err: 'Answers cannot close in the past.' };
+    if (d.expires && d.expires <= todayIso()) return { err: 'It can come down tomorrow at the earliest.' };
+    return { row: { kind: 'general', title: title, body: body || null, link: link || null, pinned: !!d.pinned, happened_at: todayIso(), expires_at: d.expires || null,
+      created_by: myEmail(), created_name: meName(), audience: d.audience, teams: d.audience === 'teams' ? d.teams.slice() : [],
+      department: d.audience === 'teams' && d.teams.length === 1 ? d.teams[0] : null, ask: ask, anonymous: ask ? !!d.anonymous : false,
+      show_results: ask ? !!d.show_results : true, closes_at: ask && d.closes ? endOfDay(d.closes) : null, post_slack: !!d.slack } };
+  }
+  function submitPost() {
+    var d = syncDraft(), b = buildRow(d), err = document.querySelector('#modalBox [data-w180perr]');
+    if (b.err) { if (err) { err.hidden = false; err.textContent = b.err; } return; }
+    S.busy.post = true; redrawPost();
+    q(db.from('hub_announcements').insert(b.row).select('id, created_at').single()).then(function (r) {
+      S.busy.post = false;
+      if (!r || r.error || !r.data) {
+        var m = r && r.error ? String(r.error.message || '') : '';
+        redrawPost();
+        var e2 = document.querySelector('#modalBox [data-w180perr]');
+        if (e2) { e2.hidden = false; e2.textContent = /row-level security|policy/i.test(m) ? 'Leaders post to everyone, the leaders or their own team; HR and admins to anyone. This one is outside what you can post to.' : ('It did not post: ' + cleanErr(m || 'try again')); }
+        return;
+      }
+      var row = Object.assign({}, b.row, { id: r.data.id, created_at: r.data.created_at || new Date().toISOString() });
+      (S.list = S.list || []).unshift(row); S.draft = null;
+      closeModal(); T(b.row.post_slack ? 'Posted, and on its way to ' + slackWhere(d) : 'Posted');
+      paintCard();
+      try { if (window.w116News && w116News.refresh) w116News.refresh(); } catch (e) { /* fine */ }
+    });
+  }
+
+  /* ---------- voting on a poll ---------- */
+  function vote(id, picks) {
+    var a = byId(id); if (!a) return;
+    S.busy['v' + id] = 1; delete S.errs[id]; repaint(id);
+    answer(id, { choice: picks }).then(function () {
+      S.busy['v' + id] = 0; delete S.sel[id]; repaint(id); T('Thanks, your answer is in');
+    }, function (e) { S.busy['v' + id] = 0; S.errs[id] = e.message; repaint(id); });
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el, id;
+    /* What's new on the Executive dashboard posts through the same form */
+    if (t.closest('#w116news [data-anpost]')) { e.preventDefault(); e.stopPropagation(); openPost(); return; }
+    if ((el = t.closest('[data-w180post]'))) { e.preventDefault(); openPost(); return; }
+    if ((el = t.closest('[data-w180all]'))) { e.preventDefault(); openAll(); return; }
+    if ((el = t.closest('[data-w180open]'))) { e.preventDefault(); openItem(el.getAttribute('data-w180open')); return; }
+    if ((el = t.closest('[data-w180res]'))) { e.preventDefault(); id = el.getAttribute('data-w180res'); var ar = byId(id); if (ar) openResults(ar); return; }
+    if ((el = t.closest('[data-w180form]'))) { e.preventDefault(); id = el.getAttribute('data-w180form'); var af = byId(id); if (af) openForm(af); return; }
+    if ((el = t.closest('[data-w180close]'))) { e.preventDefault(); closeModal(); return; }
+    if ((el = t.closest('[data-w180vote]'))) {
+      e.preventDefault(); id = el.getAttribute('data-w180vote'); var a = byId(id); if (!a || S.busy['v' + id]) return;
+      var i = Number(el.getAttribute('data-i'));
+      if (a.ask.multi) {
+        var s = S.sel[id] || (S.sel[id] = { edit: !!S.mine[id], picks: ((S.mine[id] && S.mine[id].choice) || []).slice() });
+        var k = s.picks.indexOf(i); if (k >= 0) s.picks.splice(k, 1); else s.picks.push(i);
+        repaint(id); return;
+      }
+      vote(id, [i]); return;
+    }
+    if ((el = t.closest('[data-w180send]'))) { e.preventDefault(); id = el.getAttribute('data-w180send'); var sp = S.sel[id]; if (sp && sp.picks.length) vote(id, sp.picks.slice().sort(function (x, y) { return x - y; })); return; }
+    if ((el = t.closest('[data-w180change]'))) { e.preventDefault(); id = el.getAttribute('data-w180change'); S.sel[id] = { edit: true, picks: ((S.mine[id] && S.mine[id].choice) || []).slice() }; repaint(id); return; }
+    if ((el = t.closest('[data-w180keep]'))) { e.preventDefault(); id = el.getAttribute('data-w180keep'); delete S.sel[id]; repaint(id); return; }
+    /* a short form's choices */
+    if ((el = t.closest('[data-w180pick]'))) {
+      e.preventDefault(); var qid = el.getAttribute('data-w180pick'), ix = Number(el.getAttribute('data-i')), multi = el.getAttribute('data-multi') === '1';
+      var af2 = byId(S.formId), qq = af2 && af2.ask && (af2.ask.questions || []).filter(function (x) { return x.id === qid; })[0]; if (!qq) return;
+      S.formAns = S.formAns || {};
+      if (qq.type === 'yesno') S.formAns[qid] = S.formAns[qid] === (ix === 0) ? undefined : (ix === 0);
+      else if (multi) { var cur = Array.isArray(S.formAns[qid]) ? S.formAns[qid] : []; var kk = cur.indexOf(ix); if (kk >= 0) cur.splice(kk, 1); else cur.push(ix); S.formAns[qid] = cur.sort(function (x, y) { return x - y; }); }
+      else S.formAns[qid] = S.formAns[qid] === ix ? undefined : ix;
+      var fe = document.querySelector('#modalBox [data-w180ferr]'); if (fe) fe.hidden = true;
+      var grp = el.parentNode, val = S.formAns[qid];
+      Array.prototype.forEach.call(grp.querySelectorAll('[data-w180pick]'), function (b) {
+        var j = Number(b.getAttribute('data-i')), on = qq.type === 'yesno' ? (val === true && j === 0) || (val === false && j === 1) : Array.isArray(val) ? val.indexOf(j) >= 0 : val === j;
+        b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      return;
+    }
+    /* the answers window */
+    if ((el = t.closest('[data-w180csv]'))) { e.preventDefault(); var ac = byId(el.getAttribute('data-w180csv')); if (ac) downloadCsv(ac); return; }
+    if ((el = t.closest('[data-w180shut]'))) {
+      e.preventDefault(); id = el.getAttribute('data-w180shut'); el.disabled = true;
+      patch(id, { closes_at: new Date().toISOString() }).then(function (a2) { T('Answers are closed'); paintCard(); if (a2) openResults(a2); }, function (err) { el.disabled = false; T('Not closed: ' + err.message); });
+      return;
+    }
+    if ((el = t.closest('[data-w180down]'))) {
+      e.preventDefault(); id = el.getAttribute('data-w180down');
+      if (!S.busy['down' + id]) { S.busy['down' + id] = 1; el.textContent = 'Press again to take it down'; setTimeout(function () { S.busy['down' + id] = 0; }, 6000); return; }
+      S.busy['down' + id] = 0; el.disabled = true;
+      patch(id, { expires_at: todayIso() }).then(function () { closeModal(); T('Taken down'); paintCard(); try { if (window.w116News && w116News.refresh) w116News.refresh(); } catch (x) { /* fine */ } }, function (err) { el.disabled = false; T('Not taken down: ' + err.message); });
+      return;
+    }
+    /* the post form */
+    if (!t.closest('#modalBox [data-w180postform]')) return;
+    var d = S.draft; if (!d) return;
+    if ((el = t.closest('[data-w180aud]'))) { e.preventDefault(); syncDraft(); d.audience = el.getAttribute('data-w180aud'); if (d.audience === 'teams' && !d.teams.length) { var own = postTeams(); if (own.length === 1) d.teams = [own[0]]; } redrawPost(); return; }
+    if ((el = t.closest('[data-w180team]'))) { e.preventDefault(); syncDraft(); var tm = el.getAttribute('data-w180team'), ti = d.teams.indexOf(tm); if (ti >= 0) d.teams.splice(ti, 1); else d.teams.push(tm); redrawPost(); return; }
+    if ((el = t.closest('[data-w180askt]'))) { e.preventDefault(); syncDraft(); d.ask = el.getAttribute('data-w180askt'); if (d.ask !== 'none' && !d.closes) d.closes = ''; redrawPost(d.ask === 'poll' ? '#w180pq' : d.ask === 'form' ? '[data-w180ql="0"]' : null); return; }
+    if ((el = t.closest('[data-w180addopt]'))) { e.preventDefault(); syncDraft(); if (d.poll.options.length < 8) d.poll.options.push(''); redrawPost('[data-w180popt="' + (d.poll.options.length - 1) + '"]'); return; }
+    if ((el = t.closest('[data-w180delopt]'))) { e.preventDefault(); syncDraft(); if (d.poll.options.length > 2) d.poll.options.splice(Number(el.getAttribute('data-w180delopt')), 1); redrawPost(); return; }
+    if ((el = t.closest('[data-w180addq]'))) { e.preventDefault(); syncDraft(); if (d.form.questions.length < 8) d.form.questions.push({ id: 'q' + (d.form.questions.length + 1), label: '', type: 'short', required: false, options: '' }); redrawPost('[data-w180ql="' + (d.form.questions.length - 1) + '"]'); return; }
+    if ((el = t.closest('[data-w180delq]'))) { e.preventDefault(); syncDraft(); if (d.form.questions.length > 1) d.form.questions.splice(Number(el.getAttribute('data-w180delq')), 1); redrawPost(); return; }
+  }, true);
+  document.addEventListener('input', function (e) {   /* a message about what is missing goes once they type */
+    var t = e.target; if (!t || !t.closest) return;
+    var f = t.closest('#modalBox [data-w180formbox], #modalBox [data-w180postform]'); if (!f) return;
+    var er = f.querySelector('[data-w180ferr], [data-w180perr]'); if (er && !er.hidden) er.hidden = true;
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#modalBox [data-w180postform]')) return;
+    var d = S.draft; if (!d) return;
+    if (t.hasAttribute('data-w180qt')) { syncDraft(); var i = Number(t.getAttribute('data-w180qt')); if (d.form.questions[i]) d.form.questions[i].type = t.value; redrawPost((t.value === 'one' || t.value === 'several') ? '[data-w180qo="' + i + '"]' : null); return; }
+    if (t.id === 'w180ps') { syncDraft(); redrawPost(); return; }
+  }, true);
+  document.addEventListener('submit', function (e) {
+    var f = e.target; if (!f || !f.matches) return;
+    if (f.matches('#modalBox [data-w180postform]')) { e.preventDefault(); submitPost(); return; }
+    if (f.matches('#modalBox [data-w180formbox]')) { e.preventDefault(); submitForm(f.getAttribute('data-w180formbox')); return; }
+  }, true);
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target && e.target.matches && e.target.matches('#modalBox [data-w180open]')) { e.preventDefault(); openItem(e.target.getAttribute('data-w180open')); }
+  });
+
+  /* ---------- the windows share the Hub's modal: only this wave's are wide ---------- */
+  if (typeof openModal === 'function') { var __om180 = openModal; openModal = function () { wide(false); return __om180.apply(this, arguments); }; }
+  if (typeof closeModal === 'function') { var __cm180 = closeModal; closeModal = function () { wide(false); return __cm180.apply(this, arguments); }; }
+
+  /* ---------- the address: #announce/<id> (the Slack post's link) and #announce/all open on Home ---------- */
+  function hashId() { var m = /^#announce\/(\d+|all)$/.exec(location.hash || ''); return m ? m[1] : null; }
+  function fromHash() {
+    var id = hashId(); if (!id) return false;
+    try { location.replace('#mypage'); } catch (e) { location.hash = '#mypage'; }   /* Home, where announcements live (fires the Hub's own routing) */
+    setTimeout(function () { if (id === 'all') openAll(); else openItem(id); }, 350);
+    return true;
+  }
+  window.addEventListener('hashchange', function () { try { fromHash(); } catch (e) { /* fine */ } });
+
+  /* ---------- Home: the card after every render ---------- */
+  if (typeof renderMyPage === 'function') {
+    var __rm180 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm180.apply(this, arguments);
+      try { refreshCard(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  if (typeof wa40Load === 'function') {   /* the card redraws once the person's access is known */
+    var __wl180 = wa40Load;
+    wa40Load = async function () { var r = await __wl180.apply(this, arguments); try { if (S.list) paintCard(); } catch (e) { /* fine */ } return r; };
+  }
+  if (typeof startApp === 'function') {
+    var __sa180 = startApp;
+    startApp = async function () {
+      var pend = hashId();
+      if (pend) { try { history.replaceState(null, '', '#mypage'); } catch (e) { /* fine */ } }
+      var out = await __sa180.apply(this, arguments);
+      try { addTour(); if (pend) setTimeout(function () { if (pend === 'all') openAll(); else openItem(pend); }, 600); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { S.list = null; S.mine = {}; S.res = {}; S.sel = {}; S.draft = null; var c = document.getElementById('w180card'); if (c) c.remove(); } });
+  } catch (e) { /* fine */ }
+
+  /* ---------- the Home tour: a stop for the card ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT || !TT.home || !TT.home.steps || TT.home.__w180) return;
+      var hs = TT.home.steps, i = -1;
+      hs.forEach(function (x, k) { if (x.s === '#mpBody .mp-chips') i = k; });
+      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w180card', t: 'Announcements', p: 'What your leaders, HR and the admins posted for you: news, and polls or short forms you answer right here (a tap for a poll). The totals show once you answer, when the poster shares them. Leaders, HR and admins post from here: it shows at the top of Home for the people it is for and goes once to Slack.', opt: 1 });
+      TT.home.__w180 = true;
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  window.w180 = { refresh: refreshCard, open: openItem, all: openAll, post: openPost, state: function () { return S; } };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

@@ -194,6 +194,8 @@
 170_wave170
 # 171_wave171: volunteers confirm by text (planned as wave169a: the Texts card on an event, the tags on the roster, Text to confirm, Text settings), the serving's format, the next serving's confirmations on Home and the Executive dashboard. The public confirm page is build/c (hub.welfareavenue.com/c/<token>); the database functions are wa171_*.
 171_wave171
+# 180_wave180: announcements that lead to a poll or a short form the team answers (Steel, 29/09/26): the card at the top of Home (#w180card) with the announcements for this person, a poll answered with a tap, a short form in a window, the totals once answered when the poster allows; See the answers for the poster, leaders, HR and admins (who chose what unless anonymous, who has not answered, a CSV); Post an announcement (leaders to their team, the leaders or everyone; HR and admins to anyone) with the one Slack post (team-inbox). #announce/<id> opens one. Numbered 180: another session ships 171 onwards tonight. The What's new link lives in 116g.
+180_wave180
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

@@ -616,9 +616,19 @@ Birthdays people chose to share (month and day, no year). share: everyone, team 
 
 ### `hub_announcements`
 
-Manual "What's new" announcements posted by leaders and admins (pinned, expiring). Empty so far.
+Announcements (wave116g; wave180: for everyone, the leaders or some teams, with a poll or a short form the team answers). Shown at the top of Home for the people they are for and in What's new on the Executive dashboard; each gets one Slack post. Posted by leaders (to everyone, the leaders or their own team), HR and admins (to anyone); read by the people they are for, the poster, leaders, HR and admins.
 
 - `department`: Team code the announcement is about, or NULL for everyone.
+- `audience`: wave180: who it is for: everyone (anyone on the Hub), leaders (leaders and admins) or teams (the teams in teams).
+- `teams`: wave180: the team codes it is for when audience is teams (the dept codes, finance and exec included).
+- `ask`: wave180: what people answer: null, a poll {type poll, question, options, multi} or a short form {type form, questions [{id, label, type, required, options}]} (wa180_ask_ok). Answers are hub_announcement_answers.
+- `anonymous`: wave180: the results never say who answered what (the poster sees the totals only; who has not answered is a count).
+- `show_results`: wave180: people see the totals once they have answered (or once it closes); text answers are never shown to them.
+- `closes_at`: wave180: answers are taken until then (null: until it is taken down).
+- `post_slack`: wave180: post it once in Slack when it is posted (the teams' channels, #general for everyone, #leaders for the leaders; team-inbox, event announcement).
+- `slack`: wave180: what the Slack post did: {posts: [{channel, ts, url}], errors, at} (team-inbox).
+- `created_name`: wave180: the poster's name as it shows (created_by is their email).
+- `updated_at`: wave180: last change (closing it, taking it down).
 
 ### `hub_connections`
 
@@ -1620,6 +1630,14 @@ wave175: a volunteer's Google account (auth.users) linked to their volunteer rec
 
 wave175: every letter of volunteer hours issued from the volunteer page (reference WA-VH-xxxxxx printed on it), so staff can confirm one when a school or employer asks. Staff read.
 
+### `hub_announcement_answers`
+
+wave180: each person's answer to an announcement's poll or short form (one per person, changed until it closes). A person reads only their own; the totals and who answered come from wa180_results. Written by wa180_answer only.
+
+- `email`: wave180: who answered (their Welfare Avenue address; an alias counts as it).
+- `name`: wave180: their name as the roster has it, for the results (never shown when the announcement is anonymous).
+- `answers`: wave180: the answer, checked against the ask: a poll {choice: [option indexes]}; a form {q1: text | option index | [indexes] | true/false | YYYY-MM-DD | number}.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1767,4 +1785,14 @@ Functions:
 - `volunteer_me_link(text)`: wave175: links the signed-in Google account to the volunteer of a personal link (/c/<token>): the link proves who they are. Refuses an account already linked to someone else. Logged.
 - `volunteer_me_signup(bigint, text)`: wave175: the signed-in volunteer takes an open spot: an upcoming service within vol_signup_days, a role in vol_signup_roles, while the role is under its vol_role_targets count; not twice on the same serving. Adds a roster row (status TBD, detail.source self sign-up) so the usual texts apply (a sign-up notice, the confirmation 7 days before). Logged.
 - `volunteer_me_letter()`: wave175: a letter of volunteer hours for the signed-in volunteer (servings, hours, first and last serving, roles), recorded in volunteer_hour_letters with a reference (WA-VH-xxxxxx) staff can check.
+- `wa180_my_teams()`: wave180: the signed-in person's teams (their roster rows; an alias counts as the Welfare Avenue address it belongs to).
+- `wa180_is_hr()`: wave180: the signed-in person has the HR access profile (and is not blocked).
+- `wa180_can_post(text, text[])`: wave180: may the signed-in person post an announcement to this audience: admins and HR to anyone; leaders to everyone, the leaders, or their own team(s).
+- `wa180_for_me(text, text[])`: wave180: is an announcement with this audience for the signed-in person (everyone: the team, that is anyone on staff; leaders: leaders and admins; teams: people on those teams, and board viewers when the board is one of them).
+- `wa180_manages(text)`: wave180: may the signed-in person see an announcement's results and who has not answered: its poster, leaders, HR and admins.
+- `wa180_ask_ok(jsonb)`: wave180: is an announcement's ask well formed: null; a poll {type poll, question, options (2 to 8), multi}; or a form {type form, questions (1 to 8): id q1.., label, type short|long|one|several|yesno|date|number, required, options (2 to 10) for one and several}.
+- `trg_wa180_touch()`: wave180: keeps hub_announcements.updated_at.
+- `wa180_answer(bigint, jsonb)`: wave180: answer (or change the answer to) an announcement's poll or short form, as the signed-in person: it must be for them, open (not closed or taken down), and the answer is checked against the ask. Returns the answer kept and the results they may see.
+- `wa180_results(bigint)`: wave180: an announcement's results as the signed-in person may see them: the poster, leaders, HR and admins see the totals, the names (unless anonymous), the text answers, each person's answer (rows, for the CSV; no name or time when anonymous), how many it is for and who has not answered (a count only when anonymous); the people it is for see the totals once they have answered or it has closed, when the poster allows; nobody else sees anything.
+- `trg_wa180_announce_post()`: wave180: a new announcement with post_slack asks team-inbox to post it once in Slack.
 

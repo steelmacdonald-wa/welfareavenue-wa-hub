@@ -216,7 +216,7 @@
     try {
       var a = await db.from('hub_announcements').select('*').order('created_at', { ascending: false }).limit(60);
       N.manual = ((a && a.data) || []).filter(function (x) { return !x.expires_at || new Date(x.expires_at) > new Date(); });
-      N.manual.forEach(function (x) { items.push({ id: 'a' + x.id, kind: KINDS[x.kind] ? x.kind : 'general', title: x.title, body: x.body || '', when: x.happened_at || x.created_at, dept: x.department, link: x.link, pinned: !!x.pinned, manual: x, by: x.created_by }); });
+      N.manual.forEach(function (x) { items.push({ id: 'a' + x.id, kind: KINDS[x.kind] ? x.kind : 'general', title: x.title, body: x.body || '', when: x.happened_at || x.created_at, dept: x.department, link: x.link || (x.ask ? '#announce/' + x.id : null), pinned: !!x.pinned, manual: x, by: x.created_name || x.created_by }); });   /* wave180: a poll or a form opens where it is answered */
     } catch (e) { /* none */ }
     try {
       var ch = (typeof DB_CHANGES !== 'undefined' ? DB_CHANGES : []).filter(function (c) { return c.changed_at && c.changed_at.slice(0, 10) >= since; });
