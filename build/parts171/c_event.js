@@ -37,7 +37,7 @@
     if (iv) out.push('Itinerary texted ' + fmtWhen(iv.sent_at || iv.created_at));
     return out.map(function (x) { return '<span class="w171tag mute">' + E(x) + '</span>'; }).join('');
   }
-  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : ''); }
+  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : '') + w175Tags(r); }
   function decorateCards() {
     var D = curD(); var ev = curEv(); if (!D || !ev) return;
     var by = {}; (D.roster || []).forEach(function (r) { by[String(r.id)] = r; });
@@ -96,7 +96,7 @@
   async function paintCard() {
     var ev = curEv(), D = curD(); var rail = document.getElementById('w119rail');
     if (!ev || !D || !rail || !staff()) return;
-    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false); await loadRecipes();
+    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false); await loadRecipes(); await loadAccounts(false);
     if (curEv() !== ev) return;
     rail = document.getElementById('w119rail'); if (!rail) return;
     var box = document.getElementById('w171card');

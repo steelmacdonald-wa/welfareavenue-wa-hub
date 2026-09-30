@@ -51,6 +51,8 @@
     if ((b = t.closest('[data-w174st]'))) { e.preventDefault(); saveStart(b); return; }
     if ((b = t.closest('[data-w174read]'))) { e.preventDefault(); readModal(); return; }
     if ((b = t.closest('[data-w174itsave]'))) { e.preventDefault(); itinSave(b); return; }
+    if ((b = t.closest('[data-w175save]'))) { e.preventDefault(); signupSave(b); return; }
+    if ((b = t.closest('[data-w175ref]'))) { e.preventDefault(); refCheck(); return; }
     if ((b = t.closest('[data-w171open]'))) { e.preventDefault(); location.hash = '#volunteering/e/' + b.getAttribute('data-w171open'); return; }
   });
   document.addEventListener('change', function (e) {
@@ -87,5 +89,5 @@
 
   /* ---------- test hook ---------- */
   window.w171 = { state: function () { return S; }, paintCard: paintCard, decorateCards: decorateCards, decorateMast: decorateMast, decorateCalendar: decorateCalendar,
-    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
+    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w175: W5, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
 })();

@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>Welfare Avenue: your volunteer account</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Welfare Avenue: the volunteer account page (wave175, 30/09/26), hub.welfareavenue.com/me. Volunteers sign in with Google
+     (Supabase Auth, the code flow with PKCE, kept in this page's own storage key so it never mixes with a staff session);
+     the access token hook (wa175_access_token_hook) makes a volunteer's token anon, so it reaches only the volunteer_me
+     functions: their servings and hours, their upcoming servings (with their links), open spots to sign up for, their
+     recent surveys, and a letter of their hours (printable, with a reference staff can check). The account links by the
+     Google email when it matches their volunteer record, or from their personal link (/me?link=<token>, from the confirm
+     page). While the hook is off the page refuses and signs out. English and French. Built by build/me/make.py. -->
+<style>
+%%STYLE%%
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:4px 0 12px}
+.stats div{background:rgba(16,63,57,.05);border-radius:14px;padding:12px 8px;text-align:center}
+.stats b{display:block;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:34px;line-height:1;color:var(--green)}
+.stats span{display:block;font-size:12.5px;color:var(--muted);margin-top:4px}
+.mile{display:flex;gap:12px;align-items:center;background:rgba(220,165,39,.16);border-radius:14px;padding:12px 14px;margin:0 0 12px;font-size:15px}
+.mile .bar{height:8px;border-radius:8px;background:rgba(16,63,57,.1);overflow:hidden;margin-top:6px}
+.mile .bar i{display:block;height:100%;background:var(--gold)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 6px}
+.chip{border-radius:999px;padding:3px 11px;font-size:13px;font-weight:600;background:rgba(16,63,57,.07);color:var(--green)}
+.list{list-style:none;padding:0;margin:4px 0 0}
+.list li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.list li:first-child{border-top:0}
+.list .d{flex:1 1 180px;min-width:0}
+.list .d b{display:block;font-size:15px}
+.list .d span{color:var(--muted);font-size:13px}
+.st{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(220,165,39,.22)}
+.st.ok{background:rgba(42,140,122,.16);color:#1c6b5d}
+.st.no{background:rgba(179,64,47,.1);color:var(--flag)}
+.opens{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 0}
+.opens button{width:auto;margin:0;font-size:14px;padding:8px 14px;background:transparent;border:1.5px solid var(--green);color:var(--green)}
+.opens button small{font-weight:500;color:var(--muted);margin-left:4px}
+.ask{background:rgba(16,63,57,.05);border-radius:14px;padding:12px 14px;margin:8px 0 0;font-size:15px}
+.ask .row{display:flex;gap:8px;margin-top:8px}
+.ask .row button{width:auto;flex:1;margin:0;font-size:15px;padding:11px 16px}
+.ask .row button.ghost{background:transparent;border:1.5px solid var(--line);color:var(--green)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:var(--ink);border:1.5px solid rgba(16,63,57,.25)}
+.gbtn svg{width:20px;height:20px;flex:none}
+.small{font-size:13.5px;color:var(--muted)}
+.more{background:none;border:0;color:var(--green);text-decoration:underline;font-weight:500;font-size:14px;padding:6px 0;width:auto;margin:4px 0 0;cursor:pointer}
+.letter{background:#fff;color:#1F201E;border:1px solid var(--line);border-radius:6px;padding:34px 36px;margin:10px 0 0;font-size:15px;line-height:1.6}
+.letter .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:3px solid var(--gold);padding-bottom:12px;margin-bottom:18px}
+.letter .lh .lockup{height:46px;color:var(--green)}
+.letter .lh small{display:block;text-align:right;color:var(--muted);font-size:12px;line-height:1.5}
+.letter p{margin:0 0 12px}
+.letter .fig{font-weight:700}
+.letter .sig{margin-top:26px}
+.letter .ref{margin-top:22px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+@media (max-width:480px){.letter{padding:22px 18px}.stats b{font-size:28px}}
+@media print{
+  body{background:#fff}
+  .band,footer,.noprint{display:none!important}
+  main{margin:0;max-width:none;padding:0}
+  .card{box-shadow:none;padding:0}
+  .letter{border:0;padding:0;margin:0}
+}
+</style>
+</head>
+<body>
+<div class="band ph" id="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a><div class="langs" id="langs"><button type="button" data-l="en">EN</button><button type="button" data-l="fr">FR</button></div></div><div class="hx"><p class="ey" id="ey"></p><h1 id="ht"></h1></div></div>
+<main><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></main>
+<footer id="foot"></footer>
+<script>
+(function () {
+  var SB = '%%SUPABASE_URL%%', API = SB + '/rest/v1/rpc/', KEY = '%%ANON_KEY%%', ST = '%%ST%%';
+  var LOCKUP = '%%LOCKUP_INLINE%%';
+  var OPS = '438-808-7754', OPS_TEL = '+14388087754', STORE = 'wa_vol_auth', PKCE = 'wa_vol_pkce';
+  var MILES = [1, 5, 10, 25, 50, 100, 150, 200];
+  var TX = {
+    en: { ey: 'Your volunteer account', hiT: 'Your volunteering', loading: 'Loading…',
+      inT: 'Your volunteering, in one place', inP: 'Sign in with your Google account to see how many times you have volunteered with us, your hours, your upcoming servings, open spots you can take, and a letter of your hours for school or work.',
+      inBtn: 'Sign in with Google', inNote: 'We only see your name and email from Google, never your password. Your text links keep working without an account.',
+      linkNote: 'Sign in to save your volunteering to your Google account.',
+      servings: 'servings', hours: 'hours', since: 'since {d}', milestoneNext: '{n} more to your {m} serving', milestoneHit: 'You reached {m} servings. Thank you!', rolesT: 'Your roles',
+      upT: 'Coming up', upNone: 'Nothing coming up yet. Take an open spot below.', open: 'Open', stOk: 'Confirmed', stNo: 'Can’t make it', stWait: 'To confirm',
+      openT: 'Open spots', openP: 'Pick a serving and a role. We text you to confirm 7 days before.', openNone: 'No open spots right now. We will text you when new servings are posted.',
+      spots1: '1 spot', spotsN: '{n} spots', askT: 'Sign up as {r} on {d}?', askYes: 'Yes, sign me up', askNo: 'Not now', joined: 'You’re signed up as {r} on {d}! We will text you to confirm 7 days before.',
+      full: 'That spot was just taken. Please pick another.', already: 'You’re already on that serving.',
+      histT: 'Where you’ve been', histNone: 'Your servings show here after you volunteer with us.', survey: 'Take the survey', surveyDone: 'Survey answered', showMore: 'Show all',
+      letterT: 'Letter of your hours', letterP: 'For school, a job or a scholarship: a letter of your volunteer hours with a reference we can confirm.', letterBtn: 'Get my hours letter', letterNone: 'Your letter is available after your first serving.',
+      print: 'Print or save as PDF', back: 'Back to my account',
+      lDate: '{d}', lTo: 'To whom it may concern,',
+      lBody1: 'This letter confirms that {n} has volunteered with Welfare Avenue, a registered charity that serves hot meals and essentials to people experiencing homelessness in Montreal.',
+      lBody2: 'Between {a} and {b}, {f} volunteered at {s} of our servings, for a total of about {h} hours, as {r}.',
+      lBody3: 'We are grateful for {f}’s time and care. Please contact us if you have any questions about this letter.',
+      lSig: 'The Welfare Avenue team', lRef: 'Reference {ref} · issued {d}. To confirm this letter, email info@welfareavenue.com with the reference.',
+      and: 'and', out: 'Sign out', signedAs: 'Signed in as {e}',
+      notT: 'We couldn’t find your volunteer record', notP: 'No volunteer record uses {e}. Open the link from any of our texts and tap “Save to my account”, or text us and we will link it.', other: 'Use another Google account',
+      hookT: 'Volunteer accounts aren’t open yet', hookP: 'We are switching them on soon. Your text links work as always.',
+      linkedOther: 'That link belongs to another volunteer, so we didn’t add it to your account.', linkedOk: 'Saved to your account.',
+      err: 'We could not reach Welfare Avenue. Check your connection and try again.', signinErr: 'Sign-in did not go through. Please try again.',
+      call: 'Questions? Text or call Welfare Avenue at ', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001' },
+    fr: { ey: 'Votre compte bénévole', hiT: 'Votre bénévolat', loading: 'Chargement…',
+      inT: 'Votre bénévolat, au même endroit', inP: 'Connectez-vous avec votre compte Google pour voir combien de fois vous avez fait du bénévolat avec nous, vos heures, vos prochains services, les places libres et une lettre de vos heures pour l’école ou le travail.',
+      inBtn: 'Se connecter avec Google', inNote: 'Google nous transmet seulement votre nom et votre courriel, jamais votre mot de passe. Vos liens par texto fonctionnent toujours sans compte.',
+      linkNote: 'Connectez-vous pour enregistrer votre bénévolat dans votre compte Google.',
+      servings: 'services', hours: 'heures', since: 'depuis {d}', milestoneNext: 'Encore {n} avant votre {m}e service', milestoneHit: 'Vous avez atteint {m} services. Merci!', rolesT: 'Vos rôles',
+      upT: 'À venir', upNone: 'Rien à venir pour l’instant. Prenez une place libre ci-dessous.', open: 'Ouvrir', stOk: 'Confirmé', stNo: 'Absent', stWait: 'À confirmer',
+      openT: 'Places libres', openP: 'Choisissez un service et un rôle. Nous vous texterons pour confirmer 7 jours avant.', openNone: 'Aucune place libre pour l’instant. Nous vous texterons quand de nouveaux services seront affichés.',
+      spots1: '1 place', spotsN: '{n} places', askT: 'Vous inscrire comme {r} le {d}?', askYes: 'Oui, inscrivez-moi', askNo: 'Pas maintenant', joined: 'Vous êtes inscrit comme {r} le {d}! Nous vous texterons pour confirmer 7 jours avant.',
+      full: 'Cette place vient d’être prise. Choisissez-en une autre.', already: 'Vous êtes déjà inscrit à ce service.',
+      histT: 'Vos services', histNone: 'Vos services apparaîtront ici après votre premier bénévolat.', survey: 'Répondre au sondage', surveyDone: 'Sondage rempli', showMore: 'Tout afficher',
+      letterT: 'Lettre de vos heures', letterP: 'Pour l’école, un emploi ou une bourse : une lettre de vos heures de bénévolat avec une référence que nous pouvons confirmer.', letterBtn: 'Obtenir ma lettre', letterNone: 'Votre lettre est disponible après votre premier service.',
+      print: 'Imprimer ou enregistrer en PDF', back: 'Retour à mon compte',
+      lDate: '{d}', lTo: 'À qui de droit,',
+      lBody1: 'La présente confirme que {n} fait du bénévolat avec Welfare Avenue, un organisme de bienfaisance enregistré qui sert des repas chauds et des produits essentiels aux personnes en situation d’itinérance à Montréal.',
+      lBody2: 'Entre le {a} et le {b}, {f} a participé à {s} de nos services, pour un total d’environ {h} heures, comme {r}.',
+      lBody3: 'Nous sommes reconnaissants du temps et de l’attention de {f}. N’hésitez pas à nous écrire pour toute question au sujet de cette lettre.',
+      lSig: 'L’équipe de Welfare Avenue', lRef: 'Référence {ref} · émise le {d}. Pour confirmer cette lettre, écrivez à info@welfareavenue.com en indiquant la référence.',
+      and: 'et', out: 'Se déconnecter', signedAs: 'Connecté avec {e}',
+      notT: 'Nous n’avons pas trouvé votre dossier de bénévole', notP: 'Aucun dossier de bénévole n’utilise {e}. Ouvrez le lien d’un de nos textos et touchez « Enregistrer dans mon compte », ou textez-nous et nous ferons le lien.', other: 'Utiliser un autre compte Google',
+      hookT: 'Les comptes bénévoles ne sont pas encore ouverts', hookP: 'Nous les activons bientôt. Vos liens par texto fonctionnent comme d’habitude.',
+      linkedOther: 'Ce lien appartient à un autre bénévole, nous ne l’avons donc pas ajouté à votre compte.', linkedOk: 'Enregistré dans votre compte.',
+      err: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', signinErr: 'La connexion n’a pas fonctionné. Veuillez réessayer.',
+      call: 'Des questions? Textez ou appelez Welfare Avenue au ', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001' }
+  };
+  var app = document.getElementById('app'), foot = document.getElementById('foot'), band = document.getElementById('band');
+  var q = new URLSearchParams(location.search);
+  var S = { lang: 'en', chosen: false, me: null, note: '', noteKind: 'info', ask: null, busy: false, all: false, letter: null };
+  function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
+  function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+  function day(iso, short) {
+    var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); if (isNaN(d)) return String(iso || '');
+    try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', short ? { weekday: 'short', month: 'short', day: 'numeric' } : { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); }
+  }
+  function longDate(iso) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function monthYear(iso) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00'); try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { year: 'numeric', month: 'long' }); } catch (e) { return String(iso); } }
+  function hm(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var h = Number(m[1]); return S.lang === 'fr' ? h + ' h' + (m[2] === '00' ? '' : ' ' + m[2]) : (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
+  function num(n) { var x = Math.round(Number(n || 0) * 10) / 10; return String(x).replace('.', S.lang === 'fr' ? ',' : '.'); }
+  function rn(o) { return (S.lang === 'fr' ? o.role_fr : o.role_en) || o.role || ''; }
+  function ordinal(m) { if (S.lang === 'fr') return m; var s = ['th', 'st', 'nd', 'rd'], v = m % 100; return m + (s[(v - 20) % 10] || s[v] || s[0]); }
+  function footer() { foot.innerHTML = (t('brand') ? '<p class="brandline">' + E(t('brand')) + '</p>' : '') + '<p>Welfare Avenue · ' + E(t('charity')) + '</p>'; }
+  function langButtons() { Array.prototype.forEach.call(document.querySelectorAll('#langs button'), function (b) { b.classList.toggle('on', b.getAttribute('data-l') === S.lang); b.setAttribute('aria-pressed', b.getAttribute('data-l') === S.lang ? 'true' : 'false'); }); document.documentElement.lang = S.lang; }
+  function setBand() { var img = new Image(); var p = 'photos/web/2022-10-autumn-crew-at-the-tent.jpg'; img.onload = function () { band.style.backgroundImage = 'url("' + ST + p + '")'; band.style.backgroundPosition = '52% 58%'; band.classList.remove('ph'); }; img.src = ST + p; }
+  function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
+
+  /* ---------- the Google sign-in (Supabase Auth, the code flow with PKCE) ---------- */
+  function b64url(buf) { var s = '', a = new Uint8Array(buf); for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function store(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* fine */ } }
+  function load(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+  function signIn() {
+    var arr = new Uint8Array(48); crypto.getRandomValues(arr); var verifier = b64url(arr);
+    store(PKCE, { v: verifier, link: q.get('link') || null, at: Date.now() });
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then(function (h) {
+      var back = location.origin + '/me/' + (q.get('link') ? '?link=' + encodeURIComponent(q.get('link')) : '');
+      location.href = SB + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(back) + '&code_challenge=' + b64url(h) + '&code_challenge_method=s256';
+    });
+  }
+  function authFetch(path, body, token) {
+    return fetch(SB + '/auth/v1/' + path, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + (token || KEY), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, body: j }; }); });
+  }
+  function keep(sess) { if (!sess || !sess.access_token) return null; var s = { access_token: sess.access_token, refresh_token: sess.refresh_token, expires_at: sess.expires_at || Math.floor(Date.now() / 1000) + Number(sess.expires_in || 3600), email: (sess.user && sess.user.email) || null }; store(STORE, s); return s; }
+  function session() {
+    var s = load(STORE); if (!s || !s.access_token) return Promise.resolve(null);
+    if (s.expires_at - Math.floor(Date.now() / 1000) > 60) return Promise.resolve(s);
+    return authFetch('token?grant_type=refresh_token', { refresh_token: s.refresh_token }).then(function (r) { if (r.ok && r.body) return keep(r.body); store(STORE, null); return null; });
+  }
+  function signOut() {
+    var s = load(STORE); store(STORE, null);
+    var done = function () { S.me = null; S.letter = null; paint(); };
+    if (s && s.access_token) authFetch('logout', {}, s.access_token).then(done, done); else done();
+  }
+  function rpc(fn, body) {
+    return session().then(function (s) {
+      return fetch(API + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + (s ? s.access_token : KEY), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+        .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, body: j }; }); });
+    });
+  }
+
+  /* ---------- the page ---------- */
+  function signinHtml() {
+    var g = '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.7 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-3.1-.4-4.6H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.2-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>';
+    return '<h2>' + E(t('inT')) + '</h2><div class="rule"></div>' + (S.note ? '<div class="banner ' + S.noteKind + '">' + E(S.note) + '</div>' : '')
+      + '<p>' + E(q.get('link') ? t('linkNote') : t('inP')) + '</p><button type="button" class="gbtn" id="signin">' + g + E(t('inBtn')) + '</button><p class="small" style="margin:12px 0 0">' + E(t('inNote')) + '</p>' + callHtml();
+  }
+  function statsHtml(m) {
+    var n = Number(m.servings || 0), next = MILES.filter(function (x) { return x > n; })[0], prev = MILES.filter(function (x) { return x <= n; }).pop() || 0;
+    var h = '<div class="stats"><div><b>' + n + '</b><span>' + E(t('servings')) + '</span></div><div><b>' + E(num(m.hours)) + '</b><span>' + E(t('hours')) + '</span></div><div><b>' + E(m.first_date ? String(m.first_date).slice(0, 4) : '–') + '</b><span>' + E(m.first_date ? t('since').replace('{d}', monthYear(m.first_date)) : '') + '</span></div></div>';
+    if (next) {
+      var pct = Math.round(100 * (n - prev) / (next - prev));
+      h += '<div class="mile"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div style="flex:1"><b>' + E(n && prev === n ? t('milestoneHit').replace('{m}', n) : t('milestoneNext').replace('{n}', next - n).replace('{m}', ordinal(next))) + '</b><div class="bar"><i style="width:' + pct + '%"></i></div></div></div>';
+    }
+    if ((m.roles || []).length) h += '<div class="chips" aria-label="' + E(t('rolesT')) + '">' + m.roles.map(function (r) { return '<span class="chip">' + E(rn(r)) + ' · ' + r.n + '</span>'; }).join('') + '</div>';
+    return h;
+  }
+  function upHtml(m) {
+    var up = m.upcoming || [];
+    return '<div class="sec"><h3>' + E(t('upT')) + '</h3>' + (up.length ? '<ul class="list">' + up.map(function (o) {
+      var st = o.state === 'confirmed' ? ['ok', t('stOk')] : o.state === 'declined' ? ['no', t('stNo')] : ['', t('stWait')];
+      var tm = o.times && o.times.start ? ' · ' + hm(o.times.start) : '';
+      return '<li><div class="d"><b>' + E(day(o.date)) + '</b><span>' + E(rn(o)) + E(tm) + ' · ' + E(o.location) + '</span></div><span class="st ' + st[0] + '">' + E(st[1]) + '</span><a href="/c/' + E(o.token) + '">' + E(t('open')) + '</a></li>';
+    }).join('') + '</ul>' : '<p class="small">' + E(t('upNone')) + '</p>') + '</div>';
+  }
+  function openHtml(m) {
+    var ev = m.open || [];
+    var h = '<div class="sec" id="open"><h3>' + E(t('openT')) + '</h3>';
+    if (!ev.length) return h + '<p class="small">' + E(t('openNone')) + '</p></div>';
+    h += '<p class="small" style="margin:0 0 6px">' + E(t('openP')) + '</p><ul class="list">' + ev.map(function (e) {
+      var ask = S.ask && S.ask.event_id === e.event_id ? S.ask : null;
+      return '<li style="display:block"><div class="d"><b>' + E(day(e.date)) + '</b><span>' + E(hm(e.start)) + ' · ' + E(e.location) + '</span></div><div class="opens">'
+        + (e.roles || []).map(function (r) { return '<button type="button" data-join="' + e.event_id + '" data-role="' + E(r.role) + '">' + E(rn(r)) + '<small>' + E(r.left === 1 ? t('spots1') : t('spotsN').replace('{n}', r.left)) + '</small></button>'; }).join('') + '</div>'
+        + (ask ? '<div class="ask" role="alertdialog"><b>' + E(t('askT').replace('{r}', rn(ask).toLowerCase()).replace('{d}', day(e.date))) + '</b><div class="row"><button type="button" id="joinyes"' + (S.busy ? ' disabled' : '') + '>' + E(t('askYes')) + '</button><button type="button" class="ghost" id="joinno">' + E(t('askNo')) + '</button></div></div>' : '')
+        + '</li>';
+    }).join('') + '</ul></div>';
+    return h;
+  }
+  function histHtml(m) {
+    var hs = m.history || []; var shown = S.all ? hs : hs.slice(0, 6);
+    return '<div class="sec"><h3>' + E(t('histT')) + '</h3>' + (hs.length ? '<ul class="list">' + shown.map(function (o) {
+      var sv = o.survey === 'answered' ? '<span class="st ok">' + E(t('surveyDone')) + '</span>' : (o.survey === 'open' && o.token ? '<a href="/c/' + E(o.token) + '#survey">' + E(t('survey')) + '</a>' : '');
+      return '<li><div class="d"><b>' + E(day(o.date)) + '</b><span>' + E(rn(o)) + ' · ' + E(o.location) + '</span></div>' + sv + '</li>';
+    }).join('') + '</ul>' + (hs.length > shown.length ? '<button type="button" class="more" id="all">' + E(t('showMore')) + ' (' + hs.length + ')</button>' : '') : '<p class="small">' + E(t('histNone')) + '</p>') + '</div>';
+  }
+  function letterBoxHtml(m) {
+    return '<div class="sec"><h3>' + E(t('letterT')) + '</h3><p class="small" style="margin:0 0 8px">' + E(t('letterP')) + '</p>'
+      + (Number(m.servings || 0) ? '<button type="button" class="sec2" id="letter"' + (S.busy ? ' disabled' : '') + '>' + E(t('letterBtn')) + '</button>' : '<p class="small">' + E(t('letterNone')) + '</p>') + '</div>';
+  }
+  function joinRoles(rs) {
+    var names = (rs || []).map(function (r) { return rn(r).toLowerCase(); });
+    if (names.length < 2) return names.join('');
+    return names.slice(0, -1).join(', ') + ' ' + t('and') + ' ' + names[names.length - 1];
+  }
+  function letterHtml(L) {
+    var f = String(L.name || '').trim().split(/\s+/)[0] || L.name;
+    return '<div class="noprint" style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px"><button type="button" id="print" style="width:auto;flex:1">' + E(t('print')) + '</button><button type="button" class="sec2" id="back" style="width:auto;flex:1">' + E(t('back')) + '</button></div>'
+      + '<div class="letter" id="letterdoc"><div class="lh">' + LOCKUP + '<small>Welfare Avenue<br>info@welfareavenue.com · welfareavenue.com<br>' + E(t('charity')) + '</small></div>'
+      + '<p>' + E(longDate(L.issued)) + '</p><p>' + E(t('lTo')) + '</p>'
+      + '<p>' + E(t('lBody1').replace('{n}', L.name)) + '</p>'
+      + '<p>' + E(t('lBody2').replace('{a}', longDate(L.first_date)).replace('{b}', longDate(L.last_date)).replace('{f}', f).replace('{s}', L.servings).replace('{h}', num(L.hours)).replace('{r}', joinRoles(L.roles))) + '</p>'
+      + '<p>' + E(t('lBody3').replace('{f}', f)) + '</p>'
+      + '<p class="sig">' + E(t('lSig')) + '</p>'
+      + '<p class="ref">' + E(t('lRef').replace('{ref}', L.ref).replace('{d}', longDate(L.issued))) + '</p></div>';
+  }
+  function paint() {
+    langButtons(); footer();
+    var ey = document.getElementById('ey'), ht = document.getElementById('ht');
+    ey.textContent = t('ey');
+    var m = S.me;
+    if (!m || !m.signed_in) { ht.textContent = t('hiT'); app.innerHTML = signinHtml(); return; }
+    var who = '<p class="small noprint" style="margin:18px 0 0">' + E(t('signedAs').replace('{e}', m.email || '')) + ' · <a href="#" id="out">' + E(t('out')) + '</a></p>';
+    if (m.hook === false) { ht.textContent = t('hiT'); app.innerHTML = '<h2>' + E(t('hookT')) + '</h2><div class="rule"></div><p>' + E(t('hookP')) + '</p>' + callHtml(); return; }
+    if (!m.linked) {
+      ht.textContent = t('hiT');
+      app.innerHTML = (S.note ? '<div class="banner ' + S.noteKind + '">' + E(S.note) + '</div>' : '') + '<h2>' + E(t('notT')) + '</h2><div class="rule"></div><p>' + E(t('notP').replace('{e}', m.email || '')) + '</p><button type="button" class="sec2" id="switch">' + E(t('other')) + '</button>' + callHtml() + who;
+      return;
+    }
+    ht.textContent = m.first || t('hiT');
+    if (S.letter) { app.innerHTML = letterHtml(S.letter); return; }
+    app.innerHTML = (S.note ? '<div class="banner ' + S.noteKind + '" role="status">' + E(S.note) + '</div>' : '')
+      + '<h2>' + E(t('hiT')) + '</h2><div class="rule"></div>' + statsHtml(m) + upHtml(m) + openHtml(m) + histHtml(m) + letterBoxHtml(m) + callHtml() + who;
+  }
+  function refresh() {
+    return rpc('volunteer_me', {}).then(function (r) {
+      if (!r.ok || !r.body) { S.note = t('err'); S.noteKind = 'warn'; S.me = S.me || null; paint(); return; }
+      S.me = r.body;
+      if (!S.chosen && r.body.lang === 'fr') S.lang = 'fr';
+      if (r.body.signed_in && r.body.hook === false) { store(STORE, null); }
+      paint();
+    }).catch(function () { S.note = t('err'); S.noteKind = 'warn'; paint(); });
+  }
+  function join() {
+    var a = S.ask; if (!a || S.busy) return;
+    S.busy = true; paint();
+    rpc('volunteer_me_signup', { p_event: a.event_id, p_role: a.role }).then(function (r) {
+      S.busy = false; S.ask = null;
+      var b = r.body || {};
+      if (r.ok && b.ok) { S.note = t('joined').replace('{r}', rn(a).toLowerCase()).replace('{d}', day(a.date)); S.noteKind = 'info'; }
+      else if (b.reason === 'full') { S.note = t('full'); S.noteKind = 'warn'; }
+      else if (b.reason === 'already') { S.note = t('already'); S.noteKind = 'warn'; }
+      else { S.note = t('err'); S.noteKind = 'warn'; }
+      return refresh().then(function () { try { window.scrollTo(0, 0); } catch (e) { /* fine */ } });
+    }).catch(function () { S.busy = false; S.note = t('err'); S.noteKind = 'warn'; paint(); });
+  }
+  function getLetter() {
+    if (S.busy) return; S.busy = true; paint();
+    rpc('volunteer_me_letter', {}).then(function (r) {
+      S.busy = false;
+      if (r.ok && r.body && r.body.ok) { S.letter = r.body; paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ } }
+      else { S.note = t('err'); S.noteKind = 'warn'; paint(); }
+    }).catch(function () { S.busy = false; S.note = t('err'); S.noteKind = 'warn'; paint(); });
+  }
+  app.addEventListener('click', function (e) {
+    var el = e.target && e.target.closest ? e.target.closest('button, a#out') : null; if (!el) return;
+    if (el.id === 'signin') { signIn(); return; }
+    if (el.id === 'out') { e.preventDefault(); signOut(); return; }
+    if (el.id === 'switch') { store(STORE, null); signIn(); return; }
+    if (el.id === 'all') { S.all = true; paint(); return; }
+    if (el.id === 'letter') { getLetter(); return; }
+    if (el.id === 'print') { window.print(); return; }
+    if (el.id === 'back') { S.letter = null; paint(); return; }
+    if (el.id === 'joinno') { S.ask = null; paint(); return; }
+    if (el.id === 'joinyes') { join(); return; }
+    var ev = el.getAttribute('data-join');
+    if (ev) {
+      var e2 = (S.me.open || []).filter(function (x) { return String(x.event_id) === ev; })[0]; if (!e2) return;
+      var r = (e2.roles || []).filter(function (x) { return x.role === el.getAttribute('data-role'); })[0]; if (!r) return;
+      S.ask = { event_id: e2.event_id, date: e2.date, role: r.role, role_en: r.role_en, role_fr: r.role_fr }; S.note = ''; paint();
+    }
+  });
+  document.getElementById('langs').addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;
+    S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
+    paint();
+  });
+
+  /* ---------- start: finish a sign-in, link from a personal link, then read ---------- */
+  try { var sl = localStorage.getItem('wa_lang'); if (sl === 'fr' || sl === 'en') { S.lang = sl; S.chosen = true; } } catch (e) { /* fine */ }
+  if (!S.chosen && /^fr\b/i.test(navigator.language || '')) S.lang = 'fr';
+  langButtons(); footer(); setBand();
+  var code = q.get('code'), pk = load(PKCE);
+  var start = Promise.resolve();
+  if (q.get('error_description') || q.get('error')) { S.note = t('signinErr'); S.noteKind = 'warn'; }
+  if (code) {
+    start = (pk && pk.v ? authFetch('token?grant_type=pkce', { auth_code: code, code_verifier: pk.v }) : Promise.resolve({ ok: false }))
+      .then(function (r) { store(PKCE, null); if (r.ok && r.body) keep(r.body); else { S.note = t('signinErr'); S.noteKind = 'warn'; } })
+      .catch(function () { S.note = t('signinErr'); S.noteKind = 'warn'; });
+  }
+  start.then(function () {
+    var link = q.get('link') || (pk && pk.link) || null;
+    if (code || q.get('error')) history.replaceState({}, '', '/me/' + (link ? '?link=' + encodeURIComponent(link) : ''));
+    return session().then(function (s) {
+      if (!s) { S.me = { signed_in: false }; paint(); return; }
+      if (!link) return refresh();
+      return rpc('volunteer_me_link', { p_token: link }).then(function (r) {
+        var b = r.body || {};
+        if (b.ok && !b.already) { S.note = t('linkedOk'); S.noteKind = 'info'; }
+        else if (b.reason === 'other') { S.note = t('linkedOther'); S.noteKind = 'warn'; }
+        history.replaceState({}, '', '/me/');
+        return refresh();
+      });
+    });
+  }).catch(function () { S.note = t('err'); S.noteKind = 'warn'; S.me = { signed_in: false }; paint(); });
+})();
+</script>
+</body>
+</html>

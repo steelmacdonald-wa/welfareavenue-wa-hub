@@ -91,7 +91,7 @@
   async function settingsModal() {
     var cn = await can(); await loadCfg(true);
     openModal('<div class="w171m"><h3>Text settings</h3><p class="sub">Loading…</p></div>');
-    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true)]);
+    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true), loadAccounts(true)]);
     paintSettings(cn);
   }
   function paintSettings(cn) {
@@ -104,6 +104,7 @@
       + surveyHtml(cn)
       + cookHtml()
       + itinSetHtml(cn)
+      + accountsHtml(cn)
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'

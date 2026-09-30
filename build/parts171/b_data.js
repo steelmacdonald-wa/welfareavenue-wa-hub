@@ -15,7 +15,7 @@
   async function loadCfg(force) {
     if (!force && S.mode && Date.now() - S.modeAt < 30000) return S.cfg;
     try {
-      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time', 'sms_itinerary_hour']);
+      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time', 'sms_itinerary_hour', 'vol_signup_roles', 'vol_signup_days']);
       var c = {}; ((r && r.data) || []).forEach(function (x) { c[x.key] = x.value; });
       S.cfg = c; S.mode = c.sms_mode || 'off'; S.modeAt = Date.now();
     } catch (e) { S.mode = S.mode || 'off'; }

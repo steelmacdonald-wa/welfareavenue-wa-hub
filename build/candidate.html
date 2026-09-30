@@ -64134,6 +64134,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    settings holds the pickup areas and the drop-off.
    wave174 (30/09/26, f_w174.js): the Survey and itinerary card on the event (the start time, each role's arrival, the
    drivers' parts, previews, the survey answers); Text settings gains the itineraries and each role's survey questions.
+   wave175 (30/09/26, g_w175.js): volunteer accounts (hub.welfareavenue.com/me): tags for self sign-ups and accounts; Text
+   settings gains the sign-up settings and a check of an hours letter's reference.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
@@ -64247,7 +64249,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function loadCfg(force) {
     if (!force && S.mode && Date.now() - S.modeAt < 30000) return S.cfg;
     try {
-      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time', 'sms_itinerary_hour']);
+      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time', 'sms_itinerary_hour', 'vol_signup_roles', 'vol_signup_days']);
       var c = {}; ((r && r.data) || []).forEach(function (x) { c[x.key] = x.value; });
       S.cfg = c; S.mode = c.sms_mode || 'off'; S.modeAt = Date.now();
     } catch (e) { S.mode = S.mode || 'off'; }
@@ -64331,7 +64333,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (iv) out.push('Itinerary texted ' + fmtWhen(iv.sent_at || iv.created_at));
     return out.map(function (x) { return '<span class="w171tag mute">' + E(x) + '</span>'; }).join('');
   }
-  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : ''); }
+  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : '') + w175Tags(r); }
   function decorateCards() {
     var D = curD(); var ev = curEv(); if (!D || !ev) return;
     var by = {}; (D.roster || []).forEach(function (r) { by[String(r.id)] = r; });
@@ -64390,7 +64392,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function paintCard() {
     var ev = curEv(), D = curD(); var rail = document.getElementById('w119rail');
     if (!ev || !D || !rail || !staff()) return;
-    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false); await loadRecipes();
+    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false); await loadRecipes(); await loadAccounts(false);
     if (curEv() !== ev) return;
     rail = document.getElementById('w119rail'); if (!rail) return;
     var box = document.getElementById('w171card');
@@ -64608,7 +64610,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function settingsModal() {
     var cn = await can(); await loadCfg(true);
     openModal('<div class="w171m"><h3>Text settings</h3><p class="sub">Loading\u2026</p></div>');
-    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true)]);
+    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true), loadAccounts(true)]);
     paintSettings(cn);
   }
   function paintSettings(cn) {
@@ -64621,6 +64623,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + surveyHtml(cn)
       + cookHtml()
       + itinSetHtml(cn)
+      + accountsHtml(cn)
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'
@@ -64982,6 +64985,57 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try { var r = await db.from('volunteer_survey_questions').update({ active: el.checked, updated_at: new Date().toISOString(), updated_by: await myEmail() }).eq('id', id); if (r.error) throw r.error; (W4.qs || []).forEach(function (q) { if (q.id === id) q.active = el.checked; }); T(el.checked ? 'Question back on' : 'Question off'); }
     catch (e) { el.checked = !el.checked; T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
   }
+  /* =====================================================================
+     wave175 (30/09/26): volunteer accounts (hub.welfareavenue.com/me). On the event page each roster card says when the
+     volunteer signed up themselves on their page and when they have an account; Text settings gains "Volunteer accounts":
+     how many are linked, the open-spot settings, and a check of an hours letter's reference.
+     ===================================================================== */
+  var W5 = { acc: null, accAt: 0 };
+  async function loadAccounts(force) {
+    if (!force && W5.acc && Date.now() - W5.accAt < 60000) return W5.acc;
+    try { var r = await db.from('volunteer_accounts').select('person_id,linked_via,linked_at,last_seen_at'); var by = {}; ((r && r.data) || []).forEach(function (x) { by[x.person_id] = x; }); W5.acc = by; } catch (e) { W5.acc = W5.acc || {}; }
+    W5.accAt = Date.now();
+    return W5.acc;
+  }
+  function w175Tags(r) {
+    if (isOff(r)) return '';
+    var out = '';
+    if ((r.detail || {}).source === 'self sign-up (volunteer page)') out += '<span class="w171tag wait">Signed up on their page</span>';
+    if (r.person_id && W5.acc && W5.acc[r.person_id]) out += '<span class="w171tag mute">Has a volunteer account</span>';
+    return out;
+  }
+  function accountsHtml(cn) {
+    var n = W5.acc ? Object.keys(W5.acc).length : 0;
+    return '<div class="w171h" style="margin-top:18px">Volunteer accounts</div>'
+      + '<p class="w171note">Volunteers sign in with Google at hub.welfareavenue.com/me to see their servings and hours, their upcoming servings, open spots, and a letter of their hours. ' + n + ' account' + (n === 1 ? '' : 's') + ' linked so far. A volunteer&rsquo;s account can never open the Hub.</p>'
+      + '<div class="two"><div><label class="f">Roles volunteers can sign up for themselves</label><input type="text" id="w175roles" value="' + E(S.cfg.vol_signup_roles || '') + '"' + (cn.admin ? '' : ' disabled') + '></div>'
+      + '<div><label class="f">How far ahead (days)</label><input type="text" id="w175days" value="' + E(S.cfg.vol_signup_days || '90') + '"' + (cn.admin ? '' : ' disabled') + '></div></div>'
+      + (cn.admin ? '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w175save="1">Save the sign-up settings</button></div>' : '')
+      + '<label class="f">Check an hours letter (its reference, like WA-VH-89C29E)</label><div style="display:flex;gap:8px"><input type="text" id="w175ref" placeholder="WA-VH-" style="max-width:200px"><button class="w171btn ghost" data-w175ref="1">Check</button></div><div id="w175refout" class="w171note" style="margin-top:6px"></div>';
+  }
+  async function refCheck() {
+    var v = String((document.getElementById('w175ref') || {}).value || '').trim().toUpperCase(); var out = document.getElementById('w175refout'); if (!out) return;
+    if (!/^WA-VH-[0-9A-F]{6}$/.test(v)) { out.textContent = 'A reference looks like WA-VH-89C29E.'; return; }
+    try {
+      var r = await db.from('volunteer_hour_letters').select('*').eq('ref', v).maybeSingle();
+      var x = r && r.data;
+      out.innerHTML = x ? '<b>Real letter.</b> ' + E(x.full_name) + ': ' + E(x.servings) + ' servings, about ' + E(x.hours) + ' hours, ' + E(fmtDay(x.first_date)) + ' to ' + E(fmtDay(x.last_date)) + '. Issued ' + E(fmtWhen(x.issued_at)) + '.' : '<b style="color:' + FLAG + '">No letter has this reference.</b>';
+    } catch (e) { out.textContent = 'Could not check: ' + String((e && e.message) || e).slice(0, 80); }
+  }
+  async function signupSave(btn) {
+    var roles = String((document.getElementById('w175roles') || {}).value || '').split(',').map(function (x) { return lower(x); }).filter(Boolean);
+    var bad = roles.filter(function (x) { return ROLES.indexOf(x) < 0; });
+    if (bad.length) { T('Not a role: ' + bad.join(', ') + '. Roles: ' + ROLES.join(', ')); return; }
+    var days = String(parseInt((document.getElementById('w175days') || {}).value, 10));
+    if (!(Number(days) >= 7 && Number(days) <= 365)) { T('Days ahead: 7 to 365'); return; }
+    btn.disabled = true;
+    try {
+      var now = new Date().toISOString(), rows = [['vol_signup_roles', roles.join(',')], ['vol_signup_days', days]];
+      for (var i = 0; i < rows.length; i++) { var r = await db.from('app_config').update({ value: rows[i][1], updated_at: now }).eq('key', rows[i][0]); if (r.error) throw r.error; S.cfg[rows[i][0]] = rows[i][1]; }
+      T('Sign-up settings saved');
+    } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
+    btn.disabled = false;
+  }
 
   /* ---------- wiring ---------- */
   function afterEvent() { setTimeout(function () { loadRaw(curEv() || {}); paintCard(); decorateCards(); decorateMast(); }, 260); }
@@ -65035,6 +65089,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((b = t.closest('[data-w174st]'))) { e.preventDefault(); saveStart(b); return; }
     if ((b = t.closest('[data-w174read]'))) { e.preventDefault(); readModal(); return; }
     if ((b = t.closest('[data-w174itsave]'))) { e.preventDefault(); itinSave(b); return; }
+    if ((b = t.closest('[data-w175save]'))) { e.preventDefault(); signupSave(b); return; }
+    if ((b = t.closest('[data-w175ref]'))) { e.preventDefault(); refCheck(); return; }
     if ((b = t.closest('[data-w171open]'))) { e.preventDefault(); location.hash = '#volunteering/e/' + b.getAttribute('data-w171open'); return; }
   });
   document.addEventListener('change', function (e) {
@@ -65071,7 +65127,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- test hook ---------- */
   window.w171 = { state: function () { return S; }, paintCard: paintCard, decorateCards: decorateCards, decorateMast: decorateMast, decorateCalendar: decorateCalendar,
-    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
+    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w175: W5, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

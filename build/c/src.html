@@ -23,7 +23,8 @@
      list) or drop-off at the serving by noon, and whether they stay to serve.
      wave174 (30/09/26): the role's own times (from the serving's start time; in the calendar entries too); the survey, tailored
      to the role, on this page an hour after the serving starts (volunteer_survey_submit); the itinerary by role from the day
-     before (team leaders and drivers, servers and photographers, the Community lead; none for cooks). ?test=1 previews both. -->
+     before (team leaders and drivers, servers and photographers, the Community lead; none for cooks). ?test=1 previews both.
+     wave175 (30/09/26): "Save to my account" goes to hub.welfareavenue.com/me?link=<token> (the volunteer account page). -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -195,7 +196,8 @@ ul.team li,ul.notes li{margin:0 0 5px}
       itClW: 'Welcome people and listen', itClWB: 'Greet people, learn names and have real conversations. Note the needs people share, and fill in the tracking form as people are served (it is under your forms below).',
       itClC: 'Build the community', itClCB: 'Introduce regulars to the volunteers, invite people back to the next serving, and check in with the volunteers during the serving.',
       itClE: 'Close the day', itClEB: 'Count the clothing that is left, then fill in your survey on this page: it is the debrief (clothing, needs, barriers, ratings). Remind the volunteers that their survey comes by text.',
-      kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text' },
+      kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text',
+      acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots, with your Google account.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
@@ -239,7 +241,8 @@ ul.team li,ul.notes li{margin:0 0 5px}
       itClW: 'Accueillir et écouter', itClWB: 'Saluez les gens, retenez les prénoms et prenez le temps de vraies conversations. Notez les besoins exprimés et remplissez le formulaire de suivi au fil du service (il est dans vos formulaires plus bas).',
       itClC: 'Bâtir la communauté', itClCB: 'Présentez les habitués aux bénévoles, invitez les gens au prochain service et prenez des nouvelles des bénévoles pendant le service.',
       itClE: 'Clore la journée', itClEB: 'Comptez les vêtements restants, puis remplissez votre sondage sur cette page : c’est le bilan (vêtements, besoins, obstacles, évaluations). Rappelez aux bénévoles que leur sondage arrive par texto.',
-      kMain: 'chauffeur principal', kPick: 'chauffeur des collectes', kBoth: 'chauffeur', call2: 'Appeler', text2: 'Texto' }
+      kMain: 'chauffeur principal', kPick: 'chauffeur des collectes', kBoth: 'chauffeur', call2: 'Appeler', text2: 'Texto',
+      acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres, avec votre compte Google.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
@@ -460,6 +463,8 @@ ul.team li,ul.notes li{margin:0 0 5px}
     }).join('') + '</ul></div>';
   }
   function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  /* wave175: keep it in their Google account (hub.welfareavenue.com/me) */
+  function acctHtml() { return S.test ? '' : '<div class="soon" style="margin:18px 0 0"><img src="' + ST + 'brand/doodle-heart-purple.png" alt="" style="width:28px;height:auto;flex:none"><div><a href="/me/?link=' + encodeURIComponent(token()) + '" style="font-weight:700">' + E(t('acct')) + '</a><br><span style="font-size:14px">' + E(t('acctP')) + '</span></div></div>'; }
   function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
   /* ---------- wave174: the survey, tailored to the role ---------- */
   function svLabel(o) { return (S.lang === 'fr' ? o.fr : o.en) || o.en || ''; }
@@ -625,7 +630,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
     if (d.past) {
       app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml()
         + (d.survey ? surveyHtml() : '<div class="banner info">' + E(t('past')) + '</div>')
-        + linksHtml() + callHtml(); return;
+        + linksHtml() + acctHtml() + callHtml(); return;
     }
     if (svOpen && d.state !== 'declined') {
       /* the serving day, after it started: the survey first */
@@ -634,7 +639,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
     }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + spotHtml() + itineraryHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+        + spotHtml() + itineraryHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
         + (S.test && d.survey ? surveyHtml() : '');
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
@@ -642,7 +647,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
     } else if (d.state === 'early') {
       app.innerHTML = test + err + '<h2>' + E(t('earlyT')) + '</h2><div class="rule"></div><p style="margin:0 0 12px">' + E(t('hi')) + ' ' + E(d.first || '') + '. ' + E(t('earlyP')) + '</p>'
         + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + '</div></div>'
-        + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + linksHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
+        + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + linksHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else {
       app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t('intro')) + '</p>' + spotHtml()
         + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('confirm')) + '</button>'
@@ -736,6 +741,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
     if (!S.chosen && r.body.lang === 'fr') S.lang = 'fr';
     setBand(r.body.photo);
     paint();
+    if (location.hash === '#survey') svScroll();
   }).catch(function () { notFound(t('offline')); });
 })();
 </script>
