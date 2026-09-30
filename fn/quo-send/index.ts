@@ -1,4 +1,6 @@
-// Welfare Avenue: quo-send (v3, wave171, 30/09/26)
+// Welfare Avenue: quo-send (v4, wave172, 30/09/26)
+// v4 (wave172): drain also sends the sign-up notices (kind signup) and the survey texts (kind survey); only the thank-you
+// after a YES or NO (ack) may go outside 8 am to 8 pm.
 // Purpose: every text the Hub sends from the ops line (438) 808-7754 through Quo (OpenPhone), logged in quo_messages.
 // Trigger: staff in the Hub (Text volunteers, Send me a test) with their sign-in; the Hub itself (cron wa-sms-tick,
 //   wa171_text_to_confirm, quo-events) with the trigger secret.
@@ -129,7 +131,7 @@ async function drain(): Promise<Record<string, unknown>> {
       await svc.from('quo_messages').update({ status: 'skipped', error: 'test mode: only the test phones get texts' }).eq('id', r.id);
       skipped++; continue;
     }
-    if (r.kind === 'confirm' && !inWindow) { waiting++; continue; }
+    if (r.kind !== 'ack' && !inWindow) { waiting++; continue; }
     // claim the row first, so two drains never send it twice
     const { data: claimed } = await svc.from('quo_messages').update({ status: 'sent', sent_at: new Date().toISOString() })
       .eq('id', r.id).eq('status', 'queued').select('id');

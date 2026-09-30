@@ -20,6 +20,9 @@
    Text settings: the mode (off, test, live; admins switch it, logged; the assistant never does), the test phone, and
    what volunteers see per role (the photo from the Photo library's ready photos, what to expect, bring and arrival, in
    English and French).
+   wave172 (30/09/26): the roster cards also say what volunteers told us on their page (a cook's recipe, a server's
+   donations, a new driver's car, how a photographer will share) and when the sign-up notice and the survey went; Text
+   settings gains the survey (link, roles, hour) and each role's forms and guides (links).
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
@@ -42,7 +45,7 @@
   function fmtDay(iso, long) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', long ? { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' } : { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
   function fmtWhen(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return String(ts).slice(0, 16); } }
   function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
-  var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community welcome', community_debrief: 'Community debrief', volunteer: 'Volunteer' };
+  var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community welcome', community_debrief: 'Community lead', volunteer: 'Volunteer' };
   function one(r) { return ONE[r] || String(r || 'volunteer').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); }); }
   function roleLabel(r) { try { return typeof waVolRoleLabel === 'function' ? waVolRoleLabel(r) : r; } catch (e) { return r; } }
   function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }

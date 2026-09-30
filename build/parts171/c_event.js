@@ -1,6 +1,6 @@
 
   /* ---------- the event page ---------- */
-  function tagFor(r, evId) {
+  function statusTag(r, evId) {
     if (isOff(r)) return '';
     var c = r.confirm || {};
     if (isConf(r)) {
@@ -12,23 +12,39 @@
       return '';
     }
     var t = lastText(evId, r.id);
+    if (!t && r.signup_noticed_at) return '<span class="w171tag mute">Told they are signed up · ' + E(fmtWhen(r.signup_noticed_at)) + '</span>';
     if (t && t.status === 'sent') return '<span class="w171tag wait">Texted ' + E(fmtWhen(t.sent_at || t.created_at)) + ' · no answer yet</span>';
     if (t && t.status === 'queued') return '<span class="w171tag wait">Text queued</span>';
     if (t && t.status === 'failed') return '<span class="w171tag no" title="' + E(t.error || '') + '">The text did not go through</span>';
     if (!phoneOf(r)) return '<span class="w171tag mute">No phone number</span>';
     return '';
   }
+  /* wave172: what the volunteer told us on their page (the recipe, donations, the car, how photos come back) and the survey */
+  var SHARE = { album: 'the Google Photos album', drive: 'the Drive folder', email: 'email' };
+  function recipeName(id) { var x = (S.recipes || []).filter(function (r) { return r.id === id; })[0]; return x ? x.name : 'recipe ' + id; }
+  function detailTags(r, evId) {
+    if (isOff(r) || isDecl(r)) return '';
+    var c = r.confirm || {}, out = [];
+    if (r.recipe_id && lower(r.role) === 'cook') out.push('Cooking: ' + recipeName(r.recipe_id));
+    if (c.donations) out.push('Bringing to donate: ' + c.donations);
+    if (c.vehicle || c.model) out.push('Car: ' + [c.vehicle, c.model].filter(Boolean).join(' '));
+    if (c.photos_share) out.push('Photos by ' + (SHARE[c.photos_share] || c.photos_share));
+    var sv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'survey' && x.direction === 'out' && x.status === 'sent'; })[0];
+    if (sv) out.push('Survey texted ' + fmtWhen(sv.sent_at || sv.created_at));
+    return out.map(function (x) { return '<span class="w171tag mute">' + E(x) + '</span>'; }).join('');
+  }
+  function tagFor(r, evId) { return statusTag(r, evId) + detailTags(r, evId); }
   function decorateCards() {
     var D = curD(); var ev = curEv(); if (!D || !ev) return;
     var by = {}; (D.roster || []).forEach(function (r) { by[String(r.id)] = r; });
     document.querySelectorAll('#w119 [data-w119card]').forEach(function (el) {
       var r = by[el.getAttribute('data-w119card')]; if (!r) return;
       var html = tagFor(r, ev.id);
-      var old = el.querySelector('.w171tag');
-      if (!html) { if (old) old.remove(); return; }
-      if (old && old.outerHTML === html) return;
-      if (old) old.remove();
-      el.insertAdjacentHTML('beforeend', html);
+      var olds = el.querySelectorAll('.w171tag');
+      var cur = Array.prototype.map.call(olds, function (x) { return x.outerHTML; }).join('');
+      if (cur === html) return;
+      Array.prototype.forEach.call(olds, function (x) { x.remove(); });
+      if (html) el.insertAdjacentHTML('beforeend', html);
     });
   }
   function decorateMast() {
@@ -57,7 +73,7 @@
     if (!up) note = 'This serving is over, so no more confirmation texts go out.';
     else if (mode === 'off') note = 'Texts are off: nothing goes out until an admin switches them on in Text settings.';
     else if (mode === 'test') note = 'Test mode: only the test phone gets texts. Everyone else is held back.';
-    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away.';
+    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + (S.cfg.sms_survey_url ? ' After the serving, the survey goes to: ' + String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + '.' : '');
     var reps = replies(ev.id).slice(0, 6);
     return '<h4>Texts <span class="mode ' + E(mode) + '">' + E(MODES[mode] || mode) + '</span></h4>'
       + '<div class="w171nums"><div><b>' + c.conf + '</b><span>confirmed of ' + c.list + '</span></div><div><b>' + c.bytext + '</b><span>by text</span></div><div><b>' + c.waiting + '</b><span>waiting' + (c.texted ? ', ' + c.texted + ' texted' : '') + '</span></div><div><b>' + c.decl + '</b><span>can’t make it</span></div></div>'
@@ -68,10 +84,15 @@
       + '<button class="w171btn ghost" data-w171set="1">Text settings</button></div>'
       + '<div class="w171h">Replies</div>' + (reps.length ? reps.map(function (m) { return repHtml(m, D); }).join('') : '<p class="w171note" style="margin:0">No texts back yet. YES and NO update the roster by themselves; anything else shows here for the team.</p>');
   }
+  async function loadRecipes() {
+    if (S.recipes) return S.recipes;
+    try { var r = await db.from('recipes').select('id,name').order('sort'); S.recipes = (r && r.data) || []; } catch (e) { S.recipes = []; }
+    return S.recipes;
+  }
   async function paintCard() {
     var ev = curEv(), D = curD(); var rail = document.getElementById('w119rail');
     if (!ev || !D || !rail || !staff()) return;
-    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false);
+    var cn = await can(); await loadCfg(false); await loadMsgs(ev.id, false); await loadRecipes();
     if (curEv() !== ev) return;
     rail = document.getElementById('w119rail'); if (!rail) return;
     var box = document.getElementById('w171card');
@@ -173,18 +194,18 @@
   }
 
   /* ---------- the page refreshes itself while it is open, so a tap on a phone shows up here ---------- */
-  function rosterSig(rows) { return (rows || []).map(function (r) { return r.id + ':' + (r.status || '') + ':' + (r.confirm_status || '') + ':' + (r.confirmed_at || ''); }).sort().join('|'); }
+  function rosterSig(rows) { return (rows || []).map(function (r) { return r.id + ':' + (r.status || '') + ':' + (r.confirm_status || '') + ':' + (r.confirmed_at || '') + ':' + (r.recipe_id || '') + ':' + JSON.stringify(r.confirm || {}); }).sort().join('|'); }
   async function tick() {
     if (document.hidden || !onEvent() || S.busy) return;
     var ev = curEv(), D = curD(); if (!ev || !D) return;
     try {
-      var r = await db.from('event_roster').select('id,status,confirm_status,confirmed_at,confirm').eq('event_id', ev.id);
+      var r = await db.from('event_roster').select('id,status,confirm_status,confirmed_at,confirm,recipe_id,signup_noticed_at').eq('event_id', ev.id);
       var rows = (r && r.data) || [];
       await loadMsgs(ev.id, true);
       if (rosterSig(rows) !== rosterSig(D.roster)) {
         var by = {}; rows.forEach(function (x) { by[x.id] = x; });
         var changed = false;
-        D.roster.forEach(function (x) { var n = by[x.id]; if (n && (n.status !== x.status || n.confirm_status !== x.confirm_status || n.confirmed_at !== x.confirmed_at)) { Object.assign(x, n); changed = true; } });
+        D.roster.forEach(function (x) { var n = by[x.id]; if (n && rosterSig([n]) !== rosterSig([x])) { Object.assign(x, n); changed = true; } });
         if (rows.length !== D.roster.length) { if (typeof waVolLoadEvent === 'function') { await waVolLoadEvent(ev.id); changed = true; } }
         if (changed) {
           ev.roster_confirmed = (curD().roster || []).filter(function (x) { return lower(x.status) === 'confirmed'; }).length;

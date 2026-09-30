@@ -14,6 +14,48 @@
   }
   async function myEmail() { try { var u = await db.auth.getUser(); return (u && u.data && u.data.user && u.data.user.email) || null; } catch (e) { return null; } }
   function guideOf(role) { return (S.guides || []).filter(function (g) { return g.role === role; })[0] || null; }
+  /* wave172: the survey after the serving (the Volunteer Survey from the master SOP) */
+  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher'];
+  function surveyHtml(cn) {
+    var on = String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return x.trim(); });
+    var dis = cn.admin ? '' : ' disabled';
+    return '<div class="w171h" style="margin-top:18px">The survey after the serving</div>'
+      + '<p class="w171note">A thank-you text with the survey link goes to the confirmed volunteers in these roles, from this hour on the day of the serving (or the next day if it was missed).</p>'
+      + '<label class="f">Survey link</label><input type="text" id="w171svu" value="' + E(S.cfg.sms_survey_url || '') + '"' + dis + '>'
+      + '<div class="two"><div><label class="f">Who gets it</label>' + SV_ROLES.map(function (r) { return '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:3px 0"><input type="checkbox" data-w171svr="' + r + '"' + (on.indexOf(r) >= 0 ? ' checked' : '') + dis + '> ' + E(one(r)) + '</label>'; }).join('') + '</div>'
+      + '<div><label class="f">From (hour, 24 h, Toronto)</label><input type="text" id="w171svh" value="' + E(S.cfg.sms_survey_hour || '18') + '"' + dis + '></div></div>'
+      + (cn.admin ? '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w171svsave="1">Save the survey settings</button></div>' : '');
+  }
+  async function surveySave(btn) {
+    var url = ((document.getElementById('w171svu') || {}).value || '').trim();
+    var roles = Array.prototype.map.call(document.querySelectorAll('[data-w171svr]:checked'), function (c) { return c.getAttribute('data-w171svr'); }).join(',');
+    var hour = String(parseInt((document.getElementById('w171svh') || {}).value, 10));
+    if (url && !/^https:\/\//.test(url)) { T('The survey link must start with https://'); return; }
+    if (!(Number(hour) >= 8 && Number(hour) <= 19)) { T('The hour is between 8 and 19'); return; }
+    btn.disabled = true;
+    try {
+      var now = new Date().toISOString();
+      var rows = [['sms_survey_url', url], ['sms_survey_roles', roles], ['sms_survey_hour', hour]];
+      for (var i = 0; i < rows.length; i++) { var r = await db.from('app_config').update({ value: rows[i][1], updated_at: now }).eq('key', rows[i][0]); if (r.error) throw r.error; S.cfg[rows[i][0]] = rows[i][1]; }
+      T('Survey settings saved');
+    } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
+    btn.disabled = false;
+  }
+  /* wave172: the role's forms and guides, one per line: when | English | French | link */
+  function linksText(g) { return ((g && g.links) || []).map(function (l) { return [l.when || 'before', l.label_en || '', l.label_fr || '', l.url || ''].join(' | '); }).join('\n'); }
+  function linksParse(txt) {
+    var out = [], bad = 0;
+    String(txt || '').split('\n').forEach(function (line) {
+      if (!line.trim()) return;
+      var p = line.split('|').map(function (x) { return x.trim(); });
+      var when = lower(p[0]);
+      if (['before', 'during', 'after'].indexOf(when) < 0) { when = 'before'; p.unshift('before'); }
+      var url = p[p.length - 1];
+      if (p.length < 3 || !/^(https:\/\/|mailto:)/i.test(url)) { bad++; return; }
+      out.push({ when: when, label_en: p[1], label_fr: p.length >= 4 ? p[2] : p[1], url: url });
+    });
+    return { links: out, bad: bad };
+  }
   function modeHtml(cn) {
     var m = S.mode || 'off';
     var opt = function (v, t, d) { return '<label class="' + (m === v ? 'on' : '') + '"><input type="radio" name="w171mode" value="' + v + '"' + (m === v ? ' checked' : '') + (cn.admin ? '' : ' disabled') + '><span><b>' + t + '</b><small>' + d + '</small></span></label>'; };
@@ -36,6 +78,7 @@
     var html = '<div class="w171m"><h3>Text settings</h3><p class="sub">Volunteers get a text from the ops line, 438-808-7754, 7 days before their serving (at ' + E(S.cfg.sms_confirm_hour || 10) + ' am), with their own link to confirm. ' + E(hook) + '</p>'
       + modeHtml(cn)
       + '<label class="f">Test phone</label><input type="text" id="w171tp" value="' + E(S.cfg.sms_test_phones || '') + '"' + (cn.admin ? '' : ' disabled') + ' placeholder="438 555 0100">'
+      + surveyHtml(cn)
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'
@@ -43,6 +86,7 @@
       + '<div class="two"><div><label class="f">What to expect (English, one per line)</label><textarea id="w171een">' + E((g.expect_en || []).join('\n')) + '</textarea></div><div><label class="f">What to expect (French)</label><textarea id="w171efr">' + E((g.expect_fr || []).join('\n')) + '</textarea></div></div>'
       + '<div class="two"><div><label class="f">What to bring (English)</label><input type="text" id="w171ben" value="' + E(g.bring_en || '') + '"></div><div><label class="f">What to bring (French)</label><input type="text" id="w171bfr" value="' + E(g.bring_fr || '') + '"></div></div>'
       + '<div class="two"><div><label class="f">When to arrive (English)</label><input type="text" id="w171aen" value="' + E(g.arrive_en || '') + '"></div><div><label class="f">When to arrive (French)</label><input type="text" id="w171afr" value="' + E(g.arrive_fr || '') + '"></div></div>'
+      + '<label class="f">Forms and guides, one per line: before, during or after | English | French | link</label><textarea id="w171lnk" style="min-height:110px">' + E(linksText(g)) + '</textarea>'
       + '<div class="foot"><button class="w171btn ghost" data-w171close="1">Close</button><button class="w171btn" data-w171gsave="1"' + (guideOf(S.set.role) ? '' : ' disabled') + '>Save this role</button></div></div>';
     var mb = document.getElementById('modalBox'), back = document.getElementById('modalBack');
     if (mb && back && back.style.display === 'flex' && mb.querySelector('.w171m')) mb.innerHTML = html; else openModal(html);
@@ -52,7 +96,9 @@
     var g = guideOf(S.set.role); if (!g) return;
     var v = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
     var lines = function (id) { return v(id).split('\n').map(function (s) { return s.trim(); }).filter(Boolean); };
-    var row = { label_en: v('w171len').trim() || g.label_en, label_fr: v('w171lfr').trim() || g.label_fr, photo_id: S.set.photo || null,
+    var lk = linksParse(v('w171lnk'));
+    if (lk.bad) { T(lk.bad + ' link line' + (lk.bad === 1 ? '' : 's') + ' need a link starting with https:// or mailto:'); return; }
+    var row = { links: lk.links, label_en: v('w171len').trim() || g.label_en, label_fr: v('w171lfr').trim() || g.label_fr, photo_id: S.set.photo || null,
       expect_en: lines('w171een'), expect_fr: lines('w171efr'), bring_en: v('w171ben').trim() || null, bring_fr: v('w171bfr').trim() || null,
       arrive_en: v('w171aen').trim() || null, arrive_fr: v('w171afr').trim() || null, updated_at: new Date().toISOString(), updated_by: await myEmail() };
     btn.disabled = true;

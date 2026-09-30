@@ -114,7 +114,7 @@ var WA_VOL_PHASES = [
 ];
 var WA_VOL_ROLELABEL = {
   server: 'Servers', cook: 'Cooks', driver: 'Drivers', photographer: 'Photographers',
-  dishwasher: 'Dishwashers', team_leader: 'Team leaders', community_debrief: 'Community debrief',
+  dishwasher: 'Dishwashers', team_leader: 'Team leaders', community_debrief: 'Community lead',
   community_talker: 'Community talkers'
 };
 /* the vocabulary actually used in the volunteering sheet, plus the two we add when

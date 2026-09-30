@@ -1,4 +1,4 @@
-/* w171page.js: the volunteer confirm page (build/c/index.html, wave171), offline. The page is served at
+/* w172page.js: the volunteer confirm page (build/c/index.html, wave171 and wave172), offline. The page is served at
    https://hub.welfareavenue.com/c/<token> by route interception and the two RPCs are stubbed: an open spot shows the
    first name, role, date, place and format with Confirm and I can't make it; Confirm sends the token and attending yes
    and shows "You're confirmed" with what to expect, the role's photo, what to bring and when to arrive; reopening a
@@ -18,10 +18,11 @@ function spot(over) {
   return Object.assign({
     first: 'Nasim', name: 'Nasim Example', role: 'cook', role_en: 'Cook', role_fr: 'Bénévole en cuisine', event_date: '2026-10-04',
     event_title: 'Sunday serving', location: 'Montreal', code: 'WA-26-21', lang: 'en', format: 'home_cooked', kitchen_place: null, kitchen_shift: null,
-    past: false, cancelled: false, state: 'open', confirmed_at: null, already: null, answers: null,
+    past: false, cancelled: false, state: 'open', confirmed_at: null, already: null, answers: null, opens_on: '2026-09-27', confirm_days: 7,
+    details: { recipe_id: null, donations: null, vehicle: null, model: null, car_on_file: null, photos_share: null }, recipes: [], events: [], survey_url: null,
     photo: { path: 'photos/web/2021-02-winter-home-cooked-tray.jpg', alt: 'A tray of food', fx: 0.5, fy: 0.5 },
     guide: { expect_en: ['Cook your dish at home.', 'Your driver texts you 10 minutes before.'], expect_fr: ['Préparez votre plat à la maison.', 'Votre chauffeur vous texte.'],
-      bring_en: 'Your dish, packed.', bring_fr: 'Votre plat, emballé.', arrive_en: 'Be ready for pickup.', arrive_fr: 'Soyez prêt.' }
+      bring_en: 'Your dish, packed.', bring_fr: 'Votre plat, emballé.', arrive_en: 'Be ready for pickup.', arrive_fr: 'Soyez prêt.', links: [] }
   }, over || {});
 }
 
@@ -114,6 +115,76 @@ const TOK = 'abcdef1234567890ab';
     f = await open(browser, TOK, () => ({ body: spot({ format: 'community_kitchen', kitchen_place: 'La Poubelle Magnifique, 1221 Rue Crescent', kitchen_shift: '9:00 to 12:30' }) }));
     t = await text(f.page);
     ok('kitchen: the format, the kitchen and the shift', /Community kitchen/.test(t) && /1221 Rue Crescent/.test(t) && /9:00 to 12:30/.test(t));
+    await f.ctx.close();
+
+    /* 7 (wave172). a serving more than 7 days away: signed up, no confirm button, the calendar and the other servings */
+    const EVS = [{ token: TOK, date: '2026-11-15', role: 'cook', role_en: 'Cook', role_fr: 'Bénévole en cuisine', location: 'Montreal', state: 'early', current: true },
+                 { token: 'zzzz1234567890ab', date: '2026-12-13', role: 'server', role_en: 'Server', role_fr: 'Bénévole au service', location: 'Montreal', state: 'early', current: false }];
+    const RECIPES = [{ id: 1, name: 'Chana Masala and Naan', url: 'https://drive.google.com/file/d/a/view', taken: 2 }, { id: 2, name: 'Pasta Primavera', url: 'https://drive.google.com/file/d/b/view', taken: 0 }];
+    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ state: 'early', event_date: '2026-11-15', opens_on: '2026-11-08', events: EVS, recipes: RECIPES }) } : { body: { ok: true } });
+    t = await text(f.page);
+    ok('early: signed up, confirming later', /You.re signed up!/i.test(t) && /We will text you on Sunday, November 8 to confirm/.test(t) && !(await f.page.$('#yes')), t.slice(0, 500));
+    ok('early: I can’t make it stays', !!(await f.page.$('#cant')));
+    ok('early: add to calendar', /Add to your calendar/i.test(t) && await f.page.evaluate(() => { const a = document.querySelector('.cal a'); return !!a && /calendar\.google\.com\/calendar\/render\?action=TEMPLATE/.test(a.href) && /dates=20261115\/20261116/.test(a.href); }));
+    ok('early: the other servings with their links', /Your servings/i.test(t) && /Sunday, December 13/.test(t) && await f.page.evaluate(() => !!document.querySelector('.evs a[href="/c/zzzz1234567890ab"]')), t);
+    let dl = f.page.waitForEvent('download', { timeout: 4000 }).catch(() => null);
+    await f.page.click('.cal button[data-ics]'); const d1 = await dl;
+    let icsText = ''; if (d1) { const pth = await d1.path(); icsText = fs.readFileSync(pth, 'utf8'); }
+    ok('early: the .ics file', /BEGIN:VEVENT/.test(icsText) && /DTSTART;VALUE=DATE:20261115/.test(icsText) && /Welfare Avenue serving: Cook/.test(icsText), icsText.slice(0, 300));
+    ok('cook: the recipes, with how many already chose them', /Which dish will you cook/i.test(t) && /Chana Masala and Naan/.test(t) && /2 cooks already/.test(t));
+    await f.page.check('input[name="dish"][value="2"]'); await f.page.waitForTimeout(150);
+    ok('cook: the chosen recipe links to itself', await f.page.evaluate(() => /Pasta Primavera/.test(document.body.innerText) && !!document.querySelector('a[href="https://drive.google.com/file/d/b/view"]')));
+    await f.page.click('#save'); await f.page.waitForTimeout(300);
+    let det = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[0];
+    ok('cook: saves the recipe', det && det.body.p_token === TOK && det.body.p.recipe_id === 2, det && det.body);
+    ok('cook: saved', /Saved\. Thank you!/.test(await text(f.page)));
+    if (SHOTS) await f.page.screenshot({ path: SHOTS + '/06-early-cook.png', fullPage: true });
+    await f.ctx.close();
+
+    /* 8. server: donations; the links after confirming */
+    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ role: 'server', role_en: 'Server', role_fr: 'Bénévole au service', state: 'confirmed', confirmed_at: '2026-09-28T14:00:00Z',
+      guide: { expect_en: ['Set up.'], expect_fr: ['Installez.'], links: [{ label_en: 'Volunteer survey (after the serving)', label_fr: 'Sondage', url: 'https://docs.google.com/forms/x', when: 'after' }, { label_en: 'Bad', url: 'javascript:alert(1)', when: 'after' }] } }) } : { body: { ok: true } });
+    t = await text(f.page);
+    ok('server: the donations question', /Bringing anything to donate/i.test(t));
+    ok('links: grouped, only https and mailto', /Your forms and guides/i.test(t) && /After the serving/i.test(t) && /Volunteer survey/.test(t) && !/\bBad\b/.test(t));
+    await f.page.fill('#don', 'Two bags of winter clothes'); await f.page.click('#save'); await f.page.waitForTimeout(300);
+    det = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[0];
+    ok('server: saves the donations', det && det.body.p.donations === 'Two bags of winter clothes', det && det.body);
+    await f.ctx.close();
+
+    /* 9. driver: new (no car on file) and known */
+    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ role: 'driver', role_en: 'Driver', role_fr: 'Bénévole à la livraison', state: 'confirmed' }) } : { body: { ok: true } });
+    t = await text(f.page);
+    ok('driver: asks for the car', /Your car/i.test(t) && !/Car on file/.test(t) && !!(await f.page.$('#vehicle')) && !!(await f.page.$('#model')));
+    await f.page.selectOption('#vehicle', 'SUV'); await f.page.fill('#model', 'Toyota RAV4'); await f.page.click('#save'); await f.page.waitForTimeout(300);
+    det = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[0];
+    ok('driver: saves type and model', det && det.body.p.vehicle === 'SUV' && det.body.p.model === 'Toyota RAV4', det && det.body);
+    ok('driver: then shows the car on file', /Car on file: SUV Toyota RAV4/.test(await text(f.page)));
+    await f.ctx.close();
+    f = await open(browser, TOK, () => ({ body: spot({ role: 'driver', role_en: 'Driver', state: 'confirmed', details: { car_on_file: 'Kia Soul' } }) }));
+    ok('driver: a known car is shown', /Car on file: Kia Soul/.test(await text(f.page)));
+    await f.ctx.close();
+
+    /* 10. photographer: how they share */
+    f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: spot({ role: 'photographer', role_en: 'Photographer', state: 'confirmed',
+      guide: { expect_en: ['Shoot.'], links: [{ label_en: 'Add your photos to the Google Photos album', url: 'https://photos.app.goo.gl/x', when: 'after' }, { label_en: 'Or email them to marketing@welfareavenue.com', url: 'mailto:marketing@welfareavenue.com', when: 'after' }] } }) } : { body: { ok: true } });
+    t = await text(f.page);
+    ok('photographer: the ways to share', /How will you share your photos/i.test(t) && /Google Photos album/.test(t) && await f.page.evaluate(() => !!document.querySelector('a[href^="mailto:marketing@welfareavenue.com"]')));
+    await f.page.check('input[name="share"][value="album"]'); await f.page.click('#save'); await f.page.waitForTimeout(300);
+    det = f.calls.filter(c => c.url.endsWith('volunteer_confirm_details'))[0];
+    ok('photographer: saves the choice', det && det.body.p.photos_share === 'album', det && det.body);
+    await f.ctx.close();
+
+    /* 11. after the serving: the survey */
+    f = await open(browser, TOK, () => ({ body: spot({ role: 'server', role_en: 'Server', past: true, state: 'confirmed', survey_url: 'https://docs.google.com/forms/d/e/abc/viewform' }) }));
+    t = await text(f.page);
+    ok('past: the survey', /Take the two-minute survey/i.test(t) && await f.page.evaluate(() => !!document.querySelector('a[href="https://docs.google.com/forms/d/e/abc/viewform"]')));
+    await f.ctx.close();
+
+    /* 12. test link: details save nothing */
+    f = await open(browser, TOK, () => ({ body: spot({ role: 'server', role_en: 'Server', state: 'confirmed' }) }), null, '?test=1');
+    await f.page.fill('#don', 'x'); await f.page.click('#save'); await f.page.waitForTimeout(200);
+    ok('test: details not sent', f.calls.filter(c => c.url.endsWith('volunteer_confirm_details')).length === 0 && /Saved/.test(await text(f.page)));
     await f.ctx.close();
 
     /* 6. phone width */

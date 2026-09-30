@@ -39,6 +39,7 @@
     if ((b = t.closest('[data-w171fmt]'))) { e.preventDefault(); e.stopPropagation(); loadRaw(curEv() || {}).then(fmtModal); return; }
     if ((b = t.closest('[data-w171fsave]'))) { e.preventDefault(); fmtSave(b); return; }
     if ((b = t.closest('[data-w171gsave]'))) { e.preventDefault(); saveGuide(b); return; }
+    if ((b = t.closest('[data-w171svsave]'))) { e.preventDefault(); surveySave(b); return; }
     if ((b = t.closest('[data-w171pic]'))) {
       e.preventDefault(); S.set.photo = Number(b.getAttribute('data-w171pic'));
       document.querySelectorAll('[data-w171pic]').forEach(function (x) { x.classList.toggle('on', x === b); }); return;
@@ -68,7 +69,7 @@
       if (vs && !vs.some(function (x) { return x.s === '#w171card'; })) {
         var i = -1; vs.forEach(function (x, k) { if (x.s === '#w119right') i = k; });
         vs.splice(i >= 0 ? i + 1 : vs.length, 0,
-          { s: '#w171card', t: 'Texts', p: 'Volunteers get a text from the ops line 7 days before the serving with their own link to confirm. When they tap Confirm (or reply YES), their card turns confirmed here within half a minute. Text to confirm sends it now; replies that need a person show under Replies; Text settings holds the switch, the test phone and what each role sees after confirming.', opt: 1 },
+          { s: '#w171card', t: 'Texts', p: 'Volunteers get a text from the ops line 7 days before the serving with their own link to confirm. When they tap Confirm (or reply YES), their card turns confirmed here within half a minute. Text to confirm sends it now; replies that need a person show under Replies; Someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar; after the serving the survey goes to the roles you choose. Each card shows what the volunteer told us (a cook\u2019s recipe, donations, a new driver\u2019s car). Text settings holds the switch, the test phone, the survey, and what each role sees after confirming (its forms and guides).', opt: 1 },
           { s: '#w119 .mast .w171pill', t: 'The format and who is confirmed', p: 'Home-cooked or community kitchen (click to set it, with the kitchen and the shift), and how many on the list have confirmed, by text or by hand.', opt: 1 });
       }
       var hs = TT.home && TT.home.steps;

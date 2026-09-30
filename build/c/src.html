@@ -14,7 +14,11 @@
      volunteer_confirm_get (the token is the key: first name, role, date and place, never a phone or anyone else),
      Confirm or I can't make it calls volunteer_confirm_submit, and the Hub's roster and dashboards show it at once.
      After confirming: what to expect in their role, with the role's photo from the Photo library. English and French.
-     ?test=1 (the admins' test text) shows everything and saves nothing. Built by build/c/make.py from build/c/src.html. -->
+     ?test=1 (the admins' test text) shows everything and saves nothing. Built by build/c/make.py from build/c/src.html.
+     wave172 (30/09/26): a serving more than 7 days away shows "You're signed up" (confirming opens 7 days before, when the
+     confirmation text comes); each role's own questions (a cook's recipe, a server's donations, a new driver's car, how a
+     photographer will share) saved by volunteer_confirm_details; the role's forms and guides (links); Add to calendar
+     (Google Calendar or an .ics file) for this serving and the person's other servings; the survey after the serving. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -70,6 +74,35 @@ ul.steps li:before{content:attr(data-n);position:absolute;left:0;top:8px;width:2
 .done-e{display:block;width:92px;height:auto;margin:0 0 6px}
 .heart{position:absolute;right:14px;top:-18px;width:62px;height:auto;transform:rotate(10deg)}
 .brandline{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:18px;letter-spacing:.6px;text-transform:uppercase;color:var(--green);margin:22px 0 0}
+.sec{margin:22px 0 0;border-top:1px solid var(--line);padding-top:4px}
+.q{margin:10px 0 0}
+.q label.l{display:block;font-weight:600;font-size:14px;margin:0 0 6px}
+.q select,.q input[type=text],.q textarea{width:100%;font:inherit;color:inherit;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+.q textarea{min-height:80px;resize:vertical}
+.q select:focus,.q input:focus,.q textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(220,165,39,.35)}
+.opt{display:flex;gap:10px;align-items:center;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 8px;cursor:pointer;font-size:15px}
+.opt input{width:18px;height:18px;accent-color:var(--green);flex:none;margin:0}
+.opt:has(input:checked){border-color:var(--green);background:rgba(16,63,57,.04)}
+.opt small{color:var(--muted);margin-left:auto;font-size:12.5px;white-space:nowrap}
+button.sec2{background:var(--green);color:var(--cream);font-size:16px;padding:12px 22px}
+.saved{color:#1c6b5d;font-weight:600;font-size:14px;margin:8px 0 0}
+.links a.lk{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1.5px solid var(--line);border-radius:12px;padding:11px 14px;margin:0 0 8px;text-decoration:none;color:var(--green);font-weight:600;font-size:15px}
+.links a.lk:after{content:"\2197";font-weight:700;color:var(--gold)}
+.links .w{font:700 11.5px 'Space Grotesk',Arial,sans-serif;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:12px 0 6px}
+.cal{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0}
+.cal a,.cal button{flex:1 1 150px;text-align:center;border:1.5px solid var(--green);color:var(--green);background:transparent;border-radius:999px;padding:10px 14px;font:600 14.5px 'Space Grotesk',Arial,sans-serif;text-decoration:none;cursor:pointer;margin:0;width:auto}
+.evs{list-style:none;padding:0;margin:6px 0 0}
+.evs li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.evs li:first-child{border-top:0}
+.evs .d{flex:1 1 180px;min-width:0}
+.evs .d b{display:block;font-size:15px}
+.evs .d span{color:var(--muted);font-size:13px}
+.evs .st{font-size:12px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(220,165,39,.22)}
+.evs .st.ok{background:rgba(42,140,122,.16);color:#1c6b5d}
+.evs .st.no{background:rgba(179,64,47,.1);color:var(--flag)}
+.evs .acts{display:flex;gap:10px;font-size:13.5px}
+.soon{display:flex;gap:12px;align-items:flex-start;background:rgba(220,165,39,.16);border-radius:14px;padding:12px 14px;margin:0 0 14px;font-size:15px}
+.soon b{display:block}
 .loading{color:var(--muted)}
 footer{max-width:560px;margin:0 auto;padding:0 16px 36px;font-size:13px;color:var(--muted)}
 a{color:var(--green)}
@@ -86,29 +119,55 @@ a{color:var(--green)}
   var ST = '%%ST%%';
   var OPS = '438-808-7754', OPS_TEL = '+14388087754';
   var TX = {
-    en: { loading: 'Loading…', ey: 'Your volunteer spot', title: 'See you there?', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.',
+    en: { loading: 'Loading…', ey: 'Your volunteer spot', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.',
       role: 'Role', date: 'Date', place: 'Where', format: 'Format', home: 'Home-cooked', kitchen: 'Community kitchen', shift: 'Kitchen shift',
       confirm: 'Confirm, I will be there', cant: 'I can’t make it', saving: 'Saving…',
       okT: 'You’re confirmed!', okP: 'Thank you. The team can see it now.', okWhen: 'Confirmed',
+      earlyT: 'You’re signed up!', earlyP: 'Thank you for volunteering with us. There is nothing to confirm yet:',
+      earlyWhen: 'We will text you on {d} to confirm your spot.', earlyCal: 'Add it to your calendar so you don’t miss it.',
       expect: 'What to expect as', bring: 'What to bring', arrive: 'When to arrive', photo: 'The team in action',
       noT: 'Thanks for letting us know', noP: 'We have taken you off this serving. We hope to see you at another one soon.', changed: 'Changed your mind?', again: 'I can come after all',
       call: 'Questions? Text or call Welfare Avenue at ', past: 'This serving has already happened. Thank you for being part of it.', cancelled: 'This serving was cancelled. We will be in touch about the next one.',
+      survey: 'How did it go? Take the two-minute survey', surveyP: 'Your answers help us make every serving better.',
       nf: 'We could not find this link.', nfh: 'It may be mistyped or out of date. Text us at ', offline: 'We could not reach Welfare Avenue. Check your connection and try again.',
-      test: 'Test link: nothing is saved.', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001' },
-    fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', title: 'On se voit là-bas?', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
+      test: 'Test link: nothing is saved.', brand: 'Service is solidarity, not charity.', charity: 'Registered charity 713048502RR0001',
+      yours: 'A few details for your role', save: 'Save', savedOk: 'Saved. Thank you!',
+      dish: 'Which dish will you cook?', dishPick: 'Choose a recipe…', dishNone: 'Not sure yet', taken1: '1 cook already', takenN: '{n} cooks already', seeRecipe: 'See the recipe',
+      don: 'Bringing anything to donate? (optional)', donPh: 'For example: two bags of winter clothes, toiletries',
+      car: 'Your car', carOnFile: 'Car on file:', carChange: 'Update it if it has changed.', carType: 'Type of car', carModel: 'Make and model', carPick: 'Choose…', carPh: 'For example: Toyota Corolla',
+      carTypes: ['Sedan', 'Hatchback', 'SUV', 'Minivan', 'Pickup truck', 'Van'],
+      share: 'How will you share your photos with us?', shareOpts: [['album', 'The shared Google Photos album'], ['drive', 'The Drive folder'], ['email', 'By email to marketing@welfareavenue.com']],
+      links: 'Your forms and guides', wBefore: 'Before the serving', wDuring: 'During the serving', wAfter: 'After the serving',
+      calT: 'Add to your calendar', calG: 'Google Calendar', calI: 'Apple or Outlook (.ics)',
+      evT: 'Your servings', evOpen: 'Open', stEarly: 'Confirm from {d}', stOpen: 'To confirm', stOk: 'Confirmed', stNo: 'Can’t make it', current: 'this one',
+      calTitle: 'Welfare Avenue serving: {r}', calDesc: 'Your spot as {r}. Details and your link: {u}' },
+    fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
       okT: 'C’est confirmé!', okP: 'Merci. L’équipe le voit dès maintenant.', okWhen: 'Confirmé',
+      earlyT: 'Vous êtes inscrit!', earlyP: 'Merci de faire du bénévolat avec nous. Rien à confirmer pour l’instant :',
+      earlyWhen: 'Nous vous texterons le {d} pour confirmer votre place.', earlyCal: 'Ajoutez-le à votre agenda pour ne pas l’oublier.',
       expect: 'À quoi vous attendre :', bring: 'Quoi apporter', arrive: 'Quand arriver', photo: 'L’équipe en action',
       noT: 'Merci de nous avoir prévenus', noP: 'Nous vous avons retiré de ce service. Au plaisir de vous voir à un prochain.', changed: 'Vous avez changé d’idée?', again: 'Finalement, je peux venir',
       call: 'Des questions? Textez ou appelez Welfare Avenue au ', past: 'Ce service a déjà eu lieu. Merci d’en avoir fait partie.', cancelled: 'Ce service a été annulé. Nous vous écrirons pour le prochain.',
+      survey: 'Comment ça s’est passé? Répondez au sondage de deux minutes', surveyP: 'Vos réponses nous aident à améliorer chaque service.',
       nf: 'Nous n’avons pas trouvé ce lien.', nfh: 'Il est peut-être mal copié ou expiré. Textez-nous au ', offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.',
-      test: 'Lien de test : rien n’est enregistré.', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001' }
+      test: 'Lien de test : rien n’est enregistré.', brand: '', charity: 'Organisme de bienfaisance enregistré 713048502RR0001',
+      yours: 'Quelques détails pour votre rôle', save: 'Enregistrer', savedOk: 'C’est enregistré. Merci!',
+      dish: 'Quel plat allez-vous cuisiner?', dishPick: 'Choisir une recette…', dishNone: 'Je ne sais pas encore', taken1: 'déjà 1 cuisinier ou cuisinière', takenN: 'déjà {n} en cuisine', seeRecipe: 'Voir la recette',
+      don: 'Vous apportez quelque chose à donner? (facultatif)', donPh: 'Par exemple : deux sacs de vêtements d’hiver, des articles d’hygiène',
+      car: 'Votre voiture', carOnFile: 'Voiture au dossier :', carChange: 'Mettez-la à jour si elle a changé.', carType: 'Type de voiture', carModel: 'Marque et modèle', carPick: 'Choisir…', carPh: 'Par exemple : Toyota Corolla',
+      carTypes: ['Berline', 'Hatchback', 'VUS', 'Fourgonnette', 'Camionnette', 'Camion'],
+      share: 'Comment allez-vous nous transmettre vos photos?', shareOpts: [['album', 'L’album Google Photos partagé'], ['drive', 'Le dossier Drive'], ['email', 'Par courriel à marketing@welfareavenue.com']],
+      links: 'Vos formulaires et guides', wBefore: 'Avant le service', wDuring: 'Pendant le service', wAfter: 'Après le service',
+      calT: 'Ajouter à votre agenda', calG: 'Google Agenda', calI: 'Apple ou Outlook (.ics)',
+      evT: 'Vos services', evOpen: 'Ouvrir', stEarly: 'À confirmer dès le {d}', stOpen: 'À confirmer', stOk: 'Confirmé', stNo: 'Absent', current: 'celui-ci',
+      calTitle: 'Service Welfare Avenue : {r}', calDesc: 'Votre place : {r}. Détails et votre lien : {u}' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
   var q = new URLSearchParams(location.search);
-  var S = { d: null, lang: 'en', busy: false, err: '', test: q.get('test') === '1', chosen: false };
+  var S = { d: null, lang: 'en', busy: false, err: '', test: q.get('test') === '1', chosen: false, saved: false, form: {} };
   function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function token() {
@@ -119,16 +178,16 @@ a{color:var(--green)}
     return fetch(API + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, body: j }; }); });
   }
-  function day(iso) {
+  function day(iso, short) {
     var d = new Date(String(iso) + 'T12:00:00');
     if (isNaN(d)) return String(iso || '');
-    try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); }
+    try { return d.toLocaleDateString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', short ? { weekday: 'short', month: 'short', day: 'numeric' } : { weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); }
   }
   function when(iso) {
     var d = new Date(iso); if (isNaN(d)) return '';
     try { return d.toLocaleString(S.lang === 'fr' ? 'fr-CA' : 'en-CA', { month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; }
   }
-  function roleName() { var d = S.d || {}; return (S.lang === 'fr' ? d.role_fr : d.role_en) || d.role || ''; }
+  function roleName(o) { var d = o || S.d || {}; return (S.lang === 'fr' ? d.role_fr : d.role_en) || d.role || ''; }
   function photoUrl(p) { return ST + String(p.path || '').replace(/^\/+/, ''); }
   function setBand(photo) {
     var p = photo || DEF_PHOTO;
@@ -156,12 +215,98 @@ a{color:var(--green)}
     var bring = fr ? g.bring_fr : g.bring_en, arrive = fr ? g.arrive_fr : g.arrive_en;
     var ph = d.photo || DEF_PHOTO;
     var h = '<div class="photo" role="img" aria-label="' + E(ph.alt || t('photo')) + '" style="background-image:url(&quot;' + E(photoUrl(ph)) + '&quot;);background-position:' + Math.round((ph.fx == null ? 0.5 : ph.fx) * 100) + '% ' + Math.round((ph.fy == null ? 0.5 : ph.fy) * 100) + '%"><span class="cap">' + E(roleName()) + '</span></div>';
-    h += '<h3>' + E(t('expect')) + ' ' + E(fr ? roleName().toLowerCase() : roleName().toLowerCase()) + '</h3>';
+    h += '<h3>' + E(t('expect')) + ' ' + E(roleName().toLowerCase()) + '</h3>';
     if (steps.length) h += '<ul class="steps">' + steps.map(function (s, i) { return '<li data-n="' + (i + 1) + '">' + E(s) + '</li>'; }).join('') + '</ul>';
     if (bring) h += '<div class="kv"><b>' + E(t('bring')) + '</b>' + E(bring) + '</div>';
     if (arrive) h += '<div class="kv"><b>' + E(t('arrive')) + '</b>' + E(arrive) + '</div>';
     return h;
   }
+  function safeUrl(u) { u = String(u || ''); return /^(https:\/\/|mailto:)/i.test(u) ? u : ''; }
+  function linksHtml() {
+    var ls = ((S.d.guide || {}).links || []).filter(function (l) { return safeUrl(l.url); });
+    if (!ls.length) return '';
+    var fr = S.lang === 'fr', h = '<div class="sec links"><h3>' + E(t('links')) + '</h3>';
+    [['before', 'wBefore'], ['during', 'wDuring'], ['after', 'wAfter']].forEach(function (w) {
+      var some = ls.filter(function (l) { return (l.when || 'before') === w[0]; });
+      if (!some.length) return;
+      h += '<div class="w">' + E(t(w[1])) + '</div>' + some.map(function (l) {
+        var u = safeUrl(l.url); var mail = /^mailto:/i.test(u);
+        return '<a class="lk" href="' + E(u) + '"' + (mail ? '' : ' target="_blank" rel="noopener"') + '>' + E((fr ? l.label_fr : l.label_en) || l.label_en || u) + '</a>';
+      }).join('');
+    });
+    return h + '</div>';
+  }
+  /* the role's own questions (wave172) */
+  function detailsHtml() {
+    var d = S.d, role = String(d.role || '').toLowerCase(), x = d.details || {}, f = S.form, h = '';
+    function val(k) { return f[k] !== undefined ? f[k] : (x[k] == null ? '' : x[k]); }
+    if (role === 'cook' && (d.recipes || []).length) {
+      var cur = String(val('recipe_id') || '');
+      h += '<div class="q"><label class="l">' + E(t('dish')) + '</label>' + d.recipes.map(function (r) {
+        var tk = Number(r.taken || 0);
+        return '<label class="opt"><input type="radio" name="dish" value="' + E(r.id) + '"' + (String(r.id) === cur ? ' checked' : '') + '><span>' + E(r.name) + '</span>' + (tk ? '<small>' + E(tk === 1 ? t('taken1') : t('takenN').replace('{n}', tk)) + '</small>' : '') + '</label>';
+      }).join('') + '<label class="opt"><input type="radio" name="dish" value=""' + (cur ? '' : ' checked') + '><span>' + E(t('dishNone')) + '</span></label>';
+      var pick = d.recipes.filter(function (r) { return String(r.id) === cur; })[0];
+      if (pick && safeUrl(pick.url)) h += '<p style="margin:2px 0 0;font-size:14px"><a href="' + E(safeUrl(pick.url)) + '" target="_blank" rel="noopener">' + E(t('seeRecipe')) + ': ' + E(pick.name) + '</a></p>';
+      h += '</div>';
+    } else if (role === 'server') {
+      h += '<div class="q"><label class="l" for="don">' + E(t('don')) + '</label><textarea id="don" maxlength="300" placeholder="' + E(t('donPh')) + '">' + E(val('donations')) + '</textarea></div>';
+    } else if (role === 'driver') {
+      var onFile = x.car_on_file;
+      h += '<div class="q"><label class="l">' + E(t('car')) + '</label>' + (onFile ? '<p style="margin:0 0 8px;font-size:14px">' + E(t('carOnFile')) + ' <b>' + E(onFile) + '</b>. ' + E(t('carChange')) + '</p>' : '')
+        + '<select id="vehicle" aria-label="' + E(t('carType')) + '"><option value="">' + E(t('carType')) + '</option>' + t('carTypes').map(function (c) { return '<option' + (val('vehicle') === c ? ' selected' : '') + '>' + E(c) + '</option>'; }).join('') + '</select>'
+        + '<input type="text" id="model" maxlength="60" style="margin-top:8px" aria-label="' + E(t('carModel')) + '" placeholder="' + E(t('carModel') + ' · ' + t('carPh')) + '" value="' + E(val('model')) + '"></div>';
+    } else if (role === 'photographer') {
+      var sh = val('photos_share');
+      h += '<div class="q"><label class="l">' + E(t('share')) + '</label>' + t('shareOpts').map(function (o) { return '<label class="opt"><input type="radio" name="share" value="' + o[0] + '"' + (sh === o[0] ? ' checked' : '') + '><span>' + E(o[1]) + '</span></label>'; }).join('') + '</div>';
+    }
+    if (!h) return '';
+    return '<div class="sec"><h3>' + E(t('yours')) + '</h3>' + h + '<button type="button" class="sec2" id="save"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('save')) + '</button>' + (S.saved ? '<p class="saved" role="status">' + E(t('savedOk')) + '</p>' : '') + '</div>';
+  }
+  function readForm() {
+    var d = S.d, role = String(d.role || '').toLowerCase(), p = {};
+    function v(id) { var el = document.getElementById(id); return el ? el.value : undefined; }
+    function r(name) { var el = document.querySelector('input[name="' + name + '"]:checked'); return el ? el.value : undefined; }
+    if (role === 'cook') { var dish = r('dish'); if (dish !== undefined) p.recipe_id = dish === '' ? null : Number(dish); }
+    if (role === 'server') p.donations = v('don') || '';
+    if (role === 'driver') { p.vehicle = v('vehicle') || ''; p.model = v('model') || ''; }
+    if (role === 'photographer') { var s = r('share'); if (s) p.photos_share = s; }
+    return p;
+  }
+  /* Add to calendar (wave172): all-day, the date, the place and the link */
+  function ymd(iso) { return String(iso).slice(0, 10).replace(/-/g, ''); }
+  function nextDay(iso) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
+  function linkFor(tok) { return location.origin + '/c/' + tok; }
+  function calTitle(o) { return t('calTitle').replace('{r}', roleName(o)); }
+  function gcal(o, tok) {
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(calTitle(o)) + '&dates=' + ymd(o.date || o.event_date) + '/' + ymd(nextDay(o.date || o.event_date))
+      + '&location=' + encodeURIComponent(o.location || 'Montreal') + '&details=' + encodeURIComponent(t('calDesc').replace('{r}', roleName(o)).replace('{u}', linkFor(tok)));
+  }
+  function ics(o, tok) {
+    var esc = function (s) { return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); };
+    var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    var body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Welfare Avenue//Volunteer servings//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
+      'UID:' + tok + '@hub.welfareavenue.com', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + ymd(o.date || o.event_date), 'DTEND;VALUE=DATE:' + ymd(nextDay(o.date || o.event_date)),
+      'SUMMARY:' + esc(calTitle(o)), 'LOCATION:' + esc(o.location || 'Montreal'), 'DESCRIPTION:' + esc(t('calDesc').replace('{r}', roleName(o)).replace('{u}', linkFor(tok))), 'URL:' + linkFor(tok),
+      'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    var blob = new Blob([body], { type: 'text/calendar;charset=utf-8' });
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'welfare-avenue-' + String(o.date || o.event_date).slice(0, 10) + '.ics';
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  function calHtml() {
+    var d = S.d;
+    return '<div class="sec"><h3>' + E(t('calT')) + '</h3><div class="cal"><a href="' + E(gcal(d, token())) + '" target="_blank" rel="noopener">' + E(t('calG')) + '</a><button type="button" data-ics="' + E(token()) + '">' + E(t('calI')) + '</button></div></div>';
+  }
+  function eventsHtml() {
+    var evs = (S.d.events || []);
+    if (evs.length < 2) return '';
+    return '<div class="sec"><h3>' + E(t('evT')) + '</h3><ul class="evs">' + evs.map(function (o) {
+      var st = o.state === 'confirmed' ? ['ok', t('stOk')] : o.state === 'declined' ? ['no', t('stNo')] : o.state === 'open' ? ['', t('stOpen')] : ['', t('stEarly').replace('{d}', day(addDays(o.date, -Number(S.d.confirm_days || 7)), true))];
+      return '<li><div class="d"><b>' + E(day(o.date)) + '</b><span>' + E(roleName(o)) + (o.current ? ' · ' + E(t('current')) : '') + '</span></div><span class="st ' + st[0] + '">' + E(st[1]) + '</span>'
+        + '<div class="acts">' + (o.current ? '' : '<a href="/c/' + E(o.token) + (S.test ? '?test=1' : '') + '">' + E(t('evOpen')) + '</a>') + '<a href="' + E(gcal(o, o.token)) + '" target="_blank" rel="noopener">' + E(t('calG')) + '</a><a href="#" data-ics="' + E(o.token) + '">.ics</a></div></li>';
+    }).join('') + '</ul></div>';
+  }
+  function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
   function tick() { return '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFAF2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'; }
   function paint() {
@@ -173,17 +318,26 @@ a{color:var(--green)}
     var test = S.test ? '<div class="banner info">' + E(t('test')) + '</div>' : '';
     var err = S.err ? '<div class="banner warn">' + E(S.err) + '</div>' : '';
     if (d.cancelled) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('cancelled')) + '</div>' + callHtml(); return; }
-    if (d.past) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('past')) + '</div>' + callHtml(); return; }
+    if (d.past) {
+      var sv = safeUrl(d.survey_url);
+      app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml()
+        + (sv ? '<p style="margin:0 0 10px">' + E(t('surveyP')) + '</p><a class="lk" style="display:block;text-align:center;background:var(--gold);color:var(--ink);border-radius:999px;padding:15px 20px;font-weight:600;text-decoration:none" href="' + E(sv) + '" target="_blank" rel="noopener">' + E(t('survey')) + '</a>' : '<div class="banner info">' + E(t('past')) + '</div>')
+        + linksHtml() + callHtml(); return;
+    }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + spotHtml() + guideHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
+        + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
-        + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + callHtml();
+        + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + eventsHtml() + callHtml();
+    } else if (d.state === 'early') {
+      app.innerHTML = test + err + '<h2>' + E(t('earlyT')) + '</h2><div class="rule"></div><p style="margin:0 0 12px">' + E(t('hi')) + ' ' + E(d.first || '') + '. ' + E(t('earlyP')) + '</p>'
+        + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + '</div></div>'
+        + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + linksHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else {
       app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t('intro')) + '</p>' + spotHtml()
         + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('confirm')) + '</button>'
-        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + callHtml();
+        + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + detailsHtml() + calHtml() + eventsHtml() + callHtml();
     }
   }
   function answer(att) {
@@ -193,18 +347,50 @@ a{color:var(--green)}
     S.busy = true; paint();
     rpc('volunteer_confirm_submit', { p_token: token(), p: { attending: att, via: 'link', lang: S.lang } }).then(function (r) {
       S.busy = false;
-      if (r.ok && r.body && r.body.ok) { S.d.state = r.body.state; S.d.confirmed_at = new Date().toISOString(); }
+      if (r.ok && r.body && r.body.ok) { S.d.state = r.body.state; S.d.confirmed_at = new Date().toISOString(); (S.d.events || []).forEach(function (o) { if (o.current) o.state = r.body.state; }); }
       else if (r.body && r.body.reason === 'past') { S.d.past = true; }
       else { S.err = t('offline'); }
       paint(); try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
     }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
   }
+  function save() {
+    if (S.busy) return;
+    var p = readForm(); S.form = Object.assign({}, S.form, p); S.saved = false; S.err = '';
+    var apply = function () {
+      var x = S.d.details = S.d.details || {};
+      if ('recipe_id' in p) x.recipe_id = p.recipe_id;
+      if ('donations' in p) x.donations = p.donations;
+      if ('vehicle' in p) { x.vehicle = p.vehicle; x.model = p.model; var c = [p.vehicle, p.model].filter(Boolean).join(' '); if (c) x.car_on_file = c; }
+      if ('photos_share' in p) x.photos_share = p.photos_share;
+      S.form = {}; S.saved = true;
+    };
+    if (S.test) { apply(); paint(); return; }
+    S.busy = true; paint();
+    rpc('volunteer_confirm_details', { p_token: token(), p: p }).then(function (r) {
+      S.busy = false;
+      if (r.ok && r.body && r.body.ok) apply();
+      else if (r.body && r.body.reason === 'past') S.d.past = true;
+      else S.err = t('offline');
+      paint();
+    }).catch(function () { S.busy = false; S.err = t('offline'); paint(); });
+  }
   app.addEventListener('click', function (e) {
+    var ic = e.target && e.target.closest ? e.target.closest('[data-ics]') : null;
+    if (ic) {
+      e.preventDefault(); var tk = ic.getAttribute('data-ics');
+      var o = tk === token() ? S.d : (S.d.events || []).filter(function (x) { return x.token === tk; })[0];
+      if (o) ics(o, tk); return;
+    }
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
-    if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no');
+    if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no'); else if (b.id === 'save') save();
+  });
+  app.addEventListener('change', function (e) {
+    var el = e.target; if (!el) return;
+    if (el.name === 'dish') { S.form = Object.assign({}, S.form, readForm()); S.saved = false; paint(); }
   });
   document.getElementById('langs').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;
+    if (S.d) S.form = Object.assign({}, S.form, readForm());
     S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
     if (S.d) paint(); else langButtons();
   });
@@ -229,5 +415,6 @@ a{color:var(--green)}
   }).catch(function () { notFound(t('offline')); });
 })();
 </script>
+
 </body>
 </html>
