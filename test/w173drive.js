@@ -78,7 +78,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     ok('card: in the rail', await f.ev(() => !!document.querySelector('#w119rail #w171card')), card);
     ok('card: texts on', /TEXTS ON|Texts on/i.test(card), card);
     ok('card: the numbers', /2\s*confirmed of 6/.test(card) && /1\s*by text/.test(card) && /3\s*waiting, 1 texted/.test(card) && /1\s*can.t make it/.test(card), card);
-    ok('card: the automatic note', /automatically/.test(card) && /no phone number/.test(card) && /signed up, with a link to add it to their calendar/.test(card) && /the survey goes to: server/.test(card), card);
+    ok('card: the automatic note', /automatically/.test(card) && /no phone number/.test(card) && /signed up, with a link to add it to their calendar/.test(card) && /after the serving, their survey \(server\)/.test(card), card);
     ok('card: admin buttons', /Text to confirm/.test(card) && /Send me a test/.test(card) && /Text settings/.test(card));
     ok('card: replies with their handling', /What time should I be at the storage unit/.test(card) && /Needs an answer/.test(card) && /Can.t make it/.test(card), card);
     const tags = await f.ev(() => { const o = {}; document.querySelectorAll('#w119 [data-w119card]').forEach(el => { o[el.getAttribute('data-w119card')] = Array.prototype.map.call(el.querySelectorAll('.w171tag'), x => x.innerText).join(' | '); }); return o; });
@@ -135,7 +135,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.page.click('[data-w171mset="off"]'); await f.page.waitForTimeout(500);
     calls = await f.ev(() => window.__W171.rpc.filter(c => c.fn === 'wa171_sms_mode_set'));
     ok('settings: the mode goes through wa171_sms_mode_set', calls.length === 1 && calls[0].args.p_mode === 'off', calls);
-    ok('settings (172): the survey', /The survey after the serving/i.test(m) && await f.ev(() => document.getElementById('w171svu').value === 'https://docs.google.com/forms/d/e/x/viewform' && document.querySelector('[data-w171svr="server"]').checked));
+    ok('settings (172): the survey', /The survey after the serving/i.test(m) && await f.ev(() => !document.getElementById('w171svu') && document.querySelector('[data-w171svr="server"]').checked && !document.querySelector('[data-w171svr="cook"]').checked));
     await f.page.check('[data-w171svr="cook"]'); await f.page.fill('#w171svh', '17');
     await f.page.click('[data-w171svsave]'); await f.page.waitForTimeout(500);
     const svu = await f.ev(() => window.__W171.up.filter(u => u.t === 'app_config').map(u => u.p.value));

@@ -64132,6 +64132,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    settings gains the survey (link, roles, hour) and each role's forms and guides (links).
    wave173 (30/09/26): a cook's pickup (neighbourhood and address) or drop-off (and staying to serve) on their card; Text
    settings holds the pickup areas and the drop-off.
+   wave174 (30/09/26, f_w174.js): the Survey and itinerary card on the event (the start time, each role's arrival, the
+   drivers' parts, previews, the survey answers); Text settings gains the itineraries and each role's survey questions.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
@@ -64245,7 +64247,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function loadCfg(force) {
     if (!force && S.mode && Date.now() - S.modeAt < 30000) return S.cfg;
     try {
-      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time']);
+      var r = await db.from('app_config').select('key,value').in('key', ['sms_mode', 'sms_test_phones', 'sms_confirm_days', 'sms_confirm_hour', 'quo_webhook_id', 'sms_survey_url', 'sms_survey_roles', 'sms_survey_hour', 'cook_pickup_areas', 'cook_dropoff_place', 'cook_dropoff_time', 'sms_itinerary_hour']);
       var c = {}; ((r && r.data) || []).forEach(function (x) { c[x.key] = x.value; });
       S.cfg = c; S.mode = c.sms_mode || 'off'; S.modeAt = Date.now();
     } catch (e) { S.mode = S.mode || 'off'; }
@@ -64325,9 +64327,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (c.photos_share) out.push('Photos by ' + (SHARE[c.photos_share] || c.photos_share));
     var sv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'survey' && x.direction === 'out' && x.status === 'sent'; })[0];
     if (sv) out.push('Survey texted ' + fmtWhen(sv.sent_at || sv.created_at));
+    var iv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'itinerary' && x.direction === 'out' && x.status === 'sent'; })[0];
+    if (iv) out.push('Itinerary texted ' + fmtWhen(iv.sent_at || iv.created_at));
     return out.map(function (x) { return '<span class="w171tag mute">' + E(x) + '</span>'; }).join('');
   }
-  function tagFor(r, evId) { return statusTag(r, evId) + detailTags(r, evId); }
+  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : ''); }
   function decorateCards() {
     var D = curD(); var ev = curEv(); if (!D || !ev) return;
     var by = {}; (D.roster || []).forEach(function (r) { by[String(r.id)] = r; });
@@ -64367,7 +64371,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!up) note = 'This serving is over, so no more confirmation texts go out.';
     else if (mode === 'off') note = 'Texts are off: nothing goes out until an admin switches them on in Text settings.';
     else if (mode === 'test') note = 'Test mode: only the test phone gets texts. Everyone else is held back.';
-    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + (S.cfg.sms_survey_url ? ' After the serving, the survey goes to: ' + String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + '.' : '');
+    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
     var reps = replies(ev.id).slice(0, 6);
     return '<h4>Texts <span class="mode ' + E(mode) + '">' + E(MODES[mode] || mode) + '</span></h4>'
       + '<div class="w171nums"><div><b>' + c.conf + '</b><span>confirmed of ' + c.list + '</span></div><div><b>' + c.bytext + '</b><span>by text</span></div><div><b>' + c.waiting + '</b><span>waiting' + (c.texted ? ', ' + c.texted + ' texted' : '') + '</span></div><div><b>' + c.decl + '</b><span>can\u2019t make it</span></div></div>'
@@ -64394,6 +64398,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var html = cardHtml(ev, D, cn);
     if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
     decorateCards(); decorateMast();
+    paintW174();
   }
 
   /* ---------- Text to confirm ---------- */
@@ -64495,7 +64500,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     try {
       var r = await db.from('event_roster').select('id,status,confirm_status,confirmed_at,confirm,recipe_id,signup_noticed_at').eq('event_id', ev.id);
       var rows = (r && r.data) || [];
-      await loadMsgs(ev.id, true);
+      await loadMsgs(ev.id, true); await loadResp(ev.id, true);
       if (rosterSig(rows) !== rosterSig(D.roster)) {
         var by = {}; rows.forEach(function (x) { by[x.id] = x; });
         var changed = false;
@@ -64527,27 +64532,26 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function myEmail() { try { var u = await db.auth.getUser(); return (u && u.data && u.data.user && u.data.user.email) || null; } catch (e) { return null; } }
   function guideOf(role) { return (S.guides || []).filter(function (g) { return g.role === role; })[0] || null; }
   /* wave172: the survey after the serving (the Volunteer Survey from the master SOP) */
-  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher'];
+  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher', 'community_talker', 'volunteer'];
   function surveyHtml(cn) {
-    var on = String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return x.trim(); });
+    var all = String(S.cfg.sms_survey_roles || '*').trim() === '*';
+    var on = all ? SV_ROLES.slice() : String(S.cfg.sms_survey_roles || '').split(',').map(function (x) { return x.trim(); });
     var dis = cn.admin ? '' : ' disabled';
     return '<div class="w171h" style="margin-top:18px">The survey after the serving</div>'
-      + '<p class="w171note">A thank-you text with the survey link goes to the confirmed volunteers in these roles, from this hour on the day of the serving (or the next day if it was missed).</p>'
-      + '<label class="f">Survey link</label><input type="text" id="w171svu" value="' + E(S.cfg.sms_survey_url || '') + '"' + dis + '>'
+      + '<p class="w171note">A thank-you text with the volunteer\u2019s own link goes to the confirmed volunteers in these roles, from this hour on the day of the serving (or the next day if it was missed). The survey is on their page, tailored to their role (the questions are under each role below); the answers show on the event.</p>'
       + '<div class="two"><div><label class="f">Who gets it</label>' + SV_ROLES.map(function (r) { return '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:3px 0"><input type="checkbox" data-w171svr="' + r + '"' + (on.indexOf(r) >= 0 ? ' checked' : '') + dis + '> ' + E(one(r)) + '</label>'; }).join('') + '</div>'
       + '<div><label class="f">From (hour, 24 h, Toronto)</label><input type="text" id="w171svh" value="' + E(S.cfg.sms_survey_hour || '18') + '"' + dis + '></div></div>'
       + (cn.admin ? '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w171svsave="1">Save the survey settings</button></div>' : '');
   }
   async function surveySave(btn) {
-    var url = ((document.getElementById('w171svu') || {}).value || '').trim();
-    var roles = Array.prototype.map.call(document.querySelectorAll('[data-w171svr]:checked'), function (c) { return c.getAttribute('data-w171svr'); }).join(',');
+    var picked = Array.prototype.map.call(document.querySelectorAll('[data-w171svr]:checked'), function (c) { return c.getAttribute('data-w171svr'); });
+    var roles = picked.length === SV_ROLES.length ? '*' : picked.join(',');
     var hour = String(parseInt((document.getElementById('w171svh') || {}).value, 10));
-    if (url && !/^https:\/\//.test(url)) { T('The survey link must start with https://'); return; }
     if (!(Number(hour) >= 8 && Number(hour) <= 19)) { T('The hour is between 8 and 19'); return; }
     btn.disabled = true;
     try {
       var now = new Date().toISOString();
-      var rows = [['sms_survey_url', url], ['sms_survey_roles', roles], ['sms_survey_hour', hour]];
+      var rows = [['sms_survey_roles', roles], ['sms_survey_hour', hour]];
       for (var i = 0; i < rows.length; i++) { var r = await db.from('app_config').update({ value: rows[i][1], updated_at: now }).eq('key', rows[i][0]); if (r.error) throw r.error; S.cfg[rows[i][0]] = rows[i][1]; }
       T('Survey settings saved');
     } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
@@ -64604,7 +64608,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function settingsModal() {
     var cn = await can(); await loadCfg(true);
     openModal('<div class="w171m"><h3>Text settings</h3><p class="sub">Loading\u2026</p></div>');
-    await Promise.all([loadGuides(), loadPhotos()]);
+    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true)]);
     paintSettings(cn);
   }
   function paintSettings(cn) {
@@ -64616,6 +64620,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<label class="f">Test phone</label><input type="text" id="w171tp" value="' + E(S.cfg.sms_test_phones || '') + '"' + (cn.admin ? '' : ' disabled') + ' placeholder="438 555 0100">'
       + surveyHtml(cn)
       + cookHtml()
+      + itinSetHtml(cn)
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'
@@ -64624,6 +64629,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<div class="two"><div><label class="f">What to bring (English)</label><input type="text" id="w171ben" value="' + E(g.bring_en || '') + '"></div><div><label class="f">What to bring (French)</label><input type="text" id="w171bfr" value="' + E(g.bring_fr || '') + '"></div></div>'
       + '<div class="two"><div><label class="f">When to arrive (English)</label><input type="text" id="w171aen" value="' + E(g.arrive_en || '') + '"></div><div><label class="f">When to arrive (French)</label><input type="text" id="w171afr" value="' + E(g.arrive_fr || '') + '"></div></div>'
       + '<label class="f">Forms and guides, one per line: before, during or after | English | French | link</label><textarea id="w171lnk" style="min-height:110px">' + E(linksText(g)) + '</textarea>'
+      + questionsHtml()
       + '<div class="foot"><button class="w171btn ghost" data-w171close="1">Close</button><button class="w171btn" data-w171gsave="1"' + (guideOf(S.set.role) ? '' : ' disabled') + '>Save this role</button></div></div>';
     var mb = document.getElementById('modalBox'), back = document.getElementById('modalBack');
     if (mb && back && back.style.display === 'flex' && mb.querySelector('.w171m')) mb.innerHTML = html; else openModal(html);
@@ -64750,6 +64756,232 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       placeNext(w, k, false);
     }
   }
+  /* =====================================================================
+     wave174 (30/09/26): surveys for every role, the serving's time, and the itineraries by role.
+     On the event page: a "Survey and itinerary" card under the Texts card (the start time, each role's arrival, the
+     driver parts, previews of each itinerary and survey as a test link, who answered the survey, what they said:
+     overall, the needs people told us about, what slowed the serving, the meal, and every answer in full); each roster
+     card says "Survey answered" and, for a driver, main or pickup (leaders click it to switch). Text settings gains the
+     itinerary settings (the meeting spot, the storage unit and its access, the dishwashing, the notes, the pickup lead
+     time, the hour of the day-before text) and the survey questions per role (switch one off).
+     ===================================================================== */
+  var W4 = { resp: {}, respAt: {}, qs: null, itin: null, times: {} };
+  var KIND = { main: 'Main driver', pickup: 'Pickup driver', both: 'Only driver' };
+  var ITIN_KEYS = [['meet_spot', 'Meeting spot at the serving'], ['storage_place', 'Storage unit (address and how to find it)'], ['storage_access', 'Storage access (door and locker codes; team leaders and drivers only)'],
+    ['dish_place', 'Dishwashing after the serving'], ['pickup_lead_min', 'Pickup driver starts this many minutes before the serving'], ['audit_url', 'Audit and restock form (team leaders)']];
+  var CSS4 = ''
+    + '.w174card .t{display:flex;align-items:center;gap:8px;margin:4px 0 8px;flex-wrap:wrap;font-size:13px;}'
+    + '.w174card .t input{width:92px;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:10px;padding:5px 8px;background:' + CREAM + ';}'
+    + '.w174roles{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12.5px;margin:4px 0 8px;}'
+    + '.w174roles b{font-family:' + HEAD + ';font-size:15px;color:' + GREEN + ';}'
+    + '.w174bars{margin:4px 0 8px;}'
+    + '.w174bars div{display:grid;grid-template-columns:1fr 34px;gap:6px;align-items:center;font-size:12px;margin:3px 0;}'
+    + '.w174bars i{display:block;height:7px;border-radius:7px;background:rgba(16,63,57,.08);overflow:hidden;grid-column:1/-1;margin-top:-2px;}'
+    + '.w174bars i s{display:block;height:100%;background:' + GOLD + ';text-decoration:none;}'
+    + '.w174bars span:last-child{text-align:right;font-weight:700;}'
+    + '.w174ans{border-top:1px solid rgba(16,63,57,.1);padding:10px 0;font-size:13px;}'
+    + '.w174ans .h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:0 0 4px;}'
+    + '.w174ans dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:3px 12px;margin:0;}'
+    + '.w174ans dt{color:' + MUTED + ';}.w174ans dd{margin:0;font-weight:600;white-space:pre-wrap;word-break:break-word;}'
+    + '@media (max-width:620px){.w174ans dl{grid-template-columns:1fr;}.w174ans dd{margin-bottom:4px;}}'
+    + '.w171tag[data-w174drv]{cursor:pointer;}'
+    + '.w174q{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(16,63,57,.08);font-size:13px;}'
+    + '.w174q small{display:block;color:' + MUTED + ';font-size:11.5px;}';
+  if (!document.getElementById('wa174css')) { var st4 = document.createElement('style'); st4.id = 'wa174css'; st4.textContent = CSS4; document.head.appendChild(st4); }
+
+  function hm12(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return String(s || ''); var h = Number(m[1]); return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
+  function addMin(s, n) { var m = String(s || '12:00').match(/^(\d{1,2}):(\d{2})/); var x = (Number(m[1]) * 60 + Number(m[2]) + n + 1440) % 1440; return ('0' + Math.floor(x / 60)).slice(-2) + ':' + ('0' + (x % 60)).slice(-2); }
+  async function loadResp(evId, force) {
+    if (!evId) return [];
+    if (!force && W4.resp[evId] && Date.now() - (W4.respAt[evId] || 0) < 25000) return W4.resp[evId];
+    try { var r = await db.from('volunteer_survey_responses').select('id,roster_id,role,lang,answers,submitted_at,updated_at').eq('event_id', evId); W4.resp[evId] = (r && r.data) || []; } catch (e) { W4.resp[evId] = W4.resp[evId] || []; }
+    W4.respAt[evId] = Date.now();
+    return W4.resp[evId];
+  }
+  async function loadQs(force) {
+    if (W4.qs && !force) return W4.qs;
+    try { var r = await db.from('volunteer_survey_questions').select('*').order('sort').order('id'); W4.qs = (r && r.data) || []; } catch (e) { W4.qs = W4.qs || []; }
+    return W4.qs;
+  }
+  async function loadStart(ev) {
+    try { var r = await db.from('volunteer_events').select('id,start_time').eq('id', ev.id).maybeSingle(); if (r && r.data) ev.start_time = String(r.data.start_time || '12:00').slice(0, 5); } catch (e) { /* fine */ }
+    return ev.start_time || '12:00';
+  }
+  /* a driver's part, as the database decides it (wa174_driver_kind): set by hand, or the first driver main and the next pickup */
+  function driverKinds(D) {
+    var drv = (D.roster || []).filter(function (r) { return lower(r.role) === 'driver' && !isOff(r) && !isDecl(r); });
+    var rank = function (r) { var k = (r.detail || {}).driver_role; return k === 'main' || k === 'both' ? 0 : k === 'pickup' ? 1 : 2; };
+    drv.sort(function (a, b) { return rank(a) - rank(b) || (a.sort == null ? 1e9 : a.sort) - (b.sort == null ? 1e9 : b.sort) || a.id - b.id; });
+    var out = {};
+    drv.forEach(function (r, i) { var k = (r.detail || {}).driver_role; out[r.id] = ['main', 'pickup', 'both'].indexOf(k) >= 0 ? k : drv.length === 1 ? 'both' : i === 0 ? 'main' : 'pickup'; });
+    return out;
+  }
+  function qOf(role, key) { return (W4.qs || []).filter(function (q) { return q.qkey === key && (q.role === role || q.role === '*'); }).sort(function (a, b) { return (a.role === '*') - (b.role === '*'); })[0]; }
+  function optLabel(q, v) {
+    if (v && typeof v === 'object') return 'Other: ' + v.other;
+    var o = ((q && q.options) || []).filter(function (x) { return x.v === v; })[0]; return o ? o.en : String(v);
+  }
+  function ansText(q, v) {
+    if (Array.isArray(v)) return v.map(function (x) { return optLabel(q, x); }).join(', ');
+    if (q && q.kind === 'choice') return optLabel(q, v);
+    if (q && q.kind === 'scale') return v + ' of ' + (q.max_v == null ? 5 : q.max_v);
+    return String(v);
+  }
+  function tally(rows, key, qRole) {
+    var c = {}, n = 0;
+    rows.forEach(function (x) { var v = (x.answers || {})[key]; if (v == null) return; n++; (Array.isArray(v) ? v : [v]).forEach(function (y) { var k = y && typeof y === 'object' ? 'Other: ' + y.other : optLabel(qOf(qRole || x.role, key), y); c[k] = (c[k] || 0) + 1; }); });
+    return { n: n, list: Object.keys(c).map(function (k) { return [k, c[k]]; }).sort(function (a, b) { return b[1] - a[1]; }) };
+  }
+  function barsHtml(title, tl, max) {
+    if (!tl.n) return '';
+    return '<div class="w171h">' + E(title) + ' <span style="font-weight:600;text-transform:none;letter-spacing:0">(' + tl.n + ' answered)</span></div><div class="w174bars">' + tl.list.slice(0, max || 6).map(function (p) {
+      return '<div><span>' + E(p[0]) + '</span><span>' + p[1] + '</span><i><s style="width:' + Math.round(100 * p[1] / tl.n) + '%"></s></i></div>';
+    }).join('') + '</div>';
+  }
+  function avg(rows, key) { var v = rows.map(function (x) { return (x.answers || {})[key]; }).filter(function (x) { return typeof x === 'number'; }); return v.length ? Math.round(10 * v.reduce(function (a, b) { return a + b; }, 0) / v.length) / 10 : null; }
+  function w174Html(ev, D, cn, rows) {
+    var st = ev.start_time || '12:00';
+    var up = ev.event_date >= todayIso() && ev.status !== 'cancelled';
+    var dk = driverKinds(D);
+    var guides = S.guides || [];
+    var g = function (r) { return guides.filter(function (x) { return x.role === r; })[0] || {}; };
+    var lead = Number((W4.itin || {}).pickup_lead_min || 75);
+    var roleRow = function (label, from, to) { return '<b>' + E(hm12(from)) + '</b><span>' + E(label) + (to ? ' (to ' + E(hm12(to)) + ')' : '') + '</span>'; };
+    var times = roleRow('Team leader and main driver at the storage unit', addMin(st, g('team_leader').arrive_offset_min == null ? -60 : g('team_leader').arrive_offset_min))
+      + roleRow('Pickup driver starts the pickups', addMin(st, -lead))
+      + roleRow('Community lead (clothing count)', addMin(st, g('community_debrief').arrive_offset_min == null ? -15 : g('community_debrief').arrive_offset_min))
+      + roleRow('Serving: servers, photographers', st, addMin(st, g('server').duration_min || 120));
+    var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
+    var conf = list.filter(isConf);
+    var byId = {}; (D.roster || []).forEach(function (r) { byId[r.id] = r; });
+    var answered = rows.filter(function (x) { return byId[x.roster_id]; });
+    /* previews: the first person on the list per itinerary kind, as a test link (saves nothing) */
+    var pv = [];
+    var seen = {};
+    list.forEach(function (r) {
+      var role = lower(r.role); if (!r.confirm_token) return;
+      var kind = role === 'driver' ? 'driver ' + (dk[r.id] || '') : role;
+      if (seen[kind]) return; seen[kind] = 1;
+      pv.push('<a class="w171btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(r.confirm_token) + '?test=1">' + E(role === 'driver' ? (KIND[dk[r.id]] || 'Driver') : one(role)) + '</a>');
+    });
+    var srv = answered.filter(function (x) { return ['server', 'team_leader', 'community_debrief', 'community_talker'].indexOf(x.role) >= 0; });
+    var mealAvg = avg(answered, 'meal_rating');
+    var h = '<h4>Survey and itinerary</h4>'
+      + '<div class="t">Serving starts at ' + (cn.text || staff() ? '<input type="time" id="w174st" value="' + E(st) + '"' + (up ? '' : ' disabled') + '> <button class="w171btn ghost" data-w174st="1"' + (up ? '' : ' disabled') + '>Save</button>' : '<b>' + E(hm12(st)) + '</b>') + '</div>'
+      + '<div class="w174roles">' + times + '</div>'
+      + '<p class="w171note">Confirmed volunteers see their itinerary on their page from the day before (team leaders and drivers, servers and photographers, the Community lead; cooks have none), and get a text with it at ' + E(hm12(((S.cfg.sms_itinerary_hour || '17') + ':00'))) + ' when texts are on. After the serving, everyone confirmed gets their own survey. Previews (test links, nothing is saved):</p>'
+      + (pv.length ? '<div class="w171btns">' + pv.join('') + '</div>' : '<p class="w171note">No one on the list yet.</p>')
+      + '<div class="w171h">Survey</div>'
+      + '<div class="w171nums" style="grid-template-columns:repeat(3,1fr)"><div><b>' + answered.length + '</b><span>answered of ' + conf.length + ' confirmed</span></div>'
+      + '<div><b>' + (mealAvg == null ? '\u2013' : mealAvg) + '</b><span>meal rating (0 to 5)</span></div>'
+      + '<div><b>' + (avg(answered, 'meals') == null ? '\u2013' : avg(answered, 'meals')) + '</b><span>meals served (team leader)</span></div></div>'
+      + barsHtml('Overall', tally(answered, 'overall', '*'))
+      + barsHtml('Needs people told us about', tally(srv, 'needs'), 9)
+      + barsHtml('What slowed the serving', tally(answered.filter(function (x) { return (x.answers || {}).barriers; }), 'barriers'))
+      + barsHtml('The meal, as servers saw it', tally(answered, 'meal_reaction', 'server'))
+      + (answered.length ? '<div class="w171btns"><button class="w171btn ghost" data-w174read="1">Read every answer</button></div>' : '<p class="w171note" style="margin:0">' + (ev.event_date > todayIso() ? 'The survey opens an hour after the serving starts.' : 'No answers yet.') + '</p>');
+    return h;
+  }
+  async function paintW174() {
+    var ev = curEv(), D = curD(); var rail = document.getElementById('w119rail');
+    if (!ev || !D || !rail || !staff()) return;
+    var cn = await can();
+    await Promise.all([loadResp(ev.id, false), loadQs(false), S.guides ? null : loadGuides(), W4.itin ? null : loadItin(), ev.start_time ? null : loadStart(ev)]);
+    if (curEv() !== ev) return;
+    rail = document.getElementById('w119rail'); if (!rail) return;
+    var box = document.getElementById('w174card');
+    if (!box) { box = document.createElement('div'); box.id = 'w174card'; box.className = 'cardy w174card'; var after = document.getElementById('w171card'); if (after && after.parentNode === rail) after.insertAdjacentElement('afterend', box); else rail.insertBefore(box, rail.firstChild); }
+    var html = w174Html(ev, D, cn, W4.resp[ev.id] || []);
+    if (box.__h !== html && !(document.activeElement && document.activeElement.id === 'w174st')) { box.innerHTML = html; box.__h = html; }
+  }
+  /* the roster cards: survey answered, a driver's part */
+  function w174Tags(r, evId, dk) {
+    if (isOff(r) || isDecl(r)) return '';
+    var out = '';
+    if (lower(r.role) === 'driver' && dk[r.id]) out += '<span class="w171tag mute" data-w174drv="' + r.id + '" title="' + (staff() ? 'Click to switch main or pickup' : '') + '">' + E(KIND[dk[r.id]]) + '</span>';
+    var a = (W4.resp[evId] || []).filter(function (x) { return x.roster_id === r.id; })[0];
+    if (a) out += '<span class="w171tag ok">Survey answered \u00b7 ' + E(fmtWhen(a.updated_at || a.submitted_at)) + '</span>';
+    return out;
+  }
+  async function saveStart(btn) {
+    var ev = curEv(); var el = document.getElementById('w174st'); if (!ev || !el) return;
+    var v = String(el.value || '').slice(0, 5);
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) { T('The time looks like 12:00'); return; }
+    btn.disabled = true;
+    try { var r = await db.from('volunteer_events').update({ start_time: v }).eq('id', ev.id); if (r.error) throw r.error; ev.start_time = v; T('The serving starts at ' + hm12(v)); document.getElementById('w174card').__h = ''; paintW174(); }
+    catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); btn.disabled = false; }
+  }
+  async function switchDriver(rid) {
+    var D = curD(); if (!D) return;
+    var r = (D.roster || []).filter(function (x) { return x.id === rid; })[0]; if (!r) return;
+    var dk = driverKinds(D); var next = dk[rid] === 'main' ? 'pickup' : dk[rid] === 'pickup' ? 'both' : 'main';
+    var detail = Object.assign({}, r.detail || {}, { driver_role: next });
+    try { var res = await db.from('event_roster').update({ detail: detail }).eq('id', rid); if (res.error) throw res.error; r.detail = detail; T(first(r.person_name) + ': ' + KIND[next].toLowerCase()); decorateCards(); document.getElementById('w174card').__h = ''; paintW174(); }
+    catch (e) { T('Could not switch: ' + String((e && e.message) || e).slice(0, 90)); }
+  }
+  function readModal() {
+    var ev = curEv(), D = curD(); if (!ev || !D) return;
+    var byId = {}; (D.roster || []).forEach(function (r) { byId[r.id] = r; });
+    var rows = (W4.resp[ev.id] || []).filter(function (x) { return byId[x.roster_id]; });
+    var html = '<div class="w171m"><h3>Survey answers</h3><p class="sub">' + E(fmtDay(ev.event_date, true)) + ' \u00b7 ' + rows.length + ' answered. Staff only.</p>';
+    rows.forEach(function (x) {
+      var r = byId[x.roster_id]; var a = x.answers || {};
+      var qs = (W4.qs || []).filter(function (q) { return (q.role === '*' || q.role === x.role) && a[q.qkey] != null; }).sort(function (p, q) { return p.sort - q.sort; });
+      html += '<div class="w174ans"><div class="h"><b>' + E(r.person_name || 'Unnamed') + '</b><span class="w171tag mute" style="display:inline-block;margin:0">' + E(one(x.role)) + '</span><span style="color:' + MUTED + ';font-size:11.5px">' + E(fmtWhen(x.updated_at || x.submitted_at)) + (x.lang === 'fr' ? ' \u00b7 in French' : '') + '</span></div><dl>'
+        + qs.map(function (q) { return '<dt>' + E(q.label_en) + '</dt><dd>' + E(ansText(q, a[q.qkey])) + '</dd>'; }).join('') + '</dl></div>';
+    });
+    html += '<div class="foot"><button class="w171btn ghost" data-w171close="1">Close</button></div></div>';
+    openModal(html);
+  }
+  /* ---------- Text settings: the itineraries and the survey questions ---------- */
+  async function loadItin() {
+    try { var r = await db.from('volunteer_itinerary_settings').select('key,value'); var o = {}; ((r && r.data) || []).forEach(function (x) { o[x.key] = x.value; }); W4.itin = o; } catch (e) { W4.itin = W4.itin || {}; }
+    return W4.itin;
+  }
+  function itinSetHtml(cn) {
+    var o = W4.itin || {};
+    return '<div class="w171h" style="margin-top:18px">Itineraries</div>'
+      + '<p class="w171note">What volunteers see on their page from the day before. The storage access shows only to team leaders and drivers.</p>'
+      + ITIN_KEYS.map(function (k) { return '<label class="f">' + E(k[1]) + '</label><input type="text" data-w174it="' + k[0] + '" value="' + E(o[k[0]] || '') + '">'; }).join('')
+      + '<div class="two"><div><label class="f">Important notes (English, one per line)</label><textarea data-w174it="notes_en">' + E(o.notes_en || '') + '</textarea></div><div><label class="f">Important notes (French)</label><textarea data-w174it="notes_fr">' + E(o.notes_fr || '') + '</textarea></div></div>'
+      + '<label class="f">The itinerary text goes the day before at (hour, 24 h, Toronto)</label><input type="text" id="w174ih" value="' + E(S.cfg.sms_itinerary_hour || '17') + '"' + (cn.admin ? '' : ' disabled') + ' style="max-width:120px">'
+      + '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w174itsave="1">Save the itineraries</button></div>';
+  }
+  async function itinSave(btn) {
+    var rows = Array.prototype.map.call(document.querySelectorAll('[data-w174it]'), function (el) { return { key: el.getAttribute('data-w174it'), value: el.value.trim() || null }; });
+    var lead = rows.filter(function (x) { return x.key === 'pickup_lead_min'; })[0];
+    if (lead && lead.value && !(Number(lead.value) >= 0 && Number(lead.value) <= 240)) { T('The pickup lead time is minutes, 0 to 240'); return; }
+    var au = rows.filter(function (x) { return x.key === 'audit_url'; })[0];
+    if (au && au.value && !/^https:\/\//.test(au.value)) { T('The audit form link must start with https://'); return; }
+    btn.disabled = true;
+    try {
+      var who = await myEmail(), now = new Date().toISOString();
+      var r = await db.from('volunteer_itinerary_settings').upsert(rows.map(function (x) { return Object.assign(x, { updated_at: now, updated_by: who }); }));
+      if (r.error) throw r.error;
+      rows.forEach(function (x) { W4.itin[x.key] = x.value; });
+      var hEl = document.getElementById('w174ih');
+      if (hEl && !hEl.disabled && hEl.value.trim() !== String(S.cfg.sms_itinerary_hour || '17')) {
+        var h = String(parseInt(hEl.value, 10));
+        if (!(Number(h) >= 8 && Number(h) <= 19)) throw new Error('the hour is between 8 and 19');
+        var r2 = await db.from('app_config').update({ value: h, updated_at: now }).eq('key', 'sms_itinerary_hour'); if (r2.error) throw r2.error; S.cfg.sms_itinerary_hour = h;
+      }
+      T('Itineraries saved');
+    } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
+    btn.disabled = false;
+  }
+  function questionsHtml() {
+    var qs = (W4.qs || []).filter(function (q) { return q.role === '*' || q.role === S.set.role; });
+    return '<div class="w171h" style="margin-top:18px">This role\u2019s survey after the serving</div>'
+      + '<p class="w171note">Everyone answers the common questions (how it went, feeling ready, communication, coming back) plus their role\u2019s own. Untick a question to stop asking it.</p>'
+      + qs.map(function (q) {
+        return '<label class="w174q"><input type="checkbox" data-w174q="' + q.id + '"' + (q.active ? ' checked' : '') + '><span>' + E(q.label_en) + (q.required ? ' *' : '') + '<small>' + E(q.role === '*' ? 'Every role' : one(q.role)) + ' \u00b7 ' + E({ choice: 'one answer', multi: 'several answers', scale: (q.min_v == null ? 0 : q.min_v) + ' to ' + (q.max_v == null ? 5 : q.max_v), number: 'a number', text: 'in their words' }[q.kind] || q.kind) + (q.options && q.options.length ? ': ' + q.options.map(function (o) { return o.en; }).join(', ') : '') + '</small></span></label>';
+      }).join('');
+  }
+  async function qToggle(el) {
+    var id = Number(el.getAttribute('data-w174q'));
+    try { var r = await db.from('volunteer_survey_questions').update({ active: el.checked, updated_at: new Date().toISOString(), updated_by: await myEmail() }).eq('id', id); if (r.error) throw r.error; (W4.qs || []).forEach(function (q) { if (q.id === id) q.active = el.checked; }); T(el.checked ? 'Question back on' : 'Question off'); }
+    catch (e) { el.checked = !el.checked; T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
+  }
 
   /* ---------- wiring ---------- */
   function afterEvent() { setTimeout(function () { loadRaw(curEv() || {}); paintCard(); decorateCards(); decorateMast(); }, 260); }
@@ -64771,7 +65003,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   try {
     var vs = document.getElementById('volunteering');
     if (vs) new MutationObserver(function (muts) {
-      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && t.closest('#w171card, .w171tag, .w171m1, .w171fmt')) continue; soon(); return; }
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && t.closest('#w171card, #w174card, .w171tag, .w171m1, .w171fmt')) continue; soon(); return; }
     }).observe(vs, { childList: true, subtree: true });
   } catch (e) { /* fine */ }
   /* every 30 seconds while an event page is open (and the tab is visible): a tap on a phone shows up here */
@@ -64799,6 +65031,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }
     if ((b = t.closest('[data-w171mset]'))) { e.preventDefault(); modeSet(b.getAttribute('data-w171mset'), b); return; }
     if ((b = t.closest('[data-w171mno]'))) { e.preventDefault(); var r0 = document.querySelector('input[name="w171mode"][value="' + (S.mode || 'off') + '"]'); if (r0) r0.checked = true; modeAsk(S.mode); return; }
+    if ((b = t.closest('[data-w174drv]'))) { e.preventDefault(); e.stopPropagation(); if (staff()) switchDriver(Number(b.getAttribute('data-w174drv'))); return; }
+    if ((b = t.closest('[data-w174st]'))) { e.preventDefault(); saveStart(b); return; }
+    if ((b = t.closest('[data-w174read]'))) { e.preventDefault(); readModal(); return; }
+    if ((b = t.closest('[data-w174itsave]'))) { e.preventDefault(); itinSave(b); return; }
     if ((b = t.closest('[data-w171open]'))) { e.preventDefault(); location.hash = '#volunteering/e/' + b.getAttribute('data-w171open'); return; }
   });
   document.addEventListener('change', function (e) {
@@ -64807,6 +65043,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.name === 'w171f') { var k = document.getElementById('w171kit'); if (k) k.style.display = t.value === 'community_kitchen' ? '' : 'none'; document.querySelectorAll('input[name="w171f"]').forEach(function (x) { x.closest('label').classList.toggle('on', x.checked); }); return; }
     if (t.id === 'w171role') { S.set.role = t.value; can().then(paintSettings); return; }
     if (t.id === 'w171tp') { testPhoneSave(t); return; }
+    if (t.hasAttribute && t.hasAttribute('data-w174q')) { qToggle(t); return; }
   });
   try {
     if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) {
@@ -64823,6 +65060,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         var i = -1; vs.forEach(function (x, k) { if (x.s === '#w119right') i = k; });
         vs.splice(i >= 0 ? i + 1 : vs.length, 0,
           { s: '#w171card', t: 'Texts', p: 'Volunteers get a text from the ops line 7 days before the serving with their own link to confirm. When they tap Confirm (or reply YES), their card turns confirmed here within half a minute. Text to confirm sends it now; replies that need a person show under Replies; Someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar; after the serving the survey goes to the roles you choose. Each card shows what the volunteer told us (a cook\u2019s recipe, donations, a new driver\u2019s car). Text settings holds the switch, the test phone, the survey, and what each role sees after confirming (its forms and guides).', opt: 1 },
+          { s: '#w174card', t: 'Survey and itinerary', p: 'When the serving starts and when each role arrives; which driver is main and which picks up (click the tag on a driver\u2019s card); a preview of each role\u2019s itinerary and survey; and what volunteers said after the serving: overall, the needs people told us about, what slowed things down, the meal, and every answer in full.', opt: 1 },
           { s: '#w119 .mast .w171pill', t: 'The format and who is confirmed', p: 'Home-cooked or community kitchen (click to set it, with the kitchen and the shift), and how many on the list have confirmed, by text or by hand.', opt: 1 });
       }
       var hs = TT.home && TT.home.steps;
@@ -64833,7 +65071,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- test hook ---------- */
   window.w171 = { state: function () { return S; }, paintCard: paintCard, decorateCards: decorateCards, decorateMast: decorateMast, decorateCalendar: decorateCalendar,
-    paintNext: paintNext, nextHtml: nextHtml, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
+    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

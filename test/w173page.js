@@ -195,10 +195,10 @@ const TOK = 'abcdef1234567890ab';
     ok('photographer: saves the choice', det && det.body.p.photos_share === 'album', det && det.body);
     await f.ctx.close();
 
-    /* 11. after the serving: the survey */
-    f = await open(browser, TOK, () => ({ body: spot({ role: 'server', role_en: 'Server', past: true, state: 'confirmed', survey_url: 'https://docs.google.com/forms/d/e/abc/viewform' }) }));
+    /* 11. after the serving: the survey (wave174: on the page itself, test/w174page.js) */
+    f = await open(browser, TOK, () => ({ body: spot({ role: 'server', role_en: 'Server', past: true, state: 'confirmed', survey: { open: true, questions: [{ key: 'overall', kind: 'choice', en: 'Overall?', fr: 'Global?', required: true, options: [{ v: 'good', en: 'Good', fr: 'Bonne' }] }] } }) }));
     t = await text(f.page);
-    ok('past: the survey', /Take the two-minute survey/i.test(t) && await f.page.evaluate(() => !!document.querySelector('a[href="https://docs.google.com/forms/d/e/abc/viewform"]')));
+    ok('past: the survey', /How did it go\?/i.test(t) && await f.page.evaluate(() => !!document.getElementById('svsend')));
     await f.ctx.close();
 
     /* 12. test link: details save nothing */

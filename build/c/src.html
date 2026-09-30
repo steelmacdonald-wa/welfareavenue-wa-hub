@@ -20,7 +20,10 @@
      photographer will share) saved by volunteer_confirm_details; the role's forms and guides (links); Add to calendar
      (Google Calendar or an .ics file) for this serving and the person's other servings; the survey after the serving.
      wave173 (30/09/26): cooks say how their food reaches us: pickup from their address in the pickup areas (the old website's
-     list) or drop-off at the serving by noon, and whether they stay to serve. -->
+     list) or drop-off at the serving by noon, and whether they stay to serve.
+     wave174 (30/09/26): the role's own times (from the serving's start time; in the calendar entries too); the survey, tailored
+     to the role, on this page an hour after the serving starts (volunteer_survey_submit); the itinerary by role from the day
+     before (team leaders and drivers, servers and photographers, the Community lead; none for cooks). ?test=1 previews both. -->
 <style>
 :root{--green:#103F39;--cream:#FFFAF2;--gold:#DCA527;--ink:#1F201E;--muted:#6B6A66;--line:rgba(16,63,57,.16);--flag:#B3402F;--card:#FFFFFF;--purple:#6F64AB}
 *{box-sizing:border-box}
@@ -108,6 +111,34 @@ button.sec2{background:var(--green);color:var(--cream);font-size:16px;padding:12
 .loading{color:var(--muted)}
 footer{max-width:560px;margin:0 auto;padding:0 16px 36px;font-size:13px;color:var(--muted)}
 a{color:var(--green)}
+.req{color:var(--flag)}
+.q .help{margin:-2px 0 6px;color:var(--muted);font-size:13px}
+.svq{padding:10px 0 4px;border-top:1px solid var(--line)}
+.svq.err label.l{color:var(--flag)}
+.svq.err{box-shadow:inset 3px 0 0 var(--flag);padding-left:10px}
+.q input[type=number]{width:100%;font:inherit;color:inherit;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;outline:none}
+.svother{width:100%;font:inherit;color:inherit;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 8px}
+.scale{display:flex;gap:6px;flex-wrap:wrap}
+.scale .sc{flex:1 1 40px;position:relative}
+.scale .sc input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.scale .sc span{display:block;text-align:center;border:1.5px solid var(--line);border-radius:12px;padding:10px 0;font-weight:700;color:var(--green)}
+.scale .sc input:checked+span{background:var(--green);color:var(--cream);border-color:var(--green)}
+.scale .sc input:focus-visible+span{outline:3px solid var(--gold)}
+.m{color:var(--muted);font-size:13.5px}
+ol.tl{list-style:none;padding:0;margin:6px 0 0}
+ol.tl>li{display:grid;grid-template-columns:78px 1fr;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+ol.tl>li:first-child{border-top:0}
+ol.tl .tm{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:19px;color:var(--green);line-height:1.2}
+ol.tl b{display:block;font-size:16px}
+ol.tl p b{display:inline;font-size:inherit}
+ol.tl p{margin:4px 0 0;font-size:15px}
+ol.stops{margin:8px 0 0;padding-left:20px;font-size:15px}
+ol.stops li{margin:0 0 8px}
+a.lk.rt{display:inline-block;border:1.5px solid var(--green);border-radius:999px;padding:8px 14px;text-decoration:none;font-weight:600;font-size:14.5px}
+.itin .w{font:700 11.5px 'Space Grotesk',Arial,sans-serif;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+ul.team,ul.notes{margin:0;padding-left:18px;font-size:15px}
+ul.team li,ul.notes li{margin:0 0 5px}
+@media (max-width:420px){ol.tl>li{grid-template-columns:62px 1fr}}
 </style>
 </head>
 <body>
@@ -147,7 +178,24 @@ a{color:var(--green)}
       links: 'Your forms and guides', wBefore: 'Before the serving', wDuring: 'During the serving', wAfter: 'After the serving',
       calT: 'Add to your calendar', calG: 'Google Calendar', calI: 'Apple or Outlook (.ics)',
       evT: 'Your servings', evOpen: 'Open', stEarly: 'Confirm from {d}', stOpen: 'To confirm', stOk: 'Confirmed', stNo: 'Can’t make it', current: 'this one',
-      calTitle: 'Welfare Avenue serving: {r}', calDesc: 'Your spot as {r}. Details and your link: {u}' },
+      calTitle: 'Welfare Avenue serving: {r}', calDesc: 'Your spot as {r}. Details and your link: {u}',
+      when: 'When', toT: '{a} to {b}', serveAt: 'the serving starts at {t}', cookHome: 'Food ready for pickup from {t} (your driver texts you first)', cookDrop: 'Drop off your food by {t}',
+      svT: 'How did it go?', svP: 'Two minutes, and it helps us make every serving better. Questions with * are needed.', svSend: 'Send my answers', svReq: 'Please answer the questions marked in red.',
+      svBad: 'One answer does not look right. Please check it.', svThanks: 'Thank you! We got your answers.', svThanksP: 'The team reads every one of them.', svEdit: 'Change my answers',
+      svOther: 'Other (tell us)', svClosed: 'The survey for this serving is closed. Thank you for being part of it.', svPreview: 'Test preview: the survey opens an hour after the serving starts.',
+      itT: 'Your itinerary', itSub: '{d} · the serving starts at {t}', itTeam: 'Your team', itNotes: 'Important', itRoute: 'Open the route in Google Maps', itMap: 'Map',
+      itStorage: 'Meet at the storage unit', itStorageB: 'Load the equipment and the food bins with the team.', itAccess: 'Access:', itAccessNone: 'Text the ops line if you do not have the storage codes.',
+      itPick: 'Pick up the cooks’ food', itPickB: 'Text each cook about 10 minutes before you arrive.', itNoPick: 'No pickups yet: the cooks tell us on their page whether we pick up or they drop off.',
+      itBoth: 'Then the storage unit, with the team leader', itServe: 'The serving', itServeB: 'Set up at {p}.', itDrops: 'Cooks dropping off their food:', itStays: 'staying to serve',
+      itTl: 'Share your ETA in the group chat and keep your data on. Everyone gets a survey by text after the serving: remind the team to answer it.', itAudit: 'Weekly audit and restock form',
+      itAfter: 'After the serving', itAfterB: 'Dishwashing: {p}', itAfterBack: 'Bring the equipment back to the storage unit.', itAfterPick: 'Help the team pack up and follow the team leader’s direction.',
+      itArrive: 'Meet the team', itArriveB: 'At {p}. Find the team leader and follow their direction.', itPhoto: 'Ask before photographing anyone’s face, and share your photos the same day (the links are below).',
+      itDon: 'Bringing donations? Hand them to the team leader when you arrive.', itDish: 'After the serving, the dishes go to {p}', itSurvey: 'Your two-minute survey comes by text after the serving.',
+      itClA: 'Arrive and count the clothing', itClAB: 'Meet the team leader at {p} and count the clothing items before the serving opens. You report the number in your survey.',
+      itClW: 'Welcome people and listen', itClWB: 'Greet people, learn names and have real conversations. Note the needs people share, and fill in the tracking form as people are served (it is under your forms below).',
+      itClC: 'Build the community', itClCB: 'Introduce regulars to the volunteers, invite people back to the next serving, and check in with the volunteers during the serving.',
+      itClE: 'Close the day', itClEB: 'Count the clothing that is left, then fill in your survey on this page: it is the debrief (clothing, needs, barriers, ratings). Remind the volunteers that their survey comes by text.',
+      kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
@@ -174,7 +222,24 @@ a{color:var(--green)}
       links: 'Vos formulaires et guides', wBefore: 'Avant le service', wDuring: 'Pendant le service', wAfter: 'Après le service',
       calT: 'Ajouter à votre agenda', calG: 'Google Agenda', calI: 'Apple ou Outlook (.ics)',
       evT: 'Vos services', evOpen: 'Ouvrir', stEarly: 'À confirmer dès le {d}', stOpen: 'À confirmer', stOk: 'Confirmé', stNo: 'Absent', current: 'celui-ci',
-      calTitle: 'Service Welfare Avenue : {r}', calDesc: 'Votre place : {r}. Détails et votre lien : {u}' }
+      calTitle: 'Service Welfare Avenue : {r}', calDesc: 'Votre place : {r}. Détails et votre lien : {u}',
+      when: 'Quand', toT: 'De {a} à {b}', serveAt: 'le service commence à {t}', cookHome: 'Plat prêt pour la collecte dès {t} (votre chauffeur vous texte avant)', cookDrop: 'Déposez votre plat avant {t}',
+      svT: 'Comment ça s’est passé?', svP: 'Deux minutes, et ça nous aide à améliorer chaque service. Les questions avec * sont nécessaires.', svSend: 'Envoyer mes réponses', svReq: 'Merci de répondre aux questions en rouge.',
+      svBad: 'Une réponse ne semble pas correcte. Merci de la vérifier.', svThanks: 'Merci! Nous avons reçu vos réponses.', svThanksP: 'L’équipe les lit toutes.', svEdit: 'Modifier mes réponses',
+      svOther: 'Autre (précisez)', svClosed: 'Le sondage pour ce service est fermé. Merci d’en avoir fait partie.', svPreview: 'Aperçu de test : le sondage ouvre une heure après le début du service.',
+      itT: 'Votre itinéraire', itSub: '{d} · le service commence à {t}', itTeam: 'Votre équipe', itNotes: 'Important', itRoute: 'Ouvrir le trajet dans Google Maps', itMap: 'Carte',
+      itStorage: 'Rendez-vous à l’entrepôt', itStorageB: 'Chargez l’équipement et les bacs de nourriture avec l’équipe.', itAccess: 'Accès :', itAccessNone: 'Textez la ligne des opérations si vous n’avez pas les codes de l’entrepôt.',
+      itPick: 'Collecte des plats', itPickB: 'Textez chaque cuisinier ou cuisinière environ 10 minutes avant d’arriver.', itNoPick: 'Pas encore de collecte : les cuisiniers nous disent sur leur page si nous passons ou s’ils déposent.',
+      itBoth: 'Puis l’entrepôt, avec le ou la responsable d’équipe', itServe: 'Le service', itServeB: 'Installation au {p}.', itDrops: 'Plats déposés par :', itStays: 'reste pour servir',
+      itTl: 'Partagez votre heure d’arrivée dans le groupe et gardez vos données mobiles activées. Tout le monde reçoit un sondage par texto après le service : rappelez à l’équipe d’y répondre.', itAudit: 'Formulaire d’inventaire hebdomadaire',
+      itAfter: 'Après le service', itAfterB: 'Vaisselle : {p}', itAfterBack: 'Rapportez l’équipement à l’entrepôt.', itAfterPick: 'Aidez l’équipe à ranger et suivez les consignes du ou de la responsable.',
+      itArrive: 'Rejoignez l’équipe', itArriveB: 'Au {p}. Trouvez le ou la responsable d’équipe et suivez ses consignes.', itPhoto: 'Demandez la permission avant de photographier un visage, et transmettez vos photos le jour même (les liens sont plus bas).',
+      itDon: 'Vous apportez des dons? Remettez-les au ou à la responsable d’équipe en arrivant.', itDish: 'Après le service, la vaisselle se fait au {p}', itSurvey: 'Votre sondage de deux minutes arrive par texto après le service.',
+      itClA: 'Arrivée et décompte des vêtements', itClAB: 'Rejoignez le ou la responsable d’équipe au {p} et comptez les vêtements avant l’ouverture. Vous indiquerez le nombre dans votre sondage.',
+      itClW: 'Accueillir et écouter', itClWB: 'Saluez les gens, retenez les prénoms et prenez le temps de vraies conversations. Notez les besoins exprimés et remplissez le formulaire de suivi au fil du service (il est dans vos formulaires plus bas).',
+      itClC: 'Bâtir la communauté', itClCB: 'Présentez les habitués aux bénévoles, invitez les gens au prochain service et prenez des nouvelles des bénévoles pendant le service.',
+      itClE: 'Clore la journée', itClEB: 'Comptez les vêtements restants, puis remplissez votre sondage sur cette page : c’est le bilan (vêtements, besoins, obstacles, évaluations). Rappelez aux bénévoles que leur sondage arrive par texto.',
+      kMain: 'chauffeur principal', kPick: 'chauffeur des collectes', kBoth: 'chauffeur', call2: 'Appeler', text2: 'Texto' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
@@ -219,7 +284,24 @@ a{color:var(--green)}
     var h = '<dl class="spot"><dt>' + E(t('role')) + '</dt><dd>' + E(roleName()) + '</dd><dt>' + E(t('date')) + '</dt><dd>' + E(day(d.event_date)) + '</dd><dt>' + E(t('place')) + '</dt><dd>' + E(d.location || 'Montreal') + '</dd>';
     if (d.format) h += '<dt>' + E(t('format')) + '</dt><dd><span class="pill">' + E(d.format === 'community_kitchen' ? t('kitchen') : t('home')) + '</span>' + (d.kitchen_place ? '<br><span style="font-weight:500">' + E(d.kitchen_place) + '</span>' : '') + '</dd>';
     if (d.kitchen_shift) h += '<dt>' + E(t('shift')) + '</dt><dd>' + E(d.kitchen_shift) + '</dd>';
+    var w = whenText(d);
+    if (w) h += '<dt>' + E(t('when')) + '</dt><dd>' + E(w) + '</dd>';
     return h + '</dl>';
+  }
+  /* wave174: the times (Toronto): 10:45 am, or 10 h 45 in French */
+  function hm(s) {
+    var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return String(s || '');
+    var hh = Number(m[1]), mm = m[2];
+    if (S.lang === 'fr') return hh + ' h' + (mm === '00' ? '' : ' ' + mm);
+    return (hh % 12 || 12) + ':' + mm + (hh < 12 ? ' am' : ' pm');
+  }
+  function whenText(d) {
+    var tm = d.times; if (!tm || !tm.start) return '';
+    if (tm.at === 'home') return t('cookHome').replace('{t}', hm(tm.start));
+    if (tm.at === 'dropoff') return t('cookDrop').replace('{t}', dropTime());
+    var s = t('toT').replace('{a}', hm(tm.start)).replace('{b}', hm(tm.end));
+    if (tm.serve && tm.serve !== tm.start) s += ' (' + t('serveAt').replace('{t}', hm(tm.serve)) + ')';
+    return s;
   }
   function guideHtml() {
     var d = S.d, g = d.guide || {}, fr = S.lang === 'fr';
@@ -329,15 +411,35 @@ a{color:var(--green)}
   function nextDay(iso) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); }
   function linkFor(tok) { return location.origin + '/c/' + tok; }
   function calTitle(o) { return t('calTitle').replace('{r}', roleName(o)); }
+  /* wave174: the role's own times when known (Toronto, written in UTC), otherwise the whole day */
+  function torontoOffset(iso) {
+    /* Eastern time: daylight time from the second Sunday of March to the first Sunday of November */
+    var y = Number(String(iso).slice(0, 4)), d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z');
+    var sun = function (m, n) { var x = new Date(Date.UTC(y, m, 1)); var add = (7 - x.getUTCDay()) % 7; return Date.UTC(y, m, 1 + add + 7 * (n - 1)); };
+    return (d.getTime() >= sun(2, 2) && d.getTime() < sun(10, 1)) ? 4 : 5;
+  }
+  function utcStamp(iso, hmv) {
+    var m = String(hmv || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return '';
+    var d = new Date(String(iso).slice(0, 10) + 'T00:00:00Z'); d.setUTCHours(Number(m[1]) + torontoOffset(iso), Number(m[2]), 0, 0);
+    return d.toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  }
+  function span(o) {
+    var iso = o.date || o.event_date, tm = o.times || {};
+    var a = tm.start ? utcStamp(iso, tm.start) : '', b = tm.end ? utcStamp(iso, tm.end) : '';
+    if (a && b && b > a) return { timed: true, a: a, b: b };
+    return { timed: false, a: ymd(iso), b: ymd(nextDay(iso)) };
+  }
   function gcal(o, tok) {
-    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(calTitle(o)) + '&dates=' + ymd(o.date || o.event_date) + '/' + ymd(nextDay(o.date || o.event_date))
+    var sp = span(o);
+    return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(calTitle(o)) + '&dates=' + sp.a + '/' + sp.b
       + '&location=' + encodeURIComponent(o.location || 'Montreal') + '&details=' + encodeURIComponent(t('calDesc').replace('{r}', roleName(o)).replace('{u}', linkFor(tok)));
   }
   function ics(o, tok) {
     var esc = function (s) { return String(s).replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n'); };
     var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    var sp = span(o);
     var body = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Welfare Avenue//Volunteer servings//EN', 'CALSCALE:GREGORIAN', 'BEGIN:VEVENT',
-      'UID:' + tok + '@hub.welfareavenue.com', 'DTSTAMP:' + stamp, 'DTSTART;VALUE=DATE:' + ymd(o.date || o.event_date), 'DTEND;VALUE=DATE:' + ymd(nextDay(o.date || o.event_date)),
+      'UID:' + tok + '@hub.welfareavenue.com', 'DTSTAMP:' + stamp, sp.timed ? 'DTSTART:' + sp.a : 'DTSTART;VALUE=DATE:' + sp.a, sp.timed ? 'DTEND:' + sp.b : 'DTEND;VALUE=DATE:' + sp.b,
       'SUMMARY:' + esc(calTitle(o)), 'LOCATION:' + esc(o.location || 'Montreal'), 'DESCRIPTION:' + esc(t('calDesc').replace('{r}', roleName(o)).replace('{u}', linkFor(tok))), 'URL:' + linkFor(tok),
       'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
     var blob = new Blob([body], { type: 'text/calendar;charset=utf-8' });
@@ -359,8 +461,158 @@ a{color:var(--green)}
   }
   function addDays(iso, n) { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
   function callHtml() { return '<p class="call">' + E(t('call')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>'; }
+  /* ---------- wave174: the survey, tailored to the role ---------- */
+  function svLabel(o) { return (S.lang === 'fr' ? o.fr : o.en) || o.en || ''; }
+  function svVal(k) {
+    if (S.sv && k in S.sv) return S.sv[k];
+    var a = (S.d.survey || {}).answers || {}; return a[k];
+  }
+  function surveyHtml() {
+    var sv = S.d.survey; if (!sv) return '';
+    var qs = sv.questions || [], fr = S.lang === 'fr';
+    if (!sv.open && !S.test) return '<div class="banner info">' + E(t('svClosed')) + '</div>';
+    if (sv.submitted_at && !S.svEdit) {
+      return '<div class="sec svd" id="survey"><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('svThanks')) + '</h2><p>' + E(t('svThanksP')) + '</p></div></div>'
+        + (sv.open || S.test ? '<button type="button" class="no" id="svedit">' + E(t('svEdit')) + '</button>' : '') + '</div>';
+    }
+    var h = '<div class="sec sv" id="survey"><h3 style="font-size:26px">' + E(t('svT')) + '</h3><p style="margin:0 0 8px;font-size:15px">' + E(t('svP')) + '</p>'
+      + (!sv.open && S.test ? '<div class="banner info">' + E(t('svPreview')) + '</div>' : '');
+    qs.forEach(function (q, i) {
+      var k = q.key, v = svVal(k), bad = (S.svMissing || []).indexOf(k) >= 0 || S.svBadKey === k;
+      var lab = '<label class="l" id="svl-' + E(k) + '">' + E(fr ? q.fr : q.en) + (q.required ? ' <span class="req">*</span>' : '') + '</label>'
+        + ((fr ? q.help_fr : q.help_en) ? '<p class="help">' + E(fr ? q.help_fr : q.help_en) + '</p>' : '');
+      h += '<div class="q svq' + (bad ? ' err' : '') + '" data-svq="' + E(k) + '" role="group" aria-labelledby="svl-' + E(k) + '">' + lab;
+      if (q.kind === 'choice') {
+        h += (q.options || []).map(function (o) { return '<label class="opt"><input type="radio" name="sv_' + E(k) + '" value="' + E(o.v) + '"' + (v === o.v ? ' checked' : '') + '><span>' + E(svLabel(o)) + '</span></label>'; }).join('');
+      } else if (q.kind === 'multi') {
+        var arr = Array.isArray(v) ? v : [];
+        var oth = arr.filter(function (x) { return x && typeof x === 'object'; })[0];
+        h += (q.options || []).map(function (o) { return '<label class="opt"><input type="checkbox" name="sv_' + E(k) + '" value="' + E(o.v) + '"' + (arr.indexOf(o.v) >= 0 ? ' checked' : '') + '><span>' + E(svLabel(o)) + '</span></label>'; }).join('');
+        if (q.other) h += '<input type="text" class="svother" data-svother="' + E(k) + '" maxlength="200" placeholder="' + E(t('svOther')) + '" value="' + E(oth ? oth.other : '') + '">';
+      } else if (q.kind === 'scale') {
+        var lo = q.min == null ? 0 : q.min, hi = q.max == null ? 5 : q.max, row = '';
+        for (var n = lo; n <= hi; n++) row += '<label class="sc"><input type="radio" name="sv_' + E(k) + '" value="' + n + '"' + (String(v) === String(n) && v !== undefined && v !== null && v !== '' ? ' checked' : '') + '><span>' + n + '</span></label>';
+        h += '<div class="scale">' + row + '</div>';
+      } else if (q.kind === 'number') {
+        h += '<input type="number" inputmode="numeric" data-svnum="' + E(k) + '" min="' + E(q.min == null ? 0 : q.min) + '"' + (q.max != null ? ' max="' + E(q.max) + '"' : '') + ' step="1" value="' + E(v == null ? '' : v) + '" style="max-width:180px">';
+      } else {
+        h += '<textarea data-svtext="' + E(k) + '" maxlength="1000">' + E(v == null ? '' : v) + '</textarea>';
+      }
+      h += '</div>';
+    });
+    if (S.svErr) h += '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.svErr) + '</div>';
+    return h + '<button type="button" id="svsend"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('svSend')) + '</button></div>';
+  }
+  function svRead() {
+    var sv = S.d && S.d.survey; if (!sv) return {};
+    var out = {};
+    (sv.questions || []).forEach(function (q) {
+      var k = q.key;
+      if (q.kind === 'choice' || q.kind === 'scale') {
+        var el = document.querySelector('input[name="sv_' + k + '"]:checked');
+        if (el) out[k] = q.kind === 'scale' ? Number(el.value) : el.value;
+        else if (document.querySelector('input[name="sv_' + k + '"]')) out[k] = null;
+      } else if (q.kind === 'multi') {
+        var boxes = document.querySelectorAll('input[name="sv_' + k + '"]'); if (!boxes.length) return;
+        var arr = Array.prototype.filter.call(boxes, function (b) { return b.checked; }).map(function (b) { return b.value; });
+        var ot = document.querySelector('[data-svother="' + k + '"]');
+        if (ot && ot.value.trim()) arr.push({ other: ot.value.trim() });
+        out[k] = arr;
+      } else if (q.kind === 'number') {
+        var nm = document.querySelector('[data-svnum="' + k + '"]'); if (!nm) return;
+        out[k] = nm.value.trim() === '' ? null : Number(nm.value);
+      } else {
+        var tx = document.querySelector('[data-svtext="' + k + '"]'); if (!tx) return;
+        out[k] = tx.value;
+      }
+    });
+    return out;
+  }
+  function svSend() {
+    if (S.busy) return;
+    S.sv = Object.assign({}, S.sv || {}, svRead()); S.svErr = ''; S.svMissing = []; S.svBadKey = '';
+    var qs = S.d.survey.questions || [];
+    var miss = qs.filter(function (q) { var v = S.sv[q.key]; return q.required && (v == null || v === '' || (Array.isArray(v) && !v.length) || (typeof v === 'number' && isNaN(v))); }).map(function (q) { return q.key; });
+    if (miss.length) { S.svMissing = miss; S.svErr = t('svReq'); paint(); svScroll(miss[0]); return; }
+    var answers = {}; Object.keys(S.sv).forEach(function (k) { var v = S.sv[k]; if (v != null && v !== '' && !(Array.isArray(v) && !v.length)) answers[k] = v; });
+    var done = function () { S.d.survey.answers = answers; S.d.survey.submitted_at = new Date().toISOString(); S.sv = null; S.svEdit = false; paint(); svScroll(); };
+    if (S.test) { done(); return; }
+    S.busy = true; paint();
+    rpc('volunteer_survey_submit', { p_token: token(), p: { answers: answers, lang: S.lang } }).then(function (r) {
+      S.busy = false;
+      if (r.ok && r.body && r.body.ok) { done(); return; }
+      var b = r.body || {};
+      if (b.reason === 'required') { S.svMissing = b.missing || []; S.svErr = t('svReq'); }
+      else if (b.reason === 'bad' || b.reason === 'range') { S.svBadKey = b.key || ''; S.svErr = t('svBad'); }
+      else if (b.reason === 'closed') { S.d.survey.open = false; }
+      else S.svErr = t('offline');
+      paint(); svScroll((S.svMissing || [])[0] || S.svBadKey);
+    }).catch(function () { S.busy = false; S.svErr = t('offline'); paint(); });
+  }
+  function svScroll(k) {
+    try { var el = k ? document.querySelector('[data-svq="' + k + '"]') : document.getElementById('survey'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ }
+  }
+  /* ---------- wave174: the itinerary by role, from the day before ---------- */
+  function mapLink(addr) { return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(addr); }
+  function telOf(p) { var x = String(p || '').replace(/\D/g, ''); if (x.length === 10) x = '1' + x; return x ? '+' + x : ''; }
+  function phoneTxt(p) { var x = String(p || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); return x.length === 10 ? x.slice(0, 3) + '-' + x.slice(3, 6) + '-' + x.slice(6) : String(p || ''); }
+  function contact(p) { var tl = telOf(p); return tl ? ' · <a class="nw" href="tel:' + E(tl) + '">' + E(phoneTxt(p)) + '</a>' : ''; }
+  function kindName(k) { return k === 'main' ? t('kMain') : k === 'pickup' ? t('kPick') : t('kBoth'); }
+  function itineraryHtml() {
+    var it = S.d.itinerary; if (!it) return '';
+    var fr = S.lang === 'fr', role = String(S.d.role || '').toLowerCase(), tm = it.times || {}, kind = tm.driver_kind;
+    var steps = [];
+    function step(time, title, body) { steps.push({ time: time, title: title, body: body || '' }); }
+    var place = it.place || '1500 Rue Berri', spot = it.meet_spot ? place + ' (' + it.meet_spot + ')' : place;
+    if (it.kind === 'lead_driver') {
+      var storage = '<p>' + E(it.storage_place || '') + '</p><p>' + (it.storage_access ? '<b>' + E(t('itAccess')) + '</b> ' + E(it.storage_access) : E(t('itAccessNone'))) + '</p><p>' + E(t('itStorageB')) + '</p>';
+      if (role === 'driver' && (kind === 'pickup' || kind === 'both')) {
+        var pk = it.pickups || [];
+        var pb = '<p>' + E(t('itPickB')) + '</p>' + (pk.length ? '<ol class="stops">' + pk.map(function (c) {
+          var addr = [c.address, c.postal_code].filter(Boolean).join(', ');
+          return '<li><b>' + E(c.name || '') + '</b>' + contact(c.phone) + (c.dish ? '<br><span class="m">' + E(c.dish) + '</span>' : '') + (addr ? '<br><a href="' + E(mapLink(addr + ', Montréal')) + '" target="_blank" rel="noopener">' + E(addr) + '</a>' + (c.neighbourhood ? ' <span class="m">(' + E(c.neighbourhood) + ')</span>' : '') : '') + '</li>';
+        }).join('') + '</ol>' : '<p class="m">' + E(t('itNoPick')) + '</p>')
+          + (it.route_url && pk.length ? '<p><a class="lk rt" href="' + E(it.route_url) + '" target="_blank" rel="noopener">' + E(t('itRoute')) + '</a></p>' : '');
+        step(tm.start, t('itPick'), pb);
+        if (kind === 'both') step('', t('itBoth'), storage);
+      } else {
+        step(tm.start, t('itStorage'), storage);
+      }
+      var drops = it.dropoffs || [];
+      var sb = '<p>' + E(t('itServeB').replace('{p}', spot)) + '</p>'
+        + (drops.length && !(role === 'driver' && kind === 'pickup') ? '<p><b>' + E(t('itDrops')) + '</b> ' + drops.map(function (c) { return E(c.name || '') + (c.stay === true ? ' (' + E(t('itStays')) + ')' : ''); }).join(', ') + '</p>' : '')
+        + (role === 'team_leader' ? '<p>' + E(t('itTl')) + '</p>' + (safeUrl(it.audit_url) ? '<p><a href="' + E(safeUrl(it.audit_url)) + '" target="_blank" rel="noopener">' + E(t('itAudit')) + '</a></p>' : '') : '');
+      step(it.serve, t('itServe'), sb);
+      var ab = role === 'driver' && kind === 'pickup' ? '<p>' + E(t('itAfterPick')) + '</p>'
+        : (it.dish_place ? '<p>' + E(t('itAfterB').replace('{p}', it.dish_place)) + '</p>' : '') + '<p>' + E(t('itAfterBack')) + '</p>';
+      step('', t('itAfter'), ab);
+    } else if (it.kind === 'community') {
+      step(tm.start, t('itClA'), '<p>' + E(t('itClAB').replace('{p}', spot)) + '</p>');
+      step(it.serve, t('itClW'), '<p>' + E(t('itClWB')) + '</p>');
+      step('', t('itClC'), '<p>' + E(t('itClCB')) + '</p>');
+      step('', t('itClE'), '<p>' + E(t('itClEB')) + '</p>');
+    } else {
+      var extra = role === 'photographer' ? '<p>' + E(t('itPhoto')) + '</p>' : role === 'server' ? '<p>' + E(t('itDon')) + '</p>' : '';
+      step(tm.start, t('itArrive'), '<p>' + E(t('itArriveB').replace('{p}', spot)) + '</p>' + extra);
+      if (tm.serve && tm.serve !== tm.start) step(tm.serve, t('itServe'), '');
+      step('', t('itAfter'), (it.dish_place ? '<p>' + E(t('itDish').replace('{p}', it.dish_place)) + '</p>' : '') + '<p>' + E(t('itSurvey')) + '</p>');
+    }
+    var h = '<div class="sec itin" id="itinerary"><h3 style="font-size:26px">' + E(t('itT')) + '</h3><p class="m" style="margin:0 0 10px">' + E(t('itSub').replace('{d}', day(S.d.event_date)).replace('{t}', hm(it.serve))) + '</p>'
+      + (it.kitchen_place ? '<p class="m" style="margin:-4px 0 10px">' + E(t('kitchen')) + ': ' + E(it.kitchen_place) + (it.kitchen_shift ? ' · ' + E(it.kitchen_shift) : '') + '</p>' : '')
+      + '<ol class="tl">' + steps.map(function (s) { return '<li><span class="tm">' + E(s.time ? hm(s.time) : '') + '</span><div><b>' + E(s.title) + '</b>' + s.body + '</div></li>'; }).join('') + '</ol>';
+    var team = (it.team || []).filter(function (p) { return !p.me; });
+    if (team.length) h += '<div class="w">' + E(t('itTeam')) + '</div><ul class="team">' + team.map(function (p) {
+      var rl = (fr ? p.role_fr : p.role_en) || p.role || ''; if (p.role === 'driver' && p.kind) rl = kindName(p.kind);
+      return '<li><b>' + E(p.name || '') + '</b> <span class="m">' + E(rl) + '</span>' + contact(p.phone) + '</li>';
+    }).join('') + '</ul>';
+    var notes = (fr ? it.notes_fr : it.notes_en) || [];
+    notes = notes.filter(function (x) { return String(x || '').trim(); });
+    if (notes.length && it.kind !== 'community') h += '<div class="w">' + E(t('itNotes')) + '</div><ul class="notes">' + notes.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>';
+    return h + '</div>';
+  }
   function tick() { return '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFAF2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'; }
   function paint() {
+    if (S.d && S.d.survey && document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead());
     langButtons(); footer();
     var ey = document.getElementById('ey'), ht = document.getElementById('ht');
     if (!S.d) return;
@@ -369,15 +621,21 @@ a{color:var(--green)}
     var test = S.test ? '<div class="banner info">' + E(t('test')) + '</div>' : '';
     var err = S.err ? '<div class="banner warn">' + E(S.err) + '</div>' : '';
     if (d.cancelled) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('cancelled')) + '</div>' + callHtml(); return; }
+    var svOpen = d.survey && d.survey.open;
     if (d.past) {
-      var sv = safeUrl(d.survey_url);
       app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml()
-        + (sv ? '<p style="margin:0 0 10px">' + E(t('surveyP')) + '</p><a class="lk" style="display:block;text-align:center;background:var(--gold);color:var(--ink);border-radius:999px;padding:15px 20px;font-weight:600;text-decoration:none" href="' + E(sv) + '" target="_blank" rel="noopener">' + E(t('survey')) + '</a>' : '<div class="banner info">' + E(t('past')) + '</div>')
+        + (d.survey ? surveyHtml() : '<div class="banner info">' + E(t('past')) + '</div>')
         + linksHtml() + callHtml(); return;
+    }
+    if (svOpen && d.state !== 'declined') {
+      /* the serving day, after it started: the survey first */
+      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + surveyHtml() + itineraryHtml() + linksHtml() + callHtml();
+      return;
     }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
+        + spotHtml() + itineraryHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+        + (S.test && d.survey ? surveyHtml() : '');
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
         + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + eventsHtml() + callHtml();
@@ -448,6 +706,7 @@ a{color:var(--green)}
     }
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
     if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no'); else if (b.id === 'save') save();
+    else if (b.id === 'svsend') svSend(); else if (b.id === 'svedit') { S.svEdit = true; paint(); svScroll(); }
   });
   app.addEventListener('change', function (e) {
     var el = e.target; if (!el) return;
@@ -455,7 +714,7 @@ a{color:var(--green)}
   });
   document.getElementById('langs').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;
-    if (S.d) S.form = Object.assign({}, S.form, readForm());
+    if (S.d) { S.form = Object.assign({}, S.form, readForm()); if (document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead()); }
     S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
     if (S.d) paint(); else langButtons();
   });
@@ -470,7 +729,7 @@ a{color:var(--green)}
   langButtons();
   var tk = token();
   if (!tk) { notFound(); return; }
-  rpc('volunteer_confirm_get', { p_token: tk }).then(function (r) {
+  rpc('volunteer_confirm_get', S.test ? { p_token: tk, p_preview: true } : { p_token: tk }).then(function (r) {
     if (!r.ok) { notFound(t('offline')); return; }
     if (!r.body) { notFound(); return; }
     S.d = r.body;

@@ -33,9 +33,11 @@
     if (c.photos_share) out.push('Photos by ' + (SHARE[c.photos_share] || c.photos_share));
     var sv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'survey' && x.direction === 'out' && x.status === 'sent'; })[0];
     if (sv) out.push('Survey texted ' + fmtWhen(sv.sent_at || sv.created_at));
+    var iv = (S.msgs[evId] || []).filter(function (x) { return x.roster_id === r.id && x.kind === 'itinerary' && x.direction === 'out' && x.status === 'sent'; })[0];
+    if (iv) out.push('Itinerary texted ' + fmtWhen(iv.sent_at || iv.created_at));
     return out.map(function (x) { return '<span class="w171tag mute">' + E(x) + '</span>'; }).join('');
   }
-  function tagFor(r, evId) { return statusTag(r, evId) + detailTags(r, evId); }
+  function tagFor(r, evId) { var D = curD(); return statusTag(r, evId) + detailTags(r, evId) + (D ? w174Tags(r, evId, driverKinds(D)) : ''); }
   function decorateCards() {
     var D = curD(); var ev = curEv(); if (!D || !ev) return;
     var by = {}; (D.roster || []).forEach(function (r) { by[String(r.id)] = r; });
@@ -75,7 +77,7 @@
     if (!up) note = 'This serving is over, so no more confirmation texts go out.';
     else if (mode === 'off') note = 'Texts are off: nothing goes out until an admin switches them on in Text settings.';
     else if (mode === 'test') note = 'Test mode: only the test phone gets texts. Everyone else is held back.';
-    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + (S.cfg.sms_survey_url ? ' After the serving, the survey goes to: ' + String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + '.' : '');
+    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
     var reps = replies(ev.id).slice(0, 6);
     return '<h4>Texts <span class="mode ' + E(mode) + '">' + E(MODES[mode] || mode) + '</span></h4>'
       + '<div class="w171nums"><div><b>' + c.conf + '</b><span>confirmed of ' + c.list + '</span></div><div><b>' + c.bytext + '</b><span>by text</span></div><div><b>' + c.waiting + '</b><span>waiting' + (c.texted ? ', ' + c.texted + ' texted' : '') + '</span></div><div><b>' + c.decl + '</b><span>can’t make it</span></div></div>'
@@ -102,6 +104,7 @@
     var html = cardHtml(ev, D, cn);
     if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
     decorateCards(); decorateMast();
+    paintW174();
   }
 
   /* ---------- Text to confirm ---------- */
@@ -203,7 +206,7 @@
     try {
       var r = await db.from('event_roster').select('id,status,confirm_status,confirmed_at,confirm,recipe_id,signup_noticed_at').eq('event_id', ev.id);
       var rows = (r && r.data) || [];
-      await loadMsgs(ev.id, true);
+      await loadMsgs(ev.id, true); await loadResp(ev.id, true);
       if (rosterSig(rows) !== rosterSig(D.roster)) {
         var by = {}; rows.forEach(function (x) { by[x.id] = x; });
         var changed = false;

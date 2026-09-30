@@ -743,6 +743,7 @@ Volunteer events, mostly the biweekly Sunday serving days in Montreal (kind serv
 - `kitchen_contact`: wave171, community_kitchen servings: who to reach at the kitchen (a name; no personal phone numbers here).
 - `kitchen_shift`: wave171, community_kitchen servings: the cooking shift (for example 9:00 to 12:30).
 - `ingredients_note`: wave171, community_kitchen servings: when and where the ingredients arrive, and fridge space.
+- `start_time`: wave174: when the serving starts (Toronto time; the itineraries' 12:00 pm). Each role's arrival is counted from it (volunteer_role_guides.arrive_offset_min).
 
 ### `event_roster`
 
@@ -1595,6 +1596,21 @@ wave171: what a volunteer sees after confirming on hub.welfareavenue.com/c/<toke
 
 - `photo_id`: The role's photo (wa_photos.id); shown only while that photo is ready.
 - `links`: wave172: the forms and documents the role needs, [{label_en, label_fr, url, when: before | during | after}], shown on the confirm page after confirming (from the master SOP).
+- `arrive_offset_min`: wave174: minutes from the serving's start time to this role's arrival (negative: before). Drivers and cooks follow their own rules (wa174_times).
+- `duration_min`: wave174: how long the role's calendar entry lasts, from the arrival.
+- `itinerary`: wave174: which itinerary the role gets on its page from the day before: lead_driver (team leaders and drivers), serve (servers, photographers and the other serving roles), community (the Community lead), none (cooks).
+
+### `volunteer_itinerary_settings`
+
+wave174: what the itineraries say (the meeting spot, the storage unit and its access, the dishwashing, the notes, the pickup driver's lead time). Staff read and edit; volunteers see them only on their own page (volunteer_confirm_get), team leaders and drivers only for the storage access.
+
+### `volunteer_survey_questions`
+
+wave174: the survey each volunteer answers on their page after the serving. role is the roster role, or * for every role; sort 10-90 open every survey, 100-699 are the role's own, 800-999 close it. kind: choice (one of options), multi (several, other adds a free answer), scale (min_v to max_v), number, text. Options: [{v, en, fr}]. Staff read and switch questions on or off.
+
+### `volunteer_survey_responses`
+
+wave174: a volunteer's survey answers after a serving (answers: {qkey: value}; multi answers are arrays, an other answer is {"other": text} inside them). Written only by volunteer_survey_submit from the volunteer's own page; staff read.
 
 Functions:
 
@@ -1733,6 +1749,9 @@ Functions:
 - `wa171_inbound(jsonb)`: wave171: files an incoming text ({phone, text, quo_id, at}) in quo_messages (direction in, once per quo_id) matched to the volunteer and their next serving, then acts on keywords: STOP/ARRET always sets crm_contacts.sms_opt_out; while sms_mode is live (or test, for the test phones) YES/OUI confirms the roster row, NO/NON marks it Unavailable (both queue a short thank-you, kind ack), START opts back in; anything else is a question for the team (wave169b). Service role only (quo-events).
 - `volunteer_confirm_details(text, jsonb)`: wave172, wave173: the role's own answers from the confirm page, any time before the serving: a cook's recipe (event_roster.recipe_id) and how their food reaches us (pickup: a street address and a neighbourhood from app_config cook_pickup_areas, a postal code if given, kept on the volunteer's record and as confirm.cook_location home, which the event summary's pickup route reads; drop-off at app_config cook_dropoff_place by cook_dropoff_time, with whether they stay to serve), a server's donations, a driver's car type and model (also volunteer_people.car_type), how a photographer will share, a note (all in event_roster.confirm). Anonymous by design; the token is the key; logged.
 - `wa172_queue_signups()`: wave172: the sign-up notice. For roster rows added in the last 3 days (at least 10 minutes ago, so several sign-ups go together) to servings more than 7 days away and not yet noticed, one text per phone listing those servings with a link to see them and add them to a calendar; no confirmation is asked (that text comes 7 days before each serving). Marks the rows signup_noticed_at. sms_mode, STOP and the test phones as for the confirmations. Internal: called by wa171_sms_tick.
-- `wa172_queue_surveys()`: wave172: the quick survey text after a serving (app_config sms_survey_url, the Volunteer Survey from the master SOP) to the confirmed volunteers whose role is in sms_survey_roles (server by default), from sms_survey_hour (18:00) Toronto on the day, or the next day if missed; once per roster row. sms_mode, STOP and the test phones as for the confirmations. Internal: called by wa171_sms_tick.
+- `wa172_queue_surveys()`: wave172, wave174: after the serving, a thank-you text with the volunteer's own link (their survey, tailored to their role, is on it) to the confirmed volunteers in app_config sms_survey_roles (* for every role), from sms_survey_hour on the day or the next day. Once per roster row; test mode texts the test phones only; STOP respected.
 - `wa173_cook_areas()`: wave173: the neighbourhoods where drivers pick up cooks' food (app_config cook_pickup_areas, one per line; from the old website).
+- `volunteer_confirm_get(text, boolean)`: wave31, wave171-174: what the public confirm page (hub.welfareavenue.com/c/<token>) shows for one roster row: first name, role (both languages), date, place, the format, the start time and the role's own times, the state (early: more than 7 days away; open; confirmed; declined), the role's photo, what to expect and its links, the role's own details (a cook's recipe and pickup or drop-off, a driver's car, a server's donations), the person's other upcoming servings, the role's survey (an hour after the start, for 14 days) and, for a confirmed volunteer from the day before, the role's itinerary (team leaders and drivers: the storage unit, the team's phones and the cooks' pickups; servers and photographers; the Community lead; none for cooks). p_preview (the admins' test links) shows the survey and the itinerary early. Anonymous by design; the unguessable token is the key.
+- `volunteer_survey_submit(text, jsonb)`: wave174: a volunteer's survey answers from their own page (p: {answers: {qkey: value}, lang}), from an hour after the serving starts for 14 days: only the active questions for their role, each checked (a choice among its options, several among them plus an other answer when allowed, a whole number in range, text up to 1000 characters), the required ones present. Answering again replaces the answers. Anonymous by design; the token is the key; logged.
+- `wa174_queue_itineraries()`: wave174: the day before the serving, from app_config sms_itinerary_hour (Toronto), a text with the volunteer's own link (their itinerary is on it) and their start time, to the confirmed volunteers whose role has an itinerary (volunteer_role_guides.itinerary: team leaders, drivers, servers, photographers, the Community lead; not cooks). Once per roster row; test mode texts the test phones only; STOP respected; nothing while sms_mode is off.
 

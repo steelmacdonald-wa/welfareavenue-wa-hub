@@ -25,6 +25,8 @@
    settings gains the survey (link, roles, hour) and each role's forms and guides (links).
    wave173 (30/09/26): a cook's pickup (neighbourhood and address) or drop-off (and staying to serve) on their card; Text
    settings holds the pickup areas and the drop-off.
+   wave174 (30/09/26, f_w174.js): the Survey and itinerary card on the event (the start time, each role's arrival, the
+   drivers' parts, previews, the survey answers); Text settings gains the itineraries and each role's survey questions.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;

@@ -15,27 +15,26 @@
   async function myEmail() { try { var u = await db.auth.getUser(); return (u && u.data && u.data.user && u.data.user.email) || null; } catch (e) { return null; } }
   function guideOf(role) { return (S.guides || []).filter(function (g) { return g.role === role; })[0] || null; }
   /* wave172: the survey after the serving (the Volunteer Survey from the master SOP) */
-  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher'];
+  var SV_ROLES = ['server', 'cook', 'driver', 'photographer', 'team_leader', 'community_debrief', 'dishwasher', 'community_talker', 'volunteer'];
   function surveyHtml(cn) {
-    var on = String(S.cfg.sms_survey_roles || 'server').split(',').map(function (x) { return x.trim(); });
+    var all = String(S.cfg.sms_survey_roles || '*').trim() === '*';
+    var on = all ? SV_ROLES.slice() : String(S.cfg.sms_survey_roles || '').split(',').map(function (x) { return x.trim(); });
     var dis = cn.admin ? '' : ' disabled';
     return '<div class="w171h" style="margin-top:18px">The survey after the serving</div>'
-      + '<p class="w171note">A thank-you text with the survey link goes to the confirmed volunteers in these roles, from this hour on the day of the serving (or the next day if it was missed).</p>'
-      + '<label class="f">Survey link</label><input type="text" id="w171svu" value="' + E(S.cfg.sms_survey_url || '') + '"' + dis + '>'
+      + '<p class="w171note">A thank-you text with the volunteer’s own link goes to the confirmed volunteers in these roles, from this hour on the day of the serving (or the next day if it was missed). The survey is on their page, tailored to their role (the questions are under each role below); the answers show on the event.</p>'
       + '<div class="two"><div><label class="f">Who gets it</label>' + SV_ROLES.map(function (r) { return '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:3px 0"><input type="checkbox" data-w171svr="' + r + '"' + (on.indexOf(r) >= 0 ? ' checked' : '') + dis + '> ' + E(one(r)) + '</label>'; }).join('') + '</div>'
       + '<div><label class="f">From (hour, 24 h, Toronto)</label><input type="text" id="w171svh" value="' + E(S.cfg.sms_survey_hour || '18') + '"' + dis + '></div></div>'
       + (cn.admin ? '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w171svsave="1">Save the survey settings</button></div>' : '');
   }
   async function surveySave(btn) {
-    var url = ((document.getElementById('w171svu') || {}).value || '').trim();
-    var roles = Array.prototype.map.call(document.querySelectorAll('[data-w171svr]:checked'), function (c) { return c.getAttribute('data-w171svr'); }).join(',');
+    var picked = Array.prototype.map.call(document.querySelectorAll('[data-w171svr]:checked'), function (c) { return c.getAttribute('data-w171svr'); });
+    var roles = picked.length === SV_ROLES.length ? '*' : picked.join(',');
     var hour = String(parseInt((document.getElementById('w171svh') || {}).value, 10));
-    if (url && !/^https:\/\//.test(url)) { T('The survey link must start with https://'); return; }
     if (!(Number(hour) >= 8 && Number(hour) <= 19)) { T('The hour is between 8 and 19'); return; }
     btn.disabled = true;
     try {
       var now = new Date().toISOString();
-      var rows = [['sms_survey_url', url], ['sms_survey_roles', roles], ['sms_survey_hour', hour]];
+      var rows = [['sms_survey_roles', roles], ['sms_survey_hour', hour]];
       for (var i = 0; i < rows.length; i++) { var r = await db.from('app_config').update({ value: rows[i][1], updated_at: now }).eq('key', rows[i][0]); if (r.error) throw r.error; S.cfg[rows[i][0]] = rows[i][1]; }
       T('Survey settings saved');
     } catch (e) { T('Could not save: ' + String((e && e.message) || e).slice(0, 90)); }
@@ -92,7 +91,7 @@
   async function settingsModal() {
     var cn = await can(); await loadCfg(true);
     openModal('<div class="w171m"><h3>Text settings</h3><p class="sub">Loading…</p></div>');
-    await Promise.all([loadGuides(), loadPhotos()]);
+    await Promise.all([loadGuides(), loadPhotos(), loadItin(), loadQs(true)]);
     paintSettings(cn);
   }
   function paintSettings(cn) {
@@ -104,6 +103,7 @@
       + '<label class="f">Test phone</label><input type="text" id="w171tp" value="' + E(S.cfg.sms_test_phones || '') + '"' + (cn.admin ? '' : ' disabled') + ' placeholder="438 555 0100">'
       + surveyHtml(cn)
       + cookHtml()
+      + itinSetHtml(cn)
       + '<div class="w171h" style="margin-top:18px">What volunteers see after they confirm</div>'
       + '<label class="f">Role</label><select id="w171role">' + ROLES.map(function (r) { var x = guideOf(r); return '<option value="' + r + '"' + (r === S.set.role ? ' selected' : '') + '>' + E(x ? x.label_en : one(r)) + '</option>'; }).join('') + '</select>'
       + '<div class="two"><div><label class="f">Name (English)</label><input type="text" id="w171len" value="' + E(g.label_en || '') + '"></div><div><label class="f">Name (French)</label><input type="text" id="w171lfr" value="' + E(g.label_fr || '') + '"></div></div>'
@@ -112,6 +112,7 @@
       + '<div class="two"><div><label class="f">What to bring (English)</label><input type="text" id="w171ben" value="' + E(g.bring_en || '') + '"></div><div><label class="f">What to bring (French)</label><input type="text" id="w171bfr" value="' + E(g.bring_fr || '') + '"></div></div>'
       + '<div class="two"><div><label class="f">When to arrive (English)</label><input type="text" id="w171aen" value="' + E(g.arrive_en || '') + '"></div><div><label class="f">When to arrive (French)</label><input type="text" id="w171afr" value="' + E(g.arrive_fr || '') + '"></div></div>'
       + '<label class="f">Forms and guides, one per line: before, during or after | English | French | link</label><textarea id="w171lnk" style="min-height:110px">' + E(linksText(g)) + '</textarea>'
+      + questionsHtml()
       + '<div class="foot"><button class="w171btn ghost" data-w171close="1">Close</button><button class="w171btn" data-w171gsave="1"' + (guideOf(S.set.role) ? '' : ' disabled') + '>Save this role</button></div></div>';
     var mb = document.getElementById('modalBox'), back = document.getElementById('modalBack');
     if (mb && back && back.style.display === 'flex' && mb.querySelector('.w171m')) mb.innerHTML = html; else openModal(html);
