@@ -32494,7 +32494,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   async function load() {
     try {
-      var r = await db.from('hub_mail').select('id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, links, error, reason, undone_at, undone_by').order('internal_date', { ascending: false }).limit(300);
+      var r = await db.from('hub_mail').select('id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, links, error, reason, undone_at, undone_by, mailbox, ask, assignee, forwarded_by').order('internal_date', { ascending: false }).limit(300);
       H.rows = (r && r.data) || [];
       var s = await db.from('hub_mail_state').select('*').eq('id', 1).maybeSingle();
       H.state = (s && s.data) || null;
@@ -32510,6 +32510,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (f.type === 'update') return { st: 'Team update', cls: '', link: '#team/' + f.department, text: 'Update on the ' + E(label(f.department)) + ' page' };
     if (f.type === 'transcript') return { st: 'Transcript pipeline', cls: '', link: '#transcripts', text: 'In the Transcript Archive; tasks, updates and decisions follow' };
     if (f.type === 'inbox') return { st: 'needs a team', cls: 'warn', text: 'The model could not tell which team this belongs to' };
+    /* wave170: info@ passed on (or filed quietly when someone on the team is already on the email), and emails sent on from an inbox */
+    if (f.type === 'info') return f.on_thread ? { st: 'info@, filed quietly', cls: '', link: '#requests/m/' + x.id, text: E(f.on_thread) + ' is already on the email' } : { st: 'info@, passed on', cls: '', link: '#requests/m/' + x.id, text: (x.assignee ? 'To ' + E(x.assignee) : 'To the ' + E(label(f.department || x.department)) + ' inbox') + ', with what to do' };
+    if (f.type === 'forward') return { st: 'Sent on from an inbox', cls: '', link: '#requests/m/' + x.id, text: 'By ' + E(f.by || x.forwarded_by || 'a colleague') + ', to the ' + E(label(x.department)) + ' inbox' };
+    if (f.type === 'candidate') return { st: 'Applicant', cls: '', link: '#hrcentre/recruitment', text: 'In Recruitment, in the HR centre' };
     return { st: x.status || 'new', cls: 'mut', text: '' };
   }
   function attHtml(x) {
@@ -32522,7 +32526,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var dept = x.department || f.department;
     return '<div class="w116mr" data-mid="' + E(x.id) + '"><span class="k" style="background:' + k[1] + '">' + k[2] + '</span>' +
       '<div class="b"><div class="m1"><span class="kd" style="color:' + k[1] + '">' + E(k[0]) + '</span><span>' + E(x.from_name || x.from_email || '') + (x.from_name ? ' &lt;' + E(x.from_email) + '&gt;' : '') + '</span><span>' + E(fmt(x.internal_date)) + '</span>' + (x.amount != null ? '<span><b>' + E(money(x.amount)) + '</b>' + (x.due_date ? ' due ' + E(x.due_date) : '') + '</span>' : '') + '</div>' +
-      '<div class="t">' + E(x.title || x.subject || '(no subject)') + '</div>' + (x.summary ? '<div class="s">' + E(x.summary) + '</div>' : (x.subject && x.title !== x.subject ? '<div class="s">' + E(x.subject) + '</div>' : '')) +
+      '<div class="t">' + E(x.title || x.subject || '(no subject)') + '</div>' + (x.ask ? '<div class="s"><b>To do:</b> ' + E(x.ask) + '</div>' : x.summary ? '<div class="s">' + E(x.summary) + '</div>' : (x.subject && x.title !== x.subject ? '<div class="s">' + E(x.subject) + '</div>' : '')) +   /* wave170: the ask first */
       '<div class="f">' + (dept ? '<span class="d" style="background:' + color(dept) + '"></span><span>' + E(label(dept)) + '</span>' : '') + '<span class="st ' + ft.cls + '">' + E(ft.st) + '</span>' + (ft.link ? '<a data-hact="go" data-hash="' + E(ft.link) + '">' + ft.text + ' &rarr;</a>' : (ft.text ? '<span style="color:var(--wa-muted)">' + ft.text + '</span>' : '')) + attHtml(x) + '</div></div>' +
       '<div class="a">' + (!canAct() ? '' :
         (x.status === 'filed' && f.type !== 'inbox' ? '<a class="warn" data-hact="undo">Undo</a><a data-hact="refile">Move to another team</a>' : '') +
@@ -41433,7 +41437,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     all: { d: '', state: 'open', q: '' },
     sheet: null
   };
-  var MAILCOLS = 'id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, notify, team_state, team_done_by, team_done_at, assignee, request_id';
+  var MAILCOLS = 'id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, notify, team_state, team_done_by, team_done_at, assignee, request_id, mailbox, ask, assignee_email, forwarded_by';   /* wave170: where it came in, the ask, the person, who sent it */
   var JEV_SINCE = '2026-09-25T17:00:00Z';
 
   /* ---------- who and where ---------- */
@@ -41919,6 +41923,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function jevPill(m) {
     var n = m.notify || null;
     if (!n) return '';
+    /* wave170: an info@ email, or one sent on from someone's inbox: passed on with what to do */
+    if ((n.by === 'info' || n.by === 'forward') && n.decision === 'notify') return '<span class="w123pill jev" title="Passed on on Slack, with what to do">' + I('hash') + (n.dm ? 'Sent to ' + E(String(n.dm).split(/[\s@]/)[0]) : n.channel ? E(n.channel) : 'Passed on') + '</span>';
+    if (n.by === 'info' && n.decision === 'file') return '<span class="w123pill quiet" title="' + E((n.on_thread || 'Someone on the team') + ' is already on the email') + '">Filed quietly</span>';
     if (n.decision === 'notify') return '<span class="w123pill jev" title="' + E(n.by === 'setting' ? 'The team setting says to always ping' : 'Jev decided the team needed to hear about it') + '">' + I('hash') + (n.channel ? E(n.channel) : 'Team pinged') + '</span>';
     return '<span class="w123pill quiet" title="' + E(n.by === 'setting' ? 'The team setting says never to ping' : 'Jev decided finding it here was enough') + '">Filed quietly</span>';
   }
@@ -41937,7 +41944,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + (m.assignee ? avatar(m.assignee, 22) : '');
     return '<div class="w123row" data-w123m="' + E(m.id) + '" tabindex="0" role="button" aria-label="' + E(m.title || m.subject || 'Email') + '"><span class="w123ico" style="' + cv(k.c) + '">' + I(k.icon) + '</span>'
       + '<div style="min-width:0"><div class="t">' + E(m.title || m.subject || 'Email') + '</div><div class="m">' + meta.join('<span class="dot"></span>') + '</div>'
-      + (m.summary && ctx !== 'card' ? '<div class="s">' + E(m.summary) + '</div>' : '') + '</div><div class="r">' + right + '</div></div>';
+      + (m.ask && ctx !== 'card' ? '<div class="s"><b>To do:</b> ' + E(m.ask) + (m.mailbox === 'info' ? ' <span style="color:var(--wa-muted)">(info@)</span>' : m.forwarded_by ? ' <span style="color:var(--wa-muted)">(from ' + E(m.forwarded_by) + ')</span>' : '') + '</div>' : (m.summary && ctx !== 'card' ? '<div class="s">' + E(m.summary) + '</div>' : '')) + '</div><div class="r">' + right + '</div></div>';   /* wave170: the ask first */
   }
   function sugRow(s, ctx) {
     return '<div class="w123row sug" data-w123s="' + E(s.id) + '"><span class="w123ico" style="' + cv(GOLD) + '">' + I('spark') + '</span><div style="min-width:0"><div class="t">' + E(s.title) + '</div>'
@@ -42187,6 +42194,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (f.type === 'transcript') return 'Sent through the meeting pipeline: its tasks, updates and decisions are on the boards. <a class="w123lnk" data-w123go="#tx/' + E(f.id) + '">Open the meeting</a>';
     if (f.type === 'candidate') return 'Added to Recruitment in the HR centre.' + (isLeader() ? ' <a class="w123lnk" data-w123go="#hrcentre/recruitment">Open Recruitment</a>' : '');
     if (f.type === 'update') return 'Filed as an update on the team page. <a class="w123lnk" data-w123go="#team/' + E(m.department) + '">Open the team page</a>';
+    if (f.type === 'forward') return 'Sent to the team by ' + E(f.by || m.forwarded_by || 'a colleague') + ' from their inbox.';   /* wave170 */
+    if (f.type === 'info') return f.on_thread ? 'Sent to info@. ' + E(f.on_thread) + ' is already on the email, so it was filed here without a ping.' : 'Sent to info@ and passed on to ' + E(m.assignee || teamLabel(m.department)) + ' with what to do. Nothing was emailed.';   /* wave170 */
     return 'Filed by the Hub inbox.';
   }
   function jevBlock(m) {
@@ -42199,6 +42208,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var why = n.why ? WHY[n.why] || n.why : null;
     var head, sub;
     if (n.by === 'setting') { head = n.decision === 'notify' ? 'The team is always pinged' : 'The team is never pinged'; sub = 'That is the team&rsquo;s setting in Slack settings.'; }
+    else if ((n.by === 'forward' || n.by === 'info') && n.decision === 'file') {   /* wave170: someone on the team is already on the email */
+      head = 'Filed quietly: ' + E(n.on_thread || 'someone on the team') + ' is already on the email'; sub = 'Emails to info@ are passed on with what to do, unless someone on the team is already on the thread.';
+    }
+    else if (n.by === 'forward' || n.by === 'info') {   /* wave170: sent on by a person, or an info@ email: always passed on */
+      head = n.dm ? 'Sent to ' + E(n.dm) + ' on Slack' : (n.channel ? 'Posted in #' + E(n.channel) : 'Passed on to ' + E(team));
+      sub = (n.by === 'info' ? 'Emails to info@ are always passed on, with what to do. ' : 'Sent on from their inbox, with what to do. ') + (n.url ? '<a class="w123lnk" href="' + E(n.url) + '" target="_blank" rel="noopener">Open it in Slack</a>' : '');
+    }
     else if (n.decision === 'notify') { head = 'Jev pinged ' + E(team) + (n.channel ? ' in #' + E(n.channel) : ''); sub = (why ? 'Because ' + E(why) + '. ' : '') + (n.url ? '<a class="w123lnk" href="' + E(n.url) + '" target="_blank" rel="noopener">Open it in Slack</a>' : ''); }
     else { head = 'Jev filed it quietly'; sub = (why ? 'It looked like ' + E(why === 'someone needs to act' ? 'something to act on, but not urgent' : why) + '. ' : '') + 'No Slack message: finding it here is enough.'; }
     if (n.by === 'rule') sub += ' Jev did not answer, so the Hub&rsquo;s rule decided (bills, applicants and anything due within ten days get a ping).';
@@ -42216,6 +42232,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<h2>' + E(m.title || m.subject || 'Email') + '</h2>'
       + '<div class="meta"><span>From <b>' + E(m.from_name || m.from_email || 'someone') + '</b>' + (m.from_name && m.from_email ? ' &lt;' + E(m.from_email) + '&gt;' : '') + '</span><span>' + E(fmtWhen(m.internal_date)) + '</span>'
       + (m.amount != null ? '<span><b>$' + E(Number(m.amount).toLocaleString('en-CA', { maximumFractionDigits: 2 })) + '</b></span>' : '') + (m.due_date ? '<span class="' + (daysUntil(m.due_date) < 0 && open ? 'late' : '') + '">due ' + E(fmtLong(m.due_date)) + '</span>' : '') + (m.assignee ? '<span>With <b>' + E(m.assignee) + '</b></span>' : '') + '</div>'
+      + (m.ask ? '<div class="blk"><h4>What to do</h4><div class="prose" style="white-space:normal"><b>' + E(m.ask) + '</b>' + (m.forwarded_by ? '<br><span class="w123sub" style="margin:0">From ' + E(m.forwarded_by) + ', who sent it on from their inbox' + (m.assignee ? ', for ' + E(m.assignee) : '') + '.</span>' : m.mailbox === 'info' ? '<br><span class="w123sub" style="margin:0">Sent to info@; the Hub wrote this line' + ((m.filed || {}).on_thread ? '. ' + E(m.filed.on_thread) + ' is already on the email' : m.assignee ? ' and passed it to ' + E(m.assignee) : '') + '.</span>' : '') + '</div></div>' : '')   /* wave170 */
       + '<div class="blk">' + jevBlock(m) + '</div>';
     if (st) out += '<div class="ctl"><label>With <select data-w123mas aria-label="Who has it">' + assigneeOptions(m.department, m.assignee) + '</select></label><span class="sp"></span>'
       + (m.request_id ? '<a class="w123btn sm ghost" data-w123go="#requests/r/' + E(m.request_id) + '">Open the request</a>' : '<button type="button" class="w123btn sm ghost" data-w123mconv>' + I('inbox') + 'Make it a request</button>')
@@ -63461,6 +63478,632 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   window.w169 = { can: canAssign, homeHtml: homeHtml, banner: bannerHtml, preview: preview, endPreview: endPreview, openAssign: openAssign, openWeek: openWeek,
     decorate: decorateHr, cards: paintCards, sample: SAMPLE_ID, state: function () { return S; } };
+})();
+/* =====================================================================
+   WA v170 Your inbox: the assistant for your own mailbox (30/09/26)
+   =====================================================================
+   Steel (29/09/26): "review my steel.macdonald@welfareavenue.com emails as well and to start categorizing them in to my
+   different folders, sending them to the necessary teams, and helping me draft replies in a reply tool that asks me questions
+   to clarify how to respond to individuals the emailed me. It needs to use steel-voice and wa-writing to make sure replies
+   sound like me. This is a tool I'd like to roll out to others later".
+   His choices: it files mail into his own Gmail labels by itself (every 15 minutes, a switch here); the rest waits for him;
+   replies are Gmail drafts he sends himself; owner only; personal mail is left alone; an email he sends to a
+   team lands in the team's Hub inbox (and their Slack channel).
+
+   Where: a card on Home for people whose mailbox the assistant works on (mybox_owners, their own row), and the assistant
+   itself, full screen (#mypage/inbox): To reply (the reply tool: the email and its thread, "Help me reply" asks what it needs
+   to know, drafts the reply in his voice, saves it as a Gmail draft), For a team (the team and the one-line ask, sent to the
+   team's Hub inbox), Sorted (what went in which folder, undo), Settings (the schedule, notes per folder, folders whose mail
+   also leaves the inbox, the never-read list).
+   Data: mybox_owners and mybox_mail (read here, own rows only); everything else through the mybox function.
+   ===================================================================== */
+(function () {
+  if (window.__wa170) return; window.__wa170 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2', PURPLE = '#6F64AB', INK = '#1F201E', SAND = '#F4F2EA';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var TEAMS = { opsmtl: 'Operations Montreal', progdev: 'Program Development', opsto: 'Operations Toronto', marketing: 'Marketing', fundraising: 'Fundraising', finance: 'Finance', hr: 'Human Resources', board: 'Board & Governance' };
+  var TEAM_ORDER = ['opsmtl', 'opsto', 'progdev', 'marketing', 'fundraising', 'finance', 'hr', 'board'];
+  var REPLY_P = 0.55;
+  var S = { owner: null, ownerAt: 0, ownerP: null, rows: null, rowsAt: 0, rowsP: null, skipped: 0, errors: 0, open: false, tab: 'reply', sel: null, D: {}, showDone: false, poll: null, sortedAt: null, busy: {}, set: null };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
+  function first(n) { return String(n || '').trim().split(/\s+/)[0] || ''; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function initials(n, em) { var s = String(n || em || '?').replace(/[<>"]/g, '').trim(); var p = s.split(/[\s@._-]+/).filter(Boolean); return ((p[0] || '?').charAt(0) + (p[1] ? p[1].charAt(0) : '')).toUpperCase(); }
+  function ago(iso) {
+    if (!iso) return '';
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago';
+    var d = Math.round(s / 86400); if (d < 7) return d === 1 ? 'yesterday' : d + ' days ago';
+    try { return new Date(iso).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }); } catch (e) { return String(iso).slice(0, 10); }
+  }
+  function when(iso) { try { return new Date(iso).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }); } catch (e) { return String(iso || '').slice(0, 16); } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function dayOf(iso) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return String(iso || '').slice(0, 10); } }
+  function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
+  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/u/' + encodeURIComponent(owner) + '/#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  function labelShort(n) { var p = String(n || '').split('/'); return p[p.length - 1]; }
+
+  var CSS = ''
+    /* the card on Home */
+    + '#w170card{margin:12px 0;}'
+    + '#w170card h3{display:flex;align-items:center;gap:8px;}'
+    + '#w170card .sub{margin:0 0 10px;font-size:12.5px;color:#4a5551;}'
+    + '#w170card .w170tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}'
+    + '#w170card .w170tiles button{border:1px solid ' + LINE + ';background:' + CREAM + ';border-radius:14px;padding:12px 14px;text-align:left;cursor:pointer;font:inherit;color:' + INK + ';}'
+    + '#w170card .w170tiles button:hover{border-color:rgba(16,63,57,.4);}'
+    + '#w170card .w170tiles b{display:block;font-family:' + HEAD + ';font-size:30px;line-height:1;color:' + GREEN + ';}'
+    + '#w170card .w170tiles button.hot b{color:#8a6512;}#w170card .w170tiles span{font-size:12px;color:' + MUTED + ';}'
+    + '#w170card .w170foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:10px;font-size:12px;color:' + MUTED + ';}'
+    + '.w170btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ' !important;font:inherit;font-size:13px;font-weight:700;padding:8px 16px;cursor:pointer;text-decoration:none !important;white-space:nowrap;}'
+    + '.w170btn:hover{background:#0b2f2a;}.w170btn[disabled]{opacity:.55;cursor:default;}'
+    + '.w170btn.gold{background:' + GOLD + ';color:' + GREEN + ' !important;}.w170btn.gold:hover{background:#c9951f;}'
+    + '.w170btn.ghost{background:transparent;color:' + GREEN + ' !important;border:1px solid rgba(16,63,57,.35);}.w170btn.ghost:hover{background:rgba(16,63,57,.07);}'
+    + '.w170btn.sm{font-size:12px;padding:6px 12px;}'
+    + '.w170lnk{border:0;background:none;padding:0;font:inherit;color:' + GREEN + ';font-weight:700;text-decoration:underline;cursor:pointer;}'
+    /* the assistant, full screen */
+    + '#w170sheet{position:fixed;inset:0;z-index:2147470000;display:none;}'
+    + '#w170sheet.on{display:block;}'
+    + '#w170sheet .w170bk{position:absolute;inset:0;background:rgba(16,63,57,.45);}'
+    + '#w170sheet .w170sh{position:absolute;inset:18px;background:' + CREAM + ';border-radius:22px;box-shadow:0 30px 80px -30px rgba(0,0,0,.45);display:flex;flex-direction:column;overflow:hidden;}'
+    + '#w170sheet .w170hd{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:14px 18px;border-bottom:1px solid ' + LINE + ';background:' + CREAM + ';}'
+    + '#w170sheet .w170hd .ti .k{display:block;font-size:10.5px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:' + GOLD + ';}'
+    + '#w170sheet .w170hd h2{margin:0;font-family:' + HEAD + ';font-size:28px;font-weight:700;text-transform:uppercase;color:' + GREEN + ';line-height:1;}'
+    + '#w170sheet .w170tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px;background:rgba(16,63,57,.06);border-radius:999px;}'
+    + '#w170sheet .w170tabs button{border:0;background:transparent;border-radius:999px;padding:7px 14px;font:inherit;font-size:13px;font-weight:700;color:' + GREEN + ';cursor:pointer;}'
+    + '#w170sheet .w170tabs button.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w170sheet .w170tabs .n{display:inline-block;margin-left:6px;font-size:11px;font-weight:800;background:' + GOLD + ';color:' + GREEN + ';border-radius:999px;padding:0 7px;}'
+    + '#w170sheet .w170hd .sp{flex:1;}#w170sheet .w170hd .st{font-size:12px;color:' + MUTED + ';}'
+    + '#w170sheet .w170xb{border:0;background:rgba(16,63,57,.08);color:' + GREEN + ';width:38px;height:38px;border-radius:50%;font-size:22px;line-height:38px;cursor:pointer;}'
+    + '#w170sheet .w170bd{flex:1;display:grid;grid-template-columns:minmax(300px,380px) 1fr;min-height:0;}'
+    + '#w170sheet .w170list{border-right:1px solid ' + LINE + ';overflow-y:auto;padding:10px;background:' + SAND + ';}'
+    + '#w170sheet .w170main{overflow-y:auto;padding:20px 26px 40px;min-width:0;}'
+    + '#w170sheet .w170main.full{grid-column:1 / -1;}'
+    + '#w170sheet .w170it{display:flex;gap:10px;width:100%;text-align:left;border:1px solid transparent;background:' + CREAM + ';border-radius:14px;padding:10px 12px;margin:0 0 8px;cursor:pointer;font:inherit;color:' + INK + ';}'
+    + '#w170sheet .w170it:hover{border-color:rgba(16,63,57,.25);}#w170sheet .w170it.on{border-color:' + GREEN + ';box-shadow:0 0 0 1px ' + GREEN + ';}'
+    + '#w170sheet .w170it.dim{opacity:.62;}'
+    + '#w170sheet .w170av{flex:0 0 34px;height:34px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;}'
+    + '#w170sheet .w170it .tx{flex:1;min-width:0;}#w170sheet .w170it b{display:block;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '#w170sheet .w170it .s{display:block;font-size:12.5px;color:#3d3c39;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+    + '#w170sheet .w170it .m{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;font-size:11.5px;color:' + MUTED + ';}'
+    + '.w170chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(16,63,57,.08);color:' + GREEN + ';white-space:nowrap;}'
+    + '.w170chip.team{background:rgba(111,100,171,.14);color:' + PURPLE + ';}.w170chip.gold{background:rgba(220,165,39,.22);color:#6b4d0e;}.w170chip.flag{background:rgba(179,64,47,.12);color:' + FLAG + ';}'
+    + '#w170sheet .w170empty{padding:30px 20px;text-align:center;color:' + MUTED + ';font-size:13.5px;}'
+    + '#w170sheet .w170empty b{display:block;font-family:' + HEAD + ';font-size:22px;text-transform:uppercase;color:' + GREEN + ';margin-bottom:4px;}'
+    /* the email */
+    + '#w170sheet .w170mh h3{margin:0 0 6px;font-size:20px;line-height:1.25;color:' + INK + ';}'
+    + '#w170sheet .w170mh .meta{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;font-size:12.5px;color:' + MUTED + ';}'
+    + '#w170sheet .w170mh .meta b{color:' + INK + ';}'
+    + '#w170sheet .w170back{display:none;}'
+    + '#w170sheet .w170mail{margin:14px 0 0;padding:14px 16px;border-radius:14px;background:rgba(16,63,57,.035);border:1px solid ' + LINE + ';font-size:13.5px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;color:#2b2b28;max-height:420px;overflow-y:auto;}'
+    + '#w170sheet .w170hist{margin:10px 0 0;}#w170sheet .w170hist summary{cursor:pointer;font-size:12.5px;font-weight:700;color:' + GREEN + ';}'
+    + '#w170sheet .w170hist .h{margin:8px 0 0;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.04);font-size:12.5px;white-space:pre-wrap;color:#3d3c39;}'
+    + '#w170sheet .w170hist .h i{display:block;font-style:normal;font-weight:700;color:' + GREEN + ';margin-bottom:4px;}'
+    /* the reply tool */
+    + '#w170sheet .w170tool{margin:18px 0 0;padding:16px 18px;border-radius:18px;background:' + SAND + ';border:1px solid ' + LINE + ';}'
+    + '#w170sheet .w170tool h4{margin:0 0 6px;font-family:' + HEAD + ';font-size:20px;text-transform:uppercase;color:' + GREEN + ';letter-spacing:.3px;}'
+    + '#w170sheet .w170tool .gist{font-size:13.5px;color:#2b2b28;margin:0 0 12px;}#w170sheet .w170tool .gist b{color:' + GREEN + ';}'
+    + '#w170sheet .w170q{margin:0 0 14px;}#w170sheet .w170q .qq{font-weight:700;font-size:13.5px;color:' + INK + ';margin:0 0 6px;}'
+    + '#w170sheet .w170opts{display:flex;flex-wrap:wrap;gap:6px;}'
+    + '#w170sheet .w170opts button{border:1px solid rgba(16,63,57,.3);background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;}'
+    + '#w170sheet .w170opts button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+    + '#w170sheet .w170tool input[type=text],#w170sheet .w170tool textarea,#w170sheet .w170set input[type=text],#w170sheet .w170set textarea,#w170sheet .w170tool select,#w170sheet .w170set select{width:100%;box-sizing:border-box;border:1px solid #DEE0D8;border-radius:10px;padding:8px 10px;font:inherit;font-size:13.5px;background:' + CREAM + ';color:' + INK + ';}'
+    + '#w170sheet .w170tool input[type=text]{margin-top:6px;}'
+    + '#w170sheet .w170draft{min-height:260px;line-height:1.55;font-size:14px !important;}'
+    + '#w170sheet .w170acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px;}'
+    + '#w170sheet .w170notes{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.14);font-size:12.5px;color:#6b4d0e;}'
+    + '#w170sheet .w170notes ul{margin:4px 0 0 18px;padding:0;}'
+    + '#w170sheet .w170wait{display:flex;gap:10px;align-items:center;font-size:13.5px;color:' + GREEN + ';font-weight:600;}'
+    + '#w170sheet .w170wait i{width:18px;height:18px;border-radius:50%;border:3px solid rgba(16,63,57,.2);border-top-color:' + GREEN + ';animation:w170spin 1s linear infinite;}'
+    + '@keyframes w170spin{to{transform:rotate(360deg);}}'
+    + '#w170sheet .w170ok{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(42,140,122,.12);color:' + GREEN + ';font-size:13.5px;}'
+    + '#w170sheet .w170err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    + '#w170sheet label.w170l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:12px 0 4px;}'
+    + '#w170sheet label.w170l .op{font-weight:500;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:6px;}'
+    + '#w170sheet .w170ck{display:flex;gap:8px;align-items:center;font-size:13px;color:' + INK + ';margin:8px 0 0;}'
+    + '#w170sheet .w170ck input{accent-color:' + GREEN + ';}'
+    /* sorted and settings */
+    + '#w170sheet .w170day{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';margin:16px 0 6px;}'
+    + '#w170sheet .w170row{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:9px 12px;border-radius:12px;background:' + CREAM + ';border:1px solid ' + LINE + ';margin:0 0 6px;font-size:13px;}'
+    + '#w170sheet .w170row .who{flex:1;min-width:180px;}#w170sheet .w170row .who b{display:block;font-size:13px;}#w170sheet .w170row .who span{font-size:12px;color:' + MUTED + ';}'
+    + '#w170sheet .w170sum{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 6px;}'
+    + '#w170sheet .w170set{max-width:760px;}#w170sheet .w170set h4{margin:22px 0 6px;font-family:' + HEAD + ';font-size:20px;text-transform:uppercase;color:' + GREEN + ';}'
+    + '#w170sheet .w170set p{font-size:13px;color:#3d3c39;margin:4px 0;}'
+    + '#w170sheet .w170lab{display:grid;grid-template-columns:minmax(140px,220px) 1fr auto;gap:8px 12px;align-items:center;padding:8px 0;border-bottom:1px solid ' + LINE + ';font-size:13px;}'
+    + '#w170sheet .w170lab b{font-size:13px;color:' + INK + ';word-break:break-word;}'
+    + '#w170sheet .w170lab label{display:flex;gap:6px;align-items:center;font-size:12px;color:' + MUTED + ';white-space:nowrap;}'
+    + '#w170sheet .w170sw{position:relative;display:inline-flex;align-items:center;gap:10px;font-size:14px;font-weight:700;color:' + INK + ';cursor:pointer;}'
+    + '#w170sheet .w170sw input{width:42px;height:24px;accent-color:' + GREEN + ';}'
+    + '@media (max-width:760px){'
+    +   '#w170sheet .w170sh{inset:0;border-radius:0;}'
+    +   '#w170sheet .w170hd{padding:12px 14px;}#w170sheet .w170hd h2{font-size:24px;}#w170sheet .w170hd .st{display:none;}'
+    +   '#w170sheet .w170tabs{order:5;width:100%;overflow-x:auto;flex-wrap:nowrap;gap:2px;box-sizing:border-box;}#w170sheet .w170tabs button{white-space:nowrap;padding:7px 9px;font-size:12.5px;}#w170sheet .w170tabs .n{margin-left:4px;padding:0 6px;}'
+    +   '#w170sheet .w170bd{grid-template-columns:1fr;}'
+    +   '#w170sheet .w170list{border-right:0;}'
+    +   '#w170sheet.sel .w170list{display:none;}#w170sheet:not(.sel) .w170main:not(.full){display:none;}'
+    +   '#w170sheet .w170main{padding:14px 14px 90px;}'
+    +   '#w170sheet .w170back{display:inline-flex;margin:0 0 10px;}'
+    +   '#w170sheet .w170lab{grid-template-columns:1fr;}'
+    +   '#w170card .w170tiles b{font-size:26px;}'
+    + '}'
+    + 'html.w170lock,html.w170lock body{overflow:hidden !important;}';
+  if (!document.getElementById('wa170css')) { var st = document.createElement('style'); st.id = 'wa170css'; st.textContent = CSS; document.head.appendChild(st); }
+
+  /* ---------- data: my mailbox (own rows only), and the mybox function ---------- */
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+  function staffish() { try { return typeof isStaff !== 'function' || isStaff(); } catch (e) { return true; } }
+  function loadOwner(force) {
+    if (!staffish()) { S.owner = false; return Promise.resolve(false); }
+    if (S.ownerP) return S.ownerP;
+    if (!force && S.owner !== null && Date.now() - S.ownerAt < 60000) return Promise.resolve(S.owner);
+    S.ownerP = q(db.from('mybox_owners').select('email, name, enabled, auto_sort, days_back, archive_labels, label_notes, skip_senders, skip_words, labels, labels_at, last_sort_at, last_result, last_error').limit(1)).then(function (r) {
+      var o = r && Array.isArray(r.data) && r.data[0] ? r.data[0] : null;
+      S.owner = o && o.enabled ? o : false; S.ownerAt = Date.now(); S.ownerP = null;
+      return S.owner;
+    });
+    return S.ownerP;
+  }
+  function loadRows(force) {
+    if (!S.owner) { S.rows = []; return Promise.resolve([]); }
+    if (S.rowsP) return S.rowsP;
+    if (!force && S.rows && Date.now() - S.rowsAt < 30000) return Promise.resolve(S.rows);
+    var since = new Date(Date.now() - 21 * 86400000).toISOString();
+    S.rowsP = Promise.all([
+      q(db.from('mybox_mail').select('id, gmail_id, thread_id, received_at, from_email, from_name, subject, snippet, label_id, label_name, label_conf, labelled_at, archived, team, team_conf, team_state, sent_mail_id, sent_at, reply_p, reply_state, draft_id, drafted_at, state, error').eq('skipped', false).gte('received_at', since).order('received_at', { ascending: false }).limit(300)),
+      q(db.from('mybox_mail').select('id', { count: 'exact', head: true }).eq('skipped', true).gte('created_at', since))
+    ]).then(function (r) {
+      var rows = Array.isArray(r[0].data) ? r[0].data : (S.rows || []);
+      S.rows = rows.filter(function (x) { return x.state !== 'error'; });
+      S.errors = rows.filter(function (x) { return x.state === 'error'; }).length;
+      S.skipped = (r[1] && typeof r[1].count === 'number') ? r[1].count : S.skipped;
+      S.rowsAt = Date.now(); S.rowsP = null;
+      return S.rows;
+    });
+    return S.rowsP;
+  }
+  function fnError(r) {
+    return Promise.resolve().then(function () {
+      if (r && r.error && r.error.context && typeof r.error.context.json === 'function') return r.error.context.json().then(function (j) { return (j && j.error) || r.error.message || ''; }, function () { return r.error.message || ''; });
+      return (r && r.error && r.error.message) || (r && r.data && r.data.error) || '';
+    });
+  }
+  /* the mybox function: resolves to the answer, or rejects with the reason in plain words */
+  function fn(body) {
+    return q(db.functions.invoke('mybox', { body: body })).then(function (r) {
+      if (r && !r.error && r.data && !r.data.error) return r.data;
+      return fnError(r).then(function (msg) { throw new Error(msg || 'The assistant did not answer just now'); });
+    });
+  }
+  function toReply() { return (S.rows || []).filter(function (x) { return Number(x.reply_p) >= REPLY_P && !x.reply_state; }); }
+  function repliedDone() { return (S.rows || []).filter(function (x) { return Number(x.reply_p) >= REPLY_P && x.reply_state; }); }
+  function forTeam() { return (S.rows || []).filter(function (x) { return x.team && !x.team_state; }); }
+  function teamDone() { return (S.rows || []).filter(function (x) { return x.team && x.team_state; }); }
+  function sortedToday() { var t = todayIso(); return (S.rows || []).filter(function (x) { return x.labelled_at && dayOf(x.labelled_at) === t; }); }
+  function rowBy(gid) { return (S.rows || []).filter(function (x) { return x.gmail_id === gid; })[0] || null; }
+  function patchRow(gid, p) { var r = rowBy(gid); if (r) Object.keys(p).forEach(function (k) { r[k] = p[k]; }); }
+  function teamPeople(team) {
+    try { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.department === team && m.email; }).sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }); } catch (e) { return []; }
+  }
+
+  /* ---------- Home: the card ---------- */
+  function cardHtml() {
+    var o = S.owner; if (!o) return '';
+    var nr = toReply().length, nt = forTeam().length, ns = sortedToday().length;
+    var when0 = o.last_sort_at ? 'Sorted ' + ago(o.last_sort_at) : 'Not sorted yet';
+    var sched = o.auto_sort ? 'every 15 minutes' : 'when you press Check now';
+    return '<h3>Your inbox</h3>'
+      + '<p class="sub">Your Welfare Avenue mail, sorted into your folders. What needs your reply, and what a team should handle, waits here for you.</p>'
+      + '<div class="w170tiles">'
+      + '<button type="button" class="' + (nr ? 'hot' : '') + '" data-w170open="reply"><b>' + nr + '</b><span>to reply</span></button>'
+      + '<button type="button" data-w170open="team"><b>' + nt + '</b><span>for a team</span></button>'
+      + '<button type="button" data-w170open="sorted"><b>' + ns + '</b><span>sorted today</span></button></div>'
+      + '<div class="w170foot"><span>' + E(when0) + ' \u00b7 ' + E(sched) + (o.last_error ? ' \u00b7 <span style="color:' + FLAG + '">the last run stopped</span>' : '') + '</span>'
+      + '<button type="button" class="w170btn sm" data-w170open="' + (nr ? 'reply' : nt ? 'team' : 'sorted') + '">Open your inbox</button></div>';
+  }
+  function paintCard() {
+    var body = document.getElementById('mpBody'), el = document.getElementById('w170card');
+    var html = S.owner ? cardHtml() : '';
+    if (!body || !html) { if (el) el.remove(); return; }
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w170card'; el.className = 'mp-sec';
+      var a = document.getElementById('w166lead') || document.getElementById('w112wrap') || body.querySelector('.mp-online') || body.querySelector('.mp-chips') || body.querySelector('.mp-head');
+      if (a && a.parentNode === body) body.insertBefore(el, a.nextSibling); else body.insertBefore(el, body.firstChild);
+    }
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+  }
+  function refreshCard(force) {
+    return loadOwner(force).then(function (o) { if (!o) { paintCard(); return; } return loadRows(force).then(function () { paintCard(); }); });
+  }
+
+  /* ---------- the assistant, full screen ---------- */
+  function sheetEl() {
+    var el = document.getElementById('w170sheet');
+    if (!el) { el = document.createElement('div'); el.id = 'w170sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Your inbox assistant'); document.body.appendChild(el); }
+    return el;
+  }
+  function openSheet(tab, gid) {
+    S.open = true; S.tab = tab || S.tab || 'reply'; S.sel = gid || null;
+    var el = sheetEl(), was = !el.classList.contains('on'); el.classList.add('on'); document.documentElement.classList.add('w170lock');
+    render();
+    if (was) setTimeout(function () { var b = document.querySelector('#w170sheet .w170tabs button.on') || document.querySelector('#w170sheet .w170xb'); if (b) { try { b.focus({ preventScroll: true }); } catch (e) { /* fine */ } } }, 0);   /* the keyboard starts in the assistant */
+    loadOwner(true).then(function (o) {
+      if (!o) { render(); return; }
+      return loadRows(true).then(function () { if (!S.sel && !phone()) { var l = listFor(S.tab); if (l.length) S.sel = l[0].gmail_id; } render(); ensureDetail(); });
+    });
+  }
+  function closeSheet(keepHash) {
+    S.open = false; S.sel = null;
+    var el = document.getElementById('w170sheet'); if (el) { el.classList.remove('on'); el.classList.remove('sel'); el.innerHTML = ''; }
+    document.documentElement.classList.remove('w170lock');
+    stopPoll();
+    if (!keepHash && /^#mypage\/inbox/.test(location.hash || '')) { try { history.replaceState(null, '', '#mypage'); } catch (e) { location.hash = '#mypage'; } }
+    paintCard();
+    var c = document.querySelector('#w170card .w170foot [data-w170open]'); if (c && !keepHash) { try { c.focus({ preventScroll: true }); } catch (e) { /* fine */ } }   /* and comes back to the card */
+  }
+  function listFor(tab) {
+    if (tab === 'reply') return S.showDone ? toReply().concat(repliedDone()) : toReply();
+    if (tab === 'team') return S.showDone ? forTeam().concat(teamDone()) : forTeam();
+    return [];
+  }
+
+  /* ---------- drawing ---------- */
+  function headHtml() {
+    var o = S.owner || {}, nr = toReply().length, nt = forTeam().length;
+    var tabs = [['reply', 'To reply', nr], ['team', 'For a team', nt], ['sorted', 'Sorted', 0], ['settings', 'Settings', 0]];
+    return '<header class="w170hd"><div class="ti"><span class="k">Welfare Avenue</span><h2>Your inbox</h2></div>'
+      + '<nav class="w170tabs" aria-label="Your inbox">' + tabs.map(function (t) { return '<button type="button" data-w170tab="' + t[0] + '"' + (S.tab === t[0] ? ' class="on" aria-current="page"' : '') + '>' + t[1] + (t[2] ? '<span class="n">' + t[2] + '</span>' : '') + '</button>'; }).join('') + '</nav>'
+      + '<span class="sp"></span><span class="st">' + (S.poll ? 'Sorting your new mail\u2026' : (o.last_sort_at ? 'Sorted ' + E(ago(o.last_sort_at)) : 'Not sorted yet')) + '</span>'
+      + '<button type="button" class="w170btn ghost sm" data-w170sort' + (S.poll ? ' disabled' : '') + '>' + (S.poll ? 'Sorting\u2026' : 'Check now') + '</button>'
+      + '<button type="button" class="w170xb" data-w170x aria-label="Close">&times;</button></header>';
+  }
+  function itemHtml(x) {
+    var who = x.from_name || x.from_email || 'Someone', done = (S.tab === 'reply' && x.reply_state) || (S.tab === 'team' && x.team_state);
+    var chips = [];
+    if (x.label_name) chips.push('<span class="w170chip" title="' + E(x.label_name) + '">' + E(labelShort(x.label_name)) + '</span>');
+    if (S.tab === 'reply') { if (x.reply_state === 'drafted') chips.push('<span class="w170chip gold">Draft saved</span>'); else if (x.reply_state === 'done') chips.push('<span class="w170chip">Replied</span>'); else if (x.reply_state === 'dismissed') chips.push('<span class="w170chip">No reply needed</span>'); }
+    if (S.tab === 'team' && x.team) chips.push('<span class="w170chip team">' + E(x.team_state === 'sent' ? 'Sent to ' + (TEAMS[x.team] || x.team) : TEAMS[x.team] || x.team) + '</span>');
+    return '<button type="button" class="w170it' + (S.sel === x.gmail_id ? ' on' : '') + (done ? ' dim' : '') + '" data-w170sel="' + E(x.gmail_id) + '"><span class="w170av" aria-hidden="true">' + E(initials(x.from_name, x.from_email)) + '</span>'
+      + '<span class="tx"><b>' + E(who) + '</b><span class="s">' + E(x.subject || '(no subject)') + '</span><span class="m"><span>' + E(ago(x.received_at)) + '</span>' + chips.join('') + '</span></span></button>';
+  }
+  function listHtml() {
+    if (S.tab !== 'reply' && S.tab !== 'team') return '';
+    var list = listFor(S.tab), done = S.tab === 'reply' ? repliedDone().length : teamDone().length;
+    var empty = S.tab === 'reply'
+      ? '<div class="w170empty"><b>Nothing waiting on you</b>New mail that needs your own reply shows up here.</div>'
+      : '<div class="w170empty"><b>Nothing for a team</b>Mail a team should handle shows up here, with the team the assistant thinks it is for.</div>';
+    return '<aside class="w170list" aria-label="' + (S.tab === 'reply' ? 'Mail to reply to' : 'Mail for a team') + '">' + (S.rows === null ? '<div class="w170empty">Loading your inbox\u2026</div>' : (list.length ? list.map(itemHtml).join('') : empty))
+      + (done ? '<p style="text-align:center;margin:8px 0"><button type="button" class="w170lnk" data-w170done>' + (S.showDone ? 'Hide the ones you dealt with' : 'Show the ones you dealt with (' + done + ')') + '</button></p>' : '') + '</aside>';
+  }
+  function mailHead(x, d) {
+    var o = S.owner || {};
+    return '<button type="button" class="w170btn ghost sm w170back" data-w170back>&larr; Back</button><div class="w170mh"><h3>' + E(x.subject || '(no subject)') + '</h3><div class="meta"><span>From <b>' + E(x.from_name || x.from_email) + '</b>' + (x.from_name ? ' &lt;' + E(x.from_email) + '&gt;' : '') + '</span><span>' + E(when(x.received_at)) + '</span>'
+      + (x.label_name ? '<span class="w170chip" title="The folder the assistant filed it in">' + E(x.label_name) + '</span>' : '')
+      + '<a class="w170lnk" href="' + E(gmailUrl(o.email, x)) + '" target="_blank" rel="noopener">Open in Gmail</a></div></div>';
+  }
+  function mailBody(d) {
+    if (!d || d.stage === 'loading' || !d.main) return d && d.err ? '<p class="w170err">' + E(d.err) + '</p>' : '<div class="w170mail"><span class="w170wait"><i></i>Opening the email\u2026</span></div>';
+    var h = d.history || [];
+    return (h.length ? '<details class="w170hist"><summary>Earlier in the thread (' + h.length + ')</summary>' + h.map(function (m) { return '<div class="h"><i>' + E(m.mine ? 'You' : m.from) + ' \u00b7 ' + E(when(m.date)) + '</i>' + E(m.text) + '</div>'; }).join('') + '</details>' : '')
+      + '<div class="w170mail">' + E(d.main.text || '(no text: attachments only)') + (d.main.atts && d.main.atts.length ? '\n\nAttachments: ' + E(d.main.atts.join(', ')) : '') + '</div>'
+      + ((d.later || []).some(function (m) { return m.mine; }) ? '<div class="w170ok" style="margin-top:10px">You have already replied in this thread.</div>' : '');
+  }
+  function replyTool(x, d) {
+    var st = d.stage || 'read';
+    var h = '<section class="w170tool" aria-live="polite"><h4>Reply</h4>';
+    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one. <a class="w170lnk" href="https://mail.google.com/mail/u/' + encodeURIComponent((S.owner || {}).email || '0') + '/#drafts" target="_blank" rel="noopener">Open your drafts</a></div>';
+    if (st === 'read' || st === 'loading') {
+      h += '<p class="gist">The assistant asks what it needs to know, then writes the reply in your voice. You read it, change anything, and it saves as a draft in your Gmail: nothing is sent for you.</p>'
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170help' + (st === 'loading' ? ' disabled' : '') + '>Help me reply</button>'
+        + '<button type="button" class="w170btn ghost sm" data-w170mark="reply_done">I replied already</button><button type="button" class="w170btn ghost sm" data-w170mark="reply_dismiss">No reply needed</button></div>';
+    } else if (st === 'asking') h += '<div class="w170wait"><i></i>Reading the email and working out what to ask you\u2026</div>';
+    else if (st === 'questions') {
+      h += (d.gist ? '<p class="gist"><b>What they want:</b> ' + E(d.gist) + '</p>' : '')
+        + (d.questions.length ? d.questions.map(function (qq, i) {
+          var cur = d.answers[i] || '';
+          return '<div class="w170q"><div class="qq">' + E(qq.q) + '</div><div class="w170opts" role="group" aria-label="' + E(qq.q) + '">' + qq.options.map(function (op) { return '<button type="button" data-w170ans="' + i + '" data-v="' + E(op) + '"' + (cur === op ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + E(op) + '</button>'; }).join('') + '</div>'
+            + '<input type="text" data-w170own="' + i + '" placeholder="Or in your own words" value="' + E(d.custom[i] || '') + '" aria-label="Your own answer"></div>';
+        }).join('') : '<p class="gist">Nothing to ask: this one is simple.</p>')
+        + '<label class="w170l" for="w170note">Anything else to say<span class="op">optional</span></label><textarea id="w170note" rows="2" placeholder="A detail to include, someone to thank, a date">' + E(d.note || '') + '</textarea>'
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170draft>Write my reply</button><button type="button" class="w170btn ghost sm" data-w170reset>Cancel</button></div>';
+    } else if (st === 'drafting') h += '<div class="w170wait"><i></i>Writing it the way you would\u2026</div>';
+    else if (st === 'draft' || st === 'saving') {
+      var others = d.main ? (String(d.main.to || '') + ',' + String(d.main.cc || '')).split(',').filter(function (a) { return /@/.test(a) && lower(a).indexOf(lower((S.owner || {}).email || '#')) < 0; }).length > 1 : false;
+      h += '<label class="w170l" for="w170body">Your reply<span class="op">change anything you like</span></label><textarea id="w170body" class="w170draft" rows="12">' + E(d.draft || '') + '</textarea>'
+        + ((d.brackets && d.brackets.length) || (d.notes && d.notes.length) ? '<div class="w170notes"><b>Before you send</b><ul>' + (d.brackets || []).map(function (b) { return '<li>Fill in ' + E(b) + '</li>'; }).join('') + (d.notes || []).map(function (n) { return '<li>' + E(n) + '</li>'; }).join('') + '</ul></div>' : '')
+        + (others ? '<label class="w170ck"><input type="checkbox" data-w170all' + (d.replyAll ? ' checked' : '') + '> Reply to everyone on the email</label>' : '')
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving\u2026' : 'Save as a Gmail draft') + '</button>'
+        + '<button type="button" class="w170btn ghost sm" data-w170redraft>Write it again</button><button type="button" class="w170btn ghost sm" data-w170change>Change my answers</button></div>';
+    } else if (st === 'saved') {
+      h += '<div class="w170ok">Saved in your Gmail drafts, in the thread' + (d.saved && d.saved.to ? ', to ' + E(d.saved.to.join(', ')) : '') + '. Read it once more and send it from Gmail.</div>'
+        + '<div class="w170acts"><a class="w170btn" href="' + E((d.saved && d.saved.url) || '#') + '" target="_blank" rel="noopener">Open your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
+    }
+    if (d.err && st !== 'loading') h += '<p class="w170err">' + E(d.err) + '</p>';
+    return h + '</section>';
+  }
+  function teamTool(x, d) {
+    var t = d.team || {}, team = t.team || x.team || '', people = team ? teamPeople(team) : [];
+    var h = '<section class="w170tool" aria-live="polite"><h4>Send it to a team</h4>';
+    if (x.team_state === 'sent' || t.sent) {
+      return h + '<div class="w170ok">In ' + E(TEAMS[x.team] || x.team) + '\u2019s Hub inbox, with your ask. ' + (t.sent && t.sent.person ? E(t.sent.person) + ' got a Slack message about it.' : 'Their Slack channel heard about it.') + '</div>'
+        + (x.sent_mail_id || (t.sent && t.sent.mail_id) ? '<div class="w170acts"><a class="w170btn ghost sm" href="#requests/m/' + E(x.sent_mail_id || t.sent.mail_id) + '" data-w170go>See it in their inbox</a></div>' : '') + '</section>';
+    }
+    h += '<p class="gist">' + (x.team ? 'The assistant thinks this is for <b>' + E(TEAMS[x.team] || x.team) + '</b>. ' : '') + 'It goes to the team\u2019s inbox in the Hub with the line you write, and their Slack channel hears about it. Pick one person on the team and they get the Slack message instead.</p>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label class="w170l" for="w170team">The team</label><select id="w170team">' + TEAM_ORDER.map(function (k) { return '<option value="' + k + '"' + (k === team ? ' selected' : '') + '>' + E(TEAMS[k]) + '</option>'; }).join('') + '</select></div>'
+      + '<div><label class="w170l" for="w170person">For<span class="op">optional</span></label><select id="w170person"><option value="">The whole team</option>' + people.map(function (p) { return '<option value="' + E(lower(p.email)) + '"' + (lower(p.email) === lower(t.person || '') ? ' selected' : '') + '>' + E(p.name) + '</option>'; }).join('') + '</select></div></div>'
+      + '<label class="w170l" for="w170ask">What they should do<span class="op">one line, they read it first</span></label><textarea id="w170ask" rows="2" maxlength="300" placeholder="' + (t.loading ? 'Writing a first line for you\u2026' : 'For example: Can you reply to Maria about volunteering on the 12th?') + '">' + E(t.ask || '') + '</textarea>'
+      + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170send' + (t.sending ? ' disabled' : '') + '>' + (t.sending ? 'Sending\u2026' : 'Send to ' + E(TEAMS[team] || 'the team')) + '</button>'
+      + '<button type="button" class="w170btn ghost sm" data-w170suggest' + (t.loading ? ' disabled' : '') + '>' + (t.loading ? 'Writing\u2026' : 'Suggest the line') + '</button>'
+      + '<button type="button" class="w170btn ghost sm" data-w170mark="team_dismiss">Not for a team</button></div>'
+      + (t.err ? '<p class="w170err">' + E(t.err) + '</p>' : '');
+    return h + '</section>';
+  }
+  function mainHtml() {
+    if (S.tab === 'sorted') return '<main class="w170main full">' + sortedHtml() + '</main>';
+    if (S.tab === 'settings') return '<main class="w170main full">' + settingsHtml() + '</main>';
+    var x = S.sel ? rowBy(S.sel) : null;
+    if (!x) return '<main class="w170main"><div class="w170empty"><b>' + (S.tab === 'reply' ? 'Pick an email' : 'Pick an email') + '</b>' + (S.tab === 'reply' ? 'Open one to read it and write back with the assistant.' : 'Open one to send it to the right team.') + '</div></main>';
+    var d = S.D[x.gmail_id] || {};
+    return '<main class="w170main">' + mailHead(x, d) + (S.tab === 'reply' ? replyTool(x, d) : teamTool(x, d)) + mailBody(d) + '</main>';
+  }
+  function sortedHtml() {
+    var o = S.owner || {}, rows = (S.rows || []).slice(0, 150), byDay = {}, order = [];
+    rows.forEach(function (x) { var k = dayOf(x.received_at); if (!byDay[k]) { byDay[k] = []; order.push(k); } byDay[k].push(x); });
+    var labelled = rows.filter(function (x) { return x.label_name; }).length;
+    var h = '<div class="w170sum"><span class="w170chip">' + plural(labelled, 'filed in a folder', 'filed in folders') + '</span><span class="w170chip">' + plural(rows.length - labelled, 'left in the inbox', 'left in the inbox') + '</span>'
+      + (S.skipped ? '<span class="w170chip gold" title="Personal mail: the assistant keeps nothing but that it left it alone">' + plural(S.skipped, 'personal email left alone', 'personal emails left alone') + '</span>' : '')
+      + (S.errors ? '<span class="w170chip flag">' + plural(S.errors, 'could not be sorted', 'could not be sorted') + ' <button type="button" class="w170lnk" data-w170retry style="font-size:11px">Try again</button></span>' : '') + '</div>'
+      + '<p style="font-size:12.5px;color:' + MUTED + ';margin:0 0 4px">The last three weeks. A label the assistant added can come off here; nothing else about the email changes.' + (o.last_result ? ' Last run: ' + E(o.last_result) + '.' : '') + '</p>';
+    if (!rows.length) return h + '<div class="w170empty"><b>Nothing sorted yet</b>' + (o.auto_sort ? 'New mail is sorted every 15 minutes.' : 'Press Check now, or turn on sorting every 15 minutes in Settings.') + '</div>';
+    order.forEach(function (k) {
+      h += '<div class="w170day">' + E(k === todayIso() ? 'Today' : new Date(k + 'T12:00:00Z').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' })) + '</div>';
+      byDay[k].forEach(function (x) {
+        h += '<div class="w170row"><div class="who"><b>' + E(x.from_name || x.from_email) + '</b><span>' + E(x.subject || '(no subject)') + '</span></div>'
+          + (x.label_name ? '<span class="w170chip" title="' + E(x.label_name) + '">' + E(x.label_name) + (x.archived ? ', out of the inbox' : '') + '</span><button type="button" class="w170lnk" data-w170unlabel="' + E(x.gmail_id) + '" style="font-size:12px">Take the label off</button>' : '<span class="w170chip" style="background:rgba(16,63,57,.04);color:' + MUTED + '">No folder</span>')
+          + (x.team ? '<span class="w170chip team">' + E(TEAMS[x.team] || x.team) + '</span>' : '')
+          + (Number(x.reply_p) >= REPLY_P ? '<span class="w170chip gold">' + (x.reply_state ? 'Reply: ' + (x.reply_state === 'drafted' ? 'draft saved' : x.reply_state === 'done' ? 'replied' : 'not needed') : 'Needs your reply') + '</span>' : '')
+          + '</div>';
+      });
+    });
+    return h;
+  }
+  function settingsHtml() {
+    var o = S.owner || {}, st = S.set || (S.set = { notes: Object.assign({}, o.label_notes || {}), archive: (o.archive_labels || []).slice(), senders: (o.skip_senders || []).join('\n'), words: (o.skip_words || []).join('\n'), auto: !!o.auto_sort, days: o.days_back || 3 });
+    var labels = o.labels || [];
+    return '<div class="w170set">'
+      + '<h4 style="margin-top:0">Sorting</h4>'
+      + '<label class="w170sw"><input type="checkbox" id="w170auto"' + (st.auto ? ' checked' : '') + '> Sort new mail into my folders every 15 minutes</label>'
+      + '<p>It only adds a folder (a Gmail label) when it is sure, and leaves everything else in your inbox. Personal mail is left alone, and nothing about it is kept.</p>'
+      + '<label class="w170l" for="w170days">Look back<span class="op">for new mail in the inbox</span></label><select id="w170days" style="max-width:220px">' + [1, 2, 3, 5, 7].map(function (n) { return '<option value="' + n + '"' + (Number(st.days) === n ? ' selected' : '') + '>' + plural(n, 'day') + '</option>'; }).join('') + '</select>'
+      + '<h4>Your folders</h4><p>Say in a few words what goes in each one, so the sorting gets it right. Tick a folder to also take its mail out of the inbox (off by default).</p>'
+      + (labels.length ? labels.map(function (l) {
+        return '<div class="w170lab"><b>' + E(l.name) + '</b><input type="text" data-w170lnote="' + E(l.id) + '" maxlength="200" placeholder="' + E(l.examples && l.examples.length ? 'Like: ' + l.examples[0] : 'What goes here') + '" value="' + E(st.notes[l.id] || '') + '" aria-label="' + E('What goes in ' + l.name) + '"><label><input type="checkbox" data-w170arch="' + E(l.id) + '"' + (st.archive.indexOf(l.id) >= 0 ? ' checked' : '') + '> out of the inbox</label></div>';
+      }).join('') : '<p style="color:' + MUTED + '">Your folders have not been read yet.</p>')
+      + '<div class="w170acts"><button type="button" class="w170btn ghost sm" data-w170relabels>Read my folders again</button>' + (o.labels_at ? '<span style="font-size:12px;color:' + MUTED + '">Read ' + E(ago(o.labels_at)) + '</span>' : '') + '</div>'
+      + '<h4>Never read</h4><p>Mail from these senders, or with these words in the subject, is left alone before anything reads it: the assistant keeps only that it skipped it. Some sensitive subjects (health, support groups, family matters) are always left alone.</p>'
+      + '<label class="w170l" for="w170snd">Senders or domains<span class="op">one per line</span></label><textarea id="w170snd" rows="3" placeholder="someone@example.com&#10;example.org">' + E(st.senders) + '</textarea>'
+      + '<label class="w170l" for="w170wrd">Words in the subject<span class="op">one per line</span></label><textarea id="w170wrd" rows="2">' + E(st.words) + '</textarea>'
+      + '<div class="w170acts" style="margin-top:16px"><button type="button" class="w170btn gold" data-w170saveset' + (S.busy.set ? ' disabled' : '') + '>' + (S.busy.set ? 'Saving\u2026' : 'Save') + '</button></div>'
+      + '<h4>How it works</h4><p>The Hub reads your mailbox through Welfare Avenue\u2019s Google Workspace, as you, and only for you: nobody else sees this page or your mail. Replies are drafts in your Gmail; you send them. An email reaches a team only when you send it.</p>'
+      + '</div>';
+  }
+  function render() {
+    var el = document.getElementById('w170sheet'); if (!el || !S.open) return;
+    if (S.owner === false) { el.innerHTML = '<div class="w170bk" data-w170x></div><div class="w170sh">' + '<header class="w170hd"><div class="ti"><span class="k">Welfare Avenue</span><h2>Your inbox</h2></div><span class="sp"></span><button type="button" class="w170xb" data-w170x aria-label="Close">&times;</button></header><div class="w170empty"><b>Not on for your mailbox</b>The inbox assistant is on for a few people for now.</div></div>'; return; }
+    var lst = el.querySelector('.w170list'), mn = el.querySelector('.w170main');
+    var lt = lst ? lst.scrollTop : 0, mt = mn ? mn.scrollTop : 0, sameSel = el.getAttribute('data-sel') === String(S.sel) && el.getAttribute('data-tab') === S.tab;
+    el.innerHTML = '<div class="w170bk" data-w170x></div><div class="w170sh">' + headHtml() + '<div class="w170bd">' + listHtml() + mainHtml() + '</div></div>';
+    el.classList.toggle('sel', !!S.sel && (S.tab === 'reply' || S.tab === 'team'));
+    el.setAttribute('data-sel', String(S.sel)); el.setAttribute('data-tab', S.tab);
+    var l2 = el.querySelector('.w170list'), m2 = el.querySelector('.w170main');
+    if (l2) l2.scrollTop = lt; if (m2 && sameSel) m2.scrollTop = mt;
+  }
+  /* the email itself, read from Gmail when it is opened */
+  function ensureDetail() {
+    var x = S.sel ? rowBy(S.sel) : null; if (!x || (S.tab !== 'reply' && S.tab !== 'team')) return;
+    var d = S.D[x.gmail_id] || (S.D[x.gmail_id] = { stage: 'read', answers: {}, custom: {}, note: '' });
+    if (d.main) { firstLine(x, d); return; }   /* opened before (in To reply, say): the line for the team is still written */
+    if (d.stage === 'loading') return;
+    d.stage = 'loading'; d.err = null; render();
+    fn({ action: 'open', gmail_id: x.gmail_id }).then(function (r) {
+      d.main = r.main; d.history = r.history || []; d.later = r.later || []; d.stage = 'read'; render();
+      firstLine(x, d);
+    }, function (e) { d.stage = 'read'; d.err = 'The email did not open: ' + e.message; render(); });
+  }
+  /* For a team: the assistant writes a first line for the team it thinks of, once */
+  function firstLine(x, d) {
+    if (S.tab === 'team' && S.sel === x.gmail_id && x.team && !x.team_state && !(d.team && (d.team.ask || d.team.loading || d.team.sent || d.team.asked))) suggestAsk(x, x.team);
+  }
+  function suggestAsk(x, team) {
+    var d = S.D[x.gmail_id] || (S.D[x.gmail_id] = { stage: 'read', answers: {}, custom: {}, note: '' });
+    d.team = d.team || {}; d.team.team = team; d.team.loading = true; d.team.asked = true; d.team.err = null; render();
+    fn({ action: 'suggest_ask', gmail_id: x.gmail_id, team: team }).then(function (r) {
+      d.team.loading = false; if (!d.team.ask) d.team.ask = r.ask || ''; if (!d.team.person && r.person) d.team.person = r.person; render();
+    }, function (e) { d.team.loading = false; d.team.err = 'No line suggested: ' + e.message; render(); });
+  }
+
+  /* ---------- the reply tool, the team, the settings ---------- */
+  function detail(x) { return S.D[x.gmail_id] || (S.D[x.gmail_id] = { stage: 'read', answers: {}, custom: {}, note: '' }); }
+  function askQuestions(x) {
+    var d = detail(x); d.stage = 'asking'; d.err = null; render();
+    fn({ action: 'questions', gmail_id: x.gmail_id }).then(function (r) {
+      d.gist = r.gist || ''; d.questions = Array.isArray(r.questions) ? r.questions : []; d.answers = {}; d.custom = {};
+      d.stage = 'questions'; render();
+      if (!d.questions.length && !d.note) makeDraft(x);
+    }, function (e) { d.stage = 'read'; d.err = 'It could not read the email just now: ' + e.message; render(); });
+  }
+  function answersOf(d) {
+    return (d.questions || []).map(function (qq, i) { var a = String(d.custom[i] || '').trim() || String(d.answers[i] || '').trim(); return a ? { q: qq.q, a: a } : null; }).filter(Boolean);
+  }
+  function makeDraft(x) {
+    var d = detail(x); d.stage = 'drafting'; d.err = null; render();
+    fn({ action: 'draft', gmail_id: x.gmail_id, answers: answersOf(d), note: String(d.note || '').trim() }).then(function (r) {
+      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.stage = 'draft'; render();
+      var ta = document.getElementById('w170body'); if (ta) { try { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; } catch (e) { /* fine */ } }
+    }, function (e) { d.stage = 'questions'; d.err = 'The reply was not written: ' + e.message; render(); });
+  }
+  function saveDraft(x) {
+    var d = detail(x), ta = document.getElementById('w170body'); if (ta) d.draft = ta.value;
+    if (!String(d.draft || '').trim()) { d.err = 'The reply is empty.'; render(); return; }
+    var open = String(d.draft).match(/\[[^\]\n]{1,80}\]/g);
+    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = 'There is still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Press Save again to keep them in the draft.'; render(); return; }
+    d.stage = 'saving'; d.err = null; render();
+    fn({ action: 'save_draft', gmail_id: x.gmail_id, body: d.draft, reply_all: !!d.replyAll }).then(function (r) {
+      d.saved = r; d.stage = 'saved'; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id }); render(); paintCard();
+      T('Saved in your Gmail drafts');
+    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); });
+  }
+  function nextItem() {
+    var list = listFor(S.tab).filter(function (x) { return S.tab === 'reply' ? !x.reply_state : !x.team_state; });
+    var i = list.map(function (x) { return x.gmail_id; }).indexOf(S.sel);
+    var nx = list[i + 1] || list[0] || null;
+    S.sel = nx && nx.gmail_id !== S.sel ? nx.gmail_id : (phone() ? null : (nx ? nx.gmail_id : null));
+    if (phone()) S.sel = null;
+    render(); ensureDetail();
+  }
+  function mark(x, what) {
+    var patch = what === 'reply_done' ? { reply_state: 'done' } : what === 'reply_dismiss' ? { reply_state: 'dismissed' } : what === 'team_dismiss' ? { team_state: 'dismissed' } : {};
+    fn({ action: 'done', gmail_id: x.gmail_id, what: what }).then(function () {
+      patchRow(x.gmail_id, patch); T(what === 'team_dismiss' ? 'Kept with you' : 'Done'); nextItem(); paintCard();
+    }, function (e) { T('Not saved: ' + e.message); });
+  }
+  function sendToTeam(x) {
+    var d = detail(x); d.team = d.team || {};
+    var tm = document.getElementById('w170team'), pe = document.getElementById('w170person'), ak = document.getElementById('w170ask');
+    if (tm) d.team.team = tm.value; if (pe) d.team.person = pe.value; if (ak) d.team.ask = ak.value;
+    if (!String(d.team.ask || '').trim()) { d.team.err = 'Say in one line what they should do.'; render(); return; }
+    d.team.sending = true; d.team.err = null; render();
+    fn({ action: 'to_team', gmail_id: x.gmail_id, team: d.team.team, ask: String(d.team.ask).trim(), person: d.team.person || null }).then(function (r) {
+      d.team.sending = false; d.team.sent = r; patchRow(x.gmail_id, { team: d.team.team, team_state: 'sent', sent_mail_id: r.mail_id }); render(); paintCard();
+      T('Sent to ' + (TEAMS[d.team.team] || 'the team') + (r.person ? ', for ' + r.person : ''));
+    }, function (e) { d.team.sending = false; d.team.err = 'Not sent: ' + e.message; render(); });
+  }
+  function stopPoll() { if (S.poll) { clearInterval(S.poll); S.poll = null; } }
+  function startSort(action) {
+    if (S.poll) return;
+    var before = (S.owner && S.owner.last_sort_at) || null, t0 = Date.now();
+    fn({ action: action }).then(function (r) {
+      if (r && (r.fresh != null || r.result)) { loadOwner(true).then(function () { return loadRows(true); }).then(function () { render(); paintCard(); T(r.result ? 'Sorted: ' + r.result : 'Sorted'); }); return; }
+      S.poll = setInterval(function () {
+        loadOwner(true).then(function (o) {
+          var after = o && o.last_sort_at;
+          if (after && after !== before) { stopPoll(); loadRows(true).then(function () { render(); paintCard(); T(o.last_error ? 'Sorting stopped: ' + o.last_error : 'Sorted: ' + (o.last_result || 'done')); }); }
+          else if (Date.now() - t0 > 150000) { stopPoll(); render(); T('Still sorting: new mail shows up here in a minute'); }
+        });
+      }, 4000);
+      render();
+    }, function (e) { stopPoll(); render(); T('Sorting did not start: ' + e.message); });
+  }
+  function saveSettings() {
+    var st = S.set; if (!st) return;
+    S.busy.set = true; render();
+    fn({ action: 'settings', auto_sort: !!st.auto, days_back: Number(st.days) || 3, label_notes: st.notes, archive_labels: st.archive, skip_senders: st.senders, skip_words: st.words }).then(function () {
+      S.busy.set = false; S.set = null; return loadOwner(true).then(function () { render(); paintCard(); T('Saved'); });
+    }, function (e) { S.busy.set = false; render(); T('Not saved: ' + e.message); });
+  }
+  function setHash(tab) { var h = '#mypage/inbox' + (tab && tab !== 'reply' ? '/' + tab : ''); if ((location.hash || '') !== h) { try { history.replaceState(null, '', h); } catch (e) { /* fine */ } } }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el = t.closest('[data-w170open]');
+    if (el) { e.preventDefault(); var tab0 = el.getAttribute('data-w170open') || 'reply'; try { history.pushState(null, '', '#mypage/inbox' + (tab0 !== 'reply' ? '/' + tab0 : '')); } catch (x0) { /* fine */ } openSheet(tab0); return; }
+    if (!t.closest('#w170sheet')) return;
+    var x = S.sel ? rowBy(S.sel) : null, v;
+    if ((el = t.closest('[data-w170x]'))) { e.preventDefault(); closeSheet(); return; }
+    if ((el = t.closest('[data-w170go]'))) { closeSheet(true); return; }
+    if ((el = t.closest('[data-w170tab]'))) { e.preventDefault(); S.tab = el.getAttribute('data-w170tab'); S.showDone = false; var l = listFor(S.tab); S.sel = !phone() && l.length ? l[0].gmail_id : null; setHash(S.tab); render(); ensureDetail(); return; }
+    if ((el = t.closest('[data-w170sel]'))) { e.preventDefault(); S.sel = el.getAttribute('data-w170sel'); render(); ensureDetail(); var m = document.querySelector('#w170sheet .w170main'); if (m) m.scrollTop = 0; return; }
+    if ((el = t.closest('[data-w170back]'))) { e.preventDefault(); S.sel = null; render(); return; }
+    if ((el = t.closest('[data-w170done]'))) { e.preventDefault(); S.showDone = !S.showDone; render(); return; }
+    if ((el = t.closest('[data-w170sort]'))) { e.preventDefault(); startSort('sort'); return; }
+    if ((el = t.closest('[data-w170retry]'))) { e.preventDefault(); startSort('retry'); return; }
+    if ((el = t.closest('[data-w170relabels]'))) { e.preventDefault(); el.disabled = true; fn({ action: 'labels', refresh: true }).then(function () { S.set = null; return loadOwner(true); }).then(function () { render(); T('Your folders were read again'); }, function (err) { el.disabled = false; T('Not read: ' + err.message); }); return; }
+    if ((el = t.closest('[data-w170saveset]'))) { e.preventDefault(); saveSettings(); return; }
+    if ((el = t.closest('[data-w170unlabel]'))) {
+      e.preventDefault(); v = el.getAttribute('data-w170unlabel'); el.disabled = true;
+      fn({ action: 'unlabel', gmail_id: v }).then(function () { patchRow(v, { label_id: null, label_name: null, labelled_at: null, archived: false }); render(); paintCard(); T('The label is off'); }, function (err) { el.disabled = false; T('Not changed: ' + err.message); });
+      return;
+    }
+    if (!x) return;
+    var d = detail(x);
+    if ((el = t.closest('[data-w170help]'))) { e.preventDefault(); askQuestions(x); return; }
+    if ((el = t.closest('[data-w170ans]'))) { e.preventDefault(); var i = Number(el.getAttribute('data-w170ans')); v = el.getAttribute('data-v'); d.answers[i] = d.answers[i] === v ? '' : v; if (d.answers[i]) d.custom[i] = ''; render(); return; }
+    if ((el = t.closest('[data-w170draft]'))) { e.preventDefault(); var nt = document.getElementById('w170note'); if (nt) d.note = nt.value; makeDraft(x); return; }
+    if ((el = t.closest('[data-w170reset]'))) { e.preventDefault(); d.stage = 'read'; d.err = null; render(); return; }
+    if ((el = t.closest('[data-w170redraft]'))) { e.preventDefault(); makeDraft(x); return; }
+    if ((el = t.closest('[data-w170change]'))) { e.preventDefault(); var tb = document.getElementById('w170body'); if (tb) d.draft = tb.value; d.stage = d.questions ? 'questions' : 'read'; d.err = null; render(); return; }
+    if ((el = t.closest('[data-w170save]'))) { e.preventDefault(); saveDraft(x); return; }
+    if ((el = t.closest('[data-w170next]'))) { e.preventDefault(); nextItem(); return; }
+    if ((el = t.closest('[data-w170mark]'))) { e.preventDefault(); mark(x, el.getAttribute('data-w170mark')); return; }
+    if ((el = t.closest('[data-w170suggest]'))) { e.preventDefault(); var tm = document.getElementById('w170team'); d.team = d.team || {}; d.team.ask = ''; suggestAsk(x, tm ? tm.value : (x.team || 'opsmtl')); return; }
+    if ((el = t.closest('[data-w170send]'))) { e.preventDefault(); sendToTeam(x); return; }
+  }, true);
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w170sheet')) return;
+    var x = S.sel ? rowBy(S.sel) : null, d = x ? detail(x) : null, st = S.set;
+    if (d && t.hasAttribute('data-w170own')) { var i = Number(t.getAttribute('data-w170own')); d.custom[i] = t.value; if (t.value && d.answers[i]) { d.answers[i] = ''; Array.prototype.forEach.call(t.parentNode.querySelectorAll('[data-w170ans]'), function (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }); } return; }
+    if (d && t.id === 'w170note') { d.note = t.value; return; }
+    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; return; }
+    if (d && t.id === 'w170ask') { d.team = d.team || {}; d.team.ask = t.value; return; }
+    if (st && t.hasAttribute('data-w170lnote')) { st.notes[t.getAttribute('data-w170lnote')] = t.value; return; }
+    if (st && t.id === 'w170snd') { st.senders = t.value; return; }
+    if (st && t.id === 'w170wrd') { st.words = t.value; return; }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w170sheet')) return;
+    var x = S.sel ? rowBy(S.sel) : null, d = x ? detail(x) : null, st = S.set;
+    if (d && t.id === 'w170team') { d.team = d.team || {}; var ak = document.getElementById('w170ask'); if (ak) d.team.ask = ak.value; d.team.team = t.value; d.team.person = ''; render(); return; }
+    if (d && t.id === 'w170person') { d.team = d.team || {}; d.team.person = t.value; return; }
+    if (d && t.hasAttribute('data-w170all')) { d.replyAll = !!t.checked; return; }
+    if (st && t.id === 'w170auto') { st.auto = !!t.checked; return; }
+    if (st && t.id === 'w170days') { st.days = Number(t.value) || 3; return; }
+    if (st && t.hasAttribute('data-w170arch')) { var id = t.getAttribute('data-w170arch'), k = st.archive.indexOf(id); if (t.checked && k < 0) st.archive.push(id); if (!t.checked && k >= 0) st.archive.splice(k, 1); return; }
+  }, true);
+  document.addEventListener('keydown', function (e) { if (S.open && e.key === 'Escape' && !e.defaultPrevented) { var tag = (e.target && e.target.tagName) || ''; if (tag !== 'TEXTAREA' && tag !== 'INPUT' && tag !== 'SELECT') { e.preventDefault(); closeSheet(); } } });
+
+  /* ---------- the address: #mypage/inbox[/team|/sorted|/settings] opens it ---------- */
+  function fromHash() {
+    var h = location.hash || '', m = /^#mypage\/inbox(?:\/(reply|team|sorted|settings))?$/.exec(h);
+    if (m) { var tab = m[1] || 'reply'; if (!S.open) openSheet(tab); else if (S.tab !== tab) { S.tab = tab; S.sel = null; render(); } return; }
+    if (S.open) closeSheet(true);
+  }
+  window.addEventListener('hashchange', function () { try { fromHash(); } catch (e) { /* fine */ } });
+
+  /* ---------- Home: the card after every render ---------- */
+  if (typeof renderMyPage === 'function') {
+    var __rm170 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm170.apply(this, arguments);
+      try { refreshCard(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa170 = startApp;
+    startApp = async function () {
+      var out = await __sa170.apply(this, arguments);
+      try { addTour(); if (/^#mypage\/inbox/.test(location.hash || '')) loadOwner(false).then(function () { fromHash(); }); } catch (e) { /* fine */ }
+      return out;
+    };
+  }
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { S.owner = null; S.rows = null; S.D = {}; closeSheet(true); var c = document.getElementById('w170card'); if (c) c.remove(); } });
+  } catch (e) { /* fine */ }
+
+  /* ---------- the Home tour: a stop for the card ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT || !TT.home || !TT.home.steps || TT.home.__w170) return;
+      var hs = TT.home.steps, i = -1;
+      hs.forEach(function (x, k) { if (x.s === '#w166lead' || x.s === '#w112wrap') i = k; });
+      hs.splice(i >= 0 ? i + 1 : Math.min(2, hs.length), 0, { s: '#w170card', t: 'Your inbox', p: 'For the people whose mailbox the assistant works on: your Welfare Avenue mail sorted into your own folders, what needs your reply (the reply tool asks what it needs, writes it in your voice and saves it as a Gmail draft) and what a team should handle (sent to the team\u2019s Hub inbox with your one-line ask).', opt: 1 });
+      TT.home.__w170 = true;
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  window.w170 = { open: openSheet, close: closeSheet, refresh: refreshCard, state: function () { return S; } };
 })();
 /* =====================================================================
    WA v171 Volunteers confirm by text (planned as wave169a), and the serving's format (30/09/26)

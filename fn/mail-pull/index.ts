@@ -1,3 +1,12 @@
+// v10 (30/09/26, wave170): mail sent to info@ (which forwards to hub@) is passed on to the team or the person who should handle
+// it with one line saying what to do (routeInfo: the model picks the team and, when a role clearly fits, the person, and writes the
+// ask; hub_mail.mailbox info, ask, assignee, assignee_email); an info@ update is filed straight into the team's inbox (filed.type
+// info, no team-page update) and team-inbox v1.3 always passes it on: a DM for a person, the channel for a team. When someone on the
+// team is already on the email (they wrote it, or it was sent to them too), it is theirs and it is filed quietly (filed.on_thread):
+// no ping for a thread they are already in. Security mail (codes, password resets, sign-in and security alerts: the subject decides)
+// is never filed or passed on, whichever address it came to. Steel:
+// "with info@welfareavenue.com we get a few emails there as well that needs to forwarded to the correct groups and individuals
+// with a brief note of an ask of what they should take action on."
 // v9 (29/09/26, wave164): Finance is its own team, apart from Fundraising. Steel: "all finance related emails like invoices, receipts,
 // reimbursements should go straight to the finance slack channel not fundraising". Every money email (an invoice, a bill, a receipt, a
 // payment notice or a failed payment, a reimbursement, a bank, card or tax notice) is kind invoice, department finance: a task on the
@@ -21,7 +30,7 @@
 //   'sync'           : pull new messages, classify, file (cron every 30 min)
 //   'undo' {mail_id} : reverse what one email created; the row stays as 'undone'
 //   'refile' {mail_id, kind?, department?} : undo then file again with overrides
-//   'test' {from, subject, body, cc?, dry_run?} : classify and file a made-up email (no Gmail)
+//   'test' {from, subject, body, cc?, to?, dry_run?} : classify and file a made-up email (no Gmail); to info@ tests the passing on
 // Filing rules (kind decided by the model, rules as fallback):
 //   invoice          -> Finance task (dept_tasks, finance / Bills and receipts) with the
 //                       attachments stored in the hub-mail bucket
@@ -56,6 +65,12 @@ const CALENDAR_SUBJECT = /^(invitation|invitation with note|updated invitation|u
 /* bulk senders: a List-Unsubscribe header alone is not enough (Google Groups add one to real people's mail) */
 const BULK_SENDER = /(^|[._-])(no-?reply|newsletters?|mailer|notifications?|news|marketing|campaigns?|updates?|digest)@/i;
 const BULK_ESP = /mailchimp|mcsv\.net|sendgrid|constantcontact|hubspot|klaviyo|substack|campaign-archive|mailerlite|sendinblue|brevo|convertkit|list-manage/i;
+/* v10: security mail is never filed or passed on (a code or a reset link is for the account's owner only). The subject decides; the
+   body counts only with a plain "your code is" (a meeting invite's "Passcode:" line is not security mail) */
+const SECURITY = /\b(verification code|confirmation code|security code|login code|log[- ]in code|sign[- ]in code|one[- ]time (code|password|passcode|pin)|2-step verification|two[- ]factor|2fa|security alert|new sign[- ]in|sign[- ]in attempt|password (has been |was )?(reset|changed)|reset your password|password reset|verify your (email|account|identity|device|login)|your code is)\b/i;
+const SECURITY_BODY = /\b(your (verification|security|confirmation|one[- ]time|login|log[- ]in|sign[- ]in) code is|use (this|the following) code to (sign|log|verify|confirm|reset))\b/i;
+function isSecurity(subject: string, body: string): boolean { return SECURITY.test(subject) || SECURITY_BODY.test(body.slice(0, 1500)); }
+const INFO = /(^|[\s<,;"'])info@welfareavenue\.com/i;
 
 async function getSecret(name: string): Promise<string> {
   const { data, error } = await svc.rpc('get_secret', { secret_name: name });
@@ -115,7 +130,7 @@ async function delegatedToken(scope = 'https://www.googleapis.com/auth/gmail.rea
   const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const claims = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: HUB, scope, aud: sa.token_uri, iat: now, exp: now + 3600 })));
   const signingInput = header + '.' + claims;
-  const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key), { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+  const key = await crypto.subtle.importKey('pkcs8', pemToDer(sa.private_key).buffer as ArrayBuffer, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, enc.encode(signingInput)));
   const assertion = signingInput + '.' + b64url(sig);
   const res = await fetch(sa.token_uri, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion }) });
@@ -170,7 +185,7 @@ async function labelIds(token: string): Promise<Record<string, string>> {
 }
 /* outcome: 'filed' (read + archived), 'needs' (stays in the inbox, unread), 'ignored' (read + archived), 'undo' (back in the inbox as needs) */
 async function labelMessage(gmailId: string, outcome: 'filed' | 'needs' | 'ignored' | 'undo' | 'recruit'): Promise<boolean> {
-  if (!gmailId || gmailId.startsWith('test-')) return false;
+  if (!gmailId || gmailId.startsWith('test-') || gmailId.startsWith('person:')) return false;   /* v10: sent on from someone's own inbox: not in hub@ */
   const token = await modifyToken(); if (!token) return false;
   try {
     const ids = await labelIds(token);
@@ -326,8 +341,62 @@ async function modelClassify(m: { from_email: string; from_name: string; to_list
   throw new Error('classifier failed: ' + lastErr);
 }
 
+/* ---- v10: info@ mail: which team or person, and the one line they read first ---- */
+type FullRoster = Array<{ name: string; email: string | null; department: string | null; role: string | null }>;
+type Route = { department: string | null; person: { name: string; email: string } | null; ask: string };
+const ROUTE_TOOL = {
+  name: 'pass_on',
+  description: 'Who at Welfare Avenue should handle an email sent to info@, and the one line they read first.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      department: { type: ['string', 'null'], enum: [...DEPT_KEYS, null], description: 'The team that should handle it' },
+      person: { type: ['string', 'null'], description: 'The email of the one person on the roster it is for, when their role clearly fits; null for the team' },
+      ask: { type: 'string', description: 'One line, at most 160 characters, addressed to them: what they should do (reply, decide, book, pay, send), with the key detail (who, what, when). No em dashes.' },
+      confidence: { type: 'number' }
+    },
+    required: ['department', 'person', 'ask', 'confidence']
+  }
+};
+/* someone on the team already on the email (they wrote it, or it was sent to them too): it is theirs, and nobody needs a ping */
+function onThread(m: { from_email: string; to_list: string; cc_list: string }, roster: FullRoster): { name: string; email: string } | null {
+  const staff = roster.filter(r => r.email && String(r.email).toLowerCase() !== HUB && !/^info@/i.test(String(r.email)));
+  const from = String(m.from_email || '').toLowerCase();
+  const s = staff.find(r => String(r.email).toLowerCase() === from);
+  if (s) return { name: s.name, email: from };
+  const hay = (String(m.to_list || '') + ',' + String(m.cc_list || '')).toLowerCase();
+  const r = staff.find(p => hay.indexOf(String(p.email).toLowerCase()) >= 0);
+  return r ? { name: r.name, email: String(r.email).toLowerCase() } : null;
+}
+async function routeInfo(m: { from_email: string; from_name: string; subject: string; internal_date: string; body_text: string; attachments: Att[] }, cls: Cls, roster: FullRoster, already: { name: string; email: string } | null = null): Promise<Route | null> {
+  try {
+    const people = roster.filter(r => r.email);
+    const system = 'Emails sent to info@welfareavenue.com, the public address of Welfare Avenue (a charity serving people in need in Montreal and Toronto), are passed on to the team or the person who should handle them, with one line saying what to do. Pick the team; pick one person only when their role clearly fits the email (from the roster with roles), else leave person null for the whole team. Teams: opsmtl Operations Montreal (servings, volunteers, kitchen), progdev Program Development (programs, community partners), opsto Operations Toronto, marketing (brand, social, website, media), fundraising (grants, donors, sponsors, events), finance (invoices, receipts, payments, reimbursements), hr (hiring, applicants, people), board (governance). Write the line as a colleague would: plain, kind, specific, starting with what to do. Never use em dashes.';
+    const user = 'ROSTER (name, email, team, role):\n' + people.map(p => p.name + ' <' + p.email + '> ' + (p.department || '') + ' ' + (p.role || '')).join('\n')
+      + '\n\nTHE EMAIL (sent to info@)\nFrom: ' + m.from_name + ' <' + m.from_email + '>\nDate: ' + m.internal_date + '\nSubject: ' + m.subject + '\nAttachments: ' + (m.attachments.map(a => a.filename).join(', ') || 'none')
+      + '\nThe Hub filed it as: ' + cls.kind + (cls.department ? ' for ' + cls.department : '') + (cls.summary ? ' (' + cls.summary + ')' : '')
+      + (already ? '\n' + already.name + ' <' + already.email + '> is already on this email thread: they are the person, and the line says where it stands for them.' : '')
+      + '\n\nBODY:\n' + (m.body_text || '').slice(0, 5000);
+    const res = await fetch(SUPABASE_URL + '/functions/v1/llm', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'x-wa-task': 'mail_triage', 'x-wa-caller': 'mail-pull', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ max_tokens: 500, temperature: 0, system, messages: [{ role: 'user', content: user }], tools: [ROUTE_TOOL], tool_choice: { type: 'tool', name: 'pass_on' } })
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    // deno-lint-ignore no-explicit-any
+    const tu = (body.content || []).find((c: any) => c.type === 'tool_use');
+    if (!tu?.input) return null;
+    const i = tu.input as Record<string, unknown>;
+    const dep = DEPT_KEYS.includes(String(i.department)) ? String(i.department) : null;
+    const pe = already ? people.find(p => String(p.email).toLowerCase() === already.email) : i.person ? people.find(p => String(p.email).toLowerCase() === String(i.person).toLowerCase()) : null;
+    const ask = String(i.ask || '').replace(/\s*\u2014\s*/g, ', ').replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!ask) return null;
+    return { department: dep, person: pe ? { name: pe.name, email: String(pe.email).toLowerCase() } : null, ask };
+  } catch (e) { console.error('routeInfo', String(e).slice(0, 200)); return null; }
+}
+
 /* ---- filing ---- */
-type MailRow = { id: number; gmail_id: string; from_email: string; from_name: string; subject: string; body_text: string; attachments: Att[]; links: string[]; internal_date: string; kind: string; department: string | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor?: string | null; candidate?: Candidate | null };
+type MailRow = { id: number; gmail_id: string; from_email: string; from_name: string; subject: string; body_text: string; attachments: Att[]; links: string[]; internal_date: string; kind: string; department: string | null; title: string; summary: string; amount: number | null; due_date: string | null; meeting_date: string | null; vendor?: string | null; candidate?: Candidate | null; mailbox?: string | null; on_thread?: string | null; forwarded_by?: string | null };
 
 async function storeAttachments(token: string, row: MailRow): Promise<Att[]> {
   const out: Att[] = [];
@@ -486,6 +555,10 @@ async function fileOne(token: string, row: MailRow, site: string): Promise<Recor
   if (row.kind === 'application') return fileApplication(token, row, site);
   if (row.kind === 'invoice') return fileInvoice(token, row, site);
   if (row.kind === 'meeting_summary') return fileSummary(row, site);
+  /* v10: an info@ email goes straight into the team's inbox, not onto the team page */
+  if (row.mailbox === 'info') return row.department ? { type: 'info', id: null, department: row.department, title: row.title || row.subject, site, on_thread: row.on_thread || null } : { type: 'inbox', id: null, needs: 'department', title: row.title || row.subject, site };
+  /* an email someone sent on from their inbox assistant stays that when it is moved to another team */
+  if (row.mailbox === 'person') return { type: 'forward', id: null, department: row.department, by: row.forwarded_by || null, from: 'inbox assistant', site };
   return fileUpdate(row, site);
 }
 
@@ -527,8 +600,9 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
   let known = new Set<string>();
   if (ids.length) { const { data: have } = await svc.from('hub_mail').select('gmail_id').in('gmail_id', ids); known = new Set((have || []).map(h => h.gmail_id)); }
   const fresh = ids.filter(id => !known.has(id));
-  const { data: rosterRows } = await svc.from('team_members').select('name, email, department').eq('active', true);
+  const { data: rosterRows } = await svc.from('team_members').select('name, email, department, role').eq('active', true);
   const roster: Roster = (rosterRows || []) as Roster;
+  const fullRoster = (rosterRows || []) as FullRoster;
   let filed = 0, ignored = 0, failed = 0, newest: string | null = st?.last_internal_date || null;
   const lines: string[] = [];
   for (const id of fresh.reverse()) {
@@ -544,18 +618,29 @@ async function runSync(max = 40): Promise<Record<string, unknown>> {
       const listUnsub = !!hdr(m, 'List-Unsubscribe');
       const bulk = listUnsub && !from.email.endsWith('@welfareavenue.com') && (BULK_SENDER.test(from.email) || BULK_ESP.test(hdr(m, 'List-Unsubscribe') + ' ' + hdr(m, 'List-Id') + ' ' + hdr(m, 'X-Mailer') + ' ' + hdr(m, 'Return-Path')) || /^bulk$/i.test(hdr(m, 'Precedence')));
       const isNoise = NOISE_SENDERS.test(from.email) || CALENDAR_SUBJECT.test(base.subject) || from.email === HUB || bulk || /^(welcome to chat|tips for using your new inbox|get the official gmail app)/i.test(base.subject);
+      const security = isSecurity(base.subject, bodyText);   /* v10 */
+      const toInfo = INFO.test([base.to_list, base.cc_list, hdr(m, 'X-Original-To'), hdr(m, 'X-Forwarded-For'), hdr(m, 'Delivered-To')].join(','));   /* v10 */
       let cls: Cls;
-      if (isNoise) cls = { kind: 'noise', department: null, title: base.subject.slice(0, 90), summary: '', amount: null, due_date: null, meeting_date: null, vendor: null, confidence: 1, reason: 'system or calendar mail' };
+      if (isNoise || security) cls = { kind: 'noise', department: null, title: base.subject.slice(0, 90), summary: '', amount: null, due_date: null, meeting_date: null, vendor: null, confidence: 1, reason: security ? 'security mail: never filed or passed on' : 'system or calendar mail' };
       else {
         try { cls = await modelClassify(base, roster); } catch (e) { console.error('model classify failed', e); cls = rulesClassify(base, roster); }
       }
-      const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new' }).select('id').single();
+      /* v10: info@ mail is passed on to a team or a person with one line of what to do */
+      let route: Route | null = null, already: { name: string; email: string } | null = null;
+      if (toInfo && cls.kind !== 'noise') {
+        already = onThread(base, fullRoster);
+        route = await routeInfo(base, cls, fullRoster, already);
+        if (route && route.department && (cls.kind === 'update' || cls.kind === 'meeting_summary' || !cls.department)) cls = { ...cls, department: route.department, reason: (cls.reason + ' | info@: ' + route.department + (route.person ? ' for ' + route.person.name : '')).slice(0, 300) };
+      }
+      const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new',
+        mailbox: toInfo ? 'info' : 'hub', ask: route ? route.ask : null, assignee: route && route.person ? route.person.name : null, assignee_email: route && route.person ? route.person.email : null }).select('id').single();
       if (ins.error) throw new Error('hub_mail insert failed: ' + ins.error.message);
       if (!newest || internal > newest) newest = internal;
       if (cls.kind === 'noise') { ignored++; await labelMessage(id, 'ignored'); continue; }
-      const row: MailRow = { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null };
+      const row: MailRow = { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null, mailbox: toInfo ? 'info' : 'hub', on_thread: already ? already.name : null };
       try {
         const result = await fileOne(token, row, site);
+        if (toInfo && already && !result.on_thread) result.on_thread = already.name;   /* v10: team-inbox files it quietly */
         await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', row.id);
         await labelMessage(id, result.type === 'inbox' ? 'needs' : result.type === 'candidate' ? 'recruit' : 'filed');
         const where = result.type === 'candidate' ? 'Recruitment (HR centre)' : result.type === 'task' ? 'Finance task' : result.type === 'transcript' ? 'transcript pipeline' : result.type === 'inbox' ? 'the Hub inbox (no team yet)' : (DEPT_LABEL[String(result.department)] || String(result.department)) + ' update';
@@ -624,17 +709,23 @@ Deno.serve(async (req: Request) => {
     if (action === 'test') {
       /* classify and file a made-up email (no Gmail); undo it with {action:'undo', mail_id} */
       const site = await siteUrl();
-      const { data: rosterRows } = await svc.from('team_members').select('name, email, department').eq('active', true);
+      const { data: rosterRows } = await svc.from('team_members').select('name, email, department, role').eq('active', true);
       const from = parseAddr(String(body.from || 'someone@example.com'));
       const bodyText = String(body.body || '').slice(0, 60000);
       const links = Array.from(new Set((bodyText.match(/https?:\/\/[^\s<>"')\]]+/g) || []).map(l => l.replace(/[.,;:]+$/, '')))).slice(0, 30);
-      const base = { gmail_id: 'test-' + Date.now(), thread_id: null, internal_date: new Date().toISOString(), from_email: from.email, from_name: from.name, to_list: HUB, cc_list: String(body.cc || ''), subject: String(body.subject || 'Test'), snippet: bodyText.slice(0, 200), body_text: bodyText, attachments: [] as Att[], links };
+      const toTest = String(body.to || HUB);   /* v10: to info@ tests the passing on */
+      const base = { gmail_id: 'test-' + Date.now(), thread_id: null, internal_date: new Date().toISOString(), from_email: from.email, from_name: from.name, to_list: toTest, cc_list: String(body.cc || ''), subject: String(body.subject || 'Test'), snippet: bodyText.slice(0, 200), body_text: bodyText, attachments: [] as Att[], links };
+      const security = isSecurity(base.subject, bodyText), toInfo = INFO.test(toTest + ',' + base.cc_list);
       let cls: Cls;
-      try { cls = await modelClassify(base, (rosterRows || []) as Roster); } catch (e) { cls = rulesClassify(base, (rosterRows || []) as Roster); cls.reason = 'rules (' + String(e).slice(0, 120) + ')'; }
-      const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new' }).select('id').single();
+      if (security) cls = { kind: 'noise', department: null, title: base.subject.slice(0, 90), summary: '', amount: null, due_date: null, meeting_date: null, vendor: null, confidence: 1, reason: 'security mail: never filed or passed on' };
+      else { try { cls = await modelClassify(base, (rosterRows || []) as Roster); } catch (e) { cls = rulesClassify(base, (rosterRows || []) as Roster); cls.reason = 'rules (' + String(e).slice(0, 120) + ')'; } }
+      let route: Route | null = null;
+      let already: { name: string; email: string } | null = null;
+      if (toInfo && cls.kind !== 'noise') { already = onThread(base, (rosterRows || []) as FullRoster); route = await routeInfo(base, cls, (rosterRows || []) as FullRoster, already); if (route && route.department && (cls.kind === 'update' || cls.kind === 'meeting_summary' || !cls.department)) cls = { ...cls, department: route.department }; }
+      const ins = await svc.from('hub_mail').insert({ ...base, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, confidence: cls.confidence, reason: cls.reason, status: cls.kind === 'noise' ? 'ignored' : 'new', mailbox: toInfo ? 'info' : 'hub', ask: route ? route.ask : null, assignee: route && route.person ? route.person.name : null, assignee_email: route && route.person ? route.person.email : null }).select('id').single();
       if (ins.error) throw new Error(ins.error.message);
-      if (cls.kind === 'noise' || body.dry_run === true) return json({ ok: true, mail_id: ins.data.id, classification: cls, filed: null });
-      const result = await fileOne('', { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null }, site);
+      if (cls.kind === 'noise' || body.dry_run === true) return json({ ok: true, mail_id: ins.data.id, classification: cls, route, on_thread: already ? already.name : null, filed: null });
+      const result = await fileOne('', { ...base, id: ins.data.id, kind: cls.kind, department: cls.department, title: cls.title, summary: cls.summary, amount: cls.amount, due_date: cls.due_date, meeting_date: cls.meeting_date, vendor: cls.vendor, candidate: cls.candidate || null, mailbox: toInfo ? 'info' : 'hub', on_thread: already ? already.name : null }, site);
       await svc.from('hub_mail').update({ filed: result, status: 'filed' }).eq('id', ins.data.id);
       await log(String(ins.data.id), 'filed', null, 'test: ' + cls.kind + ' -> ' + String(result.type) + ' ' + String(result.id), caller);
       return json({ ok: true, mail_id: ins.data.id, classification: cls, filed: result });
@@ -653,7 +744,9 @@ Deno.serve(async (req: Request) => {
       const { token } = await delegatedToken();
       const site = await siteUrl();
       const result = await fileOne(token, { ...(row as MailRow), kind, department }, site);
-      await svc.from('hub_mail').update({ kind, department, filed: result, status: 'filed', error: null, undone_at: null, undone_by: null }).eq('id', id);
+      /* v10: an info@ email moved to another team is passed on to that team, not to the person it was first meant for */
+      const moved = (row.mailbox === 'info' || row.mailbox === 'person') && department !== row.department ? { assignee: null, assignee_email: null } : {};
+      await svc.from('hub_mail').update({ kind, department, filed: result, status: 'filed', error: null, undone_at: null, undone_by: null, ...moved }).eq('id', id);
       await labelMessage(String(row.gmail_id || ''), result.type === 'inbox' ? 'needs' : result.type === 'candidate' ? 'recruit' : 'filed');
       await log(String(id), 'refiled', row.kind + '/' + (row.department || ''), kind + '/' + (department || '') + ' -> ' + String(result.type) + ' ' + String(result.id), caller);
       return json({ ok: true, filed: result });

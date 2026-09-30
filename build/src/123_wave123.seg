@@ -408,7 +408,7 @@
     all: { d: '', state: 'open', q: '' },
     sheet: null
   };
-  var MAILCOLS = 'id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, notify, team_state, team_done_by, team_done_at, assignee, request_id';
+  var MAILCOLS = 'id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, notify, team_state, team_done_by, team_done_at, assignee, request_id, mailbox, ask, assignee_email, forwarded_by';   /* wave170: where it came in, the ask, the person, who sent it */
   var JEV_SINCE = '2026-09-25T17:00:00Z';
 
   /* ---------- who and where ---------- */
@@ -894,6 +894,9 @@
   function jevPill(m) {
     var n = m.notify || null;
     if (!n) return '';
+    /* wave170: an info@ email, or one sent on from someone's inbox: passed on with what to do */
+    if ((n.by === 'info' || n.by === 'forward') && n.decision === 'notify') return '<span class="w123pill jev" title="Passed on on Slack, with what to do">' + I('hash') + (n.dm ? 'Sent to ' + E(String(n.dm).split(/[\s@]/)[0]) : n.channel ? E(n.channel) : 'Passed on') + '</span>';
+    if (n.by === 'info' && n.decision === 'file') return '<span class="w123pill quiet" title="' + E((n.on_thread || 'Someone on the team') + ' is already on the email') + '">Filed quietly</span>';
     if (n.decision === 'notify') return '<span class="w123pill jev" title="' + E(n.by === 'setting' ? 'The team setting says to always ping' : 'Jev decided the team needed to hear about it') + '">' + I('hash') + (n.channel ? E(n.channel) : 'Team pinged') + '</span>';
     return '<span class="w123pill quiet" title="' + E(n.by === 'setting' ? 'The team setting says never to ping' : 'Jev decided finding it here was enough') + '">Filed quietly</span>';
   }
@@ -912,7 +915,7 @@
       + (m.assignee ? avatar(m.assignee, 22) : '');
     return '<div class="w123row" data-w123m="' + E(m.id) + '" tabindex="0" role="button" aria-label="' + E(m.title || m.subject || 'Email') + '"><span class="w123ico" style="' + cv(k.c) + '">' + I(k.icon) + '</span>'
       + '<div style="min-width:0"><div class="t">' + E(m.title || m.subject || 'Email') + '</div><div class="m">' + meta.join('<span class="dot"></span>') + '</div>'
-      + (m.summary && ctx !== 'card' ? '<div class="s">' + E(m.summary) + '</div>' : '') + '</div><div class="r">' + right + '</div></div>';
+      + (m.ask && ctx !== 'card' ? '<div class="s"><b>To do:</b> ' + E(m.ask) + (m.mailbox === 'info' ? ' <span style="color:var(--wa-muted)">(info@)</span>' : m.forwarded_by ? ' <span style="color:var(--wa-muted)">(from ' + E(m.forwarded_by) + ')</span>' : '') + '</div>' : (m.summary && ctx !== 'card' ? '<div class="s">' + E(m.summary) + '</div>' : '')) + '</div><div class="r">' + right + '</div></div>';   /* wave170: the ask first */
   }
   function sugRow(s, ctx) {
     return '<div class="w123row sug" data-w123s="' + E(s.id) + '"><span class="w123ico" style="' + cv(GOLD) + '">' + I('spark') + '</span><div style="min-width:0"><div class="t">' + E(s.title) + '</div>'
@@ -1162,6 +1165,8 @@
     if (f.type === 'transcript') return 'Sent through the meeting pipeline: its tasks, updates and decisions are on the boards. <a class="w123lnk" data-w123go="#tx/' + E(f.id) + '">Open the meeting</a>';
     if (f.type === 'candidate') return 'Added to Recruitment in the HR centre.' + (isLeader() ? ' <a class="w123lnk" data-w123go="#hrcentre/recruitment">Open Recruitment</a>' : '');
     if (f.type === 'update') return 'Filed as an update on the team page. <a class="w123lnk" data-w123go="#team/' + E(m.department) + '">Open the team page</a>';
+    if (f.type === 'forward') return 'Sent to the team by ' + E(f.by || m.forwarded_by || 'a colleague') + ' from their inbox.';   /* wave170 */
+    if (f.type === 'info') return f.on_thread ? 'Sent to info@. ' + E(f.on_thread) + ' is already on the email, so it was filed here without a ping.' : 'Sent to info@ and passed on to ' + E(m.assignee || teamLabel(m.department)) + ' with what to do. Nothing was emailed.';   /* wave170 */
     return 'Filed by the Hub inbox.';
   }
   function jevBlock(m) {
@@ -1174,6 +1179,13 @@
     var why = n.why ? WHY[n.why] || n.why : null;
     var head, sub;
     if (n.by === 'setting') { head = n.decision === 'notify' ? 'The team is always pinged' : 'The team is never pinged'; sub = 'That is the team&rsquo;s setting in Slack settings.'; }
+    else if ((n.by === 'forward' || n.by === 'info') && n.decision === 'file') {   /* wave170: someone on the team is already on the email */
+      head = 'Filed quietly: ' + E(n.on_thread || 'someone on the team') + ' is already on the email'; sub = 'Emails to info@ are passed on with what to do, unless someone on the team is already on the thread.';
+    }
+    else if (n.by === 'forward' || n.by === 'info') {   /* wave170: sent on by a person, or an info@ email: always passed on */
+      head = n.dm ? 'Sent to ' + E(n.dm) + ' on Slack' : (n.channel ? 'Posted in #' + E(n.channel) : 'Passed on to ' + E(team));
+      sub = (n.by === 'info' ? 'Emails to info@ are always passed on, with what to do. ' : 'Sent on from their inbox, with what to do. ') + (n.url ? '<a class="w123lnk" href="' + E(n.url) + '" target="_blank" rel="noopener">Open it in Slack</a>' : '');
+    }
     else if (n.decision === 'notify') { head = 'Jev pinged ' + E(team) + (n.channel ? ' in #' + E(n.channel) : ''); sub = (why ? 'Because ' + E(why) + '. ' : '') + (n.url ? '<a class="w123lnk" href="' + E(n.url) + '" target="_blank" rel="noopener">Open it in Slack</a>' : ''); }
     else { head = 'Jev filed it quietly'; sub = (why ? 'It looked like ' + E(why === 'someone needs to act' ? 'something to act on, but not urgent' : why) + '. ' : '') + 'No Slack message: finding it here is enough.'; }
     if (n.by === 'rule') sub += ' Jev did not answer, so the Hub&rsquo;s rule decided (bills, applicants and anything due within ten days get a ping).';
@@ -1191,6 +1203,7 @@
       + '<h2>' + E(m.title || m.subject || 'Email') + '</h2>'
       + '<div class="meta"><span>From <b>' + E(m.from_name || m.from_email || 'someone') + '</b>' + (m.from_name && m.from_email ? ' &lt;' + E(m.from_email) + '&gt;' : '') + '</span><span>' + E(fmtWhen(m.internal_date)) + '</span>'
       + (m.amount != null ? '<span><b>$' + E(Number(m.amount).toLocaleString('en-CA', { maximumFractionDigits: 2 })) + '</b></span>' : '') + (m.due_date ? '<span class="' + (daysUntil(m.due_date) < 0 && open ? 'late' : '') + '">due ' + E(fmtLong(m.due_date)) + '</span>' : '') + (m.assignee ? '<span>With <b>' + E(m.assignee) + '</b></span>' : '') + '</div>'
+      + (m.ask ? '<div class="blk"><h4>What to do</h4><div class="prose" style="white-space:normal"><b>' + E(m.ask) + '</b>' + (m.forwarded_by ? '<br><span class="w123sub" style="margin:0">From ' + E(m.forwarded_by) + ', who sent it on from their inbox' + (m.assignee ? ', for ' + E(m.assignee) : '') + '.</span>' : m.mailbox === 'info' ? '<br><span class="w123sub" style="margin:0">Sent to info@; the Hub wrote this line' + ((m.filed || {}).on_thread ? '. ' + E(m.filed.on_thread) + ' is already on the email' : m.assignee ? ' and passed it to ' + E(m.assignee) : '') + '.</span>' : '') + '</div></div>' : '')   /* wave170 */
       + '<div class="blk">' + jevBlock(m) + '</div>';
     if (st) out += '<div class="ctl"><label>With <select data-w123mas aria-label="Who has it">' + assigneeOptions(m.department, m.assignee) + '</select></label><span class="sp"></span>'
       + (m.request_id ? '<a class="w123btn sm ghost" data-w123go="#requests/r/' + E(m.request_id) + '">Open the request</a>' : '<button type="button" class="w123btn sm ghost" data-w123mconv>' + I('inbox') + 'Make it a request</button>')

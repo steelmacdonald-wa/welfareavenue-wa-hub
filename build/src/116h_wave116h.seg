@@ -90,7 +90,7 @@
 
   async function load() {
     try {
-      var r = await db.from('hub_mail').select('id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, links, error, reason, undone_at, undone_by').order('internal_date', { ascending: false }).limit(300);
+      var r = await db.from('hub_mail').select('id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, status, filed, attachments, links, error, reason, undone_at, undone_by, mailbox, ask, assignee, forwarded_by').order('internal_date', { ascending: false }).limit(300);
       H.rows = (r && r.data) || [];
       var s = await db.from('hub_mail_state').select('*').eq('id', 1).maybeSingle();
       H.state = (s && s.data) || null;
@@ -106,6 +106,10 @@
     if (f.type === 'update') return { st: 'Team update', cls: '', link: '#team/' + f.department, text: 'Update on the ' + E(label(f.department)) + ' page' };
     if (f.type === 'transcript') return { st: 'Transcript pipeline', cls: '', link: '#transcripts', text: 'In the Transcript Archive; tasks, updates and decisions follow' };
     if (f.type === 'inbox') return { st: 'needs a team', cls: 'warn', text: 'The model could not tell which team this belongs to' };
+    /* wave170: info@ passed on (or filed quietly when someone on the team is already on the email), and emails sent on from an inbox */
+    if (f.type === 'info') return f.on_thread ? { st: 'info@, filed quietly', cls: '', link: '#requests/m/' + x.id, text: E(f.on_thread) + ' is already on the email' } : { st: 'info@, passed on', cls: '', link: '#requests/m/' + x.id, text: (x.assignee ? 'To ' + E(x.assignee) : 'To the ' + E(label(f.department || x.department)) + ' inbox') + ', with what to do' };
+    if (f.type === 'forward') return { st: 'Sent on from an inbox', cls: '', link: '#requests/m/' + x.id, text: 'By ' + E(f.by || x.forwarded_by || 'a colleague') + ', to the ' + E(label(x.department)) + ' inbox' };
+    if (f.type === 'candidate') return { st: 'Applicant', cls: '', link: '#hrcentre/recruitment', text: 'In Recruitment, in the HR centre' };
     return { st: x.status || 'new', cls: 'mut', text: '' };
   }
   function attHtml(x) {
@@ -118,7 +122,7 @@
     var dept = x.department || f.department;
     return '<div class="w116mr" data-mid="' + E(x.id) + '"><span class="k" style="background:' + k[1] + '">' + k[2] + '</span>' +
       '<div class="b"><div class="m1"><span class="kd" style="color:' + k[1] + '">' + E(k[0]) + '</span><span>' + E(x.from_name || x.from_email || '') + (x.from_name ? ' &lt;' + E(x.from_email) + '&gt;' : '') + '</span><span>' + E(fmt(x.internal_date)) + '</span>' + (x.amount != null ? '<span><b>' + E(money(x.amount)) + '</b>' + (x.due_date ? ' due ' + E(x.due_date) : '') + '</span>' : '') + '</div>' +
-      '<div class="t">' + E(x.title || x.subject || '(no subject)') + '</div>' + (x.summary ? '<div class="s">' + E(x.summary) + '</div>' : (x.subject && x.title !== x.subject ? '<div class="s">' + E(x.subject) + '</div>' : '')) +
+      '<div class="t">' + E(x.title || x.subject || '(no subject)') + '</div>' + (x.ask ? '<div class="s"><b>To do:</b> ' + E(x.ask) + '</div>' : x.summary ? '<div class="s">' + E(x.summary) + '</div>' : (x.subject && x.title !== x.subject ? '<div class="s">' + E(x.subject) + '</div>' : '')) +   /* wave170: the ask first */
       '<div class="f">' + (dept ? '<span class="d" style="background:' + color(dept) + '"></span><span>' + E(label(dept)) + '</span>' : '') + '<span class="st ' + ft.cls + '">' + E(ft.st) + '</span>' + (ft.link ? '<a data-hact="go" data-hash="' + E(ft.link) + '">' + ft.text + ' &rarr;</a>' : (ft.text ? '<span style="color:var(--wa-muted)">' + ft.text + '</span>' : '')) + attHtml(x) + '</div></div>' +
       '<div class="a">' + (!canAct() ? '' :
         (x.status === 'filed' && f.type !== 'inbox' ? '<a class="warn" data-hact="undo">Undo</a><a data-hact="refile">Move to another team</a>' : '') +

@@ -1,4 +1,9 @@
-// Welfare Avenue: team-inbox (v1.2, 29/09/26: Finance is a team of its own for requests and emails, apart from Fundraising, and posts in
+// Welfare Avenue: team-inbox (v1.3, 30/09/26, wave170: an email sent to info@ (the Hub inbox, mailbox info) and an email someone sent
+// to a team from their inbox assistant (mailbox person, filed.type forward) always go out, with the one-line ask: a DM to the person
+// it is for (assignee_email), else a post in the team's channel; an info@ email someone on the team is already on (filed.on_thread) is
+// filed quietly. Steel: "with info@welfareavenue.com we get a few emails there as well
+// that needs to forwarded to the correct groups and individuals with a brief note of an ask of what they should take action on."
+// v1.2, 29/09/26: Finance is a team of its own for requests and emails, apart from Fundraising, and posts in
 // #accounting-finance (private: the Hub's app was added to it); an invoice, receipt or reimbursement says which it is. Steel: "all finance
 // related emails like invoices, receipts, reimbursements should go straight to the finance slack channel not fundraising".
 // v1.1, 25/09/26: who asked reads plainly for meeting and Ask the Hub requests; v1 25/09/26)
@@ -368,7 +373,7 @@ async function requestNote(noteId: number): Promise<Record<string, unknown>> {
 }
 
 /* ---------- emails the Hub inbox filed: Jev decides ---------- */
-type Mail = { id: number; gmail_id: string | null; internal_date: string | null; from_email: string | null; from_name: string | null; subject: string | null; title: string | null; summary: string | null; kind: string | null; department: string | null; amount: number | null; due_date: string | null; meeting_date: string | null; status: string | null; filed: Record<string, unknown> | null; notify: Record<string, unknown> | null; attachments: Array<{ filename: string }> | null; body_text: string | null };
+type Mail = { id: number; gmail_id: string | null; internal_date: string | null; from_email: string | null; from_name: string | null; subject: string | null; title: string | null; summary: string | null; kind: string | null; department: string | null; amount: number | null; due_date: string | null; meeting_date: string | null; status: string | null; filed: Record<string, unknown> | null; notify: Record<string, unknown> | null; attachments: Array<{ filename: string }> | null; body_text: string | null; mailbox?: string | null; ask?: string | null; assignee?: string | null; assignee_email?: string | null; forwarded_by?: string | null };
 const KIND_LABEL: Record<string, string> = { invoice: 'Invoice', meeting_summary: 'Meeting summary', update: 'Email', application: 'Job application' };
 /* v1.2: a money email says what it is (the Hub inbox files them all as kind invoice) */
 function kindLabel(m: Mail): string {
@@ -444,14 +449,65 @@ async function mailText(m: Mail, d: Decision): Promise<string> {
   if (d.by === 'jev' && d.why) lines.push('_Jev flagged it: ' + (WHY_TEXT[d.why] || d.why) + (d.p != null ? ' (' + Math.round(d.p * 100) + '%)' : '') + '_');
   return lines.join('\n');
 }
+/* v1.3: an email passed on (info@, or sent on by a person): what to do comes first */
+function passedText(m: Mail, forPerson: boolean): string {
+  const team = TEAMS[String(m.department)] || String(m.department);
+  const via = m.mailbox === 'info' ? 'sent to info@' : 'sent on by ' + sx(m.forwarded_by || 'a colleague') + ' from their inbox';
+  const lines: string[] = [];
+  lines.push(':envelope_with_arrow: *' + (forPerson ? 'An email for you' : sx(kindLabel(m)) + ' for ' + sx(team)) + '* · ' + via);
+  lines.push('*' + link('#requests/m/' + m.id, clip(m.title || m.subject || 'Email', 150)) + '*');
+  if (m.ask) lines.push('*To do:* ' + sx(clip(m.ask, 300)));
+  else if (m.summary) lines.push('> ' + sx(clip(m.summary, 320)));
+  const meta: string[] = ['From ' + sx(m.from_name || m.from_email || 'someone')];
+  if (m.amount != null) meta.push('$' + Number(m.amount).toLocaleString('en-CA', { maximumFractionDigits: 2 }));
+  if (m.due_date) meta.push('due ' + day(m.due_date));
+  if (forPerson) meta.push('in the ' + sx(team) + ' inbox'); else if (m.assignee) meta.push('for ' + sx(m.assignee));
+  lines.push(meta.join(' · '));
+  return lines.join('\n');
+}
 async function mailFiled(id: number, dry = false): Promise<Record<string, unknown>> {
   const s = await settings();
-  const { data } = await svc.from('hub_mail').select('id, gmail_id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, meeting_date, status, filed, notify, attachments, body_text').eq('id', id).maybeSingle();
+  const { data } = await svc.from('hub_mail').select('id, gmail_id, internal_date, from_email, from_name, subject, title, summary, kind, department, amount, due_date, meeting_date, status, filed, notify, attachments, body_text, mailbox, ask, assignee, assignee_email, forwarded_by').eq('id', id).maybeSingle();
   const m = data as Mail | null;
   if (!m) return { error: 'mail not found' };
   if (!m.department || m.kind === 'noise' || m.status !== 'filed' || (m.filed || {}).type === 'inbox') return { skipped: 'not filed to a team' };
   const prev = (m.notify || {}) as Record<string, unknown>;
   if (!dry && prev.department === m.department && (prev.ts || prev.decision === 'file')) return { skipped: 'already decided for this team' };
+  /* v1.3: passed on (info@, or sent on by a person): always, to the person it is for when there is one */
+  const passed = m.mailbox === 'info' || m.mailbox === 'person' || (m.filed || {}).type === 'forward';
+  if (passed) {
+    const by = m.mailbox === 'info' ? 'info' : 'forward';
+    const rec: Record<string, unknown> = { department: m.department, decision: 'notify', p: null, why: 'act', why_conf: null, ask: null, by, at: new Date().toISOString() };
+    /* someone on the team is already on the email thread: it is theirs, filed quietly (no ping for a thread they are in) */
+    const onThread = by === 'info' ? String((m.filed || {}).on_thread || '') : '';
+    if (onThread) {
+      rec.decision = 'file'; rec.why = 'on the thread'; rec.on_thread = onThread;
+      if (dry) return { dry: true, ...rec, to: 'nobody (on the thread)' };
+      await svc.from('hub_mail').update({ notify: rec }).eq('id', id);
+      await log('hub_mail', String(id), 'team notify', 'filed quietly (info): ' + onThread + ' is on the thread');
+      return { ok: true, ...rec };
+    }
+    if (dry) return { dry: true, ...rec, to: m.assignee_email ? 'dm ' + m.assignee_email : 'channel', text: passedText(m, !!m.assignee_email) };
+    let sent = false;
+    if (m.assignee_email) {
+      const out = await dm(m.assignee_email, passedText(m, true), 'mail_for_you');
+      rec.dm = m.assignee || m.assignee_email; rec.dm_state = out;
+      sent = out === 'sent';
+    }
+    if (!sent) {
+      const chain = s.channels[m.department] || [];
+      const res = chain.length ? await resolve(chain) : { ch: null, tried: [] as Array<{ name: string; state: string }> };
+      if (!res.ch) rec.error = 'could not post: ' + (res.tried.map(t => '#' + t.name + ' (' + t.state + ')').join(', ') || 'no channel set');
+      else {
+        const out = await postTo(res.ch, passedText(m, false));
+        if (out.ok) { rec.channel = res.ch.name; rec.channel_id = res.ch.id; rec.ts = out.ts; rec.url = permalink(res.ch.id, out.ts!); if (rec.dm) rec.dm = null; }
+        else rec.error = 'Slack refused: ' + out.error;
+      }
+    }
+    await svc.from('hub_mail').update({ notify: rec }).eq('id', id);
+    await log('hub_mail', String(id), 'team notify', 'passed on (' + by + ')' + (rec.dm ? ' to ' + rec.dm : '') + (rec.channel ? ' in #' + rec.channel : '') + (rec.error ? ' ' + rec.error : ''));
+    return { ok: true, ...rec };
+  }
   const mode = s.email_mode[m.department] || 'jev';
   let d: Decision;
   if (mode === 'always') d = { notify: true, p: null, why: null, why_conf: null, ask: null, by: 'setting' };

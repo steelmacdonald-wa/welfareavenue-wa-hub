@@ -259,6 +259,10 @@ Emails received by the hub@ mailbox, pulled every 30 minutes by mail-pull, class
 - `team_state`: Team inbox state set by team_inbox_mail(): open, done or request. Unused so far.
 - `request_id`: dept_requests.id created from the email in the team inbox. Foreign key (on delete set null).
 - `confidence`: Classifier confidence from 0 to 1.
+- `mailbox`: wave170: where the email came in: hub (cc'd to hub@), info (sent to info@, which forwards to hub@: always passed on with an ask), person (sent to a team from someone's inbox assistant).
+- `ask`: wave170: the one line the team or person reads: what they should do about it (written by the model for info@ mail, by the sender for a forward).
+- `assignee_email`: wave170: the person it is for (their Slack DM), with assignee their name.
+- `forwarded_by`: wave170: who sent it to the team from their inbox assistant (their name).
 
 ### `hub_mail_state`
 
@@ -1566,6 +1570,25 @@ wave165: the other addresses a member signs in with (Steel: his gmail). Read onl
 
 wave169: a training or a Learning Avenue assigned to everyone (the whole team, not the board), teams or people, from the HR centre or the Avenue Academy (academy_assign); include_new gives it to people who join later (trg_wa169_member_assign), due_days is their time to finish. The rows in training_progress carry it (assignment_id, due_date).
 
+### `mybox_owners`
+
+wave170: the people whose own mailbox the inbox assistant works on (the mybox function, through the Hub's Google delegation acting as them). Each person reads only their own row; every write goes through the mybox function. enabled: the assistant is on; auto_sort: it sorts new inbox mail into their labels every 15 minutes (cron wa-mybox-sort).
+
+- `archive_labels`: wave170: the labels whose mail also leaves the inbox when the assistant files it there (none by default: a label is only added).
+- `label_notes`: wave170: what goes in each label, in the owner's words ({label id: note}); the sorting reads it.
+- `skip_senders`: wave170: senders or domains the assistant never reads (personal mail): it keeps nothing but the message id.
+- `skip_words`: wave170: words in a subject that make the assistant leave a message unread and unkept, like skip_senders.
+- `voice`: wave170: how the owner's replies sound, given to the model that drafts them (Steel's: his steel-voice and wa-writing guides, for Welfare Avenue mail).
+- `labels`: wave170: the owner's own Gmail labels as last read: [{id, name, examples: [subjects of recent mail in it]}].
+
+### `mybox_mail`
+
+wave170: what the inbox assistant did with each message in its owner's inbox: the label it added (and how sure it was), a team it could go to, whether it needs the owner's reply, the Gmail draft saved from the reply tool, and the Hub inbox row when the owner sent it to a team. The owner reads only their own rows; personal mail is kept as its id alone (skipped). Written by the mybox function.
+
+- `skipped`: wave170: personal mail (the owner's never-read list, a sensitive subject, or the model's call): nothing is kept but the id, so it is never read again.
+- `reply_p`: wave170: how likely it needs the owner's own reply (0 to 1).
+- `sent_mail_id`: wave170: the hub_mail row the owner created by sending this email to a team (mailbox person).
+
 ### `volunteer_role_guides`
 
 wave171: what a volunteer sees after confirming on hub.welfareavenue.com/c/<token>: per roster role, the label (English and French), a Photo library photo (only a ready one is ever shown), what to expect, what to bring and when to arrive. Staff edit (Texts settings on an event); the public page reads it only through volunteer_confirm_get.
@@ -1692,6 +1715,7 @@ Functions:
 - `academy_assign_end(bigint)`: wave169: stop an assignment; rows nobody started are removed, started ones keep their progress.
 - `academy_assignments_list()`: wave169: the assignments (running, and stopped in the last 30 days) with each person's progress, for HR, leaders and admins.
 - `wa169_onb_avenue_sync()`: wave169: the Learning Avenue Your onboarding is the master onboarding's Academy modules, in the master's order (trg_wa169_onb_avenue on onboarding_template).
+- `mybox_me()`: wave170: the signed-in person's own mailbox: their email, or the Welfare Avenue address an alias they signed in with belongs to (wa_email_aliases). The inbox assistant's tables use it for "your own rows only".
 - `wa171_role_label(text, text)`: wave171: a roster role's label in English or French (volunteer_role_guides, else the role code in words).
 - `wa171_date_words(date, text)`: wave171: a date in words for a text (Sunday, October 4 / dimanche 4 octobre).
 - `wa171_digits(text)`: wave171: a phone number's last 10 digits (how every Hub table matches numbers), or null.

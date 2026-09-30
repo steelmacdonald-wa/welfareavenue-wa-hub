@@ -1,5 +1,7 @@
 # 30/09/26 - wave169: the master onboarding runs the Academy, and trainings are assigned to the organization
 
+Not to be confused with the plans for volunteer texts, WhatsApp links and itineraries (claude/hub-wave169-plan-texts-whatsapp-itineraries.md and claude/hub-wave169b-plan-volunteer-faq-by-text.md), written the same night under the same number and not built yet: build those under the next free number (wave171 or later: wave170 is the inbox assistant and info@).
+
 Steel (29/09/26): "the master onboarding in the hr center that controls the onboarding. I want to make that's synced to what people see on their Avenue Academy page. Also, I want HR to have the ability to assign trainings to the org through that same page in the hr center. Leaders should have that ability on the Avenue Academy page as well".
 
 ## The master onboarding is what people see

@@ -1,0 +1,7 @@
+-- wa170b_wording (30/09/26): the inbox assistant's notes say "personal mail" plainly (the table comments and the sorting route's
+-- note), as the page does. The recorded wa170_inbox (20260930100000) is rewritten from the repo copy, which no longer carries the
+-- owner's voice: that drafting guide is personal to its owner and lives in their mybox_owners row only.
+comment on column public.mybox_owners.skip_senders is 'wave170: senders or domains the assistant never reads (personal mail): it keeps nothing but the message id.';
+comment on table public.mybox_mail is 'wave170: what the inbox assistant did with each message in its owner''s inbox: the label it added (and how sure it was), a team it could go to, whether it needs the owner''s reply, the Gmail draft saved from the reply tool, and the Hub inbox row when the owner sent it to a team. The owner reads only their own rows; personal mail is kept as its id alone (skipped). Written by the mybox function.';
+comment on column public.mybox_mail.skipped is 'wave170: personal mail (the owner''s never-read list, a sensitive subject, or the model''s call): nothing is kept but the id, so it is never read again.';
+update public.ai_routes set notes = 'wave170: the inbox assistant: Jev decides a person''s own mail: personal (left alone), which of their labels, a team it could go to, whether it needs their reply.', updated_at = now(), updated_by = 'wave170' where task = 'mybox_sort';
