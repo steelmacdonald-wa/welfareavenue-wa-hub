@@ -22,11 +22,13 @@ PATHS = {
     'contact': {'en': '/contact/', 'fr': '/fr/contact/'},
     'donate': {'en': '/donate/', 'fr': '/fr/donner/'},
 }
-NAV = ['about', 'volunteer', 'events', 'press', 'contact']
+# The menu, in the order of Edison's design (www2, 01/10/26). Contact and Sign up sit in the header's side group.
+NAV = ['home', 'volunteer', 'donate', 'events', 'press', 'about']
 
 UI = {
     'en': {
-        'nav': {'about': 'About', 'volunteer': 'Volunteer', 'events': 'Events', 'press': 'Press', 'contact': 'Contact', 'donate': 'Donate'},
+        'nav': {'home': 'Home', 'about': 'About us', 'volunteer': 'Volunteer', 'events': 'Our activities', 'press': 'Press', 'contact': 'Contact', 'donate': 'Donate'},
+        'signup': 'Sign up',
         'skip': 'Skip to content', 'menu': 'Menu', 'home_label': 'Welfare Avenue, home', 'main_nav': 'Main',
         'other_lang': 'Français', 'other_code': 'fr',
         'hint': 'Ce site est aussi offert en français.', 'hint_link': 'Voir la version française', 'hint_close': 'Fermer',
@@ -40,7 +42,8 @@ UI = {
         'logo_alt': 'Welfare Avenue, building pathways in our community',
     },
     'fr': {
-        'nav': {'about': 'À propos', 'volunteer': 'Bénévolat', 'events': 'Événements', 'press': 'Presse', 'contact': 'Contact', 'donate': 'Faire un don'},
+        'nav': {'home': 'Accueil', 'about': 'À propos', 'volunteer': 'Bénévolat', 'events': 'Nos activités', 'press': 'Presse', 'contact': 'Contact', 'donate': 'Faire un don'},
+        'signup': 'S’inscrire',
         'skip': 'Aller au contenu', 'menu': 'Menu', 'home_label': 'Welfare Avenue, accueil', 'main_nav': 'Principal',
         'other_lang': 'English', 'other_code': 'en',
         'hint': '', 'hint_link': '', 'hint_close': '',
@@ -391,4 +394,22 @@ FUNDRAISERS_NEXT = [
     ({'en': 'Rally Paper', 'fr': 'Rally Paper'}, {'en': 'Summer 2027', 'fr': 'Été 2027'},
      {'en': 'Our challenge weekend returns, run together with partner organizations.',
       'fr': 'Notre fin de semaine défi revient, organisée avec des organismes partenaires.'}),
+]
+
+# Who we need at each serving (www2, 01/10/26, Edison's "Who do we need?"): the roster board's target for each role, from the
+# Hub's app_config vol_role_targets (30/09/26: server 8, cook 4, driver 2, dishwasher 2, photographer 1, community welcome 2;
+# team leaders and the community debrief are staff roles and left off). A rebuild picks up a change of targets.
+SERVING_TEAM = [  # (role key in the Hub, target, title, what they do)
+    ('server', 8, {'en': 'Servers', 'fr': 'Service'},
+     {'en': 'Set up the tent and serve meals with care.', 'fr': 'Monter la tente et servir les repas avec soin.'}),
+    ('cook', 4, {'en': 'Cooks', 'fr': 'Cuisine'},
+     {'en': 'Prepare the home-cooked meals for the serving.', 'fr': 'Préparer les repas maison pour la distribution.'}),
+    ('driver', 2, {'en': 'Drivers', 'fr': 'Transport'},
+     {'en': 'Bring the food and supplies there and back.', 'fr': 'Apporter la nourriture et le matériel, aller-retour.'}),
+    ('dishwasher', 2, {'en': 'Dishwashers', 'fr': 'Vaisselle'},
+     {'en': 'Keep the kitchen moving so every meal is ready on time.', 'fr': 'Assurer le roulement en cuisine pour que chaque repas soit prêt à temps.'}),
+    ('community_talker', 2, {'en': 'Community welcome', 'fr': 'Accueil'},
+     {'en': 'Welcome people as they arrive: a meal is also a conversation.', 'fr': 'Accueillir les gens à leur arrivée : un repas, c’est aussi une conversation.'}),
+    ('photographer', 1, {'en': 'Photographer', 'fr': 'Photographie'},
+     {'en': 'Capture the day, with care for everyone’s privacy.', 'fr': 'Raconter la journée en images, dans le respect de la vie privée de chacun.'}),
 ]

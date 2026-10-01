@@ -217,12 +217,12 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     ok(!brokenF.length, 'events: every fundraiser photo and poster loads ' + brokenF.join(' '));
     /* wave168: the page opens on a photo; fundraisers coming up show their last edition or the brand's E; a past event with no poster is branded */
     const w168 = await page.evaluate(() => {
-      const hero = document.querySelector('.page-hero.photo'), him = hero && hero.querySelector('.ph-img img');
+      const hero = document.querySelector('.hero'), him = hero && hero.querySelector('.bg img');
       const cards = Array.from(document.querySelectorAll('#fundraisers .fundnext li')).map(li => { const cm = li.querySelector('.cm'); const im = cm && cm.querySelector('img:not(.s)'); return { brand: !!(cm && cm.classList.contains('brand')), e: !!(cm && cm.querySelector('svg.e')), img: im ? { alt: im.alt, ok: im.complete && im.naturalWidth > 0, src: im.getAttribute('src') } : null, tag: (cm && cm.querySelector('.tag') || {}).textContent || '' }; });
       const ph = document.querySelector('#past .ph');
-      return { hero: !!hero, heroImg: him && { alt: him.alt, ok: him.complete && him.naturalWidth > 0, eager: him.getAttribute('fetchpriority') === 'high' }, doodle: !!(hero && hero.querySelector('img.doodle')), h1: (hero && hero.querySelector('h1') || {}).textContent, cards, ph: ph && { e: !!ph.querySelector('svg.e'), t: ph.textContent.trim() } };
+      return { hero: !!hero, heroImg: him && { alt: him.alt, ok: him.complete && him.naturalWidth > 0, eager: him.getAttribute('fetchpriority') === 'high' }, h1: (hero && hero.querySelector('h1') || {}).textContent, cards, ph: ph && { e: !!ph.querySelector('svg.e'), t: ph.textContent.trim() } };
     });
-    ok(w168.hero && w168.heroImg && w168.heroImg.ok && w168.heroImg.eager && /celebrates/.test(w168.heroImg.alt) && w168.doodle && w168.h1 === 'Events and photos', 'events (wave168): opens on a photo with the star, the title over it ' + JSON.stringify(w168.heroImg));
+    ok(w168.hero && w168.heroImg && w168.heroImg.ok && w168.heroImg.eager && /celebrates/.test(w168.heroImg.alt) && w168.h1 === 'Our activities', 'events (www2): opens on a photo, the title over it ' + JSON.stringify(w168.heroImg));
     ok(w168.cards.length === 4 && w168.cards[0].brand && w168.cards[0].e && !w168.cards[0].img && w168.cards[1].img && w168.cards[1].img.ok && /gift-baskets-the-crew/.test(w168.cards[1].img.src) && w168.cards[1].tag === 'The 2025 drive' && w168.cards[1].img.alt.length > 20
       && w168.cards[2].img && /flag-football-team-in-yellow/.test(w168.cards[2].img.src) && w168.cards[2].tag === 'The 2026 tournament' && w168.cards[3].brand && w168.cards[3].e, 'events (wave168): fundraisers coming up with last year\'s photo (said so) or the brand\'s E ' + JSON.stringify(w168.cards));
     ok(w168.ph && w168.ph.e && w168.ph.t === 'Rally Paper 2026', 'events (wave168): a past event without a poster is branded with the E ' + JSON.stringify(w168.ph));
@@ -247,7 +247,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   for (const W of [1280, 390]) {
     const { ctx, page, calls } = await context({ width: W });
     await page.goto(ORIGIN + '/volunteer/', { waitUntil: 'networkidle' });
-    await page.click(W > 900 ? '.nav .btn.desk' : '.top .donate-m');
+    await page.click(W > 1139 ? 'footer [data-wa-donate]' : '.top .donate-m');
     await page.waitForSelector('.wa-dn-back iframe');
     ok(new URL(page.url()).pathname === '/volunteer/', W + ' donate: the visitor stays on the page');
     ok((await page.getAttribute('.wa-dn-back iframe', 'src')) === 'https://hub.welfareavenue.com/give/?embed=1' && (await page.getAttribute('.wa-dn-back iframe', 'allow')) === 'payment *', W + ' donate: the popup shows the Hub\'s donation page, payments allowed');
@@ -294,6 +294,49 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     ok(calls.filter(c => c.startsWith('linkedin:')).length >= 3 && !(await page.evaluate(() => window.__csp.length)), W + ' about ' + lang + ': the posts load under the site\'s policy');
     ok(!errors.length, W + ' about ' + lang + ': no console errors ' + errors.join(' | '));
     ok((await page.evaluate(() => document.documentElement.scrollWidth)) <= W, W + ' about ' + lang + ': no sideways scroll');
+    await ctx.close();
+  }
+
+  // www2 (01/10/26): Edison's design built into the site
+  {
+    const BAD = /Sing Up|Sing In|teem|generosuty|Cordinator|tax-deductible|10\.000|\$ ?40[.,]000|—/, BAD_EN = /ressources/;  /* "ressources" is right in French */
+    for (const f of htmlFiles) { const t = fs.readFileSync(f, 'utf8'), rel = path.relative(OUT, f); ok(!BAD.test(t) && (rel.startsWith('fr/') || !BAD_EN.test(t)), rel + ': no mockup typos, sample figures or em dashes'); }
+    const { ctx, page, calls } = await context({ width: 1440 });
+    await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' });
+    const h = await page.evaluate(() => ({
+      logo: (document.querySelector('.top .brand img') || {}).getAttribute ? document.querySelector('.top .brand img').getAttribute('src') : '',
+      bg: getComputedStyle(document.querySelector('.top')).backgroundColor,
+      nav: Array.from(document.querySelectorAll('.nav .links a:not(.lang)')).map(a => a.textContent),
+      cur: (document.querySelector('.nav .links a[aria-current=page]') || {}).textContent,
+      side: Array.from(document.querySelectorAll('.nav .side a')).map(a => [a.textContent, a.getAttribute('href')]),
+      h1: document.querySelector('h1 .sr').textContent, heroBtn: !!document.querySelector('.hero [data-wa-donate]'),
+      paths: Array.from(document.querySelectorAll('.paths li')).map(li => [li.querySelector('h2').textContent, li.querySelector('a.sq').getAttribute('href'), li.querySelector('a.sq').getAttribute('aria-label')]),
+      tiles: document.querySelectorAll('.tiles .tile').length, give: (document.querySelector('.foot .give') || {}).textContent || '' }));
+    ok(h.logo === '/assets/logo-green.svg' && h.bg === 'rgb(255, 255, 255)', 'www2 header: white, the logo in green');
+    ok(JSON.stringify(h.nav) === JSON.stringify(['Home', 'Volunteer', 'Donate', 'Our activities', 'Press', 'About us']) && h.cur === 'Home', 'www2 header: the menu in Edison\'s order, Home current ' + JSON.stringify(h.nav));
+    ok(h.side.length === 2 && h.side[0][1] === '/contact/' && h.side[1][1] === '/volunteer/#apply', 'www2 header: Contact and Sign up on the side ' + JSON.stringify(h.side));
+    ok(h.h1 === 'We meet people where they are' && h.heroBtn, 'www2 home: the headline and Make a donation in the hero');
+    ok(h.paths.length === 3 && h.paths[0][1] === '/events/#upcoming' && h.paths[1][1] === '/volunteer/' && h.paths[2][1] === '/donate/' && h.paths.every(p => p[2]), 'www2 home: three ways in, each with a named arrow ' + JSON.stringify(h.paths));
+    ok(h.tiles === 4 && /Your generosity helps us/.test(h.give), 'www2 home: four figure tiles; the footer asks for a gift');
+    await page.goto(ORIGIN + '/volunteer/', { waitUntil: 'networkidle' });
+    const v = await page.evaluate(() => ({ roles: Array.from(document.querySelectorAll('#roles .role')).map(r => [r.querySelector('h3').textContent, r.querySelector('.tag').textContent, r.querySelector('a.textlink').getAttribute('href')]),
+      steps: Array.from(document.querySelectorAll('.steps li h3')).map(x => x.textContent), apply: !!document.querySelector('#apply [data-wa-form="volunteer"]'), figs: document.querySelectorAll('#apply .fig').length }));
+    ok(v.roles.length === 6 && v.roles.every(r => r[1] === 'Montreal' && r[2] === '/volunteer/#apply'), 'www2 volunteer: six opportunity cards, tagged Montreal, each to the form ' + JSON.stringify(v.roles.map(r => r[0])));
+    ok(JSON.stringify(v.steps) === JSON.stringify(['Sign up', 'Get confirmed', 'Show up and serve']) && v.apply && v.figs === 2, 'www2 volunteer: how to join, the form and two figures');
+    await page.goto(ORIGIN + '/events/', { waitUntil: 'networkidle' });
+    const a = await page.evaluate(() => ({ next: (document.querySelector('[data-next]') || {}).textContent, needs: Array.from(document.querySelectorAll('.needs li')).map(li => li.querySelector('.n').textContent + ' ' + li.querySelector('h3').textContent),
+      navcur: (document.querySelector('.nav .links a[aria-current=page]') || {}).textContent }));
+    ok(a.next === 'Next serving: Sunday, May 4', 'www2 activities: the gold tag shows the next serving from the Hub (' + a.next + ')');
+    ok(JSON.stringify(a.needs) === JSON.stringify(['8 Servers', '4 Cooks', '2 Drivers', '2 Dishwashers', '2 Community welcome', '1 Photographer']) && a.navcur === 'Our activities', 'www2 activities: who we need at each serving, from the Hub\'s roster targets ' + JSON.stringify(a.needs));
+    await page.goto(ORIGIN + '/donate/', { waitUntil: 'networkidle' });
+    const d = await page.evaluate(() => ({ ladder: document.querySelectorAll('#give .ladder li').length, box: !!document.querySelector('#give .givebox a[data-wa-donate]'), figs: document.querySelectorAll('.figs .fig').length }));
+    ok(d.ladder === 3 && d.box && d.figs === 4, 'www2 donate: what a gift makes possible, the giving box and four figures');
+    await page.click('#give .givebox a[data-wa-donate]'); await page.waitForSelector('.wa-dn-back iframe');
+    ok(new URL(page.url()).pathname === '/donate/', 'www2 donate: Give now opens the popup on the page');
+    await page.keyboard.press('Escape');
+    await page.goto(ORIGIN + '/fr/evenements/', { waitUntil: 'networkidle' });
+    const fr = await page.evaluate(() => ({ next: (document.querySelector('[data-next]') || {}).textContent, h1: document.querySelector('h1').textContent, nav: Array.from(document.querySelectorAll('.nav .links a:not(.lang)')).map(a => a.textContent) }));
+    ok(/^Prochain repas : dimanche 4 mai$/.test(fr.next) && fr.h1 === 'Nos activités' && fr.nav[3] === 'Nos activités', 'www2 activités (fr): the next serving in French and the French menu (' + fr.next + ')');
     await ctx.close();
   }
 

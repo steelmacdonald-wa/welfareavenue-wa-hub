@@ -1,12 +1,12 @@
-/* Welfare Avenue website (wave162, 28/09/26): the menu on phones, the French hint, the next servings and
+/* Welfare Avenue website (wave162, 28/09/26; www2, 01/10/26): the menu on phones, the French hint, the next servings and
    events (from the Hub, with the build's copy as the first paint), the photo viewer and the press videos.
    No inline scripts or styles: the Content-Security-Policy allows neither. */
 (function () {
   'use strict';
   var B = document.body, LANG = B.getAttribute('data-lang') || 'en', SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
   var T = {
-    en: { serving: 'Sunday serving', sign: 'Sign up', none: 'New dates will be posted soon. Sign up and we will tell you when they are set.', event: 'Fundraiser', more: 'Details', close: 'Close', prev: 'Previous', next: 'Next', menu: 'Menu', photo: 'Photo' },
-    fr: { serving: 'Repas du dimanche', sign: 'S’inscrire', none: 'Les prochaines dates seront publiées bientôt. Inscrivez-vous et nous vous écrirons dès qu’elles seront fixées.', event: 'Collecte de fonds', more: 'Détails', close: 'Fermer', prev: 'Précédente', next: 'Suivante', menu: 'Menu', photo: 'Photo' }
+    en: { nextServing: 'Next serving: ', serving: 'Sunday serving', sign: 'Sign up', none: 'New dates will be posted soon. Sign up and we will tell you when they are set.', event: 'Fundraiser', more: 'Details', close: 'Close', prev: 'Previous', next: 'Next', menu: 'Menu', photo: 'Photo' },
+    fr: { nextServing: 'Prochain repas : ', serving: 'Repas du dimanche', sign: 'S’inscrire', none: 'Les prochaines dates seront publiées bientôt. Inscrivez-vous et nous vous écrirons dès qu’elles seront fixées.', event: 'Collecte de fonds', more: 'Détails', close: 'Fermer', prev: 'Précédente', next: 'Suivante', menu: 'Menu', photo: 'Photo' }
   }[LANG === 'fr' ? 'fr' : 'en'];
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function ls(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
@@ -59,15 +59,22 @@
         (link ? '<a class="btn small go" href="' + E(link) + '"' + (/^https?:/.test(link) && link.indexOf(location.host) < 0 ? ' rel="noopener"' : '') + '>' + E(it.kind === 'serving' ? T.sign : T.more) + '<span class="sr"> · ' + E(longDate(it.date)) + '</span></a>' : '') + '</li>';
     }).join('');
   }
+  /* www2: the next serving's date in the gold tag on Our activities (Edison's featured activity) */
+  var nexts = document.querySelectorAll('[data-next]');
+  function paintNext(data) {
+    var t = today(), s = (data.servings || []).map(function (x) { return x.date; }).filter(function (d) { return d >= t; }).sort()[0];
+    if (s) Array.prototype.forEach.call(nexts, function (el) { el.textContent = T.nextServing + longDate(s); });
+  }
   var boxes = document.querySelectorAll('[data-upcoming]');
-  if (boxes.length) {
+  if (boxes.length || nexts.length) {
     var seed = {};
     try { seed = JSON.parse((document.getElementById('upcoming-seed') || {}).textContent || '{}'); } catch (e) { seed = {}; }
     Array.prototype.forEach.call(boxes, function (b) { paint(b, seed); });
+    paintNext(seed);
     if (SUPA && KEY && window.fetch) {
       fetch(SUPA + '/rest/v1/rpc/www_upcoming?p_limit=8', { headers: { apikey: KEY, Authorization: 'Bearer ' + KEY, Accept: 'application/json' } })
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { if (d && (d.servings || d.events)) Array.prototype.forEach.call(boxes, function (b) { paint(b, d); }); })
+        .then(function (d) { if (d && (d.servings || d.events)) { Array.prototype.forEach.call(boxes, function (b) { paint(b, d); }); paintNext(d); } })
         .catch(function () { /* the build's copy stays */ });
     }
   }
