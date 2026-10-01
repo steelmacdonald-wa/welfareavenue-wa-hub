@@ -97,7 +97,7 @@
   function isLeader() { try { return !!(WA40_MINE && WA40_MINE.role === 'leader'); } catch (e) { return false; } }
   function myDept() { try { return (WA_ME && WA_ME.department) || null; } catch (e) { return null; } }
   function deptLabel(d) { try { return (DEPT_LABEL && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
-  function siteUrl() { return 'https://wa-exec-dashboard.netlify.app/'; }
+  function siteUrl() { return 'https://hub.welfareavenue.com/'; }   /* wave190: the Hub's own address (the Netlify one still works) */
   function ago(ts) {
     if (!ts) return '';
     var ms = Date.now() - new Date(ts).getTime();

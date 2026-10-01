@@ -13110,7 +13110,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '2. Activate your Welfare Avenue Google account. Watch the setup video: https://www.loom.com/share/522090b198054eb4aab13e0365efadf6\n' +
       '   Email: [new WA email]\n   Your temporary password comes to you separately; you will be asked to change it when you first sign in.\n' +
       '3. Join the Slack workspace using the invitation sent to your new Welfare Avenue Gmail.\n' +
-      '4. Open the Hub (https://wa-exec-dashboard.netlify.app) and sign in with your Welfare Avenue Google account: your onboarding plan is in the Avenue Academy.\n' +
+      '4. Open the Hub (https://hub.welfareavenue.com) and sign in with your Welfare Avenue Google account: your onboarding plan is in the Avenue Academy.\n' +
       '5. Sign the contract, sent via DocuSign to your personal email.\n' +
       '6. Review your job description and prepare questions to ask your director.\n\n' +
       'If you run into any technical issues or have any questions, do not hesitate to reach out. We are here to make your onboarding experience smooth and welcoming.\n\n' +
@@ -26283,7 +26283,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           + a('https://slack.com/help/articles/212675257-Join-a-Slack-workspace', 'Slack') + ', '
           + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ' and '
           + a('https://www.canva.com/help/join-team/', 'Canva') + '. Each link shows how to join when invited.')   /* wave166: no Keela or ClickUp */
-      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://wa-exec-dashboard.netlify.app', 'wa-exec-dashboard.netlify.app') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
+      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://hub.welfareavenue.com', 'hub.welfareavenue.com') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
       + step(4, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
       + step(5, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
       + '</table>'
@@ -27311,7 +27311,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function isLeader() { try { return !!(WA40_MINE && WA40_MINE.role === 'leader'); } catch (e) { return false; } }
   function myDept() { try { return (WA_ME && WA_ME.department) || null; } catch (e) { return null; } }
   function deptLabel(d) { try { return (DEPT_LABEL && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
-  function siteUrl() { return 'https://wa-exec-dashboard.netlify.app/'; }
+  function siteUrl() { return 'https://hub.welfareavenue.com/'; }   /* wave190: the Hub's own address (the Netlify one still works) */
   function ago(ts) {
     if (!ts) return '';
     var ms = Date.now() - new Date(ts).getTime();
@@ -38306,7 +38306,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 (function () {
   if (window.__wa122) return; window.__wa122 = true;
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E', STEM = '#2B6F55';
-  var SF = "-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Inter','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+  /* wave190: the brand's faces, as everywhere else in the Hub (wave114): Space Grotesk to read, Barlow Condensed for titles */
+  var SF = "'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+  var DISP = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
   var KIND = {
     video: { l: 'Video', icon: 'play', c1: '#103F39', c2: '#2A8C7A' },
@@ -39048,7 +39050,43 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '.w122soprow .tx span{font-size:12px;color:var(--wa-muted,#797773);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
     + '.w122soprow > .w122ic{width:15px;height:15px;color:#a09d96;flex:none;}'
     + 'html.w122lock,html.w122lock body{overflow:hidden !important;}'
-    + '#toast{z-index:2147483300 !important;}';
+    + '#toast{z-index:2147483300 !important;}'
+    /* wave190: the brand in the Avenue Academy. Titles in Barlow Condensed (uppercase, the green), reading in Space Grotesk
+       (SF above), the gold rule under a chapter, numbers in the display face, numbered steps and gold bullets in readings */
+    + '#w122 .w122hero h1,#w122 .w122sech h2,#w122 .w122onb .oh h2,#w122 .w122trk .th h3,#w122 .w122path .pc h3,#w122sheet .hd h2,#w122sheet .cht,#w122sheet .prose h3,#w122sheet .phero h3,#w122sheet .quiz .res h3,#w122sheet .w122sop h3,#w122cel h3,.w122tp .pop h4,.w122cert .c-title,.w122cert .c-path{font-family:' + DISP + ';text-transform:uppercase;font-weight:700;letter-spacing:.3px;}'
+    + '#w122 .w122hero h1{font-size:50px;line-height:.96;}'
+    + '@media (max-width:760px){#w122 .w122hero h1{font-size:40px;}}'
+    + '#w122 .w122sech h2{font-size:31px;line-height:1;color:' + GREEN + ';}'
+    + '#w122 .w122onb .oh h2{font-size:36px;line-height:.98;color:' + GREEN + ';}'
+    + '#w122 .w122onb.all .oh h2{font-size:27px;}'
+    + '#w122 .w122trk .th h3{font-size:20px;line-height:1;color:' + GREEN + ';}'
+    + '#w122 .w122path .pc h3{font-size:25px;line-height:1;}'
+    + '#w122sheet .hd h2{font-size:29px;line-height:1;color:' + GREEN + ';margin:7px 0 0;}'
+    + '@media (max-width:760px){#w122sheet .hd h2{font-size:25px;}}'
+    + '#w122sheet .chh{color:#8A5A0B;letter-spacing:1.6px;}'
+    + '#w122sheet .cht{font-size:44px;line-height:.96;color:' + GREEN + ';margin:0 0 22px;}'
+    + '#w122sheet .cht::after{content:"";display:block;width:56px;height:4px;border-radius:4px;background:' + GOLD + ';margin:14px 0 0;}'
+    + '@media (max-width:760px){#w122sheet .cht{font-size:35px;}}'
+    + '#w122sheet .prose{font-size:16px;line-height:1.66;}'
+    + '#w122sheet .prose .lead{font-size:19px;line-height:1.5;color:' + GREEN + ';}'
+    + '#w122sheet .prose h3{font-size:24px;line-height:1.02;color:' + GREEN + ';margin:32px 0 10px;}'
+    + '#w122sheet .prose h4{font-size:12.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#8A5A0B;margin:24px 0 8px;}'
+    + '#w122sheet .prose > :first-child{margin-top:0;}'
+    + '#w122sheet .prose ul li::marker{color:' + GOLD + ';}'
+    + '#w122sheet .prose ol.w190ol{list-style:none;counter-reset:w190;margin:4px 0 20px;padding:0;}'
+    + '#w122sheet .prose ol.w190ol > li{counter-increment:w190;position:relative;padding:1px 0 0 42px;margin:0 0 14px;min-height:28px;}'
+    + '#w122sheet .prose ol.w190ol > li::before{content:counter(w190);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';font-family:' + DISP + ';font-size:16px;font-weight:700;line-height:28px;text-align:center;}'
+    + '#w122sheet .prose ol.w190ol li ul{margin:8px 0 2px;padding-left:20px;}'
+    + '#w122sheet .prose ol.w190ol li ul li{margin:0 0 6px;}'
+    + '#w122sheet .stats b{font-family:' + DISP + ';font-size:40px;font-weight:700;letter-spacing:.2px;line-height:1;}'
+    + '#w122sheet .phero h3{font-size:38px;line-height:.98;}'
+    + '#w122sheet .quiz .res h3{font-size:34px;line-height:1;color:' + GREEN + ';}'
+    + '#w122sheet .w122sop h3{font-size:24px;line-height:1.02;color:' + GREEN + ';}'
+    + '#w122cel h3{font-size:36px;line-height:1;color:' + GREEN + ';}'
+    + '.w122tp .pop h4{font-size:23px;line-height:1.02;color:' + GREEN + ';}'
+    + '.w122cert .c-title{font-size:40px;letter-spacing:.6px;}'
+    + '.w122cert .c-path{font-size:26px;}'
+    + '@media (max-width:640px){.w122cert .c-title{font-size:28px;}.w122cert .c-path{font-size:20px;}}';
   document.head.appendChild(css);
 
   /* ---------- state ---------- */
@@ -39728,16 +39766,49 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var desc = String(t.description || '').trim();
     return (desc ? articleText(desc) : '<p>This training has no written content yet.</p>') + relatedTours(t);
   }
+  /* wave190: a reading reads like a page. Blank lines make blocks. A block that starts Try it:, Done when:, Tip:, Note: (or
+     Good to know:) or Watch out: is a callout, Goal: is the lead, and a block that is only **bold** is a heading. Inside a
+     block, a line starting ## is a heading, a line that is only **bold** is a small heading, 1. lines are numbered steps (the - lines under one are its points), - lines are
+     bullets, and the other lines make a paragraph. Text written before wave190 reads as it did, numbered lists now numbered. */
+  var W190CALL = [[/^try it:\s*/i, 'try', 'bolt', 'Try it'], [/^done when:\s*/i, 'info', 'check', 'Done when'], [/^tip:\s*/i, 'tip', 'sparkle', 'Tip'], [/^(?:note|good to know):\s*/i, 'info', 'compass', 'Good to know'], [/^(?:watch out|careful):\s*/i, 'warn', 'flag', 'Watch out']];
   function articleText(text) {
-    return redact(text).split(/\n{2,}/).map(function (p) {
+    return redact(text).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n+/).map(function (p) {
       var s = p.trim(); if (!s) return '';
-      if (/^try it:/i.test(s)) return '<div class="callout try">' + ic('bolt') + '<div><b>Try it</b>' + md(s.replace(/^try it:\s*/i, '')) + '</div></div>';
-      if (/^done when:/i.test(s)) return '<div class="callout info">' + ic('check') + '<div><b>Done when</b>' + md(s.replace(/^done when:\s*/i, '')) + '</div></div>';
+      for (var i = 0; i < W190CALL.length; i++) {
+        var c = W190CALL[i];
+        if (c[0].test(s)) { var t = s.replace(c[0], ''); t = t.charAt(0).toUpperCase() + t.slice(1); return '<div class="callout ' + c[1] + '">' + ic(c[2]) + '<div><b>' + c[3] + '</b>' + t.split('\n').map(md).join('<br>') + '</div></div>'; }
+      }
       if (/^goal:/i.test(s)) return '<p class="lead">' + md(s.replace(/^goal:\s*/i, '')) + '</p>';
-      var lines = s.split('\n');
-      if (lines.length > 1 && lines.every(function (l) { return /^\s*(?:[-\u2022*]|\d+[.)])\s+/.test(l); })) return '<ul>' + lines.map(function (l) { return '<li>' + md(l.replace(/^\s*(?:[-\u2022*]|\d+[.)])\s+/, '')) + '</li>'; }).join('') + '</ul>';
-      return '<p>' + lines.map(md).join('<br>') + '</p>';
+      var hb = /^\*\*([^*\n]+)\*\*\s*$/.exec(s); if (hb) return '<h3>' + md(hb[1].replace(/\s*:\s*$/, '')) + '</h3>';
+      return articleBlock(s.split('\n'));
     }).join('');
+  }
+  function articleBlock(lines) {
+    var out = [], para = [], list = null;
+    function endPara() { if (para.length) { out.push('<p>' + para.map(md).join('<br>') + '</p>'); para = []; } }
+    function endList() {
+      if (!list) return;
+      out.push('<' + list.tag + (list.tag === 'ol' ? ' class="w190ol"' + (list.start > 1 ? ' start="' + list.start + '" style="counter-reset:w190 ' + (list.start - 1) + '"' : '') : '') + '>' + list.items.map(function (it) {
+        return '<li>' + it.h + (it.sub.length ? '<ul>' + it.sub.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>' : '') + '</li>';
+      }).join('') + '</' + list.tag + '>');
+      list = null;
+    }
+    lines.forEach(function (raw) {
+      var l = String(raw).replace(/\s+$/, ''), m;
+      if (!l.trim()) return;
+      if ((m = /^\s*#{1,6}\s+(.+)$/.exec(l))) { endPara(); endList(); out.push('<h3>' + md(m[1].replace(/\s+#+$/, '')) + '</h3>'); return; }
+      if ((m = /^\s*\*\*([^*]+)\*\*\s*$/.exec(l))) { endPara(); endList(); out.push('<h4>' + md(m[1].replace(/\s*:\s*$/, '')) + '</h4>'); return; }
+      if ((m = /^\s*(\d+)[.)]\s+(.*)$/.exec(l))) { endPara(); if (!list || list.tag !== 'ol') { endList(); list = { tag: 'ol', items: [], start: Number(m[1]) || 1 }; } list.items.push({ h: md(m[2]), sub: [] }); return; }
+      if ((m = /^\s*[-\u2022*]\s+(.*)$/.exec(l))) {
+        endPara();
+        if (list && list.tag === 'ol' && list.items.length) { list.items[list.items.length - 1].sub.push(md(m[1])); return; }
+        if (!list) list = { tag: 'ul', items: [] };
+        list.items.push({ h: md(m[1]), sub: [] }); return;
+      }
+      endList(); para.push(l.trim());
+    });
+    endPara(); endList();
+    return out.join('');
   }
   function relatedTours(t) {
     var keys = (t.body && t.body.tours) || [];
@@ -40011,7 +40082,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label>Link (video or document)<input type="url" data-f="resource_url" value="' + E(t.resource_url || '') + '" placeholder="https://www.loom.com/share/..."></label>' +
       '<div class="row2"><label>Topic<input type="text" list="w122cats" data-f="category" value="' + E(t.category || 'General') + '"><datalist id="w122cats">' + cats.map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></label>' +
       '<label>Learning Avenue<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
-      '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, and lines starting Try it: or Done when: become highlighted boxes.">' + E(t.description || '') + '</textarea></label>' +
+      '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, a line starting ## (or a line of its own in **bold**) is a heading, lines starting 1. or - make a list, and a paragraph starting Try it:, Done when:, Tip:, Good to know: or Watch out: becomes a highlighted box.">' + E(t.description || '') + '</textarea></label>' +
       '</div></div></div></div><div class="ft">' + (!isNew ? '<button class="w122btn ghost" data-w122retire="1">Retire it</button>' : '') + '<span class="sp"></span><button class="w122btn soft" data-w122x="1">Cancel</button><button class="w122btn" data-w122save="1">' + ic('check') + ' Save</button></div>';
   }
   async function saveForm() {
@@ -49578,7 +49649,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   /* the same words as wave113's message, so both views send one message */
   function inviteMessage(name) {
-    return 'Hi ' + (first(name) || 'there') + ', you have been added to the Welfare Avenue Hub, the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves.\n\nSign in with your Welfare Avenue Google account at https://wa-exec-dashboard.netlify.app/\n\nThe 60 second tour starts on your first visit, and a short getting-started checklist on your home page walks you through the rest.';
+    return 'Hi ' + (first(name) || 'there') + ', you have been added to the Welfare Avenue Hub, the team\'s shared workspace: meetings turn into tasks, goals and decisions, and everyone can see how the work moves.\n\nSign in with your Welfare Avenue Google account at https://hub.welfareavenue.com/\n\nThe 60 second tour starts on your first visit, and a short getting-started checklist on your home page walks you through the rest.';
   }
 
   /* ---------- styles ---------- */
@@ -66495,6 +66566,247 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   window.w180 = { refresh: refreshCard, open: openItem, all: openAll, post: openPost, state: function () { return S; } };
 })();
 /* =====================================================================
+   WA v177 Confirm your next team meeting from Home (01/10/26)
+   =====================================================================
+   Steel (30/09/26): "When a member is on their home page could you prompt them with confirming their attendance to the
+   next team meeting so that the accept button is click on google calendar". His answers: the next team meeting (a meeting
+   tied to a team, hub_events.department) in the next 7 days that they have not answered; two choices, Accept and I can't
+   make it, with a note to let their leader know at least 24 hours before; Accept switches on their Google Calendar link
+   in one go when it is off (said on the card; Settings turns it off). Then (30/09/26): "I'd rather it be a pop up rather
+   than a section in the home page. A pop will prompt them to answer it".
+
+   Where: a pop-up over Home (#w177pop holding the dialog #w177card), a moment after Home opens, never on top of another
+   window. "Ask me later" (or Escape, or the x) closes it until they next come back to Home. The reply goes to Google
+   Calendar as them (hub-connect rsvp, the domain-wide delegation of wave116j), so the organizer sees it like any reply;
+   the pop-up then says so and closes. Their leader is the meeting's organizer. Nothing else is sent on their behalf.
+   ===================================================================== */
+(function () {
+  if (window.__wa177) return; window.__wa177 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F', INK = '#1F201E';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var DAYS = 7, SKIP = ['hub@welfareavenue.com', 'loom@welfareavenue.com', 'admin@welfareavenue.com', 'wa-hub-drive@welfareavenue.com'];
+  var S = { list: null, at: 0, p: null, busy: false, done: null, err: '', later: {}, quiet: false, timer: null };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function tick() { try { return performance.now(); } catch (e) { return Date.now(); } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; }
+  function nameOf(em) {
+    em = lower(em); var m = members().filter(function (x) { return lower(x.email) === em; })[0];
+    return m && m.name ? String(m.name).trim().split(/\s+/)[0] : (em ? em.split('@')[0].split('.')[0].replace(/^./, function (c) { return c.toUpperCase(); }) : '');
+  }
+  function teamLabel(d) { try { return (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || d; } catch (e) { return d; } }
+  function when(iso) {
+    var d = new Date(iso); if (isNaN(d)) return '';
+    var o = { timeZone: 'America/Toronto' };
+    var day = d.toLocaleDateString('en-CA', Object.assign({ weekday: 'long', month: 'long', day: 'numeric' }, o));
+    var t = d.toLocaleTimeString('en-CA', Object.assign({ hour: 'numeric', minute: '2-digit' }, o)).replace(/\./g, '').replace(/\s?(a|p)m$/i, function (x) { return ' ' + x.trim().toLowerCase(); });
+    var k = function (x) { return x.toLocaleDateString('en-CA', o); };
+    var now = new Date(), tom = new Date(now.getTime() + 864e5);
+    var rel = k(d) === k(now) ? 'Today' : k(d) === k(tom) ? 'Tomorrow' : day;
+    return rel + ' at ' + t;
+  }
+  function myAttendee(e, em) { return (e.attendees || []).filter(function (a) { return lower(a.email) === em; })[0] || null; }
+  function organizer(e) {
+    var o = (e.attendees || []).filter(function (a) { return a.organizer; })[0];
+    return lower((o && o.email) || e.organizer || '');
+  }
+
+  /* the next team meeting this person has not answered (within DAYS) */
+  function pick() {
+    var em = myEmail(); if (!em || !S.list) return null;
+    var now = Date.now();
+    var dismissed = S.done && S.done.id;
+    return S.list.filter(function (e) {
+      if (!e.department || e.status === 'cancelled' || e.all_day) return false;
+      if (new Date(e.start_at).getTime() <= now) return false;
+      if (String(e.id) === String(dismissed)) return false;
+      if (organizer(e) === em) return false;
+      var a = myAttendee(e, em); if (!a) return false;
+      return !a.status || a.status === 'needsAction';
+    })[0] || null;
+  }
+  async function load(force) {
+    var em = myEmail(); if (!em || !staff()) { S.list = null; return null; }
+    if (!force && S.list && Date.now() - S.at < 5 * 60000) return S.list;
+    if (S.p) return S.p;
+    S.p = (async function () {
+      try {
+        var from = new Date().toISOString(), to = new Date(Date.now() + DAYS * 864e5).toISOString();
+        var r = await db.from('hub_events').select('id,summary,start_at,end_at,all_day,status,department,organizer,attendees,attendee_emails,meet_link,html_link')
+          .gte('start_at', from).lte('start_at', to).not('department', 'is', null).contains('attendee_emails', [em]).order('start_at').limit(20);
+        if (r && !r.error) { S.list = r.data || []; S.at = Date.now(); }
+      } catch (e) { /* offline: keep what we had */ }
+      S.p = null; return S.list;
+    })();
+    return S.p;
+  }
+
+  function css() {
+    if (document.getElementById('w177css')) return;
+    var st = document.createElement('style'); st.id = 'w177css';
+    st.textContent = ''
+      + '#w177pop{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(16,32,30,.48);animation:w177in .18s ease-out;}'
+      + '@keyframes w177in{from{opacity:0}to{opacity:1}}'
+      + '#w177card{position:relative;width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;border-radius:20px;background:' + CREAM + ';border-top:6px solid ' + GOLD + ';padding:22px 22px 18px;font-family:inherit;color:' + INK + ';box-shadow:0 24px 60px rgba(0,0,0,.28);}'
+      + '#w177card .x{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:#5d5b57;font-size:22px;line-height:1;cursor:pointer;padding:0;}'
+      + '#w177card .x:hover{background:rgba(16,63,57,.08);}'
+      + '#w177card .k{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GREEN + ';font-weight:800;margin:0 36px 0 0;}'
+      + '#w177card h3{font-family:' + HEAD + ';font-size:28px;line-height:1.08;margin:4px 0 6px;color:' + GREEN + ';text-transform:uppercase;letter-spacing:.3px;}'
+      + '#w177card .w{margin:0 0 12px;font-size:14.5px;color:' + INK + ';}'
+      + '#w177card .w a{color:' + GREEN + ';font-weight:700;margin-left:8px;}'
+      + '#w177card .q{font-weight:700;font-size:16px;margin:0 0 10px;}'
+      + '#w177card .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}'
+      + '#w177card .row button{border:0;border-radius:999px;padding:11px 20px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;flex:1 1 160px;}'
+      + '#w177card button.yes{background:' + GREEN + ';color:' + CREAM + ';}'
+      + '#w177card button.no{background:transparent;color:' + FLAG + ';border:1.5px solid rgba(179,64,47,.45);}'
+      + '#w177card button[disabled]{opacity:.55;cursor:default;}'
+      + '#w177card .note{font-size:12.5px;color:#5d5b57;margin:12px 0 0;line-height:1.45;}'
+      + '#w177card .note b{color:' + INK + ';}'
+      + '#w177card .err{font-size:12.5px;color:' + FLAG + ';margin:10px 0 0;}'
+      + '#w177card .later{display:block;margin:12px auto 0;border:0;background:none;color:#5d5b57;font-weight:600;font-size:12.5px;font-family:inherit;text-decoration:underline;cursor:pointer;}'
+      + '#w177card.ok{border-top-color:' + GREEN + ';}'
+      + '#w177card.dec{border-top-color:' + FLAG + ';}'
+      + '@media (max-width:600px){#w177pop{align-items:flex-end;padding:0;}#w177card{width:100%;border-radius:20px 20px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom));}#w177card h3{font-size:24px;}}';
+    document.head.appendChild(st);
+  }
+  function cardHtml(e) {
+    var lead = nameOf(organizer(e)); var calOn = !!(window.w116Conn && window.w116Conn.calendar);
+    var soon = new Date(e.start_at).getTime() - Date.now() < 864e5;
+    return '<button type="button" class="x" data-w177later aria-label="Ask me later">\u00d7</button>'
+      + '<p class="k" id="w177k">Your next team meeting \u00b7 ' + E(teamLabel(e.department)) + '</p>'
+      + '<h3>' + E(e.summary || 'Team meeting') + '</h3>'
+      + '<p class="w">' + E(when(e.start_at)) + (e.meet_link ? '<a href="' + E(e.meet_link) + '" target="_blank" rel="noopener">Meet link</a>' : '') + '</p>'
+      + '<p class="q">Will you be there?</p>'
+      + '<div class="row"><button type="button" class="yes" data-w177="accepted"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'accepted' ? 'Accepting\u2026' : 'Accept') + '</button>'
+      + '<button type="button" class="no" data-w177="declined"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'declined' ? 'Sending\u2026' : 'I can\u2019t make it') + '</button></div>'
+      + '<p class="note">Your answer goes to Google Calendar' + (lead ? ', so ' + E(lead) + ' sees it' : '') + '. If you can\u2019t make it, <b>let ' + E(lead || 'your team leader') + ' know at least 24 hours before</b>' + (soon ? ' (this one is less than 24 hours away, so message them now)' : '') + '.'
+      + (calOn ? '' : ' Answering here switches on Google Calendar for the Hub, which you can turn off in Settings.') + '</p>'
+      + (S.err ? '<p class="err">' + E(S.err) + (e.html_link ? ' <a href="' + E(e.html_link) + '" target="_blank" rel="noopener">Answer in Google Calendar</a>' : '') + '</p>' : '')
+      + '<button type="button" class="later" data-w177later' + (S.busy ? ' disabled' : '') + '>Ask me later</button>';
+  }
+  function doneHtml(d) {
+    var lead = d.lead;
+    var x = '<button type="button" class="x" data-w177close aria-label="Close">\u00d7</button>';
+    if (d.response === 'accepted') return x + '<p class="k" id="w177k">Thank you</p><h3>See you there</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Accepted on your Google Calendar.</p>'
+      + '<div class="row"><button type="button" class="yes" data-w177close>Close</button></div>';
+    return x + '<p class="k" id="w177k">Answer sent</p><h3>Thanks for letting us know</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Declined on your Google Calendar.</p>'
+      + '<p class="note"><b>Please also let ' + E(lead || 'your team leader') + ' know</b>, at least 24 hours before the meeting.</p>'
+      + '<div class="row" style="margin-top:12px"><button type="button" class="yes" data-w177close>Close</button></div>';
+  }
+  function onHome() {
+    var body = document.getElementById('mpBody'), home = document.getElementById('mypage');
+    return !!body && (!home || home.classList.contains('active'));
+  }
+  /* another window is open (the Hub's modal, the Academy's sheet, a tour, any dialog): wait for it to close */
+  function busyElsewhere() {
+    try {
+      var mb = document.getElementById('modalBack'); if (mb && getComputedStyle(mb).display !== 'none') return true;
+      var sh = document.getElementById('w122sheet'); if (sh && sh.getBoundingClientRect().width > 0 && getComputedStyle(sh).display !== 'none' && getComputedStyle(sh).visibility !== 'hidden') return true;
+      /* the welcome window (84), a tour step (122) */
+      if (Array.prototype.some.call(document.querySelectorAll('#w84back, #w122cel, .w122tp'), function (d) { var r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(d).display !== 'none' && getComputedStyle(d).visibility !== 'hidden'; })) return true;
+      return Array.prototype.some.call(document.querySelectorAll('[aria-modal="true"]'), function (d) { return !d.closest('#w177pop') && d.getBoundingClientRect().width > 0; });
+    } catch (e) { return false; }
+  }
+  function close() {
+    var p = document.getElementById('w177pop'); if (p) p.remove();
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(ev) {
+    if (ev.key === 'Escape' && document.getElementById('w177pop')) { ev.preventDefault(); later(); }
+  }
+  function later() {
+    var e = pick(); if (e) S.later[e.id] = 1;
+    S.err = ''; S.quiet = true; close();
+  }
+  function paint() {
+    var pop = document.getElementById('w177pop');
+    var e = S.done ? null : pick();
+    if (!onHome() || !staff()) { if (pop) close(); return; }
+    var html = S.done ? doneHtml(S.done) : (e && !S.later[e.id] && !S.quiet) ? cardHtml(e) : '';
+    if (!html) { if (pop) close(); return; }
+    if (!pop && busyElsewhere()) return;
+    css();
+    var first = !pop;
+    if (!pop) {
+      pop = document.createElement('div'); pop.id = 'w177pop';
+      pop.innerHTML = '<div id="w177card" role="dialog" aria-modal="true" aria-labelledby="w177k"></div>';
+      document.body.appendChild(pop);
+      document.addEventListener('keydown', onKey, true);
+    }
+    var el = document.getElementById('w177card');
+    el.className = S.done ? (S.done.response === 'accepted' ? 'ok' : 'dec') : '';
+    if (e) el.setAttribute('data-ev', e.id); else el.removeAttribute('data-ev');
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; if (!first && !S.busy) { var f = el.querySelector('button.yes'); if (f && S.done) try { f.focus(); } catch (x) { /* fine */ } } }
+    if (first) { var b = el.querySelector('button.yes'); if (b) try { b.focus(); } catch (x) { /* fine */ } }
+  }
+  /* a moment after Home opens, so the page is drawn behind it */
+  function soon(ms) { clearTimeout(S.timer); S.timer = setTimeout(function () { refresh(false); }, ms == null ? 1200 : ms); }
+  async function refresh(force) { await load(force); paint(); }
+
+  async function answer(resp) {
+    var em = myEmail(); var e = pick(); if (!e || S.busy) return;
+    S.busy = resp; S.err = ''; paint();
+    try {
+      /* Accept switches on Google Calendar for the Hub when it is off (Steel, 30/09/26); the card says so */
+      if (!(window.w116Conn && window.w116Conn.calendar)) {
+        var t = await db.functions.invoke('hub-connect', { body: { action: 'toggle', provider: 'google_calendar', enabled: true } });
+        var td = (t && t.data) || {};
+        if ((t && t.error) || td.ok === false) throw new Error(td.error && /welfareavenue\.com/.test(td.error) ? 'Replying from the Hub works with a welfareavenue.com account.' : 'Google Calendar could not be switched on for you.');
+        window.w116Conn = Object.assign({}, window.w116Conn || {}, { calendar: true });
+      }
+      var r = await db.functions.invoke('hub-connect', { body: { action: 'rsvp', event_id: e.id, response: resp } });
+      var d = (r && r.data) || {};
+      if ((r && r.error) || d.ok === false || d.error) throw new Error(d.error || 'The reply did not go through.');
+      var a = myAttendee(e, em); if (a) a.status = resp;
+      try { ((window.W116 && window.W116.events) || []).forEach(function (x) { if (String(x.id) === String(e.id)) (x.attendees || []).forEach(function (at) { if (lower(at.email) === em) at.status = resp; }); }); } catch (x) { /* fine */ }
+      S.done = { id: e.id, response: resp, summary: e.summary || 'Team meeting', when: when(e.start_at), lead: nameOf(organizer(e)), at: tick() };
+      S.busy = false; paint();
+      toastS(resp === 'accepted' ? 'Accepted on Google Calendar' : 'Declined on Google Calendar');
+      var doneAt = S.done; setTimeout(function () { if (S.done === doneAt && resp === 'accepted') finish(); }, 6000);
+    } catch (err) {
+      S.busy = false; S.err = String((err && err.message) || err).slice(0, 160); paint();
+    }
+  }
+  /* after an answer: close, and stay quiet until they next come back to Home (then the next unanswered one, if any) */
+  function finish() { S.done = null; S.err = ''; S.quiet = true; close(); }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t || !t.closest) return;
+    var b = t.closest('#w177card [data-w177]'); if (b) { ev.preventDefault(); answer(b.getAttribute('data-w177')); return; }
+    if (t.closest('#w177card [data-w177later]')) { ev.preventDefault(); if (!S.busy) later(); return; }
+    if (t.closest('#w177card [data-w177close]')) { ev.preventDefault(); finish(); }
+  });
+
+  /* coming back to Home (from another page, or a fresh load) asks again */
+  var wasHome = false;
+  function watch() {
+    var h = onHome();
+    if (h && !wasHome) { S.quiet = false; S.later = {}; soon(); }
+    if (!h && wasHome) { clearTimeout(S.timer); close(); S.done = null; }
+    wasHome = h;
+  }
+  if (typeof renderMyPage === 'function') {
+    var __rm177 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm177.apply(this, arguments);
+      try { watch(); if (!S.quiet) soon(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  window.addEventListener('hashchange', function () { setTimeout(watch, 300); });
+  /* another window was open: try again once it closes; look again every ten minutes */
+  setInterval(function () { try { watch(); if (!document.hidden && document.getElementById('mpBody') && !S.quiet && !S.list && !S.p && myEmail() && staff()) { refresh(false); return; } if (!document.hidden && onHome() && !document.getElementById('w177pop') && !S.quiet && pick() && !busyElsewhere()) paint(); } catch (e) { /* fine */ } }, 2000);
+  setInterval(function () { try { if (!document.hidden && onHome() && !S.quiet) refresh(true); } catch (e) { /* fine */ } }, 10 * 60000);
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { S.list = null; S.done = null; S.later = {}; close(); } });
+  } catch (e) { /* fine */ }
+
+  window.w177 = { refresh: refresh, pick: pick, close: close, state: function () { return S; } };
+})();
+/* =====================================================================
    WA v181 The HR centre's Analytics: who has been part of Welfare Avenue, and for how long (30/09/26)
    =====================================================================
    Steel (30/09/26), with Slack's Member Analytics export (29/08/2025 to 29/09/2026): "To help you add start dates, add an
@@ -67117,6 +67429,66 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   addTour(); setTimeout(addTour, 1500);
 
   window.w181 = { state: function () { return A; }, load: load, paint: paint, can: canSee, stats: stats, series: series, byFy: byFy, look: look, parse: fromExport, windowFromName: windowFromName };
+})();
+/* =====================================================================
+   WA v190 The reading pass: trainings and onboarding that are pleasant to read and on brand (01/10/26)
+   =====================================================================
+   Steel (30/09/26): "Can you revist some of the trainings and onboarding to ensure everything is please to read and that it's
+   well branded". Numbered 190: other sessions ship wave181 onwards tonight.
+
+   This segment: the onboarding steps (the plan in the Avenue Academy, the HR centre's master and board, the onboarding window)
+   read better. The step text is larger and darker, "To complete this step:" (or the older "To complete the task:", "To complete
+   this task:", "Mini task:", "Your task:") becomes a gold box that says what to do, and a line written all in italics (how the
+   step ticks itself) is a quiet note. wa37Md (wave37, the steps' Markdown) is wrapped: the wrapper only reshapes the paragraphs
+   it returns, so every page that draws a step gets the same look.
+
+   The Avenue Academy's own changes (the brand's faces, the gold rule, numbered steps and headings in readings) live in
+   122_wave122; the words (the nine Hub modules, the master onboarding, the Slack imports and the ClickUp leftovers) live in the
+   database (migration wa190_reading_pass, build/data/wa190_reading_pass.py).
+   ===================================================================== */
+(function () {
+  if (window.__wa190) return; window.__wa190 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var DO = /^<p>(?:<b>)?\s*(?:to complete (?:this|the) (?:step|task)|mini task|your task)\s*:?\s*(?:<\/b>)?\s*:?\s*([\s\S]*)<\/p>$/i;
+
+  /* reshape what wa37Md returns: a step's to-do as a box, an all-italic line as a note */
+  function decorate(html) {
+    return String(html || '').replace(/<p>[\s\S]*?<\/p>/g, function (p) {
+      var m = DO.exec(p);
+      if (m && m[1].replace(/<[^>]+>/g, '').trim()) return '<div class="w190do"><b>To complete this step</b><span>' + m[1].replace(/^\s+/, '').replace(/^[a-z]/, function (c) { return c.toUpperCase(); }) + '</span></div>';
+      if (p.indexOf('<p><i>') === 0 && p.indexOf('</i>') === p.length - 8) return '<p class="w190tk">' + p.slice(6, -8) + '</p>';
+      return p;
+    });
+  }
+  if (typeof window.wa37Md === 'function' && !window.wa37Md.__w190) {
+    var base = window.wa37Md;
+    var wrapped = function (s) { return decorate(base(s)); };
+    wrapped.__w190 = true;
+    window.wa37Md = wrapped;
+  }
+
+  var css = document.createElement('style');
+  css.id = 'wa190css';
+  css.textContent = ''
+    + '.w37step .nm{font-size:14.5px;}'
+    + '.w37step .ds{font-size:13.5px;line-height:1.55;color:#45443f;margin-top:3px;}'
+    + '.w37step .ds p{margin:0 0 6px;}'
+    + '.w37step .ds p:last-child{margin-bottom:0;}'
+    + '.w37step .ds ul{margin:2px 0 8px;padding-left:18px;}'
+    + '.w37step .ds li{margin:0 0 3px;}'
+    + '.w37step .ds li::marker{color:' + GOLD + ';}'
+    + '.w37step .ds a{color:' + GREEN + ';font-weight:600;}'
+    + '.w37step .ds .vl-h{font-weight:700;color:' + GREEN + ';margin:8px 0 4px;}'
+    + '.w190do{margin:8px 0 6px;padding:8px 12px 9px;border-radius:10px;background:rgba(220,165,39,.14);border-left:3px solid ' + GOLD + ';color:#3d3008;}'
+    + '.w190do b{display:block;font-family:' + HEAD + ';font-size:13px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8A5A0B;margin:0 0 1px;}'
+    + '.w190do a{color:' + GREEN + ';font-weight:600;}'
+    + 'p.w190tk{font-size:12.5px;color:' + MUTED + ';margin:4px 0 0;}'
+    + '.w37step.done .w190do{background:rgba(16,63,57,.05);border-left-color:rgba(16,63,57,.22);color:' + MUTED + ';}'
+    + '.w37step.done .w190do b{color:' + MUTED + ';}';
+  document.head.appendChild(css);
+
+  window.w190 = { decorate: decorate };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

@@ -213,8 +213,8 @@ function leadView() {
       const go = document.getElementById('w108go'); if (go) { document.getElementById('w108title').value = 'Event Coordinator'; go.click(); await new Promise(r => setTimeout(r, 500)); }
       const html = window.__w108html || '', plain = (document.getElementById('w46em') || {}).value || '';
       return { kit: !!btn || typeof window.wa46Kit === 'function', keela: /Keela|ClickUp/.test(txt), lead: /Their lead.s moments/.test(txt) && /Check in at two weeks/.test(txt), acct: /share the first password with them one to one/.test(txt),
-        html: { video: html.indexOf('loom.com/share/522090b198054eb4aab13e0365efadf6') >= 0, hub: html.indexOf('wa-exec-dashboard.netlify.app') >= 0, old: /Keela|ClickUp|welfare-avenue-google-setup|Temporary password/.test(html) },
-        plain: { video: plain.indexOf('522090b198054eb4aab13e0365efadf6') >= 0, hub: plain.indexOf('wa-exec-dashboard.netlify.app') >= 0, old: /Keela|ClickUp|welfare-avenue-google-setup|password \(please change after first login\): Welfare Avenue/.test(plain), n: plain.length } };
+        html: { video: html.indexOf('loom.com/share/522090b198054eb4aab13e0365efadf6') >= 0, hub: html.indexOf('hub.welfareavenue.com') >= 0, old: /Keela|ClickUp|welfare-avenue-google-setup|Temporary password/.test(html) },
+        plain: { video: plain.indexOf('522090b198054eb4aab13e0365efadf6') >= 0, hub: plain.indexOf('hub.welfareavenue.com') >= 0, old: /Keela|ClickUp|welfare-avenue-google-setup|password \(please change after first login\): Welfare Avenue/.test(plain), n: plain.length } };
     });
     ok('the Welcome kit opens', k && k.kit, k);
     ok('the Welcome kit has no Keela or ClickUp, shares the first password one to one, and lists the lead’s moments', k && !k.keela && k.lead && k.acct, k);

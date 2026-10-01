@@ -45,7 +45,7 @@ W1 = {
     {'id': 'tools', 't': 'The tools you will use', 'blocks': [
       {'type': 'lead', 'text': 'We are a remote team, so our tools are our office. Each one has a job.'},
       {'type': 'cards', 'items': [
-        {'icon': 'home', 't': 'The Hub', 'd': 'Where our work lives: your team\'s page and tasks, meetings, requests, the calendar, and the Avenue Academy with this plan.', 'k': 'wa-exec-dashboard.netlify.app'},
+        {'icon': 'home', 't': 'The Hub', 'd': 'Where our work lives: your team\'s page and tasks, meetings, requests, the calendar, and the Avenue Academy with this plan.', 'k': 'hub.welfareavenue.com'},
         {'icon': 'chat', 't': 'Slack', 'd': 'Where we talk every day: your team\'s channel, your onboarding channel and messages.'},
         {'icon': 'doc', 't': 'Google Workspace', 'd': 'Your Welfare Avenue email, calendar and shared drives. Use it in its own Chrome profile, apart from your personal account.'},
         {'icon': 'play', 't': 'Loom', 'd': 'Our meetings are recorded on Loom and come into the Hub by themselves. The Academy\'s videos are Loom videos too.'},
@@ -63,7 +63,7 @@ W1 = {
     ]},
   ],
   'quiz': {'pass': 0.8, 'questions': [
-    {'q': 'Where do your team\'s tasks live?', 'a': ['On your team\'s page in the Hub', 'In ClickUp', 'In a spreadsheet your lead shares'], 'c': 0, 'why': 'Every team\'s tasks, projects and requests are in the Hub. ClickUp is no longer used.'},
+    {'q': 'Where do your team\'s tasks live?', 'a': ['On your team\'s page in the Hub', 'In your email inbox', 'In a spreadsheet your lead shares'], 'c': 0, 'why': 'Every team\'s tasks, projects and requests live in the Hub, on your team\'s page.'},   # wave190: no ClickUp in onboarding text
     {'q': 'You sit down to work on your onboarding. What do you do first?', 'a': ['Nothing, the Hub tracks it', 'Press Check in at the top of the Hub', 'Email HR'], 'c': 1, 'why': 'Check in when you start and out when you finish, with a line on what you did.'},
     {'q': 'What happens to a step marked Avenue Academy in your plan?', 'a': ['HR ticks it for you', 'It ticks itself when you finish it in the Academy', 'It is optional'], 'c': 1, 'why': 'Finish the lesson, video or avenue and the step ticks itself.'},
     {'q': 'How soon should you acknowledge a message from your team?', 'a': ['Within 24 hours', 'Within a week', 'Only when it is urgent'], 'c': 0, 'why': 'A quick acknowledgment keeps a remote team moving, even if the full answer comes later.'},

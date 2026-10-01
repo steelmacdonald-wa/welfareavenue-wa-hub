@@ -200,6 +200,8 @@
 177_wave177
 # 181_wave181: the HR centre's Analytics (HR and admins): who has been part of Welfare Avenue and for how long, from the roster and Slack's member export (hr_people_tenure_v, hr_slack_accounts): the team over time, each fiscal year, how long people stay, by team, Worth a look, everyone with a sheet per person, a CSV, and Import a new Slack export. The rail icon lives in 153.
 181_wave181
+# 190_wave190: the reading pass (Steel, 30/09/26): onboarding steps read better (wa37Md wrapped: the to-do as a gold box, the italic line as a note); the Avenue Academy's brand type and reading layout live in 122. Numbered 190: other sessions ship 181 onwards tonight.
+190_wave190
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

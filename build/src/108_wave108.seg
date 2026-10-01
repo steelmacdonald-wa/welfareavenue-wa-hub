@@ -89,7 +89,7 @@
           + a('https://slack.com/help/articles/212675257-Join-a-Slack-workspace', 'Slack') + ', '
           + a('https://support.loom.com/hc/en-us/articles/4404288978579-Join-a-Workspace', 'Loom') + ' and '
           + a('https://www.canva.com/help/join-team/', 'Canva') + '. Each link shows how to join when invited.')   /* wave166: no Keela or ClickUp */
-      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://wa-exec-dashboard.netlify.app', 'wa-exec-dashboard.netlify.app') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
+      + step(3, 'Open the Hub', 'Where Welfare Avenue&#39;s work lives: ' + a('https://hub.welfareavenue.com', 'hub.welfareavenue.com') + '. Sign in with your Welfare Avenue Google account; your onboarding plan is waiting in the Avenue Academy, week by week, with the videos inside.')
       + step(4, 'Sign your contract', 'Sent via DocuSign to your personal email (' + a('https://support.docusign.com/s/articles/How-do-I-sign-a-DocuSign-document-Basic-Signing', 'how signing works') + ').')
       + step(5, 'Review your job description', 'Note any questions for your onboarding session' + (v.lead ? ' with <b>' + esc(v.lead) + '</b>' : '') + '.')
       + '</table>'

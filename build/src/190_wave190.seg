@@ -1,0 +1,60 @@
+/* =====================================================================
+   WA v190 The reading pass: trainings and onboarding that are pleasant to read and on brand (01/10/26)
+   =====================================================================
+   Steel (30/09/26): "Can you revist some of the trainings and onboarding to ensure everything is please to read and that it's
+   well branded". Numbered 190: other sessions ship wave181 onwards tonight.
+
+   This segment: the onboarding steps (the plan in the Avenue Academy, the HR centre's master and board, the onboarding window)
+   read better. The step text is larger and darker, "To complete this step:" (or the older "To complete the task:", "To complete
+   this task:", "Mini task:", "Your task:") becomes a gold box that says what to do, and a line written all in italics (how the
+   step ticks itself) is a quiet note. wa37Md (wave37, the steps' Markdown) is wrapped: the wrapper only reshapes the paragraphs
+   it returns, so every page that draws a step gets the same look.
+
+   The Avenue Academy's own changes (the brand's faces, the gold rule, numbered steps and headings in readings) live in
+   122_wave122; the words (the nine Hub modules, the master onboarding, the Slack imports and the ClickUp leftovers) live in the
+   database (migration wa190_reading_pass, build/data/wa190_reading_pass.py).
+   ===================================================================== */
+(function () {
+  if (window.__wa190) return; window.__wa190 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var DO = /^<p>(?:<b>)?\s*(?:to complete (?:this|the) (?:step|task)|mini task|your task)\s*:?\s*(?:<\/b>)?\s*:?\s*([\s\S]*)<\/p>$/i;
+
+  /* reshape what wa37Md returns: a step's to-do as a box, an all-italic line as a note */
+  function decorate(html) {
+    return String(html || '').replace(/<p>[\s\S]*?<\/p>/g, function (p) {
+      var m = DO.exec(p);
+      if (m && m[1].replace(/<[^>]+>/g, '').trim()) return '<div class="w190do"><b>To complete this step</b><span>' + m[1].replace(/^\s+/, '').replace(/^[a-z]/, function (c) { return c.toUpperCase(); }) + '</span></div>';
+      if (p.indexOf('<p><i>') === 0 && p.indexOf('</i>') === p.length - 8) return '<p class="w190tk">' + p.slice(6, -8) + '</p>';
+      return p;
+    });
+  }
+  if (typeof window.wa37Md === 'function' && !window.wa37Md.__w190) {
+    var base = window.wa37Md;
+    var wrapped = function (s) { return decorate(base(s)); };
+    wrapped.__w190 = true;
+    window.wa37Md = wrapped;
+  }
+
+  var css = document.createElement('style');
+  css.id = 'wa190css';
+  css.textContent = ''
+    + '.w37step .nm{font-size:14.5px;}'
+    + '.w37step .ds{font-size:13.5px;line-height:1.55;color:#45443f;margin-top:3px;}'
+    + '.w37step .ds p{margin:0 0 6px;}'
+    + '.w37step .ds p:last-child{margin-bottom:0;}'
+    + '.w37step .ds ul{margin:2px 0 8px;padding-left:18px;}'
+    + '.w37step .ds li{margin:0 0 3px;}'
+    + '.w37step .ds li::marker{color:' + GOLD + ';}'
+    + '.w37step .ds a{color:' + GREEN + ';font-weight:600;}'
+    + '.w37step .ds .vl-h{font-weight:700;color:' + GREEN + ';margin:8px 0 4px;}'
+    + '.w190do{margin:8px 0 6px;padding:8px 12px 9px;border-radius:10px;background:rgba(220,165,39,.14);border-left:3px solid ' + GOLD + ';color:#3d3008;}'
+    + '.w190do b{display:block;font-family:' + HEAD + ';font-size:13px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#8A5A0B;margin:0 0 1px;}'
+    + '.w190do a{color:' + GREEN + ';font-weight:600;}'
+    + 'p.w190tk{font-size:12.5px;color:' + MUTED + ';margin:4px 0 0;}'
+    + '.w37step.done .w190do{background:rgba(16,63,57,.05);border-left-color:rgba(16,63,57,.22);color:' + MUTED + ';}'
+    + '.w37step.done .w190do b{color:' + MUTED + ';}';
+  document.head.appendChild(css);
+
+  window.w190 = { decorate: decorate };
+})();
