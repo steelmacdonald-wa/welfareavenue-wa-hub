@@ -121,6 +121,9 @@
   function dateShort(s) { try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(s || '').slice(0, 10); } }
   function isSelf(m) { return !!(m && m.email && lower(m.email) === myEmail()); }
   function canEdit(m) { var r = role(); return r === 'admin' || r === 'leader' || isSelf(m); }
+  /* wave192 (The Loop): hours are the person's own, and HR's: their own page, leaders, admins and the HR profile (the database
+     says the same: hub_checkins rows are readable by the person, admins and wa169_can_assign()) */
+  function seesHours(m) { if (isSelf(m)) return true; var r = role(); if (r === 'admin' || r === 'leader') return true; try { return !!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile === 'hr' && r !== 'viewer' && r !== 'blocked'); } catch (e) { return false; } }
 
   /* ---------- who owns what ---------- */
   function personOwns(t, m) {
@@ -167,8 +170,8 @@
         '<div class="bar"><i style="width:' + c.pct + '%"></i></div></div>';
     }).join('') + '</div>';
   }
-  function hoursHtml(h) {
-    if (!h) return '<p class="empty">No hub check-ins yet. The Check in button at the top of the hub starts the clock.</p>';
+  function hoursHtml(h, self) {
+    if (!h) return '<p class="empty">' + (self ? 'No sessions yet. Press I\u2019m in at the top of the Hub when you start. Your hours are for you and HR, never the post.' : 'No sessions yet.') + '</p>';
     return '<div class="w116khours"><div' + (h.open ? ' class="now"' : '') + '><b>' + E(fmtMins(h.month)) + '</b>this month' + (h.open ? ' (checked in now)' : '') + '</div><div><b>' + E(fmtMins(h.last)) + '</b>last month</div><div><b>' + h.sessions + '</b>sessions in 60 days</div></div>' +
       (h.recent.length ? '<div class="w116ksess">' + h.recent.map(function (s) { return '<span>' + E(dateShort(s.started_at)) + ' &middot; ' + E(fmtMins(s.mins)) + (s.open ? ' (open)' : '') + '</span>'; }).join('') + '</div>' : '');
   }
@@ -236,7 +239,8 @@
     var doneFy = doneAll.filter(function (t) { return (t.closed_at || t.updated_at || '') >= fy; }).sort(function (a, b) { return String(b.closed_at || '').localeCompare(String(a.closed_at || '')); });
     CUR.open = open; CUR.done = doneFy;
     var led = projectsLed(m);
-    var hours = staff() ? await loadHours(m) : null;
+    var seeHours = staff() && seesHours(m);
+    var hours = seeHours ? await loadHours(m) : null;
     var meetings = await loadMeetings(m);
     if (String(CUR.building) !== String(mid)) return;
     var self = isSelf(m);
@@ -256,7 +260,7 @@
       '<div class="w116kpis" style="margin-top:16px">' +
         '<div class="w116kpi go" data-w116kgo="open"><b>' + open.length + '</b>open now' + (overdue ? '<small>' + overdue + ' overdue</small>' : '') + '</div>' +
         '<div class="w116kpi go" data-w116kgo="done"><b>' + doneFy.length + '</b>finished in ' + E(fyLabel()) + '<small>' + doneAll.length + ' all time</small></div>' +
-        (staff() ? '<div class="w116kpi"><b>' + E(hours ? fmtMins(hours.month).replace(/ 00m$/, '') : '0m') + '</b>on the hub this month' + (hours ? '<small>' + E(fmtMins(hours.last)) + ' last month</small>' : '<small>no check-ins yet</small>') + '</div>' : '') +
+        (seeHours ? '<div class="w116kpi"><b>' + E(hours ? fmtMins(hours.month).replace(/ 00m$/, '') : '0m') + '</b>on the Hub this month' + (hours ? '<small>' + E(fmtMins(hours.last)) + ' last month</small>' : '<small>no sessions yet</small>') + '</div>' : '') +
         '<div class="w116kpi go" data-w116kgo="projects"><b>' + led.length + '</b>' + (led.length === 1 ? 'project' : 'projects') + ' leading</div>' +
       '</div>' +
       '<div class="w116grid">' +
@@ -268,7 +272,7 @@
         '</div>' +
         '<div class="w116col" id="w116kright">' +
           (bio ? aboutCard(m, bio) : '') +
-          (staff() ? '<div class="w116card" id="w116khours"><h3>Hours on the hub' + (self ? '<span class="lnk" data-w116ka="ck">' + (checked ? 'Check out' : 'Check in') + '</span>' : '') + '</h3>' + hoursHtml(hours) + '</div>' : '') +
+          (seeHours ? '<div class="w116card" id="w116khours"><h3>' + (self ? 'Your hours' : 'Hours on the Hub') + (self ? '<span class="lnk" data-w116ka="ck">' + (checked ? 'Close the loop' : 'I\u2019m in') + '</span>' : '') + '</h3>' + hoursHtml(hours, self) + (self ? '' : '<p class="empty" style="margin-top:8px">You see this as HR, a leader or an admin. Teammates see what moved, never the hours.</p>') + '</div>' : '') +
           '<div class="w116card" id="w116kmeet"><h3>Their meetings' + (self ? '<a class="lnk" href="#mypage">Reply from Home</a>' : '') + '</h3>' + (meetings.length && window.w116EventRow ? meetings.map(function (e) { return window.w116EventRow(e, { mine: false }); }).join('') : '<p class="empty">No upcoming meetings on the hub calendar.</p>') + '</div>' +
           '<div class="w116card" id="w116ktrain"><h3><span id="w116ktrainh">Training</span></h3><div id="w116ktrainslot"><p class="empty">No training assigned yet.</p></div></div>' +
           '<div class="w116card" id="w116kteam"><h3>' + E(label(m.department) || 'Team') + (teamPage ? '<a class="lnk" href="#team/' + E(m.department) + '">Team page</a>' : '') + '</h3>' + teamHtml(m) + '</div>' +

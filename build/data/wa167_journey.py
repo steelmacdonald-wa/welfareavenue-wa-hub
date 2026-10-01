@@ -55,7 +55,8 @@ W1 = {
     {'id': 'habits', 't': 'How we work together', 'blocks': [
       {'type': 'lead', 'text': 'Most of us are students giving our time around classes and jobs. A few habits keep that working.'},
       {'type': 'cards', 'items': [
-        {'icon': 'clock', 't': 'Check in and out', 'd': 'When you start working for Welfare Avenue, press **Check in** at the top of the Hub; check out when you finish, with a line on what you did. It posts in #check-in-out-wa for you.'},
+        # wave192 (01/10/26): the card and the second question say The Loop (I'm in, close the loop), not check in and out
+        {'icon': 'refresh', 't': 'The Loop', 'd': 'When you start working for Welfare Avenue, press **I\'m in** at the top of the Hub; when you finish, press **Close the loop** and share a few lines on what moved. Your team sees the work, never your hours.'},
         {'icon': 'chat', 't': 'Answer within 24 hours', 'd': 'Acknowledge messages from your team within a day, even when the full answer comes later.'},
         {'icon': 'target', 't': 'Your time', 'd': 'Team members give at least 16 hours a month (directors 24) and volunteer at a serving at least twice a year.'},
         {'icon': 'people', 't': 'One meeting a week', 'd': 'Each team meets online once a week. The whole team takes a break every August.'}]},
@@ -64,7 +65,7 @@ W1 = {
   ],
   'quiz': {'pass': 0.8, 'questions': [
     {'q': 'Where do your team\'s tasks live?', 'a': ['On your team\'s page in the Hub', 'In your email inbox', 'In a spreadsheet your lead shares'], 'c': 0, 'why': 'Every team\'s tasks, projects and requests live in the Hub, on your team\'s page.'},   # wave190: no ClickUp in onboarding text
-    {'q': 'You sit down to work on your onboarding. What do you do first?', 'a': ['Nothing, the Hub tracks it', 'Press Check in at the top of the Hub', 'Email HR'], 'c': 1, 'why': 'Check in when you start and out when you finish, with a line on what you did.'},
+    {'q': 'You sit down to work on your onboarding. What do you do first?', 'a': ['Nothing, the Hub notices on its own', 'Press I\'m in at the top of the Hub', 'Email HR'], 'c': 1, 'why': 'Press I\'m in when you start and close the loop when you finish, with a few lines on what moved. It keeps your team in the loop; it is not a timeclock.'},
     {'q': 'What happens to a step marked Avenue Academy in your plan?', 'a': ['HR ticks it for you', 'It ticks itself when you finish it in the Academy', 'It is optional'], 'c': 1, 'why': 'Finish the lesson, video or avenue and the step ticks itself.'},
     {'q': 'How soon should you acknowledge a message from your team?', 'a': ['Within 24 hours', 'Within a week', 'Only when it is urgent'], 'c': 0, 'why': 'A quick acknowledgment keeps a remote team moving, even if the full answer comes later.'},
     {'q': 'Who is paid at Welfare Avenue?', 'a': ['The leadership team', 'The directors', 'Nobody: every one of us, leadership included, volunteers'], 'c': 2, 'why': 'Welfare Avenue has no paid staff. Everyone, leadership included, gives their time.'}]},
@@ -229,7 +230,7 @@ JOURNEY = {
   'hero': {'photo': 'photos/web/2024-07-summer-team-under-the-tent.jpg', 'fx': 0.5, 'fy': 0.52, 'alt': 'Thirteen volunteers in green Welfare Avenue vests pose under the green tent in a leafy park.', 'tag': 'Service is solidarity, not charity.'},
   'weeks': {
     'WEEK 1': {'title': 'Get set up', 'photo': 'photos/web/2024-10-autumn-volunteers-plating.jpg', 'fx': 0.42, 'fy': 0.45, 'lesson': 'wa167w1',
-               'learn': ['Set up your Welfare Avenue accounts: Google, Chrome, Slack and Loom', 'Find your way around the Hub and your team\'s page', 'Read our policies, and check in and out every time you work'],
+               'learn': ['Set up your Welfare Avenue accounts: Google, Chrome, Slack and Loom', 'Find your way around the Hub and your team\'s page', 'Read our policies, and close the loop every time you work'],
                'why': 'Everything at Welfare Avenue runs through these tools. A week spent setting them up well saves you hours later, and it means your team can reach you.'},
     'WEEK 2': {'title': 'Who we are', 'photo': 'photos/web/2022-01-winter-crew-in-the-snow.jpg', 'fx': 0.5, 'fy': 0.64, 'lesson': 'wa167w2',
                'learn': ['Tell our story and our mission in your own words', 'Use our brand and the words we use for the people we serve', 'Do your first work in the Hub'],

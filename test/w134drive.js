@@ -92,7 +92,8 @@ const INFO_MOCK = `(function(){ window.__RPC = []; var t = setInterval(function(
   /* 3. the check-in note */
   { const f = await fresh(browser, { who: 'admin', init: "try { localStorage.removeItem('w118bSnooze'); localStorage.removeItem('w118bSeen'); } catch (e) {}", wait: 4500 });
     const n = await f.ev(() => { const el = document.getElementById('w118ck'); return el ? { text: el.textContent.replace(/\s+/g, ' ').trim(), hasOld: /hours count/i.test(el.textContent) } : null; });
-    ok('the check-in note says Don’t forget to check in', n && /Don’t forget to check in/.test(n.text) && !n.hasOld && /Check in/.test(n.text) && /Not now/.test(n.text), n);
+    /* wave192: the note speaks The Loop (Starting some work? I'm in) */
+    ok('the note under the Loop button asks Starting some work? with I’m in', n && /Starting some work\?/.test(n.text) && !n.hasOld && /I’m in/.test(n.text) && /Not now/.test(n.text), n);
     await f.close(); }
 
   /* 4. Important info: the list for everyone, passwords by request */

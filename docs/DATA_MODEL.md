@@ -593,12 +593,15 @@ Daily seconds and visits per person, meant to be written by wa_usage_visit() and
 
 ### `hub_checkins`
 
-Check-in and check-out sessions started from the Hub, with minutes worked and a summary; checkin-post posts each one to Slack. Open sessions close themselves after eight hours (auto_closed).
+The Loop (wave192; check in and out before): a session starts with I'm in and ends with Close the loop, with minutes worked and the wrap-up note (summary.bullets) the person chose to share: to their team's channel, to everyone (the Loop channel) or just the Hub. Starting posts nothing; the shared post carries what moved, never times or hours. Rows are read by the person, admins and HR (wave192c); everyone else reads loop_feed() and loop_in_now(). Open sessions close themselves after eight hours (auto_closed).
 
 - `name`: Copy of the display name.
 - `department`: Team code at check-in.
 - `slack_ts`: Slack timestamp of the check-in message; slack_out_ts of the check-out message.
 - `closed_task_ids`: dept_tasks ids closed during the session.
+- `share_to`: wave192: where the wrap-up note was shared: team (the department's Slack channel), everyone (the Loop channel) or hub (no Slack post; Home only). Null before wave192 or for a session closed without a note.
+- `share_channel`: wave192: the Slack channel name the wrap-up was posted to, when it was.
+- `trail`: Not used (wave192b): the Loop draft is built on demand for the person's own sheet and never stored. Empty; dropped in the wave192 cleanup once Steel approves.
 
 ### `hub_shoutouts`
 
@@ -1861,4 +1864,8 @@ Functions:
 - `crm_receipt_auto_issue(bigint)`: Issues the receipt for one paid online gift by itself (wave185), service role only: stripe-events calls it right after crm_stripe_apply records the gift. Only while receipt_mode and receipt_auto_online are both on, only for a gift from the donation page that is due a receipt; what crm_receipt_make refuses (no address, a used number) is returned as skipped and noted in change_log, and the gift stays due for an admin to issue by hand. Returns the receipt id and serial, or why it was skipped.
 - `crm_receipt_email_doc(bigint)`: What the receipt email needs (wave185), service role only (mail-send): the receipt (serial, status, amounts, the gift's date, whether it is a monthly payment, any tribute), the donor as printed and their language, the contact and the address the email goes to, the PDF path, and whether it was emailed already.
 - `crm_receipt_emailed(bigint, bigint)`: Marks a receipt as emailed to the donor (wave185) with the crm_email_sends row that carried it. Service role only (mail-send, after Resend accepted the email; never for a test copy).
+- `loop_trail(text, timestamptz, timestamptz)`: wave192: what one person changed in the Hub between two moments (tasks closed, opened, commented or edited; requests; goals; decisions; team updates; Academy modules finished; meetings joined; transcripts; @mentions; announcements; posts; rosters; team emails handled; CRM contacts; onboarding steps), as items {k, t, id, at} the wrap-up drafts from, plus the count of restricted items left out (confidential, board-only, private or one-on-one work never pre-fills a note that may reach Slack). A signed-in person reads their own trail only; the service role (checkin-post) reads anyone's for their own wrap-up.
+- `wa192_loop_done()`: wave192: when a Loop session ends (not auto-closed), marks the onboarding training The Loop (216) done for the person in training_progress; trg_wa166_tp_onb then ticks the step in their active onboarding plan. Never blocks the check-out.
+- `loop_feed(int, text)`: wave192b: the Loop notes people shared (Home's In the loop, the person page's Their loop): who, their team, the day (Toronto), the lines, how many tasks were closed and the titles of the closed tasks that are open to everyone (confidential, board-only and restricted ones are counted, never named). No clock time, no minutes. Staff and admins; p_days 1 to 90, optional p_email for one person.
+- `loop_in_now()`: wave192b: the emails of the people in a Loop session now (started in the last 14 hours, not closed), for the ring on their photo in the header (wave116j). No times. Staff, admins and board viewers.
 

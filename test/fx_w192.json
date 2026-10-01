@@ -1,0 +1,380 @@
+{
+ "trainings": [
+  {
+   "id": 39,
+   "category": "General",
+   "title": "Hub module 1: My page and finding your work",
+   "description": "Goal: Know your way around Home, the menu and the apps, so you can always find your work.\n\n**Home, your page**\n\nSign in and you land on Home (My page). It gathers what is yours, top to bottom:\n\n- **The news banner:** what happened lately and what is coming (the next servings, thank-yous after a serving, fundraising events, people who joined a team, wins from team meetings and news from the admins). It is rebuilt every morning; hover over it or press pause to stop it.\n- **Announcements for you,** from your leaders, HR and the admins. Answer a poll with a tap, or a short form in a window; the totals show once you answer, when the poster shares them.\n- **Your open tasks,** with their due dates. Late ones turn red.\n- **Your team's plate,** if you lead people.\n- **Updates** that mention you or your department, **incoming requests** and **your own hours** (only you and HR see them).\n- **Mentions:** when a meeting you were not in talked about you, a card shows up so you stay in the loop. Press Got it once you have read it.\n\nGood to know: leaders, HR and the admins post announcements from Home too. Each one goes out once in Slack and once by email.\n\n**Your inbox (a few people for now)**\n\nIf the inbox assistant is on for your mailbox, Your inbox on Home keeps what needs your reply and what a team should handle. It files your new Welfare Avenue mail into your own Gmail folders, writes a reply that sounds like you after asking you a question or two (saved as a Gmail draft: you send it), and sends an email on to a team's inbox with your one-line ask.\n\n**The menu**\n\n- **At the top:** Home, the Avenue Academy, the Executive dashboard, the Calendar and The Brain.\n- **Departments:** each team's page, with its own pages folded under it.\n- **Other Tools:** Important info, The Task Bank, Agendas, the Document finder, the Transcript archive, the Photo library and Requests.\n- **Organization:** the Org chart, Our story and the Hub inbox.\n\nYou see the pages your access profile opens (Hub module 9 explains how).\n\n**The apps**\n\nApps, at the bottom of the menu, open the bigger tools: Strategy (goals and projects), the Volunteer Manager (servings, rosters, texts and volunteers), the CRM (contacts, partners, gifts and email), the HR centre, Finance and the Admin centre.\n\n**On a phone**\n\nThe bar at the bottom has Home, the Calendar, Ask, your team and Menu. Menu opens everything, with Find a page at the top and the apps as tiles.\n\nTry it: open Home, find your open tasks, and click one update to read it.\n\nDone when: you can say where your tasks, your mentions and your department's updates live.",
+   "resource_url": null,
+   "source": "hub",
+   "ext_id": null,
+   "duration_sec": null,
+   "path_group": "Using the Hub",
+   "sort": 920,
+   "active": true,
+   "created_at": "2026-08-04T18:54:56.490875+00:00",
+   "kind": "read",
+   "key": null,
+   "body": {
+    "tours": [
+     "home",
+     "chrome"
+    ]
+   },
+   "minutes": 3,
+   "xp": null,
+   "updated_at": "2026-10-01T18:53:11.238116+00:00"
+  },
+  {
+   "id": 53,
+   "category": "Hub tours",
+   "title": "Page tour: Finding your way around",
+   "description": "The menu, search, the Loop, Needs me and Ask the Hub: the parts that follow you everywhere.",
+   "resource_url": null,
+   "source": "hub",
+   "ext_id": null,
+   "duration_sec": null,
+   "path_group": "Hub page tours",
+   "sort": 1,
+   "active": true,
+   "created_at": "2026-09-25T16:42:15.406042+00:00",
+   "kind": "tour",
+   "key": "tour:chrome",
+   "body": {
+    "tab": "mypage",
+    "tour": "chrome"
+   },
+   "minutes": 2,
+   "xp": 20,
+   "updated_at": "2026-10-01T18:53:11.238116+00:00"
+  },
+  {
+   "id": 216,
+   "category": "Onboarding",
+   "title": "The Loop: I'm in, close the loop",
+   "description": "Goal: Know what The Loop is, why we do it, and how to close it in under a minute.\n\n**Two buttons, one habit**\n\nThe Loop is how a team that works apart stays in the loop. When you start working for Welfare Avenue, press I'm in at the top of the Hub. When you finish, press Close the loop and share a few lines on what moved.\n\nThat is the whole thing. A meeting, your onboarding, a task, a serving: I'm in when you start, Close the loop when you finish.\n\n**Why we do it**\n\n- **Nothing gets lost.** Your note is where a teammate picks up a thread, sees that a task is done, or learns that the flyers print Friday.\n- **Your work is seen.** We cannot see each other across a hallway, so the note is how the team knows what you carried this week.\n- **It marks the end.** Closing the loop closes your Welfare Avenue time and opens the rest of your day: your classes, your job, your evening.\n\n**What it is not**\n\nThe Loop is not a timeclock. The shared note carries what moved, never the clock time and never the hours. Nobody is told when you start; the green ring on your photo only shows teammates you are around.\n\nYour hours are yours. They show on your own page, and to HR, for your records and your balance. They never go in the post.\n\n**How to close the loop**\n\n1. Press Close the loop at the top of the Hub.\n2. Read what the Hub drafted: the tasks you closed or opened, the requests you made, the meetings you joined, the Academy modules you finished. Keep what matters and change any line.\n3. Add what the Hub could not see: a call, an email thread, a conversation. Say it or type it; Add to the note turns it into lines.\n4. Tick the tasks you finished. They close themselves.\n5. Choose who sees it: your team's channel (the usual choice), everyone in the Loop channel, or just the Hub. Every note also shows on Home.\n6. Press Close the loop.\n\nTip: write it the way you would tell a teammate at the door. \"Met Amanda about the flyers, she prints Friday\" beats \"Flyer discussion held\".\n\nGood to know: in a team meeting you are asked to be in at the start and to close the loop at the end, so the team's notes line up. The button replaces the in and out lines some of us typed in Slack.\n\nTry it: take the one-minute walkthrough below. Then press I'm in for real, and close the loop with a note to just the Hub.\n\nDone when: you have closed the loop once. The Hub ticks this step for you.",
+   "resource_url": null,
+   "source": null,
+   "ext_id": null,
+   "duration_sec": null,
+   "path_group": "Your onboarding",
+   "sort": 50,
+   "active": true,
+   "created_at": "2026-09-29T21:09:20.562908+00:00",
+   "kind": "read",
+   "key": "onb:checkin",
+   "body": {
+    "tours": [
+     "loop"
+    ]
+   },
+   "minutes": 3,
+   "xp": null,
+   "updated_at": "2026-10-01T18:49:42.365047+00:00"
+  },
+  {
+   "id": 222,
+   "category": "Onboarding",
+   "title": "Week 1: Welcome to Welfare Avenue",
+   "description": "Who we are in one page, how your onboarding works, the tools you will use, and the habits that keep a remote team of volunteers working well together.",
+   "resource_url": null,
+   "source": "hub",
+   "ext_id": null,
+   "duration_sec": null,
+   "path_group": "Your onboarding",
+   "sort": 10,
+   "active": true,
+   "created_at": "2026-09-29T21:53:39.136355+00:00",
+   "kind": "lesson",
+   "key": "onb:w1",
+   "body": {
+    "v": 1,
+    "quiz": {
+     "pass": 0.8,
+     "questions": [
+      {
+       "a": [
+        "On your team's page in the Hub",
+        "In your email inbox",
+        "In a spreadsheet your lead shares"
+       ],
+       "c": 0,
+       "q": "Where do your team's tasks live?",
+       "why": "Every team's tasks, projects and requests live in the Hub, on your team's page."
+      },
+      {
+       "a": [
+        "Nothing, the Hub notices on its own",
+        "Press I'm in at the top of the Hub",
+        "Email HR"
+       ],
+       "c": 1,
+       "q": "You sit down to work on your onboarding. What do you do first?",
+       "why": "Press I'm in when you start and close the loop when you finish, with a few lines on what moved. It keeps your team in the loop; it is not a timeclock."
+      },
+      {
+       "a": [
+        "HR ticks it for you",
+        "It ticks itself when you finish it in the Academy",
+        "It is optional"
+       ],
+       "c": 1,
+       "q": "What happens to a step marked Avenue Academy in your plan?",
+       "why": "Finish the lesson, video or avenue and the step ticks itself."
+      },
+      {
+       "a": [
+        "Within 24 hours",
+        "Within a week",
+        "Only when it is urgent"
+       ],
+       "c": 0,
+       "q": "How soon should you acknowledge a message from your team?",
+       "why": "A quick acknowledgment keeps a remote team moving, even if the full answer comes later."
+      },
+      {
+       "a": [
+        "The leadership team",
+        "The directors",
+        "Nobody: every one of us, leadership included, volunteers"
+       ],
+       "c": 2,
+       "q": "Who is paid at Welfare Avenue?",
+       "why": "Welfare Avenue has no paid staff. Everyone, leadership included, gives their time."
+      }
+     ]
+    },
+    "cover": "green",
+    "summary": "Who we are in one page, how your onboarding works, the tools you will use, and the habits that keep a remote team of volunteers working well together.",
+    "chapters": [
+     {
+      "t": "Welcome to Welfare Avenue",
+      "id": "welcome",
+      "blocks": [
+       {
+        "fx": 0.52,
+        "fy": 0.58,
+        "alt": "About twenty volunteers in green Welfare Avenue vests pose in front of two green tents under yellow autumn trees.",
+        "cap": "The autumn crew in front of the tents, October 2022.",
+        "src": "https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/photos/web/2022-10-autumn-crew-at-the-tent.jpg",
+        "type": "photo"
+       },
+       {
+        "text": "Welcome. You are joining a youth-powered non-profit fighting food insecurity and poverty by providing direct support to neighbours and communities in need.",
+        "type": "lead"
+       },
+       {
+        "text": "It started in April 2020, during Montreal's first lockdown, when our founder and a few friends began bringing food to people living on the emptied streets downtown. Six years later we serve in Montreal and Toronto, we ran a first pilot in Ottawa, and every one of us, leadership included, is a volunteer.",
+        "type": "p"
+       },
+       {
+        "note": "The Hub's estimates from our own records, September 2026.",
+        "type": "stats",
+        "items": [
+         {
+          "l": "the year we began, in Montreal",
+          "n": "2020"
+         },
+         {
+          "l": "meals and food bags since",
+          "n": "20,000+"
+         },
+         {
+          "l": "people have volunteered with us",
+          "n": "700+"
+         },
+         {
+          "l": "cities: Montreal, Toronto and a pilot in Ottawa",
+          "n": "3"
+         }
+        ]
+       },
+       {
+        "by": "Our brand, 2026",
+        "text": "Service is solidarity, not charity.",
+        "type": "quote"
+       }
+      ]
+     },
+     {
+      "t": "How your onboarding works",
+      "id": "how",
+      "blocks": [
+       {
+        "text": "Your onboarding runs for about 90 days. The first four weeks carry most of it; the 60-day steps help you grow from there.",
+        "type": "lead"
+       },
+       {
+        "type": "steps",
+        "items": [
+         {
+          "d": "Your accounts, the Hub, our policies, Slack and Loom.",
+          "t": "Week 1: Get set up"
+         },
+         {
+          "d": "Our story and foundations, our brand, and your first work in the Hub.",
+          "t": "Week 2: Who we are"
+         },
+         {
+          "d": "How your team works, your team's Learning Avenue, and your first serving.",
+          "t": "Week 3: Your team"
+         },
+         {
+          "d": "Two short quizzes, a self-assessment and your 30-day evaluation.",
+          "t": "Week 4: Look back"
+         },
+         {
+          "d": "How charities work, a Learning Avenue of your choice, and 15 minutes with one of our co-executive directors.",
+          "t": "60 days: Grow"
+         }
+        ]
+       },
+       {
+        "t": "Steps that tick themselves",
+        "text": "Steps marked **Avenue Academy** are done here: finish the lesson, the video or the avenue and the step ticks itself. Everything else, you tick when it is done.",
+        "tone": "tip",
+        "type": "callout"
+       },
+       {
+        "t": "Stuck?",
+        "text": "Use **Ask for help** under your plan. HR and your lead see it in the Hub and reach out. Your onboarding channel in Slack works too.",
+        "tone": "info",
+        "type": "callout"
+       }
+      ]
+     },
+     {
+      "t": "The tools you will use",
+      "id": "tools",
+      "blocks": [
+       {
+        "text": "We are a remote team, so our tools are our office. Each one has a job.",
+        "type": "lead"
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "d": "Where our work lives: your team's page and tasks, meetings, requests, the calendar, and the Avenue Academy with this plan.",
+          "k": "hub.welfareavenue.com",
+          "t": "The Hub",
+          "icon": "home"
+         },
+         {
+          "d": "Where we talk every day: your team's channel, your onboarding channel and messages.",
+          "t": "Slack",
+          "icon": "chat"
+         },
+         {
+          "d": "Your Welfare Avenue email, calendar and shared drives. Use it in its own Chrome profile, apart from your personal account.",
+          "t": "Google Workspace",
+          "icon": "doc"
+         },
+         {
+          "d": "Our meetings are recorded on Loom and come into the Hub by themselves. The Academy's videos are Loom videos too.",
+          "t": "Loom",
+          "icon": "play"
+         },
+         {
+          "d": "Where our designs are made, with the brand's colours, fonts and doodles.",
+          "t": "Canva",
+          "icon": "sparkle"
+         },
+         {
+          "d": "Ask a question in plain words: it reads our meetings, documents and trainings and answers with where it found it.",
+          "t": "Ask the Hub",
+          "icon": "search"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "t": "How we work together",
+      "id": "habits",
+      "blocks": [
+       {
+        "text": "Most of us are students giving our time around classes and jobs. A few habits keep that working.",
+        "type": "lead"
+       },
+       {
+        "type": "cards",
+        "items": [
+         {
+          "d": "When you start working for Welfare Avenue, press **I'm in** at the top of the Hub; when you finish, press **Close the loop** and share a few lines on what moved. Your team sees the work, never your hours.",
+          "t": "The Loop",
+          "icon": "refresh"
+         },
+         {
+          "d": "Acknowledge messages from your team within a day, even when the full answer comes later.",
+          "t": "Answer within 24 hours",
+          "icon": "chat"
+         },
+         {
+          "d": "Team members give at least 16 hours a month (directors 24) and volunteer at a serving at least twice a year.",
+          "t": "Your time",
+          "icon": "target"
+         },
+         {
+          "d": "Each team meets online once a week. The whole team takes a break every August.",
+          "t": "One meeting a week",
+          "icon": "people"
+         }
+        ]
+       },
+       {
+        "t": "Finding anything",
+        "text": "Search everything at the top of the Hub finds people, tasks, meetings and documents. Ask the Hub answers questions.",
+        "tone": "info",
+        "type": "callout"
+       }
+      ]
+     }
+    ]
+   },
+   "minutes": 10,
+   "xp": null,
+   "updated_at": "2026-10-01T18:56:40.93211+00:00"
+  },
+  {
+   "id": 226,
+   "category": "Hub tours",
+   "title": "Page tour: The Loop",
+   "description": "I'm in, close the loop: what moved, who sees it, and what never goes in the post.",
+   "resource_url": null,
+   "source": "hub",
+   "ext_id": null,
+   "duration_sec": null,
+   "path_group": "Hub page tours",
+   "sort": 3,
+   "active": true,
+   "created_at": "2026-10-01T18:53:11.238116+00:00",
+   "kind": "tour",
+   "key": "tour:loop",
+   "body": {
+    "tab": "mypage",
+    "tour": "loop"
+   },
+   "minutes": 1,
+   "xp": 20,
+   "updated_at": "2026-10-01T18:57:41.042607+00:00"
+  }
+ ],
+ "onboarding_template": [
+  {
+   "id": "86e1cj9gn",
+   "section": "WEEK 1",
+   "parent_id": "86e1cj9gh",
+   "name": "The Loop: I'm in, close the loop (every time you work)",
+   "description": "Every time you work for Welfare Avenue (a meeting, your onboarding, a task), press I'm in at the top of the Hub when you start and Close the loop when you finish, with a few lines on what moved. It is how a team that works apart stays in the loop; it is not a timeclock, and the note never carries your hours. The reading in the Avenue Academy shows how in three minutes.\n\n**To complete this step:** be in for your onboarding, then close the loop once with a note shared with your team or just the Hub.\n\n*This step ticks itself when you have closed the loop once.*",
+   "sort": 70,
+   "priority": "high",
+   "active": true,
+   "content_pending": false,
+   "clickup_url": "https://app.clickup.com/t/86e1cj9gn",
+   "updated_at": "2026-10-01T18:02:44.570819+00:00",
+   "academy_path": null,
+   "training_id": 216
+  }
+ ]
+}

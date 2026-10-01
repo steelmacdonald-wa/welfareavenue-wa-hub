@@ -32953,8 +32953,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function refreshPresence() {
     try { if (typeof waLoadPresence === 'function') await waLoadPresence(); } catch (e) { /* fine */ }
     try {
-      var r = await db.from('hub_checkins').select('email').is('ended_at', null);
-      J.checked = {}; ((r && r.data) || []).forEach(function (x) { J.checked[lower(x.email)] = 1; });
+      /* wave192: who is in comes from loop_in_now() (emails only, no times); session rows are the person's own and HR's */
+      var ems = null;
+      try { var q = await db.rpc('loop_in_now'); if (q && !q.error && Array.isArray(q.data)) ems = q.data.map(function (x) { return typeof x === 'string' ? x : (x && (x.email || x.loop_in_now)) || ''; }); } catch (e2) { ems = null; }
+      if (!ems) { var r = await db.from('hub_checkins').select('email').is('ended_at', null); ems = ((r && r.data) || []).map(function (x) { return x.email; }); }
+      J.checked = {}; ems.forEach(function (em) { if (em) J.checked[lower(em)] = 1; });
     } catch (e) { /* fine */ }
     renderPresence();
   }
@@ -33334,6 +33337,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function dateShort(s) { try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return String(s || '').slice(0, 10); } }
   function isSelf(m) { return !!(m && m.email && lower(m.email) === myEmail()); }
   function canEdit(m) { var r = role(); return r === 'admin' || r === 'leader' || isSelf(m); }
+  /* wave192 (The Loop): hours are the person's own, and HR's: their own page, leaders, admins and the HR profile (the database
+     says the same: hub_checkins rows are readable by the person, admins and wa169_can_assign()) */
+  function seesHours(m) { if (isSelf(m)) return true; var r = role(); if (r === 'admin' || r === 'leader') return true; try { return !!(typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.profile === 'hr' && r !== 'viewer' && r !== 'blocked'); } catch (e) { return false; } }
 
   /* ---------- who owns what ---------- */
   function personOwns(t, m) {
@@ -33380,8 +33386,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         '<div class="bar"><i style="width:' + c.pct + '%"></i></div></div>';
     }).join('') + '</div>';
   }
-  function hoursHtml(h) {
-    if (!h) return '<p class="empty">No hub check-ins yet. The Check in button at the top of the hub starts the clock.</p>';
+  function hoursHtml(h, self) {
+    if (!h) return '<p class="empty">' + (self ? 'No sessions yet. Press I\u2019m in at the top of the Hub when you start. Your hours are for you and HR, never the post.' : 'No sessions yet.') + '</p>';
     return '<div class="w116khours"><div' + (h.open ? ' class="now"' : '') + '><b>' + E(fmtMins(h.month)) + '</b>this month' + (h.open ? ' (checked in now)' : '') + '</div><div><b>' + E(fmtMins(h.last)) + '</b>last month</div><div><b>' + h.sessions + '</b>sessions in 60 days</div></div>' +
       (h.recent.length ? '<div class="w116ksess">' + h.recent.map(function (s) { return '<span>' + E(dateShort(s.started_at)) + ' &middot; ' + E(fmtMins(s.mins)) + (s.open ? ' (open)' : '') + '</span>'; }).join('') + '</div>' : '');
   }
@@ -33449,7 +33455,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var doneFy = doneAll.filter(function (t) { return (t.closed_at || t.updated_at || '') >= fy; }).sort(function (a, b) { return String(b.closed_at || '').localeCompare(String(a.closed_at || '')); });
     CUR.open = open; CUR.done = doneFy;
     var led = projectsLed(m);
-    var hours = staff() ? await loadHours(m) : null;
+    var seeHours = staff() && seesHours(m);
+    var hours = seeHours ? await loadHours(m) : null;
     var meetings = await loadMeetings(m);
     if (String(CUR.building) !== String(mid)) return;
     var self = isSelf(m);
@@ -33469,7 +33476,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w116kpis" style="margin-top:16px">' +
         '<div class="w116kpi go" data-w116kgo="open"><b>' + open.length + '</b>open now' + (overdue ? '<small>' + overdue + ' overdue</small>' : '') + '</div>' +
         '<div class="w116kpi go" data-w116kgo="done"><b>' + doneFy.length + '</b>finished in ' + E(fyLabel()) + '<small>' + doneAll.length + ' all time</small></div>' +
-        (staff() ? '<div class="w116kpi"><b>' + E(hours ? fmtMins(hours.month).replace(/ 00m$/, '') : '0m') + '</b>on the hub this month' + (hours ? '<small>' + E(fmtMins(hours.last)) + ' last month</small>' : '<small>no check-ins yet</small>') + '</div>' : '') +
+        (seeHours ? '<div class="w116kpi"><b>' + E(hours ? fmtMins(hours.month).replace(/ 00m$/, '') : '0m') + '</b>on the Hub this month' + (hours ? '<small>' + E(fmtMins(hours.last)) + ' last month</small>' : '<small>no sessions yet</small>') + '</div>' : '') +
         '<div class="w116kpi go" data-w116kgo="projects"><b>' + led.length + '</b>' + (led.length === 1 ? 'project' : 'projects') + ' leading</div>' +
       '</div>' +
       '<div class="w116grid">' +
@@ -33481,7 +33488,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         '</div>' +
         '<div class="w116col" id="w116kright">' +
           (bio ? aboutCard(m, bio) : '') +
-          (staff() ? '<div class="w116card" id="w116khours"><h3>Hours on the hub' + (self ? '<span class="lnk" data-w116ka="ck">' + (checked ? 'Check out' : 'Check in') + '</span>' : '') + '</h3>' + hoursHtml(hours) + '</div>' : '') +
+          (seeHours ? '<div class="w116card" id="w116khours"><h3>' + (self ? 'Your hours' : 'Hours on the Hub') + (self ? '<span class="lnk" data-w116ka="ck">' + (checked ? 'Close the loop' : 'I\u2019m in') + '</span>' : '') + '</h3>' + hoursHtml(hours, self) + (self ? '' : '<p class="empty" style="margin-top:8px">You see this as HR, a leader or an admin. Teammates see what moved, never the hours.</p>') + '</div>' : '') +
           '<div class="w116card" id="w116kmeet"><h3>Their meetings' + (self ? '<a class="lnk" href="#mypage">Reply from Home</a>' : '') + '</h3>' + (meetings.length && window.w116EventRow ? meetings.map(function (e) { return window.w116EventRow(e, { mine: false }); }).join('') : '<p class="empty">No upcoming meetings on the hub calendar.</p>') + '</div>' +
           '<div class="w116card" id="w116ktrain"><h3><span id="w116ktrainh">Training</span></h3><div id="w116ktrainslot"><p class="empty">No training assigned yet.</p></div></div>' +
           '<div class="w116card" id="w116kteam"><h3>' + E(label(m.department) || 'Team') + (teamPage ? '<a class="lnk" href="#team/' + E(m.department) + '">Team page</a>' : '') + '</h3>' + teamHtml(m) + '</div>' +
@@ -40176,7 +40183,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
       S('#w163bar || nav.wa-nav || #w114bar', 'The menu', 'Every Hub page lives here: Home, the Avenue Academy, the Executive dashboard, the Calendar and The Brain at the top, then Departments, Other Tools and Organization. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar. Strategy, the CRM and the other apps open from Apps at the bottom. On a phone, the bar at the bottom has Home, the Calendar, Ask, your team and Menu, which opens everything, with Find a page.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
-      S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
+      S('#w192go || #w116jck', 'The Loop', 'Starting work for Welfare Avenue? Press I\u2019m in. Nothing is posted: the ring on your photo shows teammates you are around, and your hours are yours and HR\u2019s. When you finish, Close the loop shares what moved with your team.', OPT),   /* wave192 */
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
       S('#waChatBtn', 'Ask the Hub', 'Ask anything about what is happening at Welfare Avenue, or type a request or a task in plain words. It answers from the Hub\u2019s live data and asks you to confirm before it saves anything.', OPT),
       C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Avenue Academy.')
@@ -45591,6 +45598,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    line and the row's summary fields follow the same path as a normal
    check-out (the function keeps an ended_at that is already set).
    Works in both looks (this is behaviour, not skin). window.__wa118b.
+   wave192 (01/10/26), The Loop: the notes sit under the I'm in button (#w192go), speak The Loop (I'm in, close the
+   loop), and a close "as of" a time ends the session at that time and opens the wrap-up sheet (w192.openRow), so the
+   person chooses what to share; nothing is posted on its own. The audit line keeps the time, never the hours.
    ===================================================================== */
 (function () {
   if (window.__wa118b) return; window.__wa118b = { version: 1 };
@@ -45633,7 +45643,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function drop(k) { try { localStorage.removeItem(k); } catch (e) { /* fine */ } }
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function ck() { return window.w116jCk || null; }
-  function pill() { return document.getElementById('w116jck'); }
+  function pill() { return document.getElementById('w192go') || document.getElementById('w116jck'); }
   function open() { var c = ck(); try { return c ? c.open() : null; } catch (e) { return null; } }
   function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
   function fmtMins(m) { var c = ck(); try { if (c && c.fmtMins) return c.fmtMins(m); } catch (e) { /* fine */ } var h = Math.floor(m / 60), r = Math.round(m % 60); return (h ? h + 'h ' : '') + (r || !h ? r + 'm' : ''); }
@@ -45672,46 +45682,50 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (last && Date.now() - last < AWAY_MS) return false;
     /* wave130: two short lines, so the note under the pill stays clear of the page (the tiles on Home sit 90 px below the pill) */
     /* Steel (26/09/26): "instead it should say don't forget to check-in" */
-    show('in', '<b><i></i>Don\u2019t forget to check in</b><div class="row"><button class="go" data-w118b="in">Check in</button><button class="link" data-w118b="later">Not now</button></div>');
+    show('in', '<b><i></i>Starting some work?</b><div class="row"><button class="go" data-w118b="in">I\u2019m in</button><button class="link" data-w118b="later">Not now</button></div>');
     return true;
   }
   function nudgeBack(row, leftAt) {
-    show('back', '<b><i></i>Welcome back</b><p>You are still checked in (since ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + ') and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Log it the way it happened?</p>'
-      + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Check out as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Check out now</button><button class="link" data-w118b="still">Still working</button></div>');
+    show('back', '<b><i></i>Welcome back</b><p>You are still in, and were away from ' + E(clock(leftAt)) + ' ' + E(dayWord(leftAt)) + '. Finished then? Close the loop as of that time and share what moved.</p>'
+      + '<div class="row"><button class="go" data-w118b="asof" data-t="' + leftAt + '">Close as of ' + E(clock(leftAt)) + '</button><button class="ghost" data-w118b="out">Close now</button><button class="link" data-w118b="still">Still working</button></div>');
   }
   function nudgeLong(row) {
     var mins = (Date.now() - new Date(row.started_at).getTime()) / 60000;
-    show('long', '<b><i></i>Still here?</b><p>You have been checked in for ' + E(fmtMins(Math.round(mins))) + '. If you stopped earlier, set the time so your hours are logged properly.</p>'
-      + '<div class="row"><button class="ghost" data-w118b="still">Still here</button><button class="go" data-w118b="out">Check out now</button><button class="link" data-w118b="settime">Set the time</button></div>');
+    show('long', '<b><i></i>Still in?</b><p>You have been in for ' + E(fmtMins(Math.round(mins))) + ' (only you see this). If you finished earlier, set when, then close the loop.</p>'
+      + '<div class="row"><button class="ghost" data-w118b="still">Still in</button><button class="go" data-w118b="out">Close the loop</button><button class="link" data-w118b="settime">Set the time</button></div>');
     put(K.asked, Date.now());
   }
   function timeForm(row) {
     var n = document.getElementById('w118ck'); if (!n) return;
     var guess = num(K.seen) && num(K.seen) > new Date(row.started_at).getTime() ? num(K.seen) : Date.now();
-    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you stop?</b><p>Checked in ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. The check-out is logged at this time.</p>'
+    n.innerHTML = '<button class="x" data-w118b="x" title="Close" aria-label="Close">&times;</button><b><i></i>When did you finish?</b><p>You were in from ' + E(clock(row.started_at)) + ' ' + E(dayWord(row.started_at)) + '. Your session ends at this time; then you share what moved.</p>'
       + '<div class="when"><input type="time" id="w118bt" value="' + hhmm(guess) + '" step="60"><span>' + E(dayWord(guess)) + '</span></div><div class="err" id="w118berr"></div>'
-      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Check out at that time</button><button class="link" data-w118b="still">Cancel</button></div>';
+      + '<div class="row"><button class="go" data-w118b="save" data-day="' + new Date(guess).toDateString() + '">Close at that time</button><button class="link" data-w118b="still">Cancel</button></div>';
     place();
   }
 
   /* ---------- writing a check-out at a chosen moment ---------- */
   async function checkOutAt(row, endMs) {
     var start = new Date(row.started_at).getTime();
-    if (endMs <= start) return 'That is before you checked in (' + clock(row.started_at) + ').';
+    if (endMs <= start) return 'That is before you were in (' + clock(row.started_at) + ').';
     if (endMs > Date.now() + 60000) return 'That is in the future.';
     var mins = Math.max(1, Math.round((endMs - start) / 60000));
     var endIso = new Date(endMs).toISOString();
     try {
       var r = await db.from('hub_checkins').update({ ended_at: endIso, minutes: mins }).eq('id', row.id).is('ended_at', null);
       if (r && r.error) throw r.error;
-    } catch (e) { return 'Could not save the check-out (' + ((e && e.message) || e) + ').'; }
-    var posted = false, perr = '';
-    try { var fr = await db.functions.invoke('checkin-post', { body: { action: 'out', checkin_id: row.id, bullets: [], close_task_ids: [], skipped: true } }); posted = !!(fr && fr.data && fr.data.posted); perr = (fr && fr.data && fr.data.error) || (fr && fr.error && fr.error.message) || ''; } catch (e) { perr = (e && e.message) || String(e); }
-    try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: myEmail(), field: 'out', old_value: null, new_value: 'checked out as of ' + clock(endMs) + ' (' + fmtMins(mins) + ', time set by hand)', changed_by: myName() }); } catch (e) { /* audit */ }
+    } catch (e) { return 'Could not end the session (' + ((e && e.message) || e) + ').'; }
+    /* wave192: no audit of the hours (change_log is read by staff), and nothing posted: the wrap-up sheet opens for this session */
+    try { await db.from('change_log').insert({ entity_type: 'checkin', entity_id: myEmail(), field: 'out', old_value: null, new_value: 'closed the loop as of ' + clock(endMs) + ' (time set by hand)', changed_by: myName() }); } catch (e) { /* audit */ }
     var c = ck(); try { if (c && c.clear) c.clear(); } catch (e) { /* fine */ }
     try { if (c && c.reload) await c.reload(); } catch (e) { /* fine */ }
     try { if (c && c.render) c.render(); if (c && c.presence) c.presence(); } catch (e) { /* fine */ }
-    toastS('Checked out as of ' + clock(endMs) + ': ' + fmtMins(mins) + ' on the hub' + (posted ? ', posted to #check-in-out-wa' : (perr ? ' (Slack post failed: ' + perr + ')' : '')));
+    var ended = { id: row.id, email: row.email, started_at: row.started_at, ended_at: endIso, minutes: mins };
+    if (window.w192 && window.w192.openRow) window.w192.openRow(ended);
+    else {
+      try { await db.functions.invoke('checkin-post', { body: { action: 'out', checkin_id: row.id, bullets: [], close_task_ids: [], skipped: true } }); } catch (e) { /* the session is ended either way */ }
+      toastS('Session ended as of ' + clock(endMs) + '.');
+    }
     return '';
   }
 
@@ -45767,8 +45781,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     /* the check-in pill changing state means a check-in or check-out happened: the note is stale */
     var p = pill();
     var mo = new MutationObserver(function () { if (S.kind && S.kind !== 'long') hide(); else if (S.kind === 'long' && !open()) hide(); });
-    if (p) mo.observe(p, { childList: true, attributes: true, subtree: true });
-    else { var mo2 = new MutationObserver(function () { var q = pill(); if (q) { mo.observe(q, { childList: true, attributes: true, subtree: true }); mo2.disconnect(); } }); mo2.observe(document.body, { childList: true, subtree: true }); }
+    /* wave192: the state is the button's class (in or not); its text carries a minute counter that must not dismiss a note */
+    if (p) mo.observe(p, { attributes: true, attributeFilter: ['class'] });
+    else { var mo2 = new MutationObserver(function () { var q = pill(); if (q) { mo.observe(q, { attributes: true, attributeFilter: ['class'] }); mo2.disconnect(); } }); mo2.observe(document.body, { childList: true, subtree: true }); }
   }
   if (typeof startApp === 'function') {
     var __sa118b = startApp;
@@ -67489,6 +67504,509 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   document.head.appendChild(css);
 
   window.w190 = { decorate: decorate };
+})();
+/* =====================================================================
+   WA v192 The Loop: I'm in, close the loop (01/10/26)
+   =====================================================================
+   Steel (01/10/26): "I'm questioning whether our checkins should be in our slack channels for everyone to see, I
+   really don't want people to feel like they are tracked but more that work that's being done is shared to keep
+   everyone in the loop. Also when people check out, it might be helpful to track their clicks in the hub in order to
+   help give them a summary of what they did, the voice to text is likely also very helpful. [...] redo the onboarding
+   module for check-in-out and instead position it differently, brand it, make it easy, and rethink its processes,
+   values and intended purpose."
+   His choices (01/10/26): the name The Loop (I'm in to start, Close the loop to finish, #the-loop for everyone); a
+   wrap-up goes to the person's team channel by default, or to everyone or just the Hub, their choice each time; the
+   shared post carries only what moved (no clock time, no hours); the note drafts itself from the records the person
+   changed (checkin-post draft, loop_trail), never from clicks or pages. Hours stay with the person and HR.
+   - The header button is #w192go. Wave116j's #w116jck stays underneath, hidden: it still owns the session row (its
+     toggle inserts the row; I'm in uses it) and the presence ring. Clicks on #w192go, #w116jck and the person page's
+     link are taken at the window, before wave116q's handlers, so its sheet never opens.
+   - I'm in starts a session and posts nothing. Close the loop opens the wrap-up sheet: What moved (lines the Hub drafted
+     from the person's own records; private work never pre-filled), Anything the Hub could not see (say it or type it,
+     Add to the note folds it in through the model and names the tasks worth closing), the tasks to tick, Who sees it
+     (My team with the real channel, Everyone with the Loop channel, Just the Hub), Close the loop or Close without a
+     note. The minutes show to the person only.
+   - Home: In the loop, the week's notes from everyone, read through loop_feed() (no times, no hours). The person page:
+     Their loop (Your loop on your own). Hours on someone else's page are for HR, leaders and admins (wave116k).
+   - The walkthrough: the page tour "loop" (the Academy row tour:loop). It opens the sheet in preview (nothing read or
+     written) to show each part, and the preview closes with the tour. The chrome tour's step lives in 122.
+   - window.w192: start, open, openRow (wave118b's "as of" close), preview, endPreview, feed, state.
+   ===================================================================== */
+(function () {
+  if (window.__wa192) return; window.__wa192 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var TZ = 'America/Toronto';
+  var Q = { row: null, busy: false, preview: false, rec: null, listening: false, finalText: '', text: '', bullets: [], suggest: [], others: [], picked: {},
+    share: 'team', touched: false, teamCh: null, allCh: null, hidden: 0, minutes: 0, loaded: false, loopName: 'the-loop', sig: '' };
+  var F = { rows: null, at: 0, p: null };
+
+  var css = document.createElement('style');
+  css.id = 'wa192css';
+  css.textContent = '' +
+    /* the button */
+    '#w116jck{display:none !important;}' +
+    '#w192go{display:inline-flex;align-items:center;gap:8px;font-family:' + BODY + ';font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border:none;border-radius:999px;padding:7px 14px;cursor:pointer;white-space:nowrap;margin-right:8px;}' +
+    '#w192go:hover{background:rgba(16,63,57,.14);}' +
+    '#w192go:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
+    '#w192go.in{background:' + GREEN + ';color:' + CREAM + ';}' +
+    '#w192go.in:hover{background:#0c332e;}' +
+    '#w192go .dot{width:8px;height:8px;border-radius:50%;background:' + TEAL + ';}' +
+    '#w192go.in .dot{background:' + GOLD + ';}' +
+    '#w192go .t{font-weight:500;opacity:.85;}' +
+    '@media (max-width:740px){#w192go .t{display:none;}#w192go{padding:7px 12px;margin-right:6px;}}' +
+    /* the sheet */
+    '.w192m h3{font-family:' + HEAD + ';font-weight:600;font-size:26px;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 4px;}' +
+    '.w192m .m-sub{margin:0 0 6px;line-height:1.5;font-size:13.5px;color:var(--wa-text);}' +
+    '.w192m .hrs{display:inline-block;font-family:' + HEAD + ';font-size:22px;color:' + GREEN + ';font-weight:700;letter-spacing:.3px;margin-right:6px;}' +
+    '.w192m h4{font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);margin:14px 0 8px;display:flex;align-items:center;gap:8px;}' +
+    '.w192m h4 .k{display:inline-block;background:rgba(220,165,39,.22);color:' + GREEN + ';border-radius:999px;padding:2px 8px;font-size:10px;letter-spacing:.6px;}' +
+    '.w192m .bul{display:flex;flex-direction:column;gap:8px;margin:6px 0 4px;}' +
+    '.w192m .bul .b{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:8px;align-items:center;}' +
+    '.w192m .bul .b .dot{width:8px;height:8px;border-radius:50%;background:' + GOLD + ';}' +
+    '.w192m .bul .b input{width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid rgba(16,63,57,.18);border-radius:10px;font-size:14px;font-family:' + BODY + ';}' +
+    '.w192m .bul .b input:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
+    '.w192m .bul .b .rm{font-size:12px;color:var(--wa-muted);cursor:pointer;background:none;border:none;padding:4px 6px;}' +
+    '.w192m .bul .b .rm:hover{color:' + FLAG + ';}' +
+    '.w192m .addl{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;display:inline-block;margin:2px 0 4px;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
+    '.w192m .quiet{font-size:12px;color:var(--wa-muted);margin:4px 0 0;line-height:1.5;}' +
+    '.w192m .empty{font-size:13px;color:var(--wa-muted);margin:4px 0 6px;line-height:1.5;}' +
+    '.w192m textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px 14px;border:1px solid rgba(16,63,57,.2);border-radius:14px;font-size:15px;line-height:1.5;font-family:' + BODY + ';resize:vertical;}' +
+    '.w192m textarea:focus{outline:none;border-color:' + GREEN + ';box-shadow:0 0 0 3px rgba(16,63,57,.12);}' +
+    '.w192m .sayrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;}' +
+    '.w192m .mic,.w192m .addb{display:inline-flex;align-items:center;gap:8px;font-family:' + BODY + ';font-size:13px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.08);border:none;border-radius:999px;padding:9px 14px;cursor:pointer;}' +
+    '.w192m .mic:hover{background:rgba(16,63,57,.14);}' +
+    '.w192m .addb{background:rgba(220,165,39,.22);}' +
+    '.w192m .addb:hover{background:rgba(220,165,39,.36);}' +
+    '.w192m .addb[disabled]{opacity:.6;cursor:default;}' +
+    '.w192m .mic.on{background:' + FLAG + ';color:' + CREAM + ';animation:w192pulse 1.2s ease-in-out infinite;}' +
+    '@keyframes w192pulse{0%{box-shadow:0 0 0 0 rgba(179,64,47,.45);}70%{box-shadow:0 0 0 12px rgba(179,64,47,0);}100%{box-shadow:0 0 0 0 rgba(179,64,47,0);}}' +
+    '@media (prefers-reduced-motion:reduce){.w192m .mic.on{animation:none;}}' +
+    '.w192m .mic .ic{width:16px;height:16px;border-radius:50%;background:currentColor;display:inline-block;position:relative;}' +
+    '.w192m .mic .ic:after{content:"";position:absolute;left:4px;top:4px;width:8px;height:8px;border-radius:50%;background:' + CREAM + ';opacity:.9;}' +
+    '.w192m .mic.on .ic:after{background:' + FLAG + ';}' +
+    '.w192m .tk{display:flex;flex-direction:column;gap:6px;}' +
+    '.w192m .tk label{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start;background:rgba(16,63,57,.05);border-radius:12px;padding:9px 12px;cursor:pointer;font-size:13.5px;line-height:1.45;}' +
+    '.w192m .tk label.sug{background:rgba(220,165,39,.16);}' +
+    '.w192m .tk label input{width:16px;height:16px;margin-top:2px;accent-color:' + GREEN + ';}' +
+    '.w192m .tk label b{display:block;font-weight:600;color:var(--wa-text);}' +
+    '.w192m .tk label span{display:block;font-size:12px;color:var(--wa-muted);margin-top:2px;}' +
+    '.w192m .more{font-size:12.5px;color:' + GREEN + ';cursor:pointer;text-decoration:underline;margin:6px 0 0;display:inline-block;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
+    '.w192m .share{display:flex;gap:8px;flex-wrap:wrap;}' +
+    '.w192m .share label{position:relative;display:inline-flex;align-items:center;gap:6px;border:1.5px solid rgba(16,63,57,.18);border-radius:999px;padding:8px 14px;font-size:13px;font-weight:600;color:' + GREEN + ';cursor:pointer;background:var(--wa-card);}' +
+    '.w192m .share label.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
+    '.w192m .share label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:2px;}' +
+    '.w192m .share label input{position:absolute;opacity:0;width:1px;height:1px;}' +
+    '.w192m .share label small{font-weight:500;opacity:.8;}' +
+    '.w192m .w113acts{margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
+    '.w192m .w113acts .w113ok{font-size:12px;color:var(--wa-muted);align-self:center;}' +
+    '.w192m .w113acts .skip{background:none;border:none;color:var(--wa-muted);font-size:12.5px;cursor:pointer;text-decoration:underline;padding:6px 4px;font-family:' + BODY + ';}' +
+    '.w192m .w113acts .skip:hover{color:' + FLAG + ';}' +
+    '.w192m .pv{display:inline-block;background:rgba(111,100,171,.16);color:' + PURPLE + ';border-radius:999px;padding:2px 10px;font-family:' + BODY + ';font-size:11px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;margin-left:8px;vertical-align:middle;}' +
+    /* Home: In the loop */
+    '#w192feed{margin:0 0 16px;}' +
+    '#w192feed .w192sub{font-size:12.5px;color:var(--wa-muted);margin:-4px 0 10px;line-height:1.5;}' +
+    '#w192feed .w192l{display:flex;flex-direction:column;gap:8px;}' +
+    '#w192feed .w192e{display:grid;grid-template-columns:30px minmax(0,1fr);gap:10px;align-items:start;background:rgba(16,63,57,.04);border-radius:12px;padding:10px 12px;}' +
+    '#w192feed .w192e .who{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--wa-text);}' +
+    '#w192feed .w192e .who b{font-weight:700;color:' + GREEN + ';}' +
+    '#w192feed .w192e .who .pl{display:inline-block;border-radius:999px;padding:1px 8px;color:' + CREAM + ';font-size:10.5px;font-weight:700;letter-spacing:.3px;}' +
+    '#w192feed .w192e .who .d{font-size:11.5px;color:var(--wa-muted);}' +
+    '#w192feed .w192e ul{margin:5px 0 0;padding:0 0 0 16px;font-size:13px;line-height:1.45;color:var(--wa-text);}' +
+    '#w192feed .w192e ul li::marker{color:' + GOLD + ';}' +
+    '#w192feed .w192e .cl{font-size:12px;color:' + TEAL + ';margin:4px 0 0;font-weight:600;}' +
+    '.w192av{width:30px;height:30px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';display:inline-flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:13px;font-weight:700;overflow:hidden;}' +
+    '.w192av img{width:100%;height:100%;object-fit:cover;display:block;}' +
+    '#w192feed .w192more{display:inline-block;margin:8px 0 0;font-size:12px;font-weight:700;color:' + GREEN + ';cursor:pointer;background:none;border:none;padding:0;font-family:' + BODY + ';}' +
+    '#w192feed .w192more:hover{text-decoration:underline;}' +
+    '#w192feed .mp-empty{font-size:13px;color:var(--wa-muted);}' +
+    /* the person page: Their loop */
+    '#w192their ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px;}' +
+    '#w192their li{background:rgba(16,63,57,.04);border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.45;}' +
+    '#w192their li .d{font-size:11.5px;color:var(--wa-muted);display:block;margin-bottom:2px;}' +
+    '#w192their li span.b{display:block;}' +
+    '#w192their li span.b:before{content:"\\2022";color:' + GOLD + ';margin-right:6px;}' +
+    '#w192their .empty{font-size:13px;color:var(--wa-muted);margin:0;}';
+  document.head.appendChild(css);
+
+  /* ---------- helpers ---------- */
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; }
+  function me() { var em = myEmail(); return members().filter(function (x) { return lower(x.email) === em; })[0] || null; }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function ck() { return window.w116jCk || null; }
+  function fmtMins(m) { m = Math.max(0, Math.round(m)); var h = Math.floor(m / 60), r = m % 60; return h ? h + 'h ' + (r < 10 ? '0' : '') + r + 'm' : r + 'm'; }
+  function teamLabel(d) {
+    if (!d) return '';
+    try { if (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) return WA_TEAMS.label[d]; } catch (e) { /* fine */ }
+    try { if (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) return WA_TEAMS.labels[d]; } catch (e) { /* fine */ }
+    try { if (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) return DEPT_LABEL[d]; } catch (e) { /* fine */ }
+    return d === 'exec' ? 'Executive team' : d;
+  }
+  function teamColor(d) { try { if (window.WA_TEAMS && WA_TEAMS.color && WA_TEAMS.color[d]) return WA_TEAMS.color[d]; } catch (e) { /* fine */ } try { if (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) return DEPT_COLOR[d]; } catch (e) { /* fine */ } return GREEN; }
+  /* a day key (YYYY-MM-DD, Toronto) and how it reads: Today, Yesterday, Mon, Sep 29 */
+  function dayKey(d) { return d.toLocaleDateString('en-CA', { timeZone: TZ }); }
+  function dayLabel(v) {
+    if (!v) return '';
+    var key = /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : dayKey(new Date(v));
+    var now = new Date(), yest = new Date(now.getTime() - 864e5);
+    if (key === dayKey(now)) return 'Today';
+    if (key === dayKey(yest)) return 'Yesterday';
+    return new Date(key + 'T12:00:00Z').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }).replace(/\./g, '');
+  }
+  async function fn(name, body) {
+    var r = await db.functions.invoke(name, { body: body });
+    if (r && r.error) { var msg = ''; try { if (r.error.context && r.error.context.json) msg = (await r.error.context.json()).error; } catch (e) { /* fine */ } throw new Error(msg || r.error.message || 'failed'); }
+    if (!r || !r.data) throw new Error('no reply from the Hub');
+    if (r.data.error && r.data.ok !== true) throw new Error(r.data.error);
+    return r.data;
+  }
+  function SR() { return window.SpeechRecognition || window.webkitSpeechRecognition || null; }
+  function loopName() { return Q.allCh || Q.loopName || 'the-loop'; }
+  (async function () { try { var r = await db.from('app_config').select('value').eq('key', 'loop_channel').maybeSingle(); var v = r && r.data && String(r.data.value || '').replace(/^#/, '').trim(); if (v) Q.loopName = v; } catch (e) { /* default */ } })();
+  function onPerson() { return (/^#person\/(\d+)/.exec(location.hash || '') || [])[1] || null; }
+  function repaintPerson() { var id = onPerson(); if (id && typeof window.w116Person === 'function') { try { window.w116Person(id); } catch (e) { /* fine */ } } }
+
+  /* ---------- the button (repainted only when what it says changes) ---------- */
+  function mount() {
+    if (!staff()) return null;
+    var pill = document.querySelector('.wa-toolbar .pill.w115pill'); if (!pill) return null;
+    var b = document.getElementById('w192go');
+    if (!b) { b = document.createElement('button'); b.id = 'w192go'; b.type = 'button'; pill.insertAdjacentElement('beforebegin', b); }
+    return b;
+  }
+  function render() {
+    var b = mount(); if (!b) return;
+    var c = ck(); var open = c && c.open();
+    var cls, html, title, label;
+    if (open) {
+      var mins = (Date.now() - new Date(open.started_at).getTime()) / 60000;
+      cls = 'in'; html = '<span class="dot"></span>Close the loop <span class="t">&middot; ' + E(fmtMins(mins)) + '</span>';
+      title = 'You are in. Your time (' + fmtMins(mins) + ') is for your eyes only. Press to close the loop and share what moved.';
+      label = 'Close the loop';
+    } else {
+      cls = ''; html = '<span class="dot"></span>I’m in';
+      title = 'Starting work for Welfare Avenue? Press I’m in. Nothing is posted; the ring on your photo shows teammates you are around.';
+      label = 'I’m in';
+    }
+    if (b.className !== cls) b.className = cls;
+    if (b.__h !== html) { b.innerHTML = html; b.__h = html; }
+    if (b.title !== title) b.title = title;
+    if (b.getAttribute('aria-label') !== label) b.setAttribute('aria-label', label);
+  }
+  setInterval(render, 2000);
+  render(); setTimeout(render, 800); setTimeout(render, 2500);
+
+  /* ---------- I'm in: wave116j's toggle inserts the row; nothing is posted ---------- */
+  async function start() {
+    var c = ck(); if (!c || Q.busy || c.open()) return; Q.busy = true;
+    try {
+      await c.toggle();
+      var row = c.open();
+      render(); try { c.presence(); } catch (e) { /* fine */ }
+      if (row) {
+        toastS('You’re in. Close the loop when you finish.');
+        if (row.id) { try { fn('checkin-post', { action: 'start', checkin_id: row.id }); } catch (e) { /* nothing is posted anyway */ } }
+        repaintPerson();
+      }
+    } catch (e) { toastS('Could not start your session: ' + (e.message || e)); }
+    Q.busy = false;
+  }
+
+  /* ---------- Close the loop: the sheet ---------- */
+  function stopRec() { try { if (Q.rec) Q.rec.stop(); } catch (e) { /* fine */ } Q.listening = false; var b = document.getElementById('w192mic'); if (b) { b.classList.remove('on'); b.innerHTML = '<span class="ic"></span>Talk instead'; } }
+  function startRec() {
+    var R = SR(); if (!R) return;
+    try {
+      var rec = new R(); rec.lang = (navigator.language && /^fr/i.test(navigator.language)) ? 'fr-CA' : 'en-CA'; rec.continuous = true; rec.interimResults = true;
+      var ta = document.getElementById('w192say'); Q.finalText = ta ? ta.value : '';
+      rec.onresult = function (ev) {
+        var interim = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) { var t = ev.results[i][0].transcript; if (ev.results[i].isFinal) Q.finalText = (Q.finalText + ' ' + t).replace(/\s+/g, ' ').trim(); else interim += t; }
+        var box = document.getElementById('w192say'); if (box) { box.value = (Q.finalText + (interim ? ' ' + interim : '')).trim(); box.scrollTop = box.scrollHeight; }
+      };
+      rec.onerror = function (ev) { stopRec(); var h = document.getElementById('w192hint'); if (h) h.textContent = ev.error === 'not-allowed' ? 'The browser blocked the microphone. Allow it in the address bar, or type instead.' : 'Listening stopped (' + (ev.error || 'error') + '). Type or try again.'; };
+      rec.onend = function () { if (Q.listening) { try { rec.start(); } catch (e) { stopRec(); } } };
+      rec.start(); Q.rec = rec; Q.listening = true;
+      var b = document.getElementById('w192mic'); if (b) { b.classList.add('on'); b.innerHTML = '<span class="ic"></span>Listening&hellip; tap to stop'; }
+    } catch (e) { stopRec(); }
+  }
+  function readBullets() { var out = []; document.querySelectorAll('[data-w192b]').forEach(function (i) { var v = i.value.trim(); if (v) out.push(v.slice(0, 220)); }); return out; }
+  function readPicked() { var out = []; document.querySelectorAll('[data-w192t]').forEach(function (i) { if (i.checked) out.push(Number(i.getAttribute('data-w192t'))); }); return out; }
+  /* what is on the sheet now, kept before a repaint */
+  function keep() {
+    if (!document.getElementById('w192sheet')) return;
+    var raw = []; document.querySelectorAll('[data-w192b]').forEach(function (i) { raw.push(i.value); }); Q.bullets = raw;
+    Q.picked = {}; readPicked().forEach(function (id) { Q.picked[id] = true; });
+    var ta = document.getElementById('w192say'); if (ta) Q.text = ta.value;
+  }
+  function shareOpts() {
+    var o = [];
+    if (Q.teamCh) o.push({ k: 'team', t: 'My team', s: '#' + Q.teamCh });
+    o.push({ k: 'everyone', t: 'Everyone', s: '#' + loopName() });
+    o.push({ k: 'hub', t: 'Just the Hub', s: 'no Slack post' });
+    return o;
+  }
+  function sheetHtml() {
+    var bul = Q.bullets.map(function (b, i) { return '<div class="b"><span class="dot"></span><input type="text" data-w192b="' + i + '" value="' + E(b) + '" aria-label="Line ' + (i + 1) + ' of your note"><button type="button" class="rm" data-w192rm="' + i + '" title="Take this line out" aria-label="Take this line out">&#10005;</button></div>'; }).join('');
+    var draft = !Q.loaded ? '<p class="empty">Reading what moved…</p>'
+      : (Q.bullets.length ? '<div class="bul" id="w192bul">' + bul + '</div>' : '<p class="empty">Nothing on record for this session yet. Say or type what you got done below.</p>');
+    var hidden = Q.hidden ? '<p class="quiet">' + Q.hidden + (Q.hidden === 1 ? ' private item is' : ' private items are') + ' left out (confidential, board or one-on-one work). Add a line yourself if it should be shared.</p>' : '';
+    var sug = Q.suggest.map(function (s) { return '<label class="sug"><input type="checkbox" data-w192t="' + s.id + '"' + (Q.picked[s.id] ? ' checked' : '') + '><div><b>' + E(s.title) + '</b>' + (s.why ? '<span>' + E(s.why) + '</span>' : '') + '</div></label>'; }).join('');
+    var oth = Q.others.map(function (t) { return '<label><input type="checkbox" data-w192t="' + t.id + '"' + (Q.picked[t.id] ? ' checked' : '') + '><div><b>' + E(t.title) + '</b>' + (t.owner ? '<span>' + E(t.owner) + '</span>' : '') + '</div></label>'; }).join('');
+    var opts = shareOpts();
+    if (!opts.some(function (o) { return o.k === Q.share; })) Q.share = opts[0].k;
+    var share = opts.map(function (o) { return '<label class="' + (Q.share === o.k ? 'on' : '') + '"><input type="radio" name="w192s" data-w192s="' + o.k + '"' + (Q.share === o.k ? ' checked' : '') + '>' + E(o.t) + ' <small>&middot; ' + E(o.s) + '</small></label>'; }).join('');
+    return '<div class="w113modal w192m" id="w192sheet" role="dialog" aria-labelledby="w192h"><h3 id="w192h">Close the loop' + (Q.preview ? '<span class="pv">Walkthrough</span>' : '') + '</h3>' +
+      '<p class="m-sub"><span class="hrs">' + E(fmtMins(Q.minutes)) + '</span> on the Hub, for your eyes only. Here is what moved while you were in: keep what matters, add what the Hub could not see, then share.</p>' +
+      '<div id="w192draftbox"><h4>What moved <span class="k">From your records</span></h4>' + draft + hidden +
+      '<button type="button" class="addl" id="w192add">+ add a line</button></div>' +
+      '<div id="w192saybox"><h4>Anything the Hub could not see?</h4>' +
+      '<textarea id="w192say" aria-label="Anything the Hub could not see" placeholder="e.g. met Amanda about the flyers, she prints Friday; called the shelter back about Sunday">' + E(Q.text || '') + '</textarea>' +
+      '<div class="sayrow">' + (SR() ? '<button type="button" class="mic" id="w192mic"><span class="ic"></span>Talk instead</button>' : '') + '<button type="button" class="addb" id="w192tidy">Add to the note</button><span class="quiet" id="w192hint">' + (SR() ? 'Talking works in Chrome, Edge and Safari. Say it the way you would tell a teammate.' : 'This browser cannot listen; typing works the same.') + '</span></div></div>' +
+      (Q.suggest.length ? '<h4>Finished these? Tick to close them</h4><div class="tk" id="w192sug">' + sug + '</div>' : '') +
+      (Q.others.length ? '<button type="button" class="more" id="w192more">' + (Q.suggest.length ? 'Close other tasks too' : 'Close a task you finished') + '</button><div class="tk" id="w192oth" style="display:none;margin-top:8px">' + oth + '</div>' : '') +
+      '<div id="w192sharebox"><h4>Who sees it</h4><div class="share" role="radiogroup" aria-label="Who sees it">' + share + '</div>' +
+      '<p class="quiet">No clock time and no hours in the post. Every note also shows on Home, in the loop.</p></div>' +
+      '<div class="w113acts"><span class="w113ok" id="w192ok"></span><span style="flex:1"></span><button type="button" class="skip" id="w192skip">Close without a note</button><button class="btn primary" id="w192close">Close the loop</button></div></div>';
+  }
+  function paint() {
+    var sig = sheetHtml();
+    if (!document.getElementById('w192sheet') || Q.sig !== sig) { openModal(sig); Q.sig = sig; }
+  }
+  function begin(row) {
+    Q.row = row; Q.preview = false; Q.bullets = []; Q.suggest = []; Q.others = []; Q.picked = {}; Q.finalText = ''; Q.text = ''; Q.hidden = 0; Q.loaded = false;
+    Q.teamCh = null; Q.allCh = null; Q.touched = false; Q.share = 'everyone';
+    var endMs = row.ended_at ? new Date(row.ended_at).getTime() : Date.now();
+    Q.minutes = Math.max(1, Math.round((endMs - new Date(row.started_at).getTime()) / 60000));
+  }
+  async function openSheet(row) {
+    begin(row); paint();
+    try {
+      var r = await fn('checkin-post', { action: 'draft', checkin_id: row.id });
+      if (Q.row !== row || Q.preview) return;
+      keep();
+      var mine = Q.bullets.map(function (b) { return String(b || '').trim(); }).filter(Boolean);
+      var drafted = (r.bullets || []).slice();
+      Q.bullets = drafted.concat(mine.filter(function (b) { return drafted.indexOf(b) < 0; }));
+      Q.hidden = Number(r.hidden || 0); Q.minutes = r.minutes || Q.minutes;
+      Q.others = (r.open_tasks || []).slice();
+      Q.teamCh = r.team_channel || null; Q.allCh = r.everyone_channel || null;
+      if (!Q.touched) Q.share = Q.teamCh ? 'team' : 'everyone';
+      Q.loaded = true; paint();
+    } catch (e) {
+      if (Q.row !== row) return;
+      keep(); Q.loaded = true; Q.bullets = Q.bullets.filter(function (b) { return String(b || '').trim(); }); paint();
+      var ok = document.getElementById('w192ok'); if (ok) ok.textContent = 'The Hub could not read what moved (' + (e.message || e) + '). Say or type it instead.';
+    }
+  }
+  async function tidy() {
+    if (Q.preview) return;
+    keep();
+    var text = String(Q.text || '').trim();
+    var ok = document.getElementById('w192ok');
+    if (text.length < 3) { if (ok) ok.textContent = 'Say or type a line first, then Add to the note.'; return; }
+    stopRec();
+    if (Q.busy) return; Q.busy = true; if (ok) ok.textContent = 'Folding that into your note…';
+    var btn = document.getElementById('w192tidy'); if (btn) btn.disabled = true;
+    try {
+      var r = await fn('checkin-post', { action: 'tidy', checkin_id: Q.row ? Q.row.id : null, text: text, bullets: readBullets() });
+      Q.bullets = (r.bullets || []).slice(); Q.suggest = r.suggest || [];
+      Q.others = (r.open_tasks || []).filter(function (t) { return !Q.suggest.some(function (s) { return s.id === t.id; }); });
+      Q.suggest.forEach(function (s) { Q.picked[s.id] = true; });
+      Q.text = ''; Q.finalText = ''; Q.loaded = true; Q.busy = false; paint();
+      return;
+    } catch (e) { if (ok) ok.textContent = 'Could not fold that in (' + (e.message || e) + '). Add it as a line instead.'; if (btn) btn.disabled = false; }
+    Q.busy = false;
+  }
+  async function finish(skipped) {
+    var c = ck(); if (!c || !Q.row || Q.busy || Q.preview) return;
+    keep(); stopRec();
+    var bullets = skipped ? [] : readBullets(), closeIds = skipped ? [] : readPicked(), share = skipped ? 'hub' : Q.share;
+    if (!skipped && String(Q.text || '').trim().length >= 3) bullets.push(String(Q.text).trim().slice(0, 220));   /* words typed but not folded in still go */
+    var ok = document.getElementById('w192ok');
+    if (!skipped && !bullets.length) { if (ok) ok.textContent = 'Add a line, or close without a note.'; return; }
+    Q.busy = true;
+    if (ok) ok.textContent = skipped ? 'Closing…' : 'Sharing…';
+    var go = document.getElementById('w192close'); if (go) go.disabled = true;
+    try {
+      var r = await fn('checkin-post', { action: 'close', checkin_id: Q.row.id, bullets: bullets, close_task_ids: closeIds, share_to: share, skipped: !!skipped });
+      c.clear(); closeModal(); Q.sig = '';
+      var where = skipped ? 'Loop closed, no note shared.'
+        : r.share_to === 'hub' ? 'Loop closed. Your note is on Home.'
+        : r.posted ? 'Loop closed and shared in #' + r.channel + '.'
+        : 'Loop closed. Your note is on Home; Slack did not take it (' + (r.error || 'unknown') + ').';
+      var n = (r.closed_ids || []).length;
+      toastS(where + (n ? ' ' + n + (n === 1 ? ' task closed.' : ' tasks closed.') : ''));
+      try {
+        var shut = (r.closed_ids || []).map(String);
+        if (shut.length && typeof DB_TASKS !== 'undefined' && DB_TASKS) { var nowIso = new Date().toISOString(); DB_TASKS.forEach(function (t) { if (shut.indexOf(String(t.id)) >= 0) { t.done = true; t.closed_at = t.closed_at || nowIso; } }); if (typeof renderMyPage === 'function' && document.getElementById('mpBody')) renderMyPage(); }
+      } catch (e) { /* fine */ }
+      Q.row = null; render(); try { c.presence(); } catch (e) { /* fine */ }
+      F.at = 0; injectFeed(true); repaintPerson();
+    } catch (e) {
+      if (ok) ok.textContent = 'Could not close the loop: ' + (e.message || e);
+      if (go) go.disabled = false;
+    }
+    Q.busy = false;
+  }
+
+  /* ---------- the walkthrough's preview of the sheet (nothing is read or written) ---------- */
+  function preview() {
+    var d = (me() || {}).department;
+    begin({ id: 0, started_at: new Date(Date.now() - 95 * 60000).toISOString() });
+    Q.preview = true; Q.loaded = true; Q.hidden = 1;
+    var chans = { opsmtl: 'operations-mtl', opsto: 'general-toronto', progdev: 'program-development', marketing: 'social-media', fundraising: 'fundraising', hr: 'human-resources', board: 'board-of-directors' };
+    Q.teamCh = chans[d] || 'operations-mtl'; Q.share = 'team';
+    Q.bullets = ['Closed: Book the kitchen for Sunday; Send the volunteer reminder', 'Commented on: Flyers for the gift basket drive', 'Joined: Operations Montreal meeting'];
+    Q.suggest = [{ id: -1, title: 'Confirm the drivers for Sunday', why: 'you said the drivers are confirmed' }]; Q.picked = { '-1': true }; Q.others = [];
+    paint();
+  }
+  function endPreview() { if (!Q.preview) return; Q.preview = false; Q.row = null; Q.sig = ''; try { if (document.getElementById('w192sheet')) closeModal(); } catch (e) { /* fine */ } }
+  /* the tour leaving (Finish, Esc or the x) closes the preview with it */
+  try { new MutationObserver(function () { if (Q.preview && !document.querySelector('.w122tp')) endPreview(); }).observe(document.body, { childList: true }); } catch (e) { /* fine */ }
+
+  /* ---------- wiring: taken at the window, before wave116q's document handlers ---------- */
+  window.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('#w192go') || t.closest('#w116jck') || t.closest('[data-w116ka="ck"]');
+    if (!b) return;
+    var c = ck(); if (!c) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (c.busy() || Q.busy) return;
+    if (Q.preview) endPreview();
+    if (c.open()) openSheet(c.open()); else start();
+  }, true);
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !document.getElementById('w192sheet')) return;
+    if (t.closest('#w192mic')) { if (Q.preview) return; if (Q.listening) stopRec(); else startRec(); return; }
+    if (t.closest('#w192tidy')) { tidy(); return; }
+    if (t.closest('#w192skip')) { if (Q.preview) { endPreview(); return; } finish(true); return; }
+    if (t.closest('#w192close')) { if (Q.preview) { endPreview(); return; } finish(false); return; }
+    if (t.closest('#w192add')) { keep(); Q.bullets.push(''); Q.loaded = true; paint(); var last = document.querySelectorAll('[data-w192b]'); if (last.length) last[last.length - 1].focus(); return; }
+    var rm = t.closest('[data-w192rm]'); if (rm) { keep(); Q.bullets.splice(Number(rm.getAttribute('data-w192rm')), 1); paint(); return; }
+    if (t.closest('#w192more')) { var o = document.getElementById('w192oth'); if (o) o.style.display = o.style.display === 'none' ? '' : 'none'; return; }
+  });
+  document.addEventListener('change', function (e) {
+    var s = e.target && e.target.closest && e.target.closest('[data-w192s]'); if (!s) return;
+    Q.share = s.getAttribute('data-w192s'); Q.touched = true;
+    document.querySelectorAll('#w192sheet .share label').forEach(function (l) { var i = l.querySelector('[data-w192s]'); l.classList.toggle('on', !!(i && i.checked)); });
+  });
+
+  /* ---------- the shared notes: loop_feed() returns what moved, never a time or hours ---------- */
+  async function feedRows(days, email) {
+    try {
+      var r = await db.rpc('loop_feed', email ? { p_days: days, p_email: email } : { p_days: days });
+      if (r && !r.error && Array.isArray(r.data)) return r.data;
+    } catch (e) { /* the table, for an older database */ }
+    try {
+      var q = db.from('hub_checkins').select('id, email, name, department, ended_at, summary, share_to');
+      if (email) q = q.eq('email', lower(email));
+      var t = await q.order('ended_at', { ascending: false }).limit(40);
+      return ((t && t.data) || []).filter(function (x) { return x.ended_at && x.summary && Array.isArray(x.summary.bullets) && x.summary.bullets.length; })
+        .map(function (x) { return { id: x.id, email: x.email, name: x.name, department: x.department, day: dayKey(new Date(x.ended_at)), bullets: x.summary.bullets, closed: (x.summary.closed || []).length, closed_titles: [], share_to: x.share_to }; });
+    } catch (e) { return []; }
+  }
+  async function loadFeed(force) {
+    if (!force && F.rows && Date.now() - F.at < 3 * 60000) return F.rows;
+    if (F.p) return F.p;
+    F.p = (async function () { var rows = await feedRows(7, null); F.rows = rows; F.at = Date.now(); F.p = null; return rows; })();
+    return F.p;
+  }
+  function avatar(p) {
+    try { if (window.w116Avatar) { var h = window.w116Avatar(p, 30, ''); if (h) return h; } } catch (e) { /* fine */ }
+    var ini = String(p.name || '?').trim().split(/\s+/).map(function (x) { return x.charAt(0); }).join('').slice(0, 2).toUpperCase();
+    return '<span class="w192av">' + (p.avatar_url ? '<img src="' + E(p.avatar_url) + '" alt="">' : E(ini)) + '</span>';
+  }
+  function bulletsOf(x) { var b = x.bullets; if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = []; } } return Array.isArray(b) ? b : []; }
+  function feedHtml(rows, all) {
+    if (!rows) return '<p class="mp-empty">Loading the loop…</p>';
+    if (!rows.length) return '<p class="mp-empty">No notes this week yet. Press I’m in when you start and Close the loop when you finish: your note shows here.</p>';
+    var shown = all ? rows : rows.slice(0, 5);
+    return '<div class="w192l">' + shown.map(function (x) {
+      var em = lower(x.email); var m = members().filter(function (y) { return lower(y.email) === em; })[0] || { name: x.name || em, email: em };
+      var dept = x.department || m.department;
+      var titles = Array.isArray(x.closed_titles) ? x.closed_titles : [];
+      var n = Number(x.closed || 0);
+      return '<div class="w192e">' + avatar(m) + '<div><div class="who"><b>' + E(m.name || x.name || em) + '</b>' + (dept ? '<span class="pl" style="background:' + E(teamColor(dept)) + '">' + E(teamLabel(dept)) + '</span>' : '') + '<span class="d">' + E(dayLabel(x.day)) + '</span></div>' +
+        '<ul>' + bulletsOf(x).slice(0, 6).map(function (b) { return '<li>' + E(b) + '</li>'; }).join('') + '</ul>' +
+        (n ? '<div class="cl">Closed ' + n + (n === 1 ? ' task' : ' tasks') + (titles.length ? ': ' + E(titles.slice(0, 3).join(', ')) : '') + '</div>' : '') + '</div></div>';
+    }).join('') + '</div>' + (rows.length > shown.length ? '<button type="button" class="w192more" id="w192feedmore">Show all ' + rows.length + ' from this week</button>' : '');
+  }
+  function drawFeed() { var s = document.getElementById('w192feed'); if (!s) return; s.innerHTML = '<h3>In the loop</h3><p class="w192sub">What moved this week, from everyone’s notes. Times and hours stay with each person.</p>' + feedHtml(F.rows, s.__all); }
+  function injectFeed(force) {
+    var page = document.getElementById('mypage'); if (!page || !staff()) return;
+    var sec = document.getElementById('w192feed');
+    if (!sec) {
+      sec = document.createElement('div'); sec.className = 'mp-sec'; sec.id = 'w192feed';
+      var anchor = document.getElementById('w116home') || page.querySelector('.mp-online') || page.querySelector('.mp-chips') || page.querySelector('.mp-head');
+      if (anchor && anchor.parentNode) anchor.insertAdjacentElement('afterend', sec);
+      else { var grid = page.querySelector('.mp-grid'); var col = grid ? (grid.querySelector('.w74col') || grid) : null; if (!col) return; col.insertBefore(sec, col.firstChild); }
+    }
+    drawFeed();
+    loadFeed(force).then(drawFeed);
+  }
+  document.addEventListener('click', function (e) { var t = e.target; if (t && t.id === 'w192feedmore') { var s = document.getElementById('w192feed'); if (s) { s.__all = true; drawFeed(); } } });
+  if (typeof renderMyPage === 'function') {
+    var __rmp192 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rmp192.apply(this, arguments);
+      try { injectFeed(false); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  setTimeout(function () { try { if (document.getElementById('mpBody')) injectFeed(false); } catch (e) { /* fine */ } }, 2500);
+
+  /* ---------- the person page: Their loop (Your loop on your own) ---------- */
+  function personCard() {
+    var id = onPerson(); if (!id) return;
+    var right = document.getElementById('w116kright'); if (!right || document.getElementById('w192their')) return;
+    var m = members().filter(function (x) { return String(x.id) === String(id); })[0]; if (!m || !m.email) return;
+    var self = lower(m.email) === myEmail();
+    var card = document.createElement('div'); card.className = 'w116card'; card.id = 'w192their';
+    card.innerHTML = '<h3>' + (self ? 'Your loop' : 'Their loop') + '</h3><p class="empty">Loading…</p>';
+    var after = document.getElementById('w116khours') || document.getElementById('w116kabout');
+    if (after && after.parentNode === right) after.insertAdjacentElement('afterend', card); else right.insertBefore(card, right.firstChild);
+    feedRows(60, m.email).then(function (rows) {
+      var el = document.getElementById('w192their'); if (!el) return;
+      rows = (rows || []).slice(0, 5);
+      el.innerHTML = '<h3>' + (self ? 'Your loop' : 'Their loop') + '</h3>' + (rows.length ? '<ul>' + rows.map(function (x) { return '<li><span class="d">' + E(dayLabel(x.day)) + '</span>' + bulletsOf(x).slice(0, 4).map(function (b) { return '<span class="b">' + E(b) + '</span>'; }).join('') + '</li>'; }).join('') + '</ul>' : '<p class="empty">' + (self ? 'No notes yet. Close the loop with a few lines and they show here.' : 'No notes shared yet.') + '</p>');
+    });
+  }
+  try { new MutationObserver(function () { if (onPerson() && staff()) personCard(); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+
+  /* ---------- the walkthrough: the page tour "loop" ---------- */
+  function tours() {
+    try {
+      var T = window.w122 && window.w122.tours; if (!T) return false;
+      if (T.loop) return true;
+      T.loop = { tab: 'mypage', icon: 'refresh', hash: '#mypage', steps: [
+        { c: 1, t: 'The Loop', p: 'Two buttons, one habit: I’m in when you start working for Welfare Avenue, Close the loop when you finish. This one-minute walkthrough shows both. It is not a timeclock: the note you share carries what moved, never your hours.' },
+        { s: '#w192go', t: 'I’m in', p: 'Press it when you start: a meeting, your onboarding, a task. Nothing is posted anywhere. The ring on your photo shows teammates you are around, and your time counts for you, on your own page and for HR.', go: function () { endPreview(); } },
+        { s: '#w192draftbox', t: 'What moved', p: 'When you close the loop, the Hub drafts your note from your own records: tasks closed or opened, requests, meetings joined, Academy modules finished. Keep what matters and change any line. Private work (confidential, board, one-on-ones) is never pre-filled.', go: function () { preview(); } },
+        { s: '#w192saybox', t: 'Add what the Hub could not see', p: 'A call, an email thread, a conversation. Say it or type it, and Add to the note turns it into lines and spots the tasks you finished.' },
+        { s: '#w192sug', t: 'Tick what is finished', p: 'The tasks your words show are done are suggested here. Ticked tasks close themselves when you close the loop.', opt: 1 },
+        { s: '#w192sharebox', t: 'Who sees it', p: 'Your team’s channel by default, everyone in the Loop channel, or just the Hub. Every note also shows on Home, so nothing is lost.' },
+        { s: '#w192close', t: 'Close the loop', p: 'Your note goes where you chose, with no clock time and no hours. Close without a note ends your session and shares nothing.' },
+        { c: 1, t: 'Your hours are yours', p: 'They show on your own page and to HR, for your records and your balance. They never go in the post. That is the whole thing: I’m in, close the loop.' }
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  if (!tours()) { setTimeout(tours, 1500); setTimeout(tours, 5000); }
+
+  window.w192 = {
+    start: start,
+    open: function () { var c = ck(); if (c && c.open()) openSheet(c.open()); },
+    openRow: function (row) { if (row && row.id) openSheet(row); },
+    preview: preview, endPreview: endPreview,
+    feed: function (f) { return injectFeed(!!f); },
+    state: function () { return { row: Q.row, bullets: Q.bullets.slice(), suggest: Q.suggest.slice(), share: Q.share, teamCh: Q.teamCh, allCh: Q.allCh, preview: Q.preview, loaded: Q.loaded, minutes: Q.minutes, feed: F.rows }; }
+  };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

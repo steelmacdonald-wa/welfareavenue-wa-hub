@@ -208,8 +208,11 @@
   async function refreshPresence() {
     try { if (typeof waLoadPresence === 'function') await waLoadPresence(); } catch (e) { /* fine */ }
     try {
-      var r = await db.from('hub_checkins').select('email').is('ended_at', null);
-      J.checked = {}; ((r && r.data) || []).forEach(function (x) { J.checked[lower(x.email)] = 1; });
+      /* wave192: who is in comes from loop_in_now() (emails only, no times); session rows are the person's own and HR's */
+      var ems = null;
+      try { var q = await db.rpc('loop_in_now'); if (q && !q.error && Array.isArray(q.data)) ems = q.data.map(function (x) { return typeof x === 'string' ? x : (x && (x.email || x.loop_in_now)) || ''; }); } catch (e2) { ems = null; }
+      if (!ems) { var r = await db.from('hub_checkins').select('email').is('ended_at', null); ems = ((r && r.data) || []).map(function (x) { return x.email; }); }
+      J.checked = {}; ems.forEach(function (em) { if (em) J.checked[lower(em)] = 1; });
     } catch (e) { /* fine */ }
     renderPresence();
   }
