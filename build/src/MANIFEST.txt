@@ -196,6 +196,8 @@
 171_wave171
 # 180_wave180: announcements that lead to a poll or a short form the team answers (Steel, 29/09/26): the card at the top of Home (#w180card) with the announcements for this person, a poll answered with a tap, a short form in a window, the totals once answered when the poster allows; See the answers for the poster, leaders, HR and admins (who chose what unless anonymous, who has not answered, a CSV); Post an announcement (leaders to their team, the leaders or everyone; HR and admins to anyone) with the one Slack post (team-inbox). #announce/<id> opens one. Numbered 180: another session ships 171 onwards tonight. The What's new link lives in 116g.
 180_wave180
+# 177_wave177: confirm your next team meeting from Home (Steel, 30/09/26): a pop-up (#w177pop) over Home asks about the next team meeting (hub_events.department) in 7 days the person has not answered, Accept or I can't make it, the reply goes to Google Calendar through hub-connect rsvp (switching Google Calendar on when it is off), with the note to tell the leader (the organizer) 24 hours before.
+177_wave177
 # 181_wave181: the HR centre's Analytics (HR and admins): who has been part of Welfare Avenue and for how long, from the roster and Slack's member export (hr_people_tenure_v, hr_slack_accounts): the team over time, each fiscal year, how long people stay, by team, Worth a look, everyone with a sheet per person, a CSV, and Import a new Slack export. The rail icon lives in 153.
 181_wave181
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.

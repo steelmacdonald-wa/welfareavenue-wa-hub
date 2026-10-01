@@ -1,0 +1,241 @@
+/* =====================================================================
+   WA v177 Confirm your next team meeting from Home (01/10/26)
+   =====================================================================
+   Steel (30/09/26): "When a member is on their home page could you prompt them with confirming their attendance to the
+   next team meeting so that the accept button is click on google calendar". His answers: the next team meeting (a meeting
+   tied to a team, hub_events.department) in the next 7 days that they have not answered; two choices, Accept and I can't
+   make it, with a note to let their leader know at least 24 hours before; Accept switches on their Google Calendar link
+   in one go when it is off (said on the card; Settings turns it off). Then (30/09/26): "I'd rather it be a pop up rather
+   than a section in the home page. A pop will prompt them to answer it".
+
+   Where: a pop-up over Home (#w177pop holding the dialog #w177card), a moment after Home opens, never on top of another
+   window. "Ask me later" (or Escape, or the x) closes it until they next come back to Home. The reply goes to Google
+   Calendar as them (hub-connect rsvp, the domain-wide delegation of wave116j), so the organizer sees it like any reply;
+   the pop-up then says so and closes. Their leader is the meeting's organizer. Nothing else is sent on their behalf.
+   ===================================================================== */
+(function () {
+  if (window.__wa177) return; window.__wa177 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', FLAG = '#B3402F', INK = '#1F201E';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var DAYS = 7, SKIP = ['hub@welfareavenue.com', 'loom@welfareavenue.com', 'admin@welfareavenue.com', 'wa-hub-drive@welfareavenue.com'];
+  var S = { list: null, at: 0, p: null, busy: false, done: null, err: '', later: {}, quiet: false, timer: null };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function tick() { try { return performance.now(); } catch (e) { return Date.now(); } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; }
+  function nameOf(em) {
+    em = lower(em); var m = members().filter(function (x) { return lower(x.email) === em; })[0];
+    return m && m.name ? String(m.name).trim().split(/\s+/)[0] : (em ? em.split('@')[0].split('.')[0].replace(/^./, function (c) { return c.toUpperCase(); }) : '');
+  }
+  function teamLabel(d) { try { return (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || d; } catch (e) { return d; } }
+  function when(iso) {
+    var d = new Date(iso); if (isNaN(d)) return '';
+    var o = { timeZone: 'America/Toronto' };
+    var day = d.toLocaleDateString('en-CA', Object.assign({ weekday: 'long', month: 'long', day: 'numeric' }, o));
+    var t = d.toLocaleTimeString('en-CA', Object.assign({ hour: 'numeric', minute: '2-digit' }, o)).replace(/\./g, '').replace(/\s?(a|p)m$/i, function (x) { return ' ' + x.trim().toLowerCase(); });
+    var k = function (x) { return x.toLocaleDateString('en-CA', o); };
+    var now = new Date(), tom = new Date(now.getTime() + 864e5);
+    var rel = k(d) === k(now) ? 'Today' : k(d) === k(tom) ? 'Tomorrow' : day;
+    return rel + ' at ' + t;
+  }
+  function myAttendee(e, em) { return (e.attendees || []).filter(function (a) { return lower(a.email) === em; })[0] || null; }
+  function organizer(e) {
+    var o = (e.attendees || []).filter(function (a) { return a.organizer; })[0];
+    return lower((o && o.email) || e.organizer || '');
+  }
+
+  /* the next team meeting this person has not answered (within DAYS) */
+  function pick() {
+    var em = myEmail(); if (!em || !S.list) return null;
+    var now = Date.now();
+    var dismissed = S.done && S.done.id;
+    return S.list.filter(function (e) {
+      if (!e.department || e.status === 'cancelled' || e.all_day) return false;
+      if (new Date(e.start_at).getTime() <= now) return false;
+      if (String(e.id) === String(dismissed)) return false;
+      if (organizer(e) === em) return false;
+      var a = myAttendee(e, em); if (!a) return false;
+      return !a.status || a.status === 'needsAction';
+    })[0] || null;
+  }
+  async function load(force) {
+    var em = myEmail(); if (!em || !staff()) { S.list = null; return null; }
+    if (!force && S.list && Date.now() - S.at < 5 * 60000) return S.list;
+    if (S.p) return S.p;
+    S.p = (async function () {
+      try {
+        var from = new Date().toISOString(), to = new Date(Date.now() + DAYS * 864e5).toISOString();
+        var r = await db.from('hub_events').select('id,summary,start_at,end_at,all_day,status,department,organizer,attendees,attendee_emails,meet_link,html_link')
+          .gte('start_at', from).lte('start_at', to).not('department', 'is', null).contains('attendee_emails', [em]).order('start_at').limit(20);
+        if (r && !r.error) { S.list = r.data || []; S.at = Date.now(); }
+      } catch (e) { /* offline: keep what we had */ }
+      S.p = null; return S.list;
+    })();
+    return S.p;
+  }
+
+  function css() {
+    if (document.getElementById('w177css')) return;
+    var st = document.createElement('style'); st.id = 'w177css';
+    st.textContent = ''
+      + '#w177pop{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(16,32,30,.48);animation:w177in .18s ease-out;}'
+      + '@keyframes w177in{from{opacity:0}to{opacity:1}}'
+      + '#w177card{position:relative;width:min(520px,100%);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;border-radius:20px;background:' + CREAM + ';border-top:6px solid ' + GOLD + ';padding:22px 22px 18px;font-family:inherit;color:' + INK + ';box-shadow:0 24px 60px rgba(0,0,0,.28);}'
+      + '#w177card .x{position:absolute;top:10px;right:10px;width:34px;height:34px;border-radius:50%;border:0;background:transparent;color:#5d5b57;font-size:22px;line-height:1;cursor:pointer;padding:0;}'
+      + '#w177card .x:hover{background:rgba(16,63,57,.08);}'
+      + '#w177card .k{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GREEN + ';font-weight:800;margin:0 36px 0 0;}'
+      + '#w177card h3{font-family:' + HEAD + ';font-size:28px;line-height:1.08;margin:4px 0 6px;color:' + GREEN + ';text-transform:uppercase;letter-spacing:.3px;}'
+      + '#w177card .w{margin:0 0 12px;font-size:14.5px;color:' + INK + ';}'
+      + '#w177card .w a{color:' + GREEN + ';font-weight:700;margin-left:8px;}'
+      + '#w177card .q{font-weight:700;font-size:16px;margin:0 0 10px;}'
+      + '#w177card .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}'
+      + '#w177card .row button{border:0;border-radius:999px;padding:11px 20px;font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;flex:1 1 160px;}'
+      + '#w177card button.yes{background:' + GREEN + ';color:' + CREAM + ';}'
+      + '#w177card button.no{background:transparent;color:' + FLAG + ';border:1.5px solid rgba(179,64,47,.45);}'
+      + '#w177card button[disabled]{opacity:.55;cursor:default;}'
+      + '#w177card .note{font-size:12.5px;color:#5d5b57;margin:12px 0 0;line-height:1.45;}'
+      + '#w177card .note b{color:' + INK + ';}'
+      + '#w177card .err{font-size:12.5px;color:' + FLAG + ';margin:10px 0 0;}'
+      + '#w177card .later{display:block;margin:12px auto 0;border:0;background:none;color:#5d5b57;font-weight:600;font-size:12.5px;font-family:inherit;text-decoration:underline;cursor:pointer;}'
+      + '#w177card.ok{border-top-color:' + GREEN + ';}'
+      + '#w177card.dec{border-top-color:' + FLAG + ';}'
+      + '@media (max-width:600px){#w177pop{align-items:flex-end;padding:0;}#w177card{width:100%;border-radius:20px 20px 0 0;padding:20px 18px calc(18px + env(safe-area-inset-bottom));}#w177card h3{font-size:24px;}}';
+    document.head.appendChild(st);
+  }
+  function cardHtml(e) {
+    var lead = nameOf(organizer(e)); var calOn = !!(window.w116Conn && window.w116Conn.calendar);
+    var soon = new Date(e.start_at).getTime() - Date.now() < 864e5;
+    return '<button type="button" class="x" data-w177later aria-label="Ask me later">\u00d7</button>'
+      + '<p class="k" id="w177k">Your next team meeting \u00b7 ' + E(teamLabel(e.department)) + '</p>'
+      + '<h3>' + E(e.summary || 'Team meeting') + '</h3>'
+      + '<p class="w">' + E(when(e.start_at)) + (e.meet_link ? '<a href="' + E(e.meet_link) + '" target="_blank" rel="noopener">Meet link</a>' : '') + '</p>'
+      + '<p class="q">Will you be there?</p>'
+      + '<div class="row"><button type="button" class="yes" data-w177="accepted"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'accepted' ? 'Accepting\u2026' : 'Accept') + '</button>'
+      + '<button type="button" class="no" data-w177="declined"' + (S.busy ? ' disabled' : '') + '>' + (S.busy === 'declined' ? 'Sending\u2026' : 'I can\u2019t make it') + '</button></div>'
+      + '<p class="note">Your answer goes to Google Calendar' + (lead ? ', so ' + E(lead) + ' sees it' : '') + '. If you can\u2019t make it, <b>let ' + E(lead || 'your team leader') + ' know at least 24 hours before</b>' + (soon ? ' (this one is less than 24 hours away, so message them now)' : '') + '.'
+      + (calOn ? '' : ' Answering here switches on Google Calendar for the Hub, which you can turn off in Settings.') + '</p>'
+      + (S.err ? '<p class="err">' + E(S.err) + (e.html_link ? ' <a href="' + E(e.html_link) + '" target="_blank" rel="noopener">Answer in Google Calendar</a>' : '') + '</p>' : '')
+      + '<button type="button" class="later" data-w177later' + (S.busy ? ' disabled' : '') + '>Ask me later</button>';
+  }
+  function doneHtml(d) {
+    var lead = d.lead;
+    var x = '<button type="button" class="x" data-w177close aria-label="Close">\u00d7</button>';
+    if (d.response === 'accepted') return x + '<p class="k" id="w177k">Thank you</p><h3>See you there</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Accepted on your Google Calendar.</p>'
+      + '<div class="row"><button type="button" class="yes" data-w177close>Close</button></div>';
+    return x + '<p class="k" id="w177k">Answer sent</p><h3>Thanks for letting us know</h3><p class="w">' + E(d.summary) + ', ' + E(d.when) + '. Declined on your Google Calendar.</p>'
+      + '<p class="note"><b>Please also let ' + E(lead || 'your team leader') + ' know</b>, at least 24 hours before the meeting.</p>'
+      + '<div class="row" style="margin-top:12px"><button type="button" class="yes" data-w177close>Close</button></div>';
+  }
+  function onHome() {
+    var body = document.getElementById('mpBody'), home = document.getElementById('mypage');
+    return !!body && (!home || home.classList.contains('active'));
+  }
+  /* another window is open (the Hub's modal, the Academy's sheet, a tour, any dialog): wait for it to close */
+  function busyElsewhere() {
+    try {
+      var mb = document.getElementById('modalBack'); if (mb && getComputedStyle(mb).display !== 'none') return true;
+      var sh = document.getElementById('w122sheet'); if (sh && sh.getBoundingClientRect().width > 0 && getComputedStyle(sh).display !== 'none' && getComputedStyle(sh).visibility !== 'hidden') return true;
+      /* the welcome window (84), a tour step (122) */
+      if (Array.prototype.some.call(document.querySelectorAll('#w84back, #w122cel, .w122tp'), function (d) { var r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(d).display !== 'none' && getComputedStyle(d).visibility !== 'hidden'; })) return true;
+      return Array.prototype.some.call(document.querySelectorAll('[aria-modal="true"]'), function (d) { return !d.closest('#w177pop') && d.getBoundingClientRect().width > 0; });
+    } catch (e) { return false; }
+  }
+  function close() {
+    var p = document.getElementById('w177pop'); if (p) p.remove();
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function onKey(ev) {
+    if (ev.key === 'Escape' && document.getElementById('w177pop')) { ev.preventDefault(); later(); }
+  }
+  function later() {
+    var e = pick(); if (e) S.later[e.id] = 1;
+    S.err = ''; S.quiet = true; close();
+  }
+  function paint() {
+    var pop = document.getElementById('w177pop');
+    var e = S.done ? null : pick();
+    if (!onHome() || !staff()) { if (pop) close(); return; }
+    var html = S.done ? doneHtml(S.done) : (e && !S.later[e.id] && !S.quiet) ? cardHtml(e) : '';
+    if (!html) { if (pop) close(); return; }
+    if (!pop && busyElsewhere()) return;
+    css();
+    var first = !pop;
+    if (!pop) {
+      pop = document.createElement('div'); pop.id = 'w177pop';
+      pop.innerHTML = '<div id="w177card" role="dialog" aria-modal="true" aria-labelledby="w177k"></div>';
+      document.body.appendChild(pop);
+      document.addEventListener('keydown', onKey, true);
+    }
+    var el = document.getElementById('w177card');
+    el.className = S.done ? (S.done.response === 'accepted' ? 'ok' : 'dec') : '';
+    if (e) el.setAttribute('data-ev', e.id); else el.removeAttribute('data-ev');
+    if (el.__h !== html) { el.innerHTML = html; el.__h = html; if (!first && !S.busy) { var f = el.querySelector('button.yes'); if (f && S.done) try { f.focus(); } catch (x) { /* fine */ } } }
+    if (first) { var b = el.querySelector('button.yes'); if (b) try { b.focus(); } catch (x) { /* fine */ } }
+  }
+  /* a moment after Home opens, so the page is drawn behind it */
+  function soon(ms) { clearTimeout(S.timer); S.timer = setTimeout(function () { refresh(false); }, ms == null ? 1200 : ms); }
+  async function refresh(force) { await load(force); paint(); }
+
+  async function answer(resp) {
+    var em = myEmail(); var e = pick(); if (!e || S.busy) return;
+    S.busy = resp; S.err = ''; paint();
+    try {
+      /* Accept switches on Google Calendar for the Hub when it is off (Steel, 30/09/26); the card says so */
+      if (!(window.w116Conn && window.w116Conn.calendar)) {
+        var t = await db.functions.invoke('hub-connect', { body: { action: 'toggle', provider: 'google_calendar', enabled: true } });
+        var td = (t && t.data) || {};
+        if ((t && t.error) || td.ok === false) throw new Error(td.error && /welfareavenue\.com/.test(td.error) ? 'Replying from the Hub works with a welfareavenue.com account.' : 'Google Calendar could not be switched on for you.');
+        window.w116Conn = Object.assign({}, window.w116Conn || {}, { calendar: true });
+      }
+      var r = await db.functions.invoke('hub-connect', { body: { action: 'rsvp', event_id: e.id, response: resp } });
+      var d = (r && r.data) || {};
+      if ((r && r.error) || d.ok === false || d.error) throw new Error(d.error || 'The reply did not go through.');
+      var a = myAttendee(e, em); if (a) a.status = resp;
+      try { ((window.W116 && window.W116.events) || []).forEach(function (x) { if (String(x.id) === String(e.id)) (x.attendees || []).forEach(function (at) { if (lower(at.email) === em) at.status = resp; }); }); } catch (x) { /* fine */ }
+      S.done = { id: e.id, response: resp, summary: e.summary || 'Team meeting', when: when(e.start_at), lead: nameOf(organizer(e)), at: tick() };
+      S.busy = false; paint();
+      toastS(resp === 'accepted' ? 'Accepted on Google Calendar' : 'Declined on Google Calendar');
+      var doneAt = S.done; setTimeout(function () { if (S.done === doneAt && resp === 'accepted') finish(); }, 6000);
+    } catch (err) {
+      S.busy = false; S.err = String((err && err.message) || err).slice(0, 160); paint();
+    }
+  }
+  /* after an answer: close, and stay quiet until they next come back to Home (then the next unanswered one, if any) */
+  function finish() { S.done = null; S.err = ''; S.quiet = true; close(); }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target; if (!t || !t.closest) return;
+    var b = t.closest('#w177card [data-w177]'); if (b) { ev.preventDefault(); answer(b.getAttribute('data-w177')); return; }
+    if (t.closest('#w177card [data-w177later]')) { ev.preventDefault(); if (!S.busy) later(); return; }
+    if (t.closest('#w177card [data-w177close]')) { ev.preventDefault(); finish(); }
+  });
+
+  /* coming back to Home (from another page, or a fresh load) asks again */
+  var wasHome = false;
+  function watch() {
+    var h = onHome();
+    if (h && !wasHome) { S.quiet = false; S.later = {}; soon(); }
+    if (!h && wasHome) { clearTimeout(S.timer); close(); S.done = null; }
+    wasHome = h;
+  }
+  if (typeof renderMyPage === 'function') {
+    var __rm177 = renderMyPage;
+    renderMyPage = async function () {
+      var r = await __rm177.apply(this, arguments);
+      try { watch(); if (!S.quiet) soon(); } catch (e) { /* non-fatal */ }
+      return r;
+    };
+  }
+  window.addEventListener('hashchange', function () { setTimeout(watch, 300); });
+  /* another window was open: try again once it closes; look again every ten minutes */
+  setInterval(function () { try { watch(); if (!document.hidden && document.getElementById('mpBody') && !S.quiet && !S.list && !S.p && myEmail() && staff()) { refresh(false); return; } if (!document.hidden && onHome() && !document.getElementById('w177pop') && !S.quiet && pick() && !busyElsewhere()) paint(); } catch (e) { /* fine */ } }, 2000);
+  setInterval(function () { try { if (!document.hidden && onHome() && !S.quiet) refresh(true); } catch (e) { /* fine */ } }, 10 * 60000);
+  try {
+    if (typeof db !== 'undefined' && db && db.auth) db.auth.onAuthStateChange(function (evt) { if (evt === 'SIGNED_OUT') { S.list = null; S.done = null; S.later = {}; close(); } });
+  } catch (e) { /* fine */ }
+
+  window.w177 = { refresh: refresh, pick: pick, close: close, state: function () { return S; } };
+})();
