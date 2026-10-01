@@ -2081,17 +2081,17 @@
       S('#w122 [data-sec="feed"]', 'Celebrate each other', 'What people across Welfare Avenue earned recently.', OPT)
     ] },
     volunteering: { tab: 'volunteering', icon: 'bowl', hash: '#volunteering', steps: [
-      S('#volunteering > .w118mast', 'The serving programme', 'Events, volunteers and supplies for Montreal, end to end.'),
-      S('#volunteering .vl-sub', 'Sections', 'The calendar, the master program SOP, volunteers, inventory, recipes and texting volunteers.', OPT),
-      S('#w106add', 'Add an event', 'Create a serving or a special event. It copies the master SOP checklist so nothing is missed.', OPT),
-      S('#volunteering .vl-hero', 'The next event', 'The countdown, readiness and what still needs doing.', OPT),
-      S('#w119cal', 'The month', 'Every event on a calendar, with its readiness and gaps.', OPT),
-      S('#volunteering .vl-grid', 'Events', 'Each card shows readiness and gaps. Open one for its command centre.', OPT),
-      S('#w119 .mast', 'The event command centre', 'Date, countdown, venue, meals and two readiness rings: the checklist and the roster.', { opt: 1, go: function () { var e = document.querySelector('#volunteering .vl-grid [data-vlev]') || document.querySelector('#volunteering [data-vlev]'); if (e) location.hash = '#volunteering/e/' + e.getAttribute('data-vlev'); } }),
-      S('#w119 .next', 'What\u2019s next', 'The three most urgent unticked steps, each with a one-tap tick.', OPT),
-      S('#w119left', 'The checklist', 'Every step from the master SOP, grouped by phase. Tick as you go; owners follow the role assignments.', OPT),
-      S('#w119right', 'The roster board', 'One column per role. Drag volunteers between roles, or add them from the bench of available people.', OPT),
-      S('#w119rail', 'Side rail', 'The event summary, tasks that came from meetings, and cancelling the event.', OPT)
+      /* wave191: the flow (This week, a serving's six stages, The team) */
+      S('#volunteering > .w118mast', 'Servings', 'This week, the calendar and every Montreal serving. The SOP, the volunteers, the recipes and the inventory are in the menu on the left.'),
+      S('#w191week', 'This week', 'Each serving coming up, the stage it is in and its next step for a person; then what is overdue, what has no owner and your own steps. A past serving the Hub could not settle asks whether it happened.', OPT),
+      S('#w106add', 'Add an event', 'Create a serving or a special event. It copies the master SOP so nothing is missed.', OPT),
+      S('#w119cal', 'The month', 'Every serving on a calendar.', OPT),
+      S('#volunteering .vl-grid', 'Every serving', 'Open one to plan it.', OPT),
+      S('#w191head', 'A serving', 'The date, the countdown, the format and the six stages: Plan, Recruit, Confirm, Prepare, Day of and Wrap up. The gold button is the next thing to do; More holds everything else.', { opt: 1, go: function () { var e = document.querySelector('#w191week [data-vlev]') || document.querySelector('#volunteering .vl-grid [data-vlev]') || document.querySelector('#volunteering [data-vlev]'); if (e) location.hash = '#volunteering/e/' + e.getAttribute('data-vlev'); } }),
+      S('#w191next', 'Next up', 'What needs a person now: the serving\u2019s gaps first (the format, short roles, people to confirm, the WhatsApp link), then the steps due soonest. Tick a step right here.', OPT),
+      S('#w191team', 'The team', 'Everyone on the roster, one column per role, against what a serving needs. Drag people between roles, or add them from the volunteer list.', OPT),
+      S('#w191stages', 'The stages', 'Each stage holds its cards and its steps, and the current one is open. A step marked Hub ticks itself once the thing has happened (a confirmation, an itinerary sent, the WhatsApp link pasted).', OPT),
+      S('#w191extra', 'Also for this serving', 'Tasks that came out of an operations meeting for this date.', OPT)
     ] },
     hrcentre: { tab: 'hrcentre', icon: 'people', hash: '#hrcentre', steps: [
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),

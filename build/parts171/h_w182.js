@@ -184,7 +184,7 @@
       + (dbPast ? '' : '<label><input type="radio" name="w182when" value="daybefore">The day before, ' + E(fmtDay(dbIso.slice(0, 10))) + ' at ' + E(hm12(dbIso.slice(11, 16))) + '</label>')
       + '<label><input type="radio" name="w182when" value="at">At a set time</label></div>'
       + '<input type="datetime-local" id="w182at" value="' + E(dbIso) + '" style="display:none;margin-top:6px;width:auto;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:10px;padding:7px 10px;background:' + CREAM + '">'
-      + '<p class="w171note" style="margin:4px 0 0">Texts go between 8 am and 8 pm Toronto time; outside those hours they wait until 8 am.</p>'
+      + '<p class="w171note" style="margin:4px 0 0">Texts go between 9 am and 7 pm Montreal time; outside those hours they wait until 9 am.</p>'
       + '<label class="f">A note to everyone (optional, in the text and the email)</label><input type="text" id="w182note" maxlength="300" placeholder="For example: it will be cold, bring a warm coat">'
       + '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:10px 0 0"><input type="checkbox" id="w182upd"> This is an update (it says their itinerary has changed)</label>'
       + '<div class="tabs"><button type="button" class="on" data-w182tab="text">The text</button><button type="button" data-w182tab="email">The email</button><button type="button" data-w182tab="page">The page</button></div><div id="w182prev"><p class="w171note" style="margin:10px 0">Pick someone to see their text.</p></div>'
@@ -248,7 +248,7 @@
         if (tk.emails) bits.push(tk.emails + ' email' + (tk.emails === 1 ? '' : 's'));
         if (bits.length) bits = [bits.join(' and ') + ' on the way'];
         if (tk.skipped) bits.push(tk.skipped + ' skipped (see Sent and scheduled)');
-        if (tk.waiting_for_8am) bits.push(tk.waiting_for_8am + ' text' + (tk.waiting_for_8am === 1 ? '' : 's') + ' wait for 8 am');
+        var wn = tk.waiting_for_window != null ? tk.waiting_for_window : tk.waiting_for_8am; if (wn) bits.push(wn + ' text' + (wn === 1 ? '' : 's') + ' wait for 9 am');
       }
       if (d.no_way_to_reach) bits.push(d.no_way_to_reach + ' with no phone or email');
       T(bits.join(', ') || 'Nothing to send');

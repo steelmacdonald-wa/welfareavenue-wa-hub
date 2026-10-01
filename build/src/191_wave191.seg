@@ -1,0 +1,1229 @@
+/* =====================================================================
+   WA v191 the Volunteer Manager's flow (01/10/26)
+   =====================================================================
+   Steel (01/10/26): "our operations team needs the Volunteer manager to be easy to use and make each part of the event
+   planning process as seamless as possible. There's a lot of information everywhere and I'd like to clean it up and
+   better show the flow of our event planning process. Please do a full review of the volunteer manager to ensure it has
+   Apple UI, but with Clickup's robustness and Welfare Avenue's Montreal operations processes in place."
+
+   The review found two systems side by side: the checklist (the master SOP, 63 steps) still described the manual work
+   (the Excel sheet, the Canva itinerary, the email drafts, the WhatsApp asks) while the Hub now does most of it (waves 171
+   to 182), nothing ticked when it did, no step had ever been ticked on a real serving, past servings stayed "planned", no
+   upcoming serving had its format, and the serving page was one long column of cards from eight waves.
+
+   This wave puts the flow first. Montreal's six stages: Plan, Recruit, Confirm, Prepare, Day of, Wrap up.
+   - The serving page: a calm header (date, countdown, format, the stage bar), Next up (the three steps that need a person
+     now), then one section per stage, each hosting the cards and the steps that belong to it (the plan and the recipes in
+     Plan, the roster board in Recruit, the Texts card in Confirm, the itinerary card in Prepare, the day's contacts in
+     Day of, the survey and the recap in Wrap up). The current stage is open; the others fold to one line. Every card the
+     earlier waves paint keeps its handlers: this wave only places them.
+   - Steps the Hub does tick themselves (the database: wa191_autotick from wa191_signal; sop_template.hub_signal) and say
+     so; a person's untick is never overridden. The SOP shows each step's stage, the Hub-done badge, and the Hub's
+     proposals for outdated wording (approve or dismiss, leaders, HR, admins; wa191_sop_proposal).
+   - The Calendar opens on This week (wa191_this_week): the servings by stage with their next step, overdue steps, steps
+     with no owner, and the signed-in person's own steps.
+   - Finished servings close themselves the day after (wa191_close_past, cron wa-serving-flow).
+   - Retired from the page: the Canva itinerary link, "Build the driver and team leader itinerary" and "Check Quo replies"
+     (the Hub's itineraries and the Texts card replaced them). The page's title names the view. "Add an event" shows on
+     the calendar only (106 patched). Buttons share one style.
+   The database decides who may do what (staff read; leaders, HR and admins decide proposals); sms_mode and mail_mode are
+   never switched here; nothing is sent by this wave.
+   ===================================================================== */
+(function () {
+  if (window.__wa191) return; window.__wa191 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E', MUTED = '#797773';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var STAGES = [
+    { k: 'plan', l: 'Plan', s: 'The date, the format, the meals and the plan', when: 'More than two weeks out' },
+    { k: 'recruit', l: 'Recruit', s: 'Fill the roster for every role', when: 'Two weeks out' },
+    { k: 'confirm', l: 'Confirm', s: 'Everyone confirms by text', when: 'Seven days out' },
+    { k: 'prepare', l: 'Prepare', s: 'Itineraries, the WhatsApp group, the kit', when: 'The days before' },
+    { k: 'day_of', l: 'Day of', s: 'The serving', when: 'The day' },
+    { k: 'wrap_up', l: 'Wrap up', s: 'The survey, the thanks, the numbers', when: 'After' }
+  ];
+  var STAGE_IX = {}; STAGES.forEach(function (s, i) { STAGE_IX[s.k] = i; });
+  var FORMATS = { home_cooked: 'Home-cooked', community_kitchen: 'Community kitchen' };
+  var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
+  var S = { ev: null, evAt: 0, guides: null, week: null, weekAt: 0, weekFor: null, open: {}, showAll: false, pend: null, laid: null, ticking: false, ticked: {}, sopPend: null };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function daysTo(iso) { var a = new Date(todayIso() + 'T12:00:00Z').getTime(), b = new Date(String(iso).slice(0, 10) + 'T12:00:00Z').getTime(); return Math.round((b - a) / 86400000); }
+  function fmtDay(iso, long) { if (!iso) return ''; try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', long ? { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' } : { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function fmtDue(iso) { if (!iso) return ''; var d = daysTo(iso); if (d === 0) return 'today'; if (d === 1) return 'tomorrow'; if (d === -1) return 'yesterday'; if (d < 0) return fmtDay(iso); if (d < 7) return fmtDay(iso).split(',')[0]; return fmtDay(iso); }
+  function hm12(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return ''; var h = Number(m[1]); return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
+  function roleLabel(r) { try { return typeof waVolRoleLabel === 'function' ? waVolRoleLabel(r) : r; } catch (e) { return r; } }
+  function one(r) { var ONE = { team_leader: 'Team leader', cook: 'Cook', driver: 'Driver', server: 'Server', dishwasher: 'Dishwasher', photographer: 'Photographer', community_talker: 'Community welcome', community_debrief: 'Community lead' }; return ONE[r] || String(r || 'volunteer').replace(/_/g, ' ').replace(/^./, function (m) { return m.toUpperCase(); }); }
+  function isConf(r) { return lower(r.status) === 'confirmed' || r.confirm_status === 'confirmed'; }
+  function isDecl(r) { return lower(r.status) === 'unavailable' || r.confirm_status === 'declined'; }
+  function isOff(r) { return lower(r.status) === 'cancelled'; }
+  function curEv() { var ev = null; try { (WA_VOL_EVENTS || []).forEach(function (e) { if (e.id === WA_VOL_EVENT) ev = e; }); } catch (e) { /* fine */ } return ev; }
+  function curD() { try { return (WA_VOL_DETAIL && WA_VOL_DETAIL.id === WA_VOL_EVENT) ? WA_VOL_DETAIL : null; } catch (e) { return null; } }
+  function tmpl() { try { return WA_VOL_TMPL || []; } catch (e) { return []; } }
+  function stageOf(date, status) {
+    if (status === 'cancelled') return 'cancelled'; if (status === 'completed') return 'done';
+    var d = daysTo(date);
+    if (d < 0) return 'wrap_up'; if (d === 0) return 'day_of'; if (d <= 2) return 'prepare'; if (d <= 7) return 'confirm'; if (d <= 14) return 'recruit'; return 'plan';
+  }
+  function stageLabel(k) { var s = STAGES[STAGE_IX[k]]; return s ? s.l : k === 'done' ? 'Done' : k === 'cancelled' ? 'Cancelled' : ''; }
+  function countdown(ev) { var d = daysTo(ev.event_date); if (ev.status === 'cancelled') return 'Cancelled'; if (ev.status === 'completed') return 'Done'; if (d === 0) return 'Today'; if (d === 1) return 'Tomorrow'; if (d > 1) return d + ' days to go'; if (d === -1) return 'Yesterday'; return Math.abs(d) + ' days ago'; }
+
+  var css = document.createElement('style'); css.id = 'wa191css';
+  css.textContent = '' +
+    /* one button style for the serving page: the pill (wave171's), in three weights */
+    '.w191btn{font-family:' + BODY + ';font-weight:600;font-size:12.5px;line-height:1;padding:9px 14px;border-radius:999px;border:1px solid transparent;cursor:pointer;background:' + GREEN + ';color:' + CREAM + ';display:inline-flex;align-items:center;gap:6px;white-space:nowrap;text-decoration:none;}' +
+    '.w191btn.ghost{background:transparent;color:' + GREEN + ';border-color:rgba(16,63,57,.3);}.w191btn.gold{background:' + GOLD + ';color:' + GREEN + ';}.w191btn.quiet{background:rgba(16,63,57,.07);color:' + GREEN + ';}' +
+    '.w191btn:hover{filter:brightness(1.06);}.w191btn[disabled]{opacity:.5;cursor:default;}' +
+    /* the page's own header */
+    '#w191head{background:' + GREEN + ';color:' + CREAM + ';border-radius:22px;padding:22px 24px 18px;margin:6px 0 14px;position:relative;overflow:hidden;font-family:' + BODY + ';}' +
+    '#w191head:before{content:"";position:absolute;right:-90px;top:-120px;width:340px;height:340px;border-radius:50%;background:radial-gradient(closest-side,rgba(111,100,171,.45),rgba(111,100,171,0));pointer-events:none;}' +
+    '#w191head .k{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;display:flex;gap:10px;flex-wrap:wrap;align-items:center;position:relative;}' +
+    '#w191head .k .fmt{background:rgba(255,250,242,.14);color:' + CREAM + ';border-radius:999px;padding:3px 10px;letter-spacing:.6px;cursor:pointer;border:none;font:inherit;font-size:10.5px;font-weight:800;}#w191head .k .fmt.unset{background:' + GOLD + ';color:' + GREEN + ';}' +
+    '#w191head h3{font-family:' + HEAD + ';font-size:40px;line-height:1;margin:8px 0 6px;color:' + CREAM + ';letter-spacing:.3px;font-weight:700;text-transform:uppercase;position:relative;}' +
+    '#w191head .meta{font-size:13.5px;color:rgba(255,250,242,.88);display:flex;gap:6px 14px;flex-wrap:wrap;align-items:center;position:relative;}' +
+    '#w191head .meta .cd{font-family:' + HEAD + ';font-size:17px;color:' + CREAM + ';}#w191head .meta .cd b{color:' + GOLD + ';font-size:24px;}' +
+    '#w191head .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;position:relative;}' +
+    '#w191head .acts .w191btn.ghost{color:' + CREAM + ';border-color:rgba(255,250,242,.35);}#w191head .acts .w191btn.quiet{background:rgba(255,250,242,.14);color:' + CREAM + ';}' +
+    '#w191head .more{position:relative;}#w191head .menu{display:none;position:absolute;right:0;top:40px;background:' + CREAM + ';color:' + INK + ';border-radius:14px;box-shadow:0 14px 40px -12px rgba(0,0,0,.45);padding:6px;min-width:220px;z-index:30;}' +
+    '#w191head .more.open .menu{display:block;}#w191head .menu button{display:block;width:100%;text-align:left;background:none;border:none;font:inherit;font-size:13px;padding:9px 12px;border-radius:9px;cursor:pointer;color:' + INK + ';}#w191head .menu button:hover{background:rgba(16,63,57,.08);}#w191head .menu button.warn{color:' + FLAG + ';}' +
+    /* the stage bar */
+    '.w191bar{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;margin-top:16px;position:relative;}' +
+    '.w191bar .st{background:rgba(255,250,242,.10);border-radius:12px;padding:9px 10px 8px;cursor:pointer;border:1px solid transparent;min-width:0;text-align:left;font:inherit;color:' + CREAM + ';}' +
+    '.w191bar .st b{display:block;font-family:' + HEAD + ';font-size:16px;letter-spacing:.4px;text-transform:uppercase;line-height:1;}' +
+    '.w191bar .st span{display:block;font-size:11px;color:rgba(255,250,242,.75);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w191bar .st i{display:block;height:4px;border-radius:4px;background:rgba(255,250,242,.18);margin-top:7px;overflow:hidden;}.w191bar .st i:after{content:"";display:block;height:100%;width:var(--p,0%);background:' + GOLD + ';border-radius:4px;}' +
+    '.w191bar .st.done i:after{background:' + TEAL + ';width:100%;}.w191bar .st.done span{color:rgba(255,250,242,.65);}' +
+    '.w191bar .st.now{background:rgba(255,250,242,.2);border-color:' + GOLD + ';}.w191bar .st.late span{color:#F4C6BD;}.w191bar .st.late i:after{background:' + FLAG + ';}' +
+    /* next up */
+    '#w191next{margin:0 0 14px;}#w191next .lbl{font-family:' + BODY + ';font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 8px;}' +
+    '#w191next .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;}' +
+    '#w191next .n{background:' + CREAM + ';border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:11px 13px;display:grid;grid-template-columns:24px minmax(0,1fr);gap:10px;align-items:start;box-shadow:0 8px 20px -18px rgba(16,63,57,.6);}' +
+    '#w191next .n .tk{width:20px;height:20px;border-radius:50%;border:2px solid rgba(16,63,57,.35);cursor:pointer;margin-top:1px;background:none;padding:0;}#w191next .n .tk:hover{border-color:' + GREEN + ';background:rgba(16,63,57,.08);}' +
+    '#w191next .n .go{width:20px;height:20px;border-radius:50%;background:' + GOLD + ';display:flex;align-items:center;justify-content:center;color:' + GREEN + ';font-weight:800;font-size:13px;margin-top:1px;}' +
+    '#w191next .n b{display:block;font-size:13.5px;color:' + INK + ';line-height:1.3;}#w191next .n span{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:3px;}#w191next .n span em{font-style:normal;color:' + FLAG + ';font-weight:600;}' +
+    '#w191next .n.act{border-color:rgba(220,165,39,.5);background:#FFF8E8;}#w191next .n .w191btn{margin-top:7px;padding:6px 11px;font-size:11.5px;}' +
+    /* stage sections */
+    '.w191stage{border:1px solid rgba(16,63,57,.10);border-radius:18px;background:' + CREAM + ';margin:0 0 10px;overflow:hidden;font-family:' + BODY + ';}' +
+    '.w191stage > .h{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:12px;align-items:center;padding:13px 16px;cursor:pointer;user-select:none;}' +
+    '.w191stage > .h .num{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:17px;font-weight:700;background:rgba(16,63,57,.08);color:' + GREEN + ';}' +
+    '.w191stage.now > .h .num{background:' + GOLD + ';color:' + GREEN + ';}.w191stage.done > .h .num{background:' + TEAL + ';color:' + CREAM + ';}.w191stage.late > .h .num{background:' + FLAG + ';color:' + CREAM + ';}' +
+    '.w191stage > .h b{font-family:' + HEAD + ';font-size:22px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';line-height:1;display:block;}' +
+    '.w191stage > .h .sub{font-size:12.5px;color:' + MUTED + ';margin-top:3px;display:block;}.w191stage > .h .sub em{font-style:normal;color:' + FLAG + ';font-weight:600;}.w191stage > .h .sub .ok{color:' + TEAL + ';font-weight:600;}' +
+    '.w191stage > .h .r{display:flex;align-items:center;gap:10px;font-size:12px;color:' + MUTED + ';white-space:nowrap;}.w191stage > .h .r .chev{transition:transform .2s;color:' + GREEN + ';}.w191stage:not(.open) > .h .r .chev{transform:rotate(-90deg);}' +
+    '.w191stage > .b{display:none;padding:2px 16px 16px;border-top:1px solid rgba(16,63,57,.08);}.w191stage.open > .b{display:block;}' +
+    '.w191stage .b > .cardy,.w191stage .b > .w31sum{box-shadow:none;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:14px 16px;margin:12px 0 0;background:#FFFDF8;}' +
+    '.w191stage .b > .cardy > h4,.w191stage .b > .w31sum > h4{margin:0 0 8px;font-family:' + HEAD + ';font-size:18px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';}' +
+    '.w191stage .b .w191line{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:13px;color:' + INK + ';margin:12px 0 0;}.w191stage .b .w191line .pill{background:rgba(16,63,57,.07);border-radius:999px;padding:4px 10px;font-size:12px;}.w191stage .b .w191line .pill.short{background:rgba(179,64,47,.1);color:' + FLAG + ';}.w191stage .b .w191line .pill.ok{background:rgba(42,140,122,.12);color:' + TEAL + ';}' +
+    '.w191stage .b .w191grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;}' +
+    /* steps inside a stage: flat, calm */
+    '.w191steps{margin:12px 0 0;}.w191steps .w191grp{font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:14px 0 2px;}.w191steps .w191grp:first-child{margin-top:4px;}' +
+    '.w191steps .vl-step{margin:0 !important;padding:9px 0;border-bottom:1px solid rgba(16,63,57,.08);align-items:flex-start;}.w191steps .vl-step:last-child{border-bottom:none;}' +
+    '.w191steps .vl-step input[type=checkbox]{width:20px;height:20px;border-radius:50%;margin-top:1px;}' +
+    '.w191steps .vl-step .vl-name{font-size:14px;line-height:1.35;color:' + INK + ';}.w191steps .vl-step.done .vl-name{color:' + MUTED + ';text-decoration:line-through;}' +
+    '.w191steps .vl-step .w26c,.w191steps .vl-step .w26n,.w191steps .vl-step .w59sel{display:none !important;}' +
+    '.w191steps .vl-step .vl-meta{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:center;margin-top:5px;font-size:11.5px;}' +
+    '.w191steps .vl-step .vl-meta .w59role{margin:0;}.w191steps .vl-step .vl-meta .vl-in{border-radius:8px;}' +
+    '.w191steps .vl-step .vl-meta{display:none;}.w191steps .vl-step.w191x .vl-meta{display:flex;}.w191steps .wa24-sx{display:none;}.w191steps .wa24-sx.w191sx{display:flex;}' +
+    '.w191cm{display:block;background:none;border:none;padding:0;margin:3px 0 0;font:inherit;font-size:12px;color:' + MUTED + ';cursor:pointer;text-align:left;}.w191cm em{font-style:normal;color:' + FLAG + ';font-weight:600;}.w191cm .w191cmx{color:' + GREEN + ';font-weight:600;margin-left:6px;opacity:0;transition:opacity .15s;}.vl-step:hover .w191cm .w191cmx,.vl-step.w191x .w191cm .w191cmx{opacity:1;}@media (hover:none){.w191cm .w191cmx{opacity:1;}}' +
+    '.w191steps .wa24-sx{margin:2px 0 6px 30px;}.w191steps .wa24-sx .who{display:none;}.w191steps .vl-step .vl-meta .vl-in.w90{width:128px;}' +
+    '#w191extra > .cardy{border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:14px 16px;margin:4px 0 10px;background:' + CREAM + ';box-shadow:none;}#w191extra > .cardy > h4{margin:0 0 8px;font-family:' + HEAD + ';font-size:22px;letter-spacing:.3px;text-transform:uppercase;color:' + GREEN + ';}#w191extra .btn,#w119.w191 .w31sum .btn,#w119.w191 .w31sum .w31btn{font-family:' + BODY + ';font-weight:600;font-size:12.5px;padding:9px 14px;border-radius:999px;text-transform:none;letter-spacing:0;}' +
+    '.w191steps .vl-step .vl-more{margin-left:8px;}' +
+    '.w191hub{display:inline-flex;align-items:center;gap:5px;background:rgba(111,100,171,.12);color:' + PURPLE + ';border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin-left:8px;vertical-align:middle;cursor:help;}' +
+    '.w191hubnote{display:block;font-size:11.5px;color:' + PURPLE + ';margin-top:3px;}' +
+    '.w191wait{display:flex;align-items:center;gap:10px;width:100%;margin:0 0 10px;padding:10px 14px;border-radius:14px;border:1px solid rgba(179,64,47,.3);background:#FFF5F2;cursor:pointer;font-family:' + BODY + ';color:' + INK + ';text-align:left;}' +
+    '.w191wait i{width:9px;height:9px;border-radius:50%;background:' + FLAG + ';flex:none;}.w191wait b{flex:1;font-size:13px;}.w191wait span{font-size:12px;color:' + FLAG + ';font-weight:600;white-space:nowrap;}' +
+    '.w191steps .vl-step[data-w191hub].done .vl-name{text-decoration:none;color:' + MUTED + ';}' +
+    '.w191steps .vl-step[data-w191parent]{display:none !important;}.w191steps .vl-step[data-w191parent] + .wa24-sx{display:none !important;}' +
+    '.w191empty{font-size:13px;color:' + MUTED + ';padding:12px 0 2px;}' +
+    '#w191team{margin:0 0 14px;}#w191team > .b > .cardy.w191roster{border:none;padding:6px 0 0;margin:0;background:none;}#w191team > .b > .cardy.w191roster > h4{display:none;}#w191team .board{margin-top:8px;}' +
+    '.w191stage .b .w191line button.pill{border:none;font:inherit;font-size:12px;cursor:pointer;color:inherit;}.w191stage .b .w191line button.pill:hover{filter:brightness(.96);}' +
+    '.w191ctx{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:rgba(111,100,171,.07);font-size:13px;line-height:1.5;color:' + INK + ';}.w191ctx b{display:block;color:' + PURPLE + ';font-size:12px;letter-spacing:.6px;text-transform:uppercase;margin-bottom:2px;}' +
+    '#w119.w191 .pc .flag.w191partner{background:rgba(111,100,171,.12);color:' + PURPLE + ';}' +
+    '.w191donebox{margin:6px 0 0;}.w191donebox > summary{cursor:pointer;font-size:12.5px;color:' + TEAL + ';font-weight:600;padding:8px 0;list-style:none;display:flex;align-items:center;gap:6px;}.w191donebox > summary::-webkit-details-marker{display:none;}.w191donebox > summary:before{content:"\\2713";display:inline-flex;width:18px;height:18px;border-radius:50%;background:rgba(42,140,122,.14);align-items:center;justify-content:center;font-size:11px;}.w191donebox[open] > summary:after{content:"hide";color:' + MUTED + ';font-weight:500;margin-left:4px;}.w191donebox:not([open]) > summary:after{content:"show";color:' + MUTED + ';font-weight:500;margin-left:4px;}' +
+    '.w191hide{display:none !important;}#volunteering > .card:has(> #w119.w191) > p.read,#volunteering > .card:has(> #w191week) > .vl-hero{display:none !important;}' +
+    /* legacy pieces this wave retires from the serving page (the data stays; the Hub's tools replaced them) */
+    '#w119.w191 > .mast,#w119.w191 > .next,#w119.w191 > .top,#w119.w191 > .grid > #w119left,#w119.w191 .w191hide{display:none !important;}' +
+    '#w119.w191 > .grid{display:block;}#w119.w191 > .grid > #w119right{display:block;}#w119.w191 #w119rail{display:none;}' +
+    '#w119.w191 .w31sum .row:has(> input[placeholder*="Canva"]),#w119.w191 .w31sum .row:has(> #w33qr),#w119.w191 .w31sum .row:has(> [data-w33it]){display:none !important;}' +
+    '#w119.w191 .w31sum .row .b:has(+ .b),#w119.w191 .w31sum .row > span.b{font-size:12px;}' +
+    /* roster cards, compact */
+    '#w119.w191 .pc .flag{display:inline-block;font-size:10.5px;}#w119.w191 .pc .mv{opacity:.55;}#w119.w191 .pc:hover .mv{opacity:1;}' +
+    /* This week on the calendar */
+    '#w191week{font-family:' + BODY + ';margin:0 0 18px;}#w191week .lbl{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;}#w191week .lbl span{color:' + MUTED + ';letter-spacing:0;text-transform:none;font-weight:500;font-size:12px;}' +
+    '#w191week .srv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}' +
+    '#w191week .sv{background:' + CREAM + ';border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 15px;cursor:pointer;box-shadow:0 8px 20px -18px rgba(16,63,57,.6);display:flex;flex-direction:column;gap:7px;}#w191week .sv:hover{box-shadow:0 10px 24px -16px rgba(16,63,57,.7);}' +
+    '#w191week .sv .d{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}#w191week .sv .d b{font-family:' + HEAD + ';font-size:20px;text-transform:uppercase;color:' + GREEN + ';letter-spacing:.3px;line-height:1;}#w191week .sv .d span{font-size:12px;color:' + MUTED + ';white-space:nowrap;}' +
+    '#w191week .sv .stg{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:800;color:' + GREEN + ';}#w191week .sv .stg i{width:8px;height:8px;border-radius:50%;background:' + GOLD + ';display:inline-block;}#w191week .sv .stg.wrap_up i,#w191week .sv .stg.done i{background:' + TEAL + ';}' +
+    '#w191week .sv .bars{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11.5px;color:' + MUTED + ';}#w191week .sv .bars b{color:' + INK + ';font-weight:600;}#w191week .sv .bars i{display:block;height:4px;border-radius:4px;background:rgba(16,63,57,.1);margin-top:4px;overflow:hidden;}#w191week .sv .bars i:after{content:"";display:block;height:100%;width:var(--p,0%);background:' + GREEN + ';}' +
+    '#w191week .sv .nx{font-size:12.5px;color:' + INK + ';border-top:1px solid rgba(16,63,57,.08);padding-top:7px;}#w191week .sv .nx span{color:' + MUTED + ';}#w191week .sv .nx em{font-style:normal;color:' + FLAG + ';font-weight:600;}' +
+    '#w191week .lists{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px;}' +
+    '#w191week .ls{background:#FFFDF8;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:12px 14px;}#w191week .ls h5{margin:0 0 6px;font-family:' + HEAD + ';font-size:16px;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';display:flex;justify-content:space-between;}#w191week .ls h5 span{font-family:' + BODY + ';font-size:12px;color:' + MUTED + ';text-transform:none;letter-spacing:0;font-weight:500;}' +
+    '#w191week .ls .it{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;font-size:12.5px;padding:5px 0;border-top:1px solid rgba(16,63,57,.06);cursor:pointer;color:' + INK + ';}#w191week .ls .it:first-of-type{border-top:none;}#w191week .ls .it span{color:' + MUTED + ';white-space:nowrap;font-size:11.5px;}#w191week .ls .it em{font-style:normal;color:' + FLAG + ';}#w191week .ls .it small{display:block;color:' + MUTED + ';font-size:11px;}' +
+    '#w191week .ls .none{font-size:12.5px;color:' + TEAL + ';padding:4px 0;}' +
+    /* the SOP page */
+    '.w191stg{display:inline-block;background:rgba(16,63,57,.08);color:' + GREEN + ';border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;margin-right:6px;vertical-align:middle;}' +
+    '.w191prop{margin:8px 0 4px 26px;border:1px solid rgba(220,165,39,.5);background:#FFF8E8;border-radius:12px;padding:10px 12px;font-size:12.5px;color:' + INK + ';}.w191prop .k{font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:#8A6410;font-weight:800;margin-bottom:4px;}.w191prop b{display:block;margin:2px 0;}.w191prop p{margin:4px 0;color:#4a4a46;}.w191prop .why{color:' + MUTED + ';font-size:11.5px;}.w191prop .acts{display:flex;gap:6px;margin-top:8px;}' +
+    '#w191legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:0 0 14px;font-family:' + BODY + ';}#w191legend .lg{background:' + CREAM + ';border:1px solid rgba(16,63,57,.10);border-radius:12px;padding:10px 12px;}#w191legend .lg b{display:block;font-family:' + HEAD + ';font-size:16px;text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';}#w191legend .lg span{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:2px;}#w191legend .lg small{display:block;font-size:11px;color:' + GREEN + ';margin-top:4px;font-weight:600;}' +
+    '#w191sopintro{font-size:13px;color:' + INK + ';margin:0 0 12px;line-height:1.5;}' +
+    /* phones */
+    '@media (max-width:700px){#w191head{padding:18px 16px 16px;border-radius:18px;}#w191head h3{font-size:32px;}.w191bar{display:flex;overflow-x:auto;gap:6px;padding-bottom:4px;scrollbar-width:none;}.w191bar::-webkit-scrollbar{display:none;}.w191bar .st{flex:0 0 118px;}' +
+    '.w191stage > .h{padding:12px 13px;gap:10px;}.w191stage > .h b{font-size:19px;}.w191stage > .b{padding:0 12px 12px;}.w191stage .b > .cardy,.w191stage .b > .w31sum{padding:12px;}#w191next .grid{grid-template-columns:1fr;}#w191week .sv .d b{font-size:18px;}}';
+  document.head.appendChild(css);
+  /* ---------- data: the serving's own row, the role targets, the Hub's ticks ---------- */
+  async function loadEvRow(ev, force) {
+    if (!ev) return null;
+    if (!force && S.ev && S.ev.id === ev.id && Date.now() - S.evAt < 20000) return S.ev;
+    try {
+      var r = await db.from('volunteer_events').select('id,format,planned_meals,plan_note,start_time,whatsapp_url,location,status,itinerary_auto,itinerary_channels,kitchen_place,kitchen_contact').eq('id', ev.id).maybeSingle();
+      if (r && r.data) { S.ev = r.data; S.evAt = Date.now(); if (r.data.format && !ev.format) ev.format = r.data.format; if (r.data.start_time && !ev.start_time) ev.start_time = r.data.start_time; }
+    } catch (e) { /* fine */ }
+    return S.ev && S.ev.id === ev.id ? S.ev : null;
+  }
+  async function loadGuides() {
+    if (S.guides) return S.guides;
+    try { var r = await db.from('volunteer_role_guides').select('role,target,label_en'); S.guides = (r && r.data) || []; } catch (e) { S.guides = []; }
+    return S.guides;
+  }
+  function targets() {
+    /* the database's targets (volunteer_role_guides.target, from the medians of past servings); these defaults only until they load */
+    var t = { team_leader: 1, cook: 4, driver: 2, server: 8, dishwasher: 1, photographer: 1, community_debrief: 1 };
+    if (S.guides && S.guides.length) { t = {}; S.guides.forEach(function (g) { if (g.target != null && Number(g.target) > 0) t[g.role] = Number(g.target); }); }
+    return t;
+  }
+  /* the Hub ticks what it can when the page opens (once per serving per five minutes), then the steps reload */
+  async function autotick(ev) {
+    if (!ev || !staff() || S.ticking) return false;
+    var last = S.ticked[ev.id] || 0; if (Date.now() - last < 300000) return false;
+    S.ticking = true; S.ticked[ev.id] = Date.now();
+    try {
+      var r = await db.rpc('wa191_autotick', { p_event: ev.id });
+      var d = (r && r.data) || {};
+      if ((d.ticked || 0) + (d.unticked || 0) > 0) {
+        var steps = await db.from('sop_event_steps').select('*').eq('event_id', ev.id);
+        var D = curD(); if (D && steps && steps.data) { D.steps = steps.data; try { WA_VOL_LOADED = false; } catch (e) { /* fine */ } }
+        return true;
+      }
+    } catch (e) { /* fine */ } finally { S.ticking = false; }
+    return false;
+  }
+
+  /* ---------- the model: templates by id, leaves, stages ---------- */
+  function tmap() { var m = {}; tmpl().forEach(function (t) { m[t.id] = t; }); return m; }
+  function kidsOf() { var k = {}; tmpl().forEach(function (t) { if (t.parent_id) (k[t.parent_id] = k[t.parent_id] || []).push(t); }); return k; }
+  function stageOfTmpl(t) { if (t.stage) return t.stage; var p = t.phase || ''; if (p === 'post_event') return 'wrap_up'; if (p === 'event_day') return 'day_of'; if (p === 'week_of' || p === 't_minus_1w') return 'prepare'; return 'recruit'; }
+  function model(ev, D) {
+    var TM = tmap(), K = kidsOf(); var today = todayIso();
+    var cur = stageOf(ev.event_date, ev.status);
+    var out = { cur: cur, curIx: STAGE_IX[cur] == null ? (cur === 'done' ? 6 : -1) : STAGE_IX[cur], stages: {}, steps: [] };
+    STAGES.forEach(function (s) { out.stages[s.k] = { k: s.k, leaves: 0, done: 0, overdue: 0, hub: 0, hubDone: 0, undone: [], people: 0 }; });
+    (D.steps || []).forEach(function (s) {
+      var t = TM[s.template_id]; if (!t || t.active === false) return;
+      var st = stageOfTmpl(t); var isParent = !!(K[t.id] && K[t.id].length) && (!t.hub_signal || t.hub_signal === 'children'); /* a container; a parent with its own signal is a step */
+      var row = { s: s, t: t, stage: st, parent: isParent, hub: !!t.hub_signal, over: !s.done && s.due_date && s.due_date < today };
+      out.steps.push(row);
+      var g = out.stages[st]; if (!g || isParent) return;
+      g.leaves++; if (s.done) g.done++; if (row.over) g.overdue++;
+      if (t.hub_signal) { g.hub++; if (s.done) g.hubDone++; } else { if (!s.done) { g.undone.push(row); g.people++; } }
+    });
+    STAGES.forEach(function (s, i) {
+      var g = out.stages[s.k];
+      g.pct = g.leaves ? Math.round(g.done / g.leaves * 100) : 0;
+      g.state = (g.leaves && g.done >= g.leaves) ? 'done' : s.k === cur ? 'now' : (i < out.curIx && g.leaves > g.done) ? 'late' : 'soon';
+      if (cur === 'done' && g.leaves > g.done) g.state = 'late';
+    });
+    return out;
+  }
+  function stageSummary(k, g, ev, D, row) {
+    var bits = [];
+    if (k === 'plan') { bits.push(ev.format ? FORMATS[ev.format] || ev.format : '<em>format not set</em>'); if (row && row.planned_meals) bits.push(row.planned_meals + ' meals'); }
+    if (k === 'recruit') { var c = rosterCounts(D); var short = c.short; bits.push(c.on + ' on the list' + (short.length ? ', <em>' + short.length + ' role' + (short.length === 1 ? '' : 's') + ' short</em>' : ', <span class="ok">every role filled</span>')); }
+    if (k === 'confirm') { var cc = rosterCounts(D); bits.push(cc.conf + ' of ' + cc.on + ' confirmed' + (cc.wait ? ', ' + cc.wait + ' waiting' : '')); }
+    if (k === 'prepare') { bits.push(row && row.whatsapp_url ? '<span class="ok">WhatsApp link set</span>' : '<em>no WhatsApp link</em>'); }
+    if (k === 'wrap_up' && ev.status === 'completed') bits.push('<span class="ok">closed</span>');
+    if (g.leaves) bits.push(g.done + ' of ' + g.leaves + ' steps' + (g.overdue ? ', <em>' + g.overdue + ' overdue</em>' : ''));
+    return bits.join(' \u00b7 ');
+  }
+  function rosterCounts(D) {
+    var T = targets(); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
+    var by = {}; list.forEach(function (r) { by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; });
+    var short = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > (by[r] || 0); });
+    var conf = list.filter(isConf).length;
+    return { on: list.length, conf: conf, wait: list.length - conf, by: by, short: short, T: T };
+  }
+  function ownerOf(row) { return (row.s.owner || row.t.default_owner || '').trim(); }
+  /* ---------- the serving page: header, Next up, the six stages ---------- */
+  function root() { var r = document.getElementById('w119'); return r && r.classList.contains('w191') ? r : null; }
+  function stageBody(k) { var r = root(); return r ? r.querySelector('.w191stage[data-stage="' + k + '"] > .b') : null; }
+  function stepsBox(k) { var b = stageBody(k); return b ? b.querySelector('.w191steps') : null; }
+  function clickProxy(sel) { var el = document.querySelector(sel); if (el) { el.click(); return true; } return false; }
+  function openStage(k, scroll) { var r = root(); if (!r) return; var sec = r.querySelector('.w191stage[data-stage="' + k + '"]'); if (!sec) return; sec.classList.add('open'); S.open[k] = true; if (scroll) { try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { sec.scrollIntoView(); } } }
+
+  function headHtml(ev, D, M, row) {
+    var fmt = ev.format || (row && row.format); var fmtL = fmt ? FORMATS[fmt] || fmt : '';
+    var up = ev.status !== 'cancelled' && ev.status !== 'completed';
+    var start = (row && row.start_time) || ev.start_time; var place = (row && row.location) || ev.location || '';
+    var meals = row && row.planned_meals ? row.planned_meals + ' meals planned' : '';
+    var meta = '<span class="cd">' + (M.cur === 'done' ? 'Done' : M.cur === 'cancelled' ? 'Cancelled' : countdown(ev).replace(/^(\d+) /, '<b>$1</b> ')) + '</span>'
+      + (start ? '<span>' + E(hm12(start)) + (place ? ' at ' + E(place) : '') + '</span>' : (place ? '<span>' + E(place) + '</span>' : ''))
+      + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '');
+    var prim = primaryAction(ev, D, M, row);
+    var menu = ''
+      + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button>' : '')
+      + (staff() ? '<button data-w191go="text171">Text to confirm</button>' : '')
+      + (staff() ? '<button data-w191go="send182">Send itineraries</button><button data-w191go="hist182">Sent and scheduled</button><button data-w191go="ev182">This serving\u2019s itinerary</button>' : '')
+      + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button>' : '')
+      + (staff() ? '<button data-w191go="brecap">Recap in Slack</button>' : '')
+      + (staff() && up ? '<button data-w191go="close">Close this serving</button>' : '')
+      + (staff() && ev.status === 'completed' ? '<button data-w191go="reopen">Reopen this serving</button>' : '')
+      + (staff() ? '<button class="warn" data-w191go="cancel">' + (ev.status === 'cancelled' ? 'Restore this serving' : 'Cancel this serving') + '</button>' : '');
+    var bar = STAGES.map(function (s, i) {
+      var g = M.stages[s.k]; var sub = s.k === M.cur ? (M.cur === 'wrap_up' ? 'Now' : 'Now \u00b7 ' + s.when.toLowerCase()) : g.state === 'done' ? 'Done' : g.state === 'late' ? (g.leaves - g.done) + ' left' : s.when;
+      return '<button class="st ' + g.state + '" data-w191stage="' + s.k + '" style="--p:' + g.pct + '%" title="' + E(s.s) + '"><b>' + E(s.l) + '</b><span>' + E(sub) + '</span><i></i></button>';
+    }).join('');
+    return '<div class="k"><span>' + E(ev.code || 'Serving') + (ev.season ? ' \u00b7 ' + E(ev.season) : '') + '</span>'
+      + (up || fmtL ? '<button class="fmt' + (fmtL ? '' : ' unset') + '" data-w191go="fmt" title="The serving\u2019s format">' + E(fmtL || 'Format not set') + '</button>' : '')
+      + (ev.status === 'cancelled' ? '<span class="fmt" style="background:' + FLAG + '">Cancelled</span>' : ev.status === 'completed' ? '<span class="fmt" style="background:' + TEAL + '">Done</span>' : '') + '</div>'
+      + '<h3>' + E(fmtDay(ev.event_date, true)) + '</h3><div class="meta">' + meta + '</div>'
+      + '<div class="acts">' + (prim ? '<button class="w191btn gold" data-w191go="' + E(prim.go) + '">' + E(prim.l) + '</button>' : '')
+      + '<button class="w191btn ghost" data-w191go="back">\u2190 All servings</button><span style="flex:1"></span>'
+      + '<span class="more"><button class="w191btn quiet" data-w191go="menu">More \u22ee</button><div class="menu">' + menu + '</div></span></div>'
+      + '<div class="w191bar">' + bar + '</div>';
+  }
+  function primaryAction(ev, D, M, row) {
+    if (!staff()) return null;
+    var c = rosterCounts(D); var fmt = ev.format || (row && row.format);
+    switch (M.cur) {
+      case 'plan': return fmt ? { go: 'stage:plan', l: 'Review the plan' } : { go: 'fmt', l: 'Set the format' };
+      case 'recruit': return { go: 'find', l: 'Find volunteers' };
+      case 'confirm': return c.wait ? { go: 'text171', l: 'Text to confirm' } : { go: 'stage:prepare', l: 'Prepare the day' };
+      case 'prepare': return (row && !row.whatsapp_url) ? { go: 'ev182', l: 'Add the WhatsApp link' } : { go: 'send182', l: 'Send itineraries' };
+      case 'day_of': return { go: 'stage:day_of', l: 'Today\u2019s contacts' };
+      case 'wrap_up': return { go: 'close', l: 'Close this serving' };
+      case 'done': return { go: 'brecap', l: 'Recap in Slack' };
+    }
+    return null;
+  }
+  function nextHtml(ev, D, M, row) {
+    var items = []; var c = rosterCounts(D); var up = ev.status !== 'cancelled' && ev.status !== 'completed';
+    /* what the serving itself still needs, by stage */
+    if (up && !(ev.format || (row && row.format))) items.push({ act: 1, go: 'fmt', b: 'Set the format', s: 'Home-cooked or community kitchen: the itinerary and the texts depend on it.', l: 'Set it' });
+    if (up && M.curIx >= STAGE_IX.recruit && c.short.length) items.push({ act: 1, go: 'find', b: 'Fill the roster: ' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short', s: c.short.slice(0, 3).map(function (r) { return roleLabel(r).toLowerCase() + ' ' + (c.by[r] || 0) + ' of ' + c.T[r]; }).join(', ') + (c.short.length > 3 ? ' and ' + (c.short.length - 3) + ' more' : '') + '. Find volunteers looks through the CRM and texts them for you.', l: 'Find volunteers' });
+    if (up && M.curIx >= STAGE_IX.confirm && c.wait) items.push({ act: 1, go: 'text171', b: c.wait + ' still to confirm', s: 'The confirmation text carries their personal link.', l: 'Text to confirm' });
+    if (up && M.curIx >= STAGE_IX.prepare && row && !row.whatsapp_url) items.push({ act: 1, go: 'ev182', b: 'Paste the WhatsApp group link', s: 'The itineraries carry it; nobody is added by hand.', l: 'Add the link' });
+    /* then the steps a person must do: the current stage first, overdue first, due soonest first */
+    var rows = M.steps.filter(function (r) { return !r.parent && !r.hub && !r.s.done && r.stage !== 'cancelled'; });
+    rows.sort(function (a, b) { var ai = STAGE_IX[a.stage] <= M.curIx ? 0 : 1, bi = STAGE_IX[b.stage] <= M.curIx ? 0 : 1; if (ai !== bi) return ai - bi; var ad = a.s.due_date || '9999', bd = b.s.due_date || '9999'; if (ad !== bd) return ad < bd ? -1 : 1; return (a.t.sort || 0) - (b.t.sort || 0); });
+    rows.slice(0, Math.max(1, 4 - items.length)).forEach(function (r) { items.push({ r: r }); });
+    if (!items.length) return '';
+    return '<div class="lbl">Next up</div><div class="grid">' + items.map(function (it) {
+      if (it.act) return '<div class="n act"><span class="go">!</span><div><b>' + E(it.b) + '</b><span>' + E(it.s) + '</span>' + (staff() ? '<button class="w191btn gold" data-w191go="' + E(it.go) + '">' + E(it.l) + '</button>' : '') + '</div></div>';
+      var r = it.r; var who = ownerOf(r);
+      return '<div class="n">' + (staff() ? '<button class="tk" data-w191tick="' + r.s.id + '" title="Mark done"></button>' : '<span></span>') + '<div><b>' + E(r.t.name) + '</b><span>' + (who ? E(who) : '<em>no owner yet</em>') + (r.s.due_date ? ' \u00b7 ' + (r.over ? '<em>due ' + E(fmtDue(r.s.due_date)) + '</em>' : 'due ' + E(fmtDue(r.s.due_date))) : '') + ' \u00b7 ' + E(stageLabel(r.stage)) + '</span></div></div>';
+    }).join('') + '</div>';
+  }
+  function stageHeadHtml(s, i, g, ev, D, row) {
+    return '<span class="num">' + (g.state === 'done' ? '\u2713' : (i + 1)) + '</span><span><b>' + E(s.l) + '</b><span class="sub">' + stageSummary(s.k, g, ev, D, row) + '</span></span>'
+      + '<span class="r">' + (g.hub ? '<span title="Steps the Hub ticks by itself">' + g.hubDone + '/' + g.hub + ' by the Hub</span>' : '') + '<span class="chev">\u25be</span></span>';
+  }
+  function planLine(ev, D, row) {
+    var fmt = ev.format || (row && row.format);
+    return '<div class="w191line"><span class="pill' + (fmt ? ' ok' : ' short') + '">' + E(fmt ? FORMATS[fmt] || fmt : 'Format not set') + '</span>'
+      + (row && row.start_time ? '<button class="pill" data-w191go="start" title="Change the start time">Starts ' + E(hm12(row.start_time)) + '</button>' : '<button class="pill short" data-w191go="start">No start time</button>')
+      + (row && row.planned_meals ? '<span class="pill">' + E(row.planned_meals) + ' meals</span>' : '<span class="pill short">Meals not set</span>')
+      + (fmt === 'community_kitchen' && row && row.kitchen_place ? '<span class="pill">' + E(row.kitchen_place) + '</span>' : '')
+      + (staff() ? '<button class="w191btn ghost" data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button>' : '') + '</div>'
+      + (ev.title || ev.notes ? '<div class="w191ctx">' + (ev.title ? '<b>' + E(ev.title) + '</b>' : '') + (ev.notes ? '<span>' + E(ev.notes) + '</span>' : '') + '</div>' : '');
+  }
+  function recruitLine(D) {
+    var c = rosterCounts(D);
+    return '<div class="w191line">' + ROLE_ORDER.filter(function (r) { return c.T[r] || c.by[r]; }).map(function (r) { var n = c.by[r] || 0, t = c.T[r] || 0; return '<span class="pill' + (t && n < t ? ' short' : t ? ' ok' : '') + '">' + E(roleLabel(r)) + ' ' + n + (t ? '/' + t : '') + '</span>'; }).join('')
+      + (staff() ? '<button class="w191btn ghost" data-w191go="bplan">Plan the roster</button>' : '') + '</div>';
+  }
+  function teamHeadHtml(D) {
+    var c = rosterCounts(D); var need = 0; Object.keys(c.T).forEach(function (k) { need += c.T[k] || 0; });
+    return '<span class="num" style="background:rgba(16,63,57,.08);color:' + GREEN + '">\u263A</span><span><b>The team</b><span class="sub">' + c.conf + ' confirmed of ' + c.on + ' on the list' + (need ? ' \u00b7 needs ' + need : '') + (c.short.length ? ' \u00b7 <em>' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short</em>' : (c.on ? ' \u00b7 <span class="ok">every role filled</span>' : '')) + '</span></span><span class="r"><span class="chev">\u25BE</span></span>';
+  }
+  function recruitStageLine(D) {
+    var c = rosterCounts(D);
+    return '<div class="w191line">' + (c.short.length ? '<span class="pill short">' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short: ' + E(c.short.map(function (r) { return roleLabel(r).toLowerCase(); }).join(', ')) + '</span>' : '<span class="pill ok">Every role has someone</span>')
+      + (staff() ? '<button class="w191btn gold" data-w191go="find">Find volunteers</button><button class="w191btn ghost" data-w191go="conv">Conversations</button><button class="w191btn ghost" data-w191go="bplan">Plan the roster</button><button class="w191btn ghost" data-w191go="team">See the team</button>' : '') + '</div>'
+      + (staff() ? '<p style="margin:6px 0 0;font-size:12px;line-height:1.45;color:' + MUTED + '">Find volunteers: who signed up and never came, regulars we miss, who came once and who loved it, with a personal text to each from the ops line (9 am to 7 pm). Their YES lands on the roster by itself.</p>' : '');
+  }
+  /* a partner organization on the roster (Old Brewery Mission on dishes, a corporate partner serving) is not "not matched" */
+  function partners() {
+    var D = curD(); if (!D) return;
+    var by = {}; (D.roster || []).forEach(function (x) { by[String(x.id)] = x; });
+    document.querySelectorAll('#w119 [data-w119card]').forEach(function (el) {
+      var x = by[el.getAttribute('data-w119card')]; if (!x || !(x.detail || {}).partner) return;
+      var f = el.querySelector('.flag'); if (f && f.textContent !== 'Partner organization') { f.textContent = 'Partner organization'; f.classList.add('w191partner'); }
+    });
+  }
+  function dayCard(ev, D, row) {
+    var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
+    var ph = function (r) { var p = (r.detail || {}).phone; return p ? '<a href="tel:' + E(String(p).replace(/[^\d+]/g, '')) + '" style="color:' + GREEN + '">' + E(p) + '</a>' : '<span style="color:' + MUTED + '">no phone</span>'; };
+    var who = function (role) { return list.filter(function (r) { return r.role === role; }).map(function (r) { var k = (r.detail || {}).driver_role; return '<div style="padding:4px 0;font-size:13.5px"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (role === 'driver' && k ? ' <span style="color:' + MUTED + ';font-size:12px">' + E(k === 'main' ? 'main' : k === 'pickup' ? 'pickups' : 'main and pickups') + '</span>' : '') + ' \u00b7 ' + ph(r) + (isConf(r) ? '' : ' <span style="color:' + MUTED + ';font-size:11.5px">not confirmed</span>') + '</div>'; }).join('') || '<div style="padding:4px 0;font-size:13px;color:' + FLAG + '">Nobody yet</div>'; };
+    var tl = list.filter(function (r) { return r.role === 'team_leader' && r.confirm_token; })[0];
+    return '<div class="cardy"><h4>The day</h4><div class="w191grid2">'
+      + '<div><div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:0 0 2px">Team leaders</div>' + who('team_leader') + '<div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:10px 0 2px">Drivers</div>' + who('driver') + '</div>'
+      + '<div><div style="font-size:13.5px;line-height:1.6">' + (row && row.start_time ? 'Serving at <b>' + E(hm12(row.start_time)) + '</b>' : 'Start time not set') + (row && row.location ? ' \u00b7 ' + E(row.location) : '') + '<br>Ops line <a href="tel:+14388087754" style="color:' + GREEN + '"><b>438-808-7754</b></a>'
+      + '<br>WhatsApp group: ' + (row && row.whatsapp_url ? '<a href="' + E(row.whatsapp_url) + '" target="_blank" rel="noopener" style="color:' + GREEN + ';font-weight:600">open</a>' : '<span style="color:' + FLAG + '">no link yet</span>') + '</div>'
+      + '<div class="w191line" style="margin-top:10px">' + (tl ? '<a class="w191btn ghost" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(tl.confirm_token) + '?test=1&it=1">The team leader\u2019s itinerary</a>' : '') + (staff() ? '<button class="w191btn ghost" data-w191go="hist182">Sent and scheduled</button>' : '') + '</div></div></div></div>';
+  }
+  function wrapLine(ev) {
+    return '<div class="w191line">' + (staff() ? '<button class="w191btn ghost" data-w191go="brecap">Recap in Slack</button>' : '')
+      + (staff() && ev.status !== 'completed' && ev.status !== 'cancelled' ? '<button class="w191btn ghost" data-w191go="close">Close this serving</button>' : '')
+      + (ev.status === 'completed' ? '<span class="pill ok">Closed' + '</span>' + (staff() ? '<button class="w191btn ghost" data-w191go="reopen">Reopen</button>' : '') : '') + '</div>';
+  }
+
+  /* the steps: moved out of the phase checklist into their stage, flat, grouped by the parent they sit under */
+  function placeSteps(M) {
+    var r = root(); if (!r) return;
+    var TM = tmap();
+    var kicker = function (t) { var p = t.parent_id ? TM[t.parent_id] : null; return p ? p.name : (t.section || ''); };
+    STAGES.forEach(function (s) {
+      var box = stepsBox(s.k); if (!box) return;
+      var rows = M.steps.filter(function (x) { return x.stage === s.k; }).sort(function (a, b) { return (a.t.sort || 0) - (b.t.sort || 0); });
+      var lastGrp = null, any = false;
+      rows.forEach(function (x) {
+        var el = r.querySelector('.vl-step[data-vlstep="' + x.s.id + '"]'); if (!el) return;
+        if (x.parent) { el.setAttribute('data-w191parent', '1'); }
+        else {
+          var grp = kicker(x.t);
+          if (grp !== lastGrp) { var g = document.createElement('div'); g.className = 'w191grp'; g.textContent = grp; box.appendChild(g); lastGrp = grp; }
+          any = true;
+        }
+        var tail = []; var n = el.nextElementSibling; while (n && !n.classList.contains('vl-step') && !n.classList.contains('vl-sec') && !n.classList.contains('w191grp')) { tail.push(n); n = n.nextElementSibling; }
+        box.appendChild(el); tail.forEach(function (t) { box.appendChild(t); });
+        decorateStep(el, x);
+      });
+      if (!any) { var e = document.createElement('div'); e.className = 'w191empty'; e.textContent = s.k === 'day_of' ? 'No steps here beyond the day itself.' : 'No steps in this stage.'; box.appendChild(e); }
+      foldDone(s.k);
+    });
+  }
+  function compactLine(el) {
+    var meta = el.querySelector('.vl-meta'); if (!meta) return;
+    var own = ''; var sel = meta.querySelector('select[data-vlowner], select.w28sel[data-w28own]'); var inp = meta.querySelector('input[data-vlowner]');
+    if (sel) { var o = sel.options[sel.selectedIndex]; own = o && sel.value ? o.textContent.trim() : ''; } else if (inp) own = inp.value.trim();
+    var due = (meta.querySelector('input[data-vldue]') || {}).value || '';
+    var role = meta.querySelector('.w59role'); var roleT = role ? role.textContent.trim() : '';
+    var over = due && due < todayIso() && !el.classList.contains('done');
+    var txt = [own ? E(own) : '<em>no owner</em>', due ? (over ? '<em>due ' + E(fmtDue(due)) + '</em>' : 'due ' + E(fmtDue(due))) : '', roleT ? E(roleT) : ''].filter(Boolean).join(' \u00b7 ');
+    var cm = el.querySelector('.w191cm'); if (!cm) { cm = document.createElement('button'); cm.className = 'w191cm'; cm.type = 'button'; cm.title = 'Owner and due date'; var t = el.querySelector('.vl-t'); (t || el).insertBefore(cm, meta); }
+    cm.innerHTML = txt + ' <span class="w191cmx">' + (el.classList.contains('w191x') ? 'Done editing' : 'Edit') + '</span>';
+  }
+  /* done steps fold away under the stage's list */
+  function foldDone(k) {
+    var box = stepsBox(k); if (!box) return;
+    var rows = Array.prototype.slice.call(box.querySelectorAll(':scope > .vl-step.done:not([data-w191parent])'));
+    if (!rows.length) return;
+    var d = box.querySelector(':scope > details.w191donebox');
+    if (!d) { d = document.createElement('details'); d.className = 'w191donebox'; d.innerHTML = '<summary></summary><div class="w191donein"></div>'; box.appendChild(d); }
+    var inner = d.querySelector('.w191donein');
+    rows.forEach(function (el) { var tail = []; var n = el.nextElementSibling; while (n && n.classList.contains('wa24-sx')) { tail.push(n); n = n.nextElementSibling; } inner.appendChild(el); tail.forEach(function (t) { inner.appendChild(t); }); });
+    /* a kicker left with nothing under it goes too */
+    Array.prototype.slice.call(box.querySelectorAll(':scope > .w191grp')).forEach(function (g) { var n = g.nextElementSibling; if (!n || n.classList.contains('w191grp') || n.classList.contains('w191donebox')) g.remove(); });
+    var all = inner.querySelectorAll('.vl-step').length; d.querySelector('summary').textContent = all + ' done';
+    box.appendChild(d);
+  }
+  function decorateStep(el, x) {
+    el.setAttribute('data-w191stage', x.stage);
+    var name = el.querySelector('.vl-name'); if (!name) return;
+    compactLine(el);
+    if (x.hub && !name.querySelector('.w191hub')) {
+      el.setAttribute('data-w191hub', '1');
+      var b = document.createElement('span'); b.className = 'w191hub'; b.textContent = 'Hub'; b.title = x.t.hub_note || 'The Hub ticks this step by itself.'; name.appendChild(b);
+    }
+    var note = el.querySelector('.w191hubnote');
+    var txt = x.hub ? (x.s.done ? (x.s.done_source === 'hub' || x.s.done_by === 'the Hub' ? 'Ticked by the Hub' : 'Ticked by ' + (x.s.done_by || 'the team')) + (x.t.hub_note ? ' \u00b7 ' + x.t.hub_note.replace(/^Ticks itself when /i, 'when ').replace(/\.$/, '') : '') : (x.t.hub_note || '')) : '';
+    if (txt && !note) { note = document.createElement('span'); note.className = 'w191hubnote'; name.appendChild(note); }
+    if (note) note.textContent = txt;
+  }
+
+  function layout() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'event') return;
+    var r = document.getElementById('w119'); if (!r || r.classList.contains('w191')) return;
+    var ev = curEv(), D = curD(); if (!ev || !D) return;
+    var right = r.querySelector('#w119right'); var check = r.querySelector('#w119check'); if (!right || !check) return;
+    var row = S.ev && S.ev.id === ev.id ? S.ev : null;
+    var M = model(ev, D);
+    r.classList.add('w191');
+    var head = document.createElement('div'); head.id = 'w191head'; head.innerHTML = headHtml(ev, D, M, row);
+    var next = document.createElement('div'); next.id = 'w191next'; next.innerHTML = nextHtml(ev, D, M, row);
+    var stages = document.createElement('div'); stages.id = 'w191stages';
+    var openK = M.cur === 'done' || M.cur === 'cancelled' ? 'wrap_up' : M.cur;
+    STAGES.forEach(function (s, i) {
+      var g = M.stages[s.k]; var open = S.showAll || S.open[s.k] != null ? (S.showAll || S.open[s.k]) : s.k === openK;
+      var d = document.createElement('section'); d.className = 'w191stage ' + g.state + (open ? ' open' : ''); d.setAttribute('data-stage', s.k);
+      d.innerHTML = '<div class="h" data-w191toggle="' + s.k + '">' + stageHeadHtml(s, i, g, ev, D, row) + '</div><div class="b"><div class="w191own"></div><div class="w191steps"></div></div>';
+      stages.appendChild(d);
+    });
+    var extra = document.createElement('div'); extra.id = 'w191extra';
+    /* The team is open on a computer and folded on a phone (its header carries the counts), unless someone chose */
+    var teamOpen = S.teamOpen != null ? S.teamOpen : !(window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+    var team = document.createElement('section'); team.id = 'w191team'; team.className = 'w191stage' + (teamOpen ? ' open' : '');
+    team.innerHTML = '<div class="h" data-w191team="1">' + teamHeadHtml(D) + '</div><div class="b"><div class="w191own">' + recruitLine(D) + '</div></div>';
+    var grid = r.querySelector('.grid');
+    r.insertBefore(head, grid); r.insertBefore(next, grid); r.insertBefore(team, grid); r.insertBefore(stages, grid); r.insertBefore(extra, grid);
+    /* the stage's own line, then the cards the earlier waves paint */
+    var own = function (k) { return stages.querySelector('.w191stage[data-stage="' + k + '"] .w191own'); };
+    own('plan').innerHTML = planLine(ev, D, row); own('recruit').innerHTML = recruitStageLine(D); own('day_of').innerHTML = dayCard(ev, D, row); own('wrap_up').innerHTML = wrapLine(ev);
+    var dateCtl = r.querySelector('.top > span'); if (dateCtl) { var dw = document.createElement('div'); dw.className = 'w191line w191date'; dw.appendChild(dateCtl); own('plan').appendChild(dw); }
+    var rosterCard = right.querySelector(':scope > .cardy'); if (rosterCard) { rosterCard.classList.add('w191roster'); team.querySelector(':scope > .b').appendChild(rosterCard); }
+    partners();
+    adoptRail();
+    placeSteps(M);
+    S.laid = ev.id;
+    autotick(ev).then(function (changed) { if (changed) refresh(true); });
+  }
+  /* cards the earlier waves put in wave119's rail land in their stage; anything new arriving later follows (the observer) */
+  function adoptRail() {
+    var r = root(); if (!r) return; var rail = r.querySelector('#w119rail'); if (!rail) return;
+    var put = function (el, k) { var b = stageBody(k); if (!b || !el || el.parentNode === b) return; b.insertBefore(el, stepsBox(k)); };
+    Array.prototype.slice.call(rail.children).forEach(function (el) {
+      if (el.classList.contains('w31sum')) return put(el, 'plan');
+      if (el.id === 'w171card') return put(el, 'confirm');
+      if (el.id === 'w174card') return put(el, 'prepare');
+      if (el.id === 'w174survey') return put(el, 'wrap_up');
+      if (el.id === 'w145fb' || el.id === 'w145au') return put(el, 'wrap_up');   /* the volunteers' feedback form and the lead's audit (wave145) */
+      var h4 = el.querySelector(':scope > h4'); if (h4 && /From the meetings/i.test(h4.textContent)) { var x = document.getElementById('w191extra'); if (x && el.parentNode !== x) { h4.textContent = 'Also for this serving'; x.appendChild(el); } return; }
+      /* anything else a wave puts in the rail stays visible below the stages (the old roster list and hero are hidden on purpose) */
+      if (el.classList.contains('w119hide') || el.classList.contains('w191hide')) return;
+      var xx = document.getElementById('w191extra'); if (xx && el.parentNode !== xx) xx.appendChild(el);
+    });
+    /* the survey card is born next to the itinerary card: move it on */
+    var sv = r.querySelector('.w191stage[data-stage="prepare"] #w174survey'); if (sv) put(sv, 'wrap_up');
+  }
+  /* repaint the header, Next up and the stage lines from the data as it changes; the cards repaint themselves */
+  function refresh(steps) {
+    var r = root(); var ev = curEv(), D = curD(); if (!r || !ev || !D) return;
+    var row = S.ev && S.ev.id === ev.id ? S.ev : null; var M = model(ev, D);
+    var head = r.querySelector('#w191head'); if (head) { var openMenu = !!head.querySelector('.more.open'); head.innerHTML = headHtml(ev, D, M, row); if (openMenu) head.querySelector('.more').classList.add('open'); }
+    var next = r.querySelector('#w191next'); if (next) next.innerHTML = nextHtml(ev, D, M, row);
+    STAGES.forEach(function (s, i) {
+      var g = M.stages[s.k]; var sec = r.querySelector('.w191stage[data-stage="' + s.k + '"]'); if (!sec) return;
+      sec.className = 'w191stage ' + g.state + (sec.classList.contains('open') ? ' open' : '');
+      var h = sec.querySelector(':scope > .h'); if (h) h.innerHTML = stageHeadHtml(s, i, g, ev, D, row);
+    });
+    var own = function (k) { return r.querySelector('.w191stage[data-stage="' + k + '"] .w191own'); };
+    var pl = own('plan'); if (pl) { var keep = pl.querySelector('.w191date'); pl.innerHTML = planLine(ev, D, row); if (keep) pl.appendChild(keep); }
+    var rc = own('recruit'); if (rc) rc.innerHTML = recruitStageLine(D);
+    var tm = r.querySelector('#w191team'); if (tm) { var th = tm.querySelector(':scope > .h'); if (th) th.innerHTML = teamHeadHtml(D); var tl = tm.querySelector(':scope > .b > .w191own'); if (tl) tl.innerHTML = recruitLine(D); }
+    partners();
+    var dc = own('day_of'); if (dc) dc.innerHTML = dayCard(ev, D, row);
+    var wl = own('wrap_up'); if (wl) wl.innerHTML = wrapLine(ev);
+    if (steps) { /* the steps were reloaded: tick the boxes and the notes in place */
+      M.steps.forEach(function (x) { var el = r.querySelector('.vl-step[data-vlstep="' + x.s.id + '"]'); if (!el) return; el.classList.toggle('done', !!x.s.done); var cb = el.querySelector('input[data-vlchk]'); if (cb) cb.checked = !!x.s.done; decorateStep(el, x); });
+      STAGES.forEach(function (s) { foldDone(s.k); });
+    }
+  }
+  async function setStatus(ev, status) {
+    if (!staff()) return;
+    var old = ev.status;
+    var r = await db.rpc('wa191_settle', { p_event: ev.id, p_status: status });
+    if (r && r.error) { T('Could not save: ' + r.error.message); return; }
+    ev.status = status; try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    T(status === 'completed' ? 'This serving is closed' : 'This serving is open again');
+    refresh();
+  }
+  function go(what, btn) {
+    var ev = curEv(); if (!ev) return;
+    if (what === 'menu') { var m = btn.closest('.more'); if (m) m.classList.toggle('open'); return; }
+    document.querySelectorAll('#w191head .more.open').forEach(function (m) { m.classList.remove('open'); });
+    if (what === 'back') { location.hash = '#volunteering'; return; }
+    if (what.indexOf('stage:') === 0) { openStage(what.slice(6), true); return; }
+    if (what === 'fmt') { if (!clickProxy('#w119 [data-w171fmt]')) T('Set the format from the serving\u2019s header once the texts card has loaded.'); return; }
+    if (what === 'find') { openRecruit({ tab: 'people', reset: true }); return; }
+    if (what === 'conv') { openRecruit({ tab: 'conv' }); return; }
+    if (what === 'bplan') { openStage('recruit'); if (!clickProxy('#w119 [data-w119bplan]')) T('Plan the roster is loading'); return; }
+    if (what === 'brecap') { if (!clickProxy('#w119 [data-w119brecap]')) T('The recap is loading'); return; }
+    if (what === 'text171') { openStage('confirm'); if (!clickProxy('#w171card [data-w171send]')) T('The Texts card is loading'); return; }
+    if (what === 'send182') { openStage('prepare'); if (!clickProxy('#w119 [data-w182send]')) T('The itinerary card is loading'); return; }
+    if (what === 'hist182') { if (!clickProxy('#w119 [data-w182hist]')) T('The itinerary card is loading'); return; }
+    if (what === 'ev182') { openStage('prepare'); if (!clickProxy('#w119 [data-w182ev]')) T('The itinerary card is loading'); return; }
+    if (what === 'date') { openStage('plan', true); var inp = document.querySelector('#w119 .w191date input'); if (inp) { try { inp.focus(); inp.showPicker && inp.showPicker(); } catch (e) { /* fine */ } } return; }
+    if (what === 'cancel') { if (!clickProxy('#w106can')) T('The cancel control is loading'); return; }
+    if (what === 'start') { openStage('prepare', true); setTimeout(function () { var st = document.getElementById('w174st'); if (st) { try { st.focus(); } catch (e) { /* fine */ } } }, 350); return; }
+    if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
+    if (what === 'close') { if (confirm('Close this serving? It moves to Done; you can reopen it.')) setStatus(ev, 'completed'); return; }
+    if (what === 'reopen') { setStatus(ev, 'planned'); return; }
+  }
+
+  /* ---------- wiring ---------- */
+  if (typeof waVolRenderEvent === 'function') {
+    var __ev191 = waVolRenderEvent;
+    waVolRenderEvent = function () { var out = __ev191.apply(this, arguments); var ev = curEv(); loadGuides(); if (ev) loadEvRow(ev, false).then(function () { schedule(); }); schedule(); return out; };
+  }
+  function schedule() { if (S.pend) return; S.pend = setTimeout(function () { S.pend = null; try { layout(); adoptRail(); } catch (e) { /* fine */ } }, 320); }
+  try {
+    new MutationObserver(function (muts) {
+      var r = document.getElementById('w119'); if (!r) return;
+      if (!r.classList.contains('w191')) { schedule(); return; }
+      var touch = false;
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w119rail') || t.closest('#w119 .board') || t.closest('#w171card') || t.closest('#w174card') || t.closest('.w31sum'))) { touch = true; break; } }
+      if (!touch) return;
+      if (S.pend2) return; S.pend2 = setTimeout(function () { S.pend2 = null; try { adoptRail(); refresh(); } catch (e) { /* fine */ } }, 260);
+    }).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* fine */ }
+  document.addEventListener('click', async function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var g = t.closest('[data-w191go]'); if (g && g.closest('#volunteering')) { e.preventDefault(); e.stopPropagation(); go(g.getAttribute('data-w191go'), g); return; }
+    /* the format editor (wave171) saves into the event: the flow header follows */
+    if (t.closest('[data-w171fsave]')) { var ev0 = curEv(), f0 = ev0 ? ev0.format : null, n0 = 0; var iv = setInterval(function () { var e1 = curEv(); n0++; if ((e1 && e1.format !== f0) || n0 > 20) { clearInterval(iv); if (root()) refresh(false); } }, 150); }
+    var st = t.closest('.w191bar [data-w191stage]'); if (st) { e.preventDefault(); e.stopPropagation(); openStage(st.getAttribute('data-w191stage'), true); return; }
+    var tt = t.closest('[data-w191team]'); if (tt) { var ts = tt.closest('#w191team'); if (ts) { var on2 = !ts.classList.contains('open'); ts.classList.toggle('open', on2); S.teamOpen = on2; } return; }
+    var tg = t.closest('[data-w191toggle]'); if (tg) { var sec = tg.closest('.w191stage'); if (sec) { var k = sec.getAttribute('data-stage'); var on = !sec.classList.contains('open'); sec.classList.toggle('open', on); S.open[k] = on; } return; }
+    var tk = t.closest('#w191next [data-w191tick]'); if (tk) { e.preventDefault(); e.stopPropagation(); var sid = tk.getAttribute('data-w191tick'); var box = document.querySelector('#w119 input[data-vlchk="' + sid + '"]'); if (box) { box.click(); } else if (typeof waVolToggleStep === 'function') { await waVolToggleStep(sid, true, null); } setTimeout(function () { refresh(true); }, 500); return; }
+    if (!t.closest('#w191head .more')) document.querySelectorAll('#w191head .more.open').forEach(function (m) { m.classList.remove('open'); });
+  }, true);
+  document.addEventListener('change', function (e) { var t = e.target; if (!t || !t.getAttribute) return; if (t.getAttribute('data-vlchk') && root()) setTimeout(function () { refresh(false); }, 450); if (t.getAttribute('data-vlrstat') && root()) setTimeout(function () { refresh(false); }, 400); var row = t.closest && t.closest('.w191steps .vl-step'); if (row) setTimeout(function () { compactLine(row); }, 50); });
+  document.addEventListener('click', function (e) { var t = e.target; if (!t || !t.closest) return; var cm = t.closest('.w191steps .w191cm'); if (cm) { e.preventDefault(); e.stopPropagation(); var row = cm.closest('.vl-step'); row.classList.toggle('w191x'); var sx = row.nextElementSibling; while (sx && sx.classList.contains('wa24-sx')) { sx.classList.toggle('w191sx', row.classList.contains('w191x')); sx = sx.nextElementSibling; } compactLine(row); } }, true);
+  /* ---------- the Calendar opens on This week ---------- */
+  async function loadWeek(force) {
+    if (!staff()) return null;
+    if (!force && S.week && Date.now() - S.weekAt < 60000) return S.week;
+    try {
+      var res = await Promise.all([db.rpc('wa191_this_week', { p_days: 30 }), db.rpc('wa191_this_week_unclosed'), db.rpc('wa191_recruit_inbox', { p_events: null, p_days: 14 })]);
+      var r = res[0]; if (r && !r.error && r.data) { S.week = r.data; S.weekAt = Date.now(); S.week.unclosed = (res[1] && !res[1].error && Array.isArray(res[1].data)) ? res[1].data : [];
+        S.week.waiting = (res[2] && !res[2].error && Array.isArray(res[2].data)) ? res[2].data.filter(function (c) { return c.wait; }).length : 0; }
+    } catch (e) { /* fine */ }
+    return S.week;
+  }
+  function svHtml(sv) {
+    var stg = sv.stage; var days = sv.days;
+    var cd = sv.status === 'completed' ? 'Done' : days === 0 ? 'Today' : days === 1 ? 'Tomorrow' : days > 1 ? days + ' days to go' : days === -1 ? 'Yesterday' : Math.abs(days) + ' days ago';
+    var fmt = sv.format ? FORMATS[sv.format] || sv.format : null;
+    var rosterP = sv.target ? Math.min(100, Math.round(sv.confirmed / sv.target * 100)) : 0;
+    var stepsP = sv.steps_total ? Math.round(sv.steps_done / sv.steps_total * 100) : 0;
+    var nx = sv.next;
+    return '<div class="sv" data-vlev="' + sv.id + '" role="link" tabindex="0">'
+      + '<div class="d"><b>' + E(fmtDay(sv.date)) + '</b><span>' + E(cd) + '</span></div>'
+      + '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="stg ' + E(stg) + '"><i></i>' + E(stageLabel(stg) || stg) + '</span><span style="font-size:11.5px;color:' + (fmt ? MUTED : FLAG) + '">' + E(fmt || 'Format not set') + (sv.code ? ' \u00b7 ' + E(sv.code) : '') + '</span></div>'
+      + '<div class="bars"><div><b>' + sv.confirmed + '</b> confirmed of ' + sv.on_list + ' on the list' + (sv.target ? ' <span style="opacity:.8">(need ' + sv.target + ')</span>' : '') + '<i style="--p:' + rosterP + '%"></i></div>'
+      + '<div><b>' + sv.steps_done + '</b> of ' + sv.steps_total + ' steps' + (sv.overdue ? ' \u00b7 <em style="font-style:normal;color:' + FLAG + '">' + sv.overdue + ' overdue</em>' : '') + '<i style="--p:' + stepsP + '%"></i></div></div>'
+      + (nx ? '<div class="nx"><span>Next for a person:</span> ' + E(nx.name) + ' <span>\u00b7 ' + (nx.owner ? E(nx.owner) : '<em>no owner</em>') + (nx.due ? ' \u00b7 ' + (nx.due < todayIso() ? '<em>due ' + E(fmtDue(nx.due)) + '</em>' : 'due ' + E(fmtDue(nx.due))) : '') + '</span></div>' : (sv.status === 'completed' ? '<div class="nx"><span>Every step done.</span></div>' : ''))
+      + '</div>';
+  }
+  function listHtml(title, rows, kind, sub) {
+    var body = rows.length ? rows.slice(0, 8).map(function (x) {
+      return '<div class="it" data-w191step="' + E(x.step_id) + '" data-w191ev="' + E(x.event_id) + '"><div>' + E(x.name) + '<small>' + E(fmtDay(x.date)) + (x.owner ? ' \u00b7 ' + E(x.owner) : kind === 'unassigned' ? ' \u00b7 <span style="color:' + FLAG + '">no owner</span>' : '') + '</small></div><span>' + (x.due ? (x.due < todayIso() ? '<em>due ' + E(fmtDue(x.due)) + '</em>' : 'due ' + E(fmtDue(x.due))) : '') + '</span></div>';
+    }).join('') + (rows.length > 8 ? '<div class="it" style="color:' + MUTED + '">and ' + (rows.length - 8) + ' more</div>' : '') : '<div class="none">' + E(sub) + '</div>';
+    return '<div class="ls"><h5>' + E(title) + '<span>' + (rows.length ? rows.length : '') + '</span></h5>' + body + '</div>';
+  }
+  function weekHtml(w) {
+    var sv = (w.servings || []).filter(function (x) { return x.status !== 'cancelled'; });
+    return '<div class="lbl"><span style="color:' + GOLD + ';letter-spacing:1.6px;text-transform:uppercase;font-weight:700;font-size:11px">This week</span><span>' + (w.me ? 'Hi ' + E(String(w.me).split(' ')[0]) + ' \u00b7 ' : '') + E(fmtDay(w.today, true)) + ' <button class="w191btn ghost" style="padding:5px 10px;font-size:11px;margin-left:6px" data-w191week="refresh">Refresh</button></span></div>'
+      + (w.waiting && staff() ? '<button class="w191wait" data-w191convopen="1"><i></i><b>' + w.waiting + ' text' + (w.waiting === 1 ? '' : 's') + ' from volunteers wait' + (w.waiting === 1 ? 's' : '') + ' for an answer</b><span>Open the conversations \u203a</span></button>' : '')
+      + (sv.length ? '<div class="srv">' + sv.slice(0, 4).map(svHtml).join('') + '</div>' : '<div class="w191empty">No serving in the next 30 days. Add one from the calendar.</div>')
+      + ((w.unclosed || []).length ? '<div class="ls" style="margin-top:10px;border-color:rgba(220,165,39,.5);background:#FFF8E8"><h5>Did it happen?<span>The Hub could not tell from the roster or the survey</span></h5>' + w.unclosed.map(function (u) { return '<div class="it" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div>' + E(fmtDay(u.date, true)) + (u.title ? ' \u00b7 ' + E(u.title) : '') + '<small>' + E(u.code || '') + '</small></div><span style="display:flex;gap:6px">' + (staff() ? '<button class="w191btn gold" style="padding:6px 11px;font-size:11.5px" data-w191settle="completed" data-ev="' + E(u.id) + '">It happened</button><button class="w191btn ghost" style="padding:6px 11px;font-size:11.5px" data-w191settle="cancelled" data-ev="' + E(u.id) + '">Cancelled</button>' : '') + '</span></div>'; }).join('') + '</div>' : '')
+      + '<div class="lists">' + listHtml('Overdue', w.overdue || [], 'overdue', 'Nothing overdue.') + listHtml('No owner yet', w.unassigned || [], 'unassigned', 'Every step due soon has an owner.') + listHtml('Mine this week', w.mine || [], 'mine', w.me ? 'Nothing of yours due this week.' : 'Your name is not on the team list yet.') + '</div>';
+  }
+  async function paintWeek() {
+    var sec = document.getElementById('volunteering'); if (!sec || !staff()) return;
+    if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'calendar') return;
+    var card = sec.querySelector('.card'); if (!card) return;
+    var w = await loadWeek(false); if (!w) return;
+    if (WA_VOL_VIEW !== 'calendar') return;
+    card = sec.querySelector('.card'); if (!card) return;
+    var box = document.getElementById('w191week');
+    if (!box) {
+      box = document.createElement('div'); box.id = 'w191week';
+      var anchor = card.querySelector('.vl-hero') || card.querySelector('#w106add') || card.querySelector('#w119cal') || card.querySelector('.vl-month') || card.querySelector('.vl-empty');
+      if (anchor) anchor.parentElement.insertBefore(box, anchor); else card.appendChild(box);
+    }
+    var html = weekHtml(w); if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
+    var hero = card.querySelector('.vl-hero'); if (hero) hero.classList.add('w191hide');
+    var add = card.querySelector('#w106add'); if (add && box.nextElementSibling !== add) { box.insertAdjacentElement('afterend', add); add.style.margin = '0 0 10px'; }
+  }
+  if (typeof waVolRenderCalendar === 'function') {
+    var __cal191 = waVolRenderCalendar;
+    waVolRenderCalendar = function () { var out = __cal191.apply(this, arguments); setTimeout(paintWeek, 60); setTimeout(paintWeek, 400); return out; };
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var rf = t.closest('#w191week [data-w191week="refresh"]'); if (rf) { e.preventDefault(); e.stopPropagation(); rf.disabled = true; loadWeek(true).then(function () { rf.disabled = false; paintWeek(); }); return; }
+    var se = t.closest('#w191week [data-w191settle]'); if (se) { e.preventDefault(); e.stopPropagation(); se.disabled = true; db.rpc('wa191_settle', { p_event: Number(se.getAttribute('data-ev')), p_status: se.getAttribute('data-w191settle') }).then(function (r) { if (r && r.error) { T('Could not save: ' + r.error.message); se.disabled = false; return; } T(se.getAttribute('data-w191settle') === 'completed' ? 'Marked as done' : 'Marked as cancelled'); try { WA_VOL_LOADED = false; } catch (x) { /* fine */ } loadWeek(true).then(paintWeek); }); return; }
+    var cw = t.closest('#w191week [data-w191convopen]'); if (cw) { e.preventDefault(); e.stopPropagation(); openRecruit({ tab: 'conv' }); return; }
+    var it = t.closest('#w191week [data-w191step]'); if (it) { e.preventDefault(); e.stopPropagation(); S.focusStep = Number(it.getAttribute('data-w191step')); location.hash = '#volunteering/e/' + it.getAttribute('data-w191ev'); return; }
+  }, true);
+  /* a step picked on This week: its stage opens and the row is brought into view */
+  function focusStep() {
+    var r = root(); if (!r || !S.focusStep) return;
+    var el = r.querySelector('.vl-step[data-vlstep="' + S.focusStep + '"]'); S.focusStep = null; if (!el) return;
+    var k = el.getAttribute('data-w191stage'); if (k) openStage(k, false);
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { el.scrollIntoView(); }
+    el.style.transition = 'background .6s'; el.style.background = 'rgba(220,165,39,.25)'; setTimeout(function () { el.style.background = ''; }, 1800);
+  }
+  /* ---------- the SOP page: stages, Hub-done badges, the Hub's proposals ---------- */
+  function legendHtml() {
+    var K = kidsOf(); var counts = {}; STAGES.forEach(function (s) { counts[s.k] = { n: 0, hub: 0 }; });
+    tmpl().forEach(function (t) { if (t.active === false) return; var k = stageOfTmpl(t); if (!counts[k]) return; if (K[t.id] && K[t.id].length) return; counts[k].n++; if (t.hub_signal) counts[k].hub++; });
+    return '<div id="w191legend">' + STAGES.map(function (s, i) { var c = counts[s.k]; return '<div class="lg"><b>' + (i + 1) + '. ' + E(s.l) + '</b><span>' + E(s.s) + ' \u00b7 ' + E(s.when.toLowerCase()) + '</span><small>' + c.n + ' step' + (c.n === 1 ? '' : 's') + (c.hub ? ', ' + c.hub + ' by the Hub' : '') + '</small></div>'; }).join('') + '</div>';
+  }
+  function propHtml(t) {
+    var p = t.proposal || {}; var retire = p.kind === 'retire';
+    return '<div class="w191prop" data-w191prop="' + E(t.id) + '"><div class="k">' + (retire ? 'The Hub suggests retiring this step' : 'The Hub suggests new wording') + '</div>'
+      + (retire ? '' : '<b>' + E(p.name || t.name) + '</b>' + (p.description ? '<p>' + E(p.description) + '</p>' : ''))
+      + (p.why ? '<div class="why">' + E(p.why) + '</div>' : '')
+      + (staff() ? '<div class="acts"><button class="w191btn gold" data-w191prop-act="approve">' + (retire ? 'Retire it' : 'Use this wording') + '</button><button class="w191btn ghost" data-w191prop-act="dismiss">Keep as is</button></div>' : '') + '</div>';
+  }
+  function decorateSop() {
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'sop') return;
+    var card = sec.querySelector('.card'); if (!card) return;
+    var TM = tmap();
+    /* the legend and the intro line, once per paint */
+    if (!card.querySelector('#w191legend')) {
+      var intro = card.querySelector('.vl-empty');
+      var first = card.querySelector('details.vl-phase'); var anchor = card.querySelector('#w47roles') || card.querySelector('.wa24-links') || first;
+      var box = document.createElement('div'); box.innerHTML = '<p id="w191sopintro">Every serving runs these steps in six stages. A step marked <span class="w191hub" style="margin:0;cursor:default">Hub</span> is ticked by the Hub itself when the thing it describes has happened (a confirmation, an itinerary sent, the WhatsApp link pasted); the rest are for a person. Where the Hub has replaced the old way of working it suggests new wording below the step: a leader approves it or keeps the step as it is.</p>' + legendHtml();
+      if (intro) intro.textContent = String(intro.textContent || '').replace(/\s*Re-run the ClickUp import to pull changes across\.?/i, '').replace(/straight from the ClickUp list\.?/i, 'as the team wrote it.');
+      if (anchor && anchor.parentNode === card) { card.insertBefore(box.firstChild, anchor); card.insertBefore(box.firstChild, anchor); }
+      else if (first && first.parentNode) { first.parentNode.insertBefore(box.firstChild, first); first.parentNode.insertBefore(box.firstChild, first); }
+    }
+    card.querySelectorAll('.vl-step[data-vlstep^="tmpl-"]').forEach(function (el) {
+      var id = el.getAttribute('data-vlstep').slice(5); var t = TM[id]; if (!t) return;
+      var name = el.querySelector('.vl-name'); if (!name) return;
+      if (!name.querySelector('.w191stg')) {
+        var chip = document.createElement('span'); chip.className = 'w191stg'; chip.textContent = stageLabel(stageOfTmpl(t)); chip.title = 'The stage of the serving this step belongs to';
+        var c = name.querySelector('.w26c'); if (c && c.nextSibling) name.insertBefore(chip, c.nextSibling); else name.insertBefore(chip, name.firstChild);
+      }
+      if (t.hub_signal && !name.querySelector('.w191hub')) { var b = document.createElement('span'); b.className = 'w191hub'; b.textContent = 'Hub'; b.title = t.hub_note || 'The Hub ticks this step by itself.'; var more = name.querySelector('.vl-more'); if (more) name.insertBefore(b, more); else name.appendChild(b); }
+      if (t.hub_signal && t.hub_note && !el.querySelector('.w191hubnote')) { var n = document.createElement('span'); n.className = 'w191hubnote'; n.textContent = t.hub_note; name.appendChild(n); }
+      var vt = el.querySelector('.vl-t'); var had = el.querySelector('.w191prop');
+      if (t.proposal && vt && !had) vt.insertAdjacentHTML('beforeend', propHtml(t));
+      else if (!t.proposal && had) had.remove();
+    });
+  }
+  async function decideProposal(id, action, btn) {
+    if (!staff()) return;
+    var all = btn.closest('.w191prop').querySelectorAll('button'); all.forEach(function (b) { b.disabled = true; });
+    try {
+      var r = await db.rpc('wa191_sop_proposal', { p_id: id, p_action: action });
+      if (r && r.error) { T(r.error.message || 'Could not save'); all.forEach(function (b) { b.disabled = false; }); return; }
+      T(action === 'approve' ? ((r.data || {}).kind === 'retire' ? 'The step is retired' : 'The wording is updated on the master and every upcoming serving') : 'Kept as it is');
+      try { WA_VOL_LOADED = false; await waVolLoad(true); } catch (e) { /* fine */ }
+      if (typeof waVolRender === 'function') waVolRender();
+    } catch (e) { T('Could not save'); all.forEach(function (b) { b.disabled = false; }); }
+  }
+  if (typeof waVolRenderSop === 'function') {
+    var __sop191 = waVolRenderSop;
+    waVolRenderSop = function () { var out = __sop191.apply(this, arguments); setTimeout(decorateSop, 140); setTimeout(decorateSop, 600); return out; };
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var a = t.closest('[data-w191prop-act]'); if (a) { e.preventDefault(); e.stopPropagation(); var box = a.closest('[data-w191prop]'); if (box) decideProposal(box.getAttribute('data-w191prop'), a.getAttribute('data-w191prop-act'), a); }
+  }, true);
+  /* ---------- Find volunteers (wave191e) ----------
+     Steel (01/10/26): "a feature in the recruit section of the event to help recruit for upcoming event(s) and look through our
+     CRM to find people that signed up and never volunteered, volunteered a lot but haven't in a while, volunteered once before,
+     submitted a survey saying they liked the experience ... find people and get them together for an event and then shoot them
+     personalized texts", "use QUO to enable conversations with people and only message them throughout 9am to 7pm".
+     One sheet with two tabs. People: pick the servings, a group (never came, regulars we miss, came once, loved it, everyone),
+     filter and tick; Review the texts shows each group's wording (English, French) and the real texts (wa191_recruit_send dry
+     run); Invite adds them as Waiting For Response and queues one personal text each through Quo (sms_mode, STOP and 9 am to
+     7 pm decide). Conversations: every number that texted or was texted lately, the thread (the Hub's copy plus what was typed
+     in the Quo app, quo-send thread) and a reply from the ops line (wa191_text_reply). */
+  var R = { tab: 'people', evs: null, pool: null, poolKey: '', poolBusy: false, group: 'never', role: '', q: '', sort: 'fit', notTexted: true, hideOn: true, hasPhone: true,
+            lapsedDays: 60, regularMin: 3, sel: {}, step: 'list', askRole: '', textThem: true, tpl: null, edits: {}, saveDefault: false, preview: null, prevBusy: false, prevKey: '',
+            result: null, inbox: null, inboxAt: 0, ph: null, thread: null, quo: null, can: null, lastTa: null, sending: false };
+  var GROUPS = [
+    { k: 'never', l: 'Never came', s: 'Signed up to volunteer and never served. Their text says no experience is needed.' },
+    { k: 'lapsed', l: 'Regulars we miss', s: '' },
+    { k: 'once', l: 'Came once', s: 'Served one time. Their text thanks them for that serving.' },
+    { k: 'liked', l: 'Loved it', s: 'Rated their serving Excellent or Good on the survey or the feedback form (and did not say "not at this time").' },
+    { k: 'all', l: 'Everyone', s: 'Every volunteer the CRM knows. Search by name, phone or role.' }
+  ];
+  var GL = {}; GROUPS.forEach(function (g) { GL[g.k] = g.l; });
+  var KIND = { recruit: 'Invitation', confirm: 'Confirmation text', signup: 'Sign-up text', itinerary: 'Itinerary', survey: 'Survey', ack: 'Thank-you', reply: 'Reply', manual: 'Text volunteers', inbound: '' };
+  function digits(s) { var d = String(s || '').replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; }
+  function phf(d) { d = digits(d); return d ? '(' + d.slice(0, 3) + ') ' + d.slice(3, 6) + '-' + d.slice(6) : ''; }
+  function initials(n) { var p = String(n || '?').trim().split(/\s+/); return (((p[0] || '')[0] || '') + ((p[1] || '')[0] || '')).toUpperCase() || '?'; }
+  function hue(n) { var h = 0; n = String(n || ''); for (var i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) % 360; return h; }
+  function ago(iso) { if (!iso) return ''; var d = -daysTo(String(iso).slice(0, 10)); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 60 ? d + ' days ago' : fmtMonth(iso); }
+  function fmtMonth(iso) { try { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); return d.toLocaleDateString('en-CA', { timeZone: 'UTC', month: 'short', year: 'numeric' }); } catch (e) { return String(iso).slice(0, 7); } }
+  function fmtShort(iso) { try { var d = new Date(String(iso).slice(0, 10) + 'T12:00:00Z'); var y = d.getUTCFullYear() !== new Date().getFullYear(); return d.toLocaleDateString('en-CA', { timeZone: 'UTC', month: 'short', day: 'numeric', year: y ? 'numeric' : undefined }); } catch (e) { return String(iso); } }
+  function when(ts) {
+    if (!ts) return ''; var t = new Date(ts); if (isNaN(t)) return '';
+    var day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(t);
+    var hm = t.toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '').toLowerCase();
+    var d = daysTo(day); return d === 0 ? hm : d === -1 ? 'Yesterday ' + hm : fmtShort(day) + ' ' + hm;
+  }
+  async function canText() {
+    if (R.can && Date.now() - R.canAt < 60000) return R.can;
+    var out = { text: false };
+    try { var r = await Promise.all([db.rpc('is_wa_admin'), db.rpc('is_wa_leader'), db.rpc('wa_is_hr')]); out.text = [0, 1, 2].some(function (i) { return r[i] && r[i].data === true; }); } catch (e) { /* the database decides anyway */ }
+    R.can = out; R.canAt = Date.now(); return out;
+  }
+  /* the servings people can be invited to: upcoming, not cancelled, the next six */
+  function upcoming() {
+    var t = todayIso(); var list = [];
+    try { list = (WA_VOL_EVENTS || []).filter(function (e) { return (e.kind || 'service') === 'service' && e.status !== 'cancelled' && e.status !== 'completed' && String(e.event_date) >= t; }); } catch (e) { /* fine */ }
+    list.sort(function (a, b) { return String(a.event_date) < String(b.event_date) ? -1 : 1; }); return list.slice(0, 6);
+  }
+  function chosen() { return (R.evs || []).slice().sort(function (a, b) { var A = upcoming().filter(function (e) { return e.id === a; })[0], B = upcoming().filter(function (e) { return e.id === b; })[0]; return String((A || {}).event_date) < String((B || {}).event_date) ? -1 : 1; }); }
+  function evById(id) { var x = null; upcoming().forEach(function (e) { if (e.id === id) x = e; }); return x; }
+  async function loadPool(force) {
+    var key = chosen().join(',') + '|' + R.lapsedDays + '|' + R.regularMin;
+    if (!force && R.pool && R.poolKey === key) return R.pool;
+    R.poolBusy = true; paintBody();
+    try {
+      var r = await db.rpc('wa191_recruit_pool', { p_events: chosen(), p_lapsed_days: R.lapsedDays, p_regular_min: R.regularMin });
+      if (r && r.error) throw r.error;
+      R.pool = r.data || { people: [] }; R.poolKey = key;
+    } catch (e) { T('Could not load the volunteers: ' + String((e && e.message) || e).slice(0, 90)); R.pool = R.pool || { people: [] }; }
+    R.poolBusy = false; return R.pool;
+  }
+  function inGroup(p, g) { return g === 'all' || (p.g || []).indexOf(g) >= 0; }
+  function onChosen(p) { return (p.on || []).filter(function (o) { return chosen().indexOf(o.e) >= 0; }); }
+  function score(p) {
+    var s = 0; var role = R.role || R.askRole;
+    if (role) { if (p.top === role) s += 3; else if ((p.roles || []).indexOf(role) >= 0) s += 2; }
+    if (p.lk) s += 2;
+    s += Math.min(p.s || 0, 10) * 0.3;
+    if (!p.s && p.su && -daysTo(p.su) < 180) s += 1;
+    if ((p.ask || 0) >= 2 && (p.no || 0) / p.ask >= 0.5) s -= 1;
+    if (p.tx && -daysTo(p.tx) < 7) s -= 2;
+    if (!p.ph) s -= 5; if (p.out) s -= 5;
+    return s;
+  }
+  function pass(p) {
+    var q = lower(R.q); var qd = q.replace(/\D/g, '');
+    if (R.hasPhone && !p.ph) return false;
+    if (R.notTexted && p.tx && -daysTo(p.tx) < 7) return false;
+    if (R.hideOn && onChosen(p).length) return false;
+    if (R.role && p.top !== R.role && (p.roles || []).indexOf(R.role) < 0) return false;
+    if (q) { var hay = lower([p.n, p.ph, p.city, p.top, (p.roles || []).join(' ')].join(' ')); if (hay.indexOf(q) < 0 && !(qd.length >= 3 && String(p.ph || '').replace(/\D/g, '').indexOf(qd) >= 0)) return false; }
+    return true;
+  }
+  function shown() {
+    var ppl = (R.pool && R.pool.people) || [];
+    var list = ppl.filter(function (p) { return inGroup(p, R.group) && pass(p); });
+    var byName = function (a, b) { return lower(a.n) < lower(b.n) ? -1 : lower(a.n) > lower(b.n) ? 1 : 0; };
+    var by = {
+      fit: function (a, b) { var d = score(b) - score(a); return d || byName(a, b); },
+      most: function (a, b) { return (b.s || 0) - (a.s || 0) || byName(a, b); },
+      away: function (a, b) { var x = String(a.l || a.su || '9999'), y = String(b.l || b.su || '9999'); return x < y ? -1 : x > y ? 1 : byName(a, b); },
+      recent: function (a, b) { var x = String(a.l || a.su || ''), y = String(b.l || b.su || ''); return x > y ? -1 : x < y ? 1 : byName(a, b); },
+      name: byName
+    };
+    list.sort(by[R.sort] || by.fit); return list;
+  }
+  function count(g) { var ppl = (R.pool && R.pool.people) || []; return ppl.filter(function (p) { return inGroup(p, g) && pass(p); }).length; }
+  function facts(p) {
+    var bits = [];
+    if (!p.s) bits.push('Signed up ' + (p.su ? fmtShort(p.su) : '') + ' \u00b7 never served');
+    else bits.push('Served ' + (p.s === 1 ? 'once' : p.s + ' times') + (p.l ? ' \u00b7 last ' + fmtShort(p.l) : ''));
+    if (p.lk) bits.push('Rated it ' + p.lk.w + (p.lk.on ? ' (' + fmtShort(p.lk.on) + ')' : '') + (p.lk.again && /^yes/i.test(p.lk.again) ? ', wants to come again' : ''));
+    if ((p.ask || 0) >= 2 && p.no) bits.push('said no ' + p.no + ' of ' + p.ask);
+    return bits.join(' \u00b7 ');
+  }
+  function tags(p) {
+    var t = [];
+    var role = p.top || (p.roles || [])[0]; if (role) t.push('<span class="tg">' + E(one(role)) + '</span>');
+    onChosen(p).forEach(function (o) { var e = evById(o.e); t.push('<span class="tg on">On ' + E(e ? fmtShort(e.event_date) : '') + ' \u00b7 ' + E(lower(o.st) === 'waiting for response' ? 'waiting' : lower(o.st)) + '</span>'); });
+    if (p.inv) t.push('<span class="tg">Invited ' + E(ago(p.inv)) + '</span>'); else if (p.tx) t.push('<span class="tg">Texted ' + E(ago(p.tx)) + '</span>');
+    if (p.rx) t.push('<span class="tg">Texted us ' + E(ago(p.rx)) + '</span>');
+    if (p.out) t.push('<span class="tg no">Stopped texts</span>'); else if (!p.ph) t.push('<span class="tg no">No phone</span>');
+    if (p.t) t.push('<span class="tg test">Test phone</span>');
+    if (p.fr) t.push('<span class="tg">FR</span>');
+    return t.join('');
+  }
+  function key(p) { return p.p ? 'p' + p.p : 'c' + p.c; }
+  function rowHtml(p) {
+    var k = key(p); var on = !!R.sel[k];
+    return '<label class="rw' + (on ? ' on' : '') + '"><input type="checkbox" data-rsel="' + E(k) + '"' + (on ? ' checked' : '') + '><span class="av" style="background:hsl(' + hue(p.n) + ',36%,40%)">' + E(initials(p.n)) + '</span>'
+      + '<span class="who"><b>' + E(p.n) + '</b><span>' + E(facts(p)) + '</span><span class="tgs">' + tags(p) + '</span></span><span class="ph">' + E(p.ph || '') + '</span></label>';
+  }
+  function selList() { var ppl = (R.pool && R.pool.people) || []; return ppl.filter(function (p) { return R.sel[key(p)]; }); }
+  function groupFor(p) { if (R.sel[key(p)] && R.sel[key(p)] !== true) return R.sel[key(p)]; var g = p.g || []; return ['liked', 'lapsed', 'once', 'never'].filter(function (x) { return g.indexOf(x) >= 0; })[0] || 'other'; }
+
+  /* ---------- painting ---------- */
+  function sheet() { return document.getElementById('w191rec'); }
+  function paint() {
+    var el = sheet(); if (!el) return;
+    var ev = curEv(); var conv = R.tab === 'conv'; var waiting = (R.inbox || []).filter(function (x) { return x.wait; }).length;
+    el.querySelector('.hd .t p').textContent = conv ? 'Texts with the ops line (438) 808-7754, through Quo' : (ev ? 'For ' + fmtDay(ev.event_date, true) + (ev.code ? ' \u00b7 ' + ev.code : '') : 'For the upcoming servings');
+    el.querySelectorAll('[data-rtab]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-rtab') === R.tab); });
+    var bd = el.querySelector('[data-rtab="conv"] .badge'); if (bd) { bd.textContent = waiting ? String(waiting) : ''; bd.style.display = waiting ? '' : 'none'; }
+    paintBody(); paintFoot();
+  }
+  function paintBody() {
+    var body = document.getElementById('w191recbody'); if (!body) return;
+    var html = R.tab === 'conv' ? convHtml() : R.step === 'compose' ? composeHtml() : R.step === 'done' ? doneHtml() : rListHtml();
+    if (body.__h === html) return;
+    var keepScroll = body.scrollTop; var qf = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-rq') !== null;
+    body.innerHTML = html; body.__h = html;
+    if (R.step === 'list' && R.tab === 'people') body.scrollTop = keepScroll;
+    if (qf) { var q = body.querySelector('[data-rq]'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e) { /* fine */ } } }
+    if (R.tab === 'conv') { var th = body.querySelector('.thr .msgs'); if (th) th.scrollTop = th.scrollHeight; }
+  }
+  function rListHtml() {
+    var ups = upcoming();
+    var evRow = '<div class="row evs"><span class="lb">Invite to</span>' + (ups.length ? ups.map(function (e) {
+      var on = chosen().indexOf(e.id) >= 0; var conf = e.roster_confirmed || 0, list = e.roster_count || 0;
+      return '<button class="chip' + (on ? ' on' : '') + '" data-rev="' + e.id + '" aria-pressed="' + on + '"><b>' + E(fmtShort(e.event_date)) + '</b><span>' + conf + ' of ' + list + ' confirmed</span></button>';
+    }).join('') : '<span class="none">No upcoming serving. Add one from the calendar first.</span>') + '</div>';
+    var segs = '<div class="seg groups" role="tablist">' + GROUPS.map(function (g) { return '<button role="tab" data-rgroup="' + g.k + '" class="' + (R.group === g.k ? 'on' : '') + '" aria-selected="' + (R.group === g.k) + '">' + E(g.l) + (R.pool ? ' <i>' + count(g.k) + '</i>' : '') + '</button>'; }).join('') + '</div>';
+    var gnote = R.group === 'lapsed'
+      ? '<p class="gn"><input type="number" min="2" max="20" value="' + R.regularMin + '" data-rnum="regularMin" aria-label="Servings for a regular"> or more servings, none in the last <input type="number" min="7" max="365" value="' + R.lapsedDays + '" data-rnum="lapsedDays" aria-label="Days since the last serving"> days. Their text says how many times they served.</p>'
+      : '<p class="gn">' + E((GROUPS.filter(function (g) { return g.k === R.group; })[0] || {}).s || '') + '</p>';
+    var roles = ROLE_ORDER.filter(function (r) { return r !== 'community_talker'; });
+    var filters = '<div class="row flt"><input type="search" placeholder="Search a name, phone or role" value="' + E(R.q) + '" data-rq>'
+      + '<select data-rrole aria-label="Role"><option value="">Any role</option>' + roles.map(function (r) { return '<option value="' + r + '"' + (R.role === r ? ' selected' : '') + '>' + E(one(r)) + '</option>'; }).join('') + '</select>'
+      + '<select data-rsort aria-label="Sort"><option value="fit"' + (R.sort === 'fit' ? ' selected' : '') + '>Best fit</option><option value="most"' + (R.sort === 'most' ? ' selected' : '') + '>Most servings</option><option value="away"' + (R.sort === 'away' ? ' selected' : '') + '>Longest away</option><option value="recent"' + (R.sort === 'recent' ? ' selected' : '') + '>Most recent</option><option value="name"' + (R.sort === 'name' ? ' selected' : '') + '>Name</option></select></div>'
+      + '<div class="row tgl"><label><input type="checkbox" data-rf="notTexted"' + (R.notTexted ? ' checked' : '') + '> Not texted in 7 days</label><label><input type="checkbox" data-rf="hideOn"' + (R.hideOn ? ' checked' : '') + '> Not on these servings yet</label><label><input type="checkbox" data-rf="hasPhone"' + (R.hasPhone ? ' checked' : '') + '> Has a phone</label></div>';
+    if (!R.pool || R.poolBusy) return evRow + segs + gnote + filters + '<div class="empty">Looking through the CRM\u2026</div>';
+    if (!chosen().length) return evRow + segs + gnote + filters + '<div class="empty">Pick at least one serving to invite them to.</div>';
+    var list = shown(); var shownSel = list.filter(function (p) { return R.sel[key(p)]; }).length;
+    var head = '<div class="lh"><label><input type="checkbox" data-rall' + (list.length && shownSel === list.length ? ' checked' : '') + '> ' + (list.length ? 'Select all ' + list.length : 'Nobody') + ' shown</label><span>' + (list.length > 150 ? 'Showing the first 150; search or filter to narrow it' : '') + '</span></div>';
+    return evRow + segs + gnote + filters + head + (list.length ? '<div class="lst">' + list.slice(0, 150).map(rowHtml).join('') + '</div>' : '<div class="empty">Nobody here with these filters.</div>');
+  }
+  function groupsInSel() { var g = {}; selList().forEach(function (p) { var k = groupFor(p); (g[k] = g[k] || []).push(p); }); return g; }
+  function tplOf(g, lang) { var e = R.edits[g + '|' + lang]; if (e != null) return e; return ((R.tpl || {})[g] || {})[lang] || ''; }
+  function composeHtml() {
+    var gs = groupsInSel(); var order = ['never', 'lapsed', 'once', 'liked', 'other'];
+    var mode = (R.pool && R.pool.mode) || 'off'; var open = R.pool ? R.pool.window_open : true;
+    var banner = mode === 'live' ? '' : mode === 'test' ? '<div class="note warn"><b>Test mode.</b> Only the test phone gets a text. Everyone else is added to the roster without one; when an admin switches texts on, the 7-day confirmation still reaches them.</div>' : '<div class="note warn"><b>Texts are off.</b> Everyone you pick is added to the roster without a text.</div>';
+    banner += open ? '' : '<div class="note">It is after 7 pm in Montreal, so the texts wait in the queue and go at 9 am.</div>';
+    if (!R.textThem) banner = '<div class="note">No texts: they are only added to the roster as Waiting For Response.</div>';
+    var cards = order.filter(function (g) { return gs[g]; }).map(function (g) {
+      var hasFr = gs[g].some(function (p) { return p.fr; });
+      var ta = function (lang) { var v = tplOf(g, lang); return '<div class="tpl"><span class="lg">' + (lang === 'fr' ? 'Fran\u00e7ais' : 'English') + '</span><textarea rows="3" data-rtpl="' + g + '|' + lang + '">' + E(v) + '</textarea><span class="cnt">' + v.length + ' characters before the names and the link</span></div>'; };
+      return '<div class="wc"><h5>' + E(GL[g] || 'Other') + ' <span>' + gs[g].length + (gs[g].length === 1 ? ' person' : ' people') + '</span></h5>' + (R.textThem ? ta('en') + (hasFr ? ta('fr') : '') : '') + '</div>';
+    }).join('');
+    var chips = R.textThem ? '<div class="phs"><span>Insert:</span>' + ['{first}', '{dates}', '{served}', '{last}', '{role}', '{answer}', '{link}'].map(function (x) { return '<button data-rph="' + x + '">' + x + '</button>'; }).join('') + '</div>'
+      + '<p class="gn">{answer} becomes \u201cReply YES or NO, or tap here: their link\u201d (or \u201cTap here to pick your dates\u201d for several servings); every text ends with how to stop texts.</p>'
+      + '<label class="sv"><input type="checkbox" data-rsave' + (R.saveDefault ? ' checked' : '') + '> Save this wording as the default for these groups</label>' : '';
+    return banner + '<div class="cmp"><div class="cw">' + cards + chips + '</div><div class="prev" id="w191recprev">' + prevHtml() + '</div></div>';
+  }
+  function prevHtml() {
+    var prev = '';
+    if (R.prevBusy && !R.preview) prev = '<div class="empty">Writing the texts\u2026</div>';
+    else if (R.preview) {
+      var pv = R.preview;
+      var line = [pv.added ? pv.added + ' added as Waiting For Response' : '', pv.kept ? pv.kept + ' already waiting (kept)' : '', pv.already_confirmed ? pv.already_confirmed + ' already confirmed' : '', pv.said_no ? pv.said_no + ' said no to a serving (left alone)' : ''].filter(Boolean).join(' \u00b7 ');
+      prev = '<h6>What they get' + (R.prevBusy ? ' <i>updating\u2026</i>' : '') + '</h6><p class="gn">' + E(line) + (pv.texts ? ' \u00b7 <b>' + pv.texts + ' text' + (pv.texts === 1 ? '' : 's') + '</b>' : ' \u00b7 no text goes') + '</p>'
+        + (pv.previews || []).slice(0, 12).map(function (x) {
+          return '<div class="pv"><div class="pn"><b>' + E(x.n) + '</b><span>' + E(GL[x.g] || '') + (x.chars ? ' \u00b7 ' + x.chars + ' characters' : '') + '</span></div>' + (x.text ? '<div class="bub out">' + E(x.text).replace(/\n/g, '<br>') + '</div>' : '') + (x.why ? '<div class="why">' + E(x.why === 'test mode: only the test phone gets texts' ? 'Added, no text (test mode)' : x.why === 'texts are off' ? 'Added, no text (texts are off)' : x.why) + '</div>' : '') + '</div>';
+        }).join('') + ((pv.previews || []).length > 12 ? '<p class="gn">and ' + ((pv.previews || []).length - 12) + ' more, each with their own name and link.</p>' : '');
+    }
+    return prev;
+  }
+  function paintPrev() { var b = document.getElementById('w191recprev'); if (!b) { paintBody(); return; } var h = prevHtml(); if (b.__h !== h) { b.innerHTML = h; b.__h = h; } }
+  function doneHtml() {
+    var r = R.result || {}; var evs = chosen().map(function (id) { var e = evById(id); return e ? fmtShort(e.event_date) : ''; }).filter(Boolean).join(', ');
+    var lines = [];
+    lines.push('<li><b>' + (r.added || 0) + '</b> added to ' + E(evs) + ' as Waiting For Response' + (r.kept ? ' (' + r.kept + ' already on the list)' : '') + '</li>');
+    if (r.texts) lines.push('<li><b>' + r.texts + '</b> invitation text' + (r.texts === 1 ? '' : 's') + (r.sends_now ? ' going out now' : ' waiting for 9 am') + ' from the ops line</li>');
+    if (r.held) lines.push('<li><b>' + r.held + '</b> without a text (' + (r.mode === 'test' ? 'test mode' : 'texts are off') + ')</li>');
+    if (r.no_phone) lines.push('<li><b>' + r.no_phone + '</b> with no phone number: call or email them</li>');
+    if (r.opted_out) lines.push('<li><b>' + r.opted_out + '</b> who texted STOP (not texted)</li>');
+    if (r.invited_recently) lines.push('<li><b>' + r.invited_recently + '</b> invited in the last 3 days (not texted again)</li>');
+    if (r.new_records) lines.push('<li><b>' + r.new_records + '</b> new volunteer record' + (r.new_records === 1 ? '' : 's') + ' for people only in the CRM</li>');
+    return '<div class="done"><div class="tick">\u2713</div><h4>Invitations on their way</h4><ul>' + lines.join('') + '</ul><p class="gn">A YES by text or a tap on their link confirms them on the roster. Anything else they write shows in Conversations.</p></div>';
+  }
+  function convHtml() {
+    var list = R.inbox;
+    var left = list == null ? '<div class="empty">Loading the conversations\u2026</div>' : !list.length ? '<div class="empty">No texts in the last three weeks.</div>' : list.map(function (c) {
+      return '<button class="cv' + (R.ph === c.ph ? ' on' : '') + '" data-rconv="' + E(c.ph) + '"><span class="av" style="background:hsl(' + hue(c.n || c.ph) + ',36%,40%)">' + E(c.n ? initials(c.n) : '#') + '</span><span class="who"><b>' + E(c.n || c.phf) + '</b><span>' + (c.dir === 'out' ? 'You: ' : '') + E(c.last || '') + '</span></span><span class="tm">' + E(when(c.at)) + (c.wait ? '<i class="dot" title="Waiting for an answer"></i>' : '') + '</span></button>';
+    }).join('');
+    var right = R.ph ? threadHtml() : '<div class="empty">Pick a conversation.</div>';
+    return '<div class="conv' + (R.ph ? ' has' : '') + '"><div class="cl">' + left + '</div><div class="thr">' + right + '</div></div>';
+  }
+  function merged() {
+    var t = (R.thread && R.thread.messages) || []; var seen = {}; t.forEach(function (m) { if (m.qid) seen[m.qid] = 1; });
+    var out = t.map(function (m) { return { dir: m.dir, body: m.body, at: m.at, kind: m.kind, st: m.st, by: m.by, err: m.err, ev: m.ev, h: m.h }; });
+    ((R.quo && R.quo.messages) || []).forEach(function (q) {
+      if (seen[q.id]) return;
+      /* the Hub has every incoming text from the webhook; an outgoing one it does not have was typed in the Quo app */
+      if (q.dir === 'in' && t.some(function (m) { return m.dir === 'in' && String(m.body || '').trim() === String(q.text || '').trim(); })) return;
+      out.push({ dir: q.dir, body: q.text, at: q.at, kind: q.dir === 'out' ? 'quo' : 'inbound', st: q.status, quo: true });
+    });
+    out.sort(function (a, b) { return String(a.at) < String(b.at) ? -1 : 1; });
+    return out;
+  }
+  function threadHtml() {
+    var th = R.thread; if (!th) return '<div class="empty">Loading\u2026</div>';
+    var msgs = merged(); var open = th.window_open;
+    var name = th.n || phf(th.ph);
+    var head = '<div class="th"><button class="bk" data-rback aria-label="Back">\u2039</button><span class="av" style="background:hsl(' + hue(th.n || th.ph) + ',36%,40%)">' + E(th.n ? initials(th.n) : '#') + '</span><span><b>' + E(name) + '</b><span>' + E(phf(th.ph)) + (th.p ? ' \u00b7 <a href="#volunteering/people" data-rperson="' + th.p + '">volunteer record</a>' : '') + '</span></span></div>';
+    var body = msgs.length ? msgs.map(function (m) {
+      var lab = m.dir === 'out' ? (m.quo ? 'Typed in Quo' : (KIND[m.kind] || '') + (m.kind === 'reply' && m.by ? ' \u00b7 ' + String(m.by).split('@')[0] : '')) : '';
+      var st = m.dir === 'out' && m.st === 'queued' ? (open ? 'Sending\u2026' : 'Waits for 9 am') : m.st === 'failed' ? 'Not delivered' + (m.err ? ': ' + m.err : '') : m.st === 'skipped' ? 'Not sent' + (m.err ? ': ' + m.err : '') : '';
+      return '<div class="m ' + (m.dir === 'in' ? 'in' : 'out') + '"><div class="bub ' + (m.dir === 'in' ? 'in' : 'out') + (m.st === 'failed' || m.st === 'skipped' ? ' bad' : '') + '">' + E(m.body || '').replace(/\n/g, '<br>') + '</div><div class="mt">' + E([lab, m.ev, when(m.at), st].filter(Boolean).join(' \u00b7 ')) + '</div></div>';
+    }).join('') : '<div class="empty">No texts yet.</div>';
+    var can = R.can && R.can.text;
+    var foot = th.out ? '<div class="note warn">They texted STOP, so the Hub cannot text them. If they text START to the ops line, texts work again.</div>'
+      : !can ? '<div class="note">Only leaders, HR and admins can reply from the Hub. Quo has the same conversation on the ops line.</div>'
+      : '<div class="rp"><textarea rows="2" placeholder="Reply from the ops line" data-rreplyta></textarea><button class="w191btn" data-rreply>' + (open ? 'Send' : 'Send at 9 am') + '</button></div>' + (open ? '' : '<p class="gn">It is outside 9 am to 7 pm in Montreal: your reply waits and goes at 9 am.</p>');
+    return head + '<div class="msgs">' + body + '</div>' + foot;
+  }
+  function paintFoot() {
+    var f = document.getElementById('w191recfoot'); if (!f) return;
+    var html;
+    if (R.tab === 'conv') html = '<span class="gn">Replies go through Quo, so the team sees them in the Quo app too.</span><button class="w191btn ghost" data-rgo="refreshconv">Refresh</button>';
+    else if (R.step === 'list') {
+      var n = selList().length; var roles = ROLE_ORDER.filter(function (r) { return r !== 'community_talker'; });
+      html = '<span class="cnt"><b>' + n + '</b> selected' + (n ? ' <button class="lnk" data-rgo="clear">Clear</button>' : '') + '</span>'
+        + '<label class="ask">Ask them as <select data-raskrole><option value="">their usual role</option>' + roles.map(function (r) { return '<option value="' + r + '"' + (R.askRole === r ? ' selected' : '') + '>' + E(one(r).toLowerCase()) + '</option>'; }).join('') + '</select></label>'
+        + (R.can && !R.can.text ? '<span class="ask" title="Only leaders, HR and admins can text volunteers">Added without a text</span>' : '<label class="ask"><input type="checkbox" data-rtext' + (R.textThem ? ' checked' : '') + '> Text them</label>')
+        + '<button class="w191btn gold" data-rgo="compose"' + (n && chosen().length ? '' : ' disabled') + '>' + (R.textThem ? 'Review the texts' : 'Review') + '</button>';
+    } else if (R.step === 'compose') {
+      var pv = R.preview || {}; var n2 = selList().length;
+      var lbl = R.textThem ? 'Invite ' + n2 + (pv.texts != null ? ' \u00b7 send ' + pv.texts + ' text' + (pv.texts === 1 ? '' : 's') : '') : 'Add ' + n2 + ' to the roster';
+      html = '<button class="w191btn ghost" data-rgo="list">\u2039 Back</button><span class="sp"></span><button class="w191btn gold" data-rgo="send"' + (R.sending || R.prevBusy || !n2 ? ' disabled' : '') + '>' + E(R.sending ? 'Inviting\u2026' : lbl) + '</button>';
+    } else html = '<button class="w191btn ghost" data-rgo="conv">See the conversations</button><span class="sp"></span><button class="w191btn ghost" data-rgo="more">Find more people</button><button class="w191btn" data-rx>Done</button>';
+    if (f.__h !== html) { f.innerHTML = html; f.__h = html; }
+  }
+
+  /* ---------- actions ---------- */
+  async function openRecruit(opt) {
+    opt = opt || {};
+    if (!staff()) return;
+    var ev = curEv(); var ups = upcoming();
+    if (!R.evs || !R.evs.length || opt.reset) R.evs = ev && ups.some(function (e) { return e.id === ev.id; }) ? [ev.id] : ups.length ? [ups[0].id] : [];
+    R.tab = opt.tab || 'people'; if (opt.tab !== 'conv') { R.step = R.step === 'done' ? 'list' : R.step || 'list'; }
+    if (opt.phone) { R.ph = digits(opt.phone); R.thread = null; R.quo = null; }
+    var el = sheet();
+    if (!el) {
+      el = document.createElement('div'); el.id = 'w191rec'; el.className = 'w191rec'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Find volunteers');
+      el.innerHTML = '<div class="sh"><div class="hd"><div class="t"><h3>Find volunteers</h3><p></p></div><div class="seg tabs"><button data-rtab="people">People</button><button data-rtab="conv">Conversations <span class="badge" style="display:none"></span></button></div><button class="x" data-rx aria-label="Close">\u2715</button></div><div class="bd" id="w191recbody"></div><div class="ft" id="w191recfoot"></div></div>';
+      document.body.appendChild(el);
+    }
+    el.classList.add('open'); document.documentElement.classList.add('w191noscroll');
+    paint();
+    canText().then(function (cn) { if (!cn.text) R.textThem = false; paint(); });
+    loadInbox(false).then(function () { paint(); });
+    if (R.tab === 'conv') { if (R.ph) openThread(R.ph); }
+    else { await loadPool(false); paint(); }
+  }
+  function closeRecruit() { var el = sheet(); if (el) el.classList.remove('open'); document.documentElement.classList.remove('w191noscroll'); }
+  async function loadInbox(force) {
+    if (!force && R.inbox && Date.now() - R.inboxAt < 30000) return R.inbox;
+    try { var r = await db.rpc('wa191_recruit_inbox', { p_events: null, p_days: 21 }); if (r && !r.error) { R.inbox = r.data || []; R.inboxAt = Date.now(); } } catch (e) { /* fine */ }
+    if (!R.inbox) R.inbox = []; return R.inbox;
+  }
+  async function openThread(ph) {
+    R.ph = digits(ph); R.thread = null; R.quo = null; paint();
+    try { var r = await db.rpc('wa191_recruit_thread', { p_phone: R.ph }); if (r && r.error) throw r.error; R.thread = r.data; } catch (e) { R.thread = { ph: R.ph, messages: [] }; T('Could not load the texts: ' + String((e && e.message) || e).slice(0, 80)); }
+    paint();
+    /* what was typed in the Quo app (leaders, HR and admins; quo-send v5) */
+    var cn = await canText(); if (!cn.text) return;
+    try { var q = await db.functions.invoke('quo-send', { body: { action: 'thread', phone: R.ph } }); if (q && !q.error && q.data && q.data.messages && R.ph === (q.data.phone || R.ph)) { R.quo = q.data; paint(); } } catch (e) { /* the Hub's copy is enough */ }
+  }
+  async function reply(btn) {
+    var ta = document.querySelector('#w191rec [data-rreplyta]'); if (!ta) return; var v = ta.value.trim(); if (!v) { ta.focus(); return; }
+    btn.disabled = true;
+    try {
+      var r = await db.rpc('wa191_text_reply', { p_phone: R.ph, p_body: v }); if (r && r.error) throw r.error;
+      ta.value = ''; T(r.data && r.data.sends_now ? 'Sent from the ops line' : 'Queued: it goes at 9 am');
+      setTimeout(function () { openThread(R.ph); }, r.data && r.data.sends_now ? 2500 : 300); loadInbox(true).then(paint);
+    } catch (e) { T('Could not send: ' + String((e && e.message) || e).slice(0, 120)); }
+    btn.disabled = false;
+  }
+  function people() { return selList().map(function (p) { return { person_id: p.p || null, contact_id: p.c, group: groupFor(p), role: R.askRole || null }; }); }
+  function texts() { var out = {}; Object.keys(R.edits).forEach(function (k) { var a = k.split('|'); out[a[0]] = out[a[0]] || {}; out[a[0]][a[1]] = R.edits[k]; }); return out; }
+  async function loadTpl() { if (R.tpl) return R.tpl; try { var r = await db.rpc('wa191_recruit_templates'); if (r && !r.error) R.tpl = r.data; } catch (e) { /* fine */ } return R.tpl || {}; }
+  var prevTimer = null;
+  function schedPreview() { clearTimeout(prevTimer); prevTimer = setTimeout(preview, 700); }
+  async function preview() {
+    var keyNow = JSON.stringify([chosen(), people(), texts(), R.textThem]); if (R.preview && R.prevKey === keyNow) return;
+    R.prevBusy = true; paintFoot(); paintPrev();
+    try {
+      var r = await db.rpc('wa191_recruit_send', { p_events: chosen(), p_people: people(), p_texts: texts(), p_dry: true, p_text: R.textThem });
+      if (r && r.error) throw r.error; R.preview = r.data; R.prevKey = keyNow;
+    } catch (e) { T('Could not write the texts: ' + String((e && e.message) || e).slice(0, 120)); }
+    R.prevBusy = false; if (R.step === 'compose') { paintPrev(); paintFoot(); }
+  }
+  async function send(btn) {
+    if (R.sending) return; R.sending = true; paintFoot();
+    try {
+      if (R.saveDefault && Object.keys(R.edits).length) {
+        var sv = await db.rpc('wa191_recruit_templates_save', { p: texts() }); if (sv && sv.error) throw sv.error; R.tpl = sv.data || R.tpl;
+      }
+      var r = await db.rpc('wa191_recruit_send', { p_events: chosen(), p_people: people(), p_texts: texts(), p_dry: false, p_text: R.textThem });
+      if (r && r.error) throw r.error;
+      R.result = r.data || {}; R.step = 'done'; R.sel = {}; R.preview = null; R.edits = {}; R.saveDefault = false;
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+      T((R.result.added || 0) + ' invited' + (R.result.texts ? ', ' + R.result.texts + ' text' + (R.result.texts === 1 ? '' : 's') + (R.result.sends_now ? ' going out' : ' at 9 am') : ''));
+      R.pool = null; loadPool(true).then(paint); loadInbox(true).then(paint);
+      try { if (typeof waVolRender === 'function') waVolRender(); } catch (e) { /* fine */ }
+    } catch (e) { T('Could not invite: ' + String((e && e.message) || e).slice(0, 140)); }
+    R.sending = false; paint();
+  }
+  async function rgo(what, btn) {
+    if (what === 'compose') { if (!selList().length) return; R.step = 'compose'; R.preview = null; await loadTpl(); paint(); preview(); return; }
+    if (what === 'list') { R.step = 'list'; paint(); return; }
+    if (what === 'send') { await send(btn); return; }
+    if (what === 'clear') { R.sel = {}; paint(); return; }
+    if (what === 'more') { R.step = 'list'; R.result = null; paint(); if (!R.pool) { await loadPool(true); paint(); } return; }
+    if (what === 'conv') { R.tab = 'conv'; R.step = 'list'; paint(); await loadInbox(true); paint(); return; }
+    if (what === 'refreshconv') { await loadInbox(true); paint(); if (R.ph) openThread(R.ph); return; }
+  }
+  /* placeholders go where the cursor was in the last wording touched */
+  function insertPh(ph) {
+    var ta = R.lastTa && document.body.contains(R.lastTa) ? R.lastTa : document.querySelector('#w191rec [data-rtpl]'); if (!ta) return;
+    var a = ta.selectionStart || ta.value.length, b = ta.selectionEnd || ta.value.length;
+    ta.value = ta.value.slice(0, a) + ph + ta.value.slice(b); ta.focus(); try { ta.setSelectionRange(a + ph.length, a + ph.length); } catch (e) { /* fine */ }
+    R.edits[ta.getAttribute('data-rtpl')] = ta.value; var c = ta.parentElement.querySelector('.cnt'); if (c) c.textContent = ta.value.length + ' characters before the names and the link';
+    schedPreview();
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var cv = t.closest('[data-w191conv]'); if (cv) { e.preventDefault(); e.stopPropagation(); openRecruit({ tab: 'conv', phone: cv.getAttribute('data-w191conv') }); return; }
+    var el = t.closest('#w191rec'); if (!el) return;
+    if (t === el) { closeRecruit(); return; }
+    var x;
+    if ((x = t.closest('[data-rx]'))) { e.preventDefault(); closeRecruit(); return; }
+    if ((x = t.closest('[data-rtab]'))) { e.preventDefault(); R.tab = x.getAttribute('data-rtab'); paint(); if (R.tab === 'conv') loadInbox(false).then(paint); else if (!R.pool) loadPool(false).then(paint); return; }
+    if ((x = t.closest('[data-rev]'))) { e.preventDefault(); var id = Number(x.getAttribute('data-rev')); var i = R.evs.indexOf(id); if (i >= 0) R.evs.splice(i, 1); else R.evs.push(id); R.preview = null; paintBody(); loadPool(false).then(paint); return; }
+    if ((x = t.closest('[data-rgroup]'))) { e.preventDefault(); R.group = x.getAttribute('data-rgroup'); paintBody(); return; }
+    if ((x = t.closest('[data-rgo]'))) { e.preventDefault(); rgo(x.getAttribute('data-rgo'), x); return; }
+    if ((x = t.closest('[data-rconv]'))) { e.preventDefault(); openThread(x.getAttribute('data-rconv')); return; }
+    if ((x = t.closest('[data-rback]'))) { e.preventDefault(); R.ph = null; R.thread = null; paint(); return; }
+    if ((x = t.closest('[data-rreply]'))) { e.preventDefault(); reply(x); return; }
+    if ((x = t.closest('[data-rph]'))) { e.preventDefault(); insertPh(x.getAttribute('data-rph')); return; }
+    if ((x = t.closest('[data-rperson]'))) { closeRecruit(); return; }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w191rec')) return;
+    var k;
+    if ((k = t.getAttribute('data-rsel'))) { if (t.checked) R.sel[k] = R.group === 'all' ? true : R.group; else delete R.sel[k]; var lb = t.closest('.rw'); if (lb) lb.classList.toggle('on', t.checked); paintFoot(); var all = document.querySelector('#w191rec [data-rall]'); if (all) { var l = shown(); all.checked = l.length && l.every(function (p) { return R.sel[key(p)]; }); } return; }
+    if (t.hasAttribute('data-rall')) { shown().slice(0, 150).forEach(function (p) { if (t.checked) R.sel[key(p)] = R.group === 'all' ? true : R.group; else delete R.sel[key(p)]; }); paint(); return; }
+    if (t.hasAttribute('data-rrole')) { R.role = t.value; paintBody(); return; }
+    if (t.hasAttribute('data-rsort')) { R.sort = t.value; paintBody(); return; }
+    if ((k = t.getAttribute('data-rf'))) { R[k] = t.checked; paintBody(); return; }
+    if ((k = t.getAttribute('data-rnum'))) { var v = Math.round(Number(t.value)); if (!isFinite(v)) return; R[k] = Math.max(k === 'lapsedDays' ? 7 : 2, Math.min(k === 'lapsedDays' ? 365 : 20, v)); loadPool(false).then(paint); return; }
+    if (t.hasAttribute('data-raskrole')) { R.askRole = t.value; R.preview = null; return; }
+    if (t.hasAttribute('data-rtext')) { R.textThem = t.checked; paintFoot(); return; }
+    if (t.hasAttribute('data-rsave')) { R.saveDefault = t.checked; return; }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w191rec')) return;
+    if (t.hasAttribute('data-rq')) { R.q = t.value; clearTimeout(R.qT); R.qT = setTimeout(paintBody, 160); return; }
+    if (t.hasAttribute('data-rreplyta')) { t.style.height = '42px'; t.style.height = Math.min(140, t.scrollHeight + 2) + 'px'; return; }
+    var k = t.getAttribute('data-rtpl'); if (k) { R.lastTa = t; R.edits[k] = t.value; var c = t.parentElement.querySelector('.cnt'); if (c) c.textContent = t.value.length + ' characters before the names and the link'; schedPreview(); }
+  });
+  document.addEventListener('focusin', function (e) { var t = e.target; if (t && t.getAttribute && t.getAttribute('data-rtpl')) R.lastTa = t; });
+  document.addEventListener('keydown', function (e) {
+    var el = sheet(); if (!el || !el.classList.contains('open')) return;
+    if (e.key === 'Escape') { if (R.tab === 'conv' && R.ph && window.innerWidth < 720) { R.ph = null; paint(); } else closeRecruit(); }
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && e.target && e.target.hasAttribute && e.target.hasAttribute('data-rreplyta')) { var b = el.querySelector('[data-rreply]'); if (b) reply(b); }
+  });
+
+  var rcss = document.createElement('style'); rcss.id = 'wa191rcss';
+  rcss.textContent = '' +
+    'html.w191noscroll,html.w191noscroll body{overflow:hidden;}' +
+    '.w191rec{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;background:rgba(31,32,30,.38);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);font-family:' + BODY + ';color:' + INK + ';}' +
+    '.w191rec.open{display:flex;}' +
+    '.w191rec .sh{width:min(880px,calc(100vw - 32px));height:min(92vh,980px);background:#FFFAF2;border-radius:18px;box-shadow:0 24px 70px rgba(16,63,57,.28);display:flex;flex-direction:column;overflow:hidden;}' +
+    '.w191rec .hd{display:flex;align-items:center;gap:14px;padding:16px 18px 12px;border-bottom:1px solid rgba(16,63,57,.1);}' +
+    '.w191rec .hd .t{flex:1;min-width:0;}.w191rec .hd h3{margin:0;font-family:' + HEAD + ';font-size:26px;letter-spacing:.3px;color:' + GREEN + ';line-height:1.05;}.w191rec .hd p{margin:2px 0 0;font-size:12.5px;color:' + MUTED + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.w191rec .x{border:0;background:rgba(16,63,57,.07);color:' + GREEN + ';width:32px;height:32px;border-radius:50%;font-size:14px;cursor:pointer;flex:none;}' +
+    '.w191rec .seg{display:inline-flex;background:rgba(16,63,57,.07);border-radius:10px;padding:3px;gap:2px;}' +
+    '.w191rec .seg button{border:0;background:transparent;padding:7px 12px;border-radius:8px;font:600 12.5px ' + BODY + ';color:' + GREEN + ';cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;}' +
+    '.w191rec .seg button.on{background:#FFFAF2;box-shadow:0 1px 3px rgba(16,63,57,.18);}' +
+    '.w191rec .seg button i{font-style:normal;font-weight:700;font-size:11px;background:rgba(16,63,57,.1);border-radius:999px;padding:1px 7px;}.w191rec .seg button.on i{background:' + GOLD + ';color:' + GREEN + ';}' +
+    '.w191rec .badge{background:' + FLAG + ';color:#FFFAF2;border-radius:999px;font-size:10.5px;padding:1px 6px;font-weight:700;}' +
+    '.w191rec .bd{flex:1;overflow:auto;padding:14px 18px 18px;-webkit-overflow-scrolling:touch;}' +
+    '.w191rec .ft{display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid rgba(16,63,57,.1);background:' + CREAM + ';flex-wrap:wrap;}' +
+    '.w191rec .ft .cnt{font-size:13px;}.w191rec .ft .sp{flex:1;}.w191rec .ft .ask{font-size:12.5px;color:' + MUTED + ';display:inline-flex;align-items:center;gap:6px;}.w191rec .ft .ask select{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid rgba(16,63,57,.2);}' +
+    '.w191rec .ft .w191btn.gold{margin-left:auto;}.w191rec .lnk{border:0;background:none;color:' + TEAL + ';font:inherit;cursor:pointer;text-decoration:underline;padding:0 4px;}' +
+    '.w191rec .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px;}.w191rec .row .lb{font-size:12px;color:' + MUTED + ';font-weight:600;margin-right:2px;}' +
+    '.w191rec .chip{border:1px solid rgba(16,63,57,.2);background:#FFFAF2;border-radius:12px;padding:7px 11px;cursor:pointer;text-align:left;font-family:' + BODY + ';color:' + GREEN + ';}' +
+    '.w191rec .chip b{display:block;font-size:13px;}.w191rec .chip span{font-size:11px;color:' + MUTED + ';}.w191rec .chip.on{border-color:' + GREEN + ';background:rgba(16,63,57,.06);box-shadow:inset 0 0 0 1px ' + GREEN + ';}' +
+    '.w191rec .groups{display:flex;overflow-x:auto;max-width:100%;margin:2px 0 6px;scrollbar-width:none;}.w191rec .groups::-webkit-scrollbar{display:none;}' +
+    '.w191rec .gn{font-size:12.5px;color:' + MUTED + ';margin:4px 0 10px;line-height:1.45;}.w191rec .gn input{width:52px;font:inherit;padding:2px 4px;border:1px solid rgba(16,63,57,.25);border-radius:6px;text-align:center;}' +
+    '.w191rec .flt input[type=search]{flex:1;min-width:180px;font:inherit;font-size:13px;padding:8px 11px;border-radius:10px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;}' +
+    '.w191rec .flt select{font:inherit;font-size:13px;padding:7px 9px;border-radius:10px;border:1px solid rgba(16,63,57,.2);background:#FFFAF2;}' +
+    '.w191rec .tgl label{font-size:12px;color:' + GREEN + ';display:inline-flex;gap:6px;align-items:center;padding:5px 11px 5px 8px;border:1px solid rgba(16,63,57,.18);border-radius:999px;background:#FFFAF2;cursor:pointer;}.w191rec .tgl label:has(input:checked){background:rgba(16,63,57,.07);border-color:rgba(16,63,57,.35);}.w191rec .tgl input{margin:0;accent-color:' + GREEN + ';}' +
+    '.w191rec .lh{display:flex;justify-content:space-between;font-size:12.5px;color:' + MUTED + ';padding:6px 2px;border-bottom:1px solid rgba(16,63,57,.1);}.w191rec .lh label{display:inline-flex;gap:6px;align-items:center;color:' + INK + ';font-weight:600;}' +
+    '.w191rec .rw{display:grid;grid-template-columns:22px 34px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 4px;border-bottom:1px solid rgba(16,63,57,.07);cursor:pointer;border-radius:10px;}' +
+    '.w191rec .rw:hover{background:rgba(16,63,57,.035);}.w191rec .rw.on{background:rgba(220,165,39,.12);}' +
+    '.w191rec .av{width:34px;height:34px;border-radius:50%;color:#FFFAF2;font-weight:700;font-size:12px;display:inline-flex;align-items:center;justify-content:center;flex:none;}' +
+    '.w191rec .who{min-width:0;display:flex;flex-direction:column;gap:2px;}.w191rec .who b{font-size:14px;}.w191rec .who > span{font-size:12px;color:' + MUTED + ';overflow:hidden;text-overflow:ellipsis;}' +
+    '.w191rec .tgs{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px;}.w191rec .tg{font-size:10.5px;padding:2px 7px;border-radius:999px;background:rgba(16,63,57,.07);color:' + GREEN + ';white-space:nowrap;}' +
+    '.w191rec .tg.on{background:rgba(42,140,122,.14);color:' + TEAL + ';}.w191rec .tg.no{background:rgba(179,64,47,.1);color:' + FLAG + ';}.w191rec .tg.test{background:rgba(111,100,171,.14);color:' + PURPLE + ';}' +
+    '.w191rec .ph{font-size:12px;color:' + MUTED + ';white-space:nowrap;}' +
+    '.w191rec .empty{padding:30px 10px;text-align:center;color:' + MUTED + ';font-size:13px;}.w191rec .none{font-size:12.5px;color:' + FLAG + ';}' +
+    '.w191rec .note{font-size:12.5px;line-height:1.45;padding:10px 12px;border-radius:12px;background:rgba(16,63,57,.06);margin:0 0 10px;}.w191rec .note.warn{background:#FFF4DC;border:1px solid rgba(220,165,39,.45);}' +
+    '.w191rec .wc{border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px;margin:0 0 10px;background:#FFFAF2;}.w191rec .wc h5{margin:0 0 8px;font-size:14px;color:' + GREEN + ';}.w191rec .wc h5 span{font-weight:500;color:' + MUTED + ';font-size:12px;margin-left:4px;}' +
+    '.w191rec .cmp{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start;}.w191rec .cmp .prev{position:sticky;top:0;background:rgba(16,63,57,.045);border-radius:14px;padding:4px 12px 10px;max-height:calc(92vh - 200px);overflow:auto;}.w191rec .cmp .prev h6{margin-top:10px;}' +
+    '.w191rec .tpl{display:flex;flex-direction:column;gap:4px;margin:0 0 8px;}.w191rec .tpl .lg{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:' + MUTED + ';}' +
+    '.w191rec .tpl textarea{font:inherit;font-size:13.5px;line-height:1.45;padding:9px 11px;border-radius:10px;border:1px solid rgba(16,63,57,.2);resize:vertical;min-height:72px;height:auto;background:#FFFAF2;}.w191rec .tpl .cnt{font-size:11px;color:' + MUTED + ';}' +
+    '.w191rec .phs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:' + MUTED + ';}.w191rec .phs button{border:1px dashed rgba(16,63,57,.3);background:#FFFAF2;border-radius:8px;padding:3px 8px;font:600 12px ui-monospace,Menlo,monospace;color:' + GREEN + ';cursor:pointer;}' +
+    '.w191rec .sv{font-size:12.5px;display:inline-flex;gap:6px;align-items:center;margin:2px 0 8px;}' +
+    '.w191rec .prev h6{font-size:12px;letter-spacing:1.2px;text-transform:uppercase;color:' + GOLD + ';margin:14px 0 4px;}.w191rec .prev h6 i{font-style:normal;color:' + MUTED + ';letter-spacing:0;text-transform:none;font-weight:500;}' +
+    '.w191rec .pv{margin:0 0 12px;}.w191rec .pv .pn{font-size:12px;margin:0 0 4px;display:flex;gap:6px;align-items:baseline;}.w191rec .pv .pn span{color:' + MUTED + ';}.w191rec .pv .why{font-size:11.5px;color:' + FLAG + ';margin-top:3px;}' +
+    '.w191rec .bub{max-width:min(460px,86%);padding:9px 13px;border-radius:18px;font-size:13.5px;line-height:1.42;word-wrap:break-word;overflow-wrap:anywhere;}' +
+    '.w191rec .bub.out{background:' + GREEN + ';color:' + CREAM + ';border-bottom-right-radius:6px;margin-left:auto;}.w191rec .pv .bub.out{margin-left:0;border-bottom-right-radius:18px;border-bottom-left-radius:6px;}' +
+    '.w191rec .bub.in{background:#ECEBE6;color:' + INK + ';border-bottom-left-radius:6px;}.w191rec .bub.bad{opacity:.55;}' +
+    '.w191rec .done{text-align:center;padding:26px 10px;}.w191rec .done .tick{width:54px;height:54px;border-radius:50%;background:' + TEAL + ';color:#FFFAF2;font-size:28px;display:inline-flex;align-items:center;justify-content:center;}' +
+    '.w191rec .done h4{font-family:' + HEAD + ';font-size:24px;color:' + GREEN + ';margin:10px 0 8px;}.w191rec .done ul{list-style:none;padding:0;margin:0 auto 10px;max-width:520px;text-align:left;}.w191rec .done li{padding:7px 0;border-bottom:1px solid rgba(16,63,57,.08);font-size:13.5px;}' +
+    '.w191rec .conv{display:grid;grid-template-columns:280px minmax(0,1fr);gap:0;height:100%;min-height:420px;border:1px solid rgba(16,63,57,.1);border-radius:14px;overflow:hidden;}' +
+    '.w191rec .bd:has(.conv){padding:12px;}' +
+    '.w191rec .cl{overflow:auto;border-right:1px solid rgba(16,63,57,.1);background:' + CREAM + ';}' +
+    '.w191rec .cv{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:9px;align-items:center;width:100%;text-align:left;border:0;background:transparent;padding:10px 12px;border-bottom:1px solid rgba(16,63,57,.07);cursor:pointer;font-family:' + BODY + ';}' +
+    '.w191rec .cv.on{background:rgba(16,63,57,.07);}.w191rec .cv .who span{white-space:nowrap;}.w191rec .cv .tm{font-size:11px;color:' + MUTED + ';display:flex;flex-direction:column;align-items:flex-end;gap:5px;}.w191rec .dot{width:9px;height:9px;border-radius:50%;background:' + FLAG + ';display:inline-block;}' +
+    '.w191rec .thr{display:flex;flex-direction:column;min-width:0;min-height:0;}' +
+    '.w191rec .th{display:flex;gap:10px;align-items:center;padding:10px 14px;border-bottom:1px solid rgba(16,63,57,.1);}.w191rec .th b{display:block;font-size:14px;}.w191rec .th span span{font-size:12px;color:' + MUTED + ';}.w191rec .th a{color:' + TEAL + ';}' +
+    '.w191rec .th .bk{display:none;border:0;background:none;font-size:26px;color:' + GREEN + ';cursor:pointer;padding:0 4px;}' +
+    '.w191rec .msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:8px;background:#FFFAF2;}' +
+    '.w191rec .m{display:flex;flex-direction:column;}.w191rec .m.out{align-items:flex-end;}.w191rec .m .mt{font-size:10.5px;color:' + MUTED + ';margin:3px 6px 0;}' +
+    '.w191rec .rp{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid rgba(16,63,57,.1);background:#FFFAF2;}.w191rec .rp textarea{flex:1;font:inherit;font-size:13.5px;line-height:1.4;padding:10px 14px;border-radius:20px;border:1px solid rgba(16,63,57,.2);resize:none;min-height:42px;height:42px;max-height:140px;background:#FFFAF2;box-sizing:border-box;}' +
+    '.w191rec .thr > .note,.w191rec .thr > .gn{margin:8px 12px;}' +
+    '@media (max-width:720px){.w191rec{align-items:flex-end;}.w191rec .sh{width:100vw;height:96vh;border-radius:18px 18px 0 0;}.w191rec .hd{flex-wrap:wrap;padding:14px 14px 10px;}.w191rec .hd .seg{order:3;width:100%;}.w191rec .hd .seg button{flex:1;justify-content:center;}' +
+      '.w191rec .bd{padding:12px 14px 16px;}.w191rec .ft{padding:10px 14px;}.w191rec .rw{grid-template-columns:22px 30px minmax(0,1fr);}.w191rec .rw .ph{display:none;}.w191rec .av{width:30px;height:30px;}' +
+      '.w191rec .conv{grid-template-columns:1fr;}.w191rec .conv .thr{display:none;}.w191rec .conv.has .cl{display:none;}.w191rec .conv.has .thr{display:flex;}.w191rec .th .bk{display:inline-block;}' +
+      '.w191rec .ft .ask{flex:1 1 40%;}.w191rec .ft .w191btn.gold{flex:1 1 100%;justify-content:center;}.w191rec .ft > .gn{display:none;}.w191rec .ft [data-rgo="refreshconv"]{margin-left:auto;}' +
+      '.w191rec .flt input[type=search]{flex:1 1 100%;}.w191rec .flt select{flex:1 1 40%;}.w191rec .cmp{grid-template-columns:1fr;}.w191rec .cmp .prev{position:static;max-height:none;}}';
+  document.head.appendChild(rcss);
+  /* ---------- the page's title names the view (inside the Volunteer Manager) ---------- */
+  var TITLES = { calendar: ['Servings', 'This week, the calendar and every serving'], sop: ['The SOP', 'The master checklist every serving starts from, in six stages'], people: ['Volunteers', 'Everyone who volunteers in Montreal, one record with the CRM'], inventory: ['Inventory', 'The kit in storage, counted and reordered'], recipes: ['Recipes', 'What the cooks make'], event: ['Serving', ''] };
+  function title() {
+    try {
+      if (!document.body.classList.contains('w153volunteer')) return;
+      var sec = document.getElementById('volunteering'); if (!sec) return;
+      var mast = sec.querySelector('.w118mast'); if (!mast) return;
+      var h1 = mast.querySelector('h1'), p = mast.querySelector(':scope > p');
+      var v = typeof WA_VOL_VIEW !== 'undefined' ? WA_VOL_VIEW : 'calendar'; var t = TITLES[v] || TITLES.calendar;
+      var ev = v === 'event' ? curEv() : null;
+      var h = ev ? 'Serving' : t[0]; var sub = ev ? [fmtDay(ev.event_date, true), ev.code, ev.title].filter(Boolean).join(' \u00b7 ') : t[1];
+      if (h1 && h1.textContent !== h) h1.textContent = h;
+      if (p && p.textContent !== sub) p.textContent = sub;
+    } catch (e) { /* fine */ }
+  }
+  var __sched191 = schedule;
+  schedule = function () { __sched191(); setTimeout(title, 100); setTimeout(title, 700); };
+  if (typeof waVolRender === 'function') { var __vr191 = waVolRender; waVolRender = async function () { var out = await __vr191.apply(this, arguments); setTimeout(title, 120); setTimeout(title, 900); setTimeout(focusStep, 1200); return out; }; }
+  window.addEventListener('hashchange', function () { setTimeout(title, 300); });
+  setTimeout(title, 1500);
+
+  /* the page tour: the cards of the earlier waves now sit in stages, so their steps open the stage first; the masthead pill is gone */
+  function fixTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; var vs = TT && TT.volunteering && TT.volunteering.steps; if (!vs || vs.__w191) return;
+      var by = {}; vs.forEach(function (x) { by[x.s] = x; });
+      var stage = function (k) { return function () { openStage(k, false); }; };
+      var ord = ['#volunteering > .w118mast', '#w191week', '#w106add', '#w119cal', '#w145home', '#volunteering .vl-grid', '#w191head', '#w191next', '#w191team', '#w191stages'];
+      var out = ord.map(function (k) { return by[k]; }).filter(Boolean);
+      out.push({ s: '#w171card', t: 'Confirm: the texts', p: 'Volunteers get a text from the ops line 7 days before the serving with their own link to confirm. When they tap Confirm (or reply YES), their card turns confirmed within half a minute. Replies that need a person show here.', opt: 1, go: stage('confirm') });
+      out.push({ s: '#w174card', t: 'Prepare: the itinerary', p: 'When the serving starts and when each role arrives, a preview of each role\u2019s itinerary, and sending the itineraries by text or email.', opt: 1, go: stage('prepare') });
+      out.push({ s: '#w174survey', t: 'Wrap up: the survey', p: 'What volunteers said after the serving: overall, the needs people told us about, what slowed things down, the meal, and every answer in full.', opt: 1, go: stage('wrap_up') });
+      if (by['#w145fb']) { var fb = Object.assign({}, by['#w145fb'], { opt: 1, go: stage('wrap_up') }); out.push(fb); }
+      out.push({ s: '#w191stages [data-w191go="find"]', t: 'Recruit: Find volunteers', p: 'Looks through the CRM for who signed up and never came, regulars we miss, who came once and who loved it. Tick people, read the texts each one gets, and invite them: they go on the roster as Waiting For Response and get a personal text from the ops line between 9 am and 7 pm. A YES by text or a tap on their link confirms them. Replies show in Conversations.', opt: 1, go: stage('recruit') });
+      if (by['#w191extra']) out.push(by['#w191extra']);
+      /* any step another wave adds later keeps its place at the end */
+      vs.forEach(function (x) { if (out.indexOf(x) < 0 && ['#w171card', '#w174card', '#w119 .mast .w171pill', '#w145fb'].indexOf(x.s) < 0) out.push(x); });
+      vs.length = 0; out.forEach(function (x) { vs.push(x); }); vs.__w191 = true;
+    } catch (e) { /* fine */ }
+  }
+  setTimeout(fixTour, 1800); setTimeout(fixTour, 5000);
+
+  window.w191 = { S: S, STAGES: STAGES, model: model, layout: layout, refresh: refresh, stageOf: stageOf, paintWeek: paintWeek, decorateSop: decorateSop, title: title, adoptRail: adoptRail, openRecruit: openRecruit, R: R };
+})();

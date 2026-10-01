@@ -134,7 +134,14 @@
     var box = document.getElementById('w174card');
     if (!box) { box = document.createElement('div'); box.id = 'w174card'; box.className = 'cardy w174card'; var after = document.getElementById('w171card'); if (after && after.parentNode === rail) after.insertAdjacentElement('afterend', box); else rail.insertBefore(box, rail.firstChild); }
     var html = w174Html(ev, D, cn, W4.resp[ev.id] || []);
-    if (box.__h !== html && !(document.activeElement && document.activeElement.id === 'w174st')) { box.innerHTML = html; box.__h = html; }
+    /* wave191: two cards: the itinerary (Prepare) and the survey (Wrap up), so the serving page can place each in its stage */
+    var mark = '<div class="w171h">Survey</div>'; var at = html.indexOf(mark);
+    var h1 = at > 0 ? html.slice(0, at).replace('<h4>Survey and itinerary</h4>', '<h4>Itinerary</h4>') : html;
+    var h2 = at > 0 ? '<h4>Survey</h4>' + html.slice(at + mark.length) : '';
+    if (box.__h !== h1 && !(document.activeElement && document.activeElement.id === 'w174st')) { box.innerHTML = h1; box.__h = h1; }
+    var box2 = document.getElementById('w174survey');
+    if (!box2) { box2 = document.createElement('div'); box2.id = 'w174survey'; box2.className = 'cardy w174card w174survey'; box.insertAdjacentElement('afterend', box2); }
+    if (box2.__h !== h2) { box2.innerHTML = h2; box2.__h = h2; box2.style.display = h2 ? '' : 'none'; }
   }
   /* the roster cards: survey answered, a driver's part */
   function w174Tags(r, evId, dk) {

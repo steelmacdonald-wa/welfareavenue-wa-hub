@@ -1,6 +1,11 @@
-// Welfare Avenue: quo-send (v4, wave172, 30/09/26)
-// v4 (wave172): drain also sends the sign-up notices (kind signup) and the survey texts (kind survey); only the thank-you
-// after a YES or NO (ack) may go outside 8 am to 8 pm.
+// Welfare Avenue: quo-send (v5, wave191e, 01/10/26)
+// v5 (wave191e): texts to volunteers go only between 9 am and 7 pm Toronto time (app_config sms_window_start and
+// sms_window_end, Steel 01/10/26), thank-yous included; outside it they wait in the queue for the quarter-hour tick.
+// A Text volunteers send outside the hours is queued (kind manual) and goes at 9 am. drain sends the Find volunteers
+// invitations (kind recruit) under sms_mode like every automatic text, and a person's own words (kind manual, kind reply
+// from the Hub's conversations) whatever sms_mode says, as Text volunteers always did. STOP is checked again just before
+// sending. 'thread': the Quo conversation with one number, what was typed in the Quo app included.
+// v4 (wave172): drain also sends the sign-up notices (kind signup) and the survey texts (kind survey).
 // Purpose: every text the Hub sends from the ops line (438) 808-7754 through Quo (OpenPhone), logged in quo_messages.
 // Trigger: staff in the Hub (Text volunteers, Send me a test) with their sign-in; the Hub itself (cron wa-sms-tick,
 //   wa171_text_to_confirm, quo-events) with the trigger secret.
@@ -8,10 +13,11 @@
 // Actions:
 //   (none) / 'send'  the Text volunteers window: {message, person_ids|phones, event_id?, event_date?, role?, dry_run}
 //                    {{first_name}} {{event_date}} {{confirm_link}} (the personal link, now hub.welfareavenue.com/c/<token>).
-//   'drain'          trigger secret only: sends what is queued (the 7-day confirmation texts, kind confirm, and the
-//                    thank-yous after a YES or NO, kind ack), at most 60 a call, 250 ms apart. sms_mode decides:
-//                    off skips everything queued, test sends only to app_config sms_test_phones (the rest is skipped),
-//                    live sends. Confirmations only between 8 am and 8 pm Toronto (they wait in the queue otherwise).
+//   'drain'          trigger secret only: sends what is queued (confirm, signup, survey, itinerary, recruit, ack, and the
+//                    manual and reply texts staff wrote outside the hours), at most 60 a call, 250 ms apart. Only between
+//                    sms_window_start and sms_window_end Toronto (9 am to 7 pm); the rest waits. sms_mode decides for the
+//                    automatic kinds: off skips them, test sends them only to app_config sms_test_phones, live sends.
+//                    manual and reply go whatever the mode. Anyone who texted STOP since it was queued is skipped.
 //                    A number Quo refuses (a US number the carrier registration does not cover, for example) is
 //                    logged as failed and never retried (Steel, 29/09/26).
 //   'test_confirm'   admins: {roster_id}: that row's confirmation text, with ?test=1 on the link (the page then saves
@@ -21,6 +27,8 @@
 //   'webhook_setup'  admins or the trigger secret: creates the Quo webhook (message.received) to quo-events, keeps its
 //                    signing key in the vault (QUO_WEBHOOK_SECRET) and its id in app_config quo_webhook_id.
 //   'webhook_status' admins or the trigger secret: the webhooks Quo has.
+//   'thread'         {phone}: the last 50 texts between the ops line and that number as Quo has them (both ways, what
+//                    was typed in the Quo app included), for the Hub's conversations.
 // Tables: quo_messages (insert, update), event_roster (confirm_token, only for the manual {{confirm_link}}), app_config (read;
 //   quo_webhook_id), volunteer_people (read), vault via wa_vault_set. Side effects: texts through Quo.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -87,6 +95,18 @@ function torontoHour(): number {
   const s = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', hour12: false }).format(new Date());
   return Number(s) % 24;
 }
+async function windowOpen(): Promise<boolean> {
+  const a = parseInt(await cfg('sms_window_start'), 10), b = parseInt(await cfg('sms_window_end'), 10);
+  const start = Number.isFinite(a) ? a : 9, end = Number.isFinite(b) ? b : 19, h = torontoHour();
+  return h >= start && h < end;
+}
+const PERSON_KINDS = ['manual', 'reply'];
+async function optedOutPhones(): Promise<Set<string>> {
+  const { data } = await svc.from('crm_contacts').select('phones').eq('sms_opt_out', true).is('merged_into', null);
+  const out = new Set<string>();
+  (data || []).forEach((c: any) => (c.phones || []).map(normPhone).filter(Boolean).forEach((x: string) => out.add(x)));
+  return out;
+}
 async function testPhones(): Promise<string[]> {
   return (await cfg('sms_test_phones')).split(',').map(normPhone).filter(Boolean);
 }
@@ -117,31 +137,56 @@ async function drain(): Promise<Record<string, unknown>> {
     .eq('direction', 'out').eq('status', 'queued').order('id', { ascending: true }).limit(60);
   const list = rows || [];
   if (!list.length) return { mode, sent: 0, skipped: 0, failed: 0, waiting: 0 };
-  if (mode !== 'test' && mode !== 'live') {
-    await svc.from('quo_messages').update({ status: 'skipped', error: 'texts are off (sms_mode ' + mode + ')' }).in('id', list.map(r => r.id));
-    return { mode, skipped: list.length };
-  }
+  const open = await windowOpen();
   const tests = await testPhones();
-  const inWindow = (() => { const h = torontoHour(); return h >= 8 && h < 20; })();
-  const key = await getSecret('QUO_API_KEY');
+  const stopped = await optedOutPhones();
+  let key = '';
   let sent = 0, skipped = 0, failed = 0, waiting = 0;
   for (const r of list) {
     const d = normPhone(r.phone);
-    if (mode === 'test' && tests.indexOf(d) < 0) {
-      await svc.from('quo_messages').update({ status: 'skipped', error: 'test mode: only the test phones get texts' }).eq('id', r.id);
+    const person = PERSON_KINDS.indexOf(String(r.kind)) >= 0;
+    if (!person && mode !== 'test' && mode !== 'live') {
+      await svc.from('quo_messages').update({ status: 'skipped', error: 'texts are off (sms_mode ' + mode + ')' }).eq('id', r.id).eq('status', 'queued');
       skipped++; continue;
     }
-    if (r.kind !== 'ack' && !inWindow) { waiting++; continue; }
+    if (!person && mode === 'test' && tests.indexOf(d) < 0) {
+      await svc.from('quo_messages').update({ status: 'skipped', error: 'test mode: only the test phones get texts' }).eq('id', r.id).eq('status', 'queued');
+      skipped++; continue;
+    }
+    if (!d || stopped.has(d)) {
+      await svc.from('quo_messages').update({ status: 'skipped', error: d ? 'they texted STOP' : 'no phone number' }).eq('id', r.id).eq('status', 'queued');
+      skipped++; continue;
+    }
+    if (!open) { waiting++; continue; }
     // claim the row first, so two drains never send it twice
     const { data: claimed } = await svc.from('quo_messages').update({ status: 'sent', sent_at: new Date().toISOString() })
       .eq('id', r.id).eq('status', 'queued').select('id');
     if (!claimed || !claimed.length) continue;
+    if (!key) key = await getSecret('QUO_API_KEY');
     const out = await quoSend(key, '+1' + d, String(r.body));
     if (out.ok) { sent++; if (out.id) await svc.from('quo_messages').update({ quo_id: out.id }).eq('id', r.id); }
     else { failed++; await svc.from('quo_messages').update({ status: 'failed', sent_at: null, error: out.error || 'failed' }).eq('id', r.id); }
     await new Promise(res => setTimeout(res, 250));
   }
-  return { mode, sent, skipped, failed, waiting };
+  return { mode, sent, skipped, failed, waiting, window_open: open };
+}
+
+/* ---------- a conversation as Quo has it ---------- */
+async function thread(phone: string): Promise<Record<string, unknown>> {
+  const d = normPhone(phone);
+  if (!d) return { error: 'which number?' };
+  const key = await getSecret('QUO_API_KEY');
+  const pn = await cfg('quo_phone_number_id');
+  if (!pn) return { error: 'app_config quo_phone_number_id is not set' };
+  const url = OP + '/messages?phoneNumberId=' + encodeURIComponent(pn) + '&participants[]=' + encodeURIComponent('+1' + d) + '&maxResults=50';
+  const res = await fetch(url, { headers: { 'Authorization': key } });
+  const b: any = await res.json().catch(() => ({}));
+  if (!res.ok) return { error: 'quo ' + res.status, detail: JSON.stringify(b).slice(0, 200) };
+  const messages = ((b && b.data) || []).map((m: any) => ({
+    id: m.id, dir: String(m.direction || '') === 'incoming' ? 'in' : 'out', text: String(m.text ?? m.content ?? '').slice(0, 2000),
+    at: m.createdAt || null, status: m.status || null, by: m.userId || null,
+  }));
+  return { phone: d, messages };
 }
 
 /* ---------- the Quo webhook ---------- */
@@ -295,13 +340,16 @@ async function manual(body: any, auth: Who): Promise<Response> {
 
   const batchId = crypto.randomUUID();
   const previews: Array<Record<string, unknown>> = [];
-  let sent = 0, failed = 0;
-  const key = dryRun ? '' : await getSecret('QUO_API_KEY');
+  let sent = 0, failed = 0, queued = 0;
+  // v5: only between 9 am and 7 pm; outside the hours the texts are queued and go at the next tick inside them
+  const open = await windowOpen();
+  const key = dryRun || !open ? '' : await getSecret('QUO_API_KEY');
   for (const r of finalRecips) {
     const text = render(message, { first_name: firstName(r.name), event_date: eventDate, confirm_link: linkByPhone.get(r.phone) || '' });
     const to = '+1' + r.phone;
     let status = 'dry_run'; let errMsg: string | null = null; let qid: string | null = null;
-    if (!dryRun) {
+    if (!dryRun && !open) { status = 'queued'; queued += 1; }
+    else if (!dryRun) {
       const out = await quoSend(key, to, text);
       if (out.ok) { status = 'sent'; sent += 1; qid = out.id || null; } else { status = 'failed'; failed += 1; errMsg = out.error || 'failed'; }
       await new Promise(res2 => setTimeout(res2, 250));
@@ -312,7 +360,7 @@ async function manual(body: any, auth: Who): Promise<Response> {
     });
     if (previews.length < 60) previews.push({ person_id: r.person_id, name: r.name, phone: to, text: text.slice(0, 300), status });
   }
-  return json({ batch_id: batchId, dry_run: dryRun, recipients: finalRecips.length, sent, failed,
+  return json({ batch_id: batchId, dry_run: dryRun, recipients: finalRecips.length, sent, failed, queued, window_open: open,
     skipped_no_phone: Math.max(0, skippedNoPhone), skipped_no_link: skippedNoLink, skipped_opted_out: skippedOptOut, previews });
 }
 
@@ -336,6 +384,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'numbers') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await numbers()); }
     if (action === 'webhook_setup') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await webhookSetup()); }
     if (action === 'webhook_status') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await webhookStatus()); }
+    if (action === 'thread') return json(await thread(String(body.phone || '')));
     if (action === 'send') return await manual(body, auth);
     return json({ error: 'unknown action' }, 400);
   } catch (e) {

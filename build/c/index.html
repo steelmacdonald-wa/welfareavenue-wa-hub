@@ -262,7 +262,7 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
   var ST = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/';
   var OPS = '438-808-7754', OPS_TEL = '+14388087754';
   var TX = {
-    en: { loading: 'Loading…', ey: 'Your volunteer spot', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.',
+    en: { loading: 'Loading…', ey: 'Your volunteer spot', hi: 'Hi', intro: 'Please confirm your spot. It takes one tap.', introInv: 'We’d love to have you on this serving. Can you make it? One tap tells the team.', confirmInv: 'Yes, I’ll be there',
       role: 'Role', date: 'Date', place: 'Where', format: 'Format', home: 'Home-cooked', kitchen: 'Community kitchen', shift: 'Kitchen shift',
       confirm: 'Confirm, I will be there', cant: 'I can’t make it', saving: 'Saving…',
       okT: 'You’re confirmed!', okP: 'Thank you. The team can see it now.', okWhen: 'Confirmed',
@@ -318,7 +318,7 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
       wx: { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Cloudy', 45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains', 80: 'Rain showers', 81: 'Rain showers', 82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorms', 96: 'Thunderstorms', 99: 'Thunderstorms' },
       kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text',
       acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots, with your Google account.' },
-    fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
+    fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
       confirm: 'Je confirme, je serai là', cant: 'Je ne peux pas venir', saving: 'Enregistrement…',
       okT: 'C’est confirmé!', okP: 'Merci. L’équipe le voit dès maintenant.', okWhen: 'Confirmé',
@@ -951,8 +951,8 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
         + '<div class="soon"><img src="' + ST + 'brand/doodle-star-gold.png" alt="" style="width:30px;height:auto;flex:none"><div><b>' + E(t('earlyWhen').replace('{d}', day(d.opens_on))) + '</b>' + E(t('earlyCal')) + '</div></div>'
         + spotHtml() + calHtml() + detailsHtml() + eventsHtml() + guideHtml() + linksHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>';
     } else {
-      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t('intro')) + '</p>' + spotHtml()
-        + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('confirm')) + '</button>'
+      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '!</h2><div class="rule"></div><p style="margin:0 0 16px">' + E(t(d.invited ? 'introInv' : 'intro')) + '</p>' + spotHtml()
+        + '<button type="button" id="yes"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t(d.invited ? 'confirmInv' : 'confirm')) + '</button>'
         + '<button type="button" class="no" id="cant"' + (S.busy ? ' disabled' : '') + '>' + E(t('cant')) + '</button>' + detailsHtml() + calHtml() + eventsHtml() + callHtml();
     }
   }

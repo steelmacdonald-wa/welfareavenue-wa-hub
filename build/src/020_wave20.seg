@@ -239,7 +239,7 @@ async function waVolLoad(force) {
   if (WA_VOL_LOADED && !force) return;
   var res = await Promise.all([
     db.from('volunteer_event_summary').select('*').order('event_date', { ascending: true }),
-    db.from('sop_template').select('id,parent_id,depth,sort,section,name,description,clickup_url,phase,default_owner,needs_review,review_note,has_secret').eq('active', true).order('sort', { ascending: true }),
+    db.from('sop_template').select('id,parent_id,depth,sort,section,name,description,clickup_url,phase,default_owner,needs_review,review_note,has_secret,stage,hub_signal,hub_note,proposal').eq('active', true).order('sort', { ascending: true }),
     db.from('sop_shots').select('template_id,attachment_id,public_url,title,sort').order('sort', { ascending: true })
   ]);
   WA_VOL_EVENTS = (res[0].data) || [];
@@ -285,7 +285,7 @@ function waVolShell(inner) {
   }).join('');
   return '<div class="card">'
     + '<h2 style="color:#103F39">Volunteering<span class="deptchip" style="background:#103F39">Montreal</span></h2>'
-    + '<p class="read">The biweekly Sunday serving programme. Every event runs the same 94 step checklist, pulled from the ClickUp SOP with its original wording, links and screenshots. Tick steps here and the whole team sees it.</p>'
+    + '<p class="read">The Sunday servings in Montreal: this week, the calendar and each serving with its roster and steps, the SOP, the volunteers, the recipes and the inventory.</p>' /* wave191 wording */
     + '<div class="vl-sub">' + chips + '</div>'
     + inner + '</div>';
 }
@@ -513,7 +513,7 @@ async function waVolRender() {
 
 /* ---------- writes ---------- */
 async function waVolToggleStep(id, done, box) {
-  var patch = { done: done, done_at: done ? new Date().toISOString() : null, done_by: done ? who() : null };
+  var patch = { done: done, done_at: done ? new Date().toISOString() : null, done_by: done ? who() : null, done_source: done ? 'manual' : 'manual_off' }; /* wave191: a person's untick is never overridden by the Hub */
   var r = await db.from('sop_event_steps').update(patch).eq('id', Number(id));
   if (r.error) { toast('Could not save that step'); if (box) box.checked = !done; return; }
   var row = document.querySelector('[data-vlstep="' + id + '"]');

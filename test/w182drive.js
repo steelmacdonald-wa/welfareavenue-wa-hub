@@ -111,7 +111,8 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.ev(() => { const c = document.getElementById('w174card'); if (c) c.__h = ''; return window.w171 && window.w171.paintW174 && window.w171.paintW174(); });
     await f.page.waitForTimeout(1200);
     let blk = await text(f, '#w182blk');
-    ok('block: on the card, above the survey', await f.ev(() => { const b = document.getElementById('w182blk'), c = document.getElementById('w174card'); if (!b || !c) return false; const sv = Array.from(c.querySelectorAll('.w171h')).filter(x => /Survey/.test(x.textContent))[0]; return !!sv && !!(b.compareDocumentPosition(sv) & Node.DOCUMENT_POSITION_FOLLOWING); }), blk);
+    /* wave191: the survey is a card of its own after the itinerary card; the block stays on the itinerary card */
+    ok('block: on the itinerary card, before the survey card', await f.ev(() => { const b = document.getElementById('w182blk'), c = document.getElementById('w174card'), sv = document.getElementById('w174survey'); if (!b || !c || !sv) return false; return c.contains(b) && !!(b.compareDocumentPosition(sv) & Node.DOCUMENT_POSITION_FOLLOWING); }), blk);
     ok('block: sent count and season', /Itineraries · Autumn look/i.test(blk) && /1 of 4 sent/i.test(blk), blk);
     ok('block: modes, scheduled, WhatsApp', /Texts on/.test(blk) && /Email in test mode/.test(blk) && /1 scheduled/.test(blk) && /No WhatsApp group yet/.test(blk), blk);
     ok('block: automatic send line', /day before at 5:00 pm/.test(blk) && /by text and email/.test(blk) && /cooks don’t/.test(blk), blk);

@@ -139,7 +139,7 @@
   function modeAsk(v) {
     var box = document.getElementById('w171mconf'); if (!box) return;
     if (v === S.mode) { box.innerHTML = ''; return; }
-    var what = { off: 'Switch texts off? Anything still queued is not sent.', test: 'Switch to test mode? Only the test phone gets texts.', live: 'Switch texts on? Volunteers on upcoming servings get their confirmation text 7 days before (anyone already inside 7 days gets it at the next quarter hour, between 8 am and 8 pm).' }[v];
+    var what = { off: 'Switch texts off? Anything still queued is not sent.', test: 'Switch to test mode? Only the test phone gets texts.', live: 'Switch texts on? Volunteers on upcoming servings get their confirmation text 7 days before (anyone already inside 7 days gets it at the next quarter hour, between 9 am and 7 pm).' }[v];
     box.innerHTML = '<div class="' + (v === 'live' ? 'warn' : 'info') + '">' + E(what) + '<div class="foot" style="margin-top:8px"><button class="w171btn ghost" data-w171mno="1">Keep ' + E((MODES[S.mode] || S.mode).toLowerCase()) + '</button><button class="w171btn" data-w171mset="' + v + '">Yes, ' + (v === 'live' ? 'switch texts on' : v === 'test' ? 'use test mode' : 'switch them off') + '</button></div></div>';
   }
   async function modeSet(v, btn) {

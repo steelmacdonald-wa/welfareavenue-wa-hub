@@ -279,7 +279,8 @@ if (typeof waTxtPreview === 'function') {
         (d.skipped_no_phone ? '<p class="m-sub">' + d.skipped_no_phone + ' skipped with no phone on file.</p>' : '') +
         (d.skipped_no_link ? '<p class="m-sub">' + d.skipped_no_link + ' skipped: no volunteer record to attach a confirm link to.</p>' : '') +
         rows + more +
-        '<div class="m-actions"><button class="btn" id="vtSend">Send ' + d.recipients + (d.recipients === 1 ? ' text' : ' texts') + ' now</button></div>';
+        (d.window_open === false ? '<p class="m-sub">It is outside 9 am to 7 pm in Montreal, so these texts wait and go at 9 am.</p>' : '') +
+        '<div class="m-actions"><button class="btn" id="vtSend">' + (d.window_open === false ? 'Queue ' + d.recipients + (d.recipients === 1 ? ' text' : ' texts') + ' for 9 am' : 'Send ' + d.recipients + (d.recipients === 1 ? ' text' : ' texts') + ' now') + '</button></div>';
       var send = document.getElementById('vtSend');
       if (send) send.addEventListener('click', waTxtSend);
     } catch (e) {

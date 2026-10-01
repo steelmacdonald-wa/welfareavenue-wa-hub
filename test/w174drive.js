@@ -87,8 +87,9 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     let f = await fresh(browser, { who: 'admin', hash: '#volunteering/e/900', fixture: fixture(), rpcs: RPCS_ADMIN, init: INIT, wait: 4500 });
     await f.ev(INSTALL);
     await f.page.waitForTimeout(800);
-    let card = await text(f, '#w174card');
-    ok('card: under the Texts card', await f.ev(() => { const a = document.getElementById('w171card'), b = document.getElementById('w174card'); return !!a && !!b && a.nextElementSibling === b; }), card);
+    /* wave191: the card is two, the itinerary (Prepare) and the survey (Wrap up); read them together */
+    let card = (await text(f, '#w174card')) + '\n' + (await text(f, '#w174survey'));
+    ok('card: the itinerary card and the survey card on the serving, after the Texts card', await f.ev(() => { const a = document.getElementById('w171card'), b = document.getElementById('w174card'), c = document.getElementById('w174survey'); return !!a && !!b && !!c && !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) && !!(b.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING); }), card.slice(0, 200));
     ok('card: the start time and each role', /Serving starts at/.test(card) && /11:00 am\s*Team leader and main driver at the storage unit/.test(card) && /10:45 am\s*Pickup driver/.test(card) && /11:45 am\s*Community lead/.test(card) && /12:00 pm\s*Serving: servers, photographers \(to 2:00 pm\)/.test(card), card);
     ok('card: itinerary text hour', /text with it at 5:00 pm/.test(card));
     ok('card: previews as test links', await f.ev(() => !!document.querySelector('#w174card a[href="https://hub.welfareavenue.com/c/tok9003abcdefghijk?test=1&it=1"]') && !document.querySelector('#w174card a[href*="tok9002"]')));
@@ -102,6 +103,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.page.click('#w119 [data-w119card="9003"] [data-w174drv]'); await f.page.waitForTimeout(500);
     let up = await f.ev(() => window.__W171.up.filter(u => u.t === 'event_roster'));
     ok('driver: click switches the part (saved in detail)', up.length === 1 && up[0].p.detail.driver_role === 'main' && up[0].p.detail.phone, up);
+    await f.ev(() => document.querySelectorAll('.w191stage').forEach(x => x.classList.add('open')));   /* wave191: the cards sit in folded stages */
     await f.page.fill('#w174st', '12:30'); await f.page.click('[data-w174st]'); await f.page.waitForTimeout(500);
     up = await f.ev(() => window.__W171.up.filter(u => u.t === 'volunteer_events'));
     ok('start time: saved', up.length === 1 && up[0].p.start_time === '12:30', up);

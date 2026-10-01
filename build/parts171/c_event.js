@@ -65,8 +65,8 @@
   function repHtml(m, D) {
     var r = m.roster_id ? (D.roster || []).filter(function (x) { return x.id === m.roster_id; })[0] : null;
     var who = r ? first(r.person_name) + ' (' + one(r.role) + ')' : 'Someone not on this roster';
-    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can’t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
-    return '<div class="w171rep"><div class="h"><b>' + E(who) + '</b><span>' + E(fmtWhen(m.created_at)) + '</span><span class="w171tag ' + h[0] + '" style="display:inline-block;margin:0">' + E(h[1]) + '</span></div><p>' + E(m.body) + '</p></div>';
+    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can’t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], answered: ['ok', 'Answered'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
+    return '<div class="w171rep"><div class="h"><b>' + E(who) + '</b><span>' + E(fmtWhen(m.created_at)) + '</span><span class="w171tag ' + h[0] + '" style="display:inline-block;margin:0">' + E(h[1]) + '</span>' + (m.phone && typeof isStaff === 'function' && isStaff() ? '<button class="w171btn ghost" style="margin-left:auto;padding:4px 10px;font-size:11px" data-w191conv="' + E(m.phone) + '">' + (m.handled === 'question' ? 'Reply' : 'Open') + '</button>' : '') + '</div><p>' + E(m.body) + '</p></div>';
   }
   function cardHtml(ev, D, cn) {
     var c = counts(D.roster, ev.id);
@@ -77,7 +77,7 @@
     if (!up) note = 'This serving is over, so no more confirmation texts go out.';
     else if (mode === 'off') note = 'Texts are off: nothing goes out until an admin switches them on in Text settings.';
     else if (mode === 'test') note = 'Test mode: only the test phone gets texts. Everyone else is held back.';
-    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
+    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 9 am to 7 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
     var reps = replies(ev.id).slice(0, 6);
     return '<h4>Texts <span class="mode ' + E(mode) + '">' + E(MODES[mode] || mode) + '</span></h4>'
       + '<div class="w171nums"><div><b>' + c.conf + '</b><span>confirmed of ' + c.list + '</span></div><div><b>' + c.bytext + '</b><span>by text</span></div><div><b>' + c.waiting + '</b><span>waiting' + (c.texted ? ', ' + c.texted + ' texted' : '') + '</span></div><div><b>' + c.decl + '</b><span>can’t make it</span></div></div>'

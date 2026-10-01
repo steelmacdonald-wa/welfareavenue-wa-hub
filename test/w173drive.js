@@ -75,7 +75,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     await f.ev(INSTALL);
     await f.page.waitForSelector('#w171card', { timeout: 8000 }).catch(() => null);
     let card = await text(f, '#w171card');
-    ok('card: in the rail', await f.ev(() => !!document.querySelector('#w119rail #w171card')), card);
+    ok('card: in the rail (wave191: in the Confirm stage)', await f.ev(() => !!document.querySelector('#w119rail #w171card') || !!document.querySelector('.w191stage[data-stage="confirm"] #w171card')), card);
     ok('card: texts on', /TEXTS ON|Texts on/i.test(card), card);
     ok('card: the numbers', /2\s*confirmed of 6/.test(card) && /1\s*by text/.test(card) && /3\s*waiting, 1 texted/.test(card) && /1\s*can.t make it/.test(card), card);
     ok('card: the automatic note', /automatically/.test(card) && /no phone number/.test(card) && /signed up, with a link to add it to their calendar/.test(card) && /after the serving, their survey \(server\)/.test(card), card);
@@ -91,19 +91,20 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     ok('tags (172): the driver\u2019s car', /Car: SUV Toyota RAV4/.test(tags['9003'] || ''), tags);
     ok('tags (172): donations and the sign-up notice', /Bringing to donate: Two bags of clothes/.test(tags['9004'] || '') && /Told they are signed up/.test(tags['9004'] || ''), tags);
     ok('tags: confirmed by hand has no text tag', (tags['9006'] || '') === '', tags);
-    let mast = await text(f, '#w119 .mast');
-    ok('mast: format not set and x of y confirmed', /Format not set/i.test(mast) && /2 of 6 confirmed · 1 by text/i.test(mast), mast);
+    /* wave191: the flow header carries the format; the Texts card the counts */
+    let mast = await text(f, '#w191head') + ' ' + await f.ev(() => (document.querySelector('#w171card') || {}).textContent || '');
+    ok('mast: format not set and x of y confirmed', /Format not set/i.test(mast) && /2\s*confirmed of 6/i.test(mast) && /1\s*by text/i.test(mast), mast);
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/01-event.png', fullPage: false });
 
     /* the format */
-    await f.page.click('#w119 .mast [data-w171fmt]'); await f.page.waitForTimeout(500);
+    await f.page.click('#w191head [data-w191go="fmt"]'); await f.page.waitForTimeout(500);
     ok('format: the editor opens', /How the food is made/i.test(await text(f, '#modalBox')));
     await f.page.check('input[name="w171f"][value="community_kitchen"]'); await f.page.waitForTimeout(150);
     ok('format: kitchen fields show', await f.ev(() => document.getElementById('w171kit').style.display !== 'none'));
     await f.page.fill('#w171kp', 'La Poubelle Magnifique, 1221 Rue Crescent'); await f.page.fill('#w171ks', '9:00 to 12:30');
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/02-format.png' });
     await f.page.click('[data-w171fsave]'); await f.page.waitForTimeout(600);
-    mast = await text(f, '#w119 .mast');
+    mast = await text(f, '#w191head');
     ok('format: saved and shown', /Community kitchen/i.test(mast), mast);
     const saved = await f.ev(() => window.__W171.up.filter(u => u.t === 'volunteer_events')[0]);
     ok('format: written to volunteer_events', saved && saved.p.format === 'community_kitchen' && /Crescent/.test(saved.p.kitchen_place || '') && saved.p.kitchen_shift === '9:00 to 12:30', saved);

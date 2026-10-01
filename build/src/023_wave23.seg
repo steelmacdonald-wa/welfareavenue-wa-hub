@@ -102,7 +102,7 @@ async function waTxtSend() {
     if (r.error) throw r.error;
     var d = r.data || {};
     closeModal();
-    toast('Sent ' + (d.sent || 0) + (d.sent === 1 ? ' text' : ' texts') + (d.failed ? ', ' + d.failed + ' failed' : ''));
+    toast(d.queued ? 'Queued ' + d.queued + (d.queued === 1 ? ' text' : ' texts') + ': they go at 9 am' : 'Sent ' + (d.sent || 0) + (d.sent === 1 ? ' text' : ' texts') + (d.failed ? ', ' + d.failed + ' failed' : ''));
   } catch (e) {
     if (btn) { btn.disabled = false; btn.textContent = 'Send now'; }
     toast('Send failed');

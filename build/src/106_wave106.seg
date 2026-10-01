@@ -165,8 +165,9 @@
       if (typeof isStaff !== 'function' || !isStaff()) return;
       var sec = document.getElementById('volunteering');
       if (!sec || document.getElementById('w106add')) return;
-      /* only on the calendar view (the hero back-button marks detail views) */
+      /* only on the calendar view (the hero back-button marks detail views; wave191: the SOP, inventory and recipes views too) */
       if (sec.querySelector('.vl-back')) return;
+      if (typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW !== 'calendar') return;
       /* anchor above the hero or first month; an EMPTY calendar still gets
          the button (that is exactly when you need to add events) */
       var anchor = sec.querySelector('.vl-hero') || sec.querySelector('.vl-month') || sec.querySelector('.vl-empty');

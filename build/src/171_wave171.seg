@@ -254,8 +254,8 @@
   function repHtml(m, D) {
     var r = m.roster_id ? (D.roster || []).filter(function (x) { return x.id === m.roster_id; })[0] : null;
     var who = r ? first(r.person_name) + ' (' + one(r.role) + ')' : 'Someone not on this roster';
-    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can\u2019t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
-    return '<div class="w171rep"><div class="h"><b>' + E(who) + '</b><span>' + E(fmtWhen(m.created_at)) + '</span><span class="w171tag ' + h[0] + '" style="display:inline-block;margin:0">' + E(h[1]) + '</span></div><p>' + E(m.body) + '</p></div>';
+    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can\u2019t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], answered: ['ok', 'Answered'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
+    return '<div class="w171rep"><div class="h"><b>' + E(who) + '</b><span>' + E(fmtWhen(m.created_at)) + '</span><span class="w171tag ' + h[0] + '" style="display:inline-block;margin:0">' + E(h[1]) + '</span>' + (m.phone && typeof isStaff === 'function' && isStaff() ? '<button class="w171btn ghost" style="margin-left:auto;padding:4px 10px;font-size:11px" data-w191conv="' + E(m.phone) + '">' + (m.handled === 'question' ? 'Reply' : 'Open') + '</button>' : '') + '</div><p>' + E(m.body) + '</p></div>';
   }
   function cardHtml(ev, D, cn) {
     var c = counts(D.roster, ev.id);
@@ -266,7 +266,7 @@
     if (!up) note = 'This serving is over, so no more confirmation texts go out.';
     else if (mode === 'off') note = 'Texts are off: nothing goes out until an admin switches them on in Text settings.';
     else if (mode === 'test') note = 'Test mode: only the test phone gets texts. Everyone else is held back.';
-    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 8 am to 8 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
+    else note = (ad.day > todayIso() ? 'Confirmation texts go automatically on ' + fmtDay(ad.day, true) + ' at ' + ad.hour + ' am' : 'Confirmation texts go automatically, 9 am to 7 pm') + ' to everyone not yet confirmed. Anyone added later gets theirs right away; someone added more than 7 days out first gets a text saying they are signed up, with a link to add it to their calendar.' + ' The day before, confirmed volunteers get their itinerary; after the serving, their survey' + (String(S.cfg.sms_survey_roles || '*').trim() === '*' ? '' : ' (' + String(S.cfg.sms_survey_roles).split(',').map(function (x) { return one(x.trim()).toLowerCase(); }).join(', ') + ')') + '.';
     var reps = replies(ev.id).slice(0, 6);
     return '<h4>Texts <span class="mode ' + E(mode) + '">' + E(MODES[mode] || mode) + '</span></h4>'
       + '<div class="w171nums"><div><b>' + c.conf + '</b><span>confirmed of ' + c.list + '</span></div><div><b>' + c.bytext + '</b><span>by text</span></div><div><b>' + c.waiting + '</b><span>waiting' + (c.texted ? ', ' + c.texted + ' texted' : '') + '</span></div><div><b>' + c.decl + '</b><span>can\u2019t make it</span></div></div>'
@@ -551,7 +551,7 @@
   function modeAsk(v) {
     var box = document.getElementById('w171mconf'); if (!box) return;
     if (v === S.mode) { box.innerHTML = ''; return; }
-    var what = { off: 'Switch texts off? Anything still queued is not sent.', test: 'Switch to test mode? Only the test phone gets texts.', live: 'Switch texts on? Volunteers on upcoming servings get their confirmation text 7 days before (anyone already inside 7 days gets it at the next quarter hour, between 8 am and 8 pm).' }[v];
+    var what = { off: 'Switch texts off? Anything still queued is not sent.', test: 'Switch to test mode? Only the test phone gets texts.', live: 'Switch texts on? Volunteers on upcoming servings get their confirmation text 7 days before (anyone already inside 7 days gets it at the next quarter hour, between 9 am and 7 pm).' }[v];
     box.innerHTML = '<div class="' + (v === 'live' ? 'warn' : 'info') + '">' + E(what) + '<div class="foot" style="margin-top:8px"><button class="w171btn ghost" data-w171mno="1">Keep ' + E((MODES[S.mode] || S.mode).toLowerCase()) + '</button><button class="w171btn" data-w171mset="' + v + '">Yes, ' + (v === 'live' ? 'switch texts on' : v === 'test' ? 'use test mode' : 'switch them off') + '</button></div></div>';
   }
   async function modeSet(v, btn) {
@@ -788,7 +788,14 @@
     var box = document.getElementById('w174card');
     if (!box) { box = document.createElement('div'); box.id = 'w174card'; box.className = 'cardy w174card'; var after = document.getElementById('w171card'); if (after && after.parentNode === rail) after.insertAdjacentElement('afterend', box); else rail.insertBefore(box, rail.firstChild); }
     var html = w174Html(ev, D, cn, W4.resp[ev.id] || []);
-    if (box.__h !== html && !(document.activeElement && document.activeElement.id === 'w174st')) { box.innerHTML = html; box.__h = html; }
+    /* wave191: two cards: the itinerary (Prepare) and the survey (Wrap up), so the serving page can place each in its stage */
+    var mark = '<div class="w171h">Survey</div>'; var at = html.indexOf(mark);
+    var h1 = at > 0 ? html.slice(0, at).replace('<h4>Survey and itinerary</h4>', '<h4>Itinerary</h4>') : html;
+    var h2 = at > 0 ? '<h4>Survey</h4>' + html.slice(at + mark.length) : '';
+    if (box.__h !== h1 && !(document.activeElement && document.activeElement.id === 'w174st')) { box.innerHTML = h1; box.__h = h1; }
+    var box2 = document.getElementById('w174survey');
+    if (!box2) { box2 = document.createElement('div'); box2.id = 'w174survey'; box2.className = 'cardy w174card w174survey'; box.insertAdjacentElement('afterend', box2); }
+    if (box2.__h !== h2) { box2.innerHTML = h2; box2.__h = h2; box2.style.display = h2 ? '' : 'none'; }
   }
   /* the roster cards: survey answered, a driver's part */
   function w174Tags(r, evId, dk) {
@@ -1115,7 +1122,7 @@
       + (dbPast ? '' : '<label><input type="radio" name="w182when" value="daybefore">The day before, ' + E(fmtDay(dbIso.slice(0, 10))) + ' at ' + E(hm12(dbIso.slice(11, 16))) + '</label>')
       + '<label><input type="radio" name="w182when" value="at">At a set time</label></div>'
       + '<input type="datetime-local" id="w182at" value="' + E(dbIso) + '" style="display:none;margin-top:6px;width:auto;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:10px;padding:7px 10px;background:' + CREAM + '">'
-      + '<p class="w171note" style="margin:4px 0 0">Texts go between 8 am and 8 pm Toronto time; outside those hours they wait until 8 am.</p>'
+      + '<p class="w171note" style="margin:4px 0 0">Texts go between 9 am and 7 pm Montreal time; outside those hours they wait until 9 am.</p>'
       + '<label class="f">A note to everyone (optional, in the text and the email)</label><input type="text" id="w182note" maxlength="300" placeholder="For example: it will be cold, bring a warm coat">'
       + '<label style="display:flex;gap:8px;align-items:center;font-size:13.5px;margin:10px 0 0"><input type="checkbox" id="w182upd"> This is an update (it says their itinerary has changed)</label>'
       + '<div class="tabs"><button type="button" class="on" data-w182tab="text">The text</button><button type="button" data-w182tab="email">The email</button><button type="button" data-w182tab="page">The page</button></div><div id="w182prev"><p class="w171note" style="margin:10px 0">Pick someone to see their text.</p></div>'
@@ -1179,7 +1186,7 @@
         if (tk.emails) bits.push(tk.emails + ' email' + (tk.emails === 1 ? '' : 's'));
         if (bits.length) bits = [bits.join(' and ') + ' on the way'];
         if (tk.skipped) bits.push(tk.skipped + ' skipped (see Sent and scheduled)');
-        if (tk.waiting_for_8am) bits.push(tk.waiting_for_8am + ' text' + (tk.waiting_for_8am === 1 ? '' : 's') + ' wait for 8 am');
+        var wn = tk.waiting_for_window != null ? tk.waiting_for_window : tk.waiting_for_8am; if (wn) bits.push(wn + ' text' + (wn === 1 ? '' : 's') + ' wait for 9 am');
       }
       if (d.no_way_to_reach) bits.push(d.no_way_to_reach + ' with no phone or email');
       T(bits.join(', ') || 'Nothing to send');
