@@ -1,0 +1,624 @@
+/* =====================================================================
+   WA v181 The HR centre's Analytics: who has been part of Welfare Avenue, and for how long (30/09/26)
+   =====================================================================
+   Steel (30/09/26), with Slack's Member Analytics export (29/08/2025 to 29/09/2026): "To help you add start dates, add an
+   analytics tab to the hr center, show trends, and know who's been a part of the org and for how long ish (we may have
+   deactivated their accounts late)".
+
+   Where: a seventh section in the HR centre, Analytics (#hrcentre/analytics; on a computer it is in the app's rail), for
+   HR and admins only (wa181_can_see: the HR access list, the HR profile, admins; leaders who open the HR centre do not get
+   the tab). It shows:
+   - the headline (on the team now, joined and left this fiscal year, how long people stay, everyone since 2021);
+   - the team over time (people on the team each month since May 2021, with the month's joiners; hover for the numbers);
+   - each fiscal year (October to September): joined, left, on the team at the year's end, and how many of that year's
+     joiners are still here;
+   - how long people stay (the current team so far, and the people who left);
+   - by team (the current team);
+   - everyone who has been part of Welfare Avenue, filterable, with a sheet per person (their Slack accounts, link to the
+     roster or mark as not a team member) and a CSV;
+   - Worth a look (people on Slack but not on the roster, roster and Slack disagreeing, accounts nobody used in a year,
+     links made by first name, people with no start date);
+   - Import a new Slack export (the same CSV; the page reads it and wa181_import saves it).
+   Honest dates: accounts were switched off late and in batches, so a leaving date is "left by" (the latest day they can
+   have left), and someone not active once in the export's window left by its first day.
+   Data: hr_people_tenure_v (one row per person), hr_slack_accounts (one per Slack account), wa181_import, wa181_link.
+   Start dates on the roster now take the day people joined Slack when it is earlier (start_source slack; wave181c).
+   ===================================================================== */
+(function () {
+  if (window.__wa181) return; window.__wa181 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A', LINE = '#E7E2D6', CREAM = '#FFFAF2', PURPLE = '#6F64AB', INK = '#1F201E', SAND = '#F4F2EA';
+  var HEAD = '"Barlow Condensed", "Arial Narrow", sans-serif';
+  var A = { can: null, canP: null, rows: [], accts: [], roster: [], loaded: false, loading: null, err: '', f: 'current', q: '', team: '', sort: 'start', imp: null };
+  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lower(s) { return String(s == null ? '' : s).toLowerCase(); }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+  function ym(iso) { return String(iso || '').slice(0, 7); }
+  function monLabel(k) { var p = String(k).split('-'); return MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function dayNice(iso) { if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); return Number(p[2]) + ' ' + MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function monthNice(iso) { if (!iso) return ''; var p = String(iso).slice(0, 10).split('-'); return MON[Number(p[1]) - 1] + ' ' + p[0]; }
+  function months(a, b) { /* whole months between two ISO days */
+    if (!a || !b) return null; var x = String(a).split('-').map(Number), y = String(b).split('-').map(Number);
+    var m = (y[0] - x[0]) * 12 + (y[1] - x[1]) + (y[2] >= x[2] ? 0 : -1); return Math.max(0, m);
+  }
+  function dur(m) {
+    if (m == null) return '';
+    if (m < 1) return 'under a month'; if (m < 12) return plural(m, 'month');
+    var y = Math.floor(m / 12), r = m % 12; return y + (y === 1 ? ' year' : ' years') + (r ? ' ' + r + ' mo' : '');
+  }
+  function fyOf(iso) { var y = Number(String(iso).slice(0, 4)), m = Number(String(iso).slice(5, 7)); return m >= 10 ? y : y - 1; }   /* the fiscal year starting 1 October of that year */
+  function fyLabel(y) { return y + '-' + String((y + 1) % 100).padStart(2, '0'); }
+  function median(a) { if (!a.length) return null; var s = a.slice().sort(function (x, y) { return x - y; }); var h = Math.floor(s.length / 2); return s.length % 2 ? s[h] : Math.round((s[h - 1] + s[h]) / 2); }
+  function teamName(d) { try { return (window.WA_TEAMS && WA_TEAMS.labels[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function teamShort(d) { try { return (window.WA_TEAMS && WA_TEAMS.short[d]) || teamName(d); } catch (e) { return d || ''; } }
+  function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
+  function hrOn() { var pn = document.getElementById('hrcentre'); return !!pn && pn.classList.contains('active'); }
+  function curView() { var on = document.querySelector('#w46body .w47tab.on'); return on ? on.getAttribute('data-w47v') : ''; }
+
+  var CSS = ''
+    + '#w181{display:none;font-family:inherit;color:' + INK + ';}#w181.on{display:block;}'
+    + '#w181 .w181top{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:0 0 14px;}'
+    + '#w181 .w181top p{margin:0;flex:1 1 360px;font-size:13.5px;line-height:1.5;color:' + MUTED + ';}'
+    + '#w181 .w181top .acts{display:flex;gap:8px;flex-wrap:wrap;}'
+    + '.w181btn{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ' !important;font:inherit;font-size:13px;font-weight:700;padding:8px 16px;cursor:pointer;text-decoration:none !important;white-space:nowrap;}'
+    + '.w181btn:hover{background:#0b2f2a;}.w181btn[disabled]{opacity:.55;cursor:default;}'
+    + '.w181btn.ghost{background:transparent;color:' + GREEN + ' !important;border:1px solid rgba(16,63,57,.35);}.w181btn.ghost:hover{background:rgba(16,63,57,.07);}'
+    + '.w181btn.gold{background:' + GOLD + ';color:' + GREEN + ' !important;}.w181btn.sm{font-size:12px;padding:6px 12px;}'
+    + '.w181lnk{border:0;background:none;padding:0;font:inherit;color:' + GREEN + ';font-weight:700;text-decoration:underline;cursor:pointer;text-align:left;}'
+    + '#w181 .w181tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 16px;}'
+    + '#w181 .w181tile{background:' + CREAM + ';border:1px solid ' + LINE + ';border-radius:16px;padding:12px 14px;}'
+    + '#w181 .w181tile b{display:block;font-family:' + HEAD + ';font-size:30px;line-height:1.05;color:' + GREEN + ';}'
+    + '#w181 .w181tile span{display:block;font-size:12.5px;color:' + INK + ';margin-top:2px;line-height:1.35;}'
+    + '#w181 .w181tile small{display:block;font-size:11.5px;color:' + MUTED + ';margin-top:4px;line-height:1.35;}'
+    + '#w181 .w181card{background:' + CREAM + ';border:1px solid ' + LINE + ';border-radius:18px;padding:16px 18px;margin:0 0 14px;}'
+    + '#w181 .w181card h3{font-family:' + HEAD + ';font-size:22px;font-weight:700;color:' + GREEN + ';margin:0 0 2px;letter-spacing:.2px;}'
+    + '#w181 .w181card .sub{font-size:12.5px;color:' + MUTED + ';margin:0 0 12px;line-height:1.45;}'
+    + '#w181 .w181two{display:grid;grid-template-columns:1fr 1fr;gap:14px;}#w181 .w181two > .w181card{margin:0;min-width:0;}'
+    + '#w181 .w181chart{position:relative;}#w181 .w181chart svg{display:block;width:100%;height:auto;overflow:visible;}'
+    + '#w181 .w181tip{position:absolute;pointer-events:none;background:' + INK + ';color:' + CREAM + ';font-size:12px;line-height:1.45;border-radius:10px;padding:7px 10px;white-space:nowrap;transform:translate(-50%,-100%);display:none;z-index:3;}'
+    + '#w181 .w181tip b{font-weight:800;}'
+    + '#w181 .w181key{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:' + MUTED + ';margin:8px 0 0;}'
+    + '#w181 .w181key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}'
+    + '#w181 table.w181t{width:100%;border-collapse:collapse;font-size:13px;}'
+    + '#w181 table.w181t th{text-align:left;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:' + MUTED + ';font-weight:800;padding:6px 8px;border-bottom:1px solid ' + LINE + ';white-space:nowrap;}'
+    + '#w181 table.w181t td{padding:8px;border-bottom:1px solid ' + LINE + ';vertical-align:top;}'
+    + '#w181 table.w181t td.n,#w181 table.w181t th.n{text-align:right;font-variant-numeric:tabular-nums;}#w181 .w181fy .sm{display:none;}#w181 .w181fy td:first-child{white-space:nowrap;}'
+    + '#w181 .w181bars .r{display:grid;grid-template-columns:110px 1fr 40px;align-items:center;gap:8px;margin:0 0 6px;font-size:12.5px;}'
+    + '#w181 .w181bars .tr{height:14px;background:' + SAND + ';border-radius:999px;overflow:hidden;}'
+    + '#w181 .w181bars .tr i{display:block;height:100%;border-radius:999px;}'
+    + '#w181 .w181bars .r b{text-align:right;font-variant-numeric:tabular-nums;}'
+    + '#w181 .w181bars h4{font-size:12px;letter-spacing:.5px;text-transform:uppercase;color:' + MUTED + ';margin:10px 0 8px;font-weight:800;}'
+    + '#w181 .w181bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px;}'
+    + '#w181 .w181bar input[type=search]{flex:1 1 200px;min-width:160px;padding:9px 14px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font:inherit;font-size:13.5px;}'
+    + '#w181 .w181bar select{padding:8px 10px;border:1px solid rgba(16,63,57,.2);border-radius:999px;font:inherit;font-size:13px;background:' + CREAM + ';}'
+    + '#w181 .w181chip{font-size:12.5px;font-weight:700;color:' + GREEN + ';background:rgba(16,63,57,.07);border:none;border-radius:999px;padding:7px 12px;cursor:pointer;}'
+    + '#w181 .w181chip.on{background:' + GREEN + ';color:' + CREAM + ';}'
+    + '#w181 .w181ppl tr[data-w181p]{cursor:pointer;}#w181 .w181ppl tr[data-w181p]:hover td{background:rgba(16,63,57,.035);}'
+    + '#w181 .w181ppl td .t{display:block;font-size:12px;color:' + MUTED + ';margin-top:2px;}'
+    + '.w181tag{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.3px;border-radius:999px;padding:2px 8px;margin:0 4px 3px 0;background:rgba(16,63,57,.08);color:' + GREEN + ';white-space:nowrap;}'
+    + '.w181tag.warn{background:rgba(220,165,39,.22);color:#6b4d05;}.w181tag.bad{background:rgba(179,64,47,.12);color:' + FLAG + ';}.w181tag.ok{background:rgba(42,140,122,.14);color:#1d6658;}'
+    + '#w181 .w181look{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;}'
+    + '#w181 .w181look > div{background:' + CREAM + ';border:1px solid ' + LINE + ';border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.5;}'
+    + '#w181 .w181look b.h{display:block;font-size:13.5px;color:' + GREEN + ';margin:0 0 2px;}'
+    + '#w181 .w181look p{margin:0 0 6px;font-size:12.5px;color:' + MUTED + ';}'
+    + '#w181 .w181note{font-size:12px;color:' + MUTED + ';margin:8px 0 0;line-height:1.45;}'
+    + '#w181 .w181empty{font-size:13px;color:' + MUTED + ';padding:12px 0;}'
+    + '.w181sheet h3{font-family:' + HEAD + ';font-size:24px;color:' + GREEN + ';margin:0 0 2px;}'
+    + '.w181sheet .sub{font-size:13px;color:' + MUTED + ';margin:0 0 12px;}'
+    + '.w181sheet .facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin:0 0 14px;}'
+    + '.w181sheet .facts div{background:rgba(16,63,57,.045);border-radius:10px;padding:8px 10px;font-size:13px;}'
+    + '.w181sheet .facts small{display:block;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase;color:' + MUTED + ';font-weight:800;}'
+    + '.w181sheet .acc{border:1px solid ' + LINE + ';border-radius:12px;padding:10px 12px;margin:0 0 8px;font-size:13px;line-height:1.5;}'
+    + '.w181sheet .acc .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;}'
+    + '.w181sheet .acc select{padding:6px 8px;border:1px solid rgba(16,63,57,.25);border-radius:8px;font:inherit;font-size:13px;max-width:100%;}'
+    + '.w181sheet .foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px;}'
+    + '.w181sheet .err{color:' + FLAG + ';font-size:12.5px;margin:6px 0 0;}'
+    + '.w181sheet label.f{display:block;font-size:12px;font-weight:700;color:' + INK + ';margin:8px 0 4px;}'
+    + '.w181sheet input[type=date],.w181sheet input[type=file]{font:inherit;font-size:13px;}'
+    + '@media (max-width:760px){#w181 .w181two{grid-template-columns:1fr;}#w181 .w181tile b{font-size:26px;}'
+    + '#w181 table.w181ppl thead{display:none;}#w181 table.w181ppl tr{display:block;border-bottom:1px solid ' + LINE + ';padding:8px 0;}'
+    + '#w181 table.w181ppl td{display:block;border:0;padding:2px 4px;}#w181 table.w181ppl td[data-l]:before{content:attr(data-l) ": ";font-size:11px;color:' + MUTED + ';font-weight:700;}'
+    + '#w181 .w181bars .r{grid-template-columns:90px 1fr 34px;}#w181 .w181fy{font-size:13px;}#w181 .w181fy th{font-size:10px;letter-spacing:.2px;}#w181 .w181fy th,#w181 .w181fy td{padding:6px 4px;white-space:nowrap;}#w181 .w181fy .lg{display:none;}#w181 .w181fy .sm{display:inline;}#w181 .w181tiles{grid-template-columns:1fr 1fr;}#w181 .w181card{padding:14px 12px;}}';
+  var st = document.createElement('style'); st.id = 'w181css'; st.textContent = CSS; document.head.appendChild(st);
+
+  /* ---------- who may see it, and the data ---------- */
+  function canSee() {
+    if (A.can !== null) return Promise.resolve(A.can);
+    if (A.canP) return A.canP;
+    A.canP = (async function () {
+      try { var r = await db.rpc('wa181_can_see'); A.can = !!(r && !r.error && r.data === true); }
+      catch (e) { A.can = false; }
+      A.canP = null; return A.can;
+    })();
+    return A.canP;
+  }
+  async function pageAll(q) {   /* PostgREST answers 1,000 rows a call */
+    var out = [], from = 0;
+    for (var i = 0; i < 20; i++) {
+      var r = await q().range(from, from + 999);
+      if (r.error) throw r.error;
+      out = out.concat(r.data || []); if (!r.data || r.data.length < 1000) break; from += 1000;
+    }
+    return out;
+  }
+  function load(force) {
+    if (A.loading) return A.loading;
+    if (A.loaded && !force) return Promise.resolve();
+    A.loading = (async function () {
+      try {
+        var res = await Promise.all([
+          pageAll(function () { return db.from('hr_people_tenure_v').select('*').order('person_key'); }),
+          pageAll(function () { return db.from('hr_slack_accounts').select('slack_id,full_name,display_name,email,title,account_type,created_on,claimed_on,deactivated_on,days_active,messages,team_member_id,person_key,kind,link_by,period_from,period_to').order('slack_id'); }),
+          pageAll(function () { return db.from('team_members').select('id,name,department,active,email').order('name'); })
+        ]);
+        A.rows = res[0]; A.accts = res[1]; A.roster = res[2]; A.err = ''; A.loaded = true;
+      } catch (e) { A.err = (e && e.message) || String(e); }
+      A.loading = null;
+    })();
+    return A.loading;
+  }
+
+  /* ---------- the numbers ---------- */
+  function today() { return todayIso(); }
+  function period() {   /* the export's window */
+    var f = null, t = null;
+    A.accts.forEach(function (a) { if (a.period_from && (!f || a.period_from > f)) f = a.period_from; if (a.period_to && (!t || a.period_to > t)) t = a.period_to; });
+    return { from: f, to: t };
+  }
+  function people() { return A.rows.filter(function (p) { return p.status !== 'never_joined'; }); }
+  function endOf(p) {   /* the day counted as their last: today while on the team, else the latest day they can have left */
+    if (p.status === 'current') return today();
+    if (p.left_by) return p.left_by;
+    if (p.accounts > 0 && p.open_accounts > 0 && p.period_to) return p.period_to;   /* still on Slack and used it in the window */
+    return null;
+  }
+  function tenureOf(p) { var e = endOf(p); return p.started_on && e ? months(p.started_on, e) : null; }
+  function curFy() { return fyOf(today()); }
+  function stats() {
+    var all = people(), cur = all.filter(function (p) { return p.status === 'current'; });
+    var t = today(), y1 = (Number(t.slice(0, 4)) - 1) + t.slice(4);   /* the last 12 months */
+    var joined = all.filter(function (p) { return p.started_on && p.started_on > y1 && p.started_on <= t; });
+    var left = all.filter(function (p) { return p.status !== 'current' && p.left_by && p.left_by > y1 && !(p.days_active === 0 && p.left_by === p.period_from); });
+    var gone = all.filter(function (p) { return p.status !== 'current' && tenureOf(p) != null; });
+    var first = null; all.forEach(function (p) { if (p.started_on && (!first || p.started_on < first)) first = p.started_on; });
+    return {
+      all: all, cur: cur, since: y1, joined: joined, left: left,
+      curMed: median(cur.map(tenureOf).filter(function (x) { return x != null; })),
+      goneMed: median(gone.map(tenureOf)),
+      first: first,
+      noStart: cur.filter(function (p) { return !p.started_on; }).length
+    };
+  }
+  function monthsRange(a, b) { var out = [], y = Number(a.slice(0, 4)), m = Number(a.slice(5, 7)); var ey = Number(b.slice(0, 4)), em = Number(b.slice(5, 7)); while (y < ey || (y === ey && m <= em)) { out.push(y + '-' + String(m).padStart(2, '0')); m++; if (m > 12) { m = 1; y++; } } return out; }
+  function series() {   /* people on the team at the end of each month, and the month's joiners */
+    var all = people().filter(function (p) { return p.started_on; }); var t = today();
+    var first = all.reduce(function (a, p) { return !a || p.started_on < a ? p.started_on : a; }, null); if (!first) return [];
+    return monthsRange(ym(first), ym(t)).map(function (k) {
+      var y = Number(k.slice(0, 4)), m = Number(k.slice(5, 7)); var last = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10); if (last > t) last = t;
+      var on = 0, joined = [], unsure = 0;
+      all.forEach(function (p) {
+        if (ym(p.started_on) === k) joined.push(p.name);
+        var e = endOf(p);
+        if (p.started_on <= last && (e === null ? p.status === 'current' : e >= last)) { on++; if (p.status !== 'current' && p.days_active === 0) unsure++; }
+      });
+      return { k: k, on: on, joined: joined, unsure: unsure };
+    });
+  }
+  function byFy() {
+    var all = people(); var t = today(); var fys = {};
+    all.forEach(function (p) { if (p.started_on) fys[fyOf(p.started_on)] = 1; });
+    return Object.keys(fys).map(Number).sort().map(function (y) {
+      var s = y + '-10-01', e = (y + 1) + '-09-30', end = e > t ? t : e;
+      var j = all.filter(function (p) { return p.started_on && p.started_on >= s && p.started_on <= e; });
+      var l = all.filter(function (p) { return p.status !== 'current' && p.left_by && p.left_by >= s && p.left_by <= e; });
+      var on = all.filter(function (p) { var x = endOf(p); return p.started_on && p.started_on <= end && (x === null ? p.status === 'current' : x >= end); });
+      return { y: y, joined: j.length, still: j.filter(function (p) { return p.status === 'current'; }).length, left: l.length, on: on.length, running: e > t };
+    });
+  }
+  var BUCKETS = [['Under 3 months', 0, 3], ['3 to 6 months', 3, 6], ['6 to 12 months', 6, 12], ['1 to 2 years', 12, 24], ['2 years or more', 24, 1e9]];
+  function buckets(list) { return BUCKETS.map(function (b) { return [b[0], list.filter(function (m) { return m >= b[1] && m < b[2]; }).length]; }); }
+  function byTeam() {
+    var cur = people().filter(function (p) { return p.status === 'current'; }); var g = {};
+    cur.forEach(function (p) { var k = p.department || '_none'; (g[k] = g[k] || []).push(p); });
+    var order = ((window.WA_TEAMS && WA_TEAMS.order) || []).concat(['exec', 'finance', '_none']);
+    return Object.keys(g).sort(function (a, b) { var x = order.indexOf(a), y = order.indexOf(b); return (x < 0 ? 99 : x) - (y < 0 ? 99 : y); }).map(function (k) {
+      return { k: k, label: k === '_none' ? 'Not on the roster' : teamName(k), n: g[k].length, med: median(g[k].map(tenureOf).filter(function (x) { return x != null; })) };
+    });
+  }
+  function acctsOf(p) { var ids = p.slack_ids || []; return A.accts.filter(function (a) { return ids.indexOf(a.slack_id) >= 0 || (p.team_member_id && a.team_member_id === p.team_member_id); }); }
+  function flags(p) {
+    var f = [], acc = acctsOf(p);
+    if (!p.on_roster && p.status === 'current') f.push(['Not on the roster', 'warn']);
+    if (p.on_roster && !p.roster_active && p.open_accounts > 0) f.push(['Left on the roster, Slack still open', 'warn']);
+    if (p.on_roster && p.roster_active && p.accounts > 0 && p.open_accounts === 0) f.push(['Slack switched off', 'bad']);
+    if (p.status === 'quiet') f.push(['Slack open, not used in a year', 'warn']);
+    if (p.accounts > 1) f.push([p.accounts + ' Slack accounts', '']);
+    if (acc.some(function (a) { return a.link_by === 'name'; })) f.push(['Linked by first name', 'warn']);
+    if (p.status === 'current' && !p.started_on) f.push(['No start date', 'bad']);
+    return f;
+  }
+  function look() {
+    var all = A.rows;
+    var unusedDup = A.accts.filter(function (a) {
+      if (a.kind !== 'team' || !a.claimed_on || a.deactivated_on || a.days_active > 0) return false;
+      return A.accts.some(function (b) { return b.slack_id !== a.slack_id && b.person_key === a.person_key && b.days_active > 0; });
+    });
+    return [
+      { k: 'offroster', h: 'On Slack this year, not on the roster', p: 'They used Slack in the last year but have no roster row, so the Hub leaves them out of the team. Add them to the roster, or switch their Slack off if they have gone.', list: all.filter(function (p) { return !p.on_roster && p.status === 'current'; }) },
+      { k: 'leftopen', h: 'Left on the roster, Slack still open', p: 'The roster says they left; their Slack account is still on. Switch it off, or put them back on the roster.', list: all.filter(function (p) { return p.on_roster && !p.roster_active && p.open_accounts > 0; }) },
+      { k: 'off', h: 'On the roster, Slack switched off', p: 'Still on the team in the Hub, but their Slack account was deactivated. Have they left?', list: all.filter(function (p) { return p.on_roster && p.roster_active && p.accounts > 0 && p.open_accounts === 0; }) },
+      { k: 'quiet', h: 'Slack open, not used once in a year', p: 'Accounts still on that nobody used in the export\u2019s window. Usually safe to switch off.', list: all.filter(function (p) { return p.status === 'quiet'; }), extra: unusedDup.map(function (a) { var o = all.filter(function (p) { return (p.slack_ids || []).indexOf(a.slack_id) >= 0 || (p.team_member_id && p.team_member_id === a.team_member_id); })[0]; return { a: a, p: o }; }) },
+      { k: 'name', h: 'Linked by first name: please confirm', p: 'These Slack accounts were matched to the roster by first name only. Open one to confirm or change it.', list: all.filter(function (p) { return acctsOf(p).some(function (a) { return a.link_by === 'name'; }); }) },
+      { k: 'nostart', h: 'On the team, no start date', p: 'No Workspace or Slack date to go on. Set it on the People view (click Started).', list: all.filter(function (p) { return p.status === 'current' && !p.started_on; }) }
+    ];
+  }
+
+  /* ---------- painting ---------- */
+  function host() {
+    var body = document.getElementById('w46body'); if (!body) return null;
+    var h = document.getElementById('w181');
+    if (!h) { h = document.createElement('div'); h.id = 'w181'; var tabs = body.querySelector('.w47tabs'); if (tabs) tabs.insertAdjacentElement('afterend', h); else body.insertBefore(h, body.firstChild); }
+    return h;
+  }
+  function tile(n, label, small) { return '<div class="w181tile"><b>' + E(n) + '</b><span>' + E(label) + '</span>' + (small ? '<small>' + small + '</small>' : '') + '</div>'; }
+  function paint() {
+    var h = host(); if (!h) return;
+    if (A.err) { h.innerHTML = '<div class="w181card"><h3>Analytics</h3><p class="w181empty">Could not load the numbers: ' + E(A.err) + '</p><button class="w181btn sm" data-w181="reload">Try again</button></div>'; return; }
+    if (!A.loaded) { h.innerHTML = '<div class="w181card"><p class="w181empty">Loading who has been part of Welfare Avenue\u2026</p></div>'; return; }
+    if (!A.rows.length) { h.innerHTML = '<div class="w181card"><h3>Analytics</h3><p class="w181empty">Nobody to show yet. Import Slack\u2019s member export to see who has been part of Welfare Avenue and for how long.</p><button class="w181btn sm" data-w181="import">Import a Slack export</button></div>'; return; }
+    var s = stats(), pr = period(); A.noStart = s.noStart;
+    var top = '<div class="w181top"><p>Who has been part of Welfare Avenue, and for how long: the roster and every Slack account since ' + E(monthNice(s.first)) + '. ' +
+      (pr.from ? 'Slack\u2019s export covers ' + E(dayNice(pr.from)) + ' to ' + E(dayNice(pr.to)) + '. ' : '') +
+      'Accounts were often switched off late, so a leaving date is the latest day they can have left.</p>' +
+      '<div class="acts"><button class="w181btn ghost sm" data-w181="csv">Download (CSV)</button><button class="w181btn sm" data-w181="import">Import a new Slack export</button></div></div>';
+    var tiles = '<div class="w181tiles">' +
+      tile(s.cur.length, 'on the team now', s.cur.filter(function (p) { return !p.on_roster; }).length ? plural(s.cur.filter(function (p) { return !p.on_roster; }).length, 'is', 'are') + ' on Slack but not on the roster' : 'on the roster') +
+      tile(s.joined.length, 'joined in the last 12 months', 'by the day they joined Slack or got a Workspace account') +
+      tile(s.left.length, 'left in the last 12 months', 'Slack active in the year, then switched off') +
+      tile(s.curMed == null ? '\u2013' : dur(s.curMed), 'typical time with us so far', 'the median of the team today') +
+      tile(s.goneMed == null ? '\u2013' : dur(s.goneMed), 'typical stay of people who left', 'at most: they may have left earlier') +
+      tile(s.all.length, 'people since ' + monthNice(s.first).split(' ')[1], 'on the team at some point, staff and volunteers') +
+      '</div>';
+    h.innerHTML = top + tiles + overTime() + '<div class="w181two">' + fyTable() + stayCard() + '</div><div style="height:14px"></div>' + teamCard() + lookCard() + peopleCard();
+    wireChart();
+  }
+
+  function overTime() {
+    var ser = series(); if (!ser.length) return '';
+    var W = 760, H = 230, L = 34, R = 10, Tp = 12, B = 26, n = ser.length, cw = (W - L - R) / n;
+    var max = Math.max(4, Math.max.apply(null, ser.map(function (d) { return Math.max(d.on, d.joined.length); })));
+    var step = max > 60 ? 20 : max > 24 ? 10 : 5; var top = Math.ceil(max / step) * step;
+    var y = function (v) { return Tp + (H - Tp - B) * (1 - v / top); };
+    var grid = ''; for (var g = 0; g <= top; g += step) grid += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + y(g) + '" y2="' + y(g) + '" stroke="' + LINE + '" stroke-width="1"/><text x="' + (L - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end" font-size="10" fill="' + MUTED + '">' + g + '</text>';
+    var bars = ser.map(function (d, i) { var v = d.joined.length; if (!v) return ''; var x = L + i * cw + cw * 0.18; return '<rect x="' + x.toFixed(1) + '" y="' + y(v).toFixed(1) + '" width="' + (cw * 0.64).toFixed(1) + '" height="' + (y(0) - y(v)).toFixed(1) + '" rx="1.5" fill="' + GOLD + '"/>'; }).join('');
+    var pts = ser.map(function (d, i) { return (L + i * cw + cw / 2).toFixed(1) + ',' + y(d.on).toFixed(1); });
+    var area = '<path d="M' + (L + cw / 2).toFixed(1) + ',' + y(0) + ' L' + pts.join(' L') + ' L' + (L + (n - 1) * cw + cw / 2).toFixed(1) + ',' + y(0) + ' Z" fill="rgba(16,63,57,.10)"/>';
+    var line = '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + GREEN + '" stroke-width="2.2" stroke-linejoin="round"/>';
+    var yrs = ser.map(function (d, i) { return d.k.slice(5) === '01' ? '<text x="' + (L + i * cw).toFixed(1) + '" y="' + (H - 8) + '" font-size="10.5" fill="' + MUTED + '">' + d.k.slice(0, 4) + '</text><line x1="' + (L + i * cw).toFixed(1) + '" x2="' + (L + i * cw).toFixed(1) + '" y1="' + y(0) + '" y2="' + (y(0) + 4) + '" stroke="' + MUTED + '"/>' : ''; }).join('');
+    var hits = ser.map(function (d, i) { return '<rect class="hit" data-i="' + i + '" x="' + (L + i * cw).toFixed(1) + '" y="' + Tp + '" width="' + cw.toFixed(1) + '" height="' + (H - Tp - B) + '" fill="transparent" pointer-events="all"/>'; }).join('');
+    var cur = '<line class="cur" x1="0" x2="0" y1="' + Tp + '" y2="' + y(0) + '" stroke="' + INK + '" stroke-width="1" stroke-dasharray="3 3" style="display:none"/>';
+    A.ser = ser; A.serGeom = { L: L, cw: cw, W: W };
+    var last = ser[ser.length - 1], peak = ser.reduce(function (a, d) { return d.on > a.on ? d : a; }, ser[0]);
+    return '<div class="w181card"><h3>The team over time</h3><p class="sub">People on the team at the end of each month (green) and the month\u2019s joiners (gold). ' + E(last.on) + ' now' + (A.noStart ? ' (' + plural(A.noStart, 'person', 'people') + ' on the team ' + (A.noStart === 1 ? 'has' : 'have') + ' no start date, so ' + (A.noStart === 1 ? 'is' : 'are') + ' left out)' : '') + '; the most was ' + E(peak.on) + ' in ' + E(monLabel(peak.k)) + '. Before September 2025 the line is at most: people not active once in Slack\u2019s export are counted until it starts, since we cannot see when they stopped.</p>' +
+      '<div class="w181chart" id="w181over"><svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="People on the team each month since ' + E(monLabel(ser[0].k)) + '">' + grid + area + bars + line + yrs + cur + hits + '</svg><div class="w181tip"></div></div>' +
+      '<div class="w181key"><span><i style="background:' + GREEN + '"></i>On the team</span><span><i style="background:' + GOLD + '"></i>Joined that month</span><span>Hover, tap or use the arrow keys for a month\u2019s numbers</span></div></div>';
+  }
+  function wireChart() {
+    var box = document.getElementById('w181over'); if (!box || box.dataset.w) return; box.dataset.w = '1';
+    var svg = box.querySelector('svg'), tip = box.querySelector('.w181tip'), cur = svg.querySelector('.cur'); box.tabIndex = 0;
+    function show(i) {
+      var d = A.ser[i]; if (!d) return; A.serI = i; var g = A.serGeom; var r = svg.getBoundingClientRect(), sc = r.width / g.W;
+      var x = (g.L + i * g.cw + g.cw / 2); cur.setAttribute('x1', x); cur.setAttribute('x2', x); cur.style.display = '';
+      var j = d.joined.length;
+      tip.innerHTML = '<b>' + E(monLabel(d.k)) + '</b><br>On the team: ' + d.on + (d.unsure ? ' (at most)' : '') + '<br>Joined: ' + j + (j && j <= 4 ? ' (' + E(d.joined.join(', ')) + ')' : '');
+      tip.style.display = 'block'; var left = x * sc; left = Math.max(80, Math.min(r.width - 80, left)); tip.style.left = left + 'px'; tip.style.top = '6px';
+    }
+    function hide() { tip.style.display = 'none'; cur.style.display = 'none'; }
+    svg.addEventListener('mousemove', function (e) { var t = e.target.closest && e.target.closest('.hit'); if (t) show(Number(t.getAttribute('data-i'))); });
+    svg.addEventListener('click', function (e) { var t = e.target.closest && e.target.closest('.hit'); if (t) show(Number(t.getAttribute('data-i'))); });
+    svg.addEventListener('mouseleave', hide);
+    box.addEventListener('keydown', function (e) { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); var i = (A.serI == null ? A.ser.length : A.serI) + (e.key === 'ArrowLeft' ? -1 : 1); show(Math.max(0, Math.min(A.ser.length - 1, i))); } if (e.key === 'Escape') hide(); });
+    box.addEventListener('blur', hide);
+  }
+
+  function fyTable() {
+    var rows = byFy();
+    var tr = rows.map(function (r) {
+      return '<tr><td>' + E(fyLabel(r.y)) + (r.running ? ' <span class="w181tag lg">so far</span>' : '') + '</td><td class="n">' + r.joined + '</td><td class="n">' + r.left + '</td><td class="n">' + r.on + '</td><td class="n">' + (r.joined ? r.still + ' <span style="color:' + MUTED + '">(' + Math.round(100 * r.still / r.joined) + '%)</span>' : '\u2013') + '</td></tr>';
+    }).join('');
+    return '<div class="w181card"><h3>Each fiscal year</h3><p class="sub">October to September. Left counts the day an account was switched off, so a batch can land in the year after people stopped (21 October 2025 switched off 22 at once).</p>' +
+      '<table class="w181t w181fy"><thead><tr><th>Year</th><th class="n">Joined</th><th class="n">Left by</th><th class="n"><span class="lg">On the team at the end</span><span class="sm">Year end</span></th><th class="n"><span class="lg">Joiners still here</span><span class="sm">Still here</span></th></tr></thead><tbody>' + tr + '</tbody></table></div>';
+  }
+  function barsHtml(list, color) {
+    var max = Math.max(1, Math.max.apply(null, list.map(function (x) { return x[1]; })));
+    return list.map(function (x) { return '<div class="r"><span>' + E(x[0]) + '</span><span class="tr"><i style="width:' + (100 * x[1] / max).toFixed(1) + '%;background:' + color + '"></i></span><b>' + x[1] + '</b></div>'; }).join('');
+  }
+  function stayCard() {
+    var all = people(), cur = all.filter(function (p) { return p.status === 'current'; }).map(tenureOf).filter(function (x) { return x != null; });
+    var gone = all.filter(function (p) { return p.status !== 'current'; }).map(tenureOf).filter(function (x) { return x != null; });
+    return '<div class="w181card w181bars"><h3>How long people stay</h3><p class="sub">From the day they started to today, or to the latest day they can have left.</p>' +
+      '<h4>The team today (' + cur.length + ')</h4>' + barsHtml(buckets(cur), GREEN) +
+      '<h4>People who left (' + gone.length + ', at most)</h4>' + barsHtml(buckets(gone), GOLD) + '</div>';
+  }
+  function teamCard() {
+    var t = byTeam(); if (!t.length) return '';
+    var max = Math.max.apply(null, t.map(function (x) { return x.n; }));
+    return '<div class="w181card w181bars"><h3>The team today, by team</h3><p class="sub">People on the team now and the typical (median) time they have been with us.</p>' +
+      t.map(function (x) { return '<div class="r" style="grid-template-columns:minmax(120px,190px) 1fr 40px 110px"><span>' + E(x.label) + '</span><span class="tr"><i style="width:' + (100 * x.n / max).toFixed(1) + '%;background:' + (x.k === '_none' ? GOLD : TEAL) + '"></i></span><b>' + x.n + '</b><span style="color:' + MUTED + ';font-size:12px">' + (x.med == null ? '' : dur(x.med)) + '</span></div>'; }).join('') + '</div>';
+  }
+  function lookCard() {
+    var L = look().filter(function (g) { return g.list.length || (g.extra && g.extra.length); }); if (!L.length) return '';
+    var nm = function (p) { return '<button class="w181lnk" data-w181p="' + E(p.person_key) + '">' + E(p.name) + '</button>'; };
+    return '<div class="w181card"><h3>Worth a look</h3><p class="sub">Where the roster and Slack disagree, and what to tidy. Click a name for their sheet.</p><div class="w181look">' +
+      L.map(function (g) {
+        var names = g.list.map(nm).join(', ');
+        if (g.extra && g.extra.length) names += (names ? '; ' : '') + 'and unused second accounts: ' + g.extra.map(function (x) { return x.p ? '<button class="w181lnk" data-w181p="' + E(x.p.person_key) + '">' + E(x.p.name) + '</button> (' + E(x.a.email || x.a.slack_id) + ')' : E(x.a.full_name); }).join(', ');
+        return '<div data-w181look="' + g.k + '"><b class="h">' + E(g.h) + ' (' + (g.list.length + (g.extra ? g.extra.length : 0)) + ')</b><p>' + E(g.p) + '</p>' + names + '</div>';
+      }).join('') + '</div></div>';
+  }
+  var FILTERS = [['current', 'On the team now'], ['left', 'Left'], ['quiet', 'Slack open, unused'], ['never_joined', 'Never joined'], ['all', 'Everyone']];
+  function filtered() {
+    var q = lower(A.q);
+    var rows = A.rows.filter(function (p) {
+      if (A.f !== 'all' && p.status !== A.f) return false;
+      if (A.team && (p.department || '_none') !== A.team) return false;
+      if (q && lower(p.name + ' ' + (p.slack_name || '') + ' ' + (p.title || '') + ' ' + (p.email || '')).indexOf(q) < 0) return false;
+      return true;
+    });
+    var key = A.sort;
+    rows.sort(function (a, b) {
+      if (key === 'name') return String(a.name).localeCompare(String(b.name));
+      if (key === 'long') return (tenureOf(b) || -1) - (tenureOf(a) || -1);
+      if (key === 'left') return String(b.left_by || '').localeCompare(String(a.left_by || ''));
+      return String(a.started_on || '9').localeCompare(String(b.started_on || '9'));
+    });
+    return rows;
+  }
+  function statusTag(p) {
+    if (p.status === 'current') return p.on_roster ? '<span class="w181tag ok">On the team</span>' : '<span class="w181tag ok">On Slack</span>';
+    if (p.status === 'left') return '<span class="w181tag">Left</span>';
+    if (p.status === 'quiet') return '<span class="w181tag warn">Slack unused</span>';
+    return '<span class="w181tag">Invited, never joined</span>';
+  }
+  function leftCell(p) {
+    if (p.status === 'current') return '';
+    if (p.left_by) return 'by ' + monthNice(p.left_by);
+    return p.status === 'never_joined' ? '' : 'not known';
+  }
+  function timeCell(p) { var m = tenureOf(p); if (m == null) return ''; return (p.status === 'current' ? '' : 'up to ') + dur(m); }
+  function peopleCard() {
+    var counts = {}; A.rows.forEach(function (p) { counts[p.status] = (counts[p.status] || 0) + 1; }); counts.all = A.rows.length;
+    var teams = {}; A.rows.forEach(function (p) { teams[p.department || '_none'] = 1; });
+    var rows = filtered();
+    var chips = FILTERS.map(function (f) { return '<button class="w181chip' + (A.f === f[0] ? ' on' : '') + '" data-w181f="' + f[0] + '">' + E(f[1]) + ' ' + (counts[f[0]] || 0) + '</button>'; }).join('');
+    var tsel = '<select id="w181team" aria-label="Team"><option value="">Every team</option>' + Object.keys(teams).sort().map(function (k) { return '<option value="' + E(k) + '"' + (A.team === k ? ' selected' : '') + '>' + E(k === '_none' ? 'Not on the roster' : teamName(k)) + '</option>'; }).join('') + '</select>';
+    var ssel = '<select id="w181sort" aria-label="Sort"><option value="start"' + (A.sort === 'start' ? ' selected' : '') + '>Longest-standing first</option><option value="long"' + (A.sort === 'long' ? ' selected' : '') + '>Longest time with us</option><option value="left"' + (A.sort === 'left' ? ' selected' : '') + '>Most recently left</option><option value="name"' + (A.sort === 'name' ? ' selected' : '') + '>Name</option></select>';
+    var body = rows.map(function (p) {
+      var fl = flags(p).map(function (f) { return '<span class="w181tag ' + f[1] + '">' + E(f[0]) + '</span>'; }).join('');
+      return '<tr data-w181p="' + E(p.person_key) + '" tabindex="0"><td><b>' + E(p.name) + '</b>' + (p.title ? '<span class="t">' + E(p.title) + '</span>' : '') + '</td>' +
+        '<td data-l="Team">' + E(p.department ? teamShort(p.department) : '') + '</td><td data-l="Started">' + E(p.started_on ? monthNice(p.started_on) : '') + '</td>' +
+        '<td data-l="Left">' + E(leftCell(p)) + '</td><td data-l="Time with us">' + E(timeCell(p)) + '</td><td data-l="Slack, last year" class="n">' + (p.accounts ? p.days_active + ' days' : '') + '</td><td>' + statusTag(p) + fl + '</td></tr>';
+    }).join('');
+    return '<div class="w181card" id="w181people"><h3>Everyone who has been part of Welfare Avenue</h3><p class="sub">Started is the earliest of their Workspace account and the day they joined Slack. Slack, last year is the days they were active in the export\u2019s window.</p>' +
+      '<div class="w181bar">' + chips + '</div><div class="w181bar"><input type="search" id="w181q" placeholder="Search by name, role or email" value="' + E(A.q) + '">' + tsel + ssel + '</div>' +
+      (body ? '<table class="w181t w181ppl"><thead><tr><th>Person</th><th>Team</th><th>Started</th><th>Left</th><th>Time with us</th><th class="n">Slack, last year</th><th></th></tr></thead><tbody>' + body + '</tbody></table>' : '<p class="w181empty">Nobody matches.</p>') +
+      '<p class="w181note">' + plural(rows.length, 'person', 'people') + '. Click a person for their Slack accounts, to link an account to the roster, or to mark it as not a team member.</p></div>';
+  }
+  function repaintPeople() {
+    var c = document.getElementById('w181people'); if (!c) return paint();
+    var d = document.createElement('div'); d.innerHTML = peopleCard(); c.replaceWith(d.firstChild);
+  }
+
+  /* ---------- a person's sheet ---------- */
+  function personBy(key) { return A.rows.filter(function (p) { return p.person_key === key; })[0]; }
+  function openPerson(key) {
+    var p = personBy(key); if (!p || typeof openModal !== 'function') return;
+    var acc = acctsOf(p).sort(function (a, b) { return String(a.claimed_on || a.created_on || '').localeCompare(String(b.claimed_on || b.created_on || '')); });
+    var opts = function (sel) { return '<option value="">Not on the roster</option>' + A.roster.map(function (m) { return '<option value="' + m.id + '"' + (String(sel) === String(m.id) ? ' selected' : '') + '>' + E(m.name) + (m.active === false ? ' (left)' : '') + (m.department ? ' \u00b7 ' + E(teamShort(m.department)) : '') + '</option>'; }).join(''); };
+    var accHtml = acc.length ? acc.map(function (a) {
+      var bits = [];
+      bits.push(a.claimed_on ? 'Joined Slack ' + dayNice(a.claimed_on) : 'Invited ' + dayNice(a.created_on) + ', never joined');
+      bits.push(a.deactivated_on ? 'switched off ' + dayNice(a.deactivated_on) : (a.claimed_on ? 'still on' : ''));
+      bits.push(a.days_active + ' active days in the export');
+      return '<div class="acc" data-w181acc="' + E(a.slack_id) + '"><b>' + E(a.full_name) + '</b> <span style="color:' + MUTED + '">' + E(a.email || '') + ' \u00b7 ' + E(a.account_type) + '</span>' +
+        (a.link_by === 'name' ? ' <span class="w181tag warn">linked by first name</span>' : '') + (a.kind === 'external' ? ' <span class="w181tag">not a team member</span>' : '') +
+        '<div style="color:' + MUTED + ';font-size:12.5px">' + E(bits.filter(Boolean).join(' \u00b7 ')) + (a.title ? ' \u00b7 \u201c' + E(a.title) + '\u201d' : '') + '</div>' +
+        '<div class="row"><label style="font-size:12px;font-weight:700">Roster person <select data-w181m="' + E(a.slack_id) + '">' + opts(a.team_member_id) + '</select></label>' +
+        '<label style="font-size:12px;font-weight:700"><input type="checkbox" data-w181x="' + E(a.slack_id) + '"' + (a.kind === 'external' ? ' checked' : '') + '> Not a team member (a consultant, a guest)</label>' +
+        '<button class="w181btn sm" data-w181save="' + E(a.slack_id) + '">Save</button></div></div>';
+    }).join('') : '<p style="font-size:13px;color:' + MUTED + '">No Slack account found for them. Their start date comes from the roster.</p>';
+    var m = tenureOf(p);
+    openModal('<div class="w181sheet"><h3>' + E(p.name) + '</h3><p class="sub">' + E([p.title, p.department ? teamName(p.department) : (p.on_roster ? '' : 'Not on the roster')].filter(Boolean).join(' \u00b7 ')) + '</p>' +
+      '<div class="facts"><div><small>Status</small>' + statusTag(p) + '</div><div><small>Started</small>' + E(p.started_on ? dayNice(p.started_on) : 'not known') + (p.started_on ? '<br><span style="font-size:11.5px;color:' + MUTED + '">' + E(p.joined_slack && p.started_on === p.joined_slack ? 'joined Slack' : (p.start_source === 'manual' ? 'set by HR' : 'Workspace account')) + '</span>' : '') + '</div>' +
+      '<div><small>Left</small>' + E(leftCell(p) || (p.status === 'current' ? 'still here' : '')) + '</div><div><small>Time with us</small>' + E(m == null ? 'not known' : timeCell(p)) + '</div></div>' +
+      '<b style="font-size:13px;color:' + GREEN + '">Slack accounts</b>' + accHtml + '<p class="err" id="w181serr"></p>' +
+      '<div class="foot">' + (p.team_member_id ? '<a class="w181btn ghost sm" href="#person/' + p.team_member_id + '">Open their profile</a>' : '') + '<button class="w181btn ghost sm" data-w181="close">Close</button></div></div>');
+  }
+  async function saveLink(id) {
+    var sel = document.querySelector('[data-w181m="' + id + '"]'), x = document.querySelector('[data-w181x="' + id + '"]'), err = document.getElementById('w181serr');
+    var btn = document.querySelector('[data-w181save="' + id + '"]'); if (btn) btn.disabled = true;
+    try {
+      var r = await db.rpc('wa181_link', { p_slack_id: id, p_member: sel && sel.value ? Number(sel.value) : null, p_kind: x && x.checked ? 'external' : 'team' });
+      if (r && r.error) throw r.error;
+      T('Saved'); if (typeof closeModal === 'function') closeModal();
+      await load(true); paint();
+    } catch (e) { if (err) err.textContent = 'Could not save: ' + ((e && e.message) || e); if (btn) btn.disabled = false; }
+  }
+
+  /* ---------- the CSV ---------- */
+  function csvCell(v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+  function downloadCsv() {
+    var head = ['Name', 'Team', 'Title', 'Status', 'On the roster', 'Started', 'Left by', 'Months with us', 'Slack accounts', 'Slack active days (export)', 'Notes'];
+    var lines = [head.join(',')].concat(filtered().map(function (p) {
+      return [p.name, p.department ? teamName(p.department) : '', p.title || '', p.status, p.on_roster ? 'yes' : 'no', p.started_on || '', p.left_by || '', tenureOf(p) == null ? '' : tenureOf(p), p.accounts, p.days_active, flags(p).map(function (f) { return f[0]; }).join('; ')].map(csvCell).join(',');
+    }));
+    try {
+      var blob = new Blob(['\ufeff' + lines.join('\n')], { type: 'text/csv;charset=utf-8' }); var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = todayIso().split('-').reverse().map(function (x, i) { return i === 2 ? x.slice(2) : x; }).join('-') + ' - Welfare Avenue people and tenure.csv';
+      document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    } catch (e) { T('Could not make the file'); }
+  }
+
+  /* ---------- importing a new export ---------- */
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false, i = 0, c;
+    text = String(text || '').replace(/^\ufeff/, '');
+    for (; i < text.length; i++) {
+      c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.length > 1 || (r[0] || '').trim(); });
+  }
+  function slackDay(s) {   /* "Jan 8, 2025" */
+    s = String(s || '').trim(); if (!s) return null; var m = s.match(/^([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})$/); if (!m) return null;
+    var mi = MON.indexOf(m[1].charAt(0).toUpperCase() + m[1].slice(1, 3).toLowerCase()); if (mi < 0) return null;
+    return m[3] + '-' + String(mi + 1).padStart(2, '0') + '-' + String(m[2]).padStart(2, '0');
+  }
+  function fromExport(text) {
+    var rows = parseCsv(text); if (rows.length < 2) return { err: 'The file has no rows.' };
+    var h = rows[0].map(function (x) { return x.trim(); }), ix = function (n) { return h.indexOf(n); };
+    var need = ['Name', 'User ID', 'Account type', 'Account created (UTC)', 'Days active'];
+    var miss = need.filter(function (n) { return ix(n) < 0; }); if (miss.length) return { err: 'This does not look like Slack\u2019s Member Analytics export (missing ' + miss.join(', ') + ').' };
+    var g = function (r, n) { var k = ix(n); return k < 0 ? '' : (r[k] || '').trim(); }, num = function (v) { var x = parseInt(String(v).replace(/[^\d]/g, ''), 10); return isNaN(x) ? 0 : x; };
+    var out = rows.slice(1).map(function (r) {
+      return { slack_id: g(r, 'User ID'), full_name: g(r, 'Name') || g(r, 'Display name'), display_name: g(r, 'Display name'), email: lower(g(r, 'Email')), title: g(r, 'What I Do'), account_type: g(r, 'Account type'),
+        created_on: slackDay(g(r, 'Account created (UTC)')), claimed_on: slackDay(g(r, 'Claimed Date (UTC)')), deactivated_on: slackDay(g(r, 'Deactivated date (UTC)')),
+        days_active: num(g(r, 'Days active')), messages: num(g(r, 'Messages posted')), channel_messages: num(g(r, 'Messages posted in channels')), reactions: num(g(r, 'Reactions added')) };
+    }).filter(function (r) { return /^[UW][A-Z0-9]{6,}$/.test(r.slack_id) && r.full_name; });
+    return { rows: out };
+  }
+  function windowFromName(name) {   /* "Welfare Avenue Member Analytics Aug 29 2025 - Sep 29 2026.csv" */
+    var m = String(name || '').match(/([A-Za-z]{3}) (\d{1,2}),? (\d{4})\s*-\s*([A-Za-z]{3}) (\d{1,2}),? (\d{4})/); if (!m) return null;
+    return { from: slackDay(m[1] + ' ' + m[2] + ', ' + m[3]), to: slackDay(m[4] + ' ' + m[5] + ', ' + m[6]) };
+  }
+  function openImport() {
+    if (typeof openModal !== 'function') return; A.imp = null;
+    openModal('<div class="w181sheet"><h3>Import a new Slack export</h3><p class="sub">In Slack: Tools and settings, Workspace settings, Analytics, Members, then Export to CSV (all members, the dates you want). The Hub keeps each account\u2019s links and updates its dates and activity; new accounts are matched to the roster by email. Earlier Slack join days become start dates (never over one HR set).</p>' +
+      '<label class="f" for="w181file">The CSV file</label><input type="file" id="w181file" accept=".csv,text/csv">' +
+      '<div id="w181impmore" style="display:none"><label class="f">The dates the export covers</label><input type="date" id="w181ifrom"> to <input type="date" id="w181ito"><p id="w181isum" style="font-size:13px;margin:10px 0 0"></p></div>' +
+      '<p class="err" id="w181ierr"></p><div class="foot"><button class="w181btn ghost sm" data-w181="close">Cancel</button><button class="w181btn sm" data-w181="doimport" disabled>Import</button></div></div>');
+  }
+  function readImportFile(f) {
+    var err = document.getElementById('w181ierr'), more = document.getElementById('w181impmore'), go = document.querySelector('[data-w181="doimport"]');
+    if (!f) return; if (err) err.textContent = '';
+    var rd = new FileReader();
+    rd.onload = function () {
+      var x = fromExport(rd.result); if (x.err) { if (err) err.textContent = x.err; if (go) go.disabled = true; return; }
+      A.imp = x.rows; var w = windowFromName(f.name) || {};
+      document.getElementById('w181ifrom').value = w.from || ''; document.getElementById('w181ito').value = w.to || '';
+      var known = {}; A.accts.forEach(function (a) { known[a.slack_id] = 1; });
+      var nw = x.rows.filter(function (r) { return !known[r.slack_id]; }).length;
+      document.getElementById('w181isum').textContent = plural(x.rows.length, 'account') + ' in the file: ' + plural(nw, 'new one') + ', ' + (x.rows.length - nw) + ' already in the Hub.' + (w.from ? '' : ' Fill in the dates the export covers.');
+      if (more) more.style.display = ''; if (go) go.disabled = false;
+    };
+    rd.onerror = function () { if (err) err.textContent = 'Could not read the file.'; };
+    rd.readAsText(f);
+  }
+  async function doImport() {
+    var err = document.getElementById('w181ierr'), go = document.querySelector('[data-w181="doimport"]');
+    var f = (document.getElementById('w181ifrom') || {}).value, t = (document.getElementById('w181ito') || {}).value;
+    if (!A.imp || !A.imp.length) { if (err) err.textContent = 'Pick the file first.'; return; }
+    if (!f || !t || t < f) { if (err) err.textContent = 'Fill in the dates the export covers (from, then to).'; return; }
+    if (go) go.disabled = true;
+    try {
+      var r = await db.rpc('wa181_import', { rows: A.imp, p_from: f, p_to: t }); if (r && r.error) throw r.error;
+      var d = (r && r.data) || {}; A.imp = null; if (typeof closeModal === 'function') closeModal();
+      T('Imported: ' + (d['new'] || 0) + ' new, ' + (d.updated || 0) + ' updated, ' + plural(d.start_dates || 0, 'start date') + ' filled in');
+      await load(true); paint();
+    } catch (e) { if (err) err.textContent = 'Could not import: ' + ((e && e.message) || e); if (go) go.disabled = false; }
+  }
+
+  /* ---------- the tab in the HR centre ---------- */
+  function setShown(on) {
+    var h = document.getElementById('w181'); if (h) h.classList.toggle('on', !!on);
+    if (on) { if (!A.loaded && !A.loading) { paint(); load().then(paint); } else if (A.loaded && h && !h.children.length) paint(); }
+  }
+  async function decorate() {
+    var body = document.getElementById('w46body'); if (!body) return;
+    var tabs = body.querySelector('.w47tabs'); if (!tabs) return;
+    if (!(await canSee())) return;
+    tabs = body.querySelector('.w47tabs'); if (!tabs) return;
+    var tab = tabs.querySelector('[data-w47v="analytics"]');
+    if (!tab) { tabs.insertAdjacentHTML('beforeend', '<button class="w47tab" data-w47v="analytics">Analytics</button>'); tab = tabs.querySelector('[data-w47v="analytics"]'); }
+    host();
+    var sub = String(location.hash || '').split('/')[1] || '';
+    var want = hrOn() && String(location.hash || '').indexOf('#hrcentre') === 0 && (sub === 'analytics' || A.on);
+    if (want && !tab.classList.contains('on')) { tab.click(); return; }
+    setShown(tab.classList.contains('on'));
+  }
+  var pend = null;
+  function schedule() { clearTimeout(pend); pend = setTimeout(function () { try { decorate(); } catch (e) { /* fine */ } }, 160); }
+  function watch() {
+    var panel = document.getElementById('hrcentre'); if (!panel || panel.dataset.w181mo) return; panel.dataset.w181mo = '1';
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w181') || (muts[i].type === 'attributes' && t.closest('.w47tab')))) continue; schedule(); return; }
+    }).observe(panel, { childList: true, subtree: true });
+    schedule();
+  }
+  if (typeof wa46Render === 'function') {
+    var __r46 = wa46Render;
+    wa46Render = async function () { var out = await __r46.apply(this, arguments); try { watch(); schedule(); } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp = showPanel;
+    showPanel = function (id) { var out = __sp.apply(this, arguments); try { if (id === 'hrcentre') { watch(); setTimeout(schedule, 500); } else A.on = false; } catch (e) { /* fine */ } return out; };
+  }
+  window.addEventListener('hashchange', function () { if (String(location.hash || '').indexOf('#hrcentre/analytics') === 0) { A.on = true; schedule(); } });
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var tb = t.closest('#w46body .w47tab');
+    if (tb) { A.on = tb.getAttribute('data-w47v') === 'analytics'; setTimeout(function () { setShown(A.on); }, 0); return; }
+    if (!t.closest('#w181') && !t.closest('.w181sheet')) return;
+    var b = t.closest('[data-w181]');
+    if (b) {
+      var k = b.getAttribute('data-w181');
+      if (k === 'reload') { A.err = ''; paint(); load(true).then(paint); }
+      else if (k === 'csv') downloadCsv();
+      else if (k === 'import') openImport();
+      else if (k === 'doimport') doImport();
+      else if (k === 'close' && typeof closeModal === 'function') closeModal();
+      return;
+    }
+    var f = t.closest('[data-w181f]'); if (f) { A.f = f.getAttribute('data-w181f'); repaintPeople(); return; }
+    var sv = t.closest('[data-w181save]'); if (sv) { saveLink(sv.getAttribute('data-w181save')); return; }
+    var p = t.closest('[data-w181p]'); if (p) { openPerson(p.getAttribute('data-w181p')); return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target; if (!t || !t.closest || (e.key !== 'Enter' && e.key !== ' ')) return;
+    var p = t.closest('#w181 tr[data-w181p]'); if (p) { e.preventDefault(); openPerson(p.getAttribute('data-w181p')); }
+  });
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || t.id !== 'w181q') return;
+    A.q = t.value; repaintPeople(); var q = document.getElementById('w181q'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e2) { /* fine */ } }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w181team') { A.team = t.value; repaintPeople(); }
+    else if (t.id === 'w181sort') { A.sort = t.value; repaintPeople(); }
+    else if (t.id === 'w181file') readImportFile(t.files && t.files[0]);
+  });
+
+  /* ---------- the tour ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT || !TT.hrcentre || TT.hrcentre.__w181) return;
+      var st = TT.hrcentre.steps, i = -1;
+      st.forEach(function (s, k) { if (s.s === '#w46body .w47tabs || #w153rail .w153sec') { i = k; s.p = 'People, Onboarding, Training, Recruitment, Commitment, Policies, Discipline and, for HR and admins, Analytics. On a computer they are in the menu on the left.'; } });
+      st.splice(i >= 0 ? i + 1 : st.length, 0, { s: '#w181 .w181tiles || #w46body .w47tab[data-w47v="analytics"] || #w153rail .w153it[href="#hrcentre/analytics"]', t: 'Analytics', p: 'For HR and admins: who has been part of Welfare Avenue and for how long, from the roster and Slack. The team over time, each fiscal year (joined, left, joiners still here), how long people stay, Worth a look (where the roster and Slack disagree), everyone with their start and leaving dates, and Import a new Slack export.', opt: 1 });
+      TT.hrcentre.__w181 = true;
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500);
+
+  window.w181 = { state: function () { return A; }, load: load, paint: paint, can: canSee, stats: stats, series: series, byFy: byFy, look: look, parse: fromExport, windowFromName: windowFromName };
+})();

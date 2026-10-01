@@ -127,7 +127,7 @@
     hr: { id: 'hr', label: 'HR centre', color: FLAG, ic: 'clip', blurb: 'People records, onboarding, hours, policies', pages: ['hrcentre'], home: '#hrcentre',
       groups: function () {
         /* the page's own tabs once it has drawn (they depend on the person: the People view needs the HR access list); the known list before */
-        var IC = { people: 'people', onboarding: 'clip', training: 'cap', recruitment: 'star', hours: 'chart', policies: 'form', discipline: 'shield' };
+        var IC = { people: 'people', onboarding: 'clip', training: 'cap', recruitment: 'star', hours: 'chart', policies: 'form', discipline: 'shield', analytics: 'chart' };   /* wave181: Analytics (HR and admins) */
         var known = [['people', 'People'], ['onboarding', 'Onboarding'], ['training', 'Training'], ['recruitment', 'Recruitment'], ['hours', 'Commitment'], ['policies', 'Policies'], ['discipline', 'Discipline']];
         var drawn = Array.prototype.map.call(document.querySelectorAll('#hrcentre .w47tab[data-w47v]'), function (b) {
           var k = b.getAttribute('data-w47v'), t = (b.childNodes[0] && b.childNodes[0].nodeType === 3 ? b.childNodes[0].textContent : b.textContent) || k;

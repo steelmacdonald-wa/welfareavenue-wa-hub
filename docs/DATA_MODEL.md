@@ -432,8 +432,9 @@ Staff and board roster; id is the key other tables should use for a person (task
 - `ai_bio`: Short AI-written job description from person-profile; ai_bio_at is when.
 - `responsibilities`: JSON array of 3 to 5 responsibility lines (strings).
 - `jd_url`: Link to the job description document; jd_name is its title.
-- `start_source`: Where start_date came from: google (Workspace account creation) or manual (set by HR).
+- `start_source`: Where start_date came from: google (Workspace account creation), slack (the day they joined Slack, from the Member Analytics export, wave181) or manual (set by HR).
 - `avatar_url`: Profile photo URL in the public avatars bucket: u/<email> is a photo the person uploaded on the Hub (always kept); slack/<member_id> is their Slack photo and google/<member_id> their Google Workspace photo, both filled in and refreshed by directory-sync (Slack wins over Google). Empty text means the person removed their photo on the Hub, so nothing fills it in again; null means no photo yet.
+- `start_date`: When the person started with Welfare Avenue: the earliest of the Workspace account's creation (google) and the day they joined Slack (slack, wave181), unless HR sets it by hand (manual). Workspace dates of 17/01/2024 are the day the Workspace was set up, not a start.
 
 ### `hub_directory`
 
@@ -1649,6 +1650,23 @@ wave180: each person's answer to an announcement's poll or short form (one per p
 - `name`: wave180: their name as the roster has it, for the results (never shown when the announcement is anonymous).
 - `answers`: wave180: the answer, checked against the ask: a poll {choice: [option indexes]}; a form {q1: text | option index | [indexes] | true/false | YYYY-MM-DD | number}.
 
+### `hr_slack_accounts`
+
+wave181: one row per account in the Welfare Avenue Slack, from Slack's Member Analytics export (Admin, Analytics, Members, export CSV), imported by build/data/wa181_slack_import.py. The account dates go back to 2021; the activity counts cover period_from to period_to only. Read by HR and admins (wa181_can_see); written by imports only (service role, migrations). Use hr_people_tenure_v for one row per person.
+
+- `created_on`: Day the account was created (for an invited account, the day of the invitation).
+- `claimed_on`: Day the person accepted the invitation and joined Slack; null for an invitation never accepted.
+- `deactivated_on`: Day an admin deactivated the account. Often later than the day the person left: accounts were switched off in batches (21/10/2025 took 22 at once).
+- `days_active`: Days the person was active on Slack between period_from and period_to (the export's window), not over the account's life.
+- `team_member_id`: The roster person (team_members) this account belongs to; null for people not on the roster today. Two accounts of one person point at the same row.
+- `person_key`: Groups the accounts of one person: tm:<team_members.id> when linked, else slack:<the main account's id>.
+- `kind`: team (a volunteer or staff member at some point) or external (a consultant, an organisation's account, a guest): external accounts are left out of the people counts.
+- `link_by`: How the account was linked to the roster: email (the same address, or an obvious second address), name (first name only, worth a confirm) or hr (linked or confirmed by HR in the Analytics tab).
+
+### `hr_people_tenure_v` (view)
+
+wave181: one row per person who has been part of Welfare Avenue (the roster and every team Slack account, two accounts of one person as one row), with started_on (the earliest of the roster's start date and the day they joined Slack), status (current: on the roster and active, or off the roster with a Slack account used in the export's window; quiet: a Slack account still open but not used once in the window; left; never_joined: invited, never accepted) and left_by (the latest day they can have left; null while current or when unknown). security_invoker: the Slack side needs wa181_can_see, the roster side follows team_members. The HR centre's Analytics tab reads it.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1809,4 +1827,8 @@ Functions:
 - `wa180_results(bigint)`: wave180: an announcement's results as the signed-in person may see them: the poster, leaders, HR and admins see the totals, the names (unless anonymous), the text answers, each person's answer (rows, for the CSV; no name or time when anonymous), how many it is for and who has not answered (a count only when anonymous); the people it is for see the totals once they have answered or it has closed, when the poster allows; nobody else sees anything.
 - `trg_wa180_announce_post()`: wave180: a new announcement with post_slack or post_email asks team-inbox to post it once in Slack and email it to the people it is for.
 - `wa180_audience(text, text[])`: wave180d: the people an announcement is for, from the active roster (everyone: the team without the board; leaders: leaders and admins; teams: the people on those teams). team-inbox emails them; wa180_results counts them. Server only.
+- `wa181_can_see()`: wave181: the signed-in person may read the HR centre's Analytics (who has been part of Welfare Avenue and for how long): the HR access list (wa_is_hr), the HR access profile (wa180_is_hr) or an admin. Leaders do not.
+- `wa181_keep_start()`: wave181: trigger on team_members: a Workspace date (start_source google, written by directory-sync) never replaces an earlier Slack date (start_source slack). HR's own date (manual) always wins.
+- `wa181_import(jsonb, date, date)`: wave181d: imports Slack's Member Analytics export (rows parsed by the HR centre's Analytics tab) for HR and admins (wa181_can_see): existing accounts get their new counts and dates (their roster link and kind are kept), new accounts are linked to the roster by email, then earlier Slack join days become start dates (never over a manual one). Logs each start date and the import in change_log.
+- `wa181_link(text, bigint, text)`: wave181d: HR or an admin (wa181_can_see) links a Slack account to its roster person (or unlinks it with null) and says whether it counts as a team member (team) or not (external: a consultant, a guest, an organisation's account). Saving sets link_by to hr (HR confirmed it), which also clears a link made by first name from Worth a look. Logged in change_log. Start dates are not changed here.
 
