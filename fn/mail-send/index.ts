@@ -1,4 +1,10 @@
-// Welfare Avenue: mail-send (v4, 30/09/26 Toronto, wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// Welfare Avenue: mail-send (v5, 30/09/26 Toronto, wave185; v4 wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v5 (wave185): receipts by email. receipt {receipt_id, to?} sends the donor one email that thanks them and carries their
+//   official receipt as a PDF (the receipts bucket; receipt-pdf draws it first when it is missing), in English or French
+//   (the donor's language on the receipt), through the permission rule as a transactional message. In test mode the
+//   email goes to a test recipient instead (is_test, the receipt not marked emailed); live, to the donor, and the
+//   receipt is marked emailed (crm_receipt_emailed). Callers: an admin (Email it in Receipts) or the automation
+//   (stripe-events after an online gift, x-wa-secret). Attachments ride on the send (Resend attachments, base64).
 // v4 (wave182): volunteers' itineraries by email. wa182_itinerary_tick queues one crm_email_sends row per itinerary
 //   send (template volunteer_itinerary, kind transactional, meta.source 'itinerary' with the roster row and its token);
 //   the pump sends those first (crm_claim_queued(p_limit, 'itinerary')), rendered here from the volunteer's own page
@@ -44,6 +50,10 @@
 //   campaign_pump                  -> takes queued sends (crm_claim_queued) within the daily cap, re-checks the rule, sends
 //   campaign_cancel {campaign_id}  -> the sends still waiting are cancelled
 //   campaign_test {campaign_id, to?} -> the campaign as it will look, to a test recipient or the caller's own staff address
+//   receipt {receipt_id, to?}      -> the thank-you with the official receipt PDF attached (admins or the automation)
+//   receipt_sample {to?, lang?}    -> the same email with a SAMPLE receipt attached, to a test recipient (admins)
+//   itinerary_preview {roster_id, note?, is_update?, lang?} -> a volunteer's itinerary email as it will look (leaders, HR, admins)
+//   itinerary_test {roster_id, to?, note?, is_update?, lang?} -> the same, sent to a test recipient or the caller's own team address
 // Anyone with the CRM page may send a campaign (Steel, 27/09/26); the mode (test/live) still gates every real send.
 // Tables: crm_email_templates, crm_email_sends, crm_interactions, crm_contacts, app_config, change_log.
 // Secrets: RESEND_API_KEY (function secret, or the vault), WA_MAIL_SECRET (vault; signs unsubscribe links),
@@ -117,7 +127,7 @@ function esc(s: unknown): string { return String(s == null ? '' : s).replace(/[&
 function isEmail(s: string): boolean { return /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/.test(s); }
 
 /* ---------- rendering ---------- */
-const RAW_KEYS = ['body_html'];
+const RAW_KEYS = ['body_html', 'extra_html'];
 function fill(tpl: string, vars: Record<string, string>, html: boolean): string {
   return String(tpl || '').replace(/\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|([^}]*))?\}\}/g, (_m, key: string, fb?: string) => {
     const v = vars[key];
@@ -239,7 +249,8 @@ async function contactByEmail(email: string) {
 /* ---------- the send itself ---------- */
 type Sent = { send_id?: number; resend_id?: string; status?: string; to?: string; subject?: string; error?: string };
 type Sender = { name?: string | null; email?: string | null; reply?: string | null };
-type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null };
+type Attachment = { filename: string; content: string };
+type Content = { tpl: any; vars: Record<string, string>; kind: string; subject?: string | null; preheader?: string | null; sender?: Sender | null; campaignId?: number | null; automationId?: number | null; attachments?: Attachment[] | null };
 function senderLine(cfg: Record<string, string>, s?: Sender | null) {
   const name = String((s && s.name) || cfg.mail_from_name || 'Welfare Avenue').replace(/[<>"\r\n]/g, '').trim() || 'Welfare Avenue';
   const email = String((s && s.email) || cfg.mail_from_email || 'info@welfareavenue.com').trim().toLowerCase();
@@ -264,7 +275,8 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
   const tags = [{ name: 'template', value: String(tpl.key).replace(/[^a-zA-Z0-9_-]/g, '_') }, { name: 'kind', value: kind }, { name: 'send_id', value: String(o.sendId) }];
   if (o.content.campaignId) tags.push({ name: 'campaign_id', value: String(o.content.campaignId) });
   if (o.content.automationId) tags.push({ name: 'automation_id', value: String(o.content.automationId) });
-  const payload: Record<string, unknown> = { from: sender.from, to: [o.to], subject: r.subject, html: r.html, text: r.text, reply_to: sender.reply, ...(Object.keys(headers).length ? { headers } : {}), tags };
+  const payload: Record<string, unknown> = { from: sender.from, to: [o.to], subject: r.subject, html: r.html, text: r.text, reply_to: sender.reply, ...(Object.keys(headers).length ? { headers } : {}), tags,
+    ...(o.content.attachments && o.content.attachments.length ? { attachments: o.content.attachments } : {}) };
   const res = await rs(key, 'POST', '/emails', payload, { 'Idempotency-Key': 'wa-send-' + o.sendId });
   await svc.from('crm_email_sends').update({ subject: r.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
     error: res.ok ? null : (res.status + ' ' + String((res.body && (res.body.message || res.body.error)) || '')).slice(0, 400) }).eq('id', o.sendId);
@@ -280,7 +292,7 @@ async function sendRow(o: { sendId: number; c: any; to: string; content: Content
 async function deliver(o: { c: any; to: string; tpl: any; vars: Record<string, string>; cfg: Record<string, string>; kind: string; isTest: boolean; basis: string; who: Caller; content?: Partial<Content>; campaignId?: number | null }): Promise<Sent> {
   const ins = await svc.from('crm_email_sends').insert({
     contact_id: o.c ? o.c.id : null, to_email: o.to, template_key: o.tpl.key, kind: o.kind, status: 'queued', is_test: o.isTest, permission_basis: o.basis, campaign_id: o.isTest ? null : (o.campaignId || null),
-    meta: { template: o.tpl.name, vars: o.vars, caller: o.who.email, campaign_id: o.campaignId || null }, created_by: o.who.email
+    meta: { template: o.tpl.name, vars: o.vars, caller: o.who.email, campaign_id: o.campaignId || null, ...(o.content && o.content.attachments && o.content.attachments.length ? { attachments: o.content.attachments.map(a => a.filename) } : {}) }, created_by: o.who.email
   }).select('id').single();
   if (ins.error) return { error: 'send log: ' + ins.error.message };
   return await sendRow({ sendId: ins.data.id as number, c: o.c, to: o.to, content: { tpl: o.tpl, vars: o.vars, kind: o.kind, ...(o.content || {}), campaignId: o.campaignId || null }, cfg: o.cfg, isTest: o.isTest, who: o.who });
@@ -731,6 +743,101 @@ Deno.serve(async (req: Request) => {
       await svc.from('change_log').insert({ entity_type: 'crm_campaign', entity_id: String(k.id), field: 'status', old_value: 'draft', new_value: 'sending: ' + a.ok.length + ' queued, ' + a.held.length + ' held back', changed_by: who.email });
       const first = await pump(cfg, who, 5);
       return json({ ...summary, queued: queued.length, first });
+    }
+    if (action === 'receipt') {
+      /* v5 (wave185): the thank-you with the official receipt attached. Admins (Email it) or the automation. */
+      if (!admin) return json({ error: 'admins only' }, 403);
+      const rid = Number(body.receipt_id);
+      const d = await svc.rpc('crm_receipt_email_doc', { p_id: rid });
+      if (d.error || !d.data) return json({ error: d.error ? d.error.message : 'no such receipt' }, 404);
+      const rc = d.data as any;
+      if (rc.status !== 'issued') return json({ error: 'Receipt ' + rc.serial + ' is cancelled: nothing is emailed.' }, 400);
+      if (!rc.contact_id) return json({ error: 'The receipt has no donor on file.' }, 400);
+      const c = await contactById(Number(rc.contact_id)); if (!c) return json({ error: 'no such contact' }, 404);
+      /* the PDF: drawn by receipt-pdf once; drawn now when it is missing */
+      let path = String(rc.pdf_path || '');
+      if (!path) {
+        const sec = await getSecret('WA_TRIGGER_SECRET');
+        if (!sec) return json({ error: 'The receipt PDF is not drawn yet and the trigger secret is unavailable.' }, 500);
+        const r = await fetch(SUPABASE_URL + '/functions/v1/receipt-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': sec, Authorization: 'Bearer ' + ANON_KEY, apikey: ANON_KEY }, body: JSON.stringify({ action: 'render', receipt_id: rid }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.path) return json({ error: 'The receipt PDF could not be drawn: ' + String(j.error || r.status) }, 502);
+        path = String(j.path);
+      }
+      const file = await svc.storage.from('receipts').download(path);
+      if (file.error || !file.data) return json({ error: 'The receipt PDF could not be read: ' + (file.error ? file.error.message : 'no file') }, 502);
+      const bytes = new Uint8Array(await file.data.arrayBuffer());
+      let b64 = ''; for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + 0x8000)));
+      const attachments: Attachment[] = [{ filename: 'Welfare-Avenue-receipt-' + String(rc.serial).replace(/[^A-Za-z0-9_-]/g, '_') + '.pdf', content: btoa(b64) }];
+      /* the words, in the donor's language */
+      const fr = rc.lang === 'fr';
+      const tpl = await template(fr ? 'receipt_fr' : 'receipt'); if (!tpl || !tpl.active) return json({ error: 'the receipt email template is missing or switched off' }, 400);
+      const first = String(rc.first_name || firstName(c) || '').trim();
+      const money = (n: number) => { const v = Math.round((Number(n) || 0) * 100) / 100; const p = v.toFixed(2).split('.'); return '$' + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',') + '.' + p[1]; };
+      const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+      const iso = String(rc.gift_date_iso || '');
+      const dateFr = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? (Number(iso.slice(8, 10)) === 1 ? '1er' : String(Number(iso.slice(8, 10)))) + ' ' + MONTHS_FR[Number(iso.slice(5, 7)) - 1] + ' ' + iso.slice(0, 4) : String(rc.gift_date || '');
+      const annual = Number(rc.gift_count || 1) > 1;
+      const vars: Record<string, string> = {
+        thanks_to: fr ? (first ? 'Merci, ' + first : 'Merci') : (first ? 'Thank you, ' + first : 'Thank you'),
+        greeting: fr ? (first ? 'Bonjour ' + first + ',' : 'Bonjour,') : (first ? 'Hi ' + first + ',' : 'Hi there,'),
+        amount: money(Number(rc.amount)),
+        gift_date_line: annual ? (fr ? ' (' + rc.gift_count + ' dons en ' + rc.tax_year + ')' : ' (' + rc.gift_count + ' gifts in ' + rc.tax_year + ')') : (fr ? ' du ' + dateFr : ' on ' + String(rc.gift_date || '')),
+        serial: String(rc.serial || ''),
+        monthly_note: rc.recurring ? (fr ? ' Chaque paiement mensuel reçoit son propre reçu.' : ' Each monthly payment gets its own receipt.') : '',
+        extra_html: '', extra_text: ''
+      };
+      if (rc.tribute_kind && rc.tribute_name) {
+        const line = fr ? (rc.tribute_kind === 'memory' ? 'Ce don a été fait à la mémoire de ' : 'Ce don a été fait en l’honneur de ') + rc.tribute_name + '.'
+                        : (rc.tribute_kind === 'memory' ? 'Your gift was made in memory of ' : 'Your gift was made in honour of ') + rc.tribute_name + '.';
+        vars.extra_html = '<p>' + esc(line) + '</p>'; vars.extra_text = line + '\n\n';
+      }
+      /* the rule: a receipt is transactional (anyone whose address works) */
+      const perm = await svc.rpc('crm_email_permission', { p_contact_id: c.id, p_kind: 'transactional' });
+      const p = (perm.data || [])[0] || { allowed: false, basis: 'the permission rule did not answer', email: null };
+      if (!p.allowed) {
+        await svc.from('crm_email_sends').insert({ contact_id: c.id, to_email: p.email || c.primary_email || (c.emails || [])[0] || '(no email)', template_key: tpl.key, kind: 'transactional', status: 'suppressed', permission_basis: p.basis, meta: { template: tpl.name, caller: who.email, receipt_id: rid }, created_by: who.email });
+        return json({ status: 'suppressed', basis: p.basis, to: p.email, serial: rc.serial }, 200);
+      }
+      const live = (cfg.mail_mode || 'test') === 'live';
+      const tests = listOf(cfg.mail_test_recipients);
+      const donorTo = String(p.email).toLowerCase();
+      /* test mode: the same email, to a test recipient (the one asked for, or the first), never to the donor; the receipt is not marked */
+      let to = donorTo, isTest = false, basis = p.basis;
+      if (!live && !tests.includes(donorTo)) {
+        const want = String(body.to || '').trim().toLowerCase();
+        to = want && tests.includes(want) ? want : (tests[0] || '');
+        if (!to) return json({ error: 'The Hub is in test mode and no test recipient is set.' }, 403);
+        isTest = true; basis = 'test mode: a copy to a test recipient instead of ' + donorTo;
+      }
+      const out = await deliver({ c, to, tpl, vars, cfg, kind: 'transactional', isTest, basis, who, content: { tpl, vars, kind: 'transactional', attachments } });
+      if (out.status === 'sent' && !isTest) await svc.rpc('crm_receipt_emailed', { p_id: rid, p_send_id: out.send_id });
+      if (out.status === 'sent') await svc.from('change_log').insert({ entity_type: 'crm_receipt', entity_id: String(rc.serial), field: isTest ? 'email_test_copy' : 'emailed', old_value: null, new_value: (isTest ? 'test copy to ' : 'sent to ') + to + ' (send ' + out.send_id + ')', changed_by: who.email });
+      return json({ ...out, serial: rc.serial, test_copy: isTest, donor_email: isTest ? donorTo : undefined, basis, marked: out.status === 'sent' && !isTest }, out.error && !out.send_id ? 400 : 200);
+    }
+    if (action === 'receipt_sample') {
+      /* v5 (wave185): the receipt email as the donor will get it, with a SAMPLE receipt PDF attached, to a test recipient (admins) */
+      if (!admin) return json({ error: 'admins only' }, 403);
+      const to = String(body.to || who.email || '').trim().toLowerCase();
+      if (!isEmail(to)) return json({ error: 'a recipient is needed' }, 400);
+      if (!listOf(cfg.mail_test_recipients).includes(to) && !(to === who.email && onDomain(to, cfg))) return json({ error: 'Samples go only to the test recipients (' + (cfg.mail_test_recipients || 'none set') + ') or to your own team address.' }, 403);
+      const fr = body.lang === 'fr';
+      const sec = await getSecret('WA_TRIGGER_SECRET'); if (!sec) return json({ error: 'the trigger secret is unavailable' }, 500);
+      const r = await fetch(SUPABASE_URL + '/functions/v1/receipt-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': sec, Authorization: 'Bearer ' + ANON_KEY, apikey: ANON_KEY }, body: JSON.stringify({ action: 'check', return: true, lang: fr ? 'fr' : 'en' }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.pdf_b64) return json({ error: 'The sample PDF could not be drawn: ' + String(j.error || r.status) }, 502);
+      const tpl = await template(fr ? 'receipt_fr' : 'receipt'); if (!tpl) return json({ error: 'the receipt email template is missing' }, 400);
+      const c = await contactByEmail(to);
+      const first = c ? firstName(c) : '';
+      const vars: Record<string, string> = {
+        thanks_to: fr ? (first ? 'Merci, ' + first : 'Merci') : (first ? 'Thank you, ' + first : 'Thank you'),
+        greeting: fr ? (first ? 'Bonjour ' + first + ',' : 'Bonjour,') : (first ? 'Hi ' + first + ',' : 'Hi there,'),
+        amount: '$50.00', gift_date_line: fr ? ' du 9 août 2026' : ' on 9 August 2026', serial: 'CHECK-0001 (sample)', monthly_note: '',
+        extra_html: '<p>' + esc(fr ? 'Ceci est un exemple : le reçu joint est marqué EXEMPLE et n’est pas un reçu officiel.' : 'This is a sample: the attached receipt is marked SAMPLE and is not an official receipt.') + '</p>',
+        extra_text: (fr ? 'Ceci est un exemple : le reçu joint est marqué EXEMPLE et n’est pas un reçu officiel.' : 'This is a sample: the attached receipt is marked SAMPLE and is not an official receipt.') + '\n\n'
+      };
+      const out = await deliver({ c, to, tpl, vars, cfg, kind: 'transactional', isTest: true, basis: 'sample receipt email to a test recipient', who, content: { tpl, vars, kind: 'transactional', attachments: [{ filename: 'Welfare-Avenue-receipt-SAMPLE.pdf', content: String(j.pdf_b64) }] } });
+      return json({ ...out, sample: true }, out.error && !out.send_id ? 400 : 200);
     }
     if (action === 'itinerary_preview' || action === 'itinerary_test') {
       /* v4 (wave182): the itinerary email for one roster row, as it will look; a test goes to the caller's own team address or a test recipient */

@@ -4,9 +4,25 @@
      in the private bucket), the switch for admins (on needs everything; the treasurer and Steel decide), Issue for a donor's due
      gifts of the tax year (one receipt: one gift, or several as the year-end run does), the year-end run (one receipt per donor),
      and the receipts issued, each with its PDF, Replace and Cancel (with the reason). A sample receipt downloads as a PDF drawn by
-     receipt-pdf, marked SAMPLE. Issuing and replacing refuse in the database while receipt_mode is off. */
+     receipt-pdf, marked SAMPLE. Issuing and replacing refuse in the database while receipt_mode is off.
+     wave185 (30/09/26): receipts by email. Email it beside an issued receipt sends the donor one email that thanks them and carries
+     the PDF (mail-send, action receipt; a test copy to a test address while the Hub's email is in test mode), and the receipt
+     says when it was emailed. The switch for online gifts (admins, only while receipts are on): every paid gift through the
+     donation page gets its receipt issued and emailed by itself (stripe-events). Both switches stay off until an admin decides. */
   var RB = { busy: '', msg: '', err: '', act: null, confirmOn: false, run: null, sigUrl: null, sigAt: 0 };
-  LOADERS.rcpts = function () { return db.from('crm_receipts').select('id,serial,contact_id,tax_year,kind,status,gift_ids,amount,advantage_amount,eligible_amount,donor,issued_at,issued_by,replaces_id,replaced_by_id,cancelled_at,cancel_reason,pdf_path,cancelled_pdf_path').order('issued_at', { ascending: false }).order('id', { ascending: false }).limit(3000); };
+  LOADERS.rcpts = function () { return db.from('crm_receipts').select('id,serial,contact_id,tax_year,kind,status,gift_ids,amount,advantage_amount,eligible_amount,donor,issued_at,issued_by,replaces_id,replaced_by_id,cancelled_at,cancel_reason,pdf_path,cancelled_pdf_path,emailed_at,email_send_id').order('issued_at', { ascending: false }).order('id', { ascending: false }).limit(3000); };
+  function rbMail(body) {
+    if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
+    return Promise.resolve(db.functions.invoke('mail-send', { body: body })).then(function (r) {
+      if (r && r.error) {
+        var ctx = r.error.context;
+        if (ctx && typeof ctx.json === 'function') return ctx.json().then(function (j) { return { error: (j && j.error) || r.error.message || 'The email function refused.' }; }, function () { return { error: r.error.message || 'The email function refused.' }; });
+        return { error: r.error.message || 'The email function refused.' };
+      }
+      return (r && r.data) || {};
+    }).catch(function (e) { return { error: String((e && e.message) || e) }; });
+  }
+  function rbAuto() { return !!(GF.cfg && GF.cfg.receipt_auto_online === 'on'); }
   function rbFn(body) {
     if (typeof db === 'undefined' || !db || !db.functions) return Promise.resolve({ error: 'offline' });
     return Promise.resolve(db.functions.invoke('receipt-pdf', { body: body })).then(function (r) {
@@ -57,7 +73,44 @@
       '<div class="w155lb">The signature on receipts <span class="m">the treasurer’s, or another person the board authorizes; a PNG or JPG on a white or clear background</span></div>' + sig +
       (admin ? (RB.confirmOn ? '<div class="w155cf"><b>Turn receipts from the Hub on?</b> From then on admins can issue official receipts with the next number (' + E((cfg.receipt_prefix || '') + String(cfg.receipt_next_number || '').padStart(4, '0')) + '), and Keela stops being the only place receipts come from. The treasurer and Steel decide this.' +
           '<div class="w154acts"><button class="w152btn" data-w158bmode="on">' + I('check') + ' Turn them on</button><button class="w152btn ghost" data-w158bmodeno="1">Not yet</button></div></div>'
-        : '<div class="w154acts">' + (on ? '<button class="w152btn ghost" data-w158bmode="off">' + I('lock') + ' Turn receipts off</button>' : '<button class="w152btn ghost" data-w158bask="1"' + (missing.length ? ' disabled title="' + E('Missing: ' + missing.join(', ')) + '"' : '') + '>' + I('check') + ' Turn receipts on…</button>') + '</div>') : '');
+        : '<div class="w154acts">' + (on ? '<button class="w152btn ghost" data-w158bmode="off">' + I('lock') + ' Turn receipts off</button>' : '<button class="w152btn ghost" data-w158bask="1"' + (missing.length ? ' disabled title="' + E('Missing: ' + missing.join(', ')) + '"' : '') + '>' + I('check') + ' Turn receipts on…</button>') + '</div>') : '') +
+      rbAutoHtml(cfg);
+  }
+  /* wave185: the switch for online gifts */
+  function rbAutoHtml(cfg) {
+    var on = cfg.receipt_mode === 'on', auto = cfg.receipt_auto_online === 'on', admin = !!cfg.is_admin;
+    return '<div class="w185auto ' + (auto && on ? 'on' : 'off') + '" data-w185auto-state="' + (auto && on ? 'on' : 'off') + '"><b>Online gifts: ' + (auto && on ? 'each paid gift through the donation page gets its receipt issued and emailed by itself.' : 'receipts are issued by hand (Issue below, then Email it).') + '</b> ' +
+      (on ? 'With this on, every gift the donation page takes is receipted with the next number the moment Stripe confirms it, and the donor gets one email: the thank-you with the official receipt attached as a PDF, in the language they gave in. A gift that cannot be receipted by itself (no address, a number already used) stays in the list below for an admin.'
+        : 'Receipts from the Hub must be on first.') +
+      (admin ? '<div class="w154acts">' + (on ? (auto ? '<button class="w152btn ghost" data-w185auto="off">' + I('lock') + ' Stop the automatic receipts</button>' : '<button class="w152btn" data-w185auto="on">' + I('send') + ' Email receipts for online gifts automatically</button>') : '') +
+        '<button class="w152btn ghost" data-w185sample="en"' + (RB.busy ? ' disabled' : '') + '>' + I('note') + ' Email me a sample</button><button class="w152btn ghost" data-w185sample="fr"' + (RB.busy ? ' disabled' : '') + '>' + I('note') + ' En français</button></div>' : '') +
+      '</div>';
+  }
+  function rbAutoSet(mode) {
+    RB.busy = 'auto';
+    Promise.resolve(db.rpc('crm_receipt_auto_set', { p_on: mode })).then(function (r) {
+      if (r && r.error) { rbSay('Not changed: ' + (r.error.message || r.error), true); return; }
+      GF.cfg = r.data || GF.cfg; rbSay(mode === 'on' ? 'Online gifts now get their receipt by email automatically.' : 'Online gifts are receipted by hand again.');
+    });
+  }
+  /* wave185: the receipt email with a SAMPLE receipt attached, to the admin's own test address */
+  function rbSample(lang) {
+    RB.busy = 'sample'; paint();
+    rbMail({ action: 'receipt_sample', lang: lang }).then(function (r) {
+      if (r.error || r.status !== 'sent') { rbSay('The sample was not sent: ' + (r.error || r.status || 'no answer'), true); return; }
+      rbSay('A sample receipt email went to ' + r.to + ' (the attached receipt is marked SAMPLE).');
+    });
+  }
+  /* wave185: Email it */
+  function rbEmail(id) {
+    RB.busy = 'mail:' + id; paint();
+    rbMail({ action: 'receipt', receipt_id: Number(id) }).then(function (r) {
+      if (r.error) { rbSay('Not emailed: ' + r.error, true); return; }
+      if (r.status === 'suppressed') { rbSay('Not emailed: ' + (r.basis || 'the address does not work') + '. Download the PDF and send it another way.', true); return; }
+      if (r.status !== 'sent') { rbSay('Not emailed: ' + (r.error || r.status || 'no answer'), true); return; }
+      rbSay(r.test_copy ? 'The Hub\u2019s email is in test mode: a copy went to ' + r.to + ' instead of ' + (r.donor_email || 'the donor') + '. The receipt is not marked as emailed.' : 'Emailed to ' + r.to + ' with the PDF attached.');
+      rbRefresh();
+    });
   }
   function rbSigLoad() {
     if (!GF.cfg || !GF.cfg.signature || RB.sigUrl || Date.now() - RB.sigAt < 60000 || !db.storage) return;
@@ -190,13 +243,15 @@
       else if (admin) acts.push('<button class="w152mini" data-w158bmake="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>Make the PDF</button>');
       if (r.cancelled_pdf_path) acts.push('<button class="w152mini" data-w158bpdf="' + E(r.id) + '" data-which="cancelled">Cancelled copy</button>');
       if (admin && r.status === 'issued') {
+        acts.push('<button class="w152mini" data-w185mail="' + E(r.id) + '"' + (RB.busy ? ' disabled' : '') + '>' + (RB.busy === 'mail:' + r.id ? 'Emailing…' : I('send') + (r.emailed_at ? ' Email it again' : ' Email it')) + '</button>');
         if (on) acts.push('<button class="w152mini" data-w158bdo="replace" data-id="' + E(r.id) + '">Replace</button>');
         acts.push('<button class="w152mini" data-w158bdo="cancel" data-id="' + E(r.id) + '">Cancel</button>');
       }
+      var mailed = r.status === 'issued' ? (r.emailed_at ? '<span class="w185mailed on" title="' + E('Emailed to the donor on ' + fmtDay(r.emailed_at)) + '">' + I('send') + ' Emailed ' + E(fmtDay(r.emailed_at)) + '</span>' : '<span class="w185mailed">Not emailed</span>') : '';
       var form = RB.act && String(RB.act.id) === String(r.id) ? '<div class="w158bwhy"><input class="w152in" data-w158breason="' + E(r.id) + '" placeholder="' + (RB.act.kind === 'replace' ? 'Why it is replaced (the address changed, a typo…)' : 'Why it is cancelled (issued in error…)') + '">' +
         '<button class="w152btn sm" data-w158bgo="' + E(RB.act.kind) + '" data-id="' + E(r.id) + '">' + (RB.act.kind === 'replace' ? 'Replace it' : 'Cancel it') + '</button><button class="w152btn sm ghost" data-w158bstop="1">Keep it</button></div>' : '';
       return '<div class="w158brow' + (r.status === 'cancelled' ? ' off' : '') + '"><span class="s"><b>' + E(r.serial) + '</b><span class="m">' + E(fmtDay(r.issued_at)) + (r.kind === 'annual' ? ' · ' + plural((r.gift_ids || []).length, 'gift', 'gifts') + ' in ' + E(r.tax_year) : '') + '</span></span>' +
-        '<span class="w">' + who + '</span><span class="a">' + E(cents(r.eligible_amount)) + '</span><span class="t">' + gchip({ issued: ['Issued', GREEN], cancelled: [st, MUTED] }, r.status) + (r.cancel_reason ? '<span class="m"> ' + E(String(r.cancel_reason).replace(/^Replaced:\s*/, '')) + '</span>' : '') + '</span>' +
+        '<span class="w">' + who + '</span><span class="a">' + E(cents(r.eligible_amount)) + '</span><span class="t">' + gchip({ issued: ['Issued', GREEN], cancelled: [st, MUTED] }, r.status) + (r.cancel_reason ? '<span class="m"> ' + E(String(r.cancel_reason).replace(/^Replaced:\s*/, '')) + '</span>' : '') + mailed + '</span>' +
         '<span class="x">' + acts.join('') + '</span>' + form + '</div>';
     }).join('');
     return '<div class="w154card wide"><h3>' + I('note') + ' Receipts issued by the Hub <span class="m">' + plural(list.length, 'receipt', 'receipts') + '</span></h3>' +
@@ -212,7 +267,9 @@
     + '.w158brow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px dashed rgba(16,63,57,.12);font-size:13.5px;}'
     + '.w158brow.off{opacity:.72;}.w158brow .s{display:flex;flex-direction:column;min-width:0;}.w158brow .a{font-weight:600;font-variant-numeric:tabular-nums;}.w158brow .x{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;}'
     + '.w158brow .w a{color:inherit;font-weight:600;}.w158bwhy{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;}.w158bwhy .w152in{flex:1 1 240px;}'
-    + '@media (max-width:700px){.w158brow{grid-template-columns:minmax(0,1fr) auto;}.w158brow .w,.w158brow .t{grid-column:1/-1;}.w158brow .x{grid-column:1/-1;justify-content:flex-start;}}';
+    + '@media (max-width:700px){.w158brow{grid-template-columns:minmax(0,1fr) auto;}.w158brow .w,.w158brow .t{grid-column:1/-1;}.w158brow .x{grid-column:1/-1;justify-content:flex-start;}}'
+    + '.w185auto{border-radius:12px;padding:10px 12px;margin:12px 0 4px;font-size:13.5px;line-height:1.45;background:rgba(111,100,171,.08);}.w185auto.on{background:rgba(42,140,122,.1);}'
+    + '.w185mailed{display:inline-block;margin-left:8px;font-size:12px;color:' + MUTED + ';}.w185mailed.on{color:' + GREEN + ';font-weight:600;}';
   document.head.appendChild(css158b);
 
   /* ---------- wiring ---------- */
@@ -223,6 +280,9 @@
     if ((el = t.closest('[data-w158bask]'))) { e.preventDefault(); RB.confirmOn = true; RB.msg = ''; RB.err = ''; paint(); return; }
     if ((el = t.closest('[data-w158bmodeno]'))) { e.preventDefault(); RB.confirmOn = false; paint(); return; }
     if ((el = t.closest('[data-w158bmode]'))) { e.preventDefault(); rbModeSet(el.getAttribute('data-w158bmode')); return; }
+    if ((el = t.closest('[data-w185auto]'))) { e.preventDefault(); rbAutoSet(el.getAttribute('data-w185auto')); return; }
+    if ((el = t.closest('[data-w185mail]'))) { e.preventDefault(); rbEmail(el.getAttribute('data-w185mail')); return; }
+    if ((el = t.closest('[data-w185sample]'))) { e.preventDefault(); rbSample(el.getAttribute('data-w185sample')); return; }
     if ((el = t.closest('[data-w158bissue]'))) { e.preventDefault(); rbIssueDonor(el.getAttribute('data-w158bissue'), el.getAttribute('data-year')); return; }
     if ((el = t.closest('[data-w158brun]'))) { e.preventDefault(); rbYearRun(el.getAttribute('data-w158brun')); return; }
     if ((el = t.closest('[data-w158bpdf]'))) { e.preventDefault(); rbPdf(el.getAttribute('data-w158bpdf'), el.getAttribute('data-which')); return; }

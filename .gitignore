@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 .pushed.json
 test/shots_*/
+build/base.html
+build/live.html
+build/w1*.html
+build/rebase_check.html

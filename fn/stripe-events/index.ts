@@ -1,4 +1,9 @@
-// Welfare Avenue: stripe-events (v1, 28/09/26, wave161)
+// Welfare Avenue: stripe-events (v2, 30/09/26, wave185; v1 28/09/26, wave161)
+// v2 (wave185): after a paid gift is recorded, the receipt follows by itself when both switches are on (receipt_mode and
+//   receipt_auto_online): crm_receipt_auto_issue takes the next number, receipt-pdf draws the PDF, mail-send emails the
+//   thank-you with the receipt attached (a test copy to a test address while mail_mode is test). This runs after the
+//   answer to Stripe (EdgeRuntime.waitUntil) and never fails the webhook; what goes wrong is written to change_log
+//   (crm_receipt / auto_email_failed) and the receipt, if issued, waits in Receipts with Email it.
 // The Hub's own Stripe webhook (the endpoint stripe-admin setup created on Welfare Avenue's Stripe account). Stripe signs
 // each event with the endpoint's secret, which setup saved straight into the vault (STRIPE_WEBHOOK_SECRET; nobody copies
 // it). This function checks the Stripe-Signature header (HMAC-SHA256 of "<t>.<raw body>", at most 5 minutes old), looks up
@@ -76,6 +81,31 @@ async function extraFor(ev: Json): Promise<Json> {
   } catch (_) { return {}; }
 }
 
+/* wave185: the receipt after an online gift (both switches on), off the webhook's critical path */
+async function followUp(giftId: number) {
+  const log = async (what: string, detail: string) => { try { await svc.from('change_log').insert({ entity_type: 'crm_receipt', entity_id: 'gift ' + giftId, field: what, old_value: null, new_value: detail.slice(0, 500), changed_by: 'donation page' }); } catch (_) { /* nothing more to do */ } };
+  try {
+    const issued = await svc.rpc('crm_receipt_auto_issue', { p_gift_id: giftId });
+    if (issued.error) { await log('auto_issue_failed', issued.error.message); return; }
+    const r = issued.data || {};
+    if (!r.receipt_id) return; /* skipped: the switches are off, or the gift is not due (already noted when it matters) */
+    const sec = await svc.rpc('get_secret', { secret_name: 'WA_TRIGGER_SECRET' });
+    if (sec.error || !sec.data) { await log('auto_email_failed', r.serial + ': the trigger secret is unavailable'); return; }
+    const anon = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const call = async (fn: string, body: Json) => {
+      const res = await fetch(SUPABASE_URL + '/functions/v1/' + fn, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-wa-secret': String(sec.data), Authorization: 'Bearer ' + anon, apikey: anon }, body: JSON.stringify(body) });
+      const j = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, body: j };
+    };
+    const pdf = await call('receipt-pdf', { action: 'render', receipt_id: r.receipt_id });
+    if (!pdf.ok || !pdf.body.path) { await log('auto_email_failed', r.serial + ': the PDF was not drawn (' + String(pdf.body.error || pdf.status) + ')'); return; }
+    const mail = await call('mail-send', { action: 'receipt', receipt_id: r.receipt_id });
+    if (!mail.ok || mail.body.error || mail.body.status === 'suppressed') await log('auto_email_failed', r.serial + ': ' + String(mail.body.error || ('status ' + (mail.body.status || mail.status)) + (mail.body.basis ? ' (' + mail.body.basis + ')' : '')));
+  } catch (e) {
+    await log('auto_email_failed', String(e));
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
   const raw = await req.text();
@@ -88,5 +118,11 @@ Deno.serve(async (req: Request) => {
   const extra = await extraFor(ev);
   const { data, error } = await svc.rpc('crm_stripe_apply', { p_event: ev, p_extra: extra });
   if (error || (data && data.error)) return json({ error: 'not applied yet' }, 500);
+  /* a new gift: its receipt follows by itself when the switches are on (after the answer to Stripe) */
+  const gid = data && !data.duplicate && !data.ignored && !data.already && data.gift_id ? Number(data.gift_id) : 0;
+  if (gid) {
+    const w = (globalThis as any).EdgeRuntime;
+    if (w && typeof w.waitUntil === 'function') w.waitUntil(followUp(gid)); else await followUp(gid);
+  }
   return json({ ok: true, result: data && data.duplicate ? 'duplicate' : data && data.ignored ? 'ignored' : 'done' });
 });
