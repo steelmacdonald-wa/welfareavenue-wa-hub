@@ -91,7 +91,7 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     ok('card: under the Texts card', await f.ev(() => { const a = document.getElementById('w171card'), b = document.getElementById('w174card'); return !!a && !!b && a.nextElementSibling === b; }), card);
     ok('card: the start time and each role', /Serving starts at/.test(card) && /11:00 am\s*Team leader and main driver at the storage unit/.test(card) && /10:45 am\s*Pickup driver/.test(card) && /11:45 am\s*Community lead/.test(card) && /12:00 pm\s*Serving: servers, photographers \(to 2:00 pm\)/.test(card), card);
     ok('card: itinerary text hour', /text with it at 5:00 pm/.test(card));
-    ok('card: previews as test links', await f.ev(() => !!document.querySelector('#w174card a[href="https://hub.welfareavenue.com/c/tok9003abcdefghijk?test=1"]') && !document.querySelector('#w174card a[href*="tok9002"]')));
+    ok('card: previews as test links', await f.ev(() => !!document.querySelector('#w174card a[href="https://hub.welfareavenue.com/c/tok9003abcdefghijk?test=1&it=1"]') && !document.querySelector('#w174card a[href*="tok9002"]')));
     ok('card: survey numbers', /2\s*answered of 2 confirmed/.test(card), card.slice(-450));
     ok('card: overall and needs, with the other answer', /Overall/i.test(card) && /Excellent/.test(card) && /Needs people told us about/i.test(card) && /Food insecurity/.test(card) && /Other: Winter boots/.test(card), card);
     ok('card: meals served from the team leader', /110\s*meals served/.test(card));

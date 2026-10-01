@@ -43,7 +43,16 @@ async function open(browser, tok, handler, opts, qs) {
   await page.waitForTimeout(400);
   return { ctx, page, calls, errors };
 }
-const text = p => p.evaluate(() => document.getElementById('app').innerText + '\n' + document.body.innerText);
+/* wave182: the itinerary lives in its own view now (the teaser opens it): the text includes it, then goes back */
+const text = async p => {
+  const a = await p.evaluate(() => document.getElementById('app').innerText + '\n' + document.body.innerText);
+  if (!(await p.evaluate(() => !!document.querySelector('[data-open-it]')))) return a;
+  await p.click('[data-open-it]'); await p.waitForTimeout(120);
+  const b = await p.evaluate(() => document.getElementById('itv').innerText);
+  await p.click('[data-iv="back"]'); await p.waitForTimeout(80);
+  return a + '\n' + b;
+};
+const inItv = async (p, fn) => { const has = await p.evaluate(() => !!document.querySelector('[data-open-it]')); if (has) { await p.click('[data-open-it]'); await p.waitForTimeout(120); } const r = await p.evaluate(fn); if (has) { await p.click('[data-iv="back"]'); await p.waitForTimeout(80); } return r; };
 const TOK = 'abcdef1234567890ab';
 
 
@@ -77,10 +86,10 @@ const noScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= w
     let f = await open(browser, TOK, (c) => ({ body: base('server', { role_en: 'Server', itinerary: itin('serve') }) }));
     let t = await text(f.page);
     ok('server: the time row', /When\s*12:00 pm to 2:00 pm/.test(t), t.slice(0, 600));
-    ok('server: the itinerary heading and date', /Your itinerary/i.test(t) && /Sunday, October 4 · the serving starts at 12:00 pm/.test(t), t);
-    ok('server: meet the team at the spot', /Meet the team/.test(t) && /1500 Rue Berri, Montréal, QC H2L 2C4 \(Maisonneuve side\)/.test(t));
+    ok('server: the itinerary heading and date', /Your itinerary/i.test(t) && /Sunday, October 4/.test(t) && /The serving · 12:00 pm/i.test(t), t);
+    ok('server: meet the team at the spot', /Meet the team/i.test(t) && /Maisonneuve side/.test(t) && /1500 Rue Berri/.test(t));
     ok('server: donations hint and the survey note', /Bringing donations\?/.test(t) && /survey comes by text/.test(t));
-    ok('server: the team with phones', /Melissa Keza/.test(t) && /438-221-2053/.test(t) && /main driver/.test(t) && /pickup driver/.test(t), t);
+    ok('server: the team with phones', /Melissa Keza/.test(t) && /438-221-2053/.test(t) && /main driver/i.test(t) && /pickup driver/i.test(t), t);
     ok('server: the notes', /Sanitize your hands/.test(t));
     ok('server: no pickups or storage', !/storage unit/i.test(t) && !/Open the route/.test(t));
     const g = await f.page.$eval('.cal a', a => a.href);
@@ -95,11 +104,11 @@ const noScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= w
       dropoffs: [{ name: 'Fabrice', stay: true }], route_url: 'https://www.google.com/maps/dir/a/b/c', storage_place: '888 Rue Saint-Antoine W', storage_access: null, dish_place: 'Old Brewery Mission' });
     f = await open(browser, TOK, () => ({ body: base('driver', { role_en: 'Driver', times: pick.times, itinerary: pick }) }));
     t = await text(f.page);
-    ok('pickup driver: the start and the pickups', /10:45 am/.test(t) && /Pick up the cooks’ food/.test(t) && /Text each cook about 10 minutes/.test(t) && /Butter chicken/.test(t), t.slice(0, 1500));
-    ok('pickup driver: cook phones as call links', await f.page.evaluate(() => !!document.querySelector('a[href="tel:+15142990421"]')));
-    ok('pickup driver: the route link', await f.page.evaluate(() => { const a = document.querySelector('a.rt'); return !!a && a.href === 'https://www.google.com/maps/dir/a/b/c'; }));
+    ok('pickup driver: the start and the pickups', /10:45 am/.test(t) && /Before the serving/i.test(t) && /Text each cook about 10 minutes/.test(t) && /Butter chicken/.test(t), t.slice(0, 1500));
+    ok('pickup driver: cook phones as call links', await inItv(f.page, () => !!document.querySelector('a[href="tel:+15142990421"]')));
+    ok('pickup driver: the route link', await inItv(f.page, () => { const a = document.querySelector('.acts a.pri'); return !!a && a.href === 'https://www.google.com/maps/dir/a/b/c'; }));
     ok('pickup driver: no storage step, pack up after', !/Meet at the storage unit/.test(t) && /Help the team pack up/.test(t));
-    ok('pickup driver: a name is text, not markup', await f.page.evaluate(() => !window.__x && !document.querySelector('.itin img')));
+    ok('pickup driver: a name is text, not markup', await inItv(f.page, () => !window.__x && !document.querySelector('#itv img')));
     ok('pickup driver: the time row 10:45 am to 2:30 pm (the serving 12:00 pm)', /10:45 am to 2:30 pm \(the serving starts at 12:00 pm\)/.test(t));
     await f.ctx.close();
 
@@ -107,23 +116,23 @@ const noScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= w
     const both = Object.assign({}, pick, { times: { start: '10:45', end: '14:30', at: 'pickup', serve: '12:00', driver_kind: 'both' }, storage_access: 'Door *1234#' });
     f = await open(browser, TOK, () => ({ body: base('driver', { itinerary: both, times: both.times }) }));
     t = await text(f.page);
-    ok('only driver: pickups then the storage unit', /Pick up the cooks’ food/.test(t) && /Then the storage unit/.test(t) && /Door \*1234#/.test(t) && /Old Brewery Mission/.test(t));
+    ok('only driver: pickups then the storage unit', /Before the serving/i.test(t) && /Storage unit/i.test(t) && /Door \*1234#/.test(t) && /Old Brewery Mission/.test(t));
     await f.ctx.close();
     const tl = itin('lead_driver', { times: { start: '11:00', end: '14:30', at: 'storage', serve: '12:00' }, pickups: [], dropoffs: [{ name: 'Fabrice', stay: true }, { name: 'Ilias' }],
       storage_place: '888 Rue Saint-Antoine W, unit 1253', storage_access: null, dish_place: 'Old Brewery Mission, 915 Clark Street', audit_url: 'https://forms.gle/1FqxfNeVq1ZorJUj8' });
     f = await open(browser, TOK, () => ({ body: base('team_leader', { role_en: 'Team leader', itinerary: tl, times: tl.times }) }));
     t = await text(f.page);
-    ok('team leader: storage at 11:00 am', /11:00 am\s*Meet at the storage unit/.test(t) && /unit 1253/.test(t) && /Text the ops line if you do not have the storage codes/.test(t), t.slice(0, 1500));
+    ok('team leader: storage at 11:00 am', /11:00 am/.test(t) && /Storage unit/i.test(t) && /unit 1253/.test(t) && /Text the ops line if you do not have the storage codes/.test(t), t.slice(0, 1500));
     ok('team leader: drop-offs and staying', /Cooks dropping off their food:\s*Fabrice \(staying to serve\), Ilias/.test(t), t.slice(0, 2000));
-    ok('team leader: ETA, survey reminder, audit form', /Share your ETA/.test(t) && await f.page.evaluate(() => !!document.querySelector('a[href="https://forms.gle/1FqxfNeVq1ZorJUj8"]')));
-    ok('team leader: after, dishwashing and back to storage', /Dishwashing: Old Brewery Mission, 915 Clark Street/.test(t) && /Bring the equipment back/.test(t));
+    ok('team leader: ETA, survey reminder, audit form', /Share your ETA/.test(t) && await inItv(f.page, () => !!document.querySelector('a[href="https://forms.gle/1FqxfNeVq1ZorJUj8"]')));
+    ok('team leader: after, dishwashing and back to storage', /Old Brewery Mission/.test(t) && /915 Clark Street/.test(t) && /Bring the equipment back/.test(t));
     await f.ctx.close();
 
     /* 4. the community lead */
     const cl = itin('community', { times: { start: '11:45', end: '14:15', at: 'serving', serve: '12:00' } });
     f = await open(browser, TOK, () => ({ body: base('community_debrief', { role_en: 'Community lead', itinerary: cl, times: cl.times }) }));
     t = await text(f.page);
-    ok('community lead: four steps', /11:45 am\s*Arrive and count the clothing/.test(t) && /Welcome people and listen/.test(t) && /Build the community/.test(t) && /Close the day/.test(t), t.slice(0, 1500));
+    ok('community lead: four steps', /Arrive and count the clothing/.test(t) && /11:45 am/.test(t) && /Welcome people and listen/.test(t) && /Build the community/.test(t) && /Close the day/.test(t), t.slice(0, 1500));
     ok('community lead: the debrief is the survey', /fill in your survey on this page/.test(t));
     await f.ctx.close();
 
@@ -141,7 +150,7 @@ const noScroll = p => p.evaluate(() => document.documentElement.scrollWidth <= w
     const sv = { open: true, questions: SQ, answers: null, submitted_at: null };
     f = await open(browser, TOK, (c) => c.url.endsWith('volunteer_confirm_get') ? { body: base('server', { survey: sv, itinerary: itin('serve') }) } : { body: { ok: true } });
     t = await text(f.page);
-    ok('survey: first on the day', await f.page.evaluate(() => { const s = document.getElementById('survey'), i = document.getElementById('itinerary'); return !!s && !!i && (s.compareDocumentPosition(i) & 4) > 0; }));
+    ok('survey: first on the day', await f.page.evaluate(() => { const s = document.getElementById('survey'), i = document.querySelector('[data-open-it]'); return !!s && !!i && (s.compareDocumentPosition(i) & 4) > 0; }));
     ok('survey: the questions and the help', /How did it go\?/i.test(t) && /Which needs did the people you served tell you about\?/.test(t) && /0 = very poor, 5 = excellent/.test(t) && /Please leave out names/.test(t));
     await f.page.click('#svsend'); await f.page.waitForTimeout(200);
     t = await text(f.page);

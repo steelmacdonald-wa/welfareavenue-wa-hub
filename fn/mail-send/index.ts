@@ -1,4 +1,13 @@
-// Welfare Avenue: mail-send (v3, 28/09/26 Toronto, wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// Welfare Avenue: mail-send (v4, 30/09/26 Toronto, wave182; v3 wave157; v2 wave155; v1.1 wave154: links styled before the button is built, footer line once)
+// v4 (wave182): volunteers' itineraries by email. wa182_itinerary_tick queues one crm_email_sends row per itinerary
+//   send (template volunteer_itinerary, kind transactional, meta.source 'itinerary' with the roster row and its token);
+//   the pump sends those first (crm_claim_queued(p_limit, 'itinerary')), rendered here from the volunteer's own page
+//   data (volunteer_confirm_get): the season's photo, their role, when and where they start, their day in short, the
+//   team's note, the WhatsApp group, their team, and a button to their full itinerary (hub.welfareavenue.com/c/<token>?it=1).
+//   The storage codes are never in the email (they stay on the page). New actions for the Hub's Send itineraries window:
+//   itinerary_preview {roster_id, note?, is_update?} (the email as it will look) and itinerary_test {roster_id, note?,
+//   is_update?} (sent to the caller's own team address or a test recipient, marked as a test). The mail_mode rule is
+//   unchanged: in test mode only the test recipients get an itinerary.
 // v3 (wave157): the automations' emails. crm_automation_advance queues one row per run and step (automation_id,
 //   automation_run_id, step_id, the content in meta.content); the pump sends them first, within the daily cap only
 //   (crm_claim_queued(p_limit, 'automation')), then the campaigns within both caps ('campaign'). In test mode only a
@@ -277,6 +286,164 @@ async function deliver(o: { c: any; to: string; tpl: any; vars: Record<string, s
   return await sendRow({ sendId: ins.data.id as number, c: o.c, to: o.to, content: { tpl: o.tpl, vars: o.vars, kind: o.kind, ...(o.content || {}), campaignId: o.campaignId || null }, cfg: o.cfg, isTest: o.isTest, who: o.who });
 }
 
+
+/* ---------- v4 (wave182): volunteers' itineraries ---------- */
+const ST_PUBLIC = SUPABASE_URL + '/storage/v1/object/public/content-images/';
+const IT_TX: Record<string, Record<string, string>> = {
+  en: { hi: 'Hi', intro: 'Here is your itinerary for {d}. Thank you for being part of it!', introUp: 'Your itinerary for {d} has changed. Here is the latest.', ov: 'Your itinerary', role: 'Your role', date: 'Date', start: 'You start', where: 'Where', serving: 'The serving',
+    day: 'Your day', team: 'Your team', open: 'Open my full itinerary', wa: 'Join the WhatsApp group', note: 'A note from the team', you: 'you', after: 'After',
+    storage: 'Meet at the storage unit', storageB: 'The address and the access codes are on your itinerary page.', pickups: 'Start your pickups', pickupsB1: '1 cook to pick up. Text them about 10 minutes before you arrive; the route is on your itinerary page.', pickupsB: '{n} cooks to pick up. Text each one about 10 minutes before you arrive; the route is on your itinerary page.',
+    serve: 'The serving', serveB: 'At {p}.', after1: 'Dishwashing at {p}, then the equipment goes back to the storage unit.', afterPick: 'Help the team pack up and follow the team leader’s direction.',
+    meet: 'Meet the team', meetB: 'At {p}. Find the team leader and follow their direction.', survey: 'Your two-minute survey comes by text after the serving.',
+    cA: 'Arrive and count the clothing', cW: 'Welcome people and listen', cC: 'Build the community', cE: 'Close the day: your survey is the debrief',
+    q: 'Questions? Text or call Welfare Avenue at 438-808-7754.', subj: 'Your itinerary for {d}', subjUp: 'Updated: your itinerary for {d}', pre: 'Where to be, when, and who is on your team.',
+    winter: 'Winter', spring: 'Spring', summer: 'Summer', autumn: 'Autumn', home: 'Home-cooked', kitchen: 'Community kitchen', storageAt: 'at the storage unit', pickupAt: 'at your first pickup', servingAt: 'at the serving' },
+  fr: { hi: 'Bonjour', intro: 'Voici votre itinéraire pour le {d}. Merci d’en faire partie!', introUp: 'Votre itinéraire pour le {d} a changé. Voici la dernière version.', ov: 'Votre itinéraire', role: 'Votre rôle', date: 'Date', start: 'Votre début', where: 'Lieu', serving: 'Le service',
+    day: 'Votre journée', team: 'Votre équipe', open: 'Ouvrir mon itinéraire complet', wa: 'Rejoindre le groupe WhatsApp', note: 'Un mot de l’équipe', you: 'vous', after: 'Après',
+    storage: 'Rendez-vous à l’entrepôt', storageB: 'L’adresse et les codes d’accès sont sur votre page d’itinéraire.', pickups: 'Début des collectes', pickupsB1: '1 plat à aller chercher. Textez la personne environ 10 minutes avant d’arriver; le trajet est sur votre page d’itinéraire.', pickupsB: '{n} plats à aller chercher. Textez chaque personne environ 10 minutes avant d’arriver; le trajet est sur votre page d’itinéraire.',
+    serve: 'Le service', serveB: 'Au {p}.', after1: 'Vaisselle au {p}, puis l’équipement retourne à l’entrepôt.', afterPick: 'Aidez l’équipe à ranger et suivez les consignes du ou de la responsable.',
+    meet: 'Rejoignez l’équipe', meetB: 'Au {p}. Trouvez le ou la responsable d’équipe et suivez ses consignes.', survey: 'Votre sondage de deux minutes arrive par texto après le service.',
+    cA: 'Arrivée et décompte des vêtements', cW: 'Accueillir et écouter', cC: 'Bâtir la communauté', cE: 'Clore la journée : votre sondage est le bilan',
+    q: 'Des questions? Textez ou appelez Welfare Avenue au 438-808-7754.', subj: 'Votre itinéraire pour le {d}', subjUp: 'Mis à jour : votre itinéraire pour le {d}', pre: 'Où et quand, et qui est dans votre équipe.',
+    winter: 'Hiver', spring: 'Printemps', summer: 'Été', autumn: 'Automne', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', storageAt: 'à l’entrepôt', pickupAt: 'à votre première collecte', servingAt: 'au service' }
+};
+function itHm(s: string, fr: boolean): string {
+  const m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return String(s || '');
+  const h = Number(m[1]), mm = m[2];
+  return fr ? h + ' h' + (mm === '00' ? '' : ' ' + mm) : (h % 12 || 12) + ':' + mm + (h < 12 ? ' am' : ' pm');
+}
+function itDay(iso: string, fr: boolean): string {
+  try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }); } catch (_) { return String(iso); }
+}
+function itPhone(p: string): string { const x = String(p || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, ''); return x.length === 10 ? x.slice(0, 3) + '-' + x.slice(3, 6) + '-' + x.slice(6) : String(p || ''); }
+async function itData(rosterId: number): Promise<any> {
+  const r = await svc.from('event_roster').select('id,confirm_token').eq('id', rosterId).maybeSingle();
+  if (!r.data || !r.data.confirm_token) return null;
+  const d = await svc.rpc('volunteer_confirm_get', { p_token: r.data.confirm_token, p_preview: true });
+  if (d.error || !d.data) return null;
+  return { ...(d.data as any), token: r.data.confirm_token };
+}
+function itineraryEmail(d: any, o: { note?: string | null; isUpdate?: boolean; lang?: string | null; cfg: Record<string, string>; unsub: string }) {
+  const fr = (o.lang || d.lang) === 'fr';
+  const T = IT_TX[fr ? 'fr' : 'en'];
+  const it = d.itinerary || {};
+  const look = it.look || d.look || {};
+  const tm = it.times || {};
+  const role = String(d.role || '').toLowerCase();
+  const kind = tm.driver_kind;
+  const dayTxt = itDay(d.event_date, fr);
+  const place = it.place || '1500 Rue Berri, Montréal, QC H2L 2C4';
+  const spot = it.meet_spot ? place.split(',')[0] + ' (' + it.meet_spot + ')' : place;
+  let rname = String((fr ? d.role_fr : d.role_en) || d.role || '');
+  if (role === 'driver' && kind) rname = fr ? (kind === 'main' ? 'Chauffeur principal' : kind === 'pickup' ? 'Chauffeur des collectes' : 'Chauffeur') : (kind === 'main' ? 'Main driver' : kind === 'pickup' ? 'Pickup driver' : 'Driver');
+  const link = (Deno.env.get('SMS_LINK_BASE') || 'https://hub.welfareavenue.com/c/') + d.token + '?it=1';
+  const steps: Array<[string, string, string]> = [];
+  if (it.kind === 'lead_driver') {
+    if (role === 'driver' && (kind === 'pickup' || kind === 'both')) { const n = (it.pickups || []).length; steps.push([tm.start, T.pickups, n === 1 ? T.pickupsB1 : T.pickupsB.replace('{n}', String(n))]); }
+    if (!(role === 'driver' && kind === 'pickup')) steps.push([kind === 'both' ? '' : tm.start, T.storage, T.storageB]);
+    steps.push([it.serve, T.serve, T.serveB.replace('{p}', spot)]);
+    steps.push(['', T.after, role === 'driver' && kind === 'pickup' ? T.afterPick : T.after1.replace('{p}', String(it.dish_place || 'Old Brewery Mission').split(',')[0])]);
+  } else if (it.kind === 'community') {
+    steps.push([tm.start, T.cA, '']); steps.push([it.serve, T.cW, '']); steps.push(['', T.cC, '']); steps.push(['', T.cE, '']);
+  } else {
+    steps.push([tm.start, T.meet, T.meetB.replace('{p}', spot)]);
+    steps.push(['', T.after, T.survey]);
+  }
+  const at = tm.at === 'storage' ? T.storageAt : tm.at === 'pickup' ? T.pickupAt : T.servingAt;
+  const hero = look.hero && look.hero.path ? ST_PUBLIC + String(look.hero.path).replace(/^\/+/, '') : '';
+  const band = look.band && look.band.path ? ST_PUBLIC + String(look.band.path).replace(/^\/+/, '') : hero;
+  const season = look.season ? T[look.season] || '' : '';
+  const cream = 'color:' + CREAM + ';';
+  const lab = `font-family:${BODY};font-weight:700;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:${GOLD};`;
+  const cell = (k: string, v: string, sub?: string) => `<td valign="top" style="padding:12px 14px;background-color:${GREEN};border:1px solid #1F4D46;"><div style="${lab}">${esc(k)}</div><div style="font-family:${BODY};font-size:15px;line-height:21px;font-weight:700;${cream}padding-top:4px;">${esc(v)}</div>${sub ? `<div style="font-family:${BODY};font-size:12.5px;line-height:18px;color:#CFD9D6;">${esc(sub)}</div>` : ''}</td>`;
+  const stepRows = steps.map(([time, title, body]) => `<tr><td valign="top" width="86" style="padding:12px 0;border-top:1px solid #3A3B37;font-family:${HEAD};font-weight:600;font-size:20px;line-height:24px;color:${GOLD};">${time ? esc(itHm(time, fr)) : '&nbsp;'}</td><td valign="top" style="padding:12px 0;border-top:1px solid #3A3B37;"><div style="font-family:${BODY};font-weight:700;font-size:16px;line-height:22px;${cream}">${esc(title)}</div>${body ? `<div style="font-family:${BODY};font-size:14.5px;line-height:21px;color:#D9D6CF;padding-top:2px;">${esc(body)}</div>` : ''}</td></tr>`).join('');
+  const team = (it.team || []).filter((p: any) => !p.me).map((p: any) => {
+    let rl = String((fr ? p.role_fr : p.role_en) || p.role || ''); if (p.role === 'driver' && p.kind) rl = fr ? (p.kind === 'main' ? 'chauffeur principal' : p.kind === 'pickup' ? 'chauffeur des collectes' : 'chauffeur') : (p.kind === 'main' ? 'main driver' : p.kind === 'pickup' ? 'pickup driver' : 'driver');
+    const ph = itPhone(p.phone);
+    return `<tr><td style="padding:7px 0;border-top:1px solid #3A3B37;font-family:${BODY};font-size:15px;line-height:21px;${cream}"><b>${esc(p.name || '')}</b> <span style="color:#B8B5AE;">· ${esc(rl)}</span>${ph ? ` · <a href="tel:+1${esc(ph.replace(/\D/g, ''))}" style="color:${GOLD};text-decoration:none;">${esc(ph)}</a>` : ''}</td></tr>`;
+  }).join('');
+  const note = String(o.note || '').trim();
+  const wa = /^https:\/\/(chat\.whatsapp\.com|wa\.me|whatsapp\.com)\//i.test(String(it.whatsapp_url || '')) ? String(it.whatsapp_url) : '';
+  const btn = (href: string, label: string, bg: string, fg: string) => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0;"><tr><td style="background-color:${bg};border-radius:999px;"><a href="${esc(href)}" style="display:inline-block;padding:14px 26px;font-family:${HEAD};font-weight:600;font-size:18px;letter-spacing:1px;text-transform:uppercase;color:${fg};text-decoration:none;">${esc(label)}</a></td></tr></table>`;
+  const addr = o.cfg.mail_postal_address || 'Welfare Avenue, 8200 av Bloomfield, Montreal QC H3N 2H9';
+  const charity = o.cfg.mail_charity_number || '713048502RR0001';
+  const subject = (o.isUpdate ? T.subjUp : T.subj).replace('{d}', dayTxt);
+  const fmt = d.format === 'community_kitchen' ? T.kitchen : d.format === 'home_cooked' ? T.home : '';
+  const html = `<!DOCTYPE html><html lang="${fr ? 'fr' : 'en'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark light"><title>${esc(subject)}</title>` +
+    `<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">` +
+    `<style>body{margin:0;padding:0;background:#151614;}table{border-collapse:collapse;}img{border:0;line-height:100%;}@media only screen and (max-width:620px){.wa-wrap{width:100% !important;}.wa-pad{padding-left:18px !important;padding-right:18px !important;}.wa-h1{font-size:40px !important;line-height:40px !important;}.wa-col{display:block !important;width:100% !important;box-sizing:border-box;}}</style></head>` +
+    `<body style="margin:0;padding:0;background-color:#151614;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;font-size:1px;line-height:1px;color:#151614;">${esc(T.pre)}</div>` +
+    `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#151614;"><tr><td align="center" style="padding:20px 10px;">` +
+    `<table role="presentation" class="wa-wrap" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px;background-color:${INK};border-radius:18px;overflow:hidden;">` +
+    `<tr><td class="wa-pad" style="background-color:${GREEN};padding:22px 32px 18px 32px;"><img src="${LOGO_CREAM}" width="150" alt="Welfare Avenue" style="display:block;width:150px;height:auto;"></td></tr>` +
+    (hero ? `<tr><td style="background-color:${GREEN};line-height:0;"><img src="${esc(hero)}" width="600" alt="${esc((look.hero && look.hero.alt) || '')}" style="display:block;width:100%;max-width:600px;height:auto;"></td></tr>` : '') +
+    `<tr><td class="wa-pad" style="padding:26px 32px 6px 32px;"><div style="${lab}">${esc(T.ov)}${season ? ' · ' + esc(season) : ''}${o.isUpdate ? ' · ' + (fr ? 'MIS À JOUR' : 'UPDATED') : ''}</div>` +
+    `<h1 class="wa-h1" style="margin:6px 0 0;font-family:${HEAD};font-weight:700;font-size:48px;line-height:46px;text-transform:uppercase;${cream}">${esc(rname)}</h1>` +
+    `<p style="margin:12px 0 0;font-family:${BODY};font-size:16px;line-height:24px;color:#E8E4DC;">${esc(T.hi)}${d.first ? ' ' + esc(d.first) : ''}, ${esc(((t: string) => t.charAt(0).toLowerCase() + t.slice(1))((o.isUpdate ? T.introUp : T.intro).replace('{d}', dayTxt)))}</p></td></tr>` +
+    `<tr><td class="wa-pad" style="padding:16px 32px 4px 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>` +
+    `<td class="wa-col" width="33%" style="padding:0;">${'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + cell(T.date, dayTxt, T.serving + ' ' + itHm(it.serve, fr)) + '</tr></table>'}</td>` +
+    `<td class="wa-col" width="34%" style="padding:0;">${'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + cell(T.where, place.split(',')[0], fmt || (it.meet_spot ? String(it.meet_spot).split('(')[0].trim() : '')) + '</tr></table>'}</td>` +
+    `<td class="wa-col" width="33%" style="padding:0;">${'<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>' + cell(T.start, itHm(tm.start || it.serve, fr), at) + '</tr></table>'}</td>` +
+    `</tr></table></td></tr>` +
+    (note ? `<tr><td class="wa-pad" style="padding:14px 32px 0 32px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td style="background-color:${GOLD};border-radius:12px;padding:12px 16px;"><div style="font-family:${BODY};font-weight:700;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:${GREEN};">${esc(T.note)}</div><div style="font-family:${BODY};font-size:15px;line-height:22px;color:${INK};padding-top:3px;">${esc(note)}</div></td></tr></table></td></tr>` : '') +
+    `<tr><td class="wa-pad" style="padding:20px 32px 0 32px;"><div style="${lab}">${esc(T.day)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">${stepRows}</table></td></tr>` +
+    `<tr><td class="wa-pad" style="padding:18px 32px 4px 32px;">${btn(link, T.open, GOLD, GREEN)}${wa ? btn(wa, T.wa, '#25D366', '#0B2E1A') : ''}</td></tr>` +
+    (team ? `<tr><td class="wa-pad" style="padding:16px 32px 0 32px;"><div style="${lab}">${esc(T.team)}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:4px;">${team}</table></td></tr>` : '') +
+    `<tr><td class="wa-pad" style="padding:18px 32px 24px 32px;font-family:${BODY};font-size:14px;line-height:21px;color:#B8B5AE;">${esc(T.q)}</td></tr>` +
+    (band ? `<tr><td style="line-height:0;"><img src="${esc(band)}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;opacity:.92;"></td></tr>` : '') +
+    `<tr><td class="wa-pad" style="background-color:${GREEN};padding:22px 32px 24px 32px;"><img src="${LOCKUP_CREAM}" width="130" alt="Welfare Avenue, building pathways in our community" style="display:block;width:130px;height:auto;">` +
+    `<div style="padding:14px 0 0;font-family:${BODY};font-size:12.5px;line-height:19px;color:${CREAM};opacity:.85;">Welfare Avenue is a registered charity, no. ${esc(charity)}. ${esc(addr)}.<br>You are receiving this email because ${esc(REASON.transactional)}</div>` +
+    `<div style="padding-top:10px;font-family:${BODY};font-size:12.5px;color:${CREAM};"><a href="${SITE_URL}" style="color:${CREAM};text-decoration:underline;">welfareavenue.com</a>${o.unsub ? ` &nbsp;·&nbsp; <a href="${o.unsub}" style="color:${CREAM};text-decoration:underline;">Email preferences</a>` : ''}</div></td></tr>` +
+    `</table></td></tr></table></body></html>`;
+  const text = [(T.hi + (d.first ? ' ' + d.first : '') + ', ' + (o.isUpdate ? T.introUp : T.intro).replace('{d}', dayTxt)), '', rname.toUpperCase(),
+    T.date + ': ' + dayTxt + ' (' + T.serving + ' ' + itHm(it.serve, fr) + ')', T.where + ': ' + place, T.start + ': ' + itHm(tm.start || it.serve, fr) + ' ' + at,
+    note ? '\n' + T.note + ': ' + note : '', '', T.day + ':', ...steps.map(([tt, ti, b]) => '- ' + (tt ? itHm(tt, fr) + ' ' : '') + ti + (b ? ': ' + b : '')), '',
+    T.open + ': ' + link, wa ? T.wa + ': ' + wa : '', '', T.q].filter(x => x !== null).join('\n');
+  return { subject, html, text: textLayout(text.replace(/\n{3,}/g, '\n\n'), 'transactional', o.unsub, o.cfg), preheader: T.pre };
+}
+async function sendItineraryRow(row: any, cfg: Record<string, string>, who: Caller): Promise<Sent> {
+  const key = await resendKey();
+  const fail = async (msg: string) => { await svc.from('crm_email_sends').update({ status: 'failed', claimed_at: null, error: msg.slice(0, 400) }).eq('id', row.id); return { send_id: row.id, status: 'failed', error: msg }; };
+  if (!key) return await fail('The Resend key is not set (RESEND_API_KEY).');
+  const m = row.meta || {};
+  const d = await itData(Number(m.roster_id));
+  if (!d || !d.itinerary) return await fail('this person has no itinerary (their role has none, or the serving is past or cancelled)');
+  const c = row.contact_id ? await contactById(row.contact_id) : null;
+  const unsub = await unsubUrl(c ? c.id : null, row.id);
+  const e = itineraryEmail(d, { note: m.note, isUpdate: !!m.is_update, lang: m.lang, cfg, unsub });
+  const sender = senderLine(cfg, null);
+  const res = await rs(key, 'POST', '/emails', { from: sender.from, to: [row.to_email], subject: e.subject, html: e.html, text: e.text, reply_to: sender.reply,
+    tags: [{ name: 'template', value: 'volunteer_itinerary' }, { name: 'kind', value: 'transactional' }, { name: 'send_id', value: String(row.id) }] }, { 'Idempotency-Key': 'wa-send-' + row.id });
+  await svc.from('crm_email_sends').update({ subject: e.subject, status: res.ok ? 'sent' : 'failed', resend_id: res.ok ? res.body.id : null, sent_at: res.ok ? new Date().toISOString() : null, claimed_at: null,
+    error: res.ok ? null : (res.status + ' ' + String((res.body && (res.body.message || res.body.error)) || '')).slice(0, 400) }).eq('id', row.id);
+  if (m.itinerary_send_id) await svc.from('volunteer_itinerary_sends').update({ status: res.ok ? 'sent' : 'failed', reason: res.ok ? null : 'email: ' + String((res.body && (res.body.message || res.body.error)) || res.status).slice(0, 200), done_at: new Date().toISOString() }).eq('id', m.itinerary_send_id);
+  if (res.ok && c && !row.is_test) {
+    await svc.from('crm_interactions').insert({ contact_id: c.id, kind: 'email', direction: 'out', channel: 'email', subject: e.subject, body: e.text.split('\n--\n')[0].slice(0, 2000), occurred_at: new Date().toISOString(),
+      source: 'resend', source_ref: 'send:' + row.id, meta: { send_id: row.id, template: 'volunteer_itinerary', kind: 'transactional', status: 'sent', resend_id: res.body.id, roster_id: m.roster_id }, created_by: who.email });
+  }
+  return res.ok ? { send_id: row.id, resend_id: res.body.id, status: 'sent', to: row.to_email, subject: e.subject } : { send_id: row.id, status: 'failed', error: 'Resend answered ' + res.status };
+}
+async function pumpItineraries(cfg: Record<string, string>, who: Caller, max: number) {
+  const out = { sent: 0, failed: 0, cancelled: 0, taken: 0 };
+  const live = (cfg.mail_mode || 'test') === 'live';
+  const tests = listOf(cfg.mail_test_recipients);
+  const claim = await svc.rpc('crm_claim_queued', { p_limit: max, p_source: 'itinerary' });
+  if (claim.error) return { ...out, error: 'claim: ' + claim.error.message };
+  for (const row of (claim.data || []) as any[]) {
+    out.taken++;
+    const to = String(row.to_email || '').toLowerCase();
+    if (!live && !tests.includes(to) && !(row.is_test && onDomain(to, cfg))) {
+      await svc.from('crm_email_sends').update({ status: 'cancelled', claimed_at: null, error: 'the Hub is in test mode: only test addresses get email' }).eq('id', row.id);
+      if (row.meta && row.meta.itinerary_send_id) await svc.from('volunteer_itinerary_sends').update({ status: 'skipped', reason: 'test mode: only the test addresses get email', done_at: new Date().toISOString() }).eq('id', row.meta.itinerary_send_id);
+      out.cancelled++; continue;
+    }
+    const r = await sendItineraryRow(row, cfg, who);
+    if (r.status === 'sent') out.sent++; else out.failed++;
+    await sleep(550);
+  }
+  return out;
+}
+
 /* ---------- campaigns ---------- */
 async function campaignById(id: number) {
   const { data } = await svc.from('crm_campaigns').select('*').eq('id', id).maybeSingle();
@@ -352,11 +519,13 @@ async function pumpAutomations(cfg: Record<string, string>, who: Caller, max: nu
 }
 async function pump(cfg: Record<string, string>, who: Caller, max: number) {
   /* a direct send (send, test) that never finished leaves a queued row nobody claims: close it so the cron can rest */
-  await svc.from('crm_email_sends').update({ status: 'failed', error: 'a direct send did not finish' }).eq('status', 'queued').is('campaign_id', null).is('automation_run_id', null).lt('created_at', new Date(Date.now() - 15 * 60000).toISOString());
-  const auto = await pumpAutomations(cfg, who, max);
-  if ((cfg.mail_mode || 'test') !== 'live') return { automations: auto, sent: auto.sent, note: 'test mode: campaigns wait' };
+  await svc.from('crm_email_sends').update({ status: 'failed', error: 'a direct send did not finish' }).eq('status', 'queued').is('campaign_id', null).is('automation_run_id', null).or('meta->>source.is.null,meta->>source.neq.itinerary').lt('created_at', new Date(Date.now() - 15 * 60000).toISOString());
+  const itin = await pumpItineraries(cfg, who, max);
+  if (itin.taken >= max) return { itineraries: itin, sent: itin.sent, note: 'this round went to itineraries' };
+  const auto = await pumpAutomations(cfg, who, max - itin.taken);
+  if ((cfg.mail_mode || 'test') !== 'live') return { itineraries: itin, automations: auto, sent: auto.sent + itin.sent, note: 'test mode: campaigns wait' };
   const u = await usage(cfg);
-  const take = Math.min(Math.max(0, max - auto.taken), u.room == null ? max : u.room);
+  const take = Math.min(Math.max(0, max - auto.taken - itin.taken), u.room == null ? max : u.room);
   if (take <= 0) return { automations: auto, sent: auto.sent, note: auto.taken >= max ? 'this round went to automations' : 'the daily cap is reached; the queue goes on tomorrow', usage: u };
   const claim = await svc.rpc('crm_claim_queued', { p_limit: take, p_source: 'campaign' });
   if (claim.error) return { automations: auto, sent: auto.sent, error: 'claim: ' + claim.error.message };
@@ -382,7 +551,7 @@ async function pump(cfg: Record<string, string>, who: Caller, max: number) {
     const k = cache[kid];
     if (k && k.status !== 'cancelled' && !(left.count || 0)) await svc.from('crm_campaigns').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', kid).in('status', ['queued', 'sending']);
   }
-  return { automations: auto, sent: sent + auto.sent, held, failed, cancelled, usage: await usage(cfg) };
+  return { itineraries: itin, automations: auto, sent: sent + auto.sent + itin.sent, held, failed, cancelled, usage: await usage(cfg) };
 }
 
 Deno.serve(async (req: Request) => {
@@ -562,6 +731,30 @@ Deno.serve(async (req: Request) => {
       await svc.from('change_log').insert({ entity_type: 'crm_campaign', entity_id: String(k.id), field: 'status', old_value: 'draft', new_value: 'sending: ' + a.ok.length + ' queued, ' + a.held.length + ' held back', changed_by: who.email });
       const first = await pump(cfg, who, 5);
       return json({ ...summary, queued: queued.length, first });
+    }
+    if (action === 'itinerary_preview' || action === 'itinerary_test') {
+      /* v4 (wave182): the itinerary email for one roster row, as it will look; a test goes to the caller's own team address or a test recipient */
+      const rid = Number(body.roster_id);
+      if (!rid) return json({ error: 'roster_id is needed' }, 400);
+      if (who.who !== 'automation') {
+        const ok = await svc.rpc('wa182_staff_can_send', { p_email: who.email });
+        if (ok.error || ok.data !== true) return json({ error: 'Only leaders, HR and admins send itineraries' }, 403);
+      }
+      const d = await itData(rid);
+      if (!d) return json({ error: 'no such person on a roster' }, 404);
+      if (!d.itinerary) return json({ error: 'This role has no itinerary (cooks get none), or the serving is past or cancelled.' }, 400);
+      if (action === 'itinerary_preview') {
+        const e = itineraryEmail(d, { note: body.note ? String(body.note).slice(0, 300) : null, isUpdate: !!body.is_update, lang: body.lang ? String(body.lang) : null, cfg, unsub: SUPABASE_URL + '/functions/v1/mail-unsubscribe?preview=1' });
+        return json({ subject: e.subject, html: e.html, text: e.text, from: senderLine(cfg, null).from });
+      }
+      const to = String(body.to || who.email || '').trim().toLowerCase();
+      if (!isEmail(to)) return json({ error: 'a recipient is needed' }, 400);
+      if (!listOf(cfg.mail_test_recipients).includes(to) && !(to === who.email && onDomain(to, cfg))) return json({ error: 'Tests go only to the test recipients or to your own team address.' }, 403);
+      const ins = await svc.from('crm_email_sends').insert({ contact_id: null, to_email: to, template_key: 'volunteer_itinerary', kind: 'test', status: 'sending', is_test: true, permission_basis: 'test of an itinerary',
+        meta: { source: 'itinerary_test', roster_id: rid, note: body.note || null, is_update: !!body.is_update, lang: body.lang || null, caller: who.email }, created_by: who.email, claimed_at: new Date().toISOString() }).select('*').single();
+      if (ins.error) return json({ error: 'send log: ' + ins.error.message }, 500);
+      const r = await sendItineraryRow(ins.data, cfg, who);
+      return json(r, r.status === 'sent' ? 200 : 502);
     }
     if (action === 'campaign_pump') {
       return json(await pump(cfg, who, who.who === 'automation' ? 12 : 5));

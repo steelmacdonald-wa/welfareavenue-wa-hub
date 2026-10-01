@@ -89,5 +89,5 @@
 
   /* ---------- test hook ---------- */
   window.w171 = { state: function () { return S; }, paintCard: paintCard, decorateCards: decorateCards, decorateMast: decorateMast, decorateCalendar: decorateCalendar,
-    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w175: W5, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
+    paintNext: paintNext, nextHtml: nextHtml, paintW174: paintW174, w182: { W8: W8, loadSends: loadSends, sendModal: sendModal8, blockHtml: blockHtml }, w175: W5, w174: W4, driverKinds: driverKinds, readModal: readModal, counts: counts, tagFor: tagFor, tick: tick, sendModal: sendModal, settingsModal: settingsModal, fmtModal: fmtModal, loadMsgs: loadMsgs };
 })();

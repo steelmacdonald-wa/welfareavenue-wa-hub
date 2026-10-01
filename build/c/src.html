@@ -140,9 +140,118 @@ a.lk.rt{display:inline-block;border:1.5px solid var(--green);border-radius:999px
 ul.team,ul.notes{margin:0;padding-left:18px;font-size:15px}
 ul.team li,ul.notes li{margin:0 0 5px}
 @media (max-width:420px){ol.tl>li{grid-template-columns:62px 1fr}}
+
+/* ---------- wave182: the itinerary booklet (?it=1), in the spirit of the Canva itineraries ---------- */
+body.itv{background:#1F201E}
+body.itv .band,body.itv main,body.itv #foot{display:none}
+#itv{display:none}
+body.itv #itv{display:block}
+#itv{color:#FFFAF2;font-family:'Space Grotesk','Helvetica Neue',Arial,sans-serif;max-width:680px;margin:0 auto;background:#1F201E;min-height:100vh}
+@media (min-width:700px){#itv{margin:0 auto;border-radius:26px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.35)}body.itv{background:#151614;padding:24px 0}}
+html:has(body.itv){background:#151614}
+#itv ul.team{padding:0}
+.ih{position:relative;min-height:400px;background:#103F39 center/cover no-repeat;display:flex;flex-direction:column;padding:18px 18px 22px}
+.ih:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(16,63,57,.55) 0%,rgba(16,63,57,.15) 34%,rgba(31,32,30,.25) 55%,rgba(31,32,30,.96) 100%)}
+.ih>*{position:relative}
+.ih .top{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ih .lockup{height:46px;color:#FFFAF2}
+.ih .ttl{margin-top:auto;padding-top:120px}
+.ih .ov{font:700 12px 'Space Grotesk',Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#DCA527;margin:0 0 6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ih h1{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:56px;line-height:.95;text-transform:uppercase;color:#FFFAF2;margin:0;text-shadow:0 3px 24px rgba(0,0,0,.35);letter-spacing:.3px}
+.ih .dt{font-size:18px;font-weight:600;margin:8px 0 0;color:#FFFAF2}
+.ih .chips{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 0}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;font-size:13.5px;font-weight:600;background:rgba(255,250,242,.14);color:#FFFAF2;border:1px solid rgba(255,250,242,.28);backdrop-filter:blur(4px)}
+.chip.gold{background:#DCA527;color:#1F201E;border-color:#DCA527}
+.chip svg{width:15px;height:15px;flex:none}
+@media (max-width:440px){.ih{min-height:360px}.ih h1{font-size:46px}.ih .lockup{height:40px}}
+.ibody{padding:4px 14px 8px}
+@media (min-width:560px){.ibody{padding:4px 22px 10px}}
+.strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(255,250,242,.12);border:1px solid rgba(255,250,242,.12);border-radius:18px;overflow:hidden;margin:-6px 0 14px}
+.strip>div{background:#103F39;padding:12px 12px 13px;min-width:0}
+.strip b{display:block;font:700 10.5px 'Space Grotesk',Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;color:#DCA527;margin:0 0 4px}
+.strip span{display:block;font-size:14.5px;line-height:1.35;font-weight:600;word-wrap:break-word}
+.strip span small{display:block;font-weight:400;opacity:.8;font-size:12.5px;margin-top:2px}
+.strip a{color:#FFFAF2}
+@media (max-width:520px){.strip{grid-template-columns:1fr 1fr}.strip>div:first-child{grid-column:1/-1}}
+.acts{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.acts a,.acts button{flex:1 1 140px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;padding:12px 14px;font:600 14.5px 'Space Grotesk',Arial,sans-serif;text-decoration:none;cursor:pointer;margin:0;width:auto;border:1.5px solid rgba(255,250,242,.3);background:transparent;color:#FFFAF2}
+.acts .pri{background:#DCA527;border-color:#DCA527;color:#1F201E}
+.acts .wa{background:#25D366;border-color:#25D366;color:#0b2e1a}
+.acts svg{width:18px;height:18px;flex:none}
+.isec{background:#2A2B28;border:1px solid rgba(255,250,242,.07);border-radius:20px;padding:18px 16px;margin:0 0 12px;break-inside:avoid;page-break-inside:avoid}
+@media (min-width:560px){.isec{padding:22px 22px}}
+.isec .k{font:700 11px 'Space Grotesk',Arial,sans-serif;letter-spacing:1.8px;text-transform:uppercase;color:#DCA527;margin:0 0 2px}
+.isec h2{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:30px;line-height:1;text-transform:uppercase;color:#FFFAF2;margin:0 0 12px;letter-spacing:.3px}
+.isec p{margin:6px 0;font-size:15.5px;color:rgba(255,250,242,.9)}
+.isec a{color:#F0C860}
+.isec .m{color:rgba(255,250,242,.62);font-size:13.5px}
+.when{display:inline-flex;align-items:center;gap:6px;background:rgba(220,165,39,.16);color:#F0C860;border-radius:999px;padding:3px 11px;font:700 14px 'Space Grotesk',Arial,sans-serif;margin:0 0 8px}
+.when svg{width:15px;height:15px}
+ol.route{list-style:none;margin:10px 0 4px;padding:0;position:relative}
+ol.route>li:not(:last-child):after{content:"";position:absolute;left:15px;top:36px;bottom:2px;border-left:2px dashed rgba(220,165,39,.45)}
+ol.route>li{position:relative;padding:0 0 16px 46px}
+ol.route>li:last-child{padding-bottom:0}
+ol.route .pin{position:absolute;left:0;top:0;width:32px;height:32px;border-radius:50%;background:#DCA527;color:#1F201E;display:flex;align-items:center;justify-content:center;font:700 14px 'Space Grotesk',Arial,sans-serif;box-shadow:0 0 0 4px #2A2B28}
+ol.route .pin.flag{background:#FFFAF2}
+ol.route .pin.st{background:#6F64AB;color:#FFFAF2}
+ol.route .pin svg{width:18px;height:18px}
+ol.route b.n{display:block;font-size:16.5px;color:#FFFAF2}
+ol.route .ad{display:block;font-size:14.5px;margin-top:2px}
+ol.route .tools{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+ol.route .tools a,.team a.tb{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,250,242,.25);border-radius:999px;padding:4px 11px;font-size:13px;font-weight:600;color:#FFFAF2;text-decoration:none}
+ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
+.code{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.code span{background:#1F201E;border:1px dashed rgba(220,165,39,.6);border-radius:12px;padding:8px 12px;font:700 15px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#F0C860;letter-spacing:.5px}
+.bins{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0 4px}
+@media (max-width:400px){.bins{grid-template-columns:1fr}}
+.bin{background:#1F201E;border-radius:14px;overflow:hidden;border:1px solid rgba(255,250,242,.08);display:flex;flex-direction:column}
+.bin .im{height:96px;background:#3a3b37 center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:rgba(255,250,242,.45)}
+.bin .im svg{width:34px;height:34px}
+.bin div.tx{padding:9px 11px 11px}
+.bin b{display:block;font-size:14px;color:#FFFAF2;line-height:1.25}
+.bin span{display:block;font-size:12.5px;color:rgba(255,250,242,.7);margin-top:3px;line-height:1.35}
+.carry{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.carry span{border-radius:999px;background:rgba(111,100,171,.22);color:#E4E0FA;padding:5px 11px;font-size:13px;font-weight:600}
+.isec ul.dots{list-style:none;margin:6px 0 0;padding:0}
+.isec ul.dots li{position:relative;padding:6px 0 6px 22px;font-size:15px;color:rgba(255,250,242,.9);border-top:1px solid rgba(255,250,242,.07)}
+.isec ul.dots li:first-child{border-top:0}
+.isec ul.dots li:before{content:"";position:absolute;left:2px;top:13px;width:9px;height:9px;border-radius:50%;background:#DCA527}
+.isec.notes{background:#103F39}
+.team{list-style:none;margin:4px 0 0;padding:0}
+.team li{display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid rgba(255,250,242,.07)}
+.team li:first-child{border-top:0}
+.team .av{width:40px;height:40px;border-radius:50%;background:#DCA527;color:#1F201E;display:flex;align-items:center;justify-content:center;font:700 15px 'Space Grotesk',Arial,sans-serif;flex:none}
+.team .av.me{background:#FFFAF2}
+.team .who{flex:1;min-width:0}
+.team .who b{display:block;font-size:15.5px;color:#FFFAF2}
+.team .who span{display:block;font-size:13px;color:rgba(255,250,242,.65)}
+.team .tl{display:flex;gap:6px}
+.wx{display:flex;align-items:center;gap:10px;background:rgba(255,250,242,.06);border-radius:14px;padding:10px 12px;margin:0 0 14px;font-size:14.5px}
+.wx .ic{font-size:26px;line-height:1}
+.wx b{color:#FFFAF2}
+.ifoot{position:relative;min-height:230px;background:#103F39 center/cover no-repeat;display:flex;flex-direction:column;justify-content:flex-end;padding:22px 20px;margin-top:6px}
+.ifoot:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(31,32,30,.95) 0%,rgba(31,32,30,.25) 45%,rgba(16,63,57,.85) 100%)}
+.ifoot>*{position:relative}
+.ifoot h2{font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;margin:0;color:#FFFAF2}
+.ifoot p{margin:6px 0 0;font-size:14px;color:rgba(255,250,242,.88)}
+.ifoot .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+.ifoot .row a,.ifoot .row button{color:#FFFAF2;font:600 14px 'Space Grotesk',Arial,sans-serif;background:none;border:0;padding:0;margin:0;width:auto;text-decoration:underline;cursor:pointer}
+.ibanner{background:#DCA527;color:#1F201E;border-radius:14px;padding:10px 14px;margin:12px 0;font-size:14.5px;font-weight:600}
+.iteaser{display:flex;gap:14px;align-items:center;background:#1F201E;color:#FFFAF2;border-radius:18px;padding:12px;margin:0 0 18px;text-decoration:none;cursor:pointer;border:0;width:100%;text-align:left;font:inherit}
+.iteaser .th{width:84px;height:84px;border-radius:14px;background:#103F39 center/cover no-repeat;flex:none}
+.iteaser b{display:block;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:24px;text-transform:uppercase;line-height:1;color:#FFFAF2}
+.iteaser span{display:block;font-size:13.5px;color:rgba(255,250,242,.78);margin-top:4px}
+.iteaser i{margin-left:auto;font-style:normal;background:#DCA527;color:#1F201E;border-radius:999px;padding:8px 14px;font-weight:700;font-size:14px;white-space:nowrap}
+@media print{
+  body.itv,#itv{background:#1F201E!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #itv{margin:0;border-radius:0;box-shadow:none;max-width:none}
+  .acts,.ifoot .row,.ih .langs{display:none!important}
+  .ih{min-height:300px}
+}
 </style>
 </head>
 <body>
+<div id="itv" aria-live="polite"></div>
 <div class="band ph" id="band"><div class="in"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">%%LOCKUP_SVG%%</a><div class="langs" id="langs"><button type="button" data-l="en">EN</button><button type="button" data-l="fr">FR</button></div></div><div class="hx"><p class="ey" id="ey"></p><h1 id="ht"></h1></div></div>
 <main><div class="card" id="app" aria-live="polite"><p class="loading">Loading…</p></div></main>
 <footer id="foot"></footer>
@@ -196,6 +305,17 @@ ul.team li,ul.notes li{margin:0 0 5px}
       itClW: 'Welcome people and listen', itClWB: 'Greet people, learn names and have real conversations. Note the needs people share, and fill in the tracking form as people are served (it is under your forms below).',
       itClC: 'Build the community', itClCB: 'Introduce regulars to the volunteers, invite people back to the next serving, and check in with the volunteers during the serving.',
       itClE: 'Close the day', itClEB: 'Count the clothing that is left, then fill in your survey on this page: it is the debrief (clothing, needs, barriers, ratings). Remind the volunteers that their survey comes by text.',
+      ivOv: 'Your itinerary', s_winter: 'Winter', s_spring: 'Spring', s_summer: 'Summer', s_autumn: 'Autumn', ivStart: 'You start at {t}', ivUpdated: 'Updated',
+      ivServe: 'The serving', ivWhere: 'Location', ivYou: 'You start', ivAt_storage: 'At the storage unit', ivAt_pickup: 'At your first pickup', ivAt_serving: 'At the serving', ivAt_home: 'Food ready at home', ivAt_dropoff: 'Drop-off',
+      ivRoute: 'Open the route', ivMap: 'Directions', ivWa: 'WhatsApp group', ivPrint: 'Print or save as PDF', ivBack: 'Back to my page',
+      ivBeforeK: 'Itinerary', ivBefore: 'Before the serving', ivFinal: 'Final stop: the serving', ivStorage: 'Storage unit', ivStorageK: 'Pick up the equipment', ivBins: 'What to collect from storage', ivCarry: 'Always bring',
+      ivServingK: 'Serving time', ivAfterK: 'Itinerary', ivAfter: 'After the serving', ivTeamK: 'Who to call', ivTeam: 'Your team', ivNotesK: 'Please read', ivNotes: 'Important notes', ivTlK: 'Team leader', ivTl: 'Your extra steps',
+      ivTl1: 'Share your ETA in the group chat, and keep your data on.', ivTl2: 'Make sure every cook and server scans the QR code at the serving to record their presence.', ivTl3: 'After the serving, ask the volunteers for their opinion: everyone gets a survey by text.',
+      ivThanks: 'Thank you for being a crucial part of this serving', ivCallOps: 'Questions? Text or call Welfare Avenue at', ivNotYet: 'Your itinerary will be here from the day before the serving.',
+      ivReady: 'Your itinerary', ivReadyP: 'Where to be and when, your route and your team.', ivOpen: 'Open',
+      ivWx: 'The forecast', ivWxT: 'High {h}°, low {l}°', ivWxP: '{p}% chance of rain', ivDress: 'Dress for a few hours outside.',
+      ivCall: 'Call', ivText: 'Text', ivMe: 'you', ivDayK: 'Your day', ivKitchenK: 'Community kitchen', ivKitchenC: 'Kitchen contact:', ivIngr: 'Ingredients:', ivCooks: 'Cooks dropping off their food:', ivStop: 'Stop {n}',
+      wx: { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Cloudy', 45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains', 80: 'Rain showers', 81: 'Rain showers', 82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorms', 96: 'Thunderstorms', 99: 'Thunderstorms' },
       kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text',
       acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots, with your Google account.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.',
@@ -241,13 +361,24 @@ ul.team li,ul.notes li{margin:0 0 5px}
       itClW: 'Accueillir et écouter', itClWB: 'Saluez les gens, retenez les prénoms et prenez le temps de vraies conversations. Notez les besoins exprimés et remplissez le formulaire de suivi au fil du service (il est dans vos formulaires plus bas).',
       itClC: 'Bâtir la communauté', itClCB: 'Présentez les habitués aux bénévoles, invitez les gens au prochain service et prenez des nouvelles des bénévoles pendant le service.',
       itClE: 'Clore la journée', itClEB: 'Comptez les vêtements restants, puis remplissez votre sondage sur cette page : c’est le bilan (vêtements, besoins, obstacles, évaluations). Rappelez aux bénévoles que leur sondage arrive par texto.',
+      ivOv: 'Votre itinéraire', s_winter: 'Hiver', s_spring: 'Printemps', s_summer: 'Été', s_autumn: 'Automne', ivStart: 'Début pour vous : {t}', ivUpdated: 'Mis à jour',
+      ivServe: 'Le service', ivWhere: 'Lieu', ivYou: 'Votre début', ivAt_storage: 'À l’entrepôt', ivAt_pickup: 'À votre première collecte', ivAt_serving: 'Au service', ivAt_home: 'Plat prêt à la maison', ivAt_dropoff: 'Dépôt',
+      ivRoute: 'Ouvrir le trajet', ivMap: 'Itinéraire', ivWa: 'Groupe WhatsApp', ivPrint: 'Imprimer ou enregistrer en PDF', ivBack: 'Retour à ma page',
+      ivBeforeK: 'Itinéraire', ivBefore: 'Avant le service', ivFinal: 'Dernier arrêt : le service', ivStorage: 'Entrepôt', ivStorageK: 'Récupérer l’équipement', ivBins: 'À prendre à l’entrepôt', ivCarry: 'À toujours apporter',
+      ivServingK: 'Heure du service', ivAfterK: 'Itinéraire', ivAfter: 'Après le service', ivTeamK: 'Qui appeler', ivTeam: 'Votre équipe', ivNotesK: 'À lire', ivNotes: 'Notes importantes', ivTlK: 'Responsable d’équipe', ivTl: 'Vos étapes en plus',
+      ivTl1: 'Partagez votre heure d’arrivée dans le groupe et gardez vos données mobiles activées.', ivTl2: 'Assurez-vous que chaque cuisinier et chaque serveur scanne le code QR au service pour noter sa présence.', ivTl3: 'Après le service, demandez l’avis des bénévoles : tout le monde reçoit un sondage par texto.',
+      ivThanks: 'Merci de faire partie de ce service', ivCallOps: 'Des questions? Textez ou appelez Welfare Avenue au', ivNotYet: 'Votre itinéraire sera ici dès la veille du service.',
+      ivReady: 'Votre itinéraire', ivReadyP: 'Où et quand, votre trajet et votre équipe.', ivOpen: 'Ouvrir',
+      ivWx: 'La météo', ivWxT: 'Max. {h}°, min. {l}°', ivWxP: '{p} % de risque de pluie', ivDress: 'Habillez-vous pour quelques heures dehors.',
+      ivCall: 'Appeler', ivText: 'Texto', ivMe: 'vous', ivDayK: 'Votre journée', ivKitchenK: 'Cuisine communautaire', ivKitchenC: 'Contact en cuisine :', ivIngr: 'Ingrédients :', ivCooks: 'Plats déposés par :', ivStop: 'Arrêt {n}',
+      wx: { 0: 'Ciel dégagé', 1: 'Plutôt dégagé', 2: 'Partiellement nuageux', 3: 'Nuageux', 45: 'Brouillard', 48: 'Brouillard', 51: 'Bruine faible', 53: 'Bruine', 55: 'Forte bruine', 61: 'Pluie faible', 63: 'Pluie', 65: 'Forte pluie', 66: 'Pluie verglaçante', 67: 'Pluie verglaçante', 71: 'Neige faible', 73: 'Neige', 75: 'Forte neige', 77: 'Grésil', 80: 'Averses', 81: 'Averses', 82: 'Fortes averses', 85: 'Averses de neige', 86: 'Averses de neige', 95: 'Orages', 96: 'Orages', 99: 'Orages' },
       kMain: 'chauffeur principal', kPick: 'chauffeur des collectes', kBoth: 'chauffeur', call2: 'Appeler', text2: 'Texto',
       acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres, avec votre compte Google.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
   var app = document.getElementById('app'), band = document.getElementById('band'), foot = document.getElementById('foot');
   var q = new URLSearchParams(location.search);
-  var S = { d: null, lang: 'en', busy: false, err: '', test: q.get('test') === '1', chosen: false, saved: false, form: {} };
+  var S = { d: null, lang: 'en', busy: false, err: '', test: q.get('test') === '1', chosen: false, saved: false, form: {}, view: q.get('it') === '1' ? 'it' : 'page', wx: undefined };
   function t(k) { return (TX[S.lang] || TX.en)[k] || TX.en[k] || k; }
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function token() {
@@ -616,6 +747,173 @@ ul.team li,ul.notes li{margin:0 0 5px}
     if (notes.length && it.kind !== 'community') h += '<div class="w">' + E(t('itNotes')) + '</div><ul class="notes">' + notes.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>';
     return h + '</div>';
   }
+  /* ---------- wave182: the itinerary booklet (?it=1): the Canva itineraries' look, the season's photos ---------- */
+  var IC = {
+    pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>',
+    flag: '<svg viewBox="0 0 24 24"><path fill="#1F201E" d="M5 2h2v20H5z"/><path fill="#1F201E" d="M7 3h3v3H7zm6 0h3v3h-3zM10 6h3v3h-3zm6 0h3v3h-3zM7 9h3v3H7zm6 0h3v3h-3z"/><path fill="none" stroke="#1F201E" stroke-width="1.2" d="M7 3h12v9H7z"/></svg>',
+    clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+    phone: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1A17 17 0 0 1 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1l-2.3 2.2z"/></svg>',
+    msg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2z"/></svg>',
+    wa: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.6 15l-1.4 5 5.1-1.3A10 10 0 1 0 12 2zm5.2 14.1c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .2-3.3-.7-2.8-1.1-4.5-3.9-4.7-4.1-.1-.2-1.1-1.5-1.1-2.9s.7-2.1 1-2.4c.3-.3.6-.3.8-.3h.6c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.6 2 1.1 1 2 1.3 2.3 1.4.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l2 .9c.3.1.5.2.5.3.1.2.1.7-.1 1.4z"/></svg>',
+    route: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>',
+    box: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></svg>',
+    print: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18H4v-7h16v7h-2"/><path d="M6 14h12v7H6z"/></svg>',
+    store: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 10l9-6 9 6v10h-5v-6H8v6H3z"/></svg>'
+  };
+  function bg(p) { return p && p.path ? 'background-image:url(&quot;' + E(photoUrl(p)) + '&quot;);background-position:' + Math.round((p.fx == null ? 0.5 : p.fx) * 100) + '% ' + Math.round((p.fy == null ? 0.5 : p.fy) * 100) + '%' : ''; }
+  function dirUrl(addr) { return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(addr); }
+  function initials(n) { var p = String(n || '').trim().split(/\s+/); return ((p[0] || '').charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : '')).toUpperCase() || '·'; }
+  function tools(phone, addr) {
+    var tl = telOf(phone), h = '';
+    if (tl) h += '<a href="tel:' + E(tl) + '">' + IC.phone + E(t('ivCall')) + '</a><a href="sms:' + E(tl) + '">' + IC.msg + E(t('ivText')) + '</a>';
+    if (addr) h += '<a href="' + E(dirUrl(addr)) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivMap')) + '</a>';
+    return h ? '<span class="tools">' + h + '</span>' : '';
+  }
+  function whenChip(tm) { return tm ? '<span class="when">' + IC.clock + E(hm(tm)) + '</span>' : ''; }
+  function sec(k, title, body, cls) { return '<section class="isec' + (cls ? ' ' + cls : '') + '"><p class="k">' + E(k) + '</p><h2>' + E(title) + '</h2>' + body + '</section>'; }
+  function storageCodes(acc) {
+    var bits = String(acc || '').split(/[\n;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+    return '<div class="code">' + bits.map(function (b) { return '<span>' + E(b) + '</span>'; }).join('') + '</div>';
+  }
+  function loadWx() {
+    var d = S.d; if (!d || S.wx !== undefined) return;
+    var today = new Date(); var ev = new Date(String(d.event_date) + 'T12:00:00');
+    var days = Math.round((ev - today) / 86400000);
+    if (isNaN(days) || days < -1 || days > 14) { S.wx = null; return; }
+    S.wx = null;
+    var u = 'https://api.open-meteo.com/v1/forecast?latitude=45.5153&longitude=-73.5600&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=America%2FToronto&start_date=' + d.event_date + '&end_date=' + d.event_date;
+    fetch(u).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+      var x = j && j.daily; if (!x || !x.time || !x.time.length) return;
+      S.wx = { code: x.weather_code[0], hi: Math.round(x.temperature_2m_max[0]), lo: Math.round(x.temperature_2m_min[0]), p: x.precipitation_probability_max ? x.precipitation_probability_max[0] : null };
+      if (S.view === 'it') paintBooklet();
+    }).catch(function () { /* no forecast: fine */ });
+  }
+  function wxHtml() {
+    var w = S.wx; if (!w) return '';
+    var ic = w.code >= 95 ? '⛈️' : w.code >= 71 && w.code <= 86 && w.code !== 80 && w.code !== 81 && w.code !== 82 ? '❄️' : w.code >= 51 ? '🌧️' : w.code >= 45 ? '🌫️' : w.code >= 2 ? '⛅' : '☀️';
+    var lbl = (t('wx') || {})[w.code] || '';
+    return '<div class="wx"><span class="ic" aria-hidden="true">' + ic + '</span><div><b>' + E(t('ivWx')) + ':</b> ' + E(lbl) + (lbl ? ', ' : '') + E(t('ivWxT').replace('{h}', w.hi).replace('{l}', w.lo)) + (w.p != null ? ' · ' + E(t('ivWxP').replace('{p}', w.p)) : '') + '<br><span class="m">' + E(t('ivDress')) + '</span></div></div>';
+  }
+  function bookletHtml() {
+    var d = S.d, it = d.itinerary, fr = S.lang === 'fr', look = it.look || d.look || {};
+    var role = String(d.role || '').toLowerCase(), tm = it.times || {}, kind = tm.driver_kind;
+    var place = it.place || '1500 Rue Berri, Montréal, QC H2L 2C4', spot = it.meet_spot ? place + ' (' + it.meet_spot + ')' : place;
+    var rname = role === 'driver' && kind ? kindName(kind) : roleName();
+    rname = rname.charAt(0).toUpperCase() + rname.slice(1);
+    var season = look.season ? t('s_' + look.season) : '';
+    var h = '<header class="ih" style="' + bg(look.hero) + '" role="img" aria-label="' + E((look.hero && look.hero.alt) || '') + '">'
+      + '<div class="top"><a href="https://welfareavenue.com" aria-label="Welfare Avenue">' + (document.querySelector('.band .lockup') ? document.querySelector('.band .lockup').outerHTML : 'Welfare Avenue') + '</a>'
+      + '<div class="langs"><button type="button" data-l="en"' + (fr ? '' : ' class="on"') + '>EN</button><button type="button" data-l="fr"' + (fr ? ' class="on"' : '') + '>FR</button></div></div>'
+      + '<div class="ttl"><p class="ov">' + E(t('ivOv')) + (season ? ' · ' + E(season) : '') + '</p><h1>' + E(rname) + '</h1><p class="dt">' + E(day(d.event_date)) + (d.first ? ' · ' + E(d.first) : '') + '</p>'
+      + '<div class="chips"><span class="chip gold">' + IC.clock + E(t('ivStart').replace('{t}', hm(tm.start || it.serve))) + '</span>'
+      + (d.format === 'community_kitchen' ? '<span class="chip">' + E(t('kitchen')) + '</span>' : d.format === 'home_cooked' ? '<span class="chip">' + E(t('home')) + '</span>' : '')
+      + (it.updated ? '<span class="chip">' + E(t('ivUpdated')) + '</span>' : '') + '</div></div></header><div class="ibody">';
+    if (S.test) h += '<div class="ibanner">' + E(t('test')) + '</div>';
+    var at = tm.at && (TX[S.lang] || TX.en)['ivAt_' + tm.at] ? t('ivAt_' + tm.at) : '';
+    h += '<div class="strip"><div><b>' + E(t('date')) + '</b><span>' + E(day(d.event_date)) + '<small>' + E(t('ivServingK')) + ' ' + E(hm(it.serve)) + '</small></span></div>'
+      + '<div><b>' + E(t('ivWhere')) + '</b><span><a href="' + E(mapLink(place)) + '" target="_blank" rel="noopener">' + E(place.split(',')[0]) + '</a><small>' + E(it.meet_spot ? it.meet_spot.split('(')[0].trim() : (place.split(',').slice(1).join(',').trim())) + '</small></span></div>'
+      + '<div><b>' + E(t('ivYou')) + '</b><span>' + E(hm(tm.start || it.serve)) + (at ? '<small>' + E(at) + '</small>' : '') + '</span></div></div>';
+    var acts = '';
+    if (it.route_url && (it.pickups || []).length && role === 'driver' && (kind === 'pickup' || kind === 'both')) acts += '<a class="pri" href="' + E(it.route_url) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivRoute')) + '</a>';
+    else acts += '<a class="pri" href="' + E(dirUrl(place)) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivMap')) + '</a>';
+    if (safeUrl(it.whatsapp_url)) acts += '<a class="wa" href="' + E(safeUrl(it.whatsapp_url)) + '" target="_blank" rel="noopener">' + IC.wa + E(t('ivWa')) + '</a>';
+    acts += '<a href="sms:' + OPS_TEL + '">' + IC.msg + OPS + '</a>';
+    h += '<div class="acts">' + acts + '</div>' + wxHtml();
+    if (it.kind === 'lead_driver') {
+      var stops = [], n = 0;
+      var storageStop = function () { return '<li><span class="pin st">' + IC.store + '</span><b class="n">' + E(t('ivStorage')) + '</b><span class="ad">' + E(it.storage_place || '') + '</span>' + (it.storage_access ? storageCodes(it.storage_access) : '<span class="m">' + E(t('itAccessNone')) + '</span>') + tools(null, String(it.storage_place || '').split('.')[0]) + '</li>'; };
+      var pickupStops = function () {
+        return (it.pickups || []).map(function (c) {
+          n++; var addr = [c.address, c.postal_code].filter(Boolean).join(', ');
+          return '<li><span class="pin">' + n + '</span><b class="n">' + E(c.name || '') + '</b>' + (c.dish ? '<span class="m">' + E(c.dish) + '</span>' : '') + (addr ? '<span class="ad"><a href="' + E(mapLink(addr + ', Montréal')) + '" target="_blank" rel="noopener">' + E(addr) + '</a>' + (c.neighbourhood ? ' <span class="m">(' + E(c.neighbourhood) + ')</span>' : '') + '</span>' : '') + tools(c.phone, addr ? addr + ', Montréal' : '') + '</li>';
+        }).join('');
+      };
+      var final = '<li><span class="pin flag">' + IC.flag + '</span><b class="n">' + E(t('ivFinal')) + '</b><span class="ad"><a href="' + E(mapLink(place)) + '" target="_blank" rel="noopener">' + E(place) + '</a></span>' + (it.meet_spot ? '<span class="m">' + E(it.meet_spot) + '</span>' : '') + '</li>';
+      var body = whenChip(tm.start);
+      if (role === 'driver' && (kind === 'pickup' || kind === 'both')) {
+        body += '<p>' + E(t('itPickB')) + '</p>';
+        stops.push((it.pickups || []).length ? pickupStops() : '<li><span class="pin">1</span><span class="m">' + E(t('itNoPick')) + '</span></li>');
+        if (kind === 'both') stops.push(storageStop());
+      } else {
+        stops.push(storageStop());
+      }
+      stops.push(final);
+      if (it.format === 'community_kitchen' && (it.kitchen_place || it.kitchen_contact)) body += '<p><b>' + E(t('ivKitchenK')) + ':</b> ' + E(it.kitchen_place || '') + (it.kitchen_shift ? ' · ' + E(it.kitchen_shift) : '') + (it.kitchen_contact ? '<br>' + E(t('ivKitchenC')) + ' ' + E(it.kitchen_contact) : '') + (it.ingredients_note ? '<br>' + E(t('ivIngr')) + ' ' + E(it.ingredients_note) : '') + '</p>';
+      h += sec(t('ivBeforeK'), t('ivBefore'), body + '<ol class="route">' + stops.join('') + '</ol>');
+      if (!(role === 'driver' && kind === 'pickup')) {
+        var bins = (it.bins || []).filter(function (b) { return b && (b.name_en || b.name_fr); });
+        var carry = ((fr ? it.carry_fr : it.carry_en) || []).filter(function (x) { return String(x || '').trim(); });
+        if (bins.length || carry.length) {
+          var bb = bins.length ? '<p class="m">' + E(t('ivBins')) + '</p><div class="bins">' + bins.map(function (b) {
+            return '<div class="bin"><div class="im"' + (b.photo ? ' style="background-image:url(&quot;' + E(ST + String(b.photo).replace(/^\/+/, '')) + '&quot;)"' : '') + '>' + (b.photo ? '' : IC.box) + '</div><div class="tx"><b>' + E(fr ? (b.name_fr || b.name_en) : (b.name_en || b.name_fr)) + '</b><span>' + E(fr ? (b.items_fr || b.items_en) : (b.items_en || b.items_fr)) + '</span></div></div>';
+          }).join('') + '</div>' : '';
+          if (carry.length) bb += '<p class="m" style="margin-top:12px">' + E(t('ivCarry')) + '</p><div class="carry">' + carry.map(function (x) { return '<span>' + E(x) + '</span>'; }).join('') + '</div>';
+          h += sec(t('ivStorageK'), t('ivStorage'), bb);
+        }
+      }
+      var drops = it.dropoffs || [];
+      var sb = whenChip(it.serve) + '<p>' + E(t('itServeB').replace('{p}', spot)) + '</p>'
+        + (drops.length && !(role === 'driver' && kind === 'pickup') ? '<p><b>' + E(t('ivCooks')) + '</b> ' + drops.map(function (c) { return E(c.name || '') + (c.stay === true ? ' (' + E(t('itStays')) + ')' : ''); }).join(', ') + '</p>' : '');
+      h += sec(t('ivServingK'), t('ivServe'), sb);
+      if (role === 'team_leader') {
+        h += sec(t('ivTlK'), t('ivTl'), '<ul class="dots"><li>' + E(t('ivTl1')) + '</li><li>' + E(t('ivTl2')) + '</li><li>' + E(t('ivTl3')) + '</li>'
+          + (safeUrl(it.audit_url) ? '<li><a href="' + E(safeUrl(it.audit_url)) + '" target="_blank" rel="noopener">' + E(t('itAudit')) + '</a></li>' : '') + '</ul>');
+      }
+      var after = '';
+      if (role === 'driver' && kind === 'pickup') after = '<p>' + E(t('itAfterPick')) + '</p>';
+      else {
+        var dp = String(it.dish_place || '');
+        var dpName = dp.split(',')[0], dpRest = dp.slice(dpName.length).replace(/^,\s*/, '');
+        after = '<ol class="route">' + (dp ? '<li><span class="pin">1</span><b class="n">' + E(dpName) + '</b><span class="ad">' + E(dpRest) + '</span>' + tools(null, dp.split('.')[0]) + '</li>' : '')
+          + '<li><span class="pin st">' + IC.store + '</span><b class="n">' + E(t('ivStorage')) + '</b><span class="ad">' + E(t('itAfterBack')) + '</span></li></ol>';
+      }
+      h += sec(t('ivAfterK'), t('ivAfter'), after);
+    } else if (it.kind === 'community') {
+      h += sec(t('ivDayK'), t('ivOv'), '<ol class="route">'
+        + [[tm.start, t('itClA'), t('itClAB').replace('{p}', spot)], [it.serve, t('itClW'), t('itClWB')], ['', t('itClC'), t('itClCB')], ['', t('itClE'), t('itClEB')]].map(function (x, i) {
+          return '<li><span class="pin">' + (i + 1) + '</span><b class="n">' + E(x[1]) + '</b>' + (x[0] ? whenChip(x[0]) : '') + '<p>' + E(x[2]) + '</p></li>';
+        }).join('') + '</ol>');
+    } else {
+      var extra = role === 'photographer' ? t('itPhoto') : role === 'server' ? t('itDon') : '';
+      h += sec(t('ivDayK'), t('itArrive'), whenChip(tm.start) + '<ol class="route"><li><span class="pin">' + IC.pin + '</span><b class="n">' + E(place.split(',')[0]) + '</b><span class="ad">' + E(it.meet_spot || place) + '</span>' + tools(null, place) + '</li>'
+        + '<li><span class="pin flag">' + IC.flag + '</span><b class="n">' + E(t('ivServe')) + ' · ' + E(hm(it.serve)) + '</b><p>' + E(t('itArriveB').replace('{p}', it.meet_spot || place)) + '</p>' + (extra ? '<p>' + E(extra) + '</p>' : '') + '</li></ol>');
+      h += sec(t('ivAfterK'), t('ivAfter'), (it.dish_place ? '<p>' + E(t('itDish').replace('{p}', it.dish_place)) + '</p>' : '') + '<p>' + E(t('itSurvey')) + '</p>');
+    }
+    var team = it.team || [];
+    if (team.length) {
+      h += sec(t('ivTeamK'), t('ivTeam'), '<ul class="team">' + team.map(function (p) {
+        var rl = (fr ? p.role_fr : p.role_en) || p.role || ''; if (p.role === 'driver' && p.kind) rl = kindName(p.kind); rl = rl.charAt(0).toUpperCase() + rl.slice(1);
+        var tl = telOf(p.phone);
+        return '<li><span class="av' + (p.me ? ' me' : '') + '">' + E(initials(p.name)) + '</span><span class="who"><b>' + E(p.name || '') + (p.me ? ' (' + E(t('ivMe')) + ')' : '') + '</b><span>' + E(rl) + (p.phone && !p.me ? ' · ' + E(phoneTxt(p.phone)) : '') + '</span></span>'
+          + (tl && !p.me ? '<span class="tl"><a class="tb" href="tel:' + E(tl) + '" aria-label="' + E(t('ivCall')) + ' ' + E(p.name || '') + '">' + IC.phone + '</a><a class="tb" href="sms:' + E(tl) + '" aria-label="' + E(t('ivText')) + ' ' + E(p.name || '') + '">' + IC.msg + '</a></span>' : '') + '</li>';
+      }).join('') + '</ul>');
+    }
+    var notes = ((fr ? it.notes_fr : it.notes_en) || []).filter(function (x) { return String(x || '').trim(); });
+    if (notes.length && it.kind !== 'community') h += sec(t('ivNotesK'), t('ivNotes'), '<ul class="dots">' + notes.map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul>', 'notes');
+    h += '</div><footer class="ifoot" style="' + bg(look.band || look.hero) + '"><h2>' + E(t('ivThanks')) + '</h2>'
+      + '<p>' + E(t('ivCallOps')) + ' <a href="sms:' + OPS_TEL + '" style="color:#FFFAF2">' + OPS + '</a>.' + (t('brand') ? ' ' + E(t('brand')) : '') + '</p>'
+      + '<div class="row"><button type="button" data-iv="back">' + E(t('ivBack')) + '</button><button type="button" data-iv="print">' + E(t('ivPrint')) + '</button></div></footer>';
+    return h;
+  }
+  function paintBooklet() {
+    var el = document.getElementById('itv'); if (!el || !S.d || !S.d.itinerary) return;
+    document.body.classList.add('itv');
+    el.innerHTML = bookletHtml();
+    try { document.title = t('ivOv') + ' · ' + day(S.d.event_date) + ' · Welfare Avenue'; } catch (e) { /* fine */ }
+    loadWx();
+  }
+  function teaserHtml() {
+    var it = S.d.itinerary; if (!it) return '';
+    var look = it.look || S.d.look || {};
+    return '<button type="button" class="iteaser" data-open-it="1"><span class="th" style="' + bg(look.hero) + '"></span><span><b>' + E(t('ivReady')) + '</b><span>' + E(t('ivReadyP')) + '</span></span><i>' + E(t('ivOpen')) + '</i></button>';
+  }
+  function showView(v) {
+    S.view = v;
+    try { var u = new URL(location.href); if (v === 'it') u.searchParams.set('it', '1'); else u.searchParams.delete('it'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) { /* fine */ }
+    if (v === 'it' && S.d && S.d.itinerary) paintBooklet();
+    else { document.body.classList.remove('itv'); paint(); }
+    try { window.scrollTo(0, 0); } catch (e) { /* fine */ }
+  }
   function tick() { return '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFAF2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'; }
   function paint() {
     if (S.d && S.d.survey && document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead());
@@ -623,9 +921,12 @@ ul.team li,ul.notes li{margin:0 0 5px}
     var ey = document.getElementById('ey'), ht = document.getElementById('ht');
     if (!S.d) return;
     var d = S.d;
+    if (S.view === 'it' && d.itinerary && !d.cancelled && !d.past) { paintBooklet(); return; }
+    document.body.classList.remove('itv');
     ey.textContent = t('ey'); ht.textContent = roleName();
     var test = S.test ? '<div class="banner info">' + E(t('test')) + '</div>' : '';
     var err = S.err ? '<div class="banner warn">' + E(S.err) + '</div>' : '';
+    if (S.view === 'it' && !d.itinerary && !d.past && !d.cancelled && d.state !== 'declined') err += '<div class="banner info">' + E(t('ivNotYet')) + '</div>';
     if (d.cancelled) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('cancelled')) + '</div>' + callHtml(); return; }
     var svOpen = d.survey && d.survey.open;
     if (d.past) {
@@ -635,12 +936,12 @@ ul.team li,ul.notes li{margin:0 0 5px}
     }
     if (svOpen && d.state !== 'declined') {
       /* the serving day, after it started: the survey first */
-      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + surveyHtml() + itineraryHtml() + linksHtml() + callHtml();
+      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + surveyHtml() + teaserHtml() + linksHtml() + callHtml();
       return;
     }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + spotHtml() + itineraryHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+        + teaserHtml() + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
         + (S.test && d.survey ? surveyHtml() : '');
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
@@ -711,6 +1012,7 @@ ul.team li,ul.notes li{margin:0 0 5px}
       if (o) ics(o, tk); return;
     }
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
+    if (b.hasAttribute('data-open-it')) { showView('it'); return; }
     if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no'); else if (b.id === 'save') save();
     else if (b.id === 'svsend') svSend(); else if (b.id === 'svedit') { S.svEdit = true; paint(); svScroll(); }
   });
@@ -723,6 +1025,13 @@ ul.team li,ul.notes li{margin:0 0 5px}
     if (S.d) { S.form = Object.assign({}, S.form, readForm()); if (document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead()); }
     S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
     if (S.d) paint(); else langButtons();
+  });
+  document.getElementById('itv').addEventListener('click', function (e) {
+    var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
+    if (b.getAttribute('data-iv') === 'back') { showView('page'); return; }
+    if (b.getAttribute('data-iv') === 'print') { try { window.print(); } catch (x) { /* fine */ } return; }
+    var l = b.getAttribute('data-l');
+    if (l) { S.lang = l; S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ } langButtons(); paintBooklet(); }
   });
   function notFound(msg) {
     document.getElementById('ey').textContent = 'Welfare Avenue';
