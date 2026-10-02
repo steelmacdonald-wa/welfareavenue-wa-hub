@@ -208,6 +208,8 @@
 192_wave192
 # 193_wave193: the Fundraising app (Steel, 01/10/26): one page #fund with sections by address (Overview, Calendar, Donor program, Event SOPs, Grants: the pipeline, Found for you, Funders, the grant writer, the playbook How we win grants, the fact base), framed by wave153's app rail (the APPS entry and the hide rule live in 153; the labels in 110, 127, 131; the menu layout in 134); the data is wa193_fundraising (fund_*), the functions grant-scan (the Monday scan, Scan now, the #grants post) and grant-write (draft, review, fit).
 193_wave193
+# 194_wave194: Updated since you finished asks people to open the changed step (its module, its avenue or the step in their plan) before they can close it (Steel, 02/10/26; 122's onboarding card and 058's Classic view call in here), and the Avenue Academy's certificate in the brand with Steel's signature (app_config cert_signature; 122's certHtml, renderCert and printCert call in here).
+194_wave194
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

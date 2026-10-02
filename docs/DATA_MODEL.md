@@ -539,7 +539,7 @@ Master onboarding checklist in sections WEEK 1 to WEEK 4 and 60 DAYS, originally
 
 ### `onboarding_update_acks`
 
-Records that a person acknowledged a changed onboarding step (template_updated_at is the version they saw).
+Records that a person acknowledged a changed onboarding step (template_updated_at is the version they saw). Since wave194 the Hub writes it from Close, which shows only after the person opened the step (onboarding_update_opens).
 
 - `onboarding_id`: onboardings.id. Foreign key (on delete cascade).
 - `template_id`: onboarding_template.id. Foreign key (on delete cascade).
@@ -1777,6 +1777,16 @@ wave193: the grant writer's drafts: the funder's questions with their word limit
 
 wave193: the Fundraising app's settings: donor_program (goals, tiers, cadence, roles, the launch plan), scanner (the Slack channel for new finds, the schedule, the questions it asks), playbook (the approach: the fit screen, the proposal sections, the rules, the calendar discipline, the readiness checklist, as markdown). Staff with the Fundraising app read; leaders and admins write.
 
+### `onboarding_update_opens`
+
+wave194: a person opened a step of the master onboarding that changed after they finished (Updated since you finished in the Avenue Academy): the module, the avenue or the step in their plan. Opening is what brings Close, which writes onboarding_update_acks. One row per person per version of the step (template_updated_at). Staff read and write, like onboarding_update_acks.
+
+- `onboarding_id`: onboardings.id: whose onboarding. Foreign key (on delete cascade).
+- `template_id`: onboarding_template.id: the step that changed. Foreign key (on delete cascade).
+- `template_updated_at`: The version of the step they opened (onboarding_template.updated_at at the time). A later change asks again.
+- `opened_at`: When they opened it.
+- `opened_by`: Who opened it (the Hub's display name, as acked_by).
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1845,7 +1855,7 @@ Functions:
 - `crm_automation_stop(bigint)`: Stops one person's run (wave157), cancelling its email still waiting in the queue. Staff with the CRM page.
 - `crm_claim_queued(integer)`: mail-send v6's claim (wave155), campaign rows only since wave157 so an older pump never touches an automation's email.
 - `crm_claim_queued(integer, text)`: Claims queued sends for mail-send's pump (FOR UPDATE SKIP LOCKED): automation (automation_run_id set), campaign (campaign_id set), itinerary (wave182: meta.source itinerary), or any. Sends stuck in sending for 10 minutes go back to the queue.
-- `wa_app_config_guard()`: Trigger on app_config (wave158a, wave161): the mail_*, receipt_* and donate_* settings change only through an admin or the service role; other settings stay as their policies allow.
+- `wa_app_config_guard()`: Trigger on app_config (wave158a, wave161, wave194): the mail_*, receipt_*, donate_*, loom_*, sms_* and cert_* settings change only through an admin or the service role; other settings stay as their policies allow. cert_signature is the signature on the Avenue Academy's certificates (wave194).
 - `crm_receipt_config()`: The receipt settings for the Gifts tab (wave158, wave158b): the mode (off until the treasurer and Steel say go), the charity's name and address as on file with the CRA, the registration number, where receipts are issued, the numbering (prefix and next number), the signatory; whether the caller is an admin, whether a signature image is uploaded, what is still missing in words, and how many receipts are issued.
 - `crm_receipt_config_set(jsonb)`: Saves the receipt settings (wave158), admins only, each change in change_log. receipt_mode is not among them: switching receipts on comes with wave158b (the numbering, the PDF, the signature), once the treasurer and Steel agree.
 - `crm_receipt_sample(bigint)`: A sample CRA receipt for one gift (wave158, wave185): every field the CRA requires (the statement, the charity's name, address and registration number, a serial number, where and when it is issued, the date of the gift, the donor's name and address, the amount, the advantage and its description, the eligible amount, the signatory, the CRA's name and website), how the gift came, any tribute, the donor's language, with what is missing in words. Never numbered, never stored, never sent. Staff with the CRM page.

@@ -1,0 +1,480 @@
+/* =====================================================================
+   WA v194 Updated since you finished: open it, then close it. The certificate in the brand, signed (02/10/26)
+   =====================================================================
+   Steel (02/10/26): "when new onboarding changes are made, I understand that everyone get a section called "Update since
+   you finished" and the option to write got it. Instead I'd like for them to haft to open the link of the module to re do
+   it and then they can close it." Then: "the certificate members get should be better branded with our branding and I'll
+   add my signature" (he sent the signature). His choices: opening the module unlocks Close, and the opening is saved, so
+   Close is still there on another device; a step with no module opens in the person's plan with its new instructions,
+   the same way; the signature reads Steel MacDonald, Founder and Chair.
+
+   1. Updated since you finished (the Academy's onboarding card in 122, the Classic view in 058). Each changed step shows
+      Open the module, Open the avenue or Open the step instead of Got it. Opening is saved (onboarding_update_opens, one
+      row per person per version of the step) and brings Close, which records the acknowledgement as before
+      (onboarding_update_acks). What opens carries a gold bar: what changed, the step's words when it has no module, and
+      Close the update. A step with no module opens the plan at that step (its week chosen, the step shown and flashed).
+   2. The certificate (122 calls certHtml and printCert here). The brand: the green band with the cream lockup, AVENUE
+      ACADEMY in gold, the gold seal with the E, one gold star; Barlow Condensed and Space Grotesk; the gold rule; the
+      name and what was completed; the signature with the name and title under a line, and the date awarded. The
+      signature is app_config cert_signature (JSON: image as a PNG data URL, name, title, org); signed-in staff read it,
+      only admins write cert_* keys (wa_app_config_guard). Admins change it from the certificate (Signature). Print keeps
+      the fonts and the colours (A4 landscape, edge to edge).
+   Data: wa194_updates_certificate. Test: test/w194drive.js.
+   ===================================================================== */
+(function () {
+  if (window.__wa194) return; window.__wa194 = true;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2', PURPLE = '#6F64AB', INK = '#1F201E', MUTED = '#797773';
+  var DISP = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var SF = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var BR = 'https://zwnmulmnvopclzcvytce.supabase.co/storage/v1/object/public/content-images/brand/';
+  var IMG = { logo: BR + 'logo-lockup-cream.svg', e: BR + 'e-large-cream.svg', star: BR + 'doodle-star-gold.png' };
+  var FONTS = 'https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap';
+  var CFG_KEY = 'cert_signature';
+  var DEF = { name: 'Steel MacDonald', title: 'Founder and Chair', org: 'Welfare Avenue' };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function Q(s) { return String(s == null ? '' : s).replace(/["\\]/g, '\\$&'); }
+  function T(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function md(s) { try { return typeof wa37Md === 'function' ? wa37Md(s) : E(s); } catch (e) { return E(s); } }
+  function ts(x) { var n = Date.parse(String(x || '')); return isFinite(n) ? n : 0; }
+  function role() {
+    try { if (typeof MODE !== 'undefined' && MODE === 'board') return 'board'; } catch (e) { /* fine */ }
+    try { if (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) return WA40_MINE.role; } catch (e) { /* fine */ }
+    return 'member';
+  }
+  function isAdmin() { return role() === 'admin'; }
+  function whoName() { try { return typeof who === 'function' ? (who() || null) : null; } catch (e) { return null; } }
+  function myEmail() { try { return String((USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
+  function repaint() { try { if (window.w122 && typeof w122.paint === 'function') w122.paint(); } catch (e) { /* fine */ } }
+  function sheetR() { try { return window.w122 && w122.state ? w122.state().R : null; } catch (e) { return null; } }
+  function sheetEl() { return document.querySelector('#w122sheet .sh'); }
+  function tmpl(id) { try { return (WA37.tmpl || []).filter(function (t) { return String(t.id) === String(id); })[0] || null; } catch (e) { return null; } }
+  function weekLabel(s) {
+    var u = String(s || '').trim(), m = /^WEEK\s+(\d+)$/i.exec(u); if (m) return 'Week ' + m[1];
+    m = /^(\d+)\s+(DAYS?|MONTHS?)$/i.exec(u); if (m) return m[1] + ' ' + m[2].toLowerCase();
+    return u ? u.charAt(0) + u.slice(1).toLowerCase() : '';
+  }
+  function reduced() { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } }
+
+  /* ---------- styles ---------- */
+  var CERT_CSS = ''
+    + '.w194cert{container-type:inline-size;position:relative;width:100%;background:' + CREAM + ';color:' + INK + ';font-family:' + SF + ';border-radius:6px;overflow:hidden;box-shadow:0 1px 0 rgba(16,63,57,.06),0 18px 40px -24px rgba(16,63,57,.45);-webkit-print-color-adjust:exact;print-color-adjust:exact;text-align:left;}'
+    + '.w194cert *{box-sizing:border-box;}'
+    + '.w194cert .ci{position:relative;display:flex;aspect-ratio:1.414/1;}'
+    + '.w194cert .band{position:relative;flex:0 0 33%;background:' + GREEN + ';padding:4.4cqw 3.6cqw 17cqw;display:flex;flex-direction:column;overflow:hidden;}'
+    + '.w194cert .band .logo{display:block;width:23.5cqw;max-width:100%;height:auto;}'
+    + '.w194cert .band .acad{margin:auto 0;font-family:' + DISP + ';font-weight:600;text-transform:uppercase;color:' + GOLD + ';font-size:42px;font-size:4.7cqw;line-height:.92;letter-spacing:.02em;}'
+    + '.w194cert .band .acad span{display:block;}'
+    + '.w194cert .band .acad i{display:block;width:4.2cqw;height:.36cqw;min-height:2px;background:' + CREAM + ';opacity:.85;margin:1.5cqw 0 0;}'
+    + '.w194cert .band .seal{position:absolute;left:3.6cqw;bottom:4cqw;width:10.5cqw;height:10.5cqw;border-radius:50%;background:radial-gradient(circle at 34% 30%,#F2CC6B,' + GOLD + ' 56%,#B9851B);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 .45cqw rgba(255,250,242,.38),0 .8cqw 1.8cqw -.9cqw rgba(0,0,0,.45);}'
+    + '.w194cert .band .seal img{width:6cqw;height:auto;display:block;}'
+    + '.w194cert .band .star{position:absolute;left:12.2cqw;bottom:11.6cqw;width:5.6cqw;height:auto;transform:rotate(12deg);}'
+    + '.w194cert .body{flex:1;min-width:0;display:flex;flex-direction:column;padding:5cqw 5.4cqw 4.2cqw 5.8cqw;}'
+    + '.w194cert .ov{font-weight:700;text-transform:uppercase;letter-spacing:.24em;color:' + GREEN + ';font-size:12px;font-size:1.32cqw;}'
+    + '.w194cert .rule{display:block;width:4.6cqw;height:.42cqw;min-height:3px;background:' + GOLD + ';margin:1.3cqw 0 0;}'
+    + '.w194cert .mid{margin:auto 0;padding:2.4cqw 0;}'
+    + '.w194cert .lead{font-size:15px;font-size:1.7cqw;color:rgba(31,32,30,.72);}'
+    + '.w194cert .nm{font-family:' + DISP + ';font-weight:600;text-transform:uppercase;color:' + GREEN + ';font-size:64px;font-size:7.3cqw;line-height:.94;letter-spacing:.01em;margin:.5cqw 0 1.9cqw;overflow-wrap:anywhere;}'
+    + '.w194cert .nm.s2{font-size:52px;font-size:5.9cqw;}'
+    + '.w194cert .nm.s3{font-size:40px;font-size:4.6cqw;}'
+    + '.w194cert .what{font-family:' + DISP + ';font-weight:500;text-transform:uppercase;color:' + PURPLE + ';font-size:31px;font-size:3.5cqw;line-height:1;letter-spacing:.015em;margin-top:.5cqw;}'
+    + '.w194cert .foot{display:grid;grid-template-columns:1.15fr 1fr;gap:4.6cqw;align-items:end;}'
+    + '.w194cert .foot .ink{height:7.8cqw;display:flex;align-items:flex-end;}'
+    + '.w194cert .foot .ink img{display:block;max-height:100%;max-width:100%;width:auto;height:auto;margin-bottom:-.9cqw;}'
+    + '.w194cert .foot .ink em{font-style:normal;font-family:' + DISP + ';font-weight:500;color:' + GREEN + ';font-size:22px;font-size:2.55cqw;letter-spacing:.02em;text-transform:uppercase;}'
+    + '.w194cert .foot .ln{height:.13cqw;min-height:1px;background:rgba(16,63,57,.42);margin:.45cqw 0 .8cqw;}'
+    + '.w194cert .foot b{display:block;font-family:' + DISP + ';font-weight:600;text-transform:uppercase;color:' + GREEN + ';font-size:16px;font-size:1.85cqw;letter-spacing:.03em;line-height:1.05;}'
+    + '.w194cert .foot span{display:block;font-size:11px;font-size:1.2cqw;color:rgba(31,32,30,.66);margin-top:.25cqw;}'
+    /* a phone: the band on top, readable sizes */
+    + '@container (max-width:560px){'
+    + '.w194cert .ci{aspect-ratio:auto;flex-direction:column;}'
+    + '.w194cert .band{flex:none;flex-direction:row;align-items:center;gap:14px;padding:16px 18px;}'
+    + '.w194cert .mid{margin:0;padding:12px 0 0;}'
+    + '.w194cert .band .logo{width:132px;}'
+    + '.w194cert .band .acad{margin:0 0 0 auto;font-size:22px;text-align:right;}'
+    + '.w194cert .band .acad i,.w194cert .band .star{display:none;}'
+    + '.w194cert .band .seal{position:static;width:40px;height:40px;flex:none;}'
+    + '.w194cert .band .seal img{width:24px;}'
+    + '.w194cert .body{padding:20px 18px 26px;}'
+    + '.w194cert .ov{font-size:10.5px;}.w194cert .rule{width:30px;height:3px;margin:8px 0 14px;}'
+    + '.w194cert .lead{font-size:13px;}.w194cert .nm{font-size:34px;margin:2px 0 10px;}.w194cert .nm.s2{font-size:29px;}.w194cert .nm.s3{font-size:24px;}'
+    + '.w194cert .what{font-size:21px;}'
+    + '.w194cert .foot{margin-top:22px;gap:16px;grid-template-columns:1fr 1fr;}'
+    + '.w194cert .foot .ink{height:40px;}.w194cert .foot .ink img{margin-bottom:-5px;}.w194cert .foot .ink em{font-size:16px;}'
+    + '.w194cert .foot .ln{height:1px;margin:3px 0 6px;}.w194cert .foot b{font-size:13px;}.w194cert .foot span{font-size:10.5px;}'
+    + '}'
+    + '';
+  var css = document.createElement('style'); css.id = 'wa194css';
+  css.textContent = CERT_CSS
+    + '#w122sheet .w194cert{max-width:900px;margin:0 auto;}'
+    /* Updated since you finished */
+    + '#w122 .w122trk .upd.w194upd{background:rgba(220,165,39,.1);border:1px solid rgba(220,165,39,.32);border-radius:14px;padding:12px 14px;}'
+    + '#w122 .w122trk .upd.w194upd>b{font-family:' + DISP + ';text-transform:uppercase;font-weight:600;letter-spacing:.04em;color:#8a6414;font-size:15px;margin:0 0 2px;}'
+    + '.w194why{margin:0 0 6px;font-size:12.5px;line-height:1.45;color:' + MUTED + ';}'
+    + '#w122 .w194upd .ur.w194r{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid rgba(220,165,39,.28);flex-wrap:wrap;}'
+    + '#w122 .w194upd .ur.w194r:first-of-type{border-top:none;}'
+    + '#w122 .w194upd .ur .tx{flex:1 1 220px;display:flex;flex-direction:column;min-width:0;}'
+    + '#w122 .w194upd .ur .tx em{font-style:normal;font-weight:700;font-size:13.5px;color:' + GREEN + ';line-height:1.3;}'
+    + '#w122 .w194upd .ur .tx small{font-size:11.5px;color:' + MUTED + ';margin-top:2px;}'
+    + '.w194acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}'
+    + '.w194b{border:none;border-radius:999px;padding:6px 14px;font:700 12px/1.3 ' + SF + ';background:' + GREEN + ';color:' + CREAM + ';cursor:pointer;white-space:nowrap;}'
+    + '.w194b:hover{filter:brightness(1.12);}'
+    + '.w194b.soft{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '.w194b.soft:hover{background:rgba(16,63,57,.14);filter:none;}'
+    + '.w194b.gold{background:' + GOLD + ';color:' + GREEN + ';font-family:' + DISP + ';text-transform:uppercase;letter-spacing:.06em;font-size:14px;padding:8px 16px;}'
+    + '.w194b:disabled{opacity:.55;cursor:default;}'
+    + '.w58st .w194acts{margin-top:2px;}'
+    /* the bar on what opens */
+    + '#w122sheet .w194bar{display:flex;gap:14px;align-items:flex-start;background:rgba(220,165,39,.13);border-top:1px solid rgba(220,165,39,.4);border-bottom:1px solid rgba(220,165,39,.4);padding:11px 24px;}'
+    + '#w122sheet .w194bar .w194bi{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}'
+    + '#w122sheet .w194bar .ov{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#8a6414;}'
+    + '#w122sheet .w194bar b{font-size:14.5px;color:' + GREEN + ';line-height:1.3;}'
+    + '#w122sheet .w194bar .w194bw{font-size:12.5px;color:' + MUTED + ';line-height:1.45;}'
+    + '#w122sheet .w194bar details{margin-top:4px;}'
+    + '#w122sheet .w194bar summary{cursor:pointer;font-size:12.5px;font-weight:700;color:' + GREEN + ';}'
+    + '#w122sheet .w194bar .ds{max-height:32vh;overflow:auto;font-size:13.5px;line-height:1.55;color:' + INK + ';background:rgba(255,250,242,.7);border-radius:10px;padding:8px 12px;margin-top:6px;}'
+    + '#w122sheet .w194bar.done{background:rgba(16,63,57,.07);border-color:rgba(16,63,57,.18);}'
+    + '#w122sheet .w194bar.done .w194b{display:none;}'
+    + '.onbwrap .w194hit{box-shadow:0 0 0 2px rgba(220,165,39,.7);border-radius:10px;}'
+    + '@media (max-width:640px){#w122sheet .w194bar{flex-direction:column;padding:10px 16px;}#w122sheet .w194bar .w194b{align-self:stretch;}}'
+    /* the signature, for admins */
+    + '#w194sig{max-width:900px;margin:0 auto 16px;background:#fff8ea;border:1px solid rgba(220,165,39,.4);border-radius:14px;padding:14px 16px;font-family:' + SF + ';}'
+    + '#w194sig .h b{display:block;font-family:' + DISP + ';text-transform:uppercase;font-weight:600;letter-spacing:.04em;font-size:17px;color:' + GREEN + ';}'
+    + '#w194sig .h span{font-size:12.5px;color:' + MUTED + ';}'
+    + '#w194sig .row{display:flex;gap:16px;flex-wrap:wrap;margin-top:10px;align-items:flex-start;}'
+    + '#w194sig .pv{flex:0 0 240px;height:96px;border:1px dashed rgba(16,63,57,.3);border-radius:10px;background:' + CREAM + ';display:flex;align-items:center;justify-content:center;padding:8px;font-size:12px;color:' + MUTED + ';}'
+    + '#w194sig .pv img{max-width:100%;max-height:100%;}'
+    + '#w194sig .f{flex:1 1 240px;display:flex;flex-direction:column;gap:8px;}'
+    + '#w194sig label{display:flex;flex-direction:column;gap:3px;font-size:11.5px;font-weight:700;color:' + GREEN + ';text-transform:uppercase;letter-spacing:.06em;}'
+    + '#w194sig input[type=text]{font:500 14px ' + SF + ';padding:7px 10px;border:1px solid rgba(16,63,57,.25);border-radius:8px;background:' + CREAM + ';color:' + INK + ';text-transform:none;letter-spacing:0;}'
+    + '#w194sig input[type=file]{font:500 12.5px ' + SF + ';text-transform:none;letter-spacing:0;color:' + INK + ';}'
+    + '#w194sig .hint{margin:0;font-size:12px;color:' + MUTED + ';line-height:1.45;}'
+    + '#w194sig .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;}';
+  document.head.appendChild(css);
+
+  /* =================== 1. Updated since you finished =================== */
+  var U = { onb: null, opens: {}, loaded: false, loading: null, focus: null, busy: {} };
+  function loadOpens(onbId) {
+    var id = String(onbId == null ? '' : onbId); if (!id) return Promise.resolve(false);
+    if (U.onb === id && U.loaded) return Promise.resolve(false);
+    if (U.onb === id && U.loading) return U.loading;
+    if (U.onb !== id) { U.onb = id; U.opens = {}; }
+    U.loaded = false;
+    U.loading = Promise.resolve(db.from('onboarding_update_opens').select('template_id,template_updated_at').eq('onboarding_id', Number(id))).then(function (r) {
+      ((r && r.data) || []).forEach(function (x) { var k = String(x.template_id); if (!U.opens[k] || ts(U.opens[k]) < ts(x.template_updated_at)) U.opens[k] = x.template_updated_at; });
+      U.loaded = true; U.loading = null; return true;
+    }).catch(function () { U.loaded = true; U.loading = null; return false; });
+    return U.loading;
+  }
+  function opened(t) { var v = t ? U.opens[String(t.id)] : null; return !!v && ts(v) >= ts(t.updated_at) - 1; }
+  function meWho() {
+    try { var p = typeof wa28Me === 'function' ? wa28Me() : null; return { name: (p && p.name) || '', email: myEmail(), dept: (p && p.department) || '' }; }
+    catch (e) { return { name: '', email: myEmail(), dept: '' }; }
+  }
+  /* where a changed step opens: its module, its avenue (the team's or any one resolved as wave166 does), or the plan */
+  function linkOf(t) {
+    if (t.training_id) return { kind: 'module', label: 'Open the module', hash: '#training/t/' + t.training_id, training: String(t.training_id) };
+    if (t.academy_path) {
+      var key = String(t.academy_path);
+      if (key === 'team' || key === 'any') {
+        var ps = null; try { if (window.w166 && typeof w166.pathState === 'function') ps = w166.pathState(meWho(), key); } catch (e) { ps = null; }
+        key = ps && ps.key && ps.key !== 'team' && ps.key !== 'any' && (ps.done || ps.complete) ? String(ps.key) : '';
+      }
+      return key ? { kind: 'avenue', label: 'Open the avenue', hash: '#training/p/' + key, path: key } : { kind: 'avenues', label: 'Open the avenues', hash: '#training' };
+    }
+    return { kind: 'step', label: 'Open the step', hash: '#training/onboarding' };
+  }
+  function whatOf(L) { return L.kind === 'module' ? 'Avenue Academy module' : (L.kind === 'step' ? 'Onboarding step' : 'Learning Avenue'); }
+  function actsHtml(t, onbId) {
+    var L = linkOf(t), op = opened(t), a = ' data-up="' + E(t.updated_at) + '" data-onb="' + E(onbId) + '"';
+    return '<button type="button" class="w194b' + (op ? ' soft' : '') + '" data-w194open="' + E(t.id) + '"' + a + '>' + (op ? 'Open it again' : E(L.label)) + '</button>'
+      + (op ? '<button type="button" class="w194b" data-w194close="' + E(t.id) + '"' + a + '>Close</button>' : '');
+  }
+  function rowHtml(t, onbId) {
+    var L = linkOf(t), wk = weekLabel(t.section), op = opened(t);
+    return '<div class="ur w194r' + (op ? ' op' : '') + '" data-w194row="' + E(t.id) + '"><span class="tx"><em>' + E(t.name) + '</em><small>' + E([wk, whatOf(L)].filter(Boolean).join(' \u00b7 ')) + (op ? ' \u00b7 opened, ready to close' : '') + '</small></span>'
+      + '<span class="w194acts">' + actsHtml(t, onbId) + '</span></div>';
+  }
+  /* 122's onboarding card calls this (pendingHtml) */
+  function pendingHtml(g) {
+    var o = g && g.o, list = (g && g.pending) || [], id = o ? String(o.id) : '';
+    if (id && !(U.onb === id && U.loaded)) loadOpens(id).then(function (ch) { if (ch) repaint(); });
+    var one = list.length === 1;
+    return '<div class="upd w194upd"><b>Updated since you finished (' + list.length + ')</b>'
+      + '<p class="w194why">HR changed ' + (one ? 'this step' : 'these steps') + ' after you finished your onboarding. Open ' + (one ? 'it' : 'each one') + ' to go through it again, then close it.</p>'
+      + list.map(function (t) { return rowHtml(t, id); }).join('') + '</div>';
+  }
+  function refreshRows(tid) {
+    var t = tmpl(tid); if (!t) return;
+    document.querySelectorAll('[data-w194row="' + Q(tid) + '"]').forEach(function (r) {
+      var acts = r.querySelector('.w194acts'), b = r.querySelector('[data-onb]'), onb = b ? b.getAttribute('data-onb') : U.onb;
+      if (acts) acts.innerHTML = actsHtml(t, onb);
+    });
+  }
+  function doOpen(btn) {
+    var tid = btn.getAttribute('data-w194open'), up = btn.getAttribute('data-up'), onb = btn.getAttribute('data-onb') || U.onb;
+    var t = tmpl(tid); if (!t) { T('That step is not in the onboarding any more'); return; }
+    var L = linkOf(t);
+    if (!opened(t)) {
+      U.opens[String(tid)] = up || t.updated_at;   /* at once: Close is there when they come back */
+      try {
+        Promise.resolve(db.from('onboarding_update_opens').upsert({ onboarding_id: Number(onb), template_id: String(tid), template_updated_at: up || t.updated_at, opened_by: whoName() },
+          { onConflict: 'onboarding_id,template_id,template_updated_at', ignoreDuplicates: true })).catch(function () { /* kept here; saved on the next open */ });
+      } catch (e) { /* fine */ }
+    }
+    U.focus = { tid: String(tid), up: up || t.updated_at, onb: String(onb), kind: L.kind, training: L.training || null, path: L.path || null, scrolled: false, at: Date.now() };
+    refreshRows(tid);
+    try { if (typeof closeModal === 'function' && btn.closest('.modal-back')) closeModal(); } catch (e) { /* fine */ }
+    if (location.hash === L.hash) {
+      var R = sheetR();
+      if (L.kind === 'module' && window.w122 && typeof w122.openTraining === 'function' && !(R && R.mode === 'view' && R.t && String(R.t.id) === L.training)) w122.openTraining(L.training);
+      else decorate(sheetEl(), sheetR());
+    } else location.hash = L.hash;
+    if (L.kind === 'avenues') T('Pick the Learning Avenue for this step, then close the update from your onboarding card.');
+  }
+  function doClose(btn) {
+    var tid = btn.getAttribute('data-w194close'), up = btn.getAttribute('data-up'), onb = btn.getAttribute('data-onb') || U.onb;
+    if (!tid || U.busy[tid]) return; U.busy[tid] = 1;
+    document.querySelectorAll('[data-w194close="' + Q(tid) + '"]').forEach(function (b) { b.disabled = true; });
+    Promise.resolve(db.from('onboarding_update_acks').insert({ onboarding_id: Number(onb), template_id: String(tid), template_updated_at: up, acked_by: whoName() })).then(function (r) {
+      if (r && r.error) throw r.error;
+      try { if (window.w122 && w122.A) { w122.A.acks = w122.A.acks || {}; w122.A.acks[String(tid)] = up; } } catch (e) { /* fine */ }
+      try { if (window.w58 && w58.state && w58.state.acks) w58.state.acks[String(tid)] = up; } catch (e) { /* fine */ }
+      if (U.focus && U.focus.tid === String(tid)) U.focus = null;
+      document.querySelectorAll('[data-w194bar="' + Q(tid) + '"]').forEach(function (b) {
+        b.classList.add('done');
+        var w = b.querySelector('.w194bw'); if (w) w.textContent = 'Closed. You are up to date on this step.';
+      });
+      document.querySelectorAll('[data-w58row="' + Q(tid) + '"]').forEach(function (r) { var box = r.closest('.w58upd'); r.remove(); if (box && !box.querySelector('.w58st')) box.remove(); });
+      T('Closed. You are up to date on this step.');
+      repaint();
+    }).catch(function () {
+      document.querySelectorAll('[data-w194close="' + Q(tid) + '"]').forEach(function (b) { b.disabled = false; });
+      T('Could not close it just now. Try again in a moment.');
+    }).then(function () { delete U.busy[tid]; });
+  }
+  function inPlan(t, onb) { try { var m = typeof wa37StepsFor === 'function' ? wa37StepsFor(onb) : null; return !!(m && m[t.id]); } catch (e) { return false; } }
+  function barHtml(t, f) {
+    var wk = weekLabel(t.section);
+    var why = f.kind === 'module' ? 'This module is part of your onboarding and changed after you finished. Go through it again, then close the update.'
+      : (f.kind === 'step' ? 'This step changed after you finished. Read what it says now, then close the update.'
+        : 'This avenue is part of your onboarding and changed after you finished. Go through it again, then close the update.');
+    var words = f.kind === 'step' && t.description ? '<details class="w194txt"' + (inPlan(t, f.onb) ? '' : ' open') + '><summary>What it says now</summary><div class="ds">' + md(t.description) + '</div></details>' : '';
+    return '<div class="w194bi"><span class="ov">Updated since you finished' + (wk ? ' \u00b7 ' + E(wk) : '') + '</span><b>' + E(t.name) + '</b><span class="w194bw">' + E(why) + '</span>' + words + '</div>'
+      + '<button type="button" class="w194b gold" data-w194close="' + E(t.id) + '" data-up="' + E(f.up) + '" data-onb="' + E(f.onb) + '">Close the update</button>';
+  }
+  /* 122 calls this after it draws its sheet: the gold bar on what was opened from Updated since you finished */
+  function decorate(sh, R) {
+    if (!sh || !R || !U.focus) return;
+    var f = U.focus, t = tmpl(f.tid);
+    if (!t || ts(t.updated_at) > ts(f.up) + 1) { U.focus = null; return; }
+    var match = (f.kind === 'module' && R.mode === 'view' && R.t && String(R.t.id) === f.training)
+      || (f.kind === 'avenue' && R.mode === 'path' && R.path && String(R.path.key) === f.path)
+      || (f.kind === 'step' && R.mode === 'onb' && !window.__w169view);
+    if (!match || sh.querySelector('[data-w194bar]')) return;
+    var bar = document.createElement('div'); bar.className = 'w194bar'; bar.setAttribute('data-w194bar', f.tid); bar.innerHTML = barHtml(t, f);
+    var bd = null; [].forEach.call(sh.children, function (c) { if (!bd && c.classList && c.classList.contains('bd')) bd = c; });
+    if (bd) sh.insertBefore(bar, bd); else sh.appendChild(bar);
+    if (f.kind === 'step' && !f.scrolled) { f.scrolled = true; focusStep(t); }
+  }
+  /* the plan: choose the step's week (wave167's journey), unfold it, show it and flash it */
+  function focusStep(t) {
+    var tid = String(t.id), tries = 0;
+    (function tick() {
+      var R = sheetR(), sh = sheetEl(); if (!R || R.mode !== 'onb' || !sh) return;
+      if (!sh.classList.contains('w167') && tries < 12) { tries++; setTimeout(tick, 90); return; }
+      try { if (window.w167 && typeof w167.select === 'function' && t.section && sh.classList.contains('w167')) w167.select(String(t.section), false); } catch (e) { /* fine */ }
+      var row = sh.querySelector('.onbwrap [data-w166t="' + Q(tid) + '"]');
+      if (!row) { if (tries++ < 30) setTimeout(tick, 90); return; }
+      var d = row.closest('details'); if (d && !d.open) d.open = true;
+      if (row.style.display === 'none' && t.parent_id) { var tg = sh.querySelector('.onbwrap [data-w57t="' + Q(t.parent_id) + '"]'); if (tg) tg.click(); }
+      setTimeout(function () {
+        try { row.scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth', block: 'center' }); } catch (e) { /* fine */ }
+        row.classList.add('w194hit'); row.classList.remove('w167flash'); void row.offsetWidth; row.classList.add('w167flash');
+      }, 60);
+    })();
+  }
+
+  /* =================== 2. the certificate =================== */
+  var C = { cfg: null, loaded: false, loading: null, edit: null };
+  function loadCfg(force) {
+    if (C.loaded && !force) return Promise.resolve(false);
+    if (C.loading) return C.loading;
+    var before = JSON.stringify(C.cfg);
+    C.loading = Promise.resolve(db.from('app_config').select('value').eq('key', CFG_KEY).maybeSingle()).then(function (r) {
+      var v = null; try { v = r && r.data && r.data.value ? JSON.parse(r.data.value) : null; } catch (e) { v = null; }
+      C.cfg = v && typeof v === 'object' ? v : null; C.loaded = true; C.loading = null; return JSON.stringify(C.cfg) !== before;
+    }).catch(function () { C.loaded = true; C.loading = null; return false; });
+    return C.loading;
+  }
+  function sig() {
+    var c = C.cfg || {}, img = String(c.image || '');
+    return { img: /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(img) ? img : '', name: c.name || DEF.name, title: c.title || DEF.title, org: c.org || DEF.org };
+  }
+  var MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function longDate(d) { var x = new Date(d); if (isNaN(x.getTime())) return ''; return MONTHS[x.getMonth()] + ' ' + x.getDate() + ', ' + x.getFullYear(); }
+  function nameCls(n) { var L = String(n || '').length; return L > 28 ? ' s3' : (L > 19 ? ' s2' : ''); }
+  /* 122's certHtml(a) comes here: a is the award row, m is the person (me()), no is the certificate number */
+  function certHtml(a, m, no) {
+    var s = sig(), name = (m && (m.full || m.name)) || '', when = longDate(a.earned_at);
+    var title = String(a.title || '');
+    return '<div class="w194cert" role="img" aria-label="' + E('Certificate of completion: ' + name + ' completed ' + title + (when ? ', awarded ' + when : '')) + '"><div class="ci">'
+      + '<div class="band"><img class="logo" src="' + IMG.logo + '" alt="Welfare Avenue"><div class="acad"><span>Avenue</span><span>Academy</span><i></i></div>'
+      + '<div class="seal"><img src="' + IMG.e + '" alt=""></div><img class="star" src="' + IMG.star + '" alt=""></div>'
+      + '<div class="body"><div class="ov">Certificate of completion</div><i class="rule"></i>'
+      + '<div class="mid"><div class="lead">This certifies that</div><div class="nm' + nameCls(name) + '">' + E(name) + '</div>'
+      + '<div class="lead">has completed</div><div class="what">' + E(title) + '</div></div>'
+      + '<div class="foot"><div class="sg"><div class="ink">' + (s.img ? '<img src="' + s.img + '" alt="Signature of ' + E(s.name) + '">' : '') + '</div><div class="ln"></div><b>' + E(s.name) + '</b><span>' + E(s.title + (s.org ? ', ' + s.org : '')) + '</span></div>'
+      + '<div class="dt"><div class="ink"><em>' + E(when) + '</em></div><div class="ln"></div><b>Date awarded</b><span>' + (no ? 'Certificate ' + E(no) : 'Avenue Academy') + '</span></div></div>'
+      + '</div></div></div>';
+  }
+  /* the print window: the same certificate, A4 landscape edge to edge, once the fonts and the pictures are in */
+  function writeCert(w, a, m, no) {
+    var body = certHtml(a, m, no);
+    w.document.open();
+    w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + E(a.title) + ' certificate</title>'
+      + '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>'
+      + '<link id="f194" rel="stylesheet" href="' + FONTS + '"><style>@page{size:A4 landscape;margin:0;}html,body{margin:0;padding:0;background:' + CREAM + ';}'
+      + 'body{display:flex;align-items:center;justify-content:center;min-height:100vh;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+      + CERT_CSS + '.w194cert{width:297mm;max-width:100vw;border-radius:0;box-shadow:none;}'
+      + '@media print{body{min-height:0;display:block;}.w194cert{width:297mm;height:210mm;}.w194cert .ci{height:100%;aspect-ratio:auto;}}</style></head><body>' + body
+      + '<script>(function(){var done=false;function go(){if(done)return;done=true;setTimeout(function(){try{window.focus();}catch(e){}window.print();},150);}'
+      + 'function pics(){return Promise.all([].slice.call(document.images).map(function(i){return i.complete?0:new Promise(function(r){i.onload=i.onerror=r;});}));}'
+      + 'function faces(){try{return Promise.all([document.fonts.load(\'600 40px "Barlow Condensed"\'),document.fonts.load(\'500 40px "Barlow Condensed"\'),document.fonts.load(\'400 16px "Space Grotesk"\'),document.fonts.load(\'700 16px "Space Grotesk"\')]);}catch(e){return Promise.resolve();}}'
+      + 'var l=document.getElementById("f194");var css=new Promise(function(r){if(l.sheet)return r();l.onload=l.onerror=r;});'
+      + 'css.then(function(){return Promise.all([faces(),pics()]);}).then(go,go);setTimeout(go,4000);})();<\/script></body></html>');
+    w.document.close();
+  }
+  /* the window opens inside the click (pop-up blockers), then fills once the signature is read */
+  function printNow(a, m, no) {
+    var w = window.open('', '_blank'); if (!w) { T('Allow pop-ups for the Hub to print the certificate'); return false; }
+    try { w.document.write('<!doctype html><meta charset="utf-8"><title>Preparing the certificate</title><body style="font-family:sans-serif;color:' + GREEN + ';background:' + CREAM + ';padding:40px">Preparing the certificate…</body>'); w.document.close(); } catch (e) { /* fine */ }
+    var done = false, go = function () { if (done) return; done = true; try { writeCert(w, a, m, no); } catch (e) { /* the window was closed */ } };
+    if (C.loaded) go(); else { loadCfg().then(go, go); setTimeout(go, 2500); }
+    return true;
+  }
+
+  /* the signature, for admins (Signature on the certificate) */
+  function sigEditorHtml() {
+    var s = sig(), e = C.edit || {};
+    var img = e.img != null ? e.img : s.img;
+    return '<div id="w194sig"><div class="h"><b>The signature on every certificate</b><span>Only admins can change it. It shows on every certificate in the Avenue Academy, the ones already earned too.</span></div>'
+      + '<div class="row"><div class="pv">' + (img ? '<img src="' + img + '" alt="The signature">' : 'No signature yet') + '</div>'
+      + '<div class="f"><label>Name<input type="text" id="w194sn" maxlength="60" value="' + E(e.name != null ? e.name : s.name) + '"></label>'
+      + '<label>Title<input type="text" id="w194st" maxlength="80" value="' + E(e.title != null ? e.title : s.title) + '"></label>'
+      + '<label>A new signature (PNG or JPG)<input type="file" id="w194sf" accept="image/png,image/jpeg,image/webp"></label>'
+      + '<p class="hint">Sign in dark ink on white paper or a clear background, then take a photo or a scan. The Hub trims it and clears the background.</p></div></div>'
+      + '<div class="acts"><button type="button" class="w122btn soft sm" data-w194sigx="1">Cancel</button><button type="button" class="w122btn sm" data-w194sigsave="1">Save the signature</button></div></div>';
+  }
+  function openSigEditor() {
+    if (!isAdmin()) { T('Only an admin can change the signature'); return; }
+    var sh = sheetEl(); var wrap = sh && sh.querySelector('.main .wrap'); if (!wrap) return;
+    var old = document.getElementById('w194sig'); if (old) { old.remove(); C.edit = null; return; }
+    C.edit = {};
+    wrap.insertAdjacentHTML('afterbegin', sigEditorHtml());
+  }
+  /* a photo or a scan becomes ink on a clear background, trimmed, at most 900 px wide */
+  function cleanSignature(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\//.test(file.type || '')) { reject(new Error('Choose a PNG or JPG picture')); return; }
+      if (file.size > 6 * 1024 * 1024) { reject(new Error('That picture is over 6 MB')); return; }
+      var rd = new FileReader();
+      rd.onerror = function () { reject(new Error('Could not read the picture')); };
+      rd.onload = function () {
+        var im = new Image();
+        im.onerror = function () { reject(new Error('Could not read the picture')); };
+        im.onload = function () {
+          var W = im.naturalWidth, H = im.naturalHeight, k = Math.min(1, 1800 / Math.max(W, H));
+          W = Math.max(1, Math.round(W * k)); H = Math.max(1, Math.round(H * k));
+          var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+          var cx = cv.getContext('2d'); cx.drawImage(im, 0, 0, W, H);
+          var d = cx.getImageData(0, 0, W, H), p = d.data, i, opaque = true;
+          for (i = 3; i < p.length; i += 4 * 97) { if (p[i] < 250) { opaque = false; break; } }
+          var x0 = W, y0 = H, x1 = -1, y1 = -1, x, y, a;
+          for (y = 0; y < H; y++) for (x = 0; x < W; x++) {
+            i = (y * W + x) * 4;
+            if (opaque) { var lum = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2]; a = lum >= 215 ? 0 : (lum <= 120 ? 255 : Math.round(255 * (215 - lum) / 95)); }
+            else a = p[i + 3];
+            p[i] = 31; p[i + 1] = 32; p[i + 2] = 30; p[i + 3] = a;
+            if (a > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+          if (x1 < 0) { reject(new Error('No signature found in that picture')); return; }
+          cx.putImageData(d, 0, 0);
+          var pad = 8; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(W - 1, x1 + pad); y1 = Math.min(H - 1, y1 + pad);
+          var cw = x1 - x0 + 1, ch = y1 - y0 + 1, s2 = Math.min(1, 900 / cw);
+          var out = document.createElement('canvas'); out.width = Math.max(1, Math.round(cw * s2)); out.height = Math.max(1, Math.round(ch * s2));
+          out.getContext('2d').drawImage(cv, x0, y0, cw, ch, 0, 0, out.width, out.height);
+          resolve(out.toDataURL('image/png'));
+        };
+        im.src = rd.result;
+      };
+      rd.readAsDataURL(file);
+    });
+  }
+  function saveSig() {
+    if (!isAdmin()) { T('Only an admin can change the signature'); return; }
+    var s = sig(), e = C.edit || {};
+    var name = String((document.getElementById('w194sn') || {}).value || '').trim() || DEF.name;
+    var title = String((document.getElementById('w194st') || {}).value || '').trim() || DEF.title;
+    var img = e.img != null ? e.img : s.img;
+    var v = { image: img || '', name: name, title: title, org: s.org || DEF.org, updated_by: myEmail(), updated_at: new Date().toISOString() };
+    var btn = document.querySelector('[data-w194sigsave]'); if (btn) btn.disabled = true;
+    Promise.resolve(db.from('app_config').upsert({ key: CFG_KEY, value: JSON.stringify(v), updated_at: v.updated_at }, { onConflict: 'key' })).then(function (r) {
+      if (r && r.error) throw r.error;
+      C.cfg = v; C.loaded = true; C.edit = null;
+      T('Saved. Every certificate now carries this signature.');
+      rerenderCert();
+    }).catch(function (err) {
+      if (btn) btn.disabled = false;
+      T(/admin/i.test(String((err && err.message) || '')) ? 'Only an admin can change the signature' : 'Could not save the signature just now');
+    });
+  }
+  function rerenderCert() {
+    var R = sheetR(), sh = sheetEl(), lc = window.w194.lastCert; if (!R || R.mode !== 'cert' || !sh || !lc) return;
+    var cur = sh.querySelector('.w194cert'); if (cur) cur.outerHTML = certHtml(lc.a, lc.m, lc.no);
+    if (!C.edit) { var ed = document.getElementById('w194sig'); if (ed) ed.remove(); }
+  }
+  /* 122's renderCert calls this after it draws the certificate sheet */
+  function certShown(sh, a, m, no) {
+    window.w194.lastCert = { a: a, m: m, no: no };
+    if (!C.loaded) loadCfg().then(function (ch) { if (ch) rerenderCert(); });
+    if (isAdmin() && sh) {
+      var ft = sh.querySelector('.ft'), pr = ft && ft.querySelector('[data-w122print]');
+      if (ft && !ft.querySelector('[data-w194sig]')) {
+        var b = document.createElement('button'); b.type = 'button'; b.className = 'w122btn soft'; b.setAttribute('data-w194sig', '1'); b.textContent = 'Signature';
+        if (pr) ft.insertBefore(b, pr); else ft.appendChild(b);
+      }
+    }
+  }
+  /* =================== wiring =================== */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var el;
+    if ((el = t.closest('[data-w194open]'))) { e.preventDefault(); e.stopPropagation(); doOpen(el); return; }
+    if ((el = t.closest('[data-w194close]'))) { e.preventDefault(); e.stopPropagation(); doClose(el); return; }
+    if ((el = t.closest('[data-w194sig]'))) { e.preventDefault(); openSigEditor(); return; }
+    if ((el = t.closest('[data-w194sigx]'))) { e.preventDefault(); C.edit = null; var ed = document.getElementById('w194sig'); if (ed) ed.remove(); return; }
+    if ((el = t.closest('[data-w194sigsave]'))) { e.preventDefault(); saveSig(); return; }
+  }, true);
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || t.id !== 'w194sf') return;
+    var f = t.files && t.files[0]; if (!f) return;
+    cleanSignature(f).then(function (url) {
+      C.edit = C.edit || {}; C.edit.img = url;
+      var pv = document.querySelector('#w194sig .pv'); if (pv) pv.innerHTML = '<img src="' + url + '" alt="The new signature">';
+    }).catch(function (err) { T(String((err && err.message) || 'Could not read the picture')); t.value = ''; });
+  });
+  /* the sheet closed or moved on: the bar's job is done */
+  window.addEventListener('hashchange', function () {
+    if (!U.focus) return;
+    var h = location.hash || '';
+    if (!/^#training/.test(h)) U.focus = null;
+  });
+
+  /* ---------- for 122, 058 and the harness ---------- */
+  window.w194 = {
+    pendingHtml: pendingHtml, actsHtml: actsHtml, loadOpens: loadOpens, opened: opened, linkOf: linkOf, decorate: decorate,
+    certHtml: certHtml, printCert: printNow, certShown: certShown, loadCfg: loadCfg, sig: sig, cleanSignature: cleanSignature,
+    state: function () { return { U: U, C: C }; }, lastCert: null
+  };
+})();

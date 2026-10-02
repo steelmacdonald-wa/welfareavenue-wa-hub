@@ -1220,6 +1220,7 @@
   }
   function titleCase(s) { return String(s || '').toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }
   function pendingHtml(g) {
+    if (window.w194 && typeof w194.pendingHtml === 'function') { try { return w194.pendingHtml(g); } catch (e) { /* the earlier list below */ } }   /* wave194: open it, then close it */
     return '<div class="upd"><b>Updated since you finished (' + g.pending.length + ')</b>' + g.pending.map(function (t) {
       return '<div class="ur"><span>' + E(t.name) + '</span><button class="go" data-w122ack="' + E(t.id) + '" data-up="' + E(t.updated_at) + '">Got it</button></div>';
     }).join('') + '</div>';
@@ -1464,7 +1465,11 @@
     if (R.kind === 'lesson' && !isDone(t.id)) markSeen(t, R.ch);
     renderSheet(); startTimer();
   }
-  function renderSheet() {
+  function renderSheet() {   /* wave194: after each sheet, the gold bar on a step opened from Updated since you finished */
+    renderSheet0();
+    try { if (window.w194 && typeof w194.decorate === 'function') w194.decorate(document.querySelector('#w122sheet .sh'), R); } catch (e) { /* fine */ }
+  }
+  function renderSheet0() {
     if (!R) return;
     var sh = showSheet();
     if (R.mode === 'path') return renderPath(sh);
@@ -1757,6 +1762,7 @@
   }
   function certHtml(a) {
     var m = me();
+    if (window.w194 && typeof w194.certHtml === 'function') { try { return w194.certHtml(a, m, certNo(a, a.earned_at)); } catch (e) { /* the earlier certificate below */ } }   /* wave194 */
     return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; AVENUE ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
       '<div class="c-meta"><span>Awarded ' + E(fmtDate(a.earned_at)) + '</span><span>Certificate ' + E(certNo(a, a.earned_at)) + '</span></div><div class="c-seal">' + ic('seal') + '</div></div>';
   }
@@ -1765,9 +1771,11 @@
     sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('seal') + ' Certificate</span></div><h2>' + E(a.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="bd"><div class="main"><div class="wrap wide">' + certHtml(a) + '</div></div></div>' +
       '<div class="ft"><div class="st">Earned ' + E(fmtDate(a.earned_at)) + '</div><span class="sp"></span>' + (shared ? '<span class="st">' + ic('check') + ' Shared with the team</span>' : '<button class="w122btn soft" data-w122share="' + E(a.award) + '">' + ic('megaphone') + ' Share with the team</button>') + '<button class="w122btn" data-w122print="' + E(a.award) + '">' + ic('print') + ' Print or save as PDF</button></div>';
+    try { if (window.w194 && typeof w194.certShown === 'function') w194.certShown(sh, a, me(), certNo(a, a.earned_at)); } catch (e) { /* fine */ }   /* wave194 */
   }
   function printCert(award) {
     var a = A.myAwards[award]; if (!a) return;
+    if (window.w194 && typeof w194.printCert === 'function') { try { w194.printCert(a, me(), certNo(a, a.earned_at)); return; } catch (e) { /* the earlier print below */ } }   /* wave194 */
     var w = window.open('', '_blank'); if (!w) { toastS('Allow pop-ups for the Hub to print the certificate'); return; }
     var certCss = (document.getElementById('wa122css') || {}).textContent || '';
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + E(a.title) + ' certificate</title><style>@page{size:A4 landscape;margin:12mm;}body{margin:0;background:#FFFAF2;display:flex;align-items:center;justify-content:center;min-height:100vh;}.w122cert{width:260mm;max-width:100%;}' +

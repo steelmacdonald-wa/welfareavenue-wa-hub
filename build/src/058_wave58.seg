@@ -52,6 +52,7 @@
 
   /* ---- 2. minimized completed onboarding + update confirmations ---- */
   var WA58 = { acks: {}, ackedFor: null };
+  window.w58 = { state: WA58 };   /* wave194: closing an update elsewhere keeps this list in step */
   async function wa58LoadAcks(onbId) {
     try {
       var r = await db.from('onboarding_update_acks').select('*').eq('onboarding_id', Number(onbId));
@@ -92,17 +93,20 @@
         try { isProgress = !!ch.querySelector(':scope > .w37bar'); } catch (e2) { /* old browsers */ }
         if (isWeek || isIntro || isProgress) ch.classList.add('w58hid');
       });
+      if (window.w194 && typeof w194.loadOpens === 'function') { try { await w194.loadOpens(mine.id); } catch (e3) { /* fine */ } }   /* wave194 */
+      if (host.querySelector('#w58bar')) return;
       var pend = wa58Pending(mine);
       var html = '<div id="w58bar"><b>Onboarding complete</b>'
         + '<span style="font-size:12px;color:#797773">finished ' + esc(String(mine.completed_at || '').slice(0, 10)) + '</span>'
         + '<a data-w58show="1">View the checklist</a></div>';
       if (pend.length) {
         html += '<div class="w58upd"><h4>Updated since you finished (' + pend.length + ')</h4>'
-          + '<p class="m-sub" style="margin:0 0 4px">HR changed these onboarding steps. Read each one and confirm you are up to date.</p>'
+          + '<p class="m-sub" style="margin:0 0 4px">' + (window.w194 ? 'HR changed these onboarding steps after you finished. Open each one to go through it again, then close it.' : 'HR changed these onboarding steps. Read each one and confirm you are up to date.') + '</p>'
           + pend.map(function (t) {
-            return '<div class="w58st" data-w58row="' + esc(String(t.id)) + '"><span class="nm">' + esc(t.name) + '</span><span class="sec">' + esc(t.section || '') + '</span>'
+            return '<div class="w58st" data-w58row="' + esc(String(t.id)) + '" data-w194row="' + esc(String(t.id)) + '"><span class="nm">' + esc(t.name) + '</span><span class="sec">' + esc(t.section || '') + '</span>'
               + (t.description ? '<div class="ds">' + (typeof wa37Md === 'function' ? wa37Md(t.description) : esc(t.description)) + '</div>' : '<div class="ds"></div>')
-              + '<button data-w58ack="' + esc(String(t.id)) + '" data-w58onb="' + mine.id + '" data-w58up="' + esc(String(t.updated_at)) + '">Got it, I am up to date</button></div>';
+              + (window.w194 && typeof w194.actsHtml === 'function' ? '<span class="w194acts">' + w194.actsHtml(t, mine.id) + '</span></div>'   /* wave194: open it, then close it */
+                : '<button data-w58ack="' + esc(String(t.id)) + '" data-w58onb="' + mine.id + '" data-w58up="' + esc(String(t.updated_at)) + '">Got it, I am up to date</button></div>');
           }).join('')
           + '</div>';
       }
