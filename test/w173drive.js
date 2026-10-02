@@ -121,10 +121,25 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     ok('send: calls wa171_text_to_confirm with the ticked rows', calls.length === 1 && calls[0].args.p_event === 900 && JSON.stringify(calls[0].args.p_roster) === '[9004]', calls);
     ok('send: the modal closes', await f.ev(() => document.getElementById('modalBack').style.display === 'none'));
 
-    /* Send me a test */
-    await f.page.click('[data-w171test]'); await f.page.waitForTimeout(600);
-    const fns = await f.ev(() => window.__W171.fn);
-    ok('test: quo-send test_confirm with a roster row', fns.length === 1 && fns[0].name === 'quo-send' && fns[0].body.action === 'test_confirm' && Number.isInteger(fns[0].body.roster_id), fns);
+    /* Send me a test: as any role, as anyone on the list (wave191k; it used to send the first person, a cook) */
+    await f.page.click('[data-w171test]'); await f.page.waitForTimeout(400);
+    let tm = await f.ev(() => ({ roles: Array.from(document.querySelectorAll('#modalBox .w171tm .roles label')).map(l => l.innerText.replace(/\n/g, ' ') + (l.classList.contains('on') ? ' [on]' : '')), opts: Array.from(document.querySelectorAll('#w171tp2 option')).map(o => o.textContent), sms: (document.querySelector('#modalBox .w171tm .sms') || {}).textContent || '', sent: (window.__W171.fn || []).length, page: (document.querySelector('#modalBox .w171tm a[href*="?test=1"]') || {}).href || '' }));
+    ok('test: a picker of every role on this serving (servers by default, not a cook), nothing sent yet', tm.roles.length === 4 && /^Team leader 1 on the list$/.test(tm.roles[0]) && /^Cook 2 on the list$/.test(tm.roles[1]) && /^Driver 1/.test(tm.roles[2]) && /^Server 2 on the list \[on\]$/.test(tm.roles[3]) && tm.opts.length === 2 && /Eriana Example · waiting/.test(tm.opts[0]) && /Noa Nophone/.test(tm.opts[1]) && /^Hi Eriana, it’s Welfare Avenue! You’re on the list as a server for our serving/.test(tm.sms) && tm.sent === 0 && /\/c\/tok9004abcdefghijk\?test=1$/.test(tm.page), tm);
+    if (SHOTS) await f.page.screenshot({ path: SHOTS + '/03b-test.png' });
+    await f.page.click('#modalBox .w171tm .roles label:nth-child(1)'); await f.page.waitForTimeout(250);
+    tm = await f.ev(() => ({ opts: Array.from(document.querySelectorAll('#w171tp2 option')).map(o => o.textContent), sms: (document.querySelector('#modalBox .w171tm .sms') || {}).textContent || '', page: (document.querySelector('#modalBox .w171tm a[href*="?test=1"]') || {}).href || '' }));
+    ok('test: Team leader: their person, their text (first name and role) and their page', tm.opts.length === 1 && /Sam Handmade · confirmed/.test(tm.opts[0]) && /^Hi Sam, .* as a team leader for our serving/.test(tm.sms) && /\/c\/tok9006abcdefghijk\?test=1$/.test(tm.page), tm);
+    await f.page.click('#modalBox .w171tm .roles label:nth-child(4)'); await f.page.waitForTimeout(250);
+    await f.page.selectOption('#w171tp2', '9005'); await f.page.waitForTimeout(250);
+    await f.page.click('[data-w171tgo]'); await f.page.waitForTimeout(500);
+    let fns = await f.ev(() => window.__W171.fn);
+    tm = await f.ev(() => ({ sent: (document.querySelector('#modalBox .w171tm .sent') || {}).textContent || '', sms: (document.querySelector('#modalBox .w171tm .sms') || {}).textContent || '', roles: Array.from(document.querySelectorAll('#modalBox .w171tm .roles label')).map(l => l.innerText.replace(/\n/g, ' ')), go: (document.querySelector('[data-w171tgo]') || {}).textContent }));
+    ok('test: quo-send test_confirm for the person picked (Noa, a server); the exact text and ✓ sent show, the server role ticked', fns.length === 1 && fns[0].name === 'quo-send' && fns[0].body.action === 'test_confirm' && fns[0].body.roster_id === 9005 && /Sent to the test phone/.test(tm.sent) && tm.sms === 'Hi Nasim...' && /Server 2 on the list ✓ sent/.test(tm.roles[3]) && tm.go === 'Send again', { fns, tm });
+    await f.page.click('#modalBox .w171tm .roles label:nth-child(3)'); await f.page.waitForTimeout(250);
+    await f.page.click('[data-w171tgo]'); await f.page.waitForTimeout(500);
+    fns = await f.ev(() => window.__W171.fn);
+    ok('test: then a driver, straight away', fns.length === 2 && fns[1].body.roster_id === 9003, fns);
+    await f.page.click('#modalBox [data-w171close]'); await f.page.waitForTimeout(300);
 
     /* Text settings */
     await f.page.click('[data-w171set]'); await f.page.waitForTimeout(900);

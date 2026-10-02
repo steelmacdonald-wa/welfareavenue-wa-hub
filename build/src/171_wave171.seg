@@ -29,6 +29,8 @@
    drivers' parts, previews, the survey answers); Text settings gains the itineraries and each role's survey questions.
    wave175 (30/09/26, g_w175.js): volunteer accounts (hub.welfareavenue.com/me): tags for self sign-ups and accounts; Text
    settings gains the sign-up settings and a check of an hours letter's reference.
+   wave191k (01/10/26, c_event.js): Send me a test picks the role and the person (it always sent the first on the list, a
+   cook), shows their text and their page, and keeps the exact text that went out.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
@@ -115,6 +117,16 @@
     + '.w171m .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}'
     + '.w171m .warn{background:rgba(179,64,47,.08);color:#7e2b1f;border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0;}'
     + '.w171m .info{background:rgba(220,165,39,.18);border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0;}'
+    /* wave191k: Send me a test, as any role */
+    + '.w171tm .roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:6px;margin:4px 0 2px;}'
+    + '.w171tm .roles label{position:relative;display:flex;flex-direction:column;gap:1px;border:1.5px solid rgba(16,63,57,.16);border-radius:12px;padding:8px 10px;cursor:pointer;background:' + CREAM + ';}'
+    + '.w171tm .roles label.on{border-color:' + GREEN + ';background:rgba(16,63,57,.05);box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
+    + '.w171tm .roles label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
+    + '.w171tm .roles input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}'
+    + '.w171tm .roles b{font-size:13.5px;color:' + GREEN + ';}.w171tm .roles small{color:' + MUTED + ';font-size:11.5px;}'
+    + '.w171tm .roles i{position:absolute;top:7px;right:9px;font-style:normal;font-size:10.5px;font-weight:700;color:#1c6b5d;}'
+    + '.w171tm .sms{background:#E9E9EB;color:#111;border-radius:18px 18px 18px 4px;padding:10px 13px;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;white-space:pre-wrap;max-width:380px;margin:12px 0 4px;word-break:break-word;}'
+    + '.w171tm .sent{font-size:12.5px;color:#1c6b5d;font-weight:700;margin:4px 0 0;}.w171tm .sent.no{color:' + FLAG + ';}'
     + '.w171fmt.cal{display:inline-block;margin:4px 4px 0 0;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:rgba(111,100,171,.14);color:' + PURPLE + ';}'
     + '#w171next{border-radius:18px;background:' + GREEN + ';color:' + CREAM + ';padding:16px 18px;margin:0 0 16px;position:relative;overflow:hidden;font-family:' + BODY + ';}'
     + '#w171next:after{content:"";position:absolute;right:-60px;top:-80px;width:220px;height:220px;border-radius:50%;background:radial-gradient(closest-side,rgba(220,165,39,.35),rgba(220,165,39,0));pointer-events:none;}'
@@ -334,20 +346,64 @@
     } catch (e) { T('Could not send: ' + String((e && e.message) || e).slice(0, 90)); btn.disabled = false; btn.textContent = 'Send the texts'; }
     S.busy = false;
   }
-  async function sendTest() {
-    var ev = curEv(), D = curD(); if (!ev || !D || S.busy) return;
-    var r = (D.roster || []).filter(function (x) { return !isOff(x); })[0] || (D.roster || [])[0]; if (!r) return;
-    S.busy = true; T('Sending the test to the test phone\u2026');
+  /* ---------- Send me a test: as any role, as anyone on the list ----------
+     wave191k (Steel, 01/10/26: "test mode only lets me test with volunteer cooks"): the button used to send the first
+     person on the list, and the first person on every serving is a cook. Now it opens a picker: the roles on this serving
+     (with how many), the person, their text, and their page (?test=1, saves nothing). After a send, the exact text that went
+     out shows in place and the role is ticked, so the next role can be tried straight away. Admins (quo-send test_confirm). */
+  function testRoles() {
+    var D = curD(); var by = {};
+    ((D && D.roster) || []).filter(function (x) { return !isOff(x); }).forEach(function (r) { var k = lower(r.role) || 'volunteer'; (by[k] = by[k] || []).push(r); });
+    var order = ROLES.filter(function (k) { return by[k]; }).concat(Object.keys(by).filter(function (k) { return ROLES.indexOf(k) < 0; }));
+    return { by: by, order: order };
+  }
+  function placeWord(r) { return isConf(r) ? 'confirmed' : isDecl(r) ? 'can\u2019t make it' : 'waiting'; }
+  function testModal() {
+    var ev = curEv(), D = curD(); if (!ev || !D) return;
+    var t = testRoles(); if (!t.order.length) { T('No one is on this serving yet'); return; }
+    S.tested = S.tested || {};
+    /* the last role tried, else servers (most of the list), else the first role on it */
+    var role = S.testRole && t.by[S.testRole] ? S.testRole : t.by.server ? 'server' : t.order[0]; S.testRole = role;
+    var people = t.by[role];
+    var r = people.filter(function (x) { return x.id === S.testRid; })[0] || people[0]; S.testRid = r.id;
+    var phone = String(S.cfg.sms_test_phones || '').split(',')[0].replace(/\D/g, '').slice(-10);
+    var sent = S.testSent && S.testSent.rid === r.id ? S.testSent : null;
+    var art = /^[aeiou]/.test(one(role).toLowerCase()) ? 'an ' : 'a ';
+    var text = sent && sent.text ? sent.text : 'Hi ' + (first(r.person_name) || 'there') + ', it\u2019s Welfare Avenue! You\u2019re on the list as ' + art + one(role).toLowerCase() + ' for our serving on ' + fmtDay(ev.event_date, true)
+      + '. Please confirm here: hub.welfareavenue.com/c/' + String(r.confirm_token || '').slice(0, 6) + '\u2026?test=1 (or reply YES or NO). Reply STOP to stop texts.';
+    var html = '<div class="w171m w171tm"><h3>Send me a test</h3><p class="sub">' + E(fmtDay(ev.event_date, true)) + ' \u00b7 pick whose confirmation text to try. It goes only to the test phone'
+      + (phone.length === 10 ? ' (' + phone.slice(0, 3) + ') ' + phone.slice(3, 6) + '-' + phone.slice(6) : '') + '; its link opens their page as they would see it and saves nothing.</p>'
+      + (phone ? '' : '<div class="warn">No test phone is set. Add one in Text settings first.</div>')
+      + '<label class="f">As</label><div class="roles" role="radiogroup" aria-label="The role to test">' + t.order.map(function (k) {
+        var n = t.by[k].length;
+        return '<label class="' + (k === role ? 'on' : '') + '"><input type="radio" name="w171trole" value="' + E(k) + '"' + (k === role ? ' checked' : '') + '><b>' + E(one(k)) + '</b><small>' + n + ' on the list</small>' + (S.tested[k] ? '<i title="Sent to the test phone this session">\u2713 sent</i>' : '') + '</label>';
+      }).join('') + '</div>'
+      + '<label class="f" for="w171tp2">Person</label><select id="w171tp2">' + people.map(function (x) { return '<option value="' + x.id + '"' + (x.id === r.id ? ' selected' : '') + '>' + E((x.person_name || 'Unnamed') + ' \u00b7 ' + placeWord(x)) + '</option>'; }).join('') + '</select>'
+      + '<div class="sms">' + E(text) + '</div>'
+      + (sent ? '<p class="sent' + (sent.ok ? '' : ' no') + '">' + (sent.ok ? '\u2713 Sent to the test phone ' + E(fmtWhen(sent.at)) + '. Pick another role to try the next one.' : 'The test did not go through: ' + E(String(sent.err || '').slice(0, 120))) + '</p>'
+        : '<p class="w171note" style="margin:2px 0 0">' + (lower(S.cfg.sms_mode || S.mode) === 'live' ? 'Texts are on, but a test still goes only to the test phone.' : 'This works in any mode: a test only ever goes to the test phone.') + '</p>')
+      + '<div class="foot"><button class="w171btn ghost" data-w171close="1">Done</button>'
+      + (r.confirm_token ? '<a class="w171btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(r.confirm_token) + '?test=1">Open their page</a>' : '')
+      + '<button class="w171btn" data-w171tgo="1"' + (phone && !S.busy ? '' : ' disabled') + '>' + (S.busy ? 'Sending\u2026' : sent && sent.ok ? 'Send again' : 'Send to the test phone') + '</button></div></div>';
+    var mb = document.getElementById('modalBox'); if (mb && mb.querySelector('.w171tm')) mb.innerHTML = html; else openModal(html);
+  }
+  async function testGo(btn) {
+    var ev = curEv(); var rid = S.testRid; if (!ev || !rid || S.busy) return;
+    S.busy = true; if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+    var role = S.testRole;
     try {
-      var res = await db.functions.invoke('quo-send', { body: { action: 'test_confirm', roster_id: r.id } });
+      var res = await db.functions.invoke('quo-send', { body: { action: 'test_confirm', roster_id: rid } });
       if (res.error) throw res.error;
       var d = res.data || {};
       if (d.error) throw new Error(d.error);
       var okN = (d.results || []).filter(function (x) { return x.ok; }).length;
-      T(okN ? 'Test sent (as ' + first(r.person_name) + '\u2019s text). Its link saves nothing.' : 'The test did not go through: ' + String(((d.results || [])[0] || {}).error || '').slice(0, 80));
+      S.testSent = { rid: rid, ok: okN > 0, text: d.text || '', at: new Date().toISOString(), err: okN ? '' : String(((d.results || [])[0] || {}).error || '') };
+      if (okN) { S.tested = S.tested || {}; S.tested[role] = true; }
+      T(okN ? 'Test sent to the test phone (as ' + one(role).toLowerCase() + ')' : 'The test did not go through');
       loadMsgs(ev.id, true);
-    } catch (e) { T('Could not send the test: ' + String((e && e.message) || e).slice(0, 90)); }
+    } catch (e) { S.testSent = { rid: rid, ok: false, err: String((e && e.message) || e) }; T('Could not send the test: ' + S.testSent.err.slice(0, 90)); }
     S.busy = false;
+    if (document.querySelector('#modalBox .w171tm')) testModal();
   }
 
   /* ---------- the format ---------- */
@@ -1363,7 +1419,8 @@
     var b;
     if ((b = t.closest('[data-w171send]'))) { e.preventDefault(); if (!b.disabled) sendModal(); return; }
     if ((b = t.closest('[data-w171go]'))) { e.preventDefault(); sendGo(b); return; }
-    if ((b = t.closest('[data-w171test]'))) { e.preventDefault(); sendTest(); return; }
+    if ((b = t.closest('[data-w171test]'))) { e.preventDefault(); S.testSent = null; testModal(); return; }
+    if ((b = t.closest('[data-w171tgo]'))) { e.preventDefault(); if (!b.disabled) testGo(b); return; }
     if ((b = t.closest('[data-w171set]'))) { e.preventDefault(); settingsModal(); return; }
     if ((b = t.closest('[data-w171close]'))) { e.preventDefault(); closeModal(); return; }
     if ((b = t.closest('[data-w171fmt]'))) { e.preventDefault(); e.stopPropagation(); loadRaw(curEv() || {}).then(fmtModal); return; }
@@ -1391,6 +1448,8 @@
     if (t.name === 'w171f') { var k = document.getElementById('w171kit'); if (k) k.style.display = t.value === 'community_kitchen' ? '' : 'none'; document.querySelectorAll('input[name="w171f"]').forEach(function (x) { x.closest('label').classList.toggle('on', x.checked); }); return; }
     if (t.id === 'w171role') { S.set.role = t.value; can().then(paintSettings); return; }
     if (t.id === 'w171tp') { testPhoneSave(t); return; }
+    if (t.name === 'w171trole') { S.testRole = t.value; S.testRid = null; testModal(); return; }
+    if (t.id === 'w171tp2') { S.testRid = Number(t.value); testModal(); return; }
     if (t.hasAttribute && t.hasAttribute('data-w174q')) { qToggle(t); return; }
   });
   try {

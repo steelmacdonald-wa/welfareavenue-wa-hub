@@ -33,7 +33,8 @@
     var b;
     if ((b = t.closest('[data-w171send]'))) { e.preventDefault(); if (!b.disabled) sendModal(); return; }
     if ((b = t.closest('[data-w171go]'))) { e.preventDefault(); sendGo(b); return; }
-    if ((b = t.closest('[data-w171test]'))) { e.preventDefault(); sendTest(); return; }
+    if ((b = t.closest('[data-w171test]'))) { e.preventDefault(); S.testSent = null; testModal(); return; }
+    if ((b = t.closest('[data-w171tgo]'))) { e.preventDefault(); if (!b.disabled) testGo(b); return; }
     if ((b = t.closest('[data-w171set]'))) { e.preventDefault(); settingsModal(); return; }
     if ((b = t.closest('[data-w171close]'))) { e.preventDefault(); closeModal(); return; }
     if ((b = t.closest('[data-w171fmt]'))) { e.preventDefault(); e.stopPropagation(); loadRaw(curEv() || {}).then(fmtModal); return; }
@@ -61,6 +62,8 @@
     if (t.name === 'w171f') { var k = document.getElementById('w171kit'); if (k) k.style.display = t.value === 'community_kitchen' ? '' : 'none'; document.querySelectorAll('input[name="w171f"]').forEach(function (x) { x.closest('label').classList.toggle('on', x.checked); }); return; }
     if (t.id === 'w171role') { S.set.role = t.value; can().then(paintSettings); return; }
     if (t.id === 'w171tp') { testPhoneSave(t); return; }
+    if (t.name === 'w171trole') { S.testRole = t.value; S.testRid = null; testModal(); return; }
+    if (t.id === 'w171tp2') { S.testRid = Number(t.value); testModal(); return; }
     if (t.hasAttribute && t.hasAttribute('data-w174q')) { qToggle(t); return; }
   });
   try {

@@ -29,6 +29,8 @@
    drivers' parts, previews, the survey answers); Text settings gains the itineraries and each role's survey questions.
    wave175 (30/09/26, g_w175.js): volunteer accounts (hub.welfareavenue.com/me): tags for self sign-ups and accounts; Text
    settings gains the sign-up settings and a check of an hours letter's reference.
+   wave191k (01/10/26, c_event.js): Send me a test picks the role and the person (it always sent the first on the list, a
+   cook), shows their text and their page, and keeps the exact text that went out.
    ===================================================================== */
 (function () {
   if (window.__wa171) return; window.__wa171 = true;
@@ -115,6 +117,16 @@
     + '.w171m .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap;}'
     + '.w171m .warn{background:rgba(179,64,47,.08);color:#7e2b1f;border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0;}'
     + '.w171m .info{background:rgba(220,165,39,.18);border-radius:10px;padding:8px 10px;font-size:13px;margin:8px 0;}'
+    /* wave191k: Send me a test, as any role */
+    + '.w171tm .roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(138px,1fr));gap:6px;margin:4px 0 2px;}'
+    + '.w171tm .roles label{position:relative;display:flex;flex-direction:column;gap:1px;border:1.5px solid rgba(16,63,57,.16);border-radius:12px;padding:8px 10px;cursor:pointer;background:' + CREAM + ';}'
+    + '.w171tm .roles label.on{border-color:' + GREEN + ';background:rgba(16,63,57,.05);box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
+    + '.w171tm .roles label:focus-within{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
+    + '.w171tm .roles input{position:absolute;opacity:0;width:1px;height:1px;margin:0;}'
+    + '.w171tm .roles b{font-size:13.5px;color:' + GREEN + ';}.w171tm .roles small{color:' + MUTED + ';font-size:11.5px;}'
+    + '.w171tm .roles i{position:absolute;top:7px;right:9px;font-style:normal;font-size:10.5px;font-weight:700;color:#1c6b5d;}'
+    + '.w171tm .sms{background:#E9E9EB;color:#111;border-radius:18px 18px 18px 4px;padding:10px 13px;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;white-space:pre-wrap;max-width:380px;margin:12px 0 4px;word-break:break-word;}'
+    + '.w171tm .sent{font-size:12.5px;color:#1c6b5d;font-weight:700;margin:4px 0 0;}.w171tm .sent.no{color:' + FLAG + ';}'
     + '.w171fmt.cal{display:inline-block;margin:4px 4px 0 0;font-size:10.5px;font-weight:700;border-radius:999px;padding:1px 8px;background:rgba(111,100,171,.14);color:' + PURPLE + ';}'
     + '#w171next{border-radius:18px;background:' + GREEN + ';color:' + CREAM + ';padding:16px 18px;margin:0 0 16px;position:relative;overflow:hidden;font-family:' + BODY + ';}'
     + '#w171next:after{content:"";position:absolute;right:-60px;top:-80px;width:220px;height:220px;border-radius:50%;background:radial-gradient(closest-side,rgba(220,165,39,.35),rgba(220,165,39,0));pointer-events:none;}'

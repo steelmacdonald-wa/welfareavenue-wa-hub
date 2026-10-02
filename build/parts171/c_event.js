@@ -145,20 +145,64 @@
     } catch (e) { T('Could not send: ' + String((e && e.message) || e).slice(0, 90)); btn.disabled = false; btn.textContent = 'Send the texts'; }
     S.busy = false;
   }
-  async function sendTest() {
-    var ev = curEv(), D = curD(); if (!ev || !D || S.busy) return;
-    var r = (D.roster || []).filter(function (x) { return !isOff(x); })[0] || (D.roster || [])[0]; if (!r) return;
-    S.busy = true; T('Sending the test to the test phone…');
+  /* ---------- Send me a test: as any role, as anyone on the list ----------
+     wave191k (Steel, 01/10/26: "test mode only lets me test with volunteer cooks"): the button used to send the first
+     person on the list, and the first person on every serving is a cook. Now it opens a picker: the roles on this serving
+     (with how many), the person, their text, and their page (?test=1, saves nothing). After a send, the exact text that went
+     out shows in place and the role is ticked, so the next role can be tried straight away. Admins (quo-send test_confirm). */
+  function testRoles() {
+    var D = curD(); var by = {};
+    ((D && D.roster) || []).filter(function (x) { return !isOff(x); }).forEach(function (r) { var k = lower(r.role) || 'volunteer'; (by[k] = by[k] || []).push(r); });
+    var order = ROLES.filter(function (k) { return by[k]; }).concat(Object.keys(by).filter(function (k) { return ROLES.indexOf(k) < 0; }));
+    return { by: by, order: order };
+  }
+  function placeWord(r) { return isConf(r) ? 'confirmed' : isDecl(r) ? 'can’t make it' : 'waiting'; }
+  function testModal() {
+    var ev = curEv(), D = curD(); if (!ev || !D) return;
+    var t = testRoles(); if (!t.order.length) { T('No one is on this serving yet'); return; }
+    S.tested = S.tested || {};
+    /* the last role tried, else servers (most of the list), else the first role on it */
+    var role = S.testRole && t.by[S.testRole] ? S.testRole : t.by.server ? 'server' : t.order[0]; S.testRole = role;
+    var people = t.by[role];
+    var r = people.filter(function (x) { return x.id === S.testRid; })[0] || people[0]; S.testRid = r.id;
+    var phone = String(S.cfg.sms_test_phones || '').split(',')[0].replace(/\D/g, '').slice(-10);
+    var sent = S.testSent && S.testSent.rid === r.id ? S.testSent : null;
+    var art = /^[aeiou]/.test(one(role).toLowerCase()) ? 'an ' : 'a ';
+    var text = sent && sent.text ? sent.text : 'Hi ' + (first(r.person_name) || 'there') + ', it’s Welfare Avenue! You’re on the list as ' + art + one(role).toLowerCase() + ' for our serving on ' + fmtDay(ev.event_date, true)
+      + '. Please confirm here: hub.welfareavenue.com/c/' + String(r.confirm_token || '').slice(0, 6) + '…?test=1 (or reply YES or NO). Reply STOP to stop texts.';
+    var html = '<div class="w171m w171tm"><h3>Send me a test</h3><p class="sub">' + E(fmtDay(ev.event_date, true)) + ' · pick whose confirmation text to try. It goes only to the test phone'
+      + (phone.length === 10 ? ' (' + phone.slice(0, 3) + ') ' + phone.slice(3, 6) + '-' + phone.slice(6) : '') + '; its link opens their page as they would see it and saves nothing.</p>'
+      + (phone ? '' : '<div class="warn">No test phone is set. Add one in Text settings first.</div>')
+      + '<label class="f">As</label><div class="roles" role="radiogroup" aria-label="The role to test">' + t.order.map(function (k) {
+        var n = t.by[k].length;
+        return '<label class="' + (k === role ? 'on' : '') + '"><input type="radio" name="w171trole" value="' + E(k) + '"' + (k === role ? ' checked' : '') + '><b>' + E(one(k)) + '</b><small>' + n + ' on the list</small>' + (S.tested[k] ? '<i title="Sent to the test phone this session">✓ sent</i>' : '') + '</label>';
+      }).join('') + '</div>'
+      + '<label class="f" for="w171tp2">Person</label><select id="w171tp2">' + people.map(function (x) { return '<option value="' + x.id + '"' + (x.id === r.id ? ' selected' : '') + '>' + E((x.person_name || 'Unnamed') + ' · ' + placeWord(x)) + '</option>'; }).join('') + '</select>'
+      + '<div class="sms">' + E(text) + '</div>'
+      + (sent ? '<p class="sent' + (sent.ok ? '' : ' no') + '">' + (sent.ok ? '✓ Sent to the test phone ' + E(fmtWhen(sent.at)) + '. Pick another role to try the next one.' : 'The test did not go through: ' + E(String(sent.err || '').slice(0, 120))) + '</p>'
+        : '<p class="w171note" style="margin:2px 0 0">' + (lower(S.cfg.sms_mode || S.mode) === 'live' ? 'Texts are on, but a test still goes only to the test phone.' : 'This works in any mode: a test only ever goes to the test phone.') + '</p>')
+      + '<div class="foot"><button class="w171btn ghost" data-w171close="1">Done</button>'
+      + (r.confirm_token ? '<a class="w171btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(r.confirm_token) + '?test=1">Open their page</a>' : '')
+      + '<button class="w171btn" data-w171tgo="1"' + (phone && !S.busy ? '' : ' disabled') + '>' + (S.busy ? 'Sending…' : sent && sent.ok ? 'Send again' : 'Send to the test phone') + '</button></div></div>';
+    var mb = document.getElementById('modalBox'); if (mb && mb.querySelector('.w171tm')) mb.innerHTML = html; else openModal(html);
+  }
+  async function testGo(btn) {
+    var ev = curEv(); var rid = S.testRid; if (!ev || !rid || S.busy) return;
+    S.busy = true; if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+    var role = S.testRole;
     try {
-      var res = await db.functions.invoke('quo-send', { body: { action: 'test_confirm', roster_id: r.id } });
+      var res = await db.functions.invoke('quo-send', { body: { action: 'test_confirm', roster_id: rid } });
       if (res.error) throw res.error;
       var d = res.data || {};
       if (d.error) throw new Error(d.error);
       var okN = (d.results || []).filter(function (x) { return x.ok; }).length;
-      T(okN ? 'Test sent (as ' + first(r.person_name) + '’s text). Its link saves nothing.' : 'The test did not go through: ' + String(((d.results || [])[0] || {}).error || '').slice(0, 80));
+      S.testSent = { rid: rid, ok: okN > 0, text: d.text || '', at: new Date().toISOString(), err: okN ? '' : String(((d.results || [])[0] || {}).error || '') };
+      if (okN) { S.tested = S.tested || {}; S.tested[role] = true; }
+      T(okN ? 'Test sent to the test phone (as ' + one(role).toLowerCase() + ')' : 'The test did not go through');
       loadMsgs(ev.id, true);
-    } catch (e) { T('Could not send the test: ' + String((e && e.message) || e).slice(0, 90)); }
+    } catch (e) { S.testSent = { rid: rid, ok: false, err: String((e && e.message) || e) }; T('Could not send the test: ' + S.testSent.err.slice(0, 90)); }
     S.busy = false;
+    if (document.querySelector('#modalBox .w171tm')) testModal();
   }
 
   /* ---------- the format ---------- */
