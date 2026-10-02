@@ -59,7 +59,9 @@
       + '<div><div class="k">' + k + '</div><h2>' + E(m.title || lbl) + '</h2><p>' + w.done + ' of ' + w.total + ' steps done</p><div class="pb">' + BAR(pct) + '</div></div></header>'
       + ((m.learn && m.learn.length) || m.why ? '<div class="w167learn">' + (m.learn && m.learn.length ? '<div class="ob"><h3>By the end of this week you will</h3><ul>' + m.learn.map(li).join('') + '</ul></div>' : '')
         + (m.why ? '<div class="wy"><img src="' + BR.heart + '" alt=""><h3>Why it matters</h3><p>' + E(m.why) + '</p></div>' : '') + '</div>' : '')
-      + featHtml(w);
+      + featHtml(w)
+      /* wave191p: Week 3, choose your servings (four a year; filled by wave191's onboarding module) */
+      + (w.name === 'WEEK 3' ? '<div class="w191onbw"><h3><img src="' + BR.star + '" alt="">Choose your servings</h3><p>Every member volunteers four times a year. Pick your first ones: they are confirmed right away, and the operations lead hears from you.</p><div class="w191onb" data-w191onbat="journey"></div></div>' : '');
   }
   function pplHtml(J) {
     var pp = peopleFor(J.o);

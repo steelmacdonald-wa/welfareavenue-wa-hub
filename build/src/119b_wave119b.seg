@@ -223,7 +223,8 @@
     var out = []; var taken = {};
     ROLE_ORDER.forEach(function (role) {
       var have = (D.roster || []).filter(function (r) { return (r.role || '') === role && lower(r.status).indexOf('unavailable') < 0 && lower(r.status).indexOf('cancel') < 0; }).length;
-      var need = (TARGET[role] || 0) - have; if (need <= 0) return;
+      var TT = (typeof window.WA191TARGETS === 'function' && window.WA191TARGETS(D.id, TARGET)) || TARGET;   /* wave191o: a partner's people count toward the roles they cover */
+      var need = (TT[role] || 0) - have; if (need <= 0) return;
       var cands = people().filter(function (p) { return !on[p.id]; }).map(function (p) { var sc = score(p, role); return { p: p, s: sc.s, why: sc.why, jev: null, pick: false }; });
       cands.sort(function (a, b) { return b.s - a.s; });
       var fit = cands.filter(function (c) { return c.s >= 0.35; }).slice(0, 8);

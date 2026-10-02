@@ -169,6 +169,8 @@
       },
       functions: {
         invoke: function (name, opts) {
+          /* wave191m: a test can answer (and record) edge function calls with window.__WA_INVOKE(name, opts) */
+          if (typeof window.__WA_INVOKE === "function") { try { return Promise.resolve(window.__WA_INVOKE(name, opts)); } catch (e) { return Promise.resolve({ data: null, error: { message: String(e) } }); } }
           return Promise.resolve({ data: null, error: null });
         }
       },

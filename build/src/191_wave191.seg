@@ -152,6 +152,51 @@
     '#w119.w191 .w31sum .row .b:has(+ .b),#w119.w191 .w31sum .row > span.b{font-size:12px;}' +
     /* roster cards, compact */
     '#w119.w191 .pc .flag{display:inline-block;font-size:10.5px;}#w119.w191 .pc .mv{opacity:.55;}#w119.w191 .pc:hover .mv{opacity:1;}' +
+    /* wave191l (Steel, 01/10/26: "it tends to be a long list of servers, could you make that section shorter, and for long lists
+       for one position just allow people to scroll"): each role column stops at about four cards and scrolls; its title
+       stays on top, a soft "N more" shows at the bottom, and a column with Add someone open grows so the list stays usable */
+    '#w119.w191 .board .rc{position:relative;max-height:min(500px,70vh);overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(16,63,57,.22) transparent;}' +
+    '#w119.w191 .board .rc::-webkit-scrollbar{width:6px;}#w119.w191 .board .rc::-webkit-scrollbar-thumb{background:rgba(16,63,57,.22);border-radius:6px;}' +
+    '#w119.w191 .board .rc > .h{position:sticky;top:-10px;z-index:3;background:#F4F2EA;margin:-10px -10px 8px;padding:10px 10px 8px;border-radius:14px 14px 0 0;}' +
+    '#w119.w191 .board .rc.over > .h{background:#F9ECD1;}' +
+    '#w119.w191 .board .rc:has(> .bench){max-height:none;overflow:visible;}' +
+    '#w119.w191 .board .rc > .w191more{position:sticky;bottom:-10px;z-index:3;margin:-4px -10px -10px;padding:20px 10px 9px;text-align:center;font-size:11.5px;font-weight:700;color:' + GREEN + ';background:linear-gradient(to bottom,rgba(244,242,234,0),#F4F2EA 62%);pointer-events:none;border-radius:0 0 14px 14px;}' +
+    '#w119.w191 .board .rc > .w191more.end{display:none;}' +
+    /* wave191m: the run (Prepare): each driver's stops with their times, after the serving, what needs a look */
+    '.w191run .w191rsub{margin:0;font-size:12.5px;color:' + MUTED + ';line-height:1.5;}.w191run .w191line{margin-top:8px;}.w191run .w191rerr{margin:8px 0 0;font-size:12.5px;color:' + FLAG + ';}' +
+    '.w191runw{margin:10px 0 0;padding:9px 12px;border-radius:12px;background:#FFF5F2;border:1px solid rgba(179,64,47,.25);font-size:12.5px;line-height:1.5;color:' + INK + ';}.w191runw b{display:block;color:' + FLAG + ';font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-bottom:2px;}' +
+    '.w191runs{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;margin-top:12px;}' +
+    '.w191runs .rn{border:1px solid rgba(16,63,57,.12);border-radius:14px;background:' + CREAM + ';padding:12px 13px;display:flex;flex-direction:column;min-width:0;}.w191runs .rn.after{background:rgba(111,100,171,.06);border-color:rgba(111,100,171,.22);}' +
+    '.w191runs .rh{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding-bottom:8px;border-bottom:1px solid rgba(16,63,57,.08);}' +
+    '.w191runs .rw{min-width:0;}.w191runs .rw b{display:block;font-size:14px;color:' + INK + ';}.w191runs .rw span{display:block;font-size:12px;color:' + MUTED + ';margin-top:2px;}' +
+    '.w191runs .rt{text-align:right;flex:none;}.w191runs .rt b{display:block;font-family:' + HEAD + ';font-size:24px;line-height:1;color:' + GREEN + ';}.w191runs .rt span{display:block;font-size:11px;color:' + MUTED + ';margin-top:3px;max-width:150px;}' +
+    '.w191runs ol.rs{list-style:none;margin:8px 0 0;padding:0;flex:1;}.w191runs ol.rs li{display:grid;grid-template-columns:62px minmax(0,1fr);gap:8px;padding:5px 0;font-size:12.5px;border-top:1px dashed rgba(16,63,57,.10);}.w191runs ol.rs li:first-child{border-top:none;}' +
+    '.w191runs ol.rs .t{font-weight:700;color:' + GREEN + ';white-space:nowrap;}.w191runs ol.rs b{color:' + INK + ';font-weight:600;}.w191runs ol.rs i{font-style:normal;color:' + MUTED + ';}.w191runs ol.rs small{display:block;color:' + MUTED + ';font-size:11.5px;margin-top:1px;word-break:break-word;}.w191runs ol.rs small em{font-style:normal;color:' + FLAG + ';}' +
+    '.w191runs .ra{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px;}.w191runs .ra .w191btn{padding:7px 11px;font-size:11.5px;}.w191runs .ra .rl{font-size:11.5px;color:' + MUTED + ';margin-right:auto;}' +
+    '.w191restock{margin:10px 0 0;padding:10px 12px;border-radius:12px;background:#FFF8E8;border:1px solid rgba(220,165,39,.4);font-size:13px;line-height:1.5;}.w191restock > b{display:block;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#7A5A0E;margin-bottom:4px;}.w191restock div{padding:3px 0;}.w191restock i{font-style:normal;color:' + MUTED + ';font-size:12px;}' +
+    '.w191restock .tg{display:inline-block;min-width:84px;margin-right:8px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;}.w191restock .tg.mi{color:' + FLAG + ';}.w191restock .tg.lo{color:#8A6410;}' +
+    '#w191invlast{margin:0 0 12px;}#w191invlast span{display:block;}' +
+    /* wave191o: a collaboration */
+    '.w191pt{border:1px solid rgba(111,100,171,.25);background:rgba(111,100,171,.05);border-radius:12px;padding:10px 12px;}.w191pt .nm{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px;}.w191pt .nm b{font-size:15px;color:' + PURPLE + ';}.w191pt .nm span{font-size:12px;color:' + MUTED + ';}' +
+    '.w191pt dl{display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 10px;margin:0;font-size:13px;}.w191pt dt{color:' + MUTED + ';}.w191pt dd{margin:0;color:' + INK + ';}.w191pt dd i{font-style:normal;color:' + MUTED + ';}.w191pt .ct{font-size:12.5px;color:' + MUTED + ';}' +
+    '@media (max-width:560px){.w191pt dl{grid-template-columns:1fr;}.w191pt dd{margin-bottom:4px;}}' +
+    '#w191head .meta .w191with{background:rgba(111,100,171,.35);border-radius:999px;padding:2px 10px;font-size:12.5px;}' +
+    '.w191pm .two3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}@media (max-width:620px){.w191pm .two3{grid-template-columns:1fr;}}' +
+    '.w191pm .w191pnum{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;}.w191pm .w191pnum label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:' + MUTED + ';}.w191pm .w191pnum input{width:100%;box-sizing:border-box;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:10px;padding:7px 9px;background:' + CREAM + ';}' +
+    '.w191pm .modes b{display:block;font-size:13.5px;}.w191pm .modes input{margin-top:3px;accent-color:' + GREEN + ';}' +
+    /* wave191p: choose your servings (the onboarding) */
+    '.w191onbw{margin:16px 0 0;padding:16px 18px;border-radius:18px;background:' + CREAM + ';border:1px solid rgba(16,63,57,.12);}.w191onbw > h3{display:flex;align-items:center;gap:8px;margin:0 0 4px;font-family:' + HEAD + ';font-size:22px;text-transform:uppercase;color:' + GREEN + ';}.w191onbw > h3 img{width:22px;height:auto;}.w191onbw > p{margin:0 0 10px;font-size:13.5px;color:' + INK + ';}' +
+    '.w191onb{font-family:' + BODY + ';color:' + INK + ';margin:10px 0 14px;}.w191onb .w191om{font-size:13.5px;color:' + MUTED + ';margin:6px 0;}' +
+    '.w191onb .yr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;align-items:center;background:' + GREEN + ';color:' + CREAM + ';border-radius:14px;padding:12px 14px;margin:0 0 10px;}.w191onb .yr b{display:block;font-size:14px;}.w191onb .yr small{display:block;font-size:11.5px;opacity:.8;}.w191onb .yr .n{font-family:' + HEAD + ';font-size:20px;}.w191onb .yr .n b{display:inline;font-size:30px;color:' + GOLD + ';}.w191onb .yr i{grid-column:1/-1;display:block;height:6px;border-radius:6px;background:rgba(255,250,242,.2);overflow:hidden;}.w191onb .yr i s{display:block;height:100%;background:' + GOLD + ';text-decoration:none;}' +
+    '.w191onb .sl{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}' +
+    '.w191onb .sv{display:flex;gap:10px;align-items:center;border:1.5px solid rgba(16,63,57,.16);border-radius:12px;padding:10px 12px;cursor:pointer;background:#FFFDF8;}.w191onb .sv input{width:18px;height:18px;accent-color:' + GREEN + ';flex:none;margin:0;}.w191onb .sv .d{flex:1;min-width:0;}.w191onb .sv .d b{display:block;font-size:14px;}.w191onb .sv .d small{display:block;font-size:12px;color:' + MUTED + ';}' +
+    '.w191onb .sv.on{border-color:' + GREEN + ';background:rgba(16,63,57,.05);}.w191onb .sv.mine{border-color:' + TEAL + ';background:rgba(42,140,122,.08);cursor:default;}.w191onb .sv .st{display:block;margin-top:3px;font-size:11px;font-weight:800;color:' + TEAL + ';text-transform:uppercase;letter-spacing:.4px;}' +
+    '.w191onb .lbl{font-size:12px;font-weight:700;color:' + MUTED + ';margin:14px 0 6px;letter-spacing:.3px;}.w191onb .lbl span{font-weight:500;}' +
+    '.w191onb .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;}.w191onb .roles label{position:relative;display:block;border:1.5px solid rgba(16,63,57,.16);border-radius:12px;padding:9px 11px;cursor:pointer;background:#FFFDF8;}.w191onb .roles label.on{border-color:' + GREEN + ';background:rgba(16,63,57,.05);}.w191onb .roles input{position:absolute;opacity:0;pointer-events:none;}.w191onb .roles b{display:block;font-size:13.5px;}.w191onb .roles small{display:block;font-size:11.5px;color:' + MUTED + ';}' +
+    '.w191onb textarea{width:100%;box-sizing:border-box;min-height:84px;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:12px;padding:9px 11px;background:#FFFDF8;color:' + INK + ';resize:vertical;}' +
+    '.w191onb .ac{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;}.w191onb .ac span{font-size:12px;color:' + MUTED + ';flex:1;min-width:200px;}.w191onb .er{margin-top:8px;font-size:13px;color:' + FLAG + ';}' +
+    '.w191onb .okb{border-radius:12px;background:rgba(42,140,122,.1);border:1px solid rgba(42,140,122,.3);padding:11px 13px;margin:0 0 10px;font-size:13.5px;}.w191onb .okb b{display:block;color:' + TEAL + ';margin-bottom:2px;}' +
+    '.w191st{display:inline-block;background:rgba(220,165,39,.18);color:#7A5A0E;border-radius:999px;padding:1px 8px;font-size:11.5px;font-weight:700;margin-left:4px;}' +
     /* This week on the calendar */
     '#w191week{font-family:' + BODY + ';margin:0 0 18px;}#w191week .lbl{font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';font-weight:700;margin:0 0 8px;display:flex;justify-content:space-between;align-items:center;}#w191week .lbl span{color:' + MUTED + ';letter-spacing:0;text-transform:none;font-weight:500;font-size:12px;}' +
     '#w191week .srv{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;}' +
@@ -250,6 +295,16 @@
   function rosterCounts(D) {
     var T = targets(); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var by = {}; list.forEach(function (r) { by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; });
+    /* wave191o: a partner's people count toward the roles they cover (promised until they sign up by name); our team leader and
+       community lead are always ours; when they make the food the cooks are covered, and when they bring it ready, one driver */
+    var P = typeof partnerOf === 'function' && D && D.id ? partnerOf(D.id) : null;
+    if (P) {
+      var cov = P.covers || {}, signed = {};
+      list.forEach(function (r) { if ((r.detail || {}).source === 'partner form') signed[r.role] = (signed[r.role] || 0) + 1; });
+      Object.keys(cov).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; by[r] = (by[r] || 0) + Math.max(0, (cov[r] || 0) - (signed[r] || 0)); });
+      if (P.food && P.food !== 'ours') by.cook = Math.max(by.cook || 0, T.cook || 0);
+      if (P.food === 'they_bring' && (T.driver || 0) > 1) T = Object.assign({}, T, { driver: 1 });
+    }
     var short = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > (by[r] || 0); });
     var conf = list.filter(isConf).length;
     return { on: list.length, conf: conf, wait: list.length - conf, by: by, short: short, T: T };
@@ -269,13 +324,13 @@
     var meals = row && row.planned_meals ? row.planned_meals + ' meals planned' : '';
     var meta = '<span class="cd">' + (M.cur === 'done' ? 'Done' : M.cur === 'cancelled' ? 'Cancelled' : countdown(ev).replace(/^(\d+) /, '<b>$1</b> ')) + '</span>'
       + (start ? '<span>' + E(hm12(start)) + (place ? ' at ' + E(place) : '') + '</span>' : (place ? '<span>' + E(place) + '</span>' : ''))
-      + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '');
+      + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '') + (partnerOf(ev.id) ? '<span class="w191with">With ' + E(partnerOf(ev.id).partner_name) + '</span>' : '');
     var prim = primaryAction(ev, D, M, row);
     var menu = ''
       + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button>' : '')
       + (staff() ? '<button data-w191go="text171">Text to confirm</button>' : '')
       + (staff() ? '<button data-w191go="send182">Send itineraries</button><button data-w191go="hist182">Sent and scheduled</button><button data-w191go="ev182">This serving\u2019s itinerary</button>' : '')
-      + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button>' : '')
+      + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button><button data-w191go="partner">' + (partnerOf(ev.id) ? 'Edit the collaboration' : 'A partner organization serves with us') + '</button>' : '')
       + (staff() ? '<button data-w191go="brecap">Recap in Slack</button>' : '')
       + (staff() && up ? '<button data-w191go="close">Close this serving</button>' : '')
       + (staff() && ev.status === 'completed' ? '<button data-w191go="reopen">Reopen this serving</button>' : '')
@@ -335,7 +390,8 @@
       + (row && row.start_time ? '<button class="pill" data-w191go="start" title="Change the start time">Starts ' + E(hm12(row.start_time)) + '</button>' : '<button class="pill short" data-w191go="start">No start time</button>')
       + (row && row.planned_meals ? '<span class="pill">' + E(row.planned_meals) + ' meals</span>' : '<span class="pill short">Meals not set</span>')
       + (fmt === 'community_kitchen' && row && row.kitchen_place ? '<span class="pill">' + E(row.kitchen_place) + '</span>' : '')
-      + (staff() ? '<button class="w191btn ghost" data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button>' : '') + '</div>'
+      + (staff() ? '<button class="w191btn ghost" data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button>' : '')
+      + (staff() && !partnerOf(ev.id) ? '<button class="w191btn ghost" data-w191go="partner" title="A partner organization (Oberoi Financial Group, say) serves with us">With a partner?</button>' : '') + '</div>'
       + (ev.title || ev.notes ? '<div class="w191ctx">' + (ev.title ? '<b>' + E(ev.title) + '</b>' : '') + (ev.notes ? '<span>' + E(ev.notes) + '</span>' : '') + '</div>' : '');
   }
   function recruitLine(D) {
@@ -349,11 +405,29 @@
   }
   function recruitStageLine(D) {
     var c = rosterCounts(D);
-    return '<div class="w191line">' + (c.short.length ? '<span class="pill short">' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short: ' + E(c.short.map(function (r) { return roleLabel(r).toLowerCase(); }).join(', ')) + '</span>' : '<span class="pill ok">Every role has someone</span>')
+    var P0 = curEv() ? partnerOf(curEv().id) : null;
+    return '<div class="w191line">' + (P0 && coversText(P0) ? '<span class="pill" title="Counted toward each role">' + E(P0.partner_name + ' covers ' + coversText(P0)) + '</span>' : '') + (c.short.length ? '<span class="pill short">' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short: ' + E(c.short.map(function (r) { return roleLabel(r).toLowerCase(); }).join(', ')) + '</span>' : '<span class="pill ok">Every role has someone</span>')
       + (staff() ? '<button class="w191btn gold" data-w191go="find">Find volunteers</button><button class="w191btn ghost" data-w191go="conv">Conversations</button><button class="w191btn ghost" data-w191go="bplan">Plan the roster</button><button class="w191btn ghost" data-w191go="team">See the team</button>' : '') + '</div>'
       + (staff() ? '<p style="margin:6px 0 0;font-size:12px;line-height:1.45;color:' + MUTED + '">Find volunteers: who signed up and never came, regulars we miss, who came once and who loved it, with a personal text to each from the ops line (9 am to 7 pm). Their YES lands on the roster by itself.</p>' : '');
   }
   /* a partner organization on the roster (Old Brewery Mission on dishes, a corporate partner serving) is not "not matched" */
+  /* wave191l: a role column that scrolls says how many cards are below (and nothing once at the end) */
+  function scrollHints() { document.querySelectorAll('#w119.w191 .board .rc').forEach(hintOne); }
+  function hintOne(rc) {
+    var m = rc.querySelector(':scope > .w191more');
+    var over = rc.scrollHeight > rc.clientHeight + 6 && !rc.querySelector(':scope > .bench');
+    if (!over) { if (m) m.remove(); return; }
+    var bottom = rc.scrollTop + rc.clientHeight - 28, n = 0;
+    rc.querySelectorAll(':scope > .pc').forEach(function (c) { if (c.offsetTop + c.offsetHeight / 2 > bottom) n++; });
+    var txt = n ? '\u2193 ' + n + ' more' : '';
+    if (!m) { m = document.createElement('div'); m.className = 'w191more'; m.setAttribute('aria-hidden', 'true'); rc.appendChild(m); }
+    if (m.textContent !== txt) m.textContent = txt;
+    if (m.classList.contains('end') !== !n) m.classList.toggle('end', !n);
+  }
+  document.addEventListener('scroll', function (e) {
+    var t = e.target; if (!t || !t.classList || !t.classList.contains('rc') || !t.closest || !t.closest('#w119.w191')) return;
+    if (t.__w191hr) return; t.__w191hr = requestAnimationFrame(function () { t.__w191hr = null; hintOne(t); });
+  }, true);
   function partners() {
     var D = curD(); if (!D) return;
     var by = {}; (D.roster || []).forEach(function (x) { by[String(x.id)] = x; });
@@ -365,7 +439,7 @@
   function dayCard(ev, D, row) {
     var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var ph = function (r) { var p = (r.detail || {}).phone; return p ? '<a href="tel:' + E(String(p).replace(/[^\d+]/g, '')) + '" style="color:' + GREEN + '">' + E(p) + '</a>' : '<span style="color:' + MUTED + '">no phone</span>'; };
-    var who = function (role) { return list.filter(function (r) { return r.role === role; }).map(function (r) { var k = (r.detail || {}).driver_role; return '<div style="padding:4px 0;font-size:13.5px"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (role === 'driver' && k ? ' <span style="color:' + MUTED + ';font-size:12px">' + E(k === 'main' ? 'main' : k === 'pickup' ? 'pickups' : 'main and pickups') + '</span>' : '') + ' \u00b7 ' + ph(r) + (isConf(r) ? '' : ' <span style="color:' + MUTED + ';font-size:11.5px">not confirmed</span>') + '</div>'; }).join('') || '<div style="padding:4px 0;font-size:13px;color:' + FLAG + '">Nobody yet</div>'; };
+    var who = function (role) { return list.filter(function (r) { return r.role === role; }).map(function (r) { var k = (r.detail || {}).driver_role; var st = runStartFor(ev.id, r.id, role); return '<div style="padding:4px 0;font-size:13.5px"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (role === 'driver' && k ? ' <span style="color:' + MUTED + ';font-size:12px">' + E(k === 'main' ? 'main' : k === 'pickup' ? 'pickups' : 'main and pickups') + '</span>' : '') + (st ? ' <span class="w191st" title="From the run (Prepare)">starts ' + E(hm12(st)) + '</span>' : '') + ' \u00b7 ' + ph(r) + (isConf(r) ? '' : ' <span style="color:' + MUTED + ';font-size:11.5px">not confirmed</span>') + '</div>'; }).join('') || '<div style="padding:4px 0;font-size:13px;color:' + FLAG + '">Nobody yet</div>'; };
     var tl = list.filter(function (r) { return r.role === 'team_leader' && r.confirm_token; })[0];
     return '<div class="cardy"><h4>The day</h4><div class="w191grid2">'
       + '<div><div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:0 0 2px">Team leaders</div>' + who('team_leader') + '<div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:10px 0 2px">Drivers</div>' + who('driver') + '</div>'
@@ -474,10 +548,11 @@
     own('plan').innerHTML = planLine(ev, D, row); own('recruit').innerHTML = recruitStageLine(D); own('day_of').innerHTML = dayCard(ev, D, row); own('wrap_up').innerHTML = wrapLine(ev);
     var dateCtl = r.querySelector('.top > span'); if (dateCtl) { var dw = document.createElement('div'); dw.className = 'w191line w191date'; dw.appendChild(dateCtl); own('plan').appendChild(dw); }
     var rosterCard = right.querySelector(':scope > .cardy'); if (rosterCard) { rosterCard.classList.add('w191roster'); team.querySelector(':scope > .b').appendChild(rosterCard); }
-    partners();
+    partners(); setTimeout(scrollHints, 60);
     adoptRail();
     placeSteps(M);
     S.laid = ev.id;
+    paintRun(); paintInv(); paintPartner();
     autotick(ev).then(function (changed) { if (changed) refresh(true); });
   }
   /* cards the earlier waves put in wave119's rail land in their stage; anything new arriving later follows (the observer) */
@@ -513,9 +588,10 @@
     var pl = own('plan'); if (pl) { var keep = pl.querySelector('.w191date'); pl.innerHTML = planLine(ev, D, row); if (keep) pl.appendChild(keep); }
     var rc = own('recruit'); if (rc) rc.innerHTML = recruitStageLine(D);
     var tm = r.querySelector('#w191team'); if (tm) { var th = tm.querySelector(':scope > .h'); if (th) th.innerHTML = teamHeadHtml(D); var tl = tm.querySelector(':scope > .b > .w191own'); if (tl) tl.innerHTML = recruitLine(D); }
-    partners();
+    partners(); scrollHints();
     var dc = own('day_of'); if (dc) dc.innerHTML = dayCard(ev, D, row);
     var wl = own('wrap_up'); if (wl) wl.innerHTML = wrapLine(ev);
+    paintRun(); paintInv(); paintPartner();
     if (steps) { /* the steps were reloaded: tick the boxes and the notes in place */
       M.steps.forEach(function (x) { var el = r.querySelector('.vl-step[data-vlstep="' + x.s.id + '"]'); if (!el) return; el.classList.toggle('done', !!x.s.done); var cb = el.querySelector('input[data-vlchk]'); if (cb) cb.checked = !!x.s.done; decorateStep(el, x); });
       STAGES.forEach(function (s) { foldDone(s.k); });
@@ -548,7 +624,9 @@
     if (what === 'date') { openStage('plan', true); var inp = document.querySelector('#w119 .w191date input'); if (inp) { try { inp.focus(); inp.showPicker && inp.showPicker(); } catch (e) { /* fine */ } } return; }
     if (what === 'cancel') { if (!clickProxy('#w106can')) T('The cancel control is loading'); return; }
     if (what === 'start') { openStage('prepare', true); setTimeout(function () { var st = document.getElementById('w174st'); if (st) { try { st.focus(); } catch (e) { /* fine */ } } }, 350); return; }
-    if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
+    if (what === 'inventory') { location.hash = '#volunteering/inventory'; return; }
+    if (what === 'partner') { partnerEditor(); return; }
+    if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; setTimeout(scrollHints, 60); try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
     if (what === 'close') { if (confirm('Close this serving? It moves to Done; you can reopen it.')) setStatus(ev, 'completed'); return; }
     if (what === 'reopen') { setStatus(ev, 'planned'); return; }
   }
@@ -575,7 +653,7 @@
     /* the format editor (wave171) saves into the event: the flow header follows */
     if (t.closest('[data-w171fsave]')) { var ev0 = curEv(), f0 = ev0 ? ev0.format : null, n0 = 0; var iv = setInterval(function () { var e1 = curEv(); n0++; if ((e1 && e1.format !== f0) || n0 > 20) { clearInterval(iv); if (root()) refresh(false); } }, 150); }
     var st = t.closest('.w191bar [data-w191stage]'); if (st) { e.preventDefault(); e.stopPropagation(); openStage(st.getAttribute('data-w191stage'), true); return; }
-    var tt = t.closest('[data-w191team]'); if (tt) { var ts = tt.closest('#w191team'); if (ts) { var on2 = !ts.classList.contains('open'); ts.classList.toggle('open', on2); S.teamOpen = on2; } return; }
+    var tt = t.closest('[data-w191team]'); if (tt) { var ts = tt.closest('#w191team'); if (ts) { var on2 = !ts.classList.contains('open'); ts.classList.toggle('open', on2); S.teamOpen = on2; if (on2) setTimeout(scrollHints, 60); } return; }
     var tg = t.closest('[data-w191toggle]'); if (tg) { var sec = tg.closest('.w191stage'); if (sec) { var k = sec.getAttribute('data-stage'); var on = !sec.classList.contains('open'); sec.classList.toggle('open', on); S.open[k] = on; } return; }
     var tk = t.closest('#w191next [data-w191tick]'); if (tk) { e.preventDefault(); e.stopPropagation(); var sid = tk.getAttribute('data-w191tick'); var box = document.querySelector('#w119 input[data-vlchk="' + sid + '"]'); if (box) { box.click(); } else if (typeof waVolToggleStep === 'function') { await waVolToggleStep(sid, true, null); } setTimeout(function () { refresh(true); }, 500); return; }
     if (!t.closest('#w191head .more')) document.querySelectorAll('#w191head .more.open').forEach(function (m) { m.classList.remove('open'); });
@@ -1269,6 +1347,473 @@
       '.w191rec .flt input[type=search]{flex:1 1 100%;}.w191rec .flt select{flex:1 1 40%;}.w191rec .cmp{grid-template-columns:1fr;}.w191rec .cmp .prev{position:static;max-height:none;}' +
       '.w191rec .srv{padding:8px 12px 6px;}.w191rec .sr .d{gap:0 8px;}.w191rec .sr .d span{flex-basis:100%;}.w191rec .seg.sm button{padding:5px 8px;}}';
   document.head.appendChild(rcss);
+  /* ---------- wave191m: the run (Prepare): where each driver goes, in order, with the times and Google Maps ----------
+     Steel (01/10/26): the driver's itinerary and start time with the team leader "will always depend on how many cooks to
+     pick up from" (3 to 6 cooks, the storage unit, the serving; after it the dishes at the Old Brewery Mission and back to the
+     storage unit), and drivers need "a working google maps trajectory link of a starting point, all the stops on the way and
+     how long in order to calculate their starting time". The serving-run edge function works the run out (the faster of the
+     storage unit first and the cooks first, OpenStreetMap driving times) and stores it (volunteer_event_runs); the itineraries
+     carry each person's part. This card shows it to the team: each driver's start, every stop with its time and the drive
+     before it, the Maps link, their itinerary (a test link), after the serving, and what needs a look (a cook with no
+     address, an address the map placed roughly). It works the run out again when the stops changed (the cron does too,
+     every 15 minutes) or on Work it out again. Staff only (wa191_run_get). */
+  var RUN = { by: {}, at: {}, busy: {}, err: {}, tried: {}, seen: {} };
+  window.WA191RUN = { get: function (id) { var x = RUN.by[id]; return x && x.plan ? x.plan : null; } };
+  var RUN_KIND = { both: 'Only driver', main: 'Main driver', pickup: 'Pickup driver', none: 'No driver yet' };
+  function runUpcoming(ev) { return ev && ev.status !== 'cancelled' && ev.status !== 'completed' && daysTo(ev.event_date) >= 0; }
+  function fmtAt(iso) { try { return new Date(iso).toLocaleString('en-CA', { timeZone: 'America/Toronto', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).replace(/\./g, ''); } catch (e) { return ''; } }
+  async function loadRun(ev, force) {
+    if (!ev || !staff()) return null;
+    if (!force && RUN.by[ev.id] && Date.now() - (RUN.at[ev.id] || 0) < 30000) return RUN.by[ev.id];
+    try {
+      var r = await db.rpc('wa191_run_get', { p_event: ev.id });
+      if (r && r.error) RUN.err[ev.id] = 'Could not load the run: ' + String(r.error.message || r.error).slice(0, 120);
+      else if (r && r.data) { RUN.by[ev.id] = r.data; RUN.err[ev.id] = RUN.err[ev.id] && /^Could not load/.test(RUN.err[ev.id]) ? null : RUN.err[ev.id]; }
+    } catch (e) { RUN.err[ev.id] = 'Could not load the run'; }
+    RUN.at[ev.id] = Date.now();
+    return RUN.by[ev.id] || null;
+  }
+  async function planRun(ev, force) {
+    if (!ev || RUN.busy[ev.id]) return;
+    RUN.busy[ev.id] = true; RUN.tried[ev.id] = Date.now(); paintRun();
+    try {
+      var r = await db.functions.invoke('serving-run', { body: { action: 'plan', event_id: ev.id, force: !!force } });
+      var d = r && r.data;
+      if (r && r.error) RUN.err[ev.id] = 'Could not work it out: ' + String(r.error.message || r.error).slice(0, 120);
+      else if (d && d.error) RUN.err[ev.id] = String(d.error).slice(0, 160);
+      else RUN.err[ev.id] = null;
+    } catch (e) { RUN.err[ev.id] = 'Could not work it out: ' + String((e && e.message) || e).slice(0, 120); }
+    RUN.busy[ev.id] = false;
+    await loadRun(ev, true);
+    paintRun();
+  }
+  function runWarn(w) {
+    var n = w.name || 'A cook';
+    if (w.why === 'no address') return n + ': no pickup address yet. Their page asks for it; or set them to drop off.';
+    if (w.why === 'address not found on the map') return n + ': the map could not find their address. Check it on their card.';
+    if (w.why === 'placed by its postal code') return n + ': placed by the postal code only, so their time is approximate.';
+    if (w.why === 'placed on its street, not the house') return n + ': placed on the street, not the house number, so their time may be a few minutes off.';
+    return String(w.why || '');
+  }
+  function runCard(r, byId, tl) {
+    var names = (r.drivers || []).map(function (id) { var x = byId[id]; return x ? x.person_name : null; }).filter(Boolean);
+    if (!names.length) names = (r.names || []).filter(Boolean);
+    var part = RUN_KIND[r.kind] || 'Driver';
+    var withTl = r.with_tl ? (tl ? ', with ' + (tl.person_name || 'the team leader') + ' (team leader)' : ', with the team leader (none on the roster yet)') : '';
+    var stops = r.stops || [];
+    var first = stops[0] || {};
+    var where = r.at === 'storage' ? 'at the storage unit' : r.at === 'serving' ? 'at the serving' : first.k === 'kitchen' ? 'at the kitchen' : first.label ? 'at ' + first.label + '\u2019s' : 'at the first pickup';
+    var h = '<div class="rn" data-w191runkind="' + E(r.kind) + '"><div class="rh"><div class="rw"><b>' + E(names.length ? names.join(', ') : 'No driver yet') + '</b><span>' + E(part + withTl) + '</span></div>'
+      + '<div class="rt"><b>' + E(hm12(r.start)) + '</b><span>' + E('starts ' + where) + '</span></div></div>';
+    h += '<ol class="rs">' + stops.map(function (s, i) {
+      var label = s.k === 'storage' ? 'Storage unit' : s.k === 'serving' ? 'The serving' : s.k === 'kitchen' ? 'The kitchen' : (s.label || 'Cook');
+      var meta = [];
+      if (i && s.drive_min) meta.push(E(s.drive_min + ' min drive'));
+      if (s.leave) meta.push(E('leaves ' + hm12(s.leave)));
+      if (s.approx) meta.push('<em>placed roughly on the map</em>');
+      return '<li><span class="t">' + E(hm12(s.arrive)) + '</span><span class="p"><b>' + E(label) + '</b>' + (s.hood ? ' <i>' + E(s.hood) + '</i>' : '')
+        + (s.k !== 'serving' && s.address ? '<small>' + E(s.address) + '</small>' : '') + (meta.length ? '<small>' + meta.join(' \u00b7 ') + '</small>' : '') + '</span></li>';
+    }).join('') + '</ol>';
+    var tok = (r.drivers || []).map(function (id) { return byId[id] && byId[id].confirm_token; }).filter(Boolean)[0] || (r.with_tl && tl && tl.confirm_token) || '';
+    var foot = (stops.length > 1 ? '<span class="rl">' + E((r.total_min || 0) + ' min in all, ' + (r.drive_min || 0) + ' driving') + '</span>' : '')
+      + (stops.length > 1 && /^https:\/\//.test(r.maps_url || '') ? '<a class="w191btn ghost" target="_blank" rel="noopener" href="' + E(r.maps_url) + '">Open in Google Maps</a>' : '')
+      + (tok ? '<a class="w191btn quiet" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(tok) + '?test=1&it=1">Their itinerary</a>' : '');
+    return h + (foot ? '<div class="ra">' + foot + '</div>' : '') + '</div>';
+  }
+  function afterCard(p, byId, tl) {
+    var a = p.after; if (!a || !(a.stops || []).length) return '';
+    var r = (p.runs || []).filter(function (x) { return x.with_storage; })[0];
+    var names = r ? (r.drivers || []).map(function (id) { var x = byId[id]; return x ? x.person_name : null; }).filter(Boolean) : [];
+    var who = (names.length ? names.join(', ') : 'The driver') + (tl ? ' and ' + (tl.person_name || 'the team leader') : ' and the team leader');
+    var li = function (t, b, sm) { return '<li><span class="t">' + E(hm12(t)) + '</span><span class="p"><b>' + E(b) + '</b>' + (sm ? '<small>' + E(sm) + '</small>' : '') + '</span></li>'; };
+    var rows = a.stops.map(function (s) {
+      if (s.k === 'serving') return li(s.leave, 'Leave the serving', 'after packing up');
+      if (s.k === 'dish') return li(s.arrive, 'Old Brewery Mission: the dishes', s.drive_min + ' min drive \u00b7 until ' + hm12(s.leave));
+      return li(s.arrive, 'Storage unit: put away, then the inventory check', s.drive_min + ' min drive \u00b7 done ' + hm12(s.leave));
+    }).join('');
+    return '<div class="rn after"><div class="rh"><div class="rw"><b>After the serving</b><span>' + E(who) + '</span></div><div class="rt"><b>' + E(hm12(a.end)) + '</b><span>back and locked up</span></div></div>'
+      + '<ol class="rs">' + rows + '</ol>' + (/^https:\/\//.test(a.maps_url || '') ? '<div class="ra"><a class="w191btn ghost" target="_blank" rel="noopener" href="' + E(a.maps_url) + '">Open in Google Maps</a></div>' : '') + '</div>';
+  }
+  function runHtml(ev, D, x) {
+    var busy = !!RUN.busy[ev.id], err = RUN.err[ev.id], up = runUpcoming(ev);
+    var p = x && x.plan;
+    var btn = up ? '<button class="w191btn ghost" data-w191run="again"' + (busy ? ' disabled' : '') + '>' + (busy ? 'Working it out\u2026' : 'Work it out again') + '</button>' : '';
+    var h = '<h4>The run</h4>';
+    if (!p) {
+      return h + '<p class="w191rsub">' + (busy ? 'Working out the drivers\u2019 run from the cooks\u2019 addresses\u2026' : err ? E(err) : up ? 'The Hub works out the drivers\u2019 run from the cooks\u2019 addresses and the drivers\u2019 parts.' : 'No run was worked out for this serving.') + '</p>'
+        + (btn && !busy ? '<div class="w191line">' + btn.replace('Work it out again', 'Work it out') + '</div>' : '');
+    }
+    var byId = {}; (D.roster || []).forEach(function (r) { byId[r.id] = r; });
+    var tl = (D.roster || []).filter(function (r) { return lower(r.role) === 'team_leader' && !isOff(r) && !isDecl(r); })[0] || null;
+    var other = p.order === 'cooks_first' ? 'storage_first' : 'cooks_first';
+    var pills = [];
+    if (p.order) pills.push('<span class="pill">' + E((p.order === 'cooks_first' ? 'Cooks first, then the storage unit' : 'The storage unit first, then the cooks') + (p.compared && p.compared[other] != null ? ': ' + p.compared[p.order] + ' min, against ' + p.compared[other] + ' the other way' : '')) + '</span>');
+    if (p.arrive_by) pills.push('<span class="pill">Everyone at the serving by ' + E(hm12(p.arrive_by)) + '</span>');
+    if (x.stale) pills.push('<span class="pill short">' + (busy ? 'The stops changed: working it out again' : 'The stops changed since it was worked out') + '</span>');
+    else pills.push('<span class="pill ok">Up to date' + (x.computed_at ? ' \u00b7 ' + E(fmtAt(x.computed_at)) : '') + '</span>');
+    if (p.source === 'estimate') pills.push('<span class="pill short">The map service did not answer: the times are estimates</span>');
+    var f = p.minutes && p.minutes.factor ? Math.round((Number(p.minutes.factor) - 1) * 100) : 0;
+    h += '<p class="w191rsub">Who drives where, in what order, and when to leave. Driving times from OpenStreetMap' + (f > 0 ? ', plus ' + f + '% for traffic' : '') + '. Each driver and the team leader see their part, with the Google Maps link, on their itinerary.</p>'
+      + '<div class="w191line">' + pills.join('') + btn + '</div>';
+    if (err && !busy) h += '<p class="w191rerr">' + E(err) + '</p>';
+    var w = p.warnings || [];
+    if (w.length) h += '<div class="w191runw"><b>Needs a look</b>' + w.map(function (y) { return '<div>' + E(runWarn(y)) + '</div>'; }).join('') + '</div>';
+    if (!tl) h += '<div class="w191runw"><b>No team leader yet</b><div>The run has a seat for them: add a team leader in The team.</div></div>';
+    h += '<div class="w191runs">' + (p.runs || []).map(function (r) { return runCard(r, byId, tl); }).join('') + afterCard(p, byId, tl) + '</div>';
+    return h;
+  }
+  /* each driver's start for The day card */
+  function runStartFor(evId, rid, role) {
+    var x = RUN.by[evId]; var p = x && x.plan; if (!p) return '';
+    var r = (p.runs || []).filter(function (y) { return role === 'team_leader' ? y.with_tl : (y.drivers || []).indexOf(rid) >= 0; })[0];
+    return r ? r.start : '';
+  }
+  function runBox() {
+    var b = stageBody('prepare'); if (!b) return null;
+    var box = document.getElementById('w191run');
+    if (!box) { box = document.createElement('div'); box.id = 'w191run'; box.className = 'cardy w191run'; }
+    var it = b.querySelector(':scope > #w174card');
+    if (it) { if (it.nextElementSibling !== box) it.insertAdjacentElement('afterend', box); }
+    else if (box.parentNode !== b) b.insertBefore(box, stepsBox('prepare'));
+    return box;
+  }
+  async function paintRun() {
+    var ev = curEv(), D = curD(); if (!ev || !D || !root() || !staff()) return;
+    if (ev.kind && ev.kind !== 'service') return;
+    var x = await loadRun(ev, false);
+    if (curEv() !== ev || !root()) return;
+    var box = runBox(); if (!box) return;
+    var html = runHtml(ev, D, x);
+    if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
+    /* the day card and the itinerary card follow a new run */
+    var stamp = x && x.plan ? String(x.computed_at || x.plan.computed_at || '') : '';
+    if (stamp && RUN.seen[ev.id] !== stamp) {
+      RUN.seen[ev.id] = stamp;
+      var row = S.ev && S.ev.id === ev.id ? S.ev : null;
+      var dc = root().querySelector('.w191stage[data-stage="day_of"] .w191own'); if (dc) dc.innerHTML = dayCard(ev, D, row);
+      var c4 = document.getElementById('w174card'); if (c4) c4.__h = '';
+      try { if (window.w171 && typeof w171.paintW174 === 'function') w171.paintW174(); } catch (e) { /* fine */ }
+    }
+    if (runUpcoming(ev) && x && (!x.plan || x.stale) && !RUN.busy[ev.id] && Date.now() - (RUN.tried[ev.id] || 0) > 60000) planRun(ev, false);
+  }
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('[data-w191run]'); if (!b || !b.closest('#w191run')) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.getAttribute('data-w191run') === 'again') planRun(curEv(), true);
+  }, true);
+
+  /* ---------- wave191n: the team leader's storage check (Wrap up), and the last check on the Inventory ----------
+     After the serving the team leader checks the storage unit on their page (volunteer_inventory_submit): whether everything
+     is back in its place, and each item all back, running low or missing; the Inventory's Reorder notes follow. Wrap up shows
+     the check and what to restock; before it is in, what to expect and the team leader's link as a test. Staff read. */
+  var INVC = { by: {}, at: {}, last: null, lastAt: 0 };
+  async function loadInvCheck(ev, force) {
+    if (!ev || !staff()) return null;
+    if (!force && INVC.at[ev.id] && Date.now() - INVC.at[ev.id] < 30000) return INVC.by[ev.id];
+    try { var r = await db.from('volunteer_inventory_checks').select('*').eq('event_id', ev.id).maybeSingle(); if (r && !r.error) INVC.by[ev.id] = r.data || null; } catch (e) { /* fine */ }
+    INVC.at[ev.id] = Date.now();
+    return INVC.by[ev.id] || null;
+  }
+  function invCardHtml(ev, D, c) {
+    var tl = (D.roster || []).filter(function (r) { return lower(r.role) === 'team_leader' && !isOff(r) && !isDecl(r); })[0] || null;
+    var d = daysTo(ev.event_date);
+    var h = '<h4>Storage check</h4>';
+    var acts = '<div class="w191line">' + (tl && tl.confirm_token ? '<a class="w191btn ghost" target="_blank" rel="noopener" href="https://hub.welfareavenue.com/c/' + E(tl.confirm_token) + '?test=1#inv">' + (c ? 'Their check (test link)' : 'The team leader\u2019s check (test link)') + '</a>' : '') + '<button class="w191btn quiet" data-w191go="inventory">Open the Inventory</button></div>';
+    if (!c) {
+      h += '<p class="w191rsub">' + (d <= 0 && ev.status !== 'cancelled'
+        ? 'The team leader\u2019s check is not in yet. It opens on their page when the serving starts, for three days: whether everything is back in its place, and what is running low or missing.'
+        : 'After the serving the team leader checks the storage unit on their page: whether everything is back in its place, and what is running low or missing. What to restock shows here and in the Inventory.') + '</p>';
+      return h + acts;
+    }
+    var items = c.items || [];
+    var lo = items.filter(function (x) { return x.state === 'low'; }), mi = items.filter(function (x) { return x.state === 'missing'; });
+    h += '<p class="w191rsub">' + E((c.by_name || 'The team leader') + ' checked the storage unit' + (c.updated_at ? ' \u00b7 ' + fmtAt(c.updated_at) : '')) + '</p>'
+      + '<div class="w191line">' + (c.in_place ? '<span class="pill ok">Everything back in its place</span>' : '<span class="pill short">Not everything back in its place</span>')
+      + '<span class="pill' + (lo.length ? ' short' : ' ok') + '">' + lo.length + ' running low</span><span class="pill' + (mi.length ? ' short' : ' ok') + '">' + mi.length + ' missing</span></div>';
+    var row = function (x, k) { return '<div><span class="tg ' + k + '">' + (k === 'mi' ? 'Missing' : 'Running low') + '</span><b>' + E(x.item || '') + '</b>' + (x.unit ? ' <i>' + E(x.unit) + '</i>' : '') + (x.category ? ' <i>\u00b7 ' + E(x.category) + '</i>' : '') + '</div>'; };
+    h += lo.length || mi.length ? '<div class="w191restock"><b>To restock</b>' + mi.map(function (x) { return row(x, 'mi'); }).join('') + lo.map(function (x) { return row(x, 'lo'); }).join('') + '</div>'
+      : '<p class="w191rsub" style="margin-top:8px">Nothing to restock.</p>';
+    if (c.note) h += '<div class="w191ctx"><b>Their note</b><span>' + E(c.note) + '</span></div>';
+    return h + acts;
+  }
+  function invBox() {
+    var b = stageBody('wrap_up'); if (!b) return null;
+    var box = document.getElementById('w191inv');
+    if (!box) { box = document.createElement('div'); box.id = 'w191inv'; box.className = 'cardy w191run w191inv'; }
+    var sv = b.querySelector(':scope > #w174survey');
+    if (sv) { if (sv.nextElementSibling !== box) sv.insertAdjacentElement('afterend', box); }
+    else if (box.parentNode !== b) b.insertBefore(box, stepsBox('wrap_up'));
+    return box;
+  }
+  async function paintInv() {
+    var ev = curEv(), D = curD(); if (!ev || !D || !root() || !staff()) return;
+    if (ev.kind && ev.kind !== 'service') return;
+    var c = await loadInvCheck(ev, false);
+    if (curEv() !== ev || !root()) return;
+    var box = invBox(); if (!box) return;
+    var html = invCardHtml(ev, D, c);
+    if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
+  }
+  /* the Inventory view: the last check, above the table */
+  async function invBanner() {
+    try {
+      if (!staff() || typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'inventory') return;
+      var sec = document.getElementById('volunteering'); if (!sec) return;
+      var wrap = sec.querySelector('.vl-tblwrap'); if (!wrap) return;
+      if (!INVC.lastAt || Date.now() - INVC.lastAt > 30000) {
+        INVC.lastAt = Date.now();
+        var r = await db.from('volunteer_inventory_checks').select('event_id,by_name,updated_at,low,missing,in_place').order('updated_at', { ascending: false }).limit(1);
+        INVC.last = r && r.data && r.data[0] ? r.data[0] : null;
+      }
+      var x = INVC.last; var el = document.getElementById('w191invlast');
+      if (!x) { if (el) el.remove(); return; }
+      var ev = null; try { (WA_VOL_EVENTS || []).forEach(function (e) { if (e.id === x.event_id) ev = e; }); } catch (e) { /* fine */ }
+      var html = '<b>Last storage check</b><span>' + E((x.by_name || 'The team leader') + (ev ? ', after the serving of ' + fmtDay(ev.event_date) : '') + ' \u00b7 ' + fmtAt(x.updated_at)) + '</span>'
+        + '<span>' + E(x.low + ' running low, ' + x.missing + ' missing' + (x.in_place ? ', everything back in its place' : ', not everything back in its place')) + '. Their flags are in the Reorder column.</span>';
+      if (!el) { el = document.createElement('div'); el.id = 'w191invlast'; el.className = 'w191ctx'; }
+      if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+      var anchor = sec.querySelector('#w63bar') || wrap;
+      if (el.nextElementSibling !== anchor) anchor.insertAdjacentElement('beforebegin', el);
+    } catch (e) { /* fine */ }
+  }
+  /* ---------- wave191o: a serving with a partner organization (Plan) ----------
+     Steel (01/10/26): collaborators like Oberoi Financial Group "work differently": is their group bringing the food, how
+     many are there, which roles do we still fill (cooks, servers, drivers, photographers), "a team leader and community lead
+     on our end always need to be there", the kitchen model with DESTA or their own space; their people by "headcount and
+     coordinator or each person by name - allow our team to choose", the form route so "we get more people in to our system".
+     The card in Plan shows the collaboration (wa191_partner_save keeps it in volunteer_event_partners); the editor sets it.
+     What they cover counts toward each role on the serving (the header, Next up, Recruit, the team), so Find volunteers and
+     Plan the roster fill only the gap; signed-up people from their form count as themselves. */
+  var PART = { by: {}, at: {}, list: null };
+  var FOOD = {
+    ours: ['Our cooks', 'Our home cooks make the food, as usual.'],
+    they_bring: ['They bring the food', 'Their group brings the meals ready to serve: no cooks or pickups from us.'],
+    desta_kitchen: ['They cook with us in DESTA\u2019s kitchen', 'Community kitchen at DESTA: their people cook, our driver picks the food up there.'],
+    their_kitchen: ['They cook in their own space', 'Their people cook at their place: our driver picks the food up there.']
+  };
+  var PROLES = [['server', 'Servers'], ['cook', 'Cooks'], ['driver', 'Drivers'], ['photographer', 'Photographers'], ['dishwasher', 'Dishwashing'], ['community_talker', 'Community welcome']];
+  function partnerOf(evId) { var x = PART.by[evId]; return x && x.active ? x : null; }
+  async function loadPartner(ev, force) {
+    if (!ev || !staff()) return null;
+    if (!force && PART.at[ev.id] && Date.now() - PART.at[ev.id] < 30000) return partnerOf(ev.id);
+    try { var r = await db.from('volunteer_event_partners').select('*').eq('event_id', ev.id).maybeSingle(); if (r && !r.error) PART.by[ev.id] = r.data || null; } catch (e) { /* fine */ }
+    PART.at[ev.id] = Date.now();
+    return partnerOf(ev.id);
+  }
+  /* what we still bring, role by role: what they cover comes off our part; our team leader and community lead are always
+     ours; when they make the food we bring no cooks, and when they bring it ready, one driver for the equipment */
+  function partnerOurs(evId, base) {
+    var P = partnerOf(evId); if (!P) return null;
+    var out = Object.assign({}, base); var cov = P.covers || {};
+    Object.keys(out).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; out[r] = Math.max(0, (out[r] || 0) - (cov[r] || 0)); });
+    if (P.food && P.food !== 'ours') out.cook = 0;
+    if (P.food === 'they_bring' && (out.driver || 0) > 1) out.driver = 1;
+    return out;
+  }
+  /* Plan the roster counts everyone on the list (their people signed up by name too): those come back onto the target */
+  function partnerTargets(evId, base, roster) {
+    var out = partnerOurs(evId, base); if (!out) return null;
+    var P = partnerOf(evId), cov = P.covers || {}, signed = {};
+    (roster || []).forEach(function (r) { if ((r.detail || {}).source === 'partner form' && !isOff(r) && !isDecl(r)) signed[r.role] = (signed[r.role] || 0) + 1; });
+    Object.keys(out).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; out[r] += Math.min(signed[r] || 0, cov[r] || 0); });
+    return out;
+  }
+  window.WA191TARGETS = function (evId, base) { var D = curD(); return partnerTargets(evId, base, D && D.id === evId ? D.roster : []); };
+  function coversText(P) {
+    var c = P.covers || {}; var bits = PROLES.filter(function (x) { return c[x[0]]; }).map(function (x) { return c[x[0]] + ' ' + (c[x[0]] === 1 ? x[1].replace(/s$/, '').replace(/^Dishwashing$/, 'dishwasher').toLowerCase() : x[1].toLowerCase()); });
+    return bits.join(', ');
+  }
+  function partnerCardHtml(ev, D, P) {
+    var signed = (D.roster || []).filter(function (r) { return (r.detail || {}).source === 'partner form' && !isOff(r) && !isDecl(r); });
+    var base = targets(); var T = partnerOurs(ev.id, base) || base;
+    var ours = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > 0; }).map(function (r) { return (T[r] > 1 ? T[r] + ' ' : '') + one(r).toLowerCase() + (T[r] > 1 ? 's' : ''); });
+    var link = P.route === 'everyone' && P.signup_token ? 'https://hub.welfareavenue.com/c/' + P.signup_token : '';
+    var h = '<h4>Collaboration</h4><div class="w191pt"><div class="nm"><b>' + E(P.partner_name) + '</b>' + (P.headcount ? '<span>' + E(P.headcount + ' people') + '</span>' : '') + '</div>'
+      + '<dl><dt>Food</dt><dd>' + E((FOOD[P.food] || FOOD.ours)[0]) + (P.kitchen_place && (P.food === 'desta_kitchen' || P.food === 'their_kitchen') ? ' <i>\u00b7 ' + E(P.kitchen_place) + '</i>' : '') + '</dd>'
+      + '<dt>They cover</dt><dd>' + (coversText(P) ? E(coversText(P)) : '<i>no roles yet</i>') + '</dd>'
+      + '<dt>We bring</dt><dd>' + E(ours.join(', ') || 'nobody else') + ' <i>(our team leader and community lead, always)</i></dd>'
+      + '<dt>Their people</dt><dd>' + (P.route === 'everyone' ? 'Everyone signs up with the form \u00b7 <b>' + signed.length + '</b> signed up so far' : 'A coordinator gives us the headcount')
+      + (P.coordinator_name || P.coordinator_email || P.coordinator_phone ? '<br><span class="ct">' + E([P.coordinator_name, P.coordinator_email, P.coordinator_phone].filter(Boolean).join(' \u00b7 ')) + '</span>' : '') + '</dd>'
+      + (P.note ? '<dt>Note</dt><dd>' + E(P.note) + '</dd>' : '') + '</dl></div>'
+      + '<div class="w191line">' + (staff() ? '<button class="w191btn ghost" data-w191go="partner">Edit the collaboration</button>' : '')
+      + (link ? '<button class="w191btn quiet" data-w191pcopy="' + E(link) + '">Copy the form link</button><a class="w191btn quiet" target="_blank" rel="noopener" href="' + E(link) + '?test=1">See the form</a>' : '') + '</div>'
+      + (link && !P.signup_open ? '<p class="w191rsub" style="margin-top:6px">The form is closed to new sign-ups.</p>' : '');
+    return h;
+  }
+  function partnerBox() {
+    var b = stageBody('plan'); if (!b) return null;
+    var box = document.getElementById('w191partner');
+    if (!box) { box = document.createElement('div'); box.id = 'w191partner'; box.className = 'cardy w191run w191partner'; }
+    var own = b.querySelector(':scope > .w191own');
+    if (own) { if (own.nextElementSibling !== box) own.insertAdjacentElement('afterend', box); }
+    else if (box.parentNode !== b) b.insertBefore(box, b.firstChild);
+    return box;
+  }
+  async function paintPartner() {
+    var ev = curEv(), D = curD(); if (!ev || !D || !root() || !staff()) return;
+    if (ev.kind && ev.kind !== 'service') return;
+    var had = !!partnerOf(ev.id);
+    var P = await loadPartner(ev, false);
+    if (curEv() !== ev || !root()) return;
+    var box = document.getElementById('w191partner');
+    if (!P) { if (box) box.remove(); if (had) refresh(false); return; }
+    box = partnerBox(); if (!box) return;
+    var html = partnerCardHtml(ev, D, P);
+    if (box.__h !== html) { box.innerHTML = html; box.__h = html; }
+    if (!had) refresh(false);
+  }
+  async function partnerList() {
+    if (PART.list) return PART.list;
+    try { var r = await db.from('wa_partners').select('id,name,category,status').order('name'); PART.list = ((r && r.data) || []).filter(function (x) { return x.status !== 'inactive'; }); } catch (e) { PART.list = []; }
+    return PART.list;
+  }
+  async function partnerEditor() {
+    var ev = curEv(); if (!ev || !staff()) return;
+    var P = await loadPartner(ev, true) || {}; var list = await partnerList();
+    var c = P.covers || {}; var food = P.food || 'ours'; var route = P.route || 'coordinator';
+    var known = P.partner_id && list.some(function (x) { return x.id === P.partner_id; });
+    var opts = '<option value="">Choose the organization\u2026</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (P.partner_id === x.id ? ' selected' : '') + '>' + E(x.name) + '</option>'; }).join('') + '<option value="other"' + (P.partner_name && !known ? ' selected' : '') + '>Another organization (type its name)</option>';
+    var html = '<div class="w171m w191pm"><h3>Collaboration</h3><p class="sub">' + E(fmtDay(ev.event_date, true)) + ' \u00b7 a partner organization serves with us. Our team leader and community lead are always ours.</p>'
+      + '<label class="f">The organization</label><select id="w191pp">' + opts + '</select>'
+      + '<input type="text" id="w191pn" placeholder="The organization\u2019s name" value="' + E(P.partner_name && !known ? P.partner_name : '') + '" style="margin-top:6px' + (P.partner_name && !known ? '' : ';display:none') + '">'
+      + '<label class="f">The food</label><div class="modes">' + Object.keys(FOOD).map(function (k) { return '<label class="' + (food === k ? 'on' : '') + '"><input type="radio" name="w191pf" value="' + k + '"' + (food === k ? ' checked' : '') + '><span><b>' + E(FOOD[k][0]) + '</b><small>' + E(FOOD[k][1]) + '</small></span></label>'; }).join('') + '</div>'
+      + '<div id="w191pkw"' + (food === 'desta_kitchen' || food === 'their_kitchen' ? '' : ' style="display:none"') + '><label class="f">The kitchen\u2019s address (the drivers\u2019 run picks the food up there)</label><input type="text" id="w191pk" placeholder="Street address, Montr\u00e9al" value="' + E(P.kitchen_place || ev.kitchen_place || '') + '"></div>'
+      + '<label class="f">Their people</label><div class="modes">'
+      + '<label class="' + (route === 'coordinator' ? 'on' : '') + '"><input type="radio" name="w191pr" value="coordinator"' + (route === 'coordinator' ? ' checked' : '') + '><span><b>A coordinator gives us a headcount</b><small>One contact for their group; we count their people by role.</small></span></label>'
+      + '<label class="' + (route === 'everyone' ? 'on' : '') + '"><input type="radio" name="w191pr" value="everyone"' + (route === 'everyone' ? ' checked' : '') + '><span><b>Everyone signs up with the form</b><small>Each person gives their name and contact: they join our volunteer list and get their own page. You get a link to share.</small></span></label></div>'
+      + '<div class="two3"><div><label class="f">Coordinator</label><input type="text" id="w191pcn" placeholder="Name" value="' + E(P.coordinator_name || '') + '"></div><div><label class="f">Email</label><input type="text" id="w191pce" placeholder="name@company.com" value="' + E(P.coordinator_email || '') + '"></div><div><label class="f">Phone</label><input type="text" id="w191pcp" placeholder="514-555-0100" value="' + E(P.coordinator_phone || '') + '"></div></div>'
+      + '<label class="f">How many of theirs, by role (they cover these; we fill the rest)</label><div class="w191pnum">' + PROLES.map(function (x) { return '<label><span>' + E(x[1]) + '</span><input type="number" min="0" max="100" data-w191pc="' + x[0] + '" value="' + E(c[x[0]] || '') + '" placeholder="0"></label>'; }).join('')
+      + '<label><span>In all</span><input type="number" min="0" max="500" id="w191ph" value="' + E(P.headcount == null ? '' : P.headcount) + '" placeholder="people"></label></div>'
+      + '<label class="f">Note (for the team)</label><textarea id="w191pnote" placeholder="Anything the team should know">' + E(P.note || '') + '</textarea>'
+      + (P.route === 'everyone' ? '<label class="row" style="border:none"><input type="checkbox" id="w191pso"' + (P.signup_open === false ? '' : ' checked') + '> The form is open to new sign-ups</label>' : '')
+      + '<div class="warn" id="w191perr" style="display:none"></div>'
+      + '<div class="foot">' + (P.event_id && P.active ? '<button class="w191btn ghost" data-w191pend="1" style="margin-right:auto">No longer a collaboration</button>' : '') + '<button class="w191btn ghost" onclick="closeModal()">Cancel</button><button class="w191btn gold" data-w191psave="1">Save the collaboration</button></div></div>';
+    openModal(html);
+  }
+  async function partnerSave(btn, end) {
+    var ev = curEv(); if (!ev) return;
+    var q = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    var p;
+    if (end) p = { active: false };
+    else {
+      var sel = q('w191pp'); var covers = {};
+      Array.prototype.forEach.call(document.querySelectorAll('[data-w191pc]'), function (el) { var v = String(el.value || '').trim(); if (v !== '') covers[el.getAttribute('data-w191pc')] = Number(v); });
+      var f = document.querySelector('input[name="w191pf"]:checked'), r = document.querySelector('input[name="w191pr"]:checked');
+      var so = document.getElementById('w191pso');
+      p = { partner_id: sel && sel !== 'other' ? Number(sel) : null, partner_name: sel === 'other' ? q('w191pn') : '', food: f ? f.value : 'ours', kitchen_place: q('w191pk'), route: r ? r.value : 'coordinator',
+        coordinator_name: q('w191pcn'), coordinator_email: q('w191pce'), coordinator_phone: q('w191pcp'), headcount: q('w191ph') === '' ? null : Number(q('w191ph')), covers: covers, note: q('w191pnote'), signup_open: so ? so.checked : true };
+    }
+    btn.disabled = true;
+    try {
+      var res = await db.rpc('wa191_partner_save', { p_event: ev.id, p: p });
+      if (res.error) throw res.error;
+      PART.by[ev.id] = res.data && res.data.active === false ? Object.assign({}, PART.by[ev.id] || {}, { active: false }) : res.data; PART.at[ev.id] = Date.now();
+      if (!end && (p.food === 'desta_kitchen' || p.food === 'their_kitchen')) { ev.format = 'community_kitchen'; try { await loadEvRow(ev, true); } catch (e) { /* fine */ } }
+      closeModal(); T(end ? 'No longer a collaboration' : 'The collaboration is saved');
+      var box = document.getElementById('w191partner'); if (box) box.__h = '';
+      refresh(false); paintPartner();
+    } catch (e) {
+      btn.disabled = false;
+      var w = document.getElementById('w191perr'); var msg = String((e && e.message) || e).replace(/^.*?ERROR:\s*/, '').slice(0, 200);
+      if (w) { w.style.display = ''; w.textContent = msg; } else T('Could not save: ' + msg);
+    }
+  }
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('.w191pm')) return;
+    if (t.id === 'w191pp') { var n = document.getElementById('w191pn'); if (n) n.style.display = t.value === 'other' ? '' : 'none'; }
+    if (t.name === 'w191pf') { var kw = document.getElementById('w191pkw'); if (kw) kw.style.display = t.value === 'desta_kitchen' || t.value === 'their_kitchen' ? '' : 'none'; }
+    if (t.name === 'w191pf' || t.name === 'w191pr') { var grp = t.closest('.modes'); if (grp) grp.querySelectorAll('label').forEach(function (l) { l.classList.toggle('on', !!l.querySelector('input:checked')); }); }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var s = t.closest('[data-w191psave]'); if (s) { e.preventDefault(); partnerSave(s, false); return; }
+    var x = t.closest('[data-w191pend]'); if (x) { e.preventDefault(); partnerSave(x, true); return; }
+    var c = t.closest('[data-w191pcopy]'); if (c) { e.preventDefault(); var link = c.getAttribute('data-w191pcopy'); try { navigator.clipboard.writeText(link).then(function () { T('The form link is copied'); }, function () { T(link); }); } catch (err) { T(link); } }
+  }, true);
+  /* ---------- wave191p: choose your servings in the onboarding ----------
+     Steel (01/10/26): "in the onboarding, I want onboardees to view the next upcoming volunteering events and select 1 or more
+     so that they have confirmed date and to communicate with the operations manager"; volunteering is "required 4 times a
+     year". Week 3's lesson (a 'servings' block, wave122) and Week 3's page in the onboarding journey (wave167) carry a
+     placeholder (.w191onb); this fills it: how many servings this fiscal year of the four, the next six servings (the ones
+     they are on already say so), what they would like to do, a message for the operations lead, Confirm my servings
+     (wa191_onb_signup: Confirmed on each, a Request to Operations Montreal with the dates and the message, their onboarding
+     step ticked). Team members only. */
+  var ONB = { data: null, at: 0, busy: false, err: '', done: null, pick: {}, role: 'server', msg: '' };
+  var ONB_ROLES = [['server', 'Serve', 'Set up, serve the meal, pack up'], ['photographer', 'Take photos', 'Capture the day for our stories'], ['community_talker', 'Welcome people', 'Greet and talk with the people we serve']];
+  function onbFmt(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { timeZone: 'UTC', weekday: 'long', month: 'long', day: 'numeric' }); } catch (e) { return String(iso); } }
+  function onbMonth(iso) { try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', { timeZone: 'UTC', month: 'long', year: 'numeric' }); } catch (e) { return String(iso); } }
+  async function onbLoad(force) {
+    if (!force && ONB.data && Date.now() - ONB.at < 30000) return ONB.data;
+    try { var r = await db.rpc('wa191_onb_servings'); if (r && r.error) { ONB.err = /Team members only/.test(r.error.message || '') ? 'team' : 'load'; } else if (r) { ONB.data = r.data; ONB.err = ''; } } catch (e) { ONB.err = 'load'; }
+    ONB.at = Date.now();
+    return ONB.data;
+  }
+  function onbHtml() {
+    var x = ONB.data;
+    if (ONB.err === 'team') return '<p class="w191om">Choosing servings here is for team members. Your lead can put you on one.</p>';
+    if (!x) return '<p class="w191om">' + (ONB.err ? 'The servings could not load. Try again in a moment.' : 'Loading the next servings\u2026') + '</p>';
+    var ops = x.ops && x.ops.name ? x.ops.name : 'the operations team', opsT = x.ops && x.ops.title ? x.ops.title : 'Operations, Montreal';
+    var yr = x.year || { done: 0, target: 4 }, pct = Math.min(100, Math.round(100 * (yr.done || 0) / (yr.target || 4)));
+    var h = '<div class="yr"><div><b>Your servings this year</b><small>' + E(onbMonth(yr.from) + ' to ' + onbMonth(yr.to)) + '</small></div><span class="n"><b>' + (yr.done || 0) + '</b> of ' + (yr.target || 4) + '</span><i><s style="width:' + pct + '%"></s></i></div>';
+    if (ONB.done) {
+      return h + '<div class="okb"><b>You are confirmed for ' + E(ONB.done.dates || '') + '.</b><span>' + E(ops) + ' has your message in the Operations Montreal inbox' + (ONB.done.step ? ', and your step Mandatory volunteering is done.' : '.') + ' Thank you for showing up for our community.</span></div>'
+        + '<button class="w191btn ghost" data-w191onb="more">Choose more servings</button>';
+    }
+    var sv = x.servings || [];
+    if (!sv.length) return h + '<p class="w191om">No servings are open right now. ' + E(ops) + ' adds the next ones soon; come back to this page.</p>';
+    h += '<div class="sl">' + sv.map(function (s) {
+      var mine = s.mine && s.mine.confirmed; var on = !!ONB.pick[s.id];
+      return '<label class="sv' + (mine ? ' mine' : on ? ' on' : '') + '"><input type="checkbox" data-w191onbev="' + s.id + '"' + (mine ? ' checked disabled' : on ? ' checked' : '') + '>'
+        + '<span class="d"><b>' + E(onbFmt(s.date)) + '</b><small>' + E((s.start ? hm12(s.start) + ' \u00b7 ' : '') + (s.location || 'Montreal') + (s.partner ? ' \u00b7 with ' + s.partner : '') + (s.title && !s.partner ? ' \u00b7 ' + s.title : '')) + '</small>'
+        + (mine ? '<span class="st">You are on it</span>' : '') + '</span></label>';
+    }).join('') + '</div>';
+    h += '<div class="lbl">What would you like to do?</div><div class="roles">' + ONB_ROLES.map(function (r) { return '<label class="' + (ONB.role === r[0] ? 'on' : '') + '"><input type="radio" name="w191onbrole" value="' + r[0] + '"' + (ONB.role === r[0] ? ' checked' : '') + '><b>' + E(r[1]) + '</b><small>' + E(r[2]) + '</small></label>'; }).join('') + '</div>'
+      + '<div class="lbl">A message for ' + E(ops) + ' <span>(' + E(opsT) + ', optional)</span></div><textarea data-w191onbmsg="1" maxlength="1500" placeholder="Hi ' + E(ops) + ', I am ' + E((x.me && x.me.name) || '') + ', new on the team. Anything I should know before my first serving?">' + E(ONB.msg || '') + '</textarea>'
+      + (ONB.err && ONB.err !== 'load' ? '<div class="er">' + E(ONB.err) + '</div>' : '')
+      + '<div class="ac"><button class="w191btn gold" data-w191onb="go"' + (ONB.busy ? ' disabled' : '') + '>' + (ONB.busy ? 'Confirming\u2026' : 'Confirm my servings') + '</button><span>They are confirmed right away, and ' + E(ops) + ' gets your message with the dates.</span></div>';
+    return h;
+  }
+  function onbPaint() {
+    document.querySelectorAll('.w191onb').forEach(function (el) {
+      var ta = el.querySelector('[data-w191onbmsg]'); if (ta && document.activeElement === ta) return;   /* never under the cursor */
+      var html = onbHtml(); if (el.__h !== html) { el.innerHTML = html; el.__h = html; }
+      el.classList.add('on');
+    });
+  }
+  async function onbFill() {
+    var els = document.querySelectorAll('.w191onb:not(.on)'); if (!els.length) return;
+    els.forEach(function (el) { el.classList.add('on'); el.innerHTML = onbHtml(); el.__h = el.innerHTML; });
+    await onbLoad(false); onbPaint();
+  }
+  async function onbGo() {
+    if (ONB.busy) return;
+    var ids = Object.keys(ONB.pick).filter(function (k) { return ONB.pick[k]; }).map(Number);
+    if (!ids.length) { ONB.err = 'Choose at least one serving.'; onbPaint(); return; }
+    ONB.busy = true; ONB.err = ''; onbPaint();
+    try {
+      var r = await db.rpc('wa191_onb_signup', { p_events: ids, p_role: ONB.role, p_message: ONB.msg || '' });
+      if (r.error) throw r.error;
+      ONB.done = { dates: (r.data && r.data.dates) || '', step: !!(r.data && r.data.step) }; ONB.pick = {}; ONB.msg = '';
+      T('You are confirmed. Thank you!');
+      await onbLoad(true);
+    } catch (e) { ONB.err = String((e && e.message) || e).replace(/^.*?ERROR:\s*/, '').slice(0, 200) || 'Could not confirm. Try again.'; }
+    ONB.busy = false; onbPaint();
+  }
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('.w191onb')) return;
+    if (t.getAttribute('data-w191onbev')) { ONB.pick[t.getAttribute('data-w191onbev')] = t.checked; var l = t.closest('label'); if (l) l.classList.toggle('on', t.checked); if (ONB.err) { ONB.err = ''; onbPaint(); } }
+    if (t.name === 'w191onbrole') { ONB.role = t.value; t.closest('.roles').querySelectorAll('label').forEach(function (l) { l.classList.toggle('on', !!l.querySelector('input:checked')); }); }
+  });
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.getAttribute && t.getAttribute('data-w191onbmsg')) ONB.msg = t.value; });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var b = t.closest('.w191onb [data-w191onb]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    if (b.getAttribute('data-w191onb') === 'go') onbGo();
+    if (b.getAttribute('data-w191onb') === 'more') { ONB.done = null; onbPaint(); }
+  }, true);
+  try { new MutationObserver(function () { if (ONB.pend) return; ONB.pend = setTimeout(function () { ONB.pend = null; if (document.querySelector('.w191onb:not(.on)')) onbFill(); }, 150); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
   /* ---------- the page's title names the view (inside the Volunteer Manager) ---------- */
   var TITLES = { calendar: ['Servings', 'This week, the calendar and every serving'], sop: ['The SOP', 'The master checklist every serving starts from, in six stages'], people: ['Volunteers', 'Everyone who volunteers in Montreal, one record with the CRM'], inventory: ['Inventory', 'The kit in storage, counted and reordered'], recipes: ['Recipes', 'What the cooks make'], event: ['Serving', ''] };
   function title() {
@@ -1286,7 +1831,7 @@
   }
   var __sched191 = schedule;
   schedule = function () { __sched191(); setTimeout(title, 100); setTimeout(title, 700); };
-  if (typeof waVolRender === 'function') { var __vr191 = waVolRender; waVolRender = async function () { var out = await __vr191.apply(this, arguments); setTimeout(title, 120); setTimeout(title, 900); setTimeout(focusStep, 1200); return out; }; }
+  if (typeof waVolRender === 'function') { var __vr191 = waVolRender; waVolRender = async function () { var out = await __vr191.apply(this, arguments); setTimeout(title, 120); setTimeout(title, 900); setTimeout(focusStep, 1200); setTimeout(invBanner, 400); setTimeout(invBanner, 1500); return out; }; }
   window.addEventListener('hashchange', function () { setTimeout(title, 300); });
   setTimeout(title, 1500);
 

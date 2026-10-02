@@ -12,13 +12,13 @@
     var meals = row && row.planned_meals ? row.planned_meals + ' meals planned' : '';
     var meta = '<span class="cd">' + (M.cur === 'done' ? 'Done' : M.cur === 'cancelled' ? 'Cancelled' : countdown(ev).replace(/^(\d+) /, '<b>$1</b> ')) + '</span>'
       + (start ? '<span>' + E(hm12(start)) + (place ? ' at ' + E(place) : '') + '</span>' : (place ? '<span>' + E(place) + '</span>' : ''))
-      + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '');
+      + (meals ? '<span>' + E(meals) + '</span>' : '') + (ev.title ? '<span>' + E(ev.title) + '</span>' : '') + (partnerOf(ev.id) ? '<span class="w191with">With ' + E(partnerOf(ev.id).partner_name) + '</span>' : '');
     var prim = primaryAction(ev, D, M, row);
     var menu = ''
       + (staff() ? '<button data-w191go="find">Find volunteers</button><button data-w191go="conv">Conversations</button><button data-w191go="bplan">Plan the roster</button>' : '')
       + (staff() ? '<button data-w191go="text171">Text to confirm</button>' : '')
       + (staff() ? '<button data-w191go="send182">Send itineraries</button><button data-w191go="hist182">Sent and scheduled</button><button data-w191go="ev182">This serving’s itinerary</button>' : '')
-      + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button>' : '')
+      + (staff() ? '<button data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button><button data-w191go="date">Change the date</button><button data-w191go="partner">' + (partnerOf(ev.id) ? 'Edit the collaboration' : 'A partner organization serves with us') + '</button>' : '')
       + (staff() ? '<button data-w191go="brecap">Recap in Slack</button>' : '')
       + (staff() && up ? '<button data-w191go="close">Close this serving</button>' : '')
       + (staff() && ev.status === 'completed' ? '<button data-w191go="reopen">Reopen this serving</button>' : '')
@@ -78,7 +78,8 @@
       + (row && row.start_time ? '<button class="pill" data-w191go="start" title="Change the start time">Starts ' + E(hm12(row.start_time)) + '</button>' : '<button class="pill short" data-w191go="start">No start time</button>')
       + (row && row.planned_meals ? '<span class="pill">' + E(row.planned_meals) + ' meals</span>' : '<span class="pill short">Meals not set</span>')
       + (fmt === 'community_kitchen' && row && row.kitchen_place ? '<span class="pill">' + E(row.kitchen_place) + '</span>' : '')
-      + (staff() ? '<button class="w191btn ghost" data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button>' : '') + '</div>'
+      + (staff() ? '<button class="w191btn ghost" data-w191go="fmt">' + (fmt ? 'Change the format' : 'Set the format') + '</button>' : '')
+      + (staff() && !partnerOf(ev.id) ? '<button class="w191btn ghost" data-w191go="partner" title="A partner organization (Oberoi Financial Group, say) serves with us">With a partner?</button>' : '') + '</div>'
       + (ev.title || ev.notes ? '<div class="w191ctx">' + (ev.title ? '<b>' + E(ev.title) + '</b>' : '') + (ev.notes ? '<span>' + E(ev.notes) + '</span>' : '') + '</div>' : '');
   }
   function recruitLine(D) {
@@ -92,11 +93,29 @@
   }
   function recruitStageLine(D) {
     var c = rosterCounts(D);
-    return '<div class="w191line">' + (c.short.length ? '<span class="pill short">' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short: ' + E(c.short.map(function (r) { return roleLabel(r).toLowerCase(); }).join(', ')) + '</span>' : '<span class="pill ok">Every role has someone</span>')
+    var P0 = curEv() ? partnerOf(curEv().id) : null;
+    return '<div class="w191line">' + (P0 && coversText(P0) ? '<span class="pill" title="Counted toward each role">' + E(P0.partner_name + ' covers ' + coversText(P0)) + '</span>' : '') + (c.short.length ? '<span class="pill short">' + c.short.length + ' role' + (c.short.length === 1 ? '' : 's') + ' short: ' + E(c.short.map(function (r) { return roleLabel(r).toLowerCase(); }).join(', ')) + '</span>' : '<span class="pill ok">Every role has someone</span>')
       + (staff() ? '<button class="w191btn gold" data-w191go="find">Find volunteers</button><button class="w191btn ghost" data-w191go="conv">Conversations</button><button class="w191btn ghost" data-w191go="bplan">Plan the roster</button><button class="w191btn ghost" data-w191go="team">See the team</button>' : '') + '</div>'
       + (staff() ? '<p style="margin:6px 0 0;font-size:12px;line-height:1.45;color:' + MUTED + '">Find volunteers: who signed up and never came, regulars we miss, who came once and who loved it, with a personal text to each from the ops line (9 am to 7 pm). Their YES lands on the roster by itself.</p>' : '');
   }
   /* a partner organization on the roster (Old Brewery Mission on dishes, a corporate partner serving) is not "not matched" */
+  /* wave191l: a role column that scrolls says how many cards are below (and nothing once at the end) */
+  function scrollHints() { document.querySelectorAll('#w119.w191 .board .rc').forEach(hintOne); }
+  function hintOne(rc) {
+    var m = rc.querySelector(':scope > .w191more');
+    var over = rc.scrollHeight > rc.clientHeight + 6 && !rc.querySelector(':scope > .bench');
+    if (!over) { if (m) m.remove(); return; }
+    var bottom = rc.scrollTop + rc.clientHeight - 28, n = 0;
+    rc.querySelectorAll(':scope > .pc').forEach(function (c) { if (c.offsetTop + c.offsetHeight / 2 > bottom) n++; });
+    var txt = n ? '↓ ' + n + ' more' : '';
+    if (!m) { m = document.createElement('div'); m.className = 'w191more'; m.setAttribute('aria-hidden', 'true'); rc.appendChild(m); }
+    if (m.textContent !== txt) m.textContent = txt;
+    if (m.classList.contains('end') !== !n) m.classList.toggle('end', !n);
+  }
+  document.addEventListener('scroll', function (e) {
+    var t = e.target; if (!t || !t.classList || !t.classList.contains('rc') || !t.closest || !t.closest('#w119.w191')) return;
+    if (t.__w191hr) return; t.__w191hr = requestAnimationFrame(function () { t.__w191hr = null; hintOne(t); });
+  }, true);
   function partners() {
     var D = curD(); if (!D) return;
     var by = {}; (D.roster || []).forEach(function (x) { by[String(x.id)] = x; });
@@ -108,7 +127,7 @@
   function dayCard(ev, D, row) {
     var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var ph = function (r) { var p = (r.detail || {}).phone; return p ? '<a href="tel:' + E(String(p).replace(/[^\d+]/g, '')) + '" style="color:' + GREEN + '">' + E(p) + '</a>' : '<span style="color:' + MUTED + '">no phone</span>'; };
-    var who = function (role) { return list.filter(function (r) { return r.role === role; }).map(function (r) { var k = (r.detail || {}).driver_role; return '<div style="padding:4px 0;font-size:13.5px"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (role === 'driver' && k ? ' <span style="color:' + MUTED + ';font-size:12px">' + E(k === 'main' ? 'main' : k === 'pickup' ? 'pickups' : 'main and pickups') + '</span>' : '') + ' · ' + ph(r) + (isConf(r) ? '' : ' <span style="color:' + MUTED + ';font-size:11.5px">not confirmed</span>') + '</div>'; }).join('') || '<div style="padding:4px 0;font-size:13px;color:' + FLAG + '">Nobody yet</div>'; };
+    var who = function (role) { return list.filter(function (r) { return r.role === role; }).map(function (r) { var k = (r.detail || {}).driver_role; var st = runStartFor(ev.id, r.id, role); return '<div style="padding:4px 0;font-size:13.5px"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (role === 'driver' && k ? ' <span style="color:' + MUTED + ';font-size:12px">' + E(k === 'main' ? 'main' : k === 'pickup' ? 'pickups' : 'main and pickups') + '</span>' : '') + (st ? ' <span class="w191st" title="From the run (Prepare)">starts ' + E(hm12(st)) + '</span>' : '') + ' · ' + ph(r) + (isConf(r) ? '' : ' <span style="color:' + MUTED + ';font-size:11.5px">not confirmed</span>') + '</div>'; }).join('') || '<div style="padding:4px 0;font-size:13px;color:' + FLAG + '">Nobody yet</div>'; };
     var tl = list.filter(function (r) { return r.role === 'team_leader' && r.confirm_token; })[0];
     return '<div class="cardy"><h4>The day</h4><div class="w191grid2">'
       + '<div><div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:0 0 2px">Team leaders</div>' + who('team_leader') + '<div class="w191grp" style="font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;margin:10px 0 2px">Drivers</div>' + who('driver') + '</div>'
@@ -217,10 +236,11 @@
     own('plan').innerHTML = planLine(ev, D, row); own('recruit').innerHTML = recruitStageLine(D); own('day_of').innerHTML = dayCard(ev, D, row); own('wrap_up').innerHTML = wrapLine(ev);
     var dateCtl = r.querySelector('.top > span'); if (dateCtl) { var dw = document.createElement('div'); dw.className = 'w191line w191date'; dw.appendChild(dateCtl); own('plan').appendChild(dw); }
     var rosterCard = right.querySelector(':scope > .cardy'); if (rosterCard) { rosterCard.classList.add('w191roster'); team.querySelector(':scope > .b').appendChild(rosterCard); }
-    partners();
+    partners(); setTimeout(scrollHints, 60);
     adoptRail();
     placeSteps(M);
     S.laid = ev.id;
+    paintRun(); paintInv(); paintPartner();
     autotick(ev).then(function (changed) { if (changed) refresh(true); });
   }
   /* cards the earlier waves put in wave119's rail land in their stage; anything new arriving later follows (the observer) */
@@ -256,9 +276,10 @@
     var pl = own('plan'); if (pl) { var keep = pl.querySelector('.w191date'); pl.innerHTML = planLine(ev, D, row); if (keep) pl.appendChild(keep); }
     var rc = own('recruit'); if (rc) rc.innerHTML = recruitStageLine(D);
     var tm = r.querySelector('#w191team'); if (tm) { var th = tm.querySelector(':scope > .h'); if (th) th.innerHTML = teamHeadHtml(D); var tl = tm.querySelector(':scope > .b > .w191own'); if (tl) tl.innerHTML = recruitLine(D); }
-    partners();
+    partners(); scrollHints();
     var dc = own('day_of'); if (dc) dc.innerHTML = dayCard(ev, D, row);
     var wl = own('wrap_up'); if (wl) wl.innerHTML = wrapLine(ev);
+    paintRun(); paintInv(); paintPartner();
     if (steps) { /* the steps were reloaded: tick the boxes and the notes in place */
       M.steps.forEach(function (x) { var el = r.querySelector('.vl-step[data-vlstep="' + x.s.id + '"]'); if (!el) return; el.classList.toggle('done', !!x.s.done); var cb = el.querySelector('input[data-vlchk]'); if (cb) cb.checked = !!x.s.done; decorateStep(el, x); });
       STAGES.forEach(function (s) { foldDone(s.k); });
@@ -291,7 +312,9 @@
     if (what === 'date') { openStage('plan', true); var inp = document.querySelector('#w119 .w191date input'); if (inp) { try { inp.focus(); inp.showPicker && inp.showPicker(); } catch (e) { /* fine */ } } return; }
     if (what === 'cancel') { if (!clickProxy('#w106can')) T('The cancel control is loading'); return; }
     if (what === 'start') { openStage('prepare', true); setTimeout(function () { var st = document.getElementById('w174st'); if (st) { try { st.focus(); } catch (e) { /* fine */ } } }, 350); return; }
-    if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
+    if (what === 'inventory') { location.hash = '#volunteering/inventory'; return; }
+    if (what === 'partner') { partnerEditor(); return; }
+    if (what === 'team') { var tm = document.getElementById('w191team'); if (tm) { tm.classList.add('open'); S.teamOpen = true; setTimeout(scrollHints, 60); try { tm.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { tm.scrollIntoView(); } } return; }
     if (what === 'close') { if (confirm('Close this serving? It moves to Done; you can reopen it.')) setStatus(ev, 'completed'); return; }
     if (what === 'reopen') { setStatus(ev, 'planned'); return; }
   }
@@ -318,7 +341,7 @@
     /* the format editor (wave171) saves into the event: the flow header follows */
     if (t.closest('[data-w171fsave]')) { var ev0 = curEv(), f0 = ev0 ? ev0.format : null, n0 = 0; var iv = setInterval(function () { var e1 = curEv(); n0++; if ((e1 && e1.format !== f0) || n0 > 20) { clearInterval(iv); if (root()) refresh(false); } }, 150); }
     var st = t.closest('.w191bar [data-w191stage]'); if (st) { e.preventDefault(); e.stopPropagation(); openStage(st.getAttribute('data-w191stage'), true); return; }
-    var tt = t.closest('[data-w191team]'); if (tt) { var ts = tt.closest('#w191team'); if (ts) { var on2 = !ts.classList.contains('open'); ts.classList.toggle('open', on2); S.teamOpen = on2; } return; }
+    var tt = t.closest('[data-w191team]'); if (tt) { var ts = tt.closest('#w191team'); if (ts) { var on2 = !ts.classList.contains('open'); ts.classList.toggle('open', on2); S.teamOpen = on2; if (on2) setTimeout(scrollHints, 60); } return; }
     var tg = t.closest('[data-w191toggle]'); if (tg) { var sec = tg.closest('.w191stage'); if (sec) { var k = sec.getAttribute('data-stage'); var on = !sec.classList.contains('open'); sec.classList.toggle('open', on); S.open[k] = on; } return; }
     var tk = t.closest('#w191next [data-w191tick]'); if (tk) { e.preventDefault(); e.stopPropagation(); var sid = tk.getAttribute('data-w191tick'); var box = document.querySelector('#w119 input[data-vlchk="' + sid + '"]'); if (box) { box.click(); } else if (typeof waVolToggleStep === 'function') { await waVolToggleStep(sid, true, null); } setTimeout(function () { refresh(true); }, 500); return; }
     if (!t.closest('#w191head .more')) document.querySelectorAll('#w191head .more.open').forEach(function (m) { m.classList.remove('open'); });

@@ -58,7 +58,7 @@ W1 = {
         # wave192 (01/10/26): the card and the second question say The Loop (I'm in, close the loop), not check in and out
         {'icon': 'refresh', 't': 'The Loop', 'd': 'When you start working for Welfare Avenue, press **I\'m in** at the top of the Hub; when you finish, press **Close the loop** and share a few lines on what moved. Your team sees the work, never your hours.'},
         {'icon': 'chat', 't': 'Answer within 24 hours', 'd': 'Acknowledge messages from your team within a day, even when the full answer comes later.'},
-        {'icon': 'target', 't': 'Your time', 'd': 'Team members give at least 16 hours a month (directors 24) and volunteer at a serving at least twice a year.'},
+        {'icon': 'target', 't': 'Your time', 'd': 'Team members give at least 16 hours a month (directors 24) and volunteer at a serving four times a year.'},
         {'icon': 'people', 't': 'One meeting a week', 'd': 'Each team meets online once a week. The whole team takes a break every August.'}]},
       {'type': 'callout', 'tone': 'info', 't': 'Finding anything', 'text': 'Search everything at the top of the Hub finds people, tasks, meetings and documents. Ask the Hub answers questions.'},
     ]},
@@ -136,7 +136,7 @@ W2 = {
 
 W3 = {
   'v': 1, 'cover': 'gold',
-  'summary': 'The teams and what each one does, how a good team meeting runs, your tasks and requests in the Hub, and your first serving.',
+  'summary': 'The teams and what each one does, how a good team meeting runs, your tasks and requests in the Hub, and why every member volunteers four times a year.',
   'chapters': [
     {'id': 'teams', 't': 'Our teams', 'blocks': [
       photo('2023-05-spring-crew-under-the-tent', 'The crew under the tent, May 2023.', 'About twelve volunteers, most in green vests, pose in front of the green tent in a downtown park.', 0.55, 0.62),
@@ -167,16 +167,28 @@ W3 = {
         {'t': 'Close it', 'd': 'Tick it done when it is done. Your team sees it move.'},
         {'t': 'Need another team?', 'd': 'Send a Request: it lands in their team inbox with what you need and by when.'}]},
     ]},
-    {'id': 'serve', 't': 'Your first serving', 'blocks': [
-      photo('2024-10-autumn-volunteers-at-work', 'Volunteers at work, autumn 2024.', 'Four volunteers work side by side over foil trays at the serving table.'),
-      {'type': 'lead', 'text': 'Every member volunteers at a serving at least twice a year. Your first one is this week, and it is where our work makes the most sense.'},
-      {'type': 'list', 'items': ['Ask your onboarding team to put you in touch with the person who runs the serving, and sign up for the next one.', 'Arrive at 12:00 for the setup, dressed for the weather.', 'The team leader briefs you on the day: you might set up, serve, hand out clothing or talk with people.', 'Tell your lead the date you are going, and afterwards how it went.']},
+    # wave191p (02/10/26): Steel, "explain why it's important to volunteer, really highlight this and add photos to encourage ...
+    # it required 4 times a year"; the servings block is Choose your servings (filled by wave191's onboarding module)
+    {'id': 'serve', 't': 'Why you volunteer', 'blocks': [
+      {'type': 'photos', 'items': [
+        {'src': B + 'photos/web/2024-07-summer-team-under-the-tent.jpg', 'fx': 0.5, 'fy': 0.52, 'alt': 'Thirteen volunteers in green Welfare Avenue vests pose under the green tent in a leafy park.', 'cap': 'The team under the tent, summer 2024.'},
+        {'src': B + 'photos/web/2024-10-autumn-volunteers-plating.jpg', 'fx': 0.42, 'fy': 0.45, 'alt': 'Two volunteers in green vests plate food side by side.', 'cap': 'Plating together, autumn 2024.'}]},
+      {'type': 'lead', 'text': 'Every member volunteers at a serving **four times a year**, starting in your onboarding. It is the heart of our work, and the fastest way to understand it.'},
+      {'type': 'callout', 'tone': 'warn', 't': 'Required: four servings a year', 'text': 'Volunteering is part of every role at Welfare Avenue, whatever your team. Choose your first servings below: they count from your first week.'},
+      {'type': 'cards', 'items': [
+        {'t': 'Understand Welfare Avenue', 'd': 'You see who we serve, what a Sunday takes and why it matters. Everything else we do starts at the table.', 'icon': 'heart'},
+        {'t': 'Do your role better', 'd': 'Marketing, fundraising, HR or finance: what you make lands at a serving. Once you have been there, you write, plan and decide better.', 'icon': 'target'},
+        {'t': 'Meet the community', 'd': 'The people we serve, our volunteers and your colleagues, side by side for an afternoon.', 'icon': 'people'}]},
+      {'type': 'photo', 'src': B + 'photos/web/2024-07-summer-servers-at-the-table.jpg', 'fx': 0.6, 'fy': 0.55, 'alt': 'Four volunteers in green vests and gloves serve salad from foil trays along the table under the tent.', 'cap': 'Serving under the tent, summer 2024.'},
+      {'type': 'h', 'text': 'Choose your servings'},
+      {'type': 'servings'},
+      {'type': 'list', 'items': ['Arrive at 12:00 for the setup, dressed for the weather.', 'The team leader briefs you on the day: you might set up, serve, hand out clothing or talk with people.', 'Afterwards a two-minute survey comes by text: tell us how it went.']},
     ]},
   ],
   'quiz': {'pass': 0.75, 'questions': [
     {'q': 'Where do your team\'s meeting notes and tasks end up?', 'a': ['In the Hub, from Loom, by themselves', 'In a document someone writes up', 'Only in Slack'], 'c': 0, 'why': 'The recording comes in from Loom; the summary, decisions and tasks land on your team\'s page.'},
     {'q': 'You need something from another team. What do you do?', 'a': ['Message whoever you know there', 'Send a Request in the Hub, to their team inbox', 'Wait for the next all-team meeting'], 'c': 1, 'why': 'A Request reaches the whole team with what you need and by when.'},
-    {'q': 'How often does every member volunteer at a serving?', 'a': ['Once, during onboarding', 'At least twice a year', 'Every week'], 'c': 1, 'why': 'At least twice a year, starting in your onboarding.'},
+    {'q': 'How often does every member volunteer at a serving?', 'a': ['Once, during onboarding', 'Four times a year', 'Every week'], 'c': 1, 'why': 'Four times a year, starting in your onboarding: it is how you understand our work and do your role better.'},
     {'q': 'Who writes the notes and tasks in a team meeting?', 'a': ['Whoever remembers', 'Someone named at every meeting', 'Nobody, the recording is enough'], 'c': 1, 'why': 'Naming a note-taker every time is the one non-negotiable in our leads\' guidance.'}]},
 }
 
@@ -222,7 +234,7 @@ LESSONS = [
 STEPS = [
   ('wa167w1', 'WEEK 1', 'Start here: Welcome to Welfare Avenue', 'onb:w1', 'A 10-minute lesson in the Avenue Academy: who we are, how your onboarding works, the tools you will use and how we work together, with a short knowledge check. This step ticks itself when you pass it.'),
   ('wa167w2', 'WEEK 2', 'Start here: Who we are', 'onb:w2', 'A 12-minute lesson: our mission, our story from a car trunk to three cities, how a Sunday serving runs and how we speak, with a short knowledge check. This step ticks itself when you pass it.'),
-  ('wa167w3', 'WEEK 3', 'Start here: Working with your team', 'onb:w3', 'An 8-minute lesson: our teams, how a good team meeting runs, your tasks and requests in the Hub, and your first serving, with a short knowledge check. This step ticks itself when you pass it.'),
+  ('wa167w3', 'WEEK 3', 'Start here: Working with your team', 'onb:w3', 'An 8-minute lesson: our teams, how a good team meeting runs, your tasks and requests in the Hub, and why every member volunteers four times a year (you choose your first servings in it), with a short knowledge check. This step ticks itself when you pass it.'),
   ('wa167w4', 'WEEK 4', 'Start here: Look back, look ahead', 'onb:w4', 'A 6-minute lesson: your 30-day evaluation, how to keep growing with us and what we hold on to, with a short knowledge check. This step ticks itself when you pass it.'),
 ]
 JOURNEY = {
@@ -236,8 +248,8 @@ JOURNEY = {
                'learn': ['Tell our story and our mission in your own words', 'Use our brand and the words we use for the people we serve', 'Do your first work in the Hub'],
                'why': 'You represent Welfare Avenue at servings, in messages and online. Knowing where we come from and how we speak means you represent us well.'},
     'WEEK 3': {'title': 'Your team', 'photo': 'photos/web/2023-10-autumn-crew-behind-the-table.jpg', 'fx': 0.55, 'fy': 0.55, 'lesson': 'wa167w3',
-               'learn': ['Know how your team works and meets', 'Start your team\'s Learning Avenue', 'Volunteer at your first serving'],
-               'why': 'This is where you start contributing: your team, your tasks, and a serving where you see our work first hand.'},
+               'learn': ['Know how your team works and meets', 'Start your team\'s Learning Avenue', 'Choose your first servings and confirm them'],
+               'why': 'This is where you start contributing: your team, your tasks, and your first serving. Every member volunteers four times a year: it is how you understand our work and do your role better.'},
     'WEEK 4': {'title': 'Look back', 'photo': 'photos/web/2025-12-gift-baskets-the-crew.jpg', 'fx': 0.5, 'fy': 0.5, 'lesson': 'wa167w4',
                'learn': ['Show what stuck in two short quizzes', 'Look back on your first weeks in a self-assessment', 'Sit down with your lead and HR for your 30-day evaluation'],
                'why': 'A moment to check what stuck, say what could be better, and plan what comes next with your lead.'},

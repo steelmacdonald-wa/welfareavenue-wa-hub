@@ -1641,6 +1641,8 @@
       /* wave167: photos from the Photo library (the Hub's own storage only), with where to hold the crop (fx, fy) and a caption */
       case 'photo': return phHtml(b);
       case 'photos': return '<div class="w167phs">' + (b.items || []).map(phHtml).join('') + '</div>';
+      /* wave191p: choose your servings (filled by wave191's onboarding module) */
+      case 'servings': return '<div class="w191onb" data-w191onbat="lesson"></div>';
       default: return b.text ? '<p>' + md(b.text) + '</p>' : '';
     }
   }

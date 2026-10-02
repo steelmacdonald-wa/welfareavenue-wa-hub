@@ -75,6 +75,16 @@
   function rosterCounts(D) {
     var T = targets(); var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
     var by = {}; list.forEach(function (r) { by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; });
+    /* wave191o: a partner's people count toward the roles they cover (promised until they sign up by name); our team leader and
+       community lead are always ours; when they make the food the cooks are covered, and when they bring it ready, one driver */
+    var P = typeof partnerOf === 'function' && D && D.id ? partnerOf(D.id) : null;
+    if (P) {
+      var cov = P.covers || {}, signed = {};
+      list.forEach(function (r) { if ((r.detail || {}).source === 'partner form') signed[r.role] = (signed[r.role] || 0) + 1; });
+      Object.keys(cov).forEach(function (r) { if (r === 'team_leader' || r === 'community_debrief') return; by[r] = (by[r] || 0) + Math.max(0, (cov[r] || 0) - (signed[r] || 0)); });
+      if (P.food && P.food !== 'ours') by.cook = Math.max(by.cook || 0, T.cook || 0);
+      if (P.food === 'they_bring' && (T.driver || 0) > 1) T = Object.assign({}, T, { driver: 1 });
+    }
     var short = ROLE_ORDER.filter(function (r) { return (T[r] || 0) > (by[r] || 0); });
     var conf = list.filter(isConf).length;
     return { on: list.length, conf: conf, wait: list.length - conf, by: by, short: short, T: T };

@@ -9,8 +9,11 @@
      ===================================================================== */
   var W4 = { resp: {}, respAt: {}, qs: null, itin: null, times: {} };
   var KIND = { main: 'Main driver', pickup: 'Pickup driver', both: 'Only driver' };
+  var RUN_ADDR = [['storage_address', 'Storage unit address (for the map)'], ['serving_address', 'Serving address (for the map)'], ['dish_address', 'Dishwashing address after the serving (for the map; empty for none)']];
+  var RUN_MIN = [['run_cook_min', 'Minutes at each cook', '7'], ['run_storage_min', 'Minutes loading at the storage unit', '15'], ['run_setup_min', 'At the serving this many minutes before it starts', '30'],
+    ['run_serve_min', 'The serving lasts (minutes)', '105'], ['run_dish_min', 'Minutes for the dishes', '45'], ['run_close_min', 'Minutes putting away at the storage unit', '20'], ['run_drive_factor', 'Traffic factor on driving times', '1.25']];
   var ITIN_KEYS = [['meet_spot', 'Meeting spot at the serving'], ['storage_place', 'Storage unit (address and how to find it)'], ['storage_access', 'Storage access (door and locker codes; team leaders and drivers only)'],
-    ['dish_place', 'Dishwashing after the serving'], ['pickup_lead_min', 'Pickup driver starts this many minutes before the serving'], ['audit_url', 'Audit and restock form (team leaders)']];
+    ['dish_place', 'Dishwashing after the serving'], ['pickup_lead_min', 'Pickup driver starts this many minutes before the serving (only until the run is worked out)'], ['audit_url', 'Audit and restock form (team leaders)']];
   var CSS4 = ''
     + '.w174card .t{display:flex;align-items:center;gap:8px;margin:4px 0 8px;flex-wrap:wrap;font-size:13px;}'
     + '.w174card .t input{width:92px;font:14px ' + BODY + ';border:1.5px solid rgba(16,63,57,.18);border-radius:10px;padding:5px 8px;background:' + CREAM + ';}'
@@ -28,7 +31,8 @@
     + '@media (max-width:620px){.w174ans dl{grid-template-columns:1fr;}.w174ans dd{margin-bottom:4px;}}'
     + '.w171tag[data-w174drv]{cursor:pointer;}'
     + '.w174q{display:flex;gap:8px;align-items:flex-start;padding:5px 0;border-top:1px solid rgba(16,63,57,.08);font-size:13px;}'
-    + '.w174q small{display:block;color:' + MUTED + ';font-size:11.5px;}';
+    + '.w174q small{display:block;color:' + MUTED + ';font-size:11.5px;}'
+    + '.w174rmin{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:8px 12px;margin:8px 0 4px;}.w174rmin label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:' + MUTED + ';}.w174rmin input{max-width:120px;}';
   if (!document.getElementById('wa174css')) { var st4 = document.createElement('style'); st4.id = 'wa174css'; st4.textContent = CSS4; document.head.appendChild(st4); }
 
   function hm12(s) { var m = String(s || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return String(s || ''); var h = Number(m[1]); return (h % 12 || 12) + ':' + m[2] + (h < 12 ? ' am' : ' pm'); }
@@ -89,8 +93,16 @@
     var g = function (r) { return guides.filter(function (x) { return x.role === r; })[0] || {}; };
     var lead = Number((W4.itin || {}).pickup_lead_min || 75);
     var roleRow = function (label, from, to) { return '<b>' + E(hm12(from)) + '</b><span>' + E(label) + (to ? ' (to ' + E(hm12(to)) + ')' : '') + '</span>'; };
-    var times = roleRow('Team leader and main driver at the storage unit', addMin(st, g('team_leader').arrive_offset_min == null ? -60 : g('team_leader').arrive_offset_min))
-      + roleRow('Pickup driver starts the pickups', addMin(st, -lead))
+    /* wave191m: with a worked-out run (the run card), the drivers' and the team leader's starts come from it */
+    var run = (window.WA191RUN && typeof WA191RUN.get === 'function') ? WA191RUN.get(ev.id) : null;
+    var runAt = function (r) { var f = (r.stops || [])[0] || {}; return r.at === 'storage' ? 'at the storage unit' : r.at === 'serving' ? 'at the serving' : f.k === 'kitchen' ? 'at the kitchen' : 'at the first pickup'; };
+    var times = run && (run.runs || []).length ? (run.runs || []).map(function (r) {
+      var who = (r.names || []).filter(Boolean).join(', ');
+      return roleRow((r.kind === 'none' ? 'The driver (none yet)' : (KIND[r.kind] || 'Driver') + (who ? ' ' + who : '')) + (r.with_tl ? ' and the team leader' : '') + ' ' + runAt(r), r.start, r.end);
+    }).join('')
+      : roleRow('Team leader and main driver at the storage unit', addMin(st, g('team_leader').arrive_offset_min == null ? -60 : g('team_leader').arrive_offset_min))
+      + roleRow('Pickup driver starts the pickups', addMin(st, -lead));
+    times = times
       + roleRow('Community lead (clothing count)', addMin(st, g('community_debrief').arrive_offset_min == null ? -15 : g('community_debrief').arrive_offset_min))
       + roleRow('Serving: servers, photographers', st, addMin(st, g('server').duration_min || 120));
     var list = (D.roster || []).filter(function (r) { return !isOff(r) && !isDecl(r); });
@@ -192,6 +204,10 @@
     return '<div class="w171h" style="margin-top:18px">Itineraries</div>'
       + '<p class="w171note">What volunteers see on their page from the day before. The storage access shows only to team leaders and drivers.</p>'
       + ITIN_KEYS.map(function (k) { return '<label class="f">' + E(k[1]) + '</label><input type="text" data-w174it="' + k[0] + '" value="' + E(o[k[0]] || '') + '">'; }).join('')
+      /* wave191m: what the drivers' run is worked out from (the serving-run function; the cron works every serving of the next 14 days out again when these change) */
+      + '<div class="w171h" style="margin-top:14px">The drivers’ run</div><p class="w171note">The Hub works out each driver’s stops and times from these, with OpenStreetMap driving times. Addresses as Google Maps would find them; no door codes here.</p>'
+      + RUN_ADDR.map(function (k) { return '<label class="f">' + E(k[1]) + '</label><input type="text" data-w174it="' + k[0] + '" value="' + E(o[k[0]] || '') + '">'; }).join('')
+      + '<div class="w174rmin">' + RUN_MIN.map(function (k) { return '<label><span>' + E(k[1]) + '</span><input type="number" min="0" max="' + (k[0] === 'run_drive_factor' ? 3 : 240) + '" step="' + (k[0] === 'run_drive_factor' ? '0.05' : '1') + '" data-w174it="' + k[0] + '" value="' + E(o[k[0]] || '') + '" placeholder="' + E(k[2]) + '"></label>'; }).join('') + '</div>'
       + '<div class="two"><div><label class="f">Important notes (English, one per line)</label><textarea data-w174it="notes_en">' + E(o.notes_en || '') + '</textarea></div><div><label class="f">Important notes (French)</label><textarea data-w174it="notes_fr">' + E(o.notes_fr || '') + '</textarea></div></div>'
       + '<label class="f">The itinerary text goes the day before at (hour, 24 h, Toronto)</label><input type="text" id="w174ih" value="' + E(S.cfg.sms_itinerary_hour || '17') + '"' + (cn.admin ? '' : ' disabled') + ' style="max-width:120px">'
       + '<div class="foot" style="justify-content:flex-start"><button class="w171btn ghost" data-w174itsave="1">Save the itineraries</button></div>';
@@ -200,6 +216,10 @@
     var rows = Array.prototype.map.call(document.querySelectorAll('[data-w174it]'), function (el) { return { key: el.getAttribute('data-w174it'), value: el.value.trim() || null }; });
     var lead = rows.filter(function (x) { return x.key === 'pickup_lead_min'; })[0];
     if (lead && lead.value && !(Number(lead.value) >= 0 && Number(lead.value) <= 240)) { T('The pickup lead time is minutes, 0 to 240'); return; }
+    var badMin = rows.filter(function (x) { return /^run_/.test(x.key) && x.key !== 'run_drive_factor' && x.value != null && !(/^\d+$/.test(x.value) && Number(x.value) <= 240); })[0];
+    if (badMin) { T('The run’s minutes are whole numbers, 0 to 240'); return; }
+    var fac = rows.filter(function (x) { return x.key === 'run_drive_factor'; })[0];
+    if (fac && fac.value != null && !(Number(fac.value) >= 0.8 && Number(fac.value) <= 3)) { T('The traffic factor is between 0.8 and 3 (1.25 adds a quarter)'); return; }
     var au = rows.filter(function (x) { return x.key === 'audit_url'; })[0];
     if (au && au.value && !/^https:\/\//.test(au.value)) { T('The audit form link must start with https://'); return; }
     btn.disabled = true;

@@ -15,7 +15,7 @@
   }
   var __sched191 = schedule;
   schedule = function () { __sched191(); setTimeout(title, 100); setTimeout(title, 700); };
-  if (typeof waVolRender === 'function') { var __vr191 = waVolRender; waVolRender = async function () { var out = await __vr191.apply(this, arguments); setTimeout(title, 120); setTimeout(title, 900); setTimeout(focusStep, 1200); return out; }; }
+  if (typeof waVolRender === 'function') { var __vr191 = waVolRender; waVolRender = async function () { var out = await __vr191.apply(this, arguments); setTimeout(title, 120); setTimeout(title, 900); setTimeout(focusStep, 1200); setTimeout(invBanner, 400); setTimeout(invBanner, 1500); return out; }; }
   window.addEventListener('hashchange', function () { setTimeout(title, 300); });
   setTimeout(title, 1500);
 

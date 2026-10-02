@@ -237,6 +237,42 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
 .ifoot .row{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
 .ifoot .row a,.ifoot .row button{color:#FFFAF2;font:600 14px 'Space Grotesk',Arial,sans-serif;background:none;border:0;padding:0;margin:0;width:auto;text-decoration:underline;cursor:pointer}
 .ibanner{background:#DCA527;color:#1F201E;border-radius:14px;padding:10px 14px;margin:12px 0;font-size:14.5px;font-weight:600}
+/* wave191m: the worked-out run: each stop's time, the drive between stops, the whole route in Google Maps */
+ol.route .at{display:inline-flex;align-items:center;gap:5px;font:700 13.5px 'Space Grotesk',Arial,sans-serif;color:#F0C860;margin:5px 0 2px}
+ol.route .at svg{width:14px;height:14px}
+ol.route .dv{display:block;font-size:12.5px;color:rgba(255,250,242,.55);margin:0 0 2px;font-style:italic}
+ol.route .pin + .dv + .at,ol.route .pin + .at{margin-top:5px}
+.rsum{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.8fr) minmax(0,1.1fr);gap:8px;margin:2px 0 12px}
+.rsum div{background:#1F201E;border-radius:14px;padding:10px 11px;min-width:0}
+.rsum b{display:block;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-weight:700;font-size:26px;line-height:1;color:#FFFAF2;white-space:nowrap}
+.rsum span{display:block;font-size:12.5px;color:rgba(255,250,242,.66);margin-top:4px;line-height:1.3}
+a.rbig{display:flex;align-items:center;justify-content:center;gap:9px;border-radius:16px;padding:14px 16px;background:#DCA527;color:#1F201E;text-decoration:none;font:700 16px 'Space Grotesk',Arial,sans-serif;margin:12px 0 6px;text-align:center}
+a.rbig.ghost{background:transparent;color:#FFFAF2;border:1.5px solid rgba(255,250,242,.3);font-size:15px;padding:12px 14px}
+a.rbig svg{width:20px;height:20px;flex:none}
+@media (max-width:440px){.rsum b{font-size:22px}.rsum div{padding:9px 9px}}
+.isec p.rnote{font-size:13.5px;color:rgba(255,250,242,.62);margin:0 0 10px}
+/* wave191n: the team leader's storage check after the serving */
+.inv .w{font:700 11.5px 'Space Grotesk',Arial,sans-serif;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);margin:16px 0 6px}
+.inv .ivl{border:1.5px solid var(--line);border-radius:14px;overflow:hidden}
+.inv .ivr{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px 9px 12px;border-top:1px solid var(--line);background:#fff}
+.inv .ivr:first-child{border-top:0}
+.inv .ivr.low{background:#FFF8E8}
+.inv .ivr.missing{background:#FFF1EE}
+.inv .ivr .nm{font-size:14.5px;font-weight:600;min-width:0;line-height:1.3}
+.inv .ivr .nm small{display:block;font-weight:400;color:var(--muted);font-size:12.5px}
+.inv .seg{display:inline-flex;border:1.5px solid var(--line);border-radius:999px;overflow:hidden;flex:none;background:#fff}
+.inv .seg button{margin:0;width:auto;border:0;border-radius:0;background:transparent;color:var(--green);font:600 12.5px 'Space Grotesk',Arial,sans-serif;padding:8px 11px;cursor:pointer;white-space:nowrap}
+.inv .seg button+button{border-left:1.5px solid var(--line)}
+.inv .seg button.on[data-st=ok]{background:var(--green);color:var(--cream)}
+.inv .seg button.on[data-st=low]{background:var(--gold);color:var(--ink)}
+.inv .seg button.on[data-st=missing]{background:var(--flag);color:var(--cream)}
+.inv textarea{width:100%;font:inherit;color:inherit;background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;outline:none;min-height:80px;resize:vertical}
+.inv .lb{display:block;font-weight:600;font-size:14px;margin:16px 0 6px}
+.inv .sum{margin:6px 0 0;font-size:14.5px}
+.inv .sum b{color:var(--flag)}
+@media (max-width:460px){.inv .ivr{flex-direction:column;align-items:stretch;gap:7px}.inv .seg{display:flex}.inv .seg button{flex:1;padding:9px 6px}}
+.pjopen{display:block;text-decoration:none}
+.ichk{display:inline-flex;align-items:center;gap:8px;margin:10px 0 0;width:auto;font:700 14.5px 'Space Grotesk',Arial,sans-serif;padding:10px 16px;border-radius:999px;background:#DCA527;color:#1F201E;border:0;cursor:pointer}
 .iteaser{display:flex;gap:14px;align-items:center;background:#1F201E;color:#FFFAF2;border-radius:18px;padding:12px;margin:0 0 18px;text-decoration:none;cursor:pointer;border:0;width:100%;text-align:left;font:inherit}
 .iteaser .th{width:84px;height:84px;border-radius:14px;background:#103F39 center/cover no-repeat;flex:none}
 .iteaser b{display:block;font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif;font-size:24px;text-transform:uppercase;line-height:1;color:#FFFAF2}
@@ -317,6 +353,24 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
       ivCall: 'Call', ivText: 'Text', ivMe: 'you', ivDayK: 'Your day', ivKitchenK: 'Community kitchen', ivKitchenC: 'Kitchen contact:', ivIngr: 'Ingredients:', ivCooks: 'Cooks dropping off their food:', ivStop: 'Stop {n}',
       wx: { 0: 'Clear', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Cloudy', 45: 'Fog', 48: 'Fog', 51: 'Light drizzle', 53: 'Drizzle', 55: 'Heavy drizzle', 61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Freezing rain', 67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow', 77: 'Snow grains', 80: 'Rain showers', 81: 'Rain showers', 82: 'Heavy showers', 85: 'Snow showers', 86: 'Snow showers', 95: 'Thunderstorms', 96: 'Thunderstorms', 99: 'Thunderstorms' },
       kMain: 'main driver', kPick: 'pickup driver', kBoth: 'driver', call2: 'Call', text2: 'Text',
+      cookEta: 'Food ready by {a}: your driver comes at about {b} and texts you first',
+      rnStart: 'Be at your first stop at {t}.', rnLong: 'The whole run takes about {m} minutes, {d} of them driving.',
+      rnStops1: 'stop', rnStopsN: 'stops', rnIn: 'in all, {d} min driving', rnRide: 'You ride with {n}.', rnRideNone: 'No driver is set yet: this is the run you and the driver will do.',
+      rnTl: 'The team leader rides with you.', rnTlN: '{n}, the team leader, rides with you.', rnMaps: 'Open the whole route in Google Maps',
+      rnMapsP: 'It starts from where you are and goes through every stop to the serving. Google shows how long you need to reach the first stop, so you know when to leave.',
+      rnDrive: '{m} min drive', rnApprox: 'about', rnLeave: 'Leave the serving', rnPack: 'Pack up with the team first.', rnDish: 'The dishes',
+      rnPutBack: 'Put everything back in its place.', rnCheckTl: 'Then do the quick inventory check on your page: two minutes, and we know what to restock.', rnCheck: 'The team leader checks the inventory before you lock up.',
+      rnMapsAfter: 'Open this route in Google Maps',
+      invT: 'Check the storage unit', invP: 'Once everything is back: tap what is running low or missing. Everything else counts as all back. Two minutes, and the team knows what to restock.',
+      invOk: 'All back', invLow: 'Running low', invOut: 'Missing', invPlaceQ: 'Is everything back in its place, and the unit locked?', invPlaceY: 'Yes, all in place and locked', invPlaceN: 'Not quite (tell us below)',
+      invNote: 'Anything broken, or anything the team should know? (optional)', invSend: 'Save the check', invReq: 'Please say whether everything is back in its place.',
+      invThanks: 'Thank you! The team sees your check in the Hub.', invNone: 'Nothing to restock.', invLowN: 'Running low: {n}', invOutN: 'Missing: {n}', invNotPlace: 'Not everything is back in its place yet.',
+      invEdit: 'Change my check', invPreview: 'Test preview: the check opens when the serving starts ({t}).', invClosed: 'The check for this serving is closed.', invGo: 'Do the storage check',
+      pjEy: 'Volunteer with Welfare Avenue', pjT: 'Join us with {p}', pjSub: '{d} · the serving starts at {t}', pjP: 'Sign up once and you are on the team for this serving. You get your own page with your itinerary, and a reminder before the day.',
+      pjFirst: 'First name', pjLast: 'Last name', pjEmail: 'Email', pjPhone: 'Mobile phone', pjOne: 'An email or a mobile phone, so we can reach you about the serving.', pjRole: 'What would you like to do?',
+      pjSend: 'Sign me up', pjOk: 'You are on the team!', pjOkP: 'Thank you for joining us. Your page has everything for the day.', pjOpen: 'Open my page', pjAlready: 'You were already on the team for this serving.',
+      pjClosed: 'Sign-ups for this serving are closed. Thank you for your interest!', pjErrName: 'Please enter your first name.', pjErrContact: 'Please enter an email or a mobile phone.', pjErrEmail: 'Please check the email.', pjErrPhone: 'Please check the phone number (10 digits).',
+      pjPriv: 'Welfare Avenue keeps your name and contact details to organize this serving and to invite you to future ones. Reply STOP to any text to stop texts.', pjJoined: '{n} from your group already signed up',
       acct: 'Save to my account', acctP: 'See how many times you’ve volunteered, your hours and open spots, with your Google account.' },
     fr: { loading: 'Chargement…', ey: 'Votre place de bénévole', hi: 'Bonjour', intro: 'Merci de confirmer votre place. Un seul clic suffit.', introInv: 'Nous aimerions beaucoup vous compter parmi nous pour ce service. Pouvez-vous venir? Un seul clic prévient l’équipe.', confirmInv: 'Oui, je serai là',
       role: 'Rôle', date: 'Date', place: 'Lieu', format: 'Formule', home: 'Cuisiné à la maison', kitchen: 'Cuisine communautaire', shift: 'Quart en cuisine',
@@ -373,6 +427,24 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
       ivCall: 'Appeler', ivText: 'Texto', ivMe: 'vous', ivDayK: 'Votre journée', ivKitchenK: 'Cuisine communautaire', ivKitchenC: 'Contact en cuisine :', ivIngr: 'Ingrédients :', ivCooks: 'Plats déposés par :', ivStop: 'Arrêt {n}',
       wx: { 0: 'Ciel dégagé', 1: 'Plutôt dégagé', 2: 'Partiellement nuageux', 3: 'Nuageux', 45: 'Brouillard', 48: 'Brouillard', 51: 'Bruine faible', 53: 'Bruine', 55: 'Forte bruine', 61: 'Pluie faible', 63: 'Pluie', 65: 'Forte pluie', 66: 'Pluie verglaçante', 67: 'Pluie verglaçante', 71: 'Neige faible', 73: 'Neige', 75: 'Forte neige', 77: 'Grésil', 80: 'Averses', 81: 'Averses', 82: 'Fortes averses', 85: 'Averses de neige', 86: 'Averses de neige', 95: 'Orages', 96: 'Orages', 99: 'Orages' },
       kMain: 'chauffeur principal', kPick: 'chauffeur des collectes', kBoth: 'chauffeur', call2: 'Appeler', text2: 'Texto',
+      cookEta: 'Plat prêt pour {a} : votre chauffeur passe vers {b} et vous texte avant',
+      rnStart: 'Soyez à votre premier arrêt à {t}.', rnLong: 'Le trajet complet prend environ {m} minutes, dont {d} de route.',
+      rnStops1: 'arrêt', rnStopsN: 'arrêts', rnIn: 'au total, dont {d} min de route', rnRide: 'Vous faites le trajet avec {n}.', rnRideNone: 'Aucun chauffeur pour l’instant : voici le trajet que vous ferez avec le chauffeur.',
+      rnTl: 'Le ou la responsable d’équipe fait le trajet avec vous.', rnTlN: '{n}, responsable d’équipe, fait le trajet avec vous.', rnMaps: 'Ouvrir tout le trajet dans Google Maps',
+      rnMapsP: 'Le trajet part de là où vous êtes et passe par chaque arrêt jusqu’au service. Google indique le temps pour vous rendre au premier arrêt : vous savez quand partir.',
+      rnDrive: '{m} min de route', rnApprox: 'environ', rnLeave: 'Départ du service', rnPack: 'Rangez d’abord avec l’équipe.', rnDish: 'La vaisselle',
+      rnPutBack: 'Remettez tout à sa place.', rnCheckTl: 'Puis faites la vérification rapide de l’inventaire sur votre page : deux minutes, et nous savons quoi racheter.', rnCheck: 'Le ou la responsable vérifie l’inventaire avant de fermer.',
+      rnMapsAfter: 'Ouvrir ce trajet dans Google Maps',
+      invT: 'Vérifiez l’entrepôt', invP: 'Une fois tout rangé : touchez ce qui baisse ou ce qui manque. Le reste compte comme tout est là. Deux minutes, et l’équipe sait quoi racheter.',
+      invOk: 'Tout est là', invLow: 'Il en reste peu', invOut: 'Manquant', invPlaceQ: 'Tout est-il à sa place, et l’entrepôt verrouillé?', invPlaceY: 'Oui, tout est rangé et verrouillé', invPlaceN: 'Pas tout à fait (précisez plus bas)',
+      invNote: 'Quelque chose de brisé, ou à signaler à l’équipe? (facultatif)', invSend: 'Enregistrer la vérification', invReq: 'Merci d’indiquer si tout est à sa place.',
+      invThanks: 'Merci! L’équipe voit votre vérification dans le Hub.', invNone: 'Rien à racheter.', invLowN: 'Il en reste peu : {n}', invOutN: 'Manquant : {n}', invNotPlace: 'Tout n’est pas encore à sa place.',
+      invEdit: 'Modifier ma vérification', invPreview: 'Aperçu de test : la vérification ouvre au début du service ({t}).', invClosed: 'La vérification pour ce service est fermée.', invGo: 'Faire la vérification de l’entrepôt',
+      pjEy: 'Bénévolat avec Welfare Avenue', pjT: 'Joignez-vous à nous avec {p}', pjSub: '{d} · le service commence à {t}', pjP: 'Inscrivez-vous une fois et vous faites partie de l’équipe pour ce service. Vous recevez votre propre page avec votre itinéraire, et un rappel avant le jour J.',
+      pjFirst: 'Prénom', pjLast: 'Nom', pjEmail: 'Courriel', pjPhone: 'Cellulaire', pjOne: 'Un courriel ou un cellulaire, pour vous joindre au sujet du service.', pjRole: 'Que voulez-vous faire?',
+      pjSend: 'Je m’inscris', pjOk: 'Vous faites partie de l’équipe!', pjOkP: 'Merci de vous joindre à nous. Votre page a tout ce qu’il faut pour le jour J.', pjOpen: 'Ouvrir ma page', pjAlready: 'Vous faisiez déjà partie de l’équipe pour ce service.',
+      pjClosed: 'Les inscriptions pour ce service sont fermées. Merci de votre intérêt!', pjErrName: 'Veuillez entrer votre prénom.', pjErrContact: 'Veuillez entrer un courriel ou un cellulaire.', pjErrEmail: 'Veuillez vérifier le courriel.', pjErrPhone: 'Veuillez vérifier le numéro (10 chiffres).',
+      pjPriv: 'Welfare Avenue conserve votre nom et vos coordonnées pour organiser ce service et vous inviter aux prochains. Répondez STOP à un texto pour ne plus en recevoir.', pjJoined: '{n} de votre groupe déjà inscrits',
       acct: 'Enregistrer dans mon compte', acctP: 'Voyez combien de fois vous avez fait du bénévolat, vos heures et les places libres, avec votre compte Google.' }
   };
   var DEF_PHOTO = { path: 'photos/web/2022-10-autumn-crew-at-the-tent.jpg', fx: 0.52, fy: 0.58, alt: '' };
@@ -431,7 +503,7 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
   }
   function whenText(d) {
     var tm = d.times; if (!tm || !tm.start) return '';
-    if (tm.at === 'home') return t('cookHome').replace('{t}', hm(tm.start));
+    if (tm.at === 'home') return tm.eta ? t('cookEta').replace('{a}', hm(tm.start)).replace('{b}', hm(tm.eta)) : t('cookHome').replace('{t}', hm(tm.start));
     if (tm.at === 'dropoff') return t('cookDrop').replace('{t}', dropTime());
     var s = t('toT').replace('{a}', hm(tm.start)).replace('{b}', hm(tm.end));
     if (tm.serve && tm.serve !== tm.start) s += ' (' + t('serveAt').replace('{t}', hm(tm.serve)) + ')';
@@ -640,6 +712,72 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
     if (S.svErr) h += '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.svErr) + '</div>';
     return h + '<button type="button" id="svsend"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('svSend')) + '</button></div>';
   }
+  /* ---------- wave191n: the team leader's storage check after the serving ---------- */
+  function invLoad() {
+    if (!S.d || String(S.d.role || '').toLowerCase() !== 'team_leader' || S.d.cancelled) return;
+    rpc('volunteer_inventory_get', S.test ? { p_token: token(), p_preview: true } : { p_token: token() }).then(function (r) {
+      if (!r.ok || !r.body) return;
+      S.inv = r.body; S.invSt = {}; S.invIn = null; S.invNote = ''; S.invDone = false;
+      var c = r.body.check;
+      if (c) { (c.items || []).forEach(function (x) { if (x.state && x.state !== 'ok') S.invSt[String(x.id)] = x.state; }); S.invIn = c.in_place; S.invNote = c.note || ''; S.invDone = true; }
+      paint();
+      if (location.hash === '#inv') invScroll();
+    }).catch(function () { /* the page works without it */ });
+  }
+  function invShow() { var v = S.inv; return !!(v && (v.items || []).length && (v.open || S.test)); }
+  function invScroll() { try { var el = document.getElementById('inv'); if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' }); } catch (e) { /* fine */ } }
+  function invHtml() {
+    if (!invShow()) return '';
+    var v = S.inv, st = S.invSt || {};
+    var h = '<div class="sec inv" id="inv"><h3 style="font-size:26px">' + E(t('invT')) + '</h3>' + (!v.open ? '<div class="banner info">' + E(t('invPreview').replace('{t}', hm(v.opens))) + '</div>' : '');
+    var names = function (k) { return (v.items || []).filter(function (it) { return st[String(it.id)] === k; }).map(function (it) { return it.item; }); };
+    if (S.invDone && !S.invEdit) {
+      var lo = names('low'), mi = names('missing');
+      var sum = (lo.length ? '<p class="sum"><b>' + E(t('invLowN').replace('{n}', '')) + '</b>' + E(lo.join(', ')) + '</p>' : '') + (mi.length ? '<p class="sum"><b>' + E(t('invOutN').replace('{n}', '')) + '</b>' + E(mi.join(', ')) + '</p>' : '')
+        + (!lo.length && !mi.length ? '<p class="sum">' + E(t('invNone')) + '</p>' : '') + (S.invIn === false ? '<p class="sum"><b>' + E(t('invNotPlace')) + '</b></p>' : '');
+      return h + '<div class="ok">' + tick() + '<div><b>' + E(t('invThanks')) + '</b></div></div>' + sum + (v.open || S.test ? '<button type="button" class="no" id="invedit">' + E(t('invEdit')) + '</button>' : '') + '</div>';
+    }
+    h += '<p style="margin:0 0 8px;font-size:15px">' + E(t('invP')) + '</p>';
+    h += '<div class="q svq' + (S.invErr === 'place' ? ' err' : '') + '" role="radiogroup" aria-labelledby="invq"><label class="l" id="invq">' + E(t('invPlaceQ')) + ' <span class="req">*</span></label>'
+      + '<label class="opt"><input type="radio" name="invin" value="yes"' + (S.invIn === true ? ' checked' : '') + '><span>' + E(t('invPlaceY')) + '</span></label>'
+      + '<label class="opt"><input type="radio" name="invin" value="no"' + (S.invIn === false ? ' checked' : '') + '><span>' + E(t('invPlaceN')) + '</span></label></div>';
+    var cats = [], by = {};
+    (v.items || []).forEach(function (it) { var c = it.category || ''; if (!by[c]) { by[c] = []; cats.push(c); } by[c].push(it); });
+    h += cats.map(function (c) {
+      return (c ? '<div class="w">' + E(c) + '</div>' : '') + '<div class="ivl">' + by[c].map(function (it) {
+        var s = st[String(it.id)] || 'ok';
+        return '<div class="ivr' + (s !== 'ok' ? ' ' + s : '') + '" data-invrow="' + it.id + '"><span class="nm">' + E(it.item || '') + (it.unit ? '<small>' + E(it.unit) + '</small>' : '') + '</span>'
+          + '<span class="seg" role="group" aria-label="' + E(it.item || '') + '">' + ['ok', 'low', 'missing'].map(function (k) {
+            return '<button type="button" data-inv="' + it.id + '" data-st="' + k + '" aria-pressed="' + (s === k ? 'true' : 'false') + '"' + (s === k ? ' class="on"' : '') + '>' + E(t(k === 'ok' ? 'invOk' : k === 'low' ? 'invLow' : 'invOut')) + '</button>';
+          }).join('') + '</span></div>';
+      }).join('') + '</div>';
+    }).join('');
+    h += '<label class="lb" for="invnote">' + E(t('invNote')) + '</label><textarea id="invnote" maxlength="1000">' + E(S.invNote || '') + '</textarea>';
+    if (S.invErr) h += '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.invErr === 'place' ? t('invReq') : S.invErr === 'closed' ? t('invClosed') : t('offline')) + '</div>';
+    return h + '<button type="button" id="invsend"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('invSend')) + '</button></div>';
+  }
+  function invTap(b) {
+    var id = b.getAttribute('data-inv'), k = b.getAttribute('data-st');
+    S.invSt = S.invSt || {}; S.invSt[id] = k;
+    var row = b.closest('[data-invrow]'); if (!row) return;
+    row.className = 'ivr' + (k !== 'ok' ? ' ' + k : '');
+    Array.prototype.forEach.call(row.querySelectorAll('[data-inv]'), function (x) { var on = x.getAttribute('data-st') === k; x.classList.toggle('on', on); x.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+  }
+  function invSend() {
+    if (S.busy) return;
+    var nt = document.getElementById('invnote'); if (nt) S.invNote = nt.value;
+    if (S.invIn !== true && S.invIn !== false) { S.invErr = 'place'; paint(); invScroll(); return; }
+    S.invErr = '';
+    var items = {}; Object.keys(S.invSt || {}).forEach(function (k) { if (S.invSt[k] !== 'ok') items[k] = S.invSt[k]; });
+    var done = function () { S.invDone = true; S.invEdit = false; paint(); invScroll(); };
+    if (S.test) { done(); return; }
+    S.busy = true; paint();
+    rpc('volunteer_inventory_submit', { p_token: token(), p: { items: items, in_place: S.invIn, note: S.invNote || '', lang: S.lang } }).then(function (r) {
+      S.busy = false;
+      if (r.ok && r.body && r.body.ok) done();
+      else { S.invErr = r.body && r.body.reason === 'closed' ? 'closed' : 'offline'; paint(); invScroll(); }
+    }).catch(function () { S.busy = false; S.invErr = 'offline'; paint(); });
+  }
   function svRead() {
     var sv = S.d && S.d.survey; if (!sv) return {};
     var out = {};
@@ -794,6 +932,52 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
     var lbl = (t('wx') || {})[w.code] || '';
     return '<div class="wx"><span class="ic" aria-hidden="true">' + ic + '</span><div><b>' + E(t('ivWx')) + ':</b> ' + E(lbl) + (lbl ? ', ' : '') + E(t('ivWxT').replace('{h}', w.hi).replace('{l}', w.lo)) + (w.p != null ? ' · ' + E(t('ivWxP').replace('{p}', w.p)) : '') + '<br><span class="m">' + E(t('ivDress')) + '</span></div></div>';
   }
+  /* ---------- wave191m: the worked-out run (serving-run): the stops in order with their times, the whole route in Google Maps ---------- */
+  function runOf(it) { var r = it && it.run; return r && Array.isArray(r.stops) && r.stops.length ? r : null; }
+  function runCooks(r) { return (r.stops || []).filter(function (s) { return s.k === 'cook'; }).length; }
+  function pickupBy(it) { var m = {}; (it.pickups || []).forEach(function (c) { if (c && c.rid != null) m[String(c.rid)] = c; }); return m; }
+  function runWho(it, role) {
+    var r = runOf(it); if (!r) return '';
+    var names = (r.names || []).filter(Boolean);
+    if (role === 'team_leader') return names.length ? t('rnRide').replace('{n}', names.join(', ')) : t('rnRideNone');
+    if (role === 'driver' && r.with_tl) { var tl = (it.team || []).filter(function (p) { return p.role === 'team_leader' && !p.me; })[0]; return tl && tl.name ? t('rnTlN').replace('{n}', tl.name) : t('rnTl'); }
+    return '';
+  }
+  function dishName(it, s) { var dp = String(it.dish_place || ''); return dp ? dp.split(',')[0] : (s.label || ''); }
+  function runAt(s) { return '<span class="at">' + IC.clock + E(s.leave ? t('toT').replace('{a}', hm(s.arrive)).replace('{b}', hm(s.leave)) : hm(s.arrive)) + (s.approx ? ' (' + E(t('rnApprox')) + ')' : '') + '</span>'; }
+  function runDrive(s, i) { return i && s.drive_min ? '<span class="dv">' + E(t('rnDrive').replace('{m}', s.drive_min)) + '</span>' : ''; }
+  function runBooklet(it, role, place) {
+    var r = runOf(it), pk = pickupBy(it), n = 0, who = runWho(it, role), stopsN = r.stops.length;
+    var h = '<div class="rsum"><div><b>' + E(hm(r.start)) + '</b><span>' + E(t('ivYou')) + '</span></div>'
+      + '<div><b>' + stopsN + '</b><span>' + E(stopsN === 1 ? t('rnStops1') : t('rnStopsN')) + '</span></div>'
+      + '<div><b>' + E(String(r.total_min || 0)) + ' min</b><span>' + E(t('rnIn').replace('{d}', r.drive_min || 0)) + '</span></div></div>';
+    if (who) h += '<p>' + E(who) + '</p>';
+    if (stopsN > 1) h += '<p>' + E(t('rnStart').replace('{t}', hm(r.start))) + '</p>';
+    if (stopsN > 1 && safeUrl(r.maps_url)) h += '<a class="rbig" href="' + E(safeUrl(r.maps_url)) + '" target="_blank" rel="noopener">' + IC.route + E(t('rnMaps')) + '</a><p class="rnote">' + E(t('rnMapsP')) + '</p>';
+    if (runCooks(r)) h += '<p>' + E(t('itPickB')) + '</p>';
+    h += '<ol class="route">' + r.stops.map(function (s, i) {
+      var dv = runDrive(s, i), at = runAt(s);
+      if (s.k === 'storage') return '<li><span class="pin st">' + IC.store + '</span>' + dv + at + '<b class="n">' + E(t('ivStorage')) + '</b><span class="ad">' + E(it.storage_place || s.address || '') + '</span>' + (it.storage_access ? storageCodes(it.storage_access) : '<span class="m">' + E(t('itAccessNone')) + '</span>') + '<span class="m">' + E(t('itStorageB')) + '</span>' + tools(null, s.address) + '</li>';
+      if (s.k === 'serving') return '<li><span class="pin flag">' + IC.flag + '</span>' + dv + at + '<b class="n">' + E(t('ivFinal')) + '</b><span class="ad"><a href="' + E(mapLink(place)) + '" target="_blank" rel="noopener">' + E(place) + '</a></span>' + (it.meet_spot ? '<span class="m">' + E(it.meet_spot) + '</span>' : '') + '</li>';
+      n++;
+      if (s.k === 'kitchen') return '<li><span class="pin">' + n + '</span>' + dv + at + '<b class="n">' + E(t('kitchen')) + '</b><span class="ad">' + E(s.address) + '</span>' + (it.kitchen_contact ? '<span class="m">' + E(t('ivKitchenC')) + ' ' + E(it.kitchen_contact) + '</span>' : '') + tools(null, s.address) + '</li>';
+      var c = pk[String(s.rid)] || {}; var addr = [c.address, c.postal_code].filter(Boolean).join(', ') || s.address;
+      return '<li><span class="pin">' + n + '</span>' + dv + at + '<b class="n">' + E(c.name || s.label || '') + '</b>' + (c.dish ? '<span class="m">' + E(c.dish) + '</span>' : '')
+        + '<span class="ad"><a href="' + E(mapLink(s.address)) + '" target="_blank" rel="noopener">' + E(addr) + '</a>' + (c.neighbourhood ? ' <span class="m">(' + E(c.neighbourhood) + ')</span>' : '') + '</span>' + tools(c.phone, s.address) + '</li>';
+    }).join('') + '</ol>';
+    return h;
+  }
+  function afterBooklet(it, role) {
+    var af = it.after;
+    var h = whenChip(af.leave) + '<ol class="route">' + (af.stops || []).map(function (s, i) {
+      if (s.k === 'serving') return '<li><span class="pin flag">' + IC.flag + '</span><span class="at">' + IC.clock + E(hm(s.leave)) + '</span><b class="n">' + E(t('rnLeave')) + '</b><span class="ad">' + E(t('rnPack')) + '</span></li>';
+      if (s.k === 'dish') return '<li><span class="pin">1</span>' + runDrive(s, i) + runAt(s) + '<b class="n">' + E(dishName(it, s)) + '</b><span class="ad">' + E(t('rnDish')) + ' · ' + E(s.address) + '</span>' + tools(null, s.address) + '</li>';
+      return '<li><span class="pin st">' + IC.store + '</span>' + runDrive(s, i) + runAt(s) + '<b class="n">' + E(t('ivStorage')) + '</b><span class="ad">' + E(t('rnPutBack')) + '</span><span class="m">' + E(role === 'team_leader' ? t('rnCheckTl') : t('rnCheck')) + '</span>'
+        + (role === 'team_leader' && invShow() ? '<button type="button" class="ichk" data-iv="inv">' + E(t('invGo')) + '</button>' : '') + '</li>';
+    }).join('') + '</ol>';
+    if (safeUrl(af.maps_url)) h += '<a class="rbig ghost" href="' + E(safeUrl(af.maps_url)) + '" target="_blank" rel="noopener">' + IC.route + E(t('rnMapsAfter')) + '</a>';
+    return h;
+  }
   function bookletHtml() {
     var d = S.d, it = d.itinerary, fr = S.lang === 'fr', look = it.look || d.look || {};
     var role = String(d.role || '').toLowerCase(), tm = it.times || {}, kind = tm.driver_kind;
@@ -813,8 +997,9 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
     h += '<div class="strip"><div><b>' + E(t('date')) + '</b><span>' + E(day(d.event_date)) + '<small>' + E(t('ivServingK')) + ' ' + E(hm(it.serve)) + '</small></span></div>'
       + '<div><b>' + E(t('ivWhere')) + '</b><span><a href="' + E(mapLink(place)) + '" target="_blank" rel="noopener">' + E(place.split(',')[0]) + '</a><small>' + E(it.meet_spot ? it.meet_spot.split('(')[0].trim() : (place.split(',').slice(1).join(',').trim())) + '</small></span></div>'
       + '<div><b>' + E(t('ivYou')) + '</b><span>' + E(hm(tm.start || it.serve)) + (at ? '<small>' + E(at) + '</small>' : '') + '</span></div></div>';
-    var acts = '';
-    if (it.route_url && (it.pickups || []).length && role === 'driver' && (kind === 'pickup' || kind === 'both')) acts += '<a class="pri" href="' + E(it.route_url) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivRoute')) + '</a>';
+    var acts = '', rr = it.kind === 'lead_driver' ? runOf(it) : null;
+    if (rr && rr.stops.length > 1 && safeUrl(rr.maps_url)) acts += '<a class="pri" href="' + E(safeUrl(rr.maps_url)) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivRoute')) + '</a>';
+    else if (!rr && it.route_url && (it.pickups || []).length && role === 'driver' && (kind === 'pickup' || kind === 'both')) acts += '<a class="pri" href="' + E(it.route_url) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivRoute')) + '</a>';
     else acts += '<a class="pri" href="' + E(dirUrl(place)) + '" target="_blank" rel="noopener">' + IC.route + E(t('ivMap')) + '</a>';
     if (safeUrl(it.whatsapp_url)) acts += '<a class="wa" href="' + E(safeUrl(it.whatsapp_url)) + '" target="_blank" rel="noopener">' + IC.wa + E(t('ivWa')) + '</a>';
     acts += '<a href="sms:' + OPS_TEL + '">' + IC.msg + OPS + '</a>';
@@ -829,18 +1014,21 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
         }).join('');
       };
       var final = '<li><span class="pin flag">' + IC.flag + '</span><b class="n">' + E(t('ivFinal')) + '</b><span class="ad"><a href="' + E(mapLink(place)) + '" target="_blank" rel="noopener">' + E(place) + '</a></span>' + (it.meet_spot ? '<span class="m">' + E(it.meet_spot) + '</span>' : '') + '</li>';
-      var body = whenChip(tm.start);
-      if (role === 'driver' && (kind === 'pickup' || kind === 'both')) {
+      var body = rr ? '' : whenChip(tm.start);
+      var store1 = rr ? !!rr.with_storage : !(role === 'driver' && kind === 'pickup');
+      if (rr) {
+        body += runBooklet(it, role, place);
+      } else if (role === 'driver' && (kind === 'pickup' || kind === 'both')) {
         body += '<p>' + E(t('itPickB')) + '</p>';
         stops.push((it.pickups || []).length ? pickupStops() : '<li><span class="pin">1</span><span class="m">' + E(t('itNoPick')) + '</span></li>');
         if (kind === 'both') stops.push(storageStop());
       } else {
         stops.push(storageStop());
       }
-      stops.push(final);
+      if (!rr) stops.push(final);
       if (it.format === 'community_kitchen' && (it.kitchen_place || it.kitchen_contact)) body += '<p><b>' + E(t('ivKitchenK')) + ':</b> ' + E(it.kitchen_place || '') + (it.kitchen_shift ? ' · ' + E(it.kitchen_shift) : '') + (it.kitchen_contact ? '<br>' + E(t('ivKitchenC')) + ' ' + E(it.kitchen_contact) : '') + (it.ingredients_note ? '<br>' + E(t('ivIngr')) + ' ' + E(it.ingredients_note) : '') + '</p>';
-      h += sec(t('ivBeforeK'), t('ivBefore'), body + '<ol class="route">' + stops.join('') + '</ol>');
-      if (!(role === 'driver' && kind === 'pickup')) {
+      h += sec(t('ivBeforeK'), t('ivBefore'), body + (stops.length ? '<ol class="route">' + stops.join('') + '</ol>' : ''));
+      if (store1) {
         var bins = (it.bins || []).filter(function (b) { return b && (b.name_en || b.name_fr); });
         var carry = ((fr ? it.carry_fr : it.carry_en) || []).filter(function (x) { return String(x || '').trim(); });
         if (bins.length || carry.length) {
@@ -853,14 +1041,15 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
       }
       var drops = it.dropoffs || [];
       var sb = whenChip(it.serve) + '<p>' + E(t('itServeB').replace('{p}', spot)) + '</p>'
-        + (drops.length && !(role === 'driver' && kind === 'pickup') ? '<p><b>' + E(t('ivCooks')) + '</b> ' + drops.map(function (c) { return E(c.name || '') + (c.stay === true ? ' (' + E(t('itStays')) + ')' : ''); }).join(', ') + '</p>' : '');
+        + (drops.length && store1 ? '<p><b>' + E(t('ivCooks')) + '</b> ' + drops.map(function (c) { return E(c.name || '') + (c.stay === true ? ' (' + E(t('itStays')) + ')' : ''); }).join(', ') + '</p>' : '');
       h += sec(t('ivServingK'), t('ivServe'), sb);
       if (role === 'team_leader') {
         h += sec(t('ivTlK'), t('ivTl'), '<ul class="dots"><li>' + E(t('ivTl1')) + '</li><li>' + E(t('ivTl2')) + '</li><li>' + E(t('ivTl3')) + '</li>'
           + (safeUrl(it.audit_url) ? '<li><a href="' + E(safeUrl(it.audit_url)) + '" target="_blank" rel="noopener">' + E(t('itAudit')) + '</a></li>' : '') + '</ul>');
       }
       var after = '';
-      if (role === 'driver' && kind === 'pickup') after = '<p>' + E(t('itAfterPick')) + '</p>';
+      if (rr && rr.with_storage && it.after && (it.after.stops || []).length) after = afterBooklet(it, role);
+      else if (!store1) after = '<p>' + E(t('itAfterPick')) + '</p>';
       else {
         var dp = String(it.dish_place || '');
         var dpName = dp.split(',')[0], dpRest = dp.slice(dpName.length).replace(/^,\s*/, '');
@@ -917,6 +1106,7 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
   function tick() { return '<span class="tick" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#FFFAF2" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>'; }
   function paint() {
     if (S.d && S.d.survey && document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead());
+    var invNt = document.getElementById('invnote'); if (invNt) S.invNote = invNt.value;
     langButtons(); footer();
     var ey = document.getElementById('ey'), ht = document.getElementById('ht');
     if (!S.d) return;
@@ -930,19 +1120,19 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
     if (d.cancelled) { app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + '<div class="banner info">' + E(t('cancelled')) + '</div>' + callHtml(); return; }
     var svOpen = d.survey && d.survey.open;
     if (d.past) {
-      app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml()
+      app.innerHTML = test + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + invHtml()
         + (d.survey ? surveyHtml() : '<div class="banner info">' + E(t('past')) + '</div>')
         + linksHtml() + acctHtml() + callHtml(); return;
     }
     if (svOpen && d.state !== 'declined') {
       /* the serving day, after it started: the survey first */
-      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + surveyHtml() + teaserHtml() + linksHtml() + callHtml();
+      app.innerHTML = test + err + '<h2>' + E(t('hi')) + ' ' + E(d.first || '') + '</h2><div class="rule"></div>' + spotHtml() + invHtml() + surveyHtml() + teaserHtml() + linksHtml() + callHtml();
       return;
     }
     if (d.state === 'confirmed') {
       app.innerHTML = test + err + '<img class="heart" src="' + ST + 'brand/doodle-heart-purple.png" alt=""><div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('okT')) + '</h2><p>' + E(t('okP')) + (d.confirmed_at ? ' ' + E(t('okWhen')) + ' ' + E(when(d.confirmed_at).replace(/\.$/, '')) + '.' : '') + '</p></div></div><div class="rule"></div>'
-        + teaserHtml() + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
-        + (S.test && d.survey ? surveyHtml() : '');
+        + teaserHtml() + (S.inv && S.inv.open ? invHtml() : '') + spotHtml() + guideHtml() + detailsHtml() + linksHtml() + calHtml() + eventsHtml() + acctHtml() + callHtml() + '<button type="button" class="no" id="cant">' + E(t('cant')) + '</button>'
+        + (S.test && d.survey ? surveyHtml() : '') + (S.test && !(S.inv && S.inv.open) ? invHtml() : '');
     } else if (d.state === 'declined') {
       app.innerHTML = test + err + '<img class="done-e" src="' + ST + 'brand/e-large-gold-600.png" alt=""><h2>' + E(t('noT')) + '</h2><div class="rule"></div><p>' + E(t('noP')) + '</p>' + spotHtml()
         + '<p style="margin:0;color:var(--muted);font-size:14px">' + E(t('changed')) + '</p><button type="button" id="yes">' + E(t('again')) + '</button>' + eventsHtml() + callHtml();
@@ -1012,27 +1202,93 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
       if (o) ics(o, tk); return;
     }
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
+    if (b.id === 'pjsend') { pjSend(); return; }
+    if (b.hasAttribute('data-inv')) { invTap(b); return; }
+    if (b.id === 'invsend') { invSend(); return; }
+    if (b.id === 'invedit') { S.invEdit = true; paint(); invScroll(); return; }
     if (b.hasAttribute('data-open-it')) { showView('it'); return; }
     if (b.id === 'yes') answer('yes'); else if (b.id === 'cant') answer('no'); else if (b.id === 'save') save();
     else if (b.id === 'svsend') svSend(); else if (b.id === 'svedit') { S.svEdit = true; paint(); svScroll(); }
   });
   app.addEventListener('change', function (e) {
     var el = e.target; if (!el) return;
+    if (el.name === 'invin') { S.invIn = el.value === 'yes'; if (S.invErr === 'place') { S.invErr = ''; var q = el.closest('.svq'); if (q) q.classList.remove('err'); } return; }
     if (el.name === 'dish' || el.name === 'food' || el.name === 'stay' || el.id === 'area') { S.form = Object.assign({}, S.form, readForm()); if (el.name === 'food') S.form.pickup = el.value; if (el.id === 'area') S.form.neighbourhood = el.value; S.saved = false; paint(); }
   });
   document.getElementById('langs').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button[data-l]') : null; if (!b) return;
     if (S.d) { S.form = Object.assign({}, S.form, readForm()); if (document.getElementById('svsend')) S.sv = Object.assign({}, S.sv || {}, svRead()); }
+    if (S.pj && !S.d && document.getElementById('pjfirst')) S.pjf = Object.assign({}, S.pjf || {}, pjRead());
     S.lang = b.getAttribute('data-l'); S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ }
-    if (S.d) paint(); else langButtons();
+    if (S.d) paint(); else if (S.pj) pjPaint(); else langButtons();
   });
   document.getElementById('itv').addEventListener('click', function (e) {
     var b = e.target && e.target.closest ? e.target.closest('button') : null; if (!b) return;
     if (b.getAttribute('data-iv') === 'back') { showView('page'); return; }
     if (b.getAttribute('data-iv') === 'print') { try { window.print(); } catch (x) { /* fine */ } return; }
+    if (b.getAttribute('data-iv') === 'inv') { showView('page'); setTimeout(invScroll, 80); return; }
     var l = b.getAttribute('data-l');
     if (l) { S.lang = l; S.chosen = true; try { localStorage.setItem('wa_lang', S.lang); } catch (x) { /* fine */ } langButtons(); paintBooklet(); }
   });
+  /* ---------- wave191o: a partner's form (hub.welfareavenue.com/c/<the partner's link>): each person joins the serving ---------- */
+  function pjPaint() {
+    var x = S.pj; if (!x) return;
+    langButtons(); footer();
+    document.getElementById('ey').textContent = t('pjEy'); document.getElementById('ht').textContent = x.partner || '';
+    var f = S.pjf || {};
+    var head = '<h2>' + E(t('pjT').replace('{p}', x.partner || '')) + '</h2><div class="rule"></div><p style="margin:0 0 6px;font-weight:600">' + E(t('pjSub').replace('{d}', day(x.event_date)).replace('{t}', hm(x.start))) + (x.location ? ' · ' + E(x.location) : '') + '</p>';
+    if (S.pjDone) {
+      app.innerHTML = head + '<div class="ok">' + tick() + '<div><h2 style="margin:0">' + E(t('pjOk')) + '</h2><p>' + E(S.pjDone.already ? t('pjAlready') : t('pjOkP')) + '</p></div></div>'
+        + (S.pjDone.token ? '<a class="pjopen" href="/c/' + E(S.pjDone.token) + '"><button type="button">' + E(t('pjOpen')) + '</button></a>' : '') + callHtml();
+      return;
+    }
+    if (!x.open) { app.innerHTML = head + '<div class="banner info">' + E(t('pjClosed')) + '</div>' + callHtml(); return; }
+    var roles = x.roles || [];
+    var h = head + '<p style="margin:0 0 12px">' + E(t('pjP')) + '</p>' + (x.joined ? '<p class="m" style="margin:0 0 10px">' + E(t('pjJoined').replace('{n}', x.joined)) + '</p>' : '')
+      + '<div class="q"><label class="l" for="pjfirst">' + E(t('pjFirst')) + ' <span class="req">*</span></label><input type="text" id="pjfirst" autocomplete="given-name" maxlength="60" value="' + E(f.first || '') + '"></div>'
+      + '<div class="q"><label class="l" for="pjlast">' + E(t('pjLast')) + '</label><input type="text" id="pjlast" autocomplete="family-name" maxlength="60" value="' + E(f.last || '') + '"></div>'
+      + '<p class="help" style="margin:12px 0 0;color:var(--muted);font-size:13.5px">' + E(t('pjOne')) + '</p>'
+      + '<div class="q"><label class="l" for="pjemail">' + E(t('pjEmail')) + '</label><input type="text" id="pjemail" inputmode="email" autocomplete="email" maxlength="120" value="' + E(f.email || '') + '"></div>'
+      + '<div class="q"><label class="l" for="pjphone">' + E(t('pjPhone')) + '</label><input type="text" id="pjphone" inputmode="tel" autocomplete="tel" maxlength="20" value="' + E(f.phone || '') + '"></div>'
+      + (roles.length > 1 ? '<div class="q"><label class="l">' + E(t('pjRole')) + '</label>' + roles.map(function (r, i) { var on = f.role ? f.role === r.role : i === 0; return '<label class="opt"><input type="radio" name="pjrole" value="' + E(r.role) + '"' + (on ? ' checked' : '') + '><span>' + E((S.lang === 'fr' ? r.fr : r.en) || r.role) + '</span></label>'; }).join('') + '</div>' : '')
+      + (S.pjErr ? '<div class="banner warn" style="margin:12px 0 0" role="alert">' + E(S.pjErr) + '</div>' : '')
+      + '<button type="button" id="pjsend"' + (S.busy ? ' disabled' : '') + '>' + E(S.busy ? t('saving') : t('pjSend')) + '</button>'
+      + '<p class="m" style="margin:12px 0 0">' + E(t('pjPriv')) + '</p>' + callHtml();
+    app.innerHTML = h;
+  }
+  function pjRead() {
+    var v = function (id) { var el = document.getElementById(id); return el ? el.value : undefined; };
+    var r = document.querySelector('input[name="pjrole"]:checked');
+    var f = { first: v('pjfirst'), last: v('pjlast'), email: v('pjemail'), phone: v('pjphone') };
+    if (r) f.role = r.value; else if ((S.pj.roles || []).length === 1) f.role = S.pj.roles[0].role;
+    return f;
+  }
+  function pjSend() {
+    if (S.busy) return;
+    var f = S.pjf = Object.assign({}, S.pjf || {}, pjRead()); S.pjErr = '';
+    var digits = String(f.phone || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+    if (!String(f.first || '').trim()) S.pjErr = t('pjErrName');
+    else if (!String(f.email || '').trim() && !digits) S.pjErr = t('pjErrContact');
+    else if (String(f.email || '').trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(f.email).trim())) S.pjErr = t('pjErrEmail');
+    else if (digits && digits.length !== 10) S.pjErr = t('pjErrPhone');
+    if (S.pjErr) { pjPaint(); return; }
+    if (S.test) { S.pjDone = { token: '', already: false }; pjPaint(); return; }
+    S.busy = true; pjPaint();
+    rpc('volunteer_partner_join', { p_token: token(), p: { first: f.first, last: f.last || '', email: f.email || '', phone: digits, role: f.role || '', lang: S.lang } }).then(function (r) {
+      S.busy = false;
+      var b = r.body || {};
+      if (r.ok && b.ok) { S.pjDone = { token: b.token, already: !!b.already }; }
+      else if (b.reason === 'closed' || b.reason === 'full') { S.pj.open = false; }
+      else S.pjErr = b.reason === 'email' ? t('pjErrEmail') : b.reason === 'phone' ? t('pjErrPhone') : b.reason === 'contact' ? t('pjErrContact') : b.reason === 'name' ? t('pjErrName') : t('offline');
+      pjPaint();
+    }).catch(function () { S.busy = false; S.pjErr = t('offline'); pjPaint(); });
+  }
+  function tryPartner(tk) {
+    rpc('volunteer_partner_get', { p_token: tk }).then(function (r) {
+      if (!r.ok || !r.body) { notFound(); return; }
+      S.pj = r.body; pjPaint();
+    }).catch(function () { notFound(t('offline')); });
+  }
   function notFound(msg) {
     document.getElementById('ey').textContent = 'Welfare Avenue';
     app.innerHTML = '<h2>' + E(msg || t('nf')) + '</h2><div class="rule"></div><p>' + E(t('nfh')) + '<a href="sms:' + OPS_TEL + '">' + OPS + '</a>.</p>';
@@ -1046,12 +1302,13 @@ ol.route .tools svg,.team a.tb svg{width:14px;height:14px}
   if (!tk) { notFound(); return; }
   rpc('volunteer_confirm_get', S.test ? { p_token: tk, p_preview: true } : { p_token: tk }).then(function (r) {
     if (!r.ok) { notFound(t('offline')); return; }
-    if (!r.body) { notFound(); return; }
+    if (!r.body) { tryPartner(tk); return; }
     S.d = r.body;
     if (!S.chosen && r.body.lang === 'fr') S.lang = 'fr';
     setBand(r.body.photo);
     paint();
     if (location.hash === '#survey') svScroll();
+    invLoad();
   }).catch(function () { notFound(t('offline')); });
 })();
 </script>
