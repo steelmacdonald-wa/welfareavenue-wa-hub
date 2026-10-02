@@ -193,11 +193,11 @@
     if (isOff(r)) return '';
     var c = r.confirm || {};
     if (isConf(r)) {
-      if (r.confirm_status === 'confirmed') return '<span class="w171tag ok">\u2713 ' + (c.via === 'reply' ? 'Replied YES' : 'Confirmed by text link') + (r.confirmed_at ? ' \u00b7 ' + E(fmtWhen(r.confirmed_at)) : '') + '</span>';
+      if (r.confirm_status === 'confirmed') return '<span class="w171tag ok">\u2713 ' + (c.via === 'reply' ? 'Replied YES' : c.via === 'staff' ? 'Said yes in a text' : 'Confirmed by text link') + (r.confirmed_at ? ' \u00b7 ' + E(fmtWhen(r.confirmed_at)) : '') + '</span>';
       return '';
     }
     if (isDecl(r)) {
-      if (r.confirm_status === 'declined') return '<span class="w171tag no">Can\u2019t make it ' + (c.via === 'reply' ? '(replied NO)' : '(text link)') + (r.confirmed_at ? ' \u00b7 ' + E(fmtWhen(r.confirmed_at)) : '') + '</span>';
+      if (r.confirm_status === 'declined') return '<span class="w171tag no">Can\u2019t make it ' + (c.via === 'reply' ? '(replied NO)' : c.via === 'staff' ? '(said so in a text)' : '(text link)') + (r.confirmed_at ? ' \u00b7 ' + E(fmtWhen(r.confirmed_at)) : '') + '</span>';
       return '';
     }
     var t = lastText(evId, r.id);
@@ -254,7 +254,7 @@
   function repHtml(m, D) {
     var r = m.roster_id ? (D.roster || []).filter(function (x) { return x.id === m.roster_id; })[0] : null;
     var who = r ? first(r.person_name) + ' (' + one(r.role) + ')' : 'Someone not on this roster';
-    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can\u2019t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], answered: ['ok', 'Answered'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
+    var h = { confirmed: ['ok', 'Confirmed'], declined: ['no', 'Can\u2019t make it'], opted_out: ['no', 'Stopped texts'], opted_in: ['ok', 'Texts back on'], question: ['wait', 'Needs an answer'], answered: ['ok', 'Answered'], done: ['ok', 'No reply needed'], stored: ['mute', 'Kept (texts off)'], unmatched: ['mute', 'Unknown number'] }[m.handled] || ['mute', m.handled || ''];
     return '<div class="w171rep"><div class="h"><b>' + E(who) + '</b><span>' + E(fmtWhen(m.created_at)) + '</span><span class="w171tag ' + h[0] + '" style="display:inline-block;margin:0">' + E(h[1]) + '</span>' + (m.phone && typeof isStaff === 'function' && isStaff() ? '<button class="w171btn ghost" style="margin-left:auto;padding:4px 10px;font-size:11px" data-w191conv="' + E(m.phone) + '">' + (m.handled === 'question' ? 'Reply' : 'Open') + '</button>' : '') + '</div><p>' + E(m.body) + '</p></div>';
   }
   function cardHtml(ev, D, cn) {

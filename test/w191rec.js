@@ -2,7 +2,8 @@
    The Recruit stage's buttons, the sheet (servings, the five groups and their counts, filters, selecting, Review the texts with
    the wording per group and the real texts from a dry run, editing the wording without losing the cursor, Invite), the
    Conversations tab (the list, a thread with what was typed in Quo, a reply), This week's waiting texts, the Texts card's Reply,
-   a phone, a staff member who cannot text. */
+   a phone, a staff member who cannot text. wave191i/j: "Typed in Quo" on copied texts, No reply needed, the next servings under
+   the name (Coming, Add as coming, a name for an unknown number), drafts that survive a refresh. */
 const { launch, fresh } = require('./boot');
 const fs = require('fs');
 const fx191 = require('./w191fx');
@@ -37,9 +38,16 @@ const INBOX = [
   { ph: '5145550101', phf: '(514) 555-0101', p: 101, n: 'Ana Novak', at: '2026-09-24T15:02:00Z', dir: 'out', last: 'Hi Ana, it’s Welfare Avenue!', kind: 'recruit', st: 'sent', cnt: 1, cin: 0, evs: [900] },
   { ph: '5145559999', phf: '(514) 555-9999', at: '2026-09-23T13:00:00Z', dir: 'in', last: 'Who is this?', kind: 'inbound', h: 'unmatched', wait: true, cnt: 1, cin: 1 }
 ];
-const THREAD = { ph: '5145550103', p: 103, n: 'Cy Lafleur', out: false, window_open: true, messages: [
+/* wave191j: the next servings under the name (Cy waits on Oct 2, is not on Oct 16) */
+const SERVINGS = [{ e: 900, code: 'WA-26-90', d: '2026-10-02', row: { id: 5001, role: 'cook', st: 'Waiting For Response' } }, { e: 902, code: 'WA-26-92', d: '2026-10-16' }];
+const THREAD = { ph: '5145550103', p: 103, n: 'Cy Lafleur', role: 'cook', servings: SERVINGS, out: false, window_open: true, messages: [
   { id: 1, dir: 'out', kind: 'recruit', st: 'sent', body: 'Hi Cy, it’s Welfare Avenue! We miss you. You’ve served with us 6 times and we’d love to have you back on Friday, October 2. Can you join us? Reply YES or NO, or tap here: https://hub.welfareavenue.com/c/abc\nReply STOP to stop texts.', at: '2026-09-25T15:00:00Z', qid: 'ACq1', ev: 'WA-26-90' },
   { id: 2, dir: 'in', kind: 'inbound', st: 'received', h: 'question', body: 'Is it still at Cabot Square?', at: '2026-09-25T18:40:00Z', ev: 'WA-26-90' }
+] };
+/* an unknown number the team texted from the Quo app (copied in by sync_threads, sent_by 'Quo app') */
+const THREAD2 = { ph: '5145559999', p: null, cn: null, servings: [{ e: 900, code: 'WA-26-90', d: '2026-10-02' }, { e: 902, code: 'WA-26-92', d: '2026-10-16' }], out: false, window_open: true, messages: [
+  { id: 10, dir: 'out', kind: 'manual', st: 'sent', by: 'Quo app', body: 'Hi! Can you serve with us Friday?', at: '2026-09-23T12:00:00Z', qid: 'ACz1' },
+  { id: 11, dir: 'in', kind: 'inbound', st: 'received', h: 'unmatched', body: 'Who is this?', at: '2026-09-23T13:00:00Z' }
 ] };
 const QUO = { phone: '5145550103', messages: [
   { id: 'ACq1', dir: 'out', text: 'Hi Cy, it’s Welfare Avenue! ...', at: '2026-09-25T15:00:00Z', status: 'delivered' },
@@ -63,8 +71,10 @@ const INSTALL = (data) => {
     if (fn === 'wa191_recruit_templates') return ok(data.tpl);
     if (fn === 'wa191_recruit_templates_save') return ok(data.tpl);
     if (fn === 'wa191_recruit_inbox') return ok(data.inbox);
-    if (fn === 'wa191_recruit_thread') return ok(data.thread);
+    if (fn === 'wa191_recruit_thread') return ok((data.threads && data.threads[args.p_phone]) || data.thread);
     if (fn === 'wa191_text_reply') return ok({ id: 77, sends_now: true });
+    if (fn === 'wa191_text_done') return ok({ done: 1 });
+    if (fn === 'wa191_text_roster') return new Promise(res => setTimeout(() => res({ data: { ok: true, name: args.p_name || 'Cy Lafleur', date: args.p_event === 902 ? '2026-10-16' : '2026-10-02', added: args.p_event === 902, new_person: !!args.p_name, status: args.p_status }, error: null }), 120));
     if (fn === 'wa191_recruit_send') {
       const ppl = args.p_people || []; const evs = args.p_events || [];
       const texted = ppl.filter(p => p.contact_id !== 1008).length;
@@ -77,7 +87,7 @@ const INSTALL = (data) => {
   const i0 = db.functions.invoke.bind(db.functions);
   db.functions.invoke = function (name, opts) { window.__REC.invokes.push({ name: name, body: opts && opts.body }); if (name === 'quo-send' && opts && opts.body && opts.body.action === 'thread') return Promise.resolve({ data: data.quo, error: null }); return i0(name, opts); };
 };
-const DATA = { pool: POOL, inbox: INBOX, thread: THREAD, quo: QUO, tpl: TPL };
+const DATA = { pool: POOL, inbox: INBOX, thread: THREAD, threads: { '5145559999': THREAD2 }, quo: QUO, tpl: TPL };
 const vis = (f, sel) => f.ev(s => { const e = document.querySelector(s); if (!e) return false; const r = e.getBoundingClientRect(); return getComputedStyle(e).display !== 'none' && r.width > 0 && r.height > 0; }, sel);
 const txt = (f, sel) => f.ev(s => { const e = document.querySelector(s); return e ? e.innerText : ''; }, sel);
 const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), fn);
@@ -184,7 +194,36 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
     await f.page.click('#w191rec [data-rreply]'); await f.page.waitForTimeout(500);
     const rp = await calls(f, 'wa191_text_reply');
     ok('a reply goes from the ops line through the Hub (the number and the words)', rp.length === 1 && rp[0].args.p_phone === '5145550103' && rp[0].args.p_body === 'Yes, same place. See you Friday!', rp);
+    /* wave191j: their servings under the name; wave191i: No reply needed */
+    const pl = await f.ev(() => ({ rows: Array.from(document.querySelectorAll('#w191rec .srv .sr')).map(r => r.innerText.replace(/\n/g, ' | ')), wl: (document.querySelector('#w191rec .wl') || {}).innerText || '' }));
+    ok('a thread: the next servings under the name (Coming / Can’t make it where listed, Add as coming where not)', pl.rows.length === 2 && /Fri, Oct 2/.test(pl.rows[0]) && /Cook · waiting/.test(pl.rows[0]) && /Coming/.test(pl.rows[0]) && /Can’t make it/.test(pl.rows[0]) && /Fri, Oct 16/.test(pl.rows[1]) && /not on the roster/.test(pl.rows[1]) && /Add as coming/.test(pl.rows[1]), pl);
+    ok('a question the team answered in the Quo app minutes ago does not wait (before the 10-minute copy)', pl.wl === '', pl.wl);
     if (SHOTS) await f.page.screenshot({ path: SHOTS + '/rec_conv.png' });
+    await f.page.click('#w191rec [data-rset="900|Confirmed"]'); await f.page.waitForTimeout(500);
+    await f.page.click('#w191rec [data-rset="902|Confirmed"]'); await f.page.waitForTimeout(500);
+    const ro = await calls(f, 'wa191_text_roster');
+    ok('Coming and Add as coming set their place from the conversation (the number, the serving, no name needed)', ro.length === 2 && ro[0].args.p_phone === '5145550103' && ro[0].args.p_event === 900 && ro[0].args.p_status === 'Confirmed' && ro[0].args.p_name === null && ro[1].args.p_event === 902 && ro[1].args.p_status === 'Confirmed', ro);
+    /* an unknown number the team texted from the Quo app */
+    await f.page.click('#w191rec [data-rconv="5145559999"]'); await f.page.waitForTimeout(700);
+    const t2 = await f.ev(() => ({ msgs: Array.from(document.querySelectorAll('#w191rec .msgs .m')).map(m => m.innerText.replace(/\n/g, ' | ')), srn: (document.querySelector('#w191rec .srn') || {}).innerText || '', name: !!document.querySelector('#w191rec [data-rname]'), wl: (document.querySelector('#w191rec .wl') || {}).innerText || '' }));
+    ok('a text copied in from the Quo app says "Typed in Quo"; an unknown number asks for a name to add them', t2.msgs.length === 2 && /Typed in Quo/.test(t2.msgs[0]) && /Not in the volunteer directory yet/.test(t2.srn) && t2.name, t2);
+    ok('a conversation that waits says so, with No reply needed', /waits for an answer/.test(t2.wl) && /No reply needed/.test(t2.wl), t2.wl);
+    if (SHOTS) await f.page.screenshot({ path: SHOTS + '/rec_conv_unknown.png' });
+    await f.page.click('#w191rec [data-rdone]'); await f.page.waitForTimeout(400);
+    const dn = await calls(f, 'wa191_text_done');
+    ok('No reply needed closes the conversation for that number', dn.length === 1 && dn[0].args.p_phone === '5145559999', dn);
+    await f.page.click('#w191rec [data-rset="900|Confirmed"]'); await f.page.waitForTimeout(300);
+    const ro2 = await calls(f, 'wa191_text_roster'); const nf = await f.ev(() => !!(document.activeElement && document.activeElement.hasAttribute('data-rname')));
+    ok('without a name nothing is saved and the name box gets the focus', ro2.length === 2 && nf, { n: ro2.length, nf });
+    await f.page.fill('#w191rec [data-rname]', 'Zoe Park');
+    await f.page.fill('#w191rec [data-rreplyta]', 'Hi Zoe, it’s Welfare Avenue');
+    await f.page.click('#w191rec [data-rgo="refreshconv"]'); await f.page.waitForTimeout(700);
+    const kept = await f.ev(() => ({ ta: (document.querySelector('#w191rec [data-rreplyta]') || {}).value, nm: (document.querySelector('#w191rec [data-rname]') || {}).value }));
+    ok('a reply being written and a name being typed survive a refresh', kept.ta === 'Hi Zoe, it’s Welfare Avenue' && kept.nm === 'Zoe Park', kept);
+    await f.page.click('#w191rec [data-rset="900|Confirmed"]'); await f.page.waitForTimeout(500);
+    const ro3 = await calls(f, 'wa191_text_roster');
+    ok('with the name, Add as coming adds them (a new volunteer record)', ro3.length === 3 && ro3[2].args.p_phone === '5145559999' && ro3[2].args.p_name === 'Zoe Park' && ro3[2].args.p_event === 900, ro3[2]);
+    await f.page.click('#w191rec [data-rconv="5145550103"]'); await f.page.waitForTimeout(600);
     await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(300);
     ok('Escape closes the sheet and the page scrolls again', !(await vis(f, '#w191rec .sh')) && !(await f.ev(() => document.documentElement.classList.contains('w191noscroll'))));
     /* the Texts card: Reply opens that conversation */
@@ -238,6 +277,7 @@ const calls = (f, fn) => f.ev(n => window.__REC.calls.filter(c => c.fn === n), f
     await f.page.click('#w191rec [data-rconv="5145550103"]'); await f.page.waitForTimeout(700);
     const pn = await txt(f, '#w191rec .thr');
     ok('staff who cannot text: the thread reads, the reply box says who can', /Only leaders, HR and admins can reply/.test(pn) && !(await f.ev(() => !!document.querySelector('#w191rec [data-rreplyta]'))), pn.slice(-200));
+    ok('staff who cannot text: they still set someone’s place on a serving, and No reply needed is not theirs', await f.ev(() => !!document.querySelector('#w191rec .srv [data-rset]') && !document.querySelector('#w191rec [data-rdone]')));
     await f.close();
   } catch (e) { fail++; console.log('FAIL crashed :: ' + (e && e.stack || e)); }
   await browser.close();

@@ -7,10 +7,16 @@
      filter and tick; Review the texts shows each group's wording (English, French) and the real texts (wa191_recruit_send dry
      run); Invite adds them as Waiting For Response and queues one personal text each through Quo (sms_mode, STOP and 9 am to
      7 pm decide). Conversations: every number that texted or was texted lately, the thread (the Hub's copy plus what was typed
-     in the Quo app, quo-send thread) and a reply from the ops line (wa191_text_reply). */
+     in the Quo app, quo-send thread) and a reply from the ops line (wa191_text_reply).
+     wave191i/j (01/10/26, the first evening): the team's Quo app replies are copied in every 10 minutes (quo-send
+     sync_threads) and labelled "Typed in Quo"; a conversation waits only while a text of theirs has no person's answer
+     (reactions such as Loved "..." do not count); "No reply needed" closes one (wa191_text_done); and the next three
+     servings sit under the name with Coming / Can't make it / Add as coming (wa191_text_roster), for the people the team
+     invited from the Quo app, whose YES the Hub cannot tie to a roster row by itself. */
   var R = { tab: 'people', evs: null, pool: null, poolKey: '', poolBusy: false, group: 'never', role: '', q: '', sort: 'fit', notTexted: true, hideOn: true, hasPhone: true,
             lapsedDays: 60, regularMin: 3, sel: {}, step: 'list', askRole: '', textThem: true, tpl: null, edits: {}, saveDefault: false, preview: null, prevBusy: false, prevKey: '',
-            result: null, inbox: null, inboxAt: 0, ph: null, thread: null, quo: null, can: null, lastTa: null, sending: false };
+            result: null, inbox: null, inboxAt: 0, ph: null, thread: null, quo: null, can: null, lastTa: null, sending: false,
+            drafts: {}, names: {}, setting: null };
   var GROUPS = [
     { k: 'never', l: 'Never came', s: 'Signed up to volunteer and never served. Their text says no experience is needed.' },
     { k: 'lapsed', l: 'Regulars we miss', s: '' },
@@ -136,11 +142,17 @@
     var body = document.getElementById('w191recbody'); if (!body) return;
     var html = R.tab === 'conv' ? convHtml() : R.step === 'compose' ? composeHtml() : R.step === 'done' ? doneHtml() : rListHtml();
     if (body.__h === html) return;
-    var keepScroll = body.scrollTop; var qf = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute('data-rq') !== null;
+    var keepScroll = body.scrollTop;
+    /* the field being typed in (the search, a reply, a name) keeps its focus and caret through a repaint */
+    var ae = document.activeElement; var fk = null, fs = 0, fe = 0;
+    if (ae && ae.getAttribute && body.contains(ae)) ['data-rq', 'data-rreplyta', 'data-rname'].forEach(function (k) { if (ae.getAttribute(k) !== null) { fk = k; try { fs = ae.selectionStart; fe = ae.selectionEnd; } catch (e) { /* fine */ } } });
     body.innerHTML = html; body.__h = html;
     if (R.step === 'list' && R.tab === 'people') body.scrollTop = keepScroll;
-    if (qf) { var q = body.querySelector('[data-rq]'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e) { /* fine */ } } }
-    if (R.tab === 'conv') { var th = body.querySelector('.thr .msgs'); if (th) th.scrollTop = th.scrollHeight; }
+    if (fk) { var f = body.querySelector('[' + fk + ']'); if (f) { f.focus(); try { f.setSelectionRange(fs == null ? f.value.length : fs, fe == null ? f.value.length : fe); } catch (e) { /* fine */ } } }
+    if (R.tab === 'conv') {
+      var th = body.querySelector('.thr .msgs'); if (th) th.scrollTop = th.scrollHeight;
+      var ta = body.querySelector('[data-rreplyta]'); if (ta && ta.value) ta.style.height = Math.min(140, ta.scrollHeight + 2) + 'px';
+    }
   }
   function rListHtml() {
     var ups = upcoming();
@@ -230,18 +242,42 @@
   function threadHtml() {
     var th = R.thread; if (!th) return '<div class="empty">Loading…</div>';
     var msgs = merged(); var open = th.window_open;
-    var name = th.n || phf(th.ph);
-    var head = '<div class="th"><button class="bk" data-rback aria-label="Back">‹</button><span class="av" style="background:hsl(' + hue(th.n || th.ph) + ',36%,40%)">' + E(th.n ? initials(th.n) : '#') + '</span><span><b>' + E(name) + '</b><span>' + E(phf(th.ph)) + (th.p ? ' · <a href="#volunteering/people" data-rperson="' + th.p + '">volunteer record</a>' : '') + '</span></span></div>';
+    var nm = th.n || th.cn; var name = nm || phf(th.ph);
+    var head = '<div class="th"><button class="bk" data-rback aria-label="Back">‹</button><span class="av" style="background:hsl(' + hue(nm || th.ph) + ',36%,40%)">' + E(nm ? initials(nm) : '#') + '</span><span><b>' + E(name) + '</b><span>' + (nm ? E(phf(th.ph)) : 'Unknown number') + (th.p ? ' · <a href="#volunteering/people" data-rperson="' + th.p + '">volunteer record</a>' : th.cn ? ' · in the CRM' : '') + '</span></span></div>';
     var body = msgs.length ? msgs.map(function (m) {
-      var lab = m.dir === 'out' ? (m.quo ? 'Typed in Quo' : (KIND[m.kind] || '') + (m.kind === 'reply' && m.by ? ' · ' + String(m.by).split('@')[0] : '')) : '';
+      /* a text the team typed in the Quo app: live from Quo (m.quo) or copied in by sync_threads (sent_by 'Quo app') */
+      var lab = m.dir === 'out' ? (m.quo || m.by === 'Quo app' ? 'Typed in Quo' : (KIND[m.kind] || '') + (m.kind === 'reply' && m.by ? ' · ' + String(m.by).split('@')[0] : '')) : '';
       var st = m.dir === 'out' && m.st === 'queued' ? (open ? 'Sending…' : 'Waits for 9 am') : m.st === 'failed' ? 'Not delivered' + (m.err ? ': ' + m.err : '') : m.st === 'skipped' ? 'Not sent' + (m.err ? ': ' + m.err : '') : '';
       return '<div class="m ' + (m.dir === 'in' ? 'in' : 'out') + '"><div class="bub ' + (m.dir === 'in' ? 'in' : 'out') + (m.st === 'failed' || m.st === 'skipped' ? ' bad' : '') + '">' + E(m.body || '').replace(/\n/g, '<br>') + '</div><div class="mt">' + E([lab, m.ev, when(m.at), st].filter(Boolean).join(' · ')) + '</div></div>';
     }).join('') : '<div class="empty">No texts yet.</div>';
     var can = R.can && R.can.text;
+    var c = (R.inbox || []).filter(function (x) { return x.ph === th.ph; })[0];
+    /* a reply typed in Quo in the last minutes (before the 10-minute copy) already answers them */
+    var tIn = 0, tMe = 0; msgs.forEach(function (m) { var t = new Date(m.at).getTime() || 0; if (m.dir === 'in') tIn = Math.max(tIn, t); else if (m.quo || m.kind === 'reply' || m.kind === 'manual') tMe = Math.max(tMe, t); });
+    var waitLine = c && c.wait && can && !(tMe && tMe > tIn) ?'<div class="wl"><span><i class="dot"></i>' + (c.open > 1 ? c.open + ' texts wait' : 'Their text waits') + ' for an answer</span><button class="lnk" data-rdone>No reply needed</button></div>' : '';
     var foot = th.out ? '<div class="note warn">They texted STOP, so the Hub cannot text them. If they text START to the ops line, texts work again.</div>'
       : !can ? '<div class="note">Only leaders, HR and admins can reply from the Hub. Quo has the same conversation on the ops line.</div>'
-      : '<div class="rp"><textarea rows="2" placeholder="Reply from the ops line" data-rreplyta></textarea><button class="w191btn" data-rreply>' + (open ? 'Send' : 'Send at 9 am') + '</button></div>' + (open ? '' : '<p class="gn">It is outside 9 am to 7 pm in Montreal: your reply waits and goes at 9 am.</p>');
-    return head + '<div class="msgs">' + body + '</div>' + foot;
+      : waitLine + '<div class="rp"><textarea rows="2" placeholder="Reply from the ops line" data-rreplyta>' + E(R.drafts[th.ph] || '') + '</textarea><button class="w191btn" data-rreply>' + (open ? 'Send' : 'Send at 9 am') + '</button></div>' + (open ? '' : '<p class="gn">It is outside 9 am to 7 pm in Montreal: your reply waits and goes at 9 am.</p>');
+    return head + placesHtml(th) + '<div class="msgs">' + body + '</div>' + foot;
+  }
+  /* wave191j: their place on the next three servings, set from the conversation (wa191_text_roster). Coming and Can't make
+     it are a toggle (tap the lit one again for waiting); a serving they are not on offers Add as coming. A number the
+     directory does not know needs a name first (or uses the CRM's). */
+  function placeOf(r) { var x = { status: r.st, confirm_status: r.cs }; return isConf(x) ? 'yes' : isDecl(x) ? 'no' : ''; }
+  function placesHtml(th) {
+    var sv = th.servings || []; if (!sv.length) return '';
+    var who = th.p ? '' : th.cn ? '<p class="srn">The CRM knows this number as <b>' + E(th.cn) + '</b>. Adding them to a serving gives them a volunteer record.</p>'
+      : '<p class="srn"><label for="w191rname">Not in the volunteer directory yet.</label><input id="w191rname" type="text" data-rname maxlength="80" autocomplete="off" placeholder="Their name, to add them" value="' + E(R.names[th.ph] || '') + '"></p>';
+    var rows = sv.map(function (s) {
+      var r = s.row; var busy = R.setting != null; var pl = r ? placeOf(r) : '';
+      var what = r ? [one(r.role), pl === 'yes' ? 'coming' : pl === 'no' ? 'can’t make it' : lower(r.st) === 'tbd' ? 'to be decided' : 'waiting'] : ['not on the roster'];
+      var day = '<span class="d"><b>' + E(fmtDay(s.d)) + '</b><span>' + E([s.t].concat(what).filter(Boolean).join(' · ')) + '</span></span>';
+      if (!r) return '<div class="sr">' + day + '<button class="w191btn ghost sm" data-rset="' + s.e + '|Confirmed"' + (busy ? ' disabled' : '') + '>Add as coming</button></div>';
+      return '<div class="sr">' + day + '<span class="seg sm" role="group" aria-label="' + E('Their answer for ' + fmtDay(s.d)) + '">'
+        + '<button data-rset="' + s.e + '|' + (pl === 'yes' ? 'Waiting For Response' : 'Confirmed') + '"' + (pl === 'yes' ? ' class="on"' : '') + ' aria-pressed="' + (pl === 'yes') + '"' + (busy ? ' disabled' : '') + ' title="' + (pl === 'yes' ? 'Tap again to set them back to waiting' : 'They are coming') + '">Coming</button>'
+        + '<button data-rset="' + s.e + '|' + (pl === 'no' ? 'Waiting For Response' : 'Unavailable') + '"' + (pl === 'no' ? ' class="on"' : '') + ' aria-pressed="' + (pl === 'no') + '"' + (busy ? ' disabled' : '') + ' title="' + (pl === 'no' ? 'Tap again to set them back to waiting' : 'They can’t make it') + '">Can’t make it</button></span></div>';
+    }).join('');
+    return '<div class="srv">' + who + rows + '</div>';
   }
   function paintFoot() {
     var f = document.getElementById('w191recfoot'); if (!f) return;
@@ -290,21 +326,59 @@
   }
   async function openThread(ph) {
     R.ph = digits(ph); R.thread = null; R.quo = null; paint();
-    try { var r = await db.rpc('wa191_recruit_thread', { p_phone: R.ph }); if (r && r.error) throw r.error; R.thread = r.data; } catch (e) { R.thread = { ph: R.ph, messages: [] }; T('Could not load the texts: ' + String((e && e.message) || e).slice(0, 80)); }
-    paint();
-    /* what was typed in the Quo app (leaders, HR and admins; quo-send v5) */
-    var cn = await canText(); if (!cn.text) return;
-    try { var q = await db.functions.invoke('quo-send', { body: { action: 'thread', phone: R.ph } }); if (q && !q.error && q.data && q.data.messages && R.ph === (q.data.phone || R.ph)) { R.quo = q.data; paint(); } } catch (e) { /* the Hub's copy is enough */ }
+    await loadThread(true);
   }
+  /* the Hub's copy of one number's texts, then what was typed in the Quo app in the last minutes (leaders, HR and admins;
+     quo-send thread). A refresh keeps what is on screen until the new copy is in; a slow answer for a number no longer open
+     is dropped. */
+  async function loadThread(withQuo) {
+    var ph = R.ph; if (!ph) return;
+    try { var r = await db.rpc('wa191_recruit_thread', { p_phone: ph }); if (r && r.error) throw r.error; if (R.ph === ph) R.thread = r.data; }
+    catch (e) { if (R.ph === ph && !R.thread) R.thread = { ph: ph, messages: [] }; T('Could not load the texts: ' + String((e && e.message) || e).slice(0, 80)); }
+    if (R.ph !== ph) return; paint();
+    if (!withQuo) return;
+    var cn = await canText(); if (!cn.text) return;
+    try { var q = await db.functions.invoke('quo-send', { body: { action: 'thread', phone: ph } }); if (q && !q.error && q.data && q.data.messages && R.ph === ph && ph === (q.data.phone || ph)) { R.quo = q.data; paint(); } } catch (e) { /* the Hub's copy is enough */ }
+  }
+  function refreshThread() { return loadThread(false); }
   async function reply(btn) {
     var ta = document.querySelector('#w191rec [data-rreplyta]'); if (!ta) return; var v = ta.value.trim(); if (!v) { ta.focus(); return; }
     btn.disabled = true;
     try {
       var r = await db.rpc('wa191_text_reply', { p_phone: R.ph, p_body: v }); if (r && r.error) throw r.error;
-      ta.value = ''; T(r.data && r.data.sends_now ? 'Sent from the ops line' : 'Queued: it goes at 9 am');
-      setTimeout(function () { openThread(R.ph); }, r.data && r.data.sends_now ? 2500 : 300); loadInbox(true).then(paint);
+      ta.value = ''; delete R.drafts[R.ph]; T(r.data && r.data.sends_now ? 'Sent from the ops line' : 'Queued: it goes at 9 am');
+      setTimeout(function () { loadThread(true); }, r.data && r.data.sends_now ? 2500 : 300); loadInbox(true).then(paint);
     } catch (e) { T('Could not send: ' + String((e && e.message) || e).slice(0, 120)); }
     btn.disabled = false;
+  }
+  /* wave191j: Coming / Can't make it / Add as coming from the conversation */
+  async function setPlace(evId, status) {
+    var th = R.thread; if (!th || R.setting != null) return;
+    var name = String(R.names[th.ph] || '').trim();
+    if (!th.p && !th.cn && name.length < 2) {
+      T('Type their name first: this number is not in the volunteer directory yet.');
+      var ni = document.querySelector('#w191rec [data-rname]'); if (ni) ni.focus(); return;
+    }
+    R.setting = evId; paintBody();
+    try {
+      var r = await db.rpc('wa191_text_roster', { p_phone: th.ph, p_event: evId, p_status: status, p_name: name || null, p_role: null });
+      if (r && r.error) throw r.error; var d = r.data || {};
+      var who = String(d.name || 'They').split(' ')[0];
+      T(status === 'Confirmed' ? who + ' is coming on ' + fmtDay(d.date) + (d.added ? ' (added to the roster)' : '')
+        : status === 'Unavailable' ? who + ' can’t make it on ' + fmtDay(d.date) : who + ' is back to waiting for ' + fmtDay(d.date));
+      if (d.new_person) delete R.names[th.ph];
+      try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+      try { if (typeof waVolRender === 'function') waVolRender(); } catch (e) { /* fine */ }
+      R.setting = null; await refreshThread(); loadInbox(true).then(paint);
+    } catch (e) { R.setting = null; paintBody(); T('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
+  }
+  /* wave191i: a "Thanks" needs no answer */
+  async function markDone(btn) {
+    if (!R.ph) return; btn.disabled = true;
+    try {
+      var r = await db.rpc('wa191_text_done', { p_phone: R.ph }); if (r && r.error) throw r.error;
+      T('Marked as needing no reply'); await loadInbox(true); paint();
+    } catch (e) { btn.disabled = false; T('Could not save: ' + String((e && e.message) || e).slice(0, 120)); }
   }
   function people() { return selList().map(function (p) { return { person_id: p.p || null, contact_id: p.c, group: groupFor(p), role: R.askRole || null }; }); }
   function texts() { var out = {}; Object.keys(R.edits).forEach(function (k) { var a = k.split('|'); out[a[0]] = out[a[0]] || {}; out[a[0]][a[1]] = R.edits[k]; }); return out; }
@@ -343,7 +417,7 @@
     if (what === 'clear') { R.sel = {}; paint(); return; }
     if (what === 'more') { R.step = 'list'; R.result = null; paint(); if (!R.pool) { await loadPool(true); paint(); } return; }
     if (what === 'conv') { R.tab = 'conv'; R.step = 'list'; paint(); await loadInbox(true); paint(); return; }
-    if (what === 'refreshconv') { await loadInbox(true); paint(); if (R.ph) openThread(R.ph); return; }
+    if (what === 'refreshconv') { await loadInbox(true); paint(); if (R.ph) loadThread(true); return; }
   }
   /* placeholders go where the cursor was in the last wording touched */
   function insertPh(ph) {
@@ -367,6 +441,8 @@
     if ((x = t.closest('[data-rconv]'))) { e.preventDefault(); openThread(x.getAttribute('data-rconv')); return; }
     if ((x = t.closest('[data-rback]'))) { e.preventDefault(); R.ph = null; R.thread = null; paint(); return; }
     if ((x = t.closest('[data-rreply]'))) { e.preventDefault(); reply(x); return; }
+    if ((x = t.closest('[data-rset]'))) { e.preventDefault(); if (x.disabled) return; var sp = x.getAttribute('data-rset').split('|'); setPlace(Number(sp[0]), sp[1]); return; }
+    if ((x = t.closest('[data-rdone]'))) { e.preventDefault(); markDone(x); return; }
     if ((x = t.closest('[data-rph]'))) { e.preventDefault(); insertPh(x.getAttribute('data-rph')); return; }
     if ((x = t.closest('[data-rperson]'))) { closeRecruit(); return; }
   }, true);
@@ -386,7 +462,8 @@
   document.addEventListener('input', function (e) {
     var t = e.target; if (!t || !t.closest || !t.closest('#w191rec')) return;
     if (t.hasAttribute('data-rq')) { R.q = t.value; clearTimeout(R.qT); R.qT = setTimeout(paintBody, 160); return; }
-    if (t.hasAttribute('data-rreplyta')) { t.style.height = '42px'; t.style.height = Math.min(140, t.scrollHeight + 2) + 'px'; return; }
+    if (t.hasAttribute('data-rreplyta')) { if (R.ph) R.drafts[R.ph] = t.value; t.style.height = '42px'; t.style.height = Math.min(140, t.scrollHeight + 2) + 'px'; return; }
+    if (t.hasAttribute('data-rname')) { if (R.ph) R.names[R.ph] = t.value; return; }
     var k = t.getAttribute('data-rtpl'); if (k) { R.lastTa = t; R.edits[k] = t.value; var c = t.parentElement.querySelector('.cnt'); if (c) c.textContent = t.value.length + ' characters before the names and the link'; schedPreview(); }
   });
   document.addEventListener('focusin', function (e) { var t = e.target; if (t && t.getAttribute && t.getAttribute('data-rtpl')) R.lastTa = t; });
@@ -457,9 +534,18 @@
     '.w191rec .m{display:flex;flex-direction:column;}.w191rec .m.out{align-items:flex-end;}.w191rec .m .mt{font-size:10.5px;color:' + MUTED + ';margin:3px 6px 0;}' +
     '.w191rec .rp{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid rgba(16,63,57,.1);background:#FFFAF2;}.w191rec .rp textarea{flex:1;font:inherit;font-size:13.5px;line-height:1.4;padding:10px 14px;border-radius:20px;border:1px solid rgba(16,63,57,.2);resize:none;min-height:42px;height:42px;max-height:140px;background:#FFFAF2;box-sizing:border-box;}' +
     '.w191rec .thr > .note,.w191rec .thr > .gn{margin:8px 12px;}' +
+    /* wave191j: their servings under the name; wave191i: the waiting line over the reply box */
+    '.w191rec .srv{padding:8px 14px 6px;border-bottom:1px solid rgba(16,63,57,.1);background:' + CREAM + ';display:flex;flex-direction:column;gap:6px;}' +
+    '.w191rec .sr{display:flex;align-items:center;gap:10px;min-height:32px;}.w191rec .sr .d{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}.w191rec .sr .d b{font-size:13px;color:' + GREEN + ';white-space:nowrap;}.w191rec .sr .d span{font-size:12px;color:' + MUTED + ';}' +
+    '.w191rec .seg.sm{padding:2px;border-radius:9px;flex:none;}.w191rec .seg.sm button{padding:5px 10px;font-size:12px;border-radius:7px;}.w191rec .seg.sm button.on{background:' + GREEN + ';color:' + CREAM + ';box-shadow:none;}.w191rec .seg.sm button[disabled]{opacity:.5;cursor:default;}' +
+    '.w191rec .w191btn.sm{padding:6px 11px;font-size:12px;flex:none;}' +
+    '.w191rec .srn{margin:0;font-size:12px;color:' + MUTED + ';display:flex;gap:8px;align-items:center;flex-wrap:wrap;}.w191rec .srn b{color:' + INK + ';}.w191rec .srn input{flex:1;min-width:150px;font:inherit;font-size:13px;padding:6px 10px;border-radius:9px;border:1px solid rgba(16,63,57,.25);background:#FFFAF2;}' +
+    '.w191rec .wl{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 14px;border-top:1px solid rgba(16,63,57,.1);background:rgba(179,64,47,.05);font-size:12px;color:' + FLAG + ';}.w191rec .wl span{display:inline-flex;align-items:center;gap:7px;}.w191rec .wl .lnk{font-size:12px;}' +
+    '.w191rec .wl + .rp{border-top:0;}' +
     '@media (max-width:720px){.w191rec{align-items:flex-end;}.w191rec .sh{width:100vw;height:96vh;border-radius:18px 18px 0 0;}.w191rec .hd{flex-wrap:wrap;padding:14px 14px 10px;}.w191rec .hd .seg{order:3;width:100%;}.w191rec .hd .seg button{flex:1;justify-content:center;}' +
       '.w191rec .bd{padding:12px 14px 16px;}.w191rec .ft{padding:10px 14px;}.w191rec .rw{grid-template-columns:22px 30px minmax(0,1fr);}.w191rec .rw .ph{display:none;}.w191rec .av{width:30px;height:30px;}' +
       '.w191rec .conv{grid-template-columns:1fr;}.w191rec .conv .thr{display:none;}.w191rec .conv.has .cl{display:none;}.w191rec .conv.has .thr{display:flex;}.w191rec .th .bk{display:inline-block;}' +
       '.w191rec .ft .ask{flex:1 1 40%;}.w191rec .ft .w191btn.gold{flex:1 1 100%;justify-content:center;}.w191rec .ft > .gn{display:none;}.w191rec .ft [data-rgo="refreshconv"]{margin-left:auto;}' +
-      '.w191rec .flt input[type=search]{flex:1 1 100%;}.w191rec .flt select{flex:1 1 40%;}.w191rec .cmp{grid-template-columns:1fr;}.w191rec .cmp .prev{position:static;max-height:none;}}';
+      '.w191rec .flt input[type=search]{flex:1 1 100%;}.w191rec .flt select{flex:1 1 40%;}.w191rec .cmp{grid-template-columns:1fr;}.w191rec .cmp .prev{position:static;max-height:none;}' +
+      '.w191rec .srv{padding:8px 12px 6px;}.w191rec .sr .d{gap:0 8px;}.w191rec .sr .d span{flex-basis:100%;}.w191rec .seg.sm button{padding:5px 8px;}}';
   document.head.appendChild(rcss);

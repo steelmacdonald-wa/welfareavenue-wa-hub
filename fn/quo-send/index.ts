@@ -1,4 +1,7 @@
-// Welfare Avenue: quo-send (v5, wave191e, 01/10/26)
+// Welfare Avenue: quo-send (v6, wave191h, 01/10/26)
+// v6 (wave191h): 'sync_threads' copies the texts the team typed in the Quo app (to people who texted the ops line in the
+// last 21 days) into quo_messages (kind manual, sent_by 'Quo app', status sent; never sent again), and marks their texts
+// answered, so the Hub's conversations and its "waiting for an answer" count match what happened in Quo. Cron wa-quo-threads.
 // v5 (wave191e): texts to volunteers go only between 9 am and 7 pm Toronto time (app_config sms_window_start and
 // sms_window_end, Steel 01/10/26), thank-yous included; outside it they wait in the queue for the quarter-hour tick.
 // A Text volunteers send outside the hours is queued (kind manual) and goes at 9 am. drain sends the Find volunteers
@@ -29,6 +32,7 @@
 //   'webhook_status' admins or the trigger secret: the webhooks Quo has.
 //   'thread'         {phone}: the last 50 texts between the ops line and that number as Quo has them (both ways, what
 //                    was typed in the Quo app included), for the Hub's conversations.
+//   'sync_threads'   trigger secret only: the replies typed in the Quo app, copied into the Hub (see v6 above).
 // Tables: quo_messages (insert, update), event_roster (confirm_token, only for the manual {{confirm_link}}), app_config (read;
 //   quo_webhook_id), volunteer_people (read), vault via wa_vault_set. Side effects: texts through Quo.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -169,6 +173,51 @@ async function drain(): Promise<Record<string, unknown>> {
     await new Promise(res => setTimeout(res, 250));
   }
   return { mode, sent, skipped, failed, waiting, window_open: open };
+}
+
+/* ---------- the team's replies typed in the Quo app, copied into the Hub (v6) ---------- */
+async function syncThreads(): Promise<Record<string, unknown>> {
+  const key = await getSecret('QUO_API_KEY');
+  const pn = await cfg('quo_phone_number_id');
+  if (!pn) return { error: 'app_config quo_phone_number_id is not set' };
+  const since = new Date(Date.now() - 21 * 86400000).toISOString();
+  const { data: ins } = await svc.from('quo_messages').select('phone, created_at').eq('direction', 'in').gte('created_at', since)
+    .order('created_at', { ascending: false }).limit(1000);
+  const phones: string[] = [];
+  for (const r of (ins || [])) { const d = normPhone(r.phone); if (d && phones.indexOf(d) < 0) phones.push(d); if (phones.length >= 60) break; }
+  let checked = 0, inserted = 0, answered = 0, limited = false;
+  const wait = (ms: number) => new Promise(res => setTimeout(res, ms));
+  for (const d of phones) {
+    const url = OP + '/messages?phoneNumberId=' + encodeURIComponent(pn) + '&participants[]=' + encodeURIComponent('+1' + d) + '&maxResults=20';
+    let res = await fetch(url, { headers: { 'Authorization': key } });
+    if (res.status === 429) { await wait(2000); res = await fetch(url, { headers: { 'Authorization': key } }); }
+    if (res.status === 429) { limited = true; break; }
+    if (!res.ok) { await wait(400); continue; }
+    checked++;
+    const b: any = await res.json().catch(() => ({}));
+    const outs = ((b && b.data) || []).filter((m: any) => m && m.id && String(m.direction || '') !== 'incoming');
+    if (outs.length) {
+      const { data: have } = await svc.from('quo_messages').select('quo_id').in('quo_id', outs.map((m: any) => String(m.id)));
+      const known = new Set((have || []).map((h: any) => String(h.quo_id)));
+      for (const m of outs) {
+        if (known.has(String(m.id))) continue;
+        const at = m.createdAt ? new Date(m.createdAt).toISOString() : new Date().toISOString();
+        const body = String(m.text ?? m.content ?? '').slice(0, 2000) || '(a picture or a file)';
+        const { error } = await svc.from('quo_messages').insert({ batch_id: crypto.randomUUID(), person_id: null, phone: '+1' + d, body, status: 'sent',
+          sent_by: 'Quo app', direction: 'out', kind: 'manual', quo_id: String(m.id), created_at: at, sent_at: at });
+        if (!error) inserted++;
+      }
+      /* their texts before the team's last reply are answered */
+      const last = outs.map((m: any) => m.createdAt ? new Date(m.createdAt).getTime() : 0).reduce((a: number, x: number) => Math.max(a, x), 0);
+      if (last) {
+        const { data: up } = await svc.from('quo_messages').update({ handled: 'answered' }).eq('direction', 'in').eq('phone', '+1' + d)
+          .in('handled', ['question', 'unmatched', 'stored']).lt('created_at', new Date(last).toISOString()).select('id');
+        answered += (up || []).length;
+      }
+    }
+    await wait(400);
+  }
+  return { phones: phones.length, checked, inserted, answered, rate_limited: limited };
 }
 
 /* ---------- a conversation as Quo has it ---------- */
@@ -385,6 +434,7 @@ Deno.serve(async (req: Request) => {
     if (action === 'webhook_setup') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await webhookSetup()); }
     if (action === 'webhook_status') { if (!auth.admin) return json({ error: 'admins only' }, 403); return json(await webhookStatus()); }
     if (action === 'thread') return json(await thread(String(body.phone || '')));
+    if (action === 'sync_threads') { if (!auth.system) return json({ error: 'sync_threads is for the Hub itself' }, 403); return json(await syncThreads()); }
     if (action === 'send') return await manual(body, auth);
     return json({ error: 'unknown action' }, 400);
   } catch (e) {
