@@ -125,7 +125,7 @@ def head(lang, key, title, desc, image=None):
     ld = ''
     if key == 'home':
         ld = {'@context': 'https://schema.org', '@type': 'NGO', 'name': 'Welfare Avenue', 'alternateName': 'Avenue du Bien-Être', 'url': SITE + '/',
-              'logo': SITE + '/apple-touch-icon.png', 'email': C.EMAIL, 'foundingDate': '2020', 'areaServed': ['Montreal', 'Toronto', 'Ottawa'],
+              'logo': SITE + '/apple-touch-icon.png', 'email': C.EMAIL, 'telephone': C.PHONE['ld'], 'foundingDate': '2020', 'areaServed': ['Montreal', 'Toronto', 'Ottawa'],
               'sameAs': [u for _, u in C.SOCIAL]}
         ld = '<script type="application/ld+json">' + json.dumps(ld, ensure_ascii=False) + '</script>\n'
     return ('<!doctype html>\n<html lang="%s">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n'
@@ -173,12 +173,12 @@ def footer(lang):
     cities = 'Montreal, Quebec<br>Toronto, Ontario' if en else 'Montréal (Québec)<br>Toronto (Ontario)'
     return ('</main>\n<footer class="foot on-dark"><div class="wrap"><div class="cols">\n'
             '<div class="who"><a class="logo" href="%s" aria-label="%s"><img src="/assets/logo-cream.svg" alt="Welfare Avenue" width="120" height="40"></a>'
-            '<p><a href="mailto:%s">%s</a></p><p>%s</p></div>\n'
+            '<p><a href="mailto:%s">%s</a><br>%s</p><p>%s</p></div>\n'
             '<div><h2>%s</h2><ul>%s</ul></div>\n<div><h2>%s</h2><ul>%s</ul></div>\n'
             '<div><h2>%s</h2><div class="social">%s</div><p class="mt2"><a href="%s" rel="noopener">%s</a></p></div>\n'
             '<div class="give"><p>%s</p>%s</div>\n</div>\n'
             '<div class="legal"><span>&copy; %d %s</span><span>%s %s</span></div>\n</div></footer>\n</body>\n</html>\n'
-            % (e(url('home', lang)), e(u['home_label']), C.EMAIL, C.EMAIL, cities,
+            % (e(url('home', lang)), e(u['home_label']), C.EMAIL, C.EMAIL, phone(lang), cities,
                e('Explore' if en else 'Explorer'), explore, e('About' if en else 'À propos'), aboutl,
                e('Connect' if en else 'Nous suivre'), soc, e(C.REVIEW), e(u['review']),
                e('Your generosity helps us' if en else 'Votre générosité nous aide'), btn(give(lang), u['nav']['donate'], 'light', donate=True),
@@ -225,11 +225,15 @@ def form_box(slugs, fallback_html, lang, heading=True, anchor=''):
 def mail(lang):
     return '<a href="mailto:%s">%s</a>' % (C.EMAIL, C.EMAIL)
 
+def phone(lang):
+    # www3 (01/10/26): Welfare Avenue's phone line, (438) 808-7754 in English and 438 808-7754 in French
+    return '<a href="tel:%s">%s</a>' % (C.PHONE['tel'], e(C.PHONE[lang]))
+
 def stats_note(lang):
     return '<p class="fine mt2">%s</p>' % e(C.STATS_NOTE[lang])
 
 def figs(lang, items=None, cls=''):
-    """Edison's figures: a thin rule, the number, the label (the 2025 impact report's figures)."""
+    """Edison's figures: a thin rule, the number, the label (www3: our best estimates from the Hub, content.IMPACT)."""
     items = items if items is not None else C.STATS[lang]
     return '<ul class="figs%s">%s</ul>' % ((' ' + cls) if cls else '', ''.join('<li class="fig"><b>%s</b><span>%s</span></li>' % (e(n), e(t)) for n, t in items))
 
@@ -467,7 +471,7 @@ def volunteer(lang):
         '<section class="band on-grey"><div class="wrap"><div class="ihead">%s<h2>%s</h2></div><ol class="steps">%s</ol></div></section>\n' % (mark(), e(T['how_h']), how) +
         '<section class="band on-white" id="apply"><div class="wrap split top"><div><p class="over">%s</p><h2>%s</h2><p class="mt1">%s</p>%s'
         '<h3 class="mt3">%s</h3>%s</div><div>%s</div></div></section>\n'
-        % (e(T['apply_over']), e(T['apply_h2']), e(T['apply_p']), figs(lang, [C.STATS[lang][2], C.STATS[lang][0]], 'two mt2'),
+        % (e(T['apply_over']), e(T['apply_h2']), e(T['apply_p']), figs(lang, C.STATS_VOLUNTEER[lang], 'two mt2'),
            e(T['next_h']), upcoming_box(lang, 'servings', 5, 'volunteer#apply', T['next_note']),
            form_box('volunteer' if en else 'benevole,volunteer', '<h3>%s</h3>%s' % (e(T['apply_h']), fb), lang)) +
         '<section class="band on-grey" id="toronto"><div class="wrap split"><div><h2>%s</h2><p class="mt1 mb0">%s</p></div><div>'
@@ -600,7 +604,7 @@ def contact(lang):
         'form_h': 'Write to us' if en else 'Écrivez-nous',
         'form_fb': 'Write to us at' if en else 'Écrivez-nous à',
         'direct_h': 'Or reach us directly' if en else 'Ou joignez-nous directement',
-        'email': 'Email' if en else 'Courriel', 'social': 'Social media' if en else 'Réseaux sociaux',
+        'email': 'Email' if en else 'Courriel', 'phone': 'Phone' if en else 'Téléphone', 'social': 'Social media' if en else 'Réseaux sociaux',
         'partner_h': 'Partners and sponsors' if en else 'Partenaires et commanditaires',
         'partner_p': 'Invest in youth-powered, measurable impact. We build partnerships with visibility and a clear report of what your support made possible.' if en else
                      'Investissez dans un impact mesurable, porté par les jeunes. Nous bâtissons des partenariats qui offrent de la visibilité, avec un compte rendu clair de ce que votre soutien a rendu possible.',
@@ -608,10 +612,11 @@ def contact(lang):
     soc = ''.join('<li><a href="%s" rel="noopener">%s</a></li>' % (e(h), e(n)) for n, h in C.SOCIAL)
     body = (hero(h1(T['title']), T['lede'], '2021-11-two-volunteers-at-the-tent', alt_of('2021-11-two-volunteers-at-the-tent', lang)) +
         '<section class="band on-white"><div class="wrap split top"><div><h2 class="sr">' + e('Contact form' if en else 'Formulaire de contact') + '</h2>%s</div><div><h2>%s</h2><h3 class="mt2">%s</h3><p><a href="mailto:%s">%s</a></p>'
+        '<h3 class="mt2">%s</h3><p>%s</p>'
         '<h3 class="mt2">%s</h3><ul class="chips">%s</ul><p class="mt2"><a href="%s" rel="noopener">%s</a></p>'
         '<div class="card mt3"><h3>%s</h3><p class="mb0">%s</p></div></div></div></section>\n'
         % (form_box('contact' if en else 'nous-joindre,contact', '<h3>%s</h3><p class="waf-note">%s %s.</p>' % (e(T['form_h']), e(T['form_fb']), mail(lang)), lang),
-           e(T['direct_h']), e(T['email']), C.EMAIL, C.EMAIL, e(T['social']), soc, e(C.REVIEW), e(C.UI[lang]['review']), e(T['partner_h']), e(T['partner_p'])) +
+           e(T['direct_h']), e(T['email']), C.EMAIL, C.EMAIL, e(T['phone']), phone(lang), e(T['social']), soc, e(C.REVIEW), e(C.UI[lang]['review']), e(T['partner_h']), e(T['partner_p'])) +
         newsletter_band(lang, '2024-07-summer-salad-trays'))
     return page(lang, 'contact', T['title'], T['desc'], body)
 
@@ -627,12 +632,6 @@ def donate(lang):
         'figs_h': 'Our impact' if en else 'Notre impact',
         'make_over': 'Make a donation' if en else 'Faire un don',
         'what_h': 'What your gift makes possible' if en else 'Ce que votre don rend possible',
-        'what': ([('Sunday servings', 'Ingredients, containers and supplies for home-cooked meals served in downtown Montreal.'),
-                  ('Essentials', 'Hygiene baskets, warm clothing and seasonal gifts, offered with dignity and choice.'),
-                  ('A pathway to support', 'The time, transport and partnerships that connect people with the services they need.')] if en else
-                 [('Les repas du dimanche', 'Ingrédients, contenants et matériel pour les repas maison servis au centre-ville de Montréal.'),
-                  ('Les articles essentiels', 'Paniers d’hygiène, vêtements chauds et cadeaux de saison, offerts avec dignité et en laissant le choix.'),
-                  ('Un chemin vers le soutien', 'Le temps, le transport et les partenariats qui relient les gens aux services dont ils ont besoin.')]),
         'give_h': 'Give online' if en else 'Donner en ligne',
         'give_p': 'Give once, or every month to keep it steady. It takes a minute, securely through Stripe, without leaving this page.' if en else
                   'Donnez une fois, ou chaque mois pour un soutien constant. Cela prend une minute, de façon sécurisée avec Stripe, sans quitter cette page.',
@@ -647,14 +646,15 @@ def donate(lang):
                   'Investissez dans un impact mesurable, porté par les jeunes, de la commandite d’un service à un partenariat d’une saison.',
         'talk': 'Talk to us' if en else 'Parlons-en',
     }
-    ladder = ''.join('<li><b>%s</b><span>%s</span></li>' % (e(t), e(d)) for t, d in T['what'])
+    # www3 (01/10/26): the amounts, costed from the Hub's grocery orders and the 2026 recipe book (content.LADDER)
+    ladder = ''.join('<li><b>%s</b><span><strong>%s</strong>%s</span></li>' % (e(a), e(t), e(d)) for a, t, d in C.LADDER[lang])
     facts = ''.join('<li>%s</li>' % e(f) for f in T['facts'])
     body = (hero(h1(T['title']), T['lede'], '2023-05-spring-crew-under-the-tent', alt_of('2023-05-spring-crew-under-the-tent', lang),
                  btn(give(lang), T['hero_btn'], donate=True)) +
-        '<section class="band on-white"><div class="wrap"><h2 class="sr">%s</h2>%s%s</div></section>\n' % (e(T['figs_h']), figs(lang), stats_note(lang)) +
-        '<section class="band on-grey" id="give"><div class="wrap split"><div><p class="over">%s</p><h2>%s</h2><ul class="ladder">%s</ul></div>'
+        '<section class="band on-white"><div class="wrap"><h2 class="sr">%s</h2>%s%s</div></section>\n' % (e(T['figs_h']), figs(lang, C.STATS_DONATE[lang], 'six'), stats_note(lang)) +
+        '<section class="band on-grey" id="give"><div class="wrap split"><div><p class="over">%s</p><h2>%s</h2><ul class="ladder">%s</ul><p class="fine mt2">%s</p></div>'
         '<div class="givebox"><h3>%s</h3><p>%s</p><ul class="facts">%s</ul>%s<p class="fine">%s</p></div></div></section>\n'
-        % (e(T['make_over']), e(T['what_h']), ladder, e(T['give_h']), e(T['give_p']), facts, btn(give(lang), T['give_btn'], donate=True), e(receipt_line(lang))) +
+        % (e(T['make_over']), e(T['what_h']), ladder, e(C.LADDER_NOTE[lang]), e(T['give_h']), e(T['give_p']), facts, btn(give(lang), T['give_btn'], donate=True), e(receipt_line(lang))) +
         '<section class="band on-white" id="essentials"><div class="wrap cards2"><div class="card"><h2>%s</h2><p>%s</p><div class="btns">%s</div></div>'
         '<div class="card"><h2>%s</h2><p>%s</p><div class="btns">%s</div></div></div></section>\n'
         % (e(T['ess_h']), e(T['ess_p']), btn(url('contact', lang), T['talk'], 'ghost'), e(T['corp_h']), e(T['corp_p']), btn(url('contact', lang), T['talk'], 'ghost')))

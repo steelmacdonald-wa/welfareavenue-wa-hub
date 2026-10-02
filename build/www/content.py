@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 """Welfare Avenue website copy, English and French (wave162, 28/09/26). Voice: wa-brand and wa-writing (people we
-serve, community, support, youth-powered, food as a starting point; no em dashes; impact first). Figures: the 2025
-Impact Report as used in the Hub since 26/09/26 (10,000+ meals at the Sunday servings, 3,000+ holiday gifts in 2025,
-201 active volunteers in 2025). Story: the Hub's Our story highlights (wa_history, published, everyone). Partners:
-wa_partners with status active and visibility everyone. Press: the old website's press page."""
+serve, community, support, youth-powered, food as a starting point; no em dashes; impact first). Figures (www3,
+01/10/26, Steel: "give all your best estimate off the data the hub provides"): best estimates from the Hub, April 2020
+to September 2026, rounded down; the method and every input are in the project doc claude/www3-impact-figures.md.
+Story: the Hub's Our story highlights (wa_history, published, everyone). Partners: wa_partners with status active and
+visibility everyone. Press: the old website's press page."""
 
 HUB = 'https://hub.welfareavenue.com'
 GIVE = HUB + '/give'
 EMAIL = 'info@welfareavenue.com'
+# www3 (01/10/26): Welfare Avenue's phone line (Steel, 01/10/26), shown the North American way in English and the
+# Quebec way in French
+PHONE = {'tel': '+14388087754', 'en': '(438) 808-7754', 'fr': '438 808-7754', 'ld': '+1-438-808-7754'}
 CHARITY = '713048502RR0001'
 SOCIAL = [('Instagram', 'https://www.instagram.com/welfareavenue/'), ('TikTok', 'https://www.tiktok.com/@welfareavenue'),
           ('LinkedIn', 'https://www.linkedin.com/company/75487020/')]
@@ -58,14 +62,55 @@ UI = {
     },
 }
 
-# Four figures on the home page and About (same wording both places)
-STATS = {
-    'en': [('10,000+', 'meals served at our Sunday servings since 2020'), ('3,000+', 'holiday gifts hand-delivered across Montreal in 2025'),
-           ('201', 'active volunteers in 2025'), ('2020', 'the spring we started, bringing food downtown in the first lockdown')],
-    'fr': [('10 000+', 'repas servis lors de nos repas du dimanche depuis 2020'), ('3 000+', 'cadeaux des fêtes livrés en main propre à Montréal en 2025'),
-           ('201', 'bénévoles actifs en 2025'), ('2020', 'le printemps où tout a commencé, avec des repas apportés au centre-ville pendant le premier confinement')],
+# www3 (01/10/26): our best estimates from the Hub, April 2020 to September 2026, each rounded down (method and inputs in
+# claude/www3-impact-figures.md). Meals ~14,700: WA's own count of more than 10,000 by October 2023, then the servings the
+# Hub records since at their recorded or typical meals. Servings 258: WA's count of 180 by October 2023, then 69 Montreal
+# servings and 9 Toronto, Ottawa and partner food events in the Hub. Raised ~$76,400: the compiled statements for FY2022 to
+# FY2025 ($55,484), the bank to July 2026 ($12,909) and about $8,000 before incorporation (WA's own $40,000 to date in
+# October 2023, less FY2022 and FY2023). Gifts: 1,500+ in December 2024 and 3,000+ in December 2025. Fundraisers: WA's 25
+# by October 2023 and 12 since. Partners: 119 organizations in the Hub's register (active or past; 102 without suppliers,
+# venues and media). Volunteers: WA's own 600+ (March 2026); the Hub holds 510 volunteer records, most of 2020 to 2022 not.
+IMPACT = {
+    'en': {'meals': ('14,000+', 'meals served since April 2020'),
+           'servings': ('250+', 'servings since April 2020, in Montreal, Toronto and Ottawa'),
+           'gifts': ('4,500+', 'holiday gifts hand-delivered in 2024 and 2025'),
+           'volunteers': ('600+', 'volunteers since 2020'),
+           'raised': ('$75,000+', 'given by our community since 2020'),
+           'fundraisers': ('35+', 'fundraising events'),
+           'partners': ('100+', 'partners: schools, businesses, community groups and shelters')},
+    'fr': {'meals': ('14 000+', 'repas servis depuis avril 2020'),
+           'servings': ('250+', 'distributions de repas depuis avril 2020, à Montréal, à Toronto et à Ottawa'),
+           'gifts': ('4 500+', 'cadeaux des fêtes livrés en main propre en 2024 et 2025'),
+           'volunteers': ('600+', 'bénévoles depuis 2020'),
+           'raised': ('75 000 $+', 'donnés par notre communauté depuis 2020'),
+           'fundraisers': ('35+', 'activités de collecte de fonds'),
+           'partners': ('100+', 'partenaires : écoles, entreprises, groupes communautaires et refuges')},
 }
-STATS_NOTE = {'en': 'Figures from our 2025 impact report.', 'fr': 'Chiffres tirés de notre rapport d’impact 2025.'}
+def _impact(keys): return {l: [IMPACT[l][k] for k in keys] for l in ('en', 'fr')}
+# The four tiles beside the pillars (home and About), the volunteer page's two, the donate page's six
+STATS = _impact(['meals', 'servings', 'gifts', 'volunteers'])
+STATS_VOLUNTEER = _impact(['volunteers', 'servings'])
+STATS_DONATE = _impact(['raised', 'meals', 'servings', 'gifts', 'fundraisers', 'partners'])
+STATS_NOTE = {'en': 'Our best estimates from our records, April 2020 to September 2026, rounded down.',
+              'fr': 'Nos meilleures estimations, tirées de nos registres d’avril 2020 à septembre 2026, arrondies à la baisse.'}
+
+# www3 (01/10/26): what a gift buys, from the Hub's grocery orders and the 2026 recipe book (Steel: "make them based on how
+# much a recipe can provide"). A volunteer cook's grocery order: median $72.52 (46 orders, September 2025 to July 2026),
+# for 30 to 35 people (the cook's role description), so about $2.10 to $2.40 a portion. A recipe in the book serves 8 to 10
+# (fruit salad 8 to 10, oatmeal bars 16, tacos 12). A Sunday serving: about $220 to $245 of groceries for about 50 plates
+# (January to July 2026, 13 servings, $3,156). Gifts are not earmarked: the note under the list says so.
+LADDER = {
+    'en': [('$25', 'One recipe from our cookbook', 'The groceries for a fruit salad for 8 to 10 people, or a tray of 16 no-bake oatmeal bars.'),
+           ('$75', 'One volunteer cook’s batch', 'A dish for 30 to 35 people, cooked at home by a volunteer, like our sweet potato and black bean salad.'),
+           ('$250', 'A whole Sunday serving', 'Groceries for about 50 plates downtown, each with a main, a side and fruit or dessert.'),
+           ('$20 a month', 'A recipe every month', 'About 100 portions over a year, served every second Sunday.')],
+    'fr': [('25 $', 'Une recette de notre livre', 'L’épicerie d’une salade de fruits pour 8 à 10 personnes, ou d’un plateau de 16 barres d’avoine sans cuisson.'),
+           ('75 $', 'Le plat d’un cuisinier bénévole','Un plat pour 30 à 35 personnes, cuisiné à la maison par un bénévole, comme notre salade de patates douces et de haricots noirs.'),
+           ('250 $', 'Tout un repas du dimanche', 'L’épicerie d’environ 50 assiettes au centre-ville, chacune avec un plat, un accompagnement et des fruits ou un dessert.'),
+           ('20 $ par mois', 'Une recette chaque mois', 'Environ 100 portions par année, servies un dimanche sur deux.')],
+}
+LADDER_NOTE = {'en': 'Estimates from our 2026 grocery orders and recipe book. Every gift supports all of our programs.',
+               'fr': 'Estimations tirées de nos commandes d’épicerie et de notre livre de recettes 2026. Chaque don soutient l’ensemble de nos programmes.'}
 
 PILLARS = {
     'en': [

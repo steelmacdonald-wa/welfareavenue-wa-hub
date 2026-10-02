@@ -176,6 +176,7 @@ section{position:relative}
 .figs{display:grid;gap:30px 28px;grid-template-columns:repeat(2,1fr);list-style:none;margin:0;padding:0}
 @media (min-width:900px){.figs{grid-template-columns:repeat(4,1fr)}}
 .figs.two{grid-template-columns:repeat(2,1fr)}
+@media (min-width:900px){.figs.six{grid-template-columns:repeat(3,1fr)}}
 .fig{border-top:1px solid var(--rule);padding-top:22px}
 .fig b{display:block;font-family:var(--hf);font-weight:500;font-size:clamp(38px,3.8vw,50px);line-height:1;color:var(--green)}
 .fig span{display:block;margin-top:14px;font-family:var(--hf);font-weight:600;font-size:18px;line-height:1.25;color:var(--green)}
@@ -230,9 +231,10 @@ section{position:relative}
 /* Giving: the list of what a gift does, and the box */
 .ladder{list-style:none;margin:30px 0 0;padding:0;border-top:1px solid var(--rule)}
 .ladder li{display:grid;gap:4px 22px;padding:18px 0;border-bottom:1px solid var(--rule)}
-@media (min-width:560px){.ladder li{grid-template-columns:11em 1fr;align-items:baseline}}
-.ladder b{font-family:var(--hf);font-weight:600;font-size:22px;line-height:1.2;color:var(--green)}
+@media (min-width:560px){.ladder li{grid-template-columns:10em 1fr;align-items:baseline}}
+.ladder b{font-family:var(--hf);font-weight:600;font-size:26px;line-height:1.15;color:var(--green)}
 .ladder span{font-size:15.5px}
+.ladder span strong{display:block;font-weight:600;color:var(--green);margin-bottom:2px}
 .givebox{background:var(--white);border:1px solid var(--line);padding:34px 32px 30px}
 .givebox h3{font-size:30px}
 .givebox .facts{list-style:none;margin:18px 0 26px;padding:0;display:grid;gap:8px}

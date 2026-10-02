@@ -329,14 +329,34 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     ok(a.next === 'Next serving: Sunday, May 4', 'www2 activities: the gold tag shows the next serving from the Hub (' + a.next + ')');
     ok(JSON.stringify(a.needs) === JSON.stringify(['8 Servers', '4 Cooks', '2 Drivers', '2 Dishwashers', '2 Community welcome', '1 Photographer']) && a.navcur === 'Our activities', 'www2 activities: who we need at each serving, from the Hub\'s roster targets ' + JSON.stringify(a.needs));
     await page.goto(ORIGIN + '/donate/', { waitUntil: 'networkidle' });
-    const d = await page.evaluate(() => ({ ladder: document.querySelectorAll('#give .ladder li').length, box: !!document.querySelector('#give .givebox a[data-wa-donate]'), figs: document.querySelectorAll('.figs .fig').length }));
-    ok(d.ladder === 3 && d.box && d.figs === 4, 'www2 donate: what a gift makes possible, the giving box and four figures');
+    const d = await page.evaluate(() => ({ ladder: Array.from(document.querySelectorAll('#give .ladder li b')).map(b => b.textContent), box: !!document.querySelector('#give .givebox a[data-wa-donate]'),
+      figs: Array.from(document.querySelectorAll('.figs.six .fig b')).map(b => b.textContent), cols: getComputedStyle(document.querySelector('.figs.six')).gridTemplateColumns.split(' ').length,
+      note: (document.querySelector('#give .ladder + .fine') || {}).textContent || '' }));
+    ok(JSON.stringify(d.ladder) === JSON.stringify(['$25', '$75', '$250', '$20 a month']) && /grocery orders and recipe book/.test(d.note) && /supports all of our programs/.test(d.note) && d.box,
+      'www3 donate: the amounts costed from recipes, with the note that gifts support every program ' + JSON.stringify(d.ladder));
+    ok(JSON.stringify(d.figs) === JSON.stringify(['$75,000+', '14,000+', '250+', '4,500+', '35+', '100+']) && d.cols === 3, 'www3 donate: six best-estimate figures, three across ' + JSON.stringify(d.figs));
+    const ph = await page.evaluate(() => Array.from(document.querySelectorAll('.foot .who a[href^="tel:"]')).map(a => [a.getAttribute('href'), a.textContent]));
+    ok(JSON.stringify(ph) === JSON.stringify([['tel:+14388087754', '(438) 808-7754']]), 'www3 footer: the phone number ' + JSON.stringify(ph));
     await page.click('#give .givebox a[data-wa-donate]'); await page.waitForSelector('.wa-dn-back iframe');
     ok(new URL(page.url()).pathname === '/donate/', 'www2 donate: Give now opens the popup on the page');
     await page.keyboard.press('Escape');
     await page.goto(ORIGIN + '/fr/evenements/', { waitUntil: 'networkidle' });
     const fr = await page.evaluate(() => ({ next: (document.querySelector('[data-next]') || {}).textContent, h1: document.querySelector('h1').textContent, nav: Array.from(document.querySelectorAll('.nav .links a:not(.lang)')).map(a => a.textContent) }));
     ok(/^Prochain repas : dimanche 4 mai$/.test(fr.next) && fr.h1 === 'Nos activités' && fr.nav[3] === 'Nos activités', 'www2 activités (fr): the next serving in French and the French menu (' + fr.next + ')');
+    // www3 (01/10/26): the phone on Contact in both languages, the figures in French, the home page's structured data
+    await page.goto(ORIGIN + '/contact/', { waitUntil: 'networkidle' });
+    const ce = await page.evaluate(() => Array.from(document.querySelectorAll('main a[href^="tel:"]')).map(a => a.textContent));
+    await page.goto(ORIGIN + '/fr/contact/', { waitUntil: 'networkidle' });
+    const cf = await page.evaluate(() => Array.from(document.querySelectorAll('main a[href^="tel:"]')).map(a => a.textContent).concat(Array.from(document.querySelectorAll('.foot a[href^="tel:"]')).map(a => a.textContent)));
+    ok(JSON.stringify(ce) === JSON.stringify(['(438) 808-7754']) && JSON.stringify(cf) === JSON.stringify(['438 808-7754', '438 808-7754']), 'www3 contact: the phone in English and French ' + JSON.stringify([ce, cf]));
+    await page.goto(ORIGIN + '/fr/donner/', { waitUntil: 'networkidle' });
+    const fd = await page.evaluate(() => ({ figs: Array.from(document.querySelectorAll('.figs.six .fig b')).map(b => b.textContent), ladder: Array.from(document.querySelectorAll('#give .ladder li b')).map(b => b.textContent) }));
+    ok(JSON.stringify(fd.figs) === JSON.stringify(['75 000 $+', '14 000+', '250+', '4 500+', '35+', '100+']) && JSON.stringify(fd.ladder) === JSON.stringify(['25 $', '75 $', '250 $', '20 $ par mois']),
+      'www3 donner (fr): the figures and amounts in French ' + JSON.stringify(fd));
+    await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' });
+    const ld = await page.evaluate(() => { try { return JSON.parse(document.querySelector('script[type="application/ld+json"]').textContent); } catch (e) { return {}; } });
+    const tiles = await page.evaluate(() => Array.from(document.querySelectorAll('.tiles .tile b')).map(b => b.textContent));
+    ok(ld.telephone === '+1-438-808-7754' && ld.email === 'info@welfareavenue.com' && JSON.stringify(tiles) === JSON.stringify(['14,000+', '250+', '4,500+', '600+']), 'www3 home: the four tiles and the phone in the structured data ' + JSON.stringify(tiles));
     await ctx.close();
   }
 
