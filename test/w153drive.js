@@ -59,10 +59,25 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('it stays in view at the foot of the menu even though the menu is taller than the screen', Math.abs(dockPos.dockBottom - dockPos.navBottom) < 2 && dockPos.navScroll > 900, dockPos);
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(250);
   const pop = await f.ev(() => ({ open: document.getElementById('w153pop').classList.contains('open'), tiles: [...document.querySelectorAll('#w153pop .w153tile')].map(t => t.querySelector('b').textContent + (t.classList.contains('on') ? '*' : '')), expanded: document.querySelector('[data-w153grid]').getAttribute('aria-expanded') }));
-  ok('the 9 dots open the launcher: the Hub (current), Strategy (wave163), the CRM, the HR centre, Finance, the Admin centre', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre|Finance|Admin centre', pop);
+  ok('the 9 dots open the launcher: the Hub (current), Strategy (wave163), the CRM, the HR centre, Finance, the Admin centre, then the Website link (01/10/26)', pop.open && pop.expanded === 'true' && pop.tiles.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre|Finance|Admin centre|Website', pop);
   await shot(f, 'apps_launcher');
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(150);
   ok('Escape closes it', await f.ev(() => !document.getElementById('w153pop').classList.contains('open')));
+  /* 01/10/26: the website under the apps: a real link that opens welfareavenue.com in a new tab while the Hub stays put
+     (the new tab is answered by the test, nothing reaches the real site) */
+  await click(f, '[data-w153grid]'); await f.page.waitForTimeout(200);
+  const web = await f.ev(() => { const a = document.querySelector('#w153pop [data-w153ext="website"]'); if (!a) return null; const tiles = [...document.querySelectorAll('#w153pop .w153tile')], r = a.getBoundingClientRect(), pr = document.getElementById('w153pop').getBoundingClientRect();
+    return { tag: a.tagName, href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel'), label: a.querySelector('b').textContent, blurb: a.querySelector('small').textContent, last: tiles[tiles.length - 1] === a, sep: !!(a.previousElementSibling && a.previousElementSibling.classList.contains('w153sep')),
+      deco: getComputedStyle(a).textDecorationLine, icon: getComputedStyle(a.querySelector('.w153ai')).color, inside: r.top >= pr.top && r.bottom <= pr.bottom + 1 }; });
+  ok('under the apps, after a rule: Website, a link to welfareavenue.com that says it opens in a new tab (target _blank, rel noopener)', !!web && web.tag === 'A' && web.href === 'https://welfareavenue.com/' && web.target === '_blank' && /noopener/.test(web.rel) && web.label === 'Website' && /new tab/.test(web.blurb) && web.last && web.sep && web.deco === 'none' && web.icon === 'rgb(16, 63, 57)' && web.inside, web);
+  await f.ctx.route('https://welfareavenue.com/**', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Welfare Avenue (test)</title><p>test</p>' }));
+  const before = await f.ev(() => location.hash);
+  const [tab] = await Promise.all([f.ctx.waitForEvent('page', { timeout: 10000 }), f.page.click('#w153pop [data-w153ext="website"]')]);
+  await tab.waitForLoadState('domcontentloaded').catch(() => {});
+  await f.page.waitForTimeout(300);
+  const after = await f.ev(() => ({ hash: location.hash, open: document.getElementById('w153pop').classList.contains('open') }));
+  ok('clicking it opens welfareavenue.com in a new tab, closes the launcher and leaves the Hub on the same page', tab.url() === 'https://welfareavenue.com/' && after.hash === before && !after.open && f.ctx.pages().length === 2, { url: tab.url(), after, before, pages: f.ctx.pages().length });
+  await tab.close();
   await click(f, '[data-w153grid]'); await f.page.waitForTimeout(200);
   await click(f, '[data-w153app="crm"]'); await f.page.waitForTimeout(1500);
   s = await state(f);

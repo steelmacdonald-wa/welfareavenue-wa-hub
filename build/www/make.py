@@ -693,8 +693,29 @@ HEADERS = ('# Welfare Avenue website (wave162): security headers for every page.
            '  Strict-Transport-Security: max-age=31536000\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n'
            '  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(self \"https://hub.welfareavenue.com\")\n'
            + ('' if LAUNCH else '  X-Robots-Tag: noindex\n') +
-           '/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/img/*\n  Cache-Control: public, max-age=604800\n')
+           '/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n/img/*\n  Cache-Control: public, max-age=604800\n'
+           '/static/react/*\n  Cache-Control: no-cache\n')
 put('_headers', HEADERS)
+
+# www3 (02/10/26), after the switch from George's site: browsers that kept the old site's page in their cache (it was
+# served without Cache-Control, so a browser may keep it for days) ask this address for the old site's script and showed
+# a blank screen. The script that now answers there asks the network for the page once more and reloads into the new
+# site (once per page and tab; a ?wa_r=1 mark stands in when the browser keeps no session storage). The old stylesheet's address
+# answers with an empty stylesheet so the old page fails quietly while it reloads.
+OLD_SCRIPT = ('/* Welfare Avenue: the old website\'s script lived here until 02/10/26. A browser still showing the old page from its\n'
+              '   cache lands here: it fetches the page again and reloads into the new site, once. */\n'
+              '(function () {\n'
+              '  var key = "wa_old_site_reload:" + window.location.pathname + window.location.search, url = window.location.href, marked = /[?&]wa_r=1(&|$)/.test(window.location.search), store = true;\n'
+              '  try { if (window.sessionStorage.getItem(key)) return; window.sessionStorage.setItem(key, "1"); } catch (e) { store = false; }\n'
+              '  if (!store && marked) return;\n'
+              '  function go() {\n'
+              '    if (store) { window.location.reload(); return; }\n'
+              '    var l = window.location; l.replace(l.pathname + l.search + (l.search ? "&" : "?") + "wa_r=1" + l.hash);\n'
+              '  }\n'
+              '  try { window.fetch(url, { cache: "reload", credentials: "same-origin" }).then(go, go); } catch (e) { go(); }\n'
+              '})();\n')
+put('static/react/static/js/main.35bf1a94.js', OLD_SCRIPT)
+put('static/react/static/css/main.aaf83bf2.css', '/* Welfare Avenue: the old website\'s stylesheet lived here until 02/10/26. */\n')
 if LAUNCH:
     put('robots.txt', 'User-agent: *\nAllow: /\n\nSitemap: %s/sitemap.xml\n' % SITE)
 else:

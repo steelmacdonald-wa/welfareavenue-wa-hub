@@ -76,7 +76,10 @@
     /* wave176: the Volunteer Manager */
     cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     pot: '<path d="M4 10.5h16l-1.5 8a2 2 0 0 1-2 1.5h-9a2 2 0 0 1-2-1.5z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/>',
-    box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>'
+    box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>',
+    /* 01/10/26: the Website link (a globe, and the arrow that says it opens elsewhere) */
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>',
+    ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -177,6 +180,10 @@
     }
   };
   var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'hr', 'finance', 'admin'];
+  /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
+     seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
+     tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
+  var LINKS = [{ id: 'website', label: 'Website', color: GOLD, ic: 'globe', blurb: 'welfareavenue.com, in a new tab', url: 'https://welfareavenue.com/' }];
 
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }
@@ -236,6 +243,13 @@
     + '#w153pop .w153tile.on{border-color:' + GREEN + ';box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
     + '#w153pop .w153tile b{font-size:13px;font-weight:700;line-height:1.2;}'
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
+    /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
+    + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
+    + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
+    + '#w153pop a.w153tile{text-decoration:none;}'
+    + '#w153pop .w153ext .w153ai{color:' + GREEN + ';}'
+    + '#w153pop .w153ext b{display:inline-flex;align-items:center;gap:5px;}'
+    + '#w153pop .w153ext .w153xi{width:12px;height:12px;color:' + MUTED + ';}'
     + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
     + '.w153ai .w153i{width:18px;height:18px;}'
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
@@ -336,10 +350,15 @@
   function tileHtml(a, on) {
     return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
   }
+  /* 01/10/26: a link tile (the website): a real link, so it opens in a new tab and the Hub stays put */
+  function linkHtml(l) {
+    return '<a class="w153tile w153ext" href="' + E(l.url) + '" target="_blank" rel="noopener" data-w153ext="' + E(l.id) + '"><span class="w153ai" style="background:' + l.color + '">' + I(l.ic) + '</span><b>' + E(l.label) + I('ext', 'w153xi') + '</b><small>' + E(l.blurb) + '</small></a>';
+  }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
     var cur = S.app || 'hub';
-    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') + '</div>';
+    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') +
+      (LINKS.length ? '<div class="w153sep" role="presentation"></div>' + LINKS.map(linkHtml).join('') : '') + '</div>';
   }
   function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
   function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }
@@ -530,6 +549,7 @@
     var el;
     if ((el = t.closest('[data-w153grid]'))) { ev.preventDefault(); togglePop(); return; }
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
+    if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
     if ((el = t.closest('[data-w153back]'))) { ev.preventDefault(); close(); return; }
     if ((el = t.closest('[data-w153go]'))) { ev.preventDefault(); go(el.getAttribute('data-w153go'), el.getAttribute('data-w153sec')); return; }
     if ((el = t.closest('[data-w153menu]'))) { ev.preventDefault(); document.body.classList.toggle('wa-mob-open'); return; }
@@ -570,7 +590,7 @@
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
         T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub\u2019s apps. Strategy (the goals and projects), the CRM (with Partners), the HR centre, Finance and the Admin centre live there, each a place of its own with its own menu; the Hub\u2019s menu keeps the rest.'),
-        T('#w153pop', 'The launcher', 'The Hub, Strategy, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
+        T('#w153pop', 'The launcher', 'The Hub, Strategy, the Volunteer Manager, the CRM, the HR centre, Finance and the Admin centre, with our website under them (it opens in a new tab). You only see the apps your access opens.', { go: function () { openPop(); } }),
         T('#w153rail', 'Inside an app', 'The menu becomes the app\u2019s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app\u2019s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app\u2019s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
@@ -581,6 +601,6 @@
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go };   /* wave163: order, icon, isOn, owner and go for the phone menu */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS };   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();

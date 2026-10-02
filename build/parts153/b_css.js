@@ -27,6 +27,13 @@
     + '#w153pop .w153tile.on{border-color:' + GREEN + ';box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
     + '#w153pop .w153tile b{font-size:13px;font-weight:700;line-height:1.2;}'
     + '#w153pop .w153tile small{font-size:11px;color:' + MUTED + ';line-height:1.3;}'
+    /* 01/10/26: the website link under the apps (green on the gold tile; the arrow says it opens elsewhere) */
+    + '#w153pop{max-height:calc(100vh - 120px);overflow-y:auto;}'
+    + '#w153pop .w153sep{height:1px;background:rgba(16,63,57,.10);margin:4px 6px;}'
+    + '#w153pop a.w153tile{text-decoration:none;}'
+    + '#w153pop .w153ext .w153ai{color:' + GREEN + ';}'
+    + '#w153pop .w153ext b{display:inline-flex;align-items:center;gap:5px;}'
+    + '#w153pop .w153ext .w153xi{width:12px;height:12px;color:' + MUTED + ';}'
     + '.w153ai{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;color:' + CREAM + ';flex:0 0 auto;}'
     + '.w153ai .w153i{width:18px;height:18px;}'
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */

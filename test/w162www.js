@@ -360,6 +360,27 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     await ctx.close();
   }
 
+  // www3 (02/10/26): a browser holding George's old page in its cache asks for the old script; it now reloads into the new site, once
+  {
+    const OLD = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Welfare Avenue</title><script defer="defer" src="/static/react/static/js/main.35bf1a94.js"></script><link href="/static/react/static/css/main.aaf83bf2.css" rel="stylesheet"></head><body><div id="root"></div></body></html>';
+    for (const storage of [true, false]) {
+      const { ctx } = await context({ width: 1280 });
+      if (!storage) await ctx.addInitScript(() => { Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('blocked'); } }); });
+      let served = 0, navs = 0;
+      await ctx.route(ORIGIN + '/volunteer/**', async (route) => {
+        if (route.request().resourceType() === 'document') { navs++; if (served++ === 0) return route.fulfill({ status: 200, contentType: 'text/html', body: OLD }); }
+        return route.fallback();
+      });
+      const page = await ctx.newPage();
+      await page.goto(ORIGIN + '/volunteer/', { waitUntil: 'load' });
+      await page.waitForFunction(() => !!document.querySelector('h1'), null, { timeout: 15000 }).catch(() => {});
+      await page.waitForTimeout(800);
+      const h1 = await page.evaluate(() => (document.querySelector('h1') || {}).textContent || '');
+      ok(h1 === 'Volunteer' && navs === 2, 'www3 old cached page' + (storage ? '' : ' (no session storage)') + ': reloads once into the new site (' + h1 + ', ' + navs + ' loads)');
+      await ctx.close();
+    }
+  }
+
   // accessibility (29/09/26): axe-core (npm i -g axe-core) finds no WCAG 2.1 A/AA or best-practice violation on any page
   {
     let AXE = null; try { AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'); } catch (e) { console.log('skip: axe-core is not installed'); }

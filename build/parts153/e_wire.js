@@ -5,6 +5,7 @@
     var el;
     if ((el = t.closest('[data-w153grid]'))) { ev.preventDefault(); togglePop(); return; }
     if ((el = t.closest('[data-w153app]'))) { ev.preventDefault(); open(el.getAttribute('data-w153app')); return; }
+    if ((el = t.closest('[data-w153ext]'))) { closePop(); return; }   /* 01/10/26: the website: the link opens its own tab (no preventDefault), the launcher closes */
     if ((el = t.closest('[data-w153back]'))) { ev.preventDefault(); close(); return; }
     if ((el = t.closest('[data-w153go]'))) { ev.preventDefault(); go(el.getAttribute('data-w153go'), el.getAttribute('data-w153sec')); return; }
     if ((el = t.closest('[data-w153menu]'))) { ev.preventDefault(); document.body.classList.toggle('wa-mob-open'); return; }
@@ -45,7 +46,7 @@
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
         T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub’s apps. Strategy (the goals and projects), the CRM (with Partners), the HR centre, Finance and the Admin centre live there, each a place of its own with its own menu; the Hub’s menu keeps the rest.'),
-        T('#w153pop', 'The launcher', 'The Hub, Strategy, the CRM, the HR centre, Finance and the Admin centre. You only see the apps your access opens.', { go: function () { openPop(); } }),
+        T('#w153pop', 'The launcher', 'The Hub, Strategy, the Volunteer Manager, the CRM, the HR centre, Finance and the Admin centre, with our website under them (it opens in a new tab). You only see the apps your access opens.', { go: function () { openPop(); } }),
         T('#w153rail', 'Inside an app', 'The menu becomes the app’s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app’s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app’s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
@@ -56,6 +57,6 @@
   addTour();
 
   /* ---------- test hook ---------- */
-  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go };   /* wave163: order, icon, isOn, owner and go for the phone menu */
+  window.WA_APP = { open: open, close: close, current: function () { return S.app; }, ok: appOk, items: items, apps: APPS, order: ORDER, icon: I, isOn: isOn, owner: ownerOf, go: go, links: LINKS };   /* wave163: order, icon, isOn, owner and go for the phone menu; 01/10/26: links (the website) */
   window.w153 = { state: function () { return S; }, paint: paint, open: open, close: close, pop: openPop, closePop: closePop, items: items, ok: appOk, allowed: allowed, hits: contactHits, current: current };
 })();

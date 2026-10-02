@@ -46,8 +46,21 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     ok('phone: the old bar is put away', old === 'none', old);
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(450);
     let s = await f.ev(SHEET);
-    ok('Menu opens the sheet: the apps, then the top pages and Departments, Other Tools and Organization, the page you are on lit', s.on && s.title === 'Menu' && s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre|Finance|Admin centre' && s.secs.join('|') === 'Apps|Departments|Other Tools|Organization' && s.rows.slice(0, 5).join('|') === 'Home*|Avenue Academy|Executive dashboard|Calendar|The Brain', s);
+    ok('Menu opens the sheet: the apps (and the Website link, 01/10/26), then the top pages and Departments, Other Tools and Organization, the page you are on lit', s.on && s.title === 'Menu' && s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre|Finance|Admin centre|Website' && s.secs.join('|') === 'Apps|Departments|Other Tools|Organization' && s.rows.slice(0, 5).join('|') === 'Home*|Avenue Academy|Executive dashboard|Calendar|The Brain', s);
     ok('the sheet: every team with its own pages as chips, yours marked; Other Tools and Organization in the menu\'s order', s.rows.indexOf('Board & Governance(mine)') >= 0 && s.chips.indexOf('MTL volunteering') < 0 /* wave176: an app now */ && s.chips.indexOf('Content calendar') >= 0 && s.rows.join('|').indexOf('Important info|The Task Bank|Agendas|Document finder|Transcript archive|Photo library|Requests|Org chart|Our story|Hub inbox') >= 0, s);
+    /* 01/10/26: the Website tile after the apps: a real link in its own list item, opening a new tab and closing the sheet */
+    const wt = await f.ev(() => { const a = document.querySelector('#w163sheet [data-w163ext="website"]'); if (!a) return null; const r = a.querySelector('.t').getBoundingClientRect();
+      return { tag: a.tagName, href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel'), aria: a.getAttribute('aria-label'), li: a.parentElement.getAttribute('role'), size: [Math.round(r.width), Math.round(r.height)], icon: getComputedStyle(a.querySelector('.t')).color, deco: getComputedStyle(a).textDecorationLine }; });
+    ok('phone: the Website tile is a link to welfareavenue.com in its own list item, sized like the apps, said to open in a new tab', !!wt && wt.tag === 'A' && wt.href === 'https://welfareavenue.com/' && wt.target === '_blank' && /noopener/.test(wt.rel) && /new tab/.test(wt.aria) && wt.li === 'listitem' && wt.size[0] === 52 && wt.size[1] === 52 && wt.icon === 'rgb(16, 63, 57)' && wt.deco === 'none', wt);
+    await f.ctx.route('https://welfareavenue.com/**', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: '<!doctype html><title>Welfare Avenue (test)</title><p>test</p>' }));
+    const hb = await f.ev(() => location.hash);
+    const [wtab] = await Promise.all([f.ctx.waitForEvent('page', { timeout: 10000 }), p.click('#w163sheet [data-w163ext="website"]')]);
+    await wtab.waitForLoadState('domcontentloaded').catch(() => {});
+    await p.waitForTimeout(400);
+    const ha = await f.ev(() => ({ hash: location.hash, on: document.getElementById('w163sheet').classList.contains('on') }));
+    ok('phone: tapping it opens welfareavenue.com in a new tab and closes the sheet; the Hub stays on the same page', wtab.url() === 'https://welfareavenue.com/' && !ha.on && ha.hash === hb, { url: wtab.url(), ha, hb });
+    await wtab.close();
+    await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(450);
     const lay = await f.ev(() => { const s = document.getElementById('w163sheet'); const r = s.getBoundingClientRect(); const x = s.querySelector('.x').getBoundingClientRect(); return { full: Math.round(r.top) === 0 && Math.round(r.height) === window.innerHeight, x: [Math.round(x.width), Math.round(x.height)], bar: getComputedStyle(document.getElementById('w163bar')).display, lock: document.body.classList.contains('w163sheet') }; });
     ok('the sheet fills the screen, its close button is a 42 px target, the bar steps aside and the page does not scroll behind', lay.full && lay.x[0] >= 40 && lay.bar === 'none' && lay.lock, lay);
     await p.fill('#w163sheet [data-w163q]', 'goal'); await p.waitForTimeout(250);
@@ -119,7 +132,7 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     ok('member: My team opens Human Resources and lights up', h === '#team/hr' && b.slots[3] === 'team:My team*', { h, b });
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(400);
     const s = await f.ev(SHEET);
-    ok('member: only the apps they can open, and no Hub inbox', s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre' && s.rows.indexOf('Hub inbox') < 0 && s.rows.indexOf('Human Resources*(mine)') >= 0, s);
+    ok('member: only the apps they can open (then the Website link), and no Hub inbox', s.apps.join('|') === 'Hub*|Strategy|Volunteer Manager|CRM|HR centre|Website' && s.rows.indexOf('Hub inbox') < 0 && s.rows.indexOf('Human Resources*(mine)') >= 0, s);
     const fit = await f.ev(() => { const s = document.getElementById('w163sheet'); return s.scrollWidth <= window.innerWidth + 1 && document.getElementById('w163bar').scrollWidth <= window.innerWidth + 1; });
     ok('member: the sheet and the bar fit a 360 px screen', fit, fit);
     ok('no page errors (member, phone)', f.errs.length === 0, f.errs);

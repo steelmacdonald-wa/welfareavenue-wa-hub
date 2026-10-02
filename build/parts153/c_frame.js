@@ -28,10 +28,15 @@
   function tileHtml(a, on) {
     return '<button type="button" class="w153tile' + (on ? ' on' : '') + '" data-w153app="' + E(a.id) + '" aria-pressed="' + (on ? 'true' : 'false') + '"><span class="w153ai" style="background:' + a.color + '">' + I(a.ic) + '</span><b>' + E(a.label) + '</b><small>' + E(a.blurb) + '</small></button>';
   }
+  /* 01/10/26: a link tile (the website): a real link, so it opens in a new tab and the Hub stays put */
+  function linkHtml(l) {
+    return '<a class="w153tile w153ext" href="' + E(l.url) + '" target="_blank" rel="noopener" data-w153ext="' + E(l.id) + '"><span class="w153ai" style="background:' + l.color + '">' + I(l.ic) + '</span><b>' + E(l.label) + I('ext', 'w153xi') + '</b><small>' + E(l.blurb) + '</small></a>';
+  }
   function paintPop() {
     var p = document.getElementById('w153pop'); if (!p) return;
     var cur = S.app || 'hub';
-    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') + '</div>';
+    p.innerHTML = '<div class="w153ph">Apps</div><div class="w153tiles">' + ORDER.filter(appOk).map(function (id) { return tileHtml(APPS[id], id === cur); }).join('') +
+      (LINKS.length ? '<div class="w153sep" role="presentation"></div>' + LINKS.map(linkHtml).join('') : '') + '</div>';
   }
   function openPop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (!p) return; paintPop(); p.classList.add('open'); S.open = true; if (g) g.setAttribute('aria-expanded', 'true'); var f = p.querySelector('.w153tile.on') || p.querySelector('.w153tile'); if (f) { try { f.focus(); } catch (e) { /* fine */ } } }
   function closePop() { var p = document.getElementById('w153pop'), g = document.querySelector('#w153dock .w153grid'); if (p) p.classList.remove('open'); S.open = false; if (g) g.setAttribute('aria-expanded', 'false'); }

@@ -76,7 +76,10 @@
     /* wave176: the Volunteer Manager */
     cal: '<rect x="4" y="5.5" width="16" height="14" rx="2.5"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/>',
     pot: '<path d="M4 10.5h16l-1.5 8a2 2 0 0 1-2 1.5h-9a2 2 0 0 1-2-1.5z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/>',
-    box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>'
+    box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>',
+    /* 01/10/26: the Website link (a globe, and the arrow that says it opens elsewhere) */
+    globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>',
+    ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>'
   };
   function I(n, cls) { return '<svg class="w153i' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" fill="' + (n === 'grid' ? 'currentColor' : 'none') + '" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>'; }
 
@@ -177,6 +180,10 @@
     }
   };
   var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'hr', 'finance', 'admin'];
+  /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
+     seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
+     tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
+  var LINKS = [{ id: 'website', label: 'Website', color: GOLD, ic: 'globe', blurb: 'welfareavenue.com, in a new tab', url: 'https://welfareavenue.com/' }];
 
   /* ---------- who can open what: the menu already knows (a hidden tab is a page this person cannot open) ---------- */
   function tab(id) { var b = document.getElementById('tabBar'); return b ? b.querySelector('.tab[data-tab="' + id + '"]') : null; }

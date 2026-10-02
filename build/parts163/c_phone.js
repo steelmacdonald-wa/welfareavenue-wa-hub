@@ -68,6 +68,12 @@
     + '#w163sheet .app{display:flex;flex-direction:column;align-items:center;gap:6px;border:none;background:none;padding:4px 0;cursor:pointer;font:600 12px ' + BODY + ';color:' + INK + ';text-align:center;line-height:1.2;border-radius:14px;}'
     + '#w163sheet .app .t{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;color:' + CREAM + ';box-shadow:0 4px 12px rgba(16,63,57,.14);}'
     + '#w163sheet .app .t svg{width:24px;height:24px;}'
+    /* 01/10/26: the website link after the apps (a real link in its own list item: it opens in a new tab) */
+    + '#w163sheet .appx{display:flex;justify-content:center;min-width:0;}'
+    + '#w163sheet .appx .app{width:100%;text-decoration:none;}'
+    + '#w163sheet .app.ext .t{color:' + GREEN + ';}'
+    + '#w163sheet .app .xl{display:inline-flex;align-items:center;gap:3px;}'
+    + '#w163sheet .app .xl .w163xi{width:11px;height:11px;color:' + MUTED + ';}'
     + '#w163sheet .app.on .t{box-shadow:0 0 0 3px ' + CREAM + ',0 0 0 5px ' + GREEN + ';}'
     + '#w163sheet .app.on{color:' + GREEN + ';font-weight:700;}'
     + '#w163sheet .sh{font-family:' + HEAD + ';font-weight:600;font-size:13px;letter-spacing:1.6px;text-transform:uppercase;color:' + MUTED + ';padding:14px 20px 6px;}'
@@ -220,6 +226,8 @@
     var A = window.WA_APP; if (!A || !A.order) return [];
     return A.order.filter(function (id) { try { return A.ok(id); } catch (e) { return false; } }).map(function (id) { return A.apps[id]; });
   }
+  /* 01/10/26: links shown after the apps (the website), from wave153's list */
+  function linkList() { var A = window.WA_APP; return A && Array.isArray(A.links) ? A.links : []; }
   function appItems(app) {
     var A = window.WA_APP; if (!A) return [];
     var out = [];
@@ -254,6 +262,8 @@
       html += apps.length > 1 ? '<div class="sh">Apps</div><div class="apps" role="list">' + apps.map(function (a) {
         var on = (app || 'hub') === a.id;
         return '<button type="button" class="app' + (on ? ' on' : '') + '" role="listitem" data-w163app="' + Esc(a.id) + '"' + (on ? ' aria-current="true"' : '') + '><span class="t" style="background:' + Esc(a.color) + '">' + (A.icon ? A.icon(a.ic) : '') + '</span>' + Esc(a.label) + '</button>';
+      }).join('') + linkList().map(function (l) {
+        return '<div class="appx" role="listitem"><a class="app ext" href="' + Esc(l.url) + '" target="_blank" rel="noopener" data-w163ext="' + Esc(l.id) + '" aria-label="' + Esc(l.label + ', opens in a new tab') + '"><span class="t" style="background:' + Esc(l.color) + '">' + (A.icon ? A.icon(l.ic) : '') + '</span><span class="xl">' + Esc(l.label) + (A.icon ? A.icon('ext', 'w163xi') : '') + '</span></a></div>';
       }).join('') + '</div>' : '';
       if (app) {
         html += '<button type="button" class="back" data-w163back="1">' + PIc('back') + ' Back to the Hub</button>';
@@ -309,6 +319,7 @@
     if (!t.closest('#w163sheet')) return;
     if ((el = t.closest('[data-w163close]'))) { ev.preventDefault(); closeSheet(); return; }
     if ((el = t.closest('[data-w163back]'))) { ev.preventDefault(); closeSheet(true); try { window.WA_APP.close(); } catch (e) { location.hash = '#mypage'; } return; }
+    if ((el = t.closest('[data-w163ext]'))) { closeSheet(true); return; }   /* 01/10/26: the website opens its own tab (no preventDefault) */
     if ((el = t.closest('[data-w163app]'))) { ev.preventDefault(); var id = el.getAttribute('data-w163app'); closeSheet(true); try { if (id === 'hub') window.WA_APP.close(); else window.WA_APP.open(id); } catch (e) { /* fine */ } return; }
     if ((el = t.closest('[data-w163i]'))) { ev.preventDefault(); var sub = el.getAttribute('data-w163sub'); choose(Number(el.getAttribute('data-w163i')), sub == null ? null : Number(sub)); return; }
   });
