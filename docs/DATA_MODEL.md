@@ -1717,6 +1717,66 @@ wave191n: the team leader's check of the storage unit after a serving (one per s
 
 wave191o: a serving with a partner organization: the partner (wa_partners or partner_name), food (ours: our cooks; they_bring; desta_kitchen: they cook with us in DESTA's kitchen; their_kitchen: they cook in their own space; a kitchen makes the serving a community kitchen at kitchen_place), route (coordinator: a contact and a headcount; everyone: each person signs up with the form at hub.welfareavenue.com/c/<signup_token>), covers {role: how many of theirs} (never team_leader or community_debrief: always ours), headcount, note. active false: no longer a collaboration. Staff read; wa191_partner_save writes.
 
+### `fund_funders`
+
+wave193: every funder Welfare Avenue knows: the ones it applied to since 2022 (from the Drive trackers, the meeting transcripts and Steel's mailbox), the watchlist researched on 02/10/26, and the ones the scanner finds. watch: the scanner re-reads its page. screened_out: not for us, with the reason (the scanner stops proposing it). fit: good, possible or weak for a small volunteer-run food-security charity, with the reason. Staff with the Fundraising app read and write; leaders and admins delete.
+
+- `aliases`: Other names the funder goes by (French, short forms), so the scanner matches a find to the row.
+- `portal`: How one applies: the portal (Benevity, SmartSimple, CyberGrants, GCOS...), an LOI, a web form, in person.
+- `contact`: The funder's office contact: a grants address or a program page, never a person's private details.
+- `relationship`: Our history with them in a few lines: applied, declined, met, a program officer's advice.
+- `source`: Where the row came from: research 02/10/26, the team's grant lists, the scanner (run id), a person.
+
+### `fund_grants`
+
+wave193: the grants pipeline, one row per opportunity or application. stage: watching (a future cycle), found (the scanner found it, to screen), screened (the go decision and the fit score), relationship (a call or an LOI), drafting, submitted, awarded, declined, not_eligible, dropped, reporting (an active grant with reports due), closed. Seeded from the team's trackers (2024 to 2026), the transcripts and the mailbox on 02/10/26. Staff with the Fundraising app read and write; leaders and admins delete.
+
+- `title`: Welfare Avenue's project name for this application (Youth Harvest, Community Connections Initiative).
+- `fit`: The fit score's seven dimensions (eligibility, alignment, geography, amount, capacity, relationship, odds), each 0 to 5 with a note, from the playbook's rubric; fit_score is the weighted total (70+ go, 55 to 69 conditional, under 55 no).
+- `gates`: The hard gates (applicant type, geography, program exists, ask-to-budget ratio, cash-flow terms, compliance load, timing): pass, fail or unknown, with a note each.
+- `deadline_note`: Words about the deadline: rolling, expected (projected from last cycle), the time of day.
+- `links`: Links kept with the grant: [{label, url}] (the application doc in Drive, the confirmation, the funder's page).
+- `source`: How it came in: drive (the team's trackers), transcript, email, scanner, research, person.
+- `program_area`: What the money is for: community kitchen, Toronto, gift baskets, servings, equipment, general, capacity.
+
+### `fund_grant_log`
+
+wave193: what happened on a grant, newest last: notes, calls, emails, stage changes (written by fund_grant_stage), decisions, reports, the scanner's matches, drafts. Staff with the Fundraising app read and add; nothing is edited.
+
+### `fund_sources`
+
+wave193: what the scanner checks each week. funder_page: a funder's program page (fetched, hashed, read by the model only when its text changed); aggregator: a page that lists calls; search: a web search question the model runs (OpenRouter's web search). Staff with the Fundraising app read and edit; the grant-scan function writes the check results.
+
+- `updated_by`: Who last changed the row (an email, or the function); kept by wa_fund_touch().
+
+### `fund_scan_runs`
+
+wave193: every run of the grant scanner: why (the Monday schedule, Scan now by a person, a test that posts nothing), what it checked, what it found, what it cost, and the Slack post in #grants (slack_ts) when new finds were posted. Staff with the Fundraising app read; the grant-scan function writes.
+
+- `steps`: How many function invocations the run took (grant-scan chains itself every ~2 minutes of work until every source is read).
+
+### `fund_scan_finds`
+
+wave193: what the scanner found. new: waits in Found for you; kept: a person kept it (fund_find_decide made the funder and the grant); dismissed: not for us, with the reason; known: the funder and program were already in the pipeline (not posted again); duplicate: the same find from another source in the same run. Staff with the Fundraising app read; the function writes; decisions go through fund_find_decide.
+
+### `fund_facts`
+
+wave193: the grant writer's fact base: Welfare Avenue's own words about its mission, history, programs, numbers, people, partners, budgets, outcomes and the standard answers it has given funders, each with its source and whether it is verified. The writing assistant drafts only from verified facts and flags the rest; conflict marks a figure the documents disagree on (meals, volunteers, the founding year). Staff with the Fundraising app read and edit; leaders and admins delete.
+
+- `status`: verified: checked against the Hub or a signed document and dated; needs_check: taken from a document, not yet confirmed; conflict: documents disagree, do not use until settled; retired: no longer true.
+
+### `fund_documents`
+
+wave193: Welfare Avenue's past grant applications, letters of intent, budgets, confirmations and the standard-answer bank, as text, with the grant and funder they belong to. The writing assistant searches them (fts) and shows the writer the three most relevant before drafting; Save as a past application adds a finished draft here. Staff with the Fundraising app read and add; leaders and admins delete.
+
+### `fund_drafts`
+
+wave193: the grant writer's drafts: the funder's questions with their word limits and the answers, drafted by the assistant (grant-write) and edited by the writer in place. questions: [{q, limit, answer, facts [keys], refs [document ids], warnings [], words}]. Staff with the Fundraising app read and edit their team's drafts; leaders and admins delete.
+
+### `fund_settings`
+
+wave193: the Fundraising app's settings: donor_program (goals, tiers, cadence, roles, the launch plan), scanner (the Slack channel for new finds, the schedule, the questions it asks), playbook (the approach: the fit screen, the proposal sections, the rules, the calendar discipline, the readiness checklist, as markdown). Staff with the Fundraising app read; leaders and admins write.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -1939,4 +1999,10 @@ Functions:
 - `wa192_loop_done()`: wave192: when a Loop session ends (not auto-closed), marks the onboarding training The Loop (216) done for the person in training_progress; trg_wa166_tp_onb then ticks the step in their active onboarding plan. Never blocks the check-out.
 - `loop_feed(int, text)`: wave192b: the Loop notes people shared (Home's In the loop, the person page's Their loop): who, their team, the day (Toronto), the lines, how many tasks were closed and the titles of the closed tasks that are open to everyone (confidential, board-only and restricted ones are counted, never named). No clock time, no minutes. Staff and admins; p_days 1 to 90, optional p_email for one person.
 - `loop_in_now()`: wave192b: the emails of the people in a Loop session now (started in the last 14 hours, not closed), for the ring on their photo in the header (wave116j). No times. Staff, admins and board viewers.
+- `wa_fund_ok()`: wave193: can this person open the Fundraising app (the fund page)? Staff whose profile allows it; the built-in gate when the profile does not decide. The fund_* policies use it.
+- `wa_fund_lead()`: wave193: a leader or admin who can open the Fundraising app (may delete grants, funders, facts and documents).
+- `wa_fund_touch()`: wave193: keeps updated_at and updated_by on the fund_* tables.
+- `fund_grant_stage(bigint, text, text)`: wave193: moves a grant to a stage (or adds a note when the stage is the same), stamps submitted_on and decided_on, writes the grant log and change_log. Staff with the Fundraising app.
+- `fund_find_decide(bigint, text, text)`: wave193: a person's decision on a scanner find: keep (the funder is made or matched, the grant enters the pipeline at found; returns the grant id), dismiss (the find is set aside with the reason), screen_out (dismissed, and the funder is marked not for us so the scanner stops proposing it). Staff with the Fundraising app.
+- `fund_giving_summary()`: wave193: the giving totals the Fundraising app shows (this fiscal year's donations and donors, last year's, monthly donors and their monthly total, donors who gave last year and not yet this year, whether the donation page is live): counts and sums only, no names. Staff with the Fundraising app.
 

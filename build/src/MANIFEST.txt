@@ -206,6 +206,8 @@
 191_wave191
 # 192_wave192: The Loop (Steel, 01/10/26): I'm in and Close the loop replace Check in and Check out (the button #w192go over wave116j's hidden pill), the wrap-up sheet that drafts from the person's own records and shares to their team, everyone or just the Hub (no times or hours), In the loop on Home, Their loop on the person page, and the page tour "loop". The changes also live in 116j (who is in, through loop_in_now), 116k (hours for the person, HR, leaders and admins), 118b (the nudges speak The Loop) and 122 (the chrome tour's step).
 192_wave192
+# 193_wave193: the Fundraising app (Steel, 01/10/26): one page #fund with sections by address (Overview, Calendar, Donor program, Event SOPs, Grants: the pipeline, Found for you, Funders, the grant writer, the playbook How we win grants, the fact base), framed by wave153's app rail (the APPS entry and the hide rule live in 153; the labels in 110, 127, 131; the menu layout in 134); the data is wa193_fundraising (fund_*), the functions grant-scan (the Monday scan, Scan now, the #grants post) and grant-write (draft, review, fit).
+193_wave193
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

@@ -39,7 +39,7 @@
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
     /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
     + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
-    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* directors keep Partners in their menu (they open no apps) */
+    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -81,6 +81,7 @@
     /* wave164: Steel: "It's a little repetitive here". Inside an app the app bar is the crumb, and on a computer the rail is the
        menu: the Finance page's tab strip and the HR centre's repeated the rail, so they go (phones keep them) */
     + 'body.w153app main .panel > .w118mast .crumb{display:none;}'
+    + 'body.w153app.w153fund #fundevents > .w118mast .crumb{display:none;}'   /* wave193: wave124's masthead keeps its own crumb element */
     + '@media (min-width:901px){body.w153app.w153finance #finances #w94nav,body.w153app.w153hr #hrcentre .w47tabs{display:none !important;}}'
     /* search everything: contacts */
     + '#searchResults .sr .sr-type.w153c{background:rgba(42,140,122,.14);color:' + TEAL + ';}'

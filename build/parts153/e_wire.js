@@ -46,11 +46,11 @@
       var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.apps = { tab: null, icon: 'star', hash: '#mypage', avail: function () { return ORDER.some(function (id) { return id !== 'hub' && appOk(id); }); }, steps: [
         T('#w153dock', 'The apps', 'At the bottom of the menu: the 9 dots open the Hub’s apps. Strategy (the goals and projects), the CRM (with Partners), the HR centre, Finance and the Admin centre live there, each a place of its own with its own menu; the Hub’s menu keeps the rest.'),
-        T('#w153pop', 'The launcher', 'The Hub, Strategy, the Volunteer Manager, the CRM, the HR centre, Finance and the Admin centre, with our website under them (it opens in a new tab). You only see the apps your access opens.', { go: function () { openPop(); } }),
+        T('#w153pop', 'The launcher', 'The Hub, Strategy, the Volunteer Manager, the CRM, Fundraising, the HR centre, Finance and the Admin centre, with our website under them (it opens in a new tab). You only see the apps your access opens.', { go: function () { openPop(); } }),
         T('#w153rail', 'Inside an app', 'The menu becomes the app’s menu: its pages and sections, the one you are on marked. Search everything searches the app first.', { go: function () { closePop(); open('crm'); } }),
         T('#w153bar', 'The app bar', 'The app, where you are in it, and its quick actions (in the CRM: add a contact). On a phone, Menu opens the app’s menu.', { opt: 1 }),
         T('#w153dock .w153back', 'Back to the Hub', 'Back to the Hub returns you to the page you left. A link to an app’s page opens that app; a Hub page in the launcher or the menu takes you out of it.', { go: function () { } }),
-        { c: 1, t: 'In the CRM now', p: 'Email arrived in wave154, lists and campaigns in wave155, forms in wave156, automations in wave157, gifts by hand and receipts in wave158 and reports in wave160 (the CRM’s Lists, Campaigns, Forms, Automations and Reports).', go: function () { close(); } }
+        { c: 1, t: 'And the Fundraising app', p: 'Since wave193: the events and their calendar, the donor program, the event SOPs, and the grants with their weekly scanner, their writer and the playbook (How we win grants). The CRM keeps the contacts, the gifts and the email.', go: function () { close(); } }
       ] };
     } catch (e) { /* fine */ }
   }

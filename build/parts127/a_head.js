@@ -35,7 +35,7 @@
   var GROUPS = [ /* wave134: the same groups as the menu */
     /* wave163: the menu's new shape: Avenue Academy and The Brain at the top, Other Tools, Organization, and the Strategy and CRM apps */
     ['Everyday', ['mypage', 'training', 'overview', 'dashboard', 'calendar', 'brain']],
-    ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'finances', 'hr', 'hrcentre']],
+    ['Departments', ['opsmtl', 'volunteering', 'progdev', 'opsto', 'marketing', 'contentcal', 'socialstats', 'fundraising', 'fundevents', 'fund', 'finances', 'hr', 'hrcentre']],   /* wave193: fund, the Fundraising app */
     ['Board', ['board', 'governance', 'committees']],
     ['Other Tools', ['importantinfo', 'bank', 'agendas', 'documents', 'transcripts', 'photos', 'requests', 'create']],
     ['Organization', ['orgchart', 'ourstory', 'hubmail']],
@@ -49,7 +49,7 @@
     orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
-    fundevents: 'Events calendar', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
+    fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
     governance: 'Board overview', committees: 'Committees', board: 'Board team page',
     transcripts: 'Transcript archive', agendas: 'Agendas', hubmail: 'Hub inbox', orgchart: 'Org chart', training: 'Avenue Academy', crm: 'CRM',
     activity: 'Activity', adminpanel: 'Admin', team: 'Team pages'
@@ -65,7 +65,8 @@
     transcripts: 'Private and leadership transcripts stay limited, whatever the page access.',
     bank: 'Moving work in or out of the bank follows the database: staff who can edit tasks, and a project’s lead or a leader for a whole project.',
     orgchart: 'Only admins and the Executive profile rearrange the chart and its open positions; the database enforces it.',
-    crm: 'Contacts, their history and their email permission follow the profile in the database, not just the menu. Directors never see them.'
+    crm: 'Contacts, their history and their email permission follow the profile in the database, not just the menu. Directors never see them.',
+    fund: 'The grants, the funders, the fact base and the drafts follow the profile in the database (wa_fund_ok), not just the menu. Leaders and admins delete; the scanner and the writer check the same gate.'
   };
   var SHORT = { marketing: 'Marketing', fundraising: 'Fundraising', progdev: 'Program Dev.', opsmtl: 'Montreal ops', opsto: 'Toronto ops', hr: 'HR & People', board: 'Board', executive: 'Executive', admin: 'Admin' };
 

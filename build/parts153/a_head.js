@@ -22,6 +22,8 @@
      Hub returns to the page you left.
    - Search everything finds contacts too (staff with the CRM), first when you are in the CRM.
    - The CRM gains a Gifts tab (#crm/gifts): every gift with its donor, campaign, platform and receipt.
+   - wave193 (02/10/26): the Fundraising app (Overview, Events, Calendar, Donor program, Event SOPs, and the Grants group:
+     Pipeline, Found for you, Funders, Writer, Playbook, Fact base), the page #fund with its sections by address.
    ===================================================================== */
 (function () {
   if (window.__wa153) return; window.__wa153 = true;
@@ -78,6 +80,9 @@
     pot: '<path d="M4 10.5h16l-1.5 8a2 2 0 0 1-2 1.5h-9a2 2 0 0 1-2-1.5z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/>',
     box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>',
     /* 01/10/26: the Website link (a globe, and the arrow that says it opens elsewhere) */
+    /* wave193: the Fundraising app's rail */
+    pen: '<path d="m4 20 1.2-4.6L15.8 4.8a2.3 2.3 0 0 1 3.3 3.3L8.6 18.8z"/><path d="m14 6.6 3.3 3.3"/>',
+    book: '<path d="M5 4.5h6a2 2 0 0 1 2 2v13a2 2 0 0 0-2-2H5z"/><path d="M19 4.5h-6a2 2 0 0 0-2 2v13a2 2 0 0 1 2-2h6z"/>',
     globe: '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.4 2.5 3.6 5.3 3.6 8.5s-1.2 6-3.6 8.5c-2.4-2.5-3.6-5.3-3.6-8.5s1.2-6 3.6-8.5z"/>',
     ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>'
   };
@@ -173,13 +178,34 @@
       },
       actions: [{ k: 'text', l: 'Text volunteers', ic: 'send', page: 'volunteering' }]
     },
+    /* wave193: Steel (01/10/26): "a new app called Fundraising that holds: Fundraising Events, Donor relations (Donor Program), Events
+       Calendar, Fundraising Event Sops (as it's own page), Grants". One page (#fund) with sections by address, plus wave124's Events page */
+    fund: { id: 'fund', label: 'Fundraising', color: ORANGE, ic: 'heart', blurb: 'Events, donors, grants and the money they bring', pages: ['fund', 'fundevents'], need: 'fund', home: '#fund',
+      groups: function () {
+        var waiting = 0; try { var W = window.w193 && window.w193.state ? window.w193.state() : null; waiting = W ? W.finds.filter(function (x) { return x.status === 'new'; }).length : 0; } catch (e) { waiting = 0; }
+        return [{ label: 'Fundraising', items: [
+          { h: '#fund', l: 'Overview', ic: 'home', page: 'fund' },
+          { h: '#fundevents', l: 'Events', ic: 'cal', page: 'fundevents' },
+          { h: '#fund/calendar', l: 'Calendar', ic: 'cal', page: 'fund' },
+          { h: '#fund/donors', l: 'Donor program', ic: 'people', page: 'fund' },
+          { h: '#fund/sops', l: 'Event SOPs', ic: 'clip', page: 'fund' }
+        ] }, { label: 'Grants', items: [
+          { h: '#fund/grants', l: 'Pipeline', ic: 'list', page: 'fund' },
+          { h: '#fund/grants/found', l: 'Found for you', ic: 'search', page: 'fund', n: waiting || null },
+          { h: '#fund/grants/funders', l: 'Funders', ic: 'db', page: 'fund' },
+          { h: '#fund/grants/write', l: 'Writer', ic: 'pen', page: 'fund' },
+          { h: '#fund/grants/playbook', l: 'Playbook', ic: 'book', page: 'fund' },
+          { h: '#fund/grants/facts', l: 'Fact base', ic: 'star', page: 'fund' }
+        ] }];
+      }
+    },
     admin: { id: 'admin', label: 'Admin centre', color: SLATE, ic: 'shield', blurb: 'Access, security, the AI models, the Hub itself', pages: ['adminpanel', 'activity'], home: '#adminpanel/people',
       groups: function () {
         return [{ label: 'Admin', items: adminSections() }, { label: 'Audit', items: [{ h: '#activity', l: 'Activity', ic: 'list', page: 'activity' }] }];
       }
     }
   };
-  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'hr', 'finance', 'admin'];
+  var ORDER = ['hub', 'strategy', 'volunteer', 'crm', 'fund', 'hr', 'finance', 'admin'];   /* wave193: the Fundraising app, before HR and Finance */
   /* 01/10/26: Steel: "I'd like to add an app in the dashboard that links to our website home page" and "but it opens up in a
      seperate tab". A link, not an app: it frames no pages, so it sits under the apps (the launcher and the phone menu's
      tiles) for everyone who has them, and opens welfareavenue.com in a new tab while the Hub stays where it was */
@@ -192,6 +218,7 @@
     if (boardMode() || !staffOk()) return false;
     var a = APPS[id]; if (!a) return false;
     if (id === 'hub') return true;
+    if (a.need) return allowed(a.need);   /* wave193: the Fundraising app needs its own page; the Events calendar alone (finance staff, wave124) opens no app */
     return a.pages.some(allowed);
   }
   function items(app) {

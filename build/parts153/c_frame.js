@@ -55,6 +55,13 @@
     var h = hashNow(), pg = pageOf(h), sub = subOf(h), ip = pageOf(it.h), isub = subOf(it.h);
     if (app === 'strategy' && pg === 'project') return ip === 'projects';   /* wave163: a project's own page marks Projects */
     if (ip !== pg) return false;
+    if (app === 'fund' && ip === 'fund') {   /* wave193: #fund/<section>[/<view>|<id>]: the view is the third part; a grant's id marks the Pipeline */
+      var fs = h.replace(/^#/, '').split('/'), is = it.h.replace(/^#/, '').split('/');
+      if ((fs[1] || '') !== (is[1] || '')) return false;
+      if ((fs[1] || '') !== 'grants') return true;
+      var v = String(fs[2] || '').split('?')[0]; if (!/^(found|funders|write|playbook|facts)$/.test(v)) v = '';
+      return v === String(is[2] || '');
+    }
     if (it.sec) return secNow(ip) === it.sec;
     if (app === 'crm' && ip === 'crm') return (isub || 'contacts') === (sub === 'c' || !sub ? 'contacts' : sub);
     if (!sub) return isub ? firstOfPage(app, ip) === it : true;   /* the page alone: its first section */
