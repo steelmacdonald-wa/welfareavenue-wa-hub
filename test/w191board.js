@@ -2,7 +2,7 @@
    Steel (01/10/26): "it tends to be a long list of servers, could you make that section shorter, and for long lists for one
    position just allow people to scroll instead". With 22 servers: the servers column stops (about four cards) and scrolls,
    its title stays on top while scrolling, "N more" shows at the bottom and goes at the end; short columns do not scroll;
-   Add someone grows the column; the board is far shorter than the list; phone width; no page errors. */
+   Add people opens its window (wave200); the board is far shorter than the list; phone width; no page errors. */
 const { launch, fresh } = require('./boot');
 const fs = require('fs');
 const fx191 = require('./w191fx');
@@ -52,7 +52,10 @@ const col = (f, role) => f.ev(r => {
     if (SHOTS) await (await f.page.$('#w119 .board')).screenshot({ path: SHOTS + '/board_scrolled.png' });
     await f.page.click('#w119 .board .rc[data-w119role="server"] [data-w119bench]'); await f.page.waitForTimeout(400);
     s = await col(f, 'server');
-    ok('Add someone: the column grows to show the list', s && s.sh <= s.ch + 6 && s.ovf === 'visible', s);
+    /* wave200: Add people opens as its own window; the column keeps its height and scroll */
+    const dlgOpen = await f.ev(() => !!document.getElementById('w200add'));
+    ok('Add people: opens as a window, the column keeps its scroll', dlgOpen && s && s.ch <= 502 && s.ovf === 'auto', { dlgOpen, s });
+    await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
     const errs = f.errs.slice(); await f.close();
     ok('no page errors', errs.length === 0, errs);
 

@@ -167,34 +167,34 @@ const [, , ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "
     out.drag_cols = await page.evaluate(() => Array.from(document.querySelectorAll('#w119 .board .rc')).map(c => c.getAttribute('data-w119role') + ':' + c.querySelectorAll('.pc').length));
     await shot('event_after_drag');
 
-    /* 7. the bench: add a cook */
+    /* 7. Add people (wave200: a window in place of the bench): add a cook */
     await page.evaluate(() => document.querySelector('#w119 [data-w119bench="cook"]').click());
     await page.waitForTimeout(1200);
-    out.bench_open = await q('#w119 [data-w119benchbox="cook"]');
-    out.bench_people = await q('#w119 .bench .bp');
-    out.bench_first = await page.evaluate(() => { const p = document.querySelector('#w119 .bench .bp'); return p ? p.textContent.trim().slice(0, 60) : null; });
+    out.bench_open = await q('#w200add');
+    out.bench_people = await q('#w200add .ar');
+    out.bench_first = await page.evaluate(() => { const p = document.querySelector('#w200add .ar'); return p ? p.textContent.trim().slice(0, 60) : null; });
     await page.fill('#w119bq', 'ab');
     await page.waitForTimeout(400);
-    out.bench_filtered = await q('#w119 .bench .bp');
+    out.bench_filtered = await q('#w200add .ar');
     out.bench_focus = await page.evaluate(() => document.activeElement && document.activeElement.id);
     await shot('event_bench');
-    const addName = await page.evaluate(() => { const p = document.querySelector('#w119 .bench .bp b'); return p ? p.textContent : null; });
-    await page.evaluate(() => { const b = document.querySelector('#w119 .bench [data-w119addp]'); if (b) b.click(); });
+    const addName = await page.evaluate(() => { const p = document.querySelector('#w200add .ar:not(.on) .who b'); return p ? p.textContent : null; });
+    await page.evaluate(() => { const b = document.querySelector('#w200add .ar:not(.on) [data-w200add]'); if (b) b.click(); });
     await page.waitForTimeout(900);
     out.add_name = addName;
     out.add_write = await page.evaluate(() => window.__WRITES.filter(w => w.t === 'event_roster' && w.op === 'insert').map(w => JSON.stringify(w.p)).slice(-1));
     out.add_card = await page.evaluate(n => Array.from(document.querySelectorAll('#w119 .rc[data-w119role="cook"] .pc b')).some(b => b.textContent === n), addName);
-    out.add_bench_closed = await q('#w119 [data-w119benchbox]');
+    out.add_window_stays = await q('#w200add');
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+    out.add_bench_closed = await q('#w200add');
     out.add_cook_header = await txt('#w119 .rc[data-w119role="cook"] .h .n');
     out.add_mast_line = await txt('#w119acts');
 
-    /* 7b. the move control (touch fallback) */
+    /* 7b. the Move menu on each card (wave200) */
     const mvId = await page.evaluate(() => { const c = document.querySelector('#w119 .rc[data-w119role="team_leader"] .pc'); return c ? c.getAttribute('data-w119card') : null; });
-    await page.evaluate(id => document.querySelector('#w119 [data-w119mvbtn="' + id + '"]').click(), mvId);
-    await page.waitForTimeout(300);
-    out.mv_select = await q('#w119 select[data-w119mv]');
-    out.mv_options = await page.evaluate(() => Array.from(document.querySelectorAll('#w119 select[data-w119mv] option')).map(o => o.value));
-    await page.selectOption('#w119 select[data-w119mv]', 'photographer');
+    out.mv_select = await q('#w119 select[data-w119mv="' + mvId + '"]');
+    out.mv_options = await page.evaluate(id => Array.from(document.querySelectorAll('#w119 select[data-w119mv="' + id + '"] option')).map(o => o.value), mvId);
+    await page.selectOption('#w119 select[data-w119mv="' + mvId + '"]', 'photographer');
     await page.waitForTimeout(800);
     out.mv_now_in = await page.evaluate(id => { const c = document.querySelector('#w119 .pc[data-w119card="' + id + '"]'); return c ? c.closest('.rc').getAttribute('data-w119role') : null; }, mvId);
     out.mv_write = await page.evaluate(() => window.__WRITES.filter(w => w.t === 'event_roster' && w.op === 'update' && w.p && w.p.role).map(w => JSON.stringify(w.p)).slice(-1));

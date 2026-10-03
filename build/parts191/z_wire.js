@@ -40,5 +40,5 @@
   }
   setTimeout(fixTour, 1800); setTimeout(fixTour, 5000);
 
-  window.w191 = { S: S, STAGES: STAGES, model: model, layout: layout, refresh: refresh, stageOf: stageOf, paintWeek: paintWeek, decorateSop: decorateSop, title: title, adoptRail: adoptRail, openRecruit: openRecruit, R: R };
+  window.w191 = { S: S, STAGES: STAGES, model: model, layout: layout, refresh: refresh, stageOf: stageOf, paintWeek: paintWeek, decorateSop: decorateSop, title: title, adoptRail: adoptRail, openRecruit: openRecruit, R: R, counts: rosterCounts };
 })();

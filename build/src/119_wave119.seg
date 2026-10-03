@@ -19,6 +19,15 @@
    Everything older keeps working underneath: this wave regroups what
    wave20, 26, 28, 31 and 59 paint, and adds its own roster board on the
    same event_roster rows.
+   wave200 (03/10/26), Steel: "This is interface is really difficult to interact with, could you make it easier to work
+   with? Also, all team members should be searchable as a volunteer. Also anyone for any position should be searchable for
+   all positions." The board's columns count the way The team's line does (on the list of the target, with how many
+   confirmed); a card has its status and its role as two plain menus, and the column's + Add opens "Add people", a
+   roomy window over the page instead of a box squeezed into the column: the role to add as (any role, switchable),
+   one search over every volunteer and every team member (name, phone, email, tag, role), Everyone / Has done this
+   role / Team members, Add keeps the window open for the next person (Undo), Enter adds the first match, and
+   people already on the serving show where they are. A team member with no volunteer record gets one when added
+   (the one record of wave176, linked to their CRM contact by email).
    ===================================================================== */
 (function () {
   if (window.__wa119) return; window.__wa119 = true;
@@ -27,7 +36,7 @@
   var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
   var ROLE_ORDER = ['team_leader', 'cook', 'driver', 'server', 'dishwasher', 'photographer', 'community_talker', 'community_debrief'];
   var TARGET = { team_leader: 2, cook: 4, driver: 2, server: 8, dishwasher: 2, photographer: 1, community_talker: 2, community_debrief: 1 };
-  var V = { pend: null, bench: null, benchRole: null, q: '', drag: null, calMonth: null, busy: false };
+  var V = { pend: null, bench: null, benchRole: null, q: '', drag: null, calMonth: null, busy: false, addTab: 'all', addShow: 60, added: [], addBusy: '' };
 
   var css = document.createElement('style');
   css.id = 'wa119css';
@@ -83,7 +92,7 @@
     '#w119 .rc .h .n{font-size:11px;color:var(--wa-muted);font-weight:700;}' +
     '#w119 .rc .h .n.short{color:' + FLAG + ';}' +
     '#w119 .rc .h .n.full{color:' + TEAL + ';}' +
-    '#w119 .rc .add{width:22px;height:22px;border-radius:50%;border:none;background:' + GREEN + ';color:' + CREAM + ';font-size:15px;line-height:1;cursor:pointer;flex:none;}' +
+    '#w119 .rc .add{border:none;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ';font:700 12px ' + BODY + ';padding:5px 11px;line-height:1.2;cursor:pointer;flex:none;white-space:nowrap;}#w119 .rc .add:hover{background:#0b2e29;}' +
     '#w119 .pc{background:#FFFAF2;border-radius:12px;padding:8px 9px;margin:0 0 7px;box-shadow:0 6px 16px -14px rgba(16,63,57,.7);cursor:grab;position:relative;font-size:12.5px;}' +
     '#w119 .pc:active{cursor:grabbing;}' +
     '#w119 .pc.dragging{opacity:.4;}' +
@@ -102,6 +111,42 @@
     '#w119 .pc select.mvsel{margin-top:5px;background:rgba(111,100,171,.12);color:' + PURPLE + ';}' +
     '#w119 .top input[type=date]{width:150px;}' +
     '#w119 .rc .empty{font-size:11.5px;color:var(--wa-muted);text-align:center;padding:14px 4px;border:1px dashed rgba(16,63,57,.2);border-radius:10px;}' +
+    /* wave200: the board's columns, cards and Add people */
+    '#w119 .rc .h .n{font-size:12px;}#w119 .rc .h .n.short{color:' + FLAG + ';}#w119 .rc .h .n.full{color:' + TEAL + ';}' +
+    '#w119 .rc .sub{font-size:11.5px;color:var(--wa-muted);margin:-4px 0 8px;}#w119 .rc .sub em{font-style:normal;color:' + FLAG + ';font-weight:600;}' +
+    '#w119 .rc button.empty{display:block;width:100%;background:none;cursor:pointer;font:600 12.5px ' + BODY + ';color:' + GREEN + ';padding:16px 8px;}#w119 .rc button.empty span{display:block;font-weight:400;font-size:11.5px;color:var(--wa-muted);margin-top:3px;}#w119 .rc button.empty:hover{background:rgba(220,165,39,.12);border-color:' + GOLD + ';}' +
+    '#w119 .board{grid-template-columns:repeat(auto-fill,minmax(236px,1fr));gap:12px;}' +
+    '#w119 .rc .h b{font-size:16px;line-height:1.1;flex:1;min-width:0;}#w119 .rc .h .n{flex:none;}' +
+    '#w119 .pc{padding:10px 11px;font-size:13px;}#w119 .pc.gone{opacity:.62;}#w119 .pc b{font-size:14px;padding-right:20px;}#w119 .pc .x{top:6px;right:6px;width:24px;height:24px;border-radius:50%;font-size:12px;}#w119 .pc .x:hover{background:rgba(179,64,47,.1);}' +
+    '#w119 .pc .sel2{display:flex;gap:6px;margin-top:8px;}' +
+    '#w119 .pc .sel2 select{margin:0;flex:1;width:auto;min-width:0;padding:7px 24px 7px 11px;font-size:12.5px;font-weight:700;letter-spacing:0;cursor:pointer;text-overflow:ellipsis;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 14px) 52%,calc(100% - 9px) 52%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;}' +
+    '#w119 .pc .sel2 select.rolesel{flex:none;width:76px;background-color:rgba(16,63,57,.06);color:' + GREEN + ';font-weight:600;}' +
+    '#w119 .pc .c{font-size:12px;margin-top:6px;}#w119 .pc .flag{font-size:11px;padding:2px 8px;margin-top:6px;}' +
+    'html.w200lock,html.w200lock body{overflow:hidden;}' +
+    '#w200add{position:fixed;inset:0;z-index:300;background:rgba(16,32,30,.45);display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px 16px;animation:w200in .15s ease-out;}' +
+    '@keyframes w200in{from{opacity:0}to{opacity:1}}' +
+    '#w200add .pan{width:min(640px,100%);max-height:90vh;display:flex;flex-direction:column;background:' + CREAM + ';border-radius:20px;box-shadow:0 30px 70px rgba(0,0,0,.28);overflow:hidden;font-family:' + BODY + ';color:var(--wa-text);}' +
+    '#w200add .pan > :not(.al){flex:none;}#w200add .ph{display:flex;align-items:flex-start;gap:10px;padding:18px 20px 8px;}#w200add .ph > div{flex:1;min-width:0;}#w200add h3{margin:0;font:700 24px ' + HEAD + ';text-transform:uppercase;letter-spacing:.3px;color:' + GREEN + ';}#w200add .ph p{margin:2px 0 0;font-size:12.5px;color:var(--wa-muted);}' +
+    '#w200add .xx{border:none;background:rgba(16,63,57,.07);width:34px;height:34px;border-radius:50%;cursor:pointer;color:' + GREEN + ';font-size:14px;flex:none;}' +
+    '#w200add .lb{padding:4px 20px 6px;font-size:10.5px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--wa-muted);}' +
+    '#w200add .rchips{display:flex;flex-wrap:wrap;gap:6px;padding:0 20px 10px;}#w200add .rchip{border:1.5px solid rgba(16,63,57,.15);background:none;border-radius:999px;padding:6px 11px;font:600 12.5px ' + BODY + ';color:var(--wa-text);cursor:pointer;}#w200add .rchip i{font-style:normal;color:var(--wa-muted);font-weight:500;margin-left:2px;}#w200add .rchip.short i{color:' + FLAG + ';}' +
+    '#w200add .rchip.on{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}#w200add .rchip.on i{color:rgba(255,250,242,.8);}' +
+    '#w200add .srch{padding:0 20px 8px;}#w200add .srch input{width:100%;box-sizing:border-box;padding:12px 16px;border:1.5px solid rgba(16,63,57,.2);border-radius:14px;font:500 15px ' + BODY + ';background:' + CREAM + ';color:var(--wa-text);}#w200add .srch input:focus{outline:none;border-color:' + GOLD + ';box-shadow:0 0 0 3px rgba(220,165,39,.25);}' +
+    '#w200add .tabs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:0 20px 8px;}#w200add .tab{border:none;background:none;border-radius:999px;padding:6px 11px;font:600 12.5px ' + BODY + ';color:var(--wa-muted);cursor:pointer;}#w200add .tab.on{background:rgba(16,63,57,.09);color:' + GREEN + ';}#w200add .tabs .cnt{margin-left:auto;font-size:12px;color:var(--wa-muted);}' +
+    '#w200add .just{margin:0 20px 8px;padding:8px 12px;border-radius:12px;background:rgba(42,140,122,.12);font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;}#w200add .just span{display:inline-flex;gap:5px;align-items:center;}#w200add .just i{font-style:normal;color:var(--wa-muted);}#w200add .just button{border:none;background:none;color:' + GREEN + ';font:700 12px ' + BODY + ';text-decoration:underline;cursor:pointer;padding:0;}' +
+    '#w200add .busy{margin:0 20px 8px;font-size:12.5px;color:var(--wa-muted);}' +
+    '#w200add .al{flex:1 1 auto;overflow-y:auto;padding:4px 12px 8px;border-top:1px solid rgba(16,63,57,.08);display:flex;flex-direction:column;gap:2px;}' +
+    '#w200add .ar{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 8px;border-radius:12px;}#w200add .ar:hover{background:rgba(16,63,57,.04);}#w200add .ar.on{opacity:.62;}' +
+    '#w200add .av{width:38px;height:38px;border-radius:50%;background:rgba(16,63,57,.1);color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;font:700 13px ' + BODY + ';}' +
+    '#w200add .who{display:flex;flex-direction:column;gap:3px;min-width:0;}#w200add .who b{font-size:14px;line-height:1.25;}#w200add .meta{display:flex;flex-wrap:wrap;gap:4px;}#w200add .meta span{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;background:rgba(16,63,57,.06);color:#4f4d49;}' +
+    '#w200add .meta .tm{background:rgba(111,100,171,.14);color:' + PURPLE + ';}#w200add .meta .rl.fit{background:rgba(42,140,122,.16);color:#1c6b5d;}#w200add .meta .rl.none{background:none;padding-left:0;color:var(--wa-muted);font-weight:500;}' +
+    '#w200add .ct{font-size:11.5px;color:var(--wa-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}' +
+    '#w200add .go{border:none;border-radius:999px;background:' + GOLD + ';color:#1F201E;font:700 13px ' + BODY + ';padding:8px 18px;cursor:pointer;}#w200add .go:hover{filter:brightness(.95);}#w200add .go[disabled]{opacity:.6;cursor:default;}' +
+    '#w200add .onl{font-size:11.5px;font-weight:600;color:' + TEAL + ';text-align:right;max-width:130px;}' +
+    '#w200add .none{padding:22px 10px;text-align:center;color:var(--wa-muted);font-size:13px;}#w200add .lnk{border:none;background:none;color:' + GREEN + ';font:700 13px ' + BODY + ';text-decoration:underline;cursor:pointer;padding:0;}' +
+    '#w200add .more{margin:6px auto 4px;border:1.5px solid rgba(16,63,57,.18);background:none;border-radius:999px;padding:7px 16px;font:600 12.5px ' + BODY + ';color:' + GREEN + ';cursor:pointer;}' +
+    '#w200add .pf{display:flex;align-items:center;gap:10px;padding:12px 20px;border-top:1px solid rgba(16,63,57,.08);font-size:12px;color:var(--wa-muted);}#w200add .pf span{flex:1;min-width:0;}#w200add .done{border:none;border-radius:999px;background:' + GREEN + ';color:' + CREAM + ';font:700 13px ' + BODY + ';padding:9px 20px;cursor:pointer;}' +
+    '@media (max-width:700px){#w200add{padding:0;align-items:stretch;}#w200add .pan{width:100%;max-height:none;height:100%;border-radius:0;}#w200add .ar{grid-template-columns:32px minmax(0,1fr) auto;gap:10px;}#w200add .av{width:32px;height:32px;font-size:12px;}#w200add .rchips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:12px;}#w200add .rchips::-webkit-scrollbar{display:none;}#w200add .rchip{flex:none;}}' +
     /* bench */
     '#w119 .bench{background:#FFFAF2;border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:10px 12px;margin:10px 0 0;box-shadow:0 14px 30px -20px rgba(16,63,57,.6);}' +
     '#w119 .bench .bh{display:flex;gap:8px;align-items:center;margin:0 0 8px;}' +
@@ -179,37 +224,131 @@
       return '<div class="n"><span class="tk" data-w119tick="' + r.s.id + '" title="Mark done"></span><div><b>' + E(r.t.name || 'Step') + '</b><span>' + E(r.s.owner || r.t.default_owner || 'no owner yet') + (r.s.due_date ? ' \u00b7 ' + (over ? '<i>due ' + E(r.s.due_date) + '</i>' : 'due ' + E(r.s.due_date)) : '') + (r.t.section ? ' \u00b7 ' + E(r.t.section) : '') + '</span></div></div>';
     }).join('') + '</div>';
   }
+  /* wave200: the same counts as The team's line (wave191: its targets, partners counted, cancelled and declined left out) */
+  function counts(D) {
+    try { if (window.w191 && typeof window.w191.counts === 'function') return window.w191.counts(D); } catch (e) { /* fine */ }
+    var by = {}, conf = 0; (D.roster || []).forEach(function (r) { var s = lower(r.status); if (s === 'cancelled' || s === 'unavailable') return; by[r.role || 'other'] = (by[r.role || 'other'] || 0) + 1; if (s.indexOf('confirm') === 0) conf++; });
+    return { by: by, T: TARGET, conf: conf };
+  }
+  function isGone(r) { var s = lower(r.status); return s === 'cancelled' || s === 'unavailable' || r.confirm_status === 'declined'; }
+  function allRoles(D) { var roles = ROLE_ORDER.slice(); ((D && D.roster) || []).forEach(function (r) { if (r.role && roles.indexOf(r.role) < 0) roles.push(r.role); }); return roles; }
+  function one(role) { return roleLabel(role).replace(/s$/, ''); }
   function boardHtml(D) {
-    var roster = D.roster || [];
-    var roles = ROLE_ORDER.slice(); roster.forEach(function (r) { if (r.role && roles.indexOf(r.role) < 0) roles.push(r.role); });
-    return '<div class="board">' + roles.map(function (role) {
+    var roster = D.roster || [], c = counts(D);
+    return '<div class="board">' + allRoles(D).map(function (role) {
       var list = roster.filter(function (r) { return (r.role || 'other') === role; });
-      var conf = list.filter(function (r) { return lower(r.status).indexOf('confirm') === 0; }).length;
-      var target = TARGET[role] || 0;
-      var cls = target ? (conf >= target ? 'full' : (list.length < target ? 'short' : '')) : '';
-      return '<div class="rc" data-w119role="' + E(role) + '"><div class="h"><b>' + E(roleLabel(role)) + '</b><span class="n ' + cls + '">' + conf + (target ? '/' + target : '') + '</span>' + (staff() ? '<button class="add" data-w119bench="' + E(role) + '" title="Add someone">+</button>' : '') + '</div>' +
-        (list.length ? list.map(cardHtml).join('') : '<div class="empty">' + (target ? 'Need ' + target : 'Nobody yet') + '<br>drop someone here</div>') +
-        (V.benchRole === role ? benchHtml(role) : '') + '</div>';
+      list.sort(function (a, b) { return (isGone(a) ? 1 : 0) - (isGone(b) ? 1 : 0); });
+      var on = c.by[role] || 0, target = (c.T || {})[role] || 0;
+      var conf = list.filter(function (r) { return lower(r.status).indexOf('confirm') === 0 || r.confirm_status === 'confirmed'; }).length;
+      var cls = target ? (on >= target ? 'full' : 'short') : '';
+      return '<div class="rc" data-w119role="' + E(role) + '"><div class="h"><b>' + E(roleLabel(role)) + '</b><span class="n ' + cls + '" title="' + E(on + ' on the list' + (target ? ' of ' + target + ' needed' : '') + ', ' + conf + ' confirmed') + '">' + on + (target ? '/' + target : '') + '</span>' +
+        (staff() ? '<button class="add" data-w119bench="' + E(role) + '" title="Add people as ' + E(one(role).toLowerCase()) + '">+ Add</button>' : '') + '</div>' +
+        (list.length ? '<div class="sub">' + (conf ? conf + ' confirmed' : 'none confirmed yet') + (target && on < target ? ' · <em>' + (target - on) + ' more needed</em>' : '') + '</div>' + list.map(function (r) { return cardHtml(r, D); }).join('') : '') +
+        (!list.length ? (staff() ? '<button class="empty" data-w119bench="' + E(role) + '">' + (target ? 'Need ' + target : 'Nobody yet') + '<span>+ Add people, or drag someone here</span></button>' : '<div class="empty">' + (target ? 'Need ' + target : 'Nobody yet') + '</div>') : '') + '</div>';
     }).join('') + '</div>';
   }
-  function cardHtml(r) {
+  /* the statuses keep their stored values; the menu shows them in plain words */
+  var SHORT = { 'Confirmed': 'Confirmed', 'Waiting For Response': 'Waiting', 'TBD': 'To ask', 'Unavailable': 'Can’t make it', 'Cancelled': 'Cancelled' };
+  function cardHtml(r, D) {
     var d = r.detail || {}; var phone = d.phone ? String(d.phone) : '';
-    var opts = '<option value=""' + (r.status ? '' : ' selected') + '>Not set</option>' + (WA_VOL_STATUSES || []).map(function (s) { return '<option' + (r.status === s ? ' selected' : '') + '>' + E(s) + '</option>'; }).join('') + (r.status && (WA_VOL_STATUSES || []).indexOf(r.status) < 0 ? '<option selected>' + E(r.status) + '</option>' : '');
-    return '<div class="pc ' + statusClass(r.status) + '" draggable="' + (staff() ? 'true' : 'false') + '" data-w119card="' + r.id + '"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (staff() ? '<button class="x" data-w119rm="' + r.id + '" title="Take off this event">&#10005;</button>' : '') +
-      '<select data-vlrstat="' + r.id + '"' + (staff() ? '' : ' disabled') + '>' + opts + '</select>' +
-      (phone || d.email ? '<span class="c" title="' + E([phone, d.email].filter(Boolean).join(' \u00b7 ')) + '">' + (phone ? '<a href="tel:' + E(phone.replace(/[^\d+]/g, '')) + '">' + E(phone) + '</a>' : '') + (phone && d.email ? ' \u00b7 ' : '') + (d.email ? E(d.email) : '') + '</span>' : '') + (r.notes ? '<span class="c" title="' + E(r.notes) + '">' + E(r.notes) + '</span>' : '') +
-      (r.person_id ? '' : '<span class="flag">not matched to a volunteer record</span>') +
-      (staff() ? '<button class="mv" data-w119mvbtn="' + r.id + '" title="Move to another role">\u21c4 move</button>' : '') + '</div>';
+    var opts = '<option value=""' + (r.status ? '' : ' selected') + '>No status</option>' + (WA_VOL_STATUSES || []).map(function (s) { return '<option value="' + E(s) + '"' + (r.status === s ? ' selected' : '') + '>' + E(SHORT[s] || s) + '</option>'; }).join('') + (r.status && (WA_VOL_STATUSES || []).indexOf(r.status) < 0 ? '<option selected>' + E(r.status) + '</option>' : '');
+    var roles = allRoles(D || detail());
+    var ropts = '<option value="" selected disabled>Move</option>' + roles.filter(function (rr) { return rr !== r.role; }).map(function (rr) { return '<option value="' + E(rr) + '">To ' + E(one(rr).toLowerCase()) + '</option>'; }).join('');
+    return '<div class="pc ' + statusClass(r.status) + (isGone(r) ? ' gone' : '') + '" draggable="' + (staff() ? 'true' : 'false') + '" data-w119card="' + r.id + '"><b>' + E(r.person_name || 'Unnamed') + '</b>' + (staff() ? '<button class="x" data-w119rm="' + r.id + '" title="Take ' + E(r.person_name || 'them') + ' off this serving" aria-label="Take ' + E(r.person_name || 'them') + ' off this serving">&#10005;</button>' : '') +
+      '<div class="sel2"><select data-vlrstat="' + r.id + '"' + (staff() ? '' : ' disabled') + ' aria-label="Status of ' + E(r.person_name || 'this person') + '" title="Status">' + opts + '</select>' +
+      (staff() ? '<select class="rolesel" data-w119mv="' + r.id + '" aria-label="Move ' + E(r.person_name || 'them') + ' to another role" title="Move to another role">' + ropts + '</select>' : '') + '</div>' +
+      (phone || d.email ? '<span class="c" title="' + E([phone, d.email].filter(Boolean).join(' · ')) + '">' + (phone ? '<a href="tel:' + E(phone.replace(/[^\d+]/g, '')) + '">' + E(phone) + '</a>' : '') + (phone && d.email ? ' · ' : '') + (d.email ? E(d.email) : '') + '</span>' : '') + (r.notes ? '<span class="c" title="' + E(r.notes) + '">' + E(r.notes) + '</span>' : '') +
+      (r.person_id ? '' : '<span class="flag" title="This name is not matched to anyone in Volunteers yet">No volunteer record</span>') + '</div>';
   }
-  function benchHtml(role) {
-    var people = (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || [];
-    var D = detail(); var on = {}; ((D && D.roster) || []).forEach(function (r) { if (r.person_id) on[r.person_id] = 1; });
-    var q = lower(V.q);
-    var list = people.filter(function (p) { return !on[p.id] && (!q || lower(p.full_name).indexOf(q) >= 0 || (p.tags || []).join(' ').toLowerCase().indexOf(q) >= 0); });
-    list.sort(function (a, b) { var ar = (a.roles || []).indexOf(role) >= 0 ? 0 : 1, br = (b.roles || []).indexOf(role) >= 0 ? 0 : 1; return ar - br || String(a.full_name).localeCompare(String(b.full_name)); });
-    return '<div class="bench" data-w119benchbox="' + E(role) + '"><div class="bh"><b>Add a ' + E(roleLabel(role).replace(/s$/, '').toLowerCase()) + '</b><input type="search" id="w119bq" placeholder="Search volunteers" value="' + E(V.q) + '"><button class="close" data-w119benchclose="1">&#10005;</button></div>' +
-      (people.length ? '<div class="bl">' + list.slice(0, 40).map(function (p) { var fits = (p.roles || []).indexOf(role) >= 0; return '<div class="bp" draggable="true" data-w119pid="' + p.id + '"><div><b>' + E(p.full_name) + '</b><span>' + ((p.roles || []).map(roleLabel).join(', ') || 'no role yet') + (fits ? '' : '') + ((p.phones || [])[0] ? ' \u00b7 ' + E((p.phones || [])[0]) : '') + '</span></div><button class="btn" data-w119addp="' + p.id + '" data-role="' + E(role) + '">Add</button></div>'; }).join('') + (list.length > 40 ? '<div class="empty">Type to narrow it down</div>' : '') + '</div>' : '<div class="empty">Loading volunteers...</div>') + '</div>';
+
+  /* ---------- wave200: Add people ---------- */
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
+  function teamLabel(d) { try { return (window.WA_TEAMS && WA_TEAMS.short && WA_TEAMS.short[d]) || (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || d || ''; } catch (e) { return d || ''; } }
+  /* every volunteer, then every team member who has no volunteer record yet (matched by email, else by name) */
+  function pool() {
+    var people = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []);
+    var team = members().filter(function (m) { return m && m.name && m.active !== false; });
+    var tByEmail = {}, tByName = {}; team.forEach(function (m) { if (m.email) tByEmail[lower(m.email)] = m; tByName[lower(m.name)] = m; });
+    var seenEmail = {}, seenName = {};
+    var out = people.map(function (p) {
+      var ems = (p.emails || []).map(lower); ems.forEach(function (e) { seenEmail[e] = 1; }); seenName[lower(p.full_name)] = 1;
+      var tm = null; ems.forEach(function (e) { if (!tm && tByEmail[e]) tm = tByEmail[e]; });
+      if (!tm && tByName[lower(p.full_name)] && !ems.length) tm = tByName[lower(p.full_name)];
+      return { key: String(p.id), p: p, name: p.full_name || '(no name)', roles: p.roles || [], phone: (p.phones || [])[0] || '', email: (p.emails || [])[0] || '', tags: p.tags || [], team: tm };
+    });
+    team.forEach(function (m) {
+      var em = lower(m.email);
+      if (em && seenEmail[em]) return;
+      if (!em && seenName[lower(m.name)]) return;
+      if (em && seenName[lower(m.name)] && people.some(function (p) { return lower(p.full_name) === lower(m.name) && !(p.emails || []).length; })) return;
+      out.push({ key: 'm' + m.id, m: m, name: m.name, roles: [], phone: '', email: m.email || '', tags: [], team: m });
+    });
+    return out;
   }
+  function onMap(D) {
+    var byPid = {}, byName = {};
+    ((D && D.roster) || []).forEach(function (r) { if (isGone(r)) return; if (r.person_id) byPid[String(r.person_id)] = r; byName[lower(r.person_name)] = r; });
+    return { pid: byPid, name: byName };
+  }
+  function digits(s) { return String(s || '').replace(/\D/g, ''); }
+  function matches(it, q) {
+    if (!q) return true;
+    var hay = [it.name, it.email, (it.tags || []).join(' '), (it.roles || []).map(roleLabel).join(' '), it.team ? 'team ' + (it.team.role || '') + ' ' + teamLabel(it.team.department) : ''].join(' ').toLowerCase();
+    return q.split(/\s+/).filter(Boolean).every(function (w) { var dw = digits(w); return hay.indexOf(w) >= 0 || (dw.length >= 3 && digits(it.phone).indexOf(dw) >= 0); });
+  }
+  function addList(role, D) {
+    var q = lower(V.q), on = onMap(D), all = pool();
+    var list = all.filter(function (it) {
+      if (V.addTab === 'role' && (it.roles || []).indexOf(role) < 0) return false;
+      if (V.addTab === 'team' && !it.team) return false;
+      return matches(it, q);
+    });
+    list.forEach(function (it) { it.on = (it.p && on.pid[String(it.p.id)]) || (!it.p && on.name[lower(it.name)]) || null; it.fits = (it.roles || []).indexOf(role) >= 0; });
+    list.sort(function (a, b) { return (a.on ? 1 : 0) - (b.on ? 1 : 0) || (b.fits ? 1 : 0) - (a.fits ? 1 : 0) || String(a.name).localeCompare(String(b.name)); });
+    return { list: list, all: all };
+  }
+  function initials(n) { var w = String(n || '?').replace(/[()]/g, '').trim().split(/\s+/); return ((w[0] || '?').charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : '')).toUpperCase(); }
+  function addRowHtml(it, role) {
+    var meta = [];
+    if (it.team) meta.push('<span class="tm">Team' + (it.team.department ? ' · ' + E(teamLabel(it.team.department)) : '') + '</span>');
+    var rl = (it.roles || []).map(function (r) { return '<span class="rl' + (r === role ? ' fit' : '') + '">' + E(one(r)) + '</span>'; }).join('');
+    if (rl) meta.push(rl); else if (!it.team) meta.push('<span class="rl none">No role yet</span>');
+    var contact = [it.phone, it.email].filter(Boolean).join(' · ');
+    return '<div class="ar' + (it.on ? ' on' : '') + '" role="listitem"><span class="av">' + E(initials(it.name)) + '</span><div class="who"><b>' + E(it.name) + '</b><span class="meta">' + meta.join('') + '</span>' + (contact ? '<span class="ct">' + E(contact) + '</span>' : '') + (!it.p && it.m ? '<span class="ct">No volunteer record yet: adding makes one</span>' : '') + '</div>' +
+      (it.on ? '<span class="onl">On this serving: ' + E(one(it.on.role)) + '</span>' : '<button class="go" data-w200add="' + E(it.key) + '" aria-label="Add ' + E(it.name) + ' as ' + E(one(role).toLowerCase()) + '">Add</button>') + '</div>';
+  }
+  function addHtml() {
+    var role = V.benchRole, D = detail(); if (!role || !D) return '';
+    var ev = curEvent(), c = counts(D), people = (typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || [];
+    var res = addList(role, D), shown = res.list.slice(0, V.addShow), firstFree = res.list.filter(function (it) { return !it.on; })[0];
+    var chips = allRoles(D).map(function (r) { var n = c.by[r] || 0, t = (c.T || {})[r] || 0; return '<button class="rchip' + (r === role ? ' on' : '') + (t && n < t ? ' short' : '') + '" data-w200role="' + E(r) + '" aria-pressed="' + (r === role) + '">' + E(roleLabel(r)) + ' <i>' + n + (t ? '/' + t : '') + '</i></button>'; }).join('');
+    var tabs = [['all', 'Everyone'], ['role', roleLabel(role)], ['team', 'Team members']].map(function (x) { return '<button class="tab' + (V.addTab === x[0] ? ' on' : '') + '" data-w200tab="' + x[0] + '" aria-pressed="' + (V.addTab === x[0]) + '">' + E(x[1]) + '</button>'; }).join('');
+    return '<div class="w200add" id="w200add" role="dialog" aria-modal="true" aria-labelledby="w200addh"><div class="pan">' +
+      '<div class="ph"><div><h3 id="w200addh">Add people</h3><p>' + E(ev ? niceDate(ev.event_date, true) : '') + ' · ' + (c.on != null ? c.on + ' on the list' : '') + '</p></div><button class="xx" data-w119benchclose="1" aria-label="Close">&#10005;</button></div>' +
+      '<div class="lb">Add as</div><div class="rchips">' + chips + '</div>' +
+      '<div class="srch"><input type="search" id="w119bq" placeholder="Search a name, phone, email, tag or role" value="' + E(V.q) + '" autocomplete="off" aria-label="Search volunteers and team members"></div>' +
+      '<div class="tabs">' + tabs + '<span class="cnt">' + (people.length ? res.list.length + ' ' + (res.list.length === 1 ? 'person' : 'people') : '') + '</span></div>' +
+      (V.added.length ? '<div class="just"><b>Added:</b> ' + V.added.map(function (a) { return '<span>' + E(a.name) + ' <i>' + E(one(a.role).toLowerCase()) + '</i>' + (a.rid ? ' <button data-w200undo="' + E(a.rid) + '">Undo</button>' : '') + '</span>'; }).join('') + '</div>' : '') +
+      (V.addBusy ? '<div class="busy">' + E(V.addBusy) + '</div>' : '') +
+      '<div class="al" role="list">' + (!people.length ? '<div class="none">Loading the volunteers…</div>' : shown.length ? shown.map(function (it) { return addRowHtml(it, role); }).join('') : '<div class="none">Nobody matches ' + (V.q ? '“' + E(V.q) + '”' : 'this') + (V.addTab !== 'all' ? '. <button class="lnk" data-w200tab="all">Search everyone</button>' : '') + '</div>') +
+        (res.list.length > shown.length ? '<button class="more" data-w200more="1">Show ' + Math.min(60, res.list.length - shown.length) + ' more of ' + (res.list.length - shown.length) + '</button>' : '') + '</div>' +
+      '<div class="pf"><span>' + (firstFree && V.q ? 'Enter adds ' + E(firstFree.name) : 'Add keeps this open for the next person.') + '</span><button class="done" data-w119benchclose="1">Done</button></div>' +
+      '</div></div>';
+  }
+  function paintAdd(keepFocus) {
+    var root = document.getElementById('w119'); var cur = document.getElementById('w200add');
+    if (!V.benchRole || !root) { if (cur) cur.remove(); document.documentElement.classList.remove('w200lock'); return; }
+    var html = addHtml(); var q = document.getElementById('w119bq'); var hadFocus = q && document.activeElement === q; var pos = q ? q.selectionStart : null;
+    var scroll = cur && cur.querySelector('.al') ? cur.querySelector('.al').scrollTop : 0;
+    if (cur) cur.outerHTML = html; else root.insertAdjacentHTML('beforeend', html);
+    document.documentElement.classList.add('w200lock');
+    var al = document.querySelector('#w200add .al'); if (al && keepFocus) al.scrollTop = scroll;
+    var rc = document.querySelector('#w200add .rchips'), onc = rc && rc.querySelector('.rchip.on'); if (rc && onc && rc.scrollWidth > rc.clientWidth) rc.scrollLeft = Math.max(0, onc.offsetLeft - rc.offsetLeft - (rc.clientWidth - onc.offsetWidth) / 2);
+    var q2 = document.getElementById('w119bq'); if (q2 && (hadFocus || !cur || keepFocus === 'q')) { q2.focus(); try { var n = pos == null ? q2.value.length : pos; q2.setSelectionRange(n, n); } catch (e) { /* fine */ } }
+  }
+  function openAdd(role) { V.benchRole = role; V.q = ''; V.addTab = 'all'; V.addShow = 60; V.added = []; V.addBusy = ''; paintAdd(); if (typeof waVolLoadPeople === 'function') waVolLoadPeople().then(function () { paintAdd('q'); }); }
+  function closeAdd() { V.benchRole = null; V.q = ''; V.added = []; paintAdd(); repaintBoard(); }
+  function benchHtml(role) { return ''; }
   function layout() {
     var sec = document.getElementById('volunteering'); if (!sec) return;
     if (typeof WA_VOL_VIEW === 'undefined' || WA_VOL_VIEW !== 'event') return;
@@ -244,7 +383,7 @@
     /* anything else that older waves appended after the checklist stays visible in the rail */
     Array.prototype.slice.call(card.children).forEach(function (el) { if (el !== root && el !== sub && !el.classList.contains('vl-sub') && el.tagName !== 'H2' && el.tagName !== 'P' && !el.classList.contains('vl-back')) { if (kids.indexOf(el) >= start) rail.appendChild(el); } });
     adopt();
-    if (V.benchRole && typeof waVolLoadPeople === 'function') waVolLoadPeople().then(repaintBoard);
+    if (V.benchRole) paintAdd();
   }
   function repaintBoard() { var D = detail(); var b = document.querySelector('#w119 .board'); if (!b || !D) return; b.outerHTML = boardHtml(D); }
   function repaintMast() { var ev = curEvent(), D = detail(); var m = document.querySelector('#w119 .mast'); if (!m || !ev || !D) return; var acts = m.querySelector('#w119acts'); var keep = acts ? Array.prototype.slice.call(acts.querySelectorAll('button')) : []; m.outerHTML = mastHtml(ev, D); var acts2 = document.querySelector('#w119acts'); if (acts2) keep.forEach(function (b) { acts2.appendChild(b); }); var nx = document.querySelector('#w119 .next'); if (nx) nx.outerHTML = nextHtml(D); else { var m2 = document.querySelector('#w119 .mast'); if (m2) m2.insertAdjacentHTML('afterend', nextHtml(D)); } }
@@ -262,15 +401,42 @@
   }
   async function addPerson(pid, role) {
     var D = detail(); var ev = curEvent(); if (!D || !ev) return;
-    var p = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []).filter(function (x) { return String(x.id) === String(pid); })[0]; if (!p) return;
+    var key = String(pid), it = pool().filter(function (x) { return x.key === key; })[0];
+    if (!it) { var p0 = ((typeof WA_VOL_PEOPLE !== 'undefined' ? WA_VOL_PEOPLE : []) || []).filter(function (x) { return String(x.id) === key; })[0]; if (p0) it = { key: key, p: p0, name: p0.full_name }; }
+    if (!it) return;
+    var p = it.p;
+    if (!p && it.m) {
+      /* a team member with no volunteer record: one is made, linked to their CRM contact by email (wave176's one record) */
+      V.addBusy = 'Making ' + it.name + '’s volunteer record…'; paintAdd(true);
+      var mk = await db.from('volunteer_people').insert({ full_name: it.m.name, emails: it.m.email ? [it.m.email] : [], phones: [] }).select('*').single();
+      V.addBusy = '';
+      if (mk && mk.error) { paintAdd(true); toastS('Could not make a volunteer record for ' + it.name + ': ' + mk.error.message); return; }
+      p = mk.data; try { WA_VOL_PEOPLE.push(p); } catch (e) { /* fine */ }
+      try { logChange('volunteer_people', p.id, 'created', null, it.name + ' (team member, added to a serving)'); } catch (e) { /* fine */ }
+    }
     var row = { event_id: ev.id, person_id: p.id, person_name: p.full_name, role: role, status: 'Waiting For Response', notes: null, detail: { phone: (p.phones || [])[0] || null, email: (p.emails || [])[0] || null }, sort: 999 };
     var r = await db.from('event_roster').insert(row).select('*').single();
     if (r && r.error) { toastS('Could not add: ' + r.error.message); return; }
-    D.roster.push(r.data || row); V.benchRole = null; V.q = '';
+    D.roster.push(r.data || row);
     try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
     try { logChange('event_roster', (r.data || {}).id || 'new', 'added', null, p.full_name + ' as ' + role); } catch (e) { /* fine */ }
-    toastS(p.full_name + ' added as ' + roleLabel(role).replace(/s$/, '').toLowerCase());
-    repaintBoard(); repaintMast();
+    toastS(p.full_name + ' added as ' + one(role).toLowerCase());
+    if (V.benchRole) { V.added.push({ rid: r.data && r.data.id, name: p.full_name, role: role }); V.q = ''; paintAdd('q'); }
+    repaintBoard(); repaintMast(); repaintTeam();
+  }
+  /* The team's header and line (wave191) count again */
+  function repaintTeam() { try { if (window.w191 && typeof window.w191.refresh === 'function') window.w191.refresh(); } catch (e) { /* fine */ } }
+  async function undoAdd(rid) {
+    var D = detail(); if (!D) return;
+    var r = await db.from('event_roster').delete().eq('id', Number(rid));
+    if (r && r.error) { toastS('Could not undo: ' + r.error.message); return; }
+    var row = D.roster.filter(function (x) { return String(x.id) === String(rid); })[0];
+    D.roster = D.roster.filter(function (x) { return String(x.id) !== String(rid); });
+    V.added = V.added.filter(function (a) { return String(a.rid) !== String(rid); });
+    try { WA_VOL_LOADED = false; } catch (e) { /* fine */ }
+    try { logChange('event_roster', rid, 'removed', row ? row.person_name : null, null); } catch (e) { /* fine */ }
+    toastS((row ? row.person_name : 'They') + ' taken off again');
+    paintAdd(true); repaintBoard(); repaintMast(); repaintTeam();
   }
   async function removeCard(id) {
     var D = detail(); if (!D) return; var row = D.roster.filter(function (r) { return String(r.id) === String(id); })[0]; if (!row) return;
@@ -369,13 +535,27 @@
     var t = e.target; if (!t || !t.closest) return;
     var tk = t.closest('#w119 [data-w119tick]'); if (tk) { e.preventDefault(); e.stopPropagation(); var sid = tk.getAttribute('data-w119tick'); var box = document.querySelector('#w119 input[data-vlchk="' + sid + '"]'); if (box) { box.click(); } else if (typeof waVolToggleStep === 'function') { await waVolToggleStep(sid, true, null); repaintMast(); } return; }
     var cal = t.closest('#w119cal [data-w119cal]'); if (cal) { e.preventDefault(); e.stopPropagation(); var dv = cal.getAttribute('data-w119cal'); var d = Number(dv); if (dv === 'today') V.calMonth = new Date().toISOString().slice(0, 7); else if (d === 0) V.calMonth = null; else { var y = Number(V.calMonth.slice(0, 4)), m = Number(V.calMonth.slice(5, 7)) - 1 + d; if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; } V.calMonth = y + '-' + String(m + 1).padStart(2, '0'); } decorateCalendar(); return; }
-    var bench = t.closest('#w119 [data-w119bench]'); if (bench) { e.preventDefault(); e.stopPropagation(); V.benchRole = bench.getAttribute('data-w119bench'); V.q = ''; repaintBoard(); try { await waVolLoadPeople(); } catch (e2) { /* fine */ } repaintBoard(); var q = document.getElementById('w119bq'); if (q) q.focus(); return; }
-    if (t.closest('#w119 [data-w119benchclose]')) { e.preventDefault(); e.stopPropagation(); V.benchRole = null; repaintBoard(); return; }
+    var bench = t.closest('#w119 [data-w119bench]'); if (bench) { e.preventDefault(); e.stopPropagation(); openAdd(bench.getAttribute('data-w119bench')); return; }
+    if (t.closest('#w119 [data-w119benchclose]') || (t.id === 'w200add')) { e.preventDefault(); e.stopPropagation(); closeAdd(); return; }
+    var ap = t.closest('#w119 [data-w200add]'); if (ap) { e.preventDefault(); e.stopPropagation(); if (ap.disabled) return; ap.disabled = true; ap.textContent = 'Adding…'; await addPerson(ap.getAttribute('data-w200add'), V.benchRole); return; }
+    var ar = t.closest('#w119 [data-w200role]'); if (ar) { e.preventDefault(); e.stopPropagation(); V.benchRole = ar.getAttribute('data-w200role'); V.addShow = 60; paintAdd(true); return; }
+    var at = t.closest('#w119 [data-w200tab]'); if (at) { e.preventDefault(); e.stopPropagation(); V.addTab = at.getAttribute('data-w200tab'); V.addShow = 60; paintAdd(true); return; }
+    if (t.closest('#w119 [data-w200more]')) { e.preventDefault(); e.stopPropagation(); V.addShow += 60; paintAdd(true); return; }
+    var un = t.closest('#w119 [data-w200undo]'); if (un) { e.preventDefault(); e.stopPropagation(); un.disabled = true; await undoAdd(un.getAttribute('data-w200undo')); return; }
     var addp = t.closest('#w119 [data-w119addp]'); if (addp) { e.preventDefault(); e.stopPropagation(); await addPerson(addp.getAttribute('data-w119addp'), addp.getAttribute('data-role')); return; }
     var rm = t.closest('#w119 [data-w119rm]'); if (rm) { e.preventDefault(); e.stopPropagation(); await removeCard(rm.getAttribute('data-w119rm')); return; }
     var mv = t.closest('#w119 [data-w119mvbtn]'); if (mv) { e.preventDefault(); e.stopPropagation(); var cur = (mv.closest('.rc') || {}).getAttribute ? mv.closest('.rc').getAttribute('data-w119role') : ''; var roles = ROLE_ORDER.slice(); document.querySelectorAll('#w119 .rc[data-w119role]').forEach(function (c) { var rr = c.getAttribute('data-w119role'); if (roles.indexOf(rr) < 0) roles.push(rr); }); mv.outerHTML = '<select class="mvsel" data-w119mv="' + mv.getAttribute('data-w119mvbtn') + '"><option value="">Move to\u2026</option>' + roles.filter(function (rr) { return rr !== cur; }).map(function (rr) { return '<option value="' + E(rr) + '">' + E(roleLabel(rr)) + '</option>'; }).join('') + '</select>'; var sel = document.querySelector('#w119 select[data-w119mv]'); if (sel) sel.focus(); return; }
   }, true);
-  document.addEventListener('input', function (e) { var t = e.target; if (t && t.id === 'w119bq') { V.q = t.value; var box = document.querySelector('#w119 [data-w119benchbox]'); if (box) { var role = box.getAttribute('data-w119benchbox'); box.outerHTML = benchHtml(role); var q = document.getElementById('w119bq'); if (q) { q.focus(); try { q.setSelectionRange(q.value.length, q.value.length); } catch (e2) { /* fine */ } } } } });
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.id === 'w119bq') { V.q = t.value; V.addShow = 60; paintAdd('q'); } });
+  /* wave200: Enter adds the first match; Escape closes Add people */
+  document.addEventListener('keydown', function (e) {
+    if (!V.benchRole || !document.getElementById('w200add')) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeAdd(); return; }
+    if (e.key === 'Enter' && e.target && e.target.id === 'w119bq') {
+      e.preventDefault(); var D = detail(); if (!D || !V.q.trim()) return;
+      var first = addList(V.benchRole, D).list.filter(function (it) { return !it.on; })[0]; if (first) addPerson(first.key, V.benchRole);
+    }
+  });
   document.addEventListener('change', function (e) { var t = e.target; if (!t || !t.getAttribute || !t.closest || !t.closest('#w119')) return; if (t.getAttribute('data-w119mv')) { if (t.value) moveCard(t.getAttribute('data-w119mv'), t.value); else repaintBoard(); return; } if (t.getAttribute('data-vlchk')) { setTimeout(repaintMast, 450); return; } if (t.getAttribute('data-vlrstat')) { setTimeout(function () { var card = t.closest('.pc'); if (card) { card.className = 'pc ' + statusClass(t.value); } repaintMast(); var b = document.querySelector('#w119 .board'); if (b) { var D = detail(); if (D) { /* header counts */ b.outerHTML = boardHtml(D); } } }, 250); } });
   /* drag and drop: roster cards between roles, bench people into a role */
   document.addEventListener('dragstart', function (e) { var c = e.target && e.target.closest && (e.target.closest('#w119 [data-w119card]') || e.target.closest('#w119 [data-w119pid]')); if (!c) return; V.drag = c.getAttribute('data-w119card') ? { kind: 'card', id: c.getAttribute('data-w119card') } : { kind: 'person', id: c.getAttribute('data-w119pid') }; c.classList.add('dragging'); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'w119'); } catch (e2) { /* fine */ } });

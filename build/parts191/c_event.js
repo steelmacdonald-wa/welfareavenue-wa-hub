@@ -84,7 +84,9 @@
   }
   function recruitLine(D) {
     var c = rosterCounts(D);
-    return '<div class="w191line">' + ROLE_ORDER.filter(function (r) { return c.T[r] || c.by[r]; }).map(function (r) { var n = c.by[r] || 0, t = c.T[r] || 0; return '<span class="pill' + (t && n < t ? ' short' : t ? ' ok' : '') + '">' + E(roleLabel(r)) + ' ' + n + (t ? '/' + t : '') + '</span>'; }).join('')
+    return '<div class="w191line">' + ROLE_ORDER.filter(function (r) { return c.T[r] || c.by[r]; }).map(function (r) { var n = c.by[r] || 0, t = c.T[r] || 0; var cls = 'pill' + (t && n < t ? ' short' : t ? ' ok' : ''), txt = E(roleLabel(r)) + ' ' + n + (t ? '/' + t : '');
+      /* wave200: a staff member's pill opens Add people for that role */
+      return staff() ? '<button type="button" class="' + cls + '" data-w119bench="' + E(r) + '" title="Add people as ' + E(roleLabel(r).replace(/s$/, '').toLowerCase()) + '">' + txt + '</button>' : '<span class="' + cls + '">' + txt + '</span>'; }).join('')
       + (staff() ? '<button class="w191btn ghost" data-w191go="bplan">Plan the roster</button>' : '') + '</div>';
   }
   function teamHeadHtml(D) {
