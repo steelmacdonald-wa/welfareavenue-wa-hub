@@ -20,6 +20,7 @@
     if (p.k === 'overview') { paintOverview(); loadOverview().then(function () { if (S.page === 'overview') paintOverview(); paintRail(); }); }
     if (p.k === 'applications') { if (S.candsAt) paintBoard(); else { var h = host('w197apps'); if (h) h.innerHTML = '<p class="w197note">Loading the applications…</p>'; } loadCands().then(function () { if (S.page === 'applications') paintBoard(); paintRail(); }); }
     if (p.k === 'hours') { paintHours(); loadHours().then(function () { if (S.page === 'hours') paintHours(); }); }
+    if (p.k === 'positions' && window.w199) w199.show();
     if (!S.data) loadOverview().then(paintRail);
   }
   var pend = null;
@@ -28,13 +29,14 @@
     if (!document.getElementById('w46body')) return;
     if (S.page === 'overview' && !document.getElementById('w197ov')) paintOverview();
     if (S.page === 'hours' && !document.getElementById('w197hours')) paintHours();
+    if (S.page === 'positions' && window.w199 && !document.getElementById('w199pos')) w199.show();
     if (S.page === 'applications' && !document.getElementById('w197apps')) { if (S.candsAt) paintBoard(); else show('applications'); }
   }
   function schedule() { clearTimeout(pend); pend = setTimeout(function () { try { if (onHr()) { ensureMine(); tagAll(); apply(); } } catch (e) { /* fine */ } }, 30); }
   function watch() {
     var panel = document.getElementById('hrcentre'); if (!panel || panel.dataset.w197mo) return; panel.dataset.w197mo = '1';
     new MutationObserver(function (muts) {
-      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w197ov') || t.closest('#w197hours') || t.closest('#w197apps') || t.closest('.w197acts') || (t.closest('.w118mast') && muts[i].type === 'characterData'))) continue; schedule(); return; }
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w197ov') || t.closest('#w197hours') || t.closest('#w197apps') || t.closest('#w199pos') || t.closest('.w197acts') || (t.closest('.w118mast') && muts[i].type === 'characterData'))) continue; schedule(); return; }
     }).observe(panel, { childList: true, subtree: true });
   }
   function fixAddress() {

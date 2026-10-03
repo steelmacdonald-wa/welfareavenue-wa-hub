@@ -1,0 +1,332 @@
+/* =====================================================================
+   WA v199 Positions: job descriptions and CVs from the HR drive, linked to Applications (03/10/26)
+   =====================================================================
+   Steel (03/10/26): "add other positions with JDs from the human resources shared drive ... add CVs that
+   are linked to current positions like Ahmed who started as a volunteer relations coordinator to Operations
+   manager. The job descriptions / positions title should be properly linked to the applications module ...
+   we should be able to upload CVs to a folder in google drive ... by department ... a folder for all the
+   resumes, a single file that is the latest version of the job description, and a folder of older job
+   descriptions." His choices: the Hub's eight departments; positions open in the Hub (ClickUp's
+   Recruitment list imported once).
+   The drive: *Recruitment* > Job descriptions > <Department> > <Position> > Resumes / the JD / Older JDs.
+   jd-drive reads it into hub_positions (one row per position folder) and hub_position_files (CVs, older
+   JDs); a CV dropped into a Resumes folder after the first read becomes an application (New).
+   This wave draws HR centre > Positions (by department, with each position's JD, CVs, applications and
+   the people who hold it) and links Applications to positions (filter, card, sheet: JD, CV in Drive).
+   ===================================================================== */
+(function () {
+  'use strict';
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif", HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var DEPTS = [['exec', 'Executive'], ['board', 'Board'], ['fundraising', 'Fundraising'], ['marketing', 'Marketing'], ['hr', 'Human Resources'], ['progdev', 'Program Development'], ['opsmtl', 'Operations Montreal'], ['opsto', 'Operations Toronto']];
+  var PSTAGES = [['requested', 'Requested'], ['defined', 'Role defined'], ['posted', 'Job posted'], ['interviewing', 'Interviewing'], ['offer', 'Offer accepted'], ['filled', 'Filled'], ['closed', 'Not hiring']];
+  var OPEN_C = ['new', 'reviewing', 'interview', 'offer'];
+  var ROOT_URL = 'https://drive.google.com/drive/folders/1wqsg2BMlXqSnuJgiYWpW01xpqipxqNlH';
+  var P = { pos: [], files: [], people: [], at: 0, loading: null, q: '', dept: '', all: false, open: null, sync: null, privacy: null, privAt: 0, busy: false };
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function who() { try { return (USER && (USER.name || USER.email)) || ''; } catch (e) { return ''; } }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); }); }
+  function deptLabel(d) { var x = DEPTS.filter(function (p) { return p[0] === d; })[0]; return x ? x[1] : (d || 'Other'); }
+  function stageLabel(s) { var x = PSTAGES.filter(function (p) { return p[0] === s; })[0]; return x ? x[1] : (s || ''); }
+  function hiring(p) { return p && p.stage !== 'filled' && p.stage !== 'closed'; }
+  function btn(label, attrs, kind) { return '<button type="button" class="w197b' + (kind ? ' ' + kind : '') + '" ' + (attrs || '') + '>' + label + '</button>'; }
+  function ago(s) { if (!s) return ''; var d = (Date.now() - new Date(s).getTime()) / 60000; if (d < 2) return 'just now'; if (d < 60) return Math.round(d) + ' min ago'; if (d < 1440) return Math.round(d / 60) + ' h ago'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
+  function day(s) { if (!s) return ''; if (/^\d{4}-\d{2}-\d{2}$/.test(String(s))) s = s + 'T12:00:00'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return ''; } }
+  function cands() { try { return (window.w197 && w197.state().cands) || []; } catch (e) { return []; } }
+  function byId(id) { return P.pos.filter(function (p) { return String(p.id) === String(id); })[0] || null; }
+  function filesOf(id, kind) { return P.files.filter(function (f) { return String(f.position_id) === String(id) && (!kind || f.kind === kind); }); }
+  function candsOf(id) { return cands().filter(function (c) { return String(c.position_id) === String(id); }); }
+  function peopleOf(id) {
+    var ms = members(), out = [];
+    P.people.filter(function (x) { return String(x.position_id) === String(id); }).forEach(function (x) { var m = ms.filter(function (y) { return String(y.id) === String(x.member_id); })[0]; if (m) out.push({ m: m, since: x.since, until: x.until, note: x.note, id: x.id, past: !!x.until || (m.position_id != null && String(m.position_id) !== String(id)) }); });
+    ms.filter(function (m) { return String(m.position_id) === String(id) && !out.some(function (o) { return o.m.id === m.id && !o.past; }); }).forEach(function (m) { out.push({ m: m, since: null, until: null, past: false }); });
+    return out.sort(function (a, b) { return (a.past ? 1 : 0) - (b.past ? 1 : 0) || String(b.since || '').localeCompare(String(a.since || '')); });
+  }
+  async function fn(body) {
+    var r = await db.functions.invoke('jd-drive', { body: body });
+    if (r && r.error) {
+      var msg = r.error.message || String(r.error);
+      try { if (r.error.context && r.error.context.json) { var j = await r.error.context.json(); if (j && j.error) msg = j.error; } } catch (e) { /* fine */ }
+      throw new Error(msg);
+    }
+    if (r && r.data && r.data.error) throw new Error(r.data.error);
+    return r ? r.data : null;
+  }
+  async function q(p) { try { var r = await p; return (r && !r.error && r.data) || []; } catch (e) { return []; } }
+
+  /* ---------- data ---------- */
+  async function load(force) {
+    if (P.loading) return P.loading;
+    if (!force && P.at && Date.now() - P.at < 60000) return P;
+    P.loading = (async function () {
+      var res = await Promise.all([
+        q(db.from('hub_positions').select('*').eq('gone', false).order('title')),
+        q(db.from('hub_position_files').select('id,position_id,kind,file_id,name,mime,url,created_time,modified_time,candidate_id,member_id').eq('gone', false).order('created_time', { ascending: false }).limit(2000)),
+        q(db.from('hub_position_people').select('*')),
+        q(db.from('app_config').select('value').eq('key', 'jd_drive_sync').limit(1))
+      ]);
+      P.pos = res[0]; P.files = res[1]; P.people = res[2]; P.sync = res[3][0] ? res[3][0].value : null;
+      P.at = Date.now(); P.loading = null;
+      try { if (window.w197 && w197.loadCands) await w197.loadCands(); } catch (e) { /* fine */ }
+      return P;
+    })();
+    return P.loading;
+  }
+  async function privacy() {
+    if (P.privAt && Date.now() - P.privAt < 600000) return P.privacy;
+    try { var r = await fn({ action: 'privacy' }); P.privacy = !!(r && r.link_open); } catch (e) { P.privacy = null; }
+    P.privAt = Date.now(); return P.privacy;
+  }
+
+  /* ---------- for Applications (wave197 asks) ---------- */
+  function roleOf(c) { var p = c && c.position_id ? byId(c.position_id) : null; return p ? p.title : (c && c.role) || 'No role given'; }
+  function filterOptions(list) {
+    var seen = {}, out = [];
+    (list || []).forEach(function (c) { var p = c.position_id ? byId(c.position_id) : null; var k = p ? 'p' + p.id : (c.role ? 'r' + c.role : ''); if (!k || seen[k]) return; seen[k] = 1; out.push({ v: k, l: p ? p.title : c.role }); });
+    return out.sort(function (a, b) { return a.l.localeCompare(b.l); });
+  }
+  function match(c, v) { if (!v) return true; if (v.charAt(0) === 'p') return String(c.position_id) === v.slice(1); if (v.charAt(0) === 'r') return !c.position_id && c.role === v.slice(1) || roleOf(c) === v.slice(1); return c.role === v; }
+  function sheetBits(c) {
+    var opts = DEPTS.map(function (d) {
+      var ps = P.pos.filter(function (p) { return p.dept === d[0]; }); if (!ps.length) return '';
+      return '<optgroup label="' + E(d[1]) + '">' + ps.map(function (p) { return '<option value="' + p.id + '"' + (String(c.position_id) === String(p.id) ? ' selected' : '') + '>' + E(p.title) + (hiring(p) ? '' : ' (not hiring)') + '</option>'; }).join('') + '</optgroup>';
+    }).join('');
+    var p = c.position_id ? byId(c.position_id) : null;
+    var cv = c.drive_file_id ? P.files.filter(function (f) { return f.file_id === c.drive_file_id; })[0] : null;
+    return '<label for="w199pos1">Position</label><select id="w199pos1" data-w199f="position_id"><option value="">Not linked to a position' + (c.role ? ' (they wrote: ' + E(String(c.role).slice(0, 40)) + ')' : '') + '</option>' + opts + '</select>' +
+      '<div class="w199links">' + (p && p.jd_url ? '<a class="w197b sm" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">The job description</a>' : (p ? '<span class="w197pill mut">No JD in Drive yet</span>' : '')) +
+      (p ? btn('The position', 'data-w199open="' + p.id + '"', 'sm') : '') +
+      (cv && cv.url ? '<a class="w197b sm" href="' + E(cv.url) + '" target="_blank" rel="noopener">CV in Drive</a>' : (c.drive_file_id ? '<a class="w197b sm" href="https://drive.google.com/file/d/' + E(c.drive_file_id) + '/view" target="_blank" rel="noopener">CV in Drive</a>' : (p ? '<label class="w197b sm w199up">Upload their CV to Drive<input type="file" data-w199upc="' + c.id + '" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' : ''))) + '</div>';
+  }
+
+  /* ---------- Positions page ---------- */
+  function host() {
+    var body = document.getElementById('w46body'); if (!body) return null;
+    var h = document.getElementById('w199pos');
+    if (!h) { h = document.createElement('div'); h.id = 'w199pos'; h.className = 'w197card w197blk'; h.setAttribute('data-w197s', 'positions'); var tabs = body.querySelector('.w47tabs'); if (tabs) tabs.insertAdjacentElement('afterend', h); else body.insertBefore(h, body.firstChild); }
+    return h;
+  }
+  function card(p) {
+    var cvs = filesOf(p.id, 'resume').length, ap = candsOf(p.id).filter(function (c) { return OPEN_C.indexOf(c.status || 'new') >= 0; }).length;
+    var ppl = peopleOf(p.id).filter(function (x) { return !x.past; }).map(function (x) { return x.m.name.split(' ')[0]; });
+    return '<button type="button" class="w199card' + (hiring(p) ? ' hire' : '') + '" data-w199open="' + p.id + '"><b>' + E(p.title) + '</b>' +
+      '<span class="st st-' + E(p.stage) + '">' + E(stageLabel(p.stage)) + '</span>' +
+      '<span class="m">' + (p.jd_id ? '<span>JD</span>' : '<span class="no">No JD</span>') + (p.older_count ? '<span>' + p.older_count + ' older</span>' : '') +
+      '<span>' + cvs + (cvs === 1 ? ' CV' : ' CVs') + '</span>' + (ap ? '<span class="ap">' + ap + (ap === 1 ? ' application' : ' applications') + '</span>' : '') + '</span>' +
+      (ppl.length ? '<span class="ppl">' + E(ppl.join(', ')) + '</span>' : '') + '</button>';
+  }
+  function pageHtml() {
+    var qq = lower(P.q);
+    var list = P.pos.filter(function (p) { return (P.all || hiring(p)) && (!P.dept || p.dept === P.dept) && (!qq || lower(p.title).indexOf(qq) >= 0); });
+    var nHire = P.pos.filter(hiring).length;
+    var unsorted = P.files.filter(function (f) { return !f.position_id; });
+    var bar = '<div class="w197bar"><input type="search" id="w199q" placeholder="Search a position" value="' + E(P.q) + '">' +
+      '<select id="w199dept" aria-label="Department"><option value="">Every department</option>' + DEPTS.map(function (d) { return '<option value="' + d[0] + '"' + (P.dept === d[0] ? ' selected' : '') + '>' + E(d[1]) + '</option>'; }).join('') + '</select>' +
+      '<span class="w199seg"><button type="button" data-w199a="hiring" class="' + (P.all ? '' : 'on') + '">Hiring now <small>' + nHire + '</small></button><button type="button" data-w199a="all" class="' + (P.all ? 'on' : '') + '">All positions <small>' + P.pos.length + '</small></button></span>' +
+      btn('New position', 'data-w199a="new"', 'sm pri') + btn(P.busy ? 'Reading Drive\u2026' : 'Sync with Drive', 'data-w199a="sync"' + (P.busy ? ' disabled' : ''), 'sm') + '<a class="w197b sm" href="' + ROOT_URL + '" target="_blank" rel="noopener">Open in Drive</a></div>';
+    var warn = P.privacy ? '<div class="w199warn"><b>CVs are personal information.</b> The Job descriptions folder is shared with anyone who has the link, so the Hub will not upload CVs into it. Turn off link sharing on *Recruitment* in Drive (Share, General access: Restricted).</div>' : '';
+    var info = '<p class="w197note" style="margin:0 0 12px">' + (P.sync && P.sync.at ? 'Read from Drive ' + E(ago(P.sync.at)) + ' \u00b7 ' : '') + P.pos.length + ' positions' +
+      (unsorted.length ? ' \u00b7 <a href="#" data-w199a="unsorted">' + unsorted.length + (unsorted.length === 1 ? ' CV' : ' CVs') + ' in Unsorted Resumes</a>' : '') + '. Each position is a folder in Drive: a Resumes folder, the latest job description, and Older JDs. A CV dropped in Resumes shows up in Applications as New.</p>';
+    var groups = DEPTS.map(function (d) {
+      var ps = list.filter(function (p) { return p.dept === d[0]; }); if (!ps.length) return '';
+      ps.sort(function (a, b) { return (hiring(b) ? 1 : 0) - (hiring(a) ? 1 : 0) || a.title.localeCompare(b.title); });
+      return '<h3 class="w199dh">' + E(d[1]) + ' <small>' + ps.length + '</small></h3><div class="w199grid">' + ps.map(card).join('') + '</div>';
+    }).join('');
+    var empty = !P.pos.length ? '<p class="w197note">No positions yet. Press Sync with Drive to read the Job descriptions folder.</p>' :
+      (!list.length ? '<p class="w197note">' + (P.all ? 'Nothing matches.' : 'Nothing is being hired for right now. All positions shows every role.') + '</p>' : '');
+    var un = P.showUnsorted && unsorted.length ? '<h3 class="w199dh">Unsorted Resumes <small>' + unsorted.length + '</small></h3><ul class="w199files">' + unsorted.map(fileRow).join('') + '</ul>' : '';
+    return '<h2>Positions</h2>' + bar + warn + info + groups + empty + un;
+  }
+  function paint() { var h = host(); if (!h) return; var a = document.activeElement, qf = a && a.id === 'w199q'; h.innerHTML = pageHtml(); if (qf) { var x = document.getElementById('w199q'); if (x) { x.focus(); try { x.setSelectionRange(x.value.length, x.value.length); } catch (e) { /* fine */ } } } try { if (window.w197) { w197.apply(); } } catch (e) { /* fine */ } }
+  function show() {
+    var h = host(); if (!h) return;
+    try { if (window.w197) w197.apply(); } catch (e) { /* fine */ }
+    if (P.at) paint(); else h.innerHTML = '<h2>Positions</h2><p class="w197note">Loading the positions\u2026</p>';
+    load().then(function () { if (onPage()) paint(); });
+    privacy().then(function () { if (onPage()) paint(); });
+  }
+  function onPage() { return /^#hrcentre\/positions/.test(String(location.hash || '')); }
+  function fileRow(f) {
+    var c = f.candidate_id ? cands().filter(function (x) { return String(x.id) === String(f.candidate_id); })[0] : null;
+    var m = f.member_id ? members().filter(function (x) { return String(x.id) === String(f.member_id); })[0] : null;
+    var moveSel = '<select data-w199mv="' + E(f.file_id) + '" aria-label="Move to"><option value="">Move to\u2026</option>' + P.pos.filter(function (p) { return String(p.id) !== String(f.position_id); }).map(function (p) { return '<option value="' + p.id + '">' + E(p.title) + '</option>'; }).join('') + (f.position_id ? '<option value="__unsorted">Unsorted Resumes</option>' : '') + '</select>';
+    return '<li><a href="' + E(f.url || '#') + '" target="_blank" rel="noopener">' + E(f.name) + '</a><small>' + E(day(f.created_time)) + '</small>' +
+      (c ? btn(E(c.name) + ' \u00b7 ' + E(c.status || 'new'), 'data-w197c="' + c.id + '"', 'sm') : (m ? '<span class="w197pill">' + E(m.name) + ', on the team</span>' : (f.position_id ? btn('Add to Applications', 'data-w199add="' + E(f.file_id) + '"', 'sm') : ''))) + moveSel + '</li>';
+  }
+
+  /* ---------- the position sheet ---------- */
+  function sheetEl() { var s = document.getElementById('w197sheet'); if (!s) { s = document.createElement('div'); s.id = 'w197sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true'); document.body.appendChild(s); } s.setAttribute('aria-label', 'Position'); return s; }
+  function openPos(id) {
+    var p = byId(id); if (!p) return; P.open = p.id;
+    var ms = members().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var olds = filesOf(p.id, 'old_jd'), cvs = filesOf(p.id, 'resume'), apps = candsOf(p.id), ppl = peopleOf(p.id);
+    var s = sheetEl();
+    s.innerHTML = '<div class="bk" data-w199a="shut"></div><div class="pn w199pn">' + btn('Close', 'data-w199a="shut"', 'sm x') +
+      '<h3>' + E(p.title) + '</h3><p class="role">' + E(deptLabel(p.dept)) + (p.clickup_url ? ' \u00b7 <a href="' + E(p.clickup_url) + '" target="_blank" rel="noopener">was in ClickUp</a>' : '') + '</p>' +
+      '<label>Stage</label><div class="stg">' + PSTAGES.map(function (x) { return '<button type="button" data-w199st="' + x[0] + '" class="' + (x[0] === 'closed' ? 'cl ' : '') + (p.stage === x[0] ? 'on' : '') + '">' + E(x[1]) + '</button>'; }).join('') + '</div>' +
+      '<label>Job description</label><div class="w199links">' + (p.jd_url ? '<a class="w197b sm pri" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">Open the job description</a><small>' + E(p.jd_name || '') + ' \u00b7 updated ' + E(day(p.jd_modified)) + '</small>' : '<span class="w197pill mut">No job description yet</span><small>Put the JD file in the position\'s folder in Drive, then Sync.</small>') + '</div>' +
+      (olds.length ? '<details class="w199old"><summary>' + olds.length + (olds.length === 1 ? ' older version' : ' older versions') + '</summary><ul class="w199files">' + olds.map(function (f) { return '<li><a href="' + E(f.url || '#') + '" target="_blank" rel="noopener">' + E(f.name) + '</a><small>' + E(day(f.modified_time)) + '</small></li>'; }).join('') + '</ul></details>' : '') +
+      '<label>In Applications <small>' + apps.length + '</small></label>' + (apps.length ? '<ul class="w199files">' + apps.map(function (c) { return '<li>' + btn(E(c.name || 'Someone'), 'data-w197c="' + c.id + '"', 'sm') + '<small>' + E(c.status || 'new') + (c.owner ? ' \u00b7 ' + E(c.owner) : '') + '</small></li>'; }).join('') + '</ul>' : '<p class="w197note" style="margin:0">Nobody yet. A CV in this position\'s Resumes folder, an upload below, or the position chosen on an application puts them here.</p>') +
+      '<label>CVs in Drive <small>' + cvs.length + '</small></label>' + (cvs.length ? '<ul class="w199files">' + cvs.map(fileRow).join('') + '</ul>' : '<p class="w197note" style="margin:0">The Resumes folder is empty.</p>') +
+      '<div class="w199upbox"><input type="text" id="w199upname" placeholder="Their name (optional)"><label class="w197b sm pri w199up">Upload a CV<input type="file" id="w199upf" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' + (p.resumes_id ? '<a class="w197b sm" href="https://drive.google.com/drive/folders/' + E(p.resumes_id) + '" target="_blank" rel="noopener">Resumes folder</a>' : '') + '</div>' +
+      '<label>People in this role</label>' + (ppl.length ? '<ul class="w199files">' + ppl.map(function (x) { return '<li><b>' + E(x.m.name) + '</b><small>' + (x.past ? (x.until ? 'until ' + E(day(x.until)) : 'earlier') + (x.since ? ', from ' + E(day(x.since)) : '') : (x.since ? 'since ' + E(day(x.since)) : 'now')) + (x.note ? ' \u00b7 ' + E(x.note) : '') + '</small>' + (x.id && !x.past ? btn('Moved on', 'data-w199end="' + x.id + '"', 'sm') : '') + '</li>'; }).join('') + '</ul>' : '<p class="w197note" style="margin:0">Nobody recorded.</p>') +
+      '<div class="w199upbox"><select id="w199who"><option value="">Add a person\u2026</option>' + ms.map(function (m) { return '<option value="' + m.id + '">' + E(m.name) + '</option>'; }).join('') + '</select><input type="date" id="w199since" aria-label="Since">' + btn('Add', 'data-w199a="addperson"', 'sm') + '</div>' +
+      '<label for="w199own">Handled by</label><select id="w199own" data-w199p="owner"><option value="">Nobody yet</option>' + ms.map(function (m) { return '<option' + (p.owner === m.name ? ' selected' : '') + '>' + E(m.name) + '</option>'; }).join('') + '</select>' +
+      '<label for="w199need">Needed by</label><input type="date" id="w199need" data-w199p="needed_by" value="' + E(p.needed_by || '') + '">' +
+      '<label for="w199notes">Notes</label><textarea id="w199notes" data-w199p="notes" placeholder="Where it is posted, the interview plan">' + E(p.notes || '') + '</textarea>' +
+      '<div class="acts">' + btn('Save the notes', 'data-w199a="notes"', 'pri sm') + '<a class="w197b sm" href="https://drive.google.com/drive/folders/' + E(p.folder_id) + '" target="_blank" rel="noopener">The folder in Drive</a></div></div>';
+    s.classList.add('open');
+  }
+  function newSheet() {
+    P.open = null;
+    var s = sheetEl();
+    s.innerHTML = '<div class="bk" data-w199a="shut"></div><div class="pn w199pn">' + btn('Close', 'data-w199a="shut"', 'sm x') + '<h3>New position</h3>' +
+      '<p class="role">Makes the position\'s folder in Drive (with its Resumes folder) under its department. Put the job description in the folder when it is written.</p>' +
+      '<label for="w199nt">Title</label><input type="text" id="w199nt" placeholder="Volunteer Coordinator">' +
+      '<label for="w199nd">Department</label><select id="w199nd">' + DEPTS.map(function (d) { return '<option value="' + d[0] + '">' + E(d[1]) + '</option>'; }).join('') + '</select>' +
+      '<label>Stage</label><div class="stg">' + PSTAGES.slice(0, 4).map(function (x, i) { return '<button type="button" data-w199ns="' + x[0] + '" class="' + (i === 0 ? 'on' : '') + '">' + E(x[1]) + '</button>'; }).join('') + '</div>' +
+      '<div class="acts">' + btn('Create the position', 'data-w199a="create"', 'pri') + '</div></div>';
+    s.classList.add('open');
+    var t = document.getElementById('w199nt'); if (t) try { t.focus(); } catch (e) { /* fine */ }
+  }
+  function shut() { var s = document.getElementById('w197sheet'); if (s) s.classList.remove('open'); P.open = null; }
+  async function savePos(id, patch, msg) {
+    try {
+      patch.updated_at = new Date().toISOString(); patch.updated_by = who();
+      var r = await db.from('hub_positions').update(patch).eq('id', id); if (r && r.error) throw r.error;
+      var p = byId(id); if (p) Object.keys(patch).forEach(function (k) { p[k] = patch[k]; });
+      try { await db.from('change_log').insert({ entity_type: 'position', entity_id: String(id), field: Object.keys(patch).filter(function (k) { return k !== 'updated_at' && k !== 'updated_by'; })[0] || 'update', old_value: null, new_value: String(patch.stage || patch.owner || patch.needed_by || (patch.notes ? 'notes' : '')), changed_by: who() }); } catch (e) { /* audit */ }
+      if (msg) toastS(msg); return true;
+    } catch (e) { toastS('Could not save: ' + (e.message || e)); return false; }
+  }
+  function readFile(file) { return new Promise(function (ok, bad) { var r = new FileReader(); r.onload = function () { ok(String(r.result).replace(/^data:[^,]*,/, '')); }; r.onerror = bad; r.readAsDataURL(file); }); }
+  async function upload(file, posId, candId, person) {
+    if (!file) return;
+    if (file.size > 15 * 1024 * 1024) { toastS('That file is larger than 15 MB'); return; }
+    toastS('Uploading ' + file.name + '\u2026');
+    try {
+      var b64 = await readFile(file);
+      var r = await fn({ action: 'upload', position_id: posId, candidate_id: candId || null, add: !candId, person: person || null, name: file.name, mime: file.type || '', content_b64: b64 });
+      toastS(candId ? 'CV saved in Drive' : 'CV saved in Drive and added to Applications');
+      await load(true); if (window.w197) { await w197.loadCands(true); try { w197.paintBoard(); } catch (e) { /* fine */ } }
+      if (candId && window.w197) w197.openSheet(candId); else if (P.open) openPos(P.open);
+      if (onPage()) paint();
+      return r;
+    } catch (e) { toastS(String(e.message || e)); }
+  }
+  async function addFromFile(fileId) {
+    var f = P.files.filter(function (x) { return x.file_id === fileId; })[0]; if (!f) return;
+    var p = byId(f.position_id); if (!p) return;
+    var name = String(f.name || 'Someone').replace(/\.[a-z0-9]{2,5}$/i, '').replace(/\b(cv|resume|curriculum vitae)\b/gi, ' ').replace(/[_()]+/g, ' ').replace(/\s+/g, ' ').replace(/[-.,'\u2019s ]+$/, '').trim();
+    var m = name.match(/^([A-Z' -]{2,})\s*[,.]\s*(.+)$/); if (m) name = m[2].trim() + ' ' + m[1].trim().toLowerCase().replace(/(^|[ '-])\S/g, function (c) { return c.toUpperCase(); });
+    try {
+      var r = await db.from('hub_candidates').insert({ name: name.slice(0, 120) || 'Someone', role: p.title, position_id: p.id, source: 'drive', status: 'new', stage_at: new Date().toISOString(), drive_file_id: f.file_id, links: f.url ? [f.url] : [], updated_by: who() }).select('id').single();
+      if (r.error) throw r.error;
+      await db.from('hub_position_files').update({ candidate_id: r.data.id }).eq('id', f.id);
+      f.candidate_id = r.data.id; toastS(name + ' added to Applications (New)');
+      if (window.w197) await w197.loadCands(true);
+      if (P.open) openPos(P.open); if (onPage()) paint();
+    } catch (e) { toastS('Could not add: ' + (e.message || e)); }
+  }
+
+  /* ---------- events ---------- */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var o = t.closest('[data-w199open]'); if (o) { e.preventDefault(); if (t.closest('#w197sheet')) { try { if (window.w197) w197.state().open = null; } catch (x) { /* fine */ } } load().then(function () { openPos(o.getAttribute('data-w199open')); }); return; }
+    var st = t.closest('#w197sheet [data-w199st]'); if (st && P.open) { var k = st.getAttribute('data-w199st'); savePos(P.open, { stage: k }, stageLabel(k)).then(function () { openPos(P.open); if (onPage()) paint(); }); return; }
+    var ns = t.closest('#w197sheet [data-w199ns]'); if (ns) { Array.prototype.forEach.call(ns.parentNode.children, function (b) { b.classList.toggle('on', b === ns); }); return; }
+    var ad = t.closest('[data-w199add]'); if (ad) { addFromFile(ad.getAttribute('data-w199add')); return; }
+    var en = t.closest('[data-w199end]'); if (en) { (async function () { await db.from('hub_position_people').update({ until: new Date().toISOString().slice(0, 10) }).eq('id', en.getAttribute('data-w199end')); await load(true); if (P.open) openPos(P.open); toastS('Noted'); })(); return; }
+    var a = t.closest('[data-w199a]'); if (!a) return;
+    var k2 = a.getAttribute('data-w199a');
+    if (k2 === 'shut') shut();
+    else if (k2 === 'hiring' || k2 === 'all') { P.all = k2 === 'all'; paint(); }
+    else if (k2 === 'unsorted') { e.preventDefault(); P.showUnsorted = !P.showUnsorted; paint(); }
+    else if (k2 === 'new') newSheet();
+    else if (k2 === 'sync') { P.busy = true; paint(); fn({ action: 'sync' }).then(function (r) { toastS('Drive read: ' + (r.positions || 0) + ' positions' + (r.added && r.added.length ? ', ' + r.added.length + ' new CVs added to Applications' : '') + (r.tidied && r.tidied.length ? ', ' + r.tidied.length + ' older JDs filed' : '')); return load(true); }).catch(function (x) { toastS('Could not read Drive: ' + (x.message || x)); }).then(function () { P.busy = false; if (onPage()) paint(); }); }
+    else if (k2 === 'notes' && P.open) { var ta = document.getElementById('w199notes'); if (ta) savePos(P.open, { notes: ta.value.slice(0, 4000) }, 'Notes saved'); }
+    else if (k2 === 'addperson' && P.open) {
+      var sel = document.getElementById('w199who'), since = document.getElementById('w199since'); if (!sel || !sel.value) { toastS('Choose a person'); return; }
+      (async function () {
+        var r = await db.from('hub_position_people').insert({ position_id: P.open, member_id: Number(sel.value), since: since && since.value || null, created_by: who() });
+        if (r && r.error) { toastS('Could not add: ' + r.error.message); return; }
+        await db.from('team_members').update({ position_id: P.open }).eq('id', Number(sel.value));
+        try { var m = members().filter(function (x) { return String(x.id) === sel.value; })[0]; if (m) m.position_id = P.open; } catch (x) { /* fine */ }
+        await load(true); openPos(P.open); toastS('Added');
+      })();
+    }
+    else if (k2 === 'create') {
+      var ti = document.getElementById('w199nt'), dp = document.getElementById('w199nd'), on = document.querySelector('#w197sheet [data-w199ns].on');
+      if (!ti || !ti.value.trim()) { toastS('A title, please'); return; }
+      a.disabled = true; a.textContent = 'Creating\u2026';
+      fn({ action: 'create_position', title: ti.value.trim(), dept: dp.value, stage: on ? on.getAttribute('data-w199ns') : 'requested', owner: (window.USER && USER.name) || null }).then(function (r) { toastS(r.position.title + ' created in Drive'); return load(true).then(function () { openPos(r.position.id); if (onPage()) paint(); }); }).catch(function (x) { toastS(String(x.message || x)); a.disabled = false; a.textContent = 'Create the position'; });
+    }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w199dept') { P.dept = t.value; paint(); return; }
+    if (t.id === 'w199upf' && P.open) { var nm = document.getElementById('w199upname'); upload(t.files && t.files[0], P.open, null, nm && nm.value.trim()); return; }
+    var uc = t.getAttribute && t.getAttribute('data-w199upc'); if (uc) { var c = cands().filter(function (x) { return String(x.id) === uc; })[0]; if (c && c.position_id) upload(t.files && t.files[0], c.position_id, c.id); return; }
+    var mv = t.getAttribute && t.getAttribute('data-w199mv'); if (mv && t.value) { var to = t.value === '__unsorted' ? null : Number(t.value); t.disabled = true; fn({ action: 'move_file', file_id: mv, position_id: to }).then(function () { toastS('Moved'); return load(true); }).catch(function (x) { toastS(String(x.message || x)); }).then(function () { if (P.open) openPos(P.open); if (onPage()) paint(); }); return; }
+    var pf = t.getAttribute && t.getAttribute('data-w199p'); if (pf && P.open && pf !== 'notes') { var pt = {}; pt[pf] = t.value || null; savePos(P.open, pt, pf === 'owner' ? (t.value ? 'Handled by ' + t.value : 'Nobody handling it') : 'Saved'); return; }
+    var cf = t.getAttribute && t.getAttribute('data-w199f');
+    if (cf === 'position_id') {
+      var st = window.w197 && w197.state(); if (!st || !st.open) return;
+      var p = t.value ? byId(t.value) : null;
+      (async function () {
+        var patch = { position_id: p ? p.id : null, updated_at: new Date().toISOString(), updated_by: who() }; if (p) patch.role = p.title;
+        var r = await db.from('hub_candidates').update(patch).eq('id', st.open);
+        if (r && r.error) { toastS('Could not save: ' + r.error.message); return; }
+        var c = cands().filter(function (x) { return x.id === st.open; })[0]; if (c) Object.keys(patch).forEach(function (k) { c[k] = patch[k]; });
+        try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: String(st.open), field: 'position_id', old_value: null, new_value: p ? p.title : '', changed_by: who() }); } catch (x) { /* audit */ }
+        toastS(p ? 'Linked to ' + p.title : 'Unlinked'); try { w197.paintBoard(); w197.openSheet(st.open); } catch (x) { /* fine */ }
+      })();
+    }
+  });
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.id === 'w199q') { P.q = t.value; paint(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && P.open) shut(); });
+
+  /* the page shows when its address does (wave197 draws the rail and the title) */
+  var last = '';
+  function tick() { var h = String(location.hash || ''); if (h === last) return; last = h; if (onPage()) setTimeout(show, 0); }
+  window.addEventListener('hashchange', tick);
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(tick, 400); });
+  setInterval(function () { if (onPage() && !document.getElementById('w199pos') && document.getElementById('w46body')) show(); }, 800);
+  /* loaded early so Applications can show positions on its cards */
+  setTimeout(function () { try { if (typeof db !== 'undefined' && db) load(); } catch (e) { /* fine */ } }, 2500);
+
+  /* ---------- the look ---------- */
+  var css = document.createElement('style'); css.id = 'w199css';
+  css.textContent =
+    '#w199pos h2{margin:0 0 10px;}' +
+    '.w199seg{display:inline-flex;border:1px solid rgba(16,63,57,.2);border-radius:999px;overflow:hidden;}' +
+    '.w199seg button{font-family:' + BODY + ';font-size:12.5px;font-weight:700;border:none;background:transparent;color:' + GREEN + ';padding:7px 12px;cursor:pointer;}' +
+    '.w199seg button.on{background:' + GREEN + ';color:' + CREAM + ';}.w199seg small{opacity:.7;font-weight:600;margin-left:3px;}' +
+    '.w199warn{background:rgba(179,64,47,.10);border:1px solid rgba(179,64,47,.3);color:' + INK + ';border-radius:12px;padding:10px 14px;font-size:13px;line-height:1.5;margin:0 0 12px;}' +
+    '.w199dh{font-family:' + HEAD + ';font-size:18px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:18px 0 8px;}.w199dh small{font-family:' + BODY + ';font-size:12px;color:var(--wa-muted);margin-left:4px;}' +
+    '.w199grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}' +
+    '.w199card{display:flex;flex-direction:column;align-items:flex-start;gap:5px;text-align:left;font-family:' + BODY + ';background:var(--wa-card);border:1px solid rgba(16,63,57,.12);border-radius:14px;padding:12px 14px;cursor:pointer;color:' + INK + ';min-width:0;}' +
+    '.w199card:hover{border-color:' + GREEN + ';}.w199card.hire{border-left:4px solid ' + GOLD + ';}' +
+    '.w199card b{font-size:14.5px;line-height:1.25;}' +
+    '.w199card .st{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:rgba(16,63,57,.07);color:var(--wa-muted);}' +
+    '.w199card.hire .st{background:rgba(220,165,39,.2);color:' + GREEN + ';}.w199card .st-filled{background:rgba(42,140,122,.14);color:' + TEAL + ';}' +
+    '.w199card .m{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--wa-muted);}.w199card .m .no{color:' + FLAG + ';}.w199card .m .ap{color:' + GREEN + ';font-weight:700;}' +
+    '.w199card .ppl{font-size:12px;color:' + TEAL + ';}' +
+    '.w199files{list-style:none;margin:0;padding:0;}.w199files li{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(16,63,57,.08);font-size:13.5px;}.w199files li:first-child{border-top:none;}' +
+    '.w199files li a{color:' + GREEN + ';font-weight:600;word-break:break-word;}.w199files small{color:var(--wa-muted);font-size:12px;}' +
+    '.w199files select{width:auto!important;font-size:12px!important;padding:4px 8px!important;border-radius:999px!important;margin-left:auto;}' +
+    '.w199links{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:8px 0 0;}.w199links small{color:var(--wa-muted);font-size:12px;}' +
+    '.w199upbox{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 0;}' +
+    '.w199upbox input[type=text],.w199upbox input[type=date],.w199upbox select{flex:1;min-width:140px;width:auto!important;font-family:' + BODY + ';font-size:13px;padding:7px 11px;border:1px solid rgba(16,63,57,.2);border-radius:999px;background:' + CREAM + ';}' +
+    'label.w199up{display:inline-block!important;margin:0!important;letter-spacing:0!important;text-transform:none!important;}' +
+    '.w199pn input[type=text],.w199pn input[type=date]{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:14px;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';color:' + INK + ';}' +
+    '.w199pn label small{font-weight:600;margin-left:4px;}' +
+    '.w199old{margin:8px 0 0;font-size:13px;}.w199old summary{cursor:pointer;color:' + GREEN + ';font-weight:600;}' +
+    '@media (max-width:600px){.w199grid{grid-template-columns:1fr;}.w199files select{margin-left:0;}}';
+  (document.head || document.documentElement).appendChild(css);
+
+  window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
+})();

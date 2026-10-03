@@ -65,12 +65,12 @@
   /* ---------- Applications: the stage board ---------- */
   function stageLabel(s) { var x = STAGES.concat(CLOSED).filter(function (p) { return p[0] === s; })[0]; return x ? x[1] : s; }
   function daysIn(c) { var t = c.stage_at || c.created_at; return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : 0; }
-  function roles() { var r = {}; S.cands.forEach(function (c) { if (c.role) r[c.role] = (r[c.role] || 0) + 1; }); return Object.keys(r).sort(); }
+  function roles() { if (window.w199) return w199.filterOptions(S.cands); var r = {}; S.cands.forEach(function (c) { if (c.role) r[c.role] = (r[c.role] || 0) + 1; }); return Object.keys(r).sort().map(function (k) { return { v: k, l: k }; }); }
   function filtered() {
     var qq = lower(S.q), ow = S.filterOwner, ro = S.filterRole || '';
     return S.cands.filter(function (c) {
-      if (qq && (lower(c.name) + ' ' + lower(c.role) + ' ' + lower(c.email)).indexOf(qq) < 0) return false;
-      if (ro && c.role !== ro) return false;
+      if (qq && (lower(c.name) + ' ' + lower(c.role) + ' ' + lower(window.w199 ? w199.roleOf(c) : '') + ' ' + lower(c.email)).indexOf(qq) < 0) return false;
+      if (ro && !(window.w199 ? w199.match(c, ro) : c.role === ro)) return false;
       if (ow === '__me') return lower(c.owner) === lower(me().name) || lower(c.owner) === lower((me().name || '').split(' ')[0]);
       if (ow === '__none') return !c.owner;
       if (ow) return c.owner === ow;
@@ -81,7 +81,7 @@
     var still = /still interested/i.test(String(c.summary || '') + ' ' + String(c.notes || ''));
     var d = daysIn(c);
     return '<button type="button" class="w197cand" draggable="' + (small ? 'false' : 'true') + '" data-w197c="' + c.id + '"><b>' + E(c.name || 'Someone') + '</b>' +
-      (small ? '' : '<span class="r">' + E(c.role || 'No role given') + ' · applied ' + E(ago(c.created_at)) + '</span><span class="m">' +
+      (small ? '' : '<span class="r">' + E(window.w199 ? w199.roleOf(c) : (c.role || 'No role given')) + ' · applied ' + E(ago(c.created_at)) + '</span><span class="m">' +
         (c.owner ? '<span class="who">' + E(String(c.owner).split(' ')[0]) + '</span>' : '<span>Nobody yet</span>') +
         (still ? '<span class="ok">Still interested</span>' : '') + (c.cv_path ? '<span>CV</span>' : '') +
         (d >= 7 ? '<span class="age">' + d + ' days here</span>' : '') + '</span>') + '</button>';
@@ -90,7 +90,7 @@
     var rows = filtered(), people = members().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
     var owners = {}; S.cands.forEach(function (c) { if (c.owner) owners[c.owner] = 1; });
     var bar = '<div class="w197bar"><input type="search" id="w197q" placeholder="Search a name or a role" value="' + E(S.q) + '">' +
-      '<select id="w197role" aria-label="Role"><option value="">Every role</option>' + roles().map(function (r) { return '<option' + (S.filterRole === r ? ' selected' : '') + '>' + E(r) + '</option>'; }).join('') + '</select>' +
+      '<select id="w197role" aria-label="Position"><option value="">Every position</option>' + roles().map(function (r) { return '<option value="' + E(r.v) + '"' + (S.filterRole === r.v ? ' selected' : '') + '>' + E(r.l) + '</option>'; }).join('') + '</select>' +
       '<select id="w197own" aria-label="Handled by"><option value="">Anyone handling</option><option value="__me"' + (S.filterOwner === '__me' ? ' selected' : '') + '>Mine</option><option value="__none"' + (S.filterOwner === '__none' ? ' selected' : '') + '>Nobody yet</option>' +
       Object.keys(owners).sort().map(function (o) { return '<option' + (S.filterOwner === o ? ' selected' : '') + '>' + E(o) + '</option>'; }).join('') + '</select>' +
       btn('Refresh', 'data-w197a="reload"', 'sm') + '</div>';
@@ -127,14 +127,14 @@
     var links = (c.links || []).map(function (l) { return '<a href="' + E(l) + '" target="_blank" rel="noopener">' + E(String(l).replace(/^https?:\/\/(www\.)?/, '').slice(0, 48)) + '</a>'; }).join('<br>');
     var s = sheetEl();
     s.innerHTML = '<div class="bk" data-w197a="shut"></div><div class="pn">' + btn('Close', 'data-w197a="shut"', 'sm x') +
-      '<h3>' + E(c.name || 'Someone') + '</h3><p class="role">' + E(c.role || 'No role given') + ' · applied ' + E(ago(c.created_at)) + (c.source ? ' · ' + E(c.source) : '') + '</p>' +
+      '<h3>' + E(c.name || 'Someone') + '</h3><p class="role">' + E(window.w199 ? w199.roleOf(c) : (c.role || 'No role given')) + ' · applied ' + E(ago(c.created_at)) + (c.source ? ' · ' + E(c.source) : '') + '</p>' +
       '<label>Stage</label><div class="stg">' + STAGES.map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="' + (c.status === p[0] ? 'on' : '') + '">' + E(p[1]) + '</button>'; }).join('') +
       CLOSED.map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="cl' + (c.status === p[0] ? ' on' : '') + '">' + E(p[1]) + '</button>'; }).join('') + '</div>' +
       '<div class="next"><b>Next:</b> ' + E(NEXT[c.status || 'new'] || '') + (c.status === 'hired' ? ' ' + btn('Go to Onboarding', 'data-w197go="onboarding"', 'sm pri') : '') + '</div>' +
       '<label>Contact</label><div class="ct">' + (c.email ? '<a href="mailto:' + E(c.email) + '">' + E(c.email) + '</a>' : 'No email') + (c.phone ? '<br><a href="tel:' + E(String(c.phone).replace(/[^\d+]/g, '')) + '">' + E(c.phone) + '</a>' : '') + (links ? '<br>' + links : '') + '</div>' +
       '<div class="acts">' + (c.cv_path ? btn('Open the CV' + (c.cv_name ? ' (' + E(String(c.cv_name).slice(0, 28)) + ')' : ''), 'data-w197cv="' + E(c.cv_path) + '"', 'pri sm') : '<span class="w197pill mut">No CV attached</span>') + (c.mail_id ? '<a class="w197b sm" href="#hubmail">The original email</a>' : '') + '</div>' +
       '<label for="w197own1">Handled by</label><select id="w197own1" data-w197f="owner"><option value="">Nobody yet</option>' + people.map(function (m) { return '<option' + (c.owner === m.name ? ' selected' : '') + '>' + E(m.name) + '</option>'; }).join('') + '</select>' +
-      '<label for="w197pos1">Position</label><select id="w197pos1" data-w197f="request_id"><option value="">Not linked to a position</option>' + pos + '</select>' +
+      (window.w199 ? w199.sheetBits(c) : '<label for="w197pos1">Position</label><select id="w197pos1" data-w197f="request_id"><option value="">Not linked to a position</option>' + pos + '</select>') +
       (c.summary ? '<label>What they wrote</label><div class="sum">' + E(c.summary) + '</div>' : '') +
       '<label for="w197notes1">Notes</label><textarea id="w197notes1" data-w197f="notes" placeholder="Interview impressions, the next step">' + E(c.notes || '') + '</textarea>' +
       '<div class="acts">' + btn('Save the notes', 'data-w197a="notes"', 'pri sm') + '</div></div>';

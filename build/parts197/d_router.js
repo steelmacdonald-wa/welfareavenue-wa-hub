@@ -35,12 +35,12 @@
     if (onb) { var h = onb.querySelector(':scope > h3'); if (h) h.textContent = 'Who is onboarding'; }
     if (master) { var h2 = master.querySelector(':scope > h3'); if (h2) hide(h2); }
     if (rec) {
-      tag(rec, 'positions playbook', true);
+      tag(rec, 'playbook', true);   /* wave199 draws Positions (#w199pos); the older hiring-request list is shown on no page */
       var mode = 'positions';
       Array.prototype.forEach.call(rec.children, function (c, i) {
         if (i === 0 && c.tagName === 'H3') { hide(c); return; }
         if (c.classList.contains('w49pb')) mode = 'playbook';
-        tag(c, mode);
+        tag(c, mode === 'positions' ? 'oldpositions' : mode);
         if (c.tagName === 'H3') c.classList.add('w197sub');
       });
     }

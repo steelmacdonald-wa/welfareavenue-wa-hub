@@ -53,7 +53,7 @@
     { k: 'timeoff', l: 'Time off', ic: 'cal', g: 'People', tab: null, d: 'Requests waiting on a decision, logging time off, and the days taken this fiscal year.' },
     { k: 'recognition', l: 'Recognition', ic: 'star', g: 'People', tab: 'people', d: 'Shout-outs: good work, noticed. They also rotate on the loading screen.' },
     { k: 'applications', l: 'Applications', ic: 'search', g: 'Hiring', tab: 'recruitment', d: 'Every application from hub@ and the job boards, by stage. Drag a card to move it, or open it to read, decide and take notes.' },
-    { k: 'positions', l: 'Positions', ic: 'list', g: 'Hiring', tab: 'recruitment', d: 'Open roles (hiring requests) and the people being set up after they said yes.' },
+    { k: 'positions', l: 'Positions', ic: 'list', g: 'Hiring', tab: 'recruitment', d: 'Every role by department, from the HR drive: its job description, CVs, applications and the people who hold it.' },
     { k: 'playbook', l: 'Playbook', ic: 'book', g: 'Hiring', tab: 'recruitment', d: 'How we recruit: the playbook, interview and offer templates, and the team structure.' },
     { k: 'onboarding', l: 'Onboarding', ic: 'clip', g: 'Growth', tab: 'onboarding', d: 'Who is onboarding and how far along, assigning an onboarding, the quizzes and what new members said.' },
     { k: 'plan', l: 'Onboarding plan', ic: 'layers', g: 'Growth', tab: 'onboarding', d: 'The master onboarding: every week and step new people see. Changes reach everyone still onboarding.' },
