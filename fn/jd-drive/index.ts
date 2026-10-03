@@ -1,4 +1,4 @@
-// Welfare Avenue: jd-drive (v1, 03/10/26, wave199)
+// Welfare Avenue: jd-drive (v2, 03/10/26, wave199; v2: app_config.value is text, so the Unsorted folder id is parsed)
 // The HR shared drive's positions, read and kept tidy by the Hub:
 //   *Recruitment* > Job descriptions > <Department> > <Position> > Resumes / the latest JD / Older JDs
 // One position folder = one row in hub_positions; its CVs and older JDs are rows in hub_position_files.
@@ -252,7 +252,7 @@ Deno.serve(async (req) => {
       if (!row) return json({ error: 'Unknown file' }, 404);
       let to: string | null = null, pid: number | null = null, title = 'Unsorted Resumes';
       if (body.position_id) { const { data: p } = await svc.from('hub_positions').select('id,resumes_id,title').eq('id', body.position_id).maybeSingle(); to = p?.resumes_id || null; pid = p?.id || null; title = p?.title || ''; }
-      else { const { data: s } = await svc.from('app_config').select('value').eq('key', 'jd_drive_sync').maybeSingle(); to = (s?.value as { unsorted?: string })?.unsorted || null; }
+      else { const { data: s } = await svc.from('app_config').select('value').eq('key', 'jd_drive_sync').maybeSingle(); let sv: unknown = s?.value; if (typeof sv === 'string') { try { sv = JSON.parse(sv); } catch (_) { sv = null; } } to = (sv as { unsorted?: string } | null)?.unsorted || null; }   // app_config.value is text
       if (!to) return json({ error: 'No folder to move it to' }, 400);
       const f = await move(row.file_id, to);
       await svc.from('hub_position_files').update({ position_id: pid, url: f.webViewLink || row.url }).eq('id', row.id);

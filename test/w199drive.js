@@ -33,7 +33,7 @@ function fixture() {
     { id: 22, position_id: 1, member_id: ahmed.id, since: '2026-02-01', until: null }
   ] : [];
   if (ahmed) ahmed.position_id = 1;
-  FX.app_config = (FX.app_config || []).concat([{ key: 'jd_drive_sync', value: { at: '2026-09-25T19:55:00Z', positions: 5, files: 4 } }]);
+  FX.app_config = (FX.app_config || []).concat([{ key: 'jd_drive_sync', value: JSON.stringify({ at: '2026-09-25T19:55:00Z', positions: 5, files: 4 }) }]);   /* app_config.value is text in production */
   const cs = FX.hub_candidates || [];
   cs.forEach((c, i) => { if (/operations manager/i.test(c.role || '')) c.position_id = 1; });
   if (!cs.some(c => c.position_id === 1)) cs.push({ id: 9001, name: 'Test Candidate', role: 'Operations Manager', position_id: 1, status: 'new', created_at: now });
@@ -116,6 +116,7 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   await f.page.click('#w199pos [data-w199a="sync"]'); await f.page.waitForTimeout(600);
   ok('Sync with Drive asks jd-drive', await f.ev(() => window.__W199CALLS.some(c => c.body.action === 'sync')));
   /* unsorted */
+  ok('The last Drive read shows (app_config text parsed)', await f.ev(() => /Read from Drive/.test(document.getElementById('w199pos').textContent)));
   ok('Unsorted Resumes are counted', await f.ev(() => /1 CV in Unsorted Resumes/.test(document.getElementById('w199pos').textContent)));
   /* Applications: positions on the board and in the sheet */
   await f.hash('#hrcentre/applications', 2000);

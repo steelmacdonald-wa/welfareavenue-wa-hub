@@ -74718,7 +74718,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         q(db.from('app_config').select('value').eq('key', 'jd_drive_sync').limit(1)),
         q(db.from('hub_candidate_grades').select('*').order('updated_at', { ascending: false }).limit(5000))
       ]);
-      P.pos = res[0]; P.files = res[1]; P.people = res[2]; P.sync = res[3][0] ? res[3][0].value : null; P.grades = res[4] || [];
+      P.pos = res[0]; P.files = res[1]; P.people = res[2]; P.sync = res[3][0] ? res[3][0].value : null; if (typeof P.sync === 'string') { try { P.sync = JSON.parse(P.sync); } catch (e) { P.sync = null; } }   /* app_config.value is text */ P.grades = res[4] || [];
       P.at = Date.now(); P.loading = null;
       try { if (window.w197 && /^#hrcentre\/applications/.test(String(location.hash || ''))) w197.paintBoard(); } catch (e) { /* fine */ }
       try { if (window.w197 && w197.loadCands) await w197.loadCands(); } catch (e) { /* fine */ }

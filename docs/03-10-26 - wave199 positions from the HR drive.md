@@ -1,6 +1,6 @@
 # 03/10/26 - wave199: positions, job descriptions and CVs from the HR drive
 
-Live md5 ba741e6466cb961b571cb276f24dd8a3 (wave199c grades, on wave199b's cef66f5a, on wave199's 8e07cca7, on wave198's 4b608fb4).
+Live md5 d03a9d7ca4bd7ca3c18a509094a095af (wave199d, on wave199c's ba741e64 (grades), on wave199b's cef66f5a, on wave199's 8e07cca7, on wave198's 4b608fb4).
 
 ## What Steel asked (03/10/26)
 
@@ -32,6 +32,11 @@ His choices: the Hub's eight departments; CVs already in the shared drive moved,
 ## Grades (wave199c)
 
 Steel: "I'd like to also grade applicants and have that show as well." His choices: 1 to 5 stars; each person grades. hub_candidate_grades (one row per applicant and grader: stars, an optional why, the stage it was given at; staff-only RLS). The sheet has your five stars (the same star again clears it), a why field once you have graded, and everyone else's grades with their names. Cards show the average and how many graded (★ 4.5 (2)), gold, green at 4 and up, red under 2.5. Best graded first on the board sorts each column by the average. The applications listed on a position's sheet show it too.
+
+## JDs from the HR Plan 2026 (Canva) (wave199d)
+
+Steel shared the HR Plan 2026 Canva (org charts by department, proposed structures, and six written JDs). Filed as Google Docs in their position folders, the newest version, so sync moved the older JD into Older JDs: Executive Assistant, Director of Fundraising (first JD), Events Director (the Outreach Director folder renamed: the JD says "previously Outreach Director"), Program & Development Coordinator, Operations Assistant, Writer. The Canva's CFO JD and two pages are empty templates and were not filed. Edits while filing: the Program Development Coordinator's second section was headed "Sponsorship & Partnership Engagement" by a copy-paste slip in the Canva and is filed as "Community Engagement & Feedback"; the Operations Assistant's named managers (Simran, Michael) became their roles.
+Fix: app_config.value is text, so jd_drive_sync is stored as a JSON string; the Positions page and jd-drive move_file (v2) now parse it ("Read from Drive …" line and moving a CV to Unsorted Resumes).
 
 ## Data (migration wa199_positions)
 
