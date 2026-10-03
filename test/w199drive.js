@@ -39,6 +39,7 @@ function fixture() {
   if (!cs.some(c => c.position_id === 1)) cs.push({ id: 9001, name: 'Test Candidate', role: 'Operations Manager', position_id: 1, status: 'new', created_at: now });
   cs.push({ id: 9002, name: 'Unlinked Person', role: 'Some Old Role', status: 'new', created_at: now });
   FX.hub_candidates = cs;
+  FX.hub_candidate_grades = [{ id: 501, candidate_id: 9002, grader_email: 'valex.sanon@welfareavenue.com', grader_name: 'Valex', stars: 4, note: 'Strong on scheduling', stage: 'new', updated_at: now }, { id: 502, candidate_id: 9002, grader_email: 'natasha.sharp@welfareavenue.com', grader_name: 'Natasha', stars: 5, stage: 'new', updated_at: now }];
   return { FX, ahmed };
 }
 const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_INVOKE = function (name, opts) { var b = (opts && opts.body) || {}; window.__W199CALLS.push({ name: name, body: b }); if (name !== 'jd-drive') return { data: null, error: null };
@@ -135,6 +136,25 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   await f.page.click('#w197sheet [data-w199open="4"]'); await f.page.waitForTimeout(400);
   ok('Applications sheet: The position opens its sheet', await f.ev(() => document.querySelector('#w197sheet h3').textContent === 'Logistics Manager'));
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+  /* grades: each person, 1 to 5 stars */
+  await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
+  const g1 = await f.ev(() => { var card = document.querySelector('#w197board [data-w197c="9002"]'); return card && (card.querySelector('.w199st') || {}).textContent; });
+  ok('Grades: the card shows the average and how many graded', g1 === '\u2605 4.5 (2)', g1);
+  await f.page.click('#w197board [data-w197c="9002"]'); await f.page.waitForTimeout(400);
+  const g2 = await f.ev(() => { var s = document.getElementById('w197sheet'); return { stars: s.querySelectorAll('.w199star').length, others: Array.from(s.querySelectorAll('.w199glist li')).map(li => li.textContent) }; });
+  ok('Grades: the sheet has your five stars and the others\' grades with names', g2.stars === 5 && g2.others.some(t => /Valex/.test(t) && /Strong on scheduling/.test(t)) && g2.others.some(t => /Natasha/.test(t)), g2);
+  await f.page.click('#w197sheet .w199star[data-n="2"]'); await f.page.waitForTimeout(500);
+  const g3 = await f.ev(() => ({ on: document.querySelectorAll('#w197sheet .w199star.on').length, note: !!document.getElementById('w199gnote'), card: (document.querySelector('#w197board [data-w197c="9002"] .w199st') || {}).textContent, mine: w199.state().grades.filter(g => g.candidate_id === 9002 && /steel/.test(g.grader_email))[0] }));
+  ok('Grades: your grade saves, the stars light and the average updates', g3.on === 2 && g3.note && g3.card === '\u2605 3.7 (3)' && g3.mine && g3.mine.stars === 2, g3);
+  await shot(f, 'grade_sheet');
+  await f.page.click('#w197sheet .w199star[data-n="2"]'); await f.page.waitForTimeout(500);
+  ok('Grades: the same star again clears your grade', await f.ev(() => document.querySelectorAll('#w197sheet .w199star.on').length === 0 && (document.querySelector('#w197board [data-w197c="9002"] .w199st') || {}).textContent === '\u2605 4.5 (2)'));
+  await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+  await f.page.check('#w199sortg'); await f.page.waitForTimeout(300);
+  ok('Grades: Best graded first puts graded cards on top', await f.ev(() => { var col = document.querySelector('#w197board [data-w197col="new"]'); var first = col && col.querySelector('.w197cand'); return first && first.getAttribute('data-w197c') === '9002'; }));
+  await shot(f, 'grade_board', true);
+  await f.page.uncheck('#w199sortg'); await f.page.waitForTimeout(200);
+
   /* interviews: a day and a time */
   await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
   const ivc = await f.ev(() => { var c = w197.state().cands.filter(x => x.status !== 'interview' && x.status !== 'hired')[0]; return c && c.id; });

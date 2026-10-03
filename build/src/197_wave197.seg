@@ -370,11 +370,11 @@
       '<select id="w197role" aria-label="Position"><option value="">Every position</option>' + roles().map(function (r) { return '<option value="' + E(r.v) + '"' + (S.filterRole === r.v ? ' selected' : '') + '>' + E(r.l) + '</option>'; }).join('') + '</select>' +
       '<select id="w197own" aria-label="Handled by"><option value="">Anyone handling</option><option value="__me"' + (S.filterOwner === '__me' ? ' selected' : '') + '>Mine</option><option value="__none"' + (S.filterOwner === '__none' ? ' selected' : '') + '>Nobody yet</option>' +
       Object.keys(owners).sort().map(function (o) { return '<option' + (S.filterOwner === o ? ' selected' : '') + '>' + E(o) + '</option>'; }).join('') + '</select>' +
-      btn('Refresh', 'data-w197a="reload"', 'sm') + '</div>';
+      (window.w199 ? w199.barBits() : '') + btn('Refresh', 'data-w197a="reload"', 'sm') + '</div>';
     var cols = STAGES.map(function (s) {
       var list = rows.filter(function (c) { return c.status === s[0] || (s[0] === 'new' && !c.status); });
       if (s[0] === 'hired') list = list.filter(function (c) { return daysIn(c) <= 90; });
-      list.sort(function (a, b) { if (s[0] === 'interview') return String(a.interview_at || '9').localeCompare(String(b.interview_at || '9')); return String(a.created_at).localeCompare(String(b.created_at)); });   /* wave199: interviews in date order, the ones with no time last */
+      list.sort(function (a, b) { if (window.w199 && w199.sortGrade()) { var d = w199.gradeAvg(b) - w199.gradeAvg(a); if (d) return d; } if (s[0] === 'interview') return String(a.interview_at || '9').localeCompare(String(b.interview_at || '9')); return String(a.created_at).localeCompare(String(b.created_at)); });   /* wave199: interviews in date order, the ones with no time last */
       return '<div class="w197col" data-w197col="' + s[0] + '"><h4>' + E(s[1]) + ' <small>' + list.length + '</small></h4>' + (list.length ? list.map(function (c) { return candCard(c); }).join('') : '<p class="w197note" style="margin:4px">' + (s[0] === 'new' ? 'No new applications.' : 'Drop a card here.') + '</p>') + '</div>';
     }).join('');
     var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn'; });
