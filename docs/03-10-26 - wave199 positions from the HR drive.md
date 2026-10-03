@@ -1,6 +1,6 @@
 # 03/10/26 - wave199: positions, job descriptions and CVs from the HR drive
 
-Live md5 d03a9d7ca4bd7ca3c18a509094a095af (wave199d, on wave199c's ba741e64 (grades), on wave199b's cef66f5a, on wave199's 8e07cca7, on wave198's 4b608fb4).
+Live md5 f2f3e08c42243f0b19c04b2fba3d698c (wave199e calls and bulk, on wave199d's d03a9d7c, on wave199c's ba741e64 (grades), on wave199b's cef66f5a, on wave199's 8e07cca7, on wave198's 4b608fb4).
 
 ## What Steel asked (03/10/26)
 
@@ -38,6 +38,12 @@ Steel: "I'd like to also grade applicants and have that show as well." His choic
 Steel shared the HR Plan 2026 Canva (org charts by department, proposed structures, and six written JDs). Filed as Google Docs in their position folders, the newest version, so sync moved the older JD into Older JDs: Executive Assistant, Director of Fundraising (first JD), Events Director (the Outreach Director folder renamed: the JD says "previously Outreach Director"), Program & Development Coordinator, Operations Assistant, Writer. The Canva's CFO JD and two pages are empty templates and were not filed. Edits while filing: the Program Development Coordinator's second section was headed "Sponsorship & Partnership Engagement" by a copy-paste slip in the Canva and is filed as "Community Engagement & Feedback"; the Operations Assistant's named managers (Simran, Michael) became their roles.
 Fix: app_config.value is text, so jd_drive_sync is stored as a JSON string; the Positions page and jd-drive move_file (v2) now parse it ("Read from Drive …" line and moving a CV to Unsorted Resumes).
 
+## Calls and bulk actions (wave199e)
+
+- Steel: "We should check whether people in reviewed have been called or not." hub_candidate_calls (one row per call: outcome reached / left a voicemail / no answer / wrong number, an optional note, who, the stage, when). The sheet has Log a call (one button per outcome, with the note field) and the call history. Cards at Reviewing say "Not called yet" in red; cards at Reviewing, Interview or Offer show "Called Sep 25" or "Tried Sep 24 (left a voicemail, 2x)". The board's "Not called yet (n)" box shows only the Reviewing applicants nobody has called. There is no phone integration for calls (Quo has texts only), so calls are logged by hand.
+- Steel: "the ability to select multiple applicants at a time to do bulk operations." Select on the board turns card clicks into selection (a tick, an outline; dragging is off) and opens a bar: n selected, Select all shown, Clear, Move to (any stage; Declined and Withdrawn ask first), Handled by, Position (sets position and role), Done. Each change is one update for all, logged per applicant in change_log ("… (bulk)").
+- The grader and caller name comes from the roster when the session has no display name.
+
 ## Data (migration wa199_positions)
 
 hub_positions, hub_position_files, hub_position_people (staff-only RLS); hub_candidates.position_id, drive_file_id; team_members.position_id; app_config jd_drive_sync. Seeded: ClickUp's 11 positions (stage, owner, needed by, link; the two template tasks skipped), the Hub-only roles (Operations Manager interviewing, HR Technician and Volunteer Cook posted, Event Coordinator filled), 38 applications linked by role, 28 team members linked to their position by their JD, Ahmed's history (Volunteer Relations Coordinator from 02/08/25, then Operations Manager), four staff CVs marked as the person's.
@@ -48,7 +54,7 @@ jd-drive v1 (verify_jwt on): sync, privacy, create_position, upload, move_file, 
 
 ## Tests
 
-test/w199drive.js 46 checks (incl. the interview day and time and grades) (Positions, the sheet, Ahmed's roles, add from a CV, new position, sync, Applications filter, card, sheet and position change, the privacy warning, French, a phone, an HR member). Regression on the shipped build: w152 68, w153 46, w157 26, w164 31, w176 14, w181 61, w193 44, w196 52, w197 98, w198 20.
+test/w199drive.js 58 checks (incl. the interview day and time, grades, calls and bulk actions) (Positions, the sheet, Ahmed's roles, add from a CV, new position, sync, Applications filter, card, sheet and position change, the privacy warning, French, a phone, an HR member). Regression on the shipped build: w152 68, w153 46, w157 26, w164 31, w176 14, w181 61, w193 44, w196 52, w197 98, w198 20.
 
 ## Open
 

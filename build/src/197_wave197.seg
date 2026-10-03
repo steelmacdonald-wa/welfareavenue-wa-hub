@@ -348,6 +348,7 @@
     return S.cands.filter(function (c) {
       if (qq && (lower(c.name) + ' ' + lower(c.role) + ' ' + lower(window.w199 ? w199.roleOf(c) : '') + ' ' + lower(c.email)).indexOf(qq) < 0) return false;
       if (ro && !(window.w199 ? w199.match(c, ro) : c.role === ro)) return false;
+      if (window.w199 && w199.notCalledOnly() && !w199.notCalled(c)) return false;   /* wave199: Reviewing, nobody has called */
       if (ow === '__me') return lower(c.owner) === lower(me().name) || lower(c.owner) === lower((me().name || '').split(' ')[0]);
       if (ow === '__none') return !c.owner;
       if (ow) return c.owner === ow;

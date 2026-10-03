@@ -38,6 +38,9 @@ function fixture() {
   cs.forEach((c, i) => { if (/operations manager/i.test(c.role || '')) c.position_id = 1; });
   if (!cs.some(c => c.position_id === 1)) cs.push({ id: 9001, name: 'Test Candidate', role: 'Operations Manager', position_id: 1, status: 'new', created_at: now });
   cs.push({ id: 9002, name: 'Unlinked Person', role: 'Some Old Role', status: 'new', created_at: now });
+  cs.push({ id: 9003, name: 'Rev Called', role: 'Logistics Manager', position_id: 4, status: 'reviewing', created_at: now });
+  cs.push({ id: 9004, name: 'Rev Waiting', role: 'Logistics Manager', position_id: 4, status: 'reviewing', created_at: now });
+  FX.hub_candidate_calls = [{ id: 601, candidate_id: 9003, outcome: 'voicemail', by_name: 'Valex', by_email: 'valex.sanon@welfareavenue.com', stage: 'reviewing', called_at: '2026-09-24T15:00:00Z' }];
   FX.hub_candidates = cs;
   FX.hub_candidate_grades = [{ id: 501, candidate_id: 9002, grader_email: 'valex.sanon@welfareavenue.com', grader_name: 'Valex', stars: 4, note: 'Strong on scheduling', stage: 'new', updated_at: now }, { id: 502, candidate_id: 9002, grader_email: 'natasha.sharp@welfareavenue.com', grader_name: 'Natasha', stars: 5, stage: 'new', updated_at: now }];
   return { FX, ahmed };
@@ -137,6 +140,42 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   await f.page.click('#w197sheet [data-w199open="4"]'); await f.page.waitForTimeout(400);
   ok('Applications sheet: The position opens its sheet', await f.ev(() => document.querySelector('#w197sheet h3').textContent === 'Logistics Manager'));
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+  /* calls: has someone called the people in Reviewing? */
+  await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
+  const c1 = await f.ev(() => ({ a: (document.querySelector('#w197board [data-w197c="9003"]') || {}).textContent, b: (document.querySelector('#w197board [data-w197c="9004"]') || {}).textContent, lbl: (document.getElementById('w199notcalled') || {}).parentNode && document.getElementById('w199notcalled').parentNode.textContent }));
+  ok('Calls: a Reviewing card shows the last try', /Tried Sep 24 \(left a voicemail\)/.test(c1.a || ''), c1.a);
+  ok('Calls: a Reviewing card nobody called says so', /Not called yet/.test(c1.b || ''), c1.b);
+  ok('Calls: the filter counts them', /Not called yet \(\d+\)/.test(c1.lbl || ''), c1.lbl);
+  await f.page.check('#w199notcalled'); await f.page.waitForTimeout(300);
+  const c2 = await f.ev(() => Array.from(document.querySelectorAll('#w197board .w197cand')).map(x => x.getAttribute('data-w197c')));
+  ok('Calls: Not called yet shows only those', c2.indexOf('9004') >= 0 && c2.indexOf('9003') < 0 && c2.indexOf('9002') < 0, c2);
+  await f.page.click('#w197board [data-w197c="9004"]'); await f.page.waitForTimeout(400);
+  await f.page.fill('#w199callnote', 'Free Tuesdays'); await f.page.click('#w197sheet [data-w199call="9004"][data-o="reached"]'); await f.page.waitForTimeout(500);
+  const c3 = await f.ev(() => ({ log: w199.state().calls.filter(k => k.candidate_id === 9004)[0], sheet: document.getElementById('w197sheet').textContent, card: (document.querySelector('#w197board [data-w197c="9004"]') || {}).textContent }));
+  ok('Calls: logging a call saves who, what and the note', c3.log && c3.log.outcome === 'reached' && c3.log.note === 'Free Tuesdays' && /Steel/.test(c3.log.by_name), c3.log);
+  ok('Calls: the sheet lists it and the card leaves the filter', /Reached/.test(c3.sheet) && !c3.card, c3.card);
+  await shot(f, 'call_sheet');
+  await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+  await f.page.uncheck('#w199notcalled'); await f.page.waitForTimeout(200);
+  ok('Calls: a reached card says Called', /Called Sep 25|Called/.test((await f.ev(() => (document.querySelector('#w197board [data-w197c="9004"]') || {}).textContent)) || ''));
+
+  /* several at once */
+  await f.page.click('#w197apps [data-w199a="selon"]'); await f.page.waitForTimeout(300);
+  ok('Bulk: Select shows the bar', await f.ev(() => !!document.getElementById('w199bulk') && /0 selected/.test(document.getElementById('w199bulk').textContent)));
+  await f.page.click('#w197board [data-w197c="9003"]'); await f.page.click('#w197board [data-w197c="9004"]'); await f.page.waitForTimeout(300);
+  const b1 = await f.ev(() => ({ sheet: document.getElementById('w197sheet') && document.getElementById('w197sheet').classList.contains('open'), n: document.getElementById('w199bulk').textContent, on: document.querySelectorAll('#w197board .w199sel.on').length }));
+  ok('Bulk: clicking cards selects them instead of opening', !b1.sheet && /2 selected/.test(b1.n) && b1.on === 2, b1);
+  await shot(f, 'bulk_select', true);
+  await f.ev(() => { window.__W199UPD = []; var from = db.from.bind(db); db.from = function (t) { var q = from(t); var up = q.update && q.update.bind(q); if (up) q.update = function (p) { window.__W199UPD.push({ t: t, p: p }); return up(p); }; return q; }; });
+  await f.page.selectOption('#w199bulk select[data-w199bulk="owner"]', 'Valex').catch(async () => { await f.ev(() => { var s = document.querySelector('#w199bulk select[data-w199bulk="owner"]'); s.value = s.options[2].value; s.dispatchEvent(new Event('change', { bubbles: true })); }); });
+  await f.page.waitForTimeout(400);
+  await f.page.click('#w197board [data-w197c="9003"]'); await f.page.click('#w197board [data-w197c="9004"]'); await f.page.waitForTimeout(200);
+  await f.page.selectOption('#w199bulk select[data-w199bulk="status"]', 'interview'); await f.page.waitForTimeout(500);
+  const b2 = await f.ev(() => ({ upd: window.__W199UPD.filter(u => u.t === 'hub_candidates').map(u => u.p), st: w197.state().cands.filter(c => c.id === 9003 || c.id === 9004).map(c => c.status + '/' + c.owner) }));
+  ok('Bulk: handled by and stage change every selected application', b2.upd.length === 2 && b2.upd[0].owner && b2.upd[1].status === 'interview' && b2.st.every(s => /^interview\//.test(s)), b2);
+  await f.page.click('#w199bulk [data-w199a="seloff"]'); await f.page.waitForTimeout(300);
+  ok('Bulk: Done closes the bar and clicks open cards again', await f.ev(() => !document.getElementById('w199bulk') && !document.querySelector('#w197board .w199sel')));
+
   /* grades: each person, 1 to 5 stars */
   await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
   const g1 = await f.ev(() => { var card = document.querySelector('#w197board [data-w197c="9002"]'); return card && (card.querySelector('.w199st') || {}).textContent; });

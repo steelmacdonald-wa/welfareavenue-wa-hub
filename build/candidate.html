@@ -73705,6 +73705,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return S.cands.filter(function (c) {
       if (qq && (lower(c.name) + ' ' + lower(c.role) + ' ' + lower(window.w199 ? w199.roleOf(c) : '') + ' ' + lower(c.email)).indexOf(qq) < 0) return false;
       if (ro && !(window.w199 ? w199.match(c, ro) : c.role === ro)) return false;
+      if (window.w199 && w199.notCalledOnly() && !w199.notCalled(c)) return false;   /* wave199: Reviewing, nobody has called */
       if (ow === '__me') return lower(c.owner) === lower(me().name) || lower(c.owner) === lower((me().name || '').split(' ')[0]);
       if (ow === '__none') return !c.owner;
       if (ow) return c.owner === ow;
@@ -74716,9 +74717,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         q(db.from('hub_position_files').select('id,position_id,kind,file_id,name,mime,url,created_time,modified_time,candidate_id,member_id').eq('gone', false).order('created_time', { ascending: false }).limit(2000)),
         q(db.from('hub_position_people').select('*')),
         q(db.from('app_config').select('value').eq('key', 'jd_drive_sync').limit(1)),
-        q(db.from('hub_candidate_grades').select('*').order('updated_at', { ascending: false }).limit(5000))
+        q(db.from('hub_candidate_grades').select('*').order('updated_at', { ascending: false }).limit(5000)),
+        q(db.from('hub_candidate_calls').select('*').order('called_at', { ascending: false }).limit(5000))
       ]);
-      P.pos = res[0]; P.files = res[1]; P.people = res[2]; P.sync = res[3][0] ? res[3][0].value : null; if (typeof P.sync === 'string') { try { P.sync = JSON.parse(P.sync); } catch (e) { P.sync = null; } }   /* app_config.value is text */ P.grades = res[4] || [];
+      P.pos = res[0]; P.files = res[1]; P.people = res[2]; P.sync = res[3][0] ? res[3][0].value : null; if (typeof P.sync === 'string') { try { P.sync = JSON.parse(P.sync); } catch (e) { P.sync = null; } }   /* app_config.value is text */ P.grades = res[4] || []; P.calls = res[5] || [];
       P.at = Date.now(); P.loading = null;
       try { if (window.w197 && /^#hrcentre\/applications/.test(String(location.hash || ''))) w197.paintBoard(); } catch (e) { /* fine */ }
       try { if (window.w197 && w197.loadCands) await w197.loadCands(); } catch (e) { /* fine */ }
@@ -74749,7 +74751,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     }).join('');
     var p = c.position_id ? byId(c.position_id) : null;
     var cv = c.drive_file_id ? P.files.filter(function (f) { return f.file_id === c.drive_file_id; })[0] : null;
-    return gradeField(c) + ivField(c) + '<label for="w199pos1">Position</label><select id="w199pos1" data-w199f="position_id"><option value="">Not linked to a position' + (c.role ? ' (they wrote: ' + E(String(c.role).slice(0, 40)) + ')' : '') + '</option>' + opts + '</select>' +
+    return callField(c) + gradeField(c) + ivField(c) + '<label for="w199pos1">Position</label><select id="w199pos1" data-w199f="position_id"><option value="">Not linked to a position' + (c.role ? ' (they wrote: ' + E(String(c.role).slice(0, 40)) + ')' : '') + '</option>' + opts + '</select>' +
       '<div class="w199links">' + (p && p.jd_url ? '<a class="w197b sm" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">The job description</a>' : (p ? '<span class="w197pill mut">No JD in Drive yet</span>' : '')) +
       (p ? btn('The position', 'data-w199open="' + p.id + '"', 'sm') : '') +
       (cv && cv.url ? '<a class="w197b sm" href="' + E(cv.url) + '" target="_blank" rel="noopener">CV in Drive</a>' : (c.drive_file_id ? '<a class="w197b sm" href="https://drive.google.com/file/d/' + E(c.drive_file_id) + '/view" target="_blank" rel="noopener">CV in Drive</a>' : (p ? '<label class="w197b sm w199up">Upload their CV to Drive<input type="file" data-w199upc="' + c.id + '" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' : ''))) + '</div>';
@@ -74757,6 +74759,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* ---------- grades: each person gives 1 to 5 stars (Steel, 03/10/26: "grade applicants and have that show as well") ---------- */
   function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  function myName() { var n = ''; try { n = (USER && (USER.name || USER.full_name)) || ''; } catch (e) { n = ''; } if (n) return n; var em = myEmail(); var m = members().filter(function (x) { return lower(x.email) === em; })[0]; return (m && m.name) || em; }
   function gradesOf(id) { return (P.grades || []).filter(function (g) { return String(g.candidate_id) === String(id); }); }
   function avgOf(id) { var gs = gradesOf(id); if (!gs.length) return null; return { avg: gs.reduce(function (a, g) { return a + Number(g.stars || 0); }, 0) / gs.length, n: gs.length }; }
   function starTxt(a) { return '\u2605 ' + (Math.round(a.avg * 10) / 10).toFixed(1) + (a.n > 1 ? ' (' + a.n + ')' : ''); }
@@ -74779,26 +74782,96 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         var d = await db.from('hub_candidate_grades').delete().eq('id', mine.id); if (d && d.error) throw d.error;
         P.grades = P.grades.filter(function (g) { return g !== mine; }); toastS('Your grade is cleared');
       } else {
-        var row = { candidate_id: Number(cid), grader_email: em, grader_name: (window.USER && USER.name) || em, stars: n, stage: c ? (c.status || 'new') : null, updated_at: new Date().toISOString() };
+        var row = { candidate_id: Number(cid), grader_email: em, grader_name: myName(), stars: n, stage: c ? (c.status || 'new') : null, updated_at: new Date().toISOString() };
         if (mine) row.note = mine.note || null;
         var r = await db.from('hub_candidate_grades').upsert(row, { onConflict: 'candidate_id,grader_email' }).select('*').single(); if (r && r.error) throw r.error;
         var saved = (r && r.data && r.data.id) ? r.data : Object.assign({}, mine || {}, row);
         P.grades = P.grades.filter(function (g) { return g !== mine; }); P.grades.unshift(saved);
         toastS((c ? c.name + ': ' : '') + n + ' of 5');
       }
-      try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: String(cid), field: 'grade', old_value: mine ? String(mine.stars) : null, new_value: mine && mine.stars === n ? '' : String(n), changed_by: (window.USER && USER.name) || em }); } catch (x) { /* audit */ }
+      try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: String(cid), field: 'grade', old_value: mine ? String(mine.stars) : null, new_value: mine && mine.stars === n ? '' : String(n), changed_by: myName() }); } catch (x) { /* audit */ }
       try { w197.paintBoard(); w197.openSheet(cid); } catch (x) { /* fine */ }
     } catch (e) { toastS('Could not save the grade: ' + (e.message || e)); }
   }
+  /* ---------- calls: has someone called them? (Steel, 03/10/26: "check whether people in reviewed have been called or not") ---------- */
+  var OUTCOMES = [['reached', 'Reached'], ['voicemail', 'Left a voicemail'], ['no_answer', 'No answer'], ['wrong_number', 'Wrong number']];
+  function outLabel(o) { var x = OUTCOMES.filter(function (p) { return p[0] === o; })[0]; return x ? x[1] : o; }
+  function callsOf(id) { return (P.calls || []).filter(function (k) { return String(k.candidate_id) === String(id); }); }
+  function notCalled(c) { return c && c.status === 'reviewing' && !callsOf(c.id).length; }
+  function callPill(c) {
+    if (!c || ['reviewing', 'interview', 'offer'].indexOf(c.status) < 0) return '';
+    var ks = callsOf(c.id); if (!ks.length) return c.status === 'reviewing' ? '<span class="w199ivno">Not called yet</span>' : '';
+    var k = ks[0], reached = ks.some(function (x) { return x.outcome === 'reached'; });
+    return '<span class="' + (reached ? 'w199called' : 'w199tried') + '" title="' + ks.length + (ks.length === 1 ? ' call' : ' calls') + '">' + (reached ? 'Called' : 'Tried') + ' ' + E(shortDay(k.called_at)) + (reached ? '' : ' (' + E(outLabel(k.outcome).toLowerCase()) + (ks.length > 1 ? ', ' + ks.length + 'x' : '') + ')') + '</span>';
+  }
+  function shortDay(t) { try { return new Date(t).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } }
+  function callField(c) {
+    var ks = callsOf(c.id);
+    return '<label>Calls <small>' + (ks.length ? ks.length : 'none yet') + '</small></label>' +
+      '<div class="w199calls"><span>Log a call:</span>' + OUTCOMES.map(function (o) { return '<button type="button" class="w197b sm' + (o[0] === 'reached' ? ' pri' : '') + '" data-w199call="' + c.id + '" data-o="' + o[0] + '">' + E(o[1]) + '</button>'; }).join('') + '</div>' +
+      '<input type="text" id="w199callnote" placeholder="What was said (optional, saved with the call you log)">' +
+      (ks.length ? '<ul class="w199files">' + ks.map(function (k) { return '<li><b>' + E(outLabel(k.outcome)) + '</b><small>' + E(ivText(k.called_at)) + ' \u00b7 ' + E(k.by_name || k.by_email || '') + '</small>' + (k.note ? '<small>' + E(k.note) + '</small>' : '') + '</li>'; }).join('') + '</ul>' : (c.status === 'reviewing' ? '<p class="w197note" style="margin:4px 0 0">Nobody has logged a call yet.</p>' : ''));
+  }
+  async function logCall(cid, outcome) {
+    var nt = document.getElementById('w199callnote'), c = cands().filter(function (x) { return String(x.id) === String(cid); })[0];
+    var row = { candidate_id: Number(cid), outcome: outcome, note: nt && nt.value.trim() ? nt.value.trim().slice(0, 500) : null, by_email: myEmail(), by_name: myName(), stage: c ? (c.status || 'new') : null, called_at: new Date().toISOString() };
+    try {
+      var r = await db.from('hub_candidate_calls').insert(row).select('*').single(); if (r && r.error) throw r.error;
+      P.calls = [(r && r.data && r.data.id) ? r.data : row].concat(P.calls || []);
+      try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: String(cid), field: 'call', old_value: null, new_value: outcome, changed_by: row.by_name }); } catch (x) { /* audit */ }
+      toastS((c ? c.name + ': ' : '') + outLabel(outcome));
+      try { w197.paintBoard(); w197.openSheet(cid); } catch (x) { /* fine */ }
+    } catch (e) { toastS('Could not log the call: ' + (e.message || e)); }
+  }
+  function notCalledOnly() { return !!P.notCalled; }
+
+  /* ---------- several applicants at once (Steel, 03/10/26: "select multiple applicants at a time to do bulk operations") ---------- */
+  P.sel = {};
+  function selIds() { return Object.keys(P.sel).filter(function (k) { return P.sel[k]; }).map(Number); }
+  function selBits(c) { return P.selMode ? '<span class="w199sel' + (P.sel[c.id] ? ' on' : '') + '" aria-hidden="true">' + (P.sel[c.id] ? '\u2713' : '') + '</span>' : ''; }
+  function bulkBar() {
+    var b = document.getElementById('w199bulk');
+    var onApps = /^#hrcentre\/applications/.test(String(location.hash || ''));
+    if (!P.selMode || !onApps) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'w199bulk'; b.setAttribute('role', 'region'); b.setAttribute('aria-label', 'Selected applications'); document.body.appendChild(b); }
+    var n = selIds().length, ms = members().slice().sort(function (a, c) { return a.name.localeCompare(c.name); });
+    var stages = [['new', 'New'], ['reviewing', 'Reviewing'], ['interview', 'Interview'], ['offer', 'Offer'], ['hired', 'Hired'], ['declined', 'Declined'], ['withdrawn', 'Withdrawn']];
+    var pos = DEPTS.map(function (d) { var ps = P.pos.filter(function (p) { return p.dept === d[0]; }); return ps.length ? '<optgroup label="' + E(d[1]) + '">' + ps.map(function (p) { return '<option value="' + p.id + '">' + E(p.title) + '</option>'; }).join('') + '</optgroup>' : ''; }).join('');
+    var dis = n ? '' : ' disabled';
+    b.innerHTML = '<b>' + n + ' selected</b>' + btn('Select all shown', 'data-w199a="selall"', 'sm') + (n ? btn('Clear', 'data-w199a="selnone"', 'sm') : '') +
+      '<select data-w199bulk="status"' + dis + ' aria-label="Move to stage"><option value="">Move to\u2026</option>' + stages.map(function (s) { return '<option value="' + s[0] + '">' + E(s[1]) + '</option>'; }).join('') + '</select>' +
+      '<select data-w199bulk="owner"' + dis + ' aria-label="Handled by"><option value="">Handled by\u2026</option><option value="__none">Nobody</option>' + ms.map(function (m) { return '<option>' + E(m.name) + '</option>'; }).join('') + '</select>' +
+      '<select data-w199bulk="position_id"' + dis + ' aria-label="Position"><option value="">Position\u2026</option>' + pos + '</select>' +
+      btn('Done', 'data-w199a="seloff"', 'sm pri');
+  }
+  function setSelMode(on) { P.selMode = !!on; if (!on) P.sel = {}; try { w197.paintBoard(); } catch (e) { /* fine */ } bulkBar(); }
+  async function bulkApply(field, value) {
+    var ids = selIds(); if (!ids.length || !value) return;
+    var patch = { updated_at: new Date().toISOString(), updated_by: myName() }, label = '';
+    if (field === 'status') { patch.status = value; patch.stage_at = patch.updated_at; label = 'moved to ' + value; }
+    else if (field === 'owner') { patch.owner = value === '__none' ? null : value; label = value === '__none' ? 'handled by nobody' : 'handled by ' + value; }
+    else if (field === 'position_id') { var p = byId(value); if (!p) return; patch.position_id = p.id; patch.role = p.title; label = 'linked to ' + p.title; }
+    else return;
+    var verb = ids.length + (ids.length === 1 ? ' application ' : ' applications ') + label;
+    if (field === 'status' && (value === 'declined' || value === 'withdrawn') && !window.confirm(verb.charAt(0).toUpperCase() + verb.slice(1) + '?')) return;
+    try {
+      var r = await db.from('hub_candidates').update(patch).in('id', ids); if (r && r.error) throw r.error;
+      cands().forEach(function (c) { if (ids.indexOf(Number(c.id)) >= 0) Object.keys(patch).forEach(function (k) { c[k] = patch[k]; }); });
+      try { await db.from('change_log').insert(ids.map(function (id) { return { entity_type: 'candidate', entity_id: String(id), field: field + ' (bulk)', old_value: null, new_value: String(field === 'position_id' ? patch.role : (patch[field] == null ? '' : patch[field])), changed_by: myName() }; })); } catch (x) { /* audit */ }
+      toastS(verb.charAt(0).toUpperCase() + verb.slice(1));
+      P.sel = {}; try { w197.paintBoard(); } catch (x) { /* fine */ } bulkBar();
+    } catch (e) { toastS('Could not update: ' + (e.message || e)); }
+  }
+
   function sortGrade() { return !!P.sortGrade; }
   function gradeAvg(c) { var a = avgOf(c.id); return a ? a.avg : -1; }
-  function barBits() { return '<label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
+  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
 
   /* ---------- interviews: a day and a time (Steel, 03/10/26: "Those in interview stage should have a day and time") ---------- */
   function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
   function ivLocal(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
   function cardBits(c) {
-    var gp = c ? gradePill(c) : '';
+    var gp = c ? selBits(c) + gradePill(c) + callPill(c) : '';
     if (!c || c.status !== 'interview') return gp;
     if (!c.interview_at) return gp + '<span class="w199ivno">No interview time</span>';
     var past = new Date(c.interview_at).getTime() < Date.now();
@@ -74943,16 +75016,30 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
 
   /* ---------- events ---------- */
+  /* in select mode a card click selects it instead of opening it (capture: before wave197's handler) */
+  document.addEventListener('click', function (e) {
+    if (!P.selMode) return; var t = e.target; if (!t || !t.closest) return;
+    var cd = t.closest('#w197board .w197cand, .w197closed .w197cand'); if (!cd) return;
+    e.preventDefault(); e.stopPropagation();
+    var id = cd.getAttribute('data-w197c'); P.sel[id] = !P.sel[id]; try { w197.paintBoard(); } catch (x) { /* fine */ } bulkBar();
+  }, true);
+  document.addEventListener('dragstart', function (e) { if (P.selMode && e.target && e.target.closest && e.target.closest('#w197board .w197cand')) { e.preventDefault(); e.stopPropagation(); } }, true);
+  window.addEventListener('hashchange', function () { if (!/^#hrcentre\/applications/.test(String(location.hash || ''))) { P.selMode = false; P.sel = {}; } bulkBar(); });
   document.addEventListener('click', function (e) {
     var t = e.target; if (!t || !t.closest) return;
     var o = t.closest('[data-w199open]'); if (o) { e.preventDefault(); if (t.closest('#w197sheet')) { try { if (window.w197) w197.state().open = null; } catch (x) { /* fine */ } } load().then(function () { openPos(o.getAttribute('data-w199open')); }); return; }
     var st = t.closest('#w197sheet [data-w199st]'); if (st && P.open) { var k = st.getAttribute('data-w199st'); savePos(P.open, { stage: k }, stageLabel(k)).then(function () { openPos(P.open); if (onPage()) paint(); }); return; }
     var ns = t.closest('#w197sheet [data-w199ns]'); if (ns) { Array.prototype.forEach.call(ns.parentNode.children, function (b) { b.classList.toggle('on', b === ns); }); return; }
+    var cl = t.closest('[data-w199call]'); if (cl) { logCall(cl.getAttribute('data-w199call'), cl.getAttribute('data-o')); return; }
     var gr = t.closest('[data-w199grade]'); if (gr) { setGrade(gr.getAttribute('data-w199grade'), Number(gr.getAttribute('data-n'))); return; }
     var ad = t.closest('[data-w199add]'); if (ad) { addFromFile(ad.getAttribute('data-w199add')); return; }
     var en = t.closest('[data-w199end]'); if (en) { (async function () { await db.from('hub_position_people').update({ until: new Date().toISOString().slice(0, 10) }).eq('id', en.getAttribute('data-w199end')); await load(true); if (P.open) openPos(P.open); toastS('Noted'); })(); return; }
     var a = t.closest('[data-w199a]'); if (!a) return;
     var k2 = a.getAttribute('data-w199a');
+    if (k2 === 'selon') { setSelMode(true); return; }
+    if (k2 === 'seloff') { setSelMode(false); return; }
+    if (k2 === 'selnone') { P.sel = {}; try { w197.paintBoard(); } catch (x) { /* fine */ } bulkBar(); return; }
+    if (k2 === 'selall') { Array.prototype.forEach.call(document.querySelectorAll('#w197board .w197cand'), function (x) { P.sel[x.getAttribute('data-w197c')] = true; }); try { w197.paintBoard(); } catch (x) { /* fine */ } bulkBar(); return; }
     if (k2 === 'shut') shut();
     else if (k2 === 'hiring' || k2 === 'all') { P.all = k2 === 'all'; paint(); }
     else if (k2 === 'unsorted') { e.preventDefault(); P.showUnsorted = !P.showUnsorted; paint(); }
@@ -74973,7 +75060,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var ti = document.getElementById('w199nt'), dp = document.getElementById('w199nd'), on = document.querySelector('#w197sheet [data-w199ns].on');
       if (!ti || !ti.value.trim()) { toastS('A title, please'); return; }
       a.disabled = true; a.textContent = 'Creating\u2026';
-      fn({ action: 'create_position', title: ti.value.trim(), dept: dp.value, stage: on ? on.getAttribute('data-w199ns') : 'requested', owner: (window.USER && USER.name) || null }).then(function (r) { toastS(r.position.title + ' created in Drive'); return load(true).then(function () { openPos(r.position.id); if (onPage()) paint(); }); }).catch(function (x) { toastS(String(x.message || x)); a.disabled = false; a.textContent = 'Create the position'; });
+      fn({ action: 'create_position', title: ti.value.trim(), dept: dp.value, stage: on ? on.getAttribute('data-w199ns') : 'requested', owner: myName() || null }).then(function (r) { toastS(r.position.title + ' created in Drive'); return load(true).then(function () { openPos(r.position.id); if (onPage()) paint(); }); }).catch(function (x) { toastS(String(x.message || x)); a.disabled = false; a.textContent = 'Create the position'; });
     }
   });
   document.addEventListener('change', function (e) {
@@ -74983,6 +75070,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var uc = t.getAttribute && t.getAttribute('data-w199upc'); if (uc) { var c = cands().filter(function (x) { return String(x.id) === uc; })[0]; if (c && c.position_id) upload(t.files && t.files[0], c.position_id, c.id); return; }
     var mv = t.getAttribute && t.getAttribute('data-w199mv'); if (mv && t.value) { var to = t.value === '__unsorted' ? null : Number(t.value); t.disabled = true; fn({ action: 'move_file', file_id: mv, position_id: to }).then(function () { toastS('Moved'); return load(true); }).catch(function (x) { toastS(String(x.message || x)); }).then(function () { if (P.open) openPos(P.open); if (onPage()) paint(); }); return; }
     var pf = t.getAttribute && t.getAttribute('data-w199p'); if (pf && P.open && pf !== 'notes') { var pt = {}; pt[pf] = t.value || null; savePos(P.open, pt, pf === 'owner' ? (t.value ? 'Handled by ' + t.value : 'Nobody handling it') : 'Saved'); return; }
+    var bk = t.getAttribute && t.getAttribute('data-w199bulk'); if (bk) { var v = t.value; t.value = ''; bulkApply(bk, v); return; }
+    if (t.id === 'w199notcalled') { P.notCalled = t.checked; try { w197.paintBoard(); } catch (x) { /* fine */ } return; }
     if (t.id === 'w199sortg') { P.sortGrade = t.checked; try { w197.paintBoard(); } catch (x) { /* fine */ } return; }
     var gn = t.getAttribute && t.getAttribute('data-w199gnote');
     if (gn) {
@@ -75059,12 +75148,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     '.w199st{color:' + GOLD + ';font-weight:700;}.w199st.hi{color:' + GREEN + ';}.w199st.lo{color:' + FLAG + ';}' +
     '.w199grade{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}.w199stars{display:inline-flex;gap:2px;}.w199star{border:none;background:none;cursor:pointer;font-size:26px;line-height:1;padding:2px;color:rgba(16,63,57,.22);}.w199star.on{color:' + GOLD + ';}.w199star:hover{transform:scale(1.12);}.w199grade small{color:var(--wa-muted);font-size:12.5px;}' +
     '#w197sheet #w199gnote{width:100%;box-sizing:border-box;margin-top:8px;font-family:' + BODY + ';font-size:13.5px;padding:8px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';}.w199glist li{gap:8px;}.w199sortg input{flex:none!important;min-width:0!important;padding:0!important;width:16px;height:16px;accent-color:' + GREEN + ';}.w199sortg{font-size:13px;display:inline-flex;align-items:center;gap:6px;color:' + GREEN + ';font-weight:600;cursor:pointer;}' +
+    '.w199sel{display:inline-flex!important;align-items:center;justify-content:center;width:18px;height:18px;border-radius:6px!important;border:2px solid rgba(16,63,57,.35);background:' + CREAM + '!important;color:' + CREAM + '!important;font-size:12px;padding:0!important;}.w199sel.on{background:' + GREEN + '!important;border-color:' + GREEN + ';}.w197cand:has(.w199sel.on){outline:2px solid ' + GREEN + ';outline-offset:1px;}' +
+    '#w199bulk{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:8500;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:' + CREAM + ';border:1px solid rgba(16,63,57,.2);box-shadow:0 18px 40px -18px rgba(16,63,57,.55);border-radius:18px;padding:10px 14px;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;font-family:' + BODY + ';font-size:13.5px;color:' + INK + ';}#w199bulk select{font-family:' + BODY + ';font-size:13px;padding:6px 10px;border:1px solid rgba(16,63,57,.2);border-radius:999px;background:' + CREAM + ';max-width:170px;}' +
+    '.w199called{color:' + TEAL + ';font-weight:700;}.w199tried{color:' + GOLD + ';font-weight:700;}.w199calls{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px;}#w197sheet #w199callnote{width:100%;box-sizing:border-box;margin-top:8px;font-family:' + BODY + ';font-size:13.5px;padding:8px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';}' +
     '.w199iv{color:' + GREEN + ';font-weight:700;}.w199iv.past{color:var(--wa-muted);font-weight:600;}.w199ivno{color:' + FLAG + ';font-weight:700;}' +
     '#w197sheet input[type=datetime-local]{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:14px;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';color:' + INK + ';}#w197sheet input.need{border-color:' + FLAG + ';box-shadow:0 0 0 3px rgba(179,64,47,.12);}' +
     '@media (max-width:600px){.w199grid{grid-template-columns:1fr;}.w199files select{margin-left:0;}}';
   (document.head || document.documentElement).appendChild(css);
 
-  window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, cardBits: cardBits, sortGrade: sortGrade, gradeAvg: gradeAvg, barBits: barBits, setGrade: setGrade, askTime: askTime, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
+  window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, cardBits: cardBits, sortGrade: sortGrade, notCalled: notCalled, notCalledOnly: notCalledOnly, logCall: logCall, selBits: selBits, bulkApply: bulkApply, setSelMode: setSelMode, gradeAvg: gradeAvg, barBits: barBits, setGrade: setGrade, askTime: askTime, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)
