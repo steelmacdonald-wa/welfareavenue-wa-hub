@@ -1,4 +1,5 @@
-// wave194 and wave195 (02/10/26): the account page on welfareavenue.com and the forms that fill in, offline. Serves
+// wave194, wave195 and wave195b (02/10/26): the account page on welfareavenue.com and the forms that fill in, offline.
+// wave195b: team and board members have an account too, with the photo they have in the Hub. Serves
 // build/www/out the way Netlify will (test/www_serve.js, the real CSP) with the Hub mocked: the accounts switch, Supabase
 // Auth (a code, a link from the email, Google's ID token, refresh, sign-out), Google's sign-in script (a stand-in), the
 // site-account function (codes, files, uploads), storage's signed upload, the account_* and volunteer_me* functions and
@@ -288,13 +289,27 @@ const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__g
     const it = calls.find(c => c.auth === 'token?grant_type=id_token');
     ok(it && it.body.provider === 'google' && it.body.id_token === 'fake.id.token' && crypto.createHash('sha256').update(it.body.nonce).digest('hex') === hashed, 'Google: the ID token to Supabase with the raw nonce');
     await ctx.close();
-    const c2 = await context({ googleTeam: true });
+    // wave195b (Steel, 02/10/26): the team and the board have a website account too, with the photo they have in the Hub
+    const PHOTO = SUPA + '/storage/v1/object/public/avatars/u/alex@example.org.jpg?v=1';
+    const c2 = await context({ googleTeam: true, rpc: { account_me: Object.assign({}, ME, { team: { name: 'Alex', title: 'Operations lead, Montreal', department: 'opsmtl', photo: PHOTO } }) } });
+    await c2.ctx.route(SUPA + '/storage/v1/object/public/avatars/**', r => r.fulfill({ status: 200, contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') }));
     await c2.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' });
-    await c2.page.click('#gsi-stub'); await c2.page.waitForSelector('.acct-one');
+    await c2.page.click('#gsi-stub'); await c2.page.waitForSelector('.acct-head');
+    await c2.page.waitForTimeout(300);
     await shot(c2.page, '09-team');
-    ok(/This is a team account/.test(await text(c2.page, '#acct')) && c2.calls.some(c => c.auth === 'logout?scope=local') && !(await c2.page.evaluate(() => localStorage.getItem('wa_site_auth'))), 'Google: a team account is signed out here at once');
-    ok(!c2.calls.some(c => c.fn === 'account_me'), 'Google: a team account reads nothing');
+    const tm = await c2.page.evaluate(() => { const i = document.querySelector('.acct-head img.acct-photo'), l = document.querySelector('.acct-head .acct-team');
+      return { src: i ? i.getAttribute('src') : null, loaded: !!(i && i.complete && i.naturalWidth > 0), line: l ? l.textContent : '', hub: l && l.querySelector('a') ? l.querySelector('a').getAttribute('href') : null,
+        kept: !!localStorage.getItem('wa_site_auth') }; });
+    ok(tm.kept && !c2.calls.some(c => c.auth === 'logout?scope=local') && c2.calls.some(c => c.fn === 'account_me'), 'Google: a team account stays signed in and reads its own account');
+    ok(tm.src === PHOTO && tm.loaded, 'team: the photo they have in the Hub :: ' + JSON.stringify(tm));
+    ok(/On the Welfare Avenue team · Operations lead, Montreal · Open the Hub/.test(tm.line) && tm.hub === 'https://hub.welfareavenue.com', 'team: the team line with their title and the Hub');
+    ok((await c2.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)), 'team: the head still fits');
     await c2.ctx.close();
+    const c2b = await context({ session: session({ team: true }), rpc: { account_me: Object.assign({}, ME, { team: { name: 'Alex', title: null, photo: 'https://elsewhere.test/me.png' } }) } });
+    await c2b.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' }); await c2b.page.waitForSelector('.acct-head');
+    ok(!(await c2b.page.$('.acct-head img')) && /On the Welfare Avenue team · Open the Hub/.test(await text(c2b.page, '.acct-head')), 'team: a picture from anywhere but the Hub is not shown');
+    await c2b.ctx.close();
     const c3 = await context({ gcid: '' });
     await c3.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' });
     ok(!(await c3.page.$('#gsi')) && !c3.calls.some(c => c.gsi) && await c3.page.isVisible('#f-code'), 'Google: no client yet, so only the code by email');
@@ -397,11 +412,11 @@ const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__g
     await c7.page.waitForSelector('#d-phone-e');
     ok(/phone number we can reach/.test(await text(c7.page, '#d-phone-e')) && (await c7.page.inputValue('#d-phone')) === '12', 'details: a refused value is marked and kept');
     await c7.ctx.close();
-    const c8 = await context({ code: { status: 403, body: { error: 'team' } } });
+    const c8 = await context({});
     await c8.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' });
     await c8.page.fill('#a-email', 'someone@welfareavenue.com'); await c8.page.click('#f-code button[type=submit]');
-    await c8.page.waitForSelector('#acct .waf-banner', { timeout: 8000 });
-    ok(/team signs in at hub\.welfareavenue\.com/.test(await text(c8.page, '#acct .waf-banner')), 'code: a team address is sent to the Hub');
+    await c8.page.waitForSelector('#a-code', { timeout: 8000 });
+    ok(c8.calls.some(c => c.site === 'code' && c.body.email === 'someone@welfareavenue.com') && /someone@welfareavenue\.com/.test(await text(c8.page, '#acct')), 'code: a team address gets its code like anyone (wave195b)');
     await c8.ctx.close();
   }
 

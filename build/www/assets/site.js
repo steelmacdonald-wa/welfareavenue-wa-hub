@@ -13,9 +13,10 @@
   function ls(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
 
   /* wave194 (02/10/26): website accounts. A person's sign-in (Google, or a code we email them) stays in this browser under
-     wa_site_auth and is renewed with its refresh token; window.WA is what account.js and forms.js use. A sign-in on this
-     site is never a team sign-in: the Hub's access token hook gives it the wa_volunteer claim, and account.js signs out any
-     other. The "My account" links show once accounts are on (the Hub's site_accounts_mode, read at most every ten minutes)
+     wa_site_auth and is renewed with its refresh token; window.WA is what account.js and forms.js use. A volunteer's or a
+     supporter's sign-in carries the wa_volunteer claim (the Hub's access token hook); since wave195b (Steel, 02/10/26) a team
+     or board member has a website account too, with their own sign-in, used here only for their own account (isAccount).
+     The Hub itself stays for the team and the board. The "My account" links show once accounts are on (the Hub's site_accounts_mode, read at most every ten minutes)
      or when someone is signed in here. */
   var AUTH = 'wa_site_auth', CFG = 'wa_site_cfg';
   function lsj(k, v) {
@@ -77,7 +78,8 @@
     return s && s.access_token ? authFetch('logout?scope=local', {}, s.access_token).then(function () { return null; }, function () { return null; }) : Promise.resolve(null);
   }
   function isVolunteer(s) { var c = s && claims(s.access_token); return !!(c && c.wa_volunteer === true); }
-  window.WA = { session: session, keep: keep, signOut: signOut, forget: function () { lsj(AUTH, null); }, claims: claims, isVolunteer: isVolunteer,
+  function isAccount(s) { var c = s && claims(s.access_token); return !!(c && c.sub); }   /* anyone signed in here: a volunteer, a supporter, the team or the board */
+  window.WA = { session: session, keep: keep, signOut: signOut, forget: function () { lsj(AUTH, null); }, claims: claims, isVolunteer: isVolunteer, isAccount: isAccount,
     authFetch: authFetch, rpc: rpc, config: config };
   var acctLinks = document.querySelectorAll('[data-acct-link]');
   if (acctLinks.length && SUPA && KEY && window.fetch) {

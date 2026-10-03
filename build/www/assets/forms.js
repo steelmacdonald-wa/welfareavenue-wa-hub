@@ -49,7 +49,7 @@
       MODE = (c && c.mode) || 'off';
       if (MODE === 'off') return null;
       return W.session().then(function (s) {
-        if (!s || !W.isVolunteer(s)) return null;
+        if (!s || !W.isAccount(s)) return null;
         return W.rpc('account_prefill', { p_lang: PAGE_LANG }, s).then(function (r) {
           var b = r.body || {};
           if (r.ok && b.linked && b.fill) ACCT = { fill: b.fill, name: b.name || '', email: b.fill.email || s.email || '' };
@@ -164,7 +164,7 @@
       S.sending = true; S.banner = ''; render(a);
       // wave194: a signed-in account sends its own sign-in, so form-submit saves the answers to that person's record
       (ACCT && window.WA ? window.WA.session() : Promise.resolve(null)).then(function (s) {
-        var tok = s && window.WA.isVolunteer(s) ? s.access_token : null;
+        var tok = s && window.WA.isAccount(s) ? s.access_token : null;
         return call('POST', S.form.slug, { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }, tok);
       }).then(function (r) {
         S.sending = false;

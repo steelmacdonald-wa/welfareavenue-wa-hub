@@ -6,8 +6,9 @@
    signed PDF comes back here (and by email).
    Sign-in: Google Identity Services (its button; the ID token goes to Supabase Auth with a nonce), or the site-account
    function's emailed code, verified at /auth/v1/verify (the email's button opens this page with ?t=<token hash>&k=<type>).
-   A sign-in on this site always carries the wa_volunteer claim (the Hub's access token hook); any other, a team or board
-   account, is signed out here at once. Everything else goes through the account_* and volunteer_me* database functions,
+   A volunteer's or a supporter's sign-in carries the wa_volunteer claim (the Hub's access token hook). Since wave195b (Steel,
+   02/10/26) the team and the board have an account here too, with their own sign-in and the photo they have in the Hub (or
+   Slack); the Hub itself stays for the team and the board. Everything else goes through the account_* and volunteer_me* database functions,
    which read only the signed-in person's own record, and the site-account function for files (a 60-second link to their own
    PDF, a signed upload address in their own folder). The switch is the Hub's site_accounts_mode: off (coming soon), test, on.
    ?next=/path returns to a page after signing in (a form that then fills in); ?link=<token> ties a text link's volunteer
@@ -40,12 +41,11 @@
       errLink: 'That sign-in link has expired or was already used. Ask for a new code below.',
       errRate: 'Too many codes were asked for this address or from here. Please wait a while and try again.',
       errBusy: 'We are sending a lot of sign-in codes right now. Please try again in a little while.',
-      errTeam: 'This address is on the Welfare Avenue team. The team signs in at hub.welfareavenue.com.',
       errTest: 'Accounts are being tested with the team for now. They open to everyone soon.',
       errOff: 'Accounts are not open yet.', errServer: 'Something went wrong on our side. Please try again in a minute.',
       errOffline: 'We could not reach Welfare Avenue. Check your connection and try again.',
       errGoogle: 'Google sign-in did not go through. Please try again, or use a code by email.',
-      teamT: 'This is a team account', teamP: 'Accounts on welfareavenue.com are for volunteers, donors and supporters. The Welfare Avenue team signs in at hub.welfareavenue.com, so we closed this sign-in here.', teamBtn: 'Go to the Hub',
+      teamOn: 'On the Welfare Avenue team', teamHub: 'Open the Hub',
       soonT: 'Accounts are coming soon', soonP: 'Soon you will be able to sign in here to see your volunteering, your gifts and receipts, and your email preferences. Until then, the links in our texts have everything for your next serving.',
       hookT: 'Accounts are not open yet', hookP: 'We are switching them on soon. Please come back in a little while.',
       unlinkedT: 'We could not open your record', unlinkedTaken: 'Your record is already connected to another sign-in. Write to us at info@welfareavenue.com and we will sort it out.',
@@ -115,12 +115,11 @@
       errLink: 'Ce lien de connexion a expiré ou a déjà servi. Demandez un nouveau code ci-dessous.',
       errRate: 'Trop de codes ont été demandés pour cette adresse ou depuis cet appareil. Veuillez patienter un peu et réessayer.',
       errBusy: 'Nous envoyons beaucoup de codes en ce moment. Veuillez réessayer un peu plus tard.',
-      errTeam: 'Cette adresse fait partie de l’équipe Welfare Avenue. L’équipe se connecte sur hub.welfareavenue.com.',
       errTest: 'Les comptes sont en essai avec l’équipe pour l’instant. Ils ouvriront à tout le monde bientôt.',
       errOff: 'Les comptes ne sont pas encore ouverts.', errServer: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       errOffline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.',
       errGoogle: 'La connexion avec Google n’a pas fonctionné. Veuillez réessayer, ou utilisez un code par courriel.',
-      teamT: 'Ce compte fait partie de l’équipe', teamP: 'Les comptes de welfareavenue.com sont pour les bénévoles, les donateurs et les sympathisants. L’équipe de Welfare Avenue se connecte sur hub.welfareavenue.com; nous avons donc fermé cette session ici.', teamBtn: 'Aller au Hub',
+      teamOn: 'Dans l’équipe Welfare Avenue', teamHub: 'Ouvrir le Hub',
       soonT: 'Les comptes arrivent bientôt', soonP: 'Vous pourrez bientôt vous connecter ici pour voir votre bénévolat, vos dons et vos reçus, et vos préférences de courriel. D’ici là, les liens de nos textos contiennent tout pour votre prochain service.',
       hookT: 'Les comptes ne sont pas encore ouverts', hookP: 'Nous les activons bientôt. Revenez un peu plus tard.',
       unlinkedT: 'Nous n’avons pas pu ouvrir votre dossier', unlinkedTaken: 'Votre dossier est déjà relié à une autre connexion. Écrivez-nous à info@welfareavenue.com et nous réglerons la situation.',
@@ -273,7 +272,7 @@
     });
   }
   function codeError(e) {
-    return { rate: t('errRate'), busy: t('errBusy'), team: t('errTeam'), test: t('errTest'), off: t('errOff'), email: t('errEmail') }[e] || t('errServer');
+    return { rate: t('errRate'), busy: t('errBusy'), test: t('errTest'), off: t('errOff'), email: t('errEmail') }[e] || t('errServer');
   }
   function onCodeSubmit(fm) {
     if (S.busy) return;
@@ -340,7 +339,6 @@
     }).then(function (s) {
       if (S.cfg.mode === 'off') { S.had = !!s; S.view = 'soon'; paint(); return null; }
       if (!s) { S.view = 'signin'; paint(); return null; }
-      if (!WA.isVolunteer(s)) { WA.signOut(); S.view = 'team'; paint(); return null; }
       return linkThenMe(s);
     }).catch(function () { say('top', t('errOffline'), 'warn'); S.view = 'error'; paint(); });
   }
@@ -396,7 +394,6 @@
     else if (v === 'soon') box.innerHTML = one(t('soonT'), '<p class="mb0">' + E(t('soonP')) + '</p>' + (S.had ? outLine() : ''));
     else if (v === 'signin') paintSignin();
     else if (v === 'code') paintCode();
-    else if (v === 'team') box.innerHTML = one(t('teamT'), '<p>' + E(t('teamP')) + '</p><div class="btns mt1"><a class="btn small" href="' + HUB + '">' + E(t('teamBtn')) + '</a></div>');
     else if (v === 'hook') box.innerHTML = one(t('hookT'), '<p class="mb0">' + E(t('hookP')) + '</p>');
     else if (v === 'unlinked') {
       var taken = S.me && S.me.reason === 'taken';
@@ -439,8 +436,13 @@
   function paintProfile() {
     var m = S.me, c = m.contact || {}, first = c.first_name || String(c.full_name || '').split(' ')[0] || '';
     var secs = ['details'].concat(m.volunteer ? ['vol', 'letters'] : ['vol']).concat(['gifts', 'emails']);
-    box.innerHTML = '<div class="acct-head"><div><h2>' + E(first ? f('hi', { n: first }) : t('hiNone')) + '</h2><p class="fine mb0">' + E(f('signedAs', { e: m.email || '' })) +
-      ' · <button type="button" class="linkish" data-act="out">' + E(t('out')) + '</button></p></div><nav class="acct-nav" aria-label="' + E(t('navL')) + '"><ul>' +
+    // wave195b: a team or board member: the photo they have in the Hub (only from the Hub's avatars), their title, the Hub
+    var tm = m.team || null, photo = tm && String(tm.photo || '').indexOf(SUPA + '/storage/v1/object/public/avatars/') === 0 ? String(tm.photo) : '';
+    box.innerHTML = '<div class="acct-head"><div class="acct-who">' + (photo ? '<img class="acct-photo" src="' + E(photo) + '" alt="" width="72" height="72">' : '') +
+      '<div><h2>' + E(first ? f('hi', { n: first }) : t('hiNone')) + '</h2><p class="fine mb0">' + E(f('signedAs', { e: m.email || '' })) +
+      ' · <button type="button" class="linkish" data-act="out">' + E(t('out')) + '</button></p>' +
+      (tm ? '<p class="fine mb0 acct-team">' + E(t('teamOn')) + (tm.title ? ' · ' + E(tm.title) : '') + ' · <a href="' + HUB + '">' + E(t('teamHub')) + '</a></p>' : '') +
+      '</div></div><nav class="acct-nav" aria-label="' + E(t('navL')) + '"><ul>' +
       secs.map(function (s) { return '<li><a href="#a-' + s + '">' + E(t('nav_' + s)) + '</a></li>'; }).join('') + '</ul></nav></div>' + note('top') +
       '<div class="acct-secs">' + secs.map(function (s) { return '<section class="card acct-sec" id="a-' + s + '" aria-labelledby="a-' + s + '-h"></section>'; }).join('') +
       '<section class="card acct-sec acct-help"><h2>' + E(t('helpT')) + '</h2><p class="mb0">' + withMail(t('helpP')) + ' <a href="' + PRIV + '">' + E(t('privacy')) + '</a></p></section></div>';

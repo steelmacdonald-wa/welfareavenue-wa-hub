@@ -456,6 +456,11 @@ details.more>.in{padding:0 22px 22px}
 .btn[disabled]{opacity:.6;cursor:progress}
 .acct-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px 24px;margin:0 0 22px}
 .acct-head h2{font-size:clamp(34px,3.4vw,46px);margin:0 0 6px}
+/* wave195b: a team or board member's photo from the Hub, and the team line */
+.acct-who{display:flex;align-items:center;gap:16px;min-width:0}
+.acct-photo{width:72px;height:72px;border-radius:50%;object-fit:cover;flex:0 0 auto;border:3px solid var(--gold);background:var(--sand)}
+.acct-team{color:var(--green);font-weight:600}
+@media (max-width:560px){.acct-photo{width:56px;height:56px}}
 .acct-nav ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
 .acct-nav a{display:inline-block;border:1px solid var(--green);background:var(--white);padding:7px 12px;font-size:14px;line-height:1.2;text-decoration:none}
 .acct-nav a:hover{background:var(--green);color:var(--white)}

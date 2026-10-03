@@ -5,7 +5,7 @@ Two asks from Steel on 02/10/26, built in one session. The website accounts were
 - **The Hub:** live md5 `7f576e8ee27bb7344fef41296658ea54` (from `e07376da`), the segment inserted before WA v164 in part 10 by an md5-guarded patch, published by host-sync; `build/candidate.html` is the live build.
 - **The website:** the launch build with the account page (`/account/`, `/fr/compte/`) and the privacy page (`/privacy/`, `/fr/confidentialite/`), deployed through `www_files` and www-sync. Accounts are switched off: `app_config.site_accounts_mode` is `off`, so the account page says it is coming soon.
 - **The database:** `wa194_site_accounts` and `wa195_signoffs` (in `build/data`).
-- **Functions:** `site-account` v1 (new; its source joins the repo with its next version), `signoff` v1 (new), `form-submit` v5 (platform version 10).
+- **Functions:** `site-account` v3 (platform version 2), `signoff` v1 (new), `form-submit` v5 (platform version 10).
 
 ## What Steel asked
 
@@ -23,7 +23,7 @@ Later the same evening he confirmed the line between the two: volunteers, donors
 - **Letters:** ask for an hours sign-off letter, a letter of recognition, or their own school or employer form signed (a PDF upload). They follow the request, can withdraw it while it waits, and download the signed PDF, or read the team's note if it was declined.
 - **Forms fill in** for a signed-in person, and what they type is saved back to their record.
 - **Privacy notice** in English and French: what we keep, why, who processes it (Supabase, Netlify, Stripe, Resend, Quo, Google), no tracking cookies, the Commission d'accès à l'information du Québec.
-- A team or board address is turned away on the website and pointed to the Hub.
+- Team and board members have an account too (wave195b, below).
 
 **In the Hub (live):**
 
@@ -50,10 +50,21 @@ Later the same evening he confirmed the line between the two: volunteers, donors
 - The release gate against the live build: `w134drive` 34 of 34, `w176drive` 14 of 14, `w191drive` 39 of 39, `w192drive` 79 of 79, `w190drive` 25 of 25, `w153drive` the same two failures as live, every page tour (the new one highlights its three sections), and the page harness for staff, board and a member: the only difference is the Sign-offs chip in the Volunteer Manager (other differences also vary between two runs of the live build).
 - The signoff function's `check` drew test letters live with the brand fonts and the lockup.
 
+## wave195b: the team on the website (the same evening)
+
+Steel, 02/10/26: "I'd like for the team members to also sign into the website for an account there as well. Um, and allow them to use the same photos and stuff that they have in the hub and Slack and all that to uh, eventually go on the team page for their logos um, or their profile pictures." He had just confirmed that the Hub stays for the team and the board.
+
+- **site-account v3** (platform version 2): a team or board address gets a sign-in code like anyone else.
+- **The account page:** a team or board member's sign-in stays (no more "This is a team account"); `WA.isAccount` in `site.js` replaces the volunteer-only check in `forms.js` too, so their forms fill in and save. The head of their profile shows the photo they have in the Hub (`team_members.avatar_url`: their own upload, else Slack, else Google Workspace, kept by directory-sync; shown only from the Hub's public avatars bucket), with "On the Welfare Avenue team", their title and Open the Hub.
+- **The database:** `account_me` returns `team` (their roster name, title, team and photo, matched by their email or an alias in `wa_email_aliases`; a board viewer not on the roster gets `team` without a name or photo), patched in place by `build/data/wa195b_team_accounts.sql` (md5-guarded). Checked with Steel's team account in a rolled-back transaction.
+- **A team member's website session is their own sign-in**, so it carries their usual access; the website uses it only for their own account. The Hub's door is unchanged (wave175b).
+- **Tests:** `test/w194www.js` 90 (a team account stays signed in, its Hub photo, the team line, a picture from anywhere else is not shown, a team address gets its code); `test/w162www.js` 752.
+- **Live:** the website's 4 assets and 19 pages that reference them (www-sync deploy, 23 files), accounts still off.
+
 ## Still to do
 
 1. **Steel's Google step for the website:** a new Google Cloud project for the public site (External, In production, app name Welfare Avenue, home page welfareavenue.com, privacy policy welfareavenue.com/privacy/, scopes email and profile), a web OAuth client with `https://welfareavenue.com` and `https://www.welfareavenue.com` as JavaScript origins, its client ID added in Supabase (Authentication, Providers, Google, after the Hub's), then `app_config.site_google_client_id`, `site_accounts_mode` test, then on.
 2. **At switch-on:** hub.welfareavenue.com/me redirects to welfareavenue.com/account/, and the confirm page's Save to my account (`ACCT_ON` in `build/c/src.html`) points there.
-3. **Next (Steel, 02/10/26):** team and board members get a website account too, with the photo they already have in the Hub or Slack, ready for the website's team page later.
+3. **Later (Steel, 02/10/26):** the website's team page shows the team with the photos they have in the Hub.
 4. Steel saves his signature in Sign-offs, My signature, and reads the privacy notice.
 5. The temporary stage tables are dropped once Steel confirms.
