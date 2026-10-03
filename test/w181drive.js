@@ -164,7 +164,7 @@ const INIT = `(function(){ window.__rpc = []; var _s;
   ok('import: another CSV is refused with a reason', /does not look like Slack/.test(await f.ev(() => document.getElementById('w181ierr').textContent)));
   await f.ev(() => closeModal());
   /* the tour */
-  ok('tour: a stop for Analytics after Sections', await f.ev(() => { const s = w122.tours.hrcentre.steps; const i = s.findIndex(x => /w181/.test(x.s)); return i > 0 && /Sections/.test(s[i - 1].t) && /Analytics/.test(s[i - 1].p); }));
+  ok('tour (wave197): the pages stop names Analytics', await f.ev(() => w122.tours.hrcentre.steps.some(x => /pages/i.test(x.t) && /Analytics/.test(x.p))));
   /* leaving the tab */
   await f.ev(() => document.querySelector('#w46body .w47tab[data-w47v="onboarding"]').click()); await f.page.waitForTimeout(400);
   ok('another tab hides Analytics', await f.ev(() => !document.getElementById('w181').classList.contains('on')));
@@ -222,4 +222,4 @@ const INIT = `(function(){ window.__rpc = []; var _s;
   console.log(out.join('\n'));
   console.log('\nw181drive: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
-})().catch(e => { console.error(e); process.exit(2); });
+})().catch(e => { console.log(out.join("\n")); console.error(e); process.exit(2); });

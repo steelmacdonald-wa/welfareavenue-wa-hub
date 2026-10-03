@@ -43,7 +43,7 @@
 
   /* ---------- the title follows the section (the app bar says Finance, the rail says where) ---------- */
   var SECT = {
-    overview: ['Finance', 'The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.'],
+    overview: ['Overview', 'The year so far: what came in, what went out, how healthy the numbers are, and the finance work in flight.'],
     tasks: ['Tasks', 'Finance\u2019s own board: bills to pay, receipts to file, reimbursements to approve. Invoices and receipts sent to hub@ land here, and #accounting-finance hears about each one.'],
     trends: ['Trends', 'Income against spending month by month, the net position over the year, and each fiscal year side by side.'],
     money: ['Money map', 'Where the money comes from and where it goes: by category, by merchant and by team.'],

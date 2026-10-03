@@ -1,0 +1,776 @@
+/* =====================================================================
+   WA v197 the HR centre, rebuilt for Valex, and page names in every app (03/10/26)
+   =====================================================================
+   Steel (02/10/26): "The HR center app of the HUB needs a full revamp on how
+   it's displayed ... it says HR Center too many times, I think it should say
+   just the page name ... that's for all apps." And for the HR centre: buttons
+   that are not consistent, sections repeated across pages (last sign-in,
+   commitment), pages that hold things unrelated to their name, and "I'd also
+   like it to be easy to navigate the recruitment process. The intended purpose
+   is to make it easy to manage HR so that Valex can easily navigate this
+   center and do more with less time."
+   His choices (02/10/26): the layout below; hours from The Loop only (the Slack
+   hours table goes; its data stays in the database); French follows in wave198.
+
+   1. Every app: the big title is the page's name (the rail's item), the crumb
+      inside the page goes, and on a computer the app bar above the page goes
+      (the sidebar already names the app); its buttons (Add a contact, Text
+      volunteers) move into the page's header. Phones keep their bar (it holds
+      the menu).
+   2. The HR centre's rail: Overview; People: Team, Hours, Time off,
+      Recognition; Hiring: Applications, Positions, Playbook; Growth:
+      Onboarding, Onboarding plan, Training; Care: Policies, Discipline;
+      Reports: Analytics (HR and admins). Each address #hrcentre/<page> opens
+      exactly that page.
+   3. Nothing repeats: the hero, the second intro, and the five sections that
+      sat under every page (meeting attendance, quizzes, scope of work, time
+      off, Hub engagement) each live on one page. Hub engagement leaves HR
+      (the Admin centre's Adoption has sign-ins and use); the Slack scope of
+      work becomes what people shared in The Loop.
+   4. New: Overview (HR's to-do list and the numbers), Applications as a
+      stage board with a candidate sheet, Hours from The Loop (minimums,
+      below-minimum first, open sessions counted at most eight hours).
+   How it works: the older waves still draw their sections; this wave tags
+   each one with the page it belongs to (data-w197s) and shows only the
+   current page's (#hrcentre[data-w197]); it clicks the older tab a page
+   needs so its data loads. No data model change.
+   ===================================================================== */
+(function () {
+  if (window.__wa197) return; window.__wa197 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var MUTED = 'var(--wa-muted)';
+  var FOUNDERS = ['steel.macdonald@welfareavenue.com', 'steelmacdonald@gmail.com', 'suhaib.abdillahi@welfareavenue.com'];
+  var STAGES = [['new', 'New'], ['reviewing', 'Reviewing'], ['interview', 'Interview'], ['offer', 'Offer'], ['hired', 'Hired']];
+  var CLOSED = [['declined', 'Declined'], ['withdrawn', 'Withdrawn']];
+
+  /* the pages: key, label, rail icon, group, the older tab whose data it needs, the line under the title */
+  var PAGES = [
+    { k: 'overview', l: 'Overview', ic: 'home', g: '', tab: 'people', d: 'What needs HR today, and the numbers that matter. Each line opens the page where you deal with it.' },
+    { k: 'team', l: 'Team', ic: 'people', g: 'People', tab: 'people', d: 'Everyone on the roster: their team, role, start date and open tasks. Open a profile for the whole picture.' },
+    { k: 'hours', l: 'Hours', ic: 'target', g: 'People', tab: null, d: 'Time given through The Loop against each person\u2019s weekly minimum, what people shared, and who came to their team\u2019s meetings.' },
+    { k: 'timeoff', l: 'Time off', ic: 'cal', g: 'People', tab: null, d: 'Requests waiting on a decision, logging time off, and the days taken this fiscal year.' },
+    { k: 'recognition', l: 'Recognition', ic: 'star', g: 'People', tab: 'people', d: 'Shout-outs: good work, noticed. They also rotate on the loading screen.' },
+    { k: 'applications', l: 'Applications', ic: 'search', g: 'Hiring', tab: 'recruitment', d: 'Every application from hub@ and the job boards, by stage. Drag a card to move it, or open it to read, decide and take notes.' },
+    { k: 'positions', l: 'Positions', ic: 'list', g: 'Hiring', tab: 'recruitment', d: 'Open roles (hiring requests) and the people being set up after they said yes.' },
+    { k: 'playbook', l: 'Playbook', ic: 'book', g: 'Hiring', tab: 'recruitment', d: 'How we recruit: the playbook, interview and offer templates, and the team structure.' },
+    { k: 'onboarding', l: 'Onboarding', ic: 'clip', g: 'Growth', tab: 'onboarding', d: 'Who is onboarding and how far along, assigning an onboarding, the quizzes and what new members said.' },
+    { k: 'plan', l: 'Onboarding plan', ic: 'layers', g: 'Growth', tab: 'onboarding', d: 'The master onboarding: every week and step new people see. Changes reach everyone still onboarding.' },
+    { k: 'training', l: 'Training', ic: 'cap', g: 'Growth', tab: 'training', d: 'Trainings assigned to the organization, how far each person is, and the catalog.' },
+    { k: 'policies', l: 'Policies', ic: 'form', g: 'Care', tab: 'policies', d: 'Each policy, who has signed it and who has not.' },
+    { k: 'discipline', l: 'Discipline', ic: 'shield', g: 'Care', tab: 'discipline', d: 'Progressive discipline per the handbook: every entry dated and attributed. People can see their own record.' },
+    { k: 'analytics', l: 'Analytics', ic: 'chart', g: 'Reports', tab: 'analytics', d: 'Who has been part of Welfare Avenue and for how long: the team over time, retention and who left.', only: 'analytics' }
+  ];
+  var OLD = { people: 'team', recruitment: 'applications', commitment: 'hours' };   /* older addresses that now open a new page */
+  var S = { page: 'overview', cands: [], candsAt: 0, cLoading: null, ck: [], ckAt: 0, feed: [], mins: { member: 3, manager: 5 }, timeoff: [], pol: [], sig: [], onb: [], tp: [], data: null, dLoading: null, drag: null, open: null, filterOwner: '', q: '', showClosed: false, hoursWeeks: 4 };
+
+  function E(s) { return (typeof esc === 'function') ? esc(s) : String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function me() { try { return { email: lower(USER && USER.email), name: (USER && USER.name) || '' }; } catch (e) { return { email: '', name: '' }; } }
+  function isAdmin() { if (FOUNDERS.indexOf(me().email) >= 0) return true; try { return !!(WA40_MINE && WA40_MINE.role === 'admin'); } catch (e) { return false; } }
+  function canHr() { try { if (typeof window.wa46IsHr === 'function') return window.wa46IsHr(); } catch (e) { /* fine */ } return isAdmin(); }
+  function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); }); }
+  function memberByEmail(em) { em = lower(em); return members().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function teamLabel(d) { try { return (window.WA_TEAMS && WA_TEAMS.label && WA_TEAMS.label[d]) || (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function av(m, size) { try { return window.w116Avatar ? window.w116Avatar(m, size) : ''; } catch (e) { return ''; } }
+  function toastS(t) { try { toast(t); } catch (e) { /* fine */ } }
+  function fmtH(min) { min = Math.round(Number(min) || 0); var h = Math.floor(min / 60), m = min % 60; return h ? h + 'h' + (m ? ' ' + (m < 10 ? '0' : '') + m + 'm' : '') : m + 'm'; }
+  function ago(s) { if (!s) return ''; var d = (Date.now() - new Date(s).getTime()) / 86400000; if (d < 1) return 'today'; if (d < 2) return 'yesterday'; if (d < 14) return Math.round(d) + ' days ago'; try { return new Date(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } }
+  function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function pageDef(k) { return PAGES.filter(function (p) { return p.k === k; })[0] || null; }
+  function subNow() { var h = String(location.hash || ''); if (h.indexOf('#hrcentre') !== 0) return null; var s = h.replace(/^#/, '').split('/')[1] || ''; s = s.split('?')[0]; if (OLD[s]) s = OLD[s]; return pageDef(s) ? s : 'overview'; }
+  function onHr() { var p = document.getElementById('hrcentre'); return !!p && p.classList.contains('active') && String(location.hash || '').indexOf('#hrcentre') === 0; }
+  function seesAnalytics() { return !!document.querySelector('#hrcentre .w47tab[data-w47v="analytics"]'); }
+  function btn(label, attrs, kind) { return '<button type="button" class="w197b' + (kind ? ' ' + kind : '') + '" ' + (attrs || '') + '>' + label + '</button>'; }
+
+  var css = document.createElement('style');
+  css.id = 'wa197css';
+  css.textContent = '' +
+    /* ---------- 1. every app: the page's name, no crumb, no bar on a computer ---------- */
+    'body.w153app .w118mast .crumb,body.w153app .w116ptop .crumb{display:none!important;}' +
+    '@media (min-width:901px){body.w153app #w153bar{display:none!important;}body.w153app .w118adm{display:none!important;}}' +
+    '@media (max-width:900px){body.w153app #w153bar .w153bc > span:not(.w153ai){display:none!important;}}' +
+    '.w118mast .w197acts{position:absolute;right:0;top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;}' +
+    '.w118mast .w197acts .w43help{position:static!important;margin:0!important;}' +
+    '.w197pact{display:inline-flex;align-items:center;gap:6px;border:none;border-radius:999px;padding:9px 16px;background:' + GREEN + ';color:' + CREAM + ';font-family:' + BODY + ';font-size:13px;font-weight:700;cursor:pointer;}' +
+    '.w197pact:hover{background:#0c332e;}.w197pact svg{width:15px;height:15px;}' +
+    '@media (max-width:900px){.w118mast .w197acts{position:static;margin-top:8px;justify-content:flex-start;}.w197pact{display:none;}}' +
+    /* ---------- 2. the HR centre: one page at a time ---------- */
+    '#hrcentre[data-w197] [data-w197s]:not(.w197on){display:none!important;}' +
+    '#hrcentre[data-w197] .w197on.w197blk{display:block!important;}' +
+    '#hrcentre[data-w197] .w197x{display:none!important;}' +
+    /* a section an older wave has just redrawn stays out of sight until it is tagged (a few milliseconds) */
+    '#hrcentre[data-w197] #w46body > :not([data-w197s]):not(.w47tabs){display:none!important;}' +
+    '#hrcentre[data-w197] > :not([data-w197s]):not(.w118mast):not(.w197main){display:none!important;}' +
+    '#hrcentre[data-w197] > .w197main{background:transparent;box-shadow:none;border:none;padding:0;}' +
+    '#hrcentre[data-w197] #w46body{display:block;}' +
+    '#hrcentre[data-w197] .w47tabs{display:none!important;}' +
+    /* one look for every section */
+    '#hrcentre[data-w197] .w197card,#hrcentre[data-w197] #w46body > .w46sec,#hrcentre[data-w197] #w144hr,#hrcentre[data-w197] #w145quiz,#hrcentre[data-w197] #w105to,#hrcentre[data-w197] #w105pol,#hrcentre[data-w197] #w105disc,#hrcentre[data-w197] #w116ppeople,#hrcentre[data-w197] #w181{background:var(--wa-card);border:1px solid rgba(16,63,57,.10);border-radius:18px;padding:20px 22px;margin:0 0 16px;box-shadow:0 10px 26px -22px rgba(16,63,57,.45);font-family:' + BODY + ';}' +
+    '#hrcentre[data-w197] #w106polsec,#hrcentre[data-w197] #w106discsec{margin:0;padding:0;border:none;background:none;}' +
+    '#hrcentre[data-w197] .w197card h2,#hrcentre[data-w197] #w46body > .w46sec > h3,#hrcentre[data-w197] #w144hr > h2,#hrcentre[data-w197] #w145quiz > h2,#hrcentre[data-w197] #w105to > h2,#hrcentre[data-w197] #w106polsec h2,#hrcentre[data-w197] #w106discsec h2{font-family:' + HEAD + ';font-weight:600;font-size:22px;letter-spacing:.4px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 6px;}' +
+    '#hrcentre[data-w197] .w46sec h3.w197sub{font-size:17px;margin:18px 0 6px;}' +
+    /* buttons: one family */
+    '.w197b,#hrcentre[data-w197] .w144btn,#hrcentre[data-w197] .w145btn,#hrcentre[data-w197] #w105to button,#hrcentre[data-w197] #w106polsec button,#hrcentre[data-w197] #w106discsec button,#hrcentre[data-w197] #w116ppeople .btn,#hrcentre[data-w197] .w169bar button{font-family:' + BODY + '!important;font-size:13px!important;font-weight:700!important;letter-spacing:0!important;text-transform:none!important;border-radius:999px!important;padding:8px 15px!important;cursor:pointer;line-height:1.2!important;}' +
+    '#hrcentre[data-w197] #w105pol button,#hrcentre[data-w197] #w105disc button,#hrcentre[data-w197] #w105to button{background:' + GREEN + '!important;color:' + CREAM + '!important;border:1px solid ' + GREEN + '!important;box-shadow:none!important;}' +
+    '#hrcentre[data-w197] #w105disc button + button,#hrcentre[data-w197] #w116ppeople .btn{background:transparent!important;color:' + GREEN + '!important;border:1px solid rgba(16,63,57,.25)!important;box-shadow:none!important;}' +
+    '#hrcentre[data-w197] #w169cardT .w169lead button,#hrcentre[data-w197] #w169cardT .w169lead .w169btn{background:' + GREEN + '!important;color:' + CREAM + '!important;}' +
+    '.w197b{border:1px solid rgba(16,63,57,.22);background:transparent;color:' + GREEN + ';}' +
+    '.w197b:hover{background:rgba(16,63,57,.06);}' +
+    '.w197b.pri{background:' + GREEN + ';border-color:' + GREEN + ';color:' + CREAM + ';}.w197b.pri:hover{background:#0c332e;}' +
+    '.w197b.sm{padding:5px 11px!important;font-size:12px!important;}' +
+    '.w197b.warn{color:' + FLAG + ';border-color:rgba(179,64,47,.35);}' +
+    /* the page head (title and actions) inside the masthead */
+    '#hrcentre .w197lead{font-size:13.5px;color:' + MUTED + ';margin:-4px 0 16px;max-width:720px;line-height:1.5;}' +
+    /* tiles */
+    '.w197tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:0 0 16px;}' +
+    '.w197tile{background:var(--wa-card);border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 16px;text-align:left;cursor:pointer;font-family:' + BODY + ';color:' + INK + ';}' +
+    '.w197tile:hover{border-color:rgba(16,63,57,.35);}' +
+    '.w197tile b{display:block;font-family:' + HEAD + ';font-size:34px;line-height:1;color:' + GREEN + ';font-weight:600;}' +
+    '.w197tile span{display:block;font-size:12.5px;color:' + MUTED + ';margin-top:6px;line-height:1.3;}' +
+    '.w197tile.hot b{color:' + FLAG + ';}' +
+    /* the to-do list */
+    '.w197todo{list-style:none;margin:0;padding:0;}' +
+    '.w197todo li{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid rgba(16,63,57,.08);}' +
+    '.w197todo li:first-child{border-top:none;}' +
+    '.w197todo .n{flex:none;min-width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:' + HEAD + ';font-size:22px;font-weight:600;background:rgba(220,165,39,.18);color:' + GREEN + ';}' +
+    '.w197todo .n.ok{background:rgba(42,140,122,.14);}' +
+    '.w197todo .t{flex:1;min-width:0;}.w197todo .t b{display:block;font-size:14.5px;color:' + INK + ';}.w197todo .t small{display:block;font-size:12.5px;color:' + MUTED + ';margin-top:2px;line-height:1.4;}' +
+    '.w197done{font-size:14px;color:' + TEAL + ';font-weight:700;padding:6px 0;}' +
+    '.w197grid2{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:16px;align-items:start;}' +
+    '@media (max-width:1100px){.w197grid2{grid-template-columns:1fr;}}' +
+    /* the applications board */
+    '.w197bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 14px;}' +
+    '.w197bar input,.w197bar select{font-family:' + BODY + ';font-size:13.5px;padding:8px 13px;border:1px solid rgba(16,63,57,.2);border-radius:999px;background:var(--wa-card);color:' + INK + ';}' +
+    '.w197bar input{flex:1;min-width:180px;}' +
+    '.w197board{display:grid;grid-template-columns:repeat(5,minmax(210px,1fr));gap:12px;overflow-x:auto;padding-bottom:6px;}' +
+    '.w197col{background:rgba(16,63,57,.045);border-radius:16px;padding:10px;min-height:160px;display:flex;flex-direction:column;gap:8px;transition:background .12s;}' +
+    '.w197col.over{background:rgba(220,165,39,.18);}' +
+    '.w197col h4{margin:2px 4px 4px;font-family:' + HEAD + ';font-size:17px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:' + GREEN + ';display:flex;justify-content:space-between;align-items:center;}' +
+    '.w197col h4 small{font-family:' + BODY + ';font-size:12px;font-weight:700;background:var(--wa-card);border-radius:999px;padding:1px 8px;color:' + GREEN + ';}' +
+    '.w197cand{background:var(--wa-card);border:1px solid rgba(16,63,57,.10);border-radius:12px;padding:10px 12px;cursor:pointer;font-family:' + BODY + ';text-align:left;width:100%;color:' + INK + ';}' +
+    '.w197cand:hover{border-color:rgba(16,63,57,.35);}' +
+    '.w197cand[draggable=true]{cursor:grab;}' +
+    '.w197cand b{display:block;font-size:14px;line-height:1.25;}' +
+    '.w197cand .r{display:block;font-size:12px;color:' + MUTED + ';margin-top:3px;line-height:1.3;}' +
+    '.w197cand .m{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;}' +
+    '.w197cand .m span{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:rgba(16,63,57,.07);color:' + GREEN + ';}' +
+    '.w197cand .m span.who{background:rgba(111,100,171,.14);color:' + PURPLE + ';}' +
+    '.w197cand .m span.age{background:rgba(220,165,39,.2);}' +
+    '.w197cand .m span.ok{background:rgba(42,140,122,.14);color:' + TEAL + ';}' +
+    '.w197closed{margin-top:14px;font-size:13px;color:' + MUTED + ';}' +
+    '.w197closed .w197cand{display:inline-block;width:auto;margin:4px 6px 0 0;padding:6px 10px;}' +
+    '@media (max-width:900px){.w197board{grid-template-columns:repeat(5,minmax(240px,82vw));scroll-snap-type:x mandatory;}.w197col{scroll-snap-align:start;}}' +
+    /* the candidate sheet */
+    '#w197sheet{position:fixed;inset:0;z-index:9000;display:none;}' +
+    '#w197sheet.open{display:block;}' +
+    '#w197sheet .bk{position:absolute;inset:0;background:rgba(31,32,30,.38);}' +
+    '#w197sheet .pn{position:absolute;right:0;top:0;bottom:0;width:min(560px,100%);background:' + CREAM + ';box-shadow:-20px 0 40px -20px rgba(16,63,57,.4);overflow-y:auto;padding:24px 26px 40px;font-family:' + BODY + ';color:' + INK + ';}' +
+    '#w197sheet h3{font-family:' + HEAD + ';font-size:30px;font-weight:600;color:' + GREEN + ';margin:0 40px 2px 0;line-height:1.05;}' +
+    '#w197sheet .x{position:absolute;right:18px;top:18px;}' +
+    '#w197sheet .role{font-size:14px;color:' + MUTED + ';margin:0 0 12px;}' +
+    '#w197sheet .stg{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 16px;}' +
+    '#w197sheet .stg button{font-family:' + BODY + ';font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 12px;border:1px solid rgba(16,63,57,.2);background:transparent;color:' + GREEN + ';cursor:pointer;}' +
+    '#w197sheet .stg button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}' +
+    '#w197sheet .stg button.cl.on{background:' + FLAG + ';border-color:' + FLAG + ';}' +
+    '#w197sheet label{display:block;font-size:11.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';margin:14px 0 5px;}' +
+    '#w197sheet select,#w197sheet textarea{width:100%;font-family:' + BODY + ';font-size:14px;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';color:' + INK + ';box-sizing:border-box;}' +
+    '#w197sheet textarea{min-height:110px;resize:vertical;}' +
+    '#w197sheet .sum{white-space:pre-wrap;font-size:14px;line-height:1.55;background:' + CREAM + ';border:1px solid rgba(16,63,57,.1);border-radius:12px;padding:12px 14px;max-height:280px;overflow:auto;}' +
+    '#w197sheet .acts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px;}' +
+    '#w197sheet .ct{font-size:13.5px;line-height:1.6;}#w197sheet .ct a{color:' + GREEN + ';}' +
+    '#w197sheet .next{background:rgba(220,165,39,.16);border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;margin:14px 0 0;}' +
+    /* hours */
+    '.w197tbl{width:100%;border-collapse:collapse;font-size:13.5px;}' +
+    '.w197tbl th{text-align:left;font-size:11px;letter-spacing:.8px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;padding:8px 8px;border-bottom:1px solid rgba(16,63,57,.12);}' +
+    '.w197tbl td{padding:9px 8px;border-bottom:1px solid rgba(16,63,57,.07);vertical-align:middle;}' +
+    '.w197tbl tr.low td:first-child{box-shadow:inset 3px 0 0 ' + FLAG + ';}' +
+    '.w197tbl .bar{height:8px;border-radius:999px;background:rgba(16,63,57,.08);overflow:hidden;min-width:80px;}' +
+    '.w197tbl .bar i{display:block;height:100%;background:' + TEAL + ';border-radius:999px;}' +
+    '.w197tbl tr.low .bar i{background:' + FLAG + ';}' +
+    '.w197pill{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;background:rgba(42,140,122,.14);color:' + TEAL + ';}' +
+    '.w197pill.low{background:rgba(179,64,47,.12);color:' + FLAG + ';}.w197pill.mut{background:rgba(16,63,57,.07);color:' + MUTED + ';}' +
+    '.w197mins{display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13px;margin:4px 0 14px;}' +
+    '.w197mins input{width:58px;font-family:' + BODY + ';font-size:14px;padding:6px 8px;border:1px solid rgba(16,63,57,.2);border-radius:10px;}' +
+    '.w197feed{list-style:none;margin:0;padding:0;}' +
+    '.w197feed li{padding:10px 0;border-top:1px solid rgba(16,63,57,.08);font-size:13.5px;line-height:1.5;}' +
+    '.w197feed li:first-child{border-top:none;}' +
+    '.w197feed li b{color:' + GREEN + ';}.w197feed li small{color:' + MUTED + ';}' +
+    '.w197feed ul{margin:4px 0 0 18px;padding:0;}' +
+    '.w197note{font-size:12.5px;color:' + MUTED + ';line-height:1.5;margin:10px 0 0;}' +
+    '.w197wrap{overflow-x:auto;}' +
+    '@media (max-width:700px){.w197tbl .hp{display:none;}#hrcentre[data-w197] .w197card{padding:16px;}}';
+  document.head.appendChild(css);
+
+  /* ---------- data (row security decides what each person reads; HR, leaders and admins see the HR tables) ---------- */
+  async function q(p) { try { var r = await p; return (r && !r.error && r.data) || []; } catch (e) { return []; } }
+  async function loadCands(force) {
+    if (S.cLoading) return S.cLoading;
+    if (!force && S.candsAt && Date.now() - S.candsAt < 60000) return S.cands;
+    S.cLoading = (async function () {
+      S.cands = await q(db.from('hub_candidates').select('*').order('created_at', { ascending: false }).limit(300));
+      S.candsAt = Date.now(); S.cLoading = null; return S.cands;
+    })();
+    return S.cLoading;
+  }
+  /* The Loop's sessions (hub_checkins: the person, admins and HR read them, wave192c) */
+  async function loadHours(force) {
+    if (!force && S.ckAt && Date.now() - S.ckAt < 60000) return;
+    var since = new Date(Date.now() - 7 * 86400000 * (S.hoursWeeks + 1)).toISOString();
+    var res = await Promise.all([
+      q(db.from('hub_checkins').select('email,name,department,started_at,ended_at,minutes,auto_closed').gte('started_at', since).order('started_at', { ascending: false }).limit(3000)),
+      q(db.from('hub_settings').select('value').eq('key', 'hours_minimums').limit(1)),
+      (async function () { try { var r = await db.rpc('loop_feed', { p_days: 30, p_email: null }); return (r && !r.error && r.data) || []; } catch (e) { return []; } })()
+    ]);
+    S.ck = res[0]; var mv = res[1][0] && res[1][0].value; if (mv && typeof mv === 'object') S.mins = { member: Number(mv.member) || 3, manager: Number(mv.manager) || 5 };
+    S.feed = res[2]; S.ckAt = Date.now();
+  }
+  /* what Overview counts: one round of small reads */
+  async function loadOverview(force) {
+    if (S.dLoading) return S.dLoading;
+    if (!force && S.data && Date.now() - S.data.at < 60000) return S.data;
+    S.dLoading = (async function () {
+      var res = await Promise.all([
+        loadCands(force),
+        q(db.from('wa_timeoff').select('id,name,email,category,start_date,end_date,days,status,created_at').eq('status', 'pending').order('created_at', { ascending: true }).limit(50)),
+        q(db.from('wa_policies').select('key,title,required,active').eq('active', true)),
+        q(db.from('wa_policy_signoffs').select('email,policy_key')),
+        q(db.from('onboardings').select('id,member_id,person_name,status,started_at,completed_at').limit(200)),
+        q(db.from('training_progress').select('id,person_name,email,status,due_date,assignment_id').neq('status', 'done').limit(3000)),
+        loadHours(force)
+      ]);
+      var d = { at: Date.now(), timeoff: res[1], pol: res[2], sig: res[3], onb: res[4], tp: res[5] };
+      S.data = d; S.dLoading = null; return d;
+    })();
+    return S.dLoading;
+  }
+  /* sums per person from The Loop: this week (from Monday), last week, the average of the last N full weeks; an open session counts at most eight hours */
+  function monday(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); var wd = (x.getDay() + 6) % 7; x.setDate(x.getDate() - wd); return x; }
+  function sessionMin(c) {
+    if (c.minutes != null && c.ended_at) return Number(c.minutes) || 0;
+    var start = new Date(c.started_at).getTime(), end = c.ended_at ? new Date(c.ended_at).getTime() : Date.now();
+    return Math.max(0, Math.min(480, Math.round((end - start) / 60000)));
+  }
+  /* full weeks to average over: at most S.hoursWeeks, and only weeks The Loop has run in full (it began 25/09/26) */
+  function avgWeeks() {
+    var m0 = monday(Date.now()).getTime(), wk = 7 * 86400000, first = null;
+    S.ck.forEach(function (c) { if (!first || c.started_at < first) first = c.started_at; });
+    if (!first) return 0;
+    var fm = monday(first).getTime(); if (new Date(first).getTime() > fm) fm += wk;   /* a week begun part way is not a full week */
+    return Math.max(0, Math.min(S.hoursWeeks, Math.floor((m0 - fm) / wk)));
+  }
+  function hoursBy() {
+    var m0 = monday(Date.now()).getTime(), wk = 7 * 86400000, out = {}, aw = avgWeeks(); S.avgW = aw;
+    S.ck.forEach(function (c) {
+      var em = lower(c.email); if (!em) return;
+      var o = out[em] || (out[em] = { email: em, name: c.name, dept: c.department, week: 0, last: 0, past: 0, sessions: 0, open: false, lastAt: null });
+      var t = new Date(c.started_at).getTime(), mn = sessionMin(c);
+      if (t >= m0) o.week += mn; else if (t >= m0 - wk) o.last += mn;
+      if (t < m0 && t >= m0 - wk * aw) o.past += mn;
+      o.sessions++; if (!c.ended_at) o.open = true; if (!o.lastAt || c.started_at > o.lastAt) o.lastAt = c.started_at;
+    });
+    return out;
+  }
+  /* managers and up get the higher minimum (the same rule as wave54: lead, leader, director, manager, chair or co- in the role; the operational executives 8h); the board is exempt */
+  function isManager(m) { return /\b(lead|leader|director|manager|chair|co-)/i.test(String(m.role || '')); }
+  function minFor(m) { if (!m || m.department === 'board') return 0; if (/steel\.macdonald|suhaib\.abdillahi/.test(lower(m.email))) return 8; return isManager(m) ? S.mins.manager : S.mins.member; }
+
+  /* ---------- the hosts this wave draws into ---------- */
+  function host(id, cls) {
+    var body = document.getElementById('w46body'); if (!body) return null;
+    var h = document.getElementById(id);
+    if (!h) { h = document.createElement('div'); h.id = id; h.className = 'w197card ' + (cls || ''); var tabs = body.querySelector('.w47tabs'); if (tabs) tabs.insertAdjacentElement('afterend', h); else body.insertBefore(h, body.firstChild); }
+    return h;
+  }
+  function go(k) { location.hash = '#hrcentre/' + k; }
+
+  /* ---------- Overview: HR's to-do list ---------- */
+  function overviewHtml() {
+    var d = S.data; if (!d) return '<p class="w197note">Loading what needs HR\u2026</p>';
+    var ppl = members(), cands = S.cands, hb = hoursBy();
+    var newC = cands.filter(function (c) { return c.status === 'new'; });
+    var nobody = cands.filter(function (c) { return ['new', 'reviewing', 'interview', 'offer'].indexOf(c.status) >= 0 && !c.owner; });
+    var inFlight = cands.filter(function (c) { return c.status === 'interview' || c.status === 'offer'; });
+    var onb = d.onb.filter(function (o) { return !o.completed_at && o.status !== 'done' && o.status !== 'completed' && o.status !== 'removed'; });
+    var t0 = today(), overdue = d.tp.filter(function (t) { return t.due_date && t.due_date < t0; });
+    var overduePeople = {}; overdue.forEach(function (t) { overduePeople[lower(t.email || t.person_name)] = 1; });
+    var req = d.pol.filter(function (p) { return p.required; }), signed = {};
+    d.sig.forEach(function (s) { signed[lower(s.email) + '|' + s.policy_key] = 1; });
+    var unsigned = ppl.filter(function (m) { return m.email && req.some(function (p) { return !signed[lower(m.email) + '|' + p.key]; }); });
+    var low = !S.avgW ? [] : ppl.filter(function (m) { var mn = minFor(m); if (!mn) return false; var h = hb[lower(m.email)]; var avg = h ? h.past / S.avgW / 60 : 0; return avg < mn; });
+    var inLoop = ppl.filter(function (m) { var h = hb[lower(m.email)]; return h && h.week > 0; });
+    var checkIn = Array.prototype.map.call(document.querySelectorAll('#w144hr .w144sub'), function (s) { return s; }).filter(function (s) { return /worth a check/i.test(s.textContent); })[0];
+    var checkList = checkIn && checkIn.nextElementSibling ? Array.prototype.map.call(checkIn.nextElementSibling.querySelectorAll('li'), function (li) { var a = li.querySelector('a') || li.firstChild; return a ? String(a.textContent || '').trim() : ''; }).filter(Boolean) : [];
+    function names(arr, f, n) { var a = arr.slice(0, n || 4).map(f); return a.join(', ') + (arr.length > (n || 4) ? ' and ' + (arr.length - (n || 4)) + ' more' : ''); }
+    var oldest = newC.length ? newC.reduce(function (a, c) { return c.created_at < a ? c.created_at : a; }, newC[0].created_at) : null;
+    var items = [
+      { n: newC.length, k: 'applications', t: newC.length === 1 ? 'new application to read' : 'new applications to read', s: newC.length ? 'The oldest came ' + ago(oldest) + '. Read each one and move it to Reviewing, or close it.' : '' },
+      { n: nobody.length, k: 'applications', t: nobody.length === 1 ? 'application nobody is handling' : 'applications nobody is handling', s: nobody.length ? names(nobody, function (c) { return c.name; }) : '' },
+      { n: inFlight.length, k: 'applications', t: inFlight.length === 1 ? 'candidate at interview or offer' : 'candidates at interview or offer', s: inFlight.length ? names(inFlight, function (c) { return c.name + ' (' + c.status + ')'; }) : '' },
+      { n: d.timeoff.length, k: 'timeoff', t: d.timeoff.length === 1 ? 'time-off request to decide' : 'time-off requests to decide', s: d.timeoff.length ? names(d.timeoff, function (r) { return (r.name || r.email) + ', ' + r.start_date; }) : '' },
+      { n: onb.length, k: 'onboarding', t: onb.length === 1 ? 'person onboarding' : 'people onboarding', s: onb.length ? names(onb, function (o) { return o.person_name; }) : '' },
+      { n: Object.keys(overduePeople).length, k: 'training', t: Object.keys(overduePeople).length === 1 ? 'person with a training past its due date' : 'people with a training past its due date', s: overdue.length ? overdue.length + ' trainings in all' : '' },
+      { n: unsigned.length, k: 'policies', t: unsigned.length === 1 ? 'person who has not signed every required policy' : 'people who have not signed every required policy', s: unsigned.length ? names(unsigned, function (m) { return m.name; }, 5) : '' },
+      { n: low.length, k: 'hours', t: low.length === 1 ? 'person below their weekly minimum' : 'people below their weekly minimum', s: low.length ? 'Average over the last ' + S.avgW + (S.avgW === 1 ? ' full week' : ' full weeks') + ' in The Loop. ' + names(low, function (m) { return m.name; }, 5) : '' },
+      { n: checkList.length, k: 'hours', t: (checkList.length === 1 ? 'person' : 'people') + ' worth a check-in (missed their team\u2019s last meetings)', s: checkList.length ? checkList.join(', ') + '. A kind word first: people step back for many reasons.' : '' }
+    ];
+    var todo = items.filter(function (i) { return i.n > 0; });
+    var tiles = [
+      [ppl.length, 'people on the team', 'team'], [inLoop.length, 'in The Loop this week', 'hours'], [newC.length, 'new applications', 'applications', newC.length > 0],
+      [onb.length, 'onboarding now', 'onboarding'], [Object.keys(overduePeople).length, 'with a training overdue', 'training', overdue.length > 0], [d.timeoff.length, 'time off to decide', 'timeoff', d.timeoff.length > 0]
+    ];
+    /* anniversaries in the next 30 days and the newest people */
+    var now = new Date(), soon = [];
+    ppl.forEach(function (m) {
+      if (!m.start_date) return; var sd = new Date(m.start_date + 'T12:00:00'), y = now.getFullYear() - sd.getFullYear();
+      var next = new Date(sd); next.setFullYear(now.getFullYear()); if (next < now) { next.setFullYear(now.getFullYear() + 1); y++; }
+      var days = Math.round((next - now) / 86400000); if (y >= 1 && days <= 30) soon.push({ m: m, y: y, days: days, next: next });
+    });
+    soon.sort(function (a, b) { return a.days - b.days; });
+    var newest = ppl.filter(function (m) { return m.start_date; }).sort(function (a, b) { return String(b.start_date).localeCompare(String(a.start_date)); }).slice(0, 4);
+    function dm(x) { try { return x.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } }
+    return '<div class="w197tiles">' + tiles.map(function (t) { return '<button type="button" class="w197tile' + (t[3] ? ' hot' : '') + '" data-w197go="' + t[2] + '"><b>' + t[0] + '</b><span>' + E(t[1]) + '</span></button>'; }).join('') + '</div>' +
+      '<div class="w197grid2"><div class="w197card" style="margin:0"><h2>Needs HR</h2>' +
+      (todo.length ? '<ul class="w197todo">' + todo.map(function (i) { return '<li><span class="n">' + i.n + '</span><div class="t"><b>' + E(i.n + ' ' + i.t) + '</b>' + (i.s ? '<small>' + E(i.s) + '</small>' : '') + '</div>' + btn('Open', 'data-w197go="' + i.k + '"', 'sm') + '</li>'; }).join('') + '</ul>' : '<p class="w197done">Nothing waiting on HR. Nice.</p>') +
+      '</div><div class="w197card" style="margin:0"><h2>Coming up</h2>' +
+      (soon.length ? '<ul class="w197todo">' + soon.slice(0, 6).map(function (x) { return '<li>' + av(x.m, 36) + '<div class="t"><b>' + E(x.m.name) + '</b><small>' + x.y + (x.y === 1 ? ' year' : ' years') + ' with us on ' + dm(x.next) + (x.days === 0 ? ' (today)' : '') + '</small></div></li>'; }).join('') + '</ul>' : '<p class="w197note">No work anniversaries in the next 30 days.</p>') +
+      (newest.length ? '<h2 style="margin-top:16px">Newest on the team</h2>' : '') + '<ul class="w197todo">' + newest.map(function (m) { return '<li>' + av(m, 36) + '<div class="t"><b>' + E(m.name) + '</b><small>' + E(teamLabel(m.department)) + ' \u00b7 started ' + E(ago(m.start_date + 'T12:00:00')) + '</small></div></li>'; }).join('') + '</ul></div></div>';
+  }
+  function paintOverview() { var h = host('w197ov'); if (!h) return; h.className = 'w197ovwrap'; h.innerHTML = overviewHtml(); }
+
+  /* ---------- Applications: the stage board ---------- */
+  function stageLabel(s) { var x = STAGES.concat(CLOSED).filter(function (p) { return p[0] === s; })[0]; return x ? x[1] : s; }
+  function daysIn(c) { var t = c.stage_at || c.created_at; return t ? Math.floor((Date.now() - new Date(t).getTime()) / 86400000) : 0; }
+  function roles() { var r = {}; S.cands.forEach(function (c) { if (c.role) r[c.role] = (r[c.role] || 0) + 1; }); return Object.keys(r).sort(); }
+  function filtered() {
+    var qq = lower(S.q), ow = S.filterOwner, ro = S.filterRole || '';
+    return S.cands.filter(function (c) {
+      if (qq && (lower(c.name) + ' ' + lower(c.role) + ' ' + lower(c.email)).indexOf(qq) < 0) return false;
+      if (ro && c.role !== ro) return false;
+      if (ow === '__me') return lower(c.owner) === lower(me().name) || lower(c.owner) === lower((me().name || '').split(' ')[0]);
+      if (ow === '__none') return !c.owner;
+      if (ow) return c.owner === ow;
+      return true;
+    });
+  }
+  function candCard(c, small) {
+    var still = /still interested/i.test(String(c.summary || '') + ' ' + String(c.notes || ''));
+    var d = daysIn(c);
+    return '<button type="button" class="w197cand" draggable="' + (small ? 'false' : 'true') + '" data-w197c="' + c.id + '"><b>' + E(c.name || 'Someone') + '</b>' +
+      (small ? '' : '<span class="r">' + E(c.role || 'No role given') + ' \u00b7 applied ' + E(ago(c.created_at)) + '</span><span class="m">' +
+        (c.owner ? '<span class="who">' + E(String(c.owner).split(' ')[0]) + '</span>' : '<span>Nobody yet</span>') +
+        (still ? '<span class="ok">Still interested</span>' : '') + (c.cv_path ? '<span>CV</span>' : '') +
+        (d >= 7 ? '<span class="age">' + d + ' days here</span>' : '') + '</span>') + '</button>';
+  }
+  function boardHtml() {
+    var rows = filtered(), people = members().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var owners = {}; S.cands.forEach(function (c) { if (c.owner) owners[c.owner] = 1; });
+    var bar = '<div class="w197bar"><input type="search" id="w197q" placeholder="Search a name or a role" value="' + E(S.q) + '">' +
+      '<select id="w197role" aria-label="Role"><option value="">Every role</option>' + roles().map(function (r) { return '<option' + (S.filterRole === r ? ' selected' : '') + '>' + E(r) + '</option>'; }).join('') + '</select>' +
+      '<select id="w197own" aria-label="Handled by"><option value="">Anyone handling</option><option value="__me"' + (S.filterOwner === '__me' ? ' selected' : '') + '>Mine</option><option value="__none"' + (S.filterOwner === '__none' ? ' selected' : '') + '>Nobody yet</option>' +
+      Object.keys(owners).sort().map(function (o) { return '<option' + (S.filterOwner === o ? ' selected' : '') + '>' + E(o) + '</option>'; }).join('') + '</select>' +
+      btn('Refresh', 'data-w197a="reload"', 'sm') + '</div>';
+    var cols = STAGES.map(function (s) {
+      var list = rows.filter(function (c) { return c.status === s[0] || (s[0] === 'new' && !c.status); });
+      if (s[0] === 'hired') list = list.filter(function (c) { return daysIn(c) <= 90; });
+      list.sort(function (a, b) { return String(a.created_at).localeCompare(String(b.created_at)); });
+      return '<div class="w197col" data-w197col="' + s[0] + '"><h4>' + E(s[1]) + ' <small>' + list.length + '</small></h4>' + (list.length ? list.map(function (c) { return candCard(c); }).join('') : '<p class="w197note" style="margin:4px">' + (s[0] === 'new' ? 'No new applications.' : 'Drop a card here.') + '</p>') + '</div>';
+    }).join('');
+    var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn'; });
+    return bar + '<div class="w197board" id="w197board">' + cols + '</div>' +
+      '<div class="w197closed">' + (closed.length ? '<button type="button" class="w197b sm" data-w197a="closed">' + (S.showClosed ? 'Hide' : 'Show') + ' the ' + closed.length + ' closed (declined or withdrawn)</button>' + (S.showClosed ? '<div>' + closed.map(function (c) { return candCard(c, true); }).join('') + '</div>' : '') : '') +
+      '<p class="w197note">Applications emailed to hub@ (label Hub/Recruitment) and from the job boards land in New. Hired shows the last 90 days.</p></div>';
+  }
+  function paintBoard() { var h = host('w197apps'); if (!h) return; var a = document.activeElement, qf = a && a.id === 'w197q'; h.innerHTML = boardHtml(); if (qf) { var x = document.getElementById('w197q'); if (x) { x.focus(); try { x.setSelectionRange(x.value.length, x.value.length); } catch (e) { /* fine */ } } } }
+
+  /* the candidate sheet */
+  var NEXT = {
+    'new': 'Read the application, choose who handles it, then move it to Reviewing (or close it as Declined).',
+    reviewing: 'Invite them to an interview. The interview question templates are in Playbook.',
+    interview: 'After the interview, write your impressions here. If it is a yes, move it to Offer and send the offer letter (Playbook).',
+    offer: 'When they accept, move it to Hired, then set up their onboarding.',
+    hired: 'Set up their onboarding: Onboarding, Assign an onboarding. The Welcome kit there has the email and the account setup.',
+    declined: 'Closed. Move it back to a stage if this changes.', withdrawn: 'Closed. Move it back to a stage if this changes.'
+  };
+  function sheetEl() { var s = document.getElementById('w197sheet'); if (!s) { s = document.createElement('div'); s.id = 'w197sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true'); s.setAttribute('aria-label', 'Application'); document.body.appendChild(s); } return s; }
+  function openSheet(id) {
+    var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c) return;
+    S.open = c.id;
+    var people = members().slice().sort(function (a, b) { return a.name.localeCompare(b.name); });
+    var positions = []; try { positions = (window.WA46 && WA46.reqs || []).filter(function (r) { return r.type_key === 'hiring-request' && !r.done; }); } catch (e) { positions = []; }
+    var pos = positions.map(function (r) { return '<option value="' + r.id + '"' + (String(c.request_id) === String(r.id) ? ' selected' : '') + '>' + E(r.title || ('Request #' + r.id)) + '</option>'; }).join('');
+    if (c.request_id && !positions.some(function (r) { return String(r.id) === String(c.request_id); })) pos += '<option value="' + E(c.request_id) + '" selected>Position #' + E(c.request_id) + '</option>';
+    var links = (c.links || []).map(function (l) { return '<a href="' + E(l) + '" target="_blank" rel="noopener">' + E(String(l).replace(/^https?:\/\/(www\.)?/, '').slice(0, 48)) + '</a>'; }).join('<br>');
+    var s = sheetEl();
+    s.innerHTML = '<div class="bk" data-w197a="shut"></div><div class="pn">' + btn('Close', 'data-w197a="shut"', 'sm x') +
+      '<h3>' + E(c.name || 'Someone') + '</h3><p class="role">' + E(c.role || 'No role given') + ' \u00b7 applied ' + E(ago(c.created_at)) + (c.source ? ' \u00b7 ' + E(c.source) : '') + '</p>' +
+      '<label>Stage</label><div class="stg">' + STAGES.map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="' + (c.status === p[0] ? 'on' : '') + '">' + E(p[1]) + '</button>'; }).join('') +
+      CLOSED.map(function (p) { return '<button type="button" data-w197st="' + p[0] + '" class="cl' + (c.status === p[0] ? ' on' : '') + '">' + E(p[1]) + '</button>'; }).join('') + '</div>' +
+      '<div class="next"><b>Next:</b> ' + E(NEXT[c.status || 'new'] || '') + (c.status === 'hired' ? ' ' + btn('Go to Onboarding', 'data-w197go="onboarding"', 'sm pri') : '') + '</div>' +
+      '<label>Contact</label><div class="ct">' + (c.email ? '<a href="mailto:' + E(c.email) + '">' + E(c.email) + '</a>' : 'No email') + (c.phone ? '<br><a href="tel:' + E(String(c.phone).replace(/[^\d+]/g, '')) + '">' + E(c.phone) + '</a>' : '') + (links ? '<br>' + links : '') + '</div>' +
+      '<div class="acts">' + (c.cv_path ? btn('Open the CV' + (c.cv_name ? ' (' + E(String(c.cv_name).slice(0, 28)) + ')' : ''), 'data-w197cv="' + E(c.cv_path) + '"', 'pri sm') : '<span class="w197pill mut">No CV attached</span>') + (c.mail_id ? '<a class="w197b sm" href="#hubmail">The original email</a>' : '') + '</div>' +
+      '<label for="w197own1">Handled by</label><select id="w197own1" data-w197f="owner"><option value="">Nobody yet</option>' + people.map(function (m) { return '<option' + (c.owner === m.name ? ' selected' : '') + '>' + E(m.name) + '</option>'; }).join('') + '</select>' +
+      '<label for="w197pos1">Position</label><select id="w197pos1" data-w197f="request_id"><option value="">Not linked to a position</option>' + pos + '</select>' +
+      (c.summary ? '<label>What they wrote</label><div class="sum">' + E(c.summary) + '</div>' : '') +
+      '<label for="w197notes1">Notes</label><textarea id="w197notes1" data-w197f="notes" placeholder="Interview impressions, the next step">' + E(c.notes || '') + '</textarea>' +
+      '<div class="acts">' + btn('Save the notes', 'data-w197a="notes"', 'pri sm') + '</div></div>';
+    s.classList.add('open');
+    var f = s.querySelector('.stg button.on') || s.querySelector('.stg button'); if (f) { try { f.focus(); } catch (e) { /* fine */ } }
+  }
+  function shutSheet() { var s = document.getElementById('w197sheet'); if (!s) return; var t = s.querySelector('[data-w197f="notes"]'); if (t && S.open) { var c = S.cands.filter(function (x) { return x.id === S.open; })[0]; if (c && (c.notes || '') !== t.value) updateCand(c.id, { notes: t.value.slice(0, 2000) }, 'Notes saved'); } s.classList.remove('open'); S.open = null; }
+  async function updateCand(id, patch, msg) {
+    try {
+      var who = me().name || me().email;
+      patch.updated_at = new Date().toISOString(); patch.updated_by = who;
+      if (patch.status) patch.stage_at = patch.updated_at;
+      var r = await db.from('hub_candidates').update(patch).eq('id', id);
+      if (r && r.error) throw r.error;
+      var c = S.cands.filter(function (x) { return x.id === id; })[0]; if (c) Object.keys(patch).forEach(function (k) { c[k] = patch[k]; });
+      try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: String(id), field: Object.keys(patch).filter(function (k) { return k !== 'updated_at' && k !== 'updated_by' && k !== 'stage_at'; })[0] || 'update', old_value: null, new_value: String(patch.status || patch.owner || patch.request_id || (patch.notes ? 'notes' : '')), changed_by: who }); } catch (e) { /* audit */ }
+      if (msg) toastS(msg);
+      return true;
+    } catch (e) { toastS('Could not save: ' + (e.message || e)); return false; }
+  }
+  async function moveTo(id, st) {
+    var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c || c.status === st) return;
+    var ok = await updateCand(c.id, { status: st }, (c.name || 'Moved') + ': ' + stageLabel(st));
+    if (ok) { paintBoard(); paintRail(); if (S.open === c.id) openSheet(c.id); }
+  }
+
+  /* ---------- Hours: The Loop against the minimums ---------- */
+  function hoursHtml() {
+    var hb = hoursBy(), ppl = members().filter(function (m) { return m.department !== 'board' || minFor(m) > 0; });
+    var rows = ppl.map(function (m) {
+      var h = hb[lower(m.email)] || { week: 0, last: 0, past: 0, sessions: 0, open: false, lastAt: null };
+      var mn = minFor(m), avg = S.avgW ? h.past / S.avgW / 60 : 0;
+      return { m: m, h: h, min: mn, avg: avg, low: !!S.avgW && mn > 0 && avg < mn };
+    });
+    rows.sort(function (a, b) { if (a.low !== b.low) return a.low ? -1 : 1; if (a.low) return (a.avg / a.min) - (b.avg / b.min); return b.avg - a.avg; });
+    var lowN = rows.filter(function (r) { return r.low; }).length, none = rows.filter(function (r) { return r.min > 0 && !r.h.sessions; }).length;
+    var weekP = rows.filter(function (r) { return r.h.week > 0; }).length;
+    var tot = rows.reduce(function (a, r) { return a + r.h.week; }, 0);
+    var html = '<div class="w197tiles">' +
+      '<div class="w197tile"><b>' + weekP + '</b><span>people in The Loop this week</span></div>' +
+      '<div class="w197tile"><b>' + fmtH(tot) + '</b><span>given this week</span></div>' +
+      '<div class="w197tile' + (lowN ? ' hot' : '') + '"><b>' + (S.avgW ? lowN : '\u2013') + '</b><span>' + (S.avgW ? 'below their minimum (' + S.avgW + '-week average)' : 'below their minimum: from the first full week of The Loop') + '</span></div>' +
+      '<div class="w197tile"><b>' + none + '</b><span>no session in The Loop yet</span></div></div>' +
+      '<div class="w197card"><h2>Hours by person</h2>' +
+      '<div class="w197mins"><b>Weekly minimums:</b> managers and up <input type="number" id="w197mmgr" min="1" max="40" value="' + E(S.mins.manager) + '">h, everyone else <input type="number" id="w197mmem" min="1" max="40" value="' + E(S.mins.member) + '">h' + (isAdmin() || canHr() ? btn('Save', 'data-w197a="mins"', 'sm pri') : '') + '<span class="w197note" style="margin:0">The board is exempt; the operational executives (Steel, Suhaib) 8h.</span></div>' +
+      '<div class="w197wrap"><table class="w197tbl"><thead><tr><th>Person</th><th>This week</th><th class="hp">Last week</th><th>Average a week</th><th>Minimum</th><th class="hp"></th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var pct = r.min ? Math.min(100, Math.round(r.avg / r.min * 100)) : 100;
+        return '<tr class="' + (r.low ? 'low' : '') + '"><td><b>' + E(r.m.name) + '</b><br><small style="color:var(--wa-muted)">' + E(teamLabel(r.m.department)) + (r.h.open ? ' \u00b7 in now' : '') + '</small></td>' +
+          '<td>' + fmtH(r.h.week) + '</td><td class="hp">' + fmtH(r.h.last) + '</td>' +
+          '<td><div style="display:flex;align-items:center;gap:8px"><div class="bar" style="flex:1"><i style="width:' + pct + '%"></i></div><span>' + (Math.round(r.avg * 10) / 10) + 'h</span></div></td>' +
+          '<td>' + (r.min ? r.min + 'h' : '<span class="w197pill mut">exempt</span>') + '</td><td class="hp">' + (r.min ? (!S.avgW ? '<span class="w197pill mut">too early</span>' : r.low ? '<span class="w197pill low">below</span>' : '<span class="w197pill">on track</span>') : '') + '</td></tr>';
+      }).join('') + '</tbody></table></div>' +
+      '<p class="w197note">From The Loop: a session counts from I\u2019m in to Close the loop; a session still open counts at most eight hours. Average a week is the last ' + S.hoursWeeks + ' full weeks, counted from The Loop\u2019s first full week (it began on 25 September 2026). Hours stay with the person, HR and admins.</p></div>';
+    var feed = S.feed.slice(0, 25);
+    html += '<div class="w197card"><h2>What people shared in The Loop</h2><p class="w197note" style="margin:0 0 8px">What moved, as people chose to share it when they closed the loop (last 30 days). Never times or hours.</p>' +
+      (feed.length ? '<ul class="w197feed">' + feed.map(function (f) {
+        var b = Array.isArray(f.bullets) ? f.bullets : [];
+        return '<li><b>' + E(f.name || f.email) + '</b> <small>\u00b7 ' + E(teamLabel(f.department)) + ' \u00b7 ' + E(ago(f.day + 'T12:00:00')) + (f.closed ? ' \u00b7 closed ' + f.closed + (f.closed === 1 ? ' task' : ' tasks') : '') + '</small>' +
+          (b.length ? '<ul>' + b.slice(0, 5).map(function (x) { return '<li>' + E(typeof x === 'string' ? x : (x && (x.text || x.t)) || '') + '</li>'; }).join('') + '</ul>' : '') + '</li>';
+      }).join('') + '</ul>' : '<p class="w197note">Nothing shared in the last 30 days yet.</p>') + '</div>';
+    return html;
+  }
+  function paintHours() { var h = host('w197hours'); if (!h) return; h.className = 'w197hourswrap'; h.innerHTML = S.ckAt ? hoursHtml() : '<p class="w197note">Loading The Loop\u2026</p>'; }
+  async function saveMins() {
+    var mg = Number((document.getElementById('w197mmgr') || {}).value), mm = Number((document.getElementById('w197mmem') || {}).value);
+    if (!(mg > 0) || !(mm > 0)) { toastS('Both minimums need a number of hours'); return; }
+    var old = S.mins.manager + '/' + S.mins.member;
+    var r = await db.from('hub_settings').upsert({ key: 'hours_minimums', value: { manager: mg, member: mm }, updated_at: new Date().toISOString() });
+    if (r && r.error) { toastS('Could not save the minimums'); return; }
+    S.mins = { manager: mg, member: mm };
+    try { await db.from('change_log').insert({ entity_type: 'settings', entity_id: 'hours_minimums', field: 'minimums', old_value: old, new_value: mg + '/' + mm, changed_by: me().name || me().email }); } catch (e) { /* audit */ }
+    toastS('Minimums saved: ' + mg + 'h managers and up, ' + mm + 'h everyone else'); paintHours();
+  }
+
+  /* ---------- the router: tag every section with its page, show the current page's ---------- */
+  function tag(el, keys, blk) { if (!el) return; el.setAttribute('data-w197s', keys); if (blk) el.classList.add('w197blk'); }
+  function hide(el) { if (el) el.classList.add('w197x'); }
+  function secByH3(re) { return Array.prototype.filter.call(document.querySelectorAll('#w46body > .w46sec'), function (s) { var h = s.querySelector(':scope > h3'); return h && re.test(h.textContent.trim()); })[0] || null; }
+  function tagAll() {
+    var panel = document.getElementById('hrcentre'); if (!panel) return;
+    hide(document.getElementById('w116phero'));
+    hide(panel.querySelector(':scope > .card > h2'));
+    Array.prototype.forEach.call(panel.querySelectorAll(':scope > .card > p.w85p, :scope > .card > p.read'), hide);
+    hide(document.getElementById('w93eng'));     /* Hub engagement: the Admin centre's Adoption */
+    hide(document.getElementById('w103scope'));  /* Slack scope of work: The Loop's notes on Hours */
+    hide(document.getElementById('w52hours'));   /* the Slack hours and the old Hub hours table: Hours, from The Loop */
+    hide(document.getElementById('w169cardO'));  /* the same list as Training's Trainings assigned to the organization */
+    tag(document.getElementById('w197ov'), 'overview', true);
+    tag(document.getElementById('w197hours'), 'hours', true);
+    tag(document.getElementById('w197apps'), 'applications', true);
+    var pp = document.getElementById('w116ppeople');
+    if (pp) {
+      tag(pp, 'team recognition', true);
+      tag(document.getElementById('w116pshouts'), 'recognition');
+      Array.prototype.forEach.call(pp.children, function (c) { if (c.id !== 'w116pshouts') tag(c, 'team'); });
+    }
+    tag(document.getElementById('w144hr'), 'hours', true);
+    tag(document.getElementById('w145quiz'), 'onboarding', true);
+    tag(document.getElementById('w105to'), 'timeoff', true);
+    tag(document.getElementById('w106polsec'), 'policies', true);
+    tag(document.getElementById('w106discsec'), 'discipline', true);
+    tag(document.getElementById('w105pol'), 'policies', true); tag(document.getElementById('w105disc'), 'discipline', true);   /* wave105 draws them as cards of their own before wave106 moves them */
+    tag(document.getElementById('w181'), 'analytics', true);
+    tag(document.getElementById('w116pcands'), 'applications-list', true);   /* the old list: the board replaces it */
+    var onb = secByH3(/^Onboarding$/), master = secByH3(/^Master onboarding/), across = secByH3(/^Trainings across the team/), rec = secByH3(/^Recruitment$/);
+    tag(onb, 'onboarding', true); tag(master, 'plan', true); tag(across, 'training', true);
+    tag(document.getElementById('w169cardT'), 'training', true);
+    if (onb) { var h = onb.querySelector(':scope > h3'); if (h) h.textContent = 'Who is onboarding'; }
+    if (master) { var h2 = master.querySelector(':scope > h3'); if (h2) hide(h2); }
+    if (rec) {
+      tag(rec, 'positions playbook', true);
+      var mode = 'positions';
+      Array.prototype.forEach.call(rec.children, function (c, i) {
+        if (i === 0 && c.tagName === 'H3') { hide(c); return; }
+        if (c.classList.contains('w49pb')) mode = 'playbook';
+        tag(c, mode);
+        if (c.tagName === 'H3') c.classList.add('w197sub');
+      });
+    }
+    /* anything else inside the page this wave does not know: shown on no page (a newer wave adds its own tag) */
+    var body = document.getElementById('w46body');
+    if (body) Array.prototype.forEach.call(body.children, function (c) { if (!c.hasAttribute('data-w197s') && !c.classList.contains('w47tabs') && !c.classList.contains('w197x')) tag(c, 'none'); });
+    if (body && body.parentNode && body.parentNode.parentNode === panel) body.parentNode.classList.add('w197main');
+    Array.prototype.forEach.call(panel.children, function (c) { if (c.classList.contains('w197main') || c.classList.contains('w118mast') || c.hasAttribute('data-w197s') || c.classList.contains('w197x')) return; tag(c, 'none'); });
+  }
+  function apply() {
+    var panel = document.getElementById('hrcentre'); if (!panel) return;
+    var k = S.page;
+    if (k === 'analytics' && !seesAnalytics()) k = 'overview';
+    panel.setAttribute('data-w197', k);
+    Array.prototype.forEach.call(panel.querySelectorAll('[data-w197s]'), function (el) {
+      var on = (' ' + el.getAttribute('data-w197s') + ' ').indexOf(' ' + k + ' ') >= 0;
+      if (on !== el.classList.contains('w197on')) el.classList.toggle('w197on', on);
+    });
+    mastHr();
+  }
+  /* the HR centre's masthead: the page's name, its line, its main button */
+  var MAIN = {
+    /* only where the page's own button sits low or inside a form; pages whose card already leads with its button keep that one */
+    team: ['Add someone', 'addperson'], timeoff: ['Log time off', 'logto'], recognition: ['Post a shout-out', 'shout'],
+    policies: ['Add a policy', 'addpol'], discipline: ['Record an entry', 'recdisc']
+  };
+  function mastHr() {
+    var panel = document.getElementById('hrcentre'); if (!panel) return;
+    var m = panel.querySelector(':scope > .w118mast'); if (!m) return;
+    var p = pageDef(S.page) || PAGES[0];
+    var h1 = m.querySelector('h1'); if (h1 && h1.textContent !== p.l) h1.textContent = p.l;
+    var d = m.querySelector(':scope > p'); if (d && d.textContent !== p.d) d.textContent = p.d;
+    var acts = m.querySelector('.w197acts'); if (!acts) { acts = document.createElement('div'); acts.className = 'w197acts'; m.appendChild(acts); }
+    var help = m.querySelector('.w43help'); if (help && help.parentNode !== acts) acts.appendChild(help);
+    var want = MAIN[S.page] && (S.page !== 'team' || canHr()) ? MAIN[S.page] : null;
+    var cur = acts.querySelector('[data-w197main]');
+    if (!want && cur) cur.remove();
+    if (want && (!cur || cur.getAttribute('data-w197main') !== want[1])) { if (cur) cur.remove(); acts.insertAdjacentHTML('afterbegin', '<button type="button" class="w197pact" data-w197main="' + want[1] + '">' + E(want[0]) + '</button>'); }
+  }
+  /* the main buttons press the older pages' own controls (one flow each, no copy) */
+  function mainAction(k) {
+    function click(sel) { var b = document.querySelector(sel); if (b) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ } b.click(); return true; } return false; }
+    function focus(sel) { var b = document.querySelector(sel); if (b) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ } try { b.focus(); } catch (e) { /* fine */ } return true; } return false; }
+    if (k === 'reload') { loadCands(true).then(function () { paintBoard(); paintRail(); toastS('Applications up to date'); }); return; }
+    if (k === 'addperson') { location.hash = '#adminpanel/people'; return; }
+    if (k === 'logto') { focus('#w105to select, #w105to input'); return; }
+    if (k === 'shout') { focus('#w116pshouts textarea, #w116pshouts input'); return; }
+    if (k === 'assignonb') { focus('#w46body .w46sec[data-w197s~="onboarding"] select'); return; }
+    if (k === 'preview') { click('#w46body .w169bar button'); return; }
+    if (k === 'assigntr') { click('#w169cardT button, #w46body [data-w197s~="training"] button'); return; }
+    if (k === 'addpol') { focus('#w106polsec input'); return; }
+    if (k === 'recdisc') { focus('#w106discsec select'); return; }
+  }
+
+  /* ---------- the rail: replace the HR entry's items ---------- */
+  function railCount(k) {
+    if (k === 'applications') { var n = S.cands.filter(function (c) { return c.status === 'new'; }).length; return n ? String(n) : null; }
+    if (k === 'team') { var t = members().length; return t ? String(t) : null; }
+    if (k === 'timeoff' && S.data) { return S.data.timeoff.length ? String(S.data.timeoff.length) : null; }
+    return null;
+  }
+  function hrGroups() {
+    var pn = document.getElementById('hrcentre');
+    var notice = !!pn && pn.classList.contains('active') && !document.getElementById('w46body') && /for the HR team|for admins and leaders/i.test(pn.textContent || '');
+    if (notice || (window.wa46IsHr && !window.wa46IsHr())) return [{ label: 'HR centre', items: [{ h: '#hrcentre', l: 'HR centre', ic: 'clip', page: 'hrcentre' }] }];
+    var groups = [], by = {};
+    PAGES.forEach(function (p) {
+      if (p.only === 'analytics' && !seesAnalytics()) return;
+      var g = p.g || ''; if (!by[g]) { by[g] = { label: g || 'HR centre', solo: !g, items: [] }; groups.push(by[g]); }
+      by[g].items.push({ h: '#hrcentre/' + p.k, l: p.l, ic: p.ic, page: 'hrcentre', n: railCount(p.k) });
+    });
+    return groups;
+  }
+  function installRail() {
+    try { if (window.WA_APP && WA_APP.apps && WA_APP.apps.hr && !WA_APP.apps.hr.__w197) { WA_APP.apps.hr.groups = hrGroups; WA_APP.apps.hr.__w197 = true; } } catch (e) { /* fine */ }
+  }
+  function paintRail() { try { if (window.w153 && w153.paint) w153.paint(); } catch (e) { /* fine */ } }
+
+  /* ---------- every app: the page's name as the title, the app bar's buttons in the header ---------- */
+  function appTitles() {
+    if (!document.body.classList.contains('w153app')) return;
+    var on = document.querySelector('#w153rail .w153it.on span'); var label = on ? on.textContent.trim() : '';
+    var panel = document.querySelector('.panel.active') || Array.prototype.filter.call(document.querySelectorAll('.w118mast'), function (x) { return x.offsetParent; }).map(function (x) { return x.parentNode; })[0];
+    if (!panel) return;
+    var m = panel.querySelector(':scope > .w118mast');
+    var app0 = window.WA_APP && WA_APP.current && WA_APP.current(), appLabel = app0 && WA_APP.apps && WA_APP.apps[app0] ? WA_APP.apps[app0].label : '';
+    if (m && label && panel.id !== 'hrcentre') {
+      var h1 = m.querySelector('h1');
+      /* only where the title repeats the app's name (CRM, Finance, Fundraising...): a page that names itself keeps its title */
+      if (h1 && (lower(h1.textContent) === lower(appLabel) || h1.textContent === h1.getAttribute('data-w197set')) && h1.textContent.trim() !== label) { h1.textContent = label; h1.setAttribute('data-w197set', label); }
+      if (h1 && !h1.__w197mo) { h1.__w197mo = 1; new MutationObserver(function () { clearTimeout(h1.__w197t); h1.__w197t = setTimeout(appTitles, 30); }).observe(h1, { childList: true, characterData: true, subtree: true }); }
+      /* the CRM's line describes its contacts: on its other tabs the tab says what it is */
+      var d = m.querySelector(':scope > p');
+      if (d && app0 === 'crm' && panel.id === 'crm') d.style.display = /^(Contacts)$/.test(label) ? '' : 'none';
+    }
+    if (m) {
+      var acts = m.querySelector('.w197acts');
+      var src = Array.prototype.slice.call(document.querySelectorAll('#w153bar .w153btn[data-w153act]'));
+      if (!acts && src.length) { acts = document.createElement('div'); acts.className = 'w197acts'; m.appendChild(acts); var help = m.querySelector('.w43help'); if (help) acts.appendChild(help); }
+      if (acts) {
+        var want = src.map(function (b) { return b.getAttribute('data-w153act'); }).join('|');
+        if (acts.getAttribute('data-w197a') !== want) {
+          Array.prototype.forEach.call(acts.querySelectorAll('[data-w197proxy]'), function (x) { x.remove(); });
+          src.forEach(function (b) { acts.insertAdjacentHTML('afterbegin', '<button type="button" class="w197pact" data-w197proxy="' + E(b.getAttribute('data-w153act')) + '">' + b.innerHTML + '</button>'); });
+          acts.setAttribute('data-w197a', want);
+        }
+      }
+    }
+  }
+
+  /* ---------- showing a page ---------- */
+  function oldTabOn() { var t = document.querySelector('#w46body .w47tab.on'); return t ? t.getAttribute('data-w47v') : ''; }
+  function show(k, quiet) {
+    if (!document.getElementById('w46body')) return;
+    S.page = k || subNow() || 'overview';
+    var p = pageDef(S.page) || PAGES[0];
+    if (p.k === 'overview') host('w197ov');
+    if (p.k === 'hours') host('w197hours');
+    if (p.k === 'applications') host('w197apps');
+    tagAll(); apply();
+    var want = p.tab && document.querySelector('#w46body .w47tab[data-w47v="' + p.tab + '"]');
+    if (want && oldTabOn() !== p.tab) {
+      S.self = true; try { want.click(); } finally { S.self = false; }
+      /* wave47's tab click writes its own key into the address (replaceState): put this page's back */
+      if (String(location.hash || '') !== '#hrcentre/' + S.page) { try { history.replaceState(null, '', '#hrcentre/' + S.page); } catch (e) { /* fine */ } }
+      setTimeout(function () { tagAll(); apply(); paintRail(); }, 60);
+    }
+    if (quiet) return;
+    if (p.k === 'overview') { paintOverview(); loadOverview().then(function () { if (S.page === 'overview') paintOverview(); paintRail(); }); }
+    if (p.k === 'applications') { if (S.candsAt) paintBoard(); else { var h = host('w197apps'); if (h) h.innerHTML = '<p class="w197note">Loading the applications\u2026</p>'; } loadCands().then(function () { if (S.page === 'applications') paintBoard(); paintRail(); }); }
+    if (p.k === 'hours') { paintHours(); loadHours().then(function () { if (S.page === 'hours') paintHours(); }); }
+    if (!S.data) loadOverview().then(paintRail);
+  }
+  var pend = null;
+  /* an older wave redrew the page body: put this page's own section back (from what is already loaded) */
+  function ensureMine() {
+    if (!document.getElementById('w46body')) return;
+    if (S.page === 'overview' && !document.getElementById('w197ov')) paintOverview();
+    if (S.page === 'hours' && !document.getElementById('w197hours')) paintHours();
+    if (S.page === 'applications' && !document.getElementById('w197apps')) { if (S.candsAt) paintBoard(); else show('applications'); }
+  }
+  function schedule() { clearTimeout(pend); pend = setTimeout(function () { try { if (onHr()) { ensureMine(); tagAll(); apply(); } } catch (e) { /* fine */ } }, 30); }
+  function watch() {
+    var panel = document.getElementById('hrcentre'); if (!panel || panel.dataset.w197mo) return; panel.dataset.w197mo = '1';
+    new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) { var t = muts[i].target; if (t && t.closest && (t.closest('#w197ov') || t.closest('#w197hours') || t.closest('#w197apps') || t.closest('.w197acts') || (t.closest('.w118mast') && muts[i].type === 'characterData'))) continue; schedule(); return; }
+    }).observe(panel, { childList: true, subtree: true });
+  }
+  function fixAddress() {
+    var h = String(location.hash || ''); if (h.indexOf('#hrcentre') !== 0) return;
+    var s = (h.replace(/^#/, '').split('/')[1] || '').split('?')[0];
+    if (s && OLD[s]) { try { history.replaceState(null, '', '#hrcentre/' + OLD[s]); } catch (e) { /* fine */ } }
+    else if (s && !pageDef(s)) { try { history.replaceState(null, '', '#hrcentre/overview'); } catch (e) { /* fine */ } }
+  }
+  function onRoute() {
+    installRail();
+    if (!onHr()) return;
+    fixAddress();
+    if (S.want && String(location.hash || '') !== '#hrcentre/' + S.want) { try { history.replaceState(null, '', '#hrcentre/' + S.want); } catch (x) { /* fine */ } }
+    watch(); show(S.want || subNow());
+    setTimeout(paintRail, 80);
+  }
+  if (typeof wa46Render === 'function') {
+    var __r46 = wa46Render;
+    wa46Render = async function () { var out = await __r46.apply(this, arguments); try { installRail(); watch(); if (onHr()) { if (S.want && String(location.hash || '') !== '#hrcentre/' + S.want) { try { history.replaceState(null, '', '#hrcentre/' + S.want); } catch (x) { /* fine */ } } show(S.want || subNow()); } paintRail(); } catch (e) { /* fine */ } return out; };
+  }
+  if (typeof showPanel === 'function') {
+    var __sp = showPanel;
+    showPanel = function (id) { if (id === 'hrcentre') S.want = subNow(); var out = __sp.apply(this, arguments); try { installRail(); if (id === 'hrcentre') setTimeout(onRoute, 300); setTimeout(appTitles, 400); } catch (e) { /* fine */ } return out; };
+  }
+  window.addEventListener('hashchange', function () { if (String(location.hash || '').indexOf('#hrcentre') === 0) { fixAddress(); S.want = subNow(); if (document.getElementById('w46body')) { show(subNow()); setTimeout(paintRail, 60); } } else shutSheet(); [150, 700].forEach(function (ms) { setTimeout(appTitles, ms); }); });
+
+  /* every app's title: after the rail repaints */
+  (function railWatch() {
+    var r = document.getElementById('w153rail');
+    if (!r) { setTimeout(railWatch, 800); return; }
+    new MutationObserver(function () { clearTimeout(railWatch.t); railWatch.t = setTimeout(function () { try { appTitles(); if (onHr()) mastHr(); } catch (e) { /* fine */ } }, 40); }).observe(r, { childList: true, subtree: true });
+  })();
+
+  /* ---------- events ---------- */
+  /* an older tab pressed by anything else (a tour, wave169's links, a test): open its page */
+  var FROMTAB = { people: 'team', onboarding: 'onboarding', training: 'training', recruitment: 'applications', hours: 'hours', policies: 'policies', discipline: 'discipline', analytics: 'analytics' };
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var ot = t.closest('#w46body .w47tab[data-w47v]');
+    if (ot && !S.self) { var nk = FROMTAB[ot.getAttribute('data-w47v')]; if (nk && nk !== S.page) setTimeout(function () { try { history.replaceState(null, '', '#hrcentre/' + nk); } catch (x) { /* fine */ } S.want = nk; show(nk); paintRail(); }, 0); return; }
+    var px = t.closest('[data-w197proxy]'); if (px) { var o = document.querySelector('#w153bar .w153btn[data-w153act="' + px.getAttribute('data-w197proxy') + '"]'); if (o) o.click(); return; }
+    var mn = t.closest('[data-w197main]'); if (mn) { mainAction(mn.getAttribute('data-w197main')); return; }
+    var g = t.closest('[data-w197go]'); if (g) { if (t.closest('#w197sheet')) shutSheet(); go(g.getAttribute('data-w197go')); return; }
+    var st = t.closest('#w197sheet [data-w197st]'); if (st && S.open) { moveTo(S.open, st.getAttribute('data-w197st')); return; }
+    var cv = t.closest('[data-w197cv]');
+    if (cv) { (async function () { try { var s = await db.storage.from('hub-mail').createSignedUrl(cv.getAttribute('data-w197cv'), 600); if (s && s.data && s.data.signedUrl) window.open(s.data.signedUrl, '_blank', 'noopener'); else toastS('Could not open the CV'); } catch (x) { toastS('Could not open the CV'); } })(); return; }
+    var a = t.closest('[data-w197a]');
+    if (a) {
+      var k = a.getAttribute('data-w197a');
+      if (k === 'shut') shutSheet();
+      else if (k === 'reload') mainAction('reload');
+      else if (k === 'closed') { S.showClosed = !S.showClosed; paintBoard(); }
+      else if (k === 'mins') saveMins();
+      else if (k === 'notes') { var ta = document.querySelector('#w197sheet [data-w197f="notes"]'); var c = S.cands.filter(function (x) { return x.id === S.open; })[0]; if (ta && c) updateCand(c.id, { notes: ta.value.slice(0, 2000) }, 'Notes saved').then(function () { paintBoard(); }); }
+      return;
+    }
+    var cd = t.closest('[data-w197c]'); if (cd) { openSheet(cd.getAttribute('data-w197c')); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t) return;
+    if (t.id === 'w197role') { S.filterRole = t.value; paintBoard(); return; }
+    if (t.id === 'w197own') { S.filterOwner = t.value; paintBoard(); return; }
+    var f = t.getAttribute && t.getAttribute('data-w197f');
+    if (f && S.open && f !== 'notes') {
+      var patch = {}; patch[f] = f === 'request_id' ? (t.value ? Number(t.value) : null) : (t.value || null);
+      updateCand(S.open, patch, f === 'owner' ? (t.value ? 'Handled by ' + t.value : 'Nobody handling it yet') : (t.value ? 'Linked to the position' : 'Unlinked')).then(function () { paintBoard(); });
+    }
+  });
+  document.addEventListener('input', function (e) { var t = e.target; if (t && t.id === 'w197q') { S.q = t.value; paintBoard(); } });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && S.open) shutSheet(); });
+  document.addEventListener('dragstart', function (e) { var c = e.target && e.target.closest && e.target.closest('#w197board .w197cand'); if (!c) return; S.drag = c.getAttribute('data-w197c'); try { e.dataTransfer.setData('text/plain', S.drag); e.dataTransfer.effectAllowed = 'move'; } catch (x) { /* fine */ } });
+  document.addEventListener('dragover', function (e) { var col = e.target && e.target.closest && e.target.closest('#w197board .w197col'); if (!col || !S.drag) return; e.preventDefault(); Array.prototype.forEach.call(document.querySelectorAll('#w197board .w197col.over'), function (x) { if (x !== col) x.classList.remove('over'); }); col.classList.add('over'); });
+  document.addEventListener('dragleave', function (e) { var col = e.target && e.target.closest && e.target.closest('#w197board .w197col'); if (col && !col.contains(e.relatedTarget)) col.classList.remove('over'); });
+  document.addEventListener('drop', function (e) { var col = e.target && e.target.closest && e.target.closest('#w197board .w197col'); if (!col || !S.drag) return; e.preventDefault(); var id = S.drag; S.drag = null; col.classList.remove('over'); moveTo(id, col.getAttribute('data-w197col')); });
+  document.addEventListener('dragend', function () { S.drag = null; Array.prototype.forEach.call(document.querySelectorAll('#w197board .w197col.over'), function (x) { x.classList.remove('over'); }); });
+
+  /* ---------- the tour ---------- */
+  function addTour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT || !TT.hrcentre || TT.hrcentre.__w197) return;
+      var st = TT.hrcentre.steps, S0 = st[0] || {};
+      function step(s, t, p) { return { s: s, t: t, p: p, opt: 1 }; }
+      TT.hrcentre.hash = '#hrcentre/overview';
+      TT.hrcentre.steps = [
+        { s: '#hrcentre > .w118mast', t: 'HR centre', p: 'Each page holds one thing, named in the menu on the left. The title is the page you are on; its main button sits on the right.' },
+        step('#w153rail .w153sec', 'The pages', 'Overview first, then People (Team, Hours, Time off, Recognition), Hiring (Applications, Positions, Playbook), Growth (Onboarding, Onboarding plan, Training), Care (Policies, Discipline) and, for HR and admins, Analytics.'),
+        step('#w197ov .w197tiles', 'The numbers', 'The team, who is in The Loop this week, new applications, onboarding, overdue trainings and time off to decide. Click one to open its page.'),
+        step('#w197ov .w197todo', 'Needs HR', 'Everything waiting on HR, most urgent first, each with Open. When it is empty, nothing is waiting.'),
+        { c: 1, t: 'Applications', p: 'A board by stage: New, Reviewing, Interview, Offer, Hired. Drag a card to move it; open it to read what they wrote, open the CV, choose who handles it, link the position and take notes. Declined and withdrawn are kept below the board.' },
+        { c: 1, t: 'Hours', p: 'Time given through The Loop against each person\u2019s weekly minimum (below the minimum first), what people shared when they closed the loop, and meeting attendance.' }
+      ];
+      TT.hrcentre.__w197 = true; TT.hrcentre.__w181 = true;
+    } catch (e) { /* fine */ }
+  }
+  addTour(); setTimeout(addTour, 1500); setTimeout(addTour, 5000);
+  installRail(); setTimeout(installRail, 1000);
+
+  window.w197 = { state: function () { return S; }, pages: PAGES, show: show, tagAll: tagAll, apply: apply, hoursBy: hoursBy, minFor: minFor, loadCands: loadCands, loadOverview: loadOverview, paintBoard: paintBoard, openSheet: openSheet, moveTo: moveTo, appTitles: appTitles, groups: hrGroups };
+})();

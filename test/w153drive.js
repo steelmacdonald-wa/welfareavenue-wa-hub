@@ -84,7 +84,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('the CRM opens as an app: #crm, the menu gives way to the CRM rail, Back to the Hub in the dock', s.hash === '#crm' && s.app === 'crm' && /w153app/.test(s.body) && s.tabBar === 'none' && s.railShown !== 'none' && s.back !== 'none', s);
   let r = await rail(f);
   ok('the rail: Contacts (current), Partners (wave163), Possible duplicates, Sources, Lists (wave155), Forms (wave156), Gifts, Email (wave154), Campaigns (wave155), Automations (wave157), Reports (wave160, no longer what comes next)', r.join('|') === 'Contacts*|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports' && await f.ev(() => !/Next in the CRM/i.test(document.getElementById('w153rail').innerText)), r);
-  ok('the app bar names the app and the place, with Add a contact', /^CRM Contacts/.test(s.bar) && /Add a contact/.test(s.bar), s.bar);
+  ok('wave197: no app bar on a computer; the title is the page (Contacts) and Add a contact sits in the header', (await f.ev(() => (document.querySelector('.panel.active > .w118mast h1') || {}).textContent)) === 'Contacts' && await f.ev(() => !document.getElementById('w153bar').offsetParent && !!document.querySelector('.panel.active > .w118mast [data-w197proxy="add"]')), s.bar);
   ok('Search everything becomes the contact search', /Search contacts/.test(s.ph), s.ph);
   ok('the CRM page keeps its own tab strip out of the way on a wide screen (the rail has it)', await f.ev(() => getComputedStyle(document.querySelector('#crm .w152tabs')).display === 'none'));
   await shot(f, 'apps_crm');
@@ -95,11 +95,11 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('typing a name finds the contact first (accent ignored)', sr.length && /^Supporter\s*Élodie Gagnon/.test(sr[0]), sr);
   await click(f, '#searchResults [data-w153c]'); await f.page.waitForTimeout(900);
   s = await state(f);
-  ok('and opens their page inside the CRM', s.hash === '#crm/c/5002' && s.app === 'crm' && /^CRM Contacts/.test(s.bar), s);
+  ok('and opens their page inside the CRM', s.hash === '#crm/c/5002' && s.app === 'crm', s);
   /* the rail moves with the address */
   await f.hash('#crm/dupes'); await f.page.waitForTimeout(600);
   r = await rail(f);
-  ok('#crm/dupes marks Possible duplicates in the rail and the app bar', r.indexOf('Possible duplicates*') >= 0 && r.indexOf('Contacts*') < 0 && /^CRM Possible duplicates/.test((await state(f)).bar), r);
+  ok('#crm/dupes marks Possible duplicates in the rail and the app bar', r.indexOf('Possible duplicates*') >= 0 && r.indexOf('Contacts*') < 0 && (await f.ev(() => (document.querySelector('.panel.active > .w118mast h1') || {}).textContent)) === 'Possible duplicates', r);
   /* gifts */
   await click(f, '#w153rail [data-w153go="#crm/gifts"]'); await f.page.waitForTimeout(1500);
   const g = await f.ev(() => ({ hash: location.hash, txt: document.querySelector('#crm .w152root').innerText.replace(/\s+/g, ' '), rows: [...document.querySelectorAll('#crm .w153gifts .w152row')].map(x => x.innerText.replace(/\s+/g, ' ').slice(0, 120)) }));
@@ -125,10 +125,10 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   /* the HR centre */
   await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   s = await state(f); r = await rail(f);
-  ok('the HR centre opens where the page lands (People) with its own sections in the rail, nothing from the Hub', s.app === 'hr' && /^#hrcentre/.test(s.hash) && /^People\d*\*\|Onboarding\|Training\|Recruitment\|Commitment\|Policies\|Discipline$/.test(r.join('|')) && /^HR CENTRE People/.test(s.bar), { s, r });
-  await click(f, '#w153rail [data-w153sec="policies"]'); await f.page.waitForTimeout(2600);
-  const hr = await f.ev(() => ({ hash: location.hash, on: (document.querySelector('#hrcentre .w47tab.on') || {}).textContent, rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()) }));
-  ok('Policies in the rail switches the page\'s tab and the rail follows', hr.hash === '#hrcentre/policies' && hr.on === 'Policies' && hr.rail.join() === 'Policies', hr);
+  ok('the HR centre opens on Overview (wave197) with its own pages in the rail, nothing from the Hub', s.app === 'hr' && /^#hrcentre/.test(s.hash) && /^Overview\*\|Team\d*\|Hours\|Time off\d*\|Recognition\|Applications\d*\|Positions\|Playbook\|Onboarding\|Onboarding plan\|Training\|Policies\|Discipline/.test(r.join('|')) && (await f.ev(() => (document.querySelector('.panel.active > .w118mast h1') || {}).textContent)) === 'Overview', { s, r });
+  await click(f, '#w153rail [data-w153go="#hrcentre/policies"]'); await f.page.waitForTimeout(2600);
+  const hr = await f.ev(() => ({ hash: location.hash, on: document.getElementById('hrcentre').getAttribute('data-w197'), rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()) }));
+  ok('Policies in the rail opens the Policies page and the rail follows', hr.hash === '#hrcentre/policies' && hr.on === 'policies' && hr.rail.join() === 'Policies', hr);
   await click(f, '#hrcentre .w47tab[data-w47v="training"]'); await f.page.waitForTimeout(2600);
   ok('a tab clicked on the page moves the rail too', (await rail(f)).indexOf('Training*') >= 0, await rail(f));
   await shot(f, 'apps_hr');
@@ -147,7 +147,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('Finance holds the finance pages only: Overview (current), Tasks (wave164), Trends, Money map, Budget, Transactions', s.app === 'finance' && s.hash === '#finances' && r.join('|') === 'Overview*|Tasks|Trends|Money map|Budget|Transactions', { s, r });
   await click(f, '#w153rail [data-w153sec="budget"]'); await f.page.waitForTimeout(900);
   const fin = await f.ev(() => ({ on: (document.querySelector('#finances .w94tab.on') || {}).textContent, rail: [...document.querySelectorAll('#w153rail .w153it.on')].map(a => a.textContent.trim()), bar: document.getElementById('w153bar').innerText.replace(/\s+/g, ' ') }));
-  ok('Budget in the rail opens the Budget section', fin.on === 'Budget' && fin.rail.join() === 'Budget' && /Finance Budget/i.test(fin.bar), fin);
+  ok('Budget in the rail opens the Budget section', fin.on === 'Budget' && fin.rail.join() === 'Budget' && (await f.ev(() => (document.querySelector('#finances > .w118mast h1') || {}).textContent)) === 'Budget', fin);
   await shot(f, 'apps_finance');
   /* the Admin centre */
   await f.ev(() => window.w153.open('admin')); await f.page.waitForTimeout(1500);
@@ -173,7 +173,7 @@ const click = (f, s) => f.ev(x => { const el = document.querySelector(x); if (!e
   ok('a member on the HR profile: the dock, with the Hub, the CRM and the HR centre (no Finance, no Admin centre)', m.dock && m.apps.join() === 'hub,crm,hr' && !m.fin && !m.adm, m);
   await f.ev(() => window.w153.open('hr')); await f.page.waitForTimeout(2600);
   r = await rail(f);
-  ok('their HR centre is the whole HR centre (wave169: HR\'s own profile), so the rail is its sections, nothing from the Hub', /^People/.test(r[0] || '') && r.indexOf('Onboarding') > 0 && r.indexOf('Training') > 0 && r.indexOf('Recruitment') > 0 && !r.some(x => /^Home|^Avenue Academy/.test(x)), r);
+  ok('their HR centre is the whole HR centre (wave169: HR\'s own profile), so the rail is its sections, nothing from the Hub', /^Overview/.test(r[0] || '') && r.indexOf('Onboarding') > 0 && r.indexOf('Training') > 0 && r.some(x => /^Applications/.test(x)) && !r.some(x => /^Home|^Avenue Academy/.test(x)), r);
   ok('no page errors (member)', (f.errs || []).length === 0, f.errs);
   await f.close();
 

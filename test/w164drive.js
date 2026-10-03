@@ -38,7 +38,7 @@ const RAIL = () => { const r = document.getElementById('w153rail'); if (!r) retu
     await p.waitForTimeout(600);
     let r = await f.ev(RAIL), m = await f.ev(MAST);
     ok('the Finance app: its own gold, no group heading repeating its name, Tasks after the Overview', r && r.title === 'Finance' && r.heads.length === 0 && r.items.join('|') === 'Overview*|Tasks|Trends|Money map|Budget|Transactions' && r.tile === 'rgb(185, 133, 27)', r);
-    ok('the page does not say Fundraising: no crumb inside the app, the title is Finance with a line about the year', m && m.h1 === 'Finance' && !m.crumbShown && !/fundrais/i.test(m.h1 + ' ' + m.p + ' ' + m.crumb) && /year so far/.test(m.p), m);
+    ok('the page does not say Fundraising: no crumb inside the app, the title is the page (Overview, wave197) with a line about the year', m && m.h1 === 'Overview' && !m.crumbShown && !/fundrais/i.test(m.h1 + ' ' + m.p + ' ' + m.crumb) && /year so far/.test(m.p), m);
     const nav = await f.ev(() => ({ tabs: document.getElementById('w94nav') ? getComputedStyle(document.getElementById('w94nav')).display : 'missing', n: document.querySelectorAll('#finances .w94tab').length }));
     ok('on a computer the page\'s own tab strip is gone (the rail is the menu); the six sections are still there behind it', nav.tabs === 'none' && nav.n === 6, nav);
     const bar = await f.ev(() => ({ t: (document.querySelector('#w153bar .w153bc') || {}).innerText, tileBefore: getComputedStyle(document.querySelector('#w153bar .w153ai'), '::before').content }));
@@ -109,10 +109,10 @@ const RAIL = () => { const r = document.getElementById('w153rail'); if (!r) retu
   {
     const f = await fresh(browser, { who: 'admin', width: 1366, hash: '#hrcentre', fixture: JSON.parse(JSON.stringify(FX)), wait: 5000 });
     const hr = await f.ev(() => { const r = document.getElementById('w153rail'); const t = document.querySelector('#hrcentre .w47tabs'); return { heads: [...r.querySelectorAll('.w153sh')].map(x => x.textContent), items: [...r.querySelectorAll('.w153it')].map(a => a.querySelector('span').textContent + (a.querySelector('.w153n') ? '(' + a.querySelector('.w153n').textContent + ')' : '')), tabs: t ? getComputedStyle(t).display : 'missing', crumb: (function () { const c = document.querySelector('#hrcentre > .w118mast .crumb'); return c ? getComputedStyle(c).display : 'none'; })() }; });
-    ok('the HR centre: no heading repeating its name, the People count in the rail, its tab strip gone on a computer, no crumb', hr.heads.length === 0 && hr.items.some(x => /^People\(\d+\)$/.test(x)) && hr.tabs === 'none' && hr.crumb === 'none', hr);
-    await f.page.click('#w153rail .w153it[data-w153sec="onboarding"]'); await f.page.waitForTimeout(900);
-    const on = await f.ev(() => ({ tab: (document.querySelector('#hrcentre .w47tab.on') || {}).getAttribute && document.querySelector('#hrcentre .w47tab.on').getAttribute('data-w47v'), rail: (document.querySelector('#w153rail .w153it.on span') || {}).textContent }));
-    ok('the rail still switches the HR centre\'s sections', on.tab === 'onboarding' && on.rail === 'Onboarding', on);
+    ok('the HR centre (wave197): no heading repeating its name (Overview stands alone), the Team count in the rail, its tab strip gone on a computer, no crumb', !hr.heads.some(h => /HR centre/i.test(h)) && hr.items.some(x => /^Team\(\d+\)$/.test(x)) && hr.tabs === 'none' && hr.crumb === 'none', hr);
+    await f.page.click('#w153rail .w153it[data-w153go="#hrcentre/onboarding"]'); await f.page.waitForTimeout(900);
+    const on = await f.ev(() => ({ tab: document.getElementById('hrcentre').getAttribute('data-w197'), rail: (document.querySelector('#w153rail .w153it.on span') || {}).textContent }));
+    ok('the rail still switches the HR centre\'s pages', on.tab === 'onboarding' && on.rail === 'Onboarding', on);
     ok('no page errors in the HR centre', f.errs.length === 0, f.errs);
     await f.close();
   }

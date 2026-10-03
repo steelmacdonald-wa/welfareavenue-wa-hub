@@ -223,7 +223,7 @@
   }
   function items(app) {
     var a = APPS[app]; if (!a || !a.groups) return [];
-    var gs = a.groups().map(function (g) { return { label: g.label, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
+    var gs = a.groups().map(function (g) { return { label: g.label, solo: !!g.solo, items: g.items.filter(function (it) { return allowed(it.page); }) }; }).filter(function (g) { return g.items.length; });
     /* wave164: an app with one group named after itself (Finance, the HR centre) shows no group heading: it only repeated the app's name */
     if (gs.length === 1 && fold(gs[0].label).replace(/s$/, '') === fold(a.label).replace(/s$/, '')) gs[0].solo = true;
     return gs;

@@ -92,9 +92,9 @@ const text = (f, sel) => f.ev(s => { const e = document.querySelector(s); return
     ok('rail: servings and people', /Volunteer Manager/i.test(st.rail + st.bar) && /Calendar/.test(st.rail) && /The SOP/.test(st.rail) && /Recipes/.test(st.rail) && /Inventory/.test(st.rail) && /Volunteers/.test(st.rail), st.rail);
     ok('the Hub menu no longer lists MTL volunteering', st.tab === 'none', st.tab);
     ok('the page chips give way to the rail on a computer', st.chips === 'none', st.chips);
-    ok('app bar: Text volunteers', /Text volunteers/.test(st.bar), st.bar);
+    ok('Text volunteers in the page header (wave197: no app bar on a computer)', await f.ev(() => /Text volunteers/.test((document.querySelector('.panel.active > .w118mast [data-w197proxy="text"]') || {}).textContent || '')), st.bar);
     await f.ev(() => { window.__tx = 0; window.waTxtModal = function () { window.__tx++; }; });
-    await f.page.click('[data-w153act="text"]'); await f.page.waitForTimeout(300);
+    await f.page.click('.panel.active > .w118mast [data-w197proxy="text"]'); await f.page.waitForTimeout(300);
     ok('Text volunteers opens the texting window', await f.ev(() => window.__tx === 1));
     await f.hash('#volunteering/people', 1800);
     ok('rail marks Volunteers', await f.ev(() => { const on = document.querySelector('#w153rail .w153it.on, #w153rail [aria-current="page"]'); return !!on && /Volunteers/.test(on.textContent); }));

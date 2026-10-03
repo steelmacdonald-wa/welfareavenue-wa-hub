@@ -174,3 +174,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 | `#confirm/<token>` | none (public) | links in texts | 031 |
 
 - **One record per person (wave176).** The CRM contact (crm_contacts) is the person: name, emails, phones, address, notes, tags, organization. volunteer_profiles holds what is about volunteering (roles, car, review, Quo, applied), linked by crm_contacts.volunteer_id; volunteer_people is a view of the two with instead-of triggers (wa176_vp_write), so the Volunteer Manager and the CRM read and write the same row. The Volunteer Manager is an app in the launcher (parts153 APPS.volunteer, page volunteering).
+
+
+## wave197 (03/10/26): the HR centre's pages and page names in apps
+The HR centre is one page (`#hrcentre`) shown as fourteen pages (`#hrcentre/<page>`): wave197 tags the older waves' sections by page (`data-w197s`) and shows the current one (`#hrcentre[data-w197]`), draws Overview, the Applications board and Hours (The Loop) itself, and replaces the HR rail (`WA_APP.apps.hr.groups`). In every app the masthead's title is the rail's page name where it repeated the app's, and on a computer the app bar is hidden with its actions proxied into the masthead. See docs/03-10-26 - wave197 ….
