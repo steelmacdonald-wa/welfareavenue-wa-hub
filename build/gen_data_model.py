@@ -6,6 +6,8 @@ the repo. wa134_comments.sql gives the areas and the order; every later migratio
 single-line `comment on ... is '...';` statements (wa134_passwords.sql, wa135_academy_names.sql, ...) is read
 after it, in file name order: a later comment replaces an earlier one for the same object, a new column joins
 its table, and anything else new goes under "Added after wave134". Test files (*_test.sql) are skipped.
+A dropped object leaves the model through a line `-- dropped: column public.<table>.<column>` (or table, view,
+function) in the migration that drops it (wave192e); a later comment brings it back.
 Run after each migration that adds or changes a comment: python3 build/gen_data_model.py
 """
 import glob
@@ -16,8 +18,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'build', 'data')
 BASE = os.path.join(DATA, 'wa134_comments.sql')
 later = [f for f in sorted(glob.glob(os.path.join(DATA, '*.sql')))
-         if f != BASE and not f.endswith('_test.sql') and re.search(r'^comment on ', open(f, encoding='utf-8').read(), re.M)]
+         if f != BASE and not f.endswith('_test.sql') and re.search(r'^(comment on |-- dropped: )', open(f, encoding='utf-8').read(), re.M)]
 pat = re.compile(r"^comment on (table|view|column|function) (public\.[^ ]+(?: ?\([^)]*\))?) is '(.*)';$")
+drop_pat = re.compile(r"^-- dropped: (table|view|column|function) (public\.[^ ]+(?: ?\([^)]*\))?)\s*$")   # wave192e: a later file records a drop
 order = []            # keys in first-seen order
 text = {}             # key -> latest text
 kind_of = {}          # key -> table | view | column | function
@@ -31,6 +34,14 @@ for f in [BASE] + later:
             cur = line[3:].strip()
             if cur not in section_order:
                 section_order.append(cur)
+            continue
+        d = drop_pat.match(line)
+        if d:   # the object (and, for a table or view, its columns) leaves the model; a later comment brings it back
+            dk = d.group(1) + ' ' + d.group(2).replace('public.', '')
+            gone = [dk] + ([k for k in text if k.startswith('column ' + dk.split(' ', 1)[1] + '.')] if d.group(1) in ('table', 'view') else [])
+            for k in gone:
+                if k in text:
+                    del text[k]; order.remove(k)
             continue
         m = pat.match(line)
         if not m:

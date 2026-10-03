@@ -37,7 +37,7 @@ His choices (01/10/26):
 
 - `hub_checkins` rows (and so hours) are read by the person, admins and HR (`wa169_can_assign`: the HR profile, leaders, admins), `wa192c`. Before, any staff member or board viewer could read everyone's sessions.
 - Everyone else reads `loop_feed(p_days, p_email)` (the shared notes: who, team, day, lines, closed count, open titles; no time, no minutes) and `loop_in_now()` (emails in a session now, for the ring).
-- `loop_trail(email, since, until)` drafts the note; a signed-in person can only read their own; checkin-post reads it with the service key for the person closing. The trail is never stored (the `trail` column added at first is unused and goes in the cleanup).
+- `loop_trail(email, since, until)` drafts the note; a signed-in person can only read their own; checkin-post reads it with the service key for the person closing. The trail is never stored (the `trail` column added at first was never used and was dropped in the cleanup, 03/10/26).
 - change_log lines from the Loop carry no hours.
 
 ## Edge function: checkin-post v13
@@ -62,7 +62,7 @@ New actions `start` (keeps the focus, posts nothing), `draft` (the trail as line
 - **Rename #check-in-out-wa to #the-loop** in Slack (channel settings). The Hub posts there by name once renamed, and to the old name until then. Nothing else to change.
 - **Who sees a team's notes:** each team's channel is the first one in Settings, Team inbox channels (the same as requests). Toronto posts in #general-toronto until the Hub app is added to #toronto-operations.
 - **People who checked out before today** (Alyx on 30/09) have the WEEK 1 step open; it ticks the first time they close the loop.
-- **Cleanup awaiting approval:** the session's temporary tables (`wa_stage_192`, `wa_stage_fn192`, `wa_stage_pull_loop`, `_rids`, `_tree`) and the unused `hub_checkins.trail` column.
+- **Cleanup: done.** Steel ran it in the Supabase SQL editor on 03/10/26 (`build/data/wa192e_wa194_cleanup.sql`): the session's temporary tables (`wa_stage_192`, `wa_stage_fn192`, `wa_stage_pull_loop`, `_rids`, `_tree`, `wa_stage_push192`, `_rids`) and the unused `hub_checkins.trail` column are gone.
 
 ## Files
 

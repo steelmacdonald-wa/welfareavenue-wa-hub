@@ -601,7 +601,6 @@ The Loop (wave192; check in and out before): a session starts with I'm in and en
 - `closed_task_ids`: dept_tasks ids closed during the session.
 - `share_to`: wave192: where the wrap-up note was shared: team (the department's Slack channel), everyone (the Loop channel) or hub (no Slack post; Home only). Null before wave192 or for a session closed without a note.
 - `share_channel`: wave192: the Slack channel name the wrap-up was posted to, when it was.
-- `trail`: Not used (wave192b): the Loop draft is built on demand for the person's own sheet and never stored. Empty; dropped in the wave192 cleanup once Steel approves.
 
 ### `hub_shoutouts`
 
