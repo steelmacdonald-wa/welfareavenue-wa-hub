@@ -64424,7 +64424,15 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function dayOf(iso) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return String(iso || '').slice(0, 10); } }
   function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
-  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/u/' + encodeURIComponent(owner) + '/#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  /* wave201: Gmail links name the owner's account (authuser), so a browser signed in to several Google accounts opens the right one */
+  function au(email) { return encodeURIComponent(email || '').replace('%40', '@'); }
+  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  function draftsUrl(owner) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#drafts'; }
+  /* the draft itself (Gmail's own draft link: the thread id in decimal, the draft id), else the drafts folder */
+  function draftUrl(owner, row) {
+    if (row && row.thread_id && row.draft_id && typeof BigInt === 'function') { try { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all?compose=thread-f:' + BigInt('0x' + row.thread_id).toString() + '%2Bmsg-a:' + encodeURIComponent(row.draft_id); } catch (e) { /* the folder */ } }
+    return draftsUrl(owner);
+  }
   function labelShort(n) { var p = String(n || '').split('/'); return p[p.length - 1]; }
 
   var CSS = ''
@@ -64501,6 +64509,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     + '@keyframes w170spin{to{transform:rotate(360deg);}}'
     + '#w170sheet .w170ok{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(42,140,122,.12);color:' + GREEN + ';font-size:13.5px;}'
     + '#w170sheet .w170err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    /* wave201: the [brackets] check and an error sit right above the buttons; the framework line under the draft; the writing guide */
+    + '#w170sheet .w170warn{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.18);border:1px solid rgba(220,165,39,.55);color:#6b4d0e;font-size:13px;font-weight:600;}'
+    + '#w170sheet .w170acts + .w170err{margin-top:6px;}'
+    + '#w170sheet .w170fw{margin:8px 0 0;font-size:12px;color:' + MUTED + ';}#w170sheet .w170fw b{color:' + GREEN + ';}'
+    + '#w170sheet .w170ok .w170sub{display:block;font-size:12.5px;color:' + MUTED + ';margin-top:4px;}'
+    + '#w170sheet .w170guide summary{cursor:pointer;font-weight:700;color:' + GREEN + ';font-size:13px;margin:6px 0;}'
+    + '#w170sheet .w170guide textarea{min-height:260px;font-size:12.5px;line-height:1.5;}'
     + '#w170sheet label.w170l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:12px 0 4px;}'
     + '#w170sheet label.w170l .op{font-weight:500;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:6px;}'
     + '#w170sheet .w170ck{display:flex;gap:8px;align-items:center;font-size:13px;color:' + INK + ';margin:8px 0 0;}'
@@ -64693,7 +64708,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function replyTool(x, d) {
     var st = d.stage || 'read';
     var h = '<section class="w170tool" aria-live="polite"><h4>Reply</h4>';
-    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one. <a class="w170lnk" href="https://mail.google.com/mail/u/' + encodeURIComponent((S.owner || {}).email || '0') + '/#drafts" target="_blank" rel="noopener">Open your drafts</a></div>';
+    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one' + (x.drafted_at ? ' (' + E(ago(x.drafted_at)) + ')' : '') + '. <a class="w170lnk" href="' + E(draftUrl((S.owner || {}).email, x)) + '" target="_blank" rel="noopener">Open the draft</a></div>';
     if (st === 'read' || st === 'loading') {
       h += '<p class="gist">The assistant asks what it needs to know, then writes the reply in your voice. You read it, change anything, and it saves as a draft in your Gmail: nothing is sent for you.</p>'
         + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170help' + (st === 'loading' ? ' disabled' : '') + '>Help me reply</button>'
@@ -64713,14 +64728,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var others = d.main ? (String(d.main.to || '') + ',' + String(d.main.cc || '')).split(',').filter(function (a) { return /@/.test(a) && lower(a).indexOf(lower((S.owner || {}).email || '#')) < 0; }).length > 1 : false;
       h += '<label class="w170l" for="w170body">Your reply<span class="op">change anything you like</span></label><textarea id="w170body" class="w170draft" rows="12">' + E(d.draft || '') + '</textarea>'
         + ((d.brackets && d.brackets.length) || (d.notes && d.notes.length) ? '<div class="w170notes"><b>Before you send</b><ul>' + (d.brackets || []).map(function (b) { return '<li>Fill in ' + E(b) + '</li>'; }).join('') + (d.notes || []).map(function (n) { return '<li>' + E(n) + '</li>'; }).join('') + '</ul></div>' : '')
+        + (d.framework ? '<p class="w170fw">Written with <b>' + E(d.framework.name) + '</b>. Reader: ' + E(d.framework.reader) + '. Register: ' + E(d.framework.register) + '.</p>' : '')
         + (others ? '<label class="w170ck"><input type="checkbox" data-w170all' + (d.replyAll ? ' checked' : '') + '> Reply to everyone on the email</label>' : '')
-        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving\u2026' : 'Save as a Gmail draft') + '</button>'
+        + (d.warn ? '<div class="w170warn" role="alert">' + E(d.warn) + '</div>' : '')
+        + (d.err ? '<p class="w170err" role="alert">' + E(d.err) + '</p>' : '')
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving and checking it in Gmail\u2026' : d.bracketOk ? 'Save it with the [brackets]' : 'Save as a Gmail draft') + '</button>'
         + '<button type="button" class="w170btn ghost sm" data-w170redraft>Write it again</button><button type="button" class="w170btn ghost sm" data-w170change>Change my answers</button></div>';
     } else if (st === 'saved') {
-      h += '<div class="w170ok">Saved in your Gmail drafts, in the thread' + (d.saved && d.saved.to ? ', to ' + E(d.saved.to.join(', ')) : '') + '. Read it once more and send it from Gmail.</div>'
-        + '<div class="w170acts"><a class="w170btn" href="' + E((d.saved && d.saved.url) || '#') + '" target="_blank" rel="noopener">Open your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
+      var sv = d.saved || {}, own = (S.owner || {}).email;
+      h += '<div class="w170ok" role="status"><span>' + (sv.updated ? 'Your draft for this email is updated in Gmail' : 'Saved in your Gmail drafts') + ', in the thread' + (sv.to && sv.to.length ? ', to ' + E(sv.to.join(', ')) : '') + '.'
+        + '<span class="w170sub">The Hub read it back from Gmail: it is there' + (own ? ', in ' + E(own) : '') + '. Read it once more and send it from Gmail.</span></span></div>'
+        + '<div class="w170acts"><a class="w170btn" href="' + E(sv.url || draftUrl(own, x)) + '" target="_blank" rel="noopener">Open the draft in Gmail</a><a class="w170lnk" href="' + E(sv.drafts_url || draftsUrl(own)) + '" target="_blank" rel="noopener" style="font-size:12.5px">All your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
     }
-    if (d.err && st !== 'loading') h += '<p class="w170err">' + E(d.err) + '</p>';
+    if (d.err && st !== 'loading' && st !== 'draft' && st !== 'saving') h += '<p class="w170err">' + E(d.err) + '</p>';
     return h + '</section>';
   }
   function teamTool(x, d) {
@@ -64786,8 +64806,26 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '<label class="w170l" for="w170snd">Senders or domains<span class="op">one per line</span></label><textarea id="w170snd" rows="3" placeholder="someone@example.com&#10;example.org">' + E(st.senders) + '</textarea>'
       + '<label class="w170l" for="w170wrd">Words in the subject<span class="op">one per line</span></label><textarea id="w170wrd" rows="2">' + E(st.words) + '</textarea>'
       + '<div class="w170acts" style="margin-top:16px"><button type="button" class="w170btn gold" data-w170saveset' + (S.busy.set ? ' disabled' : '') + '>' + (S.busy.set ? 'Saving\u2026' : 'Save') + '</button></div>'
+      + guideHtml()
       + '<h4>How it works</h4><p>The Hub reads your mailbox through Welfare Avenue\u2019s Google Workspace, as you, and only for you: nobody else sees this page or your mail. Replies are drafts in your Gmail; you send them. An email reaches a team only when you send it.</p>'
       + '</div>';
+  }
+  /* wave201: Your writing guide (the owner's own; only they read it, through mybox's voice action) */
+  function guideHtml() {
+    var g = S.guide;
+    if (!g) { loadGuide(); return '<h4>Your writing guide</h4><div class="w170wait"><i></i>Reading your writing guide\u2026</div>'; }
+    if (g.err) return '<h4>Your writing guide</h4><p class="w170err">' + E(g.err) + '</p>';
+    var txt = g.draft != null ? g.draft : g.voice, words = String(txt || '').split(/\s+/).filter(Boolean).length;
+    return '<h4>Your writing guide</h4>'
+      + '<p>Every reply the assistant writes for you follows this guide, before the email and your answers. ' + (g.voice ? 'Yours: <b>' + E(g.framework) + '</b>.' : 'You have none yet, so replies use a plain house style: paste yours below.') + ' Figures come only from you, the email, or the Hub\u2019s verified facts (Fundraising, Fact base).</p>'
+      + '<details class="w170guide"' + (g.open || !g.voice ? ' open' : '') + '><summary>' + (g.voice ? 'Read or change the guide (' + plural(words, 'word') + ')' : 'Add your guide') + '</summary>'
+      + '<textarea id="w170voice" rows="14" maxlength="20000" aria-label="Your writing guide" placeholder="How your replies should sound: your rules, the way you open and close, who you write to and how, words you never use. A first line FRAMEWORK: name says which framework it is.">' + E(txt || '') + '</textarea>'
+      + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170saveguide' + (g.busy ? ' disabled' : '') + '>' + (g.busy ? 'Saving\u2026' : 'Save the guide') + '</button>' + (g.draft != null && g.draft !== g.voice ? '<span style="font-size:12px;color:' + MUTED + '">Not saved yet</span>' : '') + '</div></details>';
+  }
+  function loadGuide() {
+    if (S.guideP) return; S.guideP = true;
+    fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null }; S.guideP = false; render(); },
+      function (e) { S.guide = { err: 'Your writing guide could not be read: ' + e.message }; S.guideP = false; render(); });
   }
   function render() {
     var el = document.getElementById('w170sheet'); if (!el || !S.open) return;
@@ -64840,7 +64878,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function makeDraft(x) {
     var d = detail(x); d.stage = 'drafting'; d.err = null; render();
     fn({ action: 'draft', gmail_id: x.gmail_id, answers: answersOf(d), note: String(d.note || '').trim() }).then(function (r) {
-      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.stage = 'draft'; render();
+      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.framework = r.framework || null; d.warn = null; d.bracketOk = false; d.stage = 'draft'; render();
       var ta = document.getElementById('w170body'); if (ta) { try { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; } catch (e) { /* fine */ } }
     }, function (e) { d.stage = 'questions'; d.err = 'The reply was not written: ' + e.message; render(); });
   }
@@ -64848,12 +64886,24 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var d = detail(x), ta = document.getElementById('w170body'); if (ta) d.draft = ta.value;
     if (!String(d.draft || '').trim()) { d.err = 'The reply is empty.'; render(); return; }
     var open = String(d.draft).match(/\[[^\]\n]{1,80}\]/g);
-    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = 'There is still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Press Save again to keep them in the draft.'; render(); return; }
-    d.stage = 'saving'; d.err = null; render();
+    /* wave201: the [brackets] check stops the first press with a note right above the button (it used to sit under the buttons,
+       so the press could look like it did nothing), and the button says what a second press does */
+    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = null; d.warn = 'There ' + (open.length === 1 ? 'is' : 'are') + ' still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Fill ' + (open.length === 1 ? 'it' : 'them') + ' in above, or press Save it with the [brackets] to keep ' + (open.length === 1 ? 'it' : 'them') + ' in the draft.'; render(); showActs(); return; }
+    d.stage = 'saving'; d.err = null; d.warn = null; render();
     fn({ action: 'save_draft', gmail_id: x.gmail_id, body: d.draft, reply_all: !!d.replyAll }).then(function (r) {
-      d.saved = r; d.stage = 'saved'; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id }); render(); paintCard();
-      T('Saved in your Gmail drafts');
-    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); });
+      d.saved = r; d.stage = 'saved'; d.bracketOk = false; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id, thread_id: r.thread_id || x.thread_id, drafted_at: r.checked_at || new Date().toISOString() }); render(); paintCard();
+      T(r.updated ? 'Your draft is updated in Gmail' : 'Saved in your Gmail drafts');
+    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); showActs(); });
+  }
+  function showActs() { var b = document.querySelector('#w170sheet [data-w170save]'); if (b && b.scrollIntoView) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { b.scrollIntoView(); } } }
+  /* wave201: Your writing guide */
+  function saveGuide() {
+    var g = S.guide; if (!g || g.busy) return;
+    var ta = document.getElementById('w170voice'); var text = ta ? ta.value : (g.draft != null ? g.draft : g.voice);
+    g.busy = true; render();
+    fn({ action: 'settings', voice: String(text || '') }).then(function () {
+      return fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null, open: true }; render(); T('Your writing guide is saved'); });
+    }, function (e) { g.busy = false; render(); T('Not saved: ' + e.message); });
   }
   function nextItem() {
     var list = listFor(S.tab).filter(function (x) { return S.tab === 'reply' ? !x.reply_state : !x.team_state; });
@@ -64921,6 +64971,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if ((el = t.closest('[data-w170retry]'))) { e.preventDefault(); startSort('retry'); return; }
     if ((el = t.closest('[data-w170relabels]'))) { e.preventDefault(); el.disabled = true; fn({ action: 'labels', refresh: true }).then(function () { S.set = null; return loadOwner(true); }).then(function () { render(); T('Your folders were read again'); }, function (err) { el.disabled = false; T('Not read: ' + err.message); }); return; }
     if ((el = t.closest('[data-w170saveset]'))) { e.preventDefault(); saveSettings(); return; }
+    if ((el = t.closest('[data-w170saveguide]'))) { e.preventDefault(); saveGuide(); return; }
+    if ((el = t.closest('.w170guide summary')) && S.guide) { S.guide.open = !el.parentNode.open; return; }
     if ((el = t.closest('[data-w170unlabel]'))) {
       e.preventDefault(); v = el.getAttribute('data-w170unlabel'); el.disabled = true;
       fn({ action: 'unlabel', gmail_id: v }).then(function () { patchRow(v, { label_id: null, label_name: null, labelled_at: null, archived: false }); render(); paintCard(); T('The label is off'); }, function (err) { el.disabled = false; T('Not changed: ' + err.message); });
@@ -64945,7 +64997,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var x = S.sel ? rowBy(S.sel) : null, d = x ? detail(x) : null, st = S.set;
     if (d && t.hasAttribute('data-w170own')) { var i = Number(t.getAttribute('data-w170own')); d.custom[i] = t.value; if (t.value && d.answers[i]) { d.answers[i] = ''; Array.prototype.forEach.call(t.parentNode.querySelectorAll('[data-w170ans]'), function (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }); } return; }
     if (d && t.id === 'w170note') { d.note = t.value; return; }
-    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; return; }
+    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; d.warn = null; return; }
+    if (t.id === 'w170voice' && S.guide) { S.guide.draft = t.value; return; }
     if (d && t.id === 'w170ask') { d.team = d.team || {}; d.team.ask = t.value; return; }
     if (st && t.hasAttribute('data-w170lnote')) { st.notes[t.getAttribute('data-w170lnote')] = t.value; return; }
     if (st && t.id === 'w170snd') { st.senders = t.value; return; }
@@ -75339,6 +75392,251 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   (document.head || document.documentElement).appendChild(css);
 
   window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, cardBits: cardBits, sortGrade: sortGrade, notCalled: notCalled, notCalledOnly: notCalledOnly, logCall: logCall, selBits: selBits, bulkApply: bulkApply, setSelMode: setSelMode, gradeAvg: gradeAvg, barBits: barBits, setGrade: setGrade, askTime: askTime, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
+})();
+/* =====================================================================
+   WA v201 (03/10/26): speak instead of typing, in every AI prompt box.
+   Steel (03/10/26), on Your inbox's reply tool: "I'd like to use voice to text in prompts here"; asked where, he chose
+   "Every AI prompt box". One shared mic, the same everywhere: tap it, talk, and the words appear in the box as you speak
+   (the browser's own SpeechRecognition: Chrome, Edge and Safari; not Firefox, where no mic shows); tap again, or press Esc,
+   to stop. It listens in the person's Hub language (wave198: Francais is fr-CA, else en-CA).
+   The boxes (TARGETS): Ask the Hub (#w38in, which since wave38 replaced wave14's row and its mic), Your inbox (own words,
+   anything else to say, the reply itself, the team's line, the writing guide), the content drafter's brief (#cdBrief),
+   Suggest a change to the Hub (#w96in, #w96rin), Finance's import guidance (#w90gtext), the agenda's purpose (#w53purpose)
+   and the grant writer's notes (data-w193wnotes). The Loop (#w192say) keeps its own Speak button.
+   A box is found again by its key when its page draws it anew mid-sentence, so the words keep landing. Each change fires
+   the box's input event, so the page keeps what was said as if it were typed. Nothing is recorded or sent anywhere by the
+   Hub: the browser turns speech into text (Chrome sends the audio to Google's speech service to do it).
+   ===================================================================== */
+(function () {
+  if (window.__wa201) return;
+  window.__wa201 = true;
+  var SRC = window.SpeechRecognition || window.webkitSpeechRecognition || null;
+  var GREEN = '#103F39', GOLD = '#DCA527', CREAM = '#FFFAF2';
+
+  /* every box where people tell the Hub's AI what to do; key: the attribute that tells two boxes of one kind apart */
+  var TARGETS = [
+    { sel: '#w38in' },
+    { sel: '#w170sheet [data-w170own]', key: 'data-w170own' },
+    { sel: '#w170note' }, { sel: '#w170body' }, { sel: '#w170ask' }, { sel: '#w170voice' },
+    { sel: '#cdBrief' },
+    { sel: '#w96in' }, { sel: '#w96rin' },
+    { sel: '#w90gtext' },
+    { sel: '#w53purpose' },
+    { sel: '[data-w193wnotes]' }
+  ];
+  var MIC = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5.5a3.5 3.5 0 1 0-7 0V11a3.5 3.5 0 0 0 3.5 3.5Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V19H8.5a1 1 0 1 0 0 2h7a1 1 0 1 0 0-2H13v-2.09A6 6 0 0 0 18 11Z"/></svg>';
+  var STOP = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
+  var L_IDLE = 'Speak instead of typing', L_ON = 'Listening: tap to stop';
+
+  function css() {
+    if (document.getElementById('w201css')) return;
+    var st = document.createElement('style'); st.id = 'w201css';
+    st.textContent = ''
+      + '.w201h{display:flow-root;position:relative;height:0;padding:0;border:0;pointer-events:none;z-index:2;}'
+      + '.w201mic{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;gap:6px;width:30px;height:30px;padding:0;border-radius:999px;'
+      + 'border:1px solid rgba(16,63,57,.22);background:' + CREAM + ';color:' + GREEN + ';cursor:pointer;box-shadow:0 1px 2px rgba(16,63,57,.12);'
+      + 'font:600 12px/1 "Space Grotesk",system-ui,sans-serif;white-space:nowrap;transition:background .15s,color .15s,width .15s;}'
+      + '.w201mic:hover{background:rgba(16,63,57,.08);}'
+      + '.w201mic:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w201h .w201mic{position:absolute;}'
+      + '.w201mic.on{width:auto;padding:0 11px 0 9px;background:' + GREEN + ' !important;color:' + CREAM + ' !important;border-color:' + GREEN + ' !important;animation:w201pulse 1.4s ease-out infinite;}'
+      + '@media (hover:none){.w201mic:hover{background:' + CREAM + ';}}'
+      + '.w201mic .w201t{display:none;}.w201mic.on .w201t{display:inline;}'
+      + '@keyframes w201pulse{0%{box-shadow:0 0 0 0 rgba(220,165,39,.65);}70%{box-shadow:0 0 0 8px rgba(220,165,39,0);}100%{box-shadow:0 0 0 0 rgba(220,165,39,0);}}'
+      + '.w201in{flex:none;align-self:center;margin:0 0 0 6px;}'
+      + '.w201below{display:flex;justify-content:flex-end;margin:4px 0 0;}'
+      + '.w201sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;}'
+      + '@media (prefers-reduced-motion:reduce){.w201mic.on{animation:none;box-shadow:0 0 0 3px rgba(220,165,39,.6);}}';
+    document.head.appendChild(st);
+  }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function lang() {
+    try { var s = window.w198 && window.w198.state && window.w198.state(); if (s && s.lang) return s.lang === 'fr' ? 'fr-CA' : 'en-CA'; } catch (e) { /* fine */ }
+    return /^fr/i.test(navigator.language || '') ? 'fr-CA' : 'en-CA';
+  }
+  function keyOf(el, t) { return el.id ? '#' + el.id : t.sel + '|' + (t.key ? (el.getAttribute(t.key) || '') : ''); }
+  function find(key) {
+    if (key.charAt(0) === '#' && key.indexOf('|') < 0) return document.getElementById(key.slice(1));
+    var i = key.lastIndexOf('|'), sel = key.slice(0, i), v = key.slice(i + 1);
+    var t = TARGETS.filter(function (x) { return x.sel === sel; })[0]; if (!t) return null;
+    var all = document.querySelectorAll(sel);
+    for (var j = 0; j < all.length; j++) if (!t.key || all[j].getAttribute(t.key) === v) return all[j];
+    return null;
+  }
+  function usable(el) { return el && el.isConnected && !el.disabled && !el.readOnly && el.offsetParent !== null; }
+
+  /* ---------- placing the button ---------- */
+  function px(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+  function place(el, btn) {
+    var p = el.parentNode, pcs = getComputedStyle(p), cs = getComputedStyle(el);
+    var row = /flex/.test(pcs.display) && !/column/.test(pcs.flexDirection);
+    if (row) { btn.classList.add('w201in'); p.insertBefore(btn, el.nextSibling); return { mode: 'in', node: btn }; }
+    if (/grid/.test(pcs.display)) { var b = document.createElement('div'); b.className = 'w201below'; b.appendChild(btn); p.insertBefore(b, el.nextSibling); return { mode: 'below', node: b }; }
+    /* over the box's corner: a zero-height holder right under it, the button lifted into the box (no layout shift, no timers) */
+    var h = document.createElement('div'); h.className = 'w201h';
+    var mb = px(cs.marginBottom), gap = /flex/.test(pcs.display) ? px(pcs.rowGap) : 0;
+    h.style.marginTop = (-(mb + gap)) + 'px'; h.style.marginBottom = mb + 'px';
+    h.appendChild(btn); p.insertBefore(h, el.nextSibling);
+    var tall = el.tagName === 'TEXTAREA';
+    var grip = tall && cs.resize !== 'none' ? 16 : 0;
+    function fit() {
+      if (!el.isConnected) return;
+      h.style.width = el.offsetWidth + 'px';
+      h.style.marginLeft = (el.offsetLeft - h.offsetLeft + px(h.style.marginLeft)) + 'px';
+      var bh = btn.offsetHeight || 30;
+      btn.style.right = (6 + grip) + 'px';
+      btn.style.bottom = (tall ? 6 : Math.max(2, (el.offsetHeight - bh) / 2)) + 'px';
+    }
+    fit();
+    el.style.paddingRight = (px(cs.paddingRight) + 36) + 'px';
+    if (window.ResizeObserver) { try { new ResizeObserver(fit).observe(el); } catch (e) { /* fine */ } }
+    return { mode: 'over', node: h, fit: fit };
+  }
+
+  /* ---------- one box ---------- */
+  function attach(el, t) {
+    if (el.__w201 || el.hasAttribute('data-w201off')) return;
+    if (!el.parentNode || el.offsetParent === null) return;   /* drawn hidden: try again when it shows */
+    el.__w201 = true;
+    var key = keyOf(el, t);
+    var btn = document.createElement('button');
+    btn.type = 'button'; btn.className = 'w201mic'; btn.setAttribute('data-w201mic', key);
+    btn.setAttribute('aria-label', L_IDLE); btn.title = L_IDLE + ' (Esc stops)'; btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML = MIC + '<span class="w201t">Listening</span>';
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });   /* keep the caret in the box */
+    btn.addEventListener('click', function (e) {
+      e.preventDefault(); e.stopPropagation();
+      var box = find(key) || el;
+      if (REC && REC.key === key) stop(true); else start(box, key);
+    });
+    var pl = place(el, btn);
+    el.__w201node = pl.node;
+    if (REC && REC.key === key) paint(btn, true);
+  }
+  function paint(btn, on) {
+    btn.classList.toggle('on', !!on); btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? L_ON : L_IDLE); btn.title = (on ? L_ON : L_IDLE) + ' (Esc stops)';
+    btn.innerHTML = (on ? STOP : MIC) + '<span class="w201t">Listening</span>';
+  }
+  function paintAll() {
+    var bs = document.querySelectorAll('[data-w201mic]');
+    for (var i = 0; i < bs.length; i++) paint(bs[i], !!(REC && REC.key === bs[i].getAttribute('data-w201mic')));
+  }
+  function say(msg) { var r = document.getElementById('w201live'); if (r) r.textContent = msg; }
+
+  /* ---------- listening ---------- */
+  var REC = null;
+  function now() { return (window.performance && performance.now) ? performance.now() : new Date().getTime(); }
+  function tidy(s) { return String(s || '').replace(/\s+/g, ' ').replace(/\s+([,.!?;:])/g, '$1').trim(); }
+  function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+  function write(text) {
+    var box = find(REC.key) || (REC.el.isConnected ? REC.el : null); if (!box) return;
+    REC.el = box;
+    var heard = tidy(text); if (!heard) return;
+    if (REC.capital) heard = cap(heard);
+    var v = REC.before + heard + REC.after;
+    var max = Number(box.getAttribute('maxlength')) || 0; if (max > 0 && v.length > max) v = v.slice(0, max);
+    if (box.value === v) return;
+    box.value = v;
+    var caret = Math.min(v.length, (REC.before + heard).length);
+    try { box.setSelectionRange(caret, caret); } catch (e) { /* fine */ }
+    if (box.tagName === 'TEXTAREA' && !REC.after) box.scrollTop = box.scrollHeight;
+    try { box.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) { /* fine */ }
+  }
+  function start(el, key) {
+    if (!SRC) return;
+    if (REC) stop(true);
+    var rec;
+    try { rec = new SRC(); } catch (e) { T('Speaking is not available in this browser'); return; }
+    rec.lang = lang(); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    var v = el.value || '', at = (typeof el.selectionStart === 'number' && document.activeElement === el) ? el.selectionStart : v.length;
+    var before = v.slice(0, at), after = v.slice(at);
+    if (before && !/\s$/.test(before)) before += ' ';
+    if (after && !/^\s/.test(after)) after = ' ' + after;
+    REC = { key: key, el: el, rec: rec, before: before, after: after, fin: '', capital: !before.trim() || /[.!?]\s*$/.test(before), user: false, at: now() };
+    var mine = REC;
+    rec.onresult = function (ev) {
+      if (REC !== mine) return;
+      var interim = '';
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var r = ev.results[i]; if (!r || !r[0]) continue;
+        if (r.isFinal) mine.fin += ' ' + r[0].transcript; else interim += ' ' + r[0].transcript;
+      }
+      write(mine.fin + ' ' + interim);
+    };
+    rec.onerror = function (ev) {
+      if (REC !== mine) return;
+      var er = ev && ev.error;
+      if (er === 'not-allowed' || er === 'service-not-allowed') T('Allow the microphone for the Hub in your browser, then tap the mic again');
+      else if (er === 'no-speech') T('Nothing heard. Tap the mic and speak');
+      else if (er === 'audio-capture') T('No microphone found on this device');
+      else if (er === 'network') T('Speaking needs an internet connection');
+      else if (er && er !== 'aborted') T('Speaking stopped: ' + er);
+    };
+    rec.onend = function () { if (REC === mine) finish(); };
+    try { rec.start(); } catch (e) { REC = null; T('The microphone could not start'); return; }
+    mine.timer = setInterval(function () { if (REC !== mine) { clearInterval(mine.timer); return; } gone(); }, 700);
+    paintAll(); say(L_ON);
+    try { el.focus({ preventScroll: true }); } catch (e) { /* fine */ }
+  }
+  function stop(user) {
+    if (!REC) return;
+    REC.user = !!user;
+    var r = REC.rec;
+    try { r.stop(); } catch (e) { /* stopped */ }
+    finish();
+  }
+  function finish() {
+    var m = REC; if (!m) return;
+    REC = null;
+    if (m.timer) clearInterval(m.timer);
+    try { m.rec.onresult = null; m.rec.onend = null; m.rec.onerror = null; } catch (e) { /* fine */ }
+    var box = find(m.key) || (m.el.isConnected ? m.el : null);
+    if (box) { try { box.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) { /* fine */ } }
+    paintAll(); say('Stopped listening');
+  }
+
+  /* Esc stops listening (and does not close the sheet or the dialog around the box) */
+  window.addEventListener('keydown', function (e) {
+    if (REC && (e.key === 'Escape' || e.key === 'Esc')) { e.preventDefault(); e.stopPropagation(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); stop(true); }
+  }, true);
+
+  /* ---------- finding the boxes as pages draw them ---------- */
+  function scan() {
+    if (!SRC) return;
+    for (var i = 0; i < TARGETS.length; i++) {
+      var t = TARGETS[i], els = document.querySelectorAll(t.sel);
+      for (var j = 0; j < els.length; j++) { var el = els[j]; if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT') continue; if (!el.__w201) attach(el, t); else if (el.__w201node && !el.__w201node.isConnected) { el.__w201 = false; attach(el, t); } }
+    }
+    /* a holder whose box is gone goes too; a box drawn hidden loses its button until it shows */
+    var hs = document.querySelectorAll('.w201h,.w201below,.w201in');
+    for (var k = 0; k < hs.length; k++) {
+      var h = hs[k], prev = h.previousElementSibling;
+      if (!prev || !prev.__w201) h.remove();
+      else h.style.display = prev.offsetParent === null ? 'none' : '';
+    }
+    gone();
+  }
+  /* a box that goes away (or is hidden) for more than a second and a half stops the listening */
+  function gone() {
+    if (!REC) return;
+    var b = find(REC.key), vis = !!(b && b.offsetParent !== null) || (REC.el.isConnected && REC.el.offsetParent !== null);
+    if (vis) REC.goneAt = 0; else if (!REC.goneAt) REC.goneAt = now(); else if (now() - REC.goneAt > 1500) stop(false);
+  }
+  var queued = false;
+  function soon() { if (queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(function () { queued = false; try { scan(); } catch (e) { /* never break a page */ } }); }
+  function boot() {
+    if (!SRC || !document.body) return;
+    css();
+    if (!document.getElementById('w201live')) { var lv = document.createElement('div'); lv.id = 'w201live'; lv.className = 'w201sr'; lv.setAttribute('aria-live', 'polite'); document.body.appendChild(lv); }
+    try { new MutationObserver(soon).observe(document.body, { childList: true, subtree: true }); } catch (e) { /* fine */ }
+    document.addEventListener('focusin', soon, true);
+    document.addEventListener('click', soon, true);
+    document.addEventListener('toggle', soon, true);
+    soon();
+  }
+  window.w201 = { supported: !!SRC, targets: TARGETS.map(function (t) { return t.sel; }), scan: scan, state: function () { return REC ? { key: REC.key, lang: REC.rec.lang } : null; }, stop: function () { stop(true); }, lang: lang };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

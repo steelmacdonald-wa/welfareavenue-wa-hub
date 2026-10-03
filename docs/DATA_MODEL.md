@@ -1525,6 +1525,8 @@ The CRM's automations (wave157): when something happens to a contact (trigger), 
 - `trigger`: What starts a run: {"kind": "form", "form_id"} (a submission of that form is processed; any form when form_id is empty), {"kind": "tag", "tag"} (the tag is added to a contact), {"kind": "gift", "first_only", "min_amount"} (a gift dated in the last 7 days is recorded), {"kind": "serving", "days_before", "location", "include_unconfirmed"} (N days before a planned serving they are on the roster for, Confirmed unless include_unconfirmed).
 - `steps`: The steps in order, each {"id", "type", ...}: send {"email": "write" or "template", "template_key", "kind" (transactional, volunteer, newsletter, fundraising), "subject", "preheader", "headline", "body", "cta_label", "cta_url", "from" (org or custom), "from_name", "from_email"}; wait {"days"}; wait_open {"step" (an earlier send), "days", "yes", "no" (next, end, or a later step id)}; tag {"add", "remove"}; task {"department", "title", "note", "due_days"}; notify {"to" (team emails), "message"}; end. Texts take {{first_name}}, {{full_name}}, {{email}} and the trigger's details ({{form_title}}, {{amount}}, {{event_day}}), with a fallback after a bar: {{first_name|there}}.
 - `settings`: reentry (true: the same contact can go through it again each time the trigger fires; a gift automation does so by default), notes.
+- `folder`: wave196: the folder it sits in on the Automations page (null: no folder)
+- `sort_order`: wave196: its place in the list (smallest first; null after the numbered ones, oldest first)
 
 ### `crm_automation_runs`
 
@@ -1608,7 +1610,7 @@ wave170: the people whose own mailbox the inbox assistant works on (the mybox fu
 - `label_notes`: wave170: what goes in each label, in the owner's words ({label id: note}); the sorting reads it.
 - `skip_senders`: wave170: senders or domains the assistant never reads (personal mail): it keeps nothing but the message id.
 - `skip_words`: wave170: words in a subject that make the assistant leave a message unread and unkept, like skip_senders.
-- `voice`: wave170: how the owner's replies sound, given to the model that drafts them (Steel's: his steel-voice and wa-writing guides, for Welfare Avenue mail).
+- `voice`: wave170, wave201: the owner's writing guide, given to the model before every reply it drafts for them; a first line "FRAMEWORK: <name>" names the framework the Hub shows (Steel's: wa-writing, with steel-voice underneath). Only the owner reads or edits it, in Your inbox, Settings, Your writing guide (the mybox function's voice and settings actions); never kept in the repo or a migration.
 - `labels`: wave170: the owner's own Gmail labels as last read: [{id, name, examples: [subjects of recent mail in it]}].
 
 ### `mybox_mail`
@@ -1618,6 +1620,8 @@ wave170: what the inbox assistant did with each message in its owner's inbox: th
 - `skipped`: wave170: personal mail (the owner's never-read list, a sensitive subject, or the model's call): nothing is kept but the id, so it is never read again.
 - `reply_p`: wave170: how likely it needs the owner's own reply (0 to 1).
 - `sent_mail_id`: wave170: the hub_mail row the owner created by sending this email to a team (mailbox person).
+- `draft_id`: wave170, wave201: the Gmail draft the Hub saved for this email. mybox reads it back from Gmail (a draft, in this email's thread) before the Hub says it is saved; saving again updates this draft instead of adding another.
+- `drafted_at`: wave170, wave201: when the reply was last saved as a Gmail draft and checked there.
 
 ### `volunteer_role_guides`
 
@@ -1800,6 +1804,22 @@ wave195: the people who sign volunteer sign-offs, with the name and title printe
 ### `volunteer_signoffs`
 
 wave195: what volunteers ask for on their welfareavenue.com profile and what the team signed: an hours sign-off letter (hours), a recognition letter (recognition) or their own form (form, the upload at form_path). status requested, signed, declined (with the reason) or cancelled (by the volunteer). When signed: the servings listed and their hours (items, servings, hours), the signer's note (recognition), where the signature went on their form (placement), the reference printed on it (WA-VS-xxxxxx), the signer as printed, and the PDF (letter_path in the private signoffs bucket, with its SHA-256). Volunteer Manager staff read; written only through the functions.
+
+### `hub_i18n`
+
+wave198: the interface dictionary. en is a piece of interface text as the page shows it, with numbers replaced by {0}, {1}... (the Hub's own words, never what people type); tr is the translation (Quebec French, vous). kind: seed (translated with the wave), auto (i18n-translate, from the queue), manual (an admin's correction). Read by any signed-in person through wa198_dict(); written by i18n-translate (service role) and wa198_fix (admins).
+
+### `hub_i18n_content`
+
+wave198: translations of the onboarding and Avenue Academy content, one row per field of a source row (trainings title, description, body; onboarding_template name, description; academy_paths name, title, blurb, cert_title; hr_setup_template name, description; app_config onboarding_journey value). src_md5 is md5 of the English source (jsonb as text) when it was translated: a row whose source changed since is stale and is not served (wa198_content) until i18n-translate translates it again. tr holds text, or JSON as text for body and value. Written by the wave and i18n-translate (service role).
+
+### `hub_i18n_queue`
+
+wave198: interface text a French reader saw with no translation yet (normalized like hub_i18n.en). i18n-translate translates the ones whose words all appear in the live build (so what people type is never sent), and marks the rest skip. Written through wa198_seen(); no direct access.
+
+### `hub_user_prefs`
+
+wave198: each person's Hub settings that follow them across devices; lang is the interface language (en or fr), chosen in the account menu. A person reads and writes only their own row.
 
 Functions:
 
@@ -2056,4 +2076,9 @@ Functions:
 - `signoff_sign_data(bigint, text)`: wave195 (service role): everything the signoff function draws on a letter: the request, the volunteer, their servings in the period and their whole record, the signer (with the path of their signature) and the charity's details, and the reference (a new WA-VS- one the first time).
 - `signoff_mark_signed(bigint, text, jsonb)`: wave195 (service role): records a signed request (what was signed, by whom, the reference and the PDF), on the timeline and in change_log.
 - `signoff_mark_emailed(bigint, bigint)`: wave195 (service role): records that the volunteer was emailed about a signed letter (emailed_at, the mail-send send id); called by the signoff function.
+- `wa198_dict(text)`: wave198: the whole interface dictionary for a language as {v, d}: v changes whenever a row does (the page keeps a copy and reloads it only then), d maps en to the translation.
+- `wa198_dict_v(text)`: wave198: the dictionary's version (see wa198_dict).
+- `wa198_content(text)`: wave198: the current French versions of the onboarding and Academy content (only fields whose English has not changed since), for staff. The page puts them in place of the English when it reads those tables, unless the reader is on an editing page.
+- `wa198_seen(text, text[])`: wave198: a French reader's page reports interface text it could not translate (at most 80 a call, 2 to 300 characters); queued for i18n-translate.
+- `wa198_fix(text, text)`: wave198: an admin sets the French for one piece of interface text (kind manual; logged in change_log).
 

@@ -42,7 +42,15 @@
   function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function dayOf(iso) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return String(iso || '').slice(0, 10); } }
   function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
-  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/u/' + encodeURIComponent(owner) + '/#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  /* wave201: Gmail links name the owner's account (authuser), so a browser signed in to several Google accounts opens the right one */
+  function au(email) { return encodeURIComponent(email || '').replace('%40', '@'); }
+  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  function draftsUrl(owner) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#drafts'; }
+  /* the draft itself (Gmail's own draft link: the thread id in decimal, the draft id), else the drafts folder */
+  function draftUrl(owner, row) {
+    if (row && row.thread_id && row.draft_id && typeof BigInt === 'function') { try { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all?compose=thread-f:' + BigInt('0x' + row.thread_id).toString() + '%2Bmsg-a:' + encodeURIComponent(row.draft_id); } catch (e) { /* the folder */ } }
+    return draftsUrl(owner);
+  }
   function labelShort(n) { var p = String(n || '').split('/'); return p[p.length - 1]; }
 
   var CSS = ''
@@ -119,6 +127,13 @@
     + '@keyframes w170spin{to{transform:rotate(360deg);}}'
     + '#w170sheet .w170ok{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(42,140,122,.12);color:' + GREEN + ';font-size:13.5px;}'
     + '#w170sheet .w170err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    /* wave201: the [brackets] check and an error sit right above the buttons; the framework line under the draft; the writing guide */
+    + '#w170sheet .w170warn{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.18);border:1px solid rgba(220,165,39,.55);color:#6b4d0e;font-size:13px;font-weight:600;}'
+    + '#w170sheet .w170acts + .w170err{margin-top:6px;}'
+    + '#w170sheet .w170fw{margin:8px 0 0;font-size:12px;color:' + MUTED + ';}#w170sheet .w170fw b{color:' + GREEN + ';}'
+    + '#w170sheet .w170ok .w170sub{display:block;font-size:12.5px;color:' + MUTED + ';margin-top:4px;}'
+    + '#w170sheet .w170guide summary{cursor:pointer;font-weight:700;color:' + GREEN + ';font-size:13px;margin:6px 0;}'
+    + '#w170sheet .w170guide textarea{min-height:260px;font-size:12.5px;line-height:1.5;}'
     + '#w170sheet label.w170l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:12px 0 4px;}'
     + '#w170sheet label.w170l .op{font-weight:500;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:6px;}'
     + '#w170sheet .w170ck{display:flex;gap:8px;align-items:center;font-size:13px;color:' + INK + ';margin:8px 0 0;}'
@@ -311,7 +326,7 @@
   function replyTool(x, d) {
     var st = d.stage || 'read';
     var h = '<section class="w170tool" aria-live="polite"><h4>Reply</h4>';
-    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one. <a class="w170lnk" href="https://mail.google.com/mail/u/' + encodeURIComponent((S.owner || {}).email || '0') + '/#drafts" target="_blank" rel="noopener">Open your drafts</a></div>';
+    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one' + (x.drafted_at ? ' (' + E(ago(x.drafted_at)) + ')' : '') + '. <a class="w170lnk" href="' + E(draftUrl((S.owner || {}).email, x)) + '" target="_blank" rel="noopener">Open the draft</a></div>';
     if (st === 'read' || st === 'loading') {
       h += '<p class="gist">The assistant asks what it needs to know, then writes the reply in your voice. You read it, change anything, and it saves as a draft in your Gmail: nothing is sent for you.</p>'
         + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170help' + (st === 'loading' ? ' disabled' : '') + '>Help me reply</button>'
@@ -331,14 +346,19 @@
       var others = d.main ? (String(d.main.to || '') + ',' + String(d.main.cc || '')).split(',').filter(function (a) { return /@/.test(a) && lower(a).indexOf(lower((S.owner || {}).email || '#')) < 0; }).length > 1 : false;
       h += '<label class="w170l" for="w170body">Your reply<span class="op">change anything you like</span></label><textarea id="w170body" class="w170draft" rows="12">' + E(d.draft || '') + '</textarea>'
         + ((d.brackets && d.brackets.length) || (d.notes && d.notes.length) ? '<div class="w170notes"><b>Before you send</b><ul>' + (d.brackets || []).map(function (b) { return '<li>Fill in ' + E(b) + '</li>'; }).join('') + (d.notes || []).map(function (n) { return '<li>' + E(n) + '</li>'; }).join('') + '</ul></div>' : '')
+        + (d.framework ? '<p class="w170fw">Written with <b>' + E(d.framework.name) + '</b>. Reader: ' + E(d.framework.reader) + '. Register: ' + E(d.framework.register) + '.</p>' : '')
         + (others ? '<label class="w170ck"><input type="checkbox" data-w170all' + (d.replyAll ? ' checked' : '') + '> Reply to everyone on the email</label>' : '')
-        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving\u2026' : 'Save as a Gmail draft') + '</button>'
+        + (d.warn ? '<div class="w170warn" role="alert">' + E(d.warn) + '</div>' : '')
+        + (d.err ? '<p class="w170err" role="alert">' + E(d.err) + '</p>' : '')
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving and checking it in Gmail\u2026' : d.bracketOk ? 'Save it with the [brackets]' : 'Save as a Gmail draft') + '</button>'
         + '<button type="button" class="w170btn ghost sm" data-w170redraft>Write it again</button><button type="button" class="w170btn ghost sm" data-w170change>Change my answers</button></div>';
     } else if (st === 'saved') {
-      h += '<div class="w170ok">Saved in your Gmail drafts, in the thread' + (d.saved && d.saved.to ? ', to ' + E(d.saved.to.join(', ')) : '') + '. Read it once more and send it from Gmail.</div>'
-        + '<div class="w170acts"><a class="w170btn" href="' + E((d.saved && d.saved.url) || '#') + '" target="_blank" rel="noopener">Open your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
+      var sv = d.saved || {}, own = (S.owner || {}).email;
+      h += '<div class="w170ok" role="status"><span>' + (sv.updated ? 'Your draft for this email is updated in Gmail' : 'Saved in your Gmail drafts') + ', in the thread' + (sv.to && sv.to.length ? ', to ' + E(sv.to.join(', ')) : '') + '.'
+        + '<span class="w170sub">The Hub read it back from Gmail: it is there' + (own ? ', in ' + E(own) : '') + '. Read it once more and send it from Gmail.</span></span></div>'
+        + '<div class="w170acts"><a class="w170btn" href="' + E(sv.url || draftUrl(own, x)) + '" target="_blank" rel="noopener">Open the draft in Gmail</a><a class="w170lnk" href="' + E(sv.drafts_url || draftsUrl(own)) + '" target="_blank" rel="noopener" style="font-size:12.5px">All your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
     }
-    if (d.err && st !== 'loading') h += '<p class="w170err">' + E(d.err) + '</p>';
+    if (d.err && st !== 'loading' && st !== 'draft' && st !== 'saving') h += '<p class="w170err">' + E(d.err) + '</p>';
     return h + '</section>';
   }
   function teamTool(x, d) {
@@ -404,8 +424,26 @@
       + '<label class="w170l" for="w170snd">Senders or domains<span class="op">one per line</span></label><textarea id="w170snd" rows="3" placeholder="someone@example.com&#10;example.org">' + E(st.senders) + '</textarea>'
       + '<label class="w170l" for="w170wrd">Words in the subject<span class="op">one per line</span></label><textarea id="w170wrd" rows="2">' + E(st.words) + '</textarea>'
       + '<div class="w170acts" style="margin-top:16px"><button type="button" class="w170btn gold" data-w170saveset' + (S.busy.set ? ' disabled' : '') + '>' + (S.busy.set ? 'Saving\u2026' : 'Save') + '</button></div>'
+      + guideHtml()
       + '<h4>How it works</h4><p>The Hub reads your mailbox through Welfare Avenue\u2019s Google Workspace, as you, and only for you: nobody else sees this page or your mail. Replies are drafts in your Gmail; you send them. An email reaches a team only when you send it.</p>'
       + '</div>';
+  }
+  /* wave201: Your writing guide (the owner's own; only they read it, through mybox's voice action) */
+  function guideHtml() {
+    var g = S.guide;
+    if (!g) { loadGuide(); return '<h4>Your writing guide</h4><div class="w170wait"><i></i>Reading your writing guide\u2026</div>'; }
+    if (g.err) return '<h4>Your writing guide</h4><p class="w170err">' + E(g.err) + '</p>';
+    var txt = g.draft != null ? g.draft : g.voice, words = String(txt || '').split(/\s+/).filter(Boolean).length;
+    return '<h4>Your writing guide</h4>'
+      + '<p>Every reply the assistant writes for you follows this guide, before the email and your answers. ' + (g.voice ? 'Yours: <b>' + E(g.framework) + '</b>.' : 'You have none yet, so replies use a plain house style: paste yours below.') + ' Figures come only from you, the email, or the Hub\u2019s verified facts (Fundraising, Fact base).</p>'
+      + '<details class="w170guide"' + (g.open || !g.voice ? ' open' : '') + '><summary>' + (g.voice ? 'Read or change the guide (' + plural(words, 'word') + ')' : 'Add your guide') + '</summary>'
+      + '<textarea id="w170voice" rows="14" maxlength="20000" aria-label="Your writing guide" placeholder="How your replies should sound: your rules, the way you open and close, who you write to and how, words you never use. A first line FRAMEWORK: name says which framework it is.">' + E(txt || '') + '</textarea>'
+      + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170saveguide' + (g.busy ? ' disabled' : '') + '>' + (g.busy ? 'Saving\u2026' : 'Save the guide') + '</button>' + (g.draft != null && g.draft !== g.voice ? '<span style="font-size:12px;color:' + MUTED + '">Not saved yet</span>' : '') + '</div></details>';
+  }
+  function loadGuide() {
+    if (S.guideP) return; S.guideP = true;
+    fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null }; S.guideP = false; render(); },
+      function (e) { S.guide = { err: 'Your writing guide could not be read: ' + e.message }; S.guideP = false; render(); });
   }
   function render() {
     var el = document.getElementById('w170sheet'); if (!el || !S.open) return;
@@ -458,7 +496,7 @@
   function makeDraft(x) {
     var d = detail(x); d.stage = 'drafting'; d.err = null; render();
     fn({ action: 'draft', gmail_id: x.gmail_id, answers: answersOf(d), note: String(d.note || '').trim() }).then(function (r) {
-      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.stage = 'draft'; render();
+      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.framework = r.framework || null; d.warn = null; d.bracketOk = false; d.stage = 'draft'; render();
       var ta = document.getElementById('w170body'); if (ta) { try { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; } catch (e) { /* fine */ } }
     }, function (e) { d.stage = 'questions'; d.err = 'The reply was not written: ' + e.message; render(); });
   }
@@ -466,12 +504,24 @@
     var d = detail(x), ta = document.getElementById('w170body'); if (ta) d.draft = ta.value;
     if (!String(d.draft || '').trim()) { d.err = 'The reply is empty.'; render(); return; }
     var open = String(d.draft).match(/\[[^\]\n]{1,80}\]/g);
-    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = 'There is still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Press Save again to keep them in the draft.'; render(); return; }
-    d.stage = 'saving'; d.err = null; render();
+    /* wave201: the [brackets] check stops the first press with a note right above the button (it used to sit under the buttons,
+       so the press could look like it did nothing), and the button says what a second press does */
+    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = null; d.warn = 'There ' + (open.length === 1 ? 'is' : 'are') + ' still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Fill ' + (open.length === 1 ? 'it' : 'them') + ' in above, or press Save it with the [brackets] to keep ' + (open.length === 1 ? 'it' : 'them') + ' in the draft.'; render(); showActs(); return; }
+    d.stage = 'saving'; d.err = null; d.warn = null; render();
     fn({ action: 'save_draft', gmail_id: x.gmail_id, body: d.draft, reply_all: !!d.replyAll }).then(function (r) {
-      d.saved = r; d.stage = 'saved'; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id }); render(); paintCard();
-      T('Saved in your Gmail drafts');
-    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); });
+      d.saved = r; d.stage = 'saved'; d.bracketOk = false; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id, thread_id: r.thread_id || x.thread_id, drafted_at: r.checked_at || new Date().toISOString() }); render(); paintCard();
+      T(r.updated ? 'Your draft is updated in Gmail' : 'Saved in your Gmail drafts');
+    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); showActs(); });
+  }
+  function showActs() { var b = document.querySelector('#w170sheet [data-w170save]'); if (b && b.scrollIntoView) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { b.scrollIntoView(); } } }
+  /* wave201: Your writing guide */
+  function saveGuide() {
+    var g = S.guide; if (!g || g.busy) return;
+    var ta = document.getElementById('w170voice'); var text = ta ? ta.value : (g.draft != null ? g.draft : g.voice);
+    g.busy = true; render();
+    fn({ action: 'settings', voice: String(text || '') }).then(function () {
+      return fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null, open: true }; render(); T('Your writing guide is saved'); });
+    }, function (e) { g.busy = false; render(); T('Not saved: ' + e.message); });
   }
   function nextItem() {
     var list = listFor(S.tab).filter(function (x) { return S.tab === 'reply' ? !x.reply_state : !x.team_state; });
@@ -539,6 +589,8 @@
     if ((el = t.closest('[data-w170retry]'))) { e.preventDefault(); startSort('retry'); return; }
     if ((el = t.closest('[data-w170relabels]'))) { e.preventDefault(); el.disabled = true; fn({ action: 'labels', refresh: true }).then(function () { S.set = null; return loadOwner(true); }).then(function () { render(); T('Your folders were read again'); }, function (err) { el.disabled = false; T('Not read: ' + err.message); }); return; }
     if ((el = t.closest('[data-w170saveset]'))) { e.preventDefault(); saveSettings(); return; }
+    if ((el = t.closest('[data-w170saveguide]'))) { e.preventDefault(); saveGuide(); return; }
+    if ((el = t.closest('.w170guide summary')) && S.guide) { S.guide.open = !el.parentNode.open; return; }
     if ((el = t.closest('[data-w170unlabel]'))) {
       e.preventDefault(); v = el.getAttribute('data-w170unlabel'); el.disabled = true;
       fn({ action: 'unlabel', gmail_id: v }).then(function () { patchRow(v, { label_id: null, label_name: null, labelled_at: null, archived: false }); render(); paintCard(); T('The label is off'); }, function (err) { el.disabled = false; T('Not changed: ' + err.message); });
@@ -563,7 +615,8 @@
     var x = S.sel ? rowBy(S.sel) : null, d = x ? detail(x) : null, st = S.set;
     if (d && t.hasAttribute('data-w170own')) { var i = Number(t.getAttribute('data-w170own')); d.custom[i] = t.value; if (t.value && d.answers[i]) { d.answers[i] = ''; Array.prototype.forEach.call(t.parentNode.querySelectorAll('[data-w170ans]'), function (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }); } return; }
     if (d && t.id === 'w170note') { d.note = t.value; return; }
-    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; return; }
+    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; d.warn = null; return; }
+    if (t.id === 'w170voice' && S.guide) { S.guide.draft = t.value; return; }
     if (d && t.id === 'w170ask') { d.team = d.team || {}; d.team.ask = t.value; return; }
     if (st && t.hasAttribute('data-w170lnote')) { st.notes[t.getAttribute('data-w170lnote')] = t.value; return; }
     if (st && t.id === 'w170snd') { st.senders = t.value; return; }

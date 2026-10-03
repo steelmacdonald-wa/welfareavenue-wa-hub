@@ -119,7 +119,7 @@ const sheet = f => f.ev(() => {
     const op = await calls(f, 'open');
     ok('2.4 opening an email reads it through the mybox function', op.length === 1 && op[0].name === 'mybox' && op[0].body.gmail_id === 'g1', op);
     ok('2.5 the email shows, with the thread and the attachment', s && /Our Grade 11 class/.test(s.mail) && /Attachments: permission-form\.pdf/.test(s.mail) && s.hist === 'Earlier in the thread (1)', s && { mail: s.mail.slice(0, 80), hist: s.hist });
-    ok('2.6 Open in Gmail goes to the thread in his mailbox', s && s.gmail === 'https://mail.google.com/mail/u/steel.macdonald%40welfareavenue.com/#all/t1', s && s.gmail);
+    ok('2.6 Open in Gmail goes to the thread in his mailbox', s && s.gmail === 'https://mail.google.com/mail/?authuser=steel.macdonald@welfareavenue.com#all/t1'   /* wave201: the account by authuser */, s && s.gmail);
     ok('2.7 the reply tool offers Help me reply, I replied already, No reply needed', s && /Help me reply/.test(s.tool) && /I replied already/.test(s.tool) && /No reply needed/.test(s.tool) && /nothing is sent for you/.test(s.tool), s && s.tool);
     const dealt = await f.ev(() => (document.querySelector('#w170sheet [data-w170done]') || {}).textContent || '');
     ok('2.8 the ones dealt with can be shown', dealt === 'Show the ones you dealt with (1)', dealt);
@@ -144,11 +144,11 @@ const sheet = f => f.ev(() => {
     await shot(f, 's3_draft');
     await click(f, '#w170sheet [data-w170save]', 400);
     s = await sheet(f);
-    ok('3.6 a part still in [brackets] is pointed out before saving', (await calls(f, 'save_draft')).length === 0 && /There is still 1 part in \[brackets\] to fill in: \[time\]\. Press Save again/.test(s.err), s.err);
+    ok('3.6 a part still in [brackets] is pointed out before saving', (await calls(f, 'save_draft')).length === 0 && /There is still 1 part in \[brackets\] to fill in: \[time\]\. Fill it in above, or press Save it with the \[brackets\]/.test(await f.ev(() => (document.querySelector('#w170sheet .w170warn') || {}).textContent || '')), await f.ev(() => (document.querySelector('#w170sheet .w170warn') || {}).textContent || ''));   /* wave201: the note sits above the button */
     await click(f, '#w170sheet [data-w170save]', 700);
     const sv = await calls(f, 'save_draft');
     s = await sheet(f);
-    ok('3.7 Save as a Gmail draft saves the text as it stands (not sent)', sv.length === 1 && sv[0].body.gmail_id === 'g1' && /October 10 works/.test(sv[0].body.body) && sv[0].body.reply_all === false && /Saved in your Gmail drafts, in the thread, to maria@example\.org\. Read it once more and send it from Gmail\./.test(s.tool), { sv, tool: s.tool });
+    ok('3.7 Save as a Gmail draft saves the text as it stands (not sent)', sv.length === 1 && sv[0].body.gmail_id === 'g1' && /October 10 works/.test(sv[0].body.body) && sv[0].body.reply_all === false && /Saved in your Gmail drafts, in the thread, to maria@example\.org\.The Hub read it back from Gmail: it is there, in steel\.macdonald@welfareavenue\.com\. Read it once more and send it from Gmail\./.test(s.tool), { sv, tool: s.tool });
     const after = await f.ev(() => ({ tab: document.querySelector('#w170sheet .w170tabs button').textContent, tile: document.querySelector('#w170card .w170tiles b').textContent, items: [...document.querySelectorAll('#w170sheet .w170it')].map(b => b.getAttribute('data-w170sel')), dealt: (document.querySelector('#w170sheet [data-w170done]') || {}).textContent }));
     ok('3.8 the counts follow (To reply 1, the Home tile 1); it moves to the ones dealt with', after.tab === 'To reply1' && after.tile === '1' && after.items.join() === 'g4' && after.dealt === 'Show the ones you dealt with (2)', after);
     await click(f, '#w170sheet [data-w170next]', 700);

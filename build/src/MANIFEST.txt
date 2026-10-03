@@ -220,6 +220,8 @@
 198_wave198
 # 199_wave199: Positions from the HR drive (Steel, 03/10/26): *Recruitment* > Job descriptions > <Department> > <Position> > Resumes / the latest JD / Older JDs, read by jd-drive into hub_positions and hub_position_files; HR centre > Positions by department (stage, JD, older JDs, CVs, applications, the people who hold the role, upload a CV, new position); Applications filtered, labelled and linked by position (JD and CV in Drive on the sheet). Built from build/parts199; small hooks in parts197 (roles, filtered, candCard, openSheet, show).
 199_wave199
+# 201_wave201: speak instead of typing in every AI prompt box (Steel, 03/10/26): one shared mic (the browser's SpeechRecognition, in the person's Hub language) on Ask the Hub, Your inbox (own words, anything else, the reply, the team's line, the writing guide), the content drafter's brief, Suggest a change, Finance's import guidance, the agenda's purpose and the grant writer's notes; found again when a page redraws a box. Built from build/parts201. Your inbox's verified Gmail drafts and writing guide (the same wave) live in parts170.
+201_wave201
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

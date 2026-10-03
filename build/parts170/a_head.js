@@ -42,7 +42,15 @@
   function todayIso() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
   function dayOf(iso) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return String(iso || '').slice(0, 10); } }
   function phone() { return window.matchMedia ? window.matchMedia('(max-width: 760px)').matches : window.innerWidth <= 760; }
-  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/u/' + encodeURIComponent(owner) + '/#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  /* wave201: Gmail links name the owner's account (authuser), so a browser signed in to several Google accounts opens the right one */
+  function au(email) { return encodeURIComponent(email || '').replace('%40', '@'); }
+  function gmailUrl(owner, row) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all/' + encodeURIComponent(row.thread_id || row.gmail_id); }
+  function draftsUrl(owner) { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#drafts'; }
+  /* the draft itself (Gmail's own draft link: the thread id in decimal, the draft id), else the drafts folder */
+  function draftUrl(owner, row) {
+    if (row && row.thread_id && row.draft_id && typeof BigInt === 'function') { try { return 'https://mail.google.com/mail/?authuser=' + au(owner) + '#all?compose=thread-f:' + BigInt('0x' + row.thread_id).toString() + '%2Bmsg-a:' + encodeURIComponent(row.draft_id); } catch (e) { /* the folder */ } }
+    return draftsUrl(owner);
+  }
   function labelShort(n) { var p = String(n || '').split('/'); return p[p.length - 1]; }
 
   var CSS = ''
@@ -119,6 +127,13 @@
     + '@keyframes w170spin{to{transform:rotate(360deg);}}'
     + '#w170sheet .w170ok{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:14px;background:rgba(42,140,122,.12);color:' + GREEN + ';font-size:13.5px;}'
     + '#w170sheet .w170err{color:' + FLAG + ';font-size:12.5px;font-weight:600;margin:8px 0 0;}'
+    /* wave201: the [brackets] check and an error sit right above the buttons; the framework line under the draft; the writing guide */
+    + '#w170sheet .w170warn{margin:12px 0 0;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.18);border:1px solid rgba(220,165,39,.55);color:#6b4d0e;font-size:13px;font-weight:600;}'
+    + '#w170sheet .w170acts + .w170err{margin-top:6px;}'
+    + '#w170sheet .w170fw{margin:8px 0 0;font-size:12px;color:' + MUTED + ';}#w170sheet .w170fw b{color:' + GREEN + ';}'
+    + '#w170sheet .w170ok .w170sub{display:block;font-size:12.5px;color:' + MUTED + ';margin-top:4px;}'
+    + '#w170sheet .w170guide summary{cursor:pointer;font-weight:700;color:' + GREEN + ';font-size:13px;margin:6px 0;}'
+    + '#w170sheet .w170guide textarea{min-height:260px;font-size:12.5px;line-height:1.5;}'
     + '#w170sheet label.w170l{display:block;font-size:11.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:' + GREEN + ';margin:12px 0 4px;}'
     + '#w170sheet label.w170l .op{font-weight:500;letter-spacing:0;text-transform:none;color:' + MUTED + ';margin-left:6px;}'
     + '#w170sheet .w170ck{display:flex;gap:8px;align-items:center;font-size:13px;color:' + INK + ';margin:8px 0 0;}'

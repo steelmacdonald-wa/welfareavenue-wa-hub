@@ -73,7 +73,7 @@
   function replyTool(x, d) {
     var st = d.stage || 'read';
     var h = '<section class="w170tool" aria-live="polite"><h4>Reply</h4>';
-    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one. <a class="w170lnk" href="https://mail.google.com/mail/u/' + encodeURIComponent((S.owner || {}).email || '0') + '/#drafts" target="_blank" rel="noopener">Open your drafts</a></div>';
+    if (x.reply_state === 'drafted' && st !== 'draft' && st !== 'questions' && st !== 'saved') h += '<div class="w170ok" style="margin-bottom:10px">A draft is saved in your Gmail for this one' + (x.drafted_at ? ' (' + E(ago(x.drafted_at)) + ')' : '') + '. <a class="w170lnk" href="' + E(draftUrl((S.owner || {}).email, x)) + '" target="_blank" rel="noopener">Open the draft</a></div>';
     if (st === 'read' || st === 'loading') {
       h += '<p class="gist">The assistant asks what it needs to know, then writes the reply in your voice. You read it, change anything, and it saves as a draft in your Gmail: nothing is sent for you.</p>'
         + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170help' + (st === 'loading' ? ' disabled' : '') + '>Help me reply</button>'
@@ -93,14 +93,19 @@
       var others = d.main ? (String(d.main.to || '') + ',' + String(d.main.cc || '')).split(',').filter(function (a) { return /@/.test(a) && lower(a).indexOf(lower((S.owner || {}).email || '#')) < 0; }).length > 1 : false;
       h += '<label class="w170l" for="w170body">Your reply<span class="op">change anything you like</span></label><textarea id="w170body" class="w170draft" rows="12">' + E(d.draft || '') + '</textarea>'
         + ((d.brackets && d.brackets.length) || (d.notes && d.notes.length) ? '<div class="w170notes"><b>Before you send</b><ul>' + (d.brackets || []).map(function (b) { return '<li>Fill in ' + E(b) + '</li>'; }).join('') + (d.notes || []).map(function (n) { return '<li>' + E(n) + '</li>'; }).join('') + '</ul></div>' : '')
+        + (d.framework ? '<p class="w170fw">Written with <b>' + E(d.framework.name) + '</b>. Reader: ' + E(d.framework.reader) + '. Register: ' + E(d.framework.register) + '.</p>' : '')
         + (others ? '<label class="w170ck"><input type="checkbox" data-w170all' + (d.replyAll ? ' checked' : '') + '> Reply to everyone on the email</label>' : '')
-        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving…' : 'Save as a Gmail draft') + '</button>'
+        + (d.warn ? '<div class="w170warn" role="alert">' + E(d.warn) + '</div>' : '')
+        + (d.err ? '<p class="w170err" role="alert">' + E(d.err) + '</p>' : '')
+        + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170save' + (st === 'saving' ? ' disabled' : '') + '>' + (st === 'saving' ? 'Saving and checking it in Gmail…' : d.bracketOk ? 'Save it with the [brackets]' : 'Save as a Gmail draft') + '</button>'
         + '<button type="button" class="w170btn ghost sm" data-w170redraft>Write it again</button><button type="button" class="w170btn ghost sm" data-w170change>Change my answers</button></div>';
     } else if (st === 'saved') {
-      h += '<div class="w170ok">Saved in your Gmail drafts, in the thread' + (d.saved && d.saved.to ? ', to ' + E(d.saved.to.join(', ')) : '') + '. Read it once more and send it from Gmail.</div>'
-        + '<div class="w170acts"><a class="w170btn" href="' + E((d.saved && d.saved.url) || '#') + '" target="_blank" rel="noopener">Open your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
+      var sv = d.saved || {}, own = (S.owner || {}).email;
+      h += '<div class="w170ok" role="status"><span>' + (sv.updated ? 'Your draft for this email is updated in Gmail' : 'Saved in your Gmail drafts') + ', in the thread' + (sv.to && sv.to.length ? ', to ' + E(sv.to.join(', ')) : '') + '.'
+        + '<span class="w170sub">The Hub read it back from Gmail: it is there' + (own ? ', in ' + E(own) : '') + '. Read it once more and send it from Gmail.</span></span></div>'
+        + '<div class="w170acts"><a class="w170btn" href="' + E(sv.url || draftUrl(own, x)) + '" target="_blank" rel="noopener">Open the draft in Gmail</a><a class="w170lnk" href="' + E(sv.drafts_url || draftsUrl(own)) + '" target="_blank" rel="noopener" style="font-size:12.5px">All your drafts</a><button type="button" class="w170btn ghost sm" data-w170next>Next email</button></div>';
     }
-    if (d.err && st !== 'loading') h += '<p class="w170err">' + E(d.err) + '</p>';
+    if (d.err && st !== 'loading' && st !== 'draft' && st !== 'saving') h += '<p class="w170err">' + E(d.err) + '</p>';
     return h + '</section>';
   }
   function teamTool(x, d) {
@@ -166,8 +171,26 @@
       + '<label class="w170l" for="w170snd">Senders or domains<span class="op">one per line</span></label><textarea id="w170snd" rows="3" placeholder="someone@example.com&#10;example.org">' + E(st.senders) + '</textarea>'
       + '<label class="w170l" for="w170wrd">Words in the subject<span class="op">one per line</span></label><textarea id="w170wrd" rows="2">' + E(st.words) + '</textarea>'
       + '<div class="w170acts" style="margin-top:16px"><button type="button" class="w170btn gold" data-w170saveset' + (S.busy.set ? ' disabled' : '') + '>' + (S.busy.set ? 'Saving…' : 'Save') + '</button></div>'
+      + guideHtml()
       + '<h4>How it works</h4><p>The Hub reads your mailbox through Welfare Avenue’s Google Workspace, as you, and only for you: nobody else sees this page or your mail. Replies are drafts in your Gmail; you send them. An email reaches a team only when you send it.</p>'
       + '</div>';
+  }
+  /* wave201: Your writing guide (the owner's own; only they read it, through mybox's voice action) */
+  function guideHtml() {
+    var g = S.guide;
+    if (!g) { loadGuide(); return '<h4>Your writing guide</h4><div class="w170wait"><i></i>Reading your writing guide…</div>'; }
+    if (g.err) return '<h4>Your writing guide</h4><p class="w170err">' + E(g.err) + '</p>';
+    var txt = g.draft != null ? g.draft : g.voice, words = String(txt || '').split(/\s+/).filter(Boolean).length;
+    return '<h4>Your writing guide</h4>'
+      + '<p>Every reply the assistant writes for you follows this guide, before the email and your answers. ' + (g.voice ? 'Yours: <b>' + E(g.framework) + '</b>.' : 'You have none yet, so replies use a plain house style: paste yours below.') + ' Figures come only from you, the email, or the Hub’s verified facts (Fundraising, Fact base).</p>'
+      + '<details class="w170guide"' + (g.open || !g.voice ? ' open' : '') + '><summary>' + (g.voice ? 'Read or change the guide (' + plural(words, 'word') + ')' : 'Add your guide') + '</summary>'
+      + '<textarea id="w170voice" rows="14" maxlength="20000" aria-label="Your writing guide" placeholder="How your replies should sound: your rules, the way you open and close, who you write to and how, words you never use. A first line FRAMEWORK: name says which framework it is.">' + E(txt || '') + '</textarea>'
+      + '<div class="w170acts"><button type="button" class="w170btn gold" data-w170saveguide' + (g.busy ? ' disabled' : '') + '>' + (g.busy ? 'Saving…' : 'Save the guide') + '</button>' + (g.draft != null && g.draft !== g.voice ? '<span style="font-size:12px;color:' + MUTED + '">Not saved yet</span>' : '') + '</div></details>';
+  }
+  function loadGuide() {
+    if (S.guideP) return; S.guideP = true;
+    fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null }; S.guideP = false; render(); },
+      function (e) { S.guide = { err: 'Your writing guide could not be read: ' + e.message }; S.guideP = false; render(); });
   }
   function render() {
     var el = document.getElementById('w170sheet'); if (!el || !S.open) return;

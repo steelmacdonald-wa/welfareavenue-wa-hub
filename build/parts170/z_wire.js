@@ -14,7 +14,7 @@
   function makeDraft(x) {
     var d = detail(x); d.stage = 'drafting'; d.err = null; render();
     fn({ action: 'draft', gmail_id: x.gmail_id, answers: answersOf(d), note: String(d.note || '').trim() }).then(function (r) {
-      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.stage = 'draft'; render();
+      d.draft = r.body || ''; d.notes = r.notes || []; d.brackets = r.brackets || []; d.framework = r.framework || null; d.warn = null; d.bracketOk = false; d.stage = 'draft'; render();
       var ta = document.getElementById('w170body'); if (ta) { try { ta.focus(); ta.setSelectionRange(0, 0); ta.scrollTop = 0; } catch (e) { /* fine */ } }
     }, function (e) { d.stage = 'questions'; d.err = 'The reply was not written: ' + e.message; render(); });
   }
@@ -22,12 +22,24 @@
     var d = detail(x), ta = document.getElementById('w170body'); if (ta) d.draft = ta.value;
     if (!String(d.draft || '').trim()) { d.err = 'The reply is empty.'; render(); return; }
     var open = String(d.draft).match(/\[[^\]\n]{1,80}\]/g);
-    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = 'There is still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Press Save again to keep them in the draft.'; render(); return; }
-    d.stage = 'saving'; d.err = null; render();
+    /* wave201: the [brackets] check stops the first press with a note right above the button (it used to sit under the buttons,
+       so the press could look like it did nothing), and the button says what a second press does */
+    if (open && open.length && !d.bracketOk) { d.bracketOk = true; d.err = null; d.warn = 'There ' + (open.length === 1 ? 'is' : 'are') + ' still ' + plural(open.length, 'part', 'parts') + ' in [brackets] to fill in: ' + open.slice(0, 3).join(', ') + '. Fill ' + (open.length === 1 ? 'it' : 'them') + ' in above, or press Save it with the [brackets] to keep ' + (open.length === 1 ? 'it' : 'them') + ' in the draft.'; render(); showActs(); return; }
+    d.stage = 'saving'; d.err = null; d.warn = null; render();
     fn({ action: 'save_draft', gmail_id: x.gmail_id, body: d.draft, reply_all: !!d.replyAll }).then(function (r) {
-      d.saved = r; d.stage = 'saved'; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id }); render(); paintCard();
-      T('Saved in your Gmail drafts');
-    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); });
+      d.saved = r; d.stage = 'saved'; d.bracketOk = false; patchRow(x.gmail_id, { reply_state: 'drafted', draft_id: r.draft_id, thread_id: r.thread_id || x.thread_id, drafted_at: r.checked_at || new Date().toISOString() }); render(); paintCard();
+      T(r.updated ? 'Your draft is updated in Gmail' : 'Saved in your Gmail drafts');
+    }, function (e) { d.stage = 'draft'; d.err = 'The draft was not saved: ' + e.message; render(); showActs(); });
+  }
+  function showActs() { var b = document.querySelector('#w170sheet [data-w170save]'); if (b && b.scrollIntoView) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { b.scrollIntoView(); } } }
+  /* wave201: Your writing guide */
+  function saveGuide() {
+    var g = S.guide; if (!g || g.busy) return;
+    var ta = document.getElementById('w170voice'); var text = ta ? ta.value : (g.draft != null ? g.draft : g.voice);
+    g.busy = true; render();
+    fn({ action: 'settings', voice: String(text || '') }).then(function () {
+      return fn({ action: 'voice' }).then(function (r) { S.guide = { voice: r.voice || '', framework: r.framework || '', draft: null, open: true }; render(); T('Your writing guide is saved'); });
+    }, function (e) { g.busy = false; render(); T('Not saved: ' + e.message); });
   }
   function nextItem() {
     var list = listFor(S.tab).filter(function (x) { return S.tab === 'reply' ? !x.reply_state : !x.team_state; });
@@ -95,6 +107,8 @@
     if ((el = t.closest('[data-w170retry]'))) { e.preventDefault(); startSort('retry'); return; }
     if ((el = t.closest('[data-w170relabels]'))) { e.preventDefault(); el.disabled = true; fn({ action: 'labels', refresh: true }).then(function () { S.set = null; return loadOwner(true); }).then(function () { render(); T('Your folders were read again'); }, function (err) { el.disabled = false; T('Not read: ' + err.message); }); return; }
     if ((el = t.closest('[data-w170saveset]'))) { e.preventDefault(); saveSettings(); return; }
+    if ((el = t.closest('[data-w170saveguide]'))) { e.preventDefault(); saveGuide(); return; }
+    if ((el = t.closest('.w170guide summary')) && S.guide) { S.guide.open = !el.parentNode.open; return; }
     if ((el = t.closest('[data-w170unlabel]'))) {
       e.preventDefault(); v = el.getAttribute('data-w170unlabel'); el.disabled = true;
       fn({ action: 'unlabel', gmail_id: v }).then(function () { patchRow(v, { label_id: null, label_name: null, labelled_at: null, archived: false }); render(); paintCard(); T('The label is off'); }, function (err) { el.disabled = false; T('Not changed: ' + err.message); });
@@ -119,7 +133,8 @@
     var x = S.sel ? rowBy(S.sel) : null, d = x ? detail(x) : null, st = S.set;
     if (d && t.hasAttribute('data-w170own')) { var i = Number(t.getAttribute('data-w170own')); d.custom[i] = t.value; if (t.value && d.answers[i]) { d.answers[i] = ''; Array.prototype.forEach.call(t.parentNode.querySelectorAll('[data-w170ans]'), function (b) { b.classList.remove('on'); b.setAttribute('aria-pressed', 'false'); }); } return; }
     if (d && t.id === 'w170note') { d.note = t.value; return; }
-    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; return; }
+    if (d && t.id === 'w170body') { d.draft = t.value; d.bracketOk = false; d.warn = null; return; }
+    if (t.id === 'w170voice' && S.guide) { S.guide.draft = t.value; return; }
     if (d && t.id === 'w170ask') { d.team = d.team || {}; d.team.ask = t.value; return; }
     if (st && t.hasAttribute('data-w170lnote')) { st.notes[t.getAttribute('data-w170lnote')] = t.value; return; }
     if (st && t.id === 'w170snd') { st.senders = t.value; return; }

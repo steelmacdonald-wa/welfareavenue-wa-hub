@@ -9,6 +9,14 @@
 // v1.2 (30/09/26): bulk and automated mail (a List-Unsubscribe header with a bulk sender, a mailing service or a bulk precedence)
 // never waits on a personal reply. v1.3 (30/09/26): mail from a colleague (a welfareavenue.com address) is not offered to a team:
 // it is already with one.
+// v1.4 (03/10/26, wave201): Steel: "make sure /steel-writing:wa-writing skill is used as a framework to writing emails" and
+// "make sure that drafts are actually saved. It didn't work last time". The owner's guide (mybox_owners.voice, Steel's: the
+// wa-writing framework with steel-voice underneath, first line "FRAMEWORK: ...") leads every draft; the model names the reader
+// (wa-writing's audiences) and the register before writing; figures come only from the owner, the thread or the Hub's verified
+// fact base (fund_facts, status verified, budgets left out); a draft that still carries a banned phrase is revised once. A saved
+// draft is read back from Gmail before the Hub says so (it must be a draft in the email's thread); saving again for the same email
+// updates that draft instead of adding another; the link opens that draft in the owner's own account (authuser), not whichever
+// Gmail the browser has first; change_log gets the ids, never the subject.
 //
 // Who: the mailbox's owner, signed in to the Hub (their Welfare Avenue address, or an alias of it in wa_email_aliases), with a
 //   mybox_owners row that is on. The Hub's service account acts as them through Google Workspace domain-wide delegation
@@ -19,13 +27,15 @@
 // Actions (POST {action}):
 //   status                        the owner's settings and counts
 //   labels {refresh?}             their own Gmail labels, with a few recent subjects each (what the sorting learns from)
-//   settings {auto_sort?, days_back?, archive_labels?, label_notes?, skip_senders?, skip_words?}
+//   settings {auto_sort?, days_back?, archive_labels?, label_notes?, skip_senders?, skip_words?, voice?}
+//   voice                         the owner's own writing guide (wave201: Settings, Your writing guide)
 //   sort                          sort new inbox mail now, in the background (the owner), or every owner with auto_sort on (the secret)
 //   retry                         sort again what failed
 //   open {gmail_id}               the email and its thread, read from Gmail (not kept)
 //   questions {gmail_id}          what the reply tool needs to know first (up to three questions, with likely answers)
-//   draft {gmail_id, answers[], note?}   a reply in the owner's voice (not kept until saved)
-//   save_draft {gmail_id, body, reply_all?}   a Gmail draft in the thread; the owner sends it from Gmail
+//   draft {gmail_id, answers[], note?}   a reply in the owner's voice (not kept until saved), with the framework, reader and register
+//   save_draft {gmail_id, body, reply_all?}   a Gmail draft in the thread (the email's earlier draft updated if it is still there),
+//                                 read back before answering; the owner sends it from Gmail
 //   suggest_ask {gmail_id, team}  the one line a team would read, and who on the team it is for
 //   to_team {gmail_id, team, ask, person?, dry_run?}   files it in the team's Hub inbox (hub_mail, mailbox person); team-inbox tells
 //                                 them (dry_run: the row it would file, nothing written)
@@ -80,7 +90,7 @@ async function log(entityType: string, entityId: string, field: string, value: s
   try { await svc.from('change_log').insert({ entity_type: entityType, entity_id: entityId, field, old_value: null, new_value: value.slice(0, 400), changed_by: by }); } catch (_) { /* audit only */ }
 }
 function clip(s: unknown, n: number): string { const t = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t; }
-function noDash(s: string): string { return String(s || '').replace(/\s*\u2014\s*/g, ', ').replace(/\u2013/g, '-'); }
+function noDash(s: string): string { return String(s || '').replace(/\s*—\s*/g, ', ').replace(/–/g, '-'); }
 function first(n: string | null | undefined): string { return String(n || '').trim().split(/\s+/)[0] || ''; }
 
 /* ---- who is asking: their own mailbox (an alias counts as the address it belongs to) ---- */
@@ -415,10 +425,44 @@ const Q_TOOL = { name: 'reply_questions', description: 'What to ask the owner be
     options: { type: 'array', minItems: 2, maxItems: 4, items: { type: 'string' }, description: 'The likely answers, a few words each' },
   }, required: ['q', 'options'] } },
 }, required: ['gist', 'questions'] } };
+const READERS = ['board member', 'funder or donor', 'staff or volunteer', 'close collaborator', 'partner or community organisation', 'first contact', 'vendor or support desk', 'other'];
+const REGISTERS = ['standard email', 'quick reply', 'closure reply', 'hard news'];
 const D_TOOL = { name: 'reply_draft', description: 'The reply, ready for the owner to read, edit and send.', input_schema: { type: 'object', properties: {
+  reader: { type: 'string', enum: READERS, description: 'Who is reading, in the writing guide\'s audience terms. Decide this first: it sets the calibration.' },
+  register: { type: 'string', enum: REGISTERS, description: 'The register the email deserves, from the writing guide. Decide this before writing.' },
   body: { type: 'string', description: 'The email body only (no subject line), plain text, with the greeting and the sign-off. Anything the owner did not give you stays in [square brackets].' },
   notes: { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Anything the owner should check before sending, one short line each (a [bracket] to fill, a date to confirm)' },
-}, required: ['body', 'notes'] } };
+}, required: ['reader', 'register', 'body', 'notes'] } };
+const R_TOOL = { name: 'reply_revised', description: 'The same reply with the listed phrases written out.', input_schema: { type: 'object', properties: {
+  body: { type: 'string', description: 'The revised email body, plain text, greeting to sign-off' },
+}, required: ['body'] } };
+/* wa-writing's and steel-voice's banned phrases, checked after the model writes (one revision if any is left) */
+const BANNED: Array<[RegExp, string]> = [
+  [/hope (this|the) (e-?mail |message |note )?finds you/i, 'a stock opener ("Hope this finds you well")'],
+  [/\bhope you('| a)re (doing )?(well|good)/i, 'a stock opener ("I hope you\'re doing well")'],
+  [/let me know if you have any (other |further )?questions/i, 'a stock closer ("Let me know if you have any questions")'],
+  [/(do not|don'?t) hesitate to/i, 'a stock closer ("Don\'t hesitate to ...")'],
+  [/\b(circle back|touch base|synerg\w*|leverag\w*|utili[sz]\w*)\b/i, 'corporate filler (circle back, touch base, synergy, leverage, utilise)'],
+  [/\bI just wanted to\b/i, 'a hedge ("I just wanted to")'],
+  [/(in these (challenging|difficult|uncertain) times|making a difference together)/i, 'charity boilerplate'],
+  [/\bwhilst\b|it is for this reason that/i, 'retired stiff formality ("whilst", "it is for this reason that")'],
+  [/[A-Za-z] & [A-Za-z]/, '"&" in prose (write "and")'],
+];
+function lint(body: string): string[] { return BANNED.filter(([re]) => re.test(body)).map(([, why]) => why); }
+function frameworkOf(voice: string | null): string {
+  const m = /^\s*FRAMEWORK:\s*([^\n(]+)/i.exec(String(voice || ''));
+  return m ? m[1].trim().replace(/[.,;:]+$/, '') : (voice ? 'your writing guide' : 'the house style');
+}
+/* the Hub's verified facts (wave193's fact base): what a reply may state as fact besides the owner and the thread */
+let FACTS: string | null = null;
+async function waFacts(): Promise<string> {
+  if (FACTS != null) return FACTS;
+  try {
+    const { data } = await svc.from('fund_facts').select('category, title, body').eq('status', 'verified').neq('category', 'budget').order('sort', { ascending: true, nullsFirst: false }).limit(60);
+    FACTS = ((data || []) as Array<{ category: string; title: string; body: string }>).map(f => '- ' + f.title + ': ' + clip(f.body, 600)).join('\n');
+  } catch (_) { FACTS = ''; }
+  return FACTS;
+}
 const A_TOOL = { name: 'team_ask', description: 'What the team should do about this email.', input_schema: { type: 'object', properties: {
   ask: { type: 'string', description: 'One line, at most 160 characters, addressed to the team: what they should do about it (no em dashes)' },
   person: { type: ['string', 'null'], description: 'The email of the one person on the team it is for, from the list, or null when it is for the team' },
@@ -435,13 +479,31 @@ async function questionsFor(owner: Owner, gmailId: string) {
 async function draftFor(owner: Owner, gmailId: string, answers: Array<{ q: string; a: string }>, note: string) {
   const t = await thread(owner, gmailId);
   const who = first(owner.name) || 'the owner';
-  const sys = (owner.voice || ('You write as ' + who + '. Clear, warm and direct. Never use em dashes. Never invent facts: anything not given goes in [square brackets].'))
-    + '\n\nYOUR JOB NOW\nWrite ' + who + '\'s reply to the email below, as ' + who + ' would send it: the answers to the questions are the substance; do not add commitments, dates, amounts or names ' + who + ' did not give (put them in [square brackets]). Reply to the sender in their language. Keep it as short as the email deserves.';
+  const facts = await waFacts();
+  const fw = frameworkOf(owner.voice);
+  const sys = 'THE WRITING GUIDE (' + fw + '): follow it as the framework for this email, every rule and calibration in it.\n\n'
+    + (owner.voice || ('You write as ' + who + '. Clear, warm and direct. Never use em dashes. Never invent facts: anything not given goes in [square brackets].'))
+    + (facts ? '\n\nWELFARE AVENUE FACTS (the Hub\'s verified fact base: the only standing facts and figures you may state besides what ' + who + ' says and what the thread says; anything else goes in [square brackets])\n' + facts : '')
+    + '\n\nYOUR JOB NOW\nFirst decide who is reading (the guide\'s audiences) and the register the email deserves; then write ' + who + '\'s reply to the email below, as ' + who + ' would send it, calibrated for that reader. The answers to the questions are the substance; do not add commitments, dates, amounts or names ' + who + ' did not give (put them in [square brackets]). Reply to the sender in their language. Keep it as short as the email deserves. Run the guide\'s final check before you answer.';
   const user = threadForModel(t, who) + '\n\nWHAT ' + who.toUpperCase() + ' SAYS\n' + (answers.length ? answers.map(x => '- ' + x.q + ' ' + x.a).join('\n') : '(no questions were needed)') + (note ? '\nAnything else: ' + note : '');
-  const out = await tool('mybox_reply', sys, user, D_TOOL, 1600);
-  const body = noDash(String(out.body || '').trim());
+  const out = await tool('mybox_reply', sys, user, D_TOOL, 1800);
+  let body = noDash(String(out.body || '').trim());
+  let revised = false;
+  const left = lint(body);
+  if (left.length && body) {
+    try {
+      const r = await tool('mybox_reply', sys, 'Here is the reply you wrote:\n\n' + body + '\n\nThe writing guide bans what is still in it: ' + left.join('; ') + '. Write those parts out in ' + who + '\'s own words. Change nothing else: same substance, same [brackets], same greeting and sign-off.', R_TOOL, 1600);
+      const b2 = noDash(String(r.body || '').trim());
+      if (b2 && lint(b2).length < left.length) { body = b2; revised = true; }
+    } catch (_) { /* keep the first draft; the notes say what to fix */ }
+  }
+  const still = lint(body);
   const brackets = Array.from(new Set((body.match(/\[[^\]\n]{1,80}\]/g) || []))).slice(0, 8);
-  return { body, notes: (Array.isArray(out.notes) ? out.notes : []).slice(0, 3).map((n: unknown) => noDash(clip(n, 160))), brackets };
+  const notes = (Array.isArray(out.notes) ? out.notes : []).slice(0, 3).map((n: unknown) => noDash(clip(n, 160)));
+  if (still.length) notes.push('The guide bans ' + still.join('; ') + ': worth a rewrite before sending.');
+  const reader = READERS.includes(String(out.reader)) ? String(out.reader) : 'other';
+  const register = REGISTERS.includes(String(out.register)) ? String(out.register) : 'standard email';
+  return { body, notes, brackets, framework: { name: fw, reader, register, revised } };
 }
 
 /* ---- a Gmail draft in the thread (the owner sends it) ---- */
@@ -462,10 +524,33 @@ async function saveDraft(owner: Owner, gmailId: string, bodyText: string, replyA
   if (mid) { lines.push('In-Reply-To: ' + mid); lines.push('References: ' + (refs ? refs + ' ' : '') + mid); }
   lines.push('MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"', 'Content-Transfer-Encoding: base64', '', utf8b64(noDash(bodyText).replace(/\r?\n/g, '\r\n')).replace(/(.{76})/g, '$1\r\n'));
   const raw = utf8b64url(lines.join('\r\n'));
-  const d = await gmailWrite(token, 'POST', '/drafts', { message: { raw, threadId: msg.threadId } });
-  await svc.from('mybox_mail').update({ reply_state: 'drafted', draft_id: String(d.id || ''), drafted_at: new Date().toISOString() }).eq('owner', owner.email).eq('gmail_id', gmailId);
-  return { draft_id: d.id, to, cc, subject, url: 'https://mail.google.com/mail/u/' + encodeURIComponent(owner.email) + '/#drafts' };
+  /* the email's earlier draft from the Hub, if it is still a draft in Gmail, is updated (no second draft) */
+  const row = await rowOf(owner.email, gmailId);
+  let prev: string | null = row && row.draft_id ? String(row.draft_id) : null;
+  if (prev) { try { const g = await gmail(token, '/drafts/' + encodeURIComponent(prev) + '?format=minimal'); if (!g || !g.message || g.message.threadId !== msg.threadId) prev = null; } catch (_) { prev = null; } }
+  const d = prev
+    ? await gmailWrite(token, 'PUT', '/drafts/' + encodeURIComponent(prev), { id: prev, message: { raw, threadId: msg.threadId } })
+    : await gmailWrite(token, 'POST', '/drafts', { message: { raw, threadId: msg.threadId } });
+  const draftId = String((d && d.id) || '');
+  if (!draftId) throw new Error('Gmail did not return a draft');
+  /* read it back: it must be a draft, in the email's thread, before the Hub says it is saved */
+  let check: { message?: { threadId?: string; labelIds?: string[] } } | null = null;
+  try { check = await gmail(token, '/drafts/' + encodeURIComponent(draftId) + '?format=minimal'); } catch (e) { throw new Error('Gmail did not keep the draft (' + String((e as Error).message || e).slice(0, 120) + ')'); }
+  const cm = (check && check.message) || {};
+  if (cm.threadId !== msg.threadId || !(cm.labelIds || []).includes('DRAFT')) throw new Error('Gmail did not keep the draft in this email\'s thread');
+  const now = new Date().toISOString();
+  await svc.from('mybox_mail').update({ reply_state: 'drafted', draft_id: draftId, drafted_at: now }).eq('owner', owner.email).eq('gmail_id', gmailId);
+  await log('mybox_mail', gmailId, prev ? 'draft updated' : 'draft saved', 'draft ' + draftId + ' in thread ' + msg.threadId + ', checked in Gmail', owner.name || owner.email);
+  return { draft_id: draftId, thread_id: msg.threadId, to, cc, subject, updated: !!prev, checked_at: now, url: draftLink(owner.email, msg.threadId, draftId), drafts_url: draftsLink(owner.email) };
 }
+/* Gmail's own link to open a draft (what Google returns as a draft's viewUrl): the owner's account by authuser, the thread id in
+   decimal, the draft id; a browser signed in to several Google accounts opens the right one */
+function draftLink(email: string, threadId: string, draftId: string): string {
+  let dec = '';
+  try { dec = BigInt('0x' + threadId).toString(); } catch (_) { return draftsLink(email); }
+  return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(email).replace('%40', '@') + '#all?compose=thread-f:' + dec + '%2Bmsg-a:' + encodeURIComponent(draftId);
+}
+function draftsLink(email: string): string { return 'https://mail.google.com/mail/?authuser=' + encodeURIComponent(email).replace('%40', '@') + '#drafts'; }
 
 /* ---- sending an email to a team (their Hub inbox; team-inbox tells them) ---- */
 async function teamPeople(team: string): Promise<Array<{ name: string; email: string; role: string | null }>> {
@@ -542,7 +627,11 @@ Deno.serve(async (req: Request) => {
     if (action === 'status') {
       const { count: toReply } = await svc.from('mybox_mail').select('id', { count: 'exact', head: true }).eq('owner', owner.email).eq('skipped', false).gte('reply_p', 0.55).is('reply_state', null);
       const { count: toTeam } = await svc.from('mybox_mail').select('id', { count: 'exact', head: true }).eq('owner', owner.email).not('team', 'is', null).is('team_state', null);
-      return json({ ok: true, owner: { ...owner, voice: undefined }, counts: { to_reply: toReply || 0, to_team: toTeam || 0 } });
+      return json({ ok: true, owner: { ...owner, voice: undefined, voice_framework: frameworkOf(owner.voice), voice_len: String(owner.voice || '').length }, counts: { to_reply: toReply || 0, to_team: toTeam || 0 } });
+    }
+    if (action === 'voice') {
+      /* the owner's own writing guide (wave201): only they read it, through this action */
+      return json({ ok: true, voice: owner.voice || '', framework: frameworkOf(owner.voice) });
     }
     if (action === 'labels') {
       const token = await tokenFor(owner.email);
@@ -559,9 +648,11 @@ Deno.serve(async (req: Request) => {
       const cleanList = (v: unknown) => (Array.isArray(v) ? v : String(v || '').split(/[\n,;]+/)).map(x => String(x).trim().toLowerCase()).filter(x => x && x.length <= 120).slice(0, 80);
       if (body.skip_senders !== undefined) patch.skip_senders = cleanList(body.skip_senders);
       if (body.skip_words !== undefined) patch.skip_words = cleanList(body.skip_words);
+      if (typeof body.voice === 'string') { const v = String(body.voice).replace(/\r\n/g, '\n').trim(); if (v.length > 20000) return json({ error: 'The guide is too long (20,000 characters at most)' }, 400); patch.voice = v || null; }
       const { error } = await svc.from('mybox_owners').update(patch).eq('email', owner.email);
       if (error) throw new Error(error.message);
       if (patch.auto_sort !== undefined) await log('mybox', owner.email, 'auto sort', patch.auto_sort ? 'on' : 'off', owner.name || owner.email);
+      if (patch.voice !== undefined) await log('mybox', owner.email, 'writing guide', patch.voice ? 'updated (' + String(patch.voice).length + ' characters, ' + frameworkOf(patch.voice as string) + ')' : 'cleared', owner.name || owner.email);
       return json({ ok: true });
     }
     if (action === 'sort' || action === 'retry') {
