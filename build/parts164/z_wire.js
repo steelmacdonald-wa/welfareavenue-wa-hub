@@ -23,7 +23,8 @@
   function check() {
     var m = document.querySelector('#finances > .w118mast'); if (!m) return;
     var h = m.querySelector('h1'), q = m.querySelector(':scope > p'), id = curSec(), t = SECT[id] || SECT.overview;
-    if ((h && h.textContent !== t[0]) || (q && q.textContent !== t[1])) retitle(id);
+    var same = function (el, en) { return window.w198 && w198.same ? w198.same(el.textContent, en) : el.textContent === en; };   /* wave198 */
+    if ((h && !same(h, t[0])) || (q && !same(q, t[1]))) retitle(id);
   }
   function watchMast() {
     var m = document.querySelector('#finances > .w118mast'); if (!m || m.__w164obs) return;

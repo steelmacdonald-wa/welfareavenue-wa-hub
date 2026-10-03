@@ -180,3 +180,7 @@ Main segments are the ones that render or route the page (runtime probe plus sou
 
 ## wave197 (03/10/26): the HR centre's pages and page names in apps
 The HR centre is one page (`#hrcentre`) shown as fourteen pages (`#hrcentre/<page>`): wave197 tags the older waves' sections by page (`data-w197s`) and shows the current one (`#hrcentre[data-w197]`), draws Overview, the Applications board and Hours (The Loop) itself, and replaces the HR rail (`WA_APP.apps.hr.groups`). In every app the masthead's title is the rail's page name where it repeated the app's, and on a computer the app bar is hidden with its actions proxied into the masthead. See docs/03-10-26 - wave197 ….
+
+
+## wave198 (03/10/26): French
+A French reader's page translates the interface as it is drawn (MutationObserver) from hub_i18n (wa198_dict), and swaps in the French of the onboarding and Academy content (hub_i18n_content through wa198_content) as the supabase client reads those tables. Missing words are queued (wa198_seen) and translated nightly by i18n-translate. See docs/03-10-26 - wave198 the Hub in French.md.

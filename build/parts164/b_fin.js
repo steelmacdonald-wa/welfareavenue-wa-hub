@@ -12,8 +12,9 @@
     var m = document.querySelector('#finances > .w118mast'); if (!m) return;
     var t = SECT[id] || SECT.overview;
     var h = m.querySelector('h1'), p = m.querySelector(':scope > p');
-    if (h && h.textContent !== t[0]) h.textContent = t[0];
-    if (p && p.textContent !== t[1]) p.textContent = t[1];
+    var same = function (el, en) { return window.w198 && w198.same ? w198.same(el.textContent, en) : el.textContent === en; };   /* wave198: its French counts as the same words */
+    if (h && !same(h, t[0])) h.textContent = t[0];
+    if (p && !same(p, t[1])) p.textContent = t[1];
     F.titled = id;
     try { if (panel() && panel().classList.contains('active')) document.title = (id === 'overview' ? 'Finance' : t[0] + ' · Finance') + ' · Welfare Avenue Hub'; } catch (e) { /* fine */ }
   }

@@ -559,8 +559,9 @@
     var panel = document.getElementById('hrcentre'); if (!panel) return;
     var m = panel.querySelector(':scope > .w118mast'); if (!m) return;
     var p = pageDef(S.page) || PAGES[0];
-    var h1 = m.querySelector('h1'); if (h1 && h1.textContent !== p.l) h1.textContent = p.l;
-    var d = m.querySelector(':scope > p'); if (d && d.textContent !== p.d) d.textContent = p.d;
+    var same = function (el, en) { return window.w198 && w198.same ? w198.same(el.textContent, en) : el.textContent === en; };   /* wave198: its French counts as the same words */
+    var h1 = m.querySelector('h1'); if (h1 && !same(h1, p.l)) h1.textContent = p.l;
+    var d = m.querySelector(':scope > p'); if (d && !same(d, p.d)) d.textContent = p.d;
     var acts = m.querySelector('.w197acts'); if (!acts) { acts = document.createElement('div'); acts.className = 'w197acts'; m.appendChild(acts); }
     var help = m.querySelector('.w43help'); if (help && help.parentNode !== acts) acts.appendChild(help);
     var want = MAIN[S.page] && (S.page !== 'team' || canHr()) ? MAIN[S.page] : null;

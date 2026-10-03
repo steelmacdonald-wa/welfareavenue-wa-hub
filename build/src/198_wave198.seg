@@ -1,0 +1,370 @@
+/* =====================================================================
+   WA v198 the Hub in French (03/10/26)
+   =====================================================================
+   Steel (02/10/26): "He's also french so I'd love to make the effort in
+   putting the entire hub in french as an option. This is for future
+   recruits too." His choices: the interface, the onboarding and the
+   Avenue Academy in French (what people type stays as written); Quebec
+   French, vous; each person picks their language.
+
+   How it works (no page is rewritten):
+   1. Each person's language: the account menu's Fran\u00e7ais / English,
+      kept in hub_user_prefs (follows them to any device) and in this
+      browser (localStorage wa198lang, so the page starts in it). Changing
+      it reloads the page.
+   2. The interface: a dictionary of the Hub's own words (hub_i18n:
+      English as the page shows it, numbers as {0}, {1}...; read once
+      through wa198_dict and kept in this browser until it changes).
+      Every piece of text the page draws is looked up as it appears
+      (a MutationObserver): whole, then with its numbers set aside, then
+      piece by piece around separators (\u00b7, \u2014, |), then as a known
+      phrase followed or preceded by a name or a number; dates and
+      times read the French way. Text that is not the Hub's own (names,
+      tasks, notes, messages) has no entry and stays as written. Text
+      with no entry yet is reported (wa198_seen); i18n-translate
+      translates it overnight when its words are in the Hub's code.
+   3. The onboarding and the Avenue Academy: their French (hub_i18n_
+      content, served by wa198_content only while the English is
+      unchanged) replaces the English as the page reads those tables,
+      except on the HR centre and the Admin centre, where they are
+      edited. A save never writes the French over the English.
+   Off: English readers get none of this (one localStorage read).
+   ===================================================================== */
+(function () {
+  if (window.__wa198) return; window.__wa198 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var S = { lang: 'en', d: null, v: '', cmap: null, rev: {}, q: {}, qn: 0, sent: 0, names: {}, on: false, ready: false, stats: { hit: 0, miss: 0 }, burst: { n: 0, t: 0, hot: false } };
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { return null; } return null; }
+  S.lang = ls('wa198lang') === 'fr' ? 'fr' : 'en';
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function myEmail() { try { return lower(USER && USER.email); } catch (e) { return ''; } }
+  var NBSP = '\u00a0';
+
+  /* French dates: Oct 2 \u2192 2 oct., Fri, Oct 2, 8:47 PM \u2192 ven. 2 oct., 20 h 47 */
+  var MON = { jan: 'janv.', feb: 'f\u00e9vr.', mar: 'mars', apr: 'avr.', may: 'mai', jun: 'juin', jul: 'juill.', aug: 'ao\u00fbt', sep: 'sept.', oct: 'oct.', nov: 'nov.', dec: 'd\u00e9c.' };
+  var MONL = { january: 'janvier', february: 'f\u00e9vrier', march: 'mars', april: 'avril', may: 'mai', june: 'juin', july: 'juillet', august: 'ao\u00fbt', september: 'septembre', october: 'octobre', november: 'novembre', december: 'd\u00e9cembre' };
+  var DAY = { mon: 'lun.', tue: 'mar.', wed: 'mer.', thu: 'jeu.', fri: 'ven.', sat: 'sam.', sun: 'dim.' };
+  var DAYL = { monday: 'lundi', tuesday: 'mardi', wednesday: 'mercredi', thursday: 'jeudi', friday: 'vendredi', saturday: 'samedi', sunday: 'dimanche' };
+
+  var css = document.createElement('style');
+  css.id = 'wa198css';
+  css.textContent = '' +
+    '#w115menu .w198lang{display:flex;align-items:center;gap:8px;}' +
+    '#w115menu .w198lang small{margin-left:auto;font-size:11px;font-weight:700;letter-spacing:.6px;color:var(--wa-muted);}' +
+    '.w198busy{position:fixed;inset:0;z-index:99999;background:rgba(16,63,57,.92);color:' + CREAM + ';display:flex;align-items:center;justify-content:center;font-family:' + BODY + ';font-size:18px;font-weight:700;}';
+  document.head.appendChild(css);
+
+  /* ---------- the lookup ---------- */
+  var NUM = /\d+(?:[.,]\d+)*/g;
+  function norm(s) { var nums = [], i = 0; var k = s.replace(NUM, function (m) { nums.push(m); return '{' + (i++) + '}'; }); return { k: k, nums: nums }; }
+  function frNum(n) { if (/^\d{1,3}(,\d{3})+$/.test(n)) return n.replace(/,/g, '\u202f'); if (/^\d+\.\d+$/.test(n)) return n.replace('.', ','); return n; }
+  function fill(t, nums) { return t.replace(/\{(\d+)\}/g, function (m, i) { return nums[+i] != null ? frNum(nums[+i]) : m; }); }
+  function look(s) {
+    var d = S.d; if (!d) return null;
+    if (Object.prototype.hasOwnProperty.call(d, s)) return d[s];
+    var n = norm(s);
+    if (n.nums.length && Object.prototype.hasOwnProperty.call(d, n.k)) return fill(d[n.k], n.nums);
+    return null;
+  }
+  var NAME1 = "[A-Z\\u00c0-\\u00de][A-Za-z\\u00c0-\\u00ff'\\u2019.-]*(?:\\s+(?:de|du|van|von|da|el|al|[A-Z\\u00c0-\\u00de][A-Za-z\\u00c0-\\u00ff'\\u2019.-]*)){0,4}";
+  var NAMEISH = new RegExp('^(?:' + NAME1 + '(?:,\\s*(?:and\\s+)?' + NAME1 + '){0,8}|[#$]?\\d[\\d.,:%]*\\s*[A-Za-z%$]{0,4})[.,!?]?$');
+  function dates(s) {
+    if (!/\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*\b|\b(?:AM|PM|am|pm)\b/.test(s)) return s;
+    var o = s;
+    o = o.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?(,?\s+(\d{4}))?\b/g, function (m, mo, dd, x, yy) { return dd + ' ' + MONL[mo.toLowerCase()] + (yy ? ' ' + yy : ''); });
+    o = o.replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\.?\s+(\d{1,2})(,?\s+(\d{4}))?\b/g, function (m, mo, dd, x, yy) { return dd + ' ' + MON[mo.slice(0, 3).toLowerCase()] + (yy ? ' ' + yy : ''); });
+    o = o.replace(/\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\b/g, function (m, dd, mo) { return dd + ' ' + MONL[mo.toLowerCase()]; });
+    o = o.replace(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/g, function (m, mo, yy) { return MONL[mo.toLowerCase()] + ' ' + yy; });
+    o = o.replace(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})\b/g, function (m, mo, yy) { return MON[mo.toLowerCase()] + ' ' + yy; });
+    o = o.replace(/\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b,?/g, function (m, d) { return DAYL[d.toLowerCase()]; });
+    o = o.replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b,?(?=\s+\d)/g, function (m, d) { return DAY[d.toLowerCase()]; });
+    o = o.replace(/\b(\d{1,2}):(\d{2})\s*(AM|PM|am|pm)\b/g, function (m, h, mi, ap) { h = +h % 12 + (/p/i.test(ap) ? 12 : 0); return h + ' h ' + mi; });
+    o = o.replace(/\b(\d{1,2})\s*(AM|PM|am|pm)\b/g, function (m, h, ap) { h = +h % 12 + (/p/i.test(ap) ? 12 : 0); return h + ' h'; });
+    return o;
+  }
+  /* a date or a time and nothing else (so a task that says Sunday stays as written) */
+  var DATEWORD = /\b(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*|AM|PM|am|pm|at|to|from|until)\b|\d+(?:st|nd|rd|th)?/g;
+  function dateOnly(s) { return /\d/.test(s) && !/[A-Za-z]{2}/.test(s.replace(DATEWORD, '')); }
+  function datesIf(s) { return dateOnly(s) ? dates(s) : s; }
+  /* what may sit beside a known phrase: a number, a date, or people on the roster (Ahmed; Ahmed, Ian and Shima) */
+  function fill2(x) {
+    x = String(x || '').trim(); if (!x) return false;
+    if (/^[#$]?\d[\d.,:%]*\s*[A-Za-z%$]{0,4}[.,!?]?$/.test(x) || dateOnly(x)) return true;
+    var toks = x.replace(/[.,!?]$/, '').split(/\s*,\s*|\s+and\s+/);
+    return toks.length > 0 && toks.every(function (t) { return !!S.names[t] || !!S.names[t.split(' ')[0]] && /^[A-Z]/.test(t); });
+  }
+  function punct(p) { return p === ':' ? NBSP + ':' : p; }
+  function core(s, depth) {
+    if (!s || S.names[s]) return null;
+    var t = look(s); if (t != null) return t;
+    if (depth > 2) return null;
+    /* around separators */
+    var parts = s.split(/(\s+[\u00b7\u2022\u2014|]\s+|\s+-\s+)/);
+    if (parts.length > 1) {
+      var any = false, o = parts.map(function (p, i) { if (i % 2) return p; var x = core(p, depth + 1); if (x != null) { any = true; return x; } var dt = datesIf(p); if (dt !== p) any = true; return dt; });
+      if (any) return o.join('');
+    }
+    /* symbols around the words (+ Add a task, ? How this page works, sparkles Get recommendation, open \u00b7) */
+    var sy = /^([^A-Za-z0-9\u00c0-\u00ff({\[]+)?([\s\S]*?)([^A-Za-z0-9\u00c0-\u00ff)}\].!?\u2026]+)?$/.exec(s);
+    if (sy && (sy[1] || sy[3]) && sy[2] && sy[2] !== s) { var inner = core(sy[2], depth + 1); if (inner != null) return (sy[1] || '') + inner + (sy[3] || ''); }
+    /* words, then a short note in brackets: Daniela (Fundraising), Meeting date (optional) */
+    var br = /^([\s\S]*?\S)\s*\(([^()]{1,60})\)$/.exec(s);
+    if (br) {
+      var bh = core(br[1], depth + 1), bi = core(br[2], depth + 1);
+      if (bh != null || bi != null) return (bh != null ? bh : br[1]) + ' (' + (bi != null ? bi : br[2]) + ')';
+    }
+    /* a phrase and its closing punctuation */
+    var c = /^([\s\S]*?\S)\s*([:?!.\u2026])$/.exec(s);
+    if (c) { var cx = look(c[1]); if (cx != null) return cx + punct(c[2]); }
+    /* a known phrase, then a name or a number (Handled by Ahmed, Welcome Alyx), or the other way round */
+    if (s.length < 120) {
+      var sp = []; for (var i = 0; i < s.length; i++) if (s[i] === ' ') sp.push(i);
+      for (var j = sp.length - 1; j >= 0; j--) {
+        var head = s.slice(0, sp[j]), tail = s.slice(sp[j] + 1);
+        if (fill2(tail)) { var h = look(head) || look(head.replace(/[:,]$/, '')); if (h != null) return h + (/[:,]$/.test(head) && !/[:,]$/.test(h) ? punct(head.slice(-1)) : '') + ' ' + datesIf(tail); }
+        if (fill2(head)) { var tl = look(tail); if (tl != null) return datesIf(head) + ' ' + tl; }
+      }
+    }
+    var dt2 = datesIf(s); if (dt2 !== s) return dt2;
+    return undefined;   /* nothing known: may be the Hub's own words not yet translated */
+  }
+  /* raw text as the page has it (with its spaces) \u2192 French, or null to leave it */
+  function tr(raw) {
+    var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(raw); var s = m[2];
+    if (s.length < 2 || !/[A-Za-z]{2}/.test(s)) return null;
+    var out = core(s, 0);
+    if (out === undefined) { S.stats.miss++; queue(s); return null; }
+    if (out == null || out === s) return null;
+    S.stats.hit++;
+    return m[1] + out + m[3];
+  }
+  function queue(s) {
+    if (s.length > 160 || S.qn > 400 || S.names[s]) return;
+    if (!/[a-z]{2}/.test(s)) return;                       /* all capitals or a code */
+    if (NAMEISH.test(s) && !/\s[a-z]/.test(s)) return;     /* looks like a name */
+    var k = norm(s).k; if (S.q[k]) return; S.q[k] = 1; S.qn++;
+  }
+
+  /* ---------- the page: every text node and a few attributes ---------- */
+  var SKIP = 'script,style,textarea,code,pre,svg,[contenteditable=""],[contenteditable="true"],.notranslate,[translate="no"],[data-w198skip]';
+  var ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+  function skipEl(el) { try { return !!(el && el.closest && el.closest(SKIP)); } catch (e) { return false; } }
+  /* Some pages check their own words and put the English back (a title kept in step with its section): the second time an
+     element is set back to the English it had, it keeps the English, so the two never take turns. */
+  function doText(tn) {
+    if (tn.__w198fr !== undefined && tn.data === tn.__w198fr) return;
+    var p = tn.parentNode; if (!p || p.nodeType !== 1 || p.__w198stop || skipEl(p)) return;
+    var now = Date.now();
+    if (p.__w198last && p.__w198last.en === tn.data && now - p.__w198last.t < 4000) {
+      p.__w198back = (p.__w198back || 0) + 1;
+      if (p.__w198back >= 2) { p.__w198stop = true; tn.__w198fr = tn.data; return; }
+    }
+    if (++S.burst.n > 20000) { if (now - S.burst.t < 1500) { S.burst.hot = true; return; } S.burst = { n: 0, t: now, hot: false }; }
+    var fr = tr(tn.data);
+    if (fr != null) { p.__w198last = { en: tn.data, t: now }; tn.__w198en = tn.data; tn.__w198fr = fr; tn.data = fr; }
+    else tn.__w198fr = tn.data;
+  }
+  function doAttrs(el) {
+    if (skipEl(el)) return;
+    for (var i = 0; i < ATTRS.length; i++) {
+      var a = ATTRS[i]; if (!el.hasAttribute(a)) continue;
+      var v = el.getAttribute(a), st = el.__w198a || (el.__w198a = {});
+      if (st[a] === v) continue;
+      var fr = tr(v); if (fr != null) { st[a] = fr; el.setAttribute(a, fr); } else st[a] = v;
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit') && el.value && !el.__w198v) { var fv = tr(el.value); if (fv != null) { el.value = fv; } el.__w198v = 1; }
+  }
+  function walk(root) {
+    if (!root) return;
+    if (root.nodeType === 3) { doText(root); return; }
+    if (root.nodeType !== 1 && root.nodeType !== 9 && root.nodeType !== 11) return;
+    if (root.nodeType === 1) { if (skipEl(root)) return; doAttrs(root); }
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, { acceptNode: function (n) { if (n.nodeType === 1) { var tg = n.tagName; return (tg === 'SCRIPT' || tg === 'STYLE' || tg === 'TEXTAREA' || tg === 'CODE' || tg === 'PRE' || n.hasAttribute('data-w198skip') || n.classList.contains('notranslate')) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT; } return NodeFilter.FILTER_ACCEPT; } });
+    var n; while ((n = w.nextNode())) { if (n.nodeType === 3) doText(n); else doAttrs(n); }
+  }
+  var MO = null;
+  function start() {
+    if (S.on || S.lang !== 'fr' || !S.d) return; S.on = true;
+    document.documentElement.setAttribute('lang', 'fr-CA');
+    walk(document.body); title();
+    MO = new MutationObserver(function (muts) {
+      for (var i = 0; i < muts.length; i++) {
+        var m = muts[i];
+        if (m.type === 'childList') { for (var j = 0; j < m.addedNodes.length; j++) walk(m.addedNodes[j]); }
+        else if (m.type === 'characterData') doText(m.target);
+        else if (m.type === 'attributes' && m.target.nodeType === 1) doAttrs(m.target);
+      }
+    });
+    MO.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+    var tEl = document.querySelector('title'); if (tEl) new MutationObserver(title).observe(tEl, { childList: true, characterData: true, subtree: true });
+  }
+  function title() { var t = document.title; if (t && t !== S.lastTitle) { var parts = t.split(' \u00b7 '), out = parts.map(function (p) { var x = tr(p); return x == null ? p : x; }).join(' \u00b7 '); S.lastTitle = out; if (out !== t) document.title = out; } }
+
+  /* ---------- the dictionary: this browser's copy, refreshed when the Hub's changes ---------- */
+  function cached() { try { var c = JSON.parse(ls('wa198dict') || 'null'); if (c && c.d) { S.d = c.d; S.v = c.v || ''; return true; } } catch (e) { /* fine */ } return false; }
+  function dbOk() { try { return typeof db !== 'undefined' && db && typeof db.rpc === 'function'; } catch (e) { return false; } }
+  async function refreshDict(force) {
+    if (!dbOk()) return false;
+    try {
+      if (!force && S.d) { var vr = await db.rpc('wa198_dict_v', { p_lang: 'fr' }); if (vr && !vr.error && vr.data === S.v) return false; }
+      var r = await db.rpc('wa198_dict', { p_lang: 'fr' });
+      if (!r || r.error || !r.data || !r.data.d) return false;
+      var fresh = !S.d; S.d = r.data.d; S.v = r.data.v || '';
+      ls('wa198dict', JSON.stringify({ v: S.v, d: S.d }));
+      return fresh;
+    } catch (e) { return false; }
+  }
+  /* the onboarding and Academy content in French (only what is current) */
+  var CT = { trainings: 'id', onboarding_template: 'id', academy_paths: 'key', hr_setup_template: 'id', app_config: 'key' };
+  function setContent(rows) {
+    var m = {}, rev = {};
+    (rows || []).forEach(function (r) { var k = r.tbl + '|' + r.row_id + '|' + r.field; m[k] = r.tr; });
+    S.cmap = m; S.rev = rev;
+  }
+  function cachedContent() { try { var c = JSON.parse(ls('wa198content') || 'null'); if (c && Array.isArray(c)) { setContent(c); return true; } } catch (e) { /* fine */ } return false; }
+  async function refreshContent() {
+    if (!dbOk()) return;
+    try { var r = await db.rpc('wa198_content', { p_lang: 'fr' }); if (r && !r.error && Array.isArray(r.data)) { setContent(r.data); ls('wa198content', JSON.stringify(r.data)); } } catch (e) { /* fine */ }
+  }
+  /* the pages where this content is edited: a note says the English is the original (the French is shown; a save keeps the English
+     of every field left as it was, and what is typed is saved as typed) */
+  function editing() { var h = String(location.hash || ''); return /^#hrcentre\/(plan|training)/.test(h); }
+  function editNote() {
+    var p = document.getElementById('hrcentre'); if (!p) return;
+    var n = document.getElementById('w198edit');
+    if (S.lang !== 'fr' || !editing()) { if (n) n.remove(); return; }
+    if (n) return;
+    n = document.createElement('div'); n.id = 'w198edit'; n.className = 'notranslate';
+    n.setAttribute('style', 'margin:0 0 14px;padding:10px 14px;border-radius:12px;background:rgba(220,165,39,.18);font-size:13px;line-height:1.5;color:#1F201E');
+    n.innerHTML = '<b>Vous voyez la traduction fran\u00e7aise.</b> Le texte original est en anglais\u00a0: pour modifier ce contenu, passez \u00e0 l\u2019anglais (menu du compte, English), sinon ce que vous \u00e9crivez remplace l\u2019original.';
+    var m = p.querySelector(':scope > .w118mast'); if (m) m.insertAdjacentElement('afterend', n); else p.insertBefore(n, p.firstChild);
+  }
+  function frValue(orig, tr) { if (orig && typeof orig === 'object') { try { return JSON.parse(tr); } catch (e) { return orig; } } return tr; }
+  function mapRows(t, res) {
+    try {
+      if (S.lang !== 'fr' || !S.cmap || !res || !res.data) return res;
+      var idk = CT[t], rows = Array.isArray(res.data) ? res.data : [res.data];
+      rows.forEach(function (row) {
+        if (!row || typeof row !== 'object' || row[idk] == null) return;
+        if (t === 'app_config' && row.key !== 'onboarding_journey') return;
+        Object.keys(row).forEach(function (f) {
+          var k = t + '|' + row[idk] + '|' + f, tr = S.cmap[k];
+          if (tr == null || row[f] == null) return;
+          var v = frValue(row[f], tr);
+          S.rev[t + '|' + f + '|' + (typeof v === 'object' ? JSON.stringify(v) : v)] = row[f];
+          row[f] = v;
+        });
+      });
+    } catch (e) { /* the English stays */ }
+    return res;
+  }
+  /* a save never writes the French over the English: a value still equal to the French we showed goes back to the English */
+  function unmap(t, patch) {
+    if (!patch || typeof patch !== 'object' || !Object.keys(S.rev).length) return patch;
+    var one = function (p) { if (!p || typeof p !== 'object') return p; Object.keys(p).forEach(function (f) { var v = p[f], k = t + '|' + f + '|' + (v && typeof v === 'object' ? JSON.stringify(v) : v); if (Object.prototype.hasOwnProperty.call(S.rev, k)) p[f] = S.rev[k]; }); return p; };
+    return Array.isArray(patch) ? patch.map(one) : one(patch);
+  }
+  function wrapThen(b, t) {
+    if (!b || typeof b.then !== 'function' || b.__w198) return b;
+    var orig = b.then; b.__w198 = true;
+    b.then = function (ok, bad) { return orig.call(this, function (res) { res = mapRows(t, res); return ok ? ok(res) : res; }, bad); };
+    return b;
+  }
+  function patchDb() {
+    if (!dbOk() || db.__w198) return !!(dbOk() && db.__w198);
+    var from = db.from.bind(db);
+    db.from = function (t) {
+      var q = from(t);
+      if (!CT[t] || S.lang !== 'fr') return q;
+      ['select'].forEach(function (mth) { if (typeof q[mth] !== 'function') return; var o = q[mth].bind(q); q[mth] = function () { return wrapThen(o.apply(null, arguments), t); }; });
+      ['update', 'upsert', 'insert'].forEach(function (mth) { if (typeof q[mth] !== 'function') return; var o = q[mth].bind(q); q[mth] = function (p) { var a = Array.prototype.slice.call(arguments); a[0] = unmap(t, p); return o.apply(null, a); }; });
+      return q;
+    };
+    db.__w198 = true; return true;
+  }
+  /* what had no translation, sent now and then (at most 80 a call) */
+  async function flush() {
+    if (!dbOk() || S.lang !== 'fr') return;
+    var keys = Object.keys(S.q).filter(function (k) { return S.q[k] === 1; }).slice(0, 80); if (!keys.length) return;
+    keys.forEach(function (k) { S.q[k] = 2; });
+    try { await db.rpc('wa198_seen', { p_lang: 'fr', p_keys: keys }); S.sent += keys.length; } catch (e) { /* next time */ }
+  }
+  /* the person's language, from the database (another device may have changed it) */
+  async function syncPref() {
+    var em = myEmail(); if (!dbOk() || !em) return;
+    try {
+      var r = await db.from('hub_user_prefs').select('lang').eq('email', em).limit(1);
+      var row = r && !r.error && r.data && r.data[0];
+      if (row && row.lang && row.lang !== S.lang) {
+        var once = null; try { once = sessionStorage.getItem('wa198sync'); } catch (e) { /* fine */ }
+        if (once === row.lang) return;
+        try { sessionStorage.setItem('wa198sync', row.lang); } catch (e) { /* fine */ }
+        await switchTo(row.lang, true);
+      }
+    } catch (e) { /* fine */ }
+  }
+  async function switchTo(lang, fromPref) {
+    lang = lang === 'fr' ? 'fr' : 'en';
+    var cover = document.createElement('div'); cover.className = 'w198busy'; cover.textContent = lang === 'fr' ? 'Passage au fran\u00e7ais\u2026' : 'Switching to English\u2026'; document.body.appendChild(cover);
+    ls('wa198lang', lang);
+    if (!fromPref) { try { var em = myEmail(); if (em && dbOk()) await db.from('hub_user_prefs').upsert({ email: em, lang: lang, updated_at: new Date().toISOString() }); } catch (e) { /* this browser keeps it */ } }
+    if (lang === 'fr') { S.lang = 'fr'; await Promise.all([refreshDict(true), refreshContent()]); }
+    location.reload();
+  }
+
+  /* ---------- the account menu: Fran\u00e7ais / English ---------- */
+  function menuItem() {
+    var m = document.getElementById('w115menu'); if (!m || m.querySelector('.w198lang')) return;
+    var so = m.querySelector('#signOutBtn');
+    var b = document.createElement('button');
+    b.type = 'button'; b.className = 'w115item w198lang notranslate'; b.setAttribute('data-w198lang', S.lang === 'fr' ? 'en' : 'fr');
+    b.setAttribute('lang', S.lang === 'fr' ? 'en' : 'fr');
+    b.innerHTML = (S.lang === 'fr' ? 'English' : 'Fran\u00e7ais') + '<small>' + (S.lang === 'fr' ? 'EN' : 'FR') + '</small>';
+    if (so) m.insertBefore(b, so); else m.appendChild(b);
+  }
+  (function watchMenu() {
+    var m = document.getElementById('w115menu');
+    if (!m) { setTimeout(watchMenu, 700); return; }
+    menuItem();
+    new MutationObserver(function () { if (!m.querySelector('.w198lang')) menuItem(); }).observe(m, { childList: true });
+  })();
+  document.addEventListener('click', function (e) {
+    var b = e.target && e.target.closest && e.target.closest('[data-w198lang]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    switchTo(b.getAttribute('data-w198lang'));
+  }, true);
+
+  window.addEventListener('hashchange', function () { setTimeout(editNote, 400); });
+  setInterval(function () { if (S.lang === 'fr') editNote(); }, 2000);
+
+  /* ---------- boot ---------- */
+  if (S.lang === 'fr') {
+    try { (window.WA_MEMBERS_NAMES || []).forEach(function (n) { S.names[n] = 1; }); } catch (e) { /* fine */ }
+    cached(); cachedContent();
+    var tries = 0;
+    (function waitDb() { if (patchDb()) return; if (++tries < 600) setTimeout(waitDb, 25); })();
+    if (typeof initCloud === 'function') { var __ic = initCloud; initCloud = function () { var r = __ic.apply(this, arguments); try { patchDb(); } catch (e) { /* fine */ } return r; }; }
+    function begin() { if (document.body) start(); else setTimeout(begin, 20); }
+    if (S.d) begin();
+    /* once signed in: the names on the roster stay as they are, the dictionary and the content are brought up to date, the language is checked */
+    var after = 0;
+    (function signedIn() {
+      var ok = false; try { ok = typeof USER !== 'undefined' && USER && USER.email && dbOk(); } catch (e) { ok = false; }
+      if (!ok) { if (++after < 400) setTimeout(signedIn, 250); return; }
+      try { (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).forEach(function (m) { if (m && m.name) { S.names[m.name] = 1; S.names[String(m.name).split(' ')[0]] = 1; } }); } catch (e) { /* fine */ }
+      refreshDict(false).then(function (fresh) { if (fresh || !S.on) { S.on = false; if (MO) MO.disconnect(); begin(); } });
+      refreshContent();
+      syncPref();
+      setInterval(flush, 15000);
+    })();
+  } else {
+    (function signedIn() {
+      var ok = false; try { ok = typeof USER !== 'undefined' && USER && USER.email && dbOk(); } catch (e) { ok = false; }
+      if (!ok) { setTimeout(signedIn, 400); return; }
+      setTimeout(syncPref, 2500);
+    })();
+  }
+
+  window.w198 = { state: function () { return S; }, same: function (text, en) { text = String(text || '').trim(); if (text === en) return true; if (S.lang !== 'fr' || !S.d) return false; var f = tr(en); return f != null && text === f.trim(); }, tr: tr, core: core, dates: dates, norm: norm, switchTo: switchTo, walk: walk, flush: flush, mapRows: mapRows, unmap: unmap };
+})();

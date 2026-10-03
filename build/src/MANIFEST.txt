@@ -216,6 +216,8 @@
 197_wave197
 # 196_wave196: the side menu folds away on a computer (Steel, 02/10/26): Hide the menu (or Ctrl or Cmd + \) gives the page the whole width; the far left edge or the Menu tab opens it over the page, moving away closes it, the pin keeps it open (localStorage wa196nav). The automations reshape of wave196 is in parts152 (j_autos.js).
 196_wave196
+# 198_wave198: the Hub in French (Steel, 02/10/26): each person's language (the account menu, hub_user_prefs); the interface translated as it is drawn from the dictionary hub_i18n (wa198_dict), what is missing reported (wa198_seen) for i18n-translate; the onboarding and Academy content replaced by its French (wa198_content) as the page reads it, never on the editing pages and never saved over the English.
+198_wave198
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

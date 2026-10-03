@@ -40,6 +40,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **The HR centre's pages (wave197).** A new HR-centre section belongs to one page: tag it in `tagAll()` (`build/parts197/d_router.js`, `data-w197s="<page>"`, block-level sections with `w197blk`), or it stays hidden (anything untagged in `#w46body` is). A new page is a `PAGES` row in `build/parts197/a_head.js` (key, label, rail icon, group, the older tab whose data it needs, its line). Nothing is drawn under every page. In every app the title is the page's name: a page's masthead never repeats the app's name, and an app's quick action belongs in `APPS[...].actions` (wave197 moves it into the header on a computer).
 
+- **French (wave198).** New interface words need nothing: French readers report them and i18n-translate translates them overnight (only words that are in the build). A page that compares its own text with an English string and rewrites it must accept the French too (`window.w198.same(text, en)`), or the two take turns. Text people type must never be added to `hub_i18n`. A new table of onboarding or Academy content joins `hub_i18n_content`'s check, `wa198_content`, `wa198_content_stale` and `CT` in `build/parts198/c_data.js`. Wrap user-typed content that could look like interface words in `data-w198skip` if it must never be translated.
+
 ## Hub training
 - Every new page has a page tour (`w122.tours.<key>`) that walks through each section, and a `trainings` row `tour:<key>` in "Hub page tours".
 - Changed pages: the existing tour still highlights every step (`node test/tour1.js all`).

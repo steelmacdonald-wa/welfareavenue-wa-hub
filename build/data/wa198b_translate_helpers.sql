@@ -1,0 +1,9 @@
+-- wave198 (03/10/26): helpers for i18n-translate (applied as wa198b_translate_helpers, wa198c_queue_take_escapes, wa198d_queue_take_fast)
+-- and the llm route i18n_fr, and the nightly cron:
+--   select cron.schedule('wa-i18n-translate', '35 7 * * *', $$select public.call_edge('i18n-translate', '{"action":"run"}'::jsonb)$$);
+-- wa198_js_escape(text): non-ASCII as \uXXXX, the way the build's segments are written.
+-- wa198_queue_take(p_n): queued text whose every word-piece between {n} is in the live build (as written or escaped); the rest skip.
+-- wa198_content_stale(p_n): onboarding and Academy fields with no current French.
+-- insert into public.ai_routes (task, label, chain, jev, max_tokens, notes, updated_by, mode) values ('i18n_fr', 'French: translating the Hub',
+--   array['anthropic/claude-sonnet-5', 'openai/gpt-5', 'anthropic/claude-sonnet-4.5'], false, 16000, '...', 'wave198', 'chain');
+-- The full definitions are in the database (pg_get_functiondef); the seed came from build/data/wa198_ui_fr.json and the session's content files.

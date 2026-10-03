@@ -127,3 +127,7 @@ Rules for a new or changed function:
 
 Cron marks a job "succeeded" when the HTTP request is queued, not when the function worked; see `docs/audit/fn_findings.md` section 2 for the real results and the open fix (a job health log).
 
+
+
+## i18n-translate (wave198, v1)
+Nightly (cron wa-i18n-translate, 07:35 UTC) or an admin: POST {action: run|ui|content, limit?}. ui: hub_i18n_queue rows whose word-pieces are all in the live build (wa198_queue_take) translated with the glossary into hub_i18n (auto), the rest marked skip. content: onboarding and Academy fields with no current French (wa198_content_stale) translated into hub_i18n_content with the English's md5. Model calls through llm (route i18n_fr). Auth: x-wa-secret or is_hub_admin. Writes change_log (entity i18n). Never posts or emails.
