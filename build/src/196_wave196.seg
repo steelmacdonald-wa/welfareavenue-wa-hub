@@ -1,0 +1,143 @@
+/* =====================================================================
+   WA v196 The side menu folds away (02/10/26)
+   =====================================================================
+   Steel (02/10/26): "to give more space to the apps, I want the ability to colapse the menu of pages on the side. When
+   it's closed, you should be able to put your mouse over to all the way to the left side of the page to have it open to
+   choose another page/app, when you hover away it should close again. You should also have the functionality to keep it
+   open". His answer: every app and the Hub (one menu, nav.wa-nav, holds the Hub's pages and each app's rail), remembered
+   for each person on their computer; phones keep their bottom bar.
+
+   On a computer: "Hide the menu" (the button at the top of the menu, or Ctrl or Cmd + \) folds it away and the page takes
+   the whole width. Then the far left edge of the window (and the small Menu tab at the top left) opens it over the page;
+   moving away closes it again, unless the launcher or a menu inside it is open, or it has the keyboard's focus. "Keep it
+   open" (the pin, while it is out) puts it back for good. The choice lives in localStorage (wa196nav) on that computer.
+   The automations reshape of wave196 is in parts152 (j_autos.js).
+   ===================================================================== */
+(function () {
+  if (window.__wa196) return; window.__wa196 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var KEY = 'wa196nav', WIDE = 901, S = { col: false, peek: false, t: null, quiet: 0 };
+  function wide() { return window.innerWidth >= WIDE; }
+  function get() { try { return localStorage.getItem(KEY) === 'col'; } catch (e) { return false; } }
+  function put(v) { try { localStorage.setItem(KEY, v ? 'col' : 'open'); } catch (e) { /* fine */ } }
+  function nav() { return document.querySelector('nav.wa-nav'); }
+  var ICON = {
+    hide: '<path d="M15 6 9 12l6 6"/><path d="M4.5 4.5v15"/>',
+    pin: '<path d="M9 4.5h6l-1 5 3.5 3.5h-11L10 9.5z"/><path d="M12 13v6.5"/>',
+    menu: '<path d="M4.5 7h15M4.5 12h15M4.5 17h15"/>'
+  };
+  function ic(n) { return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>'; }
+
+  var st = document.createElement('style'); st.id = 'w196navcss';
+  st.textContent = ''
+    + '#w196pin,#w196edge,#w196tab{display:none;}'
+    + '@media (min-width:' + WIDE + 'px){'
+    + 'nav.wa-nav{transition:transform .22s ease, box-shadow .22s ease;}'
+    + 'body{transition:padding-left .22s ease;}'
+    + '#w196pin{display:inline-flex;position:absolute;top:14px;right:10px;z-index:4;width:32px;height:32px;align-items:center;justify-content:center;border:none;border-radius:10px;background:transparent;color:rgba(16,63,57,.55);cursor:pointer;padding:0;}'
+    + '#w196pin:hover,#w196pin:focus-visible{background:rgba(16,63,57,.08);color:' + GREEN + ';}'
+    + '#w196pin:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}'
+    + 'body.w196col{padding-left:0 !important;}'
+    + 'body.w196col nav.wa-nav{transform:translateX(-101%);box-shadow:none;}'
+    + 'body.w196col.w196peek nav.wa-nav{transform:none;box-shadow:16px 0 46px rgba(16,63,57,.22);z-index:200;}'
+    + 'body.w196col.w196peek #w153pop{z-index:201;}'
+    + 'body.w196col #w196pin{color:' + GREEN + ';background:rgba(220,165,39,.22);}'
+    + 'body.w196col #w196edge{display:block;position:fixed;left:0;top:0;bottom:0;width:14px;z-index:199;}'
+    + 'body.w196col #w196tab{display:inline-flex;position:fixed;left:10px;top:12px;z-index:198;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.14);background:var(--wa-card,' + CREAM + ');color:' + GREEN + ';border-radius:12px;padding:7px 11px 7px 9px;font:700 12.5px ' + BODY + ';cursor:pointer;box-shadow:0 4px 14px rgba(16,63,57,.10);}'
+    + 'body.w196col #w196tab:hover{background:' + GREEN + ';color:' + CREAM + ';}'
+    + 'body.w196col.w196peek #w196tab{opacity:0;pointer-events:none;}'
+    + 'body.w196col .wa-toolbar{padding-left:112px !important;}'
+    + '}'
+    + '@media (prefers-reduced-motion:reduce){nav.wa-nav,body{transition:none !important;}}';
+  document.head.appendChild(st);
+
+  function ensure() {
+    var n = nav(); if (!n) return false;
+    if (!document.getElementById('w196pin')) {
+      var b = document.createElement('button'); b.id = 'w196pin'; b.type = 'button';
+      n.appendChild(b);
+      b.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); set(!S.col); });
+    }
+    if (!document.getElementById('w196edge')) {
+      var ed = document.createElement('div'); ed.id = 'w196edge'; ed.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(ed);
+      ed.addEventListener('mouseenter', function () { peek(true); });
+    }
+    if (!document.getElementById('w196tab')) {
+      var tb = document.createElement('button'); tb.id = 'w196tab'; tb.type = 'button'; tb.innerHTML = ic('menu') + '<span>Menu</span>';
+      tb.setAttribute('aria-label', 'Show the menu'); tb.title = 'Show the menu (Ctrl or Cmd + \\)';
+      document.body.appendChild(tb);
+      tb.addEventListener('click', function (e) { e.preventDefault(); peek(true); var f = nav() && nav().querySelector('#w196pin'); if (f) try { f.focus({ preventScroll: true }); } catch (x) { /* fine */ } });
+      tb.addEventListener('mouseenter', function () { peek(true); });
+    }
+    paintPin();
+    return true;
+  }
+  function paintPin() {
+    var b = document.getElementById('w196pin'); if (!b) return;
+    var pinMode = S.col;   /* folded (and out on a hover): the pin keeps it open; otherwise the button hides it */
+    b.innerHTML = ic(pinMode ? 'pin' : 'hide');
+    var label = pinMode ? 'Keep the menu open' : 'Hide the menu';
+    b.setAttribute('aria-label', label); b.title = label + ' (Ctrl or Cmd + \\)';
+    b.setAttribute('aria-pressed', pinMode ? 'false' : 'true');
+  }
+  function apply() {
+    var on = S.col && wide();
+    document.body.classList.toggle('w196col', on);
+    if (!on) { S.peek = false; document.body.classList.remove('w196peek'); }
+    paintPin();
+  }
+  function set(col) {
+    S.col = !!col; put(S.col); S.peek = false; document.body.classList.remove('w196peek'); apply();
+    /* just hidden with the mouse (or the focus) still on it: it stays hidden until the mouse has left it */
+    if (S.col) { S.quiet = Date.now() + 1500; try { var ae = document.activeElement; if (ae && nav() && nav().contains(ae)) ae.blur(); } catch (e) { /* fine */ } }
+    try { if (typeof toast === 'function') toast(S.col ? 'Menu hidden: move to the left edge to open it' : 'Menu kept open'); } catch (e) { /* fine */ }
+    try { window.dispatchEvent(new Event('resize')); } catch (e) { /* fine */ }
+  }
+  /* while it is out: it stays for the launcher, a menu inside it, the keyboard's focus or the mouse over it */
+  function holding() {
+    var n = nav(); if (!n) return false;
+    if (n.matches(':hover')) return true;
+    var pop = document.getElementById('w153pop'); if (pop && (pop.classList.contains('open') || pop.matches(':hover'))) return true;
+    var ae = document.activeElement; if (ae && ae !== document.body && n.contains(ae) && ae.id !== 'w196pin' && ae.matches(':focus-visible')) return true;
+    return false;
+  }
+  function peek(on) {
+    if (!S.col || !wide()) return;
+    if (on && S.quiet && Date.now() < S.quiet) return;
+    clearTimeout(S.t);
+    if (on) { S.peek = true; document.body.classList.add('w196peek'); paintPin(); return; }
+    S.peek = false; document.body.classList.remove('w196peek');
+  }
+  function later(ms) {
+    clearTimeout(S.t);
+    S.t = setTimeout(function () { if (!S.peek) return; if (holding()) { later(400); return; } peek(false); }, ms == null ? 380 : ms);
+  }
+  function wire() {
+    var n = nav(); if (!n || n.__w196) return; n.__w196 = true;
+    n.addEventListener('mouseenter', function () { if (S.col) { clearTimeout(S.t); if (!S.peek) peek(true); } });
+    n.addEventListener('mouseleave', function () { S.quiet = 0; if (S.col && S.peek) later(); });
+    n.addEventListener('focusin', function () { if (S.col && !S.peek) peek(true); });
+    n.addEventListener('focusout', function () { if (S.col && S.peek) later(250); });
+    document.addEventListener('mouseover', function (e) { var p = document.getElementById('w153pop'); if (S.peek && p && p.contains(e.target)) clearTimeout(S.t); });
+    document.addEventListener('mouseout', function (e) { var p = document.getElementById('w153pop'); if (S.peek && p && p.contains(e.target) && !(e.relatedTarget && (p.contains(e.relatedTarget) || n.contains(e.relatedTarget)))) later(); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!wide()) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === '\\' || e.code === 'Backslash')) { e.preventDefault(); set(!S.col); return; }
+    if (e.key === 'Escape' && S.col && S.peek) { peek(false); }
+  });
+  /* choosing a page while it is out closes it */
+  window.addEventListener('hashchange', function () { if (S.col && S.peek) setTimeout(function () { if (!(nav() && nav().matches(':hover'))) peek(false); }, 150); });
+  window.addEventListener('resize', function () { apply(); });
+
+  function boot() { if (!ensure()) return false; wire(); S.col = get(); apply(); return true; }
+  if (!boot()) {
+    var tries = 0, tm = setInterval(function () { if (boot() || ++tries > 40) clearInterval(tm); }, 250);
+  }
+  /* the menu is rebuilt by other waves: keep the button in it */
+  setInterval(function () { try { var n = nav(); if (n && !document.getElementById('w196pin')) { ensure(); wire(); } } catch (e) { /* fine */ } }, 1500);
+
+  window.w196nav = { set: set, peek: peek, state: function () { return { col: S.col, peek: S.peek }; } };
+})();

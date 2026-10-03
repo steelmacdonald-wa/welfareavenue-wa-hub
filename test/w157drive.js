@@ -122,16 +122,23 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
 
   /* the editor */
   await click(f, '#crm [data-w157open="1"]'); await f.page.waitForTimeout(900);
-  b = await f.ev(() => ({ hash: location.hash, steps: document.querySelectorAll('#crm .w157step').length, kind: (document.querySelector('#crm [data-w157t="kind"]') || {}).value, form: (document.querySelector('#crm [data-w157t="form_id"]') || {}).value,
-    outline: [(document.querySelector('#crm .w157tr') || {}).textContent || ''].concat([...document.querySelectorAll('#crm .w157ol li')].map(x => x.textContent)), email1: (document.querySelector('#crm [data-w157si="0"] [data-w157s="_email"]') || {}).value,
-    yes: [...((document.querySelector('#crm [data-w157si="4"] [data-w157s="yes"]') || {}).options || [])].map(o => o.value), yesVal: (document.querySelector('#crm [data-w157si="4"] [data-w157s="yes"]') || {}).value,
-    watch: (document.querySelector('#crm [data-w157si="4"] [data-w157s="step"]') || {}).value, dept: (document.querySelector('#crm [data-w157si="1"] [data-w157s="department"]') || {}).value, on: !!document.querySelector('#crm [data-w157on]') }));
+  /* wave196: the editor is a flow of cards; a step's fields are in the panel once its card is chosen */
+  const pick = async k => { await click(f, '#crm [data-w196sel="' + k + '"]'); await f.page.waitForTimeout(250); };
+  b = await f.ev(() => ({ hash: location.hash, steps: document.querySelectorAll('#crm .w196card[data-w157si]').length,
+    outline: [(document.querySelector('#crm .w157tr') || {}).textContent || ''].concat([...document.querySelectorAll('#crm .w157ol li')].map(x => x.textContent)), on: !!document.querySelector('#crm [data-w157on]') }));
+  await pick('t'); Object.assign(b, await f.ev(() => ({ kind: (document.querySelector('#crm [data-w157t="kind"]') || {}).value, form: (document.querySelector('#crm [data-w157t="form_id"]') || {}).value })));
+  await pick('0'); Object.assign(b, await f.ev(() => ({ email1: (document.querySelector('#crm [data-w157si="0"] [data-w157s="_email"]') || {}).value })));
+  await pick('1'); Object.assign(b, await f.ev(() => ({ dept: (document.querySelector('#crm [data-w157si="1"] [data-w157s="department"]') || {}).value })));
+  await pick('4'); Object.assign(b, await f.ev(() => ({ yes: [...((document.querySelector('#crm [data-w157si="4"] [data-w157s="yes"]') || {}).options || [])].map(o => o.value), yesVal: (document.querySelector('#crm [data-w157si="4"] [data-w157s="yes"]') || {}).value,
+    watch: (document.querySelector('#crm [data-w157si="4"] [data-w157s="step"]') || {}).value })));
   ok('Open shows the editor at #crm/automations/1 with its six steps and its form', b.hash === '#crm/automations/1' && b.steps === 6 && b.kind === 'form' && b.form === '1' && b.email1 === 'tpl:welcome_volunteer' && b.dept === 'opsmtl' && b.on, b);
   ok('the outline says it in plain words, from the trigger to each step', b.outline.length === 7 && /Volunteer with Welfare Avenue/.test(b.outline[0]) && /Email: Welcome, new volunteer/.test(b.outline[1]) && /A task for Operations Montreal/.test(b.outline[2]) && /Wait 2 days/.test(b.outline[3]) && /If opened: end\. If not: go on/.test(b.outline[5]), b.outline);
   ok('wait until opened watches an earlier email, and its paths only go forward or end', b.watch === 's4' && b.yesVal === 'end' && JSON.stringify(b.yes) === '["next","end"]', b);
   await shot(f, 'auto_editor');
+  await click(f, '#crm [data-w196ins="6"]'); await f.page.waitForTimeout(200);
   await click(f, '#crm [data-w157add="tag"]'); await f.page.waitForTimeout(300);
   await setv(f, '#crm [data-w157si="6"] [data-w157s="_add"]', 'welcomed, Rally 2026');
+  await pick('2');
   await setv(f, '#crm [data-w157si="2"] [data-w157s="days"]', '4');
   await click(f, '#crm [data-w157save]'); await f.page.waitForTimeout(1300);
   b = await f.ev(() => ({ ins: window.__ins.slice(), msg: (document.querySelector('#crm .w154msg') || {}).innerText }));
@@ -157,13 +164,15 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   await click(f, '#crm [data-w157try]'); await f.page.waitForTimeout(1500);
   b = await f.ev(() => ({ rpc: window.__rpc.filter(x => x.fn === 'crm_automation_try'), msg: (document.querySelector('#crm .w154msg') || {}).innerText }));
   ok('Try it on me starts a test run on the caller and says what happens', b.rpc.length === 1 && b.rpc[0].args.p_automation_id === 1 && /A test run started on your own contact/.test(b.msg || '') && /steel\.macdonald@welfareavenue\.com/.test(b.msg || ''), b);
+  await pick('3');
   await click(f, '#crm [data-w157pv="3"]'); await f.page.waitForTimeout(1000);
   b = await f.ev(() => ({ pv: window.__calls.filter(x => x.action === 'preview').slice(-1)[0], frame: !!document.querySelector('#crm .w154frame'), side: (document.querySelector('#crm .w154pv') || {}).innerText || '' }));
   ok('Preview renders a written email through mail-send with sample details', b.pv && b.pv.template_key === 'newsletter' && b.pv.kind === 'volunteer' && b.pv.vars.headline === 'Welcome to our community' && /<p>/.test(b.pv.vars.body_html) && b.pv.vars.amount === '$25.00' && b.pv.contact_id === 5003 && b.frame && /sample details/.test(b.side), b);
   await shot(f, 'auto_preview');
   await click(f, '#crm [data-w157pvclose]'); await f.page.waitForTimeout(300);
+  await pick('t');
   await setv(f, '#crm [data-w157t="kind"]', 'serving'); await f.page.waitForTimeout(400);
-  b = await f.ev(() => ({ days: (document.querySelector('#crm [data-w157t="days_before"]') || {}).value, loc: (document.querySelector('#crm [data-w157t="location"]') || {}).value, first: ((document.querySelector('#crm .w157tr') || {}).textContent || '') }));
+  b = await f.ev(() => ({ days: (document.querySelector('#crm [data-w157t="days_before"]') || {}).value, loc: (document.querySelector('#crm [data-w157t="location"]') || {}).value, first: ((document.querySelector('#crm .w196card.trig') || {}).textContent || '') }));
   ok('the trigger becomes a serving reminder: days before, the place, in words', b.days === '2' && b.loc === 'Montreal' && /2 days before a Montreal serving they are confirmed for/.test(b.first), b);
   ok('no page errors', f.errs.length === 0, f.errs);
 

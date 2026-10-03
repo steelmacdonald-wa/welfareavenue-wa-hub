@@ -214,6 +214,8 @@
 195_wave195
 # 197_wave197: the HR centre rebuilt for Valex (Steel, 02/10/26): one page per rail item (Overview, Team, Hours, Time off, Recognition, Applications, Positions, Playbook, Onboarding, Onboarding plan, Training, Policies, Discipline, Analytics) over the older waves' sections, tagged by page (data-w197s); Overview (HR's to-do list), the Applications stage board and sheet, Hours from The Loop; and in every app the title is the page's name (no crumb, no app bar on a computer; the bar's buttons move into the header).
 197_wave197
+# 196_wave196: the side menu folds away on a computer (Steel, 02/10/26): Hide the menu (or Ctrl or Cmd + \) gives the page the whole width; the far left edge or the Menu tab opens it over the page, moving away closes it, the pin keeps it open (localStorage wa196nav). The automations reshape of wave196 is in parts152 (j_autos.js).
+196_wave196
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.
