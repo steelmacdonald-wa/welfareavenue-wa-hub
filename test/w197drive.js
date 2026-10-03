@@ -100,6 +100,9 @@ const PAGES = ['overview', 'team', 'hours', 'timeoff', 'recognition', 'applicati
   /* drag a card to Interview */
   await f.page.dragAndDrop('#w197board .w197cand[data-w197c="903"]', '#w197board .w197col[data-w197col="interview"]'); await f.page.waitForTimeout(700);
   ok('drag moves a card', (await f.ev(() => w197.state().cands.filter(x => x.id === 903)[0].status)) === 'interview');
+  /* wave199: a card moved to Interview with no time opens its sheet on the day and time; close it */
+  ok('drag to Interview asks for the day and time (wave199)', await f.ev(() => !!document.querySelector('#w197sheet.open #w199iv')));
+  await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
   await f.page.fill('#w197q', 'ben'); await f.page.waitForTimeout(300);
   ok('search filters the board', (await f.ev(() => document.querySelectorAll('#w197board .w197cand').length)) === 1);
   await f.page.fill('#w197q', ''); await f.page.waitForTimeout(200);

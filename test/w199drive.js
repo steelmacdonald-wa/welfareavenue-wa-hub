@@ -135,6 +135,18 @@ const INVOKE = `window.__W199CALLS = []; window.__W199LINK = false; window.__WA_
   await f.page.click('#w197sheet [data-w199open="4"]'); await f.page.waitForTimeout(400);
   ok('Applications sheet: The position opens its sheet', await f.ev(() => document.querySelector('#w197sheet h3').textContent === 'Logistics Manager'));
   await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
+  /* interviews: a day and a time */
+  await f.page.selectOption('#w197role', ''); await f.page.waitForTimeout(300);
+  const ivc = await f.ev(() => { var c = w197.state().cands.filter(x => x.status !== 'interview' && x.status !== 'hired')[0]; return c && c.id; });
+  await f.ev((id) => w197.moveTo(id, 'interview'), ivc); await f.page.waitForTimeout(500);
+  const iv1 = await f.ev(() => { var s = document.getElementById('w197sheet'), i = document.getElementById('w199iv'); return { open: s && s.classList.contains('open'), field: !!i, need: i && i.classList.contains('need'), focus: document.activeElement === i, pill: Array.from(document.querySelectorAll('#w197board [data-w197col="interview"] .w199ivno')).length }; });
+  ok('Interview: moving a card there opens its sheet on the day and time', iv1.open && iv1.field && iv1.need && iv1.focus, iv1);
+  ok('Interview: a card with no time says so', iv1.pill >= 1, iv1);
+  await f.page.fill('#w199iv', '2026-09-29T14:30'); await f.page.dispatchEvent('#w199iv', 'change'); await f.page.waitForTimeout(500);
+  const iv2 = await f.ev((id) => { var c = w197.state().cands.filter(x => String(x.id) === String(id))[0]; var card = document.querySelector('#w197board [data-w197c="' + id + '"]'); return { at: c && c.interview_at, txt: card && card.textContent }; }, ivc);
+  ok('Interview: the day and time are saved and shown on the card', iv2.at && new Date(iv2.at).getHours() === 14 && /Interview Tue, Sep 29/.test(iv2.txt || ''), iv2);
+  await shot(f, 'interview_card', true);
+  await f.page.keyboard.press('Escape'); await f.page.waitForTimeout(200);
   ok('No page errors', f.errs.length === 0, f.errs);
   await f.close();
 

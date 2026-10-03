@@ -1,6 +1,6 @@
 # 03/10/26 - wave199: positions, job descriptions and CVs from the HR drive
 
-Live md5 8e07cca7f6bfa91ed0cc1e7bd1122caf (on wave198's 4b608fb4).
+Live md5 cef66f5ab2143de5eaaf710a2e625b75 (wave199b, on wave199's 8e07cca7, on wave198's 4b608fb4).
 
 ## What Steel asked (03/10/26)
 
@@ -23,6 +23,12 @@ His choices: the Hub's eight departments; CVs already in the shared drive moved,
 - **Applications:** the filter is by position; cards and the sheet show the position's title; the sheet picks the position from hub_positions by department, links the JD and the position, opens the CV in Drive or uploads one.
 - A CV dropped into a Resumes folder in Drive becomes an application at the next sync (only CVs added after the position was first read; the ones there on 03/10/26 are kept on file).
 
+## Follow-ups the same day (wave199b)
+
+- Steel: "These recruits should link to a position in the organization whether they are filled already or not." Every application is linked (Alyx Denison: Event Coordinator, filled). A trigger (wa199_link_position) links any new or edited application whose role matches a position's title. The position list on an application shows every position, marked (filled) or (not hiring now). If the positions are still loading when the sheet opens, it waits and redraws. Steel's screenshot was from a page opened before the deploy.
+- Steel: "Those in interview stage should have a day and time." hub_candidates.interview_at. Interview cards show "Interview Tue, Sep 29, 2:30 p.m." (or "Interviewed …" once past), or "No interview time" in red. Moving a card to Interview with no time opens its sheet on the day-and-time field. The Interview column is in date order. The sheet shows the field at Reviewing, Interview and Offer.
+- Steel: "New applications should be added once a resume is added to the resume folder of a position." Cron wa-jd-drive-sync (jobid 90) runs jd-drive sync every 10 minutes (:02, :12, …), so a CV dropped in a Resumes folder becomes a New application within about 10 minutes. Checked live with a test file (candidate 76, now withdrawn and named as a test row; the file is in the drive's trash).
+
 ## Data (migration wa199_positions)
 
 hub_positions, hub_position_files, hub_position_people (staff-only RLS); hub_candidates.position_id, drive_file_id; team_members.position_id; app_config jd_drive_sync. Seeded: ClickUp's 11 positions (stage, owner, needed by, link; the two template tasks skipped), the Hub-only roles (Operations Manager interviewing, HR Technician and Volunteer Cook posted, Event Coordinator filled), 38 applications linked by role, 28 team members linked to their position by their JD, Ahmed's history (Volunteer Relations Coordinator from 02/08/25, then Operations Manager), four staff CVs marked as the person's.
@@ -33,7 +39,7 @@ jd-drive v1 (verify_jwt on): sync, privacy, create_position, upload, move_file, 
 
 ## Tests
 
-test/w199drive.js 38 checks (Positions, the sheet, Ahmed's roles, add from a CV, new position, sync, Applications filter, card, sheet and position change, the privacy warning, French, a phone, an HR member). Regression on the shipped build: w152 68, w153 46, w157 26, w164 31, w176 14, w181 61, w193 44, w196 52, w197 98, w198 20.
+test/w199drive.js 41 checks (incl. the interview day and time) (Positions, the sheet, Ahmed's roles, add from a CV, new position, sync, Applications filter, card, sheet and position change, the privacy warning, French, a phone, an HR member). Regression on the shipped build: w152 68, w153 46, w157 26, w164 31, w176 14, w181 61, w193 44, w196 52, w197 98, w198 20.
 
 ## Open
 

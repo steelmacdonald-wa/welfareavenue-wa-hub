@@ -90,17 +90,36 @@
   }
   function match(c, v) { if (!v) return true; if (v.charAt(0) === 'p') return String(c.position_id) === v.slice(1); if (v.charAt(0) === 'r') return !c.position_id && c.role === v.slice(1) || roleOf(c) === v.slice(1); return c.role === v; }
   function sheetBits(c) {
+    /* the positions are not read yet (the sheet opened in the first seconds): read them, then draw the sheet again */
+    if (!P.at) { load().then(function () { try { var st = window.w197 && w197.state(); if (st && String(st.open) === String(c.id)) w197.openSheet(c.id); } catch (e) { /* fine */ } }); return '<label>Position</label><p class="w197note" style="margin:0">Loading the positions…</p>'; }
     var opts = DEPTS.map(function (d) {
       var ps = P.pos.filter(function (p) { return p.dept === d[0]; }); if (!ps.length) return '';
-      return '<optgroup label="' + E(d[1]) + '">' + ps.map(function (p) { return '<option value="' + p.id + '"' + (String(c.position_id) === String(p.id) ? ' selected' : '') + '>' + E(p.title) + (hiring(p) ? '' : ' (not hiring)') + '</option>'; }).join('') + '</optgroup>';
+      return '<optgroup label="' + E(d[1]) + '">' + ps.map(function (p) { return '<option value="' + p.id + '"' + (String(c.position_id) === String(p.id) ? ' selected' : '') + '>' + E(p.title) + (hiring(p) ? '' : (p.stage === 'filled' ? ' (filled)' : ' (not hiring now)')) + '</option>'; }).join('') + '</optgroup>';
     }).join('');
     var p = c.position_id ? byId(c.position_id) : null;
     var cv = c.drive_file_id ? P.files.filter(function (f) { return f.file_id === c.drive_file_id; })[0] : null;
-    return '<label for="w199pos1">Position</label><select id="w199pos1" data-w199f="position_id"><option value="">Not linked to a position' + (c.role ? ' (they wrote: ' + E(String(c.role).slice(0, 40)) + ')' : '') + '</option>' + opts + '</select>' +
+    return ivField(c) + '<label for="w199pos1">Position</label><select id="w199pos1" data-w199f="position_id"><option value="">Not linked to a position' + (c.role ? ' (they wrote: ' + E(String(c.role).slice(0, 40)) + ')' : '') + '</option>' + opts + '</select>' +
       '<div class="w199links">' + (p && p.jd_url ? '<a class="w197b sm" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">The job description</a>' : (p ? '<span class="w197pill mut">No JD in Drive yet</span>' : '')) +
       (p ? btn('The position', 'data-w199open="' + p.id + '"', 'sm') : '') +
       (cv && cv.url ? '<a class="w197b sm" href="' + E(cv.url) + '" target="_blank" rel="noopener">CV in Drive</a>' : (c.drive_file_id ? '<a class="w197b sm" href="https://drive.google.com/file/d/' + E(c.drive_file_id) + '/view" target="_blank" rel="noopener">CV in Drive</a>' : (p ? '<label class="w197b sm w199up">Upload their CV to Drive<input type="file" data-w199upc="' + c.id + '" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' : ''))) + '</div>';
   }
+
+  /* ---------- interviews: a day and a time (Steel, 03/10/26: "Those in interview stage should have a day and time") ---------- */
+  function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
+  function ivLocal(t) { if (!t) return ''; var d = new Date(t); if (isNaN(d)) return ''; var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+  function cardBits(c) {
+    if (!c || c.status !== 'interview') return '';
+    if (!c.interview_at) return '<span class="w199ivno">No interview time</span>';
+    var past = new Date(c.interview_at).getTime() < Date.now();
+    return '<span class="w199iv' + (past ? ' past' : '') + '">' + (past ? 'Interviewed ' : 'Interview ') + E(ivText(c.interview_at)) + '</span>';
+  }
+  function ivField(c) {
+    var need = c.status === 'interview';
+    if (!need && !c.interview_at && ['reviewing', 'offer'].indexOf(c.status) < 0) return '';
+    return '<label for="w199iv">Interview day and time</label><input type="datetime-local" id="w199iv" data-w199iv="' + c.id + '" value="' + E(ivLocal(c.interview_at)) + '"' + (need && !c.interview_at ? ' class="need"' : '') + '>' +
+      (need && !c.interview_at ? '<p class="w197note" id="w199ivnote" style="margin:4px 0 0">At the Interview stage: add when it is booked.</p>' : '');
+  }
+  function askTime() { setTimeout(function () { var i = document.getElementById('w199iv'); if (i) { try { i.focus(); i.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ } } toastS('Add the interview\'s day and time'); }, 60); }
 
   /* ---------- Positions page ---------- */
   function host() {
@@ -129,7 +148,7 @@
       btn('New position', 'data-w199a="new"', 'sm pri') + btn(P.busy ? 'Reading Drive…' : 'Sync with Drive', 'data-w199a="sync"' + (P.busy ? ' disabled' : ''), 'sm') + '<a class="w197b sm" href="' + ROOT_URL + '" target="_blank" rel="noopener">Open in Drive</a></div>';
     var warn = P.privacy ? '<div class="w199warn"><b>CVs are personal information.</b> The Job descriptions folder is shared with anyone who has the link, so the Hub will not upload CVs into it. Turn off link sharing on *Recruitment* in Drive (Share, General access: Restricted).</div>' : '';
     var info = '<p class="w197note" style="margin:0 0 12px">' + (P.sync && P.sync.at ? 'Read from Drive ' + E(ago(P.sync.at)) + ' · ' : '') + P.pos.length + ' positions' +
-      (unsorted.length ? ' · <a href="#" data-w199a="unsorted">' + unsorted.length + (unsorted.length === 1 ? ' CV' : ' CVs') + ' in Unsorted Resumes</a>' : '') + '. Each position is a folder in Drive: a Resumes folder, the latest job description, and Older JDs. A CV dropped in Resumes shows up in Applications as New.</p>';
+      (unsorted.length ? ' · <a href="#" data-w199a="unsorted">' + unsorted.length + (unsorted.length === 1 ? ' CV' : ' CVs') + ' in Unsorted Resumes</a>' : '') + '. Each position is a folder in Drive: a Resumes folder, the latest job description, and Older JDs. A CV dropped in a Resumes folder shows up in Applications as New within about 10 minutes.</p>';
     var groups = DEPTS.map(function (d) {
       var ps = list.filter(function (p) { return p.dept === d[0]; }); if (!ps.length) return '';
       ps.sort(function (a, b) { return (hiring(b) ? 1 : 0) - (hiring(a) ? 1 : 0) || a.title.localeCompare(b.title); });
@@ -272,6 +291,19 @@
     var uc = t.getAttribute && t.getAttribute('data-w199upc'); if (uc) { var c = cands().filter(function (x) { return String(x.id) === uc; })[0]; if (c && c.position_id) upload(t.files && t.files[0], c.position_id, c.id); return; }
     var mv = t.getAttribute && t.getAttribute('data-w199mv'); if (mv && t.value) { var to = t.value === '__unsorted' ? null : Number(t.value); t.disabled = true; fn({ action: 'move_file', file_id: mv, position_id: to }).then(function () { toastS('Moved'); return load(true); }).catch(function (x) { toastS(String(x.message || x)); }).then(function () { if (P.open) openPos(P.open); if (onPage()) paint(); }); return; }
     var pf = t.getAttribute && t.getAttribute('data-w199p'); if (pf && P.open && pf !== 'notes') { var pt = {}; pt[pf] = t.value || null; savePos(P.open, pt, pf === 'owner' ? (t.value ? 'Handled by ' + t.value : 'Nobody handling it') : 'Saved'); return; }
+    var iv = t.getAttribute && t.getAttribute('data-w199iv');
+    if (iv) {
+      var when = t.value ? new Date(t.value) : null; if (when && isNaN(when)) return;
+      (async function () {
+        var patch = { interview_at: when ? when.toISOString() : null, updated_at: new Date().toISOString(), updated_by: who() };
+        var r = await db.from('hub_candidates').update(patch).eq('id', Number(iv));
+        if (r && r.error) { toastS('Could not save: ' + r.error.message); return; }
+        var c = cands().filter(function (x) { return String(x.id) === iv; })[0]; if (c) Object.keys(patch).forEach(function (k) { c[k] = patch[k]; });
+        try { await db.from('change_log').insert({ entity_type: 'candidate', entity_id: iv, field: 'interview_at', old_value: null, new_value: patch.interview_at || '', changed_by: who() }); } catch (x) { /* audit */ }
+        t.classList.remove('need'); var nt = document.getElementById('w199ivnote'); if (nt && when) nt.remove(); toastS(when ? 'Interview ' + ivText(when) : 'Interview time cleared'); try { w197.paintBoard(); } catch (x) { /* fine */ }
+      })();
+      return;
+    }
     var cf = t.getAttribute && t.getAttribute('data-w199f');
     if (cf === 'position_id') {
       var st = window.w197 && w197.state(); if (!st || !st.open) return;
@@ -325,8 +357,10 @@
     '.w199pn input[type=text],.w199pn input[type=date]{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:14px;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';color:' + INK + ';}' +
     '.w199pn label small{font-weight:600;margin-left:4px;}' +
     '.w199old{margin:8px 0 0;font-size:13px;}.w199old summary{cursor:pointer;color:' + GREEN + ';font-weight:600;}' +
+    '.w199iv{color:' + GREEN + ';font-weight:700;}.w199iv.past{color:var(--wa-muted);font-weight:600;}.w199ivno{color:' + FLAG + ';font-weight:700;}' +
+    '#w197sheet input[type=datetime-local]{width:100%;box-sizing:border-box;font-family:' + BODY + ';font-size:14px;padding:9px 12px;border:1px solid rgba(16,63,57,.2);border-radius:12px;background:' + CREAM + ';color:' + INK + ';}#w197sheet input.need{border-color:' + FLAG + ';box-shadow:0 0 0 3px rgba(179,64,47,.12);}' +
     '@media (max-width:600px){.w199grid{grid-template-columns:1fr;}.w199files select{margin-left:0;}}';
   (document.head || document.documentElement).appendChild(css);
 
-  window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
+  window.w199 = { state: function () { return P; }, load: load, paint: paint, show: show, openPos: openPos, roleOf: roleOf, cardBits: cardBits, askTime: askTime, filterOptions: filterOptions, match: match, sheetBits: sheetBits, stages: PSTAGES, depts: DEPTS };
 })();

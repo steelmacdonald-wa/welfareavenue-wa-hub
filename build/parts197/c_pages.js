@@ -83,7 +83,7 @@
     return '<button type="button" class="w197cand" draggable="' + (small ? 'false' : 'true') + '" data-w197c="' + c.id + '"><b>' + E(c.name || 'Someone') + '</b>' +
       (small ? '' : '<span class="r">' + E(window.w199 ? w199.roleOf(c) : (c.role || 'No role given')) + ' · applied ' + E(ago(c.created_at)) + '</span><span class="m">' +
         (c.owner ? '<span class="who">' + E(String(c.owner).split(' ')[0]) + '</span>' : '<span>Nobody yet</span>') +
-        (still ? '<span class="ok">Still interested</span>' : '') + (c.cv_path ? '<span>CV</span>' : '') +
+        (still ? '<span class="ok">Still interested</span>' : '') + (window.w199 ? w199.cardBits(c) : '') + (c.cv_path ? '<span>CV</span>' : '') +
         (d >= 7 ? '<span class="age">' + d + ' days here</span>' : '') + '</span>') + '</button>';
   }
   function boardHtml() {
@@ -97,7 +97,7 @@
     var cols = STAGES.map(function (s) {
       var list = rows.filter(function (c) { return c.status === s[0] || (s[0] === 'new' && !c.status); });
       if (s[0] === 'hired') list = list.filter(function (c) { return daysIn(c) <= 90; });
-      list.sort(function (a, b) { return String(a.created_at).localeCompare(String(b.created_at)); });
+      list.sort(function (a, b) { if (s[0] === 'interview') return String(a.interview_at || '9').localeCompare(String(b.interview_at || '9')); return String(a.created_at).localeCompare(String(b.created_at)); });   /* wave199: interviews in date order, the ones with no time last */
       return '<div class="w197col" data-w197col="' + s[0] + '"><h4>' + E(s[1]) + ' <small>' + list.length + '</small></h4>' + (list.length ? list.map(function (c) { return candCard(c); }).join('') : '<p class="w197note" style="margin:4px">' + (s[0] === 'new' ? 'No new applications.' : 'Drop a card here.') + '</p>') + '</div>';
     }).join('');
     var closed = rows.filter(function (c) { return c.status === 'declined' || c.status === 'withdrawn'; });
@@ -158,7 +158,7 @@
   async function moveTo(id, st) {
     var c = S.cands.filter(function (x) { return String(x.id) === String(id); })[0]; if (!c || c.status === st) return;
     var ok = await updateCand(c.id, { status: st }, (c.name || 'Moved') + ': ' + stageLabel(st));
-    if (ok) { paintBoard(); paintRail(); if (S.open === c.id) openSheet(c.id); }
+    if (ok) { paintBoard(); paintRail(); if (S.open === c.id) openSheet(c.id); if (st === 'interview' && !c.interview_at && window.w199) { openSheet(c.id); w199.askTime(); } }   /* wave199: an interview needs its day and time */
   }
 
   /* ---------- Hours: The Loop against the minimums ---------- */
