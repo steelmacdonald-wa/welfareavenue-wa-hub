@@ -210,6 +210,8 @@
 193_wave193
 # 194_wave194: Updated since you finished asks people to open the changed step (its module, its avenue or the step in their plan) before they can close it (Steel, 02/10/26; 122's onboarding card and 058's Classic view call in here), and the Avenue Academy's certificate in the brand with Steel's signature (app_config cert_signature; 122's certHtml, renderCert and printCert call in here).
 194_wave194
+# 195_wave195: Sign-offs (Steel, 02/10/26): the Volunteer Manager's page #volunteering/signoffs for the letters and forms volunteers ask us to sign from their profile on welfareavenue.com (an hours sign-off letter, a letter of recognition, their own school or employer form): the requests (Waiting, Signed, Declined, All), a request's sheet (their record, the servings and hours to list, a preview, Sign and send or Decline with a note), My signature, the Signers, the rail item with the waiting count, the chip on phones and the page tour "signoffs"; board viewers do not get it. Built from build/parts195; it wraps waVolRender, waVolShell and the Volunteer Manager's rail at runtime, so no other segment changed. The data is wa195_signoffs (signoff_*); the PDFs and signatures are the signoff function's.
+195_wave195
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.
 164_wave164
 # 163_wave163: the menu's new shape (the changes live in 110, 116d, 116f, 116h, 118, 118c, 122, 127, 131, 132, 134, 140, 152, 153); this segment keeps the menu out of sight until it is whole.

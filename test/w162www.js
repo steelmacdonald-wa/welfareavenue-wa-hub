@@ -9,7 +9,8 @@ const SUPA = 'https://zwnmulmnvopclzcvytce.supabase.co';
 let pass = 0, fail = 0;
 function ok(c, m) { if (c) { pass++; } else { fail++; console.log('FAIL ' + m); } }
 const PAGES = { home: ['/', '/fr/'], about: ['/about/', '/fr/a-propos/'], volunteer: ['/volunteer/', '/fr/benevolat/'], events: ['/events/', '/fr/evenements/'],
-  press: ['/press/', '/fr/presse/'], contact: ['/contact/', '/fr/contact/'], donate: ['/donate/', '/fr/donner/'] };
+  press: ['/press/', '/fr/presse/'], contact: ['/contact/', '/fr/contact/'], donate: ['/donate/', '/fr/donner/'],
+  account: ['/account/', '/fr/compte/'], privacy: ['/privacy/', '/fr/confidentialite/'] }; // wave194: the account page and the privacy notice
 const ALL = Object.values(PAGES).flat();
 const FORM = { slug: 'newsletter', title: 'Get the Welfare Avenue newsletter', intro: 'About once a month.', lang: 'en', thank_you: 'You are on the list.',
   consent: { ask: true, required: true, label: 'Yes, email me.' },
@@ -21,7 +22,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   // ---------- static checks on the build ----------
   const htmlFiles = [];
   (function walk(d) { for (const f of fs.readdirSync(d)) { const p = path.join(d, f); if (fs.statSync(p).isDirectory()) walk(p); else if (f.endsWith('.html')) htmlFiles.push(p); } })(OUT);
-  ok(htmlFiles.length === 15, 'fifteen pages built (' + htmlFiles.length + ')');
+  ok(htmlFiles.length === 19, 'nineteen pages built (' + htmlFiles.length + ')');
   for (const f of htmlFiles) {
     const s = fs.readFileSync(f, 'utf8'), rel = path.relative(OUT, f);
     ok(!/—/.test(s), rel + ': no em dash');
@@ -39,7 +40,7 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
   ok(!/'unsafe-inline'|'unsafe-eval'/.test(headers), '_headers: no unsafe-inline or unsafe-eval');
   ok(/Disallow: \//.test(fs.readFileSync(path.join(OUT, 'robots.txt'), 'utf8')), 'robots.txt: preview disallows');
   const sitemap = fs.readFileSync(path.join(OUT, 'sitemap.xml'), 'utf8');
-  ok((sitemap.match(/<loc>/g) || []).length === 14 && /hreflang="fr"/.test(sitemap), 'sitemap: 14 pages with alternates');
+  ok((sitemap.match(/<loc>/g) || []).length === 16 && /hreflang="fr"/.test(sitemap) && !/account|compte/.test(sitemap), 'sitemap: 16 pages with alternates, never the account page');
 
   // ---------- in the browser ----------
   const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY } });
@@ -47,6 +48,9 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
     const ctx = await browser.newContext({ viewport: { width: opts.width || 1280, height: 900 }, locale: opts.locale || 'en-CA' });
     await attach(ctx);
     const calls = [];
+    // wave194: the accounts switch (site.js and forms.js ask it; the account page's own flows are test/w194www.js)
+    await ctx.route(SUPA + '/rest/v1/rpc/site_account_config**', route => { calls.push('cfg'); return route.fulfill({ status: 200, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+      body: JSON.stringify({ mode: opts.mode || 'off', google_client_id: '', receipts: false }) }); });
     await ctx.route(SUPA + '/rest/v1/rpc/www_upcoming**', route => {
       calls.push('rpc');
       if (opts.rpcFail) return route.fulfill({ status: 500, body: '{}' });
@@ -308,13 +312,15 @@ const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 
       bg: getComputedStyle(document.querySelector('.top')).backgroundColor,
       nav: Array.from(document.querySelectorAll('.nav .links a:not(.lang)')).map(a => a.textContent),
       cur: (document.querySelector('.nav .links a[aria-current=page]') || {}).textContent,
-      side: Array.from(document.querySelectorAll('.nav .side a')).map(a => [a.textContent, a.getAttribute('href')]),
+      side: Array.from(document.querySelectorAll('.nav .side a:not([hidden])')).map(a => [a.textContent, a.getAttribute('href')]),
+      acct: Array.from(document.querySelectorAll('[data-acct-link]')).map(a => [a.hidden, getComputedStyle(a).display]),
       h1: document.querySelector('h1 .sr').textContent, heroBtn: !!document.querySelector('.hero [data-wa-donate]'),
       paths: Array.from(document.querySelectorAll('.paths li')).map(li => [li.querySelector('h2').textContent, li.querySelector('a.sq').getAttribute('href'), li.querySelector('a.sq').getAttribute('aria-label')]),
       tiles: document.querySelectorAll('.tiles .tile').length, give: (document.querySelector('.foot .give') || {}).textContent || '' }));
     ok(h.logo === '/assets/logo-green.svg' && h.bg === 'rgb(255, 255, 255)', 'www2 header: white, the logo in green');
     ok(JSON.stringify(h.nav) === JSON.stringify(['Home', 'Volunteer', 'Donate', 'Our activities', 'Press', 'About us']) && h.cur === 'Home', 'www2 header: the menu in Edison\'s order, Home current ' + JSON.stringify(h.nav));
     ok(h.side.length === 2 && h.side[0][1] === '/contact/' && h.side[1][1] === '/volunteer/#apply', 'www2 header: Contact and Sign up on the side ' + JSON.stringify(h.side));
+    ok(h.acct.length === 2 && h.acct.every(a => a[0] === true && a[1] === 'none'), 'wave194: the "My account" links stay hidden while accounts are off ' + JSON.stringify(h.acct));
     ok(h.h1 === 'We meet people where they are' && h.heroBtn, 'www2 home: the headline and Make a donation in the hero');
     ok(h.paths.length === 3 && h.paths[0][1] === '/events/#upcoming' && h.paths[1][1] === '/volunteer/' && h.paths[2][1] === '/donate/' && h.paths.every(p => p[2]), 'www2 home: three ways in, each with a named arrow ' + JSON.stringify(h.paths));
     ok(h.tiles === 4 && /Your generosity helps us/.test(h.give), 'www2 home: four figure tiles; the footer asks for a gift');

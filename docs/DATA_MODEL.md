@@ -1384,6 +1384,7 @@ The CRM (wave150/152): one row per person Welfare Avenue knows (volunteers, dono
 - `merged_into`: Set when this row was merged into another contact (crm_merge_contacts); the row stays for the record.
 - `last_activity_at`: The last outward or inward touch logged on their timeline (not internal notes).
 - `organization`: wave176: the organization the person gave (free text, for example a school or employer), shared with the Volunteer Manager. Partners with a record are in crm_contact_orgs.
+- `pronouns`: wave194: the pronouns the person gave on their welfareavenue.com profile (optional, up to 40 characters). Written by account_update(); read with the contact.
 
 ### `crm_contact_orgs`
 
@@ -1510,6 +1511,8 @@ The CRM's forms (wave156), shown to the public at hub.welfareavenue.com/f/<slug>
 ### `crm_form_submissions`
 
 Every answer to a CRM form (wave156), kept as sent: answers by question id, display (label and answer as shown), mapped (what goes where), consent (the words shown and whether the box was ticked), result (what the Hub did: the contact, a new or updated volunteer record, roster sign-ups, fields). status: received, processed, spam (a hidden-field or timing check failed), error (kept for the team to look at), test (a test against a draft). ip_hash is a keyed hash for rate limits, never the address. Staff with the CRM page read; only form-submit writes.
+
+- `auth_user_id`: wave194: the website account that sent this submission (form-submit checked the person's sign-in). crm_form_apply() then uses that account's contact and saves what they typed to it. Null for anonymous submissions.
 
 ### `crm_form_stats_v` (view)
 
@@ -1776,6 +1779,10 @@ wave193: the grant writer's drafts: the funder's questions with their word limit
 
 wave193: the Fundraising app's settings: donor_program (goals, tiers, cadence, roles, the launch plan), scanner (the Slack channel for new finds, the schedule, the questions it asks), playbook (the approach: the fit screen, the proposal sections, the rules, the calendar discipline, the readiness checklist, as markdown). Staff with the Fundraising app read; leaders and admins write.
 
+### `site_account_emails`
+
+wave194: every sign-in code the website was asked to email (site-account function, service role only): sent; test (sent while accounts are in test mode, to a test recipient or a Welfare Avenue address); refused (accounts off, a rate limit, not a test recipient) or failed (Resend). The rate limits read it: per address, per IP hash, per day. Not readable through the API; admins see counts through site_account_stats().
+
 ### `onboarding_update_opens`
 
 wave194: a person opened a step of the master onboarding that changed after they finished (Updated since you finished in the Avenue Academy): the module, the avenue or the step in their plan. Opening is what brings Close, which writes onboarding_update_acks. One row per person per version of the step (template_updated_at). Staff read and write, like onboarding_update_acks.
@@ -1785,6 +1792,14 @@ wave194: a person opened a step of the master onboarding that changed after they
 - `template_updated_at`: The version of the step they opened (onboarding_template.updated_at at the time). A later change asks again.
 - `opened_at`: When they opened it.
 - `opened_by`: Who opened it (the Hub's display name, as acked_by).
+
+### `volunteer_signers`
+
+wave195: the people who sign volunteer sign-offs, with the name and title printed under their signature (English and French) and where their saved signature image is (signoffs bucket, private; only the signoff function reads it). Admins and Operations leads (hub_roles leader with the opsmtl or opsto profile) may sign without being assigned; anyone else an admin assigns (assigned). Written only through the signoff_signer_* functions and the signoff edge function.
+
+### `volunteer_signoffs`
+
+wave195: what volunteers ask for on their welfareavenue.com profile and what the team signed: an hours sign-off letter (hours), a recognition letter (recognition) or their own form (form, the upload at form_path). status requested, signed, declined (with the reason) or cancelled (by the volunteer). When signed: the servings listed and their hours (items, servings, hours), the signer's note (recognition), where the signature went on their form (placement), the reference printed on it (WA-VS-xxxxxx), the signer as printed, and the PDF (letter_path in the private signoffs bucket, with its SHA-256). Volunteer Manager staff read; written only through the functions.
 
 Functions:
 
@@ -1837,7 +1852,7 @@ Functions:
 - `crm_list_preview_flat(jsonb)`: The CRM page's flat filters (kind, role, act, perm, q, city, tags) evaluated in the database (wave155); crm_list_preview calls it when a filter has no groups.
 - `crm_list_sizes()`: How many live contacts each saved list holds today (wave155b), for the Lists tab.
 - `crm_campaign_audience(bigint)`: Everyone in a campaign's list with the rule's answer for the campaign's kind (wave155b): mail-send campaign_check and campaign_queue read it.
-- `crm_form_apply(bigint)`: Applies one stored form submission (wave156) in one transaction: finds the contact by email (or creates one, source hub_form), creates or updates the MTL volunteering record when the form says so, fills in what the contact is missing without erasing anything (a phone only when they have none, so a form cannot add a number to someone else's record), records express consent with the form's name when the box was ticked (never for someone who unsubscribed), writes custom fields, signs the person up (status TBD) for the events they picked, and adds a timeline entry. Idempotent: a processed submission returns its result. Service role only (form-submit).
+- `crm_form_apply(bigint)`: Applies one form submission (wave156): the contact, the MTL volunteering record, roster sign-ups, custom fields, the consent and a timeline entry, in one transaction. wave194: a submission from a signed-in website account (auth_user_id) uses that account's own record and saves what they typed to it (names, phone first, address, city, province, postal code, language); its ticked permission box counts even after an unsubscribe. Anyone else's submission only fills gaps and never re-subscribes.
 - `crm_forms_stamp()`: Trigger on crm_forms (wave156): updated_at, the go-live checks (an email question; a newsletter asks for permission), published_at/by and closed_at, and a change_log line for every status change.
 - `crm_fill(text, jsonb)`: Fills {{key}} and {{key|fallback}} in a text from a JSON object of values (wave157: automation task titles and notices; mail-send fills the emails the same way).
 - `crm_text_html(text)`: A message typed in the Hub as HTML paragraphs (a blank line starts a paragraph, a line break stays), escaped; the same as the campaign composer (wave157).
@@ -2014,4 +2029,31 @@ Functions:
 - `fund_grant_stage(bigint, text, text)`: wave193: moves a grant to a stage (or adds a note when the stage is the same), stamps submitted_on and decided_on, writes the grant log and change_log. Staff with the Fundraising app.
 - `fund_find_decide(bigint, text, text)`: wave193: a person's decision on a scanner find: keep (the funder is made or matched, the grant enters the pipeline at found; returns the grant id), dismiss (the find is set aside with the reason), screen_out (dismissed, and the funder is marked not for us so the scanner stops proposing it). Staff with the Fundraising app.
 - `fund_giving_summary()`: wave193: the giving totals the Fundraising app shows (this fiscal year's donations and donors, last year's, monthly donors and their monthly total, donors who gave last year and not yet this year, whether the donation page is live): counts and sums only, no names. Staff with the Fundraising app.
+- `site_account_config()`: wave194: the website's account settings for anyone (no sign-in): the mode (off, test or on), the public Google client ID for Google's sign-in button, and whether official receipts are on.
+- `account_link_user(uuid, text)`: wave194 (internal): the contact a website sign-in belongs to. Already connected: that contact (following a merge). Otherwise, only with a verified email: the volunteer record its text link tied (wave175), else the contact with that email (a volunteer record first), else a new contact (source website_account). Also ties volunteer_accounts for the volunteer pages. Logs to change_log and the timeline. Not callable from the API.
+- `account_me(text)`: wave194: the signed-in person's profile on welfareavenue.com: their details, newsletter preference, whether they have a volunteer record (volunteer_me has the rest), their gifts with receipts and their official receipts. Connects the sign-in to its record the first time (account_link_user). Reads only the signed-in person's own record.
+- `account_prefill(text)`: wave194: what the website's forms fill in for the signed-in person (their own record only). Connects the sign-in the first time, like account_me.
+- `account_update(jsonb)`: wave194: the signed-in person changes their own details on welfareavenue.com (first and last name, pronouns, phone, address, city, province, postal code, country, language). Checks each value; logs the fields changed (not the values) on the timeline and in change_log.
+- `account_newsletter(boolean)`: wave194: the signed-in person turns the newsletter on (express consent, recorded with the day; refused for a bounced or complained address) or off (unsubscribed), on their own record.
+- `site_account_stats()`: wave194: staff: the website accounts at a glance (mode, accounts, old-site records connected, new people, sign-in codes today).
+- `signoff_can_sign_email(text)`: wave195 (internal): whether this address may sign volunteer sign-offs: an admin, an Operations lead (leader with the opsmtl or opsto profile) or someone an admin assigned; never a blocked address.
+- `signoff_servings(bigint, date, date)`: wave195 (internal): a volunteer's confirmed past servings (optionally within dates) with their roles and hours (the roster's hours, else vol_default_hours), for the sign-off letters.
+- `account_person(uuid)`: wave195 (internal): the contact and volunteer record of a website account.
+- `account_signoffs()`: wave195: the signed-in volunteer's sign-off requests (not the cancelled ones) and their confirmed servings and hours, for their profile.
+- `account_signoff_request(jsonb)`: wave195: the signed-in volunteer asks for an hours sign-off letter, a recognition letter or their own form signed (uploaded first through the site-account function into requests/<their account>/ in the signoffs bucket). Needs their own volunteer record with at least one confirmed serving; at most signoff_max_open open requests. Logged on their timeline and in change_log.
+- `account_signoff_cancel(bigint)`: wave195: the signed-in volunteer withdraws one of their own open requests.
+- `account_file_path(uuid, text, bigint)`: wave195 (internal): where a website account's own signed letter or official receipt PDF is, for the site-account function's short-lived link; null for anything not theirs.
+- `signoff_staff_ok()`: wave195 (internal): whether the caller is staff with the Volunteer Manager (is_wa_staff and wa_page_ok('volunteering')); the signoff_* staff functions check it.
+- `signoff_list(text)`: wave195: Volunteer Manager staff: the sign-off requests (requested first, oldest first; signed and declined after, newest first), the counts by status, and whether the caller can sign.
+- `signoff_detail(bigint)`: wave195: Volunteer Manager staff: one request with the volunteer's confirmed servings in its period (and their whole record's count and hours), and whether the caller can sign.
+- `signoff_decline(bigint, text)`: wave195: a signer declines a waiting request with a reason the volunteer sees on their profile. Logged.
+- `signoff_signer_me()`: wave195: the caller's signer profile: whether they can sign, the name and titles printed under their signature, and whether a signature is saved (never the image).
+- `signoff_signer_save(jsonb)`: wave195: a signer sets the name and title (English, and French) printed under their signature.
+- `signoff_signers()`: wave195: Volunteer Manager staff: who can sign (admins, Operations leads, people assigned) and whether each has a signature saved; admins also get the team members who could be assigned.
+- `signoff_signer_assign(text, boolean)`: wave195: an admin assigns (or unassigns) a team member to sign volunteer sign-offs. Logged.
+- `signoff_counts()`: wave195: the number of waiting sign-off requests, for the Volunteer Manager's menu.
+- `signoff_signature_set(text, text)`: wave195 (service role): records where a signer's newly saved signature image is; returns the old path so the function can remove it.
+- `signoff_sign_data(bigint, text)`: wave195 (service role): everything the signoff function draws on a letter: the request, the volunteer, their servings in the period and their whole record, the signer (with the path of their signature) and the charity's details, and the reference (a new WA-VS- one the first time).
+- `signoff_mark_signed(bigint, text, jsonb)`: wave195 (service role): records a signed request (what was signed, by whom, the reference and the PDF), on the timeline and in change_log.
+- `signoff_mark_emailed(bigint, bigint)`: wave195 (service role): records that the volunteer was emailed about a signed letter (emailed_at, the mail-send send id); called by the signoff function.
 

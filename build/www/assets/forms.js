@@ -2,33 +2,63 @@
    <div data-wa-form="slug[,fallback]"> asks the Hub's form-submit function for the published form (drafts are not
    found, so the page keeps its own message until staff put the form live in the CRM), shows the questions in the
    form's language, and posts the answers back with the signed token, the hidden field and the timing checks that
-   form-submit expects. Same protocol as the Hub's own page at hub.welfareavenue.com/f/<slug>. */
+   form-submit expects. Same protocol as the Hub's own page at hub.welfareavenue.com/f/<slug>.
+   wave194 (02/10/26, Steel: forms fill in from a person's account and what they type is saved to it): when accounts are on
+   and someone is signed in on this site (window.WA, site.js), the questions that fill a contact field come filled from
+   their profile (account_prefill), the answers go with their own sign-in so form-submit saves them to their record, and a
+   line above the form says so ("Not you?" signs out). Signed out, with accounts on, the line offers to sign in first and
+   come back (/account/?next=). */
 (function () {
   'use strict';
   var B = document.body, SUPA = B.getAttribute('data-supa') || '', KEY = B.getAttribute('data-key') || '';
   var URL_FN = SUPA + '/functions/v1/form-submit';
+  var PAGE_LANG = B.getAttribute('data-lang') === 'fr' ? 'fr' : 'en';
+  var ACCT_URL = PAGE_LANG === 'fr' ? '/fr/compte/' : '/account/', PRIV_URL = PAGE_LANG === 'fr' ? '/fr/confidentialite/' : '/privacy/';
   var TX = {
     en: { optional: '(optional)', send: 'Send', sending: 'Sending…', fix: 'Please check the answers marked below.', required: 'Please answer this question.', email: 'Please enter a valid email address.',
       phone: 'Please enter a phone number we can reach.', consent: 'Please tick the box to sign up.', rate: 'Too many tries from here. Please wait a few minutes and send again.',
       expired: 'This page was open a long time, so we refreshed the form. Please check your answers and send again.', server: 'Something went wrong on our side. Please try again in a minute.',
       offline: 'We could not reach Welfare Avenue. Check your connection and try again.', nodates: 'No dates are open right now. Send the form and we will reach out when new ones are set.',
       yes: 'Yes', no: 'No', thanks: 'Thank you!', closed: 'This form is closed for now. You can reach us at ', select: 'Choose…',
-      privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.' },
+      privacy: 'We keep your answers in our volunteer and supporter records, use them only to work with you, and never sell or share them.', privacyLink: 'Privacy',
+      acctIn: 'Signed in as {n}. We filled in what we have, and what you change here is saved to your profile.', acctMine: 'My account', acctNot: 'Not you?',
+      acctOffer: 'Have an account? {a} and this form fills in for you.', acctSignIn: 'Sign in', saved: 'Your profile is updated too.' },
     fr: { optional: '(facultatif)', send: 'Envoyer', sending: 'Envoi…', fix: 'Veuillez vérifier les réponses indiquées ci-dessous.', required: 'Veuillez répondre à cette question.', email: 'Veuillez entrer une adresse courriel valide.',
       phone: 'Veuillez entrer un numéro où vous joindre.', consent: 'Veuillez cocher la case pour vous inscrire.', rate: 'Trop d’essais depuis cet appareil. Veuillez patienter quelques minutes.',
       expired: 'Cette page était ouverte depuis longtemps; nous avons actualisé le formulaire. Vérifiez vos réponses et envoyez de nouveau.', server: 'Un problème est survenu de notre côté. Veuillez réessayer dans une minute.',
       offline: 'Impossible de joindre Welfare Avenue. Vérifiez votre connexion et réessayez.', nodates: 'Aucune date n’est ouverte pour le moment. Envoyez le formulaire et nous vous écrirons dès que de nouvelles dates seront fixées.',
       yes: 'Oui', no: 'Non', thanks: 'Merci!', closed: 'Ce formulaire est fermé pour le moment. Vous pouvez nous écrire à ', select: 'Choisir…',
-      privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.' }
+      privacy: 'Nous conservons vos réponses dans nos dossiers de bénévoles et de sympathisants, nous les utilisons seulement pour travailler avec vous et ne les vendons ni ne les partageons jamais.', privacyLink: 'Confidentialité',
+      acctIn: 'Connexion : {n}. Nous avons rempli ce que nous avons, et ce que vous changez ici est enregistré dans votre profil.', acctMine: 'Mon compte', acctNot: 'Ce n’est pas vous?',
+      acctOffer: 'Vous avez un compte? {a} et ce formulaire se remplit pour vous.', acctSignIn: 'Connectez-vous', saved: 'Votre profil est aussi à jour.' }
   };
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
-  function call(method, slug, body) {
-    var opt = { method: method, headers: { apikey: KEY, Authorization: 'Bearer ' + KEY } };
+  function call(method, slug, body, token) {
+    var opt = { method: method, headers: { apikey: KEY, Authorization: 'Bearer ' + (token || KEY) } };
     if (body) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
     return fetch(URL_FN + (method === 'GET' ? '?slug=' + encodeURIComponent(slug) : ''), opt).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { return { status: r.status, body: j || {} }; });
     });
   }
+  /* wave194: the signed-in account, looked up once for every form on the page (at most 2.5 seconds, so a form never waits long) */
+  var ACCT = null, MODE = 'off', FORMS = [];
+  var acctReady = (function () {
+    var W = window.WA;
+    if (!W || !SUPA || !KEY || !window.fetch || !document.querySelector('[data-wa-form]')) return Promise.resolve();
+    var look = W.config().then(function (c) {
+      MODE = (c && c.mode) || 'off';
+      if (MODE === 'off') return null;
+      return W.session().then(function (s) {
+        if (!s || !W.isVolunteer(s)) return null;
+        return W.rpc('account_prefill', { p_lang: PAGE_LANG }, s).then(function (r) {
+          var b = r.body || {};
+          if (r.ok && b.linked && b.fill) ACCT = { fill: b.fill, name: b.name || '', email: b.fill.email || s.email || '' };
+          return null;
+        });
+      });
+    }).catch(function () { return null; });
+    return Promise.race([look, new Promise(function (res) { setTimeout(res, 2500); })]);
+  })();
   function Form(box, n) {
     var S = { form: null, org: null, token: '', lang: 'en', errors: {}, sending: false, banner: '' };
     var slugs = (box.getAttribute('data-wa-form') || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -42,11 +72,11 @@
         if (r.status !== 200 || !r.body.form) return;
         S.form = r.body.form; S.org = r.body.org; S.token = r.body.token; S.lang = S.form.lang === 'fr' ? 'fr' : 'en';
         if (keep) S.banner = t('expired');
-        render(keep);
+        return acctReady.then(function () { render(keep); });
       }).catch(function () { /* offline: keep the page's message */ });
     }
     function field(q, keep) {
-      var id = pfx + q.id, err = S.errors[q.id], v = keep ? keep[q.id] : undefined;
+      var id = pfx + q.id, err = S.errors[q.id], v = keep ? keep[q.id] : (ACCT && q.fill && ACCT.fill[q.fill] != null ? String(ACCT.fill[q.fill]) : undefined);
       var head = function (tag) {
         return '<' + tag + (tag === 'label' ? ' for="' + id + '"' : '') + ' id="' + id + '_l">' + E(q.label) + (q.required ? '<span class="req" aria-hidden="true">*</span>' : ' <span class="opt">' + E(t('optional')) + '</span>') + '</' + tag + '>' +
           (q.help ? '<p class="help" id="' + id + '_h">' + E(q.help) + '</p>' : '');
@@ -76,18 +106,28 @@
           return '<label class="choice"><input type="' + (multi ? 'checkbox' : 'radio') + '" name="' + E(q.id) + '" value="' + E(o.v) + '"' + (on ? ' checked' : '') + (i === 0 ? ' id="' + id + '"' : '') + '><span>' + E(o.l) + '</span></label>';
         }).join('') + '</div>' + e + '</fieldset>';
     }
+    function acctLine() {
+      if (ACCT) return '<p class="waf-acct">' + E(t('acctIn').replace('{n}', ACCT.name || ACCT.email)) + ' <a href="' + ACCT_URL + '">' + E(t('acctMine')) + '</a> · ' +
+        '<button type="button" class="linkish" data-waf-out>' + E(t('acctNot')) + '</button></p>';
+      if (MODE !== 'on') return '';
+      var at = box.closest('[id]'), next = window.location.pathname + (at ? '#' + at.id : ''), parts = t('acctOffer').split('{a}');
+      return '<p class="waf-acct">' + E(parts[0]) + '<a href="' + ACCT_URL + '?next=' + encodeURIComponent(next) + '">' + E(t('acctSignIn')) + '</a>' + E(parts[1] || '') + '</p>';
+    }
     function render(keep) {
       var f = S.form, c = f.consent || {}, cerr = S.errors._consent, heading = box.getAttribute('data-heading');
-      box.innerHTML = '<form novalidate lang="' + S.lang + '">' + (heading !== 'none' ? '<h3>' + E(f.title) + '</h3>' + (f.intro ? '<p class="waf-intro">' + E(f.intro) + '</p>' : '') : '') +
+      box.innerHTML = '<form novalidate lang="' + S.lang + '">' + (heading !== 'none' ? '<h3>' + E(f.title) + '</h3>' + (f.intro ? '<p class="waf-intro">' + E(f.intro) + '</p>' : '') : '') + acctLine() +
         (S.banner ? '<div class="waf-banner ' + (Object.keys(S.errors).length ? 'warn' : 'info') + '" role="alert">' + E(S.banner) + '</div>' : '') +
         f.questions.map(function (q) { return field(q, keep); }).join('') +
         (c.ask ? '<div class="q consent' + (cerr ? ' bad' : '') + '" data-q="_consent"><label class="choice"><input type="checkbox" id="' + pfx + '_consent" name="_consent"' + (keep && keep._consent ? ' checked' : '') + (cerr ? ' aria-invalid="true" aria-describedby="' + pfx + '_consent_e"' : '') + '><span>' + E(c.label) + (c.required ? '<span class="req" aria-hidden="true">*</span>' : '') + '</span></label>' +
           (cerr ? '<p class="err" id="' + pfx + '_consent_e">' + E(cerr) + '</p>' : '') + '<p class="small">' + E((S.org && S.org.address) || 'Welfare Avenue') + ' · ' + E((S.org && S.org.email) || '') + '</p></div>' : '') +
         '<div class="hp" aria-hidden="true"><label>Website <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>' +
         '<button type="submit" class="btn waf-send"' + (S.sending ? ' disabled' : '') + '>' + E(S.sending ? t('sending') : t('send')) + '</button>' +
-        '<p class="waf-privacy">' + E(t('privacy')) + '</p></form>';
+        '<p class="waf-privacy">' + E(t('privacy')) + ' <a href="' + PRIV_URL + '">' + E(t('privacyLink')) + '</a></p></form>';
       box.querySelector('form').addEventListener('submit', submit);
+      var out = box.querySelector('[data-waf-out]');
+      if (out) out.addEventListener('click', function () { if (window.WA) window.WA.signOut(); ACCT = null; FORMS.forEach(function (fn) { fn(); }); });
     }
+    FORMS.push(function () { if (S.form && !S.sending && box.querySelector('form')) render(); });
     function collect() {
       var form = box.querySelector('form'), out = {};
       S.form.questions.forEach(function (q) {
@@ -122,17 +162,21 @@
       if (Object.keys(S.errors).length) { S.banner = t('fix'); render(a); focusFirst(); return; }
       var answers = {}; S.form.questions.forEach(function (q) { answers[q.id] = a[q.id]; });
       S.sending = true; S.banner = ''; render(a);
-      call('POST', S.form.slug, { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }).then(function (r) {
+      // wave194: a signed-in account sends its own sign-in, so form-submit saves the answers to that person's record
+      (ACCT && window.WA ? window.WA.session() : Promise.resolve(null)).then(function (s) {
+        var tok = s && window.WA.isVolunteer(s) ? s.access_token : null;
+        return call('POST', S.form.slug, { slug: S.form.slug, token: S.token, answers: answers, consent: a._consent, hp: a._hp, lang: S.lang }, tok);
+      }).then(function (r) {
         S.sending = false;
-        if (r.status === 200 && r.body.ok) { thanks(r.body.thank_you || S.form.thank_you); return; }
+        if (r.status === 200 && r.body.ok) { thanks(r.body.thank_you || S.form.thank_you, r.body.saved === true); return; }
         if (r.status === 400 && r.body.error === 'invalid') { S.errors = r.body.fields || {}; S.banner = t('fix'); render(a); focusFirst(); return; }
         if (r.status === 400 && r.body.error === 'expired') { S.errors = {}; load(slugs.indexOf(S.form.slug), a); return; }
         if (r.status === 404 || r.status === 410) { box.innerHTML = fallback; return; }
         S.banner = r.status === 429 ? t('rate') : t('server'); S.errors = {}; render(a);
       }).catch(function () { S.sending = false; S.banner = t('offline'); render(a); });
     }
-    function thanks(msg) {
-      box.innerHTML = '<div class="waf-done" role="status" tabindex="-1"><h3>' + E(t('thanks')) + '</h3><p class="mb0">' + E(msg) + '</p></div>';
+    function thanks(msg, saved) {
+      box.innerHTML = '<div class="waf-done" role="status" tabindex="-1"><h3>' + E(t('thanks')) + '</h3><p class="mb0">' + E(msg) + '</p>' + (saved ? '<p class="small">' + E(t('saved')) + '</p>' : '') + '</div>';
       var d = box.querySelector('.waf-done'); try { d.focus(); d.scrollIntoView({ block: 'center' }); } catch (e) { /* fine */ }
     }
     if (SUPA && KEY && window.fetch && slugs.length) load(0);

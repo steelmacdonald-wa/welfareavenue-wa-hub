@@ -423,3 +423,104 @@ details.more>.in{padding:0 22px 22px}
 .fundnext .cm.brand .s{width:40px;height:auto;align-self:flex-start;margin-top:18px;transform:rotate(12deg)}
 
 .notfound{padding:110px 0}
+
+/* wave194 (02/10/26): the account page (/account/, /fr/compte/, filled by account.js), the forms' account line and the
+   privacy notice. [hidden] wins over the display of a class (the "My account" links stay hidden until accounts are on). */
+[hidden]{display:none!important}
+.acct-top{background:var(--green);color:var(--white);padding:56px 0 46px}
+.acct-top .over{color:var(--white)}
+.acct-top h1{color:var(--white);font-size:clamp(46px,6vw,76px)}
+.acct-band{padding:52px 0 88px}
+@media (max-width:760px){.acct-top{padding:38px 0 32px}.acct-band{padding:28px 0 64px}}
+.acct{max-width:1040px;margin:0 auto}
+.acct .card{padding:28px 22px}
+@media (min-width:640px){.acct .card{padding:36px 38px}}
+.acct .card h2{font-size:clamp(28px,2.6vw,34px);margin:0 0 12px}
+.acct h3{font-size:22px;margin:26px 0 8px}
+.acct .card>h3:first-child,.acct-side h3:first-child{margin-top:0}
+.acct-grid{display:grid;gap:22px;align-items:start}
+@media (min-width:900px){.acct-grid{grid-template-columns:1.25fr 1fr;gap:30px}}
+.acct-side p{font-size:15.5px}
+.acct-one{max-width:660px;margin:0 auto}
+.acct-test{background:rgba(111,100,171,.12);color:#3f3878;padding:10px 14px;font-size:14.5px}
+.gsi{min-height:44px;margin:6px 0 2px}
+.acct-or{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:14px;margin:18px 0 14px}
+.acct-or::before,.acct-or::after{content:'';flex:1;height:1px;background:var(--line)}
+.acct-form .q{margin-bottom:16px}
+.acct-form .choice .fine{font-size:13.5px}
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--green);text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1.5px;cursor:pointer}
+.linkish:hover{text-decoration-color:var(--gold)}
+.linkish[disabled]{color:var(--muted);cursor:default;text-decoration:none}
+.btn.ghost.small{color:var(--green)}
+.btn.ghost.small:hover{color:var(--white)}
+.btn[disabled]{opacity:.6;cursor:progress}
+.acct-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:14px 24px;margin:0 0 22px}
+.acct-head h2{font-size:clamp(34px,3.4vw,46px);margin:0 0 6px}
+.acct-nav ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0}
+.acct-nav a{display:inline-block;border:1px solid var(--green);background:var(--white);padding:7px 12px;font-size:14px;line-height:1.2;text-decoration:none}
+.acct-nav a:hover{background:var(--green);color:var(--white)}
+.acct-secs{display:grid;gap:22px}
+.acct-sec{scroll-margin-top:16px}
+.acct-dl{margin:0;border-top:1px solid var(--line)}
+.acct-dl div{display:grid;gap:2px 20px;padding:12px 0;border-bottom:1px solid var(--line)}
+@media (min-width:640px){.acct-dl div{grid-template-columns:13em 1fr}}
+.acct-dl dt{font-weight:500;color:var(--green)}
+.acct-dl dd{margin:0;overflow-wrap:anywhere}
+.muted{color:var(--muted)}
+.acct-cols,.acct-cols2{display:grid;gap:0 18px}
+@media (min-width:640px){.acct-cols{grid-template-columns:1fr 1fr}}
+.acct-cols2{grid-template-columns:1fr 1fr}
+.acct-list{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--line)}
+.acct-list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.acct-list li.col{display:block}
+.acct-list .d{flex:1 1 220px;min-width:0}
+.acct-list .d b{font-weight:600}
+.acct-list .d>span{display:block;color:var(--muted);font-size:14.5px}
+.acct-list .d .st{display:inline-block;margin-left:6px}
+.acct-list .btn.small{padding:10px 16px;font-size:16px}
+.acct-confirm{font-size:14.5px}
+.st{display:inline-block;font-size:12.5px;font-weight:600;line-height:1;padding:6px 9px;background:rgba(220,165,39,.22);color:var(--green)}
+.st.ok{background:rgba(42,140,122,.16);color:#1c6b5d}
+.st.no{background:rgba(168,56,42,.1);color:var(--flag)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:6px 0 14px}
+.stats div{background:var(--sand);padding:16px 8px;text-align:center}
+.stats b{display:block;font-family:var(--hf);font-weight:600;font-size:clamp(30px,3vw,40px);line-height:1;color:var(--green)}
+.stats span{display:block;font-size:13px;color:var(--muted);margin-top:6px}
+.mile{display:flex;gap:14px;align-items:center;background:rgba(220,165,39,.14);padding:12px 16px;margin:0 0 14px;font-size:15px}
+.mile img{width:30px;height:auto;flex:none}
+.mile .in{flex:1}
+.mile progress{display:block;width:100%;height:8px;margin-top:6px;border:0;background:rgba(16,63,57,.1);-webkit-appearance:none;appearance:none}
+.mile progress::-webkit-progress-bar{background:rgba(16,63,57,.1)}
+.mile progress::-webkit-progress-value{background:var(--gold)}
+.mile progress::-moz-progress-bar{background:var(--gold)}
+.chipsv{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0 0 6px;padding:0}
+.chipsv li{font-size:13px;line-height:1;padding:7px 11px;background:rgba(16,63,57,.07);color:var(--green);font-weight:600}
+.opens{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.opens button{font:inherit;font-size:14px;line-height:1.2;padding:8px 12px;background:var(--white);border:1.5px solid var(--green);color:var(--green);cursor:pointer}
+.opens button:hover{background:var(--green);color:var(--white)}
+.opens small{font-weight:400;color:var(--muted);margin-left:6px}
+.opens button:hover small{color:rgba(255,255,255,.85)}
+.ask{background:var(--mist);border:1px solid var(--line);padding:14px 16px;margin:10px 0 0}
+.ask .btns{margin-top:10px}
+.acct-quick{border-top:1px solid var(--line);margin-top:26px;padding-top:2px}
+.acct-letter-bar{display:flex;gap:10px;flex-wrap:wrap;max-width:780px;margin:0 auto}
+.acct-letter{background:var(--white);border:1px solid var(--line);padding:42px 44px;max-width:780px;margin:16px auto 0;font-size:16px;line-height:1.65}
+.acct-letter .lh{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;border-bottom:3px solid var(--gold);padding-bottom:14px;margin-bottom:22px}
+.acct-letter .lh img{height:44px;width:auto}
+.acct-letter .lh small{text-align:right;color:var(--muted);font-size:12.5px;line-height:1.5}
+.acct-letter .sig{margin-top:28px;font-weight:600}
+.acct-letter .ref{margin-top:24px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
+@media (max-width:480px){.acct-letter{padding:24px 18px}}
+@media print{
+  .top,.foot,.acct-top,.langhint,.skip,.noprint{display:none!important}
+  .acct-band{padding:0!important;background:#fff!important}
+  .acct-letter{border:0;padding:0;margin:0;max-width:none}
+}
+.waf-acct{background:var(--mist);border:1px solid var(--line);padding:10px 14px;font-size:14.5px;margin:0 0 18px}
+.waf-acct .linkish{font-size:14.5px}
+.doc{max-width:780px;margin:0 auto}
+.doc h2{font-size:clamp(26px,2.4vw,32px);margin:36px 0 10px}
+.doc ul{padding-left:20px;margin:0 0 16px}
+.doc li{margin:0 0 8px}
+.doc .upd{color:var(--muted);font-size:14px;margin-bottom:10px}
+.foot .legal a{color:rgba(255,255,255,.82)}

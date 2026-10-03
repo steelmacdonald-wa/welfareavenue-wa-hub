@@ -25,6 +25,9 @@ PATHS = {
     'press': {'en': '/press/', 'fr': '/fr/presse/'},
     'contact': {'en': '/contact/', 'fr': '/fr/contact/'},
     'donate': {'en': '/donate/', 'fr': '/fr/donner/'},
+    # wave194 (02/10/26): the website accounts (not in the menu or the sitemap) and the privacy notice
+    'account': {'en': '/account/', 'fr': '/fr/compte/'},
+    'privacy': {'en': '/privacy/', 'fr': '/fr/confidentialite/'},
 }
 # The menu, in the order of Edison's design (www2, 01/10/26). Contact and Sign up sit in the header's side group.
 NAV = ['home', 'volunteer', 'donate', 'events', 'press', 'about']
@@ -44,6 +47,7 @@ UI = {
         'site_name': 'Welfare Avenue',
         'noscript_forms': 'This form needs JavaScript. You can write to us at',
         'logo_alt': 'Welfare Avenue, building pathways in our community',
+        'account': 'My account', 'privacy': 'Privacy',
     },
     'fr': {
         'nav': {'home': 'Accueil', 'about': 'À propos', 'volunteer': 'Bénévolat', 'events': 'Nos activités', 'press': 'Presse', 'contact': 'Contact', 'donate': 'Faire un don'},
@@ -59,6 +63,7 @@ UI = {
         'site_name': 'Welfare Avenue',
         'noscript_forms': 'Ce formulaire a besoin de JavaScript. Vous pouvez nous écrire à',
         'logo_alt': 'Welfare Avenue, bâtir des chemins dans notre communauté',
+        'account': 'Mon compte', 'privacy': 'Confidentialité',
     },
 }
 
@@ -458,3 +463,117 @@ SERVING_TEAM = [  # (role key in the Hub, target, title, what they do)
     ('photographer', 1, {'en': 'Photographer', 'fr': 'Photographie'},
      {'en': 'Capture the day, with care for everyone’s privacy.', 'fr': 'Raconter la journée en images, dans le respect de la vie privée de chacun.'}),
 ]
+
+# wave194 (02/10/26): the privacy notice on welfareavenue.com, from the Hub's volunteer notice (wave175b,
+# hub.welfareavenue.com/privacy/) widened to the website: accounts (Google or a code by email), forms, the newsletter,
+# gifts and receipts, signed letters, what the browser keeps. Google's sign-in screen links to it. Each section is
+# (heading, [paragraphs], [list items]).
+PRIVACY_UPDATED = {'en': 'Last updated October 2, 2026', 'fr': 'Mis à jour le 2 octobre 2026'}
+PRIVACY = {
+    'en': {
+        'title': 'Privacy',
+        'desc': 'How Welfare Avenue handles the information of the people who volunteer with us, give to us, write to us or sign up for our newsletter.',
+        'intro': 'Welfare Avenue is a youth-powered registered charity (713048502RR0001) based in Montreal. This notice explains what we keep about the '
+                 'people who volunteer with us, give to us, write to us or sign up for our newsletter, and how we use it. It covers this website, your '
+                 'account on it, our forms, our donation page and the links we send by text.',
+        'sections': [
+            ('What we keep', [], [
+                'Your name, email, phone number, the language you prefer and, if you give them, your pronouns and your address.',
+                'If you volunteer: the servings you sign up for, your role, whether you confirmed, your hours, what you tell us for your role (a cook’s '
+                'pickup address, a driver’s car), and your answers to the survey after a serving. We ask you not to include the names of the people we serve.',
+                'If you give: the amount and date of each gift and what we need for your official tax receipt. Payments go through Stripe: we never see '
+                'or keep your full card number.',
+                'What you send us through our forms and by email, and the texts you exchange with our phone line.',
+                'If you ask for a signed letter: the details of your request, the form you upload for us to sign, if any, and the signed letter.',
+                'If you have an account: how you sign in. With Google, we receive your Google account’s name and email address, never your password, and '
+                'we do not access your Gmail, Drive or contacts. With a code by email, we keep a record of the codes we send (the address, when, and a '
+                'scrambled form of the internet address it was asked from) to stop misuse.',
+            ]),
+            ('Why we keep it', [
+                'To organise our servings and keep in touch with the people who make them happen; to send you the messages you asked for, like reminders, '
+                'receipts and, if you said yes, our newsletter; to issue official tax receipts; to show you your own record when you sign in; to confirm '
+                'your volunteer hours when you ask us to; and to learn from your feedback.'], []),
+            ('Who sees it', [
+                'Only the Welfare Avenue team members whose work needs it. On a serving day, the team leader and drivers see the names, phone numbers '
+                'and pickup addresses they need for that day. We do not sell or rent your information, and we do not use it for advertising.',
+                'We use a few service providers to run all this: Supabase (our database, sign-in and file storage), Netlify (hosting this website), '
+                'Stripe (donations), Resend (our emails), Quo (our phone line and texts) and Google (sign-in with Google, and the fonts on our pages). '
+                'Their servers may be outside Quebec, including in the United States.'], []),
+            ('In your browser', [
+                'We do not use advertising or tracking cookies on this website. When you sign in, your browser keeps your sign-in so you stay signed in; '
+                'signing out removes it. The website also remembers a few choices, like closing the banner that offers the French version.',
+                'Some pages show posts from LinkedIn, press videos load from YouTube only when you press play, and our donation page uses Stripe, which '
+                'sets its own cookies to prevent fraud. Those services have their own privacy policies.'], []),
+            ('How long we keep it', [
+                'We keep your volunteer and supporter record while you are involved with us, so we can count your servings and hours and keep your '
+                'history. Gift and receipt records are kept as long as Canadian tax law requires. If you ask, we delete your record, except what the '
+                'law requires us to keep.'], []),
+            ('Your choices', [], [
+                'Every newsletter has a link to stop it, and you can turn it off on your account.',
+                'Reply STOP to any of our texts to stop them; START turns them back on.',
+                'You do not need an account to volunteer or to give. The links in our texts work without one.',
+                'You can see and correct most of your details on your account. To see everything we keep, correct it, or delete your record or your '
+                'account, write to {email} or text {phone}.',
+            ]),
+            ('Questions or concerns', [
+                'Write to our person in charge of protecting personal information at {email}. If you are not satisfied with our answer, you can contact '
+                'the Commission d’accès à l’information du Québec.'], []),
+        ],
+    },
+    'fr': {
+        'title': 'Confidentialité',
+        'desc': 'Comment Welfare Avenue traite les renseignements des personnes qui font du bénévolat avec nous, nous font un don, nous écrivent ou s’abonnent à notre infolettre.',
+        'intro': 'Welfare Avenue est un organisme de bienfaisance enregistré (713048502RR0001) porté par les jeunes et établi à Montréal. Le présent avis '
+                 'explique ce que nous conservons au sujet des personnes qui font du bénévolat avec nous, nous font un don, nous écrivent ou s’abonnent '
+                 'à notre infolettre, et comment nous l’utilisons. Il couvre ce site, votre compte, nos formulaires, notre page de dons et les liens que '
+                 'nous envoyons par texto.',
+        'sections': [
+            ('Ce que nous conservons', [], [
+                'Votre nom, votre courriel, votre numéro de téléphone, votre langue de préférence et, si vous nous les donnez, vos pronoms et votre adresse.',
+                'Si vous faites du bénévolat : les services auxquels vous vous inscrivez, votre rôle, votre confirmation, vos heures, ce que vous nous '
+                'indiquez pour votre rôle (l’adresse de collecte d’un cuisinier, la voiture d’un chauffeur) et vos réponses au sondage après un service. '
+                'Nous vous demandons de ne pas y inscrire le nom des personnes servies.',
+                'Si vous faites un don : le montant et la date de chaque don, et ce qu’il faut pour votre reçu officiel aux fins de l’impôt. Les paiements '
+                'passent par Stripe : nous ne voyons ni ne conservons jamais le numéro complet de votre carte.',
+                'Ce que vous nous envoyez par nos formulaires et par courriel, et les textos échangés avec notre ligne téléphonique.',
+                'Si vous demandez une lettre signée : les détails de votre demande, le formulaire que vous téléversez pour signature, le cas échéant, et '
+                'la lettre signée.',
+                'Si vous avez un compte : votre façon de vous connecter. Avec Google, nous recevons le nom et l’adresse courriel de votre compte Google, '
+                'jamais votre mot de passe, et nous n’accédons pas à votre Gmail, à votre Drive ni à vos contacts. Avec un code par courriel, nous gardons '
+                'une trace des codes envoyés (l’adresse, le moment et une forme brouillée de l’adresse Internet d’où vient la demande) pour prévenir les abus.',
+            ]),
+            ('Pourquoi', [
+                'Pour organiser nos services et garder le contact avec les personnes qui les rendent possibles; vous envoyer les messages que vous avez '
+                'demandés, comme des rappels, des reçus et, si vous avez dit oui, notre infolettre; émettre des reçus officiels aux fins de l’impôt; vous '
+                'montrer votre propre dossier quand vous vous connectez; confirmer vos heures de bénévolat à votre demande; et apprendre de vos commentaires.'], []),
+            ('Qui y a accès', [
+                'Seuls les membres de l’équipe de Welfare Avenue dont le travail l’exige. Le jour d’un service, la ou le responsable d’équipe et les '
+                'chauffeurs voient les noms, les numéros de téléphone et les adresses de collecte nécessaires ce jour-là. Nous ne vendons ni ne louons vos '
+                'renseignements, et nous ne les utilisons pas à des fins publicitaires.',
+                'Nous faisons appel à quelques fournisseurs : Supabase (notre base de données, la connexion et le stockage des fichiers), Netlify '
+                '(l’hébergement de ce site), Stripe (les dons), Resend (nos courriels), Quo (notre ligne téléphonique et nos textos) et Google (la '
+                'connexion avec Google et les polices de nos pages). Leurs serveurs peuvent se trouver à l’extérieur du Québec, notamment aux États-Unis.'], []),
+            ('Dans votre navigateur', [
+                'Nous n’utilisons aucun témoin (cookie) publicitaire ou de suivi sur ce site. Quand vous vous connectez, votre navigateur garde votre '
+                'connexion pour que votre session reste ouverte; la déconnexion l’efface. Le site retient aussi quelques choix, comme la fermeture du '
+                'bandeau de langue.',
+                'Certaines pages affichent des publications LinkedIn, les vidéos de presse ne se chargent depuis YouTube que lorsque vous appuyez sur '
+                'lecture, et notre page de dons utilise Stripe, qui dépose ses propres témoins pour prévenir la fraude. Ces services ont leurs propres '
+                'politiques de confidentialité.'], []),
+            ('Combien de temps', [
+                'Nous conservons votre dossier de bénévole et de sympathisant tant que vous participez à nos activités, pour compter vos services et vos '
+                'heures et garder votre historique. Les dossiers de dons et de reçus sont conservés aussi longtemps que l’exige la loi fiscale canadienne. '
+                'Sur demande, nous supprimons votre dossier, sauf ce que la loi nous oblige à conserver.'], []),
+            ('Vos choix', [], [
+                'Chaque infolettre contient un lien pour l’arrêter, et vous pouvez aussi la désactiver dans votre compte.',
+                'Répondez STOP à l’un de nos textos pour ne plus en recevoir; START les réactive.',
+                'Aucun compte n’est nécessaire pour faire du bénévolat ou un don. Les liens de nos textos fonctionnent sans compte.',
+                'Vous pouvez consulter et corriger la plupart de vos coordonnées dans votre compte. Pour voir tout ce que nous conservons, le corriger, ou '
+                'supprimer votre dossier ou votre compte, écrivez à {email} ou textez le {phone}.',
+            ]),
+            ('Questions ou préoccupations', [
+                'Écrivez à la personne responsable de la protection des renseignements personnels à {email}. Si notre réponse ne vous satisfait pas, '
+                'vous pouvez vous adresser à la Commission d’accès à l’information du Québec.'], []),
+        ],
+    },
+}

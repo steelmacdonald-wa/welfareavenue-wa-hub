@@ -1,8 +1,10 @@
-// Welfare Avenue: form-submit (v4, 29/09/26, wave156; v3 wave162: the website preview origin; v4 wave168: the form's cover photo)
+// Welfare Avenue: form-submit (v5, 02/10/26, wave194; v4 wave168: the form's cover photo; v3 wave162: the website preview origin)
 // The public side of the CRM's forms, shown at hub.welfareavenue.com/f/<slug> (Steel, 28/09/26).
 //   GET  ?slug=<slug>  The published form: questions, the email permission question, the thank-you, the open serving
 //        dates for a serving_dates question, the charity's name and address (CASL), and a signed token. A draft is
-//        not found; a closed form says so.
+//        not found; a closed form says so. v5: a question that fills a contact field says which (fill: first_name,
+//        last_name, email, phone, city, province, postal_code, address, language), so the website can fill it in for a
+//        signed-in person.
 //   POST {slug, token, answers, consent, hp, lang}  Built-in spam checks (Steel, 28/09/26): the hidden field hp must
 //        be empty and the token between 3 seconds and 24 hours old (a failure is stored as spam and answered like a
 //        success, so a bot learns nothing); at most 20 submissions per IP hash in 10 minutes (a room of volunteers on
@@ -11,12 +13,15 @@
 //        roster sign-ups, custom fields, the consent with its words, a timeline entry) in one transaction. A failure
 //        there keeps the submission as error for the team. A confirmation email goes through mail-send only when the
 //        form's settings say so (off by default).
+//        v5 (wave194, Steel 02/10/26: forms fill in from a person's profile and what they type is saved to it): when the
+//        request carries a website account's own session instead of the publishable key, its user is checked
+//        (auth.getUser) and kept on the submission (auth_user_id); crm_form_apply then uses that account's record.
 //   Tests: POST with x-wa-secret (WA_TRIGGER_SECRET) and {"test": true} may target a draft; the submission is marked
 //        is_test and no email is sent. {"action": "token"} returns a token for a draft; {"checks": true} runs the spam
 //        checks as for the public (so they can be tested without publishing anything).
-// Auth: verify_jwt on with the publishable (anon) key, which the public page sends like every page of the Hub; the
-// checks above do the rest. CORS: the Hub, the website and the Hub's Netlify name. Never says whether an email is
-// already known. Secrets (vault): WA_FORM_SECRET signs the tokens and keys the IP hash;
+// Auth: verify_jwt on with the publishable (anon) key, which the public page sends like every page of the Hub, or a
+// website account's session; the checks above do the rest. CORS: the Hub, the website and the Hub's Netlify name. Never
+// says whether an email is already known. Secrets (vault): WA_FORM_SECRET signs the tokens and keys the IP hash;
 // WA_TRIGGER_SECRET for tests and for calling mail-send. Tables: crm_forms, crm_form_submissions, volunteer_events,
 // app_config (read), crm_form_apply() (write).
 import { createClient } from 'jsr:@supabase/supabase-js@2';
@@ -30,6 +35,7 @@ const svc = createClient(SUPABASE_URL, SERVICE_KEY);
 const ORIGINS = ['https://hub.welfareavenue.com', 'https://welfareavenue.com', 'https://www.welfareavenue.com', 'https://wa-exec-dashboard.netlify.app', 'https://welfareavenue-www.netlify.app'];
 const MIN_SECONDS = 3, MAX_AGE = 86400, PER_IP = 20, PER_IP_WINDOW = 10, PER_EMAIL = 3, MAX_BODY = 32000;
 const TYPES = ['text', 'long_text', 'email', 'phone', 'choice', 'multi', 'yes_no', 'date', 'number', 'serving_dates'];
+const FILLS = ['first_name', 'last_name', 'email', 'phone', 'city', 'province', 'postal_code', 'address', 'language'];
 const MON_EN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MON_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const DAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -103,10 +109,13 @@ async function publicForm(form: Json): Promise<Json> {
   const dates = (form.questions || []).some((q: Json) => q.type === 'serving_dates') ? await openDates(form) : [];
   return {
     slug: form.slug, title: form.title, intro: form.intro || '', lang: form.lang, kind: form.kind, thank_you: form.thank_you || '', cover: await coverOf(form),
-    questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => ({
-      id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
-      options: q.type === 'serving_dates' ? dates : opts(q)
-    })),
+    questions: (form.questions || []).filter((q: Json) => q && TYPES.includes(q.type)).map((q: Json) => {
+      const to = String(q.to || ''), fill = to.startsWith('contact.') && FILLS.includes(to.slice(8)) ? to.slice(8) : '';
+      return {
+        id: String(q.id), type: q.type, label: String(q.label || ''), help: q.help ? String(q.help) : '', required: !!q.required,
+        options: q.type === 'serving_dates' ? dates : opts(q), ...(fill ? { fill } : {})
+      };
+    }),
     consent: form.consent && form.consent.ask ? { ask: true, required: !!form.consent.required, label: String(form.consent.label || '') } : { ask: false }
   };
 }
@@ -117,6 +126,16 @@ async function loadForm(slug: string): Promise<Json> {
 }
 function clientIp(req: Request): string {
   return (req.headers.get('cf-connecting-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || req.headers.get('x-real-ip') || '').trim();
+}
+// v5 (wave194): the website account behind this request, when it carries a person's own session (not the publishable key)
+async function accountOf(req: Request): Promise<string | null> {
+  const token = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token || token === ANON_KEY) return null;
+  try {
+    const { data, error } = await svc.auth.getUser(token);
+    if (error || !data || !data.user) return null;
+    return data.user.id;
+  } catch (_) { return null; }
 }
 
 // ---------- the answers against the questions ----------
@@ -243,10 +262,11 @@ Deno.serve(async (req: Request) => {
         .eq('mapped->contact->>email', email).gte('created_at', since).in('status', ['received', 'processed', 'error']);
       if ((count || 0) >= PER_EMAIL) return reply(req, { error: 'rate' }, 429);
     }
-    const consent = pub.consent.ask ? { asked: pub.consent.label, given: body.consent === true, at: new Date().toISOString(), form: form.slug } : null;
+    const account = await accountOf(req);
+    const consent = pub.consent.ask ? { asked: pub.consent.label, given: body.consent === true, at: new Date().toISOString(), form: form.slug, ...(account ? { account: true } : {}) } : null;
     const ins = await svc.from('crm_form_submissions').insert({
       form_id: form.id, status: 'received', answers: res.clean, display: res.display, mapped: res.mapped, consent,
-      lang: form.lang, ip_hash: ipHash, user_agent: ua, is_test: isTest
+      lang: form.lang, ip_hash: ipHash, user_agent: ua, is_test: isTest, auth_user_id: account
     }).select('id').single();
     if (ins.error || !ins.data) return reply(req, { error: 'store_failed' }, 500);
     const sid = (ins.data as Json).id;
@@ -258,7 +278,7 @@ Deno.serve(async (req: Request) => {
     const result = applied.data as Json;
     const mail = isTest ? null : await confirmEmail(form, Number(result && result.contact_id));
     if (mail) await svc.from('crm_form_submissions').update({ result: { ...result, confirmation: mail } }).eq('id', sid);
-    return reply(req, isTest ? { ...ok, submission_id: sid, applied: true, result } : ok);
+    return reply(req, isTest ? { ...ok, submission_id: sid, applied: true, result, account: !!account } : { ...ok, ...(account ? { saved: !!(result && result.account) } : {}) });
   } catch (e) {
     return reply(req, { error: 'server', detail: String((e as Error).message || e).slice(0, 200) }, 500);
   }

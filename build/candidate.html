@@ -72127,6 +72127,784 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   };
 })();
 /* =====================================================================
+   WA v195 Sign-offs: volunteers' letters and forms, signed (02/10/26)
+   =====================================================================
+   Steel (02/10/26): "I'd also like to add my signature to volunteer recognition and volunteer hours sign off requests
+   that volunteers can ask for on their profile in the ebsite. This would appear on our volunteer manager as it's own
+   page to sign off on hours completed with us." His choices: an hours sign-off letter, a letter of recognition, or the
+   volunteer's own form signed; Operations leads, admins and the people an admin assigns sign; the signed PDF goes to the
+   volunteer's profile on welfareavenue.com and by email.
+
+   - The Volunteer Manager's Sign-offs page (#volunteering/signoffs; in the rail under People, with the waiting count;
+     a chip on phones): Waiting, Signed, Declined, All. Volunteers ask from their profile (wave194's account page).
+   - A request opens in a sheet: what they asked for and who it is for, their record, then, for a signer: the servings to
+     list with their hours (each can be changed or left out), the signer's own words on a recognition letter, where the
+     signature goes on the volunteer's own form (a page, a corner, a size; our hours page after it), a preview of the PDF,
+     Sign and send (the volunteer is emailed that it is ready, unless the signer says not to) or Decline with a reason the
+     volunteer sees. A signed request keeps its PDF and reference (WA-VS-xxxxxx) to download again.
+   - My signature: the name and title printed under it (English, and French for French letters), the signature drawn
+     with a finger or the mouse, or uploaded; Steel's can come from the signature he sent for the Academy certificate
+     (app_config cert_signature, wave194 of another session). A sample letter shows how it prints.
+   - Signers: who can sign (admins, Operations leads, people assigned); admins assign or remove team members.
+   - The page tour "signoffs" (the Academy row Page tour: Sign-offs).
+   Everything else is in the database (wa195_signoffs: signoff_list, signoff_detail, signoff_decline, signoff_signer_me,
+   signoff_signer_save, signoff_signers, signoff_signer_assign, signoff_counts) and the signoff edge function (the PDFs
+   and the signatures, in the private signoffs bucket). Nothing here switches mail_mode. The page hooks into the
+   Volunteer Manager at run time (waVolShell, waVolRender, WA_APP.apps.volunteer.groups, the masthead), so no other
+   segment changes.
+   ===================================================================== */
+(function () {
+  if (window.__wa195) return; window.__wa195 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', INK = '#1F201E', MUTED = '#797773', LINE = 'rgba(16,63,57,.14)';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var KINDS = {
+    hours: { l: 'Hours sign-off letter', s: 'Their servings and hours, signed' },
+    recognition: { l: 'Letter of recognition', s: 'A letter about what they bring to our community, signed' },
+    form: { l: 'Their own form', s: 'The form their school or employer gave them, signed' }
+  };
+  var STATUS = { requested: 'Waiting', signed: 'Signed', declined: 'Declined', all: 'All' };
+  /* where the signature goes on their form: the top left corner and the width, as parts of the page */
+  var PLACES = [['br', 'Bottom right', 0.58, 0.80], ['bl', 'Bottom left', 0.10, 0.80], ['bc', 'Bottom centre', 0.36, 0.80], ['mr', 'Middle right', 0.58, 0.48], ['tr', 'Top right', 0.62, 0.08]];
+  var SIZES = [['s', 'Small', 0.2], ['m', 'Medium', 0.28], ['l', 'Large', 0.38]];
+  var S = {
+    status: 'requested', list: null, counts: {}, canSign: false, err: '', loading: false, me: null, signers: null, signersBusy: false,
+    waiting: null, det: null, items: null, note: '', place: 'br', size: 'm', page: '', addPage: true, caption: true, notify: true,
+    preview: null, previewBusy: false, step: '', reason: '', busy: false, sheetErr: '', sigUrl: null, sigAt: 0, cert: undefined,
+    mine: null, mineErr: '', mineBusy: false, sampleBusy: false
+  };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function T(msg) { try { if (typeof toast === 'function') toast(msg); } catch (e) { /* fine */ } }
+  function staff() { try { return typeof isStaff === 'function' ? isStaff() : false; } catch (e) { return false; } }
+  function onView() { try { return typeof WA_VOL_VIEW !== 'undefined' && WA_VOL_VIEW === 'signoffs'; } catch (e) { return false; } }
+  function lower(s) { return String(s || '').trim().toLowerCase(); }
+  function first(name) { return String(name || '').trim().split(/\s+/)[0] || ''; }
+  function msgOf(err) { var m = String((err && (err.message || err.error_description || err.error)) || err || ''); return m.replace(/^.*?:\s(?=[A-Z])/, '') || 'Something went wrong.'; }
+  function fmtDay(iso, long) {
+    if (!iso) return '';
+    try { return new Date(String(iso).slice(0, 10) + 'T12:00:00Z').toLocaleDateString('en-CA', long ? { timeZone: 'UTC', weekday: 'short', year: 'numeric', month: 'long', day: 'numeric' } : { timeZone: 'UTC', year: 'numeric', month: 'short', day: 'numeric' }); }
+    catch (e) { return String(iso).slice(0, 10); }
+  }
+  function ago(ts) {
+    if (!ts) return '';
+    var d = Math.floor((Date.now() - new Date(ts).getTime()) / 86400000);
+    return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? d + ' days ago' : fmtDay(ts);
+  }
+  function num(n) { var x = Math.round(Number(n || 0) * 100) / 100; return String(x); }
+  function plural(n, one, many) { return n + ' ' + (Number(n) === 1 ? one : many); }
+  async function rpc(fn, args) { try { return await db.rpc(fn, args || {}); } catch (e) { return { error: e }; } }
+  /* the signoff function, as the signed-in person (their Hub sign-in); an error's own words when it has some */
+  async function call(body) {
+    try {
+      var r = await db.functions.invoke('signoff', { body: body });
+      if (!r.error) return { ok: true, data: r.data || {} };
+      var j = null;
+      try { j = r.error.context && typeof r.error.context.json === 'function' ? await r.error.context.json() : null; } catch (e) { j = null; }
+      return { ok: false, data: j || {}, error: (j && (j.error === 'server' && j.detail ? j.detail : j.error)) || msgOf(r.error) };
+    } catch (e) { return { ok: false, data: {}, error: msgOf(e) }; }
+  }
+  var WORDS = { not_allowed: 'This is for the Volunteer Manager\u2019s team.', not_found: 'That request is gone.', not_signer: 'Only a signer can do that.', signin: 'Your session ended. Sign in again.' };
+  function words(e) { return WORDS[e] || e || 'Something went wrong.'; }
+
+  /* ---------- the look ---------- */
+  function css() {
+    if (document.getElementById('w195css')) return;
+    var st = document.createElement('style'); st.id = 'w195css';
+    st.textContent = ''
+      + '#w195{font-family:' + BODY + ';color:' + INK + ';}'
+      + '#w195 .w195top{display:grid;gap:18px;align-items:start;}'
+      + '@media (min-width:1000px){#w195 .w195top{grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr);}}'
+      + '#w195 .w195lead{font-size:14px;line-height:1.55;color:' + MUTED + ';margin:0 0 14px;max-width:62em;}'
+      + '#w195 .w195f{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 12px;}'
+      + '#w195 .w195f button{font:600 13px ' + BODY + ';border:1px solid ' + LINE + ';background:#fff;color:' + GREEN + ';border-radius:999px;padding:6px 12px;cursor:pointer;}'
+      + '#w195 .w195f button.on{background:' + GREEN + ';border-color:' + GREEN + ';color:#fff;}'
+      + '#w195 .w195f small{font-weight:700;margin-left:6px;opacity:.8;}'
+      + '#w195 .w195list{display:grid;gap:8px;}'
+      + '#w195 .w195row{display:grid;grid-template-columns:1fr auto;gap:2px 12px;text-align:left;width:100%;background:#fff;border:1px solid ' + LINE + ';border-radius:12px;padding:12px 14px;cursor:pointer;font:inherit;color:inherit;}'
+      + '#w195 .w195row:hover{border-color:' + GREEN + ';box-shadow:0 2px 10px rgba(16,63,57,.08);}'
+      + '#w195 .w195row .k{grid-column:1;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';}'
+      + '#w195 .w195row b{grid-column:1;font-size:15.5px;color:' + GREEN + ';}'
+      + '#w195 .w195row .m{grid-column:1;font-size:13px;color:' + MUTED + ';}'
+      + '#w195 .w195row .w195st{grid-column:2;grid-row:1 / span 3;align-self:center;}'
+      + '#w195 .w195st,#w195sheet .w195st{display:inline-block;font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:rgba(220,165,39,.2);color:#6b4d05;white-space:nowrap;}'
+      + '#w195 .w195st.signed,#w195sheet .w195st.signed{background:rgba(42,140,122,.15);color:#1c6b5d;}'
+      + '#w195 .w195st.declined,#w195sheet .w195st.declined{background:rgba(179,64,47,.1);color:' + FLAG + ';}'
+      + '#w195 .w195empty{background:#fff;border:1px dashed ' + LINE + ';border-radius:12px;padding:18px;font-size:14px;color:' + MUTED + ';}'
+      + '#w195 .w195card{background:#fff;border:1px solid ' + LINE + ';border-radius:14px;padding:16px 16px 14px;margin:0 0 14px;}'
+      + '#w195 .w195card h3{font-family:' + HEAD + ';font-weight:600;font-size:20px;letter-spacing:.3px;color:' + GREEN + ';margin:0 0 8px;}'
+      + '#w195 .w195card p{font-size:13.5px;line-height:1.5;margin:0 0 8px;}'
+      + '#w195 .w195sig{display:block;max-width:100%;max-height:74px;margin:4px 0 8px;}'
+      + '#w195 .w195who{font-weight:700;color:' + INK + ';}'
+      + '#w195 .w195muted,#w195sheet .w195muted{color:' + MUTED + ';font-size:13px;}'
+      + '#w195 .w195signers{list-style:none;margin:0 0 10px;padding:0;}'
+      + '#w195 .w195signers li{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid ' + LINE + ';font-size:13.5px;}'
+      + '#w195 .w195signers li:first-child{border-top:0;}'
+      + '#w195 .w195signers .why{margin-left:auto;font-size:11.5px;color:' + MUTED + ';}'
+      + '#w195 .w195add{display:flex;gap:6px;flex-wrap:wrap;}'
+      + '#w195 select,#w195sheet select,#w195sheet input[type=text],#w195sheet input[type=number],#w195sheet textarea{font:14px ' + BODY + ';border:1px solid ' + LINE + ';border-radius:9px;padding:8px 10px;background:#fff;color:' + INK + ';max-width:100%;}'
+      + '#w195 .w195btn,#w195sheet .w195btn{font:600 13.5px ' + BODY + ';background:' + GREEN + ';color:#fff;border:1px solid ' + GREEN + ';border-radius:10px;padding:8px 14px;cursor:pointer;}'
+      + '#w195 .w195btn.ghost,#w195sheet .w195btn.ghost{background:#fff;color:' + GREEN + ';}'
+      + '#w195 .w195btn.flag,#w195sheet .w195btn.flag{background:#fff;color:' + FLAG + ';border-color:rgba(179,64,47,.45);}'
+      + '#w195 .w195btn[disabled],#w195sheet .w195btn[disabled]{opacity:.55;cursor:progress;}'
+      + '#w195 .w195link,#w195sheet .w195link{background:none;border:0;padding:0;font:inherit;color:' + GREEN + ';text-decoration:underline;text-underline-offset:3px;cursor:pointer;}'
+      + '#w195 .w195warn,#w195sheet .w195warn{background:rgba(179,64,47,.08);color:#7e2b1f;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:0 0 12px;}'
+      + '#w195 .w195ok,#w195sheet .w195ok{background:rgba(42,140,122,.1);color:#1c5b4f;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:0 0 12px;}'
+      /* the sheet */
+      + '#w195sheet{position:fixed;inset:0;z-index:9000;background:rgba(15,30,28,.45);display:flex;justify-content:flex-end;}'
+      + '#w195sheet .w195pane{width:min(820px,100%);height:100%;overflow-y:auto;background:' + CREAM + ';box-shadow:-12px 0 40px rgba(0,0,0,.18);padding:22px 24px 40px;font-family:' + BODY + ';color:' + INK + ';}'
+      + '@media (max-width:700px){#w195sheet .w195pane{padding:16px 14px 40px;}}'
+      + '#w195sheet .w195x{position:sticky;top:0;float:right;font:600 22px/1 ' + BODY + ';background:#fff;border:1px solid ' + LINE + ';border-radius:10px;width:38px;height:38px;cursor:pointer;color:' + GREEN + ';}'
+      + '#w195sheet h2{font-family:' + HEAD + ';font-weight:600;font-size:28px;line-height:1.1;color:' + GREEN + ';margin:2px 0 4px;}'
+      + '#w195sheet h3{font-family:' + HEAD + ';font-weight:600;font-size:19px;letter-spacing:.3px;color:' + GREEN + ';margin:20px 0 8px;}'
+      + '#w195sheet .w195k{font-size:11px;font-weight:700;letter-spacing:1.3px;text-transform:uppercase;color:' + MUTED + ';}'
+      + '#w195sheet .w195box{background:#fff;border:1px solid ' + LINE + ';border-radius:12px;padding:12px 14px;margin:0 0 10px;}'
+      + '#w195sheet dl{display:grid;grid-template-columns:9em 1fr;gap:6px 12px;margin:0;font-size:14px;}'
+      + '#w195sheet dt{color:' + MUTED + ';}'
+      + '#w195sheet dd{margin:0;}'
+      + '#w195sheet .w195q{white-space:pre-line;font-style:italic;}'
+      + '#w195sheet table{width:100%;border-collapse:collapse;font-size:13.5px;}'
+      + '#w195sheet th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';padding:6px 6px;border-bottom:1px solid ' + GREEN + ';}'
+      + '#w195sheet td{padding:6px 6px;border-bottom:1px solid ' + LINE + ';}'
+      + '#w195sheet td input[type=number]{width:5.5em;padding:5px 7px;}'
+      + '#w195sheet tr.off td{color:' + MUTED + ';text-decoration:line-through;}'
+      + '#w195sheet tr.off td input{text-decoration:none;}'
+      + '#w195sheet .w195tot{text-align:right;font-weight:700;color:' + GREEN + ';padding-top:8px;font-size:14px;}'
+      + '#w195sheet .w195row2{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:6px 0;}'
+      + '#w195sheet .w195row2 label{display:inline-flex;align-items:center;gap:6px;font-size:14px;cursor:pointer;}'
+      + '#w195sheet .w195acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0 6px;}'
+      + '#w195sheet .w195acts .w195btn.flag{margin-left:auto;}'
+      + '#w195sheet iframe{width:100%;height:72vh;border:1px solid ' + LINE + ';border-radius:10px;background:#fff;}'
+      + '#w195sheet .w195confirm{background:#fff;border:1.5px solid ' + GOLD + ';border-radius:12px;padding:14px;margin:14px 0 6px;font-size:14.5px;}'
+      + '#w195sheet textarea{width:100%;min-height:90px;resize:vertical;}'
+      + '#w195sheet .w195pad{position:relative;background:#fff;border:1.5px dashed rgba(16,63,57,.3);border-radius:12px;touch-action:none;}'
+      + '#w195sheet .w195pad canvas{display:block;width:100%;height:200px;cursor:crosshair;}'
+      + '#w195sheet .w195pad .w195line{position:absolute;left:8%;right:8%;bottom:46px;border-bottom:1px solid rgba(16,63,57,.25);pointer-events:none;}'
+      + '#w195sheet .w195tabs{display:flex;gap:6px;margin:0 0 10px;flex-wrap:wrap;}'
+      + '#w195sheet .w195tabs button{font:600 13px ' + BODY + ';border:1px solid ' + LINE + ';background:#fff;color:' + GREEN + ';border-radius:999px;padding:6px 12px;cursor:pointer;}'
+      + '#w195sheet .w195tabs button.on{background:' + GREEN + ';color:#fff;border-color:' + GREEN + ';}'
+      + '#w195sheet .w195grid{display:grid;gap:10px;}'
+      + '@media (min-width:640px){#w195sheet .w195grid{grid-template-columns:1fr 1fr;}}'
+      + '#w195sheet .w195grid label{display:block;font-size:13px;color:' + MUTED + ';margin:0 0 4px;}'
+      + '#w195sheet .w195grid input{width:100%;}'
+      + '#w195sheet .w195cert{display:flex;gap:14px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid ' + LINE + ';border-radius:12px;padding:10px 12px;margin:0 0 10px;}'
+      + '#w195sheet .w195cert img{max-height:60px;max-width:220px;}'
+      + '#w195sheet .w195big{display:block;max-height:90px;max-width:100%;margin-top:8px;}'
+      + '#w195sheet #w195pgn{width:4.5em;padding:5px 7px;}'
+      + '#w195sheet .sr,#w195 .sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}';
+    document.head.appendChild(st);
+  }
+
+  /* ---------- the page: Waiting, Signed, Declined, All; my signature; the signers ---------- */
+  function setWaiting(n) {
+    S.waiting = n;
+    try {
+      var a = document.querySelector('#w153rail a[data-w153go="#volunteering/signoffs"]'); if (!a) return;
+      var b = a.querySelector('.w153n');
+      if (n) { if (!b) { b = document.createElement('small'); b.className = 'w153n'; a.appendChild(b); } b.textContent = String(n); }
+      else if (b) b.parentNode.removeChild(b);
+    } catch (e) { /* fine */ }
+  }
+  async function counts() {
+    if (!staff()) return;
+    var r = await rpc('signoff_counts');
+    if (!r.error && r.data && r.data.requested != null) setWaiting(Number(r.data.requested) || 0);
+  }
+  async function load() {
+    if (S.loading) return;
+    S.loading = true;
+    var r = await rpc('signoff_list', { p_status: S.status });
+    if (r.error) { S.err = msgOf(r.error); S.list = []; }
+    else { S.err = ''; S.list = (r.data && r.data.rows) || []; S.counts = (r.data && r.data.counts) || {}; S.canSign = !!(r.data && r.data.can_sign); setWaiting(Number(S.counts.requested || 0)); }
+    if (!S.me) { var m = await rpc('signoff_signer_me'); if (!m.error && m.data) { S.me = m.data; S.meErr = false; } else S.meErr = true; }
+    S.loading = false;
+    paint();
+    if (S.me && S.me.can_sign && S.me.has_signature && !S.sigUrl) sigImage();
+    if (!S.signers && !S.signersBusy) loadSigners();
+  }
+  async function loadSigners() {
+    S.signersBusy = true;
+    var r = await rpc('signoff_signers');
+    S.signersBusy = false;
+    if (!r.error && r.data) { S.signers = r.data; paintSide(); }
+  }
+  async function sigImage() {
+    var r = await call({ action: 'signature_url' });
+    if (r.ok && r.data.url) { S.sigUrl = r.data.url; S.sigAt = Date.now(); paintSide(); }
+  }
+  function kindL(k) { return (KINDS[k] || {}).l || k; }
+  function rowHtml(x) {
+    var bits = [];
+    if (x.for_org) bits.push('For ' + x.for_org);
+    if (x.status === 'requested') bits.push('asked ' + ago(x.requested));
+    else if (x.status === 'signed') bits.push('signed ' + ago(x.signed) + (x.signer ? ' by ' + x.signer : ''));
+    else if (x.status === 'declined') bits.push('declined ' + ago(x.declined));
+    if (x.kind !== 'recognition' && x.status === 'requested') bits.push(plural(Number(x.now_servings || 0), 'serving', 'servings') + (x.period_from || x.period_to ? ' in their dates' : ''));
+    if (x.reference) bits.push(x.reference);
+    return '<button type="button" class="w195row" data-w195open="' + Number(x.id) + '"><span class="k">' + E(kindL(x.kind)) + (x.lang === 'fr' ? ' \u00b7 en fran\u00e7ais' : '') + '</span>' +
+      '<b>' + E(x.name || 'A volunteer') + '</b><span class="m">' + E(bits.join(' \u00b7 ')) + '</span><span class="w195st ' + E(x.status) + '">' + E(STATUS[x.status] || x.status) + '</span></button>';
+  }
+  function listHtml() {
+    var inner;
+    if (S.list === null) inner = '<div class="w195empty">Loading the requests\u2026</div>';
+    else if (S.err) inner = '<div class="w195warn">' + E(S.err) + '</div>';
+    else if (!S.list.length) {
+      inner = '<div class="w195empty">' + E(S.status === 'requested' ? 'Nothing waiting. Volunteers ask for a letter or a signed form from their profile on welfareavenue.com, and their requests show here.'
+        : S.status === 'signed' ? 'Nothing signed yet.' : S.status === 'declined' ? 'Nothing declined.' : 'No requests yet.') + '</div>';
+    }
+    else return '<div class="w195list" id="w195list">' + S.list.map(rowHtml).join('') + '</div>';
+    return '<div id="w195list">' + inner + '</div>';
+  }
+  function filtersHtml() {
+    var c = S.counts || {}, all = Object.keys(c).reduce(function (a, k) { return k === 'cancelled' ? a : a + Number(c[k] || 0); }, 0);
+    return '<div class="w195f" id="w195filters" role="group" aria-label="Show">' + ['requested', 'signed', 'declined', 'all'].map(function (k) {
+      var n = k === 'all' ? all : Number(c[k] || 0);
+      return '<button type="button" data-w195status="' + k + '"' + (S.status === k ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + E(STATUS[k]) + (n ? '<small>' + n + '</small>' : '') + '</button>';
+    }).join('') + '</div>';
+  }
+  function mineHtml() {
+    var me = S.me;
+    if (!me) return '<div class="w195card" id="w195mine"><h3>My signature</h3><p class="w195muted">' + (S.meErr ? 'Your signer details did not load. Reload the page to try again.' : 'Loading\u2026') + '</p></div>';
+    if (!me.can_sign) {
+      return '<div class="w195card" id="w195mine"><h3>Who signs</h3><p>Admins, the Operations leads and the people an admin assigns sign these letters. You can see every request here.</p></div>';
+    }
+    var ready = me.has_signature && me.name && me.title;
+    return '<div class="w195card" id="w195mine"><h3>My signature</h3>' +
+      (me.has_signature ? (S.sigUrl ? '<img class="w195sig" src="' + E(S.sigUrl) + '" alt="Your saved signature">' : '<p class="w195muted">Your signature is saved.</p>') : '<p>No signature saved yet. Add it once and every letter you sign carries it.</p>') +
+      (me.name ? '<p><span class="w195who">' + E(me.name) + '</span>' + (me.title ? '<br>' + E(me.title) + (me.title_fr ? '<br><span class="w195muted">' + E(me.title_fr) + ' (French letters)</span>' : '') : '') + '</p>' : '') +
+      (!ready ? '<div class="w195warn">Before you sign: ' + E([!me.has_signature ? 'your signature' : '', !me.name ? 'your name' : '', !me.title ? 'your title' : ''].filter(Boolean).join(', ')) + '.</div>' : '') +
+      '<div class="w195add"><button type="button" class="w195btn' + (me.has_signature ? ' ghost' : '') + '" data-w195mine="1">' + (me.has_signature ? 'Change' : 'Add my signature') + '</button>' +
+      (me.has_signature ? '<button type="button" class="w195btn ghost" data-w195sample="1"' + (S.sampleBusy ? ' disabled' : '') + '>' + (S.sampleBusy ? 'Drawing\u2026' : 'See a sample letter') + '</button>' : '') + '</div></div>';
+  }
+  function signersHtml() {
+    var d = S.signers; if (!d) return '';
+    var WHY = { admin: 'Admin', lead: 'Operations lead', assigned: 'Assigned' };
+    var h = '<div class="w195card" id="w195signers"><h3>Signers</h3><ul class="w195signers">' + (d.signers || []).map(function (s) {
+      return '<li><span>' + E(s.name || s.email) + (s.has_signature ? ' <span title="Signature saved">\u2713</span>' : '') + '</span><span class="why">' + E(WHY[s.why] || s.why) + '</span>' +
+        (d.admin && s.why === 'assigned' ? '<button type="button" class="w195link" data-w195unassign="' + E(s.email) + '">Remove</button>' : '') + '</li>';
+    }).join('') + '</ul>';
+    if (d.admin && (d.people || []).length) {
+      h += '<div class="w195add"><select id="w195pick" aria-label="A team member to add as a signer"><option value="">Add a signer\u2026</option>' + d.people.map(function (p) {
+        return '<option value="' + E(p.email) + '">' + E(p.name + (p.department ? ' (' + p.department + ')' : '')) + '</option>';
+      }).join('') + '</select><button type="button" class="w195btn ghost" data-w195assign="1">Add</button></div>';
+    }
+    return h + '</div>';
+  }
+  function pageHtml() {
+    return '<div id="w195"><p class="w195lead">Letters and forms volunteers ask us to sign from their profile on welfareavenue.com: an hours sign-off letter, a letter of recognition, or their own school or employer form. Check what they ask for, then sign with your saved signature. They get the PDF on their profile and an email that it is ready.</p>' +
+      '<div class="w195top"><div>' + filtersHtml() + listHtml() + '</div><div id="w195side">' + mineHtml() + signersHtml() + '</div></div></div>';
+  }
+  function paint() {
+    if (!onView()) return;
+    css();
+    try { if (typeof waVolPaint === 'function') waVolPaint(pageHtml()); } catch (e) { /* fine */ }
+    masthead();
+  }
+  function paintSide() { var s = document.getElementById('w195side'); if (s && onView()) s.innerHTML = mineHtml() + signersHtml(); }
+  async function sample() {
+    if (S.sampleBusy) return;
+    S.sampleBusy = true; paintSide();
+    var r = await call({ action: 'sample', kind: 'hours', lang: 'en' });
+    S.sampleBusy = false; paintSide();
+    if (r.ok && r.data.url) { try { window.open(r.data.url, '_blank', 'noopener'); } catch (e) { /* fine */ } }
+    else T(words(r.error));
+  }
+  async function assign(email, on) {
+    if (!email) { T('Choose someone first'); return; }
+    var r = await rpc('signoff_signer_assign', { p_email: email, p_on: !!on });
+    if (r.error) { T(msgOf(r.error)); return; }
+    T(on ? 'Added as a signer' : 'Removed from the signers');
+    S.signers = null; loadSigners();
+  }
+
+  /* ---------- a request, in a sheet: what they asked for, their record, then sign or decline ---------- */
+  var SUB = 'Letters and forms volunteers ask us to sign from their profile on welfareavenue.com';
+  function escKey(e) { if (e.key === 'Escape' && document.getElementById('w195sheet')) closeSheet(); }
+  function closeSheet() {
+    var s = document.getElementById('w195sheet'); if (s) s.parentNode.removeChild(s);
+    S.det = null; S.preview = null; S.step = ''; S.sheetErr = ''; S.sheetOk = ''; S.mine = null;
+    document.removeEventListener('keydown', escKey);
+  }
+  function sheet(inner) {
+    css();
+    var s = document.getElementById('w195sheet');
+    if (!s) {
+      s = document.createElement('div'); s.id = 'w195sheet'; s.setAttribute('role', 'dialog'); s.setAttribute('aria-modal', 'true');
+      document.body.appendChild(s);
+      s.addEventListener('click', onSheetClick); s.addEventListener('input', onSheetInput); s.addEventListener('change', onSheetChange);
+      document.addEventListener('keydown', escKey);
+    }
+    var old = s.querySelector('.w195pane'), keep = old ? old.scrollTop : 0;
+    s.innerHTML = '<div class="w195pane"><button type="button" class="w195x" data-w195close="1" aria-label="Close">\u00d7</button>' + inner + '</div>';
+    var p = s.querySelector('.w195pane'); if (p) p.scrollTop = keep;
+    return s;
+  }
+  function dt(k, v) { return '<dt>' + E(k) + '</dt><dd>' + E(v) + '</dd>'; }
+  async function open(id) {
+    S.det = null; S.items = null; S.note = ''; S.place = 'br'; S.size = 'm'; S.page = ''; S.addPage = true; S.caption = true; S.notify = true;
+    S.preview = null; S.stale = false; S.step = ''; S.reason = ''; S.sheetErr = ''; S.sheetOk = ''; S.mine = null;
+    sheet('<p class="w195muted">Loading\u2026</p>');
+    await fill(id);
+  }
+  async function fill(id) {
+    var r = await rpc('signoff_detail', { p_id: id });
+    if (r.error || !r.data) { sheet('<div class="w195warn">' + E(r.error ? msgOf(r.error) : 'That request is gone.') + '</div>'); return; }
+    S.det = r.data;
+    if (!S.me) { var m = await rpc('signoff_signer_me'); if (!m.error && m.data) S.me = m.data; }
+    S.items = (r.data.servings || []).map(function (x) { return { roster_id: x.roster_id, date: x.date, role: x.role_en || x.role, location: x.location, hours: Number(x.hours || 0), on: true }; });
+    paintSheet();
+  }
+  function totText() {
+    var on = (S.items || []).filter(function (x) { return x.on; });
+    return plural(on.length, 'serving', 'servings') + ', ' + num(on.reduce(function (a, x) { return a + Number(x.hours || 0); }, 0)) + ' hours';
+  }
+  function servingsHtml() {
+    var it = S.items || [];
+    if (!it.length) return '<h3>Servings to list</h3><div class="w195warn">No confirmed servings in their dates. Decline with a note, or ask them for other dates.</div>';
+    return '<h3>Servings to list</h3><p class="w195muted">Every confirmed serving in their dates, with the roster\u2019s hours (the usual 2 when none were recorded). Untick one to leave it out, or change its hours.</p>' +
+      '<div class="w195box"><table><thead><tr><th scope="col"><span class="sr">List</span></th><th scope="col">Date</th><th scope="col">Role</th><th scope="col">Where</th><th scope="col">Hours</th></tr></thead><tbody>' +
+      it.map(function (x, i) {
+        return '<tr' + (x.on ? '' : ' class="off"') + '><td><input type="checkbox" data-w195on="' + i + '"' + (x.on ? ' checked' : '') + ' aria-label="List ' + E(fmtDay(x.date)) + '"></td><td>' + E(fmtDay(x.date)) + '</td><td>' + E(x.role || '') + '</td>' +
+          '<td>' + E(x.location || '') + '</td><td><input type="number" min="0.25" max="24" step="0.25" value="' + E(num(x.hours)) + '" data-w195h="' + i + '" aria-label="Hours on ' + E(fmtDay(x.date)) + '"></td></tr>';
+      }).join('') + '</tbody></table><div class="w195tot" id="w195tot">' + E(totText()) + '</div></div>';
+  }
+  function placementHtml() {
+    return '<h3>Where your signature goes on their form</h3><p class="w195muted">Open their form to see where it asks for a signature, then pick the spot. The preview shows it before you sign.</p><div class="w195box">' +
+      '<div class="w195row2"><span class="w195k">Page</span><label><input type="radio" name="w195pg" value=""' + (S.page === '' ? ' checked' : '') + '> The last page</label>' +
+      '<label><input type="radio" name="w195pg" value="n"' + (S.page !== '' ? ' checked' : '') + '> Page</label><input type="number" min="1" max="200" id="w195pgn" aria-label="Page number" value="' + E(S.page || '1') + '"></div>' +
+      '<div class="w195row2"><span class="w195k">Where</span>' + PLACES.map(function (p) { return '<label><input type="radio" name="w195pl" value="' + p[0] + '"' + (S.place === p[0] ? ' checked' : '') + '> ' + E(p[1]) + '</label>'; }).join('') + '</div>' +
+      '<div class="w195row2"><span class="w195k">Size</span>' + SIZES.map(function (z) { return '<label><input type="radio" name="w195sz" value="' + z[0] + '"' + (S.size === z[0] ? ' checked' : '') + '> ' + E(z[1]) + '</label>'; }).join('') + '</div>' +
+      '<div class="w195row2"><label><input type="checkbox" id="w195cap"' + (S.caption ? ' checked' : '') + '> Your name, title, the date and the reference under the signature</label></div>' +
+      '<div class="w195row2"><label><input type="checkbox" id="w195add"' + (S.addPage ? ' checked' : '') + '> Add our hours confirmation page after their form</label></div></div>';
+  }
+  function placement() {
+    var p = PLACES.filter(function (x) { return x[0] === S.place; })[0] || PLACES[0], z = SIZES.filter(function (x) { return x[0] === S.size; })[0] || SIZES[1];
+    var o = { x: p[2], y: p[3], w: z[2], caption: !!S.caption };
+    if (S.page !== '') o.page = Math.max(0, (Number(S.page) || 1) - 1);
+    return o;
+  }
+  function bodyFor(action) {
+    var q = S.det.request, b = { action: action, id: q.id };
+    if (q.kind !== 'recognition') b.items = (S.items || []).filter(function (x) { return x.on; }).map(function (x) { return { roster_id: x.roster_id, hours: Number(x.hours) }; });
+    else b.note = S.note || '';
+    if (q.kind === 'form') { b.placement = placement(); b.add_page = !!S.addPage; }
+    if (action === 'sign') b.notify = !!S.notify;
+    return b;
+  }
+  function ready() { var me = S.me || {}; return !!(me.has_signature && me.name && me.title); }
+  function actionsHtml() {
+    var d = S.det, q = d.request, me = S.me || {}, fn = d.first_name || first(d.name) || 'They';
+    if (S.step === 'confirm') {
+      return '<div class="w195confirm" role="alertdialog" aria-label="Sign this request"><p><b>Sign as ' + E(me.name) + ', ' + E(q.lang === 'fr' ? (me.title_fr || me.title) : me.title) + '?</b> ' +
+        E(fn) + ' gets the signed PDF on their profile' + E(S.notify ? ', and an email that it is ready.' : '. No email goes out.') + '</p>' +
+        '<div class="w195row2"><label><input type="checkbox" id="w195notify"' + (S.notify ? ' checked' : '') + '> Email ' + E(fn) + ' that it is ready</label></div>' +
+        '<div class="w195acts"><button type="button" class="w195btn" data-w195sign="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Signing\u2026' : 'Yes, sign it') + '</button>' +
+        '<button type="button" class="w195btn ghost" data-w195step="">Not yet</button></div></div>';
+    }
+    if (S.step === 'decline') {
+      return '<div class="w195confirm"><p><b>Decline this request?</b> ' + E(fn) + ' sees your note on their profile. Say why in a few words, and what would work instead if anything.</p>' +
+        '<label class="sr" for="w195reason">Your note to them</label><textarea id="w195reason" maxlength="500" placeholder="For example: this form is for hours with another organization.">' + E(S.reason) + '</textarea>' +
+        '<div class="w195acts"><button type="button" class="w195btn flag" data-w195decline="1"' + (S.busy ? ' disabled' : '') + '>' + (S.busy ? 'Declining\u2026' : 'Decline the request') + '</button>' +
+        '<button type="button" class="w195btn ghost" data-w195step="">Back</button></div></div>';
+    }
+    var none = q.kind !== 'recognition' && !(S.items || []).some(function (x) { return x.on; });
+    var why = !ready() ? 'Add your signature, name and title in My signature first' : none ? 'List at least one serving' : '';
+    return '<div class="w195acts"><button type="button" class="w195btn ghost" data-w195preview="1"' + (S.previewBusy || none ? ' disabled' : '') + '>' + (S.previewBusy ? 'Drawing\u2026' : 'Preview') + '</button>' +
+      '<button type="button" class="w195btn" data-w195step="confirm"' + (why ? ' disabled title="' + E(why) + '"' : '') + '>Sign and send</button>' +
+      '<button type="button" class="w195btn flag" data-w195step="decline">Decline</button></div>' + (why && !none ? '<p class="w195muted">' + E(why) + '.</p>' : '');
+  }
+  function paintSheet() {
+    var d = S.det; if (!d) return;
+    var q = d.request, waiting = q.status === 'requested', fn = d.first_name || first(d.name);
+    var h = '<p class="w195k">' + E(kindL(q.kind)) + (q.lang === 'fr' ? ' \u00b7 the letter is in French' : '') + '</p><h2>' + E(d.name || 'A volunteer') + '</h2>' +
+      '<p><span class="w195st ' + E(q.status) + '">' + E(STATUS[q.status] || q.status) + '</span> <span class="w195muted">asked ' + E(fmtDay(q.created_at, true)) + '</span></p>' +
+      (S.sheetOk ? '<div class="w195ok" role="status">' + E(S.sheetOk) + '</div>' : '') + (S.sheetErr ? '<div class="w195warn" role="alert">' + E(S.sheetErr) + '</div>' : '');
+    h += '<h3>What they asked for</h3><div class="w195box"><dl>' + dt('Kind', kindL(q.kind)) +
+      dt('For', q.for_org || 'Not said: the letter is addressed to whom it may concern') + (q.purpose ? dt('What for', q.purpose) : '') +
+      (q.kind !== 'recognition' ? dt('Dates', q.period_from || q.period_to ? (q.period_from ? fmtDay(q.period_from) : 'their first serving') + ' to ' + (q.period_to ? fmtDay(q.period_to) : 'today') : 'All their servings') : '') +
+      (q.notes ? '<dt>Their note</dt><dd class="w195q">' + E(q.notes) + '</dd>' : '') +
+      (q.kind === 'form' ? '<dt>Their form</dt><dd>' + E(q.form_name || 'Their form') + (q.form_bytes ? ' <span class="w195muted">(' + Math.max(1, Math.round(q.form_bytes / 1024)) + ' KB)</span>' : '') +
+        ' <button type="button" class="w195link" data-w195form="1">Open it</button></dd>' : '') +
+      dt('Email', d.email || 'None on file') + '</dl></div>';
+    h += '<h3>Their record</h3><div class="w195box">' + E(plural(Number(d.all_count || 0), 'confirmed serving', 'confirmed servings') + ', about ' + num(d.all_hours) + ' hours' +
+      (d.first ? ', from ' + fmtDay(d.first) + ' to ' + fmtDay(d.last) : '') + '.') + ((d.roles || []).filter(Boolean).length ? ' <span class="w195muted">' + E(d.roles.filter(Boolean).join(', ')) + '</span>' : '') +
+      (d.request.person_id ? ' <a class="w195link" href="#volunteering/people" data-w195person="' + Number(d.request.person_id) + '">Their volunteer record</a>' : '') + '</div>';
+    if (q.status === 'signed') {
+      h += '<h3>Signed</h3><div class="w195box"><dl>' + dt('Signed', fmtDay(q.signed_at, true) + (q.signer_name ? ' by ' + q.signer_name + (q.signer_title ? ', ' + q.signer_title : '') : '')) +
+        dt('Reference', q.reference || '') + (q.kind !== 'recognition' ? dt('Listed', plural(Number(q.servings || 0), 'serving', 'servings') + ', ' + num(q.hours) + ' hours') : '') +
+        dt('Emailed', q.emailed_at ? fmtDay(q.emailed_at, true) : 'Not emailed') + '</dl></div><div class="w195acts"><button type="button" class="w195btn" data-w195letter="1">Open the signed PDF</button></div>';
+    } else if (q.status === 'declined') {
+      h += '<h3>Declined</h3><div class="w195box"><dl>' + dt('When', fmtDay(q.declined_at, true)) + (q.declined_by ? dt('By', q.declined_by) : '') +
+        '<dt>Our note to them</dt><dd class="w195q">' + E(q.decline_reason || '') + '</dd></dl></div>';
+    } else if (waiting && !d.can_sign) {
+      h += '<div class="w195box">Only a signer can sign or decline. Admins, the Operations leads and the people an admin assigns sign these letters.</div>';
+    } else if (waiting) {
+      if (!ready()) h += '<div class="w195warn">Add your signature, name and title before you sign. <button type="button" class="w195link" data-w195mine="1">Open My signature</button></div>';
+      if (q.kind !== 'recognition') h += servingsHtml();
+      if (q.kind === 'recognition') {
+        h += '<h3>Your words</h3><p class="w195muted">The letter already says when ' + E(fn || 'they') + ' started, their servings, hours and roles. Add a few lines of your own if you like: what they bring, a moment that stood out. A blank line starts a new paragraph.</p>' +
+          '<label class="sr" for="w195note">Your words</label><textarea id="w195note" maxlength="1500">' + E(S.note) + '</textarea>';
+      }
+      if (q.kind === 'form') h += placementHtml();
+      h += actionsHtml();
+      if (S.preview) {
+        h += '<h3 id="w195pv">Preview</h3><p class="w195muted"><span id="w195stale">' + (S.stale ? STALE : '') + '</span>Marked PREVIEW; the signed copy carries its reference instead. ' +
+          '<a href="' + E(S.preview.url) + '" target="_blank" rel="noopener">Open it in a new tab</a></p><iframe src="' + E(S.preview.url) + '" title="Preview of the PDF"></iframe>';
+      }
+    }
+    sheet(h);
+  }
+  /* a change after the preview: say so where the preview is, without drawing the sheet again */
+  var STALE = '<b>Before your last change.</b> Preview again to see it. ';
+  function stale() {
+    if (!S.preview || S.stale) return;
+    S.stale = true;
+    var n = document.getElementById('w195stale'); if (n) n.innerHTML = STALE;
+  }
+  async function preview() {
+    if (S.previewBusy || !S.det) return;
+    S.previewBusy = true; S.sheetErr = ''; S.sheetOk = ''; paintSheet();
+    var r = await call(bodyFor('preview'));
+    S.previewBusy = false;
+    if (r.ok && r.data.url) {
+      S.preview = { url: r.data.url, pages: r.data.pages }; S.stale = false; paintSheet();
+      var f = document.getElementById('w195pv'); if (f) { try { f.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { /* fine */ } }
+    } else { S.sheetErr = words(r.error); paintSheet(); }
+  }
+  function mailWords(m) {
+    m = m || {};
+    if (m.skipped) return 'No email sent.';
+    var st = String(m.status || '');
+    if (st === 'sent' || st === 'queued') return 'The volunteer was emailed.';
+    if (/test/.test(st) || /test/i.test(String(m.note || ''))) return 'The Hub\u2019s email is in test mode, so the email went to the test recipients.';
+    return 'The email did not go out (' + (m.note || m.error || st || 'no reason given') + '); the PDF is on their profile.';
+  }
+  async function sign() {
+    if (S.busy || !S.det) return;
+    var id = S.det.request.id;
+    S.busy = true; S.sheetErr = ''; paintSheet();
+    var r = await call(bodyFor('sign'));
+    S.busy = false;
+    if (r.ok && r.data.ok) {
+      T('Signed: ' + r.data.reference);
+      S.step = ''; S.preview = null; S.sheetOk = 'Signed. Reference ' + r.data.reference + '. ' + mailWords(r.data.email);
+      await fill(id); load(); counts();
+    } else { S.step = 'confirm'; S.sheetErr = words(r.error); paintSheet(); }
+  }
+  async function decline() {
+    if (S.busy || !S.det) return;
+    var reason = String(S.reason || '').trim(), id = S.det.request.id, fn = first(S.det.name) || 'They';
+    if (reason.length < 3) { S.sheetErr = 'Say why in a few words: the volunteer sees it.'; paintSheet(); return; }
+    S.busy = true; S.sheetErr = ''; paintSheet();
+    var r = await rpc('signoff_decline', { p_id: id, p_reason: reason });
+    S.busy = false;
+    if (r.error) { S.sheetErr = msgOf(r.error); paintSheet(); return; }
+    T('Declined'); S.step = ''; S.sheetOk = 'Declined. ' + fn + ' sees your note on their profile.';
+    await fill(id); load(); counts();
+  }
+  async function openFile(action) {
+    var w = null;
+    try { w = window.open('about:blank', '_blank'); if (w) w.opener = null; } catch (e) { w = null; }
+    var r = await call({ action: action, id: S.det.request.id });
+    if (r.ok && r.data.url) { if (w) w.location.href = r.data.url; else window.location.href = r.data.url; }
+    else { try { if (w) w.close(); } catch (e) { /* fine */ } T(words(r.error)); }
+  }
+  function onSheetClick(e) {
+    var t = e.target;
+    if (t && t.id === 'w195sheet') { closeSheet(); return; }
+    var el = t && t.closest ? t.closest('button, a[data-w195person]') : null; if (!el) return;
+    if (el.hasAttribute('data-w195close')) closeSheet();
+    else if (el.hasAttribute('data-w195form')) openFile('form_url');
+    else if (el.hasAttribute('data-w195letter')) openFile('letter_url');
+    else if (el.hasAttribute('data-w195preview')) preview();
+    else if (el.hasAttribute('data-w195step')) {
+      S.step = el.getAttribute('data-w195step'); S.sheetErr = ''; paintSheet();
+      var f = document.getElementById(S.step === 'decline' ? 'w195reason' : S.step === 'confirm' ? 'w195notify' : ''); if (f) { try { f.focus(); } catch (x) { /* fine */ } }
+    }
+    else if (el.hasAttribute('data-w195sign')) sign();
+    else if (el.hasAttribute('data-w195decline')) decline();
+    else if (el.hasAttribute('data-w195mine')) openMine();
+    else if (el.hasAttribute('data-w195person')) closeSheet();
+    else mineClick(el);
+  }
+  function onSheetInput(e) {
+    var t = e.target; if (!t) return;
+    if (t.hasAttribute('data-w195h') && S.items) {
+      var i = Number(t.getAttribute('data-w195h')), v = Number(t.value);
+      if (S.items[i] && isFinite(v) && v > 0 && v <= 24) { S.items[i].hours = Math.round(v * 4) / 4; var tot = document.getElementById('w195tot'); if (tot) tot.textContent = totText(); stale(); }
+    }
+    else if (t.id === 'w195note') { S.note = t.value; stale(); }
+    else if (t.id === 'w195reason') S.reason = t.value;
+    else if (t.id === 'w195pgn') { S.page = String(Math.max(1, Math.floor(Number(t.value) || 1))); var rb = document.querySelector('#w195sheet input[name="w195pg"][value="n"]'); if (rb) rb.checked = true; stale(); }
+    else mineInput(t);
+  }
+  function onSheetChange(e) {
+    var t = e.target; if (!t) return;
+    if (t.hasAttribute('data-w195on') && S.items) { var i = Number(t.getAttribute('data-w195on')); if (S.items[i]) S.items[i].on = t.checked; stale(); paintSheet(); }
+    else if (t.name === 'w195pg') { S.page = t.value === 'n' ? String(Math.max(1, Number((document.getElementById('w195pgn') || {}).value) || 1)) : ''; stale(); }
+    else if (t.name === 'w195pl') { S.place = t.value; stale(); }
+    else if (t.name === 'w195sz') { S.size = t.value; stale(); }
+    else if (t.id === 'w195cap') { S.caption = t.checked; stale(); }
+    else if (t.id === 'w195add') { S.addPage = t.checked; stale(); }
+    else if (t.id === 'w195notify') { S.notify = t.checked; paintSheet(); }
+    else mineChange(t);
+  }
+
+  /* ---------- my signature: the name and titles under it, the signature drawn, uploaded or the one Steel sent ---------- */
+  async function loadCert() {
+    if (S.cert !== undefined) return S.cert;
+    S.cert = null;
+    try {
+      var r = await db.from('app_config').select('value').eq('key', 'cert_signature').maybeSingle();
+      var v = r && r.data ? r.data.value : null, j = typeof v === 'string' ? JSON.parse(v) : v;
+      if (j && /^data:image\/png;base64,/.test(String(j.image || ''))) S.cert = { image: j.image, name: String(j.name || ''), title: String(j.title || '') };
+    } catch (e) { S.cert = null; }
+    return S.cert;
+  }
+  /* the certificate's signature is offered only to the person it belongs to */
+  function certOk() {
+    var c = S.cert, m = S.mine || {}, me = S.me || {}, own = lower(c && c.name);
+    if (!own) return false;
+    var mine = [m.name, me.name, (typeof USER !== 'undefined' && USER && USER.name) || ''].map(lower);
+    return mine.indexOf(own) >= 0;
+  }
+  async function openMine() {
+    var me = S.me || {};
+    S.mine = { name: me.name || (typeof USER !== 'undefined' && USER && USER.name) || '', title: me.title || '', title_fr: me.title_fr || '', tab: me.has_signature ? 'keep' : 'draw', png: null, canvas: null };
+    S.mineErr = '';
+    sheet('<p class="w195muted">Loading\u2026</p>');
+    await loadCert();
+    if (certOk()) { if (!me.has_signature) S.mine.tab = 'cert'; if (!S.mine.title && S.cert.title) S.mine.title = S.cert.title; }
+    if (me.has_signature && !S.sigUrl) await sigImage();
+    paintMine();
+  }
+  function paintMine() {
+    var m = S.mine, me = S.me || {}; if (!m) return;
+    var tabs = [];
+    if (me.has_signature) tabs.push(['keep', 'Keep my signature']);
+    if (certOk()) tabs.push(['cert', 'The one I sent for the certificate']);
+    tabs.push(['draw', 'Draw it'], ['upload', 'Upload a picture']);
+    var h = '<p class="w195k">Volunteer Manager \u00b7 Sign-offs</p><h2>My signature</h2><p class="w195muted">What prints at the bottom of every letter you sign: your signature, then your name and title, then Welfare Avenue.</p>' +
+      (S.mineErr ? '<div class="w195warn" role="alert">' + E(S.mineErr) + '</div>' : '') +
+      '<div class="w195grid"><div><label for="w195mn">Name</label><input type="text" id="w195mn" maxlength="120" autocomplete="name" value="' + E(m.name) + '"></div>' +
+      '<div><label for="w195mt">Title</label><input type="text" id="w195mt" maxlength="120" placeholder="For example Operations Lead" value="' + E(m.title) + '"></div>' +
+      '<div><label for="w195mf">Title in French, for French letters (optional)</label><input type="text" id="w195mf" maxlength="120" placeholder="For example Responsable des op\u00e9rations" value="' + E(m.title_fr) + '"></div></div>' +
+      '<h3>Signature</h3><div class="w195tabs" role="group" aria-label="Your signature">' + tabs.map(function (x) {
+        return '<button type="button" data-w195tab="' + x[0] + '"' + (m.tab === x[0] ? ' class="on" aria-pressed="true"' : ' aria-pressed="false"') + '>' + E(x[1]) + '</button>';
+      }).join('') + '</div>';
+    if (m.tab === 'keep') h += '<div class="w195box">' + (S.sigUrl ? '<img class="w195big" src="' + E(S.sigUrl) + '" alt="Your saved signature">' : '<span class="w195muted">Your saved signature stays as it is.</span>') + '</div>';
+    else if (m.tab === 'cert') h += '<div class="w195cert"><img src="' + E(S.cert.image) + '" alt="The signature you sent"><span class="w195muted">The signature you sent for the Avenue Academy certificate. It prints the same way on volunteer letters.</span></div>';
+    else if (m.tab === 'draw') h += '<div class="w195pad" id="w195pad"><canvas aria-label="Draw your signature here"></canvas><span class="w195line"></span></div>' +
+      '<div class="w195row2"><button type="button" class="w195link" data-w195clear="1">Clear</button><span class="w195muted">Sign above the line with a finger, a pen or the mouse.</span></div>';
+    else h += '<div class="w195box"><label class="sr" for="w195file">A picture of your signature</label><input type="file" id="w195file" accept="image/png,image/jpeg">' +
+      '<p class="w195muted">A photo or a scan of your signature on white paper works: the white around it is cleared.</p>' + (m.png ? '<img class="w195big" src="' + m.png + '" alt="Your signature, ready to save">' : '') + '</div>';
+    h += '<div class="w195acts"><button type="button" class="w195btn" data-w195save="1"' + (S.mineBusy ? ' disabled' : '') + '>' + (S.mineBusy ? 'Saving\u2026' : 'Save') + '</button>' +
+      '<button type="button" class="w195btn ghost" data-w195close="1">Cancel</button></div>';
+    sheet(h);
+    if (m.tab === 'draw') pad();
+  }
+  function pad() {
+    var wrap = document.getElementById('w195pad'); if (!wrap || !S.mine) return;
+    var cv = wrap.querySelector('canvas'), r = cv.getBoundingClientRect(), dpr = Math.min(3, window.devicePixelRatio || 1);
+    cv.width = Math.max(300, Math.round((r.width || 600) * dpr)); cv.height = Math.max(100, Math.round((r.height || 200) * dpr));
+    var cx = cv.getContext('2d'), down = false, last = null;
+    cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.strokeStyle = INK; cx.fillStyle = INK; cx.lineWidth = 2.6 * dpr;
+    function pt(e) { var b = cv.getBoundingClientRect(); return { x: (e.clientX - b.left) * cv.width / b.width, y: (e.clientY - b.top) * cv.height / b.height }; }
+    cv.addEventListener('pointerdown', function (e) { down = true; last = pt(e); try { cv.setPointerCapture(e.pointerId); } catch (x) { /* fine */ } cx.beginPath(); cx.arc(last.x, last.y, cx.lineWidth / 2, 0, Math.PI * 2); cx.fill(); e.preventDefault(); });
+    cv.addEventListener('pointermove', function (e) { if (!down) return; var p = pt(e); cx.beginPath(); cx.moveTo(last.x, last.y); cx.lineTo(p.x, p.y); cx.stroke(); last = p; e.preventDefault(); });
+    function end() { down = false; last = null; }
+    cv.addEventListener('pointerup', end); cv.addEventListener('pointercancel', end);
+    S.mine.canvas = cv;
+  }
+  /* the drawing, cropped to its ink with a margin, at most 1200 x 600, as a PNG with a clear background */
+  function trimmed(cv) {
+    var w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data, x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (var y = 0; y < h; y++) for (var x = 0; x < w; x++) { if (d[(y * w + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    if (x1 < 0) return null;
+    var m = 12; x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(w - 1, x1 + m); y1 = Math.min(h - 1, y1 + m);
+    var cw = x1 - x0 + 1, ch = y1 - y0 + 1, s = Math.min(1, 1200 / cw, 600 / ch);
+    var out = document.createElement('canvas'); out.width = Math.max(40, Math.round(cw * s)); out.height = Math.max(15, Math.round(ch * s));
+    out.getContext('2d').drawImage(cv, x0, y0, cw, ch, 0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
+  }
+  function fromFile(file) {
+    return new Promise(function (res, rej) {
+      if (!file || !/^image\/(png|jpeg)$/.test(file.type)) { rej(new Error('Choose a PNG or JPEG picture.')); return; }
+      if (file.size > 8 * 1024 * 1024) { rej(new Error('That picture is over 8 MB.')); return; }
+      var fr = new FileReader();
+      fr.onload = function () {
+        var img = new Image();
+        img.onload = function () {
+          var s = Math.min(1, 2000 / img.width, 1000 / img.height), cv = document.createElement('canvas');
+          cv.width = Math.max(1, Math.round(img.width * s)); cv.height = Math.max(1, Math.round(img.height * s));
+          var cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, cv.width, cv.height);
+          var id = cx.getImageData(0, 0, cv.width, cv.height), d = id.data;
+          for (var i = 0; i < d.length; i += 4) { var l = (d[i] + d[i + 1] + d[i + 2]) / 3; if (l > 215) d[i + 3] = 0; else if (l > 160) d[i + 3] = Math.round(d[i + 3] * (215 - l) / 55); }
+          cx.putImageData(id, 0, 0);
+          var png = trimmed(cv); if (!png) rej(new Error('We could not find a signature in that picture.')); else res(png);
+        };
+        img.onerror = function () { rej(new Error('That picture could not be read.')); };
+        img.src = fr.result;
+      };
+      fr.onerror = function () { rej(new Error('That picture could not be read.')); };
+      fr.readAsDataURL(file);
+    });
+  }
+  async function saveMine() {
+    var m = S.mine; if (!m || S.mineBusy) return;
+    m.name = String(m.name || '').trim(); m.title = String(m.title || '').trim(); m.title_fr = String(m.title_fr || '').trim();
+    if (!m.name || !m.title) { S.mineErr = 'Your name and title print under your signature: add both.'; paintMine(); return; }
+    var png = null, me = S.me || {};
+    if (m.tab === 'draw') { png = m.canvas ? trimmed(m.canvas) : null; if (!png) { S.mineErr = 'Draw your signature first, or choose another way.'; paintMine(); return; } }
+    else if (m.tab === 'upload') { if (!m.png) { S.mineErr = 'Choose a picture of your signature first.'; paintMine(); return; } png = m.png; }
+    else if (m.tab === 'cert') png = S.cert && S.cert.image;
+    else if (!me.has_signature) { S.mineErr = 'Add your signature first.'; paintMine(); return; }
+    S.mineBusy = true; S.mineErr = ''; paintMine();
+    var r1 = await rpc('signoff_signer_save', { p: { name: m.name, title: m.title, title_fr: m.title_fr } });
+    if (r1.error) { S.mineBusy = false; S.mineErr = msgOf(r1.error); paintMine(); return; }
+    if (png) {
+      var r2 = await call({ action: 'signature_save', png_b64: png });
+      if (!r2.ok) { S.mineBusy = false; S.mineErr = words(r2.error); paintMine(); return; }
+    }
+    S.mineBusy = false;
+    var r3 = await rpc('signoff_signer_me'); if (!r3.error && r3.data) S.me = r3.data;
+    S.sigUrl = null; closeSheet(); T('Your signature is saved');
+    paint(); if (S.me && S.me.has_signature) sigImage();
+    S.signers = null; loadSigners();
+  }
+  function mineClick(el) {
+    if (!S.mine) return;
+    if (el.hasAttribute('data-w195tab')) { S.mine.tab = el.getAttribute('data-w195tab'); S.mine.canvas = null; S.mineErr = ''; paintMine(); }
+    else if (el.hasAttribute('data-w195clear')) { var cv = S.mine.canvas; if (cv) cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); }
+    else if (el.hasAttribute('data-w195save')) saveMine();
+  }
+  function mineInput(t) {
+    if (!S.mine) return;
+    if (t.id === 'w195mn') S.mine.name = t.value;
+    else if (t.id === 'w195mt') S.mine.title = t.value;
+    else if (t.id === 'w195mf') S.mine.title_fr = t.value;
+  }
+  function mineChange(t) {
+    if (!S.mine || t.id !== 'w195file') return;
+    var f = t.files && t.files[0]; if (!f) return;
+    fromFile(f).then(function (png) { S.mine.png = png; S.mineErr = ''; paintMine(); }, function (e) { S.mine.png = null; S.mineErr = e.message; paintMine(); });
+  }
+
+  /* ---------- the masthead: the page's own title over wave191's ---------- */
+  function masthead() {
+    if (!onView()) return;
+    var sec = document.getElementById('volunteering'); if (!sec) return;
+    var m = sec.querySelector('.w118mast'); if (!m) return;
+    var h1 = m.querySelector('h1'), p = m.querySelector(':scope > p');
+    if (h1 && h1.textContent !== 'Sign-offs') h1.textContent = 'Sign-offs';
+    if (p && p.textContent !== SUB) p.textContent = SUB;
+  }
+  function watch() {
+    var sec = document.getElementById('volunteering'); if (!sec || sec.getAttribute('data-w195mo')) return !!sec;
+    sec.setAttribute('data-w195mo', '1');
+    var t = null;
+    try { new MutationObserver(function () { if (!onView()) return; clearTimeout(t); t = setTimeout(masthead, 40); }).observe(sec, { childList: true, subtree: true, characterData: true }); } catch (e) { /* fine */ }
+    return true;
+  }
+
+  /* ---------- the page's clicks ---------- */
+  document.addEventListener('click', function (e) {
+    var root = document.getElementById('w195'); if (!root || !e.target || !root.contains(e.target)) return;
+    var el = e.target.closest ? e.target.closest('button') : null; if (!el) return;
+    if (el.hasAttribute('data-w195open')) open(Number(el.getAttribute('data-w195open')));
+    else if (el.hasAttribute('data-w195status')) { S.status = el.getAttribute('data-w195status'); S.list = null; paint(); load(); }
+    else if (el.hasAttribute('data-w195mine')) openMine();
+    else if (el.hasAttribute('data-w195sample')) sample();
+    else if (el.hasAttribute('data-w195assign')) { var sel = document.getElementById('w195pick'); assign(sel ? sel.value : '', true); }
+    else if (el.hasAttribute('data-w195unassign')) assign(el.getAttribute('data-w195unassign'), false);
+  });
+
+  /* ---------- the Volunteer Manager: the view, the chip on phones, the rail item with the waiting count ---------- */
+  function wrapVol() {
+    var ok = true;
+    if (typeof waVolRender === 'function') {
+      if (!waVolRender.__w195) {
+        var __vr195 = waVolRender;
+        waVolRender = async function () {
+          if (onView()) {
+            /* board viewers and anyone signed out of the team see the calendar instead */
+            if (!staff()) { WA_VOL_VIEW = 'calendar'; try { history.replaceState(null, '', '#volunteering'); } catch (e) { /* fine */ } return await __vr195.apply(this, arguments); }
+            css(); watch(); paint(); load();
+            setTimeout(masthead, 150); setTimeout(masthead, 700); setTimeout(masthead, 1600);
+            return;
+          }
+          var s = document.getElementById('w195sheet'); if (s) closeSheet();
+          return await __vr195.apply(this, arguments);
+        };
+        waVolRender.__w195 = true;
+      }
+    } else ok = false;
+    if (typeof waVolShell === 'function') {
+      if (!waVolShell.__w195) {
+        var __sh195 = waVolShell;
+        waVolShell = function (inner) {
+          var html = __sh195(inner);
+          try {
+            if (staff() && html.indexOf('data-vl="signoffs"') < 0) html = html.replace('Volunteers</span>', 'Volunteers</span><span class="fchip' + (onView() ? ' on' : '') + '" data-vl="signoffs">Sign-offs</span>');
+          } catch (e) { /* fine */ }
+          return html;
+        };
+        waVolShell.__w195 = true;
+      }
+    } else ok = false;
+    return ok;
+  }
+  function railItem() {
+    var A = window.WA_APP && window.WA_APP.apps;
+    if (!A || !A.volunteer || typeof A.volunteer.groups !== 'function') return false;
+    if (A.volunteer.__w195) return true;
+    var g0 = A.volunteer.groups;
+    A.volunteer.groups = function () {
+      var gs = g0.apply(this, arguments);
+      if (!staff()) return gs;
+      try {
+        var it = { h: '#volunteering/signoffs', l: 'Sign-offs', ic: 'form', page: 'volunteering', n: S.waiting ? String(S.waiting) : null };
+        var people = gs.filter(function (g) { return /people/i.test(g.label || ''); })[0];
+        if (people) { if (!people.items.some(function (x) { return x.h === it.h; })) people.items.push(it); }
+        else gs.push({ label: 'People', items: [it] });
+      } catch (e) { /* fine */ }
+      return gs;
+    };
+    A.volunteer.__w195 = true;
+    return true;
+  }
+  /* the walkthrough: the page tour "signoffs" (the Academy row Page tour: Sign-offs) */
+  function tour() {
+    try {
+      var TT = window.w122 && window.w122.tours; if (!TT) return false;
+      if (TT.signoffs) return true;
+      TT.signoffs = { tab: 'volunteering', icon: 'pen', hash: '#volunteering/signoffs', steps: [
+        { c: 1, t: 'Sign-offs', p: 'Volunteers ask for an hours letter, a letter of recognition or their own school or employer form signed, from their profile on welfareavenue.com. This page is where the team signs them.' },
+        { s: '#w195filters', t: 'Waiting first', p: 'Waiting shows what still needs a signature, oldest first. Signed and Declined keep the history, with each letter\u2019s reference.' },
+        { s: '#w195list', t: 'Open a request', p: 'Each request says who it is for and what for. Open it to see their record, choose the servings and hours to list, add your own words, or place your signature on their form. Preview it, then sign and send.', opt: 1 },
+        { s: '#w195mine', t: 'Your signature', p: 'Signers save their signature once, with the name and title printed under it. A sample letter shows how it prints.' },
+        { c: 1, t: 'What the volunteer gets', p: 'The signed PDF on their profile and an email that it is ready. Its reference lets a school or an employer check it with us at info@welfareavenue.com. Declining sends your note to their profile instead.' }
+      ] };
+      return true;
+    } catch (e) { return false; }
+  }
+  function arm() {
+    var a = wrapVol(), b = railItem(), c = tour();
+    return a && b && c;
+  }
+  if (!arm()) { setTimeout(arm, 800); setTimeout(arm, 2500); setTimeout(arm, 6000); }
+  /* the waiting count for the rail, when the Volunteer Manager opens (and once at start for staff) */
+  document.addEventListener('wa153app', function (e) { if (e && e.detail && e.detail.app === 'volunteer') { railItem(); counts(); } });
+  setTimeout(function () { if (staff() && document.body.classList.contains('w153volunteer')) counts(); }, 4000);
+  /* an address that names the page opens it, even before the Volunteer Manager has drawn */
+  window.addEventListener('hashchange', function () { if (!onView()) { var s = document.getElementById('w195sheet'); if (s && !S.mine) closeSheet(); } });
+
+  window.w195 = {
+    S: S, load: load, open: open, openMine: openMine, close: closeSheet, counts: counts, paint: paint, placement: placement, bodyFor: bodyFor,
+    trimmed: trimmed, arm: arm, state: function () { return { status: S.status, list: S.list, counts: S.counts, me: S.me, waiting: S.waiting, det: S.det, items: S.items, step: S.step, preview: S.preview }; }
+  };
+})();
+/* =====================================================================
    WA v164 Finance on its own (29/09/26)
    =====================================================================
    Steel (29/09/26), on the Finance app's Trends page: "It's a little repetitive here and still shows fundraising and

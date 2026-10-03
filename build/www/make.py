@@ -10,6 +10,10 @@ UX Web Redesign", 30/09/26): a white header with the menu in Edison's order, pho
 buttons with an arrow, the three ways in on the home page, sand figure tiles, Edison's volunteer opportunity cards, "How
 to join", "Who do we need?" at each serving (the Hub's roster targets), the donation layout and a deep green footer.
 The copy, the two languages, the Hub's forms, the live servings and the donation popup are wave162's.
+wave194 (02/10/26) adds the accounts (/account/ and /fr/compte/: sign in with Google or an emailed code, the profile, the
+volunteering, the signed letters, the gifts and receipts, the newsletter; assets/account.js, behind the Hub's
+site_accounts_mode switch), forms that fill in for a signed-in person, and the privacy notice (/privacy/,
+/fr/confidentialite/).
 
 Static pages with no inline script or style (strict CSP). Dynamic parts come from the Hub at view time:
 /assets/site.js reads the next servings and fundraisers (rpc www_upcoming, anonymous) with the build's copy as the
@@ -55,13 +59,13 @@ def ver(path):
     return hashlib.md5(files[path].encode('utf8') if isinstance(files[path], str) else files[path]).hexdigest()[:8]
 
 # ---------- assets ----------
-for a in ('site.css', 'site.js', 'forms.js'):
+for a in ('site.css', 'site.js', 'forms.js', 'account.js'):
     put('assets/' + a, open(os.path.join(HERE, 'assets', a), encoding='utf8').read())
 put('assets/logo-cream.svg', svg_primary('#FFFAF2'))
 put('assets/logo-green.svg', svg_primary('#103F39'))
 put('assets/lockup-cream.svg', svg_lockup('#FFFAF2'))
 put('favicon.svg', FAVICON)
-V = {a: ver('assets/' + a) for a in ('site.css', 'site.js', 'forms.js')}
+V = {a: ver('assets/' + a) for a in ('site.css', 'site.js', 'forms.js', 'account.js')}
 
 def url(key, lang):
     k, _, frag = key.partition('#')
@@ -139,9 +143,10 @@ def head(lang, key, title, desc, image=None):
             '<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n'
             '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap">\n'
             '<link rel="stylesheet" href="/assets/site.css?v=%s">\n%s<script src="/assets/site.js?v=%s" defer></script>\n%s<script src="https://hub.welfareavenue.com/give/embed.js" async></script>\n</head>\n'
-            % (lang, e(t), e(desc), '' if LAUNCH else '<meta name="robots" content="noindex">\n', e(canon), alt, e(t), e(desc), e(canon), og,
+            % (lang, e(t), e(desc), '' if (LAUNCH and key != 'account') else '<meta name="robots" content="noindex">\n', e(canon), alt, e(t), e(desc), e(canon), og,
                'fr_CA' if lang == 'fr' else 'en_CA', V['site.css'], ld,
-               V['site.js'], ('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else ''))
+               V['site.js'], (('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else '') +
+               (('<script src="/assets/account.js?v=%s" defer></script>\n' % V['account.js']) if key == 'account' else '')))
 
 def header(lang, key):
     u = C.UI[lang]; other = u['other_code']
@@ -151,8 +156,10 @@ def header(lang, key):
         hint = ('<div class="langhint" id="langhint" hidden lang="fr"><div class="wrap"><span>%s</span> <a href="%s" hreflang="fr">%s</a>'
                 '<button type="button" aria-label="%s">&times;</button></div></div>\n' % (e(u['hint']), e(other_url), e(u['hint_link']), e(u['hint_close'])))
     links = ''.join('<a href="%s"%s>%s</a>' % (e(url(k, lang)), ' aria-current="page"' if k == key else '', e(u['nav'][k])) for k in C.NAV)
-    side = ('<a href="%s"%s>%s%s</a><a href="%s">%s%s</a>'
-            % (e(url('contact', lang)), ' aria-current="page"' if key == 'contact' else '', e(u['nav']['contact']), ARROW,
+    # wave194: "My account" shows once accounts are on, or for someone signed in (site.js)
+    side = ('<a href="%s" data-acct-link hidden%s>%s%s</a><a href="%s"%s>%s%s</a><a href="%s">%s%s</a>'
+            % (e(url('account', lang)), ' aria-current="page"' if key == 'account' else '', e(u['account']), ARROW,
+               e(url('contact', lang)), ' aria-current="page"' if key == 'contact' else '', e(u['nav']['contact']), ARROW,
                e(url('volunteer#apply', lang)), e(u['signup']), ARROW))
     return ('<body data-lang="%s" data-supa="%s" data-key="%s">\n<a class="skip" href="#main">%s</a>\n%s'
             '<header class="top"><div class="wrap">\n<a class="brand" href="%s" aria-label="%s"><img src="/assets/logo-green.svg" alt="Welfare Avenue" width="130" height="44"></a>\n'
@@ -169,6 +176,7 @@ def footer(lang):
     about = [('about#mission', 'Our mission' if en else 'Notre mission'), ('about#story', 'Our story' if en else 'Notre histoire'),
              ('about#team', 'Our team' if en else 'Notre équipe'), ('contact#newsletter', 'Newsletter' if en else 'Infolettre'), ('contact', u['nav']['contact'])]
     aboutl = ''.join('<li><a href="%s">%s</a></li>' % (e(url(k, lang)), e(t)) for k, t in about)
+    aboutl += '<li data-acct-link hidden><a href="%s">%s</a></li>' % (e(url('account', lang)), e(u['account']))
     soc = ''.join('<a href="%s" rel="noopener">%s</a>' % (e(h), e(n)) for n, h in C.SOCIAL)
     cities = 'Montreal, Quebec<br>Toronto, Ontario' if en else 'Montréal (Québec)<br>Toronto (Ontario)'
     return ('</main>\n<footer class="foot on-dark"><div class="wrap"><div class="cols">\n'
@@ -177,12 +185,12 @@ def footer(lang):
             '<div><h2>%s</h2><ul>%s</ul></div>\n<div><h2>%s</h2><ul>%s</ul></div>\n'
             '<div><h2>%s</h2><div class="social">%s</div><p class="mt2"><a href="%s" rel="noopener">%s</a></p></div>\n'
             '<div class="give"><p>%s</p>%s</div>\n</div>\n'
-            '<div class="legal"><span>&copy; %d %s</span><span>%s %s</span></div>\n</div></footer>\n</body>\n</html>\n'
+            '<div class="legal"><span>&copy; %d %s</span><span>%s %s</span><span><a href="%s">%s</a></span></div>\n</div></footer>\n</body>\n</html>\n'
             % (e(url('home', lang)), e(u['home_label']), C.EMAIL, C.EMAIL, phone(lang), cities,
                e('Explore' if en else 'Explorer'), explore, e('About' if en else 'À propos'), aboutl,
                e('Connect' if en else 'Nous suivre'), soc, e(C.REVIEW), e(u['review']),
                e('Your generosity helps us' if en else 'Votre générosité nous aide'), btn(give(lang), u['nav']['donate'], 'light', donate=True),
-               datetime.date.today().year, e(u['rights']), e(u['charity']), C.CHARITY))
+               datetime.date.today().year, e(u['rights']), e(u['charity']), C.CHARITY, e(url('privacy', lang)), e(u['privacy'])))
 
 def page(lang, key, title, desc, body):
     return head(lang, key, title, desc) + header(lang, key) + body + footer(lang)
@@ -660,6 +668,37 @@ def donate(lang):
         % (e(T['ess_h']), e(T['ess_p']), btn(url('contact', lang), T['talk'], 'ghost'), e(T['corp_h']), e(T['corp_p']), btn(url('contact', lang), T['talk'], 'ghost')))
     return page(lang, 'donate', T['title'], T['desc'], body)
 
+def account(lang):
+    """wave194 (02/10/26): the account page. The page is a slim green band and the box that assets/account.js fills: signing
+    in (Google or a code by email), then the profile. Never indexed, not in the sitemap."""
+    en = lang == 'en'
+    T = {'title': 'Your account' if en else 'Votre compte',
+         'desc': ('Sign in to your Welfare Avenue account: your volunteering, your gifts and receipts, and your email preferences.' if en else
+                  'Connectez-vous à votre compte Welfare Avenue : votre bénévolat, vos dons et vos reçus, et vos préférences de courriel.'),
+         'loading': 'Loading your account…' if en else 'Chargement de votre compte…',
+         'noscript': 'Your account needs JavaScript. You can write to us at' if en else 'Votre compte a besoin de JavaScript. Vous pouvez nous écrire à'}
+    body = ('<section class="acct-top"><div class="wrap"><p class="over">Welfare Avenue</p><h1>%s</h1></div></section>\n'
+            '<section class="band on-grey acct-band"><div class="wrap"><div class="acct" id="acct"><p class="loading">%s</p>'
+            '<noscript><p>%s %s.</p></noscript></div></div></section>\n'
+            % (e(T['title']), e(T['loading']), e(T['noscript']), mail(lang)))
+    return page(lang, 'account', T['title'], T['desc'], body)
+
+def privacy(lang):
+    """wave194 (02/10/26): the privacy notice (content.PRIVACY), linked from every page's footer, the forms, the account page
+    and Google's sign-in screen."""
+    P = C.PRIVACY[lang]
+    links = {'{email}': mail(lang), '{phone}': '<a href="sms:%s">%s</a>' % (C.PHONE['tel'], e(C.PHONE[lang]))}
+    def fill(s):
+        out = e(s)
+        for k, v in links.items(): out = out.replace(k, v)
+        return out
+    secs = ''.join('<h2>%s</h2>%s%s' % (e(h), ''.join('<p>%s</p>' % fill(x) for x in ps), ('<ul>%s</ul>' % ''.join('<li>%s</li>' % fill(x) for x in items)) if items else '')
+                   for h, ps, items in P['sections'])
+    body = ('<section class="acct-top"><div class="wrap"><p class="over">Welfare Avenue</p><h1>%s</h1></div></section>\n'
+            '<section class="band on-white"><div class="wrap"><div class="doc"><p class="upd">%s</p><p class="lede">%s</p>%s</div></div></section>\n'
+            % (e(P['title']), e(C.PRIVACY_UPDATED[lang]), e(P['intro']), secs))
+    return page(lang, 'privacy', P['title'], P['desc'], body)
+
 def notfound():
     body = ('<section class="band on-white notfound"><div class="wrap"><p class="over">404</p><h1>Page not found</h1>'
             '<p class="lede mt1">The page you are looking for has moved or no longer exists. <span lang="fr">La page que vous cherchez a été déplacée ou n’existe plus.</span></p>'
@@ -667,7 +706,8 @@ def notfound():
     return head('en', '404', 'Page not found', 'Welfare Avenue') .replace('<link rel="canonical" href="https://welfareavenue.com/">\n', '') + header('en', '404').replace(' aria-current="page"', '') + body + footer('en')
 
 # ---------- build ----------
-BUILDERS = {'home': home, 'about': about, 'volunteer': volunteer, 'events': events, 'press': press, 'contact': contact, 'donate': donate}
+BUILDERS = {'home': home, 'about': about, 'volunteer': volunteer, 'events': events, 'press': press, 'contact': contact, 'donate': donate,
+            'account': account, 'privacy': privacy}
 for key, fn in BUILDERS.items():
     for lang in ('en', 'fr'):
         p = C.PATHS[key][lang].strip('/')
@@ -679,15 +719,20 @@ REDIRECTS = [
     ('/about/gallery', '/events/#photos'), ('/activity', '/events/'), ('/activity/volunteer/*', '/volunteer/'), ('/activity/volunteer', '/volunteer/'),
     ('/activity/weekly-volunteering', '/volunteer/'), ('/activity/fundraising/*', '/events/#past'), ('/activity/fundraising', '/events/#past'),
     ('/activity/club-volunteering', '/volunteer/#groups'), ('/activity/donate-essentials', '/donate/#essentials'), ('/thank-you', '/'),
-    ('/thank-you-newsletter', '/'), ('/signup', '/volunteer/'), ('/signin', '/'), ('/confirm-participation', '/volunteer/'), ('/user-profile', '/'),
-    ('/password-reset/*', '/'), ('/reset-password/*', '/'), ('/gallery', '/events/#photos'), ('/give', C.GIVE), ('/fr/donate', '/fr/donner/'),
+    ('/thank-you-newsletter', '/'), ('/signup', '/volunteer/'), ('/confirm-participation', '/volunteer/'),
+    # wave194: the old website's account pages open the new account page (old accounts connect by their email)
+    ('/signin', '/account/'), ('/user-profile', '/account/'), ('/password-reset/*', '/account/'), ('/reset-password/*', '/account/'),
+    ('/login', '/account/'), ('/profile', '/account/'),
+    ('/gallery', '/events/#photos'), ('/give', C.GIVE), ('/fr/donate', '/fr/donner/'),
     ('/activities', '/events/'), ('/fr/activites', '/fr/evenements/'),
 ]
 put('_redirects', '# Welfare Avenue website (wave162, www2): the old website\'s addresses\n' + ''.join('%s  %s  301\n' % (a, b) for a, b in REDIRECTS))
 
-CSP = ("default-src 'self'; script-src 'self' https://hub.welfareavenue.com; style-src 'self' https://fonts.googleapis.com https://hub.welfareavenue.com; font-src https://fonts.gstatic.com; "
-       "img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co; "
-       "frame-src https://www.youtube-nocookie.com https://hub.welfareavenue.com https://www.linkedin.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests")
+# wave194: Google's sign-in button (Google Identity Services: its script, its styles, its frame and its calls) for the account page
+CSP = ("default-src 'self'; script-src 'self' https://hub.welfareavenue.com https://accounts.google.com/gsi/client; "
+       "style-src 'self' https://fonts.googleapis.com https://hub.welfareavenue.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; "
+       "img-src 'self' data: https://zwnmulmnvopclzcvytce.supabase.co https://i.ytimg.com; connect-src 'self' https://zwnmulmnvopclzcvytce.supabase.co https://accounts.google.com/gsi/; "
+       "frame-src https://www.youtube-nocookie.com https://hub.welfareavenue.com https://www.linkedin.com https://accounts.google.com/gsi/; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests")
 HEADERS = ('# Welfare Avenue website (wave162): security headers for every page. One CSP for the whole site.\n/*\n'
            '  Content-Security-Policy: ' + CSP + '\n'
            '  Strict-Transport-Security: max-age=31536000\n  X-Content-Type-Options: nosniff\n  X-Frame-Options: DENY\n'
@@ -722,6 +767,7 @@ else:
     put('robots.txt', '# Preview: not for search engines yet\nUser-agent: *\nDisallow: /\n')
 urls = []
 for key in BUILDERS:
+    if key == 'account': continue  # the account page is never indexed
     for lang in ('en', 'fr'):
         urls.append('  <url><loc>%s%s</loc><xhtml:link rel="alternate" hreflang="en" href="%s%s"/><xhtml:link rel="alternate" hreflang="fr" href="%s%s"/></url>\n'
                     % (SITE, C.PATHS[key][lang], SITE, C.PATHS[key]['en'], SITE, C.PATHS[key]['fr']))

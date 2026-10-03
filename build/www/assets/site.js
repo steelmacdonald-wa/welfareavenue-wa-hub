@@ -1,5 +1,6 @@
-/* Welfare Avenue website (wave162, 28/09/26; www2, 01/10/26): the menu on phones, the French hint, the next servings and
-   events (from the Hub, with the build's copy as the first paint), the photo viewer and the press videos.
+/* Welfare Avenue website (wave162, 28/09/26; www2, 01/10/26; wave194, 02/10/26): the menu on phones, the French hint, the next servings and
+   events (from the Hub, with the build's copy as the first paint), the photo viewer, the press videos, and (wave194) the
+   account sign-in kept in this browser (window.WA) with the "My account" links.
    No inline scripts or styles: the Content-Security-Policy allows neither. */
 (function () {
   'use strict';
@@ -10,6 +11,79 @@
   }[LANG === 'fr' ? 'fr' : 'en'];
   function E(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
   function ls(k, v) { try { if (v === undefined) return window.localStorage.getItem(k); window.localStorage.setItem(k, v); } catch (e) { return null; } return null; }
+
+  /* wave194 (02/10/26): website accounts. A person's sign-in (Google, or a code we email them) stays in this browser under
+     wa_site_auth and is renewed with its refresh token; window.WA is what account.js and forms.js use. A sign-in on this
+     site is never a team sign-in: the Hub's access token hook gives it the wa_volunteer claim, and account.js signs out any
+     other. The "My account" links show once accounts are on (the Hub's site_accounts_mode, read at most every ten minutes)
+     or when someone is signed in here. */
+  var AUTH = 'wa_site_auth', CFG = 'wa_site_cfg';
+  function lsj(k, v) {
+    try {
+      if (v === undefined) { var raw = window.localStorage.getItem(k); return raw ? JSON.parse(raw) : null; }
+      if (v === null) window.localStorage.removeItem(k); else window.localStorage.setItem(k, JSON.stringify(v));
+    } catch (e) { return null; }
+    return null;
+  }
+  function nowS() { return Math.floor(Date.now() / 1000); }
+  function claims(tok) {
+    try {
+      var p = String(tok).split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); while (p.length % 4) p += '=';
+      return JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(p), function (c) { return '%' + ('0' + c.charCodeAt(0).toString(16)).slice(-2); }).join('')));
+    } catch (e) { return null; }
+  }
+  function authFetch(path, body, token) {
+    return fetch(SUPA + '/auth/v1/' + path, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + (token || KEY), 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); });
+  }
+  function keep(sess) {
+    if (!sess || !sess.access_token) return null;
+    var s = { access_token: sess.access_token, refresh_token: sess.refresh_token || null, expires_at: Number(sess.expires_at) || nowS() + Number(sess.expires_in || 3600),
+      email: (sess.user && sess.user.email) || null };
+    lsj(AUTH, s); return s;
+  }
+  var renewing = null;
+  function session() {
+    var s = lsj(AUTH);
+    if (!s || !s.access_token) return Promise.resolve(null);
+    if ((Number(s.expires_at) || 0) - nowS() > 60) return Promise.resolve(s);
+    if (!s.refresh_token) { lsj(AUTH, null); return Promise.resolve(null); }
+    if (!renewing) {
+      renewing = authFetch('token?grant_type=refresh_token', { refresh_token: s.refresh_token }).then(function (r) {
+        renewing = null;
+        if (r.ok && r.body && r.body.access_token) return keep(r.body);
+        if (r.status >= 400 && r.status < 500) lsj(AUTH, null); // refused: signed out; a network failure keeps it for later
+        return null;
+      }, function () { renewing = null; return null; });
+    }
+    return renewing;
+  }
+  function rpc(fn, body, s) {
+    return fetch(SUPA + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + (s && s.access_token ? s.access_token : KEY),
+      'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify(body || {}) })
+      .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); });
+  }
+  function config(fresh) {
+    var c = lsj(CFG);
+    if (!fresh && c && c.v && c.at && Date.now() - c.at < 600000) return Promise.resolve(c.v);
+    if (!SUPA || !KEY || !window.fetch) return Promise.resolve({ mode: 'off' });
+    return rpc('site_account_config', {}).then(function (r) {
+      if (r.ok && r.body && r.body.mode) { lsj(CFG, { at: Date.now(), v: r.body }); return r.body; }
+      return (c && c.v) || { mode: 'off' };
+    }, function () { return (c && c.v) || { mode: 'off' }; });
+  }
+  function signOut() {
+    var s = lsj(AUTH); lsj(AUTH, null);
+    return s && s.access_token ? authFetch('logout?scope=local', {}, s.access_token).then(function () { return null; }, function () { return null; }) : Promise.resolve(null);
+  }
+  function isVolunteer(s) { var c = s && claims(s.access_token); return !!(c && c.wa_volunteer === true); }
+  window.WA = { session: session, keep: keep, signOut: signOut, forget: function () { lsj(AUTH, null); }, claims: claims, isVolunteer: isVolunteer,
+    authFetch: authFetch, rpc: rpc, config: config };
+  var acctLinks = document.querySelectorAll('[data-acct-link]');
+  if (acctLinks.length && SUPA && KEY && window.fetch) {
+    var showAcct = function () { Array.prototype.forEach.call(acctLinks, function (a) { a.hidden = false; }); };
+    if (lsj(AUTH)) showAcct(); else config().then(function (c) { if (c && c.mode === 'on') showAcct(); });
+  }
 
   /* The menu on phones */
   var btn = document.querySelector('.menu-btn'), nav = document.getElementById('nav');
