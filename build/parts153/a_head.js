@@ -100,13 +100,16 @@
     hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, tools, the organization and everything else', pages: [] },
     /* wave163: Steel: "Could you add the following pages to an App called strategy" (Organizational goals, Department goals,
        Projects, Goal alignment); a project's own page (#project/...) opens inside it too, with Projects marked */
-    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'Goals, projects and how they line up', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
+    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'The goals, the projects that serve them, the library', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
       groups: function () {
-        return [{ label: 'Goals and projects', items: [
-          { h: '#orggoals', l: 'Organizational goals', ic: 'target', page: 'orggoals' },
-          { h: '#goals', l: 'Department goals', ic: 'flag', page: 'goals' },
+        /* wave205 (Steel, 04/10/26): "organizational goals, and departments own projects": Department goals leave the rail (the
+           retired tier opens from Goals > Retired goals; #goals goes there); Goal alignment is goals to projects; the Strategy
+           Library is a section of the Goals page (#orggoals/library) */
+        return [{ label: 'Strategy', items: [
+          { h: '#orggoals', l: 'Goals', ic: 'target', page: 'orggoals' },
           { h: '#projects', l: 'Projects', ic: 'layers', page: 'projects' },
-          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' }
+          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' },
+          { h: '#orggoals/library', l: 'Strategy Library', ic: 'book', page: 'orggoals' }
         ] }];
       }
     },

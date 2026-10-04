@@ -1,0 +1,889 @@
+{
+ "goals": [
+  {
+   "number": 1,
+   "title": "Feed more people, more reliably",
+   "detail": "By Sep 30, 2029, serve 4,000 meals a year (plated meals, food bags and community kitchen portions), counted per service in the Hub, by running all 26 scheduled Montreal services and monthly Toronto services.",
+   "why": "The meal is the mission. FY26 completed 17 Montreal services and cancelled 6.",
+   "measure": "Meals served a year",
+   "baseline": "2,269 (2025)",
+   "target_fy29": "4,000",
+   "target_fy31": "6,000",
+   "owner_text": "Shima (lead), Suhaib",
+   "owners": [
+    {
+     "member_id": 3,
+     "name": "Shima",
+     "is_lead": true,
+     "focus": null,
+     "sort": 1
+    },
+    {
+     "member_id": 38,
+     "name": "Suhaib",
+     "is_lead": false,
+     "focus": "Toronto",
+     "sort": 2
+    }
+   ],
+   "paths": [
+    {
+     "sort": 1,
+     "body": "Count meals at every service in the Hub from Oct 2026."
+    },
+    {
+     "sort": 2,
+     "body": "A backup lead and minimum crew for every Sunday service."
+    },
+    {
+     "sort": 3,
+     "body": "Grow the community kitchen model piloted with DESTA on 23 Aug 2026."
+    },
+    {
+     "sort": 4,
+     "body": "A monthly Toronto cadence with shelter partners and TYFPC (Cook & Support partnership, Oct 2026 to Jul 2027, with a TMU Cook & Share in Jan 2027), building toward a Toronto food bank with Daily Bread (a 2 to 3 year aim in the 2026 plan)."
+    }
+   ],
+   "milestones": [
+    {
+     "fy": "FY27",
+     "sort": 1,
+     "body": "Meals counted at 100% of services"
+    },
+    {
+     "fy": "FY27",
+     "sort": 2,
+     "body": "3,000 meals"
+    },
+    {
+     "fy": "FY28",
+     "sort": 1,
+     "body": "3,500 meals"
+    },
+    {
+     "fy": "FY28",
+     "sort": 2,
+     "body": "12 Toronto services"
+    },
+    {
+     "fy": "FY29",
+     "sort": 1,
+     "body": "4,000 meals"
+    },
+    {
+     "fy": "FY29",
+     "sort": 2,
+     "body": "26 Montreal services, none cancelled for staffing"
+    },
+    {
+     "fy": "FY29",
+     "sort": 3,
+     "body": "Toronto food bank open with Daily Bread"
+    },
+    {
+     "fy": "FY31",
+     "sort": 1,
+     "body": "6,000 meals"
+    },
+    {
+     "fy": "FY31",
+     "sort": 2,
+     "body": "Weekly Montreal only if the FY29 gate is met"
+    }
+   ]
+  },
+  {
+   "number": 2,
+   "title": "Go beyond the meal",
+   "detail": "By Sep 30, 2029, every service offers hygiene kits, 1 in 4 services has a referral partner on site (including housing organizations), and beneficiaries give feedback twice a year.",
+   "why": "\"Meals and essential support\" is in the mission; reintegration is the stated north star. We distributed 280 hygiene products in 2025.",
+   "measure": "Services with non-food support",
+   "baseline": "Not tracked",
+   "target_fy29": "100% hygiene kits; referral partner at 1 in 4",
+   "target_fy31": "5 beneficiaries in a paid pathways pilot",
+   "owner_text": "Shima",
+   "owners": [
+    {
+     "member_id": 3,
+     "name": "Shima",
+     "is_lead": true,
+     "focus": null,
+     "sort": 1
+    }
+   ],
+   "paths": [
+    {
+     "sort": 1,
+     "body": "Source kits through partners."
+    },
+    {
+     "sort": 2,
+     "body": "Invite referral partners from our 73 active partners, with housing organizations a priority so we can connect people to housing support, and publish the resource guide (print and digital) from the June 2026 Program Portfolio."
+    },
+    {
+     "sort": 3,
+     "body": "Complete the beneficiary feedback project (0 of 2 tasks done)."
+    }
+   ],
+   "milestones": [
+    {
+     "fy": "FY27",
+     "sort": 1,
+     "body": "Kits at 50% of services"
+    },
+    {
+     "fy": "FY27",
+     "sort": 2,
+     "body": "First feedback round"
+    },
+    {
+     "fy": "FY28",
+     "sort": 1,
+     "body": "Kits at 100% of services"
+    },
+    {
+     "fy": "FY28",
+     "sort": 2,
+     "body": "2 referral partners committed, at least 1 a housing organization"
+    },
+    {
+     "fy": "FY29",
+     "sort": 1,
+     "body": "Referral partner at 1 in 4 services"
+    },
+    {
+     "fy": "FY29",
+     "sort": 2,
+     "body": "2 feedback rounds a year"
+    },
+    {
+     "fy": "FY31",
+     "sort": 1,
+     "body": "Grant-funded pathways pilot: 5 beneficiaries in paid roles at $16.25/hr"
+    }
+   ]
+  },
+  {
+   "number": 3,
+   "title": "Grow a team that stays",
+   "detail": "By Sep 30, 2029, 35% of each year's volunteers serve again the next year, 150 unique volunteers serve a year, and no leader averages more than 6 hours a week.",
+   "why": "Retention fell from 17% (FY25) to 13% (FY26). In FY26, 12 of 42 applicants went on to serve.",
+   "measure": "Volunteers returning next year",
+   "baseline": "13% (FY26)",
+   "target_fy29": "35%",
+   "target_fy31": "50%",
+   "owner_text": "Ian (lead), Suhaib",
+   "owners": [
+    {
+     "member_id": 17,
+     "name": "Ian",
+     "is_lead": true,
+     "focus": null,
+     "sort": 1
+    },
+    {
+     "member_id": 38,
+     "name": "Suhaib",
+     "is_lead": false,
+     "focus": null,
+     "sort": 2
+    }
+   ],
+   "paths": [
+    {
+     "sort": 1,
+     "body": "Follow up with every first-time volunteer within 7 days."
+    },
+    {
+     "sort": 2,
+     "body": "The ambassador tier and role descriptions recommended by 180DC."
+    },
+    {
+     "sort": 3,
+     "body": "Decide the open volunteer recognition budget."
+    }
+   ],
+   "milestones": [
+    {
+     "fy": "FY27",
+     "sort": 1,
+     "body": "20% return"
+    },
+    {
+     "fy": "FY27",
+     "sort": 2,
+     "body": "110 volunteers"
+    },
+    {
+     "fy": "FY27",
+     "sort": 3,
+     "body": "Half of applicants serve"
+    },
+    {
+     "fy": "FY28",
+     "sort": 1,
+     "body": "28% return"
+    },
+    {
+     "fy": "FY28",
+     "sort": 2,
+     "body": "130 volunteers"
+    },
+    {
+     "fy": "FY29",
+     "sort": 1,
+     "body": "35% return"
+    },
+    {
+     "fy": "FY29",
+     "sort": 2,
+     "body": "150 volunteers"
+    },
+    {
+     "fy": "FY31",
+     "sort": 1,
+     "body": "50% return"
+    },
+    {
+     "fy": "FY31",
+     "sort": 2,
+     "body": "250 volunteers"
+    }
+   ]
+  },
+  {
+   "number": 4,
+   "title": "Build money that lasts",
+   "detail": "By Sep 30, 2029, reach $60,000 in annual revenue with no single source above 40%, fund two part-time paid roles, hold 3 months of expenses in reserve, and raise at least $20,000 a year from grants.",
+   "why": "Revenue has stayed between $10,553 and $15,347 since FY23, all recorded as donations. Three months of the FY26 budget ($19,240 in expenses) is $4,810.",
+   "measure": "Annual revenue",
+   "baseline": "$12,983 (FY25)",
+   "target_fy29": "$60,000; 2 paid roles; 3-month reserve",
+   "target_fy31": "$100,000; 6-month reserve",
+   "owner_text": "Suhaib (lead), Ian",
+   "owners": [
+    {
+     "member_id": 38,
+     "name": "Suhaib",
+     "is_lead": true,
+     "focus": "Grants and finance",
+     "sort": 1
+    },
+    {
+     "member_id": 17,
+     "name": "Ian",
+     "is_lead": false,
+     "focus": "Donor marketing and the Ad Grant",
+     "sort": 2
+    }
+   ],
+   "paths": [
+    {
+     "sort": 1,
+     "body": "Grants: Centraide (pending); joint applications with DESTA, and with TYFPC to Maytree (about $5,000)."
+    },
+    {
+     "sort": 2,
+     "body": "Donor program: the donor team (Alexis, Danielle) launches monthly giving in FY27, with QR codes at services (decided June 2026)."
+    },
+    {
+     "sort": 3,
+     "body": "Corporate Supporter Circle: 2 to 6 companies at $200 to $500 a quarter."
+    },
+    {
+     "sort": 4,
+     "body": "Google Ad Grant: $10,000 a month, unused today."
+    },
+    {
+     "sort": 5,
+     "body": "Flagship events: Flag Football, Rally Paper and the holiday drive grow into flagship events, plus one new signature event by FY28 (the 2027 sports tournament in the events calendar). Every event gets a named lead; none of the 22 planned FY27 events has one today."
+    },
+    {
+     "sort": 6,
+     "body": "Paid roles: funded by grants and wage subsidies, never general donations. Canada Summer Jobs first (MCC estimated about $15,000 a year for two summer roles), then the Trillium ask (up to $100,000, 60% for a full-time Toronto role) for a year-round role."
+    }
+   ],
+   "milestones": [
+    {
+     "fy": "FY27",
+     "sort": 1,
+     "body": "$25,000"
+    },
+    {
+     "fy": "FY27",
+     "sort": 2,
+     "body": "Donor team launched"
+    },
+    {
+     "fy": "FY27",
+     "sort": 3,
+     "body": "25 recurring donors"
+    },
+    {
+     "fy": "FY27",
+     "sort": 4,
+     "body": "First grant"
+    },
+    {
+     "fy": "FY27",
+     "sort": 5,
+     "body": "Ad Grant live"
+    },
+    {
+     "fy": "FY27",
+     "sort": 6,
+     "body": "First paid roles: 2 Canada Summer Jobs positions for summer 2027 (window may reopen Nov 2026)"
+    },
+    {
+     "fy": "FY28",
+     "sort": 1,
+     "body": "$40,000"
+    },
+    {
+     "fy": "FY28",
+     "sort": 2,
+     "body": "First part-time paid role"
+    },
+    {
+     "fy": "FY28",
+     "sort": 3,
+     "body": "3-month reserve"
+    },
+    {
+     "fy": "FY28",
+     "sort": 4,
+     "body": "Each flagship event raises $5,000+"
+    },
+    {
+     "fy": "FY29",
+     "sort": 1,
+     "body": "$60,000"
+    },
+    {
+     "fy": "FY29",
+     "sort": 2,
+     "body": "2 paid roles"
+    },
+    {
+     "fy": "FY29",
+     "sort": 3,
+     "body": "$20,000 from grants"
+    },
+    {
+     "fy": "FY29",
+     "sort": 4,
+     "body": "100 recurring donors"
+    },
+    {
+     "fy": "FY29",
+     "sort": 5,
+     "body": "Each flagship event raises $10,000+"
+    },
+    {
+     "fy": "FY31",
+     "sort": 1,
+     "body": "$100,000"
+    },
+    {
+     "fy": "FY31",
+     "sort": 2,
+     "body": "6-month reserve"
+    },
+    {
+     "fy": "FY31",
+     "sort": 3,
+     "body": "A multi-year funder covering a paid program lead"
+    }
+   ]
+  },
+  {
+   "number": 5,
+   "title": "Run on systems, not heroes",
+   "detail": "By Sep 30, 2029, every leadership role has a written description, a 3 to 6 hour expectation and a trained backup; 7 board seats are filled with 4 committees meeting quarterly; and the Hub is the single system of record.",
+   "why": "Many roles turn over each school year, the board has an open HR seat, and the organization is moving from founder-led to board-led.",
+   "measure": "Leadership roles with a written role and trained backup",
+   "baseline": "Not tracked",
+   "target_fy29": "100%",
+   "target_fy31": "Toronto runs as a self-led chapter",
+   "owner_text": "Suhaib (lead), Ian, Shima",
+   "owners": [
+    {
+     "member_id": 38,
+     "name": "Suhaib",
+     "is_lead": true,
+     "focus": null,
+     "sort": 1
+    },
+    {
+     "member_id": 17,
+     "name": "Ian",
+     "is_lead": false,
+     "focus": null,
+     "sort": 2
+    },
+    {
+     "member_id": 3,
+     "name": "Shima",
+     "is_lead": false,
+     "focus": null,
+     "sort": 3
+    }
+   ],
+   "paths": [
+    {
+     "sort": 1,
+     "body": "Complete the executive transition."
+    },
+    {
+     "sort": 2,
+     "body": "A yearly handover cycle timed to the school year."
+    },
+    {
+     "sort": 3,
+     "body": "Retire Keela into the Hub CRM."
+    },
+    {
+     "sort": 4,
+     "body": "Use MCC's chapter model for Toronto."
+    }
+   ],
+   "milestones": [
+    {
+     "fy": "FY27",
+     "sort": 1,
+     "body": "Executive transition complete"
+    },
+    {
+     "fy": "FY27",
+     "sort": 2,
+     "body": "HR seat filled"
+    },
+    {
+     "fy": "FY27",
+     "sort": 3,
+     "body": "Keela retired"
+    },
+    {
+     "fy": "FY27",
+     "sort": 4,
+     "body": "Every role written"
+    },
+    {
+     "fy": "FY28",
+     "sort": 1,
+     "body": "Every role has a backup"
+    },
+    {
+     "fy": "FY28",
+     "sort": 2,
+     "body": "A handover pack per team"
+    },
+    {
+     "fy": "FY28",
+     "sort": 3,
+     "body": "Toronto lead plus 6 team members"
+    },
+    {
+     "fy": "FY29",
+     "sort": 1,
+     "body": "7 board seats filled"
+    },
+    {
+     "fy": "FY29",
+     "sort": 2,
+     "body": "Toronto self-led with its own fundraising"
+    },
+    {
+     "fy": "FY31",
+     "sort": 1,
+     "body": "Decide on a new city (MCC recommended Calgary), only if the FY29 gate is met"
+    }
+   ]
+  }
+ ],
+ "plan": {
+  "mission": "Welfare Avenue is a youth-powered non-profit dedicated to fighting food insecurity and poverty through direct community action. We deliver meals and essential support directly to people where they are.",
+  "mission_note": "The mission adopted in July 2026. Every goal serves it.",
+  "window": "Five goals for FY27 to FY29 (Oct 1, 2026 to Sep 30, 2029), with a gated view to FY31.",
+  "why_reset": "At the July 2026 mid-year check, program impact was behind and the financial cushion had not started. This plan keeps the ambition and adds what was missing: a baseline, owners, yearly milestones, and a named engine (donor team, flagship events, grants, paid roles) behind every number. Targets start from measured baselines. All targets are proposals for board approval.",
+  "long_range": "Leadership's long-range target (Oct 2025) is $5 million in revenue and 1 million meals within 10 years, in five cities. This plan is the first five years toward it.",
+  "approval": {
+   "meeting": "2026-10-19",
+   "label": "Draft for board approval (19 Oct 2026)",
+   "final_draft": "2026-10-10"
+  },
+  "rule": "One owner, one Hub measure, and no leader asked to exceed 6 hours a week.",
+  "roadmap": {
+   "title": "Three years to prove it, then grow through the FY29 gate",
+   "phases": [
+    {
+     "key": "FY27",
+     "name": "Stabilize",
+     "dates": "Oct 2026 to Sep 2027",
+     "items": [
+      "Count every meal",
+      "Write every role",
+      "Donor team launched"
+     ]
+    },
+    {
+     "key": "FY28",
+     "name": "Strengthen",
+     "dates": "Oct 2027 to Sep 2028",
+     "items": [
+      "First paid role",
+      "3-month reserve",
+      "Toronto monthly"
+     ]
+    },
+    {
+     "key": "FY29",
+     "name": "Scale",
+     "dates": "Oct 2028 to Sep 2029",
+     "items": [
+      "4,000 meals",
+      "$60,000 revenue",
+      "Two paid roles"
+     ]
+    },
+    {
+     "key": "FY30 to FY31",
+     "name": "Grow",
+     "dates": "Oct 2029 to Sep 2031",
+     "items": [
+      "Weekly Montreal",
+      "Paid program lead",
+      "New city decision"
+     ],
+     "gated": true
+    }
+   ],
+   "checkpoint": {
+    "name": "Checkpoint, Oct 2027",
+    "after": "FY27",
+    "items": [
+     "Meals counted at every service",
+     "Executive transition complete",
+     "First grant awarded"
+    ]
+   },
+   "gate": {
+    "name": "FY29 gate, Oct 2029",
+    "after": "FY29",
+    "items": [
+     "Reserve held for 12 months",
+     "35% volunteer return",
+     "26 Montreal services delivered",
+     "Toronto self-led"
+    ]
+   },
+   "gate_rule": "FY30 and FY31 targets apply only if all four gate criteria are met in October 2029; otherwise FY29 targets carry forward."
+  },
+  "cadence": [
+   "Quarterly board meetings (Jan, Apr, Jul, Oct): a one-page scorecard, one line per goal.",
+   "Every board meeting: the standing strategy block (board item 18).",
+   "Each October: a year-end strategy session (board item 13) that resets next year's milestones."
+  ],
+  "source": {
+   "title": "29/09/26 - Welfare Avenue Organizational Goals FY27 to FY31 (Draft)",
+   "url": "https://claude.ai/code/artifact/4aa082da-baca-48da-935f-245ecc7e5a70"
+  }
+ },
+ "docs": [
+  {
+   "group": "Our plans",
+   "title": "Leadership strategic planning 2025-2026",
+   "date": "Oct 2025",
+   "url": "https://docs.google.com/spreadsheets/d/1a1QFjiiKBlXijbgg03JcJScBdtAV1g5kMyOR3aNPf4k",
+   "direction": "10-year: $5M revenue, 1M meals; 3-year picture: own kitchen and location, 10 donors over $50K, paid staff",
+   "status": "FY26 target of $100,000 vs about $13,000 actual",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "5 Year Program Plan",
+   "date": "Feb 2026",
+   "url": "https://docs.google.com/document/d/1IW5riZxDPdS_4L299kZbgXqp8755CD7o3ltGAZD3wQ4",
+   "direction": "5 cities (Montreal, Toronto, Ottawa, Calgary, Vancouver); meals, food banks, case management, research",
+   "status": "Concept; no dates or targets",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "Toronto Strategic Implementation Plan",
+   "date": "Feb 2026",
+   "url": "https://docs.google.com/document/d/1m87ujh7mklNday7jFrKd3C7M294ggdXW4v39RyrNSa4",
+   "direction": "Certified kitchen; food bank with Daily Bread by Nov 2026; research with the City",
+   "status": "No kitchen yet; food bank not open",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "Program Portfolio",
+   "date": "Jun 2026",
+   "url": "https://drive.google.com/file/d/10kMTEmtBV0FE6kQ-tMbei2CqOCb6VZkR",
+   "direction": "Community kitchen, hygiene and clothing, resource guide, 15+ partner organizations",
+   "status": "Kitchen piloted 23 Aug 2026",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "Donor Program Outline",
+   "date": "Mar 2026",
+   "url": "https://docs.google.com/document/d/1LPEKWos7lTSqzCIAVT1-RI2KliphGYOmaUKad1IWeL8",
+   "direction": "60 monthly donors at 9 months",
+   "status": "0 recurring donors; launch not yet evident",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "Fundraising Events Calendar 2026-27",
+   "date": "Jun 2026",
+   "url": "https://docs.google.com/document/d/1EhSDBvZxp_-Q3jOD8Iiv5G2d2YqNCFm4nRFz8Rre2yQ",
+   "direction": "$10K minimum, $20K target a year; a flagship sports tournament in 2027",
+   "status": "22 events planned, none with a lead",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "Grants Planning",
+   "date": "Jun to Aug 2026",
+   "url": "https://docs.google.com/document/d/1HgWsFjgQe5UlXgVE5xfQxFF0EigKf3Uqfr0CuJ7uf24",
+   "direction": "Trillium ask up to $100,000, 60% for a full-time Toronto role",
+   "status": "Submission not confirmed in the Hub",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "OTF draft",
+   "date": "Jun to Aug 2026",
+   "url": "https://docs.google.com/document/d/1-vWObCjFTYJrgvVi8q2DQ8GxdNHoa7HE5HwTSH3CByI",
+   "direction": "Trillium ask up to $100,000, 60% for a full-time Toronto role",
+   "status": "Submission not confirmed in the Hub",
+   "goals": []
+  },
+  {
+   "group": "Our plans",
+   "title": "MCC National Expansion Blueprint",
+   "date": "Apr 2025",
+   "url": null,
+   "direction": "Toronto chapter model; Calgary in year 5; CSJ about $15,000 a year for 2 summer roles",
+   "status": "CSJ not yet applied for",
+   "goals": []
+  },
+  {
+   "group": "Consulting work",
+   "title": "MCC: Statement of work",
+   "date": "2025",
+   "url": "https://drive.google.com/file/d/1gWrotewUaZdD0Gm4FoyyijT05rhFTjDN",
+   "direction": "Management Consulting Concordia, Elevate & Expand (15 Jan to 15 Apr 2025, pro bono): 5-year expansion plan (Toronto in year 2, Calgary in year 5), National Expansion Manual, chapter model, SEO and sponsorship report, Keela workflows",
+   "status": "Feeds goals 4 and 5",
+   "goals": [
+    4,
+    5
+   ]
+  },
+  {
+   "group": "Consulting work",
+   "title": "MCC: National Expansion Manual",
+   "date": "2025",
+   "url": "https://drive.google.com/file/d/1p7rUjw87I508QjX2wCADnGSxnOhBfTx0",
+   "direction": "The chapter model and the 5-year expansion plan (Toronto in year 2, Calgary in year 5)",
+   "status": "Feeds goals 4 and 5",
+   "goals": [
+    4,
+    5
+   ]
+  },
+  {
+   "group": "Consulting work",
+   "title": "MCC: Final Deliverable",
+   "date": "2025",
+   "url": "https://drive.google.com/file/d/1ef-_2r0qHmKIPc2rvjbG0gFagxEaPWT4",
+   "direction": "Elevate & Expand: the expansion plan, the SEO and sponsorship report and the Keela workflows",
+   "status": "Feeds goals 4 and 5",
+   "goals": [
+    4,
+    5
+   ]
+  },
+  {
+   "group": "Consulting work",
+   "title": "180DC: Final report",
+   "date": "26 May 2025",
+   "url": "https://drive.google.com/file/d/1-LfKmEsuAH5Ub8ppb_743vakvajkFqOO",
+   "direction": "180 Degrees Consulting restructuring (pro bono): 3-tier structure, role descriptions, VP Finance and ambassador roles, KPIs of 65 to 75% volunteer retention after 3 months and budget variance within 10%",
+   "status": "Feeds goals 3 and 5",
+   "goals": [
+    3,
+    5
+   ]
+  },
+  {
+   "group": "Consulting work",
+   "title": "180DC: Executive deck",
+   "date": "2025",
+   "url": "https://drive.google.com/file/d/1HdjTLlWtWFUt_51pUFiw8SaWAuoMEQYE",
+   "direction": "The restructuring in brief: 3-tier structure, role descriptions, VP Finance and ambassador roles",
+   "status": "Feeds goals 3 and 5",
+   "goals": [
+    3,
+    5
+   ]
+  },
+  {
+   "group": "Sources",
+   "title": "2026 Outlook & Plan: Strategic Planning",
+   "date": "2026",
+   "url": "https://docs.google.com/document/d/1sPudMzpdS4Q8TIJ7B2f18s5y8IkmIuKBeQJkRUhz2S0",
+   "direction": "A source the goals draft is built on",
+   "status": "Listed in the draft's sources",
+   "goals": []
+  }
+ ],
+ "dept_map": {
+  "23": 4,
+  "40": 4,
+  "44": 4,
+  "27": 4,
+  "29": 4,
+  "43": 4,
+  "30": 5,
+  "31": 5,
+  "32": 5,
+  "33": 3,
+  "34": 3,
+  "35": 3,
+  "36": 3,
+  "37": 3,
+  "38": 3,
+  "39": 3,
+  "66": 1,
+  "19": 2,
+  "20": 2,
+  "21": 2,
+  "22": 2,
+  "24": null,
+  "25": null,
+  "26": null,
+  "28": null
+ },
+ "old_org": {
+  "41": [
+   4,
+   "Superseded by goal 4, Build money that lasts (wave205, the FY27 to FY31 goals)."
+  ],
+  "42": [
+   null,
+   "Retired as an org goal in the FY27 to FY31 plan: follower growth becomes a marketing KPI (wave205)."
+  ],
+  "45": [
+   2,
+   "Superseded by goal 2, Go beyond the meal (wave205, the FY27 to FY31 goals)."
+  ]
+ },
+ "project_links": [
+  [
+   1,
+   4,
+   "FY27",
+   "Donor team launched"
+  ],
+  [
+   2,
+   4,
+   null,
+   null
+  ],
+  [
+   13,
+   4,
+   null,
+   null
+  ],
+  [
+   14,
+   4,
+   null,
+   null
+  ],
+  [
+   20,
+   4,
+   null,
+   null
+  ],
+  [
+   23,
+   4,
+   "FY27",
+   "First grant"
+  ],
+  [
+   15,
+   4,
+   "FY27",
+   "Ad Grant live"
+  ],
+  [
+   25,
+   4,
+   null,
+   null
+  ],
+  [
+   12,
+   4,
+   null,
+   null
+  ],
+  [
+   11,
+   4,
+   null,
+   null
+  ],
+  [
+   3,
+   2,
+   null,
+   null
+  ],
+  [
+   4,
+   2,
+   "FY27",
+   "First feedback round"
+  ],
+  [
+   10,
+   5,
+   null,
+   null
+  ],
+  [
+   8,
+   3,
+   null,
+   null
+  ],
+  [
+   9,
+   3,
+   null,
+   null
+  ],
+  [
+   24,
+   1,
+   null,
+   null
+  ],
+  [
+   22,
+   3,
+   null,
+   null
+  ]
+ ]
+}

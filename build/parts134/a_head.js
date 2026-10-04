@@ -56,7 +56,9 @@
     var ids = g.items || [];
     if (directors()) {
       if (g.key === 'org') ids = ids.concat(['partners']);
-      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners'; });
+      /* wave205: directors read the goals (read only), in their Board group */
+      if (g.key === 'board') ids = ids.concat(['orggoals']);
+      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners' && x !== 'orggoals'; });
     }
     return ids;
   }

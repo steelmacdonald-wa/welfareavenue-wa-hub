@@ -1,7 +1,8 @@
 /* tour1.js <key> [role email name]: run one page tour step by step and print what each step highlighted */
 const fs = require("fs"); const path = require("path"); const { chromium } = require("playwright");
 const [, , KEY = "chrome", ROLE = "staff", EMAIL = "steel.macdonald@welfareavenue.com", NAME = "Steel MacDonald"] = process.argv;
-const html = fs.readFileSync(path.join(__dirname, "../build/candidate.html"), "utf8"), stub = fs.readFileSync(path.join(__dirname, "stub_supabase.js"), "utf8"), fixture = fs.readFileSync(path.join(__dirname, "fixture.json"), "utf8");
+/* wave205: CAND and FIXTURE (paths) override the candidate and the fixture */
+const html = fs.readFileSync(process.env.CAND || path.join(__dirname, "../build/candidate.html"), "utf8"), stub = fs.readFileSync(path.join(__dirname, "stub_supabase.js"), "utf8"), fixture = fs.readFileSync(process.env.FIXTURE || path.join(__dirname, "fixture.json"), "utf8");
 (async () => {
   const browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" });
   const page = await (await browser.newContext({ viewport: { width: 1366, height: 900 } })).newPage();

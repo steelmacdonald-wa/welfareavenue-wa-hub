@@ -31,6 +31,7 @@
     { sel: '#w51new', kind: 'comment' },                                 /* task comments window -> task_comments */
     { sel: '#w116ted', kind: 'desc' },                                   /* task description (rich) -> dept_tasks */
     { sel: 'input[data-glci]', kind: 'comment' },                        /* goal comment -> goal_comments */
+    { sel: '#w205drawer textarea[data-w205cmt]', kind: 'comment' },        /* wave205: a comment on a goal or a milestone, and replies -> goal_comments */
     { sel: 'textarea[data-w123note]', kind: 'comment' },                 /* request note -> request_notes */
     { sel: '#w116ut', kind: 'save' },                                    /* team update -> dept_updates */
     { sel: '#dmMove', kind: 'save' }, { sel: '#ddNote', kind: 'save' },  /* decision -> decisions */

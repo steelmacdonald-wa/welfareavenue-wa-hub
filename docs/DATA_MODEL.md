@@ -88,11 +88,12 @@ Projects that group tasks within a team, optionally nested (parent_id) and linke
 - `department`: Team code that owns the project.
 - `parent_id`: Parent project (projects.id) for sub-projects.
 - `status`: Project status; only active is used today. No CHECK.
-- `goal_id`: Goal this project serves (goals.id).
+- `goal_id`: The organizational goal this project serves (since wave205 departments own projects and link them straight to an org goal; department goals are retired). Set through strategy_link_project() or the project editors.
 - `leads`: JSON array of project lead display names (0 to 2). wa_leads_project() matches the signed-in person by name.
 - `workstream`: Free-text workstream label within the team, such as Fundraising events, Donor program, Grants.
 - `banked_at`: Set when the project (with its sub-projects and open tasks) is parked in the bank. See dept_tasks.banked_at.
 - `bank_until`: Date the banked project comes back.
+- `milestone_id`: wave205: the milestone of its goal (goal_id) this project serves, or null. Set with goal_id through strategy_link_project().
 
 ### `goals`
 
@@ -108,9 +109,25 @@ Quarterly and organisational goals per team. Synced both ways with the ClickUp q
 - `suggestions`: Latest AI gap analysis for this goal from goal-suggest: {note, generated, covered, suggestions}.
 - `parent_goal_id`: Parent goal (goals.id) for sub-goals.
 - `owner`: Unused (NULL in every row).
-- `why`: SMART goal field "why" (wave116f). Unused so far.
+- `why`: Why this goal matters (Relevant). Organizational goals: the Why from the approved plan.
 - `approach`: SMART goal field "approach" (wave116f). Unused so far.
 - `success`: SMART goal field "what success looks like" (wave116f). Unused so far.
+- `detail`: The goal statement. For an organizational goal (wave205) the SMART statement as the board reads it; for the older department goals, Specific. Edited through strategy_save().
+- `measure`: How the goal is measured. For an organizational goal (wave205) its headline measure (one Hub measure per goal), e.g. Meals served a year.
+- `number`: wave205: the order an organizational goal is presented in (1 to 5 in the FY27 to FY31 plan); null for department goals and retired org goals before wave205.
+- `baseline`: wave205: the measured starting point of the headline measure, as text (2,269 (2025), Not tracked).
+- `target_fy29`: wave205: the 3-year target (FY29, Sep 30, 2029) of the headline measure, as text.
+- `target_fy31`: wave205: the 5-year target (FY31), gated by the FY29 gate, as text.
+- `approval`: wave205: draft (shown as Draft for board approval) or approved; set for all active org goals at once by an admin through strategy_set_approval(). Null for department goals.
+- `approved_at`: wave205: when an admin marked the org goals approved by the board.
+- `approved_by`: wave205: the email of the admin who marked them approved.
+- `retired_at`: wave205: when the goal was retired (archived, never removed). Retired goals keep their wins, comments and history; the Hub hides them from every default view and shows them under Strategy > Goals > Retired goals. status is archived while retired.
+- `retired_by`: wave205: who retired the goal (an email, or wave205 migration).
+- `retired_note`: wave205: why it was retired, in words (superseded by, or the tier retired).
+- `status_before_retire`: wave205: the status the goal had when it was retired (status becomes archived).
+- `maps_to_goal_id`: wave205: for a retired goal, the active organizational goal it served (null when no obvious fit). Make it a project uses it as the new project's goal.
+- `superseded_by`: wave205: for a retired org goal, the organizational goal that replaced it (null when retired outright).
+- `moved_to_project_id`: wave205: set once when a retired department goal was turned into a project (strategy_retired_to_project); the button then shows the project instead.
 
 ### `goal_comments`
 
@@ -118,6 +135,10 @@ Comments on a goal, synced with ClickUp task comments by goal-sync.
 
 - `goal_id`: goals.id (cascade delete).
 - `clickup_comment_id`: ClickUp comment id once synced.
+- `parent_id`: wave205: the comment this one answers (a thread), or null for a new thread.
+- `milestone_id`: wave205: the milestone the thread is about, or null for the goal itself.
+- `author_email`: wave205: the author's email (comments from wave205 on); the author edits their own (or an admin). Older rows have only author (a name).
+- `edited_at`: wave205: when the author last edited it.
 
 ### `goal_ideas`
 
@@ -1837,6 +1858,56 @@ wave201b: what the hourly sweep (wa_tmp_sweep, cron wa-tmp-sweep) knows of the b
 - `last_active`: wave201b: when the fingerprint last changed (tables) or when the sweep first saw the function; dropped a day after.
 - `keep_until`: wave201b: set by hand to keep a temporary table or helper past the one-day rule until this time.
 
+### `goal_owners`
+
+wave205: who owns each organizational goal, as roster rows (team_members). An active row (removed_at null) lets that person edit the goal (wa205_can_edit). One lead per goal (is_lead). Written only through strategy_owner_set() (the goal's owners and admins); read by staff and board viewers.
+
+- `focus`: What this owner carries for the goal, in words (Toronto; Grants and finance), or null.
+- `removed_at`: Set when the owner was taken off the goal (rows are kept for the history; Restore brings one back).
+
+### `goal_milestones`
+
+wave205: an organizational goal's milestones, one row per item of a fiscal year (FY27, FY28, FY29, FY31; FY30 allowed), each with its status. Projects can serve one (projects.milestone_id). Written only through strategy_save(), strategy_add() and strategy_remove() by the goal's owners and admins; read by staff and board viewers. Archived, never removed.
+
+- `fy`: The fiscal year (Oct 1 to Sep 30) the milestone belongs to: FY27 is Oct 2026 to Sep 2027.
+- `status`: not started, in progress, done, at risk, or carried forward (FY29 targets carry forward when the FY29 gate is not met).
+- `updated_by`: The email of the last person who changed it (the page shows their name in the live notice).
+- `archived_at`: Set when it was removed from the goal (Restore in the history brings it back).
+
+### `goal_paths`
+
+wave205: the paths of an organizational goal (how we get there), one row each. Written only through strategy_save(), strategy_add() and strategy_remove() by the goal's owners and admins; read by staff and board viewers. Archived, never removed.
+
+- `updated_by`: The email of the last person who changed it.
+- `archived_at`: Set when it was removed from the goal (Restore brings it back).
+
+### `goal_history`
+
+wave205: every change to an organizational goal, its milestones, paths, owners and the projects linked to it (who, when, the field, the old and new value), written by the trigger wa205_hist() only. Read by staff and board viewers (Strategy > Goals > History); Restore goes through strategy_restore().
+
+- `entity`: goal, milestone, path, owner or project (entity_id is that row's id).
+- `field`: The column that changed (title, detail, why, measure, baseline, target_fy29, target_fy31, status, due_date, approval, retired_at, body, fy, archived_at, goal_id, milestone_id, is_lead, focus), or added (a new milestone, path or owner) and removed (an owner taken off).
+- `old_ref`: For project links (goal_id, milestone_id): the id it pointed at before; Restore puts it back.
+- `new_ref`: For project links: the id it points at after the change.
+- `changed_by`: The email of the person (wa_email()), or wave205 migration for the seed.
+- `changed_by_name`: Their roster name when known, else the email.
+- `restored_from`: When this change was a Restore: the history row it restored.
+
+### `strategy_plan`
+
+wave205: the plan around the organizational goals, from the approved draft: mission, mission_note, window, why_reset, long_range, approval (the board meeting and its label), rule, roadmap (phases, the checkpoint, the FY29 gate and its rule), cadence, source. Read by staff and board viewers on Strategy > Goals; written by migrations only.
+
+### `strategy_docs`
+
+wave205: the Strategy Library, the direction-setting documents (our plans, consulting work, sources) with their links, what each sets and where it stands. pinned is the Hub's important-document flag: pinned documents lead the Library and the Goals page. Admins add, edit and pin through strategy_doc_save() and strategy_doc_pin(); staff and board viewers read. Archived, never removed.
+
+- `group_label`: The Library's shelf: Our plans, Consulting work, Sources (or another an admin types).
+- `doc_date`: When the document was written, as the plan states it (Oct 2025, Jun to Aug 2026).
+- `direction`: The direction the document sets.
+- `status_note`: Where it stands (Oct 2026), or which goals it feeds.
+- `goals`: The goal numbers (goals.number) the document feeds, when the plan says so.
+- `pinned`: The important-document flag: pinned documents show first in the Library and on the Goals page. Admins pin and unpin.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -2101,4 +2172,23 @@ Functions:
 - `email_studio_save(jsonb)`: wave202: the email studio saves a design: {key (empty for a new one), name, kind, subject, preheader, html_body, text_body, design, vars, one_off, audience, category, lang, description, active}. Staff with the CRM page (not board viewers); a new row gets the key st_ plus ten letters; changing one needs its creator or an admin (the starters: admins), and never touches a system template (design is null). Logs mail studio_template or studio_one_off in change_log. Returns {key, updated_at, one_off}.
 - `email_studio_remove(text)`: wave202: the email studio removes a design it made: deleted when nothing used it, switched off (active false) when it was sent, a campaign points at it or an automation step names it, so the history keeps its words. Same rights as email_studio_save; a system template is never touched. Logs mail studio_remove.
 - `email_studio_costs()`: wave204: the email studio's AI spend for its What it costs panel: {month: {since, calls, cost}, last_month: {since, calls, cost}, d90: {calls, cost}} from ai_calls (task email_studio, US dollars; months in Toronto time). Totals only. Staff with the CRM page (not board viewers or blocked accounts), as email_studio_save.
+- `wa205_is_owner(bigint)`: wave205: true when the signed-in person is an active owner of that goal (goal_owners, matched by their roster email). Access: authenticated.
+- `wa205_can_edit(bigint)`: wave205: who edits an organizational goal (its fields, milestones, paths, owners): the goal's owners and the Hub admins. Checked inside every strategy_* writer. Access: authenticated.
+- `wa205_can_comment()`: wave205: staff who may comment on goals and link projects to them: every staff account except viewers (the board view) and blocked people. Board viewers read only. Access: authenticated.
+- `wa205_goal_writable(bigint, text, timestamptz)`: wave205: the row rule for direct writes to goals: admins always; an organizational goal only by its owners; a retired goal only by admins; anything else by staff who may comment. Used by the restrictive policy goals_wa205_write. Access: authenticated.
+- `wa205_who()`: wave205: who a change is by, for the history: wa205.actor when a migration sets it, else the signed-in email. Access: none (used by the trigger).
+- `wa205_name(text)`: wave205: a roster name for an email (or the email when nobody matches). Access: none (used by the trigger and the writers).
+- `wa205_hist()`: wave205: writes goal_history for every change to an organizational goal (goals), its milestones, paths and owners, and to a project's goal or milestone link. Arguments: the entity and the fields to compare. Skipped while wa205.seed is 1 (the seed). Access: trigger only.
+- `strategy_save(text, bigint, text, text, text)`: wave205: autosave of one field of an organizational goal (title, detail = SMART, why, measure, baseline, target_fy29, target_fy31, status, due_date), a milestone (body, status, fy) or a path (body). p_old is the value the page started from: when the stored value differs, nothing is saved and the answer is {conflict, current, by, at} so the page can show "Ian just changed this" without losing anyone's words. Checks inside: staff, the goal's owners or an admin, the field list. Access: authenticated.
+- `strategy_add(text, bigint, text, text)`: wave205: adds a milestone (with its fiscal year) or a path to an organizational goal, at the end. Checks inside: the goal's owners or an admin. Returns the new row. Access: authenticated.
+- `strategy_remove(text, bigint)`: wave205: takes a milestone or a path off its goal (archived_at; kept for the history, Restore brings it back). A removed milestone's projects stay linked to the goal. Checks inside: the goal's owners or an admin. Access: authenticated.
+- `strategy_owner_set(bigint, bigint, boolean, boolean, text)`: wave205: adds an owner to an organizational goal (p_on true; p_lead makes them the one lead; p_focus says what they carry) or takes one off (p_on false; the row is kept with removed_at). Keeps goals.owner (text, for older views) in step. Checks inside: the goal's owners or an admin. Access: authenticated.
+- `strategy_link_project(bigint, bigint, bigint)`: wave205: links a department's project to an organizational goal and, optionally, one of its milestones (p_goal null unlinks). Departments own projects, so any staff account that may comment links them; board viewers cannot. Recorded in goal_history by the trigger. Access: authenticated.
+- `strategy_comment_add(bigint, bigint, bigint, text)`: wave205: a comment on an organizational goal or one of its milestones, or an answer in a thread (p_parent; it takes the thread's milestone). @mentions go through the existing flow (the goal_comments_mentions trigger files hub_mentions, which wave138's notify sends as a Slack DM, as Steel set up on 26/09/26). Checks inside: staff who may comment (not viewers). Access: authenticated.
+- `strategy_comment_edit(bigint, text)`: wave205: the author (or an admin) edits their goal comment. Access: authenticated.
+- `strategy_set_approval(text)`: wave205: an admin marks the active organizational goals approved by the board (or back to draft); logged in change_log and in each goal's history. Until then the page shows Draft for board approval (19 Oct 2026). Access: authenticated (admins only, checked inside).
+- `strategy_doc_save(bigint, jsonb)`: wave205: admins add a document to the Strategy Library (p_id null) or change one (title, url, group_label, doc_date, direction, status_note, pinned, archived). Logged in change_log. Access: authenticated (admins only, checked inside).
+- `strategy_retired_to_project(bigint)`: wave205: the one-time "Make it a project" for a retired department goal: a new project in the same team, named after it, linked to the org goal it served (maps_to_goal_id); the goal remembers it (moved_to_project_id) and its wins and comments stay on it. Leaders and admins. Access: authenticated.
+- `strategy_restore(bigint)`: wave205: Restore in a goal's history: puts back the old value of that change (a field, a milestone or path added or removed, an owner added or removed, a project's link). The restore is itself a change in the history (restored_from). Checks inside: the goal's owners or an admin; project links by staff who may comment. Access: authenticated.
+- `trg_mentions_goal_comment()`: Files @mentions written in a goal comment (wa_mention_notify, which wave138's notify sends as a Slack DM). Since wave205 the link opens the organizational goal on Strategy > Goals (#orggoals/goal/<id>/comments/<comment>). Access: trigger only.
 

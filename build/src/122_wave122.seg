@@ -1985,25 +1985,7 @@
       S('#w111body .dash', 'Days to close, by team', 'How long tasks take from first raised to closed, per department. Shorter bars mean work moves faster.', OPT),
       S('#w111body table.wa-tbl', 'Open workload and aging', 'How much is open per team and how old it is. Old open work is the first thing to review in a team meeting.', OPT)
     ] },
-    orggoals: { tab: 'orggoals', icon: 'flag', hash: '#orggoals', steps: [
-      S('#orggoals .w116ptop', 'Where we are going', 'The organization\u2019s yearly and multi-year goals. Department goals roll up into these.'),
-      S('#w116orghost .sum', 'At a glance', 'How many goals are in play, on track, or at risk.', OPT),
-      S('#w116orghost .tb', 'Filter and add', 'Switch the horizon, filter by status, or add a new organizational goal.', OPT),
-      S('#w116orghost article.w116og .hd', 'A goal', 'Each goal shows its horizon, status and owner. Click any part to edit it.', OPT),
-      S('#w116orghost article.w116og .w116smart', 'SMART', 'Specific, Measurable, Achievable, Relevant and Time-bound. Fill in each letter so everyone reads the goal the same way.', OPT),
-      S('#w116orghost article.w116og .w116win', 'What achieved looks like', 'Describe the day the goal is met. It keeps the goal honest.', OPT),
-      S('#w116orghost article.w116og .w116inv', 'Who is involved', 'The teams, department goals, projects and tasks that roll up into this goal.', OPT),
-      S('#w116orghost article.w116og .ft', 'Actions', 'Edit it, add a department goal under it, comment, or see it on the alignment map.', OPT)
-    ] },
-    goals: { tab: 'goals', icon: 'target', hash: '#goals', steps: [
-      S('#goals > .w118mast', 'Every team\u2019s goals', 'Quarterly goals for every team, with the projects and tasks that carry them.'),
-      S('#glBody .sum', 'At a glance', 'Goals in play this quarter, the ones at risk or past due, and the ones achieved.', OPT),
-      S('#glBody .chips', 'Filter by team', 'Show one team or all of them.', OPT),
-      S('#glBody .tb', 'Pick the quarter', 'This quarter, next quarter or all quarters. Our fiscal year starts October 1.', OPT),
-      S('#glBody .w116gg .gh', 'A team\u2019s goals', 'Each team folds open. Use + Add goal to add one.', OPT),
-      S('#glBody .w116ggrid', 'Goal cards', 'Status, due date and progress. Open a goal for its SMART detail, tasks and projects, and roll it up to an organizational goal.', OPT),
-      S('#glBody details.w116sug', 'Suggested goals', 'The AI suggests goals it hears in transcripts and board meetings. Nothing is added until someone accepts one.', OPT)
-    ] },
+    /* wave205: the tours of Goals (orggoals), the Strategy Library (strategylib) and Goal alignment (goalmap) live in build/parts205/h_tours.js; Department goals is retired */
     projects: { tab: 'projects', icon: 'box', hash: '#projects', steps: [
       S('#projects .w116ptop', 'Every active project', 'Projects by team, with their status, lead and the goal they serve.'),
       S('#w116projhost .sum', 'At a glance', 'Active projects, open tasks in projects, and projects still without a lead.', OPT),
@@ -2011,15 +1993,6 @@
       S('#w116projhost .w116pg .gh', 'A team\u2019s projects', 'Fold a team open, or add a project with + Add project.', OPT),
       S('#w116projhost .w116pc', 'A project card', 'Status, lead, owner team, linked goal and open tasks. Click it to open the project page.', OPT),
       S('#w116projhost p.note', 'One lead per project', 'Every project should have one lead: the person accountable for it.', OPT)
-    ] },
-    goalmap: { tab: 'goalmap', icon: 'link', hash: '#goalmap', steps: [
-      S('#goalmap .w116ptop', 'How it all connects', 'Projects feed department goals, which feed organizational goals.'),
-      S('#w116maphost .sum', 'Gaps at a glance', 'Projects without a goal and goals without projects show up here.', OPT),
-      S('#w116maphost .chips', 'Filter by team', 'Focus the map on one team.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(1)', 'Projects', 'The work underway. A project marked Link to a goal is not connected yet: click it to link it.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(2)', 'Department goals', 'Quarterly goals per team, rolling up to the organization.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(3)', 'Organizational goals', 'The yearly and multi-year direction.', OPT),
-      S('#w116maphost p.note', 'Try it', 'Hover anything to light up its chain; click it to pin it.', OPT)
     ] },
     project: { tab: 'projects', icon: 'box', hash: function () { return '#project/' + projectId(); }, avail: function () { return !!projectId(); }, steps: [
       S('#projectpage .card > h2', 'A project page', 'One project\u2019s name, team and status.'),

@@ -122,7 +122,8 @@
     var done = ts.filter(function (t) { return t.done; }).length;
     return { total: ts.length, done: done, open: ts.length - done, pct: ts.length ? Math.round(done / ts.length * 100) : 0 };
   }
-  function goalOf(p) { return p.goal_id ? (P.goals.filter(function (g) { return Number(g.id) === Number(p.goal_id); })[0] || null) : null; }
+  /* wave205: a retired goal (the department tier, the earlier org goals) no longer counts: the card says Not linked yet */
+  function goalOf(p) { return p.goal_id ? (P.goals.filter(function (g) { return Number(g.id) === Number(p.goal_id) && !g.retired_at; })[0] || null) : null; }
   function byId(id) { return P.rows.filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
   function key() { return 'wa116.projects'; }
   function loadState() {
@@ -139,12 +140,14 @@
       /* the shared store (wave116i): the same rows the team pages, boards and goal pages read */
       if (window.w116LoadProjects) P.rows = (await window.w116LoadProjects(true)) || [];
       else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); P.rows = (r && r.data) || []; }
-      var g = await db.from('goals').select('id, title, department, quarter, status').limit(500);
+      var g = await db.from('goals').select('id, title, department, quarter, status, number, retired_at').limit(500);
       P.goals = (g && g.data) || [];
       P.loaded = Date.now();
     } catch (e) { /* offline */ }
   }
   function changed() { try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(P.rows); } catch (e) { /* fine */ } }
+  /* wave205: a link made in the Strategy app's sheet (the goal and the milestone) repaints the cards */
+  document.addEventListener('wa:projects', function () { try { var sec = document.getElementById('projects'); if (P.host && sec && sec.classList.contains('active') && !document.querySelector('#projects .w116pop')) render(); } catch (e) { /* fine */ } });
   function wsOptions(dept, cur) {
     var bs = (T.boards && T.boards[dept]) || [];
     if (!bs.length) return '';
@@ -229,7 +232,7 @@
       '<div class="top"><div class="nm" data-pact="open" data-pid="' + E(p.id) + '">' + (par ? '<small>' + E(par.name) + ' \u203a</small>' : '') + E(p.name) + '</div><span class="w116st2 ' + st + '" data-pact="status" data-pid="' + E(p.id) + '" title="Change status">' + st + '</span></div>' +
       (p.description ? '<div class="ds">' + E(p.description) + '</div>' : '') +
       '<div class="who">' + leadField(p) + ownerField(p) + '</div>' +
-      (g ? '<div class="goal"><i>Goal</i><span title="' + E(g.title) + '">' + E(g.title) + '</span></div>' : '<div class="goal"><i style="background:rgba(121,119,115,.14);color:var(--wa-muted)">Goal</i><span>Not linked to a goal yet</span></div>') +
+      (g ? '<div class="goal"' + (staff() ? ' data-pact="goal" data-pid="' + E(p.id) + '" style="cursor:pointer" title="Change the goal or milestone it serves"' : '') + '><i>Goal' + (g.number ? ' ' + E(g.number) : '') + '</i><span title="' + E(g.title) + '">' + E(g.title) + '</span></div>' : '<div class="goal"' + (staff() ? ' data-pact="goal" data-pid="' + E(p.id) + '" style="cursor:pointer"' : '') + '><i style="background:rgba(121,119,115,.14);color:var(--wa-muted)">Goal</i><span>Not linked to a goal yet' + (staff() ? ': link it' : '') + '</span></div>') +
       '<div class="pr"><div class="bar"><i style="width:' + c.pct + '%"></i></div><span><b>' + c.open + '</b> open \u00b7 ' + c.done + ' done</span></div>' +
       (children && children.length ? '<div class="subs">' + children.map(function (ch) { var cc = counts(ch); return '<a data-pact="open" data-pid="' + E(ch.id) + '">\u203a ' + E(ch.name) + (cc.open ? ' \u00b7 ' + cc.open : '') + '</a>'; }).join('') + '</div>' : '') +
       '<div class="ft"><a data-pact="open" data-pid="' + E(p.id) + '">Open project \u2192</a><a data-pact="tasks" data-pid="' + E(p.id) + '">Tasks</a><span class="sp"></span>' + (!staff() ? '' : '<a data-pact="menu" data-pid="' + E(p.id) + '" style="color:var(--wa-muted);font-weight:600">Edit</a>') + '</div>' +
@@ -350,6 +353,8 @@
       if (act === 'new') { if (!staff()) return; e.stopPropagation(); newProject(a.getAttribute('data-pg') || P.st.team || T.order[0]); return; }
       if (!p) return;
       if (act === 'open') { location.hash = '#project/' + p.id; return; }
+      /* wave205: the Strategy app's link sheet (the goal and the milestone) */
+      if (act === 'goal') { if (p && window.w205 && window.w205.canComment()) { window.w205.load().then(function () { window.w205.open({ kind: 'link', goal: p.goal_id, project: p.id, goalPick: p.goal_id, msPick: p.milestone_id || null }); }); } return; }
       if (act === 'tasks') { try { if (window.w116Board) window.w116Board.preset('project:' + p.id); } catch (x) { /* fine */ } location.hash = '#team/' + (T.order.indexOf(p.department) >= 0 ? p.department : T.order[0]) + '/tasks'; return; }
       if (!staff()) return;
       if (act === 'lead') { e.stopPropagation(); pickLead(a, p); return; }

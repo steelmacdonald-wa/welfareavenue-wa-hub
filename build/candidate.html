@@ -30925,7 +30925,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var done = ts.filter(function (t) { return t.done; }).length;
     return { total: ts.length, done: done, open: ts.length - done, pct: ts.length ? Math.round(done / ts.length * 100) : 0 };
   }
-  function goalOf(p) { return p.goal_id ? (P.goals.filter(function (g) { return Number(g.id) === Number(p.goal_id); })[0] || null) : null; }
+  /* wave205: a retired goal (the department tier, the earlier org goals) no longer counts: the card says Not linked yet */
+  function goalOf(p) { return p.goal_id ? (P.goals.filter(function (g) { return Number(g.id) === Number(p.goal_id) && !g.retired_at; })[0] || null) : null; }
   function byId(id) { return P.rows.filter(function (p) { return Number(p.id) === Number(id); })[0] || null; }
   function key() { return 'wa116.projects'; }
   function loadState() {
@@ -30942,12 +30943,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       /* the shared store (wave116i): the same rows the team pages, boards and goal pages read */
       if (window.w116LoadProjects) P.rows = (await window.w116LoadProjects(true)) || [];
       else { var r = await db.from('projects').select('*').order('sort', { ascending: true }); P.rows = (r && r.data) || []; }
-      var g = await db.from('goals').select('id, title, department, quarter, status').limit(500);
+      var g = await db.from('goals').select('id, title, department, quarter, status, number, retired_at').limit(500);
       P.goals = (g && g.data) || [];
       P.loaded = Date.now();
     } catch (e) { /* offline */ }
   }
   function changed() { try { if (window.w116ProjectsChanged) window.w116ProjectsChanged(P.rows); } catch (e) { /* fine */ } }
+  /* wave205: a link made in the Strategy app's sheet (the goal and the milestone) repaints the cards */
+  document.addEventListener('wa:projects', function () { try { var sec = document.getElementById('projects'); if (P.host && sec && sec.classList.contains('active') && !document.querySelector('#projects .w116pop')) render(); } catch (e) { /* fine */ } });
   function wsOptions(dept, cur) {
     var bs = (T.boards && T.boards[dept]) || [];
     if (!bs.length) return '';
@@ -31032,7 +31035,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="top"><div class="nm" data-pact="open" data-pid="' + E(p.id) + '">' + (par ? '<small>' + E(par.name) + ' \u203a</small>' : '') + E(p.name) + '</div><span class="w116st2 ' + st + '" data-pact="status" data-pid="' + E(p.id) + '" title="Change status">' + st + '</span></div>' +
       (p.description ? '<div class="ds">' + E(p.description) + '</div>' : '') +
       '<div class="who">' + leadField(p) + ownerField(p) + '</div>' +
-      (g ? '<div class="goal"><i>Goal</i><span title="' + E(g.title) + '">' + E(g.title) + '</span></div>' : '<div class="goal"><i style="background:rgba(121,119,115,.14);color:var(--wa-muted)">Goal</i><span>Not linked to a goal yet</span></div>') +
+      (g ? '<div class="goal"' + (staff() ? ' data-pact="goal" data-pid="' + E(p.id) + '" style="cursor:pointer" title="Change the goal or milestone it serves"' : '') + '><i>Goal' + (g.number ? ' ' + E(g.number) : '') + '</i><span title="' + E(g.title) + '">' + E(g.title) + '</span></div>' : '<div class="goal"' + (staff() ? ' data-pact="goal" data-pid="' + E(p.id) + '" style="cursor:pointer"' : '') + '><i style="background:rgba(121,119,115,.14);color:var(--wa-muted)">Goal</i><span>Not linked to a goal yet' + (staff() ? ': link it' : '') + '</span></div>') +
       '<div class="pr"><div class="bar"><i style="width:' + c.pct + '%"></i></div><span><b>' + c.open + '</b> open \u00b7 ' + c.done + ' done</span></div>' +
       (children && children.length ? '<div class="subs">' + children.map(function (ch) { var cc = counts(ch); return '<a data-pact="open" data-pid="' + E(ch.id) + '">\u203a ' + E(ch.name) + (cc.open ? ' \u00b7 ' + cc.open : '') + '</a>'; }).join('') + '</div>' : '') +
       '<div class="ft"><a data-pact="open" data-pid="' + E(p.id) + '">Open project \u2192</a><a data-pact="tasks" data-pid="' + E(p.id) + '">Tasks</a><span class="sp"></span>' + (!staff() ? '' : '<a data-pact="menu" data-pid="' + E(p.id) + '" style="color:var(--wa-muted);font-weight:600">Edit</a>') + '</div>' +
@@ -31153,6 +31156,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (act === 'new') { if (!staff()) return; e.stopPropagation(); newProject(a.getAttribute('data-pg') || P.st.team || T.order[0]); return; }
       if (!p) return;
       if (act === 'open') { location.hash = '#project/' + p.id; return; }
+      /* wave205: the Strategy app's link sheet (the goal and the milestone) */
+      if (act === 'goal') { if (p && window.w205 && window.w205.canComment()) { window.w205.load().then(function () { window.w205.open({ kind: 'link', goal: p.goal_id, project: p.id, goalPick: p.goal_id, msPick: p.milestone_id || null }); }); } return; }
       if (act === 'tasks') { try { if (window.w116Board) window.w116Board.preset('project:' + p.id); } catch (x) { /* fine */ } location.hash = '#team/' + (T.order.indexOf(p.department) >= 0 ? p.department : T.order[0]) + '/tasks'; return; }
       if (!staff()) return;
       if (act === 'lead') { e.stopPropagation(); pickLead(a, p); return; }
@@ -31623,6 +31628,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
 
   /* quick pickers used by the map and the involvement lists */
   function pickGoalFor(p) {
+    /* wave205: the Strategy app's link sheet picks the goal and the milestone */
+    try { if (window.w205 && window.w205.open && window.w205.canComment()) { window.w205.load().then(function () { window.w205.open({ kind: 'link', goal: p.goal_id, project: p.id, goalPick: p.goal_id, msPick: p.milestone_id || null }); }); return; } } catch (e) { /* the older dialog */ }
     var opts = goals().filter(function (x) { return x.department !== 'org' && !isDone(x); }).sort(function (a, b) { return (a.department === p.department ? 0 : 1) - (b.department === p.department ? 0 : 1); });
     var orgs = goals().filter(function (x) { return x.department === 'org'; });
     openModal('<div class="w116gm"><h3>Link ' + E(p.name) + '</h3><p class="m-sub">Pick the goal this project serves. Department goals roll up into organizational goals on the map.</p>' +
@@ -31852,44 +31859,38 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function renderMap() {
     var host = M.map.host; if (!host || !document.body.contains(host)) return;
+    /* wave205 (Steel, 04/10/26): "organizational goals, and departments own projects": department goals are retired, so the map
+       is projects to the organizational goals (and the milestone each project serves) */
     var st = mapState(); var all = goals();
-    var org = all.filter(function (g) { return g.department === 'org' && !isDone(g); });
-    var dept = all.filter(function (g) { return g.department !== 'org' && !isDone(g) && (!st.team || g.department === st.team); });
+    var org = all.filter(function (g) { return g.department === 'org' && !isDone(g); }).sort(function (a, b) { return (a.number || 99) - (b.number || 99) || a.id - b.id; });
     var ps = projects().filter(function (p) { return projActive(p) && (!st.team || p.department === st.team); });
     var q = lower(st.q);
     if (q) {
       var match = function (s) { return lower(s).indexOf(q) >= 0; };
-      dept = dept.filter(function (g) { return match(g.title); });
       ps = ps.filter(function (p) { return match(projName(p)); });
     }
     var orgIds = {}; org.forEach(function (g) { orgIds[String(g.id)] = 1; });
-    var deptIds = {}; dept.forEach(function (g) { deptIds[String(g.id)] = 1; });
+    var MS = []; try { MS = (window.w205 && window.w205.state().milestones) || []; } catch (e) { MS = []; }
+    function msName(id) { for (var i = 0; i < MS.length; i++) { if (String(MS[i].id) === String(id)) return MS[i].fy + ': ' + MS[i].body; } return ''; }
     M.map.edges = [];
-    ps.forEach(function (p) {
-      if (!p.goal_id) return;
-      if (deptIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'G' + p.goal_id]);
-      else if (orgIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'O' + p.goal_id]);
-    });
-    dept.forEach(function (g) { if (g.parent_goal_id && orgIds[String(g.parent_goal_id)]) M.map.edges.push(['G' + g.id, 'O' + g.parent_goal_id]); });
+    ps.forEach(function (p) { if (p.goal_id && orgIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'O' + p.goal_id]); });
     var teams = T.order.slice();
-    var linkedP = ps.filter(function (p) { return p.goal_id && goalById(p.goal_id); }).length;
-    var rolled = dept.filter(function (g) { return g.parent_goal_id && goalById(g.parent_goal_id); }).length;
+    var linkedP = ps.filter(function (p) { return p.goal_id && orgIds[String(p.goal_id)]; }).length;
+    var bare = org.filter(function (g) { return !ps.some(function (p) { return String(p.goal_id) === String(g.id); }); }).length;
     var html = '<div class="w116g">' +
       '<div class="sum">' +
       '<div class="k" data-gact="mapsum" data-v="p"><b>' + ps.length + '</b>active projects</div>' +
       '<div class="k' + (ps.length - linkedP ? ' warn' : '') + '" data-gact="mapsum" data-v="po"><b>' + (ps.length - linkedP) + '</b>projects without a goal</div>' +
-      '<div class="k" data-gact="mapsum" data-v="g"><b>' + dept.length + '</b>department goals in play</div>' +
-      '<div class="k' + (dept.length - rolled ? ' warn' : '') + '" data-gact="mapsum" data-v="go"><b>' + (dept.length - rolled) + '</b>not rolled up yet</div>' +
       '<div class="k" data-gact="mapsum" data-v="o"><b>' + org.length + '</b>organizational goals</div>' +
+      '<div class="k' + (bare ? ' warn' : '') + '" data-gact="mapsum" data-v="o"><b>' + bare + '</b>goals with no project yet</div>' +
       '</div>' +
-      '<div class="chips">' + [['', 'All teams', null]].concat(teams.map(function (d) { return [d, label(d), color(d)]; })).map(function (c) { return '<span class="chip' + (st.team === c[0] ? ' on' : '') + '" data-gact="mapteam" data-team="' + E(c[0]) + '">' + (c[2] ? '<span class="d" style="background:' + c[2] + '"></span>' : '') + E(c[1]) + '</span>'; }).join('') + '<span class="sp" style="flex:1"></span><input type="search" data-gact="mapq" placeholder="Find a project or goal" value="' + E(st.q) + '" style="font-family:' + BODY + ';font-size:12.5px;border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:6px 10px;background:var(--wa-card)" /></div>' +
-      '<div class="w116mleg"><span><span class="sw"></span>rolls up into</span><span><span class="sw hl"></span>the chain you hover or click</span><span><span class="sw orph"></span>not linked yet' + (staff() ? ' (click the red link to fix it)' : '') + '</span>' + (M.map.focus ? '<span class="clr" data-gact="mapclear">Clear focus</span>' : '<span style="margin-left:auto">Click a node to pin its chain</span>') + '</div>' +
-      '<div class="w116map"><svg></svg><div class="w116mcols">' +
-      '<div class="w116mcol"><h4>Projects</h4><div class="hint">the work underway</div>' + (ps.length ? ps.map(function (p) { var op = tasks().filter(function (t) { return !t.done && Number(t.project_id) === Number(p.id); }).length; var linked = p.goal_id && goalById(p.goal_id); return node('P', p.id, p.department, projName(p), '<span>' + E(shortLabel(p.department)) + '</span><span>' + op + ' open</span>', !linked, 'Link to a goal'); }).join('') : '<p class="empty">No projects match.</p>') + '</div>' +
-      '<div class="w116mcol"><h4>Department goals</h4><div class="hint">quarterly, per team</div>' + (dept.length ? dept.map(function (g) { var iv = inv(g); var rolledUp = g.parent_goal_id && goalById(g.parent_goal_id); return node('G', g.id, g.department, g.title, '<span>' + E(shortLabel(g.department)) + (g.quarter ? ' \u00b7 ' + E(g.quarter) : '') + '</span>' + stPill(g, false) + '<span>' + iv.open.length + ' open</span>', !rolledUp, 'Roll up to an org goal'); }).join('') : '<p class="empty">No department goals match.</p>') + '</div>' +
-      '<div class="w116mcol"><h4>Organizational goals</h4><div class="hint">yearly and multi-year</div>' + (org.length ? org.map(function (g) { var iv = inv(g); return node('O', g.id, 'org', g.title, '<span>' + E(horizon(g)) + '</span>' + stPill(g, false) + '<span>' + iv.kids.length + ' goal' + (iv.kids.length === 1 ? '' : 's') + ' \u00b7 ' + iv.projects.length + ' project' + (iv.projects.length === 1 ? '' : 's') + ' \u00b7 ' + iv.open.length + ' open</span>', false); }).join('') : '<p class="empty">No organizational goals yet.</p>') + '</div>' +
+      '<div class="chips">' + [['', 'All teams', null]].concat(teams.map(function (d) { return [d, label(d), color(d)]; })).map(function (c) { return '<span class="chip' + (st.team === c[0] ? ' on' : '') + '" data-gact="mapteam" data-team="' + E(c[0]) + '">' + (c[2] ? '<span class="d" style="background:' + c[2] + '"></span>' : '') + E(c[1]) + '</span>'; }).join('') + '<span class="sp" style="flex:1"></span><input type="search" data-gact="mapq" placeholder="Find a project" value="' + E(st.q) + '" style="font-family:' + BODY + ';font-size:12.5px;border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:6px 10px;background:var(--wa-card)" /></div>' +
+      '<div class="w116mleg"><span><span class="sw"></span>serves</span><span><span class="sw hl"></span>the chain you hover or click</span><span><span class="sw orph"></span>not linked yet' + (staff() ? ' (click the red link to fix it)' : '') + '</span>' + (M.map.focus ? '<span class="clr" data-gact="mapclear">Clear focus</span>' : '<span style="margin-left:auto">Click a node to pin its chain</span>') + '</div>' +
+      '<div class="w116map"><svg></svg><div class="w116mcols" style="grid-template-columns:1fr 1fr">' +
+      '<div class="w116mcol"><h4>Projects</h4><div class="hint">each department’s work underway</div>' + (ps.length ? ps.map(function (p) { var op = tasks().filter(function (t) { return !t.done && Number(t.project_id) === Number(p.id); }).length; var linked = p.goal_id && orgIds[String(p.goal_id)]; var ms = linked && p.milestone_id ? msName(p.milestone_id) : ''; return node('P', p.id, p.department, projName(p), '<span>' + E(shortLabel(p.department)) + '</span><span>' + op + ' open</span>' + (ms ? '<span title="' + E(ms) + '">' + E(String(ms).slice(0, 34)) + (String(ms).length > 34 ? '…' : '') + '</span>' : ''), !linked, 'Link to a goal'); }).join('') : '<p class="empty">No projects match.</p>') + '</div>' +
+      '<div class="w116mcol"><h4>Organizational goals</h4><div class="hint">FY27 to FY29, gated to FY31</div>' + (org.length ? org.map(function (g) { var n = ps.filter(function (p) { return String(p.goal_id) === String(g.id); }).length; return node('O', g.id, 'org', (g.number ? g.number + '. ' : '') + g.title, stPill(g, false) + '<span>' + n + ' project' + (n === 1 ? '' : 's') + '</span>', false); }).join('') : '<p class="empty">No organizational goals yet.</p>') + '</div>' +
       '</div></div>' +
-      '<p class="note">Hover anything to light up its chain; click to pin it. Projects link to a goal from their card or the Projects page; department goals pick an organizational goal in "Rolls up to". <a data-gact="goorg">Organizational goals</a> \u00b7 <a data-gact="godept">Department goals</a></p></div>';
+      '<p class="note">Hover anything to light up its chain; click to pin it. Link a project from the red link here, from Projects, or from its goal on Goals (to a milestone too). <a data-gact="goorg">Goals</a></p></div>';
     host.innerHTML = html;
     var qi = host.querySelector('input[data-gact="mapq"]'); if (qi && M.map.qFocus) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); M.map.qFocus = false; }
     drawMap();
@@ -31942,7 +31943,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function ensurePanels() {
     panel('orggoals', 'Strategy', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
-    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
+    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: every department\u2019s projects and the organizational goal each one serves.', 'w116maphost');
   }
   function visiblePanel(id) { var s = document.getElementById(id); return !!(s && s.classList.contains('active')); }
   async function showOrg() { ensurePanels(); if (!visiblePanel('orggoals')) return; M.org.host = document.getElementById('w116orghost'); if (!M.org.host) return; if (!M.loaded) M.org.host.innerHTML = '<p class="read">Loading goals...</p>'; await load(); try { if (typeof wa30LoadIdeas === 'function') await wa30LoadIdeas(); } catch (e) { /* fine */ } renderOrg(); }
@@ -40440,25 +40441,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w111body .dash', 'Days to close, by team', 'How long tasks take from first raised to closed, per department. Shorter bars mean work moves faster.', OPT),
       S('#w111body table.wa-tbl', 'Open workload and aging', 'How much is open per team and how old it is. Old open work is the first thing to review in a team meeting.', OPT)
     ] },
-    orggoals: { tab: 'orggoals', icon: 'flag', hash: '#orggoals', steps: [
-      S('#orggoals .w116ptop', 'Where we are going', 'The organization\u2019s yearly and multi-year goals. Department goals roll up into these.'),
-      S('#w116orghost .sum', 'At a glance', 'How many goals are in play, on track, or at risk.', OPT),
-      S('#w116orghost .tb', 'Filter and add', 'Switch the horizon, filter by status, or add a new organizational goal.', OPT),
-      S('#w116orghost article.w116og .hd', 'A goal', 'Each goal shows its horizon, status and owner. Click any part to edit it.', OPT),
-      S('#w116orghost article.w116og .w116smart', 'SMART', 'Specific, Measurable, Achievable, Relevant and Time-bound. Fill in each letter so everyone reads the goal the same way.', OPT),
-      S('#w116orghost article.w116og .w116win', 'What achieved looks like', 'Describe the day the goal is met. It keeps the goal honest.', OPT),
-      S('#w116orghost article.w116og .w116inv', 'Who is involved', 'The teams, department goals, projects and tasks that roll up into this goal.', OPT),
-      S('#w116orghost article.w116og .ft', 'Actions', 'Edit it, add a department goal under it, comment, or see it on the alignment map.', OPT)
-    ] },
-    goals: { tab: 'goals', icon: 'target', hash: '#goals', steps: [
-      S('#goals > .w118mast', 'Every team\u2019s goals', 'Quarterly goals for every team, with the projects and tasks that carry them.'),
-      S('#glBody .sum', 'At a glance', 'Goals in play this quarter, the ones at risk or past due, and the ones achieved.', OPT),
-      S('#glBody .chips', 'Filter by team', 'Show one team or all of them.', OPT),
-      S('#glBody .tb', 'Pick the quarter', 'This quarter, next quarter or all quarters. Our fiscal year starts October 1.', OPT),
-      S('#glBody .w116gg .gh', 'A team\u2019s goals', 'Each team folds open. Use + Add goal to add one.', OPT),
-      S('#glBody .w116ggrid', 'Goal cards', 'Status, due date and progress. Open a goal for its SMART detail, tasks and projects, and roll it up to an organizational goal.', OPT),
-      S('#glBody details.w116sug', 'Suggested goals', 'The AI suggests goals it hears in transcripts and board meetings. Nothing is added until someone accepts one.', OPT)
-    ] },
+    /* wave205: the tours of Goals (orggoals), the Strategy Library (strategylib) and Goal alignment (goalmap) live in build/parts205/h_tours.js; Department goals is retired */
     projects: { tab: 'projects', icon: 'box', hash: '#projects', steps: [
       S('#projects .w116ptop', 'Every active project', 'Projects by team, with their status, lead and the goal they serve.'),
       S('#w116projhost .sum', 'At a glance', 'Active projects, open tasks in projects, and projects still without a lead.', OPT),
@@ -40466,15 +40449,6 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#w116projhost .w116pg .gh', 'A team\u2019s projects', 'Fold a team open, or add a project with + Add project.', OPT),
       S('#w116projhost .w116pc', 'A project card', 'Status, lead, owner team, linked goal and open tasks. Click it to open the project page.', OPT),
       S('#w116projhost p.note', 'One lead per project', 'Every project should have one lead: the person accountable for it.', OPT)
-    ] },
-    goalmap: { tab: 'goalmap', icon: 'link', hash: '#goalmap', steps: [
-      S('#goalmap .w116ptop', 'How it all connects', 'Projects feed department goals, which feed organizational goals.'),
-      S('#w116maphost .sum', 'Gaps at a glance', 'Projects without a goal and goals without projects show up here.', OPT),
-      S('#w116maphost .chips', 'Filter by team', 'Focus the map on one team.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(1)', 'Projects', 'The work underway. A project marked Link to a goal is not connected yet: click it to link it.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(2)', 'Department goals', 'Quarterly goals per team, rolling up to the organization.', OPT),
-      S('#w116maphost .w116mcols > .w116mcol:nth-child(3)', 'Organizational goals', 'The yearly and multi-year direction.', OPT),
-      S('#w116maphost p.note', 'Try it', 'Hover anything to light up its chain; click it to pin it.', OPT)
     ] },
     project: { tab: 'projects', icon: 'box', hash: function () { return '#project/' + projectId(); }, avail: function () { return !!projectId(); }, steps: [
       S('#projectpage .card > h2', 'A project page', 'One project\u2019s name, team and status.'),
@@ -47427,7 +47401,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
+    orggoals: 'Goals and the Strategy Library', goals: 'Department goals (retired)', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
     fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
@@ -49776,7 +49750,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var LABEL = {
     mypage: 'Home', calendar: 'Calendar', requests: 'Requests', overview: 'Executive dashboard', dashboard: 'Delivery numbers and donations',
     create: 'Create studio', photos: 'Photo library', brain: 'The Brain', importantinfo: 'Important info', ourstory: 'Our story', partners: 'Partners', documents: 'Document finder',
-    orggoals: 'Organizational goals', goals: 'Department goals', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
+    orggoals: 'Goals and the Strategy Library', goals: 'Department goals (retired)', projects: 'Projects', goalmap: 'Goal alignment', bank: 'The Task Bank',
     opsmtl: 'Operations Montreal', volunteering: 'Volunteer Manager', progdev: 'Program Development', opsto: 'Operations Toronto',
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
     fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre',
@@ -53011,7 +52985,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var ids = g.items || [];
     if (directors()) {
       if (g.key === 'org') ids = ids.concat(['partners']);
-      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners'; });
+      /* wave205: directors read the goals (read only), in their Board group */
+      if (g.key === 'board') ids = ids.concat(['orggoals']);
+      if (g.key === 'apps') ids = ids.filter(function (x) { return x !== 'partners' && x !== 'orggoals'; });
     }
     return ids;
   }
@@ -53491,6 +53467,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     { sel: '#w51new', kind: 'comment' },                                 /* task comments window -> task_comments */
     { sel: '#w116ted', kind: 'desc' },                                   /* task description (rich) -> dept_tasks */
     { sel: 'input[data-glci]', kind: 'comment' },                        /* goal comment -> goal_comments */
+    { sel: '#w205drawer textarea[data-w205cmt]', kind: 'comment' },        /* wave205: a comment on a goal or a milestone, and replies -> goal_comments */
     { sel: 'textarea[data-w123note]', kind: 'comment' },                 /* request note -> request_notes */
     { sel: '#w116ut', kind: 'save' },                                    /* team update -> dept_updates */
     { sel: '#dmMove', kind: 'save' }, { sel: '#ddNote', kind: 'save' },  /* decision -> decisions */
@@ -61362,13 +61339,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     hub: { id: 'hub', label: 'Hub', color: GREEN, ic: 'home', blurb: 'Teams, tools, the organization and everything else', pages: [] },
     /* wave163: Steel: "Could you add the following pages to an App called strategy" (Organizational goals, Department goals,
        Projects, Goal alignment); a project's own page (#project/...) opens inside it too, with Projects marked */
-    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'Goals, projects and how they line up', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
+    strategy: { id: 'strategy', label: 'Strategy', color: PURPLE, ic: 'target', blurb: 'The goals, the projects that serve them, the library', pages: ['orggoals', 'goals', 'projects', 'goalmap', 'project'], home: '#orggoals',
       groups: function () {
-        return [{ label: 'Goals and projects', items: [
-          { h: '#orggoals', l: 'Organizational goals', ic: 'target', page: 'orggoals' },
-          { h: '#goals', l: 'Department goals', ic: 'flag', page: 'goals' },
+        /* wave205 (Steel, 04/10/26): "organizational goals, and departments own projects": Department goals leave the rail (the
+           retired tier opens from Goals > Retired goals; #goals goes there); Goal alignment is goals to projects; the Strategy
+           Library is a section of the Goals page (#orggoals/library) */
+        return [{ label: 'Strategy', items: [
+          { h: '#orggoals', l: 'Goals', ic: 'target', page: 'orggoals' },
           { h: '#projects', l: 'Projects', ic: 'layers', page: 'projects' },
-          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' }
+          { h: '#goalmap', l: 'Goal alignment', ic: 'tree', page: 'goalmap' },
+          { h: '#orggoals/library', l: 'Strategy Library', ic: 'book', page: 'orggoals' }
         ] }];
       }
     },
@@ -61545,7 +61525,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     /* an app's pages leave the Hub's menu (the buttons stay in the DOM: they carry the access rule and the routing) */
     /* wave163: the Strategy pages and Partners too, and the group wave134 keeps the apps' pages in */
     + 'nav.wa-nav #tabBar .tab[data-tab="crm"],nav.wa-nav #tabBar .tab[data-tab="hrcentre"],nav.wa-nav #tabBar .tab[data-tab="finances"],nav.wa-nav #tabBar .tab-group[data-w42g="admin"],'
-    + 'nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
+    + 'html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="orggoals"],nav.wa-nav #tabBar .tab[data-tab="goals"],nav.wa-nav #tabBar .tab[data-tab="projects"],nav.wa-nav #tabBar .tab[data-tab="goalmap"],html:not(.w163dir) nav.wa-nav #tabBar .tab[data-tab="partners"],nav.wa-nav #tabBar .tab[data-tab="volunteering"],nav.wa-nav #tabBar .tab[data-tab="fund"],body.w193has nav.wa-nav #tabBar .tab[data-tab="fundevents"],nav.wa-nav #tabBar .tab-group[data-w42g="apps"]{display:none !important;}'   /* wave193: the Fundraising app's pages leave the menu; whoever has no app (directors, finance staff) keeps the Events calendar where it was */   /* directors keep Partners in their menu (they open no apps) */
     /* the app frame: the rail replaces the menu */
     + '#w153rail{display:none;flex:1 1 auto;font-family:' + BODY + ';}'
     + 'body.w153app nav.wa-nav #tabBar{display:none !important;}'
@@ -78256,6 +78236,1584 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   };
 })();
 /* =====================================================================
+   WA v205 (04/10/26): the Strategy app rebuilt; the organizational goals edited live, Google-Doc style.
+   Steel (04/10/26): a rebuilt, interactive Strategy app where the organizational goals can be edited live. His decisions:
+   - "organizational goals, and departments own projects": the five FY27 to FY31 goals with their yearly milestones;
+     department goals are retired as a tier (kept, archived, out of every default view, wins and comments kept; one-time
+     Make it a project); each department's project links straight to an org goal, ideally to one milestone.
+   - Live editing: click-to-edit with autosave on every field, milestone, target, owner and path (no edit dialog; saves as
+     you type, quietly); who is on the page and which goal they are in, with other people's saves arriving without a
+     refresh (Supabase Realtime: presence plus postgres_changes); a per-field check so two people never silently lose
+     words ("Ian just changed this"); threaded comments on goals and milestones with @mentions (wave138's flow); every
+     change in a history with Restore (goal_history, written by a database trigger).
+   - "each goal's owners and admins edit; all staff read and comment; board viewers read-only": enforced in the database
+     (strategy_* functions check inside; restrictive policies on goals and goal_comments); the page only mirrors it.
+   - The cleanest page of the Hub: the mission at the top, the five goals as cards, the roadmap with the checkpoint and
+     the FY29 gate, and the pinned Strategy Library (the Hub's first important-document flag, strategy_docs.pinned).
+   The content is the approved draft's (build/data/wa205_seed.py), marked "Draft for board approval (19 Oct 2026)" until
+   an admin marks the goals approved.
+
+   Addresses (one page, 'orggoals', wave116f's, taken over): #orggoals (Goals), #orggoals/goal/<id>[/comments[/<c>]|/history],
+   #orggoals/library (Strategy Library), #orggoals/retired (Retired goals). #goals (Department goals) opens Retired goals.
+   The rail (parts153): Goals, Projects, Goal alignment (goals to projects, 116f), Strategy Library.
+   Data: goals (org tier), goal_owners, goal_milestones, goal_paths, goal_history, goal_comments, projects.goal_id and
+   milestone_id, strategy_plan, strategy_docs (wa205_strategy). Writers: strategy_save, strategy_add, strategy_remove,
+   strategy_owner_set, strategy_link_project, strategy_comment_add, strategy_comment_edit, strategy_restore,
+   strategy_set_approval, strategy_doc_save, strategy_retired_to_project.
+   ===================================================================== */
+(function () {
+  if (window.__wa205) return; window.__wa205 = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GROUND = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', MUTED = '#797773', FLAG = '#B3402F', TEAL = '#2A8C7A';
+  var HEAD = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif";
+  var FYS = ['FY27', 'FY28', 'FY29', 'FY31'];
+  var FY_LABEL = { FY27: 'Oct 2026 to Sep 2027', FY28: 'Oct 2027 to Sep 2028', FY29: 'Oct 2028 to Sep 2029', FY30: 'Oct 2029 to Sep 2030', FY31: 'Oct 2030 to Sep 2031' };
+  var GOAL_ST = ['not started', 'in progress', 'on track', 'at risk', 'delayed', 'done'];
+  var MS_ST = ['not started', 'in progress', 'done', 'at risk', 'carried forward'];
+  var ST_LABEL = { 'not started': 'Not started', 'in progress': 'In progress', 'on track': 'On track', 'at risk': 'At risk', 'delayed': 'Delayed', 'done': 'Done', 'carried forward': 'Carried forward' };
+  var FIELD_LABEL = { title: 'the title', detail: 'the SMART statement', why: 'Why', measure: 'the headline measure', baseline: 'the baseline', target_fy29: 'the FY29 target', target_fy31: 'the FY31 target', status: 'the status', due_date: 'the due date', progress: 'progress', approval: 'board approval', retired_at: 'retired', body: 'the text', fy: 'the year', archived_at: 'removed', added: 'added', removed: 'removed', is_lead: 'the lead', focus: 'the focus', goal_id: 'the goal link', milestone_id: 'the milestone link' };
+  var SAVE_MS = 800;
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function lower(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+  function str(v) { return v == null ? '' : String(v); }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* fine */ } }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function byId(list, id) { for (var i = 0; i < list.length; i++) { if (String(list[i].id) === String(id)) return list[i]; } return null; }
+  function clip(s, n) { s = str(s); return s.length > n ? s.slice(0, n - 1) + '\u2026' : s; }
+  function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
+  function fmtDay(d) { if (!d) return ''; try { var x = new Date(String(d).length <= 10 ? String(d) + 'T12:00:00' : d); return x.toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return String(d); } }
+  function fmtWhen(ts) {
+    if (!ts) return '';
+    try {
+      var d = new Date(ts), now = new Date(), diff = (now - d) / 1000;
+      if (diff < 45) return 'just now';
+      if (diff < 3600) return Math.round(diff / 60) + ' min ago';
+      var t = d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
+      if (d.toDateString() === now.toDateString()) return 'today ' + t;
+      return d.toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }) + ' ' + t;
+    } catch (e) { return ''; }
+  }
+  function I(n) {
+    var P = {
+      plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', chat: '<path d="M4 5.5h16v10H9l-5 4z"/>',
+      clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.1 1.1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.1-1.1"/>',
+      star: '<path d="M12 3.5 14.6 9l6 .6-4.5 4 1.3 5.9L12 16.6l-5.4 2.9 1.3-5.9-4.5-4 6-.6z"/>', pin: '<path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/>',
+      search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>', chev: '<path d="m6 9 6 6 6-6"/>', ext: '<path d="M14 4.5h5.5V10"/><path d="M19.5 4.5 11 13"/><path d="M17.5 13.5v4.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V8A1.5 1.5 0 0 1 6 6.5h4.5"/>',
+      undo: '<path d="M9 7 4.5 11.5 9 16"/><path d="M5 11.5h9a5 5 0 0 1 0 10h-2"/>', check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', flag: '<path d="M6 21V3.5"/><path d="M6 4.5h11l-2.3 4.2L17 13H6"/>',
+      box: '<path d="m12 3.5 8 4v9l-8 4-8-4v-9z"/><path d="m4 7.5 8 4 8-4M12 11.5v9"/>', doc: '<path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20z"/><path d="M14 3.5V8h4M9.5 12.5h5M9.5 16h5"/>',
+      archive: '<rect x="4" y="4.5" width="16" height="4" rx="1"/><path d="M5.5 8.5V19a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V8.5M10 12.5h4"/>', people: '<circle cx="9" cy="9" r="3"/><path d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.6c2.4.1 4 1.5 4.6 4.4"/>'
+    };
+    return '<svg class="w205i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (P[n] || P.star) + '</svg>';
+  }
+
+  /* ---------- who ---------- */
+  function members() { try { return (typeof DB_MEMBERS !== 'undefined' && DB_MEMBERS) || []; } catch (e) { return []; } }
+  function memberById(id) { return byId(members(), id); }
+  function memberByEmail(em) { em = lower(em); if (!em) return null; return members().filter(function (m) { return lower(m.email) === em; })[0] || null; }
+  function nameOf(email) { var m = memberByEmail(email); return m ? m.name : (email ? String(email).split('@')[0] : 'Someone'); }
+  function myEmail() { try { return lower(typeof USER !== 'undefined' && USER && USER.email); } catch (e) { return ''; } }
+  function me() { var em = myEmail(), m = memberByEmail(em); var name = ''; try { name = (typeof USER !== 'undefined' && USER && USER.name) || ''; } catch (e) { name = ''; } return { email: em, name: (m && m.name) || name || em.split('@')[0], id: m ? m.id : null, avatar_url: m ? m.avatar_url : null }; }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function isAdmin() { return staffOk() && role() === 'admin'; }
+  function isLeader() { var r = role(); return staffOk() && (r === 'admin' || r === 'leader'); }
+  /* the database decides (wa205_can_comment, wa205_can_edit); the page mirrors it so nobody types into a box that will refuse */
+  function canComment() { return staffOk() && !boardMode() && role() !== 'viewer' && role() !== 'blocked'; }
+  function isOwner(g) { var em = myEmail(); if (!g || !em) return false; return S.owners.some(function (o) { if (String(o.goal_id) !== String(g.id) || o.removed_at) return false; var m = memberById(o.member_id); return m && lower(m.email) === em; }); }
+  function canEdit(g) { return !!g && !g.retired_at && canComment() && (isAdmin() || isOwner(g)); }
+  function readOnlyWhy() {
+    if (boardMode() || role() === 'viewer') return 'You are reading the goals as a board viewer.';
+    if (!staffOk()) return 'Sign in with a Welfare Avenue account to work on the goals.';
+    return 'Each goal\u2019s owners and the admins edit it; you can comment and link projects.';
+  }
+
+  /* ---------- state ---------- */
+  var S = {
+    loaded: 0, loading: null, err: null,
+    goals: [], retired: [], owners: [], milestones: [], paths: [], comments: [], projects: [], plan: {}, docs: [], wins: {},
+    view: 'goals', goalId: null, sub: '', subId: null,
+    base: {}, dirty: {}, timers: {}, inflight: {}, conflict: {}, savedAt: {}, errors: {},
+    presence: [], channel: null, live: false, focus: { goal: null, field: null }, stale: {},
+    drawer: null, libQ: '', libAll: false, folded: {}, flash: {}, lastSaveBy: {}
+  };
+  try { var f0 = JSON.parse(lsGet('w205folded') || '{}'); if (f0 && typeof f0 === 'object') S.folded = f0; } catch (e) { /* fine */ }
+
+  /* ---------- styles ---------- */
+  if (!document.getElementById('w205css')) {
+    var css = document.createElement('style'); css.id = 'w205css';
+    css.textContent = ''
+      /* wave116f's page stays in the DOM (its wiring, its tours' old anchors) but out of sight */
+      + '#orggoals > .w116ptop,#orggoals > #w116orghost{display:none !important;}'
+      + '#orggoals{max-width:1180px;}'
+      + '#w205{font-family:' + BODY + ';color:' + GROUND + ';--w205g:' + GREEN + ';--w205p:' + PURPLE + ';--w205gold:' + GOLD + ';}'
+      + '#w205 *{box-sizing:border-box;}'
+      + '#w205 .w205i{width:16px;height:16px;flex:none;vertical-align:-3px;}'
+      + '#w205 h1,#w205 h2,#w205 h3,#w205 h4{font-family:' + HEAD + ';font-weight:600;letter-spacing:.3px;margin:0;color:' + GREEN + ';}'
+      + '#w205 a{color:' + GREEN + ';}'
+      + '#w205 button{font-family:' + BODY + ';}'
+      + '.w205mast{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:2px 0 18px;}'
+      + '.w205mast .crumb{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + PURPLE + ';margin-bottom:4px;}'
+      + 'body.w153app .w205mast .crumb{display:none;}'
+      + '.w205mast h1{font-size:40px;line-height:1;text-transform:uppercase;}'
+      + '.w205mast p{margin:6px 0 0;color:' + MUTED + ';font-size:14px;max-width:640px;}'
+      + '.w205mast .sp{flex:1 1 auto;}'
+      + '.w205btn{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.22);background:#FFFAF2;color:' + GREEN + ';border-radius:999px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;line-height:1.1;}'
+      + '.w205btn:hover{background:rgba(16,63,57,.06);}'
+      + '.w205btn:focus-visible,.w205ed:focus-visible,.w205chip:focus-visible,.w205link:focus-visible{outline:2px solid ' + PURPLE + ';outline-offset:2px;}'
+      + '.w205btn.pri{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+      + '.w205btn.pri:hover{background:#0b2f2a;}'
+      + '.w205btn.gold{background:' + GOLD + ';color:' + GROUND + ';border-color:' + GOLD + ';}'
+      + '.w205btn.sm{padding:5px 10px;font-size:12px;}'
+      + '.w205btn.ghost{background:transparent;border-color:transparent;}'
+      + '.w205btn.ghost:hover{background:rgba(16,63,57,.07);}'
+      + '.w205btn[disabled]{opacity:.5;cursor:default;}'
+      + '.w205link{background:none;border:0;padding:0;color:' + GREEN + ';font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:inherit;}'
+      /* the mission */
+      + '.w205hero{position:relative;background:' + GREEN + ';color:' + CREAM + ';border-radius:20px;padding:28px 32px 26px;overflow:hidden;margin-bottom:14px;}'
+      + '.w205hero:after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;border:2px solid rgba(220,165,39,.35);}'
+      + '.w205hero .lab{font-size:12px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:' + GOLD + ';}'
+      + '.w205hero blockquote{margin:10px 0 12px;font-family:' + HEAD + ';font-size:28px;line-height:1.18;font-weight:500;max-width:860px;color:' + CREAM + ';}'
+      + '.w205hero .bar{width:44px;height:3px;background:' + GOLD + ';margin:0 0 12px;}'
+      + '.w205hero p{margin:0;color:rgba(255,250,242,.82);font-size:14px;max-width:760px;line-height:1.5;}'
+      + '.w205status{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 22px;}'
+      + '.w205badge{display:inline-flex;align-items:center;gap:7px;border-radius:999px;padding:6px 13px;font-size:12.5px;font-weight:700;letter-spacing:.2px;}'
+      + '.w205badge.draft{background:rgba(220,165,39,.18);color:#6b4d05;border:1px solid rgba(220,165,39,.55);}'
+      + '.w205badge.ok{background:rgba(42,140,122,.15);color:#1d6b5d;border:1px solid rgba(42,140,122,.45);}'
+      + '.w205status .note{font-size:13px;color:' + MUTED + ';}'
+      + '.w205pres{display:inline-flex;align-items:center;gap:8px;margin-left:auto;font-size:12.5px;color:' + MUTED + ';}'
+      + '.w205pres .avs{display:inline-flex;}'
+      + '.w205pres .avs > span{margin-left:-6px;border:2px solid #F4F2EA;border-radius:50%;}'
+      + '.w205pres .avs > span:first-child{margin-left:0;}'
+      + '.w205live{display:inline-block;width:8px;height:8px;border-radius:50%;background:' + TEAL + ';box-shadow:0 0 0 3px rgba(42,140,122,.18);}'
+      + '.w205live.off{background:#bbb;box-shadow:none;}'
+      + '.w205ro{background:rgba(111,100,171,.08);border:1px solid rgba(111,100,171,.25);color:#4a4187;border-radius:12px;padding:9px 14px;font-size:13px;margin:0 0 18px;}'
+      /* sections */
+      + '.w205sec{margin:30px 0 14px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;}'
+      + '.w205sec h2{font-size:26px;text-transform:uppercase;}'
+      + '.w205sec .hint{color:' + MUTED + ';font-size:13px;}'
+      + '.w205sec .sp{flex:1;}'
+      /* at a glance */
+      + '.w205glance{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;overflow:hidden;}'
+      + '.w205glance table{width:100%;border-collapse:collapse;font-size:13.5px;}'
+      + '.w205glance th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;padding:11px 14px;background:rgba(16,63,57,.04);}'
+      + '.w205glance td{padding:12px 14px;border-top:1px solid rgba(16,63,57,.08);vertical-align:top;}'
+      + '.w205glance tr[data-w205jump]{cursor:pointer;}'
+      + '.w205glance tr[data-w205jump]:hover td{background:rgba(111,100,171,.05);}'
+      + '.w205glance td b{font-family:' + HEAD + ';font-size:17px;font-weight:600;color:' + GREEN + ';}'
+      + '.w205num{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:' + GOLD + ';color:' + GROUND + ';font-family:' + HEAD + ';font-weight:700;font-size:16px;flex:none;}'
+      + '.w205glance .t29{font-weight:700;color:' + GREEN + ';}'
+      + '.w205glance .g31{color:' + MUTED + ';}'
+      /* a goal */
+      + '.w205goal{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:20px;margin:0 0 18px;box-shadow:0 1px 2px rgba(16,63,57,.04),0 10px 30px -18px rgba(16,63,57,.25);scroll-margin-top:80px;transition:box-shadow .2s;}'
+      + '.w205goal.target{box-shadow:0 0 0 3px rgba(111,100,171,.35),0 10px 30px -18px rgba(16,63,57,.25);}'
+      + '.w205ghd{display:flex;align-items:flex-start;gap:14px;padding:20px 22px 6px;}'
+      + '.w205ghd .w205num{width:40px;height:40px;font-size:22px;margin-top:2px;}'
+      + '.w205ghd .tw{flex:1 1 auto;min-width:0;}'
+      + '.w205ghd .side{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;}'
+      + '.w205ed{display:block;width:100%;border:1px solid transparent;border-radius:10px;background:transparent;font:inherit;color:inherit;padding:5px 8px;margin:0 -8px;resize:none;overflow:hidden;line-height:1.5;transition:background .15s,border-color .15s;}'
+      + 'textarea.w205ed{min-height:1.5em;field-sizing:content;}'
+      + '.w205ed:not([readonly]):hover{background:rgba(16,63,57,.035);border-color:rgba(16,63,57,.12);cursor:text;}'
+      + '.w205ed:not([readonly]):focus{background:#FFFAF2;border-color:' + PURPLE + ';box-shadow:0 0 0 3px rgba(111,100,171,.15);outline:none;}'
+      + '.w205ed[readonly]{cursor:default;}'
+      + '.w205ed.title{font-family:' + HEAD + ';font-size:28px;font-weight:600;color:' + GREEN + ';line-height:1.1;text-transform:uppercase;letter-spacing:.3px;}'
+      + '.w205ed.flash{animation:w205fl 1.6s ease;}'
+      + '.w205ed.other{border-color:rgba(111,100,171,.55);border-style:dashed;}'
+      + '@keyframes w205fl{0%{background:rgba(220,165,39,.35);}100%{background:transparent;}}'
+      + '.w205ed::placeholder{color:#aaa49b;font-style:italic;}'
+      + '.w205lab{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';margin:0 0 3px;}'
+      + '.w205lab .who{font-size:11px;letter-spacing:0;text-transform:none;font-weight:600;color:' + PURPLE + ';background:rgba(111,100,171,.1);border-radius:999px;padding:1px 8px;}'
+      + '.w205owners{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:2px 22px 10px 76px;}'
+      + '.w205chip{display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.15);background:#F4F2EA;border-radius:999px;padding:3px 10px 3px 3px;font-size:12.5px;font-weight:600;color:' + GREEN + ';cursor:default;}'
+      + 'button.w205chip{cursor:pointer;}'
+      + '.w205chip .lead{color:#8a6608;font-size:11px;font-weight:700;}'
+      + '.w205chip .focus{font-weight:500;color:' + MUTED + ';}'
+      + '.w205chip.add{padding:4px 11px;border-style:dashed;background:transparent;}'
+      + '.w205stsel{appearance:none;-webkit-appearance:none;border:1px solid rgba(16,63,57,.15);border-radius:999px;padding:5px 26px 5px 12px;font:600 12.5px ' + BODY + ';background:#FFFAF2 url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M1 1l4 4 4-4%27 stroke=%27%23103F39%27 fill=%27none%27/%3E%3C/svg%3E") no-repeat right 10px center;color:' + GREEN + ';cursor:pointer;}'
+      + '.w205stsel[disabled]{cursor:default;background-image:none;padding-right:12px;opacity:1;}'
+      + '.w205stsel.s-onTrack,.w205stsel.s-done{background-color:rgba(42,140,122,.12);border-color:rgba(42,140,122,.4);}'
+      + '.w205stsel.s-atRisk,.w205stsel.s-delayed{background-color:rgba(179,64,47,.1);border-color:rgba(179,64,47,.35);color:' + FLAG + ';}'
+      + '.w205stsel.s-inProgress{background-color:rgba(220,165,39,.14);border-color:rgba(220,165,39,.45);}'
+      + '.w205saved{font-size:12px;color:' + MUTED + ';min-width:60px;text-align:right;}'
+      + '.w205saved.busy{color:' + PURPLE + ';}'
+      + '.w205saved.err{color:' + FLAG + ';font-weight:600;}'
+      + '.w205gbody{padding:4px 22px 18px 76px;}'
+      + '.w205prog{display:flex;align-items:center;gap:12px;margin:2px 0 14px;font-size:12.5px;color:' + MUTED + ';}'
+      + '.w205prog .trk{flex:0 1 260px;height:8px;border-radius:999px;background:rgba(16,63,57,.08);overflow:hidden;}'
+      + '.w205prog .trk > i{display:block;height:100%;background:linear-gradient(90deg,' + TEAL + ',' + GREEN + ');border-radius:999px;}'
+      + '.w205two{display:grid;grid-template-columns:1.6fr 1fr;gap:18px;}'
+      + '.w205smart .w205ed{font-size:15.5px;}'
+      + '.w205meas{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0 4px;}'
+      + '.w205meas > div{background:#F4F2EA;border:1px solid rgba(16,63,57,.08);border-radius:14px;padding:10px 14px 8px;}'
+      + '.w205meas > div.t29{background:rgba(220,165,39,.12);border-color:rgba(220,165,39,.35);}'
+      + '.w205meas .w205ed{font-weight:600;color:' + GREEN + ';font-size:14.5px;}'
+      + '.w205h4{display:flex;align-items:center;gap:10px;margin:20px 0 8px;}'
+      + '.w205h4 h4{font-size:18px;text-transform:uppercase;}'
+      + '.w205h4 .sp{flex:1;}'
+      + '.w205paths{list-style:none;margin:0;padding:0;counter-reset:w205p;}'
+      + '.w205paths li{display:flex;align-items:flex-start;gap:10px;padding:2px 0;counter-increment:w205p;}'
+      + '.w205paths li:before{content:counter(w205p);flex:none;width:22px;height:22px;margin-top:6px;border-radius:50%;background:rgba(111,100,171,.12);color:' + PURPLE + ';font:700 12px/22px ' + BODY + ';text-align:center;}'
+      + '.w205paths li .w205ed{flex:1;margin:0;}'
+      + '.w205rm{flex:none;border:0;background:transparent;color:#aaa49b;cursor:pointer;border-radius:8px;padding:5px;margin-top:3px;opacity:0;}'
+      + 'li:hover > .w205rm,.w205ms:hover .w205rm,.w205rm:focus{opacity:1;}'
+      + '.w205rm:hover{color:' + FLAG + ';background:rgba(179,64,47,.08);}'
+      + '.w205years{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}'
+      + '.w205yr{background:#F4F2EA;border:1px solid rgba(16,63,57,.08);border-radius:16px;padding:12px 12px 8px;min-width:0;}'
+      + '.w205yr.gated{background:repeating-linear-gradient(135deg,#F4F2EA,#F4F2EA 10px,#ECEBE3 10px,#ECEBE3 20px);}'
+      + '.w205yr.now{border-color:rgba(111,100,171,.45);box-shadow:inset 0 0 0 1px rgba(111,100,171,.25);}'
+      + '.w205yr .yh{display:flex;align-items:baseline;gap:8px;margin:0 2px 8px;}'
+      + '.w205yr .yh b{font-family:' + HEAD + ';font-size:20px;font-weight:600;color:' + GREEN + ';}'
+      + '.w205yr .yh span{font-size:11px;color:' + MUTED + ';}'
+      + '.w205yr .yh em{margin-left:auto;font-style:normal;font-size:11px;font-weight:700;color:' + PURPLE + ';}'
+      + '.w205ms{position:relative;background:#FFFAF2;border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:6px 8px 6px 10px;margin:0 0 7px;}'
+      + '.w205ms.done{border-color:rgba(42,140,122,.35);}'
+      + '.w205ms.done .w205ed{color:#2d6a5f;}'
+      + '.w205ms .row{display:flex;align-items:flex-start;gap:6px;}'
+      + '.w205ms .w205ed{margin:0;padding:3px 4px;font-size:13.5px;}'
+      + '.w205dot{flex:none;appearance:none;-webkit-appearance:none;width:18px;height:18px;margin-top:4px;border-radius:50%;border:2px solid rgba(16,63,57,.3);background:#FFFAF2;cursor:pointer;color:transparent;font-size:0;padding:0;}'
+      + '.w205dot.s-inProgress{border-color:' + GOLD + ';background:radial-gradient(circle at center,' + GOLD + ' 0 4px,#FFFAF2 4.5px);}'
+      + '.w205dot.s-done{border-color:' + TEAL + ';background:' + TEAL + ' url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27m6 12.5 4 4 8-9%27 stroke=%27white%27 stroke-width=%273%27 fill=%27none%27/%3E%3C/svg%3E") center/12px no-repeat;}'
+      + '.w205dot.s-atRisk{border-color:' + FLAG + ';background:radial-gradient(circle at center,' + FLAG + ' 0 4px,#FFFAF2 4.5px);}'
+      + '.w205dot.s-carriedForward{border-color:' + PURPLE + ';border-style:dashed;}'
+      + '.w205dot[disabled]{cursor:default;}'
+      /* the Hub styles every select (padding, an arrow, a width): the status circle takes none of it */
+      + '#w205 select.w205dot{width:18px !important;min-width:0 !important;max-width:18px !important;height:18px !important;padding:0 !important;margin:4px 0 0 !important;border-radius:50% !important;box-shadow:none !important;background-image:none;line-height:18px;text-indent:-999px;overflow:hidden;}'
+      + '#w205 select.w205dot.s-done{background-image:url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27%3E%3Cpath d=%27m6 12.5 4 4 8-9%27 stroke=%27white%27 stroke-width=%273%27 fill=%27none%27/%3E%3C/svg%3E") !important;background-size:12px !important;background-position:center !important;background-repeat:no-repeat !important;}'
+      + '#w205 select.w205dot.s-inProgress{background:radial-gradient(circle at center,' + GOLD + ' 0 4px,#FFFAF2 4.5px) !important;}'
+      + '#w205 select.w205dot.s-atRisk{background:radial-gradient(circle at center,' + FLAG + ' 0 4px,#FFFAF2 4.5px) !important;}'
+      + '#w205 select.w205dot option{text-indent:0;font-size:14px;color:' + GROUND + ';}'
+      + '#w205 select.w205stsel{width:auto !important;min-width:0 !important;}'
+      + '.w205msft{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:3px 0 0 24px;}'
+      + '.w205pj{display:inline-flex;align-items:center;gap:5px;max-width:100%;border-radius:8px;padding:2px 8px;font-size:11.5px;font-weight:600;background:rgba(16,63,57,.06);color:' + GREEN + ';border:0;cursor:pointer;text-align:left;}'
+      + '.w205pj:hover{background:rgba(16,63,57,.12);}'
+      + '.w205pj .d{width:7px;height:7px;border-radius:50%;flex:none;}'
+      + '.w205pj span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.w205cnt{display:inline-flex;align-items:center;gap:4px;border:0;background:transparent;color:' + MUTED + ';font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 6px;border-radius:8px;}'
+      + '.w205cnt:hover{background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+      + '.w205cnt.has{color:' + PURPLE + ';}'
+      + '.w205cnt .w205i{width:13px;height:13px;}'
+      + '.w205addms{width:100%;border:1px dashed rgba(16,63,57,.2);background:transparent;border-radius:10px;padding:6px;font-size:12px;font-weight:600;color:' + MUTED + ';cursor:pointer;}'
+      + '.w205addms:hover{color:' + GREEN + ';border-color:' + GREEN + ';}'
+      + '.w205projs{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}'
+      + '.w205projs .w205pj{font-size:12.5px;padding:4px 10px;}'
+      + '.w205gft{display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid rgba(16,63,57,.08);padding:12px 22px 14px 76px;font-size:12.5px;color:' + MUTED + ';}'
+      + '.w205gft .sp{flex:1;}'
+      + '.w205fold{border:0;background:transparent;cursor:pointer;color:' + MUTED + ';border-radius:8px;padding:4px;}'
+      + '.w205fold .w205i{transition:transform .2s;}'
+      + '.w205goal.folded .w205fold .w205i{transform:rotate(-90deg);}'
+      + '.w205goal.folded .w205gbody{display:none;}'
+      + '.w205goal.folded .w205gft{border-top:0;}'
+      + '.w205conf{margin:6px 0 4px;background:rgba(220,165,39,.14);border:1px solid rgba(220,165,39,.5);border-radius:12px;padding:9px 12px;font-size:13px;color:' + GROUND + ';}'
+      + '.w205conf b{color:#6b4d05;}'
+      + '.w205conf .theirs{display:block;margin:5px 0 7px;padding:6px 9px;background:#FFFAF2;border-radius:8px;white-space:pre-wrap;max-height:120px;overflow:auto;font-size:12.5px;}'
+      + '.w205conf .acts{display:flex;gap:6px;flex-wrap:wrap;}'
+      + '.w205err{color:' + FLAG + ';font-size:12px;margin:3px 0 0;}'
+      /* the roadmap */
+      + '.w205road{background:' + GREEN + ';color:' + CREAM + ';border-radius:20px;padding:26px 26px 22px;}'
+      + '#w205 .w205road h3{color:' + CREAM + ';font-size:22px;text-transform:uppercase;}'
+      + '.w205road .bar{width:40px;height:3px;background:' + GOLD + ';margin:8px 0 18px;}'
+      + '.w205phases{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}'
+      + '.w205ph{border:1px solid rgba(255,250,242,.28);border-radius:14px;padding:14px 14px 12px;}'
+      + '.w205ph.gated{border-style:dashed;background:rgba(255,250,242,.05);}'
+      + '.w205ph .k{font-family:' + HEAD + ';font-size:17px;font-weight:600;color:' + GOLD + ';text-transform:uppercase;letter-spacing:.4px;}'
+      + '.w205ph .d{font-size:11.5px;color:rgba(255,250,242,.7);margin:2px 0 10px;}'
+      + '.w205ph ul{margin:0;padding:0;list-style:none;font-size:13.5px;}'
+      + '.w205ph li{padding:3px 0;}'
+      + '.w205marks{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:18px;position:relative;}'
+      + '.w205marks:before{content:"";position:absolute;left:0;right:0;top:11px;height:1px;background:rgba(255,250,242,.35);}'
+      + '.w205mk{position:relative;padding-top:30px;}'
+      + '.w205mk:before{content:"";position:absolute;left:0;top:3px;width:16px;height:16px;transform:rotate(45deg);border:1.5px solid ' + CREAM + ';background:' + GREEN + ';}'
+      + '.w205mk.gt:before{background:' + GOLD + ';border-color:' + GOLD + ';}'
+      + '.w205mk b{display:block;font-family:' + HEAD + ';font-size:16px;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:' + CREAM + ';}'
+      + '.w205mk.gt b{color:' + GOLD + ';}'
+      + '.w205mk ul{margin:6px 0 0;padding:0;list-style:none;font-size:12.5px;color:rgba(255,250,242,.8);}'
+      + '.w205mk li{padding:2px 0;}'
+      + '.w205mk li:before{content:"\\2713  ";color:' + GOLD + ';}'
+      + '.w205rule{margin:16px 0 0;font-size:13px;color:rgba(255,250,242,.82);border-top:1px solid rgba(255,250,242,.18);padding-top:12px;}'
+      /* the library */
+      + '.w205lib{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}'
+      + '.w205doc{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:14px 16px 12px;display:flex;flex-direction:column;gap:6px;min-width:0;}'
+      + '.w205doc.unpinned{opacity:.85;background:#F4F2EA;}'
+      + '.w205doc .hd{display:flex;align-items:flex-start;gap:10px;}'
+      + '.w205doc .hd .ic{flex:none;width:34px;height:34px;border-radius:10px;background:rgba(111,100,171,.12);color:' + PURPLE + ';display:flex;align-items:center;justify-content:center;}'
+      + '.w205doc .hd .ic .w205i{width:18px;height:18px;}'
+      + '.w205doc h4{font-family:' + BODY + ';font-size:14.5px;font-weight:700;letter-spacing:0;text-transform:none;line-height:1.3;}'
+      + '.w205doc h4 a{text-decoration:none;}'
+      + '.w205doc h4 a:hover{text-decoration:underline;}'
+      + '.w205doc .meta{font-size:11.5px;color:' + MUTED + ';}'
+      + '.w205doc .dir{font-size:13px;line-height:1.45;}'
+      + '.w205doc .st{font-size:12px;color:#5c4a8f;background:rgba(111,100,171,.08);border-radius:8px;padding:5px 8px;}'
+      + '.w205doc .ft{display:flex;align-items:center;gap:6px;margin-top:auto;padding-top:4px;}'
+      + '.w205pinb{border:0;background:transparent;cursor:pointer;color:#bbb2a3;padding:4px;border-radius:8px;}'
+      + '.w205pinb.on{color:' + GOLD + ';}'
+      + '.w205pinb:hover{background:rgba(220,165,39,.12);}'
+      + '.w205pinb.on .w205i{fill:' + GOLD + ';}'
+      + '.w205search{display:flex;align-items:center;gap:8px;background:#FFFAF2;border:1px solid rgba(16,63,57,.15);border-radius:999px;padding:8px 14px;max-width:420px;flex:1 1 260px;}'
+      + '.w205search input{border:0;outline:0;font:inherit;font-size:14px;flex:1;background:transparent;min-width:0;}'
+      + '.w205shelf{margin:22px 0 10px;font-family:' + HEAD + ';font-size:19px;font-weight:600;text-transform:uppercase;color:' + GREEN + ';display:flex;align-items:center;gap:10px;}'
+      + '.w205shelf small{font-family:' + BODY + ';font-size:12px;font-weight:600;color:' + MUTED + ';text-transform:none;}'
+      + '.w205empty{background:#FFFAF2;border:1px dashed rgba(16,63,57,.2);border-radius:16px;padding:22px;text-align:center;color:' + MUTED + ';font-size:14px;}'
+      + '.w205empty b{display:block;font-family:' + HEAD + ';font-size:19px;color:' + GREEN + ';margin-bottom:4px;text-transform:uppercase;font-weight:600;}'
+      /* unlinked projects and the retired goals */
+      + '.w205list{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;}'
+      + '.w205list .it{display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid rgba(16,63,57,.07);font-size:13.5px;}'
+      + '.w205list .it:first-child{border-top:0;}'
+      + '.w205list .it .t{flex:1;min-width:0;}'
+      + '.w205list .it .t b{font-weight:600;}'
+      + '.w205list .it .t small{display:block;color:' + MUTED + ';font-size:12px;margin-top:2px;}'
+      + '.w205tag{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:rgba(16,63,57,.07);color:' + GREEN + ';white-space:nowrap;}'
+      + '.w205tag.p{background:rgba(111,100,171,.12);color:' + PURPLE + ';}'
+      + '.w205tag.g{background:rgba(220,165,39,.2);color:#6b4d05;}'
+      + '.w205more{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0 10px;}'
+      + '.w205tile{display:flex;flex-direction:column;justify-content:flex-start;gap:4px;flex:1 1 260px;background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:16px;padding:16px 18px;cursor:pointer;text-align:left;font:inherit;color:inherit;}'
+      + '.w205tile:hover{border-color:' + PURPLE + ';}'
+      + '.w205tile b{display:block;font-family:' + HEAD + ';font-size:19px;font-weight:600;text-transform:uppercase;color:' + GREEN + ';}'
+      + '.w205tile span{font-size:13px;color:' + MUTED + ';}'
+      /* the drawer: comments, history, link a project, owners */
+      + '#w205scrim{position:fixed;inset:0;background:rgba(31,32,30,.32);z-index:880;opacity:0;pointer-events:none;transition:opacity .2s;}'
+      + '#w205scrim.open{opacity:1;pointer-events:auto;}'
+      + '#w205drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:#F4F2EA;z-index:890;box-shadow:-20px 0 50px -20px rgba(16,63,57,.35);transform:translateX(105%);transition:transform .25s ease;display:flex;flex-direction:column;font-family:' + BODY + ';color:' + GROUND + ';}'
+      + '#w205drawer.open{transform:none;}'
+      + '#w205drawer .dh{display:flex;align-items:flex-start;gap:10px;padding:18px 18px 12px;border-bottom:1px solid rgba(16,63,57,.1);}'
+      + '#w205drawer .dh h3{font-family:' + HEAD + ';font-size:22px;font-weight:600;text-transform:uppercase;color:' + GREEN + ';margin:0;line-height:1.05;}'
+      + '#w205drawer .dh small{display:block;color:' + MUTED + ';font-size:12.5px;margin-top:4px;}'
+      + '#w205drawer .dh .sp{flex:1;}'
+      + '#w205drawer .db{flex:1;overflow:auto;padding:14px 18px;}'
+      + '#w205drawer .df{border-top:1px solid rgba(16,63,57,.1);padding:12px 18px 14px;background:#FFFAF2;}'
+      + '#w205drawer textarea{width:100%;border:1px solid rgba(16,63,57,.2);border-radius:12px;padding:9px 11px;font:inherit;font-size:14px;resize:vertical;min-height:64px;background:#FFFAF2;}'
+      + '#w205drawer textarea:focus{outline:none;border-color:' + PURPLE + ';box-shadow:0 0 0 3px rgba(111,100,171,.15);}'
+      + '#w205drawer .acts{display:flex;align-items:center;gap:8px;margin-top:8px;}'
+      + '#w205drawer .acts .sp{flex:1;}'
+      + '#w205drawer .acts small{color:' + MUTED + ';font-size:11.5px;}'
+      + '.w205seg{display:flex;gap:4px;flex-wrap:wrap;margin:0 0 12px;}'
+      + '.w205seg button{border:1px solid rgba(16,63,57,.15);background:#FFFAF2;border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;color:' + GREEN + ';cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.w205seg button.on{background:' + GREEN + ';color:' + CREAM + ';border-color:' + GREEN + ';}'
+      + '.w205th{background:#FFFAF2;border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:12px 14px;margin:0 0 10px;}'
+      + '.w205cm{display:flex;gap:10px;}'
+      + '.w205cm + .w205cm{margin-top:10px;}'
+      + '.w205cm .bd{flex:1;min-width:0;}'
+      + '.w205cm .bd .who{font-size:13px;font-weight:700;color:' + GREEN + ';}'
+      + '.w205cm .bd .who small{font-weight:500;color:' + MUTED + ';margin-left:6px;}'
+      + '.w205cm .bd .tx{font-size:14px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;margin-top:2px;}'
+      + '.w205cm .bd .ln{display:flex;gap:10px;margin-top:4px;}'
+      + '.w205replies{margin:10px 0 0 34px;padding-left:12px;border-left:2px solid rgba(111,100,171,.2);}'
+      + '.w205ms-tag{display:inline-block;font-size:11px;font-weight:700;color:' + PURPLE + ';background:rgba(111,100,171,.1);border-radius:6px;padding:1px 7px;margin-bottom:5px;}'
+      + '.w205hday{font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:' + MUTED + ';margin:14px 0 6px;}'
+      + '.w205hday:first-child{margin-top:0;}'
+      + '.w205h{background:#FFFAF2;border:1px solid rgba(16,63,57,.08);border-radius:12px;padding:10px 12px;margin:0 0 7px;font-size:13px;}'
+      + '.w205h .l1{display:flex;align-items:baseline;gap:8px;}'
+      + '.w205h .l1 .sp{flex:1;}'
+      + '.w205h .l1 small{color:' + MUTED + ';font-size:11.5px;white-space:nowrap;}'
+      + '.w205h .ov,.w205h .nv{display:block;margin-top:5px;padding:5px 8px;border-radius:8px;white-space:pre-wrap;word-wrap:break-word;font-size:12.5px;max-height:110px;overflow:auto;}'
+      + '.w205h .ov{background:rgba(179,64,47,.06);color:#7d3a2f;text-decoration:line-through;text-decoration-color:rgba(179,64,47,.45);}'
+      + '.w205h .nv{background:rgba(42,140,122,.08);color:#1d5a50;}'
+      + '.w205h .rs{font-size:11px;color:' + PURPLE + ';font-weight:600;}'
+      + '.w205pick{display:flex;flex-direction:column;gap:6px;}'
+      + '.w205pick label{display:flex;align-items:center;gap:10px;background:#FFFAF2;border:1px solid rgba(16,63,57,.1);border-radius:12px;padding:9px 12px;cursor:pointer;font-size:13.5px;}'
+      + '.w205pick label:hover{border-color:' + PURPLE + ';}'
+      + '.w205pick label.on{border-color:' + GREEN + ';box-shadow:inset 0 0 0 1px ' + GREEN + ';}'
+      + '.w205pick label small{display:block;color:' + MUTED + ';font-size:12px;}'
+      + '.w205pick label .t{flex:1;min-width:0;}'
+      + '.w205pick input{accent-color:' + GREEN + ';}'
+      + '.w205grp{font-size:11px;font-weight:700;letter-spacing:1.1px;text-transform:uppercase;color:' + MUTED + ';margin:12px 0 4px;}'
+      + '.w205field{display:block;margin:0 0 10px;font-size:12px;font-weight:700;color:' + MUTED + ';}'
+      + '.w205field input,.w205field textarea{display:block;width:100%;margin-top:4px;border:1px solid rgba(16,63,57,.2);border-radius:10px;padding:8px 10px;font:inherit;font-size:14px;font-weight:400;color:' + GROUND + ';background:#FFFAF2;}'
+      /* phones */
+      + '@media (max-width:900px){'
+      + '.w205two{grid-template-columns:1fr;}'
+      + '.w205years{grid-template-columns:1fr 1fr;}'
+      + '.w205phases,.w205marks{grid-template-columns:1fr 1fr;}'
+      + '.w205marks:before{display:none;}'
+      + '}'
+      + '@media (max-width:640px){'
+      + '.w205mast h1{font-size:32px;}'
+      + '.w205hero{padding:20px 18px;border-radius:16px;}'
+      + '.w205hero blockquote{font-size:21px;}'
+      + '.w205ghd{padding:16px 14px 4px;gap:10px;flex-wrap:wrap;}'
+      + '.w205ghd .w205num{width:32px;height:32px;font-size:18px;}'
+      + '.w205ghd .tw{flex:1 1 calc(100% - 44px);}'
+      + '.w205ghd .side{width:100%;justify-content:flex-start;padding-left:42px;}'
+      + '.w205ed.title{font-size:22px;}'
+      + '.w205owners,.w205gbody,.w205gft{padding-left:14px;padding-right:14px;}'
+      + '.w205meas{grid-template-columns:1fr 1fr;}'
+      + '.w205years{grid-template-columns:1fr;}'
+      + '.w205phases,.w205marks{grid-template-columns:1fr;}'
+      + '.w205glance table thead{display:none;}'
+      + '.w205glance table,.w205glance tbody,.w205glance tr,.w205glance td{display:block;width:100%;}'
+      + '.w205glance tr{border-top:1px solid rgba(16,63,57,.1);padding:8px 0;}'
+      + '.w205glance td{border:0;padding:3px 14px;}'
+      + '.w205glance td[data-l]:before{content:attr(data-l) ": ";font-size:11px;font-weight:700;color:' + MUTED + ';text-transform:uppercase;letter-spacing:.8px;}'
+      + '.w205pres{margin-left:0;width:100%;}'
+      + '.w205rm{opacity:1;}'
+      + '#w205drawer{width:100vw;}'
+      + '}';
+    document.head.appendChild(css);
+  }
+
+  /* ---------- loading ---------- */
+  function q(p) { return Promise.resolve(p).then(function (r) { return r || { data: null }; }, function (e) { return { data: null, error: e }; }); }
+  function isActiveOrg(g) { return g && g.department === 'org' && !g.retired_at && g.number != null; }
+  function loadAll(force) {
+    if (S.loading && !force) return S.loading;
+    if (S.loaded && !force) return Promise.resolve();
+    if (typeof db === 'undefined' || !db) return Promise.resolve();
+    S.loading = Promise.all([
+      q(db.from('goals').select('*').order('number', { ascending: true })),
+      q(db.from('goal_owners').select('*').order('sort')),
+      q(db.from('goal_milestones').select('*').order('sort')),
+      q(db.from('goal_paths').select('*').order('sort')),
+      q(db.from('projects').select('id,name,department,status,goal_id,milestone_id,leads,parent_id,workstream,banked_at').order('sort')),
+      q(db.from('strategy_plan').select('*')),
+      q(db.from('strategy_docs').select('*').order('sort')),
+      q(db.from('goal_comments').select('*').order('created_at', { ascending: true })),
+      q(db.from('goal_wins').select('id,goal_id'))
+    ]).then(function (r) {
+      var all = (r[0].data || []);
+      S.err = r[0].error ? (r[0].error.message || String(r[0].error)) : null;
+      S.goals = all.filter(isActiveOrg).sort(function (a, b) { return (a.number || 99) - (b.number || 99); });
+      S.retired = all.filter(function (g) { return !!g.retired_at; });
+      S.allGoals = all;
+      S.owners = (r[1].data || []).filter(function (o) { return !o.removed_at; });
+      S.milestones = (r[2].data || []).filter(function (m) { return !m.archived_at; });
+      S.paths = (r[3].data || []).filter(function (p) { return !p.archived_at; });
+      S.projects = (r[4].data || []).filter(function (p) { return !p.banked_at; });
+      S.plan = {}; (r[5].data || []).forEach(function (x) { S.plan[x.key] = x.value; });
+      S.docs = (r[6].data || []).filter(function (d) { return !d.archived_at; });
+      S.comments = r[7].data || [];
+      S.wins = {}; (r[8].data || []).forEach(function (w) { S.wins[w.goal_id] = (S.wins[w.goal_id] || 0) + 1; });
+      S.goals.forEach(baseGoal); S.milestones.forEach(function (m) { baseRow('milestone', m, ['body', 'status', 'fy']); }); S.paths.forEach(function (p) { baseRow('path', p, ['body']); });
+      S.loaded = Date.now(); S.loading = null;
+    });
+    return S.loading;
+  }
+  var GOAL_FIELDS = ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'];
+  function key(e, id, f) { return e + ':' + id + ':' + f; }
+  function baseGoal(g) { baseRow('goal', g, GOAL_FIELDS); }
+  function baseRow(e, row, fields) { fields.forEach(function (f) { var k = key(e, row.id, f); if (!S.dirty[k]) S.base[k] = str(row[f]); }); }
+  function goalOf(e, id) {
+    if (e === 'goal') return byId(S.goals, id);
+    var row = e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id);
+    return row ? byId(S.goals, row.goal_id) : null;
+  }
+  function rowOf(e, id) { return e === 'goal' ? byId(S.goals, id) : e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id); }
+  function msOf(gid) { return S.milestones.filter(function (m) { return String(m.goal_id) === String(gid); }).sort(function (a, b) { return (a.fy < b.fy ? -1 : a.fy > b.fy ? 1 : 0) || (a.sort - b.sort) || (a.id - b.id); }); }
+  function pathsOf(gid) { return S.paths.filter(function (p) { return String(p.goal_id) === String(gid); }).sort(function (a, b) { return (a.sort - b.sort) || (a.id - b.id); }); }
+  function ownersOf(gid) { return S.owners.filter(function (o) { return String(o.goal_id) === String(gid); }).sort(function (a, b) { return (b.is_lead ? 1 : 0) - (a.is_lead ? 1 : 0) || (a.sort - b.sort); }); }
+  function projOf(gid) { return S.projects.filter(function (p) { return String(p.goal_id) === String(gid); }); }
+  function commentsOf(gid, mid) { return S.comments.filter(function (c) { return String(c.goal_id) === String(gid) && (mid === undefined || String(c.milestone_id || '') === String(mid || '')); }); }
+  function progress(gid) {
+    var ms = msOf(gid).filter(function (m) { return m.fy !== 'FY30' && m.fy !== 'FY31'; });
+    var done = ms.filter(function (m) { return m.status === 'done'; }).length;
+    var y = currentFy(), yr = ms.filter(function (m) { return m.fy === y; }), yd = yr.filter(function (m) { return m.status === 'done'; }).length;
+    return { total: ms.length, done: done, pct: ms.length ? Math.round(done / ms.length * 100) : 0, fy: y, yTotal: yr.length, yDone: yd };
+  }
+  function currentFy() { var d = new Date(), y = d.getFullYear() + (d.getMonth() >= 9 ? 1 : 0); return 'FY' + String(y).slice(2); }   /* the fiscal year starts October 1 */
+  function rpc(fn, args) {
+    return Promise.resolve(db.rpc(fn, args)).then(function (r) {
+      if (r && r.error) throw new Error(r.error.message || String(r.error));
+      return r ? r.data : null;
+    });
+  }
+  function errText(e) { var m = String((e && e.message) || e || 'Something went wrong'); return m.replace(/^Error:\s*/, ''); }
+
+  /* ---------- autosave: one field at a time, debounced, with the per-field check ---------- */
+  function fieldEl(k) { return document.querySelector('#w205 [data-w205k="' + k + '"]'); }
+  function parseKey(k) { var p = k.split(':'); return { e: p[0], id: p[1], f: p.slice(2).join(':') }; }
+  function schedule(k, ms) {
+    clearTimeout(S.timers[k]);
+    S.timers[k] = setTimeout(function () { save(k); }, ms == null ? SAVE_MS : ms);
+    savedState(k);
+  }
+  function flushAll() { Object.keys(S.timers).forEach(function (k) { if (S.dirty[k]) { clearTimeout(S.timers[k]); save(k); } }); }
+  function save(k) {
+    var el = fieldEl(k), P = parseKey(k);
+    if (!el) { delete S.dirty[k]; return Promise.resolve(); }
+    if (S.conflict[k]) return Promise.resolve();   /* waits for the person to choose */
+    if (S.inflight[k]) { S.inflight[k].again = true; return S.inflight[k].p; }
+    var val = el.value, old = S.base[k] == null ? '' : S.base[k];
+    if (val === old) { delete S.dirty[k]; savedState(k); return Promise.resolve(); }
+    var rec = { again: false };
+    rec.p = rpc('strategy_save', { p_entity: P.e, p_id: Number(P.id), p_field: P.f, p_value: val, p_old: old }).then(function (res) {
+      delete S.inflight[k];
+      if (res && res.conflict) {
+        S.conflict[k] = { current: str(res.current), by: res.by || nameOf(res.by_email) || 'Someone', at: res.at, mine: val };
+        S.base[k] = str(res.current);
+        paintConflict(k); savedState(k);
+        return;
+      }
+      if (!res || res.ok === false) throw new Error((res && res.error) || 'Not saved');
+      S.base[k] = val; delete S.errors[k];
+      var row = rowOf(P.e, P.id); if (row) { row[P.f] = P.f === 'due_date' ? (val || null) : val; row.updated_by = myEmail(); }
+      S.savedAt[goalKey(P)] = Date.now();
+      var cur = fieldEl(k);
+      if (cur && cur.value === val) delete S.dirty[k];
+      savedState(k);
+      afterSave(P);
+      if (rec.again || (cur && cur.value !== val)) schedule(k, 250);
+    }).catch(function (e) {
+      delete S.inflight[k];
+      S.errors[k] = errText(e);
+      savedState(k);
+      paintFieldError(k);
+    });
+    S.inflight[k] = rec;
+    savedState(k);
+    return rec.p;
+  }
+  function goalKey(P) { var g = goalOf(P.e, P.id); return g ? String(g.id) : ''; }
+  function savedState(k) {
+    var P = parseKey(k), gid = goalKey(P); if (!gid) return;
+    var box = document.querySelector('#w205 [data-w205saved="' + gid + '"]'); if (!box) return;
+    var keys = Object.keys(S.dirty).filter(function (x) { return goalKey(parseKey(x)) === gid; });
+    var busy = Object.keys(S.inflight).some(function (x) { return goalKey(parseKey(x)) === gid; });
+    var errs = Object.keys(S.errors).filter(function (x) { return goalKey(parseKey(x)) === gid; });
+    var conf = Object.keys(S.conflict).some(function (x) { return goalKey(parseKey(x)) === gid; });
+    box.className = 'w205saved' + (errs.length ? ' err' : busy || keys.length ? ' busy' : '');
+    box.textContent = errs.length ? 'Not saved' : conf ? 'Check the note' : busy ? 'Saving\u2026' : keys.length ? 'Editing\u2026' : (S.savedAt[gid] ? 'Saved' : '');
+    if (!errs.length && !busy && !keys.length && S.savedAt[gid]) box.title = 'Saved ' + fmtWhen(S.savedAt[gid]); else box.removeAttribute('title');
+  }
+  function paintFieldError(k) {
+    var el = fieldEl(k); if (!el) return;
+    var host = el.parentNode, old = host.querySelector('.w205err[data-for="' + k + '"]'); if (old) old.remove();
+    if (S.errors[k]) { var d = document.createElement('div'); d.className = 'w205err'; d.setAttribute('data-for', k); d.setAttribute('role', 'alert'); d.textContent = 'Not saved: ' + S.errors[k]; el.insertAdjacentElement('afterend', d); }
+  }
+  /* "Ian just changed this": their words and yours, side by side; nothing is lost either way */
+  function paintConflict(k) {
+    var el = fieldEl(k); if (!el) return;
+    var host = el.parentNode, old = host.querySelector('.w205conf[data-for="' + k + '"]'); if (old) old.remove();
+    var c = S.conflict[k]; if (!c) return;
+    var d = document.createElement('div'); d.className = 'w205conf'; d.setAttribute('data-for', k); d.setAttribute('role', 'status');
+    d.innerHTML = '<b>' + E(c.by) + ' just changed this.</b> ' + (c.current ? 'Their version:' : 'They cleared it.') +
+      (c.current ? '<span class="theirs" data-w198skip>' + E(c.current) + '</span>' : '') +
+      '<div class="acts"><button type="button" class="w205btn sm pri" data-w205keep="' + E(k) + '">Keep mine</button>' +
+      '<button type="button" class="w205btn sm" data-w205theirs="' + E(k) + '">Use theirs</button>' +
+      '<small style="color:' + MUTED + ';align-self:center">Your words stay in the box until you choose.</small></div>';
+    el.insertAdjacentElement('afterend', d);
+  }
+  function resolveConflict(k, keepMine) {
+    var c = S.conflict[k]; if (!c) return;
+    delete S.conflict[k];
+    var el = fieldEl(k);
+    var note = document.querySelector('#w205 .w205conf[data-for="' + k + '"]'); if (note) note.remove();
+    if (keepMine) { S.dirty[k] = true; save(k); }
+    else { if (el) { el.value = c.current; grow(el); } S.base[k] = c.current; delete S.dirty[k]; var P = parseKey(k), row = rowOf(P.e, P.id); if (row) row[P.f] = c.current; savedState(k); afterSave(P); }
+  }
+  /* the at-a-glance table and the progress bar follow the fields */
+  function afterSave(P) {
+    try {
+      var g = goalOf(P.e, P.id); if (!g) return;
+      if (P.e === 'goal' && ['title', 'measure', 'baseline', 'target_fy29', 'target_fy31'].indexOf(P.f) >= 0) paintGlance();
+      if (P.e === 'milestone' && P.f === 'status') { paintProgress(g.id); var ms = byId(S.milestones, P.id), box = document.querySelector('#w205 [data-w205ms="' + P.id + '"]'); if (box && ms) box.classList.toggle('done', ms.status === 'done'); paintGlance(); }
+      if (P.e === 'goal' && P.f === 'status') { var sel = fieldEl(key('goal', g.id, 'status')); if (sel) sel.className = 'w205stsel s-' + stKey(g.status); }
+      if (P.e === 'milestone' && P.f === 'fy') repaintGoal(g.id, true);
+    } catch (e) { /* cosmetic */ }
+  }
+  function stKey(s) { return String(s || 'not started').replace(/ (\w)/g, function (m, c) { return c.toUpperCase(); }).replace(/[^A-Za-z]/g, ''); }
+  function grow(el) { if (!el || el.tagName !== 'TEXTAREA') return; el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+
+  /* ---------- live: other people's saves and who is here ---------- */
+  function onRemoteRow(e, row, kind) {
+    var fields = e === 'goal' ? GOAL_FIELDS : e === 'milestone' ? ['body', 'status', 'fy'] : ['body'];
+    var by = nameOf(row.updated_by);
+    var mine = lower(row.updated_by) === myEmail();
+    var list = e === 'goal' ? S.goals : e === 'milestone' ? S.milestones : S.paths;
+    var cur = byId(list, row.id);
+    if (e === 'goal') {
+      if (!isActiveOrg(row)) { if (cur || row.retired_at) { S.loaded = 0; loadAll(true).then(paintSoon); } return; }
+      if (!cur) { S.loaded = 0; loadAll(true).then(paintSoon); return; }
+      ['approval', 'approved_at', 'owner', 'number'].forEach(function (f) { cur[f] = row[f]; });
+    }
+    if (e !== 'goal' && (row.archived_at || !cur)) {
+      if (row.archived_at) { var i = list.indexOf(cur); if (i >= 0) list.splice(i, 1); }
+      else list.push(row);
+      if (row.archived_at || !cur) { baseRow(e, row, fields); repaintGoal(row.goal_id, true); return; }
+    }
+    fields.forEach(function (f) {
+      var k = key(e, row.id, f), v = str(row[f]);
+      if (v === str(S.base[k])) { if (cur) cur[f] = row[f]; return; }   /* our own save coming back */
+      var el = fieldEl(k);
+      var busy = el && (document.activeElement === el || S.dirty[k] || S.inflight[k]) && el.value !== v;
+      if (busy && !mine) {
+        /* they are typing here: keep their words, show the other person's */
+        S.conflict[k] = { current: v, by: by, at: row.updated_at, mine: el.value };
+        S.base[k] = v; paintConflict(k); savedState(k);
+      } else {
+        S.base[k] = v; if (cur) cur[f] = row[f];
+        if (el && el.value !== v) { el.value = v; grow(el); if (!mine) { el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); el.title = 'Changed by ' + by + ' ' + fmtWhen(row.updated_at); } }
+        afterSave({ e: e, id: row.id, f: f });
+      }
+      if (cur) cur[f] = row[f];
+    });
+  }
+  function onRemote(table, payload) {
+    var row = payload.new || {}, ev = payload.eventType;
+    if (!row || !row.id) return;
+    if (table === 'goals') onRemoteRow('goal', row, ev);
+    else if (table === 'goal_milestones') onRemoteRow('milestone', row, ev);
+    else if (table === 'goal_paths') onRemoteRow('path', row, ev);
+    else if (table === 'goal_owners') {
+      var o = byId(S.owners, row.id);
+      if (row.removed_at) { if (o) S.owners.splice(S.owners.indexOf(o), 1); }
+      else if (o) Object.assign(o, row); else S.owners.push(row);
+      paintOwners(row.goal_id);
+    } else if (table === 'goal_comments') {
+      var c = byId(S.comments, row.id); if (c) Object.assign(c, row); else S.comments.push(row);
+      paintCounts(row.goal_id);
+      if (S.drawer && S.drawer.kind === 'comments' && String(S.drawer.goal) === String(row.goal_id)) paintDrawer();
+    } else if (table === 'projects') {
+      var p = byId(S.projects, row.id);
+      if (row.banked_at) { if (p) S.projects.splice(S.projects.indexOf(p), 1); }
+      else if (p) Object.assign(p, row); else S.projects.push(row);
+      S.goals.forEach(function (g) { paintProjects(g.id); });
+      paintUnlinked();
+      if (S.drawer && S.drawer.kind === 'link') paintDrawer();
+    }
+  }
+  var paintT = null;
+  function paintSoon() { clearTimeout(paintT); paintT = setTimeout(function () { if (onPage()) paint(); }, 60); }
+
+  function presenceMeta() {
+    var m = me();
+    return { email: m.email, name: m.name, avatar_url: m.avatar_url || null, goal: S.focus.goal, field: S.focus.field, view: S.view, at: Date.now() };
+  }
+  function track() { try { if (S.channel && S.live) S.channel.track(presenceMeta()); } catch (e) { /* fine */ } }
+  var trackT = null;
+  function trackSoon() { clearTimeout(trackT); trackT = setTimeout(track, 250); }
+  function readPresence() {
+    var st = {}; try { st = S.channel && S.channel.presenceState ? S.channel.presenceState() : {}; } catch (e) { st = {}; }
+    var seen = {}, out = [];
+    Object.keys(st || {}).forEach(function (k) {
+      (st[k] || []).forEach(function (m) {
+        var em = lower(m.email || k); if (!em || em === myEmail()) return;
+        if (!seen[em] || (m.at || 0) > (seen[em].at || 0)) seen[em] = m;
+      });
+    });
+    Object.keys(seen).forEach(function (em) { out.push(seen[em]); });
+    out.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+    S.presence = out;
+    paintPresence();
+  }
+  function goLive() {
+    if (S.channel || typeof db === 'undefined' || !db || typeof db.channel !== 'function') return;
+    try {
+      var ch = db.channel('wa205-strategy', { config: { presence: { key: myEmail() || 'someone' } } });
+      ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects'].forEach(function (t) {
+        var opt = { event: '*', schema: 'public', table: t };
+        if (t === 'goals') opt.filter = 'department=eq.org';
+        ch.on('postgres_changes', opt, function (payload) { try { onRemote(t, payload); } catch (e) { console.warn('wave205 live', e); } });
+      });
+      ch.on('presence', { event: 'sync' }, readPresence);
+      ch.on('presence', { event: 'join' }, readPresence);
+      ch.on('presence', { event: 'leave' }, readPresence);
+      S.channel = ch;
+      ch.subscribe(function (status) {
+        S.live = status === 'SUBSCRIBED';
+        if (S.live) track();
+        paintPresence();
+      });
+    } catch (e) { console.warn('wave205 realtime', e); S.channel = null; }
+  }
+  function goQuiet() {
+    var ch = S.channel; if (!ch) return;
+    S.channel = null; S.live = false; S.presence = [];
+    try { if (ch.untrack) ch.untrack(); } catch (e) { /* fine */ }
+    try { if (db.removeChannel) db.removeChannel(ch); else if (ch.unsubscribe) ch.unsubscribe(); } catch (e) { /* fine */ }
+  }
+
+  /* ---------- the page ---------- */
+  function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || (window.WA_TEAMS && WA_TEAMS.labels && WA_TEAMS.labels[d]) || d || 'Other'; } catch (e) { return d || 'Other'; } }
+  function deptColor(d) { try { return (typeof DEPT_COLOR !== 'undefined' && DEPT_COLOR[d]) || MUTED; } catch (e) { return MUTED; } }
+  function av(p, size) { try { return window.w116Avatar ? window.w116Avatar(p, size) : ''; } catch (e) { return ''; } }
+  function onPage() { var a = document.querySelector('.panel.active'); return !!(a && a.id === 'orggoals'); }
+  function host() {
+    var sec = document.getElementById('orggoals'); if (!sec) return null;
+    var h = document.getElementById('w205');
+    if (!h) { h = document.createElement('div'); h.id = 'w205'; sec.appendChild(h); }
+    return h;
+  }
+  function approvalLabel() { var a = S.plan.approval || {}; return a.label || 'Draft for board approval (19 Oct 2026)'; }
+  function approved() { return S.goals.length && S.goals.every(function (g) { return g.approval === 'approved'; }); }
+
+  function mastHtml(title, line) {
+    return '<header class="w205mast"><div><div class="crumb">' + (boardMode() ? 'Board' : 'Strategy') + '</div><h1>' + E(title) + '</h1>' + (line ? '<p>' + E(line) + '</p>' : '') + '</div><span class="sp"></span>' +
+      '<div class="w205pres" data-w205pres></div></header>';
+  }
+  /* a field you click and type in; it saves itself (the database checks who may) */
+  function ed(e, row, f, o) {
+    o = o || {};
+    var g = e === 'goal' ? row : byId(S.goals, row.goal_id);
+    var k = key(e, row.id, f), can = canEdit(g), v = str(row[f]);
+    var ph = can ? (o.ph || 'Click to write') : (o.empty || 'Not written yet');
+    return '<textarea class="w205ed' + (o.cls ? ' ' + o.cls : '') + '" rows="1" data-w205k="' + E(k) + '" aria-label="' + E(o.label || f) + '" placeholder="' + E(ph) + '"' + (can ? '' : ' readonly tabindex="-1"') + ' data-w198skip spellcheck="true">' + E(v) + '</textarea>';
+  }
+  function stSel(e, row, f, list) {
+    var g = e === 'goal' ? row : byId(S.goals, row.goal_id), can = canEdit(g), v = row[f] || list[0];
+    var cls = e === 'goal' ? 'w205stsel' : 'w205dot';
+    return '<select class="' + cls + ' s-' + stKey(v) + '" data-w205k="' + E(key(e, row.id, f)) + '" aria-label="' + (e === 'goal' ? 'Goal status' : 'Milestone status') + '" title="' + E(ST_LABEL[v] || v) + '"' + (can ? '' : ' disabled') + '>' +
+      list.map(function (s) { return '<option value="' + E(s) + '"' + (s === v ? ' selected' : '') + '>' + E(ST_LABEL[s] || s) + '</option>'; }).join('') + '</select>';
+  }
+  function heroHtml() {
+    var p = S.plan;
+    return '<section class="w205hero" aria-label="Our mission"><div class="lab">Our mission</div><blockquote data-w198skip>' + E(p.mission || '') + '</blockquote><div class="bar"></div>' +
+      '<p>' + E(p.mission_note || '') + (p.window ? ' ' + E(p.window) : '') + '</p></section>';
+  }
+  function statusHtml() {
+    var ok = approved(), a = S.goals[0] || {};
+    return '<div class="w205status">' +
+      (ok ? '<span class="w205badge ok">' + I('check') + ' Approved by the board' + (a.approved_at ? ' \u00b7 ' + E(fmtDay(a.approved_at)) : '') + '</span>'
+          : '<span class="w205badge draft">' + I('flag') + ' ' + E(approvalLabel()) + '</span><span class="note">The board votes on these goals on Oct 19, 2026.</span>') +
+      (isAdmin() && S.goals.length ? '<button type="button" class="w205btn sm" data-w205approve="' + (ok ? 'draft' : 'approved') + '">' + (ok ? 'Back to draft' : 'Mark approved by the board') + '</button>' : '') +
+      '</div>' +
+      (canComment() && S.goals.some(function (g) { return canEdit(g); }) ? '' : '<div class="w205ro" role="note">' + E(readOnlyWhy()) + '</div>');
+  }
+  function whyHtml() {
+    var p = S.plan; if (!p.why_reset) return '';
+    return '<details class="w205why" style="margin:0 0 6px"><summary class="w205link" style="list-style:none;display:inline-block">Why these goals</summary>' +
+      '<div style="background:#FFFAF2;border:1px solid rgba(16,63,57,.1);border-radius:14px;padding:14px 16px;margin-top:8px;font-size:14px;line-height:1.55">' +
+      '<p style="margin:0 0 8px">' + E(p.why_reset) + '</p>' + (p.long_range ? '<p style="margin:0 0 8px">' + E(p.long_range) + '</p>' : '') +
+      (p.rule ? '<p style="margin:0"><b>Rule for every goal:</b> ' + E(p.rule) + '</p>' : '') + '</div></details>';
+  }
+  function ownerNames(gid) { return ownersOf(gid).map(function (o) { var m = memberById(o.member_id); return (m ? m.name : '?') + (o.is_lead ? ' (lead)' : ''); }).join(', '); }
+  function glanceHtml() {
+    if (!S.goals.length) return '';
+    return '<div class="w205sec"><h2>The goals at a glance</h2><span class="hint">FY29 is the 3-year target; FY31 applies only if the FY29 gate is met.</span></div>' +
+      '<div class="w205glance" data-w205glance><table><thead><tr><th>Goal</th><th>Headline measure</th><th>Baseline</th><th>FY29 (3-year)</th><th>FY31 (5-year, gated)</th><th>Owners</th><th>Milestones</th></tr></thead><tbody>' +
+      S.goals.map(function (g) {
+        var pr = progress(g.id);
+        return '<tr data-w205jump="' + g.id + '" tabindex="0" role="link" aria-label="Open goal ' + E(g.number) + '">' +
+          '<td><span style="display:flex;gap:10px;align-items:center"><span class="w205num">' + E(g.number) + '</span><b data-w198skip>' + E(g.title) + '</b></span></td>' +
+          '<td data-l="Measure" data-w198skip>' + E(g.measure) + '</td><td data-l="Baseline" data-w198skip>' + E(g.baseline) + '</td>' +
+          '<td data-l="FY29" class="t29" data-w198skip>' + E(g.target_fy29) + '</td><td data-l="FY31" class="g31" data-w198skip>' + E(g.target_fy31) + '</td>' +
+          '<td data-l="Owners" data-w198skip>' + E(ownerNames(g.id)) + '</td><td data-l="Milestones">' + pr.done + ' of ' + pr.total + ' done</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function paintGlance() { var el = document.querySelector('#w205 [data-w205glance]'); if (!el) return; var tmp = document.createElement('div'); tmp.innerHTML = glanceHtml(); var n = tmp.querySelector('[data-w205glance]'); if (n) el.innerHTML = n.innerHTML; }
+
+  function ownersHtml(g) {
+    var can = canEdit(g);
+    return ownersOf(g.id).map(function (o) {
+      var m = memberById(o.member_id) || { name: 'Someone' };
+      var inner = av(m, 24) + '<span data-w198skip>' + E(m.name) + '</span>' + (o.is_lead ? '<span class="lead">Lead</span>' : '') + (o.focus ? '<span class="focus" data-w198skip>' + E(o.focus) + '</span>' : '');
+      return can ? '<button type="button" class="w205chip" data-w205owner="' + g.id + ':' + o.member_id + '" aria-label="' + E(m.name) + ': owner options">' + inner + '</button>' : '<span class="w205chip">' + inner + '</span>';
+    }).join('') + (can ? '<button type="button" class="w205chip add" data-w205addowner="' + g.id + '">' + I('plus') + ' Owner</button>' : '') +
+      (ownersOf(g.id).length ? '' : '<span style="font-size:12.5px;color:' + MUTED + '">No owner yet.</span>');
+  }
+  function paintOwners(gid) { var el = document.querySelector('#w205 [data-w205owners="' + gid + '"]'); var g = byId(S.goals, gid); if (el && g) el.innerHTML = ownersHtml(g); paintGlance(); }
+  function progHtml(g) {
+    var pr = progress(g.id);
+    return '<div class="trk" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pr.pct + '" aria-label="Milestones done, FY27 to FY29"><i style="width:' + pr.pct + '%"></i></div>' +
+      '<span><b style="color:' + GREEN + '">' + pr.done + ' of ' + pr.total + '</b> milestones done, FY27 to FY29' + (pr.yTotal ? ' \u00b7 ' + E(pr.fy) + ': ' + pr.yDone + ' of ' + pr.yTotal : '') + '</span>';
+  }
+  function paintProgress(gid) { var el = document.querySelector('#w205 [data-w205prog="' + gid + '"]'); var g = byId(S.goals, gid); if (el && g) el.innerHTML = progHtml(g); }
+  function projChip(p) {
+    return '<button type="button" class="w205pj" data-w205proj="' + p.id + '" title="' + E(deptLabel(p.department)) + ': ' + E(p.name) + '"><i class="d" style="background:' + E(deptColor(p.department)) + '"></i><span data-w198skip>' + E(p.name) + '</span></button>';
+  }
+  function cntBtn(gid, mid) {
+    var n = commentsOf(gid, mid == null ? undefined : mid).length;
+    if (mid == null) n = commentsOf(gid).length;
+    return '<button type="button" class="w205cnt' + (n ? ' has' : '') + '" data-w205cmts="' + gid + (mid != null ? ':' + mid : '') + '" aria-label="' + (mid != null ? 'Comments on this milestone' : 'Comments on this goal') + ' (' + n + ')">' + I('chat') + (n ? n : '') + '</button>';
+  }
+  function msHtml(m, g) {
+    var can = canEdit(g), ps = S.projects.filter(function (p) { return String(p.milestone_id) === String(m.id); });
+    return '<div class="w205ms' + (m.status === 'done' ? ' done' : '') + '" data-w205ms="' + m.id + '"><div class="row">' + stSel('milestone', m, 'status', MS_ST) +
+      ed('milestone', m, 'body', { label: m.fy + ' milestone', ph: 'Write the milestone' }) +
+      (can ? '<button type="button" class="w205rm" data-w205rm="milestone:' + m.id + '" aria-label="Remove this milestone">' + I('x') + '</button>' : '') + '</div>' +
+      '<div class="w205msft">' + ps.map(projChip).join('') + cntBtn(g.id, m.id) +
+      (canComment() ? '<button type="button" class="w205cnt" data-w205link="' + g.id + ':' + m.id + '" aria-label="Link a project to this milestone">' + I('link') + '</button>' : '') + '</div></div>';
+  }
+  function yearsHtml(g) {
+    var ms = msOf(g.id), now = currentFy(), can = canEdit(g);
+    var fys = FYS.slice(); ms.forEach(function (m) { if (fys.indexOf(m.fy) < 0) fys.push(m.fy); }); fys.sort();
+    return fys.map(function (fy) {
+      var list = ms.filter(function (m) { return m.fy === fy; }), done = list.filter(function (m) { return m.status === 'done'; }).length;
+      return '<div class="w205yr' + (fy === 'FY31' || fy === 'FY30' ? ' gated' : '') + (fy === now ? ' now' : '') + '"><div class="yh"><b>' + fy + '</b><span>' + E(FY_LABEL[fy] || '') + '</span>' + (list.length ? '<em>' + done + '/' + list.length + '</em>' : '') + '</div>' +
+        list.map(function (m) { return msHtml(m, g); }).join('') +
+        (list.length ? '' : '<p style="font-size:12.5px;color:' + MUTED + ';margin:2px 2px 8px">' + (can ? 'No milestone yet.' : 'No milestone for this year.') + '</p>') +
+        (can ? '<button type="button" class="w205addms" data-w205addms="' + g.id + ':' + fy + '">' + I('plus') + ' Add a milestone</button>' : '') +
+        (fy === 'FY31' ? '<p style="font-size:11px;color:' + MUTED + ';margin:6px 2px 0">Only if the FY29 gate is met.</p>' : '') + '</div>';
+    }).join('');
+  }
+  function pathsHtml(g) {
+    var can = canEdit(g), ps = pathsOf(g.id);
+    return '<ol class="w205paths">' + ps.map(function (p) {
+      return '<li data-w205path="' + p.id + '">' + ed('path', p, 'body', { label: 'Path', ph: 'Write the path' }) + (can ? '<button type="button" class="w205rm" data-w205rm="path:' + p.id + '" aria-label="Remove this path">' + I('x') + '</button>' : '') + '</li>';
+    }).join('') + '</ol>' + (ps.length ? '' : '<p style="font-size:13px;color:' + MUTED + ';margin:0">' + (can ? 'No path yet: add how we get there.' : 'No path written yet.') + '</p>');
+  }
+  function projectsHtml(g) {
+    var ms = {}; msOf(g.id).forEach(function (m) { ms[m.id] = 1; });
+    var ps = projOf(g.id).filter(function (p) { return !p.milestone_id || !ms[p.milestone_id]; });
+    var all = projOf(g.id);
+    return '<div class="w205projs">' + (ps.length ? ps.map(projChip).join('') : '') +
+      (canComment() ? '<button type="button" class="w205btn sm" data-w205link="' + g.id + '">' + I('link') + ' Link a project</button>' : '') +
+      (all.length ? '' : '<span style="font-size:12.5px;color:' + MUTED + '">' + (canComment() ? 'No project serves this goal yet.' : 'No project linked yet.') + '</span>') + '</div>';
+  }
+  function paintProjects(gid) {
+    var g = byId(S.goals, gid); if (!g) return;
+    var el = document.querySelector('#w205 [data-w205projs="' + gid + '"]'); if (el) el.innerHTML = projectsHtml(g);
+    msOf(gid).forEach(function (m) {
+      var box = document.querySelector('#w205 [data-w205ms="' + m.id + '"] .w205msft'); if (!box) return;
+      var ps = S.projects.filter(function (p) { return String(p.milestone_id) === String(m.id); });
+      box.innerHTML = ps.map(projChip).join('') + cntBtn(g.id, m.id) + (canComment() ? '<button type="button" class="w205cnt" data-w205link="' + g.id + ':' + m.id + '" aria-label="Link a project to this milestone">' + I('link') + '</button>' : '');
+    });
+    var c = document.querySelector('#w205 [data-w205pcount="' + gid + '"]'); if (c) c.textContent = projOf(gid).length ? '(' + projOf(gid).length + ')' : '';
+  }
+  function paintCounts(gid) {
+    var b = document.querySelector('#w205 [data-w205cmtsft="' + gid + '"]'); var n = commentsOf(gid).length;
+    if (b) b.innerHTML = I('chat') + ' Comments' + (n ? ' (' + n + ')' : '');
+    msOf(gid).forEach(function (m) { var x = document.querySelector('#w205 [data-w205cmts="' + gid + ':' + m.id + '"]'); if (x) x.outerHTML = cntBtn(gid, m.id); });
+  }
+  function goalBodyHtml(g) {
+    return '<div class="w205prog" data-w205prog="' + g.id + '">' + progHtml(g) + '</div>' +
+      '<div class="w205two"><div class="w205smart"><div class="w205lab">SMART <span class="who" data-w205who="' + E(key('goal', g.id, 'detail')) + '" hidden></span></div>' + ed('goal', g, 'detail', { label: 'SMART statement', ph: 'Write the goal as the board will read it' }) + '</div>' +
+      '<div><div class="w205lab">Why <span class="who" data-w205who="' + E(key('goal', g.id, 'why')) + '" hidden></span></div>' + ed('goal', g, 'why', { label: 'Why', ph: 'Why this goal matters' }) + '</div></div>' +
+      '<div class="w205meas">' + [['measure', 'Headline measure'], ['baseline', 'Baseline'], ['target_fy29', 'FY29 target'], ['target_fy31', 'FY31 target, gated']].map(function (x) {
+        return '<div' + (x[0] === 'target_fy29' ? ' class="t29"' : '') + '><div class="w205lab">' + E(x[1]) + ' <span class="who" data-w205who="' + E(key('goal', g.id, x[0])) + '" hidden></span></div>' + ed('goal', g, x[0], { label: x[1], ph: 'Add it' }) + '</div>';
+      }).join('') + '</div>' +
+      '<div class="w205h4"><h4>Paths</h4><span style="font-size:12px;color:' + MUTED + '">How we get there</span><span class="sp"></span>' + (canEdit(g) ? '<button type="button" class="w205btn sm ghost" data-w205addpath="' + g.id + '">' + I('plus') + ' Add a path</button>' : '') + '</div>' +
+      '<div data-w205paths="' + g.id + '">' + pathsHtml(g) + '</div>' +
+      '<div class="w205h4"><h4>Milestones</h4><span style="font-size:12px;color:' + MUTED + '">By fiscal year (Oct 1 to Sep 30)</span></div>' +
+      '<div class="w205years" data-w205years="' + g.id + '">' + yearsHtml(g) + '</div>' +
+      '<div class="w205h4"><h4>Projects serving this goal <span data-w205pcount="' + g.id + '" style="font-family:' + BODY + ';font-size:13px;color:' + MUTED + ';text-transform:none">' + (projOf(g.id).length ? '(' + projOf(g.id).length + ')' : '') + '</span></h4></div>' +
+      '<div data-w205projs="' + g.id + '">' + projectsHtml(g) + '</div>';
+  }
+  function goalHtml(g) {
+    var folded = !!S.folded[g.id] && String(S.goalId) !== String(g.id);
+    var n = commentsOf(g.id).length;
+    return '<article class="w205goal' + (folded ? ' folded' : '') + (String(S.goalId) === String(g.id) ? ' target' : '') + '" id="w205g-' + g.id + '" data-w205goal="' + g.id + '" aria-labelledby="w205gt-' + g.id + '">' +
+      '<div class="w205ghd"><span class="w205num" aria-hidden="true">' + E(g.number) + '</span><div class="tw" id="w205gt-' + g.id + '">' + ed('goal', g, 'title', { cls: 'title', label: 'Goal ' + g.number + ' title', ph: 'Name the goal' }) + '</div>' +
+      '<div class="side"><span class="w205pres" style="margin:0" data-w205gpres="' + g.id + '"></span>' + stSel('goal', g, 'status', GOAL_ST) + '<span class="w205saved" data-w205saved="' + g.id + '" aria-live="polite"></span>' +
+      '<button type="button" class="w205fold" data-w205fold="' + g.id + '" aria-expanded="' + (folded ? 'false' : 'true') + '" aria-label="Fold or open this goal">' + I('chev') + '</button></div></div>' +
+      '<div class="w205owners" data-w205owners="' + g.id + '">' + ownersHtml(g) + '</div>' +
+      '<div class="w205gbody" data-w205gbody="' + g.id + '">' + goalBodyHtml(g) + '</div>' +
+      '<div class="w205gft"><button type="button" class="w205btn sm" data-w205cmtsft="' + g.id + '" data-w205cmts="' + g.id + '">' + I('chat') + ' Comments' + (n ? ' (' + n + ')' : '') + '</button>' +
+      '<button type="button" class="w205btn sm" data-w205hist="' + g.id + '">' + I('clock') + ' History</button>' +
+      '<span class="sp"></span><span>Due ' + E(fmtDay(g.due_date)) + (canEdit(g) ? '' : ' \u00b7 read only') + '</span></div></article>';
+  }
+  /* repaint one goal's body without losing what someone is typing */
+  function repaintGoal(gid, keepFocus) {
+    var g = byId(S.goals, gid), box = document.querySelector('#w205 [data-w205gbody="' + gid + '"]'); if (!g || !box) return;
+    var act = document.activeElement, actKey = act && box.contains(act) ? act.getAttribute('data-w205k') : null, sel = null;
+    if (actKey && act.selectionStart != null) sel = [act.selectionStart, act.selectionEnd];
+    var keep = {};
+    box.querySelectorAll('[data-w205k]').forEach(function (el) { var k = el.getAttribute('data-w205k'); if (S.dirty[k] || S.conflict[k]) keep[k] = el.value; });
+    box.innerHTML = goalBodyHtml(g);
+    Object.keys(keep).forEach(function (k) { var el = fieldEl(k); if (el) el.value = keep[k]; if (S.conflict[k]) paintConflict(k); });
+    box.querySelectorAll('textarea.w205ed').forEach(grow);
+    if (keepFocus && actKey) { var n = fieldEl(actKey); if (n) { n.focus(); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch (e) { /* fine */ } } }
+    paintGlance(); paintPresence();
+  }
+  function roadHtml() {
+    var r = S.plan.roadmap; if (!r) return '';
+    var ph = r.phases || [];
+    return '<div class="w205sec"><h2>Roadmap</h2><span class="hint">Four phases, one checkpoint, one gate.</span></div>' +
+      '<section class="w205road" aria-label="Roadmap"><h3>' + E(r.title || '') + '</h3><div class="bar"></div>' +
+      '<div class="w205phases">' + ph.map(function (p) {
+        return '<div class="w205ph' + (p.gated ? ' gated' : '') + '"><div class="k">' + E(p.key + ' ' + p.name) + '</div><div class="d">' + E(p.dates) + (p.gated ? ' \u00b7 gated' : '') + '</div><ul>' + (p.items || []).map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul></div>';
+      }).join('') + '</div>' +
+      '<div class="w205marks"><div></div>' +
+      (r.checkpoint ? '<div class="w205mk"><b>' + E(r.checkpoint.name) + '</b><ul>' + (r.checkpoint.items || []).map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul></div>' : '<div></div>') + '<div></div>' +
+      (r.gate ? '<div class="w205mk gt"><b>' + E(r.gate.name) + '</b><ul>' + (r.gate.items || []).map(function (x) { return '<li>' + E(x) + '</li>'; }).join('') + '</ul></div>' : '') + '</div>' +
+      (r.gate_rule ? '<p class="w205rule">' + E(r.gate_rule) + '</p>' : '') + '</section>' +
+      (S.plan.cadence && S.plan.cadence.length ? '<div class="w205list" style="margin-top:12px"><div class="it" style="font-weight:700;color:' + GREEN + '">How we track it</div>' + S.plan.cadence.map(function (c) { return '<div class="it">' + E(c) + '</div>'; }).join('') + '</div>' : '');
+  }
+  function unlinkedList() {
+    return S.projects.filter(function (p) {
+      var s = lower(p.status || 'active'); if (/done|complete|closed|archiv/.test(s)) return false;
+      return !p.goal_id || !byId(S.goals, p.goal_id);
+    }).sort(function (a, b) { return String(a.department).localeCompare(String(b.department)) || String(a.name).localeCompare(String(b.name)); });
+  }
+  function unlinkedHtml() {
+    var list = unlinkedList();
+    return '<div class="w205sec"><h2>Projects not linked to a goal yet</h2><span class="hint">Departments own projects; each one serves a goal.</span></div>' +
+      (list.length ? '<div class="w205list" data-w205unlinked>' + list.map(function (p) {
+        var was = p.goal_id ? byId(S.allGoals || [], p.goal_id) : null;
+        return '<div class="it"><i style="width:9px;height:9px;border-radius:50%;background:' + E(deptColor(p.department)) + ';flex:none"></i><div class="t"><b data-w198skip>' + E(p.name) + '</b><small>' + E(deptLabel(p.department)) + (was ? ' \u00b7 was linked to a retired goal: <span data-w198skip>' + E(clip(was.title, 70)) + '</span>' : '') + '</small></div>' +
+          (canComment() ? '<button type="button" class="w205btn sm" data-w205linkp="' + p.id + '">' + I('link') + ' Link</button>' : '') + '</div>';
+      }).join('') + '</div>' : '<div class="w205empty" data-w205unlinked><b>Every project serves a goal</b>Nothing to link.</div>');
+  }
+  function paintUnlinked() { var el = document.querySelector('#w205 [data-w205unlinked]'); if (!el) return; var t = document.createElement('div'); t.innerHTML = unlinkedHtml(); var n = t.querySelector('[data-w205unlinked]'); if (n) el.replaceWith(n); }
+  function libPreviewHtml() {
+    var pinned = S.docs.filter(function (d) { return d.pinned; }).slice(0, 6);
+    return '<div class="w205sec"><h2>Strategy Library</h2><span class="hint">The documents that set our direction, pinned for everyone.</span><span class="sp"></span><button type="button" class="w205btn sm" data-w205go="#orggoals/library">' + I('doc') + ' Open the library (' + S.docs.length + ')</button></div>' +
+      (pinned.length ? '<div class="w205lib">' + pinned.map(function (d) { return docHtml(d, true); }).join('') + '</div>' : '<div class="w205empty"><b>Nothing pinned yet</b>' + (isAdmin() ? 'Pin the documents everyone should read from the library.' : 'Admins pin the documents everyone should read.') + '</div>');
+  }
+  function goalsViewHtml() {
+    var p = S.plan;
+    if (!S.goals.length) {
+      return mastHtml('Goals', p.window || '') + heroHtml() + '<div class="w205empty"><b>No organizational goals yet</b>' + (S.err ? 'The goals could not be read (' + E(clip(S.err, 120)) + ').' : 'When the goals are written, they show here.') + '</div>';
+    }
+    return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Departments own projects; each one serves a goal.') +
+      heroHtml() + statusHtml() + whyHtml() + glanceHtml() +
+      '<div class="w205sec"><h2>Goal by goal</h2><span class="hint">' + (S.goals.some(canEdit) ? 'Click any text to change it; it saves as you type.' : 'Owners keep these up to date.') + '</span></div>' +
+      S.goals.map(goalHtml).join('') + roadHtml() + libPreviewHtml() + unlinkedHtml() +
+      '<div class="w205more"><button type="button" class="w205tile" data-w205go="#goalmap"><b>Goal alignment</b><span>Every project and the goal it serves, on one map.</span></button>' +
+      '<button type="button" class="w205tile" data-w205go="#projects"><b>Projects</b><span>Every department\u2019s projects, their leads and their goals.</span></button>' +
+      '<button type="button" class="w205tile" data-w205go="#orggoals/retired"><b>Retired goals (' + S.retired.length + ')</b><span>The department goals and the three earlier org goals, kept with their wins and comments.</span></button></div>' +
+      (p.source && p.source.title ? '<p style="font-size:12px;color:' + MUTED + ';margin:18px 0 0">From the draft "' + E(p.source.title) + '".</p>' : '');
+  }
+
+  /* ---------- the drawer: comments, history, link a project, owners, a library document ---------- */
+  function ensureDrawer() {
+    if (document.getElementById('w205drawer')) return;
+    var s = document.createElement('div'); s.id = 'w205scrim'; s.setAttribute('data-w205close', '1');
+    var d = document.createElement('aside'); d.id = 'w205drawer'; d.setAttribute('role', 'dialog'); d.setAttribute('aria-modal', 'true'); d.setAttribute('aria-labelledby', 'w205dt'); d.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(s); document.body.appendChild(d);
+  }
+  function openDrawer(st) {
+    ensureDrawer();
+    S.drawer = st; S.drawer.opener = document.activeElement;
+    paintDrawer();
+    var d = document.getElementById('w205drawer'), s = document.getElementById('w205scrim');
+    d.classList.add('open'); s.classList.add('open'); d.setAttribute('aria-hidden', 'false');
+    setTimeout(function () { var f = d.querySelector('[data-w205autofocus]') || d.querySelector('textarea,input,button'); if (f) try { f.focus(); } catch (e) { /* fine */ } }, 60);
+  }
+  function closeDrawer() {
+    var d = document.getElementById('w205drawer'), s = document.getElementById('w205scrim');
+    if (!d || !S.drawer) return;
+    var op = S.drawer.opener; S.drawer = null;
+    d.classList.remove('open'); s.classList.remove('open'); d.setAttribute('aria-hidden', 'true');
+    if (onPage() && /\/(comments|history)/.test(location.hash)) { try { history.replaceState(null, '', '#orggoals/goal/' + S.goalId); } catch (e) { /* fine */ } }
+    if (op && document.body.contains(op)) try { op.focus(); } catch (e) { /* fine */ }
+  }
+  function drawerShell(title, sub, body, foot) {
+    return '<div class="dh"><div><h3 id="w205dt">' + title + '</h3>' + (sub ? '<small>' + sub + '</small>' : '') + '</div><span class="sp"></span><button type="button" class="w205btn sm ghost" data-w205close="1" aria-label="Close">' + I('x') + '</button></div>' +
+      '<div class="db">' + body + '</div>' + (foot ? '<div class="df">' + foot + '</div>' : '');
+  }
+  function paintDrawer() {
+    var d = document.getElementById('w205drawer'); if (!d || !S.drawer) return;
+    var st = S.drawer, html = '';
+    var keepVal = null, ta = d.querySelector('textarea[data-w205cmt]'); if (ta) keepVal = { v: ta.value, focus: document.activeElement === ta, s: ta.selectionStart };
+    var keepReply = {}; d.querySelectorAll('textarea[data-w205reply]').forEach(function (t) { keepReply[t.getAttribute('data-w205reply')] = t.value; });
+    if (st.kind === 'comments') html = commentsDrawer(st);
+    else if (st.kind === 'history') html = historyDrawer(st);
+    else if (st.kind === 'link') html = linkDrawer(st);
+    else if (st.kind === 'owner') html = ownerDrawer(st);
+    else if (st.kind === 'doc') html = docDrawer(st);
+    d.innerHTML = html;
+    if (keepVal) { var t2 = d.querySelector('textarea[data-w205cmt]'); if (t2) { t2.value = keepVal.v; if (keepVal.focus) { t2.focus(); try { t2.setSelectionRange(keepVal.s, keepVal.s); } catch (e) { /* fine */ } } } }
+    Object.keys(keepReply).forEach(function (k) { var t = d.querySelector('textarea[data-w205reply="' + k + '"]'); if (t) t.value = keepReply[k]; });
+  }
+
+  /* comments, threaded; @mentions through wave138 (the picker and the DM it already sends) */
+  function markText(s) { var h = E(s); try { if (window.w138Mark) h = window.w138Mark(h); } catch (e) { /* fine */ } return h; }
+  function commentHtml(c, gid, canReply) {
+    var mine = c.author_email && lower(c.author_email) === myEmail();
+    var m = memberByEmail(c.author_email) || { name: c.author || 'Someone' };
+    var editing = S.drawer && String(S.drawer.editing) === String(c.id);
+    return '<div class="w205cm" data-w205c="' + c.id + '">' + av(m, 28) + '<div class="bd"><div class="who" data-w198skip>' + E(c.author || m.name) + '<small>' + E(fmtWhen(c.created_at)) + (c.edited_at ? ' \u00b7 edited' : '') + '</small></div>' +
+      (editing ? '<textarea data-w205edit="' + c.id + '" aria-label="Edit your comment">' + E(c.body) + '</textarea><div class="acts"><button type="button" class="w205btn sm pri" data-w205editsave="' + c.id + '">Save</button><button type="button" class="w205btn sm ghost" data-w205editcancel="1">Cancel</button></div>'
+        : '<div class="tx" data-w198skip>' + markText(c.body) + '</div>') +
+      (!editing ? '<div class="ln">' + (canReply ? '<button type="button" class="w205link" data-w205replyto="' + c.id + '">Reply</button>' : '') + ((mine || isAdmin()) && canComment() ? '<button type="button" class="w205link" data-w205editc="' + c.id + '">Edit</button>' : '') + '</div>' : '') + '</div></div>';
+  }
+  function commentsDrawer(st) {
+    var g = byId(S.goals, st.goal) || byId(S.allGoals || [], st.goal);
+    if (!g) return drawerShell('Comments', '', '<p>That goal is not here.</p>');
+    var ms = msOf(g.id), mid = st.milestone || null, can = canComment();
+    var all = commentsOf(g.id);
+    var roots = all.filter(function (c) { return !c.parent_id && (mid ? String(c.milestone_id) === String(mid) : true); });
+    var seg = '<div class="w205seg" role="tablist"><button type="button" role="tab" class="' + (!mid ? 'on' : '') + '" data-w205cseg="" aria-selected="' + (!mid) + '">Everything (' + all.length + ')</button>' +
+      ms.filter(function (m) { return all.some(function (c) { return String(c.milestone_id) === String(m.id); }) || String(m.id) === String(mid); }).map(function (m) {
+        var n = all.filter(function (c) { return String(c.milestone_id) === String(m.id); }).length;
+        return '<button type="button" role="tab" class="' + (String(m.id) === String(mid) ? 'on' : '') + '" data-w205cseg="' + m.id + '" title="' + E(m.body) + '" aria-selected="' + (String(m.id) === String(mid)) + '">' + E(m.fy) + ': ' + E(clip(m.body, 26)) + ' (' + n + ')</button>';
+      }).join('') + '</div>';
+    var threads = roots.map(function (c) {
+      var reps = all.filter(function (r) { return String(r.parent_id) === String(c.id); });
+      var mm = c.milestone_id ? byId(S.milestones, c.milestone_id) : null;
+      return '<div class="w205th">' + (mm && !mid ? '<span class="w205ms-tag" data-w198skip>' + E(mm.fy) + ': ' + E(clip(mm.body, 40)) + '</span>' : '') + commentHtml(c, g.id, can) +
+        (reps.length || String(st.replyTo) === String(c.id) ? '<div class="w205replies">' + reps.map(function (r) { return commentHtml(r, g.id, false); }).join('') +
+          (String(st.replyTo) === String(c.id) ? '<div style="margin-top:10px"><textarea data-w205reply="' + c.id + '" data-w205cmt="reply" placeholder="Write a reply. Type @ to bring someone in." aria-label="Your reply" data-w205autofocus></textarea><div class="acts"><button type="button" class="w205btn sm pri" data-w205sendreply="' + c.id + '">Reply</button><button type="button" class="w205btn sm ghost" data-w205replyto="">Cancel</button></div></div>' : '') + '</div>' : '') + '</div>';
+    }).join('');
+    var msNow = mid ? byId(S.milestones, mid) : null;
+    var body = seg + (threads || '<div class="w205empty"><b>No comments yet</b>' + (can ? 'Start the conversation: a question, a link, an @mention.' : 'When the team talks about this goal, it shows here.') + '</div>');
+    var foot = can ? '<textarea data-w205cmt="new" placeholder="' + (msNow ? 'Comment on this milestone' : 'Comment on this goal') + '. Type @ to bring someone in." aria-label="Your comment"' + (st.replyTo ? '' : ' data-w205autofocus') + '></textarea>' +
+      '<div class="acts"><small>' + (msNow ? 'On ' + E(msNow.fy) + ': ' + E(clip(msNow.body, 40)) : 'On the whole goal') + ' \u00b7 Ctrl+Enter posts</small><span class="sp"></span><button type="button" class="w205btn pri sm" data-w205post="1">Post</button></div>' +
+      '<small style="display:block;color:' + MUTED + ';font-size:11px;margin-top:6px">People you @mention hear about it the way every Hub @mention works.</small>'
+      : '<small style="color:' + MUTED + '">' + E(readOnlyWhy()) + '</small>';
+    return drawerShell('Comments', '<span data-w198skip>Goal ' + E(g.number || '') + ': ' + E(g.title) + '</span>', body, foot);
+  }
+  function postComment(parent) {
+    var d = document.getElementById('w205drawer'); if (!d || !S.drawer) return;
+    var ta = parent ? d.querySelector('textarea[data-w205reply="' + parent + '"]') : d.querySelector('textarea[data-w205cmt="new"]');
+    var body = ta ? ta.value.trim() : ''; if (!body) { if (ta) ta.focus(); return; }
+    var st = S.drawer, btn = d.querySelector(parent ? '[data-w205sendreply="' + parent + '"]' : '[data-w205post]'); if (btn) btn.disabled = true;
+    rpc('strategy_comment_add', { p_goal: Number(st.goal), p_milestone: parent ? null : (st.milestone ? Number(st.milestone) : null), p_parent: parent ? Number(parent) : null, p_body: body }).then(function (row) {
+      if (row && row.id && !byId(S.comments, row.id)) S.comments.push(row);
+      if (ta) ta.value = '';
+      if (parent) st.replyTo = null;
+      paintDrawer(); paintCounts(st.goal);
+      toastS('Comment posted');
+    }).catch(function (e) { toastS('Not posted: ' + errText(e)); if (btn) btn.disabled = false; });
+  }
+  function saveEdit(id) {
+    var d = document.getElementById('w205drawer'), ta = d && d.querySelector('textarea[data-w205edit="' + id + '"]'); if (!ta) return;
+    rpc('strategy_comment_edit', { p_id: Number(id), p_body: ta.value }).then(function (row) {
+      var c = byId(S.comments, id); if (c && row) Object.assign(c, row);
+      S.drawer.editing = null; paintDrawer();
+    }).catch(function (e) { toastS('Not saved: ' + errText(e)); });
+  }
+
+  /* the history: every change, who and when, with Restore */
+  function histLabel(h) {
+    var f = FIELD_LABEL[h.field] || h.field;
+    if (h.entity === 'goal') return 'changed ' + f;
+    if (h.entity === 'milestone') return h.field === 'added' ? 'added a milestone' : h.field === 'archived_at' ? (h.new_value ? 'removed a milestone' : 'brought back a milestone') : 'changed a milestone\u2019s ' + (h.field === 'body' ? 'text' : f.replace(/^the /, ''));
+    if (h.entity === 'path') return h.field === 'added' ? 'added a path' : h.field === 'archived_at' ? (h.new_value ? 'removed a path' : 'brought back a path') : 'changed a path';
+    if (h.entity === 'owner') return h.field === 'added' ? 'added an owner' : h.field === 'removed' ? 'took an owner off' : h.field === 'is_lead' ? 'changed the lead' : 'changed an owner\u2019s focus';
+    if (h.entity === 'project') return h.field === 'goal_id' ? (h.new_value ? 'linked a project' : 'unlinked a project') : 'moved a project to a milestone';
+    return 'changed ' + f;
+  }
+  function restorable(h) {
+    if (h.entity === 'project') return canComment();
+    var g = byId(S.goals, h.goal_id); if (!canEdit(g)) return false;
+    if (h.entity === 'goal') return ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'].indexOf(h.field) >= 0;
+    return true;
+  }
+  function histVal(h, v) {
+    if (v == null || v === '') return '';
+    if (h.field === 'archived_at') return '';
+    if (h.field === 'status') return ST_LABEL[v] || v;
+    if (h.field === 'is_lead') return v === 'true' ? 'Lead' : 'Not the lead';
+    return v;
+  }
+  function historyDrawer(st) {
+    var g = byId(S.goals, st.goal); if (!g) return drawerShell('History', '', '<p>That goal is not here.</p>');
+    var body;
+    if (st.loading) body = '<p style="color:' + MUTED + '">Reading the history\u2026</p>';
+    else if (st.err) body = '<div class="w205empty"><b>The history could not be read</b>' + E(st.err) + '</div>';
+    else if (!st.rows || !st.rows.length) body = '<div class="w205empty"><b>No changes yet</b>Every change to this goal shows here, with who made it and when.</div>';
+    else {
+      var day = '', out = [];
+      st.rows.forEach(function (h) {
+        var dd = fmtDay(h.changed_at); if (dd !== day) { day = dd; out.push('<div class="w205hday">' + E(dd) + '</div>'); }
+        var ov = histVal(h, h.old_value), nv = histVal(h, h.new_value), simple = h.entity === 'project' || h.entity === 'owner' || h.field === 'added' || h.field === 'archived_at';
+        out.push('<div class="w205h" data-w205h="' + h.id + '"><div class="l1"><span><b data-w198skip>' + E(h.changed_by_name || h.changed_by || 'Someone') + '</b> ' + E(histLabel(h)) + '</span><span class="sp"></span><small>' + E(new Date(h.changed_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })) + '</small></div>' +
+          (h.restored_from ? '<span class="rs">A restore</span>' : '') +
+          (simple ? ((nv || ov) ? '<span class="nv" data-w198skip>' + E(nv || ov) + '</span>' : '') : (ov ? '<span class="ov" data-w198skip>' + E(ov) + '</span>' : '') + (nv ? '<span class="nv" data-w198skip>' + E(nv) + '</span>' : '<span class="nv"><i>cleared</i></span>')) +
+          (restorable(h) ? '<div style="margin-top:6px"><button type="button" class="w205btn sm" data-w205restore="' + h.id + '">' + I('undo') + ' Restore</button></div>' : '') + '</div>');
+      });
+      body = out.join('');
+    }
+    return drawerShell('History', '<span data-w198skip>Goal ' + E(g.number) + ': ' + E(g.title) + '</span> \u00b7 every change, newest first', body, canEdit(g) ? '<small style="color:' + MUTED + '">Restore puts the old version back; the restore is itself a change here, so nothing is lost.</small>' : '');
+  }
+  function loadHistory() {
+    var st = S.drawer; if (!st || st.kind !== 'history') return;
+    st.loading = true; paintDrawer();
+    Promise.resolve(db.from('goal_history').select('*').eq('goal_id', Number(st.goal)).order('changed_at', { ascending: false }).limit(300)).then(function (r) {
+      if (S.drawer !== st) return;
+      st.loading = false; st.err = r && r.error ? (r.error.message || String(r.error)) : null; st.rows = (r && r.data) || [];
+      st.rows.sort(function (a, b) { return String(b.changed_at).localeCompare(String(a.changed_at)) || b.id - a.id; });
+      paintDrawer();
+    }, function (e) { st.loading = false; st.err = errText(e); paintDrawer(); });
+  }
+  function restore(id) {
+    rpc('strategy_restore', { p_history: Number(id) }).then(function (res) {
+      if (res && res.conflict) { toastS('Someone changed that field again; read the latest first.'); }
+      else toastS('Restored');
+      S.loaded = 0;
+      return loadAll(true).then(function () { paint(); if (S.drawer && S.drawer.kind === 'history') loadHistory(); });
+    }).catch(function (e) { toastS('Not restored: ' + errText(e)); });
+  }
+
+  /* link a project to a goal and, ideally, one milestone */
+  function linkDrawer(st) {
+    var g = st.goal ? byId(S.goals, st.goal) : null;
+    var qv = lower(st.q || '');
+    var p = st.project ? byId(S.projects, st.project) : null;
+    var body = '';
+    if (!p) {
+      var list = S.projects.filter(function (x) { var s = lower(x.status || 'active'); return !/done|complete|closed|archiv/.test(s); })
+        .filter(function (x) { return !qv || lower(x.name + ' ' + deptLabel(x.department)).indexOf(qv) >= 0; })
+        .sort(function (a, b) { return String(deptLabel(a.department)).localeCompare(String(deptLabel(b.department))) || String(a.name).localeCompare(String(b.name)); });
+      var groups = {}; list.forEach(function (x) { (groups[x.department] = groups[x.department] || []).push(x); });
+      body = '<label class="w205search" style="max-width:none;margin:0 0 10px">' + I('search') + '<input type="search" data-w205linkq value="' + E(st.q || '') + '" placeholder="Find a project" aria-label="Find a project" data-w205autofocus /></label>' +
+        (list.length ? Object.keys(groups).map(function (d) {
+          return '<div class="w205grp">' + E(deptLabel(d)) + '</div><div class="w205pick">' + groups[d].map(function (x) {
+            var cur = x.goal_id ? byId(S.goals, x.goal_id) : null;
+            return '<label><input type="radio" name="w205lp" data-w205pickp="' + x.id + '" /><span class="t"><span data-w198skip>' + E(x.name) + '</span><small>' + (cur ? 'Serves goal ' + E(cur.number) + (g && cur.id === g.id ? ' (this goal)' : '') : 'Not linked to a goal yet') + '</small></span></label>';
+          }).join('') + '</div>';
+        }).join('') : '<div class="w205empty"><b>No project matches</b>Projects are added on a team\u2019s page or on Projects.</div>');
+      return drawerShell('Link a project', g ? '<span data-w198skip>To goal ' + E(g.number) + ': ' + E(g.title) + '</span>' : 'Pick the project first', body, '<small style="color:' + MUTED + '">Departments own their projects; linking one says which goal (and milestone) it serves.</small>');
+    }
+    var goalSel = st.goalPick != null ? st.goalPick : (g ? g.id : p.goal_id);
+    var gg = byId(S.goals, goalSel);
+    var curG = p.goal_id ? byId(S.goals, p.goal_id) : null;
+    body = '<div class="w205th"><b data-w198skip>' + E(p.name) + '</b><div style="font-size:12.5px;color:' + MUTED + ';margin-top:2px">' + E(deptLabel(p.department)) + ' \u00b7 ' + (curG ? 'serves goal ' + E(curG.number) : 'not linked to a goal yet') + '</div>' +
+      '<div style="margin-top:8px"><a class="w205btn sm" href="#project/' + p.id + '">Open the project</a></div></div>' +
+      '<div class="w205grp">The goal it serves</div><div class="w205pick">' + S.goals.map(function (x) {
+        return '<label class="' + (String(x.id) === String(goalSel) ? 'on' : '') + '"><input type="radio" name="w205lg" data-w205pickg="' + x.id + '"' + (String(x.id) === String(goalSel) ? ' checked' : '') + ' /><span class="w205num" style="width:24px;height:24px;font-size:13px">' + E(x.number) + '</span><span class="t" data-w198skip>' + E(x.title) + '</span></label>';
+      }).join('') + '</div>' +
+      (gg ? '<div class="w205grp">The milestone (optional)</div><div class="w205pick"><label class="' + (!st.msPick ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm=""' + (!st.msPick ? ' checked' : '') + ' /><span class="t">The goal as a whole</span></label>' +
+        msOf(gg.id).map(function (m) { return '<label class="' + (String(st.msPick) === String(m.id) ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm="' + m.id + '"' + (String(st.msPick) === String(m.id) ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(m.body) + '</span><small>' + E(m.fy) + '</small></span></label>'; }).join('') + '</div>' : '');
+    var foot = '<div class="acts" style="margin:0">' + (curG ? '<button type="button" class="w205btn sm ghost" data-w205unlink="' + p.id + '">Unlink</button>' : '') + '<span class="sp"></span><button type="button" class="w205btn sm ghost" data-w205close="1">Cancel</button><button type="button" class="w205btn pri" data-w205dolink="1"' + (gg ? '' : ' disabled') + '>' + I('link') + ' Link it</button></div>';
+    return drawerShell(curG ? 'Move or unlink a project' : 'Link a project', '<span data-w198skip>' + E(p.name) + '</span>', body, foot);
+  }
+  function doLink(unlink) {
+    var st = S.drawer; if (!st || st.kind !== 'link' || !st.project) return;
+    var p = byId(S.projects, st.project), g = unlink ? null : (st.goalPick != null ? st.goalPick : (st.goal || (p && p.goal_id)));
+    var m = unlink ? null : (st.msPick || null);
+    rpc('strategy_link_project', { p_project: Number(st.project), p_goal: g ? Number(g) : null, p_milestone: m ? Number(m) : null }).then(function () {
+      if (p) { p.goal_id = g ? Number(g) : null; p.milestone_id = m ? Number(m) : null; }
+      closeDrawer();
+      S.goals.forEach(function (x) { paintProjects(x.id); }); paintUnlinked();
+      /* the shared project store (wave116i): Projects, the team pages and Goal alignment repaint from the same rows */
+      try {
+        var PS = window.__waProjects;
+        if (PS && PS.rows) { PS.rows.forEach(function (x) { if (String(x.id) === String(st.project)) { x.goal_id = g ? Number(g) : null; x.milestone_id = m ? Number(m) : null; } }); if (window.w116ProjectsChanged) window.w116ProjectsChanged(PS.rows); }
+        else if (window.w116Goals && window.w116Goals.refresh) window.w116Goals.refresh();
+      } catch (e) { /* fine */ }
+      toastS(unlink ? 'Unlinked' : 'Linked to goal ' + ((byId(S.goals, g) || {}).number || ''));
+    }).catch(function (e) { toastS('Not linked: ' + errText(e)); });
+  }
+
+  /* owners: add someone from the roster, make the lead, take someone off */
+  function ownerDrawer(st) {
+    var g = byId(S.goals, st.goal); if (!g) return drawerShell('Owners', '', '');
+    var qv = lower(st.q || ''), own = ownersOf(g.id);
+    var current = own.map(function (o) {
+      var m = memberById(o.member_id) || { name: '?' };
+      return '<div class="w205th" style="display:flex;align-items:center;gap:10px">' + av(m, 30) + '<div style="flex:1;min-width:0"><b data-w198skip>' + E(m.name) + '</b>' + (o.is_lead ? ' <span class="w205tag g">Lead</span>' : '') +
+        '<label class="w205field" style="margin:6px 0 0;font-weight:600">What they carry <input type="text" data-w205focus="' + o.member_id + '" value="' + E(o.focus || '') + '" placeholder="Optional, e.g. Toronto" /></label></div>' +
+        '<div style="display:flex;flex-direction:column;gap:6px">' + (o.is_lead ? '' : '<button type="button" class="w205btn sm" data-w205lead="' + o.member_id + '">Make lead</button>') + '<button type="button" class="w205btn sm ghost" data-w205ownoff="' + o.member_id + '">Take off</button></div></div>';
+    }).join('');
+    var ids = {}; own.forEach(function (o) { ids[o.member_id] = 1; });
+    var pool = members().filter(function (m) { return m.active !== false && !ids[m.id] && (!qv || lower(m.name + ' ' + (m.role || '') + ' ' + deptLabel(m.department)).indexOf(qv) >= 0); })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); }).slice(0, 40);
+    var body = '<div class="w205grp">Owners now</div>' + (current || '<p style="font-size:13px;color:' + MUTED + '">No owner yet.</p>') +
+      '<div class="w205grp">Add an owner</div><label class="w205search" style="max-width:none;margin:0 0 8px">' + I('search') + '<input type="search" data-w205ownq value="' + E(st.q || '') + '" placeholder="Find someone on the roster" aria-label="Find someone on the roster" data-w205autofocus /></label>' +
+      '<div class="w205pick">' + pool.map(function (m) { return '<label data-w205ownon="' + m.id + '" tabindex="0" role="button">' + av(m, 26) + '<span class="t"><span data-w198skip>' + E(m.name) + '</span><small>' + E(m.role || deptLabel(m.department)) + '</small></span>' + I('plus') + '</label>'; }).join('') + '</div>';
+    return drawerShell('Owners', '<span data-w198skip>Goal ' + E(g.number) + ': ' + E(g.title) + '</span> \u00b7 one to three, one lead', body, '<small style="color:' + MUTED + '">Owners and admins edit the goal. Every change is in its history.</small>');
+  }
+  function ownerSet(gid, mid, on, lead, focus) {
+    return rpc('strategy_owner_set', { p_goal: Number(gid), p_member: Number(mid), p_on: !!on, p_lead: lead == null ? null : !!lead, p_focus: focus == null ? null : focus }).then(function () {
+      return Promise.resolve(db.from('goal_owners').select('*').eq('goal_id', Number(gid))).then(function (r) {
+        S.owners = S.owners.filter(function (o) { return String(o.goal_id) !== String(gid); }).concat(((r && r.data) || []).filter(function (o) { return !o.removed_at; }));
+        paintOwners(gid); if (S.drawer && S.drawer.kind === 'owner') paintDrawer(); paintSoonIfRights();
+      });
+    }).catch(function (e) { toastS('Not changed: ' + errText(e)); });
+  }
+  function paintSoonIfRights() { /* someone who took themselves off loses the pen: redraw the fields */ var g = S.goals.filter(function (x) { return !canEdit(x); }).length; if (g !== S.lastNoEdit) { S.lastNoEdit = g; paintSoon(); } }
+
+  /* a library document (admins) */
+  function docDrawer(st) {
+    var d = st.id ? byId(S.docs, st.id) : {};
+    var f = function (n, l, ph, ta) { return '<label class="w205field">' + E(l) + (ta ? '<textarea data-w205df="' + n + '" rows="3" placeholder="' + E(ph) + '">' + E(d[n] || '') + '</textarea>' : '<input type="' + (n === 'url' ? 'url' : 'text') + '" data-w205df="' + n + '" value="' + E(d[n] || '') + '" placeholder="' + E(ph) + '"' + (n === 'title' ? ' data-w205autofocus' : '') + ' />') + '</label>'; };
+    var body = f('title', 'Title', 'The document\u2019s name') + f('url', 'Link', 'https://docs.google.com/...') + f('group_label', 'Shelf', 'Our plans, Consulting work or Sources') + f('doc_date', 'When it was written', 'e.g. Jun 2026') +
+      f('direction', 'The direction it sets', 'What it says we will do', true) + f('status_note', 'Where it stands', 'e.g. Concept; no dates or targets', true) +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600"><input type="checkbox" data-w205df="pinned"' + (st.id ? (d.pinned ? ' checked' : '') : ' checked') + ' /> Pinned for everyone (shows on the Goals page)</label>';
+    var foot = '<div class="acts" style="margin:0">' + (st.id ? '<button type="button" class="w205btn sm ghost" data-w205docarch="' + st.id + '">Take it out of the library</button>' : '') + '<span class="sp"></span><button type="button" class="w205btn sm ghost" data-w205close="1">Cancel</button><button type="button" class="w205btn pri" data-w205docsave="1">' + (st.id ? 'Save' : 'Add it') + '</button></div>';
+    return drawerShell(st.id ? 'Edit a document' : 'Add a document', 'The Strategy Library', body, foot);
+  }
+  function docSave(archive) {
+    var st = S.drawer, d = document.getElementById('w205drawer'); if (!st || !d) return;
+    var patch = {};
+    if (archive) patch.archived = true;
+    else d.querySelectorAll('[data-w205df]').forEach(function (el) { var n = el.getAttribute('data-w205df'); patch[n] = el.type === 'checkbox' ? el.checked : el.value; });
+    if (!archive && !String(patch.title || '').trim()) { toastS('A document needs a title'); return; }
+    rpc('strategy_doc_save', { p_id: st.id ? Number(st.id) : null, p_patch: patch }).then(function (row) {
+      S.docs = S.docs.filter(function (x) { return String(x.id) !== String(row && row.id); });
+      if (row && !row.archived_at) S.docs.push(row);
+      S.docs.sort(function (a, b) { return a.sort - b.sort; });
+      closeDrawer(); paint(); toastS(archive ? 'Taken out of the library' : 'Saved');
+    }).catch(function (e) { toastS('Not saved: ' + errText(e)); });
+  }
+  function togglePin(id) {
+    var d = byId(S.docs, id); if (!d) return;
+    rpc('strategy_doc_save', { p_id: Number(id), p_patch: { pinned: !d.pinned } }).then(function (row) { if (row) Object.assign(d, row); paint(); toastS(d.pinned ? 'Pinned for everyone' : 'Unpinned'); }).catch(function (e) { toastS('Not changed: ' + errText(e)); });
+  }
+
+  /* ---------- the Strategy Library ---------- */
+  function docHtml(d, compact) {
+    var admin = isAdmin();
+    var gl = (d.goals || []).filter(Boolean).map(function (n) { var g = S.goals.filter(function (x) { return String(x.number) === String(n); })[0]; return g ? '<a class="w205tag g" href="#orggoals/goal/' + g.id + '" data-w205go="#orggoals/goal/' + g.id + '">Goal ' + E(n) + '</a>' : ''; }).join(' ');
+    return '<article class="w205doc' + (d.pinned ? '' : ' unpinned') + '" data-w205doc="' + d.id + '"><div class="hd"><span class="ic">' + I(d.url ? 'doc' : 'archive') + '</span><div style="flex:1;min-width:0">' +
+      '<h4 data-w198skip>' + (d.url ? '<a href="' + E(d.url) + '" target="_blank" rel="noopener">' + E(d.title) + '</a>' : E(d.title)) + '</h4>' +
+      '<div class="meta">' + E(d.group_label || '') + (d.doc_date ? ' \u00b7 ' + E(d.doc_date) : '') + (d.url ? '' : ' \u00b7 no link yet') + '</div></div>' +
+      (admin ? '<button type="button" class="w205pinb' + (d.pinned ? ' on' : '') + '" data-w205pin="' + d.id + '" aria-pressed="' + (d.pinned ? 'true' : 'false') + '" aria-label="' + (d.pinned ? 'Unpin' : 'Pin') + ' this document" title="' + (d.pinned ? 'Pinned for everyone: unpin' : 'Pin it for everyone') + '">' + I('star') + '</button>' : (d.pinned ? '<span class="w205pinb on" title="Pinned">' + I('star') + '</span>' : '')) + '</div>' +
+      (d.direction ? '<div class="dir" data-w198skip>' + E(compact ? clip(d.direction, 150) : d.direction) + '</div>' : '') +
+      (d.status_note && !compact ? '<div class="st" data-w198skip>' + E(d.status_note) + '</div>' : '') +
+      '<div class="ft">' + gl + '<span style="flex:1"></span>' + (d.url ? '<a class="w205btn sm ghost" href="' + E(d.url) + '" target="_blank" rel="noopener">' + I('ext') + ' Open</a>' : '') +
+      (admin && !compact ? '<button type="button" class="w205btn sm ghost" data-w205docedit="' + d.id + '">Edit</button>' : '') + '</div></article>';
+  }
+  function libraryViewHtml() {
+    var qv = lower(S.libQ), admin = isAdmin();
+    var list = S.docs.filter(function (d) {
+      if (!qv) return true;
+      return lower([d.title, d.direction, d.status_note, d.group_label, d.doc_date].join(' ')).indexOf(qv) >= 0;
+    });
+    var shelves = []; list.forEach(function (d) { var s = d.group_label || 'Other'; if (shelves.indexOf(s) < 0) shelves.push(s); });
+    var order = ['Our plans', 'Consulting work', 'Sources']; shelves.sort(function (a, b) { var ia = order.indexOf(a), ib = order.indexOf(b); return (ia < 0 ? 9 : ia) - (ib < 0 ? 9 : ib) || a.localeCompare(b); });
+    var pinnedN = S.docs.filter(function (d) { return d.pinned; }).length;
+    var html = mastHtml('Strategy Library', 'The documents that set Welfare Avenue\u2019s direction: what each one says and where it stands. Pinned documents lead the Goals page.') +
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 6px"><label class="w205search">' + I('search') + '<input type="search" data-w205libq value="' + E(S.libQ) + '" placeholder="Search the library" aria-label="Search the Strategy Library" /></label>' +
+      '<span style="font-size:13px;color:' + MUTED + '">' + plural(S.docs.length, 'document') + ', ' + pinnedN + ' pinned</span><span style="flex:1"></span>' +
+      (admin ? '<button type="button" class="w205btn pri" data-w205docadd>' + I('plus') + ' Add a document</button>' : '') +
+      '<button type="button" class="w205btn" data-w205go="#orggoals">Back to the goals</button></div>';
+    if (!list.length) {
+      html += '<div class="w205empty" style="margin-top:16px"><b>' + (qv ? 'Nothing matches' : 'The library is empty') + '</b>' + (qv ? 'Try another word, or clear the search.' : (admin ? 'Add the first document.' : 'Admins add the documents that set our direction.')) + '</div>';
+      return html;
+    }
+    shelves.forEach(function (s) {
+      var ds = list.filter(function (d) { return (d.group_label || 'Other') === s; }).sort(function (a, b) { return (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (a.sort - b.sort); });
+      html += '<div class="w205shelf">' + E(s) + ' <small>' + ds.length + '</small></div><div class="w205lib">' + ds.map(function (d) { return docHtml(d, false); }).join('') + '</div>';
+    });
+    if (S.plan.source && S.plan.source.title) html += '<p style="font-size:12px;color:' + MUTED + ';margin:20px 0 0">Seeded from "What our own plans already say" and the sources of the draft "' + E(S.plan.source.title) + '".</p>';
+    return html;
+  }
+
+  /* ---------- the retired goals ---------- */
+  function retiredViewHtml() {
+    var oldOrg = S.retired.filter(function (g) { return g.department === 'org'; });
+    var dept = S.retired.filter(function (g) { return g.department !== 'org'; });
+    var lead = isLeader();
+    function row(g) {
+      var to = g.maps_to_goal_id ? byId(S.goals, g.maps_to_goal_id) : null;
+      var proj = g.moved_to_project_id ? byId(S.projects, g.moved_to_project_id) : null;
+      var wins = S.wins[g.id] || 0, cm = (S.comments || []).filter(function (c) { return String(c.goal_id) === String(g.id); }).length;
+      return '<div class="it"><i style="width:9px;height:9px;border-radius:50%;background:' + E(g.department === 'org' ? GOLD : deptColor(g.department)) + ';flex:none"></i><div class="t"><b data-w198skip>' + E(g.title) + '</b>' +
+        '<small>' + E(g.department === 'org' ? 'Organizational goal' : deptLabel(g.department)) + (g.quarter ? ' \u00b7 ' + E(g.quarter) : '') + (g.status_before_retire ? ' \u00b7 was ' + E(ST_LABEL[g.status_before_retire] || g.status_before_retire) : '') +
+        (wins ? ' \u00b7 ' + plural(wins, 'win') : '') + (cm ? ' \u00b7 ' + plural(cm, 'comment') : '') + '</small>' +
+        (g.retired_note ? '<small data-w198skip>' + E(g.retired_note) + '</small>' : '') + '</div>' +
+        (to ? '<a class="w205tag g" href="#orggoals/goal/' + to.id + '" data-w205go="#orggoals/goal/' + to.id + '">Goal ' + E(to.number) + '</a>' : '<span class="w205tag">No obvious fit</span>') +
+        (g.department !== 'org' ? (proj ? '<a class="w205btn sm ghost" href="#project/' + proj.id + '">Now a project</a>' : g.moved_to_project_id ? '<span class="w205tag p">Now a project</span>' : (lead ? '<button type="button" class="w205btn sm" data-w205toproj="' + g.id + '" title="Once only: a project in ' + E(deptLabel(g.department)) + (to ? ', linked to goal ' + E(to.number) : '') + '">Make it a project</button>' : '')) : '') + '</div>';
+    }
+    var groups = {}; dept.forEach(function (g) { var k = g.maps_to_goal_id && byId(S.goals, g.maps_to_goal_id) ? String(g.maps_to_goal_id) : 'none'; (groups[k] = groups[k] || []).push(g); });
+    var html = mastHtml('Retired goals', 'Department goals are retired as a tier: departments own projects, and projects serve the five goals. Nothing was removed: each goal keeps its wins, comments and history.') +
+      '<div style="margin:0 0 14px"><button type="button" class="w205btn" data-w205go="#orggoals">Back to the goals</button></div>';
+    if (!S.retired.length) return html + '<div class="w205empty"><b>No retired goals</b>Goals retired later show here.</div>';
+    if (oldOrg.length) html += '<div class="w205shelf">The earlier organizational goals <small>' + oldOrg.length + '</small></div><div class="w205list">' + oldOrg.map(row).join('') + '</div>';
+    html += '<div class="w205shelf">Department goals <small>' + dept.length + '</small></div>' +
+      '<p style="font-size:13px;color:' + MUTED + ';margin:-4px 0 10px">Grouped by the goal each one served. ' + (lead ? 'Make it a project turns one into a project in the same team, linked to that goal (once per goal).' : 'Leaders and admins can turn one into a project.') + '</p>';
+    S.goals.concat([{ id: 'none' }]).forEach(function (g) {
+      var list = groups[String(g.id)]; if (!list || !list.length) return;
+      html += '<div class="w205grp">' + (g.id === 'none' ? 'No obvious fit with one of the five goals' : 'Served goal ' + E(g.number) + ': <span data-w198skip>' + E(g.title) + '</span>') + '</div><div class="w205list" style="margin-bottom:10px">' + list.map(row).join('') + '</div>';
+    });
+    return html;
+  }
+
+  /* ---------- the page tours (wave122's engine): tour:orggoals (Goals), tour:strategylib (the library), tour:goalmap ---------- */
+  function addTours() {
+    try {
+      var W = window.w122; if (!W || !W.tours || (W.tours.orggoals && W.tours.orggoals.__w205)) return;
+      var OPT = { opt: 1 };
+      var T = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
+      var jump = function (h) { return function () { if (location.hash !== h) location.hash = h; }; };
+      W.tours.orggoals = { __w205: true, tab: 'orggoals', icon: 'target', hash: '#orggoals', steps: [
+        T('#w205 .w205mast', 'Goals', 'Welfare Avenue\u2019s five organizational goals for FY27 to FY29, with a gated view to FY31. Departments own projects, and every project serves one of these goals.'),
+        T('#w205 .w205hero', 'The mission first', 'Every goal serves the mission the board adopted in July 2026.', OPT),
+        T('#w205 .w205status', 'Draft or approved', 'Until the board votes (Oct 19, 2026) the goals say Draft for board approval. An admin marks them approved after the vote.', OPT),
+        T('#w205 [data-w205pres]', 'Who is here', 'The people on this page right now. On a goal, their faces show which goal they are in; a field someone is typing in says so.', OPT),
+        T('#w205 [data-w205glance]', 'At a glance', 'One line per goal: the headline measure, the baseline, the FY29 and FY31 targets, the owners and the milestones done. Click a row to jump to the goal.', OPT),
+        T('#w205 .w205goal .w205ghd', 'A goal', 'Its number, its title and its status. If you own the goal (or you are an admin), click any text and type: it saves as you go, and Saved shows when it is in.', OPT),
+        T('#w205 .w205goal .w205owners', 'Owners', 'One to three owners, one lead. Owners and admins edit the goal; everyone on staff reads it and comments.', OPT),
+        T('#w205 .w205goal .w205two', 'SMART and Why', 'The goal as the board reads it, and why it matters.', OPT),
+        T('#w205 .w205goal .w205meas', 'The targets', 'The headline measure, where we started, the 3-year target (FY29) and the 5-year target (FY31, only if the FY29 gate is met).', OPT),
+        T('#w205 .w205goal .w205paths', 'Paths', 'How we get there. Owners add, change and remove paths.', OPT),
+        T('#w205 .w205goal .w205years', 'Milestones by year', 'Each fiscal year\u2019s milestones with their status (tap the circle). The projects serving a milestone sit under it; the speech bubble is its own comments.', OPT),
+        T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Departments link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
+        T('#w205 .w205goal .w205gft', 'Comments and history', 'Comments are threaded; type @ to bring someone in. History lists every change, who made it and when; Restore puts an old version back.', OPT),
+        T('#w205 .w205road', 'The roadmap', 'Three years to prove it: stabilize, strengthen, scale. The checkpoint in Oct 2027 and the FY29 gate in Oct 2029 decide whether FY30 and FY31 go ahead.', OPT),
+        T('#w205 .w205lib', 'The Strategy Library', 'The pinned documents that set our direction. The full library is in the menu.', OPT),
+        T('#w205 [data-w205unlinked]', 'Not linked yet', 'Active projects that do not serve a goal yet. Link each one so the goals show the work behind them.', OPT)
+      ] };
+      W.tours.strategylib = { __w205: true, tab: 'orggoals', icon: 'book', hash: '#orggoals/library', steps: [
+        T('#w205 .w205mast', 'The Strategy Library', 'The documents that set Welfare Avenue\u2019s direction: our plans, the consulting work, the sources.', { go: jump('#orggoals/library') }),
+        T('#w205 .w205search', 'Search', 'Find a document by its title, what it sets or where it stands.', OPT),
+        T('#w205 .w205doc', 'A document', 'What it says, when it was written, where it stands today, and the goals it feeds. Open takes you to the document.', OPT),
+        T('#w205 .w205pinb', 'Pinned', 'Pinned documents lead the library and show on the Goals page. Admins pin and unpin, and add new documents.', OPT)
+      ] };
+      W.tours.goalmap = { __w205: true, tab: 'goalmap', icon: 'link', hash: '#goalmap', steps: [
+        T('#goalmap .w116ptop', 'How it all connects', 'Every active project and the organizational goal it serves. Department goals are retired: departments own projects, and projects serve the goals.'),
+        T('#w116maphost .sum', 'Gaps at a glance', 'Projects without a goal, and goals with no project yet.', OPT),
+        T('#w116maphost .chips', 'Filter by team', 'Focus the map on one team.', OPT),
+        T('#w116maphost .w116mcols > .w116mcol:nth-child(1)', 'Projects', 'The work underway. A project marked Link to a goal is not connected yet: click it to link it.', OPT),
+        T('#w116maphost .w116mcols > .w116mcol:nth-child(2)', 'The goals', 'The five organizational goals and the milestones their projects serve.', OPT),
+        T('#w116maphost p.note', 'Try it', 'Hover anything to light up its chain; click it to pin it.', OPT)
+      ] };
+      if (W.tours.goals) delete W.tours.goals;   /* the Department goals page is retired */
+    } catch (e) { /* fine */ }
+  }
+
+  /* ---------- presence on the page ---------- */
+  function presName(p) { return p.name || nameOf(p.email); }
+  function paintPresence() {
+    var top = document.querySelector('#w205 [data-w205pres]');
+    var people = S.presence;
+    if (top) {
+      top.innerHTML = '<span class="w205live' + (S.live ? '' : ' off') + '" title="' + (S.live ? 'Live: changes arrive as people make them' : 'Not live: changes show when you reload') + '"></span>' +
+        (people.length ? '<span>Here now</span><span class="avs">' + people.slice(0, 8).map(function (p) {
+          var g = p.goal ? byId(S.goals, p.goal) : null, m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url };
+          return '<span title="' + E(presName(p) + (g ? ', in goal ' + g.number : '')) + '" data-w205who-e="' + E(p.email) + '">' + av(m, 26) + '</span>';
+        }).join('') + '</span>' + (people.length > 8 ? '<span>+' + (people.length - 8) + '</span>' : '') : '<span>' + (S.live ? 'Just you here' : 'Offline view') + '</span>');
+    }
+    document.querySelectorAll('#w205 [data-w205gpres]').forEach(function (el) {
+      var gid = el.getAttribute('data-w205gpres'), here = people.filter(function (p) { return String(p.goal) === String(gid); });
+      el.innerHTML = here.length ? '<span class="avs">' + here.map(function (p) { var m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url }; return '<span title="' + E(presName(p)) + ' is in this goal">' + av(m, 24) + '</span>'; }).join('') + '</span>' : '';
+    });
+    document.querySelectorAll('#w205 [data-w205who]').forEach(function (el) {
+      var k = el.getAttribute('data-w205who'), who = people.filter(function (p) { return p.field === k; }).map(presName);
+      if (who.length) { el.hidden = false; el.textContent = who.join(', ') + ' editing'; } else el.hidden = true;
+    });
+    document.querySelectorAll('#w205 .w205ed.other').forEach(function (el) { el.classList.remove('other'); el.removeAttribute('data-w205by'); });
+    people.forEach(function (p) { if (!p.field) return; var el = fieldEl(p.field); if (el) { el.classList.add('other'); el.title = presName(p) + ' is editing this'; } });
+  }
+
+  /* the boxes fit their words: again once the fonts are in and when the width changes */
+  function growAll() { document.querySelectorAll('#w205 textarea.w205ed').forEach(grow); }
+  function growSoon() { setTimeout(growAll, 30); setTimeout(growAll, 400); try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(growAll); } catch (e) { /* fine */ } }
+  var rzT = null; window.addEventListener('resize', function () { clearTimeout(rzT); rzT = setTimeout(function () { if (onPage()) growAll(); }, 150); });
+  /* ---------- paint and route ---------- */
+  function paint() {
+    var h = host(); if (!h) return;
+    var act = document.activeElement, actKey = act && h.contains(act) ? act.getAttribute('data-w205k') : null, sel = null;
+    if (actKey && act.selectionStart != null) sel = [act.selectionStart, act.selectionEnd];
+    var keep = {}; h.querySelectorAll('[data-w205k]').forEach(function (el) { var k = el.getAttribute('data-w205k'); if (S.dirty[k] || S.conflict[k]) keep[k] = el.value; });
+    var libFocus = act && act.hasAttribute && act.hasAttribute('data-w205libq');
+    var html;
+    if (!staffOk() && !boardMode()) html = mastHtml('Goals', '') + '<div class="w205empty"><b>Sign in to read the goals</b>The Strategy app is for Welfare Avenue accounts and the board.</div>';
+    else if (S.view === 'library') html = libraryViewHtml();
+    else if (S.view === 'retired') html = retiredViewHtml();
+    else html = goalsViewHtml();
+    h.innerHTML = html;
+    Object.keys(keep).forEach(function (k) { var el = fieldEl(k); if (el) el.value = keep[k]; if (S.conflict[k]) paintConflict(k); });
+    h.querySelectorAll('textarea.w205ed').forEach(grow);
+    Object.keys(S.errors).forEach(paintFieldError);
+    S.goals.forEach(function (g) { savedState(key('goal', g.id, 'title')); });
+    if (actKey) { var n = fieldEl(actKey); if (n) { n.focus(); if (sel) try { n.setSelectionRange(sel[0], sel[1]); } catch (e) { /* fine */ } } }
+    if (libFocus) { var li = h.querySelector('[data-w205libq]'); if (li) { li.focus(); li.setSelectionRange(li.value.length, li.value.length); } }
+    paintPresence(); growSoon();
+    try { document.title = (S.view === 'library' ? 'Strategy Library' : S.view === 'retired' ? 'Retired goals' : 'Goals') + ' \u00b7 Welfare Avenue Hub'; } catch (e) { /* fine */ }
+    S.lastNoEdit = S.goals.filter(function (x) { return !canEdit(x); }).length;
+  }
+  function route(hh) {
+    var p = String(hh || '').replace(/^#/, '').split('/');
+    S.view = 'goals'; S.goalId = null; S.sub = ''; S.subId = null;
+    if (p[1] === 'library') S.view = 'library';
+    else if (p[1] === 'retired') S.view = 'retired';
+    else if (p[1] === 'goal' && p[2]) { S.goalId = p[2]; S.sub = p[3] || ''; S.subId = p[4] || null; }
+  }
+  function show(hh) {
+    route(hh);
+    var h = host(); if (!h) return;
+    if (!S.loaded) h.innerHTML = '<div class="w205empty" style="margin-top:20px"><b>Loading the goals</b>One moment.</div>';
+    return loadAll().then(function () {
+      paint();
+      goLive(); trackSoon();
+      if (S.goalId) {
+        var card = document.getElementById('w205g-' + S.goalId);
+        if (card) setTimeout(function () { try { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) { card.scrollIntoView(); } }, 80);
+        if (S.sub === 'comments') openDrawer({ kind: 'comments', goal: S.goalId, milestone: null, focusComment: S.subId });
+        else if (S.sub === 'history') { openDrawer({ kind: 'history', goal: S.goalId }); loadHistory(); }
+      } else window.scrollTo(0, 0);
+    });
+  }
+  function go(h) { if (location.hash === h) { try { applyHash(); } catch (e) { show(h); } } else location.hash = h; }
+
+  /* ---------- events ---------- */
+  function inApp(t) { return !!(t && t.closest && (t.closest('#w205') || t.closest('#w205drawer') || t.closest('#w205scrim'))); }
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!inApp(t)) return;
+    var k = t.getAttribute && t.getAttribute('data-w205k');
+    if (k) {
+      if (t.readOnly || t.disabled) return;
+      grow(t); S.dirty[k] = true; delete S.errors[k];
+      var er = t.parentNode.querySelector('.w205err[data-for="' + k + '"]'); if (er) er.remove();
+      schedule(k, t.tagName === 'SELECT' ? 0 : SAVE_MS);
+      return;
+    }
+    if (t.hasAttribute('data-w205libq')) { S.libQ = t.value; clearTimeout(S.libT); S.libT = setTimeout(paint, 160); return; }
+    if (t.hasAttribute('data-w205linkq') && S.drawer) { S.drawer.q = t.value; clearTimeout(S.dT); S.dT = setTimeout(function () { paintDrawer(); var i = document.querySelector('#w205drawer [data-w205linkq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 150); return; }
+    if (t.hasAttribute('data-w205ownq') && S.drawer) { S.drawer.q = t.value; clearTimeout(S.dT); S.dT = setTimeout(function () { paintDrawer(); var i = document.querySelector('#w205drawer [data-w205ownq]'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 150); return; }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!inApp(t)) return;
+    var k = t.getAttribute && t.getAttribute('data-w205k');
+    if (k && t.tagName === 'SELECT') { t.className = t.className.replace(/\bs-\w+/, 's-' + stKey(t.value)); t.title = ST_LABEL[t.value] || t.value; return; }
+    if (t.hasAttribute('data-w205pickp') && S.drawer) { S.drawer.project = t.getAttribute('data-w205pickp'); var p = byId(S.projects, S.drawer.project); S.drawer.goalPick = S.drawer.goal || (p && p.goal_id) || null; S.drawer.msPick = p && String(p.goal_id) === String(S.drawer.goalPick) ? p.milestone_id : (S.drawer.ms || null); paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickg') && S.drawer) { S.drawer.goalPick = t.getAttribute('data-w205pickg'); S.drawer.msPick = null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickm') && S.drawer) { S.drawer.msPick = t.getAttribute('data-w205pickm') || null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205focus') && S.drawer) { ownerSet(S.drawer.goal, t.getAttribute('data-w205focus'), true, null, t.value); return; }
+  });
+  document.addEventListener('focusin', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w205')) return;
+    var card = t.closest('[data-w205goal]'), k = t.getAttribute('data-w205k');
+    var g = card ? card.getAttribute('data-w205goal') : null;
+    var f = k && !t.readOnly && !t.disabled ? k : null;
+    if (g !== S.focus.goal || f !== S.focus.field) { S.focus = { goal: g, field: f }; trackSoon(); }
+  });
+  document.addEventListener('focusout', function (e) {
+    var t = e.target; if (!t || !t.closest || !t.closest('#w205')) return;
+    var k = t.getAttribute('data-w205k');
+    if (k && S.dirty[k] && t.tagName !== 'SELECT') { clearTimeout(S.timers[k]); save(k); }
+    setTimeout(function () { var a = document.activeElement; if (!a || !a.closest || !a.closest('#w205')) { if (S.focus.field || S.focus.goal) { S.focus = { goal: null, field: null }; trackSoon(); } } }, 50);
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && S.drawer) { e.preventDefault(); closeDrawer(); return; }
+    var t = e.target; if (!inApp(t)) return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      if (t.matches('textarea[data-w205cmt="new"]')) { e.preventDefault(); postComment(null); return; }
+      if (t.matches('textarea[data-w205reply]')) { e.preventDefault(); postComment(t.getAttribute('data-w205reply')); return; }
+      if (t.matches('textarea[data-w205edit]')) { e.preventDefault(); saveEdit(t.getAttribute('data-w205edit')); return; }
+    }
+    /* a title and a measure are one line: Enter saves and leaves, like a heading in a document */
+    var k = t.getAttribute && t.getAttribute('data-w205k');
+    if (k && e.key === 'Enter' && !e.shiftKey && /:(title|measure|baseline|target_fy29|target_fy31)$/.test(k)) { e.preventDefault(); t.blur(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && t.matches('[data-w205jump],label[data-w205ownon]')) { e.preventDefault(); t.click(); }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!inApp(t)) return;
+    var el;
+    if ((el = t.closest('[data-w205close]'))) { closeDrawer(); return; }
+    if ((el = t.closest('[data-w205go]'))) { e.preventDefault(); go(el.getAttribute('data-w205go')); return; }
+    if ((el = t.closest('[data-w205jump]'))) { go('#orggoals/goal/' + el.getAttribute('data-w205jump')); return; }
+    if ((el = t.closest('[data-w205keep]'))) { resolveConflict(el.getAttribute('data-w205keep'), true); return; }
+    if ((el = t.closest('[data-w205theirs]'))) { resolveConflict(el.getAttribute('data-w205theirs'), false); return; }
+    if ((el = t.closest('[data-w205fold]'))) {
+      var gid = el.getAttribute('data-w205fold'), card = document.getElementById('w205g-' + gid);
+      var f = !card.classList.contains('folded'); card.classList.toggle('folded', f); el.setAttribute('aria-expanded', f ? 'false' : 'true');
+      if (f) S.folded[gid] = 1; else delete S.folded[gid]; lsSet('w205folded', JSON.stringify(S.folded));
+      if (!f) card.querySelectorAll('textarea.w205ed').forEach(grow);
+      return;
+    }
+    if ((el = t.closest('[data-w205cmts]'))) { var p = el.getAttribute('data-w205cmts').split(':'); openDrawer({ kind: 'comments', goal: p[0], milestone: p[1] || null }); return; }
+    if ((el = t.closest('[data-w205cseg]'))) { S.drawer.milestone = el.getAttribute('data-w205cseg') || null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w205replyto]'))) { S.drawer.replyTo = el.getAttribute('data-w205replyto') || null; paintDrawer(); var rt = document.querySelector('#w205drawer textarea[data-w205reply]'); if (rt) rt.focus(); return; }
+    if ((el = t.closest('[data-w205sendreply]'))) { postComment(el.getAttribute('data-w205sendreply')); return; }
+    if ((el = t.closest('[data-w205post]'))) { postComment(null); return; }
+    if ((el = t.closest('[data-w205editc]'))) { S.drawer.editing = el.getAttribute('data-w205editc'); paintDrawer(); return; }
+    if ((el = t.closest('[data-w205editcancel]'))) { S.drawer.editing = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w205editsave]'))) { saveEdit(el.getAttribute('data-w205editsave')); return; }
+    if ((el = t.closest('[data-w205hist]'))) { openDrawer({ kind: 'history', goal: el.getAttribute('data-w205hist') }); loadHistory(); return; }
+    if ((el = t.closest('[data-w205restore]'))) { el.disabled = true; restore(el.getAttribute('data-w205restore')); return; }
+    if ((el = t.closest('[data-w205link]'))) { var lp = el.getAttribute('data-w205link').split(':'); openDrawer({ kind: 'link', goal: lp[0], ms: lp[1] || null, msPick: lp[1] || null, q: '' }); return; }
+    if ((el = t.closest('[data-w205linkp]'))) { var pr = byId(S.projects, el.getAttribute('data-w205linkp')); openDrawer({ kind: 'link', goal: null, project: pr ? pr.id : null, goalPick: null, msPick: null }); return; }
+    if ((el = t.closest('[data-w205proj]'))) { var pj = byId(S.projects, el.getAttribute('data-w205proj')); if (!pj) return; if (!canComment()) { location.hash = '#project/' + pj.id; return; } openDrawer({ kind: 'link', goal: pj.goal_id, project: pj.id, goalPick: pj.goal_id, msPick: pj.milestone_id }); return; }
+    if ((el = t.closest('[data-w205dolink]'))) { doLink(false); return; }
+    if ((el = t.closest('[data-w205unlink]'))) { doLink(true); return; }
+    if ((el = t.closest('[data-w205addowner]'))) { openDrawer({ kind: 'owner', goal: el.getAttribute('data-w205addowner'), q: '' }); return; }
+    if ((el = t.closest('[data-w205owner]'))) { openDrawer({ kind: 'owner', goal: el.getAttribute('data-w205owner').split(':')[0], q: '' }); return; }
+    if ((el = t.closest('[data-w205ownon]'))) { ownerSet(S.drawer.goal, el.getAttribute('data-w205ownon'), true, ownersOf(S.drawer.goal).length ? null : true, null); return; }
+    if ((el = t.closest('[data-w205ownoff]'))) { ownerSet(S.drawer.goal, el.getAttribute('data-w205ownoff'), false, null, null); return; }
+    if ((el = t.closest('[data-w205lead]'))) { ownerSet(S.drawer.goal, el.getAttribute('data-w205lead'), true, true, null); return; }
+    if ((el = t.closest('[data-w205addms]'))) {
+      var a = el.getAttribute('data-w205addms').split(':'); el.disabled = true;
+      rpc('strategy_add', { p_entity: 'milestone', p_goal: Number(a[0]), p_fy: a[1], p_body: '' }).then(function (row) {
+        if (row && row.id && !byId(S.milestones, row.id)) S.milestones.push(row);
+        baseRow('milestone', row, ['body', 'status', 'fy']); repaintGoal(a[0], false);
+        var n = fieldEl(key('milestone', row.id, 'body')); if (n) n.focus();
+      }).catch(function (x) { el.disabled = false; toastS('Not added: ' + errText(x)); });
+      return;
+    }
+    if ((el = t.closest('[data-w205addpath]'))) {
+      var gp = el.getAttribute('data-w205addpath'); el.disabled = true;
+      rpc('strategy_add', { p_entity: 'path', p_goal: Number(gp), p_fy: null, p_body: '' }).then(function (row) {
+        el.disabled = false;
+        if (row && row.id && !byId(S.paths, row.id)) S.paths.push(row);
+        baseRow('path', row, ['body']); repaintGoal(gp, false);
+        var n = fieldEl(key('path', row.id, 'body')); if (n) n.focus();
+      }).catch(function (x) { el.disabled = false; toastS('Not added: ' + errText(x)); });
+      return;
+    }
+    if ((el = t.closest('[data-w205rm]'))) {
+      var r = el.getAttribute('data-w205rm').split(':'), row0 = rowOf(r[0], r[1]); if (!row0) return;
+      var gid2 = row0.goal_id;
+      rpc('strategy_remove', { p_entity: r[0], p_id: Number(r[1]) }).then(function () {
+        var list = r[0] === 'milestone' ? S.milestones : S.paths, i = list.indexOf(row0); if (i >= 0) list.splice(i, 1);
+        if (r[0] === 'milestone') S.projects.forEach(function (p) { if (String(p.milestone_id) === String(r[1])) p.milestone_id = null; });
+        repaintGoal(gid2, false); paintProgress(gid2);
+        toastS((r[0] === 'milestone' ? 'Milestone' : 'Path') + ' removed. History has Restore.');
+      }).catch(function (x) { toastS('Not removed: ' + errText(x)); });
+      return;
+    }
+    if ((el = t.closest('[data-w205approve]'))) {
+      var to = el.getAttribute('data-w205approve');
+      if (to === 'approved' && !window.confirm('Mark the five goals approved by the board? The draft label comes off for everyone.')) return;
+      rpc('strategy_set_approval', { p_status: to }).then(function () { S.loaded = 0; return loadAll(true).then(paint); }).catch(function (x) { toastS('Not changed: ' + errText(x)); });
+      return;
+    }
+    if ((el = t.closest('[data-w205toproj]'))) {
+      var rg = byId(S.retired, el.getAttribute('data-w205toproj')); if (!rg) return;
+      if (!window.confirm('Make "' + rg.title + '" a project in ' + deptLabel(rg.department) + '? This can be done once.')) return;
+      el.disabled = true;
+      rpc('strategy_retired_to_project', { p_goal: Number(rg.id) }).then(function (res) {
+        toastS('Now a project'); S.loaded = 0;
+        try { if (window.w116LoadProjects) window.w116LoadProjects(true); } catch (x) { /* fine */ }
+        return loadAll(true).then(paint).then(function () { if (res && res.project_id) location.hash = '#project/' + res.project_id; });
+      }).catch(function (x) { el.disabled = false; toastS('Not done: ' + errText(x)); });
+      return;
+    }
+    if ((el = t.closest('[data-w205pin]'))) { togglePin(el.getAttribute('data-w205pin')); return; }
+    if ((el = t.closest('[data-w205docadd]'))) { openDrawer({ kind: 'doc', id: null }); return; }
+    if ((el = t.closest('[data-w205docedit]'))) { openDrawer({ kind: 'doc', id: el.getAttribute('data-w205docedit') }); return; }
+    if ((el = t.closest('[data-w205docsave]'))) { docSave(false); return; }
+    if ((el = t.closest('[data-w205docarch]'))) { if (window.confirm('Take this document out of the library? An admin can add it again.')) docSave(true); return; }
+  });
+  window.addEventListener('beforeunload', function (e) { if (Object.keys(S.dirty).length) { flushAll(); e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('hashchange', function () {
+    var on = /^#orggoals(\/|$)/.test(location.hash || '');
+    if (!on) { flushAll(); if (S.drawer) closeDrawer(); goQuiet(); }
+  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) flushAll(); });
+
+  /* ---------- the older pages: retired goals leave their views (they stay in the database and on Retired goals) ---------- */
+  function hookOlder() {
+    if (typeof waLoadGoals === 'function' && !waLoadGoals.__w205) {
+      var __lg = waLoadGoals;
+      waLoadGoals = async function () { var r = await __lg.apply(this, arguments); try { if (typeof GOALS_CACHE !== 'undefined') GOALS_CACHE = GOALS_CACHE.filter(function (g) { return !g.retired_at; }); } catch (e) { /* fine */ } return r; };
+      waLoadGoals.__w205 = true;
+    }
+    try { if (typeof GOALS_CACHE !== 'undefined' && GOALS_CACHE.length) GOALS_CACHE = GOALS_CACHE.filter(function (g) { return !g.retired_at; }); } catch (e) { /* fine */ }
+    /* board viewers read the goals (read only; the database refuses their writes) */
+    if (typeof wa40Allowed === 'function' && !wa40Allowed.__w205) {
+      var __al = wa40Allowed;
+      wa40Allowed = function () { var a = __al.apply(this, arguments) || []; if ((boardMode() || role() === 'viewer') && a.indexOf('orggoals') < 0) a = a.concat(['orggoals']); return a; };
+      Object.keys(__al).forEach(function (k) { try { wa40Allowed[k] = __al[k]; } catch (e) { /* fine */ } });
+      wa40Allowed.__w205 = true;
+    }
+  }
+  /* the page: wave116f registered 'orggoals'; wave205 draws it. #goals (Department goals) opens Retired goals */
+  function takeOver() {
+    if (!window.WA_NAV || !WA_NAV.pages) return;
+    var pg = WA_NAV.pages.filter(function (p) { return p.id === 'orggoals'; })[0];
+    if (!pg) { WA_NAV.register({ id: 'orggoals', gate: 'member', panel: false, onShow: function (h) { show(h); } }); pg = WA_NAV.pages.filter(function (p) { return p.id === 'orggoals'; })[0]; }
+    if (pg && !pg.__w205) { pg.onShow = function (h) { show(h); }; pg.__w205 = true; }
+    var gp = WA_NAV.pages.filter(function (p) { return p.id === 'goals'; })[0];
+    if (!gp) { WA_NAV.pages.push({ id: 'goals', __w205: true, onShow: function () { location.replace('#orggoals/retired'); } }); }
+    else if (!gp.__w205) { gp.onShow = function () { location.replace('#orggoals/retired'); }; gp.__w205 = true; }
+  }
+  if (typeof showPanel === 'function') {
+    var __sp205 = showPanel;
+    showPanel = function (id) {
+      if (id === 'goals') { setTimeout(function () { if (!/^#orggoals/.test(location.hash)) location.replace('#orggoals/retired'); }, 0); }
+      var r = __sp205.apply(this, arguments);
+      try { if (id !== 'orggoals') { if (S.drawer) closeDrawer(); goQuiet(); } } catch (e) { /* fine */ }
+      return r;
+    };
+  }
+  if (typeof startApp === 'function') {
+    var __sa205 = startApp;
+    startApp = async function () {
+      var out = await __sa205.apply(this, arguments);
+      try {
+        hookOlder(); takeOver(); addTours();
+        if (typeof wa40Enforce === 'function') wa40Enforce();
+        var h = decodeURIComponent(location.hash || '');
+        if (/^#goals(\/|$)/.test(h)) location.replace('#orggoals/retired');
+        else if (/^#orggoals(\/|$)/.test(h)) { showPanel('orggoals'); show(h.replace(/^#/, '')); }
+      } catch (e) { console.warn('wave205 boot', e); }
+      return out;
+    };
+  }
+
+  /* ---------- test hook ---------- */
+  window.w205 = {
+    state: function () { return S; }, load: loadAll, paint: paint, show: show, route: route, save: save, flush: flushAll,
+    remote: onRemote, presence: function (list) { S.presence = list || []; paintPresence(); }, canEdit: canEdit, canComment: canComment,
+    open: openDrawer, close: closeDrawer, progress: progress, key: key, live: function () { return { live: S.live, channel: !!S.channel }; }
+  };
+})();
+/* =====================================================================
    WA v164 Finance on its own (29/09/26)
    =====================================================================
    Steel (29/09/26), on the Finance app's Trends page: "It's a little repetitive here and still shows fundraising and
@@ -78896,7 +80454,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     marketing: 'Marketing, Branding & Web', contentcal: 'Content calendar', socialstats: 'Analytics', fundraising: 'Fundraising',
     fundevents: 'Events calendar', fund: 'Fundraising app', finances: 'Finance', hr: 'Human Resources', hrcentre: 'HR centre', board: 'Board team page',
     governance: 'Board overview', committees: 'Committees', agendas: 'Agendas', hubmail: 'Hub inbox', transcripts: 'Transcript archive',
-    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', adminpanel: 'Admin'
+    activity: 'Activity', training: 'Avenue Academy', brain: 'The Brain', orgchart: 'Org chart', bank: 'The Task Bank', crm: 'CRM', orggoals: 'Goals and the Strategy Library', adminpanel: 'Admin'
   };
   function me() {
     return {

@@ -437,6 +437,8 @@
 
   /* quick pickers used by the map and the involvement lists */
   function pickGoalFor(p) {
+    /* wave205: the Strategy app's link sheet picks the goal and the milestone */
+    try { if (window.w205 && window.w205.open && window.w205.canComment()) { window.w205.load().then(function () { window.w205.open({ kind: 'link', goal: p.goal_id, project: p.id, goalPick: p.goal_id, msPick: p.milestone_id || null }); }); return; } } catch (e) { /* the older dialog */ }
     var opts = goals().filter(function (x) { return x.department !== 'org' && !isDone(x); }).sort(function (a, b) { return (a.department === p.department ? 0 : 1) - (b.department === p.department ? 0 : 1); });
     var orgs = goals().filter(function (x) { return x.department === 'org'; });
     openModal('<div class="w116gm"><h3>Link ' + E(p.name) + '</h3><p class="m-sub">Pick the goal this project serves. Department goals roll up into organizational goals on the map.</p>' +
@@ -666,44 +668,38 @@
   }
   function renderMap() {
     var host = M.map.host; if (!host || !document.body.contains(host)) return;
+    /* wave205 (Steel, 04/10/26): "organizational goals, and departments own projects": department goals are retired, so the map
+       is projects to the organizational goals (and the milestone each project serves) */
     var st = mapState(); var all = goals();
-    var org = all.filter(function (g) { return g.department === 'org' && !isDone(g); });
-    var dept = all.filter(function (g) { return g.department !== 'org' && !isDone(g) && (!st.team || g.department === st.team); });
+    var org = all.filter(function (g) { return g.department === 'org' && !isDone(g); }).sort(function (a, b) { return (a.number || 99) - (b.number || 99) || a.id - b.id; });
     var ps = projects().filter(function (p) { return projActive(p) && (!st.team || p.department === st.team); });
     var q = lower(st.q);
     if (q) {
       var match = function (s) { return lower(s).indexOf(q) >= 0; };
-      dept = dept.filter(function (g) { return match(g.title); });
       ps = ps.filter(function (p) { return match(projName(p)); });
     }
     var orgIds = {}; org.forEach(function (g) { orgIds[String(g.id)] = 1; });
-    var deptIds = {}; dept.forEach(function (g) { deptIds[String(g.id)] = 1; });
+    var MS = []; try { MS = (window.w205 && window.w205.state().milestones) || []; } catch (e) { MS = []; }
+    function msName(id) { for (var i = 0; i < MS.length; i++) { if (String(MS[i].id) === String(id)) return MS[i].fy + ': ' + MS[i].body; } return ''; }
     M.map.edges = [];
-    ps.forEach(function (p) {
-      if (!p.goal_id) return;
-      if (deptIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'G' + p.goal_id]);
-      else if (orgIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'O' + p.goal_id]);
-    });
-    dept.forEach(function (g) { if (g.parent_goal_id && orgIds[String(g.parent_goal_id)]) M.map.edges.push(['G' + g.id, 'O' + g.parent_goal_id]); });
+    ps.forEach(function (p) { if (p.goal_id && orgIds[String(p.goal_id)]) M.map.edges.push(['P' + p.id, 'O' + p.goal_id]); });
     var teams = T.order.slice();
-    var linkedP = ps.filter(function (p) { return p.goal_id && goalById(p.goal_id); }).length;
-    var rolled = dept.filter(function (g) { return g.parent_goal_id && goalById(g.parent_goal_id); }).length;
+    var linkedP = ps.filter(function (p) { return p.goal_id && orgIds[String(p.goal_id)]; }).length;
+    var bare = org.filter(function (g) { return !ps.some(function (p) { return String(p.goal_id) === String(g.id); }); }).length;
     var html = '<div class="w116g">' +
       '<div class="sum">' +
       '<div class="k" data-gact="mapsum" data-v="p"><b>' + ps.length + '</b>active projects</div>' +
       '<div class="k' + (ps.length - linkedP ? ' warn' : '') + '" data-gact="mapsum" data-v="po"><b>' + (ps.length - linkedP) + '</b>projects without a goal</div>' +
-      '<div class="k" data-gact="mapsum" data-v="g"><b>' + dept.length + '</b>department goals in play</div>' +
-      '<div class="k' + (dept.length - rolled ? ' warn' : '') + '" data-gact="mapsum" data-v="go"><b>' + (dept.length - rolled) + '</b>not rolled up yet</div>' +
       '<div class="k" data-gact="mapsum" data-v="o"><b>' + org.length + '</b>organizational goals</div>' +
+      '<div class="k' + (bare ? ' warn' : '') + '" data-gact="mapsum" data-v="o"><b>' + bare + '</b>goals with no project yet</div>' +
       '</div>' +
-      '<div class="chips">' + [['', 'All teams', null]].concat(teams.map(function (d) { return [d, label(d), color(d)]; })).map(function (c) { return '<span class="chip' + (st.team === c[0] ? ' on' : '') + '" data-gact="mapteam" data-team="' + E(c[0]) + '">' + (c[2] ? '<span class="d" style="background:' + c[2] + '"></span>' : '') + E(c[1]) + '</span>'; }).join('') + '<span class="sp" style="flex:1"></span><input type="search" data-gact="mapq" placeholder="Find a project or goal" value="' + E(st.q) + '" style="font-family:' + BODY + ';font-size:12.5px;border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:6px 10px;background:var(--wa-card)" /></div>' +
-      '<div class="w116mleg"><span><span class="sw"></span>rolls up into</span><span><span class="sw hl"></span>the chain you hover or click</span><span><span class="sw orph"></span>not linked yet' + (staff() ? ' (click the red link to fix it)' : '') + '</span>' + (M.map.focus ? '<span class="clr" data-gact="mapclear">Clear focus</span>' : '<span style="margin-left:auto">Click a node to pin its chain</span>') + '</div>' +
-      '<div class="w116map"><svg></svg><div class="w116mcols">' +
-      '<div class="w116mcol"><h4>Projects</h4><div class="hint">the work underway</div>' + (ps.length ? ps.map(function (p) { var op = tasks().filter(function (t) { return !t.done && Number(t.project_id) === Number(p.id); }).length; var linked = p.goal_id && goalById(p.goal_id); return node('P', p.id, p.department, projName(p), '<span>' + E(shortLabel(p.department)) + '</span><span>' + op + ' open</span>', !linked, 'Link to a goal'); }).join('') : '<p class="empty">No projects match.</p>') + '</div>' +
-      '<div class="w116mcol"><h4>Department goals</h4><div class="hint">quarterly, per team</div>' + (dept.length ? dept.map(function (g) { var iv = inv(g); var rolledUp = g.parent_goal_id && goalById(g.parent_goal_id); return node('G', g.id, g.department, g.title, '<span>' + E(shortLabel(g.department)) + (g.quarter ? ' \u00b7 ' + E(g.quarter) : '') + '</span>' + stPill(g, false) + '<span>' + iv.open.length + ' open</span>', !rolledUp, 'Roll up to an org goal'); }).join('') : '<p class="empty">No department goals match.</p>') + '</div>' +
-      '<div class="w116mcol"><h4>Organizational goals</h4><div class="hint">yearly and multi-year</div>' + (org.length ? org.map(function (g) { var iv = inv(g); return node('O', g.id, 'org', g.title, '<span>' + E(horizon(g)) + '</span>' + stPill(g, false) + '<span>' + iv.kids.length + ' goal' + (iv.kids.length === 1 ? '' : 's') + ' \u00b7 ' + iv.projects.length + ' project' + (iv.projects.length === 1 ? '' : 's') + ' \u00b7 ' + iv.open.length + ' open</span>', false); }).join('') : '<p class="empty">No organizational goals yet.</p>') + '</div>' +
+      '<div class="chips">' + [['', 'All teams', null]].concat(teams.map(function (d) { return [d, label(d), color(d)]; })).map(function (c) { return '<span class="chip' + (st.team === c[0] ? ' on' : '') + '" data-gact="mapteam" data-team="' + E(c[0]) + '">' + (c[2] ? '<span class="d" style="background:' + c[2] + '"></span>' : '') + E(c[1]) + '</span>'; }).join('') + '<span class="sp" style="flex:1"></span><input type="search" data-gact="mapq" placeholder="Find a project" value="' + E(st.q) + '" style="font-family:' + BODY + ';font-size:12.5px;border:1px solid rgba(16,63,57,.14);border-radius:10px;padding:6px 10px;background:var(--wa-card)" /></div>' +
+      '<div class="w116mleg"><span><span class="sw"></span>serves</span><span><span class="sw hl"></span>the chain you hover or click</span><span><span class="sw orph"></span>not linked yet' + (staff() ? ' (click the red link to fix it)' : '') + '</span>' + (M.map.focus ? '<span class="clr" data-gact="mapclear">Clear focus</span>' : '<span style="margin-left:auto">Click a node to pin its chain</span>') + '</div>' +
+      '<div class="w116map"><svg></svg><div class="w116mcols" style="grid-template-columns:1fr 1fr">' +
+      '<div class="w116mcol"><h4>Projects</h4><div class="hint">each department’s work underway</div>' + (ps.length ? ps.map(function (p) { var op = tasks().filter(function (t) { return !t.done && Number(t.project_id) === Number(p.id); }).length; var linked = p.goal_id && orgIds[String(p.goal_id)]; var ms = linked && p.milestone_id ? msName(p.milestone_id) : ''; return node('P', p.id, p.department, projName(p), '<span>' + E(shortLabel(p.department)) + '</span><span>' + op + ' open</span>' + (ms ? '<span title="' + E(ms) + '">' + E(String(ms).slice(0, 34)) + (String(ms).length > 34 ? '…' : '') + '</span>' : ''), !linked, 'Link to a goal'); }).join('') : '<p class="empty">No projects match.</p>') + '</div>' +
+      '<div class="w116mcol"><h4>Organizational goals</h4><div class="hint">FY27 to FY29, gated to FY31</div>' + (org.length ? org.map(function (g) { var n = ps.filter(function (p) { return String(p.goal_id) === String(g.id); }).length; return node('O', g.id, 'org', (g.number ? g.number + '. ' : '') + g.title, stPill(g, false) + '<span>' + n + ' project' + (n === 1 ? '' : 's') + '</span>', false); }).join('') : '<p class="empty">No organizational goals yet.</p>') + '</div>' +
       '</div></div>' +
-      '<p class="note">Hover anything to light up its chain; click to pin it. Projects link to a goal from their card or the Projects page; department goals pick an organizational goal in "Rolls up to". <a data-gact="goorg">Organizational goals</a> \u00b7 <a data-gact="godept">Department goals</a></p></div>';
+      '<p class="note">Hover anything to light up its chain; click to pin it. Link a project from the red link here, from Projects, or from its goal on Goals (to a milestone too). <a data-gact="goorg">Goals</a></p></div>';
     host.innerHTML = html;
     var qi = host.querySelector('input[data-gact="mapq"]'); if (qi && M.map.qFocus) { qi.focus(); qi.setSelectionRange(qi.value.length, qi.value.length); M.map.qFocus = false; }
     drawMap();
@@ -756,7 +752,7 @@
   }
   function ensurePanels() {
     panel('orggoals', 'Strategy', 'Organizational goals', 'The direction of Welfare Avenue for the year and beyond, written SMART, with the teams, projects and tasks that carry each one.', 'w116orghost');
-    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: projects feed department goals, and both roll up into the organizational goals.', 'w116maphost');
+    panel('goalmap', 'Strategy', 'Goal alignment', 'How it all connects: every department\u2019s projects and the organizational goal each one serves.', 'w116maphost');
   }
   function visiblePanel(id) { var s = document.getElementById(id); return !!(s && s.classList.contains('active')); }
   async function showOrg() { ensurePanels(); if (!visiblePanel('orggoals')) return; M.org.host = document.getElementById('w116orghost'); if (!M.org.host) return; if (!M.loaded) M.org.host.innerHTML = '<p class="read">Loading goals...</p>'; await load(); try { if (typeof wa30LoadIdeas === 'function') await wa30LoadIdeas(); } catch (e) { /* fine */ } renderOrg(); }

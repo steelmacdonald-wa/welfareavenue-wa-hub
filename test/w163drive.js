@@ -65,7 +65,8 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     ok('the sheet fills the screen, its close button is a 42 px target, the bar steps aside and the page does not scroll behind', lay.full && lay.x[0] >= 40 && lay.bar === 'none' && lay.lock, lay);
     await p.fill('#w163sheet [data-w163q]', 'goal'); await p.waitForTimeout(250);
     s = await f.ev(SHEET);
-    ok('Find a page finds the apps\' pages too (Organizational goals and Department goals are in Strategy)', s.rows.indexOf('Organizational goals') >= 0 && s.rows.indexOf('Department goals') >= 0 && s.rows.indexOf('Goal alignment') >= 0, s.rows);
+    /* wave205: Strategy's rail is Goals, Projects, Goal alignment, Strategy Library (Department goals is retired) */
+    ok('Find a page finds the apps\' pages too (Goals and Goal alignment are in Strategy; Department goals is retired)', s.rows.indexOf('Goals') >= 0 && s.rows.indexOf('Department goals') < 0 && s.rows.indexOf('Goal alignment') >= 0, s.rows);
     await p.fill('#w163sheet [data-w163q]', 'task bank'); await p.waitForTimeout(250);
     s = await f.ev(SHEET);
     ok('Find a page: The Task Bank by its name', s.rows.length === 1 && s.rows[0] === 'The Task Bank', s.rows);
@@ -104,7 +105,7 @@ const SHEET = () => { const s = document.getElementById('w163sheet'); if (!s) re
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(400);
     await p.click('#w163sheet [data-w163app="strategy"]'); await p.waitForTimeout(1800);
     h = await f.ev(() => ({ hash: location.hash, app: document.body.classList.contains('w153strategy') }));
-    ok('the Strategy tile opens the Strategy app on Organizational goals', h.hash === '#orggoals' && h.app, h);
+    ok('the Strategy tile opens the Strategy app on Goals (#orggoals)', h.hash === '#orggoals' && h.app, h);
     /* Esc and the close button */
     await p.click('#w163bar [data-w163slot="menu"]'); await p.waitForTimeout(300); await p.keyboard.press('Escape'); await p.waitForTimeout(350);
     const e1 = await f.ev(() => document.getElementById('w163sheet').classList.contains('on'));
