@@ -49,6 +49,7 @@
       '<button role="tab" class="' + (t === 'sources' ? 'on' : '') + '" data-w152go="#crm/sources">' + I('db') + ' Sources</button>' +
       '<button role="tab" class="' + (t === 'gifts' ? 'on' : '') + '" data-w152go="#crm/gifts">' + I('heart') + ' Gifts</button>' +
       '<button role="tab" class="' + (t === 'email' ? 'on' : '') + '" data-w152go="#crm/email">' + I('mail') + ' Email</button>' +
+      '<button role="tab" class="' + (t === 'studio' ? 'on' : '') + '" data-w152go="#crm/studio">' + I('spark') + ' Studio</button>' +
       '<button role="tab" class="' + (t === 'lists' ? 'on' : '') + '" data-w152go="#crm/lists">' + I('list') + ' Lists</button>' +
       '<button role="tab" class="' + (t === 'campaigns' ? 'on' : '') + '" data-w152go="#crm/campaigns">' + I('send') + ' Campaigns</button>' +
       '<button role="tab" class="' + (t === 'forms' ? 'on' : '') + '" data-w152go="#crm/forms">' + I('form') + ' Forms</button>' +
@@ -126,6 +127,7 @@
     else if (S.ui.tab === 'sources') paintSources(root);
     else if (S.ui.tab === 'gifts') paintGifts(root);
     else if (S.ui.tab === 'email') paintEmail(root);
+    else if (S.ui.tab === 'studio') paintStudio(root);
     else if (S.ui.tab === 'lists') paintLists(root);
     else if (S.ui.tab === 'campaigns') paintCampaigns(root);
     else if (S.ui.tab === 'forms') paintForms(root);
@@ -133,17 +135,24 @@
     else if (S.ui.tab === 'reports') paintReports(root);
     else paintContacts(root);
   }
+  /* wave202: the email studio's tab; the studio itself is build/parts202 (window.w202), drawn into #w202root */
+  function paintStudio(root) {
+    root.innerHTML = statsHtml(S.contacts || []) + tabsHtml() + '<div class="w202root" id="w202root"></div>';
+    var el = document.getElementById('w202root');
+    if (window.w202 && window.w202.paint) window.w202.paint(el); else el.innerHTML = busy('The email studio is loading…');
+  }
   function openCrm(h) {
     var parts = String(h || '').split('/');
     var sub = parts[1] || '';
-    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : 'contacts';
+    S.ui.tab = sub === 'dupes' ? 'dupes' : sub === 'sources' ? 'sources' : sub === 'gifts' ? 'gifts' : sub === 'email' ? 'email' : sub === 'studio' ? 'studio' : sub === 'lists' ? 'lists' : sub === 'campaigns' ? 'campaigns' : sub === 'forms' ? 'forms' : sub === 'automations' ? 'automations' : sub === 'reports' ? 'reports' : 'contacts';
     if (sub === 'campaigns') openCampaigns(parts);
+    if (sub === 'studio' && window.w202 && window.w202.open) window.w202.open(parts);
     if (sub === 'forms') openForms(parts);
     if (sub === 'automations') openAutos(parts);
     if (sub === 'reports') openReports(parts);
     if (sub === 'gifts') { GF.view = parts[2] === 'receipts' ? 'receipts' : parts[2] === 'online' ? 'online' : ''; DG.confirm = false; DG.msg = ''; DG.err = ''; DG.draft = {}; if (GF.view === 'receipts') { GF.cfg = null; S.rcpts = null; RB.act = null; RB.confirmOn = false; } GF.msg = ''; GF.err = ''; RB.msg = ''; RB.err = ''; }
     if (!staffOk() || boardMode()) { paint(); return; }
-    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
+    Promise.all([load('contacts'), load('dupes')].concat(sub === 'gifts' ? [load('gifts'), load('grcpt')] : sub === 'email' ? [load('templates'), load('sends')] : sub === 'studio' ? [load('templates'), load('lists')] : sub === 'lists' ? [load('lists')] : sub === 'campaigns' ? [load('campaigns'), load('cstats'), load('lists'), load('templates')] : sub === 'forms' ? [load('forms'), load('fstats'), load('cfields'), load('fevents')] : sub === 'automations' ? [load('autos'), load('astats'), load('forms'), load('templates'), load('depts'), load('tmembers')] : [])).then(function () {
       paint();
       if (sub === 'c' && parts[2]) contactSheet(parts[2]);
       else if (S.sheet && /^c:/.test(S.sheet)) closeSheet(true);

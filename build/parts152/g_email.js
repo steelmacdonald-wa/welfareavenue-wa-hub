@@ -233,7 +233,8 @@
 
   /* ---------- a contact's page: send them an email ---------- */
   function mailFormHtml(c) {
-    var list = (S.templates || []).filter(function (t) { return t.active && t.kind !== 'test'; });
+    /* wave202: a studio one-off or a template still holding [brackets] is not sent from here; the studio writes one for them */
+    var list = (S.templates || []).filter(function (t) { return t.active && t.kind !== 'test' && (window.w202 && window.w202.sendable ? window.w202.sendable(t) : !t.one_off); });
     var cur = MAIL.sendc && MAIL.sendc.id === c.id ? MAIL.sendc : (MAIL.sendc = { id: c.id, key: list.length ? list[0].key : '', html: '', subject: '', err: '', msg: '', busy: '' });
     var t = tplByKey(cur.key), w = permWhy(c), ok = t ? (t.kind === 'transactional' ? w.trans : w.news) : false;
     var mode = MAIL.st && MAIL.st.settings ? MAIL.st.settings.mail_mode : 'test';
@@ -243,6 +244,7 @@
       (t ? '<div class="w152line m" style="margin-top:8px">' + (ok ? '<b style="color:' + GREEN + '">Allowed</b>: ' + E(t.kind === 'transactional' ? 'a confirmation or reminder, not a commercial message' : w.why) : '<b style="color:' + FLAG + '">Held back</b>: ' + E(w.why) + '. The Hub will not send a ' + E((MKIND[t.kind] || [t.kind])[0].toLowerCase()) + ' to them.') + '</div>' : '') +
       (testOnly ? '<div class="w152line m">' + I('alert') + ' The Hub is in test mode: this address is not a test recipient, so the send would be refused until an admin switches the Email tab to live.</div>' : '') +
       (cur.html ? '<iframe class="w154frame sheet" title="Preview" sandbox="" srcdoc="' + E(cur.html) + '"></iframe>' : '<div class="w152count">' + E(cur.err || (cur.busy || 'Rendering the preview…')) + '</div>') +
+      '<div class="w152line m" style="margin-top:8px">' + I('spark') + ' Something more personal? <a href="#crm/studio/ai/to/' + E(c.id) + '" data-w202fromcontact>Write one for ' + E(String(c.full_name || 'them').split(' ')[0]) + ' in the email studio</a>.</div>' +
       '<div class="w152foot"><span class="w152err">' + E(cur.msg) + '</span><button class="w152btn ghost" data-w152back="' + E(c.id) + '">Back</button>' +
       '<button class="w152btn" data-w154go="' + E(c.id) + '"' + (!ok || !t || cur.busy ? ' disabled' : '') + '>' + I('mail') + ' Send now</button></div>';
   }

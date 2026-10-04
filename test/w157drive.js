@@ -111,13 +111,13 @@ const setv = (f, s, v) => f.ev(([x, val]) => { const el = document.querySelector
   await f.hash('#crm/automations', 2600);
   let b = await f.ev(() => ({ tabs: [...document.querySelectorAll('#crm .w152tabs button')].map(x => x.textContent.trim() + (x.classList.contains('on') ? '*' : '')),
     rows: [...document.querySelectorAll('#crm .w156row')].map(r => r.innerText.replace(/\s+/g, ' ')), note: (document.querySelector('#crm .w155cf.test') || {}).innerText || '' }));
-  ok('the CRM has ten tabs (Reports since wave160) and #crm/automations marks Automations', b.tabs.length === 10 && b.tabs[8] === 'Automations*', b.tabs);
+  ok('the CRM has eleven tabs (Reports since wave160, Studio since wave202) and #crm/automations marks Automations', b.tabs.length === 11 && b.tabs[9] === 'Automations*', b.tabs);
   ok('the list: each automation with its trigger in words and its status', b.rows.length === 3 && /When someone fills in “Volunteer with Welfare Avenue”/.test(b.rows[0]) && /Draft/i.test(b.rows[0]) &&
     /When a gift is recorded/.test(b.rows[1]) && /On/.test(b.rows[1]) && /2 days before a Montreal serving they are confirmed for/.test(b.rows[2]) && /Paused/i.test(b.rows[2]), b.rows);
   ok('the counts: in it now, finished, emails sent, and the one that needs a look', /1 person in it now/.test(b.rows[1]) && /3 finished/.test(b.rows[1]) && /3 emails sent/.test(b.rows[1]) && /1 needs a look/.test(b.rows[1]) && /6 steps · 3 emails/.test(b.rows[0]), b.rows);
   ok('the test-mode notice says emails only reach the test addresses', /test mode/i.test(b.note) && /test addresses/.test(b.note), b.note);
   const rail = await f.ev(() => [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim()));
-  ok('the CRM rail lists Automations under Email, after Campaigns', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports', rail);   /* wave163: Partners */
+  ok('the CRM rail lists Automations under Email, after Campaigns', rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Studio|Campaigns|Automations|Reports', rail);   /* wave163: Partners */
   await shot(f, 'autos_list');
 
   /* the editor */

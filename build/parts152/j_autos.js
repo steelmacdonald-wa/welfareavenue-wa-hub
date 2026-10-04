@@ -213,7 +213,7 @@
   function pathChoices(a, i) { var out = [['next', 'Go on to the next step'], ['end', 'End here']]; a.steps.forEach(function (s, j) { if (j > i + 1) out.push([s.id, 'Jump to step ' + (j + 1) + ': ' + stepText(s)]); }); return out; }
   function stepBody(s, i, a) {
     if (s.type === 'send') {
-      var tpls = [['write', 'Write it here (the Welfare Avenue layout)']].concat((S.templates || []).filter(function (t) { return t.key !== 'test' && t.key !== 'newsletter' && t.active; }).map(function (t) { return ['tpl:' + t.key, 'Saved email: ' + t.name]; }));
+      var tpls = [['write', 'Write it here (the Welfare Avenue layout)']].concat((S.templates || []).filter(function (t) { return t.key !== 'test' && t.key !== 'newsletter' && t.active && !t.one_off && !(window.w202 && window.w202.hasBrackets && window.w202.hasBrackets(t)); }).map(function (t) { return ['tpl:' + t.key, 'Saved email: ' + t.name]; }));
       var kind = AKIND.filter(function (k) { return k[0] === s.kind; })[0] || AKIND[0];
       return '<div class="w155two"><label class="w155lb">The email' + auSel('data-w157s="_email"', tpls, s.email === 'template' ? 'tpl:' + s.template_key : 'write') + '</label>' +
         '<label class="w155lb">Who can get it' + auSel('data-w157s="kind"', AKIND.map(function (k) { return [k[0], k[1]]; }), s.kind) + '</label></div><p class="m">' + E(kind[2]) + '</p>' +

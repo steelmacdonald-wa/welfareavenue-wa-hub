@@ -45,6 +45,8 @@ Steel's standing rule (25/09/26): every change to the Hub also reviews the secur
 
 - **Positions (wave199).** A position is a folder in the HR drive, not a row you make by hand: create it from Positions > New position (jd-drive makes the folder) or make the folder in Drive and Sync. Never write CVs anywhere jd-drive's privacy check would refuse.
 
+- **Designed emails (wave202).** A new designed email for volunteers or donors (a welcome, a call-out, a thank-you, an appeal) is a studio template (`crm_email_templates` with `design`; `html_body` from `MAIL202.render`, inline styles on every tag), written through `email_studio_save` and sent by mail-send like any template; not a second renderer or hand-written email HTML (the system templates, receipts and itineraries stay mail-send's own). A new block type goes into `MAIL202` (render, text, `texts`, `links`, `images`) in `build/parts202/c_blocks.js`, the AI's `BLOCK_PROPS`, the editor's `blockForm` and the checks, and `w202drive` checks it. The studio's AI only through the `email_studio` route; its facts rule stays (nothing invented; the writer's words, the template's and the website's public figures), and the page, not the model, works out weekdays. A starter uses only those figures and Photo library photos marked ready. One-offs and templates with [brackets] never reach a picker that sends on its own (`window.w202.sendable`).
+
 ## Hub training
 - Every new page has a page tour (`w122.tours.<key>`) that walks through each section, and a `trainings` row `tour:<key>` in "Hub page tours".
 - Changed pages: the existing tour still highlights every step (`node test/tour1.js all`).

@@ -105,8 +105,8 @@ const card = (f, h) => f.ev(x => { const c = [...document.querySelectorAll('#crm
   let b = await f.ev(() => ({ tabs: [...document.querySelectorAll('#crm .w152tabs button')].map(x => x.textContent.trim() + (x.classList.contains('on') ? '*' : '')),
     rail: [...document.querySelectorAll('#w153rail .w153it')].map(a => a.textContent.trim() + (a.classList.contains('on') ? '*' : '')), next: /Next in the CRM/i.test((document.getElementById('w153rail') || {}).innerText || ''),
     rpc: window.__rpc.filter(x => x.fn === 'crm_report') }));
-  ok('the CRM has ten tabs and #crm/reports marks Reports', b.tabs.length === 10 && b.tabs[9] === 'Reports*', b.tabs);
-  ok('the rail lists Reports as its own group (no longer “next”)', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Campaigns|Automations|Reports*' && !b.next, b);   /* wave163: Partners */
+  ok('the CRM has eleven tabs (Studio since wave202) and #crm/reports marks Reports', b.tabs.length === 11 && b.tabs[10] === 'Reports*', b.tabs);
+  ok('the rail lists Reports as its own group (no longer “next”)', b.rail.join('|') === 'Contacts|Partners|Possible duplicates|Sources|Lists|Forms|Gifts|Email|Studio|Campaigns|Automations|Reports*' && !b.next, b);   /* wave163: Partners */
   ok('the report is asked for once, for this year (no year given)', b.rpc.length === 1 && b.rpc[0].args.p_fy === null, b.rpc);
   let t = await txt(f);
   ok('the title says the year is still running, to the day', /Fiscal year 2025-26\s*so far, to 25 Sep 2026/i.test(t), t.slice(0, 300));
@@ -198,7 +198,7 @@ const card = (f, h) => f.ev(x => { const c = [...document.querySelectorAll('#crm
   await patch(f);
   await f.hash('#crm/reports', 2600);
   b = await f.ev(() => ({ title: (document.querySelector('#crm .w160title') || {}).innerText || '', list: !!document.querySelector('#crm [data-w160list]'), tabs: document.querySelectorAll('#crm .w152tabs button').length }));
-  ok('a staff member with the CRM sees the report and can make the list', /Fiscal year 2025-26/i.test(b.title) && b.list && b.tabs === 10, b);
+  ok('a staff member with the CRM sees the report and can make the list', /Fiscal year 2025-26/i.test(b.title) && b.list && b.tabs === 11, b);   /* 11 since wave202 (Studio) */
   ok('no page errors (member)', f.errs.length === 0, f.errs);
   await f.close();
 

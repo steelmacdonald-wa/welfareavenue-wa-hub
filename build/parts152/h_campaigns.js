@@ -204,8 +204,9 @@
   function fromCampaign(k) {
     var v = k.vars || {};
     var from = !k.from_email ? 'org' : (String(k.from_email).toLowerCase() === myEmail() ? 'me' : 'custom');
+    var st = tplByKey(k.template_key);   /* wave202: designed in the email studio */
     return { id: k.id, name: k.name || '', list_id: k.list_id, kind: k.kind || 'newsletter', template_key: k.template_key || 'newsletter', from: from, from_name: k.from_name || '', from_email: k.from_email || '', subject: k.subject || '', preheader: k.preheader || '',
-      headline: v.headline || '', body: v.body_text || '', cta_label: v.cta_label || '', cta_url: v.cta_url || '' };
+      headline: v.headline || '', body: v.body_text || '', cta_label: v.cta_label || '', cta_url: v.cta_url || '', studio: !!(st && st.design), vars: v };
   }
   function bodyHtml(t) { return String(t || '').trim().split(/\n\s*\n/).filter(function (p) { return p.trim(); }).map(function (p) { return '<p>' + E(p.trim()).replace(/\n/g, '<br>') + '</p>'; }).join(''); }
   function campRow(c) {
@@ -219,7 +220,7 @@
   function campListHtml() {
     var cs = S.campaigns || [];
     return '<div class="w154card wide"><h3>' + I('send') + ' Campaigns <span class="m">' + plural(cs.length, 'campaign', 'campaigns') + '</span></h3>' +
-      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New campaign</button></div>' +
+      '<div class="w154acts" style="margin:0 0 10px"><button class="w152btn sm" data-w155cnew>' + I('plus') + ' New campaign</button><a class="w152btn sm ghost" href="#crm/studio">' + I('spark') + ' Design one in the email studio</a></div>' +
       (LC.cmsg && !LC.c ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') +
       (cs.length ? '<div class="w155ct" role="list"><div class="w155ch" aria-hidden="true"><span>Campaign</span><span>Status</span><span>List and kind</span><span>Results</span><span>Date</span></div>' + cs.map(campRow).join('') + '</div>'
         : '<p class="m">No campaign yet. A campaign sends one message to a list, person by person, through the CASL rule.</p>') + '</div>';
@@ -245,8 +246,10 @@
       '<label class="w155lb">From' + fromSel + '</label>' +
       (c.from === 'custom' ? '<div class="w155two">' + f('from_name', 'Their name', 'Sama Saqib') + f('from_email', 'Their address', 'name@welfareavenue.com') + '</div>' : '') +
       f('subject', 'Subject', 'Sunday needs you, {{first_name|friend}}') + f('preheader', 'Preview text (the line after the subject in the inbox)', 'Servers and cooks wanted for 12 October') +
-      f('headline', 'Headline', 'Join us this Sunday') + f('body', 'Message (a blank line starts a new paragraph)', 'Hi {{first_name|there}},\n\nWe are serving at …', true) +
-      '<div class="w155two">' + f('cta_label', 'Button', 'Sign up to serve') + f('cta_url', 'Button link', 'https://welfareavenue.com') + '</div>' +
+      (c.studio ? '<div class="w155studio">' + I('spark') + ' <span>The message was designed in the email studio: <b>' + E((tplByKey(c.template_key) || {}).name || 'the studio’s email') + '</b>. Change its words, photos and button there; the subject and preview line here are what this campaign sends.</span>' +
+        '<a class="w152btn sm ghost" href="#crm/studio/e/' + E(c.template_key) + '">' + I('edit') + ' Edit it in the studio</a></div>'
+      : f('headline', 'Headline', 'Join us this Sunday') + f('body', 'Message (a blank line starts a new paragraph)', 'Hi {{first_name|there}},\n\nWe are serving at …', true) +
+      '<div class="w155two">' + f('cta_label', 'Button', 'Sign up to serve') + f('cta_url', 'Button link', 'https://welfareavenue.com') + '</div>') +
       '<p class="m">{{first_name|there}} becomes each person’s first name. Every email carries the charity number, the postal address, why they got it and an unsubscribe link.</p>' +
       (LC.cerr ? '<div class="w152err">' + E(LC.cerr) + '</div>' : '') + (LC.cmsg ? '<div class="w154msg">' + E(LC.cmsg) + '</div>' : '') + (LC.cbusy ? '<div class="m">' + E(LC.cbusy) + '</div>' : '') +
       '<div class="w154acts"><button class="w152btn ghost" data-w155csave>' + I('check') + ' Save the draft</button><button class="w152btn ghost" data-w155cprev>Preview</button>' +
@@ -315,7 +318,7 @@
     var fromEmail = c.from === 'me' ? myEmail() : c.from === 'custom' ? String(c.from_email || '').trim().toLowerCase() : '';
     return { name: String(c.name || '').trim() || String(c.subject || '').trim() || 'Untitled campaign', list_id: c.list_id ? Number(c.list_id) : null, template_key: c.template_key || 'newsletter', kind: c.kind,
       subject: String(c.subject || '').trim() || null, preheader: String(c.preheader || '').trim() || null,
-      vars: { headline: String(c.headline || '').trim(), body_text: String(c.body || ''), body_html: bodyHtml(c.body), cta_label: String(c.cta_label || '').trim() || 'Visit welfareavenue.com', cta_url: String(c.cta_url || '').trim() || 'https://welfareavenue.com' },
+      vars: c.studio ? Object.assign({}, c.vars || {}, { studio: true }) : { headline: String(c.headline || '').trim(), body_text: String(c.body || ''), body_html: bodyHtml(c.body), cta_label: String(c.cta_label || '').trim() || 'Visit welfareavenue.com', cta_url: String(c.cta_url || '').trim() || 'https://welfareavenue.com' },
       from_name: fromName || null, from_email: fromEmail || null, reply_to: null, updated_by: actor(), updated_at: new Date().toISOString(), _st: st };
   }
   function saveCampaign() {
@@ -402,6 +405,7 @@
     + '.w155mode{margin:0 0 12px;padding:9px 12px;border-radius:12px;font-size:13px;display:flex;gap:6px;align-items:flex-start;}.w155mode.test{background:rgba(220,165,39,.15);}.w155mode.live{background:rgba(16,63,57,.08);}'
     + '.w155chk{margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(16,63,57,.05);font-size:14px;}.w155chk ul{margin:4px 0 0 18px;padding:0;font-size:13px;}'
     + '.w155cf{margin-top:10px;padding:10px 12px;border-radius:12px;background:rgba(220,165,39,.18);}.w155cf.test{background:rgba(140,140,140,.12);}'
+    + '.w155studio{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(220,165,39,.12);font-size:13.5px;line-height:1.45;}.w155studio>span{flex:1;min-width:220px;}'
     + '.w155bar{height:10px;border-radius:99px;background:rgba(16,63,57,.1);overflow:hidden;margin:12px 0 4px;}.w155bar i{display:block;height:100%;background:' + TEAL + ';border-radius:99px;}'
     + '@media (max-width:980px){.w155grid{grid-template-columns:1fr;}.w155ch,.w155cr{grid-template-columns:minmax(0,1.6fr) auto minmax(0,1.2fr);}.w155ch>span:nth-child(n+4),.w155cr>div:nth-child(n+4){display:none;}}'
     + '@media (max-width:700px){.w155c{grid-template-columns:1fr 1fr;}.w155c>button{justify-self:end;}.w155two{grid-template-columns:1fr;}}';

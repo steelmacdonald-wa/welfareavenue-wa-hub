@@ -1449,8 +1449,16 @@ The public website's events (welfareavenue.com): fundraising and volunteering ev
 
 The CRM's email templates (wave154). key names the template (welcome_volunteer, thank_you_gift, serving_reminder, newsletter, test); html_body is the inner content with {{placeholders}}, wrapped in the brand layout by mail-send at send time. Staff with the CRM page read; admins edit through mail-send (save_template), which logs the change.
 
-- `kind`: What the message is under CASL: transactional (a confirmation, reminder or receipt: not a commercial message, goes to anyone with a working address), newsletter (needs express or unexpired implied consent), fundraising (a registered charity's appeal: follows the newsletter rule unless the fundraising exemption setting is on), test.
+- `kind`: What the message is under CASL: transactional (a confirmation, reminder, receipt or thank-you: not a commercial message, goes to anyone with a working address), newsletter (needs express or unexpired implied consent), fundraising (a registered charity's appeal: follows the newsletter rule unless the fundraising exemption setting is on), volunteer (a volunteer call-out, wave202: the permission rule's volunteer kind), test.
 - `vars`: The placeholders the body expects, e.g. ["first_name","event_title"]. Contact fields (first_name, full_name, email) are always available.
+- `design`: wave202: the email studio's design, {"v":1,"blocks":[...],"asks":[...]} (hero, text, heading, details, list, button, photo, photos, video, band, quote, stats, signoff, divider). Null for the system templates, which the studio never edits. html_body and text_body are what the studio rendered from it; mail-send only reads those.
+- `one_off`: wave202: an email written in the studio for one send (a person or a list), kept out of the template pickers (automations, a contact's Send an email). False for saved templates.
+- `audience`: wave202: who a studio template is for: volunteers, donors or everyone. Null for the system templates.
+- `category`: wave202: the studio's shelf for a template: volunteers_welcome (welcome and serving), volunteers_callouts (call-outs and events), donors_thanks (thanks and impact), donors_appeals (appeals and events), other.
+- `lang`: wave202: the language the email is written in (en, fr). mail-send's layout and footer stay English.
+- `description`: wave202: when to use a studio template, in a line, shown in the studio and the pickers.
+- `created_by`: wave202: who made the template in the studio (their email), or starter for the ten the studio shipped with. Only they and admins edit it; anyone with the CRM can copy it.
+- `created_at`: wave202: when the row was made (the system templates got the migration time).
 
 ### `crm_email_sends`
 
@@ -2090,4 +2098,6 @@ Functions:
 - `wa198_seen(text, text[])`: wave198: a French reader's page reports interface text it could not translate (at most 80 a call, 2 to 300 characters); queued for i18n-translate.
 - `wa198_fix(text, text)`: wave198: an admin sets the French for one piece of interface text (kind manual; logged in change_log).
 - `wa_tmp_sweep(interval)`: wave201b: the hourly sweep (cron wa-tmp-sweep). Drops public tables named wa_stage* or wa_tmp* once their row activity has not moved for p_idle (a day), and numbered helper functions wa_tmp<digits>* a day after it first saw them; plain drops only, each logged in change_log (tmp_sweep). Not callable through the API.
+- `email_studio_save(jsonb)`: wave202: the email studio saves a design: {key (empty for a new one), name, kind, subject, preheader, html_body, text_body, design, vars, one_off, audience, category, lang, description, active}. Staff with the CRM page (not board viewers); a new row gets the key st_ plus ten letters; changing one needs its creator or an admin (the starters: admins), and never touches a system template (design is null). Logs mail studio_template or studio_one_off in change_log. Returns {key, updated_at, one_off}.
+- `email_studio_remove(text)`: wave202: the email studio removes a design it made: deleted when nothing used it, switched off (active false) when it was sent, a campaign points at it or an automation step names it, so the history keeps its words. Same rights as email_studio_save; a system template is never touched. Logs mail studio_remove.
 

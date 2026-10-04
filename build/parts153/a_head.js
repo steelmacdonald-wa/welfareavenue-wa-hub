@@ -124,6 +124,7 @@
           { h: '#crm/gifts', l: 'Gifts', ic: 'heart', page: 'crm' }
         ] }, { label: 'Email', items: [
           { h: '#crm/email', l: 'Email', ic: 'mail', page: 'crm' },
+          { h: '#crm/studio', l: 'Studio', ic: 'star', page: 'crm' },   /* wave202: the email studio */
           { h: '#crm/campaigns', l: 'Campaigns', ic: 'send', page: 'crm' },
           { h: '#crm/automations', l: 'Automations', ic: 'bolt', page: 'crm' }
         ] }, { label: 'Reports', items: [

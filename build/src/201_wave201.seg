@@ -6,8 +6,9 @@
    to stop. It listens in the person's Hub language (wave198: Francais is fr-CA, else en-CA).
    The boxes (TARGETS): Ask the Hub (#w38in, which since wave38 replaced wave14's row and its mic), Your inbox (own words,
    anything else to say, the reply itself, the team's line, the writing guide), the content drafter's brief (#cdBrief),
-   Suggest a change to the Hub (#w96in, #w96rin), Finance's import guidance (#w90gtext), the agenda's purpose (#w53purpose)
-   and the grant writer's notes (data-w193wnotes). The Loop (#w192say) keeps its own Speak button.
+   Suggest a change to the Hub (#w96in, #w96rin), Finance's import guidance (#w90gtext), the agenda's purpose (#w53purpose),
+   the grant writer's notes (data-w193wnotes) and, since wave202, the email studio's boxes (data-w202say: what you want to say,
+   anything else for a template, Ask the Hub to change it). The Loop (#w192say) keeps its own Speak button.
    A box is found again by its key when its page draws it anew mid-sentence, so the words keep landing. Each change fires
    the box's input event, so the page keeps what was said as if it were typed. Nothing is recorded or sent anywhere by the
    Hub: the browser turns speech into text (Chrome sends the audio to Google's speech service to do it).
@@ -27,7 +28,8 @@
     { sel: '#w96in' }, { sel: '#w96rin' },
     { sel: '#w90gtext' },
     { sel: '#w53purpose' },
-    { sel: '[data-w193wnotes]' }
+    { sel: '[data-w193wnotes]' },
+    { sel: '[data-w202say]', key: 'data-w202say' }
   ];
   var MIC = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12 14.5a3.5 3.5 0 0 0 3.5-3.5V5.5a3.5 3.5 0 1 0-7 0V11a3.5 3.5 0 0 0 3.5 3.5Zm6-3.5a1 1 0 1 0-2 0 4 4 0 0 1-8 0 1 1 0 1 0-2 0 6 6 0 0 0 5 5.91V19H8.5a1 1 0 1 0 0 2h7a1 1 0 1 0 0-2H13v-2.09A6 6 0 0 0 18 11Z"/></svg>';
   var STOP = '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>';
