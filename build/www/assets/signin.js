@@ -141,7 +141,21 @@
       el.innerHTML = '';
       window.google.accounts.id.renderButton(el, { type: 'standard', theme: 'outline', size: 'large', text: 'signup_with', shape: 'rectangular', logo_alignment: 'left',
         width: Math.max(220, Math.min(360, el.clientWidth || 320)), locale: LANG });
+      watchGsi(el);
     }).catch(function () { var el = document.getElementById('si-gsi'); if (el) el.innerHTML = '<p class="fine mb0">' + E(t('gsiErr')) + '</p>'; });
+  }
+  // wave202b: Google's frame sizes itself once Google accepts the website; if it is still empty after 8 seconds (the website's address
+  // not allowed for the client ID, Google unreachable, a blocker), say so and point to the code by email. The note goes if the button
+  // turns up later.
+  function watchGsi(el) {
+    var n = 0, iv = setInterval(function () {
+      n++;
+      if (!el.isConnected) { clearInterval(iv); return; }
+      var f = el.querySelector('iframe'), nx = el.nextElementSibling, note = nx && nx.classList.contains('gsi-note') ? nx : null;
+      if (f && parseFloat(f.style.height) > 0) { if (note) note.remove(); clearInterval(iv); return; }
+      if (n === 16 && !note) { var p = document.createElement('p'); p.className = 'fine mb0 gsi-note'; p.textContent = t('gsiErr'); el.insertAdjacentElement('afterend', p); }
+      if (n >= 120) clearInterval(iv);
+    }, 500);
   }
   function onGoogle(resp) {
     if (!resp || !resp.credential || S.busy) return;

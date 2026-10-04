@@ -46,7 +46,12 @@ const NEWS = { slug: 'newsletter', title: 'Newsletter', intro: '', lang: 'en', t
     { id: 'language', type: 'choice', label: 'Language', required: false, fill: 'language', options: [{ v: 'en', l: 'English' }, { v: 'fr', l: 'Français' }] }] };
 const ORG = { name: 'Welfare Avenue', email: 'info@welfareavenue.com', address: 'Welfare Avenue, Montreal', charity: '713048502RR0001' };
 const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__gsi=c;},renderButton:function(el,o){window.__gsiOpts=o;var b=document.createElement("button");' +
-  'b.type="button";b.id="gsi-stub";b.textContent="Continue with Google";b.addEventListener("click",function(){window.__gsi.callback({credential:"fake.id.token"});});el.appendChild(b);}}}};';
+  'b.type="button";b.id="gsi-stub";b.textContent="Continue with Google";b.addEventListener("click",function(){window.__gsi.callback({credential:"fake.id.token"});});el.appendChild(b);var f=document.createElement("iframe");f.style.height="44px";f.style.width="1px";f.style.border="0";el.appendChild(f);}}}};';
+// wave202b: Google refusing the website (its address not allowed for the client ID): its script leaves a stand-in button in the page
+// (unstyled under our policy, so its G drew huge) and a frame that never sizes up
+const GSI_REFUSED = 'window.google={accounts:{id:{initialize:function(c){window.__gsi=c;},renderButton:function(el,o){window.__gsiOpts=o;var w=document.createElement("div");' +
+  'w.innerHTML=\'<div><div role="button" id="gsi-fallback"><svg viewBox="0 0 48 48"><rect width="48" height="48"/></svg><span>Continue with Google</span></div></div>\';' +
+  'var f=document.createElement("iframe");f.style.height="0px";f.style.width="0px";f.style.border="0";w.appendChild(f);el.appendChild(w);}}}};';
 
 (async () => {
   const browser = await chromium.launch({ proxy: { server: process.env.HTTPS_PROXY } });
@@ -102,7 +107,7 @@ const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__g
       return J(route, 200, { Key: 'signoffs/requests/u-1/abc.pdf' });
     });
     await ctx.route('https://files.test/**', route => { calls.push({ file: route.request().url() }); return route.fulfill({ status: 200, headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="x.pdf"' }, body: '%PDF-1.4\n%%EOF' }); });
-    await ctx.route('https://accounts.google.com/gsi/client', route => { calls.push({ gsi: true }); return route.fulfill({ status: 200, contentType: 'application/javascript', body: GSI_STUB }); });
+    await ctx.route('https://accounts.google.com/gsi/client', route => { calls.push({ gsi: true }); return route.fulfill({ status: 200, contentType: 'application/javascript', body: o.gsi === 'refused' ? GSI_REFUSED : GSI_STUB }); });
     await ctx.route(SUPA + '/functions/v1/form-submit**', async route => {
       if (await pre(route)) return;
       const req = route.request();
@@ -483,6 +488,30 @@ const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__g
     await c5.page.goto(ORIGIN + '/', { waitUntil: 'networkidle' }); await c5.page.waitForTimeout(300);
     ok(await c5.page.evaluate(() => { const a = document.querySelector('[data-signup]'); return !!a && a.hidden; }), 'sign up: hidden for someone already signed in');
     await c5.ctx.close();
+  }
+
+  // ---------- wave202b: Google refuses the website: no giant stand-in, and a note after 8 seconds; a working button gets none ----------
+  {
+    const { ctx, page, errors } = await context({ gsi: 'refused' });
+    await page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' });
+    await page.waitForSelector('#gsi-fallback', { state: 'attached' });
+    const early = await page.evaluate(() => ({ fb: document.getElementById('gsi-fallback').getBoundingClientRect().height, gsi: document.getElementById('gsi').getBoundingClientRect().height, note: !!document.querySelector('.gsi-note') }));
+    ok(early.fb === 0 && early.gsi < 60 && !early.note, 'Google refused: its stand-in button is hidden, the space stays one button high, no note yet ' + JSON.stringify(early));
+    await page.waitForSelector('#acct .gsi-note', { timeout: 12000 });
+    ok(/Google sign-in could not load here/.test(await text(page, '#acct .gsi-note')) && await page.isVisible('#a-email'), 'Google refused: after 8 seconds a note points to the code by email');
+    await shot(page, '17-google-refused');
+    await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' });
+    await page.click('[data-signup]'); await page.waitForSelector('#wa-signin #gsi-fallback', { state: 'attached' });
+    ok(await page.evaluate(() => document.getElementById('gsi-fallback').getBoundingClientRect().height === 0), 'Google refused: hidden in the Sign up window too');
+    await page.waitForSelector('#wa-signin .gsi-note', { timeout: 12000 });
+    ok(/could not load here/.test(await text(page, '#wa-signin .gsi-note')) && (await page.$$('#wa-signin .gsi-note')).length === 1, 'Google refused: the window says so, once');
+    ok(!errors.length, 'Google refused: no page errors ' + errors.join(' | '));
+    await ctx.close();
+    const ok2 = await context({});
+    await ok2.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' });
+    await ok2.page.waitForTimeout(8800);
+    ok(await ok2.page.isVisible('#gsi-stub') && !(await ok2.page.$('.gsi-note')), 'Google working: no note after 8 seconds');
+    await ok2.ctx.close();
   }
 
   // ---------- in French ----------

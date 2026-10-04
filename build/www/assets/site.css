@@ -462,6 +462,10 @@ dialog.signin::backdrop{background:rgba(16,63,57,.55)}
 .si-x:hover{color:var(--purple)}
 .si-test{background:rgba(111,100,171,.12);color:#3f3878;padding:9px 12px;font-size:14px}
 .si-gsi{min-height:44px;margin:14px 0 4px}
+/* wave202b: Google's script draws a stand-in button in our page while its own frame loads, styled by an inline <style> that our
+   security policy blocks (no 'unsafe-inline'), so it showed as a giant Google G. The real button is Google's frame; hide the stand-in. */
+.gsi [role=button],.si-gsi [role=button]{display:none!important}
+.gsi-note{margin:6px 0 0}
 .si-or{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:14px;margin:14px 0}
 .si-or::before,.si-or::after{content:'';flex:1;height:1px;background:var(--line)}
 .si-form{display:grid;gap:8px;margin:0 0 12px}
