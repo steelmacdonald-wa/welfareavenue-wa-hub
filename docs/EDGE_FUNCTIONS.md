@@ -124,6 +124,7 @@ Rules for a new or changed function:
 | 86 | wa-quo-threads | `3,13,23,33,43,53 * * * *` | every 10 minutes | quo-send `sync_threads` (the team's Quo app replies copied in), only while anyone texted the ops line in the last 21 days (wave191h) | new, 01/10/26 | |
 | 87 | wa-serving-run | `7,22,37,52 * * * *` | every 15 minutes | serving-run `tick`: the runs of the servings in the next 14 days whose stops changed (wave191m) | new, 02/10/26 | answers at once (the work goes on in the background) |
 | 88 | wa-grant-scan | `30 13 * * 1` | Mon 09:30 | grant-scan `scan` (trigger schedule): the Fundraising app's weekly grant scan, in chained steps (wave193) | new, 02/10/26 | answers at once (the steps run in the background); new finds posted to #grants |
+| 91 | wa-tmp-sweep | `23 * * * *` | hourly | `wa_tmp_sweep()` (SQL, no function): drops the build sessions' temporary tables (`wa_stage*`, `wa_tmp*`) once their rows have not moved for a day and numbered helpers `wa_tmp<digits>*` a day after first seen; plain drops, each logged (`tmp_sweep`) (wave201b) | new, 03/10/26 | the registry is `wa_tmp_registry` (`keep_until` holds one longer) |
 
 Cron marks a job "succeeded" when the HTTP request is queued, not when the function worked; see `docs/audit/fn_findings.md` section 2 for the real results and the open fix (a job health log).
 

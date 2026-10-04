@@ -1821,6 +1821,14 @@ wave198: interface text a French reader saw with no translation yet (normalized 
 
 wave198: each person's Hub settings that follow them across devices; lang is the interface language (en or fr), chosen in the account menu. A person reads and writes only their own row.
 
+### `wa_tmp_registry`
+
+wave201b: what the hourly sweep (wa_tmp_sweep, cron wa-tmp-sweep) knows of the build sessions' temporary tables (wa_stage_*, wa_tmp_*) and numbered helper functions (wa_tmp<digits>*): when it first saw each, its row-activity fingerprint and when that last moved. Written by wa_tmp_sweep only; no API access. keep_until (set by hand) holds a table past the one-day idle rule.
+
+- `fingerprint`: wave201b: n_tup_ins + n_tup_upd + n_tup_del from pg_stat_user_tables at the last sweep (tables); a change means the table is still in use.
+- `last_active`: wave201b: when the fingerprint last changed (tables) or when the sweep first saw the function; dropped a day after.
+- `keep_until`: wave201b: set by hand to keep a temporary table or helper past the one-day rule until this time.
+
 Functions:
 
 - `info_secret(bigint)`: Returns {id, username, secret} of a login on the Important info page to admins, to whoever added it and to people an admin approved; logs each view in change_log. Access: authenticated (checks inside).
@@ -2081,4 +2089,5 @@ Functions:
 - `wa198_content(text)`: wave198: the current French versions of the onboarding and Academy content (only fields whose English has not changed since), for staff. The page puts them in place of the English when it reads those tables, unless the reader is on an editing page.
 - `wa198_seen(text, text[])`: wave198: a French reader's page reports interface text it could not translate (at most 80 a call, 2 to 300 characters); queued for i18n-translate.
 - `wa198_fix(text, text)`: wave198: an admin sets the French for one piece of interface text (kind manual; logged in change_log).
+- `wa_tmp_sweep(interval)`: wave201b: the hourly sweep (cron wa-tmp-sweep). Drops public tables named wa_stage* or wa_tmp* once their row activity has not moved for p_idle (a day), and numbered helper functions wa_tmp<digits>* a day after it first saw them; plain drops only, each logged in change_log (tmp_sweep). Not callable through the API.
 
