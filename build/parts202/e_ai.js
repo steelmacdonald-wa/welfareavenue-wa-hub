@@ -38,11 +38,19 @@
       notes: { type: 'string', description: 'One or two lines for the writer about what you did' }
     }, required: ['subject', 'preheader', 'blocks', 'questions'] }
   };
-  function aiSystem(lang) {
+  /* the voice part of the prompt (wave203): the house voice code, the writer's own guide, or (neither loaded) the built-in paragraph */
+  var BUILTIN_VOICE = 'Write in Welfare Avenue\'s voice: warm, specific, credible, plain. Short paragraphs. Impact first. Solidarity, never charity from above. Say "people we serve", "our community", "support", "dignity", "youth-powered". Never say "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club", "just volunteers". No em dashes or en dashes as punctuation: use a comma, a colon or a full stop. No hashtags, at most one exclamation mark, no boilerplate like "in these challenging times" or "making a difference together".';
+  function voiceBlock(v) {
+    if (v && v.key === 'mine' && str(v.text).trim()) return 'VOICE: write as ' + str(v.name || 'the writer') + ', who signs this email, in their own voice. Their writing guide is between the two lines below. Use it for how the words sound: word choice, rhythm, openings and closings. The shape of the email, the facts rule, the links and Welfare Avenue\'s words after it still apply, and anything in the guide about replies, threads, attachments, plain text or tools does not.\n-----\n' + str(v.text).trim() + '\n-----';
+    if (v && str(v.text).trim()) return 'VOICE: Welfare Avenue\'s house voice, the Voice Code between the two lines below. Use it for how the words sound. The shape of the email, the facts rule and the links after it still apply.\n-----\n' + str(v.text).trim() + '\n-----';
+    return BUILTIN_VOICE;
+  }
+  function aiSystem(lang, voice) {
     var fr = lang === 'fr';
     return [
       'You put together emails for Welfare Avenue, a youth-powered registered charity in Montreal that fights food insecurity and poverty through direct community action: Sunday servings of meals cooked, driven and served by young volunteers, and the connections to support that follow. Food is the starting point.',
-      'Write in Welfare Avenue\'s voice: warm, specific, credible, plain. Short paragraphs. Impact first. Solidarity, never charity from above. Say "people we serve", "our community", "support", "dignity", "youth-powered". Never say "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club", "just volunteers". No em dashes or en dashes as punctuation: use a comma, a colon or a full stop. No hashtags, at most one exclamation mark, no boilerplate like "in these challenging times" or "making a difference together".',
+      voiceBlock(voice),
+      'Whatever the voice: never "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club" or "just volunteers"; no em dashes or en dashes as punctuation (a comma, a colon or a full stop instead); no hashtags; at most one exclamation mark.',
       'Facts: never invent a date, a time, a place, an amount, a number, a name, a quote or a link. Use only what the writer gave, the template\'s own words, and these public figures: 14,000+ meals since April 2020, 250+ servings, 600+ volunteers (our best estimates from our records, rounded down); giving: $25 covers one recipe (a fruit salad for 8 to 10 people), $75 one volunteer cook\'s batch (a dish for 30 to 35 people), $250 the groceries for a whole Sunday serving (about 50 plates), $20 a month about 100 portions a year. Add no claims the writer did not make about how things go (no experience needed, training, who will be there, what happens after signing up, what to bring, food, parking, how long it takes): leave them out, or write a [placeholder] and ask when the email needs one. When something the email needs is missing, write a short [placeholder in square brackets] where it goes and ask about it in questions. When two things disagree (a weekday that is not that date, times that do not add up, a number that changed), ask. Today is ' + todayLine() + ' in Montreal; the next three weeks: ' + nextDays(21) + '. A date without a year is the next one to come. Work out "this Saturday" or "next Sunday" from that list, never from memory.',
       'Links you may use when they fit: https://welfareavenue.com (the website), https://welfareavenue.com/volunteer/ (volunteer sign-up), https://welfareavenue.com/donate/ (giving). Any other link only if the writer gave it.',
       'Shape: one hero first (a kicker, a headline in two short lines, the last line the coloured one, a lead sentence, a doodle), then "Hi {{first_name|there}}," and short paragraphs; details for when and where (and what to bring, when the writer said); a dot list for two to five parallel points; one gold button for the one thing to do (a caption under it only when the writer gave one or it is plainly true, like "On our website"); the writer\'s photos where they help; a sign-off with the sender\'s name when known, else "[Who signs it]". 120 to 300 words unless the material needs more. Keep every {{placeholder}} exactly as written, and use {{first_name|there}} for the greeting.',
@@ -112,7 +120,8 @@
   }
   async function aiCall(o) {
     var photos = (o.photos || []).slice();
-    var body = { max_tokens: 6000, temperature: 0.4, system: aiSystem(o.lang), tools: [AI_TOOL], tool_choice: { type: 'tool', name: 'build_email' }, messages: aiMessages(o, photos) };
+    try { await loadVoices(); } catch (e) { /* the built-in voice then */ }
+    var body = { max_tokens: 6000, temperature: 0.4, system: aiSystem(o.lang, voiceFor(o.voice)), tools: [AI_TOOL], tool_choice: { type: 'tool', name: 'build_email' }, messages: aiMessages(o, photos) };
     var r;
     try { r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'email_studio', 'x-wa-caller': 'email-studio' }, body: body }); }
     catch (e) { return { error: msgOf(e) }; }

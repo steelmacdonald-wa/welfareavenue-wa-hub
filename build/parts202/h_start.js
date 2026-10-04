@@ -24,6 +24,7 @@
       '<div class="w155lb">Who is it for?' + segHtml('data-w202aud', [['volunteers', 'Volunteers'], ['donors', 'Donors'], ['everyone', 'Everyone']], s.audience) + '</div>' +
       '<label class="w155lb">What kind of email?' + kindSel('data-w202kind="start"', s.kind) + '<span class="m">' + E(k.s) + '</span></label>' +
       '<label class="w155lb">Language' + langSel('data-w202lang="start"', s.lang) + '</label>' +
+      voiceCtl(s.voice) +
       '<label class="w155lb">What do you want to say?<textarea class="w152in w202say" data-w202say="brief" data-w202s="brief" rows="10" placeholder="Write it the way you would tell a friend, or paste your notes. Dates, times, the place and the link people should use help: the Hub never makes those up, it asks.">' + E(s.brief) + '</textarea></label>' +
       startPhotosHtml() +
       (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
@@ -32,8 +33,8 @@
       (SS.busy ? busyHtml(SS.busy) : '') + '</div>' +
       '<aside class="w202tips"><h4>What helps</h4><ul><li><b>The facts:</b> the day and date, the times, the place, how many people you need, the link to sign up or give.</li>' +
       '<li><b>Who signs it,</b> if not you.</li><li><b>One thing to do:</b> what should people do after reading?</li><li><b>Photos</b> of our volunteers, food and setups (no close-ups of the people we serve).</li></ul>' +
-      '<p class="m">The Hub writes it in Welfare Avenue’s voice, leaves [brackets] where something is missing and asks you about it. Nothing is sent until you choose to.</p></aside></div>' +
-      pickerHtml() + '</div>';
+      '<p class="m">The Hub writes it in the voice you pick (Welfare Avenue’s house voice, or your own when you have a writing guide), leaves [brackets] where something is missing and asks you about it. Nothing is sent until you choose to.</p></aside></div>' +
+      pickerHtml() + voicesHtml() + '</div>';
   }
   function tplStartHtml() {
     var s = SS.start, t = s.tpl ? tplByKey(s.tpl) : null;
@@ -48,11 +49,12 @@
         }).join('') : '<p class="m">This one is ready as it is. Add anything you want to say, or use it straight away.</p>') +
         '<label class="w155lb">Anything else to say? <span class="m">Optional</span><textarea class="w152in w202say" data-w202say="extra" data-w202s="extra" rows="4" placeholder="A story, a thank-you, a detail the template does not ask for.">' + E(s.extra) + '</textarea></label>' +
         '<label class="w155lb">Language' + langSel('data-w202lang="start"', s.lang) + '</label>' +
+        voiceCtl(s.voice) +
         startPhotosHtml() +
         (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
         '<div class="w154acts"><button class="w152btn" data-w202starttpl="ai"' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Fill it in with the Hub</button>' +
         '<button class="w152btn ghost" data-w202starttpl="self">Fill it in myself</button></div>' + (SS.busy ? busyHtml(SS.busy) : '')) + '</div></div>' +
-      pickerHtml() + peekHtml() + '</div>';
+      pickerHtml() + peekHtml() + voicesHtml() + '</div>';
   }
   /* a new email in memory, then saved (it needs a subject to be saved) */
   function draftFrom(o) {
@@ -73,11 +75,11 @@
     if (str(s.brief).trim().length < 15) { SS.err = 'Tell the Hub a little more: what is happening, and what should people do?'; paint(); return; }
     SS.err = ''; SS.busy = 'The Hub is putting your email together. This takes about half a minute…'; paint();
     var photos = photosForAi(s.photos);
-    var r = await aiCall({ mode: 'new', brief: s.brief, audience: s.audience, kind: s.kind, lang: s.lang, photos: photos });
+    var r = await aiCall({ mode: 'new', brief: s.brief, audience: s.audience, kind: s.kind, lang: s.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again with a few more details, or build it yourself.'; paint(); return; }
-    res.design.source = 'ai';
+    res.design.source = 'ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
     await openDraft(draftFrom({ name: res.name || 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: res.subject, preheader: res.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
     SS.start.brief = ''; SS.start.photos = [];
   }
@@ -88,13 +90,13 @@
     s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; b.caption = p.caption || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; blocks.push(b); });
     var btn = MAIL202.blank('button'); btn.label = s.kind === 'fundraising' ? 'Give today' : s.kind === 'volunteer' ? 'Sign up to serve' : 'Find out more'; btn.url = s.kind === 'fundraising' ? 'https://welfareavenue.com/donate/' : s.kind === 'volunteer' ? 'https://welfareavenue.com/volunteer/' : ''; blocks.push(btn);
     var so = MAIL202.blank('signoff'); so.name = myName(); blocks.push(so);
-    var d = draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: '', preheader: '', design: { blocks: blocks, source: 'blocks' } });
+    var d = draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: '', preheader: '', design: { blocks: blocks, source: 'blocks', voice: s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa' } });
     SS.start.brief = ''; SS.start.photos = [];
     openDraft(d, { openFirst: true });
   }
   function startBlank() {
     var s = SS.start, so = MAIL202.blank('signoff'); so.name = myName();
-    openDraft(draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, design: { blocks: [MAIL202.blank('hero'), MAIL202.blank('text'), MAIL202.blank('button'), so], source: 'blocks' } }), { openFirst: true });
+    openDraft(draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, design: { blocks: [MAIL202.blank('hero'), MAIL202.blank('text'), MAIL202.blank('button'), so], source: 'blocks', voice: s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa' } }), { openFirst: true });
   }
   function copyOf(t, o) {
     var d = JSON.parse(JSON.stringify(t.design || { blocks: [] }));
@@ -105,16 +107,16 @@
   async function startTpl(useAi) {
     var s = SS.start, t = tplByKey(s.tpl); if (!t) return;
     var asks = (t.design && t.design.asks) || [];
-    if (!useAi) { var d0 = copyOf(t); s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false }); return; }
+    if (!useAi) { var d0 = copyOf(t); d0.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false }); return; }
     var given = asks.map(function (a) { return { label: a.label, answer: s.asks[a.id] || '' }; });
     if (asks.length && !given.some(function (a) { return str(a.answer).trim(); }) && !str(s.extra).trim()) { SS.err = 'Give the Hub at least one of your details, or choose Fill it in myself.'; paint(); return; }
     SS.err = ''; SS.busy = 'The Hub is filling in “' + t.name + '”. This takes about half a minute…'; paint();
     var photos = photosForAi(s.photos);
-    var r = await aiCall({ mode: 'template', design: t.design, subject: t.subject, preheader: t.preheader, tplName: t.name, asks: given, brief: s.extra, audience: t.audience, kind: t.kind, lang: s.lang || t.lang, photos: photos });
+    var r = await aiCall({ mode: 'template', design: t.design, subject: t.subject, preheader: t.preheader, tplName: t.name, asks: given, brief: s.extra, audience: t.audience, kind: t.kind, lang: s.lang || t.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again, or fill it in yourself.'; paint(); return; }
-    res.design.from = t.key; res.design.source = 'template+ai';
+    res.design.from = t.key; res.design.source = 'template+ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
     await openDraft(draftFrom({ name: res.name || t.name, kind: t.kind, audience: t.audience, lang: s.lang || t.lang, subject: res.subject || t.subject, preheader: res.preheader || t.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
     SS.start.asks = {}; SS.start.extra = ''; SS.start.photos = [];
   }

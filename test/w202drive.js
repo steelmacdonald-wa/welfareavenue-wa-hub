@@ -14,11 +14,16 @@
    the way into the studio for them); the automations' saved emails (ready ones only); a member gets the starters read only
    and can copy them; a phone; a board viewer gets no CRM; the mic on the studio's boxes; the page tour; no page errors.
    mail-send, llm, email_studio_save and email_studio_remove are faked in the page (window.__WA_INVOKE, db.rpc).
+   wave203 (04/10/26), the voices: the Welfare Avenue voice code (app_config mail_voice_wa, from build/data/wa203_voice_code.md)
+   in the prompt by default; My voice (the owner's writing guide through mybox's voice action) for Steel only; the Voices panel
+   (read for all, edited by admins: app_config upsert and a change_log line); the choice kept with the email and its changes.
    Uses test/boot.js (stubbed Supabase, clock fixed 25/09/26 16:00 Toronto). CAND=<file> tests another build. */
 const fs = require('fs');
 const path = require('path');
 const { launch, fresh, loadFixture } = require('./boot');
 const STARTERS = require('../build/data/wa202_starters.js').rows();
+const VOICE = fs.readFileSync(path.join(__dirname, '../build/data/wa203_voice_code.md'), 'utf8').trim();
+const GUIDE = 'FRAMEWORK: wa-writing\nYou write as Steel MacDonald, founder of Welfare Avenue. TESTGUIDE: build then land; the colon is the joint. Hold me to it.';
 let pass = 0, fail = 0; const out = [];
 function ok(name, cond, extra) { if (cond) { pass++; out.push('PASS ' + name); } else { fail++; out.push('FAIL ' + name + (extra !== undefined ? ' :: ' + String(typeof extra === 'string' ? extra : JSON.stringify(extra)).slice(0, 900) : '')); } }
 const SHOTS = process.env.SHOTS || '';
@@ -59,14 +64,16 @@ function fixture() {
     { id: 9, title: 'Two volunteers plating food', alt_text: 'Two volunteers plate food side by side', caption: null, usage: 'ready', url_web: PH + 'web/plating.jpg', url_thumb: PH + 'thumb/plating.jpg', orientation: 'landscape', scene: 'volunteers', tags: ['volunteers', 'food'], season: 'autumn', is_pick: true },
     { id: 14, title: 'Winter serving under the tent', alt_text: 'Volunteers serve under the tent', caption: null, usage: 'consent', url_web: PH + 'web/winter.jpg', url_thumb: PH + 'thumb/winter.jpg', orientation: 'landscape', scene: 'serving', tags: ['winter'], season: 'winter', is_pick: false }
   ];
-  fx.app_config = (fx.app_config || []).concat([{ key: 'mail_mode', value: 'test' }, { key: 'mail_test_recipients', value: 'steelmacdonald@gmail.com, steel.macdonald@welfareavenue.com' }]);
+  fx.app_config = (fx.app_config || []).concat([{ key: 'mail_mode', value: 'test' }, { key: 'mail_test_recipients', value: 'steelmacdonald@gmail.com, steel.macdonald@welfareavenue.com' },
+    { key: 'mail_voice_wa', value: JSON.stringify({ label: 'Welfare Avenue', text: VOICE, version: 1, source: 'Welfare Avenue Brand Guides v1 2026', updated_by: 'assistant (wave203 session)', updated_at: '2026-10-04T06:00:00Z' }), updated_at: '2026-10-04T06:00:00Z' }]);   /* app_config.value is text */
+  fx.mybox_owners = [{ email: 'steel.macdonald@welfareavenue.com', name: 'Steel MacDonald', enabled: true }];
   fx.trainings = (fx.trainings || []).concat([{ id: 1402, key: 'tour:studio', kind: 'tour', title: 'Page tour: Email studio', category: 'Hub tours', path_group: 'Hub page tours', minutes: 2, xp: 20, active: true, sort: 42, body: { tab: 'crm', tour: 'studio' } }]);
   return fx;
 }
 /* the page's fakes: email_studio_save and _remove keep the fixture's templates, campaigns get an id, mail-send and the AI answer */
 const FAKE = `(function () {
   var FX = window.__WAFIX, n = 0;
-  window.__saves = []; window.__removes = []; window.__llm = []; window.__mail = []; window.__camps = [];
+  window.__saves = []; window.__removes = []; window.__llm = []; window.__mail = []; window.__camps = []; window.__mybox = []; window.__cfg = []; window.__clog = [];
   var me = (window.__WA_TEST_EMAIL || 'steel.macdonald@welfareavenue.com').toLowerCase();
   var rpc0 = db.rpc.bind(db);
   db.rpc = function (fn, args) {
@@ -82,7 +89,10 @@ const FAKE = `(function () {
     return rpc0(fn, args);
   };
   var from0 = db.from.bind(db);
-  db.from = function (t) { var q = from0(t); if (t === 'crm_campaigns') { var ins = q.insert.bind(q); q.insert = function (p) { var row = Object.assign({ id: 991 }, JSON.parse(JSON.stringify(p))); window.__camps.push(row); FX.crm_campaigns.push(row); return ins(row); }; } return q; };
+  db.from = function (t) { var q = from0(t); if (t === 'crm_campaigns') { var ins = q.insert.bind(q); q.insert = function (p) { var row = Object.assign({ id: 991 }, JSON.parse(JSON.stringify(p))); window.__camps.push(row); FX.crm_campaigns.push(row); return ins(row); }; }
+    if (t === 'app_config') { var up = q.upsert.bind(q); q.upsert = function (p, o) { var row = JSON.parse(JSON.stringify(p)); window.__cfg.push({ row: row, opts: o || null }); var cur = FX.app_config.filter(function (x) { return x.key === row.key; })[0]; if (cur) Object.assign(cur, row); else FX.app_config.push(row); return up(p, o); }; }
+    if (t === 'change_log') { var ins2 = q.insert.bind(q); q.insert = function (p) { window.__clog.push(JSON.parse(JSON.stringify(p))); return ins2(p); }; }
+    return q; };
   function A(o) { return o; }
   window.__aiAnswer = function (body) {
     var txt = body.messages[0].content[0].text;
@@ -109,6 +119,7 @@ const FAKE = `(function () {
   window.__WA_INVOKE = function (name, opts) {
     var b = JSON.parse(JSON.stringify((opts && opts.body) || {}));
     var later = function (v) { return new Promise(function (res) { setTimeout(function () { res(v); }, 40); }); };
+    if (name === 'mybox') { window.__mybox.push(b); if (b.action === 'voice') return later({ data: { voice: ${JSON.stringify(GUIDE)}, framework: 'wa-writing' }, error: null }); return later({ data: { ok: true }, error: null }); }
     if (name === 'llm') { window.__llm.push({ headers: opts.headers, body: b }); return later({ data: { content: [{ type: 'tool_use', id: 't1', name: 'build_email', input: window.__aiAnswer(b) }] }, error: null }); }
     if (name === 'mail-send') {
       window.__mail.push(b);
@@ -162,11 +173,25 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   ok('Look shows the appeal as it will arrive, with Fill it in', b.open && /Help us/.test(b.html) && /serve <span[^>]*>mor<img[^>]*alt="E"/i.test(b.html) && /registered charity/.test(b.html) && b.fill, { open: b.open, fill: b.fill });
   await f.page.keyboard.press('Escape'); await wait(300);
   ok('Escape closes the look', !(await f.ev(() => !!document.querySelector('#crm .w202modal'))));
+  /* the voices (wave203) */
+  b = await f.ev(() => ({ btn: (document.querySelector('#crm .w202intro [data-w202voices]') || {}).innerText || '' }));
+  ok('the studio shows its Voices: Welfare Avenue and, for Steel, My voice', /Voices/.test(b.btn) && /Welfare Avenue/.test(b.btn) && /My voice/.test(b.btn), b);
+  await click(f, '#crm .w202intro [data-w202voices]'); await wait(500);
+  b = await f.ev(() => { const m = document.querySelector('#crm .w202voices'); return { open: !!m, txt: m ? ((m.querySelector('.w202vread') || {}).textContent || '') : '', edit: !!(m && m.querySelector('[data-w202vedit]')), tabs: m ? [...m.querySelectorAll('[data-w202vtab]')].map(x => x.textContent + (x.classList.contains('on') ? '*' : '')) : [] }; });
+  ok('Voices opens on the Welfare Avenue voice code, with Edit for an admin', b.open && /WELFARE AVENUE VOICE CODE/.test(b.txt) && /Warmth with purpose/.test(b.txt) && b.edit && b.tabs.join('|') === 'Welfare Avenue*|My voice', { open: b.open, edit: b.edit, tabs: b.tabs, len: b.txt.length });
+  await shot(f, '01b-voices');
+  await click(f, '#crm [data-w202vtab="mine"]'); await wait(300);
+  b = await f.ev(() => ({ txt: (document.querySelector('#crm .w202voices .w202vread') || {}).textContent || '', mb: window.__mybox.map(x => x.action) }));
+  ok('My voice shows Steel’s own writing guide, read through mybox’s voice action', /TESTGUIDE/.test(b.txt) && b.mb.indexOf('voice') >= 0, b);
+  await f.page.keyboard.press('Escape'); await wait(300);
+  ok('Escape closes the voices', !(await f.ev(() => !!document.querySelector('#crm .w202voices'))));
 
   /* ---------- 2. Tell the Hub ---------- */
   await click(f, '#crm [data-w202go="#crm/studio/ai"]'); await wait(900);
   b = await f.ev(() => ({ hash: location.hash, say: !!document.querySelector('#crm textarea[data-w202say="brief"]'), aud: (document.querySelector('#crm [data-w202aud].on') || {}).textContent, kind: (document.querySelector('#crm [data-w202kind="start"]') || {}).value }));
   ok('Tell the Hub opens at #crm/studio/ai with the box, Volunteers and a call-out', b.hash === '#crm/studio/ai' && b.say && b.aud === 'Volunteers' && b.kind === 'volunteer', b);
+  b = await f.ev(() => [...document.querySelectorAll('#crm [data-w202voice]')].map(x => x.textContent + (x.classList.contains('on') ? '*' : '')));
+  ok('Tell the Hub offers the voices: Welfare Avenue (chosen) and My voice', b.join('|') === 'Welfare Avenue*|My voice', b);
   await click(f, '#crm [data-w202startai]'); await wait(300);
   ok('too few words: the Hub asks for more before calling the AI', /a little more/.test(await text(f, '#crm .w152err') || '') && (await f.ev(() => window.__llm.length)) === 0);
   await setv(f, '#crm textarea[data-w202say="brief"]', 'We need three more servers this Saturday 11 October at Cabot Square, 11 to 2. Sign up on the website.');
@@ -184,6 +209,8 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   ok('the AI is asked through the llm router (email_studio, email-studio) with the build_email tool', b.task === 'email_studio' && b.caller === 'email-studio' && b.tool === 'build_email' && b.choice === 'build_email', b);
   ok('the message carries the words, the audience, the kind and the library photo by index', /three more servers this Saturday/.test(b.txt) && /Audience: Volunteers/.test(b.txt) && /A volunteer call-out/.test(b.txt) && /0: from our Photo library, "Two volunteers plating food"/.test(b.txt), b.txt);
   ok('the system prompt holds the facts rule, the voice and today (25 September 2026)', /never invent a date/.test(b.sys || '') && /No em dashes/.test(b.sys || '') && /Friday 25 September 2026/.test(b.sys || ''), (b.sys || '').slice(0, 300));
+  ok('the system prompt carries the Welfare Avenue voice code (the default) and the words that hold whatever the voice', /VOICE: Welfare Avenue's house voice/.test(b.sys || '') && /Warmth with purpose/.test(b.sys || '') && /Whatever the voice/.test(b.sys || '') && !/TESTGUIDE/.test(b.sys || ''), (b.sys || '').slice(600, 900));
+  ok('the draft keeps the voice it was written in (Welfare Avenue), never the voice’s text', b.save && b.save.design.voice === 'wa' && !/Warmth with purpose/.test(JSON.stringify(b.save.design)), b.save && b.save.design.voice);
   ok('the Hub checks the writer’s dates itself and tells the AI (11 October 2026 is a Sunday), the coming days are written out, and no claims the writer did not make',
     /The Hub checked the dates/.test(b.txt) && /"Saturday 11 October": 11 October 2026 is a Sunday, not a Saturday\./.test(b.txt) && /the next three weeks: Saturday 26 September, Sunday 27 September, /.test(b.sys || '') &&
     /Add no claims the writer did not make/.test(b.sys || '') && !/short reassurance/.test(b.sys || ''), { txt: b.txt.slice(-400), sys: (b.sys || '').slice(1200, 2400) });
@@ -334,8 +361,52 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   await f.ev(() => { const el = document.querySelector('#crm [data-w196sel="0"]'); if (el) el.click(); }); await wait(500);
   b = await f.ev(() => [...((document.querySelector('#crm [data-w157si="0"] [data-w157s="_email"]') || {}).options || [])].map(o => o.value));
   ok('the automations’ saved emails: ready templates (the welcome is chosen), no fill-in template, no one-off', b.indexOf('tpl:st_welcome_volunteer') >= 0 && b.indexOf('tpl:st_serving_reminder') >= 0 && b.indexOf('tpl:st_appeal') < 0 && b.indexOf('tpl:st_joyoneoff1') < 0 && !b.some(v => /^tpl:st_t/.test(v)), b);
+  /* ---------- 5b. My voice, and the house voice edited (wave203) ---------- */
+  await f.hash('#crm/studio/ai', 1200);
+  await click(f, '#crm [data-w202voice="mine"]'); await wait(300);
+  b = await f.ev(() => { const v = document.querySelector('#crm [data-w202voice]'); return { on: [...document.querySelectorAll('#crm [data-w202voice]')].map(x => x.textContent + (x.classList.contains('on') ? '*' : '')).join('|'), note: v ? v.closest('.w155lb').innerText : '' }; });
+  ok('My voice can be picked for an email Steel signs', b.on === 'Welfare Avenue|My voice*' && /Your own writing guide/.test(b.note), b);
+  await shot(f, '09-myvoice');
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'Thank you to everyone who served on Sunday 4 October at Cabot Square. The next serving is Sunday 18 October.');
+  const n0 = await f.ev(() => window.__llm.length);
+  await click(f, '#crm [data-w202startai]');
+  await until(f, n => window.__llm.length > n && /^#crm\/studio\/e\/st_t/.test(location.hash) && !window.w202.state().busy, n0, 8000); await wait(800);
+  b = await f.ev(n => ({ sys: window.__llm[n] ? window.__llm[n].body.system : '', save: window.__saves[window.__saves.length - 1], sel: (document.querySelector('#crm [data-w202voicesel]') || {}).value }), n0);
+  ok('in My voice the Hub writes as Steel from his guide, and Welfare Avenue’s words still hold', /VOICE: write as Steel Mac[dD]onald/.test(b.sys) && /TESTGUIDE/.test(b.sys) && /Whatever the voice/.test(b.sys) && !/WELFARE AVENUE VOICE CODE/.test(b.sys), (b.sys || '').slice(500, 900));
+  ok('the email keeps the choice (mine), not the guide, and the editor shows My voice', b.save && b.save.design.voice === 'mine' && !/TESTGUIDE/.test(JSON.stringify(b.save)) && b.sel === 'mine', { voice: b.save && b.save.design.voice, sel: b.sel });
+  await setv(f, '#crm textarea[data-w202say="change"]', 'Make it shorter.');
+  const n1 = await f.ev(() => window.__llm.length);
+  await click(f, '#crm [data-w202change]');
+  await until(f, n => window.__llm.length > n && !window.w202.state().busy, n1, 6000); await wait(400);
+  b = await f.ev(n => ({ sys: window.__llm[n] ? window.__llm[n].body.system : '', voice: window.w202.state().d.design.voice }), n1);
+  ok('Ask the Hub to change it keeps My voice', /TESTGUIDE/.test(b.sys) && b.voice === 'mine', b.voice);
+  await setv(f, '#crm [data-w202voicesel]', 'wa'); await wait(400);
+  ok('the editor’s Voice switches the email back to Welfare Avenue', (await f.ev(() => window.w202.state().d.design.voice)) === 'wa');
+  await f.hash('#crm/studio', 1200);
+  await click(f, '#crm .w202intro [data-w202voices]'); await wait(400);
+  await click(f, '#crm [data-w202vedit]'); await wait(300);
+  b = await f.ev(() => { const V = window.w202.voices(); return { ta: (document.querySelector('#crm [data-w202vdraft]') || {}).value || '', st: { open: V.open, editing: V.editing, tab: V.tab, wa: !!V.wa, loaded: V.loaded, view: window.w202.state().view, hash: location.hash, modal: !!document.querySelector('#crm .w202voices'), editBtn: !!document.querySelector('#crm [data-w202vedit]') } }; });
+  ok('Edit puts the voice code in a box', /WELFARE AVENUE VOICE CODE/.test(b.ta), { len: b.ta.length, st: b.st });
+  await setv(f, '#crm [data-w202vdraft]', b.ta + '\n\nTEST LINE: say Sunday serving, not the event.');
+  await click(f, '#crm [data-w202vsave]'); await wait(700);
+  b = await f.ev(() => ({ cfg: window.__cfg[window.__cfg.length - 1], log: window.__clog.filter(x => x.entity_type === 'writing_voice').pop(), read: (document.querySelector('#crm .w202voices .w202vread') || {}).textContent || '' }));
+  const vv = b.cfg && typeof b.cfg.row.value === 'string' ? JSON.parse(b.cfg.row.value) : null;
+  ok('Save writes the new version to app_config (mail_voice_wa, the JSON as text) and logs it', !!(b.cfg && b.cfg.row.key === 'mail_voice_wa' && vv && vv.version === 2 && /TEST LINE/.test(vv.text) && b.log && /^v2,/.test(b.log.new_value) && /TEST LINE/.test(b.read)), { cfg: b.cfg && { key: b.cfg.row.key, type: typeof b.cfg.row.value }, log: b.log });
+  await click(f, '#crm [data-w202vedit]'); await wait(200);
+  await setv(f, '#crm [data-w202vdraft]', 'Too short.');
+  await click(f, '#crm [data-w202vsave]'); await wait(300);
+  ok('a voice that is too short is refused with a reason', /very short/.test(await text(f, '#crm .w202voices .w152err') || ''));
+  await click(f, '#crm [data-w202vcancel]'); await wait(200); await f.page.keyboard.press('Escape'); await wait(300);
+  await f.hash('#crm/studio/ai', 1200);
+  await click(f, '#crm [data-w202voice="wa"]'); await wait(200);
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'We need two drivers on Sunday 18 October from 9 am. Sign up on the website.');
+  const n2 = await f.ev(() => window.__llm.length);
+  await click(f, '#crm [data-w202startai]');
+  await until(f, n => window.__llm.length > n && !window.w202.state().busy, n2, 8000); await wait(500);
+  b = await f.ev(n => window.__llm[n] ? window.__llm[n].body.system : '', n2);
+  ok('the next email uses the edited house voice', /TEST LINE: say Sunday serving/.test(b) && /VOICE: Welfare Avenue's house voice/.test(b), b.slice(0, 200));
   const tour = await f.ev(() => ({ studio: window.w122 && window.w122.tours.studio && window.w122.tours.studio.steps.length, crm: window.w122 && window.w122.tours.crm.steps.some(s => /crm\/studio/.test(s.s || '')) }));
-  ok('the page tour "studio" has its seven steps, and the CRM tour names the Studio', tour.studio === 7 && tour.crm, tour);
+  ok('the page tour "studio" has its eight steps (Voices since wave203), and the CRM tour names the Studio', tour.studio === 8 && tour.crm, tour);
   ok('no page errors (admin)', f.errs.length === 0, f.errs);
   await f.close();
 
@@ -351,6 +422,12 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   await f.hash('#crm/studio', 1400);
   b = await f.ev(() => document.querySelectorAll('#crm [data-w202edit]').length);
   ok('a member gets no Edit on the starters', b === 0, b);
+  b = await f.ev(() => ({ btn: (document.querySelector('#crm .w202intro [data-w202voices]') || {}).innerText || '', mb: window.__mybox.length }));
+  ok('a member without a writing guide gets Welfare Avenue only (mybox is not asked)', /Welfare Avenue/.test(b.btn) && !/My voice/.test(b.btn) && b.mb === 0, b);
+  await click(f, '#crm .w202intro [data-w202voices]'); await wait(400);
+  b = await f.ev(() => { const m = document.querySelector('#crm .w202voices'); return { edit: !!(m && m.querySelector('[data-w202vedit]')), txt: m ? m.innerText : '' }; });
+  ok('a member reads the house voice but cannot edit it', !b.edit && /Admins look after it/.test(b.txt) && /WELFARE AVENUE VOICE CODE/.test(b.txt), { edit: b.edit });
+  await f.page.keyboard.press('Escape'); await wait(200);
   await f.hash('#crm/studio/e/st_joyoneoff1', 1400);
   ok('someone else’s one-off is read only too', /joy\.dumansi|only they or an admin/.test(await text(f, '#crm .w202ro') || ''));
   ok('no page errors (member)', f.errs.length === 0, f.errs);

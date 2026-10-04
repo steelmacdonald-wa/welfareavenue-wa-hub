@@ -1,6 +1,6 @@
   /* ---------- drawing, the routes (#crm/studio, /ai, /tpl[/key], /e/<key>, .../to/<contact>), the clicks and keys ---------- */
   function keyOf(el) {
-    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap'];
+    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft'];
     for (var i = 0; i < attrs.length; i++) if (el.hasAttribute && el.hasAttribute(attrs[i])) return '[' + attrs[i] + '="' + String(el.getAttribute(attrs[i])).replace(/"/g, '\\"') + '"]';
     return null;
   }
@@ -28,6 +28,8 @@
     else if (sub === 'tpl') { SS.view = 'tpl'; if (parts[3] && parts[3] !== 'to') SS.start.tpl = parts[3]; }
     else if (sub === 'e') { SS.view = 'edit'; openKey(parts[3] || 'new'); }
     else SS.view = 'home';
+    SS.voices.open = false; SS.voices.editing = false;
+    if (!SS.voices.loaded) loadVoices().then(function () { if (SS.root && SS.root.isConnected) paint(); });
     css202();
   }
   function paint() {
@@ -85,6 +87,14 @@
     if (hit('data-w202edit')) { SS.peek = null; go('#crm/studio/e/' + v); return; }
     if (hit('data-w202open')) { go('#crm/studio/e/' + v); return; }
     if (hit('data-w202allrecent')) { SS.allRecent = true; paint(); return; }
+    if (hit('data-w202voicesx')) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202voices')) { openVoices(v === 'wa' || v === 'mine' ? v : null); return; }
+    if (hit('data-w202vtab')) { SS.voices.tab = v; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202vedit')) { SS.voices.editing = true; SS.voices.err = ''; SS.voices.draft = SS.voices.wa ? SS.voices.wa.text : ''; paint(); var ta = document.querySelector('#crm [data-w202vdraft]'); if (ta) { try { ta.focus({ preventScroll: true }); ta.setSelectionRange(0, 0); } catch (e) { /* fine */ } } return; }
+    if (hit('data-w202vcancel')) { SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202vsave')) { saveVoice(); return; }
+    if (hit('data-w202vinbox')) { SS.voices.open = false; paint(); try { if (window.w170 && window.w170.open) window.w170.open(); } catch (e) { /* fine */ } return; }
+    if (hit('data-w202voice')) { SS.start.voice = v === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.start.voice); paint(); return; }
     if (hit('data-w202aud')) { SS.start.audience = v; if (v === 'volunteers' && SS.start.kind === 'fundraising') SS.start.kind = 'volunteer'; if (v === 'donors' && SS.start.kind === 'volunteer') SS.start.kind = 'newsletter'; paint(); return; }
     if (hit('data-w202pickstart')) { SS.pick = { to: 'start' }; loadLibrary().then(function () { paint(); }); paint(); return; }
     if (hit('data-w202sdel')) { SS.start.photos.splice(Number(v), 1); paint(); return; }
@@ -136,6 +146,8 @@
       if (a === 'kind' && ev.type === 'change') { changed(false); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
       changed(false); return;
     }
+    if (t.hasAttribute('data-w202vdraft')) { SS.voices.draft = val; return; }
+    if (t.hasAttribute('data-w202voicesel') && ev.type === 'change' && SS.d && !SS.ro) { SS.d.design.voice = val === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.d.design.voice); changed(false); return; }
     if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; return; }
     if ((a = t.getAttribute('data-w202ask'))) { SS.start.asks[a] = val; return; }
     if ((a = t.getAttribute('data-w202scap'))) { var ph = SS.start.photos[Number(a)]; if (ph) ph.caption = val; return; }
@@ -154,6 +166,7 @@
   document.addEventListener('keydown', function (ev) {
     if (!SS.root || !SS.root.isConnected) return;
     if (ev.key === 'Escape') {
+      if (SS.voices.open) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
       if (SS.peek) { SS.peek = null; paint(); return; }
       if (SS.pick) { SS.pick = null; paint(); return; }
       if (SS.send && within(document.activeElement)) { SS.send = null; paint(); return; }
@@ -170,6 +183,7 @@
       W.tours.studio = { tab: 'crm', icon: 'mail', hash: '#crm/studio', steps: [
         Tt('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'The email studio', 'Emails in the Welfare Avenue brand, for one person, a list or an automation. The Hub puts them together with you and checks them before anything goes out.', OPT),
         Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Tell the Hub: write what you want to say and add your photos. Start from a template: give it your details. Build it yourself: blocks you arrange.'),
+        Tt('#crm [data-w202voices]', 'Voices', 'The Hub writes in Welfare Avenue’s house voice, drafted from our brand guide. If you have your own writing guide, pick My voice for emails you sign. Admins edit the house voice here.', OPT),
         Tt('#crm [data-w202sec="templates"]', 'Templates', 'Our starters and the team’s saved templates, on four shelves: volunteers (welcome and serving; call-outs and events) and donors (thanks and impact; appeals and events). “Ready as is” ones can go straight into an automation.'),
         Tt('#crm [data-w202sec="recent"]', 'Recent emails', 'The emails you and the team wrote here, ready to finish, send again or copy.', OPT),
         { c: 1, t: 'The Hub checks with you', p: 'It never makes up a date, a place, a number or a link: it leaves a [bracket] and asks. The studio’s own checks stop an email with anything left to fill, a weekday that is not that date or a button with no link, and point out our words, alt text and the kind under Canada’s anti-spam law.' },
@@ -187,6 +201,7 @@
     sendable: function (t) { return !!t && t.active !== false && t.kind !== 'test' && !t.one_off && !hasBrackets(t) && str(t.html_body).trim() !== '{{body_html}}'; },
     isStudio: function (t) { return !!(t && t.design); },
     MAIL202: MAIL202, checks: checks, datesIn: datesIn, checkDate: checkDate, fromAi: fromAi, aiMessages: aiMessages, aiSystem: aiSystem, designForAi: designForAi, AI_TOOL: AI_TOOL,
-    saveNow: saveNow, hasBrackets: hasBrackets
+    saveNow: saveNow, hasBrackets: hasBrackets,
+    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock
   };
 })();

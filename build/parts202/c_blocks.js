@@ -332,6 +332,7 @@
       if (asks.length) out.asks = asks;
       if (d.source) out.source = S(d.source, 20);
       if (d.from) out.from = S(d.from, 40);
+      if (d.voice === 'wa' || d.voice === 'mine') out.voice = d.voice;   /* wave203: the voice the Hub writes it in (never the guide itself) */
       return out;
     }
 

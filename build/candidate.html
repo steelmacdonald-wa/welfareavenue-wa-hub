@@ -75681,6 +75681,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      will look (mail-send's own layout, ported: MAIL202.layout), on a computer or a phone. Ask the Hub to change it.
    - Send: a test to yourself, one person (the permission rule decides, mail_mode still gates), a list (a campaign draft
      the Campaigns tab checks and sends), or save it as a template, which the automations' "Saved email" list picks up.
+   - wave203 (04/10/26), the voices: Steel, "draft a WA voice code from the brand guide and keep mine too as options". Welfare
+     Avenue (the house voice code, app_config mail_voice_wa, admins edit it in the Voices panel) or My voice (the writer's own
+     guide from Your inbox). g2_voices.js; the choice is saved with the email (design.voice), never the guide's text.
    Data: crm_email_templates (design, one_off and the shelf columns; wa202_email_studio), written only through
    email_studio_save and email_studio_remove. AI through the llm router (x-wa-task email_studio). Photos from the Photo
    library (wa_photos_list, ready ones first) or uploaded to content-images/email/. Nothing here sends on its own, and
@@ -75704,7 +75707,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   var SS = {
     view: 'home', key: null, to: null, d: null, dirty: false, saving: false, savedAt: null, msg: '', err: '', busy: '',
     filter: 'all', open: {}, device: 'desktop', tab: 'edit', questions: [], answers: {}, notes: '', change: '',
-    start: { brief: '', audience: 'volunteers', kind: 'volunteer', lang: 'en', photos: [], tpl: null, asks: {}, extra: '' },
+    start: { brief: '', audience: 'volunteers', kind: 'volunteer', lang: 'en', photos: [], tpl: null, asks: {}, extra: '', voice: 'wa' },
     send: null, pick: null, lib: null, libQ: '', libBusy: false, uploads: 0, confirmDel: false, peek: null, allRecent: false, ro: false, pendingKey: null,
     saveNote: '', undo: null, root: null, saveAgain: false, savingP: null
   };
@@ -75766,6 +75769,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     image: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="m4.5 18 5.5-5.5 4 4 2.5-2.5 3 3"/>', upload: '<path d="M12 16V4M7 9l5-5 5 5"/><path d="M4.5 16v3.5h15V16"/>',
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>', desktop: '<rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/>',
     back: '<path d="M19 12H5M11 6l-6 6 6 6"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+    voice: '<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z"/><path d="M8 10h8M8 13h5"/>',
     edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>', chev: '<path d="m9 5 7 7-7 7"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'
   };
   function I(n) { return '<svg class="w202i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IC[n] || IC.spark) + '</svg>'; }
@@ -76104,6 +76108,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (asks.length) out.asks = asks;
       if (d.source) out.source = S(d.source, 20);
       if (d.from) out.from = S(d.from, 40);
+      if (d.voice === 'wa' || d.voice === 'mine') out.voice = d.voice;   /* wave203: the voice the Hub writes it in (never the guide itself) */
       return out;
     }
 
@@ -76337,11 +76342,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       notes: { type: 'string', description: 'One or two lines for the writer about what you did' }
     }, required: ['subject', 'preheader', 'blocks', 'questions'] }
   };
-  function aiSystem(lang) {
+  /* the voice part of the prompt (wave203): the house voice code, the writer's own guide, or (neither loaded) the built-in paragraph */
+  var BUILTIN_VOICE = 'Write in Welfare Avenue\'s voice: warm, specific, credible, plain. Short paragraphs. Impact first. Solidarity, never charity from above. Say "people we serve", "our community", "support", "dignity", "youth-powered". Never say "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club", "just volunteers". No em dashes or en dashes as punctuation: use a comma, a colon or a full stop. No hashtags, at most one exclamation mark, no boilerplate like "in these challenging times" or "making a difference together".';
+  function voiceBlock(v) {
+    if (v && v.key === 'mine' && str(v.text).trim()) return 'VOICE: write as ' + str(v.name || 'the writer') + ', who signs this email, in their own voice. Their writing guide is between the two lines below. Use it for how the words sound: word choice, rhythm, openings and closings. The shape of the email, the facts rule, the links and Welfare Avenue\'s words after it still apply, and anything in the guide about replies, threads, attachments, plain text or tools does not.\n-----\n' + str(v.text).trim() + '\n-----';
+    if (v && str(v.text).trim()) return 'VOICE: Welfare Avenue\'s house voice, the Voice Code between the two lines below. Use it for how the words sound. The shape of the email, the facts rule and the links after it still apply.\n-----\n' + str(v.text).trim() + '\n-----';
+    return BUILTIN_VOICE;
+  }
+  function aiSystem(lang, voice) {
     var fr = lang === 'fr';
     return [
       'You put together emails for Welfare Avenue, a youth-powered registered charity in Montreal that fights food insecurity and poverty through direct community action: Sunday servings of meals cooked, driven and served by young volunteers, and the connections to support that follow. Food is the starting point.',
-      'Write in Welfare Avenue\'s voice: warm, specific, credible, plain. Short paragraphs. Impact first. Solidarity, never charity from above. Say "people we serve", "our community", "support", "dignity", "youth-powered". Never say "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club", "just volunteers". No em dashes or en dashes as punctuation: use a comma, a colon or a full stop. No hashtags, at most one exclamation mark, no boilerplate like "in these challenging times" or "making a difference together".',
+      voiceBlock(voice),
+      'Whatever the voice: never "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club" or "just volunteers"; no em dashes or en dashes as punctuation (a comma, a colon or a full stop instead); no hashtags; at most one exclamation mark.',
       'Facts: never invent a date, a time, a place, an amount, a number, a name, a quote or a link. Use only what the writer gave, the template\'s own words, and these public figures: 14,000+ meals since April 2020, 250+ servings, 600+ volunteers (our best estimates from our records, rounded down); giving: $25 covers one recipe (a fruit salad for 8 to 10 people), $75 one volunteer cook\'s batch (a dish for 30 to 35 people), $250 the groceries for a whole Sunday serving (about 50 plates), $20 a month about 100 portions a year. Add no claims the writer did not make about how things go (no experience needed, training, who will be there, what happens after signing up, what to bring, food, parking, how long it takes): leave them out, or write a [placeholder] and ask when the email needs one. When something the email needs is missing, write a short [placeholder in square brackets] where it goes and ask about it in questions. When two things disagree (a weekday that is not that date, times that do not add up, a number that changed), ask. Today is ' + todayLine() + ' in Montreal; the next three weeks: ' + nextDays(21) + '. A date without a year is the next one to come. Work out "this Saturday" or "next Sunday" from that list, never from memory.',
       'Links you may use when they fit: https://welfareavenue.com (the website), https://welfareavenue.com/volunteer/ (volunteer sign-up), https://welfareavenue.com/donate/ (giving). Any other link only if the writer gave it.',
       'Shape: one hero first (a kicker, a headline in two short lines, the last line the coloured one, a lead sentence, a doodle), then "Hi {{first_name|there}}," and short paragraphs; details for when and where (and what to bring, when the writer said); a dot list for two to five parallel points; one gold button for the one thing to do (a caption under it only when the writer gave one or it is plainly true, like "On our website"); the writer\'s photos where they help; a sign-off with the sender\'s name when known, else "[Who signs it]". 120 to 300 words unless the material needs more. Keep every {{placeholder}} exactly as written, and use {{first_name|there}} for the greeting.',
@@ -76411,7 +76424,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   async function aiCall(o) {
     var photos = (o.photos || []).slice();
-    var body = { max_tokens: 6000, temperature: 0.4, system: aiSystem(o.lang), tools: [AI_TOOL], tool_choice: { type: 'tool', name: 'build_email' }, messages: aiMessages(o, photos) };
+    try { await loadVoices(); } catch (e) { /* the built-in voice then */ }
+    var body = { max_tokens: 6000, temperature: 0.4, system: aiSystem(o.lang, voiceFor(o.voice)), tools: [AI_TOOL], tool_choice: { type: 'tool', name: 'build_email' }, messages: aiMessages(o, photos) };
     var r;
     try { r = await db.functions.invoke('llm', { headers: { 'x-wa-task': 'email_studio', 'x-wa-caller': 'email-studio' }, body: body }); }
     catch (e) { return { error: msgOf(e) }; }
@@ -76583,7 +76597,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var rec = mine.filter(function (t) { return lower(t.created_by) === me; }).concat(mine.filter(function (t) { return lower(t.created_by) !== me; })).slice(0, SS.allRecent ? 60 : 8);
     return '<div class="w202">' +
       '<section class="w202top" data-w202sec="start"><div class="w202intro"><span class="w202kick">Email studio</span><h2>Emails in the brand, put together with you</h2>' +
-      '<p>For one person, a list or an automation. The Hub puts your words and photos into a Welfare Avenue email, and checks it with you before anything goes out.</p></div>' +
+      '<p>For one person, a list or an automation. The Hub puts your words and photos into a Welfare Avenue email, and checks it with you before anything goes out.</p>' +
+      '<button class="w202vbtn" data-w202voices="wa">' + I('voice') + ' Voices <span>Welfare Avenue' + (SS.voices.mine ? ' \u00b7 My voice' : '') + '</span></button></div>' +
       '<div class="w202ways">' +
       '<button class="w202way" data-w202go="#crm/studio/ai">' + I('spark') + '<b>Tell the Hub</b><span>Write what you want to say and add your photos. The Hub puts it together and asks about anything missing.</span></button>' +
       '<button class="w202way" data-w202go="#crm/studio/tpl">' + I('layout') + '<b>Start from a template</b><span>Pick one of our templates and give it your details. The Hub fills it in, or you do.</span></button>' +
@@ -76599,7 +76614,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           '<span class="m">' + E(KIND[t.kind] ? KIND[t.kind].short : t.kind) + ' \u00b7 ' + E(lower(t.created_by) === me ? 'you' : str(t.created_by).split('@')[0]) + ' \u00b7 ' + E(ago(t.updated_at)) + '</span>' + I('chev') + '</button>';
       }).join('') + '</div>' + (mine.length > 8 && !SS.allRecent ? '<button class="w152btn sm ghost" data-w202allrecent>Show all ' + mine.length + '</button>' : '')
         : '<p class="m">The emails you write here show up in this list, ready to finish or send again.</p>') + '</section>' +
-      peekHtml() + '</div>';
+      peekHtml() + voicesHtml() + '</div>';
   }
   /* a quick look at a template as it will arrive */
   function peekHtml() {
@@ -76612,6 +76627,111 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<iframe class="w202frame peek" sandbox="allow-same-origin" title="The template as it will look" srcdoc="' + E(html) + '"></iframe>' +
       '<div class="w154acts">' + (hasBrackets(t) ? '<button class="w152btn" data-w202fill="' + E(t.key) + '">' + I('spark') + ' Fill it in</button>' : '<button class="w152btn" data-w202use="' + E(t.key) + '">' + I('copy') + ' Use it</button>') +
       (canEdit(t) ? '<button class="w152btn ghost" data-w202edit="' + E(t.key) + '">' + I('edit') + ' Edit the template</button>' : '') + '<button class="w152btn ghost" data-w202peekx>Close</button></div></div></div>';
+  }
+  /* ---------- wave203 (04/10/26): the voices. Steel: "draft a WA voice code from the brand guide and keep mine too as options."
+     Welfare Avenue: the house voice code (app_config mail_voice_wa; every staff member reads it, only admins change it, as
+     wa_app_config_guard keeps mail_* keys for admins), the default for everyone. My voice: the writer's own writing guide from
+     Your inbox (mybox_owners.voice through the mybox function's voice action), offered only to people who have one, sent to
+     the llm router with their own emails and never stored with an email (the design keeps only the choice: voice 'wa' or
+     'mine'). Whatever the voice, the facts rule, the links, the shape and Welfare Avenue's words stay in the prompt. ---------- */
+  var VOICE_KEY = 'mail_voice_wa';
+  SS.voices = { wa: null, mine: null, loaded: false, p: null, open: false, tab: 'wa', editing: false, draft: '', saving: false, err: '' };
+  try { var lastVoice = localStorage.getItem('wa203voice'); if (lastVoice === 'mine') SS.start.voice = 'mine'; } catch (e) { /* fine */ }
+  if (!SS.start.voice) SS.start.voice = 'wa';
+  function rememberVoice(v) { try { localStorage.setItem('wa203voice', v === 'mine' ? 'mine' : 'wa'); } catch (e) { /* fine */ } }
+  function loadVoices(force) {
+    var V = SS.voices;
+    if (V.p) return V.p;
+    if (V.loaded && !force) return Promise.resolve(V);
+    V.p = (async function () {
+      try {
+        var r = await db.from('app_config').select('key, value, updated_at').eq('key', VOICE_KEY).limit(1);
+        var row = r && Array.isArray(r.data) ? r.data[0] : null, v = row && row.value;
+        if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } }   /* app_config.value is text holding JSON */
+        V.wa = v && typeof v === 'object' && str(v.text).trim() ? { label: str(v.label || 'Welfare Avenue'), text: str(v.text), version: Number(v.version) || 1, source: str(v.source || ''),
+          updated_by: str(v.updated_by || ''), updated_at: v.updated_at || row.updated_at || null } : null;
+      } catch (e) { V.wa = null; }
+      try {
+        var o = await db.from('mybox_owners').select('email, enabled').limit(1);
+        var own = o && Array.isArray(o.data) ? o.data[0] : null;
+        if (own && own.enabled && lower(own.email) === myEmail()) {
+          var g = await db.functions.invoke('mybox', { body: { action: 'voice' } });
+          var d = g && !g.error && g.data && !g.data.error ? g.data : null;
+          V.mine = d && str(d.voice).trim() ? { text: str(d.voice), framework: str(d.framework || '') } : null;
+        } else V.mine = null;
+      } catch (e) { V.mine = null; }
+      V.loaded = true; V.p = null;
+      if (SS.start.voice === 'mine' && !V.mine) SS.start.voice = 'wa';
+      return V;
+    })();
+    return V.p;
+  }
+  /* the voice an email is written in for this person: their own only when they have a guide and it is their email */
+  function effVoice(e) {
+    var want = e && e.design && e.design.voice === 'mine' ? 'mine' : 'wa';
+    if (want === 'mine' && SS.voices.mine && (!e.created_by || lower(e.created_by) === myEmail())) return 'mine';
+    return 'wa';
+  }
+  /* what goes to the model: { key, text, name } (null when the house voice is not set: aiSystem keeps its built-in voice) */
+  function voiceFor(key) {
+    var V = SS.voices;
+    if (key === 'mine' && V.mine) return { key: 'mine', text: V.mine.text, name: myName() };
+    if (V.wa) return { key: 'wa', text: V.wa.text, name: 'Welfare Avenue' };
+    return null;
+  }
+  function voiceCtl(cur) {
+    var V = SS.voices;
+    if (!V.loaded) loadVoices().then(function () { paint(); });
+    var opts = [['wa', 'Welfare Avenue']]; if (V.mine) opts.push(['mine', 'My voice']);
+    var note = cur === 'mine' && V.mine ? 'Your own writing guide, for emails you sign.' : 'Our house voice from the brand guide: the default for anything written as Welfare Avenue.';
+    return '<div class="w155lb">Voice ' + segHtml('data-w202voice', opts, cur === 'mine' && V.mine ? 'mine' : 'wa') +
+      '<span class="m">' + E(note) + ' <button class="w202link" data-w202voices>About the voices</button></span></div>';
+  }
+  function voicesHtml() {
+    var V = SS.voices; if (!V.open) return '';
+    var tab = V.tab === 'mine' ? 'mine' : 'wa', body;
+    var tabs = '<div class="w202seg" role="tablist" aria-label="Voices">' + [['wa', 'Welfare Avenue'], ['mine', 'My voice']].map(function (o) {
+      return '<button role="tab" class="' + (o[0] === tab ? 'on' : '') + '" data-w202vtab="' + o[0] + '" aria-selected="' + (o[0] === tab) + '">' + E(o[1]) + '</button>';
+    }).join('') + '</div>';
+    if (!V.loaded) body = busyHtml('Loading the voices\u2026');
+    else if (tab === 'wa') {
+      if (V.editing) body = '<p class="m">The house voice the Hub uses for anything written as Welfare Avenue. A change applies to the next email the Hub puts together or changes.</p>' +
+        '<textarea class="w152in w202vtext" data-w202vdraft rows="22" aria-label="The Welfare Avenue voice code">' + E(V.draft) + '</textarea>' +
+        (V.err ? '<div class="w152err">' + E(V.err) + '</div>' : '') +
+        '<div class="w154acts"><button class="w152btn" data-w202vsave' + (V.saving ? ' disabled' : '') + '>' + I('save') + ' ' + (V.saving ? 'Saving\u2026' : 'Save the voice') + '</button><button class="w152btn ghost" data-w202vcancel>Cancel</button></div>';
+      else body = (V.wa ? '<p class="m">The house voice for anything written as Welfare Avenue, and the default for everyone. Version ' + V.wa.version + (V.wa.updated_at ? ', ' + E(fmtDay(V.wa.updated_at)) : '') +
+          (V.wa.updated_by ? ', ' + E(/@/.test(V.wa.updated_by) ? V.wa.updated_by.split('@')[0] : V.wa.updated_by) : '') + '.</p><div class="w202vread" data-w198skip tabindex="0">' + E(V.wa.text) + '</div>'
+        : '<p class="m">The house voice is not set yet, so the Hub uses its short built-in Welfare Avenue voice.</p>') +
+        (amAdmin() ? '<div class="w154acts"><button class="w152btn sm" data-w202vedit>' + I('edit') + ' ' + (V.wa ? 'Edit the voice' : 'Write the voice') + '</button></div>' : '<p class="m">Admins look after it. Tell one of them what you would change.</p>');
+    } else {
+      body = V.mine ? '<p class="m">Your own voice: your writing guide from Your inbox (Settings, Your writing guide). Only you see it, and only emails you write in the studio use it.</p>' +
+          '<div class="w202vread" data-w198skip tabindex="0">' + E(V.mine.text) + '</div><div class="w154acts"><button class="w152btn sm ghost" data-w202vinbox>' + I('edit') + ' Edit it in Your inbox</button></div>'
+        : '<p class="m">Your own voice comes from a writing guide. People with the inbox assistant write theirs in Your inbox, Settings, Your writing guide; \u201cMy voice\u201d then appears beside Welfare Avenue when the Hub writes an email.</p>';
+    }
+    return '<div class="w202modal" role="dialog" aria-modal="true" aria-label="Voices"><div class="w202mbox wide w202voices">' +
+      '<div class="w202mh"><h3>' + I('voice') + ' Voices</h3><button class="w202x" data-w202voicesx aria-label="Close">' + I('x') + '</button></div>' +
+      '<p class="m">How the Hub sounds when it puts an email together. Whatever the voice, it never invents a fact, and the studio\u2019s checks still run.</p>' + tabs + body + '</div></div>';
+  }
+  function openVoices(tab) {
+    var V = SS.voices; V.open = true; V.editing = false; V.err = ''; V.tab = tab || (SS.start.voice === 'mine' && V.mine ? 'mine' : 'wa');
+    loadVoices().then(function () { paint(); }); paint();
+  }
+  async function saveVoice() {
+    var V = SS.voices, text = str(V.draft).replace(/\r\n/g, '\n').trim();
+    if (!amAdmin()) { V.err = 'Only an admin can change the house voice.'; paint(); return; }
+    if (text.length < 200) { V.err = 'That is very short for a voice code: keep at least a few lines on how we sound.'; paint(); return; }
+    if (text.length > 20000) { V.err = 'Keep the voice under 20,000 characters: the Hub sends it with every email it writes.'; paint(); return; }
+    if (/[\u2014\u2013]/.test(text)) { V.err = 'The voice code has an em dash or an en dash in it. Our own rules say no dashes as punctuation: use a comma, a colon or a full stop.'; paint(); return; }
+    V.saving = true; V.err = ''; paint();
+    var prev = V.wa, now = new Date().toISOString();
+    var val = { label: 'Welfare Avenue', text: text, version: ((prev && prev.version) || 0) + 1, source: (prev && prev.source) || 'Welfare Avenue Brand Guides v1 2026', updated_by: myEmail(), updated_at: now };
+    var r; try { r = await db.from('app_config').upsert({ key: VOICE_KEY, value: JSON.stringify(val), updated_at: now }, { onConflict: 'key' }); } catch (e) { r = { error: e }; }
+    V.saving = false;
+    if (!r || r.error) { var m = msgOf(r && r.error); V.err = /admin/i.test(m) ? 'Only an admin can change the house voice.' : 'The voice did not save: ' + m; paint(); return; }
+    try { await db.from('change_log').insert({ entity_type: 'writing_voice', entity_id: VOICE_KEY, field: 'text', old_value: prev ? 'v' + prev.version + ', ' + prev.text.length + ' characters' : null, new_value: 'v' + val.version + ', ' + text.length + ' characters', changed_by: myEmail() }); } catch (e) { /* the audit line is best effort */ }
+    V.wa = { label: val.label, text: text, version: val.version, source: val.source, updated_by: val.updated_by, updated_at: now };
+    V.editing = false; V.draft = ''; T('The Welfare Avenue voice is saved');
+    paint();
   }
   /* ---------- starting an email: Tell the Hub (words and photos), Start from a template (details), Build it yourself ---------- */
   function segHtml(attr, opts, cur) {
@@ -76639,6 +76759,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w155lb">Who is it for?' + segHtml('data-w202aud', [['volunteers', 'Volunteers'], ['donors', 'Donors'], ['everyone', 'Everyone']], s.audience) + '</div>' +
       '<label class="w155lb">What kind of email?' + kindSel('data-w202kind="start"', s.kind) + '<span class="m">' + E(k.s) + '</span></label>' +
       '<label class="w155lb">Language' + langSel('data-w202lang="start"', s.lang) + '</label>' +
+      voiceCtl(s.voice) +
       '<label class="w155lb">What do you want to say?<textarea class="w152in w202say" data-w202say="brief" data-w202s="brief" rows="10" placeholder="Write it the way you would tell a friend, or paste your notes. Dates, times, the place and the link people should use help: the Hub never makes those up, it asks.">' + E(s.brief) + '</textarea></label>' +
       startPhotosHtml() +
       (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
@@ -76647,8 +76768,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       (SS.busy ? busyHtml(SS.busy) : '') + '</div>' +
       '<aside class="w202tips"><h4>What helps</h4><ul><li><b>The facts:</b> the day and date, the times, the place, how many people you need, the link to sign up or give.</li>' +
       '<li><b>Who signs it,</b> if not you.</li><li><b>One thing to do:</b> what should people do after reading?</li><li><b>Photos</b> of our volunteers, food and setups (no close-ups of the people we serve).</li></ul>' +
-      '<p class="m">The Hub writes it in Welfare Avenue\u2019s voice, leaves [brackets] where something is missing and asks you about it. Nothing is sent until you choose to.</p></aside></div>' +
-      pickerHtml() + '</div>';
+      '<p class="m">The Hub writes it in the voice you pick (Welfare Avenue\u2019s house voice, or your own when you have a writing guide), leaves [brackets] where something is missing and asks you about it. Nothing is sent until you choose to.</p></aside></div>' +
+      pickerHtml() + voicesHtml() + '</div>';
   }
   function tplStartHtml() {
     var s = SS.start, t = s.tpl ? tplByKey(s.tpl) : null;
@@ -76663,11 +76784,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         }).join('') : '<p class="m">This one is ready as it is. Add anything you want to say, or use it straight away.</p>') +
         '<label class="w155lb">Anything else to say? <span class="m">Optional</span><textarea class="w152in w202say" data-w202say="extra" data-w202s="extra" rows="4" placeholder="A story, a thank-you, a detail the template does not ask for.">' + E(s.extra) + '</textarea></label>' +
         '<label class="w155lb">Language' + langSel('data-w202lang="start"', s.lang) + '</label>' +
+        voiceCtl(s.voice) +
         startPhotosHtml() +
         (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
         '<div class="w154acts"><button class="w152btn" data-w202starttpl="ai"' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Fill it in with the Hub</button>' +
         '<button class="w152btn ghost" data-w202starttpl="self">Fill it in myself</button></div>' + (SS.busy ? busyHtml(SS.busy) : '')) + '</div></div>' +
-      pickerHtml() + peekHtml() + '</div>';
+      pickerHtml() + peekHtml() + voicesHtml() + '</div>';
   }
   /* a new email in memory, then saved (it needs a subject to be saved) */
   function draftFrom(o) {
@@ -76688,11 +76810,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (str(s.brief).trim().length < 15) { SS.err = 'Tell the Hub a little more: what is happening, and what should people do?'; paint(); return; }
     SS.err = ''; SS.busy = 'The Hub is putting your email together. This takes about half a minute\u2026'; paint();
     var photos = photosForAi(s.photos);
-    var r = await aiCall({ mode: 'new', brief: s.brief, audience: s.audience, kind: s.kind, lang: s.lang, photos: photos });
+    var r = await aiCall({ mode: 'new', brief: s.brief, audience: s.audience, kind: s.kind, lang: s.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again with a few more details, or build it yourself.'; paint(); return; }
-    res.design.source = 'ai';
+    res.design.source = 'ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
     await openDraft(draftFrom({ name: res.name || 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: res.subject, preheader: res.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
     SS.start.brief = ''; SS.start.photos = [];
   }
@@ -76703,13 +76825,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; b.caption = p.caption || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; blocks.push(b); });
     var btn = MAIL202.blank('button'); btn.label = s.kind === 'fundraising' ? 'Give today' : s.kind === 'volunteer' ? 'Sign up to serve' : 'Find out more'; btn.url = s.kind === 'fundraising' ? 'https://welfareavenue.com/donate/' : s.kind === 'volunteer' ? 'https://welfareavenue.com/volunteer/' : ''; blocks.push(btn);
     var so = MAIL202.blank('signoff'); so.name = myName(); blocks.push(so);
-    var d = draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: '', preheader: '', design: { blocks: blocks, source: 'blocks' } });
+    var d = draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: '', preheader: '', design: { blocks: blocks, source: 'blocks', voice: s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa' } });
     SS.start.brief = ''; SS.start.photos = [];
     openDraft(d, { openFirst: true });
   }
   function startBlank() {
     var s = SS.start, so = MAIL202.blank('signoff'); so.name = myName();
-    openDraft(draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, design: { blocks: [MAIL202.blank('hero'), MAIL202.blank('text'), MAIL202.blank('button'), so], source: 'blocks' } }), { openFirst: true });
+    openDraft(draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, design: { blocks: [MAIL202.blank('hero'), MAIL202.blank('text'), MAIL202.blank('button'), so], source: 'blocks', voice: s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa' } }), { openFirst: true });
   }
   function copyOf(t, o) {
     var d = JSON.parse(JSON.stringify(t.design || { blocks: [] }));
@@ -76720,16 +76842,16 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   async function startTpl(useAi) {
     var s = SS.start, t = tplByKey(s.tpl); if (!t) return;
     var asks = (t.design && t.design.asks) || [];
-    if (!useAi) { var d0 = copyOf(t); s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false }); return; }
+    if (!useAi) { var d0 = copyOf(t); d0.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false }); return; }
     var given = asks.map(function (a) { return { label: a.label, answer: s.asks[a.id] || '' }; });
     if (asks.length && !given.some(function (a) { return str(a.answer).trim(); }) && !str(s.extra).trim()) { SS.err = 'Give the Hub at least one of your details, or choose Fill it in myself.'; paint(); return; }
     SS.err = ''; SS.busy = 'The Hub is filling in \u201c' + t.name + '\u201d. This takes about half a minute\u2026'; paint();
     var photos = photosForAi(s.photos);
-    var r = await aiCall({ mode: 'template', design: t.design, subject: t.subject, preheader: t.preheader, tplName: t.name, asks: given, brief: s.extra, audience: t.audience, kind: t.kind, lang: s.lang || t.lang, photos: photos });
+    var r = await aiCall({ mode: 'template', design: t.design, subject: t.subject, preheader: t.preheader, tplName: t.name, asks: given, brief: s.extra, audience: t.audience, kind: t.kind, lang: s.lang || t.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again, or fill it in yourself.'; paint(); return; }
-    res.design.from = t.key; res.design.source = 'template+ai';
+    res.design.from = t.key; res.design.source = 'template+ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
     await openDraft(draftFrom({ name: res.name || t.name, kind: t.kind, audience: t.audience, lang: s.lang || t.lang, subject: res.subject || t.subject, preheader: res.preheader || t.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
     SS.start.asks = {}; SS.start.extra = ''; SS.start.photos = [];
   }
@@ -76846,6 +76968,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<label class="w155lb">Kind' + kindSel('data-w202e="kind"' + dis, e.kind) + '</label>' +
       '<label class="w155lb">For<select class="w152sel" data-w202e="audience"' + dis + '><option value="">Anyone</option>' + Object.keys(AUD).map(function (a) { return '<option value="' + a + '"' + (e.audience === a ? ' selected' : '') + '>' + E(AUD[a]) + '</option>'; }).join('') + '</select></label>' +
       '<label class="w155lb">Language' + langSel('data-w202e="lang"' + dis, e.lang) + '</label>' +
+      '<label class="w155lb">Voice <span class="m">When the Hub changes it</span><select class="w152sel" data-w202voicesel aria-label="The voice the Hub writes in"' + dis + '><option value="wa">Welfare Avenue</option>' +
+        (SS.voices.mine && (!e.created_by || lower(e.created_by) === myEmail()) ? '<option value="mine"' + (effVoice(e) === 'mine' ? ' selected' : '') + '>My voice</option>' : '') + '</select></label>' +
       '<p class="m wide">' + E((KIND[e.kind] || KIND.newsletter).s) + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.</p></div>';
   }
   function saveState() {
@@ -76889,7 +77013,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w202foot">' + (SS.ro ? '' : '<button class="w152btn sm ghost" data-w202dupe>' + I('copy') + ' Make a copy</button>') +
       (!SS.ro && e.key ? (SS.confirmDel ? '<span class="w202cf">' + (e.one_off ? 'Delete this email?' : 'Remove this template? Automations that use it stop sending it.') + ' <button class="w152btn sm" data-w202delyes>Yes, remove it</button><button class="w152btn sm ghost" data-w202delno>Keep it</button></span>'
         : '<button class="w152btn sm ghost" data-w202rm>' + I('trash') + ' ' + (e.one_off ? 'Delete' : 'Remove the template') + '</button>') : '') + '</div>' +
-      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + '</div>';
+      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + '</div>';
   }
   /* ---------- edits ---------- */
   var timers = {};
@@ -76971,13 +77095,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (mode === 'change' && !str(SS.change).trim()) { SS.err = 'Tell the Hub what to change.'; paint(); return; }
     if (mode === 'answers' && !qa.some(function (q) { return str(q.answer).trim(); })) { SS.err = 'Answer at least one question first.'; paint(); return; }
     SS.err = ''; SS.busy = mode === 'change' ? 'The Hub is changing your email\u2026' : 'The Hub is putting your answers in\u2026'; paint();
-    var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [] });
+    var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [], voice: effVoice(e) });
     SS.busy = '';
     if (r.error) { SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
     SS.undo = JSON.parse(JSON.stringify({ design: e.design, subject: e.subject, preheader: e.preheader }));
-    res.design.from = e.design.from; res.design.source = e.design.source;
+    res.design.from = e.design.from; res.design.source = e.design.source; if (e.design.voice) res.design.voice = e.design.voice;
     e.design = res.design; if (res.subject) e.subject = res.subject; if (res.preheader) e.preheader = res.preheader;
     SS.questions = res.questions; SS.notes = res.notes; SS.open = {};
     if (mode === 'change') SS.change = '';
@@ -77220,6 +77344,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '.w202tabs button{all:unset;cursor:pointer;padding:7px 16px;border-radius:999px;font-weight:600;font-size:13.5px;color:' + GREEN + ';}.w202tabs button.on{background:' + GREEN + ';color:' + CREAM + ';}'
       + '@media (max-width:1100px){.w202cols.ed{grid-template-columns:1fr;}.w202tabs{display:inline-flex;}.w202cols.ed.tab-edit .w202right{display:none;}.w202cols.ed.tab-preview .w202left{display:none;}.w202right{position:static;}}'
       + '@media (max-width:900px){.w202cols.st{grid-template-columns:1fr;}.w202pickcol{max-height:none;}}'
+      /* wave203: the voices */
+      + '.w202vbtn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:7px 14px;border-radius:999px;border:1.5px solid rgba(255,250,242,.55);color:' + CREAM + ';font-size:13px;font-weight:600;}'
+      + '.w202vbtn span{font-weight:400;opacity:.8;}.w202vbtn:hover{background:rgba(255,250,242,.12);}.w202vbtn:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w202link{all:unset;cursor:pointer;color:' + PURPLE + ';text-decoration:underline;text-underline-offset:2px;font-size:inherit;}.w202link:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w202voices{display:flex;flex-direction:column;gap:12px;}.w202voices h3{display:flex;align-items:center;gap:8px;}'
+      + '.w202vread{white-space:pre-wrap;background:' + CREAM + ';border:1px solid #E6DFD3;border-radius:12px;padding:14px 16px;max-height:52vh;overflow:auto;font-size:13.5px;line-height:1.55;color:' + INK + ';}'
+      + '.w202vtext{min-height:46vh;font-size:13.5px;line-height:1.55;white-space:pre-wrap;}'
       + '@media (max-width:700px){.w202top{padding:18px;border-radius:16px;}.w202set{grid-template-columns:1fr 1fr;}.w202two{grid-template-columns:1fr;}.w202slots{grid-template-columns:1fr 1fr;}'
       + '.w202row{grid-template-columns:1fr auto;}.w202row input:nth-child(2){grid-column:1;}.w202row button{grid-row:1/3;grid-column:2;}.w202tsel{grid-template-columns:1fr;}.w202trow{grid-template-columns:96px minmax(0,1fr);}'
       + '.w202name{font-size:20px;}.w202frame{min-height:480px;}.w202dev span{display:none;}.w202mbox{padding:14px;border-radius:16px;}}';
@@ -77227,7 +77358,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   /* ---------- drawing, the routes (#crm/studio, /ai, /tpl[/key], /e/<key>, .../to/<contact>), the clicks and keys ---------- */
   function keyOf(el) {
-    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap'];
+    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft'];
     for (var i = 0; i < attrs.length; i++) if (el.hasAttribute && el.hasAttribute(attrs[i])) return '[' + attrs[i] + '="' + String(el.getAttribute(attrs[i])).replace(/"/g, '\\"') + '"]';
     return null;
   }
@@ -77255,6 +77386,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else if (sub === 'tpl') { SS.view = 'tpl'; if (parts[3] && parts[3] !== 'to') SS.start.tpl = parts[3]; }
     else if (sub === 'e') { SS.view = 'edit'; openKey(parts[3] || 'new'); }
     else SS.view = 'home';
+    SS.voices.open = false; SS.voices.editing = false;
+    if (!SS.voices.loaded) loadVoices().then(function () { if (SS.root && SS.root.isConnected) paint(); });
     css202();
   }
   function paint() {
@@ -77312,6 +77445,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (hit('data-w202edit')) { SS.peek = null; go('#crm/studio/e/' + v); return; }
     if (hit('data-w202open')) { go('#crm/studio/e/' + v); return; }
     if (hit('data-w202allrecent')) { SS.allRecent = true; paint(); return; }
+    if (hit('data-w202voicesx')) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202voices')) { openVoices(v === 'wa' || v === 'mine' ? v : null); return; }
+    if (hit('data-w202vtab')) { SS.voices.tab = v; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202vedit')) { SS.voices.editing = true; SS.voices.err = ''; SS.voices.draft = SS.voices.wa ? SS.voices.wa.text : ''; paint(); var ta = document.querySelector('#crm [data-w202vdraft]'); if (ta) { try { ta.focus({ preventScroll: true }); ta.setSelectionRange(0, 0); } catch (e) { /* fine */ } } return; }
+    if (hit('data-w202vcancel')) { SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
+    if (hit('data-w202vsave')) { saveVoice(); return; }
+    if (hit('data-w202vinbox')) { SS.voices.open = false; paint(); try { if (window.w170 && window.w170.open) window.w170.open(); } catch (e) { /* fine */ } return; }
+    if (hit('data-w202voice')) { SS.start.voice = v === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.start.voice); paint(); return; }
     if (hit('data-w202aud')) { SS.start.audience = v; if (v === 'volunteers' && SS.start.kind === 'fundraising') SS.start.kind = 'volunteer'; if (v === 'donors' && SS.start.kind === 'volunteer') SS.start.kind = 'newsletter'; paint(); return; }
     if (hit('data-w202pickstart')) { SS.pick = { to: 'start' }; loadLibrary().then(function () { paint(); }); paint(); return; }
     if (hit('data-w202sdel')) { SS.start.photos.splice(Number(v), 1); paint(); return; }
@@ -77363,6 +77504,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (a === 'kind' && ev.type === 'change') { changed(false); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
       changed(false); return;
     }
+    if (t.hasAttribute('data-w202vdraft')) { SS.voices.draft = val; return; }
+    if (t.hasAttribute('data-w202voicesel') && ev.type === 'change' && SS.d && !SS.ro) { SS.d.design.voice = val === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.d.design.voice); changed(false); return; }
     if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; return; }
     if ((a = t.getAttribute('data-w202ask'))) { SS.start.asks[a] = val; return; }
     if ((a = t.getAttribute('data-w202scap'))) { var ph = SS.start.photos[Number(a)]; if (ph) ph.caption = val; return; }
@@ -77381,6 +77524,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   document.addEventListener('keydown', function (ev) {
     if (!SS.root || !SS.root.isConnected) return;
     if (ev.key === 'Escape') {
+      if (SS.voices.open) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
       if (SS.peek) { SS.peek = null; paint(); return; }
       if (SS.pick) { SS.pick = null; paint(); return; }
       if (SS.send && within(document.activeElement)) { SS.send = null; paint(); return; }
@@ -77397,6 +77541,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       W.tours.studio = { tab: 'crm', icon: 'mail', hash: '#crm/studio', steps: [
         Tt('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'The email studio', 'Emails in the Welfare Avenue brand, for one person, a list or an automation. The Hub puts them together with you and checks them before anything goes out.', OPT),
         Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Tell the Hub: write what you want to say and add your photos. Start from a template: give it your details. Build it yourself: blocks you arrange.'),
+        Tt('#crm [data-w202voices]', 'Voices', 'The Hub writes in Welfare Avenue\u2019s house voice, drafted from our brand guide. If you have your own writing guide, pick My voice for emails you sign. Admins edit the house voice here.', OPT),
         Tt('#crm [data-w202sec="templates"]', 'Templates', 'Our starters and the team\u2019s saved templates, on four shelves: volunteers (welcome and serving; call-outs and events) and donors (thanks and impact; appeals and events). \u201cReady as is\u201d ones can go straight into an automation.'),
         Tt('#crm [data-w202sec="recent"]', 'Recent emails', 'The emails you and the team wrote here, ready to finish, send again or copy.', OPT),
         { c: 1, t: 'The Hub checks with you', p: 'It never makes up a date, a place, a number or a link: it leaves a [bracket] and asks. The studio\u2019s own checks stop an email with anything left to fill, a weekday that is not that date or a button with no link, and point out our words, alt text and the kind under Canada\u2019s anti-spam law.' },
@@ -77414,7 +77559,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     sendable: function (t) { return !!t && t.active !== false && t.kind !== 'test' && !t.one_off && !hasBrackets(t) && str(t.html_body).trim() !== '{{body_html}}'; },
     isStudio: function (t) { return !!(t && t.design); },
     MAIL202: MAIL202, checks: checks, datesIn: datesIn, checkDate: checkDate, fromAi: fromAi, aiMessages: aiMessages, aiSystem: aiSystem, designForAi: designForAi, AI_TOOL: AI_TOOL,
-    saveNow: saveNow, hasBrackets: hasBrackets
+    saveNow: saveNow, hasBrackets: hasBrackets,
+    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock
   };
 })();
 /* =====================================================================

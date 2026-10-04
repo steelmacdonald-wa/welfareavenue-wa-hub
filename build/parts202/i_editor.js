@@ -111,6 +111,8 @@
       '<label class="w155lb">Kind' + kindSel('data-w202e="kind"' + dis, e.kind) + '</label>' +
       '<label class="w155lb">For<select class="w152sel" data-w202e="audience"' + dis + '><option value="">Anyone</option>' + Object.keys(AUD).map(function (a) { return '<option value="' + a + '"' + (e.audience === a ? ' selected' : '') + '>' + E(AUD[a]) + '</option>'; }).join('') + '</select></label>' +
       '<label class="w155lb">Language' + langSel('data-w202e="lang"' + dis, e.lang) + '</label>' +
+      '<label class="w155lb">Voice <span class="m">When the Hub changes it</span><select class="w152sel" data-w202voicesel aria-label="The voice the Hub writes in"' + dis + '><option value="wa">Welfare Avenue</option>' +
+        (SS.voices.mine && (!e.created_by || lower(e.created_by) === myEmail()) ? '<option value="mine"' + (effVoice(e) === 'mine' ? ' selected' : '') + '>My voice</option>' : '') + '</select></label>' +
       '<p class="m wide">' + E((KIND[e.kind] || KIND.newsletter).s) + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.</p></div>';
   }
   function saveState() {
@@ -154,7 +156,7 @@
       '<div class="w202foot">' + (SS.ro ? '' : '<button class="w152btn sm ghost" data-w202dupe>' + I('copy') + ' Make a copy</button>') +
       (!SS.ro && e.key ? (SS.confirmDel ? '<span class="w202cf">' + (e.one_off ? 'Delete this email?' : 'Remove this template? Automations that use it stop sending it.') + ' <button class="w152btn sm" data-w202delyes>Yes, remove it</button><button class="w152btn sm ghost" data-w202delno>Keep it</button></span>'
         : '<button class="w152btn sm ghost" data-w202rm>' + I('trash') + ' ' + (e.one_off ? 'Delete' : 'Remove the template') + '</button>') : '') + '</div>' +
-      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + '</div>';
+      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + '</div>';
   }
   /* ---------- edits ---------- */
   var timers = {};
@@ -236,13 +238,13 @@
     if (mode === 'change' && !str(SS.change).trim()) { SS.err = 'Tell the Hub what to change.'; paint(); return; }
     if (mode === 'answers' && !qa.some(function (q) { return str(q.answer).trim(); })) { SS.err = 'Answer at least one question first.'; paint(); return; }
     SS.err = ''; SS.busy = mode === 'change' ? 'The Hub is changing your email…' : 'The Hub is putting your answers in…'; paint();
-    var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [] });
+    var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [], voice: effVoice(e) });
     SS.busy = '';
     if (r.error) { SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
     SS.undo = JSON.parse(JSON.stringify({ design: e.design, subject: e.subject, preheader: e.preheader }));
-    res.design.from = e.design.from; res.design.source = e.design.source;
+    res.design.from = e.design.from; res.design.source = e.design.source; if (e.design.voice) res.design.voice = e.design.voice;
     e.design = res.design; if (res.subject) e.subject = res.subject; if (res.preheader) e.preheader = res.preheader;
     SS.questions = res.questions; SS.notes = res.notes; SS.open = {};
     if (mode === 'change') SS.change = '';

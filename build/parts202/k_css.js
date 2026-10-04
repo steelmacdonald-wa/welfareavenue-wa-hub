@@ -109,6 +109,13 @@
       + '.w202tabs button{all:unset;cursor:pointer;padding:7px 16px;border-radius:999px;font-weight:600;font-size:13.5px;color:' + GREEN + ';}.w202tabs button.on{background:' + GREEN + ';color:' + CREAM + ';}'
       + '@media (max-width:1100px){.w202cols.ed{grid-template-columns:1fr;}.w202tabs{display:inline-flex;}.w202cols.ed.tab-edit .w202right{display:none;}.w202cols.ed.tab-preview .w202left{display:none;}.w202right{position:static;}}'
       + '@media (max-width:900px){.w202cols.st{grid-template-columns:1fr;}.w202pickcol{max-height:none;}}'
+      /* wave203: the voices */
+      + '.w202vbtn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-top:12px;padding:7px 14px;border-radius:999px;border:1.5px solid rgba(255,250,242,.55);color:' + CREAM + ';font-size:13px;font-weight:600;}'
+      + '.w202vbtn span{font-weight:400;opacity:.8;}.w202vbtn:hover{background:rgba(255,250,242,.12);}.w202vbtn:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w202link{all:unset;cursor:pointer;color:' + PURPLE + ';text-decoration:underline;text-underline-offset:2px;font-size:inherit;}.w202link:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w202voices{display:flex;flex-direction:column;gap:12px;}.w202voices h3{display:flex;align-items:center;gap:8px;}'
+      + '.w202vread{white-space:pre-wrap;background:' + CREAM + ';border:1px solid #E6DFD3;border-radius:12px;padding:14px 16px;max-height:52vh;overflow:auto;font-size:13.5px;line-height:1.55;color:' + INK + ';}'
+      + '.w202vtext{min-height:46vh;font-size:13.5px;line-height:1.55;white-space:pre-wrap;}'
       + '@media (max-width:700px){.w202top{padding:18px;border-radius:16px;}.w202set{grid-template-columns:1fr 1fr;}.w202two{grid-template-columns:1fr;}.w202slots{grid-template-columns:1fr 1fr;}'
       + '.w202row{grid-template-columns:1fr auto;}.w202row input:nth-child(2){grid-column:1;}.w202row button{grid-row:1/3;grid-column:2;}.w202tsel{grid-template-columns:1fr;}.w202trow{grid-template-columns:96px minmax(0,1fr);}'
       + '.w202name{font-size:20px;}.w202frame{min-height:480px;}.w202dev span{display:none;}.w202mbox{padding:14px;border-radius:16px;}}';
