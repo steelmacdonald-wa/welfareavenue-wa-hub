@@ -2,7 +2,7 @@
 """Assemble build/parts202/*.js into build/src/202_wave202.seg (non-ASCII escaped)."""
 import os
 D = os.path.dirname(os.path.abspath(__file__))
-parts = ["a_head.js", "c_blocks.js", "d_checks.js", "e_ai.js", "f_photos.js", "g_home.js", "g2_voices.js", "h_start.js", "i_editor.js", "j_send.js", "k_css.js", "z_wire.js"]
+parts = ["a_head.js", "c_blocks.js", "d_checks.js", "e_ai.js", "f_photos.js", "g_home.js", "g2_voices.js", "h_start.js", "i_editor.js", "j_send.js", "l_history.js", "m_gif.js", "m_moving.js", "n_text.js", "o_costs.js", "p_content.js", "k_css.js", "z_wire.js"]
 src = ''.join(open(os.path.join(D, f), encoding='utf8').read() for f in parts)
 out = []
 for ch in src:

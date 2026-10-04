@@ -89,6 +89,12 @@
     });
     if (imgs.some(function (p) { return !p.lib; })) add('note', 'Uploaded photos: no close-ups of the people we serve, and anyone recognizable has said yes (the Photo library’s rule).', null);
     d.blocks.forEach(function (b, i) { if ((b.type === 'photo' && !str(b.src).trim()) || (b.type === 'photos' && !(b.items || []).some(function (x) { return x && str(x.src).trim(); }))) add('warn', 'A photo block has no photo yet, so it will not show (' + where(i) + ').', i); });
+    /* wave204: the moving preview (an animated GIF from the writer's own video) */
+    d.blocks.forEach(function (b, i) {
+      if (b.type !== 'video' || !str(b.gif).trim()) return;
+      if (Number(b.gkb) > 2500) add('warn', 'The moving preview is ' + kbText(b.gkb) + ': heavy for a phone on data. Make a lighter or shorter one (' + where(i) + ').', i, 'mvkb' + i);
+      add('note', 'A moving preview comes from your own video: the photo rule applies (no close-ups of the people we serve, and anyone recognizable has said yes).', i, 'mvrule');
+    });
     /* dates */
     all.forEach(function (t) {
       datesIn(t.text).forEach(function (x) {

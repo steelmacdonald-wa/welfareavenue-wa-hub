@@ -25,6 +25,14 @@
    - wave203 (04/10/26), the voices: Steel, "draft a WA voice code from the brand guide and keep mine too as options". Welfare
      Avenue (the house voice code, app_config mail_voice_wa, admins edit it in the Voices panel) or My voice (the writer's own
      guide from Your inbox). g2_voices.js; the choice is saved with the email (design.voice), never the guide's text.
+   - wave204 (04/10/26), Soraya Tyree's review: Undo and Redo for every change, with Cmd/Ctrl+Z (l_history.js), and a way back
+     from the Hub's draft to what you wrote or your details; a moving preview for the video card, a few silent seconds of your
+     own video made into an animated GIF in the browser (m_gif.js, m_moving.js), since inboxes do not play video; text pasted
+     from a document keeps its bold, links and paragraphs, and B and Link buttons mark text without typing the symbols (n_text.js).
+     Steel, the same day: the costs in the studio "so they know how much they are spending" (o_costs.js: each email's AI spend,
+     about 2 cents by every AI button, the What it costs panel with the month's total), and "come with their content first. It
+     is unacceptable to only use AI. Bad input = bad output." (p_content.js: 40 words of your own before Tell the Hub, every
+     detail before the Hub fills a template, and a prompt that never pads thin input).
    Data: crm_email_templates (design, one_off and the shelf columns; wa202_email_studio), written only through
    email_studio_save and email_studio_remove. AI through the llm router (x-wa-task email_studio). Photos from the Photo
    library (wa_photos_list, ready ones first) or uploaded to content-images/email/. Nothing here sends on its own, and
@@ -50,7 +58,8 @@
     filter: 'all', open: {}, device: 'desktop', tab: 'edit', questions: [], answers: {}, notes: '', change: '',
     start: { brief: '', audience: 'volunteers', kind: 'volunteer', lang: 'en', photos: [], tpl: null, asks: {}, extra: '', voice: 'wa' },
     send: null, pick: null, lib: null, libQ: '', libBusy: false, uploads: 0, confirmDel: false, peek: null, allRecent: false, ro: false, pendingKey: null,
-    saveNote: '', undo: null, root: null, saveAgain: false, savingP: null
+    saveNote: '', undo: null, root: null, saveAgain: false, savingP: null,
+    hist: { past: [], future: [], cur: null, field: null, at: 0 }, back: null, startNote: null, mv: null   /* wave204 */
   };
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -111,7 +120,10 @@
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>', desktop: '<rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/>',
     back: '<path d="M19 12H5M11 6l-6 6 6 6"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     voice: '<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z"/><path d="M8 10h8M8 13h5"/>',
-    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>', chev: '<path d="m9 5 7 7-7 7"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>', chev: '<path d="m9 5 7 7-7 7"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>', redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    film: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    coin: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.6c-.5-.9-1.4-1.4-2.6-1.4-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.4 5.3 4 0 1.1-1.1 1.9-2.7 1.9-1.2 0-2.2-.5-2.7-1.5M12 6.6v1.6M12 15.9v1.5"/>'
   };
   function I(n) { return '<svg class="w202i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IC[n] || IC.spark) + '</svg>'; }
   function busyHtml(m) { return '<div class="w202busy" role="status"><span class="w202spin" aria-hidden="true"></span>' + E(m) + '</div>'; }

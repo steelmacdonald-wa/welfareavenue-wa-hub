@@ -19,10 +19,10 @@
   function fv(v) { return E(v == null ? '' : v); }
   function inp(i, path, label, value, o) {
     o = o || {};
-    var at = 'data-w202f="' + i + '.' + path + '"';
+    var at = 'data-w202f="' + i + '.' + path + '"' + (o.fmt && o.area ? ' data-w204fmt' : '');
     var ph = o.ph ? ' placeholder="' + E(o.ph) + '"' : '';
     var ctrl = o.area ? '<textarea class="w152in" ' + at + ' rows="' + (o.rows || 4) + '"' + ph + '>' + fv(value) + '</textarea>' : '<input class="w152in" ' + at + ' value="' + fv(value) + '"' + ph + (o.type ? ' type="' + o.type + '"' : '') + '>';
-    return '<label class="w155lb' + (o.half ? ' half' : '') + '">' + E(label) + (o.help ? ' <span class="m">' + E(o.help) + '</span>' : '') + ctrl + '</label>';
+    return '<label class="w155lb' + (o.half ? ' half' : '') + '">' + E(label) + (o.help ? ' <span class="m">' + E(o.help) + '</span>' : '') + (o.fmt && o.area ? fmtBar() : '') + ctrl + '</label>';
   }
   function sel(i, path, label, value, opts) {
     return '<label class="w155lb half">' + E(label) + '<select class="w152sel" data-w202f="' + i + '.' + path + '">' + opts.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(o[0]) === String(value) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('') + '</select></label>';
@@ -33,7 +33,7 @@
     return '<div class="w202slot">' + (p && p.src ? '<img src="' + E(p.src) + '" alt="' + E(p.alt || '') + '">' : '<div class="w202noimg">' + I('image') + '</div>') +
       '<div class="w202slb"><button class="w152btn sm ghost" data-w202pickfor="' + at + '">' + I('image') + (p && p.src ? ' Change' : ' Choose a photo') + '</button>' + (p && p.src ? '<button class="w152btn sm ghost" data-w202rmphoto="' + at + '">' + I('x') + ' Remove</button>' : '') + '</div></div>';
   }
-  var TEXTHELP = 'A blank line starts a new paragraph. **bold**, [words](https://link), {{first_name|there}}';
+  var TEXTHELP = 'Paste from a doc and bold and links come along. Select words, then B or Link. A blank line starts a paragraph; {{first_name|there}} is their first name.';
   function blockForm(b, i) {
     var h = '';
     if (b.type === 'hero') {
@@ -41,13 +41,13 @@
       h += inp(i, 'kicker', 'Small line above', b.kicker, { ph: 'Sunday 12 October · Cabot Square' });
       h += inp(i, 'lines', 'Headline', (b.lines || []).join('\n'), { area: true, rows: 2, help: 'Two short lines; the last one takes the colour', ph: 'Sunday\nneeds you' });
       h += '<div class="w202two">' + sel(i, 'accent', 'Colour of the last line', b.accent, [['gold', 'Gold'], ['purple', 'Purple']]) + '<div class="w155lb half">The E that moves' + chk(i, 'moveE', 'Stretch one E (once per email)', b.moveE !== false) + '</div></div>';
-      h += inp(i, 'lead', 'The sentence under it', b.lead, { area: true, rows: 2 });
+      h += inp(i, 'lead', 'The sentence under it', b.lead, { area: true, rows: 2, fmt: true });
     }
-    if (b.type === 'text') h += inp(i, 'text', 'Text', b.text, { area: true, rows: 7, help: TEXTHELP });
+    if (b.type === 'text') h += inp(i, 'text', 'Text', b.text, { area: true, rows: 7, help: TEXTHELP, fmt: true });
     if (b.type === 'heading') h += inp(i, 'text', 'Heading', b.text);
     if (b.type === 'details' || b.type === 'list' || b.type === 'stats' || b.type === 'band') {
       var field = b.type === 'details' ? 'rows' : b.type === 'band' ? 'links' : 'items', rows = b[field] || [];
-      if (b.type === 'band') { h += inp(i, 'title', 'Title', b.title); h += inp(i, 'text', 'Text', b.text, { area: true, rows: 3 }); }
+      if (b.type === 'band') { h += inp(i, 'title', 'Title', b.title); h += inp(i, 'text', 'Text', b.text, { area: true, rows: 3, fmt: true }); }
       if (b.type === 'stats') { h += '<div class="w202two">' + sel(i, 'style', 'Background', b.style, [['green', 'Green card'], ['cream', 'Cream with rules']]) + inp(i, 'title', 'Small title', b.title, { half: true, ph: 'Since April 2020' }) + '</div>'; }
       h += '<div class="w202rows">' + rows.map(function (r, k) {
         var a, c;
@@ -68,9 +68,9 @@
         '<input class="w152in" data-w202f="' + i + '.items.' + k + '.alt" value="' + fv(p.alt) + '" placeholder="What it shows" aria-label="What photo ' + (k + 1) + ' shows">' +
         '<input class="w152in" data-w202f="' + i + '.items.' + k + '.caption" value="' + fv(p.caption) + '" placeholder="Caption (optional)" aria-label="Caption for photo ' + (k + 1) + '"></div>'; }).join('') + '</div>';
     }
-    if (b.type === 'video') { h += inp(i, 'url', 'Link to the video', b.url, { ph: 'https://www.instagram.com/reel/...' }) + '<div class="w202two">' + inp(i, 'title', 'Title', b.title, { half: true, ph: 'What is a serving?' }) + inp(i, 'caption', 'Line under it', b.caption, { half: true, ph: 'Tap to watch' }) + '</div><p class="m">Videos never play inside an email: the card links to it.</p>'; }
-    if (b.type === 'quote') { h += inp(i, 'quote', 'The quote', b.quote, { area: true, rows: 3 }) + inp(i, 'by', 'Who said it', b.by, { ph: 'A volunteer, fall 2025' }); }
-    if (b.type === 'signoff') { h += '<div class="w202two">' + inp(i, 'closing', 'Closing', b.closing, { half: true, ph: 'Warmly,' }) + inp(i, 'name', 'Name', b.name, { half: true }) + '</div>' + inp(i, 'role', 'Under the name', b.role, { ph: 'Welfare Avenue' }) + inp(i, 'ps', 'P.S.', b.ps, { area: true, rows: 2, help: 'Optional' }); }
+    if (b.type === 'video') { h += inp(i, 'url', 'Link to the video', b.url, { ph: 'https://www.youtube.com/watch?v=...', help: 'Where a tap goes: YouTube, Instagram, Google Drive or our website' }) + '<div class="w202two">' + inp(i, 'title', 'Title', b.title, { half: true, ph: 'What is a serving?' }) + inp(i, 'caption', 'Line under it', b.caption, { half: true, ph: 'Tap to watch' }) + '</div>' + movingSlot(i, b); }
+    if (b.type === 'quote') { h += inp(i, 'quote', 'The quote', b.quote, { area: true, rows: 3, fmt: true }) + inp(i, 'by', 'Who said it', b.by, { ph: 'A volunteer, fall 2025' }); }
+    if (b.type === 'signoff') { h += '<div class="w202two">' + inp(i, 'closing', 'Closing', b.closing, { half: true, ph: 'Warmly,' }) + inp(i, 'name', 'Name', b.name, { half: true }) + '</div>' + inp(i, 'role', 'Under the name', b.role, { ph: 'Welfare Avenue' }) + inp(i, 'ps', 'P.S.', b.ps, { area: true, rows: 2, help: 'Optional', fmt: true }); }
     if (b.type === 'divider') h += sel(i, 'style', 'Kind', b.style, [['rule', 'A short gold rule'], ['space', 'Just space']]);
     return h;
   }
@@ -93,7 +93,7 @@
     return '<div class="w154card w202q" data-w202sec="questions"><h3>' + I('spark') + ' The Hub’s questions</h3>' + (SS.notes ? '<p class="m" data-w198skip>' + E(SS.notes) + '</p>' : '') +
       (qs.length ? '<p class="m">Answer what you can, then let the Hub put your answers in. The [brackets] in the email are the same gaps.</p>' + qs.map(function (q) {
         return '<label class="w155lb" data-w198skip>' + E(q.ask) + (q.why ? ' <span class="m">' + E(q.why) + '</span>' : '') + '<input class="w152in" data-w202qa="' + E(q.id) + '" value="' + E(q.answer || '') + '" placeholder="' + E(q.hint ? 'For example: ' + q.hint : '') + '"></label>';
-      }).join('') + '<div class="w154acts"><button class="w152btn" data-w202answers' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put my answers in</button><button class="w152btn ghost" data-w202qx>I’ll fix it myself</button></div>'
+      }).join('') + '<div class="w154acts"><button class="w152btn" data-w202answers' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put my answers in ' + aboutStep() + '</button><button class="w152btn ghost" data-w202qx>I’ll fix it myself</button></div>'
         : '<div class="w154acts"><button class="w152btn ghost sm" data-w202qx>Got it</button></div>') + '</div>';
   }
   function checksHtml() {
@@ -142,9 +142,9 @@
     var e = SS.d; if (!e) return busyHtml('Opening the email…');
     var owner = !SS.ro ? '' : '<div class="w202ro">' + I('alert') + ' <span>' + (e.created_by === 'starter' ? 'This is one of our starters: only admins change it.' : 'This is ' + E(str(e.created_by).split('@')[0]) + '’s email: only they or an admin change it.') + ' Copy it to make it yours.</span><button class="w152btn sm" data-w202copy>' + I('copy') + ' Copy it</button></div>';
     return '<div class="w202 w202ed">' +
-      '<div class="w202bar"><button class="w152btn sm ghost" data-w202go="#crm/studio">' + I('back') + ' The studio</button>' +
+      '<div class="w202bar"><button class="w152btn sm ghost" data-w202go="#crm/studio">' + I('back') + ' The studio</button>' + backBtn() +
       '<input class="w202name" data-w202e="name" value="' + E(e.name) + '" aria-label="The email’s name (for the team)"' + (SS.ro ? ' disabled' : '') + ' data-w198skip>' +
-      '<span id="w202ss">' + saveState() + '</span><span class="w202sp"></span>' +
+      '<span id="w202ss">' + saveState() + '</span>' + histBar() + '<span class="w202sp"></span>' +
       (e.one_off ? '' : '<span class="w202chip g">Template</span>') +
       '<button class="w152btn sm" data-w202sendopen>' + I('send') + ' Send or save…</button></div>' + owner +
       (SS.msg ? '<div class="w154msg">' + E(SS.msg) + (SS.undo ? ' <button class="w152btn sm ghost" data-w202undo>Undo</button>' : '') + '</div>' : '') + (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
@@ -152,17 +152,19 @@
       '<div class="w202cols ed tab-' + SS.tab + '"><div class="w202left">' + sendHtml() + settingsHtml() + questionsHtml() + checksHtml() + blocksHtml() +
       (SS.ro ? '' : '<div class="w154card w202chg" data-w202sec="change"><h3>' + I('spark') + ' Ask the Hub to change it</h3>' +
         '<textarea class="w152in w202say" data-w202say="change" rows="3" placeholder="Make it shorter. Warmer. Put the date first. Write it in French. Add a P.S. about bringing a friend.">' + E(SS.change) + '</textarea>' +
-        '<div class="w154acts"><button class="w152btn" data-w202change' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Change it</button></div>' + (SS.busy ? busyHtml(SS.busy) : '') + '</div>') +
+        '<div class="w154acts"><button class="w152btn" data-w202change' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Change it ' + aboutStep() + '</button></div>' + (SS.busy ? busyHtml(SS.busy) : '') +
+        '<p class="m w204cost" id="w204cost">' + emailCostLine(e) + ' <button class="w202link" data-w204costs>What it costs</button></p></div>') +
       '<div class="w202foot">' + (SS.ro ? '' : '<button class="w152btn sm ghost" data-w202dupe>' + I('copy') + ' Make a copy</button>') +
       (!SS.ro && e.key ? (SS.confirmDel ? '<span class="w202cf">' + (e.one_off ? 'Delete this email?' : 'Remove this template? Automations that use it stop sending it.') + ' <button class="w152btn sm" data-w202delyes>Yes, remove it</button><button class="w152btn sm ghost" data-w202delno>Keep it</button></span>'
         : '<button class="w152btn sm ghost" data-w202rm>' + I('trash') + ' ' + (e.one_off ? 'Delete' : 'Remove the template') + '</button>') : '') + '</div>' +
-      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + '</div>';
+      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + movingHtml() + costsHtml() + '</div>';
   }
   /* ---------- edits ---------- */
   var timers = {};
   function later(name, ms, fn) { clearTimeout(timers[name]); timers[name] = setTimeout(fn, ms); }
-  function changed(structural) {
+  function changed(structural, field) {
     if (!SS.d || SS.ro) return;
+    histRecord(field);   /* wave204: every change is a step for Undo (typing in one field: one step until a pause) */
     SS.dirty = true; SS.saveNote = ''; updateSaveState();
     if (structural) { paint(); } else { later('pv', 300, refreshPreview); later('ck', 500, refreshChecks); }
     later('save', 2500, function () { if (SS.dirty) saveNow(); });
@@ -186,6 +188,7 @@
         var m = ev.target.closest && ev.target.closest('[data-w202b]'); if (!m) return;
         var i = Number(m.getAttribute('data-w202b')); openBlock(i);
       });
+      doc.addEventListener('keydown', onKey);   /* wave204: Cmd/Ctrl+Z works with the preview in focus too */
     } catch (e) { /* fine */ }
   }
   function openBlock(i) {
@@ -240,9 +243,11 @@
     SS.err = ''; SS.busy = mode === 'change' ? 'The Hub is changing your email…' : 'The Hub is putting your answers in…'; paint();
     var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [], voice: effVoice(e) });
     SS.busy = '';
-    if (r.error) { SS.err = r.error; paint(); return; }
+    if (r.error) { spent(e, r.cost); SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
-    if (!res.design.blocks.length) { SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
+    if (!res.design.blocks.length) { spent(e, r.cost); SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
+    res.design.ai = addCost(e.design.ai, r.cost);   /* wave204: what the Hub's work on this email has cost */
+    keepMoving(e.design, res.design);   /* wave204: a video card keeps its moving preview */
     SS.undo = JSON.parse(JSON.stringify({ design: e.design, subject: e.subject, preheader: e.preheader }));
     res.design.from = e.design.from; res.design.source = e.design.source; if (e.design.voice) res.design.voice = e.design.voice;
     e.design = res.design; if (res.subject) e.subject = res.subject; if (res.preheader) e.preheader = res.preheader;

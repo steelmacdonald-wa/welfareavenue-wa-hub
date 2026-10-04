@@ -141,7 +141,9 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const until = async (f, fn, arg, ms) => { try { await f.page.waitForFunction(fn, arg, { timeout: ms || 6000 }); return true; } catch (e) { return false; } };
 const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.view, key: s.d && s.d.key, subject: s.d && s.d.subject, blocks: s.d ? s.d.design.blocks.map(b => b.type) : [], q: (s.questions || []).length, ro: !!s.ro, dirty: !!s.dirty, msg: s.msg, err: s.err, send: s.send ? s.send.tab : null }; });
 
-(async () => {
+/* wave204: w204drive.js reuses the fixture, the fakes and the helpers */
+module.exports = { fixture, FAKE, text, click, setv, wait, until, SS, GUIDE, VOICE };
+if (require.main === module) (async () => {
   const browser = await launch();
   const cand = process.env.CAND || undefined;
 
@@ -193,8 +195,8 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   b = await f.ev(() => [...document.querySelectorAll('#crm [data-w202voice]')].map(x => x.textContent + (x.classList.contains('on') ? '*' : '')));
   ok('Tell the Hub offers the voices: Welfare Avenue (chosen) and My voice', b.join('|') === 'Welfare Avenue*|My voice', b);
   await click(f, '#crm [data-w202startai]'); await wait(300);
-  ok('too few words: the Hub asks for more before calling the AI', /a little more/.test(await text(f, '#crm .w152err') || '') && (await f.ev(() => window.__llm.length)) === 0);
-  await setv(f, '#crm textarea[data-w202say="brief"]', 'We need three more servers this Saturday 11 October at Cabot Square, 11 to 2. Sign up on the website.');
+  ok('too few words: the Hub asks for your content first before calling the AI (wave204: 40 words)', /Bring your content first/.test(await text(f, '#crm .w152err') || '') && (await f.ev(() => window.__llm.length)) === 0);
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'We need three more servers this Saturday 11 October at Cabot Square, 11 to 2. Sign up on the website. It is the first cold Sunday of the fall and the line will be long, so we want every table covered. Servers plate the meals and share the table with our community.');
   await click(f, '#crm [data-w202pickstart]'); await wait(700);
   b = await f.ev(() => ({ cells: document.querySelectorAll('#crm .w202pcell').length, badge: (document.querySelector('#crm .w202pcell.notready em') || {}).textContent }));
   ok('the photo picker shows the Photo library, ready ones first, the others marked', b.cells === 2 && b.badge === 'consent', b);
@@ -319,6 +321,10 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   ok('the template start lists the templates and asks the call-out’s four details', b.rows === 10 && b.on === 'st_callout' && b.asks.join(',') === 'date,roles,where,why', b);
   await setv(f, '#crm [data-w202ask="date"]', 'Sunday 11 October, 11 am to 2 pm');
   await setv(f, '#crm [data-w202ask="roles"]', '3 servers');
+  await click(f, '#crm [data-w202starttpl="ai"]'); await wait(300);
+  ok('wave204: with details still empty, Fill it in with the Hub asks for your content first', /Give the template your details first: 2 of 4 still empty/.test(await text(f, '#crm .w152err') || '') && (await f.ev(() => window.__llm.length)) === 3, await text(f, '#crm .w152err'));
+  await setv(f, '#crm [data-w202ask="where"]', 'Cabot Square');
+  await setv(f, '#crm [data-w202ask="why"]', 'The first cold Sunday of the fall, so the line will be long.');
   await click(f, '#crm [data-w202starttpl="ai"]');
   await until(f, () => /^#crm\/studio\/e\/st_t/.test(location.hash) && window.__llm.length >= 4, null, 8000); await wait(800);
   b = await f.ev(() => ({ txt: window.__llm[3].body.messages[0].content[0].text, s: window.w202.state().d, hash: location.hash }));
@@ -352,7 +358,7 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   await click(f, '[data-w202fromcontact]'); await wait(1200);
   b = await f.ev(() => ({ hash: location.hash, to: window.w202.state().to, view: window.w202.state().view, sheet: window.w152.state().sheet }));
   ok('the link opens Tell the Hub for that person', b.hash === '#crm/studio/ai/to/5001' && b.to === '5001' && b.view === 'ai' && !b.sheet, b);
-  await setv(f, '#crm textarea[data-w202say="brief"]', 'Thank Amara for serving three Sundays in a row and ask her to lead a table on Sunday 11 October.');
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'Thank Amara for serving three Sundays in a row and ask her to lead a table on Sunday 11 October. She knows the setup, she is calm with a long line, and the newer servers already go to her with questions, so leading a table would make it official.');
   await click(f, '#crm [data-w202startai]');
   await until(f, () => /^#crm\/studio\/e\/st_t/.test(location.hash), null, 8000); await wait(900);
   b = await f.ev(() => ({ send: window.w202.state().send, who: (document.querySelector('#crm .w202who') || {}).innerText }));
@@ -367,7 +373,7 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   b = await f.ev(() => { const v = document.querySelector('#crm [data-w202voice]'); return { on: [...document.querySelectorAll('#crm [data-w202voice]')].map(x => x.textContent + (x.classList.contains('on') ? '*' : '')).join('|'), note: v ? v.closest('.w155lb').innerText : '' }; });
   ok('My voice can be picked for an email Steel signs', b.on === 'Welfare Avenue|My voice*' && /Your own writing guide/.test(b.note), b);
   await shot(f, '09-myvoice');
-  await setv(f, '#crm textarea[data-w202say="brief"]', 'Thank you to everyone who served on Sunday 4 October at Cabot Square. The next serving is Sunday 18 October.');
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'Thank you to everyone who served on Sunday 4 October at Cabot Square. The next serving is Sunday 18 October. We served a warm meal to everyone in the line, the drivers were on time, and three new volunteers stayed to help pack up the tables at the end.');
   const n0 = await f.ev(() => window.__llm.length);
   await click(f, '#crm [data-w202startai]');
   await until(f, n => window.__llm.length > n && /^#crm\/studio\/e\/st_t/.test(location.hash) && !window.w202.state().busy, n0, 8000); await wait(800);
@@ -399,7 +405,7 @@ const SS = f => f.ev(() => { const s = window.w202.state(); return { view: s.vie
   await click(f, '#crm [data-w202vcancel]'); await wait(200); await f.page.keyboard.press('Escape'); await wait(300);
   await f.hash('#crm/studio/ai', 1200);
   await click(f, '#crm [data-w202voice="wa"]'); await wait(200);
-  await setv(f, '#crm textarea[data-w202say="brief"]', 'We need two drivers on Sunday 18 October from 9 am. Sign up on the website.');
+  await setv(f, '#crm textarea[data-w202say="brief"]', 'We need two drivers on Sunday 18 October from 9 am. Sign up on the website. Drivers pick up the cooked meals from our cooks in the morning and bring them to Cabot Square, with a short stop for the cutlery, and they are free once the food is unloaded.');
   const n2 = await f.ev(() => window.__llm.length);
   await click(f, '#crm [data-w202startai]');
   await until(f, n => window.__llm.length > n && !window.w202.state().busy, n2, 8000); await wait(500);

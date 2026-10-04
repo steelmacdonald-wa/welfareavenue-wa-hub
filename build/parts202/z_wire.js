@@ -1,6 +1,6 @@
   /* ---------- drawing, the routes (#crm/studio, /ai, /tpl[/key], /e/<key>, .../to/<contact>), the clicks and keys ---------- */
   function keyOf(el) {
-    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft'];
+    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft', 'data-w204mvstart'];
     for (var i = 0; i < attrs.length; i++) if (el.hasAttribute && el.hasAttribute(attrs[i])) return '[' + attrs[i] + '="' + String(el.getAttribute(attrs[i])).replace(/"/g, '\\"') + '"]';
     return null;
   }
@@ -15,6 +15,7 @@
     if (!t) { SS.d = null; SS.pendingKey = key; return; }
     SS.pendingKey = null;
     SS.d = fromRow(t); SS.ro = !canEdit(t); SS.questions = []; SS.notes = ''; SS.open = {}; SS.send = null; SS.undo = null; SS.dirty = false; SS.savedAt = null; SS.saveNote = ''; SS.change = '';
+    histReset();   /* wave204: a new history for this email */
     if (SS.to && !SS.ro) setTimeout(function () { openSend('person'); }, 0);
   }
   function open(parts) {
@@ -29,6 +30,7 @@
     else if (sub === 'e') { SS.view = 'edit'; openKey(parts[3] || 'new'); }
     else SS.view = 'home';
     SS.voices.open = false; SS.voices.editing = false;
+    closeMoving(); SS.costs.open = false; if (SS.startNote && SS.startNote.view !== SS.view) SS.startNote = null;   /* wave204: the note shows on the step you went back to, once */
     if (!SS.voices.loaded) loadVoices().then(function () { if (SS.root && SS.root.isConnected) paint(); });
     css202();
   }
@@ -55,13 +57,14 @@
     root.innerHTML = SS.view === 'ai' ? aiStartHtml() : SS.view === 'tpl' ? tplStartHtml() : SS.view === 'edit' ? editorHtml() : homeHtml();
     if (k) { var el = root.querySelector(k); if (el) { try { el.focus({ preventScroll: true }); if (caret && caret[0] != null && el.setSelectionRange) el.setSelectionRange(caret[0], caret[1]); } catch (e) { /* fine */ } } }
     Array.prototype.forEach.call(root.querySelectorAll('iframe.w202frame'), function (f) { f.addEventListener('load', function () { wireFrame(f); }); });
+    movingAfterPaint();
     try { if (window.w201 && window.w201.scan) window.w201.scan(); } catch (e) { /* fine */ }
   }
   function within(t) { return t && t.closest && t.closest('.w202root'); }
   function blockAt(s) { var p = String(s).split(','); return { i: Number(p[0]), k: p.length > 1 ? Number(p[1]) : null }; }
   function copyCurrent() {
     var e = SS.d; if (!e) return;
-    var d = JSON.parse(JSON.stringify(e.design)); (d.blocks || []).forEach(function (b) { b.id = MAIL202.uid(); });
+    var d = JSON.parse(JSON.stringify(e.design)); (d.blocks || []).forEach(function (b) { b.id = MAIL202.uid(); }); delete d.ai;   /* wave204: a copy starts with nothing spent */
     openDraft(draftFrom({ name: e.name + ' (copy)', kind: e.kind, audience: e.audience, lang: e.lang, subject: e.subject, preheader: e.preheader, design: d }), {});
   }
   async function removeEmail() {
@@ -87,6 +90,8 @@
     if (hit('data-w202edit')) { SS.peek = null; go('#crm/studio/e/' + v); return; }
     if (hit('data-w202open')) { go('#crm/studio/e/' + v); return; }
     if (hit('data-w202allrecent')) { SS.allRecent = true; paint(); return; }
+    if (hit('data-w204costsx')) { SS.costs.open = false; paint(); return; }
+    if (hit('data-w204costs')) { openCosts(); return; }
     if (hit('data-w202voicesx')) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
     if (hit('data-w202voices')) { openVoices(v === 'wa' || v === 'mine' ? v : null); return; }
     if (hit('data-w202vtab')) { SS.voices.tab = v; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
@@ -106,6 +111,20 @@
     if (hit('data-w202pickx')) { SS.pick = null; paint(); return; }
     if (SS.view !== 'edit' || !SS.d) return;
     var bl = SS.d.design.blocks;
+    /* wave204: undo and redo, back to the step before, the moving preview's panel, B and Link */
+    if (hit('data-w204hist')) { histGo(Number(v) < 0 ? -1 : 1); return; }
+    if (hit('data-w204back')) { backToStart(); return; }
+    if (hit('data-w204mvx')) { if (!(SS.mv && SS.mv.busy)) { closeMoving(); paint(); } return; }
+    if (SS.mv && !SS.mv.busy) {
+      var M = SS.mv;
+      if (hit('data-w204mvlen')) { M.len = Number(v) || 3; M.start = Math.min(M.start, Math.max(0, M.dur - M.len)); mvStale(); paint(); return; }
+      if (hit('data-w204mvshape')) { M.shape = v; mvStale(); paint(); return; }
+      if (hit('data-w204mvsize')) { M.size = v; mvStale(); paint(); return; }
+      if (hit('data-w204mvhere')) { var mvv = SS.root.querySelector('[data-w204mvvideo]'); if (mvv) { try { mvv.pause(); } catch (e) { /* fine */ } M.start = Math.max(0, Math.min(Number(mvv.currentTime) || 0, M.dur - M.len)); mvStale(); paint(); } return; }
+      if (hit('data-w204mvmake')) { makeMoving(); return; }
+      if (hit('data-w204mvuse')) { useMoving(); return; }
+    }
+    if (hit('data-w204fmtb')) { var lb = el.closest('label'), fta = lb && lb.querySelector('textarea'); if (fta && !SS.ro) fmtApply(fta, v); return; }
     if (hit('data-w202tog')) { var bt = bl[Number(v)]; if (bt) { SS.open[bt.id] = !SS.open[bt.id]; paint(); } return; }
     if (hit('data-w202goto')) { openBlock(Number(v)); return; }
     if (hit('data-w202dev')) { SS.device = v; paint(); return; }
@@ -135,20 +154,29 @@
     if (hit('data-w202pickfor')) { var at = blockAt(v); SS.pick = { to: 'block', i: at.i, k: at.k }; loadLibrary().then(function () { paint(); }); paint(); return; }
     if (hit('data-w202rmphoto')) { var ar = blockAt(v), b = bl[ar.i]; if (b) { var tg = ar.k == null ? b : (b.items || [])[ar.k]; if (tg) { tg.src = ''; delete tg.lib; delete tg.usage; } changed(true); } return; }
     if (hit('data-w202rowadd')) { var ra = v.split(','), rb = bl[Number(ra[0])]; if (rb) { rb[ra[1]] = rb[ra[1]] || []; rb[ra[1]].push(Object.assign({}, rb.type === 'stats' ? { n: '', label: '' } : ROW[ra[1]])); changed(true); } return; }
+    if (hit('data-w204mvrm')) { var mb = bl[Number(v)]; if (mb) { delete mb.gif; delete mb.gw; delete mb.gh; delete mb.gkb; changed(true); } return; }
     if (hit('data-w202rowdel')) { var rd = v.split(','), rbl = bl[Number(rd[0])]; if (rbl && rbl[rd[1]]) { rbl[rd[1]].splice(Number(rd[2]), 1); changed(true); } return; }
   });
   function onField(ev) {
     var t = ev.target; if (!within(t)) return;
     var val = t.type === 'checkbox' ? t.checked : t.value, a;
-    if ((a = t.getAttribute('data-w202f')) && SS.d && !SS.ro) { var p = a.split('.'); setPath(Number(p[0]), p.slice(1).join('.'), val); changed(false); return; }
+    if ((a = t.getAttribute('data-w202f')) && SS.d && !SS.ro) { var p = a.split('.'); setPath(Number(p[0]), p.slice(1).join('.'), val); changed(false, 'f' + a); return; }
     if ((a = t.getAttribute('data-w202e')) && SS.d && !SS.ro) {
       SS.d[a] = a === 'audience' ? (val || null) : val;
-      if (a === 'kind' && ev.type === 'change') { changed(false); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
-      changed(false); return;
+      if (a === 'kind' && ev.type === 'change') { changed(false, 'ekind'); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
+      changed(false, 'e' + a); return;
+    }
+    if ((a = t.getAttribute('data-w204vfile')) != null && ev.type === 'change') { var vf = t.files && t.files[0]; t.value = ''; openMoving(Number(a), vf); return; }
+    if (t.hasAttribute('data-w204mvstart') && SS.mv) {
+      var Mv = SS.mv; Mv.start = Math.max(0, Math.min(Number(val) || 0, Mv.dur - Mv.len));
+      var lab = document.getElementById('w204mvt'); if (lab) lab.textContent = mvSpan(Mv);
+      var vv = SS.root && SS.root.querySelector('[data-w204mvvideo]'); if (vv) { try { vv.currentTime = Mv.start; } catch (e) { /* fine */ } }
+      if (ev.type === 'change' && Mv.out) { mvStale(); paint(); }
+      return;
     }
     if (t.hasAttribute('data-w202vdraft')) { SS.voices.draft = val; return; }
     if (t.hasAttribute('data-w202voicesel') && ev.type === 'change' && SS.d && !SS.ro) { SS.d.design.voice = val === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.d.design.voice); changed(false); return; }
-    if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; return; }
+    if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; if (a === 'brief') updateMeter(); return; }
     if ((a = t.getAttribute('data-w202ask'))) { SS.start.asks[a] = val; return; }
     if ((a = t.getAttribute('data-w202scap'))) { var ph = SS.start.photos[Number(a)]; if (ph) ph.caption = val; return; }
     if ((a = t.getAttribute('data-w202qa'))) { (SS.questions || []).forEach(function (q) { if (q.id === a) q.answer = val; }); return; }
@@ -162,17 +190,30 @@
     if (t.getAttribute('data-w202file') && ev.type === 'change') { uploadFiles(t.files, SS.pick && SS.pick.to === 'start' ? 'start' : 'block'); t.value = ''; return; }
   }
   document.addEventListener('input', onField);
-  document.addEventListener('change', function (ev) { var t = ev.target; if (!within(t)) return; if (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'file') onField(ev); });
-  document.addEventListener('keydown', function (ev) {
+  document.addEventListener('change', function (ev) { var t = ev.target; if (!within(t)) return; if (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'file' || t.type === 'range') onField(ev); });
+  document.addEventListener('paste', onPaste);
+  document.addEventListener('mousedown', function (ev) { var t = ev.target; if (t && t.closest && t.closest('[data-w204fmtb]') && within(t)) ev.preventDefault(); });   /* B and Link keep the selection */
+  document.addEventListener('keydown', onKey);
+  function onKey(ev) {
     if (!SS.root || !SS.root.isConnected) return;
+    var mod = ev.ctrlKey || ev.metaKey, k = String(ev.key || '').toLowerCase();
+    /* wave204: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z and Ctrl+Y step through the email's history; Cmd/Ctrl+B and K mark text */
+    if (mod && !ev.altKey && (k === 'z' || k === 'y') && SS.view === 'edit' && SS.d && !SS.ro && !SS.mv && !SS.pick && !SS.voices.open && histKeyOk(document.activeElement)) {
+      var redo = k === 'y' ? (ev.ctrlKey && !ev.metaKey && !ev.shiftKey) : ev.shiftKey;
+      if (k === 'y' && !redo) return;
+      ev.preventDefault(); histGo(redo ? 1 : -1); return;
+    }
+    if (mod && !ev.altKey && !ev.shiftKey && (k === 'b' || k === 'k') && ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-w204fmt') && !SS.ro) { ev.preventDefault(); fmtApply(ev.target, k === 'b' ? 'b' : 'link'); return; }
     if (ev.key === 'Escape') {
+      if (SS.mv) { if (!SS.mv.busy) { closeMoving(); paint(); } return; }
+      if (SS.costs.open) { SS.costs.open = false; paint(); return; }
       if (SS.voices.open) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
       if (SS.peek) { SS.peek = null; paint(); return; }
       if (SS.pick) { SS.pick = null; paint(); return; }
       if (SS.send && within(document.activeElement)) { SS.send = null; paint(); return; }
     }
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S') && SS.view === 'edit' && SS.d && !SS.ro) { ev.preventDefault(); saveNow(); }
-  });
+  }
 
   /* ---------- the page tour (wave122's engine; trainings row tour:studio) ---------- */
   function addTour() {
@@ -182,12 +223,12 @@
       var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.studio = { tab: 'crm', icon: 'mail', hash: '#crm/studio', steps: [
         Tt('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'The email studio', 'Emails in the Welfare Avenue brand, for one person, a list or an automation. The Hub puts them together with you and checks them before anything goes out.', OPT),
-        Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Tell the Hub: write what you want to say and add your photos. Start from a template: give it your details. Build it yourself: blocks you arrange.'),
+        Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Bring your content first: the Hub shapes what you give it and never writes the email for you. Tell the Hub: your words (40 or more) and your photos. Start from a template: all its details. Build it yourself: blocks you arrange. What it costs shows the price of each step (about 2 cents) and the month so far.'),
         Tt('#crm [data-w202voices]', 'Voices', 'The Hub writes in Welfare Avenue’s house voice, drafted from our brand guide. If you have your own writing guide, pick My voice for emails you sign. Admins edit the house voice here.', OPT),
         Tt('#crm [data-w202sec="templates"]', 'Templates', 'Our starters and the team’s saved templates, on four shelves: volunteers (welcome and serving; call-outs and events) and donors (thanks and impact; appeals and events). “Ready as is” ones can go straight into an automation.'),
         Tt('#crm [data-w202sec="recent"]', 'Recent emails', 'The emails you and the team wrote here, ready to finish, send again or copy.', OPT),
         { c: 1, t: 'The Hub checks with you', p: 'It never makes up a date, a place, a number or a link: it leaves a [bracket] and asks. The studio’s own checks stop an email with anything left to fill, a weekday that is not that date or a button with no link, and point out our words, alt text and the kind under Canada’s anti-spam law.' },
-        { c: 1, t: 'The editor', p: 'The blocks on the left (a headline with the E that moves, text, details, a dot list, the gold button, photos, a video card, a band of links, a quote, numbers, the sign-off), the email on the right as it will look on a computer or a phone. Click any part of the email to edit it, or ask the Hub to change it.' },
+        { c: 1, t: 'The editor', p: 'The blocks on the left (a headline with the E that moves, text, details, a dot list, the gold button, photos, a video card with a moving preview, a band of links, a quote, numbers, the sign-off), the email on the right as it will look on a computer or a phone. Click any part of the email to edit it, or ask the Hub to change it. Undo and Redo (or Cmd+Z) step back through every change.' },
         { c: 1, t: 'Send or save', p: 'Send yourself a test, send it to one person (the permission rule decides), make a campaign for a list (the Campaigns tab checks and sends it), or save it as a template: the automations can then send it as a “Saved email”. While the Hub is in test mode, only the test recipients get email.' }
       ] };
       return true;
@@ -202,6 +243,7 @@
     isStudio: function (t) { return !!(t && t.design); },
     MAIL202: MAIL202, checks: checks, datesIn: datesIn, checkDate: checkDate, fromAi: fromAi, aiMessages: aiMessages, aiSystem: aiSystem, designForAi: designForAi, AI_TOOL: AI_TOOL,
     saveNow: saveNow, hasBrackets: hasBrackets,
-    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock
+    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock,
+    histGo: histGo, htmlToMark: htmlToMark, GIF204: GIF204, keepMoving: keepMoving, mvDims: mvDims   /* wave204 */
   };
 })();

@@ -52,6 +52,7 @@
       voiceBlock(voice),
       'Whatever the voice: never "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club" or "just volunteers"; no em dashes or en dashes as punctuation (a comma, a colon or a full stop instead); no hashtags; at most one exclamation mark.',
       'Facts: never invent a date, a time, a place, an amount, a number, a name, a quote or a link. Use only what the writer gave, the template\'s own words, and these public figures: 14,000+ meals since April 2020, 250+ servings, 600+ volunteers (our best estimates from our records, rounded down); giving: $25 covers one recipe (a fruit salad for 8 to 10 people), $75 one volunteer cook\'s batch (a dish for 30 to 35 people), $250 the groceries for a whole Sunday serving (about 50 plates), $20 a month about 100 portions a year. Add no claims the writer did not make about how things go (no experience needed, training, who will be there, what happens after signing up, what to bring, food, parking, how long it takes): leave them out, or write a [placeholder] and ask when the email needs one. When something the email needs is missing, write a short [placeholder in square brackets] where it goes and ask about it in questions. When two things disagree (a weekday that is not that date, times that do not add up, a number that changed), ask. Today is ' + todayLine() + ' in Montreal; the next three weeks: ' + nextDays(21) + '. A date without a year is the next one to come. Work out "this Saturday" or "next Sunday" from that list, never from memory.',
+      'Content: the writer\'s own content comes first. Build the email from what they gave, keeping their words, facts and order where they work. Never write what they did not give: no filler paragraphs, no invented stories, examples, feelings or reasons. When what they gave is thin, keep the email short and ask for more in your questions rather than padding it.',
       'Links you may use when they fit: https://welfareavenue.com (the website), https://welfareavenue.com/volunteer/ (volunteer sign-up), https://welfareavenue.com/donate/ (giving). Any other link only if the writer gave it.',
       'Shape: one hero first (a kicker, a headline in two short lines, the last line the coloured one, a lead sentence, a doodle), then "Hi {{first_name|there}}," and short paragraphs; details for when and where (and what to bring, when the writer said); a dot list for two to five parallel points; one gold button for the one thing to do (a caption under it only when the writer gave one or it is plainly true, like "On our website"); the writer\'s photos where they help; a sign-off with the sender\'s name when known, else "[Who signs it]". 120 to 300 words unless the material needs more. Keep every {{placeholder}} exactly as written, and use {{first_name|there}} for the greeting.',
       'Subject: under 60 characters, specific, honest, may use {{first_name|friend}}. Preview line: under 90 characters, adds to the subject.',
@@ -87,7 +88,7 @@
     };
     return JSON.stringify((d && d.blocks || []).map(function (b) {
       var o = {};
-      Object.keys(b).forEach(function (k) { if (['id', 'lib', 'usage', 'src', 'items'].indexOf(k) < 0 && b[k] !== '' && b[k] != null) o[k] = b[k]; });
+      Object.keys(b).forEach(function (k) { if (['id', 'lib', 'usage', 'src', 'items', 'gif', 'gw', 'gh', 'gkb'].indexOf(k) < 0 && b[k] !== '' && b[k] != null) o[k] = b[k]; });   /* wave204: a moving preview stays with the card (keepMoving), the model never sees it */
       if (b.type === 'photo' && str(b.src).trim()) o.photo = idx(b.src, b.alt, b.lib, b.usage);
       if (b.type === 'photos') { var its = (b.items || []).filter(function (x) { return x && str(x.src).trim(); }); o.photos = its.map(function (x) { return idx(x.src, x.alt, x.lib, x.usage); }); o.captions = its.map(function (x) { return str(x.caption); }); }
       else if (b.items) o.items = b.items;
@@ -127,8 +128,9 @@
     catch (e) { return { error: msgOf(e) }; }
     if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'The Hub’s AI is not open to this account.'; return { error: m }; }
     var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use' && c.input; })[0];
-    if (!tu) return { error: 'The Hub’s AI did not send an email back. Try again, or build it yourself.' };
-    return { input: tu.input, photos: photos };
+    var cost = r.data && r.data._wa && typeof r.data._wa.cost === 'number' ? r.data._wa.cost : null;   /* wave204: what this call cost (US dollars) */
+    if (!tu) return { error: 'The Hub’s AI did not send an email back. Try again, or build it yourself.', cost: cost };
+    return { input: tu.input, photos: photos, cost: cost };
   }
   /* the model's answer made into a studio design: blocks cleaned, photos put back by index */
   function fromAi(input, photos) {

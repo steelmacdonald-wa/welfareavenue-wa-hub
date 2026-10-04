@@ -46,10 +46,10 @@
     var rec = mine.filter(function (t) { return lower(t.created_by) === me; }).concat(mine.filter(function (t) { return lower(t.created_by) !== me; })).slice(0, SS.allRecent ? 60 : 8);
     return '<div class="w202">' +
       '<section class="w202top" data-w202sec="start"><div class="w202intro"><span class="w202kick">Email studio</span><h2>Emails in the brand, put together with you</h2>' +
-      '<p>For one person, a list or an automation. The Hub puts your words and photos into a Welfare Avenue email, and checks it with you before anything goes out.</p>' +
-      '<button class="w202vbtn" data-w202voices="wa">' + I('voice') + ' Voices <span>Welfare Avenue' + (SS.voices.mine ? ' · My voice' : '') + '</span></button></div>' +
+      '<p>For one person, a list or an automation. Bring your content first: your words, the facts and your photos. The Hub shapes them into a Welfare Avenue email and checks it with you before anything goes out; it does not write the email for you.</p>' +
+      '<div class="w204ibtns"><button class="w202vbtn" data-w202voices="wa">' + I('voice') + ' Voices <span>Welfare Avenue' + (SS.voices.mine ? ' · My voice' : '') + '</span></button>' + costsChip() + '</div></div>' +
       '<div class="w202ways">' +
-      '<button class="w202way" data-w202go="#crm/studio/ai">' + I('spark') + '<b>Tell the Hub</b><span>Write what you want to say and add your photos. The Hub puts it together and asks about anything missing.</span></button>' +
+      '<button class="w202way" data-w202go="#crm/studio/ai">' + I('spark') + '<b>Tell the Hub</b><span>Paste or write what you want to say and add your photos. The Hub designs the email, no HTML needed, and asks about anything missing.</span></button>' +
       '<button class="w202way" data-w202go="#crm/studio/tpl">' + I('layout') + '<b>Start from a template</b><span>Pick one of our templates and give it your details. The Hub fills it in, or you do.</span></button>' +
       '<button class="w202way" data-w202blank>' + I('blocks') + '<b>Build it yourself</b><span>Blocks you arrange: a headline, text, details, a button, photos, a video, a sign-off.</span></button>' +
       '</div></section>' +
@@ -63,7 +63,7 @@
           '<span class="m">' + E(KIND[t.kind] ? KIND[t.kind].short : t.kind) + ' · ' + E(lower(t.created_by) === me ? 'you' : str(t.created_by).split('@')[0]) + ' · ' + E(ago(t.updated_at)) + '</span>' + I('chev') + '</button>';
       }).join('') + '</div>' + (mine.length > 8 && !SS.allRecent ? '<button class="w152btn sm ghost" data-w202allrecent>Show all ' + mine.length + '</button>' : '')
         : '<p class="m">The emails you write here show up in this list, ready to finish or send again.</p>') + '</section>' +
-      peekHtml() + voicesHtml() + '</div>';
+      peekHtml() + voicesHtml() + costsHtml() + '</div>';
   }
   /* a quick look at a template as it will arrive */
   function peekHtml() {

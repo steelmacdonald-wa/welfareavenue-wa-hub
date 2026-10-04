@@ -4,7 +4,7 @@
      (which only rewrites bare <p>, <h1>, <a href=...>, <strong> and the like) leaves the studio's HTML exactly as it is.
      The anatomy follows the Rally Paper 2026 emails (Steel's example): a hero with a doodle and the E that moves, section
      headings with the gold rule, a details table, a dot list, the gold button with a purple caption, photos with captions,
-     video cards, a dark green band of links, the sign-off. Inside mail-send's layout (600px, the green header with the logo,
+     video cards (wave204: with a moving preview when the writer made one), a dark green band of links, the sign-off. Inside mail-send's layout (600px, the green header with the logo,
      the CASL footer) the green pieces are rounded cards on the cream body. */
   var MAIL202 = (function () {
     var GREEN = '#103F39', CREAM = '#FFFAF2', INK = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RULE = '#E6DFD3';
@@ -162,12 +162,19 @@
       }).join('') + '</tr>' : '';
       return tbl('<tr>' + imgs + '</tr>' + caps, 'margin:4px 0 22px;');
     };
+    /* wave204: with a moving preview (b.gif, an animated GIF the studio made from the writer's video, gw x gh pixels) the card
+       shows it, play button drawn in, above the title; without one, the gold play button as before. Either way the whole card
+       links to the video. */
     R.video = function (b) {
-      var u = safeUrl(b.url) || '#';
+      var u = safeUrl(b.url) || '#', gif = safeImg(b.gif), top;
+      if (gif) {
+        var gw = Math.max(1, Math.min(W, Math.round(Number(b.gw)) || W)), gh = Math.round(Number(b.gh)) || 0, full = gw >= W;
+        top = '<tr><td align="center" style="padding:' + (full ? '0' : '16px 16px 0') + ';line-height:0;font-size:0;"><img src="' + E(gif) + '" width="' + gw + '"' + (gh > 0 ? ' height="' + gh + '"' : '') +
+          ' alt="' + E((str(b.title).trim() || 'Watch the video') + ' (video)') + '" style="display:block;margin:0 auto;width:100%;max-width:' + gw + 'px;height:auto;border:0;border-radius:' + (full ? '8px 8px 0 0' : '8px') + ';"></td></tr>';
+      } else top = '<tr><td align="center" style="padding:22px 16px 6px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background-color:' + GOLD + ';border-radius:32px;width:64px;height:64px;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:64px;color:' + GREEN + ';font-weight:bold;">&#9654;</td></tr></table></td></tr>';
       return '<a style="display:block;text-decoration:none;margin:4px 0 22px;" href="' + E(u) + '" target="_blank">' +
-        tbl('<tr><td align="center" style="padding:22px 16px 6px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background-color:' + GOLD + ';border-radius:32px;width:64px;height:64px;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:64px;color:' + GREEN + ';font-weight:bold;">&#9654;</td></tr></table></td></tr>' +
-          '<tr><td align="center" style="font-family:' + HEAD + ';font-weight:600;font-size:22px;line-height:24px;text-transform:uppercase;color:' + CREAM + ';padding:4px 16px 4px;">' + E(str(b.title).trim() || 'Watch the video') + '</td></tr>' +
-          '<tr><td align="center" style="font-family:' + BODY + ';font-size:12px;line-height:18px;color:' + GOLD + ';padding:0 16px 22px;">' + E(str(b.caption).trim() || 'Tap to watch') + '</td></tr>',
+        tbl(top + '<tr><td align="center" style="font-family:' + HEAD + ';font-weight:600;font-size:22px;line-height:24px;text-transform:uppercase;color:' + CREAM + ';padding:' + (gif ? '14px' : '4px') + ' 16px 4px;">' + E(str(b.title).trim() || 'Watch the video') + '</td></tr>' +
+          '<tr><td align="center" style="font-family:' + BODY + ';font-size:12px;line-height:18px;color:' + GOLD + ';padding:0 16px ' + (gif ? '18px' : '22px') + ';">' + E(str(b.caption).trim() || 'Tap to watch') + '</td></tr>',
           'background-color:' + GREEN + ';border-radius:8px;border-collapse:separate;') + '</a>';
     };
     R.band = function (b) {
@@ -319,7 +326,11 @@
         if (b.type === 'button') { o.label = S(b.label, 60); o.url = S(b.url, 800); o.caption = S(b.caption, 200); }
         if (b.type === 'photo') { o.src = S(b.src, 800); o.alt = S(b.alt, 200); o.caption = S(b.caption, 400); o.link = S(b.link, 800); if (b.lib) o.lib = S(b.lib, 40); if (b.usage) o.usage = S(b.usage, 20); }
         if (b.type === 'photos') o.items = (Array.isArray(b.items) ? b.items : []).slice(0, 3).map(function (x) { var y = { src: S(x && x.src, 800), alt: S(x && x.alt, 200), caption: S(x && x.caption, 300) }; if (x && x.lib) y.lib = S(x.lib, 40); if (x && x.usage) y.usage = S(x.usage, 20); return y; });
-        if (b.type === 'video') { o.url = S(b.url, 800); o.title = S(b.title, 80); o.caption = S(b.caption, 120); }
+        if (b.type === 'video') {
+          o.url = S(b.url, 800); o.title = S(b.title, 80); o.caption = S(b.caption, 120);
+          var gu = safeImg(b.gif);   /* wave204: the moving preview, its size in pixels and in KB */
+          if (gu && gu.length <= 800) { o.gif = gu; var gw = Math.round(Number(b.gw)), gh = Math.round(Number(b.gh)), gk = Math.round(Number(b.gkb)); if (gw > 0 && gw <= 1200) o.gw = gw; if (gh > 0 && gh <= 1600) o.gh = gh; if (gk > 0) o.gkb = gk; }
+        }
         if (b.type === 'band') { o.title = S(b.title, 80); o.text = S(b.text, 1200); o.links = (Array.isArray(b.links) ? b.links : []).slice(0, 6).map(function (l) { return { label: S(l && l.label, 60), url: S(l && l.url, 800) }; }); }
         if (b.type === 'quote') { o.quote = S(b.quote, 600); o.by = S(b.by, 120); }
         if (b.type === 'stats') { o.style = b.style === 'cream' ? 'cream' : 'green'; o.title = S(b.title, 80); o.items = (Array.isArray(b.items) ? b.items : []).slice(0, 3).map(function (x) { return { n: S(x && x.n, 16), label: S(x && x.label, 60) }; }); o.note = S(b.note, 200); }
@@ -333,6 +344,10 @@
       if (d.source) out.source = S(d.source, 20);
       if (d.from) out.from = S(d.from, 40);
       if (d.voice === 'wa' || d.voice === 'mine') out.voice = d.voice;   /* wave203: the voice the Hub writes it in (never the guide itself) */
+      if (d.ai && typeof d.ai === 'object') {   /* wave204: what the Hub's AI has cost on this email (calls, US dollars) */
+        var calls = Math.round(Number(d.ai.calls)), cost = Number(d.ai.cost);
+        if (calls > 0 && calls < 100000 && cost >= 0 && cost < 10000) out.ai = { calls: calls, cost: Math.round(cost * 1e6) / 1e6 };
+      }
       return out;
     }
 

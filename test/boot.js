@@ -5,7 +5,8 @@
    f.page, f.ev(fn, arg), f.hash('#x'), f.close()
    Identities: admin (an admin), member (a member on the HR profile), leader, board (a board viewer), plain (a member on a team profile).
    The fixture defaults to test/fixture_live.json when present, else the scratchpad copy, else test/fixture.json.
-   Clock fixed at 2026-09-25 16:00 Toronto; all network except the page and the stubbed libraries is blocked. */
+   Clock fixed at 2026-09-25 16:00 Toronto; all network except the page and the stubbed libraries is blocked.
+   o.csp (wave204): serve the page with that Content-Security-Policy header, as Netlify does (build/site/_headers). */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
@@ -52,7 +53,7 @@ async function fresh(browser, o) {
   if (o.init) await page.addInitScript(o.init);
   await page.route('**/*', route => {
     const url = route.request().url();
-    if (url.startsWith('http://wahub.test/') && !url.startsWith('http://wahub.test/fonts/')) return route.fulfill({ contentType: 'text/html; charset=utf-8', body: html });
+    if (url.startsWith('http://wahub.test/') && !url.startsWith('http://wahub.test/fonts/')) return route.fulfill({ contentType: 'text/html; charset=utf-8', headers: o.csp ? { 'Content-Security-Policy': o.csp } : undefined, body: html });   /* o.csp: serve the page under that policy (wave204) */
     if (url.indexOf('cytoscape') >= 0) return route.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, 'cytoscape.min.js'), 'utf8') });
     if (url.indexOf('chart.umd') >= 0 || url.indexOf('chart.js') >= 0) return route.fulfill({ contentType: 'application/javascript', body: fs.readFileSync(path.join(__dirname, 'chart.umd.min.js'), 'utf8') });
     if (url.indexOf('supabase-js') >= 0 || url.indexOf('@supabase') >= 0) return route.fulfill({ contentType: 'application/javascript', body: stub });

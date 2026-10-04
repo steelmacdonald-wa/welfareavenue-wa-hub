@@ -75684,6 +75684,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
    - wave203 (04/10/26), the voices: Steel, "draft a WA voice code from the brand guide and keep mine too as options". Welfare
      Avenue (the house voice code, app_config mail_voice_wa, admins edit it in the Voices panel) or My voice (the writer's own
      guide from Your inbox). g2_voices.js; the choice is saved with the email (design.voice), never the guide's text.
+   - wave204 (04/10/26), Soraya Tyree's review: Undo and Redo for every change, with Cmd/Ctrl+Z (l_history.js), and a way back
+     from the Hub's draft to what you wrote or your details; a moving preview for the video card, a few silent seconds of your
+     own video made into an animated GIF in the browser (m_gif.js, m_moving.js), since inboxes do not play video; text pasted
+     from a document keeps its bold, links and paragraphs, and B and Link buttons mark text without typing the symbols (n_text.js).
+     Steel, the same day: the costs in the studio "so they know how much they are spending" (o_costs.js: each email's AI spend,
+     about 2 cents by every AI button, the What it costs panel with the month's total), and "come with their content first. It
+     is unacceptable to only use AI. Bad input = bad output." (p_content.js: 40 words of your own before Tell the Hub, every
+     detail before the Hub fills a template, and a prompt that never pads thin input).
    Data: crm_email_templates (design, one_off and the shelf columns; wa202_email_studio), written only through
    email_studio_save and email_studio_remove. AI through the llm router (x-wa-task email_studio). Photos from the Photo
    library (wa_photos_list, ready ones first) or uploaded to content-images/email/. Nothing here sends on its own, and
@@ -75709,7 +75717,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     filter: 'all', open: {}, device: 'desktop', tab: 'edit', questions: [], answers: {}, notes: '', change: '',
     start: { brief: '', audience: 'volunteers', kind: 'volunteer', lang: 'en', photos: [], tpl: null, asks: {}, extra: '', voice: 'wa' },
     send: null, pick: null, lib: null, libQ: '', libBusy: false, uploads: 0, confirmDel: false, peek: null, allRecent: false, ro: false, pendingKey: null,
-    saveNote: '', undo: null, root: null, saveAgain: false, savingP: null
+    saveNote: '', undo: null, root: null, saveAgain: false, savingP: null,
+    hist: { past: [], future: [], cur: null, field: null, at: 0 }, back: null, startNote: null, mv: null   /* wave204 */
   };
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -75770,7 +75779,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>', desktop: '<rect x="3" y="4.5" width="18" height="12" rx="1.5"/><path d="M9 20h6M12 16.5V20"/>',
     back: '<path d="M19 12H5M11 6l-6 6 6 6"/>', eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
     voice: '<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H10l-4.5 3.5v-3.5H5A1.5 1.5 0 0 1 3.5 15V7A1.5 1.5 0 0 1 5 5.5z"/><path d="M8 10h8M8 13h5"/>',
-    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>', chev: '<path d="m9 5 7 7-7 7"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>'
+    edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>', bolt: '<path d="M13 3 5 13.5h6L10 21l8-11h-6z"/>', chev: '<path d="m9 5 7 7-7 7"/>', search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>', redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>',
+    film: '<rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M10.5 9.5v5l4-2.5z"/>', link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+    coin: '<circle cx="12" cy="12" r="8.5"/><path d="M14.6 9.6c-.5-.9-1.4-1.4-2.6-1.4-1.5 0-2.6.8-2.6 1.9 0 2.6 5.3 1.4 5.3 4 0 1.1-1.1 1.9-2.7 1.9-1.2 0-2.2-.5-2.7-1.5M12 6.6v1.6M12 15.9v1.5"/>'
   };
   function I(n) { return '<svg class="w202i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (IC[n] || IC.spark) + '</svg>'; }
   function busyHtml(m) { return '<div class="w202busy" role="status"><span class="w202spin" aria-hidden="true"></span>' + E(m) + '</div>'; }
@@ -75780,7 +75792,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
      (which only rewrites bare <p>, <h1>, <a href=...>, <strong> and the like) leaves the studio's HTML exactly as it is.
      The anatomy follows the Rally Paper 2026 emails (Steel's example): a hero with a doodle and the E that moves, section
      headings with the gold rule, a details table, a dot list, the gold button with a purple caption, photos with captions,
-     video cards, a dark green band of links, the sign-off. Inside mail-send's layout (600px, the green header with the logo,
+     video cards (wave204: with a moving preview when the writer made one), a dark green band of links, the sign-off. Inside mail-send's layout (600px, the green header with the logo,
      the CASL footer) the green pieces are rounded cards on the cream body. */
   var MAIL202 = (function () {
     var GREEN = '#103F39', CREAM = '#FFFAF2', INK = '#1F201E', PURPLE = '#6F64AB', GOLD = '#DCA527', RULE = '#E6DFD3';
@@ -75938,12 +75950,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       }).join('') + '</tr>' : '';
       return tbl('<tr>' + imgs + '</tr>' + caps, 'margin:4px 0 22px;');
     };
+    /* wave204: with a moving preview (b.gif, an animated GIF the studio made from the writer's video, gw x gh pixels) the card
+       shows it, play button drawn in, above the title; without one, the gold play button as before. Either way the whole card
+       links to the video. */
     R.video = function (b) {
-      var u = safeUrl(b.url) || '#';
+      var u = safeUrl(b.url) || '#', gif = safeImg(b.gif), top;
+      if (gif) {
+        var gw = Math.max(1, Math.min(W, Math.round(Number(b.gw)) || W)), gh = Math.round(Number(b.gh)) || 0, full = gw >= W;
+        top = '<tr><td align="center" style="padding:' + (full ? '0' : '16px 16px 0') + ';line-height:0;font-size:0;"><img src="' + E(gif) + '" width="' + gw + '"' + (gh > 0 ? ' height="' + gh + '"' : '') +
+          ' alt="' + E((str(b.title).trim() || 'Watch the video') + ' (video)') + '" style="display:block;margin:0 auto;width:100%;max-width:' + gw + 'px;height:auto;border:0;border-radius:' + (full ? '8px 8px 0 0' : '8px') + ';"></td></tr>';
+      } else top = '<tr><td align="center" style="padding:22px 16px 6px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background-color:' + GOLD + ';border-radius:32px;width:64px;height:64px;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:64px;color:' + GREEN + ';font-weight:bold;">&#9654;</td></tr></table></td></tr>';
       return '<a style="display:block;text-decoration:none;margin:4px 0 22px;" href="' + E(u) + '" target="_blank">' +
-        tbl('<tr><td align="center" style="padding:22px 16px 6px;"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background-color:' + GOLD + ';border-radius:32px;width:64px;height:64px;font-family:Arial,Helvetica,sans-serif;font-size:26px;line-height:64px;color:' + GREEN + ';font-weight:bold;">&#9654;</td></tr></table></td></tr>' +
-          '<tr><td align="center" style="font-family:' + HEAD + ';font-weight:600;font-size:22px;line-height:24px;text-transform:uppercase;color:' + CREAM + ';padding:4px 16px 4px;">' + E(str(b.title).trim() || 'Watch the video') + '</td></tr>' +
-          '<tr><td align="center" style="font-family:' + BODY + ';font-size:12px;line-height:18px;color:' + GOLD + ';padding:0 16px 22px;">' + E(str(b.caption).trim() || 'Tap to watch') + '</td></tr>',
+        tbl(top + '<tr><td align="center" style="font-family:' + HEAD + ';font-weight:600;font-size:22px;line-height:24px;text-transform:uppercase;color:' + CREAM + ';padding:' + (gif ? '14px' : '4px') + ' 16px 4px;">' + E(str(b.title).trim() || 'Watch the video') + '</td></tr>' +
+          '<tr><td align="center" style="font-family:' + BODY + ';font-size:12px;line-height:18px;color:' + GOLD + ';padding:0 16px ' + (gif ? '18px' : '22px') + ';">' + E(str(b.caption).trim() || 'Tap to watch') + '</td></tr>',
           'background-color:' + GREEN + ';border-radius:8px;border-collapse:separate;') + '</a>';
     };
     R.band = function (b) {
@@ -76095,7 +76114,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         if (b.type === 'button') { o.label = S(b.label, 60); o.url = S(b.url, 800); o.caption = S(b.caption, 200); }
         if (b.type === 'photo') { o.src = S(b.src, 800); o.alt = S(b.alt, 200); o.caption = S(b.caption, 400); o.link = S(b.link, 800); if (b.lib) o.lib = S(b.lib, 40); if (b.usage) o.usage = S(b.usage, 20); }
         if (b.type === 'photos') o.items = (Array.isArray(b.items) ? b.items : []).slice(0, 3).map(function (x) { var y = { src: S(x && x.src, 800), alt: S(x && x.alt, 200), caption: S(x && x.caption, 300) }; if (x && x.lib) y.lib = S(x.lib, 40); if (x && x.usage) y.usage = S(x.usage, 20); return y; });
-        if (b.type === 'video') { o.url = S(b.url, 800); o.title = S(b.title, 80); o.caption = S(b.caption, 120); }
+        if (b.type === 'video') {
+          o.url = S(b.url, 800); o.title = S(b.title, 80); o.caption = S(b.caption, 120);
+          var gu = safeImg(b.gif);   /* wave204: the moving preview, its size in pixels and in KB */
+          if (gu && gu.length <= 800) { o.gif = gu; var gw = Math.round(Number(b.gw)), gh = Math.round(Number(b.gh)), gk = Math.round(Number(b.gkb)); if (gw > 0 && gw <= 1200) o.gw = gw; if (gh > 0 && gh <= 1600) o.gh = gh; if (gk > 0) o.gkb = gk; }
+        }
         if (b.type === 'band') { o.title = S(b.title, 80); o.text = S(b.text, 1200); o.links = (Array.isArray(b.links) ? b.links : []).slice(0, 6).map(function (l) { return { label: S(l && l.label, 60), url: S(l && l.url, 800) }; }); }
         if (b.type === 'quote') { o.quote = S(b.quote, 600); o.by = S(b.by, 120); }
         if (b.type === 'stats') { o.style = b.style === 'cream' ? 'cream' : 'green'; o.title = S(b.title, 80); o.items = (Array.isArray(b.items) ? b.items : []).slice(0, 3).map(function (x) { return { n: S(x && x.n, 16), label: S(x && x.label, 60) }; }); o.note = S(b.note, 200); }
@@ -76109,6 +76132,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       if (d.source) out.source = S(d.source, 20);
       if (d.from) out.from = S(d.from, 40);
       if (d.voice === 'wa' || d.voice === 'mine') out.voice = d.voice;   /* wave203: the voice the Hub writes it in (never the guide itself) */
+      if (d.ai && typeof d.ai === 'object') {   /* wave204: what the Hub's AI has cost on this email (calls, US dollars) */
+        var calls = Math.round(Number(d.ai.calls)), cost = Number(d.ai.cost);
+        if (calls > 0 && calls < 100000 && cost >= 0 && cost < 10000) out.ai = { calls: calls, cost: Math.round(cost * 1e6) / 1e6 };
+      }
       return out;
     }
 
@@ -76279,6 +76306,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     });
     if (imgs.some(function (p) { return !p.lib; })) add('note', 'Uploaded photos: no close-ups of the people we serve, and anyone recognizable has said yes (the Photo library\u2019s rule).', null);
     d.blocks.forEach(function (b, i) { if ((b.type === 'photo' && !str(b.src).trim()) || (b.type === 'photos' && !(b.items || []).some(function (x) { return x && str(x.src).trim(); }))) add('warn', 'A photo block has no photo yet, so it will not show (' + where(i) + ').', i); });
+    /* wave204: the moving preview (an animated GIF from the writer's own video) */
+    d.blocks.forEach(function (b, i) {
+      if (b.type !== 'video' || !str(b.gif).trim()) return;
+      if (Number(b.gkb) > 2500) add('warn', 'The moving preview is ' + kbText(b.gkb) + ': heavy for a phone on data. Make a lighter or shorter one (' + where(i) + ').', i, 'mvkb' + i);
+      add('note', 'A moving preview comes from your own video: the photo rule applies (no close-ups of the people we serve, and anyone recognizable has said yes).', i, 'mvrule');
+    });
     /* dates */
     all.forEach(function (t) {
       datesIn(t.text).forEach(function (x) {
@@ -76356,6 +76389,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       voiceBlock(voice),
       'Whatever the voice: never "the homeless", "beneficiaries", "people in need", "the less fortunate", "feed people", "hand out food", "student club" or "just volunteers"; no em dashes or en dashes as punctuation (a comma, a colon or a full stop instead); no hashtags; at most one exclamation mark.',
       'Facts: never invent a date, a time, a place, an amount, a number, a name, a quote or a link. Use only what the writer gave, the template\'s own words, and these public figures: 14,000+ meals since April 2020, 250+ servings, 600+ volunteers (our best estimates from our records, rounded down); giving: $25 covers one recipe (a fruit salad for 8 to 10 people), $75 one volunteer cook\'s batch (a dish for 30 to 35 people), $250 the groceries for a whole Sunday serving (about 50 plates), $20 a month about 100 portions a year. Add no claims the writer did not make about how things go (no experience needed, training, who will be there, what happens after signing up, what to bring, food, parking, how long it takes): leave them out, or write a [placeholder] and ask when the email needs one. When something the email needs is missing, write a short [placeholder in square brackets] where it goes and ask about it in questions. When two things disagree (a weekday that is not that date, times that do not add up, a number that changed), ask. Today is ' + todayLine() + ' in Montreal; the next three weeks: ' + nextDays(21) + '. A date without a year is the next one to come. Work out "this Saturday" or "next Sunday" from that list, never from memory.',
+      'Content: the writer\'s own content comes first. Build the email from what they gave, keeping their words, facts and order where they work. Never write what they did not give: no filler paragraphs, no invented stories, examples, feelings or reasons. When what they gave is thin, keep the email short and ask for more in your questions rather than padding it.',
       'Links you may use when they fit: https://welfareavenue.com (the website), https://welfareavenue.com/volunteer/ (volunteer sign-up), https://welfareavenue.com/donate/ (giving). Any other link only if the writer gave it.',
       'Shape: one hero first (a kicker, a headline in two short lines, the last line the coloured one, a lead sentence, a doodle), then "Hi {{first_name|there}}," and short paragraphs; details for when and where (and what to bring, when the writer said); a dot list for two to five parallel points; one gold button for the one thing to do (a caption under it only when the writer gave one or it is plainly true, like "On our website"); the writer\'s photos where they help; a sign-off with the sender\'s name when known, else "[Who signs it]". 120 to 300 words unless the material needs more. Keep every {{placeholder}} exactly as written, and use {{first_name|there}} for the greeting.',
       'Subject: under 60 characters, specific, honest, may use {{first_name|friend}}. Preview line: under 90 characters, adds to the subject.',
@@ -76391,7 +76425,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     };
     return JSON.stringify((d && d.blocks || []).map(function (b) {
       var o = {};
-      Object.keys(b).forEach(function (k) { if (['id', 'lib', 'usage', 'src', 'items'].indexOf(k) < 0 && b[k] !== '' && b[k] != null) o[k] = b[k]; });
+      Object.keys(b).forEach(function (k) { if (['id', 'lib', 'usage', 'src', 'items', 'gif', 'gw', 'gh', 'gkb'].indexOf(k) < 0 && b[k] !== '' && b[k] != null) o[k] = b[k]; });   /* wave204: a moving preview stays with the card (keepMoving), the model never sees it */
       if (b.type === 'photo' && str(b.src).trim()) o.photo = idx(b.src, b.alt, b.lib, b.usage);
       if (b.type === 'photos') { var its = (b.items || []).filter(function (x) { return x && str(x.src).trim(); }); o.photos = its.map(function (x) { return idx(x.src, x.alt, x.lib, x.usage); }); o.captions = its.map(function (x) { return str(x.caption); }); }
       else if (b.items) o.items = b.items;
@@ -76431,8 +76465,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     catch (e) { return { error: msgOf(e) }; }
     if (!r || r.error) { var m = msgOf(r && r.error); if (/401|unauthor/i.test(m)) m = 'The Hub\u2019s AI is not open to this account.'; return { error: m }; }
     var tu = ((r.data && r.data.content) || []).filter(function (c) { return c && c.type === 'tool_use' && c.input; })[0];
-    if (!tu) return { error: 'The Hub\u2019s AI did not send an email back. Try again, or build it yourself.' };
-    return { input: tu.input, photos: photos };
+    var cost = r.data && r.data._wa && typeof r.data._wa.cost === 'number' ? r.data._wa.cost : null;   /* wave204: what this call cost (US dollars) */
+    if (!tu) return { error: 'The Hub\u2019s AI did not send an email back. Try again, or build it yourself.', cost: cost };
+    return { input: tu.input, photos: photos, cost: cost };
   }
   /* the model's answer made into a studio design: blocks cleaned, photos put back by index */
   function fromAi(input, photos) {
@@ -76597,10 +76632,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var rec = mine.filter(function (t) { return lower(t.created_by) === me; }).concat(mine.filter(function (t) { return lower(t.created_by) !== me; })).slice(0, SS.allRecent ? 60 : 8);
     return '<div class="w202">' +
       '<section class="w202top" data-w202sec="start"><div class="w202intro"><span class="w202kick">Email studio</span><h2>Emails in the brand, put together with you</h2>' +
-      '<p>For one person, a list or an automation. The Hub puts your words and photos into a Welfare Avenue email, and checks it with you before anything goes out.</p>' +
-      '<button class="w202vbtn" data-w202voices="wa">' + I('voice') + ' Voices <span>Welfare Avenue' + (SS.voices.mine ? ' \u00b7 My voice' : '') + '</span></button></div>' +
+      '<p>For one person, a list or an automation. Bring your content first: your words, the facts and your photos. The Hub shapes them into a Welfare Avenue email and checks it with you before anything goes out; it does not write the email for you.</p>' +
+      '<div class="w204ibtns"><button class="w202vbtn" data-w202voices="wa">' + I('voice') + ' Voices <span>Welfare Avenue' + (SS.voices.mine ? ' \u00b7 My voice' : '') + '</span></button>' + costsChip() + '</div></div>' +
       '<div class="w202ways">' +
-      '<button class="w202way" data-w202go="#crm/studio/ai">' + I('spark') + '<b>Tell the Hub</b><span>Write what you want to say and add your photos. The Hub puts it together and asks about anything missing.</span></button>' +
+      '<button class="w202way" data-w202go="#crm/studio/ai">' + I('spark') + '<b>Tell the Hub</b><span>Paste or write what you want to say and add your photos. The Hub designs the email, no HTML needed, and asks about anything missing.</span></button>' +
       '<button class="w202way" data-w202go="#crm/studio/tpl">' + I('layout') + '<b>Start from a template</b><span>Pick one of our templates and give it your details. The Hub fills it in, or you do.</span></button>' +
       '<button class="w202way" data-w202blank>' + I('blocks') + '<b>Build it yourself</b><span>Blocks you arrange: a headline, text, details, a button, photos, a video, a sign-off.</span></button>' +
       '</div></section>' +
@@ -76614,7 +76649,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
           '<span class="m">' + E(KIND[t.kind] ? KIND[t.kind].short : t.kind) + ' \u00b7 ' + E(lower(t.created_by) === me ? 'you' : str(t.created_by).split('@')[0]) + ' \u00b7 ' + E(ago(t.updated_at)) + '</span>' + I('chev') + '</button>';
       }).join('') + '</div>' + (mine.length > 8 && !SS.allRecent ? '<button class="w152btn sm ghost" data-w202allrecent>Show all ' + mine.length + '</button>' : '')
         : '<p class="m">The emails you write here show up in this list, ready to finish or send again.</p>') + '</section>' +
-      peekHtml() + voicesHtml() + '</div>';
+      peekHtml() + voicesHtml() + costsHtml() + '</div>';
   }
   /* a quick look at a template as it will arrive */
   function peekHtml() {
@@ -76754,19 +76789,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function aiStartHtml() {
     var s = SS.start, k = KIND[s.kind] || KIND.newsletter;
-    return '<div class="w202">' + startBar('Tell the Hub') +
+    return '<div class="w202">' + startBar('Tell the Hub') + (SS.startNote && SS.startNote.view === 'ai' ? '<div class="w154msg">' + E(SS.startNote.text) + '</div>' : '') +
       '<div class="w202cols st"><div class="w154card w202form" data-w202sec="ai">' +
       '<div class="w155lb">Who is it for?' + segHtml('data-w202aud', [['volunteers', 'Volunteers'], ['donors', 'Donors'], ['everyone', 'Everyone']], s.audience) + '</div>' +
       '<label class="w155lb">What kind of email?' + kindSel('data-w202kind="start"', s.kind) + '<span class="m">' + E(k.s) + '</span></label>' +
       '<label class="w155lb">Language' + langSel('data-w202lang="start"', s.lang) + '</label>' +
       voiceCtl(s.voice) +
-      '<label class="w155lb">What do you want to say?<textarea class="w152in w202say" data-w202say="brief" data-w202s="brief" rows="10" placeholder="Write it the way you would tell a friend, or paste your notes. Dates, times, the place and the link people should use help: the Hub never makes those up, it asks.">' + E(s.brief) + '</textarea></label>' +
+      '<label class="w155lb">What do you want to say? <span class="m">Paste your text from a doc or an email (bold and links come along), or write it here. No HTML needed: the Hub designs the email.</span><textarea class="w152in w202say" data-w202say="brief" data-w202s="brief" rows="10" placeholder="Your content, in your own words: what is happening, why it matters, the day and date, the times, the place, and what people should do (with the link). The Hub shapes what you bring; it never makes up the facts.">' + E(s.brief) + '</textarea></label>' +
+      meterHtml() +
       startPhotosHtml() +
       (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
-      '<div class="w154acts"><button class="w152btn" data-w202startai' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put it together</button>' +
-      '<button class="w152btn ghost" data-w202startself>Build it myself with these words</button></div>' +
+      '<div class="w154acts"><button class="w152btn' + (ownWords(s.brief) < CONTENT_MIN ? ' notyet' : '') + '" data-w202startai' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put it together ' + aboutStep() + '</button>' +
+      '<button class="w152btn ghost" data-w202startself>Build it myself with these words ' + aboutStep(true) + '</button></div>' +
       (SS.busy ? busyHtml(SS.busy) : '') + '</div>' +
-      '<aside class="w202tips"><h4>What helps</h4><ul><li><b>The facts:</b> the day and date, the times, the place, how many people you need, the link to sign up or give.</li>' +
+      '<aside class="w202tips"><h4>Your content first</h4><p class="m">The Hub shapes what you bring; it does not write the email for you. Bad input, bad output: thin words make a thin email, and each try costs about 2\u00a2.</p><ul><li><b>Your own words:</b> what is happening and why it matters, three or four sentences at least.</li><li><b>The facts:</b> the day and date, the times, the place, how many people you need, the link to sign up or give.</li>' +
       '<li><b>Who signs it,</b> if not you.</li><li><b>One thing to do:</b> what should people do after reading?</li><li><b>Photos</b> of our volunteers, food and setups (no close-ups of the people we serve).</li></ul>' +
       '<p class="m">The Hub writes it in the voice you pick (Welfare Avenue\u2019s house voice, or your own when you have a writing guide), leaves [brackets] where something is missing and asks you about it. Nothing is sent until you choose to.</p></aside></div>' +
       pickerHtml() + voicesHtml() + '</div>';
@@ -76774,7 +76810,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function tplStartHtml() {
     var s = SS.start, t = s.tpl ? tplByKey(s.tpl) : null;
     var asks = t && t.design && t.design.asks ? t.design.asks : [];
-    return '<div class="w202">' + startBar('Start from a template') +
+    return '<div class="w202">' + startBar('Start from a template') + (SS.startNote && SS.startNote.view === 'tpl' ? '<div class="w154msg">' + E(SS.startNote.text) + '</div>' : '') +
       '<div class="w202cols st"><div class="w202pickcol" data-w202sec="pick">' + filterHtml() + shelvesHtml(studioTemplates(), true) + '</div>' +
       '<div class="w154card w202form" data-w202sec="details">' + (!t ? '<p class="m">Pick a template. Then give it your details, and the Hub fills it in.</p>' :
         '<div class="w202tsel">' + miniHero(t) + '<div data-w198skip><h3>' + E(t.name) + '</h3><p class="m">' + E(t.description || '') + '</p></div></div>' +
@@ -76787,8 +76823,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         voiceCtl(s.voice) +
         startPhotosHtml() +
         (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
-        '<div class="w154acts"><button class="w152btn" data-w202starttpl="ai"' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Fill it in with the Hub</button>' +
-        '<button class="w152btn ghost" data-w202starttpl="self">Fill it in myself</button></div>' + (SS.busy ? busyHtml(SS.busy) : '')) + '</div></div>' +
+        '<p class="m">Your details first: the Hub fills in what you give it and never makes up the rest.</p>' +
+        '<div class="w154acts"><button class="w152btn" data-w202starttpl="ai"' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Fill it in with the Hub ' + aboutStep() + '</button>' +
+        '<button class="w152btn ghost" data-w202starttpl="self">Fill it in myself ' + aboutStep(true) + '</button></div>' + (SS.busy ? busyHtml(SS.busy) : '')) + '</div></div>' +
       pickerHtml() + peekHtml() + voicesHtml() + '</div>';
   }
   /* a new email in memory, then saved (it needs a subject to be saved) */
@@ -76799,6 +76836,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function photosForAi(ps) { return ps.map(function (p) { return { src: p.src, alt: p.alt || '', title: p.title || '', lib: p.lib || null, usage: p.usage || null, caption: p.caption || '', data: p.data || '' }; }); }
   async function openDraft(d, opts) {
     SS.d = d; SS.questions = (opts && opts.questions) || []; SS.notes = (opts && opts.notes) || ''; SS.open = {}; SS.send = null; SS.ro = false; SS.err = ''; SS.msg = '';
+    histReset(); SS.startNote = null;   /* wave204: a new history; the step before, when the Hub made it from what you gave */
+    SS.back = opts && opts.back ? Object.assign({ d: d }, opts.back) : null;
     if (d.design.blocks[0]) SS.open[d.design.blocks[0].id] = !SS.questions.length && !!(opts && opts.openFirst);
     SS.view = 'edit'; SS.busy = '';
     var key = str(d.subject).trim() ? await saveNow() : null;
@@ -76807,16 +76846,18 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   async function startAi() {
     var s = SS.start;
-    if (str(s.brief).trim().length < 15) { SS.err = 'Tell the Hub a little more: what is happening, and what should people do?'; paint(); return; }
+    var nw = ownWords(s.brief);
+    if (nw < CONTENT_MIN) { SS.err = contentShort(nw); paint(); return; }   /* wave204: your content first */
+    SS.startNote = null;
     SS.err = ''; SS.busy = 'The Hub is putting your email together. This takes about half a minute\u2026'; paint();
-    var photos = photosForAi(s.photos);
+    var photos = photosForAi(s.photos), back = { view: 'ai', brief: s.brief, photos: s.photos.slice(), audience: s.audience, kind: s.kind, lang: s.lang, voice: s.voice };
     var r = await aiCall({ mode: 'new', brief: s.brief, audience: s.audience, kind: s.kind, lang: s.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again with a few more details, or build it yourself.'; paint(); return; }
-    res.design.source = 'ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
-    await openDraft(draftFrom({ name: res.name || 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: res.subject, preheader: res.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
-    SS.start.brief = ''; SS.start.photos = [];
+    res.design.source = 'ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; res.design.ai = addCost(null, r.cost);
+    await openDraft(draftFrom({ name: res.name || 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: res.subject, preheader: res.preheader, design: res.design }), { questions: res.questions, notes: res.notes, back: back });
+    SS.start.brief = ''; SS.start.photos = []; paint();
   }
   function startSelf() {
     var s = SS.start, blocks = [MAIL202.blank('hero')];
@@ -76826,8 +76867,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var btn = MAIL202.blank('button'); btn.label = s.kind === 'fundraising' ? 'Give today' : s.kind === 'volunteer' ? 'Sign up to serve' : 'Find out more'; btn.url = s.kind === 'fundraising' ? 'https://welfareavenue.com/donate/' : s.kind === 'volunteer' ? 'https://welfareavenue.com/volunteer/' : ''; blocks.push(btn);
     var so = MAIL202.blank('signoff'); so.name = myName(); blocks.push(so);
     var d = draftFrom({ name: 'New email', kind: s.kind, audience: s.audience, lang: s.lang, subject: '', preheader: '', design: { blocks: blocks, source: 'blocks', voice: s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa' } });
+    var back = { view: 'ai', brief: s.brief, photos: s.photos.slice(), audience: s.audience, kind: s.kind, lang: s.lang, voice: s.voice };
     SS.start.brief = ''; SS.start.photos = [];
-    openDraft(d, { openFirst: true });
+    openDraft(d, { openFirst: true, back: back });
   }
   function startBlank() {
     var s = SS.start, so = MAIL202.blank('signoff'); so.name = myName();
@@ -76835,25 +76877,26 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   }
   function copyOf(t, o) {
     var d = JSON.parse(JSON.stringify(t.design || { blocks: [] }));
-    d.from = t.key; d.source = (o && o.source) || 'template'; delete d.asks;
+    d.from = t.key; d.source = (o && o.source) || 'template'; delete d.asks; delete d.ai;   /* wave204: a copy starts with nothing spent */
     (d.blocks || []).forEach(function (b) { b.id = MAIL202.uid(); });
     return draftFrom({ name: (o && o.name) || t.name, kind: t.kind === 'test' ? 'newsletter' : t.kind, audience: t.audience, lang: t.lang || 'en', subject: t.subject, preheader: t.preheader || '', design: d });
   }
   async function startTpl(useAi) {
     var s = SS.start, t = tplByKey(s.tpl); if (!t) return;
-    var asks = (t.design && t.design.asks) || [];
-    if (!useAi) { var d0 = copyOf(t); d0.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false }); return; }
+    var asks = (t.design && t.design.asks) || [], back = { view: 'tpl', tpl: t.key, asks: Object.assign({}, s.asks), extra: s.extra, photos: s.photos.slice(), lang: s.lang, voice: s.voice };
+    if (!useAi) { var d0 = copyOf(t); d0.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; s.photos.forEach(function (p) { var b = MAIL202.blank('photo'); b.src = p.src; b.alt = p.alt || ''; if (p.lib) b.lib = p.lib; if (p.usage) b.usage = p.usage; d0.design.blocks.splice(Math.max(1, d0.design.blocks.length - 1), 0, b); }); SS.start.photos = []; await openDraft(d0, { openFirst: false, back: back }); return; }
     var given = asks.map(function (a) { return { label: a.label, answer: s.asks[a.id] || '' }; });
-    if (asks.length && !given.some(function (a) { return str(a.answer).trim(); }) && !str(s.extra).trim()) { SS.err = 'Give the Hub at least one of your details, or choose Fill it in myself.'; paint(); return; }
+    var short = tplShort(t, s); if (short) { SS.err = short; paint(); return; }   /* wave204: your content first */
     SS.err = ''; SS.busy = 'The Hub is filling in \u201c' + t.name + '\u201d. This takes about half a minute\u2026'; paint();
     var photos = photosForAi(s.photos);
     var r = await aiCall({ mode: 'template', design: t.design, subject: t.subject, preheader: t.preheader, tplName: t.name, asks: given, brief: s.extra, audience: t.audience, kind: t.kind, lang: s.lang || t.lang, photos: photos, voice: s.voice });
     if (r.error) { SS.busy = ''; SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
     if (!res.design.blocks.length) { SS.busy = ''; SS.err = 'The Hub sent back an empty email. Try again, or fill it in yourself.'; paint(); return; }
-    res.design.from = t.key; res.design.source = 'template+ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa';
-    await openDraft(draftFrom({ name: res.name || t.name, kind: t.kind, audience: t.audience, lang: s.lang || t.lang, subject: res.subject || t.subject, preheader: res.preheader || t.preheader, design: res.design }), { questions: res.questions, notes: res.notes });
-    SS.start.asks = {}; SS.start.extra = ''; SS.start.photos = [];
+    res.design.from = t.key; res.design.source = 'template+ai'; res.design.voice = s.voice === 'mine' && SS.voices.mine ? 'mine' : 'wa'; res.design.ai = addCost(null, r.cost);
+    keepMoving(t.design, res.design);   /* wave204: a template's moving preview stays */
+    await openDraft(draftFrom({ name: res.name || t.name, kind: t.kind, audience: t.audience, lang: s.lang || t.lang, subject: res.subject || t.subject, preheader: res.preheader || t.preheader, design: res.design }), { questions: res.questions, notes: res.notes, back: back });
+    SS.start.asks = {}; SS.start.extra = ''; SS.start.photos = []; paint();
   }
   /* ---------- the editor: settings, the Hub's questions, the checks, the blocks, Ask the Hub, the email beside it ---------- */
   function summary(b) {
@@ -76876,10 +76919,10 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
   function fv(v) { return E(v == null ? '' : v); }
   function inp(i, path, label, value, o) {
     o = o || {};
-    var at = 'data-w202f="' + i + '.' + path + '"';
+    var at = 'data-w202f="' + i + '.' + path + '"' + (o.fmt && o.area ? ' data-w204fmt' : '');
     var ph = o.ph ? ' placeholder="' + E(o.ph) + '"' : '';
     var ctrl = o.area ? '<textarea class="w152in" ' + at + ' rows="' + (o.rows || 4) + '"' + ph + '>' + fv(value) + '</textarea>' : '<input class="w152in" ' + at + ' value="' + fv(value) + '"' + ph + (o.type ? ' type="' + o.type + '"' : '') + '>';
-    return '<label class="w155lb' + (o.half ? ' half' : '') + '">' + E(label) + (o.help ? ' <span class="m">' + E(o.help) + '</span>' : '') + ctrl + '</label>';
+    return '<label class="w155lb' + (o.half ? ' half' : '') + '">' + E(label) + (o.help ? ' <span class="m">' + E(o.help) + '</span>' : '') + (o.fmt && o.area ? fmtBar() : '') + ctrl + '</label>';
   }
   function sel(i, path, label, value, opts) {
     return '<label class="w155lb half">' + E(label) + '<select class="w152sel" data-w202f="' + i + '.' + path + '">' + opts.map(function (o) { return '<option value="' + E(o[0]) + '"' + (String(o[0]) === String(value) ? ' selected' : '') + '>' + E(o[1]) + '</option>'; }).join('') + '</select></label>';
@@ -76890,7 +76933,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<div class="w202slot">' + (p && p.src ? '<img src="' + E(p.src) + '" alt="' + E(p.alt || '') + '">' : '<div class="w202noimg">' + I('image') + '</div>') +
       '<div class="w202slb"><button class="w152btn sm ghost" data-w202pickfor="' + at + '">' + I('image') + (p && p.src ? ' Change' : ' Choose a photo') + '</button>' + (p && p.src ? '<button class="w152btn sm ghost" data-w202rmphoto="' + at + '">' + I('x') + ' Remove</button>' : '') + '</div></div>';
   }
-  var TEXTHELP = 'A blank line starts a new paragraph. **bold**, [words](https://link), {{first_name|there}}';
+  var TEXTHELP = 'Paste from a doc and bold and links come along. Select words, then B or Link. A blank line starts a paragraph; {{first_name|there}} is their first name.';
   function blockForm(b, i) {
     var h = '';
     if (b.type === 'hero') {
@@ -76898,13 +76941,13 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       h += inp(i, 'kicker', 'Small line above', b.kicker, { ph: 'Sunday 12 October \u00b7 Cabot Square' });
       h += inp(i, 'lines', 'Headline', (b.lines || []).join('\n'), { area: true, rows: 2, help: 'Two short lines; the last one takes the colour', ph: 'Sunday\nneeds you' });
       h += '<div class="w202two">' + sel(i, 'accent', 'Colour of the last line', b.accent, [['gold', 'Gold'], ['purple', 'Purple']]) + '<div class="w155lb half">The E that moves' + chk(i, 'moveE', 'Stretch one E (once per email)', b.moveE !== false) + '</div></div>';
-      h += inp(i, 'lead', 'The sentence under it', b.lead, { area: true, rows: 2 });
+      h += inp(i, 'lead', 'The sentence under it', b.lead, { area: true, rows: 2, fmt: true });
     }
-    if (b.type === 'text') h += inp(i, 'text', 'Text', b.text, { area: true, rows: 7, help: TEXTHELP });
+    if (b.type === 'text') h += inp(i, 'text', 'Text', b.text, { area: true, rows: 7, help: TEXTHELP, fmt: true });
     if (b.type === 'heading') h += inp(i, 'text', 'Heading', b.text);
     if (b.type === 'details' || b.type === 'list' || b.type === 'stats' || b.type === 'band') {
       var field = b.type === 'details' ? 'rows' : b.type === 'band' ? 'links' : 'items', rows = b[field] || [];
-      if (b.type === 'band') { h += inp(i, 'title', 'Title', b.title); h += inp(i, 'text', 'Text', b.text, { area: true, rows: 3 }); }
+      if (b.type === 'band') { h += inp(i, 'title', 'Title', b.title); h += inp(i, 'text', 'Text', b.text, { area: true, rows: 3, fmt: true }); }
       if (b.type === 'stats') { h += '<div class="w202two">' + sel(i, 'style', 'Background', b.style, [['green', 'Green card'], ['cream', 'Cream with rules']]) + inp(i, 'title', 'Small title', b.title, { half: true, ph: 'Since April 2020' }) + '</div>'; }
       h += '<div class="w202rows">' + rows.map(function (r, k) {
         var a, c;
@@ -76925,9 +76968,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         '<input class="w152in" data-w202f="' + i + '.items.' + k + '.alt" value="' + fv(p.alt) + '" placeholder="What it shows" aria-label="What photo ' + (k + 1) + ' shows">' +
         '<input class="w152in" data-w202f="' + i + '.items.' + k + '.caption" value="' + fv(p.caption) + '" placeholder="Caption (optional)" aria-label="Caption for photo ' + (k + 1) + '"></div>'; }).join('') + '</div>';
     }
-    if (b.type === 'video') { h += inp(i, 'url', 'Link to the video', b.url, { ph: 'https://www.instagram.com/reel/...' }) + '<div class="w202two">' + inp(i, 'title', 'Title', b.title, { half: true, ph: 'What is a serving?' }) + inp(i, 'caption', 'Line under it', b.caption, { half: true, ph: 'Tap to watch' }) + '</div><p class="m">Videos never play inside an email: the card links to it.</p>'; }
-    if (b.type === 'quote') { h += inp(i, 'quote', 'The quote', b.quote, { area: true, rows: 3 }) + inp(i, 'by', 'Who said it', b.by, { ph: 'A volunteer, fall 2025' }); }
-    if (b.type === 'signoff') { h += '<div class="w202two">' + inp(i, 'closing', 'Closing', b.closing, { half: true, ph: 'Warmly,' }) + inp(i, 'name', 'Name', b.name, { half: true }) + '</div>' + inp(i, 'role', 'Under the name', b.role, { ph: 'Welfare Avenue' }) + inp(i, 'ps', 'P.S.', b.ps, { area: true, rows: 2, help: 'Optional' }); }
+    if (b.type === 'video') { h += inp(i, 'url', 'Link to the video', b.url, { ph: 'https://www.youtube.com/watch?v=...', help: 'Where a tap goes: YouTube, Instagram, Google Drive or our website' }) + '<div class="w202two">' + inp(i, 'title', 'Title', b.title, { half: true, ph: 'What is a serving?' }) + inp(i, 'caption', 'Line under it', b.caption, { half: true, ph: 'Tap to watch' }) + '</div>' + movingSlot(i, b); }
+    if (b.type === 'quote') { h += inp(i, 'quote', 'The quote', b.quote, { area: true, rows: 3, fmt: true }) + inp(i, 'by', 'Who said it', b.by, { ph: 'A volunteer, fall 2025' }); }
+    if (b.type === 'signoff') { h += '<div class="w202two">' + inp(i, 'closing', 'Closing', b.closing, { half: true, ph: 'Warmly,' }) + inp(i, 'name', 'Name', b.name, { half: true }) + '</div>' + inp(i, 'role', 'Under the name', b.role, { ph: 'Welfare Avenue' }) + inp(i, 'ps', 'P.S.', b.ps, { area: true, rows: 2, help: 'Optional', fmt: true }); }
     if (b.type === 'divider') h += sel(i, 'style', 'Kind', b.style, [['rule', 'A short gold rule'], ['space', 'Just space']]);
     return h;
   }
@@ -76950,7 +76993,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     return '<div class="w154card w202q" data-w202sec="questions"><h3>' + I('spark') + ' The Hub\u2019s questions</h3>' + (SS.notes ? '<p class="m" data-w198skip>' + E(SS.notes) + '</p>' : '') +
       (qs.length ? '<p class="m">Answer what you can, then let the Hub put your answers in. The [brackets] in the email are the same gaps.</p>' + qs.map(function (q) {
         return '<label class="w155lb" data-w198skip>' + E(q.ask) + (q.why ? ' <span class="m">' + E(q.why) + '</span>' : '') + '<input class="w152in" data-w202qa="' + E(q.id) + '" value="' + E(q.answer || '') + '" placeholder="' + E(q.hint ? 'For example: ' + q.hint : '') + '"></label>';
-      }).join('') + '<div class="w154acts"><button class="w152btn" data-w202answers' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put my answers in</button><button class="w152btn ghost" data-w202qx>I\u2019ll fix it myself</button></div>'
+      }).join('') + '<div class="w154acts"><button class="w152btn" data-w202answers' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Put my answers in ' + aboutStep() + '</button><button class="w152btn ghost" data-w202qx>I\u2019ll fix it myself</button></div>'
         : '<div class="w154acts"><button class="w152btn ghost sm" data-w202qx>Got it</button></div>') + '</div>';
   }
   function checksHtml() {
@@ -76999,9 +77042,9 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     var e = SS.d; if (!e) return busyHtml('Opening the email\u2026');
     var owner = !SS.ro ? '' : '<div class="w202ro">' + I('alert') + ' <span>' + (e.created_by === 'starter' ? 'This is one of our starters: only admins change it.' : 'This is ' + E(str(e.created_by).split('@')[0]) + '\u2019s email: only they or an admin change it.') + ' Copy it to make it yours.</span><button class="w152btn sm" data-w202copy>' + I('copy') + ' Copy it</button></div>';
     return '<div class="w202 w202ed">' +
-      '<div class="w202bar"><button class="w152btn sm ghost" data-w202go="#crm/studio">' + I('back') + ' The studio</button>' +
+      '<div class="w202bar"><button class="w152btn sm ghost" data-w202go="#crm/studio">' + I('back') + ' The studio</button>' + backBtn() +
       '<input class="w202name" data-w202e="name" value="' + E(e.name) + '" aria-label="The email\u2019s name (for the team)"' + (SS.ro ? ' disabled' : '') + ' data-w198skip>' +
-      '<span id="w202ss">' + saveState() + '</span><span class="w202sp"></span>' +
+      '<span id="w202ss">' + saveState() + '</span>' + histBar() + '<span class="w202sp"></span>' +
       (e.one_off ? '' : '<span class="w202chip g">Template</span>') +
       '<button class="w152btn sm" data-w202sendopen>' + I('send') + ' Send or save\u2026</button></div>' + owner +
       (SS.msg ? '<div class="w154msg">' + E(SS.msg) + (SS.undo ? ' <button class="w152btn sm ghost" data-w202undo>Undo</button>' : '') + '</div>' : '') + (SS.err ? '<div class="w152err">' + E(SS.err) + '</div>' : '') +
@@ -77009,17 +77052,19 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       '<div class="w202cols ed tab-' + SS.tab + '"><div class="w202left">' + sendHtml() + settingsHtml() + questionsHtml() + checksHtml() + blocksHtml() +
       (SS.ro ? '' : '<div class="w154card w202chg" data-w202sec="change"><h3>' + I('spark') + ' Ask the Hub to change it</h3>' +
         '<textarea class="w152in w202say" data-w202say="change" rows="3" placeholder="Make it shorter. Warmer. Put the date first. Write it in French. Add a P.S. about bringing a friend.">' + E(SS.change) + '</textarea>' +
-        '<div class="w154acts"><button class="w152btn" data-w202change' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Change it</button></div>' + (SS.busy ? busyHtml(SS.busy) : '') + '</div>') +
+        '<div class="w154acts"><button class="w152btn" data-w202change' + (SS.busy ? ' disabled' : '') + '>' + I('spark') + ' Change it ' + aboutStep() + '</button></div>' + (SS.busy ? busyHtml(SS.busy) : '') +
+        '<p class="m w204cost" id="w204cost">' + emailCostLine(e) + ' <button class="w202link" data-w204costs>What it costs</button></p></div>') +
       '<div class="w202foot">' + (SS.ro ? '' : '<button class="w152btn sm ghost" data-w202dupe>' + I('copy') + ' Make a copy</button>') +
       (!SS.ro && e.key ? (SS.confirmDel ? '<span class="w202cf">' + (e.one_off ? 'Delete this email?' : 'Remove this template? Automations that use it stop sending it.') + ' <button class="w152btn sm" data-w202delyes>Yes, remove it</button><button class="w152btn sm ghost" data-w202delno>Keep it</button></span>'
         : '<button class="w152btn sm ghost" data-w202rm>' + I('trash') + ' ' + (e.one_off ? 'Delete' : 'Remove the template') + '</button>') : '') + '</div>' +
-      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + '</div>';
+      '</div><div class="w202right">' + previewHtml() + '</div></div>' + pickerHtml() + voicesHtml() + movingHtml() + '</div>';
   }
   /* ---------- edits ---------- */
   var timers = {};
   function later(name, ms, fn) { clearTimeout(timers[name]); timers[name] = setTimeout(fn, ms); }
-  function changed(structural) {
+  function changed(structural, field) {
     if (!SS.d || SS.ro) return;
+    histRecord(field);   /* wave204: every change is a step for Undo (typing in one field: one step until a pause) */
     SS.dirty = true; SS.saveNote = ''; updateSaveState();
     if (structural) { paint(); } else { later('pv', 300, refreshPreview); later('ck', 500, refreshChecks); }
     later('save', 2500, function () { if (SS.dirty) saveNow(); });
@@ -77043,6 +77088,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
         var m = ev.target.closest && ev.target.closest('[data-w202b]'); if (!m) return;
         var i = Number(m.getAttribute('data-w202b')); openBlock(i);
       });
+      doc.addEventListener('keydown', onKey);   /* wave204: Cmd/Ctrl+Z works with the preview in focus too */
     } catch (e) { /* fine */ }
   }
   function openBlock(i) {
@@ -77097,9 +77143,11 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     SS.err = ''; SS.busy = mode === 'change' ? 'The Hub is changing your email\u2026' : 'The Hub is putting your answers in\u2026'; paint();
     var r = await aiCall({ mode: mode, design: e.design, subject: e.subject, preheader: e.preheader, instruction: SS.change, qa: qa, audience: e.audience, kind: e.kind, lang: e.lang, photos: [], voice: effVoice(e) });
     SS.busy = '';
-    if (r.error) { SS.err = r.error; paint(); return; }
+    if (r.error) { spent(e, r.cost); SS.err = r.error; paint(); return; }
     var res = fromAi(r.input, r.photos);
-    if (!res.design.blocks.length) { SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
+    if (!res.design.blocks.length) { spent(e, r.cost); SS.err = 'The Hub sent back an empty email, so nothing changed.'; paint(); return; }
+    res.design.ai = addCost(e.design.ai, r.cost);   /* wave204: what the Hub's work on this email has cost */
+    keepMoving(e.design, res.design);   /* wave204: a video card keeps its moving preview */
     SS.undo = JSON.parse(JSON.stringify({ design: e.design, subject: e.subject, preheader: e.preheader }));
     res.design.from = e.design.from; res.design.source = e.design.source; if (e.design.voice) res.design.voice = e.design.voice;
     e.design = res.design; if (res.subject) e.subject = res.subject; if (res.preheader) e.preheader = res.preheader;
@@ -77233,6 +77281,591 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     s.msg = 'Saved as a template: it is on the studio\u2019s shelf, and the automations can send it as \u201cSaved email: ' + e.name + '\u201d.';
     paint();
   }
+  /* ---------- wave204 (04/10/26): Undo and Redo, and a way back to the step before. Soraya Tyree's review: "some sort of
+     backspace button or button to go back to the previous step in case I added something but want to go back. I tried command
+     Z on my keyboard but nothing happened". Every change to the open email is a step (a block added, moved, copied or removed,
+     a field typed in, a photo or a moving preview, the settings, the Hub's own changes): Undo and Redo sit in the editor's bar,
+     with Cmd/Ctrl+Z and Shift+Cmd/Ctrl+Z (Ctrl+Y on Windows). Typing in one field is one step until a pause or another field.
+     The history belongs to the open email and starts again when another one opens. The keys are the studio's only when the
+     email has the focus (or nothing does): in the Ask the Hub box, the answers and the send panel the browser's own undo works.
+     When the Hub put the email together from your words or a template, "What you wrote" (or "Your details") takes you back to
+     that step with everything you gave it; the email stays in Recent emails. ---------- */
+  var HIST_MAX = 80;
+  function histNow() { try { return performance.now(); } catch (e) { return Date.now(); } }   /* a pause is measured on the page's own clock */
+  function histSnap(e) {
+    e = e || SS.d; if (!e) return null;
+    var d = e.design; if (d && d.ai) { d = Object.assign({}, d); delete d.ai; }   /* what was spent is spent: never a step */
+    return JSON.stringify({ design: d, subject: e.subject, preheader: e.preheader, name: e.name, kind: e.kind, audience: e.audience, lang: e.lang });
+  }
+  function histReset() { var H = SS.hist; H.past = []; H.future = []; H.cur = histSnap(); H.field = null; H.at = 0; }
+  /* from changed(): the state before this change goes on the Undo list, unless it continues a burst of typing in one field */
+  function histRecord(field) {
+    var H = SS.hist; if (!SS.d) return;
+    var now = histSnap(); if (H.cur == null) { H.cur = now; return; }
+    if (now === H.cur) return;
+    var t = histNow(), burst = !!field && H.field === field && t - H.at < 1500;
+    if (!burst) { H.past.push(H.cur); if (H.past.length > HIST_MAX) H.past.shift(); }
+    H.future = []; H.cur = now; H.field = field || null; H.at = t;
+    histButtons();
+  }
+  function histApply(s) {
+    var e = SS.d, o = JSON.parse(s), ai = e.design && e.design.ai;
+    e.design = o.design; if (ai) e.design.ai = ai; e.subject = o.subject; e.preheader = o.preheader; e.name = o.name; e.kind = o.kind; e.audience = o.audience; e.lang = o.lang;
+  }
+  /* dir -1: undo, 1: redo */
+  function histGo(dir) {
+    var H = SS.hist, e = SS.d; if (!e || SS.ro) return false;
+    var now = histSnap(); if (H.cur != null && now !== H.cur) { H.past.push(H.cur); H.future = []; H.cur = now; }
+    var from = dir < 0 ? H.past : H.future, to = dir < 0 ? H.future : H.past;
+    if (!from.length) { T(dir < 0 ? 'Nothing to undo' : 'Nothing to redo'); return false; }
+    to.push(H.cur); H.cur = from.pop(); H.field = null; H.at = 0;
+    histApply(H.cur);
+    var ids = {}; e.design.blocks.forEach(function (b) { ids[b.id] = 1; }); Object.keys(SS.open).forEach(function (k) { if (!ids[k]) delete SS.open[k]; });
+    SS.msg = ''; SS.undo = null; SS.err = ''; SS.confirmDel = false;
+    SS.dirty = true; SS.saveNote = ''; paint();
+    later('save', 2500, function () { if (SS.dirty) saveNow(); });
+    return true;
+  }
+  function histMac() { try { return /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent || ''); } catch (e) { return false; } }
+  function histBar() {
+    if (SS.ro || !SS.d) return '';
+    var H = SS.hist, mac = histMac();
+    return '<span class="w204hist" role="group" aria-label="Undo and redo">' +
+      '<button class="w152btn sm ghost w204hb" id="w204undo" data-w204hist="-1" title="Undo the last change (' + (mac ? '\u2318Z' : 'Ctrl+Z') + ')"' + (H.past.length ? '' : ' disabled') + '>' + I('undo') + '<span>Undo</span></button>' +
+      '<button class="w152btn sm ghost w204hb" id="w204redo" data-w204hist="1" title="Redo (' + (mac ? '\u21e7\u2318Z' : 'Ctrl+Y') + ')"' + (H.future.length ? '' : ' disabled') + '>' + I('redo') + '<span>Redo</span></button></span>';
+  }
+  function histButtons() {
+    var u = document.getElementById('w204undo'), r = document.getElementById('w204redo');
+    if (u) u.disabled = !SS.hist.past.length; if (r) r.disabled = !SS.hist.future.length;
+  }
+  /* may Cmd/Ctrl+Z be the studio's here? Yes on the email's own fields, the page itself or the preview; no in other boxes */
+  function histKeyOk(a) {
+    if (!a || a === document.body || a === document.documentElement) return true;
+    if (a.id === 'w202frame') return true;
+    if (!within(a)) return false;
+    if (a.hasAttribute('data-w202f') || a.hasAttribute('data-w202e') || a.hasAttribute('data-w202voicesel')) return true;
+    return !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && !a.isContentEditable;
+  }
+  /* ---------- back to the step before the Hub's draft ---------- */
+  function backBtn() {
+    var B = SS.back; if (!B || !SS.d || B.d !== SS.d) return '';
+    return '<button class="w152btn sm ghost" data-w204back title="Back to the step before, with everything you gave the Hub">' + I('back') + ' ' + (B.view === 'tpl' ? 'Your details' : 'What you wrote') + '</button>';
+  }
+  function backToStart() {
+    var B = SS.back; if (!B) return;
+    var s = SS.start, e = SS.d;
+    if (B.view === 'tpl') { s.tpl = B.tpl; s.asks = Object.assign({}, B.asks || {}); s.extra = B.extra || ''; }
+    else { s.brief = B.brief || ''; s.audience = B.audience || s.audience; s.kind = B.kind || s.kind; }
+    s.photos = (B.photos || []).slice(); s.lang = B.lang || s.lang; s.voice = B.voice || s.voice;
+    SS.back = null;
+    if (e && SS.dirty && !SS.ro) saveNow();
+    SS.startNote = { view: B.view, text: e && e.key ? 'Here is what you gave the Hub, to change and try again. The email it made is kept in Recent emails.' : 'Here is what you gave the Hub, to change and try again.' };
+    go(B.view === 'tpl' ? '#crm/studio/tpl/' + B.tpl : '#crm/studio/ai');
+  }
+  /* ---------- wave204 (04/10/26): GIF204, the animated GIF encoder behind the moving preview ----------
+     Self-contained (no page, no db), so node runs this file alone for the tests. One palette for the whole clip (median cut
+     over a 15-bit histogram: up to 255 colours, index 255 kept for transparency), so colours hold still from frame to frame.
+     Every later frame carries only the pixels that changed by more than a little (the rest transparent, the frame cropped to
+     what changed), which keeps a few seconds of video small enough for an inbox. LZW as in the GIF89a spec (the variable code
+     size timing follows omggif's encoder). Loops forever; disposal "do not dispose". */
+  var GIF204 = (function () {
+    var TI = 255;   /* the transparent index */
+    function chan(x, c) { return c === 0 ? x >> 10 : c === 1 ? (x >> 5) & 31 : x & 31; }
+    /* frames: RGBA arrays of one size; up to max colours; step: every step-th pixel goes into the histogram */
+    function palette(frames, max, step, keep) {
+      keep = keep || [];
+      var hist = new Uint32Array(32768), sr = new Float64Array(32768), sg = new Float64Array(32768), sb = new Float64Array(32768), f, d, p, i, key;
+      for (f = 0; f < frames.length; f++) { d = frames[f]; for (p = 0; p < d.length; p += 4 * step) { key = ((d[p] >> 3) << 10) | ((d[p + 1] >> 3) << 5) | (d[p + 2] >> 3); hist[key]++; sr[key] += d[p]; sg[key] += d[p + 1]; sb[key] += d[p + 2]; } }
+      var bins = []; for (i = 0; i < 32768; i++) if (hist[i]) bins.push(i);
+      function box(list) {
+        var lo = [31, 31, 31], hi = [0, 0, 0], n = 0;
+        for (var k = 0; k < list.length; k++) { var x = list[k]; n += hist[x]; for (var c = 0; c < 3; c++) { var v = chan(x, c); if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; } }
+        var r = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]], ch = r[1] >= r[0] && r[1] >= r[2] ? 1 : r[0] >= r[2] ? 0 : 2;
+        return { list: list, n: n, ch: ch, range: r[ch] };
+      }
+      var boxes = bins.length ? [box(bins)] : [], room = Math.max(1, max - keep.length);
+      while (boxes.length < room) {
+        var bi = -1, best = 0;
+        for (i = 0; i < boxes.length; i++) { var s = boxes[i].list.length > 1 ? boxes[i].n * (boxes[i].range + 1) : 0; if (s > best) { best = s; bi = i; } }
+        if (bi < 0) break;
+        var b = boxes[bi], c0 = b.ch, half = b.n / 2, acc = 0, cut = 1;
+        b.list.sort(function (x, y) { return chan(x, c0) - chan(y, c0); });
+        for (i = 0; i < b.list.length - 1; i++) { acc += hist[b.list[i]]; if (acc >= half) { cut = i + 1; break; } }
+        boxes.splice(bi, 1, box(b.list.slice(0, cut)), box(b.list.slice(cut)));
+      }
+      var pal = new Uint8Array(256 * 3);
+      boxes.forEach(function (bx, k) {
+        var r = 0, g = 0, bl = 0;
+        bx.list.forEach(function (x) { r += sr[x]; g += sg[x]; bl += sb[x]; });   /* the true average of the pixels in the box */
+        pal[k * 3] = Math.round(r / bx.n); pal[k * 3 + 1] = Math.round(g / bx.n); pal[k * 3 + 2] = Math.round(bl / bx.n);
+      });
+      var n = boxes.length;
+      keep.slice(0, max - n).forEach(function (c) { pal[n * 3] = c[0]; pal[n * 3 + 1] = c[1]; pal[n * 3 + 2] = c[2]; n++; });
+      return { pal: pal, n: Math.max(1, n) };
+    }
+    /* the nearest palette colour for a pixel, remembered per 15-bit colour */
+    function mapper(pal, n) {
+      var cache = new Int16Array(32768); for (var z = 0; z < 32768; z++) cache[z] = -1;
+      return function (r, g, b) {
+        var key = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3), v = cache[key];
+        if (v >= 0) return v;
+        var cr = ((r >> 3) << 3) + 4, cg = ((g >> 3) << 3) + 4, cb = ((b >> 3) << 3) + 4, best = 0, bd = 1e12;
+        for (var k = 0; k < n; k++) { var dr = pal[k * 3] - cr, dg = pal[k * 3 + 1] - cg, db = pal[k * 3 + 2] - cb, dd = dr * dr * 2 + dg * dg * 4 + db * db * 3; if (dd < bd) { bd = dd; best = k; } }
+        cache[key] = best; return best;
+      };
+    }
+    /* one frame's indexes as LZW sub-blocks, written into out at pos; returns the new pos */
+    function lzw(idx, len, out, pos) {
+      var min = 8, clear = 256, eoi = 257, next = 258, size = 9, cur = 0, shift = 0;
+      out[pos++] = min;
+      var sub = pos++;
+      function flush(bits) { while (shift >= bits) { out[pos++] = cur & 255; cur >>= 8; shift -= 8; if (pos === sub + 256) { out[sub] = 255; sub = pos++; } } }
+      function emit(c) { cur |= c << shift; shift += size; flush(8); }
+      var table = new Map(), ib = idx[0];
+      emit(clear);
+      for (var i = 1; i < len; i++) {
+        var k = idx[i], key = (ib << 8) | k, code = table.get(key);
+        if (code === undefined) {
+          emit(ib);
+          if (next === 4096) { emit(clear); next = 258; size = 9; table.clear(); }
+          else { if (next >= (1 << size)) size++; table.set(key, next++); }
+          ib = k;
+        } else ib = code;
+      }
+      emit(ib); emit(eoi); flush(1);
+      if (sub + 1 === pos) out[sub] = 0; else { out[sub] = pos - sub - 1; out[pos++] = 0; }
+      return pos;
+    }
+    /* frames: RGBA arrays (w x h); delay in hundredths of a second; o.thr: how far a colour may drift before a pixel is
+       redrawn (squared RGB distance); o.keep: [r, g, b] colours that must be in the palette exactly (a small gold button
+       would otherwise be averaged away by the median cut); o.onProg(fraction); o.yield(): a promise between frames */
+    async function encode(frames, w, h, delay, o) {
+      o = o || {};
+      if (!frames.length || w < 1 || h < 1) throw new Error('Nothing to make a preview from.');
+      var px = w * h, step = Math.max(1, Math.floor(frames.length * px / 200000));
+      var P = palette(frames, 255, step, o.keep), pal = P.pal, map = mapper(pal, P.n), thr = o.thr == null ? 300 : o.thr;
+      var shown = new Uint8Array(px), idx = new Uint8Array(px), crop = new Uint8Array(px);
+      var out = new Uint8Array(1024 + frames.length * (Math.ceil(px * 1.6) + 64)), pos = 0;
+      var u8 = function (v) { out[pos++] = v; }, u16 = function (v) { out[pos++] = v & 255; out[pos++] = (v >> 8) & 255; }, txt = function (s) { for (var c = 0; c < s.length; c++) u8(s.charCodeAt(c)); };
+      txt('GIF89a'); u16(w); u16(h); u8(0xF7); u8(0); u8(0);
+      out.set(pal, pos); pos += 768;
+      u8(0x21); u8(0xFF); u8(11); txt('NETSCAPE2.0'); u8(3); u8(1); u16(0); u8(0);
+      for (var f = 0; f < frames.length; f++) {
+        var d = frames[f], x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (var p = 0, q = 0; p < px; p++, q += 4) {
+          var ni = map(d[q], d[q + 1], d[q + 2]);
+          if (f === 0) { shown[p] = ni; idx[p] = ni; continue; }
+          var si = shown[p];
+          if (ni === si) { idx[p] = TI; continue; }
+          var dr = pal[ni * 3] - pal[si * 3], dg = pal[ni * 3 + 1] - pal[si * 3 + 1], db = pal[ni * 3 + 2] - pal[si * 3 + 2];
+          if (dr * dr + dg * dg + db * db < thr) { idx[p] = TI; continue; }
+          idx[p] = ni; shown[p] = ni;
+          var x = p % w, y = (p / w) | 0;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        var fx = 0, fy = 0, fw = w, fh = h, data = idx, len = px;
+        if (f > 0) {
+          if (x1 < 0) { fw = 1; fh = 1; crop[0] = TI; data = crop; len = 1; }
+          else {
+            fx = x0; fy = y0; fw = x1 - x0 + 1; fh = y1 - y0 + 1; len = fw * fh;
+            for (var yy = 0, z = 0; yy < fh; yy++) { var row = (fy + yy) * w + fx; for (var xx = 0; xx < fw; xx++) crop[z++] = idx[row + xx]; }
+            data = crop;
+          }
+        }
+        u8(0x21); u8(0xF9); u8(4); u8(4 | (f > 0 ? 1 : 0)); u16(delay); u8(TI); u8(0);
+        u8(0x2C); u16(fx); u16(fy); u16(fw); u16(fh); u8(0);
+        pos = lzw(data, len, out, pos);
+        if (o.onProg) o.onProg((f + 1) / frames.length);
+        if (o.yield) await o.yield();
+      }
+      u8(0x3B);
+      return out.slice(0, pos);
+    }
+    return { encode: encode, palette: palette, lzw: lzw };
+  })();
+  /* ---------- wave204 (04/10/26): the moving preview. Soraya Tyree's review: "something we discussed in last week's marketing
+     meeting was the possibility of having a video that plays in the email so people don't have to click on anything." Gmail and
+     Outlook do not play video inside an email (Apple Mail is about the only one that does), but they play an animated picture.
+     So the video card can carry a moving preview: a few silent seconds of the writer's own video, read here in the browser
+     (frames from the file at 10 or 8 a second, cropped to the shape picked, our gold play button drawn on), made into an animated
+     GIF (GIF204) and uploaded to content-images/email/ like a photo. It plays as soon as the email opens (Outlook on Windows
+     shows its first frame) and a tap opens the full video, with sound, at the card's link. The video file never leaves the
+     computer. The Hub page's Content-Security-Policy allows media from blob: URLs for this (build/site/_headers). ---------- */
+  var MV = { std: { delay: 10, px: 157000, fps: 10 }, light: { delay: 12, px: 96000, fps: 8 } }, MV_LEN = [2, 3, 4, 5];
+  function mvDims(shape, size) {
+    var ar = shape === 'square' ? 1 : shape === 'tall' ? 0.8 : 16 / 9, px = (MV[size] || MV.std).px;
+    var w = Math.min(MAIL202.W, Math.round(Math.sqrt(px * ar))), h = Math.round(w / ar);
+    return { w: w - (w % 2), h: h - (h % 2) };
+  }
+  function mvShapeFor(w, h) { var a = h ? w / h : 1.7; return a > 1.25 ? 'wide' : a < 0.85 ? 'tall' : 'square'; }
+  function mvTime(t) { t = Math.max(0, Number(t) || 0); var m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 9.95 ? '0' : '') + s.toFixed(1); }
+  function mvSpan(M) { return mvTime(M.start) + ' to ' + mvTime(Math.min(M.dur, M.start + M.len)) + ' of ' + mvTime(M.dur); }
+  function kbText(kb) { kb = Number(kb) || 0; return kb >= 1000 ? (kb / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(kb)) + ' KB'; }
+  function mvVideo(url) {
+    return new Promise(function (res, rej) {
+      var v = document.createElement('video'), done = false, tm;
+      var fin = function (err) { if (done) return; done = true; clearTimeout(tm); v.onloadeddata = null; v.onerror = null; if (err) rej(err); else res(v); };
+      tm = setTimeout(function () { fin(new Error('The video took too long to open. Try a shorter clip, or an MP4 file.')); }, 20000);
+      v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.onloadeddata = function () { fin(null); };
+      v.onerror = function () { fin(new Error('This video could not be read here. An MP4 file works best, in Chrome or Safari.')); };
+      v.src = url;
+    });
+  }
+  function mvSeek(v, t) {
+    return new Promise(function (res) {
+      var done = false, tm, fin = function () { if (done) return; done = true; clearTimeout(tm); v.removeEventListener('seeked', fin); res(); };
+      tm = setTimeout(fin, 4000);
+      v.addEventListener('seeked', fin);
+      try { v.currentTime = t; } catch (e) { fin(); }
+    });
+  }
+  /* our gold play button, drawn on every frame (so even Outlook's first frame says "video") */
+  function mvBadge(g, w, h) {
+    var r = Math.round(Math.max(16, Math.min(w, h) * 0.11)), cx = Math.round(w / 2), cy = Math.round(h / 2), s = r * 0.46;
+    g.save();
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fillStyle = 'rgba(220,165,39,0.95)'; g.fill();
+    g.beginPath(); g.moveTo(cx - s * 0.62, cy - s); g.lineTo(cx - s * 0.62, cy + s); g.lineTo(cx + s * 0.95, cy); g.closePath(); g.fillStyle = GREEN; g.fill();
+    g.restore();
+  }
+  function mvFree(M) {
+    if (!M) return;
+    if (M.out) { try { URL.revokeObjectURL(M.out.url); } catch (e) { /* fine */ } }
+    try { URL.revokeObjectURL(M.url); } catch (e) { /* fine */ }
+  }
+  function closeMoving() { mvFree(SS.mv); SS.mv = null; }
+  function mvStale() { var M = SS.mv; if (M && M.out) { try { URL.revokeObjectURL(M.out.url); } catch (e) { /* fine */ } M.out = null; } }
+  async function openMoving(i, file) {
+    if (!file || !SS.d || SS.ro) return;
+    var b = SS.d.design.blocks[i]; if (!b || b.type !== 'video') return;
+    if (!/^video\//i.test(file.type || '') && !/\.(mp4|m4v|mov|webm|ogv)$/i.test(str(file.name))) { SS.err = 'That is not a video file. Use an MP4 (or a MOV or WebM).'; paint(); return; }
+    closeMoving();
+    var M = SS.mv = { id: b.id, name: str(file.name) || 'Your video', url: URL.createObjectURL(file), dur: 0, vw: 0, vh: 0, start: 0, len: 3, shape: 'wide', size: 'std', busy: '', prog: 0, err: '', out: null };
+    SS.err = ''; paint();
+    try {
+      var v = await mvVideo(M.url);
+      if (!isFinite(v.duration)) await mvSeek(v, 1e6);   /* some recordings only learn their length at the end */
+      if (SS.mv !== M) return;
+      M.dur = isFinite(v.duration) ? v.duration : 0; M.vw = v.videoWidth; M.vh = v.videoHeight;
+      if (!M.dur || !M.vw) throw new Error('This video has no picture the Hub can read. Try an MP4 file.');
+      M.shape = mvShapeFor(M.vw, M.vh);
+      M.len = M.dur >= 3 ? 3 : Math.max(0.5, Math.floor(M.dur * 10) / 10);
+      M.start = M.dur > M.len + 2 ? 1 : 0;
+      try { v.removeAttribute('src'); v.load(); } catch (e) { /* fine */ }
+    } catch (e) { if (SS.mv === M) M.err = msgOf(e); }
+    if (SS.mv === M) paint();
+  }
+  function mvProg(M, pct) { M.prog = pct; var el = document.getElementById('w204mvprog'); if (el) el.textContent = pct + '%'; }
+  async function makeMoving() {
+    var M = SS.mv; if (!M || M.busy || !M.dur) return;
+    mvStale();
+    var cfg = MV[M.size] || MV.std, dm = mvDims(M.shape, M.size), n = Math.max(2, Math.round(M.len * 100 / cfg.delay));
+    M.busy = 'Making the moving preview\u2026'; M.prog = 0; M.err = ''; paint();
+    try {
+      var v = await mvVideo(M.url);
+      if (SS.mv !== M) return;
+      var c = document.createElement('canvas'); c.width = dm.w; c.height = dm.h;
+      var g = c.getContext('2d', { willReadFrequently: true });
+      var vw = v.videoWidth, vh = v.videoHeight, ar = dm.w / dm.h, sw, sh, sx, sy;
+      if (vw / vh > ar) { sh = vh; sw = vh * ar; sx = (vw - sw) / 2; sy = 0; } else { sw = vw; sh = vw / ar; sx = 0; sy = (vh - sh) / 2; }
+      var frames = [], end = Math.max(0, (isFinite(v.duration) ? v.duration : M.dur) - 0.04);
+      for (var k = 0; k < n; k++) {
+        await mvSeek(v, Math.min(end, M.start + k * cfg.delay / 100));
+        if (SS.mv !== M) return;
+        g.fillStyle = GREEN; g.fillRect(0, 0, dm.w, dm.h);
+        g.drawImage(v, sx, sy, sw, sh, 0, 0, dm.w, dm.h);
+        mvBadge(g, dm.w, dm.h);
+        frames.push(g.getImageData(0, 0, dm.w, dm.h).data);
+        mvProg(M, Math.round((k + 1) / n * 70));
+      }
+      try { v.removeAttribute('src'); v.load(); } catch (e) { /* fine */ }
+      var bytes = await GIF204.encode(frames, dm.w, dm.h, cfg.delay, { keep: [[220, 165, 39], [16, 63, 57], [255, 250, 242]], onProg: function (p) { mvProg(M, 70 + Math.round(p * 30)); }, yield: function () { return new Promise(function (r) { setTimeout(r, 0); }); } });
+      if (SS.mv !== M) return;
+      var blob = new Blob([bytes], { type: 'image/gif' });
+      M.out = { blob: blob, url: URL.createObjectURL(blob), kb: Math.max(1, Math.round(blob.size / 1024)), w: dm.w, h: dm.h, frames: n, secs: M.len };
+    } catch (e) { M.err = msgOf(e); }
+    M.busy = ''; paint();
+  }
+  async function useMoving() {
+    var M = SS.mv; if (!M || !M.out || M.busy || !SS.d) return;
+    var b = SS.d.design.blocks.filter(function (x) { return x.id === M.id; })[0];
+    if (!b || b.type !== 'video') { closeMoving(); paint(); return; }
+    M.busy = 'Uploading the preview\u2026'; M.err = ''; paint();
+    try {
+      var now = new Date(), path = 'email/' + now.getFullYear() + '/' + ('0' + (now.getMonth() + 1)).slice(-2) + '/' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4) + '.gif';
+      var up = await db.storage.from('content-images').upload(path, M.out.blob, { contentType: 'image/gif', upsert: false, cacheControl: '31536000' });
+      if (up && up.error) throw new Error('The upload did not go through: ' + msgOf(up.error));
+      var pub = db.storage.from('content-images').getPublicUrl(path), src = pub && pub.data && pub.data.publicUrl;
+      if (!src) throw new Error('The upload did not give back a link.');
+      if (SS.mv !== M) return;
+      b.gif = src; b.gw = M.out.w; b.gh = M.out.h; b.gkb = M.out.kb;
+      closeMoving(); SS.open[b.id] = true;
+      T('The moving preview is in the email');
+      changed(true);
+    } catch (e) { if (SS.mv === M) { M.busy = ''; M.err = msgOf(e); paint(); } }
+  }
+  /* the slot in the video card's form */
+  function movingSlot(i, b) {
+    var has = !!str(b.gif).trim();
+    return '<div class="w204mvslot">' + (has ? '<img src="' + E(b.gif) + '" alt="The moving preview">' : '<div class="w202noimg">' + I('film') + '</div>') +
+      '<div class="w204mvtx"><b>Moving preview</b><span class="m">' + (has ? 'Plays as soon as the email opens' + (b.gkb ? ' (' + kbText(b.gkb) + ')' : '') + '. A tap opens the full video at the link.'
+        : 'Inboxes like Gmail and Outlook do not play video inside an email, but they play a moving picture: a few silent seconds of your video that start as soon as the email opens. A tap opens the full video, with sound, at the link.') + '</span>' +
+      '<span class="w202slb"><label class="w152btn sm' + (has ? ' ghost' : '') + '">' + I('upload') + (has ? ' Make a new one' : ' Make one from a video file') + '<input type="file" accept="video/*,.mp4,.mov,.m4v,.webm" data-w204vfile="' + i + '" hidden></label>' +
+      (has ? '<button class="w152btn sm ghost" data-w204mvrm="' + i + '">' + I('x') + ' Remove it</button>' : '') + '</span></div></div>';
+  }
+  function movingHtml() {
+    var M = SS.mv; if (!M) return '';
+    var body;
+    if (!M.dur) body = M.err ? '<div class="w152err">' + E(M.err) + '</div><div class="w154acts"><button class="w152btn ghost" data-w204mvx>Close</button></div>' : busyHtml('Opening the video\u2026');
+    else {
+      var maxStart = Math.max(0, M.dur - M.len), dm = mvDims(M.shape, M.size), cfg = MV[M.size] || MV.std, dis = M.busy ? ' disabled' : '';
+      var lens = MV_LEN.filter(function (l) { return l <= M.dur + 0.05; }); if (!lens.length) lens = [M.len];
+      var left = '<div class="w204mvl"><video class="w204mvv" data-w204mvvideo src="' + E(M.url) + '" muted playsinline controls preload="auto" aria-label="Your video"></video>' +
+        '<label class="w155lb">Start at <span class="m" id="w204mvt">' + E(mvSpan(M)) + '</span><input type="range" class="w204range" data-w204mvstart min="0" max="' + maxStart.toFixed(1) + '" step="0.1" value="' + Math.min(M.start, maxStart).toFixed(1) + '"' + dis + ' aria-label="Where the preview starts"></label>' +
+        '<div class="w154acts"><button class="w152btn sm ghost" data-w204mvhere' + dis + '>Start where the video is paused</button></div>' +
+        '<div class="w155lb">Length ' + segHtml('data-w204mvlen', lens.map(function (l) { return [String(l), l + ' seconds']; }), String(M.len)) + '</div>' +
+        '<div class="w155lb">Shape ' + segHtml('data-w204mvshape', [['wide', 'Wide'], ['square', 'Square'], ['tall', 'Tall']], M.shape) + '</div>' +
+        '<div class="w155lb">Size ' + segHtml('data-w204mvsize', [['std', 'Standard'], ['light', 'Lighter']], M.size) + '<span class="m">' + dm.w + ' \u00d7 ' + dm.h + ' pixels, ' + cfg.fps + ' frames a second. Lighter loads faster on a phone.</span></div></div>';
+      var right;
+      if (M.busy) right = '<div class="w204mvwait">' + busyHtml(M.busy) + '<p class="m" id="w204mvprog" aria-live="polite">' + (M.prog ? M.prog + '%' : '') + '</p></div>';
+      else if (M.out) {
+        var kb = M.out.kb;
+        right = '<img class="w204mvout" src="' + E(M.out.url) + '" alt="The moving preview" width="' + M.out.w + '">' +
+          '<p class="m"><b>' + kbText(kb) + '</b> \u00b7 ' + M.out.frames + ' frames \u00b7 ' + M.out.w + ' \u00d7 ' + M.out.h + '. ' + (kb > 2500 ? 'Heavy for a phone on data: try Lighter, or fewer seconds.' : kb > 1500 ? 'Fine for email; Lighter would load faster.' : 'Light enough for any inbox.') + '</p>' +
+          (M.err ? '<div class="w152err">' + E(M.err) + '</div>' : '') +
+          '<div class="w154acts"><button class="w152btn" data-w204mvuse>' + I('check') + ' Use this preview</button><button class="w152btn ghost" data-w204mvmake>Make it again</button></div>';
+      } else right = '<div class="w204mvph">' + I('film') + '<p class="m">Pick where it starts and how long it runs, then make it. It takes a few seconds, here on your computer: your video is not uploaded, only the preview.</p>' +
+        (M.err ? '<div class="w152err">' + E(M.err) + '</div>' : '') + '<button class="w152btn" data-w204mvmake>' + I('spark') + ' Make the preview</button></div>';
+      body = '<div class="w204mvgrid">' + left + '<div class="w204mvr">' + right + '</div></div>';
+    }
+    return '<div class="w202modal" role="dialog" aria-modal="true" aria-label="Moving preview"><div class="w202mbox w204mv">' +
+      '<div class="w202mh"><h3>' + I('film') + ' Moving preview</h3><button class="w202x" data-w204mvx aria-label="Close"' + (M.busy ? ' disabled' : '') + '>' + I('x') + '</button></div>' +
+      '<p class="m" data-w198skip><b>' + E(M.name) + '</b>. A few silent seconds that play as soon as the email opens, with our gold play button on top; a tap opens the full video at the card\u2019s link.</p>' + body + '</div></div>';
+  }
+  /* after a paint, the video in the panel shows where the preview starts */
+  function movingAfterPaint() {
+    var M = SS.mv, v = M && SS.root && SS.root.querySelector('[data-w204mvvideo]'); if (!v) return;
+    var set = function () { try { if (Math.abs(v.currentTime - M.start) > 0.05) v.currentTime = M.start; } catch (e) { /* fine */ } };
+    if (v.readyState >= 1) set(); else v.addEventListener('loadedmetadata', set, { once: true });
+  }
+  /* the Hub's changes keep a card's moving preview: matched by the link, else by order */
+  function keepMoving(from, to) {
+    var olds = ((from && from.blocks) || []).filter(function (b) { return b && b.type === 'video' && str(b.gif).trim(); });
+    if (!olds.length || !to) return to;
+    var used = [];
+    (to.blocks || []).filter(function (b) { return b && b.type === 'video' && !str(b.gif).trim(); }).forEach(function (b) {
+      var free = olds.filter(function (o) { return used.indexOf(o) < 0; });
+      var m = free.filter(function (o) { return str(o.url).trim() && str(o.url).trim() === str(b.url).trim(); })[0] || free[0];
+      if (!m) return; used.push(m);
+      b.gif = m.gif; if (m.gw) b.gw = m.gw; if (m.gh) b.gh = m.gh; if (m.gkb) b.gkb = m.gkb;
+    });
+    return to;
+  }
+  /* ---------- wave204 (04/10/26): text without the markup. Soraya Tyree's review: "a place where I can drop the text and it
+     generates the html for me would be very helpful because I'm not too familiar with that kind of work". Tell the Hub is that
+     place, and the front page now says so (paste your text, the Hub designs the email: no HTML). In the editor, and in the
+     Tell the Hub and template boxes, text pasted from a document or an email keeps its bold, its links and its paragraphs,
+     turned into the studio's **bold** and [words](link); the B and Link buttons (Cmd/Ctrl+B, Cmd/Ctrl+K) mark selected words
+     without typing the symbols. ---------- */
+  function htmlToMark(html) {
+    var doc; try { doc = new DOMParser().parseFromString(str(html), 'text/html'); } catch (e) { return null; }
+    if (!doc || !doc.body) return null;
+    var runs = [], BLOCK = /^(P|DIV|H[1-6]|LI|UL|OL|TR|TABLE|BLOCKQUOTE|SECTION|ARTICLE|HEADER|FOOTER|PRE)$/;
+    function weight(el) { var fw = str(el.style && el.style.fontWeight).trim(); return fw === 'bold' || fw === 'bolder' ? 700 : fw === 'normal' || fw === 'lighter' ? 400 : fw ? Number(fw) || 0 : 0; }
+    function bold(el, inherited) { var w = weight(el); if (w) return w >= 600; if (/^(B|STRONG|H[1-6])$/.test(el.tagName)) return true; return inherited; }
+    function walk(node, b, inLi) {
+      for (var c = node.firstChild; c; c = c.nextSibling) {
+        if (c.nodeType === 3) { var t = c.nodeValue.replace(/\u00a0/g, ' ').replace(/[\r\n\t ]+/g, ' '); if (t) runs.push({ t: t, b: b }); continue; }
+        if (c.nodeType !== 1) continue;
+        var tag = c.tagName;
+        if (/^(STYLE|SCRIPT|META|TITLE|HEAD|NOSCRIPT|TEMPLATE|IMG|SVG)$/.test(tag)) continue;
+        if (tag === 'BR') { runs.push({ br: 1 }); continue; }
+        var b2 = bold(c, b);
+        if (tag === 'A') {
+          var href = str(c.getAttribute('href')).trim(), words = str(c.textContent).replace(/\s+/g, ' ').trim();
+          if (words && /^(https?:|mailto:|tel:)/i.test(href)) { runs.push({ t: words === href ? href : '[' + words.replace(/[\[\]]/g, '') + '](' + href.replace(/[()\s]/g, function (x) { return encodeURIComponent(x); }) + ')', raw: true }); continue; }
+          walk(c, b2, inLi); continue;
+        }
+        var blk = BLOCK.test(tag) && !(inLi && /^(P|DIV)$/.test(tag));   /* a list point's own paragraph stays on its line */
+        if (blk) runs.push({ br: tag === 'LI' ? 1 : 2 });
+        if (tag === 'LI') runs.push({ t: '\u2022 ', raw: true });
+        walk(c, b2, inLi || tag === 'LI');
+        if (blk) runs.push({ br: tag === 'LI' ? 1 : 2 });
+      }
+    }
+    walk(doc.body, false);
+    var toks = [];
+    runs.forEach(function (r) {
+      if (r.br) { toks.push(r); return; }
+      var last = toks[toks.length - 1], b = r.raw ? false : !!r.b;
+      if (last && !last.br && !last.raw && !r.raw && last.b === b) last.t += r.t; else toks.push({ t: r.t, b: b, raw: !!r.raw });
+    });
+    var out = '', pend = 0;
+    toks.forEach(function (k) {
+      if (k.br) { if (out) pend = Math.max(pend, k.br); return; }
+      var t = k.t;
+      if (!out || pend) t = t.replace(/^\s+/, '');
+      if (!t) return;
+      if (pend) { out = out.replace(/[ \t]+$/, '') + (pend === 2 ? '\n\n' : '\n'); pend = 0; }
+      if (k.b) { var m = t.match(/^(\s*)([\s\S]*?)(\s*)$/); if (m[2]) t = m[1] + '**' + m[2].replace(/\*\*/g, '') + '**' + m[3]; }
+      out += t;
+    });
+    return out.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+  /* the boxes that take pasted formatting: the editor's marked text fields, and Tell the Hub's and the template's own words */
+  function pasteBox(t) { return t && t.tagName === 'TEXTAREA' && (t.hasAttribute('data-w204fmt') || /^(brief|extra)$/.test(t.getAttribute('data-w202s') || '')); }
+  function insertText(t, text, selFrom, selTo, cutFrom, cutTo) {
+    var a = cutFrom != null ? cutFrom : t.selectionStart, z = cutTo != null ? cutTo : t.selectionEnd, v = t.value;
+    t.value = v.slice(0, a) + text + v.slice(z);
+    try { t.focus({ preventScroll: true }); t.setSelectionRange(a + (selFrom != null ? selFrom : text.length), a + (selTo != null ? selTo : selFrom != null ? selFrom : text.length)); } catch (e) { /* fine */ }
+    t.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  function onPaste(ev) {
+    var t = ev.target; if (!within(t) || !pasteBox(t) || t.disabled || t.readOnly) return;
+    var cd = ev.clipboardData; if (!cd) return;
+    var html = cd.getData('text/html'); if (!html || !/<(b|strong|a|span|p|div|li|h[1-6]|br)\b/i.test(html)) return;
+    var mark = htmlToMark(html); if (mark == null || !mark.trim()) return;
+    if (mark.replace(/\s+/g, ' ').trim() === str(cd.getData('text/plain')).replace(/\s+/g, ' ').trim()) return;   /* nothing to keep: the browser pastes it */
+    ev.preventDefault();
+    insertText(t, mark);
+  }
+  /* B and Link on the selected words */
+  function fmtApply(t, kind) {
+    if (!t || t.disabled) return;
+    var a = t.selectionStart, z = t.selectionEnd, v = t.value, sel = v.slice(a, z);
+    if (kind === 'b') {
+      if (sel && v.slice(a - 2, a) === '**' && v.slice(z, z + 2) === '**') { insertText(t, sel, 0, sel.length, a - 2, z + 2); return; }
+      if (!sel) { insertText(t, '****', 2, 2); return; }
+      var m = sel.match(/^(\s*)([\s\S]*?)(\s*)$/);
+      if (/^\*\*[\s\S]+\*\*$/.test(m[2])) { var inner = m[2].slice(2, -2); insertText(t, m[1] + inner + m[3], m[1].length, m[1].length + inner.length); return; }
+      insertText(t, m[1] + '**' + m[2] + '**' + m[3], m[1].length, m[1].length + m[2].length + 4);
+      return;
+    }
+    if (kind === 'link') {
+      var u = sel.trim();
+      if (/^(https?:\/\/|www\.)\S+$/i.test(u)) { insertText(t, '[words](' + (/^www\./i.test(u) ? 'https://' + u : u) + ')', 1, 6); return; }
+      var w = sel.replace(/[\[\]]/g, '') || 'words';
+      insertText(t, '[' + w + '](https://)', w.length + 3, w.length + 11);
+    }
+  }
+  function fmtBar() {
+    var mac = histMac();
+    return '<span class="w204fmt" role="group" aria-label="Formatting"><button type="button" class="w204fb" data-w204fmtb="b" title="Bold: select words, then B (' + (mac ? '\u2318B' : 'Ctrl+B') + ')" aria-label="Bold"><b>B</b></button>' +
+      '<button type="button" class="w204fb" data-w204fmtb="link" title="Link: select words, then Link (' + (mac ? '\u2318K' : 'Ctrl+K') + ')" aria-label="Link">' + I('link') + '</button></span>';
+  }
+  /* ---------- wave204 (04/10/26): what the Hub's AI costs. Steel: "Could you add these costs somewhere in the studio so they
+     know how much they are spending". Every call through the llm router reports its cost (_wa.cost, US dollars from
+     OpenRouter). The studio adds each call to the email it was for (design.ai: calls and cost, saved with the email, kept
+     out of Undo since the money is spent), shows that beside Ask the Hub to change it, puts "about 2\u00a2" by every button that
+     calls the AI ("free" by the ones that do not), and the front page's What it costs panel shows the price of each step,
+     what the whole studio spent this month, last month and in 90 days (email_studio_costs(), from ai_calls, for staff with
+     the CRM; admins can read ai_calls themselves until that function is there), and what the emails here have cost, the
+     writer's own among them. Measured on 04/10/26 with the voice code in the prompt: 1.6 to 1.9 cents a call. ---------- */
+  SS.costs = { open: false, loaded: false, p: null, data: null };
+  function money(d) {
+    d = Number(d) || 0;
+    if (d >= 1) return '$' + d.toFixed(2);
+    var c = d * 100;
+    return (c === 0 ? '0' : c < 0.1 ? 'under 0.1' : c < 10 ? String(Math.round(c * 10) / 10) : String(Math.round(c))) + '\u00a2';
+  }
+  function aboutStep(free) { return '<span class="w204about' + (free ? ' free' : '') + '" title="' + (free ? 'No AI: nothing to pay' : 'One call to the Hub\u2019s AI, in US dollars') + '">' + (free ? 'free' : 'about 2\u00a2') + '</span>'; }
+  function addCost(ai, cost) {
+    ai = ai && typeof ai === 'object' ? ai : {};
+    return { calls: (Number(ai.calls) || 0) + 1, cost: Math.round(((Number(ai.cost) || 0) + (Number(cost) || 0)) * 1e6) / 1e6 };
+  }
+  /* a call that changed nothing still cost something: on the email, saved, not a step for Undo */
+  function spent(e, cost) {
+    if (!e || cost == null) return;
+    e.design.ai = addCost(e.design.ai, cost); SS.dirty = true; updateSaveState();
+    later('save', 2500, function () { if (SS.dirty) saveNow(); });
+  }
+  function emailCostLine(e) {
+    var ai = e && e.design && e.design.ai;
+    return ai && ai.calls ? 'The Hub\u2019s work on this email so far: <b>' + money(ai.cost) + '</b> (' + plural(ai.calls, 'call', 'calls') + ').' : 'Nothing spent on this email yet.';
+  }
+  function torontoMonth(ts) { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', year: 'numeric', month: '2-digit' }).format(new Date(ts)).slice(0, 7); } catch (e) { return str(ts).slice(0, 7); } }
+  function loadCosts(force) {
+    var C = SS.costs; if (C.p) return C.p; if (C.loaded && !force) return Promise.resolve(C);
+    C.p = (async function () {
+      var d = null;
+      try { var r = await db.rpc('email_studio_costs', {}); if (r && !r.error && r.data && r.data.month) d = r.data; } catch (e) { d = null; }
+      if (!d && amAdmin()) {
+        try {
+          var q = await db.from('ai_calls').select('created_at, cost, ok').eq('task', 'email_studio').gte('created_at', new Date(Date.now() - 90 * 86400000).toISOString()).limit(5000);
+          if (q && !q.error && Array.isArray(q.data)) {
+            var now = torontoMonth(Date.now()), y = Number(now.slice(0, 4)), m = Number(now.slice(5, 7)), prev = (m === 1 ? (y - 1) + '-12' : y + '-' + ('0' + (m - 1)).slice(-2));
+            d = { month: { calls: 0, cost: 0 }, last_month: { calls: 0, cost: 0 }, d90: { calls: 0, cost: 0 } };
+            q.data.forEach(function (row) { var c = Number(row.cost) || 0, mo = torontoMonth(row.created_at); d.d90.calls++; d.d90.cost += c; if (mo === now) { d.month.calls++; d.month.cost += c; } else if (mo === prev) { d.last_month.calls++; d.last_month.cost += c; } });
+          }
+        } catch (e) { d = null; }
+      }
+      C.data = d; C.loaded = true; C.p = null;
+      var chip = document.getElementById('w204costchip'); if (chip && d) chip.textContent = money(d.month.cost) + ' this month';
+      return C;
+    })();
+    return C.p;
+  }
+  function costsChip() {
+    var C = SS.costs; if (!C.loaded) loadCosts();
+    return '<button class="w202vbtn" data-w204costs>' + I('coin') + ' What it costs <span id="w204costchip">' + (C.data ? E(money(C.data.month.cost) + ' this month') : 'about 2\u00a2 a step') + '</span></button>';
+  }
+  function costsHtml() {
+    var C = SS.costs; if (!C.open) return '';
+    var d = C.data, me = myEmail(), team = 0, teamn = 0, mine = 0, minen = 0;
+    templates().forEach(function (t) { var ai = t.design && t.design.ai, c = ai ? Number(ai.cost) || 0 : 0; if (!c) return; team += c; teamn++; if (lower(t.created_by) === me) { mine += c; minen++; } });
+    var rows = [['Tell the Hub: putting it together from your content', 'about 2\u00a2'], ['A round of answers (Put my answers in)', 'about 2\u00a2'], ['Ask the Hub to change it', 'about 2\u00a2 each time'],
+      ['Start from a template, filled in by the Hub', 'about 2\u00a2'], ['A photo the Hub looks at', 'about 0.1\u00a2 more'], ['A typical email: Tell the Hub, one round of answers, one change', 'about 5\u00a2'],
+      ['Build it yourself, Fill it in myself, Use it, any editing by hand, a moving preview', 'free']];
+    var spend = !C.loaded ? busyHtml('Adding it up\u2026') : d ? '<div class="w204spend"><div><b>' + E(money(d.month.cost)) + '</b><span>this month so far, ' + E(plural(d.month.calls, 'call', 'calls')) + '</span></div>' +
+      '<div><b>' + E(money(d.last_month.cost)) + '</b><span>last month, ' + E(plural(d.last_month.calls, 'call', 'calls')) + '</span></div><div><b>' + E(money(d.d90.cost)) + '</b><span>the last 90 days</span></div></div>'
+      : '<p class="m">The studio\u2019s totals are not open to this account yet; each email still shows its own.</p>';
+    return '<div class="w202modal" role="dialog" aria-modal="true" aria-label="What it costs"><div class="w202mbox wide w204costs">' +
+      '<div class="w202mh"><h3>' + I('coin') + ' What it costs</h3><button class="w202x" data-w204costsx aria-label="Close">' + I('x') + '</button></div>' +
+      '<p class="w204first">' + I('alert') + ' <span><b>Your content first.</b> The Hub shapes what you bring: your own words, the facts and your photos. It does not write the email for you, and thin input costs the same and makes a weaker email: bad input, bad output.</span></p>' +
+      '<p class="m">The Hub\u2019s AI is paid for by use (Claude Sonnet 5 through OpenRouter, in US dollars), not by subscription: each call costs a little, and anything done by hand is free.</p>' +
+      '<h4 class="w202h4">Each step</h4><table class="w204ct">' + rows.map(function (r) { return '<tr><td>' + E(r[0]) + '</td><td>' + E(r[1]) + '</td></tr>'; }).join('') + '</table>' +
+      '<h4 class="w202h4">What the studio has spent</h4>' + spend +
+      '<p class="m">On the emails here now: ' + E(money(team)) + ' across ' + E(plural(teamn, 'email', 'emails')) + (minen ? ', yours ' + E(money(mine)) + ' across ' + E(plural(minen, 'email', 'emails')) : ', none of them yours') + '. Deleted emails and drafts never saved show only in the totals above.</p>' +
+      '<h4 class="w202h4">Sending</h4><p class="m">Sending is separate from the AI: Resend\u2019s free plan covers 3,000 emails a month and 100 a day, and the Hub\u2019s daily cap is set to match.</p></div></div>';
+  }
+  function openCosts() { SS.costs.open = true; loadCosts(true).then(function () { paint(); }); paint(); }
+  /* ---------- wave204 (04/10/26): your content first. Steel: "ensure that it is important to come with their content first. It
+     is unacceptable to only use AI. Bad input = bad output." The Hub shapes what the writer brings; it never writes the email
+     for them. Tell the Hub asks for at least 40 words of the writer's own (three or four sentences, links not counted) before it
+     calls the AI, with a meter under the box (the words, a date or day, a link); Fill it in with the Hub needs every detail the
+     template asks for (a template with nothing to fill needs 20 words of your own); the prompt tells the model to build from
+     the writer's content and never pad thin input. Building by hand stays open to everyone, any time. ---------- */
+  var CONTENT_MIN = 40, EXTRA_MIN = 20;
+  function ownWords(s) {
+    return (str(s).replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/https?:\/\/\S+|www\.\S+/gi, ' ').match(/[A-Za-z0-9\u00c0-\u024f][A-Za-z0-9\u00c0-\u024f'\u2019-]*/g) || []).length;
+  }
+  function contentFacts(s) {
+    s = str(s);
+    return { words: ownWords(s),
+      date: datesIn(s).length > 0 || /\b(today|tomorrow|tonight|(sun|mon|tues|wednes|thurs|fri|satur)days?|\d{1,2}(st|nd|rd|th)?\s+(of\s+)?(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}|dimanche|lundi|mardi|mercredi|jeudi|vendredi|samedi|demain|aujourd)/i.test(s),
+      link: /https?:\/\/\S+|www\.\S+|\b[a-z0-9-]+\.(com|org|ca|net|io)\b/i.test(s) };
+  }
+  function meterHtml() {
+    var f = contentFacts(SS.start.brief), ok = f.words >= CONTENT_MIN, pct = Math.min(100, Math.round(f.words / CONTENT_MIN * 100));
+    return '<div class="w204meter' + (ok ? ' ok' : '') + '" id="w204meter" aria-live="polite"><span class="w204bar" aria-hidden="true"><i style="width:' + pct + '%"></i></span>' +
+      '<span><b>' + (ok ? 'Your content is in' : 'Your content first') + ':</b> ' + E(plural(f.words, 'word', 'words')) + (ok ? '' : ' of at least ' + CONTENT_MIN) +
+      ' \u00b7 ' + (f.date ? '\u2713 a date or day' : '\u25cb no date yet') + ' \u00b7 ' + (f.link ? '\u2713 a link' : '\u25cb no link yet') + '</span></div>';
+  }
+  function updateMeter() {
+    var el = document.getElementById('w204meter'); if (el) el.outerHTML = meterHtml();
+    var btn = SS.root && SS.root.querySelector('[data-w202startai]'); if (btn) btn.classList.toggle('notyet', ownWords(SS.start.brief) < CONTENT_MIN);
+  }
+  function contentShort(n) {
+    return 'Bring your content first: write or paste at least ' + CONTENT_MIN + ' words of your own, about three or four sentences (you have ' + n + '). What is happening, why it matters, the facts and what people should do. The Hub shapes what you bring; it does not write the email for you. Bad input, bad output.';
+  }
+  /* Fill it in with the Hub: every detail the template asks for, or (nothing to fill) a few sentences of your own */
+  function tplShort(t, s) {
+    var asks = (t.design && t.design.asks) || [];
+    var missing = asks.filter(function (a) { return str(s.asks[a.id]).trim().length < 2; });
+    if (asks.length && missing.length) return 'Give the template your details first: ' + missing.length + ' of ' + asks.length + ' still empty (' + missing.map(function (a) { return a.label; }).join(' / ') + '). The Hub fills in your content; it does not make it up. Or choose Fill it in myself.';
+    if (!asks.length && ownWords(s.extra) < EXTRA_MIN) return 'This template is ready as it is. For the Hub to work your own words in, write a few sentences under Anything else to say (' + EXTRA_MIN + ' words or more), or choose Fill it in myself.';
+    return '';
+  }
   /* ---------- styles (the CRM's buttons, fields and cards, plus the studio's own pieces) ---------- */
   function css202() {
     if (document.getElementById('w202css')) return;
@@ -77351,14 +77984,31 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       + '.w202voices{display:flex;flex-direction:column;gap:12px;}.w202voices h3{display:flex;align-items:center;gap:8px;}'
       + '.w202vread{white-space:pre-wrap;background:' + CREAM + ';border:1px solid #E6DFD3;border-radius:12px;padding:14px 16px;max-height:52vh;overflow:auto;font-size:13.5px;line-height:1.55;color:' + INK + ';}'
       + '.w202vtext{min-height:46vh;font-size:13.5px;line-height:1.55;white-space:pre-wrap;}'
+      /* wave204: undo and redo, B and Link, the moving preview */
+      + '.w204about{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:rgba(16,63,57,.1);font-size:11px;font-weight:600;letter-spacing:.2px;vertical-align:1px;}.w152btn:not(.ghost) .w204about{background:rgba(255,250,242,.22);}.w204about.free{background:rgba(42,140,122,.14);color:' + TEAL + ';}'
+      + '.w204meter{display:flex;flex-direction:column;gap:5px;margin:-2px 0 10px;font-size:12.5px;color:var(--wa-muted,' + MUTED + ');}.w204meter b{color:' + GREEN + ';}.w204bar{display:block;height:6px;border-radius:999px;background:rgba(16,63,57,.1);overflow:hidden;}.w204bar i{display:block;height:100%;background:' + GOLD + ';border-radius:999px;transition:width .2s;}.w204meter.ok .w204bar i{background:' + TEAL + ';}'
+      + '.w152btn.notyet{opacity:.55;}.w204ibtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}.w204ibtns .w202vbtn{margin:0;}'
+      + '.w204costs{display:flex;flex-direction:column;gap:10px;}.w204ct{width:100%;border-collapse:collapse;font-size:13.5px;}.w204ct td{padding:7px 4px;border-bottom:1px solid #E6DFD3;vertical-align:top;}.w204ct td:last-child{text-align:right;white-space:nowrap;font-weight:600;color:' + GREEN + ';}'
+      + '.w204spend{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;}.w204spend div{background:rgba(16,63,57,.05);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;}.w204spend b{font-family:' + HEAD + ';font-size:26px;font-weight:600;color:' + GREEN + ';}.w204spend span{font-size:12px;color:var(--wa-muted,' + MUTED + ');}'
+      + '.w204first{display:flex;gap:10px;align-items:flex-start;margin:0;padding:12px 14px;border-radius:12px;background:rgba(220,165,39,.14);color:' + INK + ';font-size:13.5px;line-height:1.5;}.w204first .w202i{color:' + GOLD + ';margin-top:2px;}.w204cost{margin:8px 0 0;}'
+      + '.w204hist{display:inline-flex;gap:4px;}.w204hb{display:inline-flex;align-items:center;gap:5px;}.w204hb[disabled]{opacity:.38;cursor:default;}'
+      + '.w204fmt{display:inline-flex;gap:4px;margin:0 0 0 8px;vertical-align:middle;}.w204fb{all:unset;box-sizing:border-box;cursor:pointer;min-width:28px;height:26px;padding:0 7px;border-radius:7px;border:1px solid rgba(16,63,57,.18);background:' + CREAM + ';color:' + GREEN + ';display:inline-flex;align-items:center;justify-content:center;font-size:13px;}'
+      + '.w204fb:hover{border-color:' + GOLD + ';background:rgba(220,165,39,.1);}.w204fb:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:1px;}.w204fb .w202i{width:15px;height:15px;}'
+      + '.w204mvslot{display:flex;gap:12px;align-items:flex-start;margin:10px 0 4px;padding:12px;border-radius:12px;background:rgba(16,63,57,.05);}.w204mvslot img,.w204mvslot .w202noimg{width:132px;height:auto;min-height:74px;border-radius:8px;flex:none;object-fit:cover;}'
+      + '.w204mvtx{display:flex;flex-direction:column;gap:6px;min-width:0;}.w204mvtx b{color:' + GREEN + ';font-size:14px;}.w204mvtx .m{font-size:12.5px;line-height:1.45;}'
+      + '.w204mv{width:min(940px,100%);}.w204mvgrid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;align-items:start;}.w204mvl{display:flex;flex-direction:column;gap:4px;min-width:0;}'
+      + '.w204mvv{width:100%;max-height:40vh;border-radius:10px;background:#000;}.w204range{width:100%;accent-color:' + GOLD + ';margin:6px 0 2px;}'
+      + '.w204mvr{display:flex;flex-direction:column;gap:10px;align-items:stretch;min-width:0;}.w204mvout{display:block;max-width:100%;height:auto;border-radius:8px;margin:0 auto;box-shadow:0 6px 18px rgba(16,63,57,.18);}'
+      + '.w204mvph,.w204mvwait{display:flex;flex-direction:column;gap:10px;align-items:flex-start;padding:16px;border:1px dashed rgba(16,63,57,.25);border-radius:12px;}.w204mvph>.w202i{width:30px;height:30px;color:' + GOLD + ';}'
       + '@media (max-width:700px){.w202top{padding:18px;border-radius:16px;}.w202set{grid-template-columns:1fr 1fr;}.w202two{grid-template-columns:1fr;}.w202slots{grid-template-columns:1fr 1fr;}'
       + '.w202row{grid-template-columns:1fr auto;}.w202row input:nth-child(2){grid-column:1;}.w202row button{grid-row:1/3;grid-column:2;}.w202tsel{grid-template-columns:1fr;}.w202trow{grid-template-columns:96px minmax(0,1fr);}'
-      + '.w202name{font-size:20px;}.w202frame{min-height:480px;}.w202dev span{display:none;}.w202mbox{padding:14px;border-radius:16px;}}';
+      + '.w202name{font-size:20px;}.w202frame{min-height:480px;}.w202dev span{display:none;}.w202mbox{padding:14px;border-radius:16px;}'
+      + '.w204spend{grid-template-columns:1fr;}.w204hb span{display:none;}.w204mvgrid{grid-template-columns:1fr;}.w204mvslot{flex-direction:column;}.w204mvslot img,.w204mvslot .w202noimg{width:100%;}}';
     document.head.appendChild(st);
   }
   /* ---------- drawing, the routes (#crm/studio, /ai, /tpl[/key], /e/<key>, .../to/<contact>), the clicks and keys ---------- */
   function keyOf(el) {
-    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft'];
+    var attrs = ['data-w202f', 'data-w202e', 'data-w202s', 'data-w202say', 'data-w202qa', 'data-w202ask', 'data-w202who', 'data-w202libq', 'data-w202t', 'data-w202scap', 'data-w202vdraft', 'data-w204mvstart'];
     for (var i = 0; i < attrs.length; i++) if (el.hasAttribute && el.hasAttribute(attrs[i])) return '[' + attrs[i] + '="' + String(el.getAttribute(attrs[i])).replace(/"/g, '\\"') + '"]';
     return null;
   }
@@ -77373,6 +78023,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (!t) { SS.d = null; SS.pendingKey = key; return; }
     SS.pendingKey = null;
     SS.d = fromRow(t); SS.ro = !canEdit(t); SS.questions = []; SS.notes = ''; SS.open = {}; SS.send = null; SS.undo = null; SS.dirty = false; SS.savedAt = null; SS.saveNote = ''; SS.change = '';
+    histReset();   /* wave204: a new history for this email */
     if (SS.to && !SS.ro) setTimeout(function () { openSend('person'); }, 0);
   }
   function open(parts) {
@@ -77387,6 +78038,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     else if (sub === 'e') { SS.view = 'edit'; openKey(parts[3] || 'new'); }
     else SS.view = 'home';
     SS.voices.open = false; SS.voices.editing = false;
+    closeMoving(); SS.costs.open = false; if (SS.startNote && SS.startNote.view !== SS.view) SS.startNote = null;   /* wave204: the note shows on the step you went back to, once */
     if (!SS.voices.loaded) loadVoices().then(function () { if (SS.root && SS.root.isConnected) paint(); });
     css202();
   }
@@ -77413,13 +78065,14 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     root.innerHTML = SS.view === 'ai' ? aiStartHtml() : SS.view === 'tpl' ? tplStartHtml() : SS.view === 'edit' ? editorHtml() : homeHtml();
     if (k) { var el = root.querySelector(k); if (el) { try { el.focus({ preventScroll: true }); if (caret && caret[0] != null && el.setSelectionRange) el.setSelectionRange(caret[0], caret[1]); } catch (e) { /* fine */ } } }
     Array.prototype.forEach.call(root.querySelectorAll('iframe.w202frame'), function (f) { f.addEventListener('load', function () { wireFrame(f); }); });
+    movingAfterPaint();
     try { if (window.w201 && window.w201.scan) window.w201.scan(); } catch (e) { /* fine */ }
   }
   function within(t) { return t && t.closest && t.closest('.w202root'); }
   function blockAt(s) { var p = String(s).split(','); return { i: Number(p[0]), k: p.length > 1 ? Number(p[1]) : null }; }
   function copyCurrent() {
     var e = SS.d; if (!e) return;
-    var d = JSON.parse(JSON.stringify(e.design)); (d.blocks || []).forEach(function (b) { b.id = MAIL202.uid(); });
+    var d = JSON.parse(JSON.stringify(e.design)); (d.blocks || []).forEach(function (b) { b.id = MAIL202.uid(); }); delete d.ai;   /* wave204: a copy starts with nothing spent */
     openDraft(draftFrom({ name: e.name + ' (copy)', kind: e.kind, audience: e.audience, lang: e.lang, subject: e.subject, preheader: e.preheader, design: d }), {});
   }
   async function removeEmail() {
@@ -77445,6 +78098,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (hit('data-w202edit')) { SS.peek = null; go('#crm/studio/e/' + v); return; }
     if (hit('data-w202open')) { go('#crm/studio/e/' + v); return; }
     if (hit('data-w202allrecent')) { SS.allRecent = true; paint(); return; }
+    if (hit('data-w204costsx')) { SS.costs.open = false; paint(); return; }
+    if (hit('data-w204costs')) { openCosts(); return; }
     if (hit('data-w202voicesx')) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
     if (hit('data-w202voices')) { openVoices(v === 'wa' || v === 'mine' ? v : null); return; }
     if (hit('data-w202vtab')) { SS.voices.tab = v; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
@@ -77464,6 +78119,20 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (hit('data-w202pickx')) { SS.pick = null; paint(); return; }
     if (SS.view !== 'edit' || !SS.d) return;
     var bl = SS.d.design.blocks;
+    /* wave204: undo and redo, back to the step before, the moving preview's panel, B and Link */
+    if (hit('data-w204hist')) { histGo(Number(v) < 0 ? -1 : 1); return; }
+    if (hit('data-w204back')) { backToStart(); return; }
+    if (hit('data-w204mvx')) { if (!(SS.mv && SS.mv.busy)) { closeMoving(); paint(); } return; }
+    if (SS.mv && !SS.mv.busy) {
+      var M = SS.mv;
+      if (hit('data-w204mvlen')) { M.len = Number(v) || 3; M.start = Math.min(M.start, Math.max(0, M.dur - M.len)); mvStale(); paint(); return; }
+      if (hit('data-w204mvshape')) { M.shape = v; mvStale(); paint(); return; }
+      if (hit('data-w204mvsize')) { M.size = v; mvStale(); paint(); return; }
+      if (hit('data-w204mvhere')) { var mvv = SS.root.querySelector('[data-w204mvvideo]'); if (mvv) { try { mvv.pause(); } catch (e) { /* fine */ } M.start = Math.max(0, Math.min(Number(mvv.currentTime) || 0, M.dur - M.len)); mvStale(); paint(); } return; }
+      if (hit('data-w204mvmake')) { makeMoving(); return; }
+      if (hit('data-w204mvuse')) { useMoving(); return; }
+    }
+    if (hit('data-w204fmtb')) { var lb = el.closest('label'), fta = lb && lb.querySelector('textarea'); if (fta && !SS.ro) fmtApply(fta, v); return; }
     if (hit('data-w202tog')) { var bt = bl[Number(v)]; if (bt) { SS.open[bt.id] = !SS.open[bt.id]; paint(); } return; }
     if (hit('data-w202goto')) { openBlock(Number(v)); return; }
     if (hit('data-w202dev')) { SS.device = v; paint(); return; }
@@ -77493,20 +78162,29 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (hit('data-w202pickfor')) { var at = blockAt(v); SS.pick = { to: 'block', i: at.i, k: at.k }; loadLibrary().then(function () { paint(); }); paint(); return; }
     if (hit('data-w202rmphoto')) { var ar = blockAt(v), b = bl[ar.i]; if (b) { var tg = ar.k == null ? b : (b.items || [])[ar.k]; if (tg) { tg.src = ''; delete tg.lib; delete tg.usage; } changed(true); } return; }
     if (hit('data-w202rowadd')) { var ra = v.split(','), rb = bl[Number(ra[0])]; if (rb) { rb[ra[1]] = rb[ra[1]] || []; rb[ra[1]].push(Object.assign({}, rb.type === 'stats' ? { n: '', label: '' } : ROW[ra[1]])); changed(true); } return; }
+    if (hit('data-w204mvrm')) { var mb = bl[Number(v)]; if (mb) { delete mb.gif; delete mb.gw; delete mb.gh; delete mb.gkb; changed(true); } return; }
     if (hit('data-w202rowdel')) { var rd = v.split(','), rbl = bl[Number(rd[0])]; if (rbl && rbl[rd[1]]) { rbl[rd[1]].splice(Number(rd[2]), 1); changed(true); } return; }
   });
   function onField(ev) {
     var t = ev.target; if (!within(t)) return;
     var val = t.type === 'checkbox' ? t.checked : t.value, a;
-    if ((a = t.getAttribute('data-w202f')) && SS.d && !SS.ro) { var p = a.split('.'); setPath(Number(p[0]), p.slice(1).join('.'), val); changed(false); return; }
+    if ((a = t.getAttribute('data-w202f')) && SS.d && !SS.ro) { var p = a.split('.'); setPath(Number(p[0]), p.slice(1).join('.'), val); changed(false, 'f' + a); return; }
     if ((a = t.getAttribute('data-w202e')) && SS.d && !SS.ro) {
       SS.d[a] = a === 'audience' ? (val || null) : val;
-      if (a === 'kind' && ev.type === 'change') { changed(false); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
-      changed(false); return;
+      if (a === 'kind' && ev.type === 'change') { changed(false, 'ekind'); var note = document.querySelector('.w202set p.m'); if (note) note.textContent = (KIND[val] || KIND.newsletter).s + ' Every email carries our charity number, postal address, why they got it and an unsubscribe link.'; return; }
+      changed(false, 'e' + a); return;
+    }
+    if ((a = t.getAttribute('data-w204vfile')) != null && ev.type === 'change') { var vf = t.files && t.files[0]; t.value = ''; openMoving(Number(a), vf); return; }
+    if (t.hasAttribute('data-w204mvstart') && SS.mv) {
+      var Mv = SS.mv; Mv.start = Math.max(0, Math.min(Number(val) || 0, Mv.dur - Mv.len));
+      var lab = document.getElementById('w204mvt'); if (lab) lab.textContent = mvSpan(Mv);
+      var vv = SS.root && SS.root.querySelector('[data-w204mvvideo]'); if (vv) { try { vv.currentTime = Mv.start; } catch (e) { /* fine */ } }
+      if (ev.type === 'change' && Mv.out) { mvStale(); paint(); }
+      return;
     }
     if (t.hasAttribute('data-w202vdraft')) { SS.voices.draft = val; return; }
     if (t.hasAttribute('data-w202voicesel') && ev.type === 'change' && SS.d && !SS.ro) { SS.d.design.voice = val === 'mine' && SS.voices.mine ? 'mine' : 'wa'; rememberVoice(SS.d.design.voice); changed(false); return; }
-    if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; return; }
+    if ((a = t.getAttribute('data-w202s'))) { SS.start[a] = val; if (a === 'brief') updateMeter(); return; }
     if ((a = t.getAttribute('data-w202ask'))) { SS.start.asks[a] = val; return; }
     if ((a = t.getAttribute('data-w202scap'))) { var ph = SS.start.photos[Number(a)]; if (ph) ph.caption = val; return; }
     if ((a = t.getAttribute('data-w202qa'))) { (SS.questions || []).forEach(function (q) { if (q.id === a) q.answer = val; }); return; }
@@ -77520,17 +78198,30 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     if (t.getAttribute('data-w202file') && ev.type === 'change') { uploadFiles(t.files, SS.pick && SS.pick.to === 'start' ? 'start' : 'block'); t.value = ''; return; }
   }
   document.addEventListener('input', onField);
-  document.addEventListener('change', function (ev) { var t = ev.target; if (!within(t)) return; if (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'file') onField(ev); });
-  document.addEventListener('keydown', function (ev) {
+  document.addEventListener('change', function (ev) { var t = ev.target; if (!within(t)) return; if (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'file' || t.type === 'range') onField(ev); });
+  document.addEventListener('paste', onPaste);
+  document.addEventListener('mousedown', function (ev) { var t = ev.target; if (t && t.closest && t.closest('[data-w204fmtb]') && within(t)) ev.preventDefault(); });   /* B and Link keep the selection */
+  document.addEventListener('keydown', onKey);
+  function onKey(ev) {
     if (!SS.root || !SS.root.isConnected) return;
+    var mod = ev.ctrlKey || ev.metaKey, k = String(ev.key || '').toLowerCase();
+    /* wave204: Cmd/Ctrl+Z, Shift+Cmd/Ctrl+Z and Ctrl+Y step through the email's history; Cmd/Ctrl+B and K mark text */
+    if (mod && !ev.altKey && (k === 'z' || k === 'y') && SS.view === 'edit' && SS.d && !SS.ro && !SS.mv && !SS.pick && !SS.voices.open && histKeyOk(document.activeElement)) {
+      var redo = k === 'y' ? (ev.ctrlKey && !ev.metaKey && !ev.shiftKey) : ev.shiftKey;
+      if (k === 'y' && !redo) return;
+      ev.preventDefault(); histGo(redo ? 1 : -1); return;
+    }
+    if (mod && !ev.altKey && !ev.shiftKey && (k === 'b' || k === 'k') && ev.target && ev.target.hasAttribute && ev.target.hasAttribute('data-w204fmt') && !SS.ro) { ev.preventDefault(); fmtApply(ev.target, k === 'b' ? 'b' : 'link'); return; }
     if (ev.key === 'Escape') {
+      if (SS.mv) { if (!SS.mv.busy) { closeMoving(); paint(); } return; }
+      if (SS.costs.open) { SS.costs.open = false; paint(); return; }
       if (SS.voices.open) { SS.voices.open = false; SS.voices.editing = false; SS.voices.err = ''; paint(); return; }
       if (SS.peek) { SS.peek = null; paint(); return; }
       if (SS.pick) { SS.pick = null; paint(); return; }
       if (SS.send && within(document.activeElement)) { SS.send = null; paint(); return; }
     }
     if ((ev.ctrlKey || ev.metaKey) && (ev.key === 's' || ev.key === 'S') && SS.view === 'edit' && SS.d && !SS.ro) { ev.preventDefault(); saveNow(); }
-  });
+  }
 
   /* ---------- the page tour (wave122's engine; trainings row tour:studio) ---------- */
   function addTour() {
@@ -77540,12 +78231,12 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       var Tt = function (sel, t, p, o) { var x = { s: sel, t: t, p: p }; if (o) Object.keys(o).forEach(function (k) { x[k] = o[k]; }); return x; };
       W.tours.studio = { tab: 'crm', icon: 'mail', hash: '#crm/studio', steps: [
         Tt('#w153rail [data-w153go="#crm/studio"] || #crm .w152tabs [data-w152go="#crm/studio"]', 'The email studio', 'Emails in the Welfare Avenue brand, for one person, a list or an automation. The Hub puts them together with you and checks them before anything goes out.', OPT),
-        Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Tell the Hub: write what you want to say and add your photos. Start from a template: give it your details. Build it yourself: blocks you arrange.'),
+        Tt('#crm [data-w202sec="start"]', 'Three ways to start', 'Bring your content first: the Hub shapes what you give it and never writes the email for you. Tell the Hub: your words (40 or more) and your photos. Start from a template: all its details. Build it yourself: blocks you arrange. What it costs shows the price of each step (about 2 cents) and the month so far.'),
         Tt('#crm [data-w202voices]', 'Voices', 'The Hub writes in Welfare Avenue\u2019s house voice, drafted from our brand guide. If you have your own writing guide, pick My voice for emails you sign. Admins edit the house voice here.', OPT),
         Tt('#crm [data-w202sec="templates"]', 'Templates', 'Our starters and the team\u2019s saved templates, on four shelves: volunteers (welcome and serving; call-outs and events) and donors (thanks and impact; appeals and events). \u201cReady as is\u201d ones can go straight into an automation.'),
         Tt('#crm [data-w202sec="recent"]', 'Recent emails', 'The emails you and the team wrote here, ready to finish, send again or copy.', OPT),
         { c: 1, t: 'The Hub checks with you', p: 'It never makes up a date, a place, a number or a link: it leaves a [bracket] and asks. The studio\u2019s own checks stop an email with anything left to fill, a weekday that is not that date or a button with no link, and point out our words, alt text and the kind under Canada\u2019s anti-spam law.' },
-        { c: 1, t: 'The editor', p: 'The blocks on the left (a headline with the E that moves, text, details, a dot list, the gold button, photos, a video card, a band of links, a quote, numbers, the sign-off), the email on the right as it will look on a computer or a phone. Click any part of the email to edit it, or ask the Hub to change it.' },
+        { c: 1, t: 'The editor', p: 'The blocks on the left (a headline with the E that moves, text, details, a dot list, the gold button, photos, a video card with a moving preview, a band of links, a quote, numbers, the sign-off), the email on the right as it will look on a computer or a phone. Click any part of the email to edit it, or ask the Hub to change it. Undo and Redo (or Cmd+Z) step back through every change.' },
         { c: 1, t: 'Send or save', p: 'Send yourself a test, send it to one person (the permission rule decides), make a campaign for a list (the Campaigns tab checks and sends it), or save it as a template: the automations can then send it as a \u201cSaved email\u201d. While the Hub is in test mode, only the test recipients get email.' }
       ] };
       return true;
@@ -77560,7 +78251,8 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     isStudio: function (t) { return !!(t && t.design); },
     MAIL202: MAIL202, checks: checks, datesIn: datesIn, checkDate: checkDate, fromAi: fromAi, aiMessages: aiMessages, aiSystem: aiSystem, designForAi: designForAi, AI_TOOL: AI_TOOL,
     saveNow: saveNow, hasBrackets: hasBrackets,
-    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock
+    voices: function () { return SS.voices; }, loadVoices: loadVoices, voiceFor: voiceFor, voiceBlock: voiceBlock,
+    histGo: histGo, htmlToMark: htmlToMark, GIF204: GIF204, keepMoving: keepMoving, mvDims: mvDims   /* wave204 */
   };
 })();
 /* =====================================================================
