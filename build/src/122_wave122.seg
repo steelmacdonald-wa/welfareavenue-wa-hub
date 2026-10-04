@@ -1998,7 +1998,7 @@
       S('#projectpage .card > h2', 'A project page', 'One project\u2019s name, team and status.'),
       S('#projectpage .w27-desc', 'What it is', 'A short description of the project.', OPT),
       S('#w104', 'Progress and people', 'Tasks complete, the lead (the one person accountable) and the contributors. Change the lead here.', OPT),
-      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Tick them done, or move one to another project.', OPT),
+      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Tick one done, or move it to another project.', OPT),
       S('#projectpage .add-row', 'Add a task', 'Quick-add a task straight into the project.', OPT),
       S('#projectpage details.completed', 'Completed', 'Finished tasks keep their history.', OPT)
     ] },

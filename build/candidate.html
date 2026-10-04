@@ -12343,7 +12343,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     transcripts: '<p>Paste or import any meeting transcript, tag the department, and save. The AI updates the department page within minutes and posts a summary to Slack.</p><p>Search and filter the archive below; every transcript shows what it contributed. Use Reprocess if something did not land.</p>',
     activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',
     adminpanel: '<p>Who sees what. Set each person&#39;s role: admins manage everything, leaders see every page, members see the work surfaces, viewers see the overview only.</p><p>Tab overrides win over the role default. Changes apply the next time the person loads the Hub.</p>',
-    projectpage: '<p>One project&#39;s tasks and details. Tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
+    projectpage: '<p>One project&#39;s tasks and details. Click a task to open it (status, owner, due date, description, comments and history, as on a team page), tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
     personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'
   };
   function wa43Key(id) {
@@ -40454,7 +40454,7 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
       S('#projectpage .card > h2', 'A project page', 'One project\u2019s name, team and status.'),
       S('#projectpage .w27-desc', 'What it is', 'A short description of the project.', OPT),
       S('#w104', 'Progress and people', 'Tasks complete, the lead (the one person accountable) and the contributors. Change the lead here.', OPT),
-      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Tick them done, or move one to another project.', OPT),
+      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Tick one done, or move it to another project.', OPT),
       S('#projectpage .add-row', 'Add a task', 'Quick-add a task straight into the project.', OPT),
       S('#projectpage details.completed', 'Completed', 'Finished tasks keep their history.', OPT)
     ] },
@@ -79818,6 +79818,171 @@ function wa40TabModal(email) { /* superseded: wave72 rebinds this to w72TabModal
     remote: onRemote, presence: function (list) { S.presence = list || []; paintPresence(); }, canEdit: canEdit, canComment: canComment,
     open: openDrawer, close: closeDrawer, progress: progress, key: key, live: function () { return { live: S.live, channel: !!S.channel }; }
   };
+})();
+/* =====================================================================
+   WA v206 a project page opens its tasks (04/10/26)
+   =====================================================================
+   Steel (04/10/26): on a project's own page (#project/<id>, e.g. Brand
+   Refresh) he wants to open a task the way he can on a department page.
+   The project page (wave27, replaced by wave99, wrapped by 100, 101 and
+   104) listed each task as a checkbox, the title and an "owner, due,
+   move" line; clicking the title did nothing.
+   Now every task title on the project page, open and completed, opens
+   the department pages' own task drawer (window.w116Board.open, wave116b,
+   with everything later waves add to it: the description and subtasks
+   and attachments of 116t, the profile chips of 116m, the bank button of
+   132, the @mentions of 138). There is no second task view.
+   - Before opening, the task's row is read again from dept_tasks and put
+     into DB_TASKS (the drawer reads tasks from there): a task added with
+     the project page's quick add, or ticked on it, is then current.
+   - The checkbox is untouched (wave27's save: dept_tasks plus change_log).
+   - While the drawer is open, every saved change repaints the project
+     page in place (debounced), and once more when the drawer closes.
+   - Keyboard: the title is a button (Tab, then Enter or Space).
+   - On a phone, wave51's latest-comment line goes under the task instead of
+     over its title.
+   - A retired goal (wave205) is no goal on the project page: "Not linked to one
+     of the five goals yet" instead of the archived department goal.
+   Works wherever #project/<id> opens: inside the Strategy app (parts153
+   APPS.strategy pages include 'project'), from Projects, Goal alignment,
+   the department cards, search and the people pages.
+   Test hook: window.w206 { open, repaint, state }.
+   ===================================================================== */
+(function () {
+  if (window.__wa206) return; window.__wa206 = true;
+  var GREEN = '#103F39';
+  var W = { opened: 0, repaints: 0, last: null, timer: null, watching: false };
+
+  var css = document.createElement('style');
+  css.id = 'wa206css';
+  css.textContent = '' +
+    '#projectpage .w27-task .tt.w206t{cursor:pointer;color:' + GREEN + ';font-weight:600;text-decoration:none;border-radius:4px;}' +
+    '#projectpage .w27-task .tt.w206t:hover{text-decoration:underline;text-underline-offset:3px;}' +
+    '#projectpage .w27-task .tt.w206t:focus-visible{outline:2px solid #DCA527;outline-offset:2px;}' +
+    '#projectpage .w27-task.done .tt.w206t{color:inherit;font-weight:400;}' +
+    '#projectpage .w27-task.w206on{background:rgba(220,165,39,.10);}' +
+    /* on a phone wave51's latest-comment line (appended to the row) sat on top of the title and squeezed it to one word a line */
+    '@media (max-width:700px){#projectpage .w27-task{flex-wrap:wrap;}#projectpage .w27-task>div:not(.w51last){flex:1 1 0;min-width:0;}#projectpage .w27-task>.w51last{flex:1 0 100%;margin:4px 0 0 25px;min-width:0;}}';
+  document.head.appendChild(css);
+
+  function onProjectPage() { return String(location.hash || '').indexOf('#project/') === 0; }
+
+  /* the titles become buttons; called after every render of the project page */
+  function decorate() {
+    var sec = document.getElementById('projectpage'); if (!sec) return;
+    sec.querySelectorAll('.w27-task').forEach(function (row) {
+      var chk = row.querySelector('input[data-w27t]'); var tt = row.querySelector('.tt');
+      if (!chk || !tt || tt.classList.contains('w206t')) return;
+      var id = chk.getAttribute('data-w27t');
+      tt.classList.add('w206t');
+      tt.setAttribute('data-w206open', id);
+      tt.setAttribute('role', 'button');
+      tt.setAttribute('tabindex', '0');
+      tt.setAttribute('title', 'Open the task');
+      if (W.last && String(W.last) === String(id) && drawerOpen()) row.classList.add('w206on');
+    });
+  }
+
+  /* wave205 retired the department goals, but GOALS_CACHE is cleaned of them only after the first paint: a deep link to
+     #project/<id> said "Rolls up to the goal: <a retired goal> (archived)". The project page reads goals through wa27Goal;
+     a retired goal is no goal here, as on Projects ("Not linked yet"). */
+  if (typeof wa27Goal === 'function' && !wa27Goal.__w206) {
+    var __g206 = wa27Goal;
+    wa27Goal = function (gid) { var g = __g206(gid); return g && g.retired_at ? null : g; };
+    wa27Goal.__w206 = true;
+  }
+  function noGoalLine() {
+    var sec = document.getElementById('projectpage'); if (!sec || sec.querySelector('.w27-goal, .w206ng')) return;
+    var v = typeof WA27_VIEW !== 'undefined' ? WA27_VIEW : null; if (!v || v.ref === 'general') return;
+    var desc = sec.querySelector('.w27-desc'); if (!desc) return;
+    var d = document.createElement('div'); d.className = 'w206ng';
+    d.textContent = 'Not linked to one of the five goals yet. Link it from Goals (Strategy).';
+    desc.insertAdjacentElement('afterend', d);
+  }
+  css.textContent += '#projectpage .w206ng{font-size:12.5px;color:var(--wa-muted,#797773);border:1px dashed rgba(16,63,57,.25);border-radius:9px;padding:8px 12px;margin:0 0 14px;max-width:720px;}';
+
+  if (typeof wa27RenderProject === 'function') {
+    var __rp206 = wa27RenderProject;
+    wa27RenderProject = async function () {
+      var out = await __rp206.apply(this, arguments);
+      try { decorate(); noGoalLine(); } catch (e) { /* never break the page */ }
+      return out;
+    };
+  }
+
+  function drawerOpen() { var dr = document.getElementById('w116dr'); return !!(dr && dr.classList.contains('open')); }
+
+  /* the drawer reads DB_TASKS: bring the row up to date first */
+  async function freshRow(id) {
+    try {
+      var r = await db.from('dept_tasks').select('*').eq('id', Number(id)).maybeSingle();
+      var row = r && r.data; if (!row) return false;
+      if (typeof DB_TASKS !== 'undefined' && Array.isArray(DB_TASKS)) {
+        var i = -1; for (var k = 0; k < DB_TASKS.length; k++) { if (String(DB_TASKS[k].id) === String(row.id)) { i = k; break; } }
+        if (i >= 0) DB_TASKS[i] = Object.assign(DB_TASKS[i], row); else DB_TASKS.push(row);
+      }
+      return true;
+    } catch (e) { return false; }
+  }
+
+  async function open(id) {
+    if (!window.w116Board || !window.w116Board.open) { if (typeof toast === 'function') toast('The task view is still loading'); return false; }
+    try { if (window.w116LoadProjects) await window.w116LoadProjects(false); } catch (e) { /* the drawer falls back to the project list it has */ }
+    var ok = await freshRow(id);
+    if (!ok && !((typeof DB_TASKS !== 'undefined' ? DB_TASKS : []).some(function (t) { return String(t.id) === String(id); }))) { if (typeof toast === 'function') toast('Could not open that task'); return false; }
+    await window.w116Board.open(Number(id));
+    W.opened++; W.last = String(id);
+    document.querySelectorAll('#projectpage .w27-task.w206on').forEach(function (r) { r.classList.remove('w206on'); });
+    var t = document.querySelector('#projectpage [data-w206open="' + String(id) + '"]'); if (t) { var row = t.closest('.w27-task'); if (row) row.classList.add('w206on'); }
+    watch();
+    return true;
+  }
+
+  /* repaint the project page in place after a change in the drawer */
+  function repaint(delay) {
+    if (W.timer) clearTimeout(W.timer);
+    W.timer = setTimeout(async function () {
+      W.timer = null;
+      if (!onProjectPage() || typeof WA27_VIEW === 'undefined' || !WA27_VIEW) return;
+      var y = window.scrollY;
+      var det = document.querySelector('#projectpage details.completed'); var wasOpen = !!(det && det.open);
+      var typing = document.activeElement && document.activeElement.id === 'w27nt' ? document.activeElement.value : null;
+      try { if (typeof wa27Load === 'function') await wa27Load(true); } catch (e) { /* counts only */ }
+      try { await wa27RenderProject(WA27_VIEW.ref, WA27_VIEW.dept); } catch (e) { return; }
+      W.repaints++;
+      /* waves 51 and 52 add the latest comment and the due pill to the rows only through renderAllSections (wave52's own after-write does the same) */
+      try { if (typeof renderAllSections === 'function') renderAllSections(); } catch (e) { /* decorations only */ }
+      var det2 = document.querySelector('#projectpage details.completed'); if (det2 && wasOpen) det2.open = true;
+      if (typing !== null) { var inp = document.getElementById('w27nt'); if (inp) { inp.value = typing; inp.focus(); } }
+      try { window.scrollTo(0, y); } catch (e) { /* fine */ }
+      if (!drawerOpen()) document.querySelectorAll('#projectpage .w27-task.w206on').forEach(function (r) { r.classList.remove('w206on'); });
+    }, delay == null ? 700 : delay);
+  }
+
+  /* listen to the shared drawer only while it was opened from a project page */
+  function watch() {
+    if (W.watching) return; W.watching = true;
+    document.addEventListener('change', function (e) { if (W.last && onProjectPage() && e.target && e.target.closest && e.target.closest('#w116dr')) repaint(); }, true);
+    document.addEventListener('click', function (e) {
+      if (!W.last || !onProjectPage() || !e.target || !e.target.closest) return;
+      if (e.target.closest('#w116dr [data-dact], #w116dr button, #w116dr [data-w116tsd]')) { repaint(); return; }
+      if (e.target.closest('#w116drb')) repaint(150);
+    }, true);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && W.last && onProjectPage() && drawerOpen()) repaint(150); }, true);
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target && e.target.closest && e.target.closest('#projectpage [data-w206open]'); if (!t) return;
+    e.preventDefault(); e.stopPropagation();
+    open(t.getAttribute('data-w206open'));
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    var t = e.target && e.target.closest && e.target.closest('#projectpage [data-w206open]'); if (!t) return;
+    e.preventDefault(); open(t.getAttribute('data-w206open'));
+  });
+
+  window.w206 = { open: open, repaint: repaint, decorate: decorate, state: function () { return { opened: W.opened, repaints: W.repaints, last: W.last, drawer: drawerOpen() }; } };
 })();
 /* =====================================================================
    WA v164 Finance on its own (29/09/26)

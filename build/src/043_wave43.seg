@@ -141,7 +141,7 @@
     transcripts: '<p>Paste or import any meeting transcript, tag the department, and save. The AI updates the department page within minutes and posts a summary to Slack.</p><p>Search and filter the archive below; every transcript shows what it contributed. Use Reprocess if something did not land.</p>',
     activity: '<p>The change log of everything that happens in the Hub. Filter by type, person and time window.</p>',
     adminpanel: '<p>Who sees what. Set each person&#39;s role: admins manage everything, leaders see every page, members see the work surfaces, viewers see the overview only.</p><p>Tab overrides win over the role default. Changes apply the next time the person loads the Hub.</p>',
-    projectpage: '<p>One project&#39;s tasks and details. Tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
+    projectpage: '<p>One project&#39;s tasks and details. Click a task to open it (status, owner, due date, description, comments and history, as on a team page), tick tasks done, quick-add new ones, move tasks between projects, and jump back to the department.</p>',
     personpage: '<p>One person: role, main responsibilities and the job description, the projects they lead, open and finished tasks, hours on the hub, meetings, training and onboarding.</p>'
   };
   function wa43Key(id) {
