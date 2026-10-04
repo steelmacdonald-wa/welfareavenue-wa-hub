@@ -59,13 +59,13 @@ def ver(path):
     return hashlib.md5(files[path].encode('utf8') if isinstance(files[path], str) else files[path]).hexdigest()[:8]
 
 # ---------- assets ----------
-for a in ('site.css', 'site.js', 'forms.js', 'account.js'):
+for a in ('site.css', 'site.js', 'forms.js', 'account.js', 'signin.js'):
     put('assets/' + a, open(os.path.join(HERE, 'assets', a), encoding='utf8').read())
 put('assets/logo-cream.svg', svg_primary('#FFFAF2'))
 put('assets/logo-green.svg', svg_primary('#103F39'))
 put('assets/lockup-cream.svg', svg_lockup('#FFFAF2'))
 put('favicon.svg', FAVICON)
-V = {a: ver('assets/' + a) for a in ('site.css', 'site.js', 'forms.js', 'account.js')}
+V = {a: ver('assets/' + a) for a in ('site.css', 'site.js', 'forms.js', 'account.js', 'signin.js')}
 
 def url(key, lang):
     k, _, frag = key.partition('#')
@@ -145,7 +145,8 @@ def head(lang, key, title, desc, image=None):
             '<link rel="stylesheet" href="/assets/site.css?v=%s">\n%s<script src="/assets/site.js?v=%s" defer></script>\n%s<script src="https://hub.welfareavenue.com/give/embed.js" async></script>\n</head>\n'
             % (lang, e(t), e(desc), '' if (LAUNCH and key != 'account') else '<meta name="robots" content="noindex">\n', e(canon), alt, e(t), e(desc), e(canon), og,
                'fr_CA' if lang == 'fr' else 'en_CA', V['site.css'], ld,
-               V['site.js'], (('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else '') +
+               V['site.js'], ('<script src="/assets/signin.js?v=%s" defer></script>\n' % V['signin.js']) +
+               (('<script src="/assets/forms.js?v=%s" defer></script>\n' % V['forms.js']) if key in ('home', 'volunteer', 'contact') else '') +
                (('<script src="/assets/account.js?v=%s" defer></script>\n' % V['account.js']) if key == 'account' else '')))
 
 def header(lang, key):
@@ -157,7 +158,8 @@ def header(lang, key):
                 '<button type="button" aria-label="%s">&times;</button></div></div>\n' % (e(u['hint']), e(other_url), e(u['hint_link']), e(u['hint_close'])))
     links = ''.join('<a href="%s"%s>%s</a>' % (e(url(k, lang)), ' aria-current="page"' if k == key else '', e(u['nav'][k])) for k in C.NAV)
     # wave194: "My account" shows once accounts are on, or for someone signed in (site.js)
-    side = ('<a href="%s" data-acct-link hidden%s>%s%s</a><a href="%s"%s>%s%s</a><a href="%s">%s%s</a>'
+    # wave202: Sign up opens the sign-up window once accounts are on (signin.js); until then it is the volunteer form
+    side = ('<a href="%s" data-acct-link hidden%s>%s%s</a><a href="%s"%s>%s%s</a><a href="%s" data-signup>%s%s</a>'
             % (e(url('account', lang)), ' aria-current="page"' if key == 'account' else '', e(u['account']), ARROW,
                e(url('contact', lang)), ' aria-current="page"' if key == 'contact' else '', e(u['nav']['contact']), ARROW,
                e(url('volunteer#apply', lang)), e(u['signup']), ARROW))

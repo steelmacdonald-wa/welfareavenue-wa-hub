@@ -420,6 +420,71 @@ const GSI_STUB = 'window.google={accounts:{id:{initialize:function(c){window.__g
     await c8.ctx.close();
   }
 
+  // ---------- wave202: the Sign up window ----------
+  {
+    const c0 = await context({ mode: 'off' });
+    await c0.page.goto(ORIGIN + '/', { waitUntil: 'networkidle' });
+    const off = await c0.page.evaluate(() => { const a = document.querySelector('[data-signup]'); return { href: a && a.getAttribute('href'), hidden: a && a.hidden }; });
+    await c0.page.click('[data-signup]'); await c0.page.waitForTimeout(500);
+    ok(off.href === '/volunteer/#apply' && !off.hidden && /\/volunteer\/#apply$/.test(c0.page.url()) && !(await c0.page.$('dialog#wa-signin[open]')), 'sign up (accounts off): the volunteer form, no window ' + JSON.stringify(off));
+    await c0.ctx.close();
+
+    const { ctx, page, calls, errors } = await context({});
+    await page.goto(ORIGIN + '/', { waitUntil: 'networkidle' });
+    await page.click('[data-signup]'); await page.waitForSelector('dialog#wa-signin[open] #si-email');
+    await page.waitForSelector('#gsi-stub');
+    const w = await page.evaluate(() => ({ h: document.getElementById('si-h').textContent, gsi: !!document.getElementById('gsi-stub'), focus: document.activeElement && document.activeElement.id,
+      text: document.getElementById('wa-signin').textContent, ctx: window.__gsi && window.__gsi.context, href: document.querySelector('[data-signup]').getAttribute('href') }));
+    await shot(page, '13-signup');
+    ok(w.h === 'Sign up or sign in' && w.gsi && w.focus === 'si-email' && /No password needed/.test(w.text) && w.ctx === 'signup' && w.href === '/account/', 'sign up: the window opens with Google, the email field, no password ' + JSON.stringify(w));
+    await page.fill('#si-email', 'nope'); await page.click('#si-f-email button[type=submit]'); await page.waitForTimeout(150);
+    ok(/valid email/.test(await text(page, '#wa-signin .waf-banner')) && !calls.some(c => c.site === 'code'), 'sign up: a bad address is caught before anything is sent');
+    await page.fill('#si-email', 'alex@example.org'); await page.click('#si-f-email button[type=submit]');
+    await page.waitForSelector('#si-code', { timeout: 8000 });
+    ok(calls.some(c => c.site === 'code' && c.body.email === 'alex@example.org') && /alex@example\.org/.test(await text(page, '#wa-signin')) && /Send a new code \(\d+\)/.test(await text(page, '#wa-signin [data-si="resend"]')), 'sign up: a code is emailed, a new one in 30 seconds');
+    await page.fill('#si-code', '000000'); await page.click('#si-f-code button[type=submit]');
+    await page.waitForSelector('#wa-signin .waf-banner.warn');
+    ok(/did not work/.test(await text(page, '#wa-signin .waf-banner')), 'sign up: a wrong code says so');
+    await page.fill('#si-code', '123 456'); await page.click('#si-f-code button[type=submit]');
+    await page.waitForURL(/\/account\/$/, { timeout: 8000 });
+    ok(!!(await page.evaluate(() => localStorage.getItem('wa_site_auth'))) && calls.some(c => c.auth === 'verify' && c.body.token === '123456'), 'sign up: the code signs them in and the account page opens');
+    await page.waitForSelector('.acct-head');
+    ok(await page.evaluate(() => { const a = document.querySelector('[data-signup]'); return !!a && a.hidden; }), 'sign up: the link hides once signed in');
+    ok(!errors.length && !(await page.evaluate(() => window.__csp.length)), 'sign up: no errors, no CSP violation ' + errors.join(' | '));
+    await ctx.close();
+
+    const c2 = await context({ mode: 'test' });
+    await c2.page.goto(ORIGIN + '/volunteer/', { waitUntil: 'networkidle' });
+    await c2.page.click('[data-signup]'); await c2.page.waitForSelector('dialog#wa-signin[open]');
+    ok(/being tested with the team/.test(await text(c2.page, '#wa-signin')), 'sign up (test mode): says accounts are being tested');
+    await c2.page.keyboard.press('Escape'); await c2.page.waitForTimeout(250);
+    ok(!(await c2.page.$('dialog#wa-signin[open]')) && (await c2.page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-signup'))), 'sign up: Escape closes the window, focus back on Sign up');
+    await c2.page.click('[data-signup]'); await c2.page.waitForSelector('#gsi-stub');
+    await c2.page.click('#gsi-stub'); await c2.page.waitForURL(/\/account\/$/, { timeout: 8000 });
+    ok(c2.calls.some(c => c.auth === 'token?grant_type=id_token' && c.body.id_token === 'fake.id.token' && c.body.nonce), 'sign up: Google signs them in and the account page opens');
+    await c2.ctx.close();
+
+    const c3 = await context({});
+    await c3.page.goto(ORIGIN + '/account/', { waitUntil: 'networkidle' }); await c3.page.waitForSelector('#f-code');
+    await c3.page.click('[data-signup]'); await c3.page.waitForTimeout(400);
+    ok(!(await c3.page.$('dialog#wa-signin[open]')) && /\/account\/$/.test(c3.page.url()), 'sign up on the account page: its own sign-in, no window');
+    await c3.ctx.close();
+
+    const c4 = await context({ width: 390, locale: 'fr-CA' });
+    await c4.page.goto(ORIGIN + '/fr/', { waitUntil: 'networkidle' });
+    if (await c4.page.isVisible('.menu-btn')) { await c4.page.click('.menu-btn'); await c4.page.waitForTimeout(250); }
+    await c4.page.click('[data-signup]'); await c4.page.waitForSelector('dialog#wa-signin[open]');
+    const ph = await c4.page.evaluate(() => { const d = document.getElementById('wa-signin').getBoundingClientRect(); return { h: document.getElementById('si-h').textContent, w: Math.round(d.width), left: Math.round(d.left), sw: document.documentElement.scrollWidth }; });
+    await shot(c4.page, '14-signup-phone-fr');
+    ok(ph.h === 'Inscription ou connexion' && ph.w <= 358 && ph.left >= 15 && ph.sw <= 390, 'sign up: French, and the window fits a phone ' + JSON.stringify(ph));
+    await c4.ctx.close();
+
+    const c5 = await context({ session: session() });
+    await c5.page.goto(ORIGIN + '/', { waitUntil: 'networkidle' }); await c5.page.waitForTimeout(300);
+    ok(await c5.page.evaluate(() => { const a = document.querySelector('[data-signup]'); return !!a && a.hidden; }), 'sign up: hidden for someone already signed in');
+    await c5.ctx.close();
+  }
+
   // ---------- in French ----------
   {
     const { ctx, page, errors } = await context({ session: session(), locale: 'fr-CA' });
