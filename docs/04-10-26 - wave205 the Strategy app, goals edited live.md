@@ -39,6 +39,10 @@ goal-sync (v3, platform version 10) only pulls from ClickUp on its daily cron (i
 
 The mapping (retired goal -> the org goal it served): 23, 27, 29, 40, 43, 44 -> 4 (flagship events, donor program, Rally Paper, the Ad Grant); 30, 31, 32 -> 5 (policies, structure); 33 to 39 -> 3 (recruiting, onboarding, development, reviews, team life); 66 -> 1 (the community kitchen pilot); 19 to 22 -> 2 (beneficiary feedback, the employment program, the referral brochure, new programs); 24, 25, 26, 28 no obvious fit (brand refresh, website, intro video, photographers). Earlier org goals: 41 superseded by goal 4, 45 by goal 2, 42 retired outright (follower growth becomes a marketing KPI). Seventeen projects re-linked (history rows by "wave205 migration"); Brand Refresh, Website Redesign, WA Intro Video and the General projects wait under Not linked yet.
 
+## The board pack (board-pack v21)
+
+`fn/board-pack/index.ts` (meta version 14, deployed as platform version 21, the deployed source checked identical to the repo's): the Organizational goals slide reads the five goals (`department = org`, not retired, numbered, in order) as "n. Title (FY29: target)"; a retired department goal reports the status it had when retired (`status_before_retire`). A read-only `preview` for the Oct 19 board meeting (id 4) listed the five goals and left `board_meetings.pack` unchanged. Deployed with the Supabase MCP because fn-deploy answers 401 (the Management API token has expired).
+
 ## Files
 
 - `build/parts205/` (a_head, b_css, c_data, d_goals, e_drawers, f_library, h_tours, z_wire; assemble.py) -> `src/205_wave205.seg`, in MANIFEST after 202.

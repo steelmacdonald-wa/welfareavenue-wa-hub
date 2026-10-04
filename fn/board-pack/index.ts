@@ -16,6 +16,8 @@
 //   refresh {meeting_id}  rewrites the Hub's own slides in the existing deck with today's numbers; slides someone added stay,
 //                          and the agenda and the notes are never touched once built
 // Google: the service account as steel.macdonald@welfareavenue.com (domain-wide delegation, scope drive).
+// wave205 (04/10/26): the organizational goals slide reads the active org goals by number (the five FY27 to FY31 goals, with
+// their FY29 target), not by quarter; a retired department goal (status archived) reports the status it had when retired.
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -140,7 +142,7 @@ async function gather(meetingId: number): Promise<Row> {
   const [team, meta, goals, wins, events, onb, items, comms, members, touch, decs, tasks, fund, fundGoals, fin, stm] = await Promise.all([
     svc.from('team_members').select('id,name,department,start_date').eq('active', true),
     svc.from('dept_meta').select('department,label,short_label,progress,priorities,sort,updated_at').order('sort'),
-    svc.from('goals').select('department,quarter,title,status,progress,sort').in('quarter', [cq.label, pq.label, 'FY' + cq.fy, 'FY' + (cq.fy + 1)]).order('sort'),
+    svc.from('goals').select('department,quarter,title,status,progress,sort,retired_at,status_before_retire').in('quarter', [cq.label, pq.label, 'FY' + cq.fy, 'FY' + (cq.fy + 1)]).order('sort'),
     svc.from('goal_wins').select('department,win,meeting_date,visibility').gte('meeting_date', ymd(since)).order('meeting_date', { ascending: false }).limit(60),
     svc.from('volunteer_events').select('event_date,status,kind,title,location').gte('event_date', ymd(since)).order('event_date'),
     svc.from('onboardings').select('status,started_at').gte('started_at', ymd(since)),
@@ -159,13 +161,15 @@ async function gather(meetingId: number): Promise<Row> {
   const directors = (members.data || []).filter((m: Row) => m.status === 'active');
   const seat = (re: RegExp) => { const m = directors.find((x: Row) => re.test(String(x.seat || ''))); return m ? m.name : ''; };
   const labels: Record<string, Row> = {}; for (const d of meta.data || []) labels[d.department] = d;
+  const orgQ = await svc.from('goals').select('title,status,progress,number,measure,target_fy29').eq('department', 'org').is('retired_at', null).not('number', 'is', null).order('number');
+  const goalRows: Row[] = (goals.data || []).filter((x: Row) => x.department !== 'org').map((x: Row) => (x.retired_at && x.status_before_retire ? { ...x, status: x.status_before_retire } : x));
   const staff = (team.data || []).filter((t: Row) => t.department !== 'board');
   const newPeople = staff.filter((t: Row) => t.start_date && t.start_date >= ymd(since)).length;
   const served = (events.data || []).filter((e: Row) => e.event_date <= ymd(now) && !/cancel/i.test(String(e.status || '')));
   const upcoming = (events.data || []).filter((e: Row) => e.event_date > ymd(now) && e.event_date <= ymd(M.meets_at) && !/cancel/i.test(String(e.status || '')));
   const openTasks = (tasks.data || []).filter((t: Row) => !t.confidential);
   const depts = TEAMS.filter((k) => labels[k]).map((k) => {
-    const gl = (goals.data || []).filter((x: Row) => x.department === k);
+    const gl = goalRows.filter((x: Row) => x.department === k);
     const lastQ = gl.filter((x: Row) => x.quarter === pq.label), thisQ = gl.filter((x: Row) => x.quarter === cq.label);
     const ot = openTasks.filter((t: Row) => t.department === k);
     const base = { key: k, label: labels[k].label || k, people: staff.filter((t: Row) => t.department === k).length, updated: labels[k].updated_at ? dayShort(labels[k].updated_at) : '',
@@ -205,7 +209,7 @@ async function gather(meetingId: number): Promise<Row> {
   const atRisk = (items.data || []).filter((i: Row) => i.status === 'at_risk').map((i: Row) => clip(safe(String(i.title || ''), 200), 110)).filter(Boolean);
   const yr = String(parts(M.meets_at).y);
   const renewals = directors.filter((m: Row) => m.renewal && String(m.renewal).includes(yr)).map((m: Row) => m.name + ' (' + m.renewal + ')');
-  const org = (goals.data || []).filter((x: Row) => x.department === 'org').map((x: Row) => ({ title: clip(x.title, 100), status: x.status || '', progress: x.progress }));
+  const org = (orgQ.data || []).map((x: Row) => ({ title: clip((x.number ? x.number + '. ' : '') + x.title + (x.target_fy29 ? ' (FY29: ' + x.target_fy29 + ')' : ''), 140), status: x.status || '', progress: x.progress }));
   const glance = [
     { n: String(staff.length), l: 'team members, all volunteers' },
     { n: String(served.length), l: 'servings and events since ' + (last ? dayShort(last.meets_at) : 'the last meeting') },
