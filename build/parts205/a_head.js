@@ -23,6 +23,11 @@
    milestone_id, strategy_plan, strategy_docs (wa205_strategy). Writers: strategy_save, strategy_add, strategy_remove,
    strategy_owner_set, strategy_link_project, strategy_comment_add, strategy_comment_edit, strategy_restore,
    strategy_set_approval, strategy_doc_save, strategy_retired_to_project.
+   wave207 (04/10/26, same segment): each goal anchored on WA's 8 registered charitable activities (charitable_activities,
+   goal_activities: chips with the reason, the at-a-glance column, the 8 activities coverage strip; strategy_activity_set),
+   and this year's goals: a yearly target per goal with Q1 to Q4 checkpoints (goal_year_targets, goal_checkpoints; the
+   "This year" view at the top of Goals with the current quarter, what is due next and what is overdue; checkpoint comments
+   through strategy_checkpoint_comment_add; projects link to a checkpoint through strategy_link_checkpoint). g_year.js.
    ===================================================================== */
 (function () {
   if (window.__wa205) return; window.__wa205 = true;
@@ -34,7 +39,8 @@
   var GOAL_ST = ['not started', 'in progress', 'on track', 'at risk', 'delayed', 'done'];
   var MS_ST = ['not started', 'in progress', 'done', 'at risk', 'carried forward'];
   var ST_LABEL = { 'not started': 'Not started', 'in progress': 'In progress', 'on track': 'On track', 'at risk': 'At risk', 'delayed': 'Delayed', 'done': 'Done', 'carried forward': 'Carried forward' };
-  var FIELD_LABEL = { title: 'the title', detail: 'the SMART statement', why: 'Why', measure: 'the headline measure', baseline: 'the baseline', target_fy29: 'the FY29 target', target_fy31: 'the FY31 target', status: 'the status', due_date: 'the due date', progress: 'progress', approval: 'board approval', retired_at: 'retired', body: 'the text', fy: 'the year', archived_at: 'removed', added: 'added', removed: 'removed', is_lead: 'the lead', focus: 'the focus', goal_id: 'the goal link', milestone_id: 'the milestone link' };
+  var FIELD_LABEL = { title: 'the title', detail: 'the SMART statement', why: 'Why', measure: 'the headline measure', baseline: 'the baseline', target_fy29: 'the FY29 target', target_fy31: 'the FY31 target', status: 'the status', due_date: 'the due date', progress: 'progress', approval: 'board approval', retired_at: 'retired', body: 'the text', fy: 'the year', archived_at: 'removed', added: 'added', removed: 'removed', is_lead: 'the lead', focus: 'the focus', goal_id: 'the goal link', milestone_id: 'the milestone link', reason: 'the reason', owners: 'the owners', activities_note: 'the note on the activities', checkpoint_id: 'the checkpoint link' };
+  var CP_ST = ['not started', 'on track', 'at risk', 'done'];   /* wave207: a quarterly checkpoint's status */
   var SAVE_MS = 800;
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -97,6 +103,7 @@
   var S = {
     loaded: 0, loading: null, err: null,
     goals: [], retired: [], owners: [], milestones: [], paths: [], comments: [], projects: [], plan: {}, docs: [], wins: {},
+    acts: [], gacts: [], targets: [], checkpoints: [],   /* wave207: charitable activities, goal_activities, goal_year_targets, goal_checkpoints */
     view: 'goals', goalId: null, sub: '', subId: null,
     base: {}, dirty: {}, timers: {}, inflight: {}, conflict: {}, savedAt: {}, errors: {},
     presence: [], channel: null, live: false, focus: { goal: null, field: null }, stale: {},

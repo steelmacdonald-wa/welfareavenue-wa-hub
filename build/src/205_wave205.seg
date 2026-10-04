@@ -23,6 +23,11 @@
    milestone_id, strategy_plan, strategy_docs (wa205_strategy). Writers: strategy_save, strategy_add, strategy_remove,
    strategy_owner_set, strategy_link_project, strategy_comment_add, strategy_comment_edit, strategy_restore,
    strategy_set_approval, strategy_doc_save, strategy_retired_to_project.
+   wave207 (04/10/26, same segment): each goal anchored on WA's 8 registered charitable activities (charitable_activities,
+   goal_activities: chips with the reason, the at-a-glance column, the 8 activities coverage strip; strategy_activity_set),
+   and this year's goals: a yearly target per goal with Q1 to Q4 checkpoints (goal_year_targets, goal_checkpoints; the
+   "This year" view at the top of Goals with the current quarter, what is due next and what is overdue; checkpoint comments
+   through strategy_checkpoint_comment_add; projects link to a checkpoint through strategy_link_checkpoint). g_year.js.
    ===================================================================== */
 (function () {
   if (window.__wa205) return; window.__wa205 = true;
@@ -34,7 +39,8 @@
   var GOAL_ST = ['not started', 'in progress', 'on track', 'at risk', 'delayed', 'done'];
   var MS_ST = ['not started', 'in progress', 'done', 'at risk', 'carried forward'];
   var ST_LABEL = { 'not started': 'Not started', 'in progress': 'In progress', 'on track': 'On track', 'at risk': 'At risk', 'delayed': 'Delayed', 'done': 'Done', 'carried forward': 'Carried forward' };
-  var FIELD_LABEL = { title: 'the title', detail: 'the SMART statement', why: 'Why', measure: 'the headline measure', baseline: 'the baseline', target_fy29: 'the FY29 target', target_fy31: 'the FY31 target', status: 'the status', due_date: 'the due date', progress: 'progress', approval: 'board approval', retired_at: 'retired', body: 'the text', fy: 'the year', archived_at: 'removed', added: 'added', removed: 'removed', is_lead: 'the lead', focus: 'the focus', goal_id: 'the goal link', milestone_id: 'the milestone link' };
+  var FIELD_LABEL = { title: 'the title', detail: 'the SMART statement', why: 'Why', measure: 'the headline measure', baseline: 'the baseline', target_fy29: 'the FY29 target', target_fy31: 'the FY31 target', status: 'the status', due_date: 'the due date', progress: 'progress', approval: 'board approval', retired_at: 'retired', body: 'the text', fy: 'the year', archived_at: 'removed', added: 'added', removed: 'removed', is_lead: 'the lead', focus: 'the focus', goal_id: 'the goal link', milestone_id: 'the milestone link', reason: 'the reason', owners: 'the owners', activities_note: 'the note on the activities', checkpoint_id: 'the checkpoint link' };
+  var CP_ST = ['not started', 'on track', 'at risk', 'done'];   /* wave207: a quarterly checkpoint's status */
   var SAVE_MS = 800;
 
   function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -97,6 +103,7 @@
   var S = {
     loaded: 0, loading: null, err: null,
     goals: [], retired: [], owners: [], milestones: [], paths: [], comments: [], projects: [], plan: {}, docs: [], wins: {},
+    acts: [], gacts: [], targets: [], checkpoints: [],   /* wave207: charitable activities, goal_activities, goal_year_targets, goal_checkpoints */
     view: 'goals', goalId: null, sub: '', subId: null,
     base: {}, dirty: {}, timers: {}, inflight: {}, conflict: {}, savedAt: {}, errors: {},
     presence: [], channel: null, live: false, focus: { goal: null, field: null }, stale: {},
@@ -428,11 +435,15 @@
       q(db.from('goal_owners').select('*').order('sort')),
       q(db.from('goal_milestones').select('*').order('sort')),
       q(db.from('goal_paths').select('*').order('sort')),
-      q(db.from('projects').select('id,name,department,status,goal_id,milestone_id,leads,parent_id,workstream,banked_at').order('sort')),
+      q(db.from('projects').select('id,name,department,status,goal_id,milestone_id,checkpoint_id,leads,parent_id,workstream,banked_at').order('sort')),
       q(db.from('strategy_plan').select('*')),
       q(db.from('strategy_docs').select('*').order('sort')),
       q(db.from('goal_comments').select('*').order('created_at', { ascending: true })),
-      q(db.from('goal_wins').select('id,goal_id'))
+      q(db.from('goal_wins').select('id,goal_id')),
+      q(db.from('charitable_activities').select('*').order('sort')),
+      q(db.from('goal_activities').select('*').order('sort')),
+      q(db.from('goal_year_targets').select('*').order('sort')),
+      q(db.from('goal_checkpoints').select('*').order('quarter'))
     ]).then(function (r) {
       var all = (r[0].data || []);
       S.err = r[0].error ? (r[0].error.message || String(r[0].error)) : null;
@@ -447,21 +458,33 @@
       S.docs = (r[6].data || []).filter(function (d) { return !d.archived_at; });
       S.comments = r[7].data || [];
       S.wins = {}; (r[8].data || []).forEach(function (w) { S.wins[w.goal_id] = (S.wins[w.goal_id] || 0) + 1; });
+      S.acts = r[9].data || []; S.gacts = (r[10].data || []).filter(function (a) { return !a.archived_at; });
+      S.targets = (r[11].data || []).filter(function (t) { return !t.archived_at; }); S.checkpoints = (r[12].data || []).filter(function (c) { return !c.archived_at; });
       S.goals.forEach(baseGoal); S.milestones.forEach(function (m) { baseRow('milestone', m, ['body', 'status', 'fy']); }); S.paths.forEach(function (p) { baseRow('path', p, ['body']); });
+      ['activity', 'target', 'checkpoint'].forEach(function (e) { ENTS[e].list().forEach(function (row) { baseRow(e, row, ENTS[e].fields); }); });
       S.loaded = Date.now(); S.loading = null;
     });
     return S.loading;
   }
-  var GOAL_FIELDS = ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'];
+  var GOAL_FIELDS = ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date', 'activities_note'];
+  /* every kind of row the page edits: its list in S and the fields autosave sends (wave207 adds activity, target, checkpoint) */
+  var ENTS = {
+    goal: { list: function () { return S.goals; }, fields: GOAL_FIELDS },
+    milestone: { list: function () { return S.milestones; }, fields: ['body', 'status', 'fy'] },
+    path: { list: function () { return S.paths; }, fields: ['body'] },
+    activity: { list: function () { return S.gacts; }, fields: ['reason'] },
+    target: { list: function () { return S.targets; }, fields: ['body', 'owners'] },
+    checkpoint: { list: function () { return S.checkpoints; }, fields: ['body', 'status', 'due_date'] }
+  };
   function key(e, id, f) { return e + ':' + id + ':' + f; }
   function baseGoal(g) { baseRow('goal', g, GOAL_FIELDS); }
   function baseRow(e, row, fields) { fields.forEach(function (f) { var k = key(e, row.id, f); if (!S.dirty[k]) S.base[k] = str(row[f]); }); }
   function goalOf(e, id) {
     if (e === 'goal') return byId(S.goals, id);
-    var row = e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id);
+    var row = rowOf(e, id);
     return row ? byId(S.goals, row.goal_id) : null;
   }
-  function rowOf(e, id) { return e === 'goal' ? byId(S.goals, id) : e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id); }
+  function rowOf(e, id) { return ENTS[e] ? byId(ENTS[e].list(), id) : null; }
   function msOf(gid) { return S.milestones.filter(function (m) { return String(m.goal_id) === String(gid); }).sort(function (a, b) { return (a.fy < b.fy ? -1 : a.fy > b.fy ? 1 : 0) || (a.sort - b.sort) || (a.id - b.id); }); }
   function pathsOf(gid) { return S.paths.filter(function (p) { return String(p.goal_id) === String(gid); }).sort(function (a, b) { return (a.sort - b.sort) || (a.id - b.id); }); }
   function ownersOf(gid) { return S.owners.filter(function (o) { return String(o.goal_id) === String(gid); }).sort(function (a, b) { return (b.is_lead ? 1 : 0) - (a.is_lead ? 1 : 0) || (a.sort - b.sort); }); }
@@ -483,7 +506,7 @@
   function errText(e) { var m = String((e && e.message) || e || 'Something went wrong'); return m.replace(/^Error:\s*/, ''); }
 
   /* ---------- autosave: one field at a time, debounced, with the per-field check ---------- */
-  function fieldEl(k) { return document.querySelector('#w205 [data-w205k="' + k + '"]'); }
+  function fieldEl(k) { return document.querySelector('#w205 [data-w205k="' + k + '"]') || document.querySelector('#w205drawer [data-w205k="' + k + '"]'); }
   function parseKey(k) { var p = k.split(':'); return { e: p[0], id: p[1], f: p.slice(2).join(':') }; }
   function schedule(k, ms) {
     clearTimeout(S.timers[k]);
@@ -572,6 +595,8 @@
       if (P.e === 'milestone' && P.f === 'status') { paintProgress(g.id); var ms = byId(S.milestones, P.id), box = document.querySelector('#w205 [data-w205ms="' + P.id + '"]'); if (box && ms) box.classList.toggle('done', ms.status === 'done'); paintGlance(); }
       if (P.e === 'goal' && P.f === 'status') { var sel = fieldEl(key('goal', g.id, 'status')); if (sel) sel.className = 'w205stsel s-' + stKey(g.status); }
       if (P.e === 'milestone' && P.f === 'fy') repaintGoal(g.id, true);
+      if (P.e === 'checkpoint' || P.e === 'target') { afterYearSave(P); paintYear(); }
+      if (P.e === 'activity') { paintActs(g.id); paintCoverage(); paintGlance(); }
     } catch (e) { /* cosmetic */ }
   }
   function stKey(s) { return String(s || 'not started').replace(/ (\w)/g, function (m, c) { return c.toUpperCase(); }).replace(/[^A-Za-z]/g, ''); }
@@ -579,10 +604,10 @@
 
   /* ---------- live: other people's saves and who is here ---------- */
   function onRemoteRow(e, row, kind) {
-    var fields = e === 'goal' ? GOAL_FIELDS : e === 'milestone' ? ['body', 'status', 'fy'] : ['body'];
+    var fields = ENTS[e].fields;
     var by = nameOf(row.updated_by);
     var mine = lower(row.updated_by) === myEmail();
-    var list = e === 'goal' ? S.goals : e === 'milestone' ? S.milestones : S.paths;
+    var list = ENTS[e].list();
     var cur = byId(list, row.id);
     if (e === 'goal') {
       if (!isActiveOrg(row)) { if (cur || row.retired_at) { S.loaded = 0; loadAll(true).then(paintSoon); } return; }
@@ -592,7 +617,7 @@
     if (e !== 'goal' && (row.archived_at || !cur)) {
       if (row.archived_at) { var i = list.indexOf(cur); if (i >= 0) list.splice(i, 1); }
       else list.push(row);
-      if (row.archived_at || !cur) { baseRow(e, row, fields); repaintGoal(row.goal_id, true); return; }
+      if (row.archived_at || !cur) { baseRow(e, row, fields); repaintGoal(row.goal_id, true); if (e === 'activity') { paintActs(row.goal_id); paintCoverage(); paintGlance(); } if (e === 'target' || e === 'checkpoint') paintYear(); if (S.drawer && S.drawer.kind === 'acts') paintDrawer(); return; }
     }
     fields.forEach(function (f) {
       var k = key(e, row.id, f), v = str(row[f]);
@@ -617,6 +642,9 @@
     if (table === 'goals') onRemoteRow('goal', row, ev);
     else if (table === 'goal_milestones') onRemoteRow('milestone', row, ev);
     else if (table === 'goal_paths') onRemoteRow('path', row, ev);
+    else if (table === 'goal_activities') onRemoteRow('activity', row, ev);
+    else if (table === 'goal_year_targets') onRemoteRow('target', row, ev);
+    else if (table === 'goal_checkpoints') onRemoteRow('checkpoint', row, ev);
     else if (table === 'goal_owners') {
       var o = byId(S.owners, row.id);
       if (row.removed_at) { if (o) S.owners.splice(S.owners.indexOf(o), 1); }
@@ -624,14 +652,14 @@
       paintOwners(row.goal_id);
     } else if (table === 'goal_comments') {
       var c = byId(S.comments, row.id); if (c) Object.assign(c, row); else S.comments.push(row);
-      paintCounts(row.goal_id);
+      paintCounts(row.goal_id); paintYear();
       if (S.drawer && S.drawer.kind === 'comments' && String(S.drawer.goal) === String(row.goal_id)) paintDrawer();
     } else if (table === 'projects') {
       var p = byId(S.projects, row.id);
       if (row.banked_at) { if (p) S.projects.splice(S.projects.indexOf(p), 1); }
       else if (p) Object.assign(p, row); else S.projects.push(row);
       S.goals.forEach(function (g) { paintProjects(g.id); });
-      paintUnlinked();
+      paintUnlinked(); paintYear();
       if (S.drawer && S.drawer.kind === 'link') paintDrawer();
     }
   }
@@ -667,7 +695,7 @@
     if (S.channel || typeof db === 'undefined' || !db || typeof db.channel !== 'function') return;
     try {
       var ch = db.channel('wa205-strategy', { config: { presence: { key: myKey() } } });
-      ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects'].forEach(function (t) {
+      ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects', 'goal_activities', 'goal_year_targets', 'goal_checkpoints'].forEach(function (t) {
         var opt = { event: '*', schema: 'public', table: t };
         if (t === 'goals') opt.filter = 'department=eq.org';
         ch.on('postgres_changes', opt, function (payload) { try { onRemote(t, payload); } catch (e) { console.warn('wave205 live', e); } });
@@ -747,14 +775,14 @@
   function glanceHtml() {
     if (!S.goals.length) return '';
     return '<div class="w205sec"><h2>The goals at a glance</h2><span class="hint">FY29 is the 3-year target; FY31 applies only if the FY29 gate is met.</span></div>' +
-      '<div class="w205glance" data-w205glance><table><thead><tr><th>Goal</th><th>Headline measure</th><th>Baseline</th><th>FY29 (3-year)</th><th>FY31 (5-year, gated)</th><th>Owners</th><th>Milestones</th></tr></thead><tbody>' +
+      '<div class="w205glance" data-w205glance><table><thead><tr><th>Goal</th><th>Headline measure</th><th>Baseline</th><th>FY29 (3-year)</th><th>FY31 (5-year, gated)</th><th>Owners</th><th>Charitable activities</th><th>Milestones</th></tr></thead><tbody>' +
       S.goals.map(function (g) {
         var pr = progress(g.id);
         return '<tr data-w205jump="' + g.id + '" tabindex="0" role="link" aria-label="Open goal ' + E(g.number) + '">' +
           '<td><span style="display:flex;gap:10px;align-items:center"><span class="w205num">' + E(g.number) + '</span><b data-w198skip>' + E(g.title) + '</b></span></td>' +
           '<td data-l="Measure" data-w198skip>' + E(g.measure) + '</td><td data-l="Baseline" data-w198skip>' + E(g.baseline) + '</td>' +
           '<td data-l="FY29" class="t29" data-w198skip>' + E(g.target_fy29) + '</td><td data-l="FY31" class="g31" data-w198skip>' + E(g.target_fy31) + '</td>' +
-          '<td data-l="Owners" data-w198skip>' + E(ownerNames(g.id)) + '</td><td data-l="Milestones">' + pr.done + ' of ' + pr.total + ' done</td></tr>';
+          '<td data-l="Owners" data-w198skip>' + E(ownerNames(g.id)) + '</td><td data-l="Activities">' + actsMini(g.id) + '</td><td data-l="Milestones">' + pr.done + ' of ' + pr.total + ' done</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
   function paintGlance() { var el = document.querySelector('#w205 [data-w205glance]'); if (!el) return; var tmp = document.createElement('div'); tmp.innerHTML = glanceHtml(); var n = tmp.querySelector('[data-w205glance]'); if (n) el.innerHTML = n.innerHTML; }
@@ -826,6 +854,7 @@
       box.innerHTML = ps.map(projChip).join('') + cntBtn(g.id, m.id) + (canComment() ? '<button type="button" class="w205cnt" data-w205link="' + g.id + ':' + m.id + '" aria-label="Link a project to this milestone">' + I('link') + '</button>' : '');
     });
     var c = document.querySelector('#w205 [data-w205pcount="' + gid + '"]'); if (c) c.textContent = projOf(gid).length ? '(' + projOf(gid).length + ')' : '';
+    paintCpFoot(gid);
   }
   function paintCounts(gid) {
     var b = document.querySelector('#w205 [data-w205cmtsft="' + gid + '"]'); var n = commentsOf(gid).length;
@@ -841,6 +870,7 @@
       }).join('') + '</div>' +
       '<div class="w205h4"><h4>Paths</h4><span style="font-size:12px;color:' + MUTED + '">How we get there</span><span class="sp"></span>' + (canEdit(g) ? '<button type="button" class="w205btn sm ghost" data-w205addpath="' + g.id + '">' + I('plus') + ' Add a path</button>' : '') + '</div>' +
       '<div data-w205paths="' + g.id + '">' + pathsHtml(g) + '</div>' +
+      yearBlockHtml(g) +
       '<div class="w205h4"><h4>Milestones</h4><span style="font-size:12px;color:' + MUTED + '">By fiscal year (Oct 1 to Sep 30)</span></div>' +
       '<div class="w205years" data-w205years="' + g.id + '">' + yearsHtml(g) + '</div>' +
       '<div class="w205h4"><h4>Projects serving this goal <span data-w205pcount="' + g.id + '" style="font-family:' + BODY + ';font-size:13px;color:' + MUTED + ';text-transform:none">' + (projOf(g.id).length ? '(' + projOf(g.id).length + ')' : '') + '</span></h4></div>' +
@@ -854,6 +884,7 @@
       '<div class="side"><span class="w205pres" style="margin:0" data-w205gpres="' + g.id + '"></span>' + stSel('goal', g, 'status', GOAL_ST) + '<span class="w205saved" data-w205saved="' + g.id + '" aria-live="polite"></span>' +
       '<button type="button" class="w205fold" data-w205fold="' + g.id + '" aria-expanded="' + (folded ? 'false' : 'true') + '" aria-label="Fold or open this goal">' + I('chev') + '</button></div></div>' +
       '<div class="w205owners" data-w205owners="' + g.id + '">' + ownersHtml(g) + '</div>' +
+      '<div class="w207acts" data-w207acts="' + g.id + '">' + actsHtml(g) + '</div>' +
       '<div class="w205gbody" data-w205gbody="' + g.id + '">' + goalBodyHtml(g) + '</div>' +
       '<div class="w205gft"><button type="button" class="w205btn sm" data-w205cmtsft="' + g.id + '" data-w205cmts="' + g.id + '">' + I('chat') + ' Comments' + (n ? ' (' + n + ')' : '') + '</button>' +
       '<button type="button" class="w205btn sm" data-w205hist="' + g.id + '">' + I('clock') + ' History</button>' +
@@ -913,7 +944,7 @@
       return mastHtml('Goals', p.window || '') + heroHtml() + '<div class="w205empty"><b>No organizational goals yet</b>' + (S.err ? 'The goals could not be read (' + E(clip(S.err, 120)) + ').' : 'When the goals are written, they show here.') + '</div>';
     }
     return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Departments own projects; each one serves a goal.') +
-      heroHtml() + statusHtml() + whyHtml() + glanceHtml() +
+      heroHtml() + statusHtml() + yearViewHtml() + whyHtml() + glanceHtml() + coverageHtml() +
       '<div class="w205sec"><h2>Goal by goal</h2><span class="hint">' + (S.goals.some(canEdit) ? 'Click any text to change it; it saves as you type.' : 'Owners keep these up to date.') + '</span></div>' +
       S.goals.map(goalHtml).join('') + roadHtml() + libPreviewHtml() + unlinkedHtml() +
       '<div class="w205more"><button type="button" class="w205tile" data-w205go="#goalmap"><b>Goal alignment</b><span>Every project and the goal it serves, on one map.</span></button>' +
@@ -959,6 +990,7 @@
     else if (st.kind === 'link') html = linkDrawer(st);
     else if (st.kind === 'owner') html = ownerDrawer(st);
     else if (st.kind === 'doc') html = docDrawer(st);
+    else if (st.kind === 'acts') html = actsDrawer(st);
     d.innerHTML = html;
     if (keepVal) { var t2 = d.querySelector('textarea[data-w205cmt]'); if (t2) { t2.value = keepVal.v; if (keepVal.focus) { t2.focus(); try { t2.setSelectionRange(keepVal.s, keepVal.s); } catch (e) { /* fine */ } } } }
     Object.keys(keepReply).forEach(function (k) { var t = d.querySelector('textarea[data-w205reply="' + k + '"]'); if (t) t.value = keepReply[k]; });
@@ -978,25 +1010,29 @@
   function commentsDrawer(st) {
     var g = byId(S.goals, st.goal) || byId(S.allGoals || [], st.goal);
     if (!g) return drawerShell('Comments', '', '<p>That goal is not here.</p>');
-    var ms = msOf(g.id), mid = st.milestone || null, can = canComment();
+    var ms = msOf(g.id), mid = st.milestone || null, cid = st.checkpoint || null, can = canComment();
     var all = commentsOf(g.id);
-    var roots = all.filter(function (c) { return !c.parent_id && (mid ? String(c.milestone_id) === String(mid) : true); });
-    var seg = '<div class="w205seg" role="tablist"><button type="button" role="tab" class="' + (!mid ? 'on' : '') + '" data-w205cseg="" aria-selected="' + (!mid) + '">Everything (' + all.length + ')</button>' +
+    var roots = all.filter(function (c) { return !c.parent_id && (cid ? String(c.checkpoint_id) === String(cid) : mid ? String(c.milestone_id) === String(mid) : true); });
+    var seg = '<div class="w205seg" role="tablist"><button type="button" role="tab" class="' + (!mid && !cid ? 'on' : '') + '" data-w205cseg="" aria-selected="' + (!mid && !cid) + '">Everything (' + all.length + ')</button>' +
+      cpsOfGoal(g.id).filter(function (c) { return all.some(function (x) { return String(x.checkpoint_id) === String(c.id); }) || String(c.id) === String(cid); }).map(function (c) {
+        var n = all.filter(function (x) { return String(x.checkpoint_id) === String(c.id); }).length;
+        return '<button type="button" role="tab" class="' + (String(c.id) === String(cid) ? 'on' : '') + '" data-w207cseg="' + c.id + '" title="' + E(c.body) + '" aria-selected="' + (String(c.id) === String(cid)) + '">' + E(cpLabel(c)) + ' (' + n + ')</button>';
+      }).join('') +
       ms.filter(function (m) { return all.some(function (c) { return String(c.milestone_id) === String(m.id); }) || String(m.id) === String(mid); }).map(function (m) {
         var n = all.filter(function (c) { return String(c.milestone_id) === String(m.id); }).length;
         return '<button type="button" role="tab" class="' + (String(m.id) === String(mid) ? 'on' : '') + '" data-w205cseg="' + m.id + '" title="' + E(m.body) + '" aria-selected="' + (String(m.id) === String(mid)) + '">' + E(m.fy) + ': ' + E(clip(m.body, 26)) + ' (' + n + ')</button>';
       }).join('') + '</div>';
     var threads = roots.map(function (c) {
       var reps = all.filter(function (r) { return String(r.parent_id) === String(c.id); });
-      var mm = c.milestone_id ? byId(S.milestones, c.milestone_id) : null;
-      return '<div class="w205th">' + (mm && !mid ? '<span class="w205ms-tag" data-w198skip>' + E(mm.fy) + ': ' + E(clip(mm.body, 40)) + '</span>' : '') + commentHtml(c, g.id, can) +
+      var mm = c.milestone_id ? byId(S.milestones, c.milestone_id) : null, cc = c.checkpoint_id ? byId(S.checkpoints, c.checkpoint_id) : null;
+      return '<div class="w205th">' + (mm && !mid ? '<span class="w205ms-tag" data-w198skip>' + E(mm.fy) + ': ' + E(clip(mm.body, 40)) + '</span>' : '') + (cc && !cid ? '<span class="w205ms-tag" data-w198skip>' + E(cpLabel(cc)) + ': ' + E(clip(cc.body, 40)) + '</span>' : '') + commentHtml(c, g.id, can) +
         (reps.length || String(st.replyTo) === String(c.id) ? '<div class="w205replies">' + reps.map(function (r) { return commentHtml(r, g.id, false); }).join('') +
           (String(st.replyTo) === String(c.id) ? '<div style="margin-top:10px"><textarea data-w205reply="' + c.id + '" data-w205cmt="reply" placeholder="Write a reply. Type @ to bring someone in." aria-label="Your reply" data-w205autofocus></textarea><div class="acts"><button type="button" class="w205btn sm pri" data-w205sendreply="' + c.id + '">Reply</button><button type="button" class="w205btn sm ghost" data-w205replyto="">Cancel</button></div></div>' : '') + '</div>' : '') + '</div>';
     }).join('');
-    var msNow = mid ? byId(S.milestones, mid) : null;
+    var msNow = mid ? byId(S.milestones, mid) : null, cpNow = cid ? byId(S.checkpoints, cid) : null;
     var body = seg + (threads || '<div class="w205empty"><b>No comments yet</b>' + (can ? 'Start the conversation: a question, a link, an @mention.' : 'When the team talks about this goal, it shows here.') + '</div>');
-    var foot = can ? '<textarea data-w205cmt="new" placeholder="' + (msNow ? 'Comment on this milestone' : 'Comment on this goal') + '. Type @ to bring someone in." aria-label="Your comment"' + (st.replyTo ? '' : ' data-w205autofocus') + '></textarea>' +
-      '<div class="acts"><small>' + (msNow ? 'On ' + E(msNow.fy) + ': ' + E(clip(msNow.body, 40)) : 'On the whole goal') + ' \u00b7 Ctrl+Enter posts</small><span class="sp"></span><button type="button" class="w205btn pri sm" data-w205post="1">Post</button></div>' +
+    var foot = can ? '<textarea data-w205cmt="new" placeholder="' + (cpNow ? 'Comment on this checkpoint' : msNow ? 'Comment on this milestone' : 'Comment on this goal') + '. Type @ to bring someone in." aria-label="Your comment"' + (st.replyTo ? '' : ' data-w205autofocus') + '></textarea>' +
+      '<div class="acts"><small>' + (cpNow ? 'On ' + E(cpLabel(cpNow)) + ': ' + E(clip(cpNow.body, 40)) : msNow ? 'On ' + E(msNow.fy) + ': ' + E(clip(msNow.body, 40)) : 'On the whole goal') + ' \u00b7 Ctrl+Enter posts</small><span class="sp"></span><button type="button" class="w205btn pri sm" data-w205post="1">Post</button></div>' +
       '<small style="display:block;color:' + MUTED + ';font-size:11px;margin-top:6px">People you @mention hear about it the way every Hub @mention works.</small>'
       : '<small style="color:' + MUTED + '">' + E(readOnlyWhy()) + '</small>';
     return drawerShell('Comments', '<span data-w198skip>Goal ' + E(g.number || '') + ': ' + E(g.title) + '</span>', body, foot);
@@ -1006,11 +1042,13 @@
     var ta = parent ? d.querySelector('textarea[data-w205reply="' + parent + '"]') : d.querySelector('textarea[data-w205cmt="new"]');
     var body = ta ? ta.value.trim() : ''; if (!body) { if (ta) ta.focus(); return; }
     var st = S.drawer, btn = d.querySelector(parent ? '[data-w205sendreply="' + parent + '"]' : '[data-w205post]'); if (btn) btn.disabled = true;
-    rpc('strategy_comment_add', { p_goal: Number(st.goal), p_milestone: parent ? null : (st.milestone ? Number(st.milestone) : null), p_parent: parent ? Number(parent) : null, p_body: body }).then(function (row) {
+    var pc = parent ? byId(S.comments, parent) : null, cpId = parent ? (pc && pc.checkpoint_id) : st.checkpoint;
+    (cpId ? rpc('strategy_checkpoint_comment_add', { p_checkpoint: Number(cpId), p_parent: parent ? Number(parent) : null, p_body: body })
+      : rpc('strategy_comment_add', { p_goal: Number(st.goal), p_milestone: parent ? null : (st.milestone ? Number(st.milestone) : null), p_parent: parent ? Number(parent) : null, p_body: body })).then(function (row) {
       if (row && row.id && !byId(S.comments, row.id)) S.comments.push(row);
       if (ta) ta.value = '';
       if (parent) st.replyTo = null;
-      paintDrawer(); paintCounts(st.goal);
+      paintDrawer(); paintCounts(st.goal); paintYearCounts(st.goal);
       toastS('Comment posted');
     }).catch(function (e) { toastS('Not posted: ' + errText(e)); if (btn) btn.disabled = false; });
   }
@@ -1029,13 +1067,16 @@
     if (h.entity === 'milestone') return h.field === 'added' ? 'added a milestone' : h.field === 'archived_at' ? (h.new_value ? 'removed a milestone' : 'brought back a milestone') : 'changed a milestone\u2019s ' + (h.field === 'body' ? 'text' : f.replace(/^the /, ''));
     if (h.entity === 'path') return h.field === 'added' ? 'added a path' : h.field === 'archived_at' ? (h.new_value ? 'removed a path' : 'brought back a path') : 'changed a path';
     if (h.entity === 'owner') return h.field === 'added' ? 'added an owner' : h.field === 'removed' ? 'took an owner off' : h.field === 'is_lead' ? 'changed the lead' : 'changed an owner\u2019s focus';
-    if (h.entity === 'project') return h.field === 'goal_id' ? (h.new_value ? 'linked a project' : 'unlinked a project') : 'moved a project to a milestone';
+    if (h.entity === 'project') return h.field === 'goal_id' ? (h.new_value ? 'linked a project' : 'unlinked a project') : h.field === 'checkpoint_id' ? (h.new_value ? 'linked a project to a checkpoint' : 'took a project off a checkpoint') : 'moved a project to a milestone';
+    if (h.entity === 'activity') return h.field === 'added' ? 'anchored the goal on a charitable activity' : h.field === 'archived_at' ? (h.new_value ? 'took a charitable activity off' : 'brought back a charitable activity') : 'changed why it serves a charitable activity';
+    if (h.entity === 'target') return h.field === 'owners' ? 'changed who reports on the yearly target' : 'changed the yearly target';
+    if (h.entity === 'checkpoint') return 'changed a checkpoint\u2019s ' + (h.field === 'body' ? 'text' : h.field === 'due_date' ? 'due date' : f.replace(/^the /, ''));
     return 'changed ' + f;
   }
   function restorable(h) {
     if (h.entity === 'project') return canComment();
     var g = byId(S.goals, h.goal_id); if (!canEdit(g)) return false;
-    if (h.entity === 'goal') return ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'].indexOf(h.field) >= 0;
+    if (h.entity === 'goal') return ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date', 'activities_note'].indexOf(h.field) >= 0;
     return true;
   }
   function histVal(h, v) {
@@ -1055,9 +1096,11 @@
       var day = '', out = [];
       st.rows.forEach(function (h) {
         var dd = fmtDay(h.changed_at); if (dd !== day) { day = dd; out.push('<div class="w205hday">' + E(dd) + '</div>'); }
-        var ov = histVal(h, h.old_value), nv = histVal(h, h.new_value), simple = h.entity === 'project' || h.entity === 'owner' || h.field === 'added' || h.field === 'archived_at';
+        var ov = histVal(h, h.old_value), nv = histVal(h, h.new_value), simple = (h.entity === 'project' && h.field !== 'checkpoint_id') || h.entity === 'owner' || h.field === 'added' || (h.field === 'archived_at' && h.entity !== 'activity');
+        if (h.entity === 'activity' && h.field === 'archived_at') { simple = true; nv = h.new_value || h.old_value || ''; }
+        var cpx = h.entity === 'checkpoint' ? cpLabel(byId(S.checkpoints, h.entity_id)) : '';
         out.push('<div class="w205h" data-w205h="' + h.id + '"><div class="l1"><span><b data-w198skip>' + E(h.changed_by_name || h.changed_by || 'Someone') + '</b> ' + E(histLabel(h)) + '</span><span class="sp"></span><small>' + E(new Date(h.changed_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })) + '</small></div>' +
-          (h.restored_from ? '<span class="rs">A restore</span>' : '') +
+          (h.restored_from ? '<span class="rs">A restore</span>' : '') + (cpx ? '<span class="w205ms-tag">' + E(cpx) + '</span>' : '') +
           (simple ? ((nv || ov) ? '<span class="nv" data-w198skip>' + E(nv || ov) + '</span>' : '') : (ov ? '<span class="ov" data-w198skip>' + E(ov) + '</span>' : '') + (nv ? '<span class="nv" data-w198skip>' + E(nv) + '</span>' : '<span class="nv"><i>cleared</i></span>')) +
           (restorable(h) ? '<div style="margin-top:6px"><button type="button" class="w205btn sm" data-w205restore="' + h.id + '">' + I('undo') + ' Restore</button></div>' : '') + '</div>');
       });
@@ -1113,7 +1156,8 @@
         return '<label class="' + (String(x.id) === String(goalSel) ? 'on' : '') + '"><input type="radio" name="w205lg" data-w205pickg="' + x.id + '"' + (String(x.id) === String(goalSel) ? ' checked' : '') + ' /><span class="w205num" style="width:24px;height:24px;font-size:13px">' + E(x.number) + '</span><span class="t" data-w198skip>' + E(x.title) + '</span></label>';
       }).join('') + '</div>' +
       (gg ? '<div class="w205grp">The milestone (optional)</div><div class="w205pick"><label class="' + (!st.msPick ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm=""' + (!st.msPick ? ' checked' : '') + ' /><span class="t">The goal as a whole</span></label>' +
-        msOf(gg.id).map(function (m) { return '<label class="' + (String(st.msPick) === String(m.id) ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm="' + m.id + '"' + (String(st.msPick) === String(m.id) ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(m.body) + '</span><small>' + E(m.fy) + '</small></span></label>'; }).join('') + '</div>' : '');
+        msOf(gg.id).map(function (m) { return '<label class="' + (String(st.msPick) === String(m.id) ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm="' + m.id + '"' + (String(st.msPick) === String(m.id) ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(m.body) + '</span><small>' + E(m.fy) + '</small></span></label>'; }).join('') + '</div>' : '') +
+      (gg ? cpPickHtml(gg, st) : '');
     var foot = '<div class="acts" style="margin:0">' + (curG ? '<button type="button" class="w205btn sm ghost" data-w205unlink="' + p.id + '">Unlink</button>' : '') + '<span class="sp"></span><button type="button" class="w205btn sm ghost" data-w205close="1">Cancel</button><button type="button" class="w205btn pri" data-w205dolink="1"' + (gg ? '' : ' disabled') + '>' + I('link') + ' Link it</button></div>';
     return drawerShell(curG ? 'Move or unlink a project' : 'Link a project', '<span data-w198skip>' + E(p.name) + '</span>', body, foot);
   }
@@ -1121,14 +1165,21 @@
     var st = S.drawer; if (!st || st.kind !== 'link' || !st.project) return;
     var p = byId(S.projects, st.project), g = unlink ? null : (st.goalPick != null ? st.goalPick : (st.goal || (p && p.goal_id)));
     var m = unlink ? null : (st.msPick || null);
+    var cp = unlink ? null : (st.cpPick || null);
     rpc('strategy_link_project', { p_project: Number(st.project), p_goal: g ? Number(g) : null, p_milestone: m ? Number(m) : null }).then(function () {
-      if (p) { p.goal_id = g ? Number(g) : null; p.milestone_id = m ? Number(m) : null; }
+      /* wave207: the checkpoint after the goal (moving the goal clears a checkpoint of another goal) */
+      var keep = p && p.checkpoint_id && cpsOfGoal(g).some(function (c) { return String(c.id) === String(p.checkpoint_id); }) ? p.checkpoint_id : null;
+      if (String(cp || '') === String(keep || '')) return null;
+      return rpc('strategy_link_checkpoint', { p_project: Number(st.project), p_checkpoint: cp ? Number(cp) : null });
+    }).then(function () {
+      if (p) { p.goal_id = g ? Number(g) : null; p.milestone_id = m ? Number(m) : null; p.checkpoint_id = cp ? Number(cp) : null; }
+      paintYear();
       closeDrawer();
       S.goals.forEach(function (x) { paintProjects(x.id); }); paintUnlinked();
       /* the shared project store (wave116i): Projects, the team pages and Goal alignment repaint from the same rows */
       try {
         var PS = window.__waProjects;
-        if (PS && PS.rows) { PS.rows.forEach(function (x) { if (String(x.id) === String(st.project)) { x.goal_id = g ? Number(g) : null; x.milestone_id = m ? Number(m) : null; } }); if (window.w116ProjectsChanged) window.w116ProjectsChanged(PS.rows); }
+        if (PS && PS.rows) { PS.rows.forEach(function (x) { if (String(x.id) === String(st.project)) { x.goal_id = g ? Number(g) : null; x.milestone_id = m ? Number(m) : null; x.checkpoint_id = cp ? Number(cp) : null; } }); if (window.w116ProjectsChanged) window.w116ProjectsChanged(PS.rows); }
         else if (window.w116Goals && window.w116Goals.refresh) window.w116Goals.refresh();
       } catch (e) { /* fine */ }
       toastS(unlink ? 'Unlinked' : 'Linked to goal ' + ((byId(S.goals, g) || {}).number || ''));
@@ -1260,6 +1311,342 @@
     return html;
   }
 
+  /* =====================================================================
+     wave207 (04/10/26): the charitable activities and this year's goals, inside wave205's page.
+     Steel: "Each org goal is anchored on one or more of WA's 8 registered charitable activities": chips on each goal (the
+     reason on hover or tap), a column in the goals at a glance, and the 8 activities coverage strip; owners and admins
+     anchor a goal on an activity, take one off and say why (strategy_activity_set, strategy_save 'activity' reason).
+     "This year's goals (FY27)": per goal the FY27 target and its Q1 to Q4 checkpoints with a status (not started, on track,
+     at risk, done), edited live like every other field (strategy_save 'target' and 'checkpoint'), with comments
+     (strategy_checkpoint_comment_add) and history; the This year view at the top of Goals: the current quarter, what is due
+     next, overdue checkpoints flagged. Projects link to a checkpoint (strategy_link_checkpoint) as well as a goal.
+     The words are the plan's (wa207_activities_fy27.sql); nothing here invents a target.
+     ===================================================================== */
+  if (!document.getElementById('w207css')) {
+    var css7 = document.createElement('style'); css7.id = 'w207css';
+    css7.textContent = ''
+      /* the This year view */
+      + '.w207year{background:#FFFAF2;border:1px solid rgba(16,63,57,.12);border-radius:20px;padding:20px 22px 18px;margin:0 0 8px;position:relative;overflow:hidden;}'
+      + '.w207year:before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:' + GOLD + ';}'
+      + '.w207year .hd{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap;}'
+      + '.w207year .lab{font-size:12px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:' + PURPLE + ';}'
+      + '.w207year h2{font-family:' + HEAD + ';font-size:30px;line-height:1.05;text-transform:uppercase;color:' + GREEN + ';margin:2px 0 0;}'
+      + '.w207year .sub{font-size:13px;color:' + MUTED + ';margin:4px 0 0;max-width:620px;line-height:1.45;}'
+      + '.w207qs{display:flex;gap:6px;margin-left:auto;flex-wrap:wrap;}'
+      + '.w207q{border:1px solid rgba(16,63,57,.15);border-radius:12px;padding:6px 10px;min-width:86px;background:#F4F2EA;}'
+      + '.w207q b{display:block;font-family:' + HEAD + ';font-size:17px;font-weight:600;color:' + GREEN + ';}'
+      + '.w207q small{font-size:11px;color:' + MUTED + ';}'
+      + '.w207q.now{background:' + GREEN + ';border-color:' + GREEN + ';}'
+      + '.w207q.now b,.w207q.now small{color:' + CREAM + ';}'
+      + '.w207q.now em{display:inline-block;font-style:normal;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:' + GROUND + ';background:' + GOLD + ';border-radius:999px;padding:1px 7px;margin-left:4px;vertical-align:2px;}'
+      + '.w207q.past{opacity:.6;}'
+      + '.w207alerts{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 14px;}'
+      + '.w207box{border-radius:14px;padding:12px 14px;border:1px solid rgba(16,63,57,.12);background:#F4F2EA;min-width:0;}'
+      + '.w207box h3{font-family:' + HEAD + ';font-size:18px;font-weight:600;text-transform:uppercase;color:' + GREEN + ';margin:0 0 2px;display:flex;align-items:center;gap:8px;}'
+      + '.w207box .when{font-size:12.5px;color:' + MUTED + ';margin:0 0 8px;}'
+      + '.w207box.late{background:rgba(179,64,47,.07);border-color:rgba(179,64,47,.35);}'
+      + '.w207box.late h3{color:' + FLAG + ';}'
+      + '.w207box.ok{background:rgba(42,140,122,.07);border-color:rgba(42,140,122,.3);}'
+      + '.w207it{display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-top:1px solid rgba(16,63,57,.08);font-size:13px;line-height:1.4;cursor:pointer;}'
+      + '.w207it:first-of-type{border-top:0;}'
+      + '.w207it:hover .tx{text-decoration:underline;text-underline-offset:3px;}'
+      + '.w207it .w205num{width:22px;height:22px;font-size:12px;}'
+      + '.w207it .tx{flex:1;min-width:0;}'
+      + '.w207pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;white-space:nowrap;background:rgba(16,63,57,.07);color:' + GREEN + ';}'
+      + '.w207pill:before{content:"";width:7px;height:7px;border-radius:50%;background:rgba(16,63,57,.35);}'
+      + '.w207pill.s-onTrack{background:rgba(42,140,122,.12);color:#1d6b5d;}.w207pill.s-onTrack:before{background:' + TEAL + ';}'
+      + '.w207pill.s-atRisk{background:rgba(179,64,47,.1);color:' + FLAG + ';}.w207pill.s-atRisk:before{background:' + FLAG + ';}'
+      + '.w207pill.s-done{background:rgba(42,140,122,.18);color:#1d6b5d;}.w207pill.s-done:before{background:' + TEAL + ';}'
+      + '.w207pill.late{background:' + FLAG + ';color:' + CREAM + ';}.w207pill.late:before{background:' + CREAM + ';}'
+      + '.w207grid{border:1px solid rgba(16,63,57,.10);border-radius:14px;overflow:hidden;background:#FFFAF2;}'
+      + '.w207grid table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed;}'
+      + '.w207grid th{text-align:left;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';font-weight:700;padding:10px 10px;background:rgba(16,63,57,.04);}'
+      + '.w207grid th.now{color:' + GREEN + ';background:rgba(220,165,39,.22);}'
+      + '.w207grid td{padding:10px 10px;border-top:1px solid rgba(16,63,57,.08);vertical-align:top;line-height:1.4;overflow-wrap:anywhere;}'
+      + '.w207grid td.now{background:rgba(220,165,39,.09);}'
+      + '.w207grid td.late{box-shadow:inset 3px 0 0 ' + FLAG + ';}'
+      + '.w207grid tr[data-w207goto]{cursor:pointer;}'
+      + '.w207grid tr[data-w207goto]:hover td{background:rgba(111,100,171,.05);}'
+      + '.w207grid tr[data-w207goto]:hover td.now{background:rgba(220,165,39,.16);}'
+      + '.w207grid td b{font-family:' + HEAD + ';font-size:16px;font-weight:600;color:' + GREEN + ';}'
+      + '.w207grid .tg{font-weight:700;color:' + GREEN + ';}'
+      + '.w207grid .w207pill{margin-bottom:4px;}'
+      + '.w207year .note{font-size:12px;color:' + MUTED + ';margin:10px 0 0;line-height:1.45;}'
+      /* activities: chips on a goal, the coverage strip */
+      + '.w207acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:0 0 12px;}'
+      + '.w207acts .lab{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:' + MUTED + ';margin-right:2px;}'
+      + '.w207chip{display:inline-flex;align-items:center;gap:6px;max-width:300px;border:1px solid rgba(111,100,171,.3);background:rgba(111,100,171,.07);color:#3f3780;border-radius:999px;padding:3px 10px 3px 3px;font-size:12px;font-weight:600;cursor:pointer;font-family:' + BODY + ';}'
+      + '.w207chip b{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:' + PURPLE + ';color:' + CREAM + ';font-size:11px;flex:none;}'
+      + '.w207chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.w207chip[aria-expanded="true"]{background:' + PURPLE + ';color:' + CREAM + ';}'
+      + '.w207chip[aria-expanded="true"] b{background:' + CREAM + ';color:' + PURPLE + ';}'
+      + '.w207chip:focus-visible{outline:2px solid ' + GOLD + ';outline-offset:2px;}'
+      + '.w207tip{flex:1 0 100%;background:#F4F2EA;border:1px solid rgba(111,100,171,.25);border-radius:12px;padding:9px 12px;font-size:13px;line-height:1.45;}'
+      + '.w207tip b{color:#3f3780;}'
+      + '.w207note{flex:1 0 100%;font-size:12.5px;color:' + MUTED + ';}'
+      + '.w207note .w205ed{font-size:12.5px;padding:2px 4px;margin:0;color:' + MUTED + ';}'
+      + '.w207mini{display:flex;gap:4px;flex-wrap:wrap;}'
+      + '.w207mini i{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(111,100,171,.14);color:#3f3780;font-style:normal;font-size:11.5px;font-weight:700;}'
+      + '.w207cov{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}'
+      + '.w207tile{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:14px;padding:12px 12px 10px;display:flex;flex-direction:column;gap:8px;min-width:0;}'
+      + '.w207tile .n{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:' + PURPLE + ';color:' + CREAM + ';font-family:' + HEAD + ';font-weight:700;font-size:15px;}'
+      + '.w207tile .t{font-size:13px;font-weight:600;line-height:1.35;color:' + GROUND + ';flex:1;}'
+      + '.w207tile .gs{display:flex;gap:4px;flex-wrap:wrap;align-items:center;}'
+      + '.w207tile .gs button{border:0;padding:0;background:none;cursor:pointer;}'
+      + '.w207tile .gs .w205num{width:24px;height:24px;font-size:13px;}'
+      + '.w207tile.gap{border-color:rgba(179,64,47,.45);background:rgba(179,64,47,.05);}'
+      + '.w207tile.gap .gs{color:' + FLAG + ';font-size:12px;font-weight:700;}'
+      + '.w207covsum{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:#1d6b5d;}'
+      + '.w207covsum.gap{color:' + FLAG + ';}'
+      /* a goal's year block */
+      + '.w207yb{background:#F4F2EA;border:1px solid rgba(220,165,39,.45);border-radius:16px;padding:12px 14px;margin:6px 0 4px;}'
+      + '.w207yb .top{display:grid;grid-template-columns:2fr 1fr;gap:12px;}'
+      + '.w207yb .w205ed{background:#FFFAF2;}'
+      + '.w207cps{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px;}'
+      + '.w207cp{background:#FFFAF2;border:1px solid rgba(16,63,57,.10);border-radius:12px;padding:8px 9px;min-width:0;display:flex;flex-direction:column;gap:6px;}'
+      + '.w207cp.now{border-color:rgba(220,165,39,.8);box-shadow:inset 0 0 0 1px rgba(220,165,39,.5);}'
+      + '.w207cp.late{border-color:rgba(179,64,47,.55);}'
+      + '.w207cp.done .w205ed{color:#2d6a5f;}'
+      + '.w207cp .qh{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}'
+      + '.w207cp .qh b{font-family:' + HEAD + ';font-size:17px;font-weight:600;color:' + GREEN + ';}'
+      + '.w207cp .qh em{font-style:normal;font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;background:' + GOLD + ';color:' + GROUND + ';border-radius:999px;padding:1px 7px;}'
+      + '.w207cp .w205ed{font-size:13px;padding:3px 4px;margin:0;}'
+      + '#w205 select.w207st{appearance:auto;font-size:12px;font-weight:700;border-radius:999px;border:1px solid rgba(16,63,57,.2);padding:3px 6px;background:#FFFAF2;color:' + GREEN + ';max-width:100%;}'
+      + '#w205 select.w207st.s-onTrack,#w205 select.w207st.s-done{background:rgba(42,140,122,.12);border-color:rgba(42,140,122,.4);color:#1d6b5d;}'
+      + '#w205 select.w207st.s-atRisk{background:rgba(179,64,47,.1);border-color:rgba(179,64,47,.4);color:' + FLAG + ';}'
+      + '.w207cp .ft{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11.5px;color:' + MUTED + ';}'
+      + '.w207cp input.w207due{font-family:' + BODY + ';font-size:11.5px;border:1px solid rgba(16,63,57,.15);border-radius:8px;padding:2px 5px;background:#FFFAF2;color:' + GROUND + ';max-width:140px;}'
+      + '.w207cp input.w207due[readonly]{border-color:transparent;background:transparent;padding-left:0;}'
+      + '.w207late{color:' + FLAG + ';font-weight:700;}'
+      /* the activities drawer */
+      + '.w207pick label{align-items:flex-start;}'
+      + '.w207pick .w205ed{background:#FFFAF2;border:1px solid rgba(16,63,57,.15);border-radius:8px;margin-top:6px;font-size:13px;}'
+      + '@media (max-width:900px){.w207cov{grid-template-columns:1fr 1fr;}.w207cps{grid-template-columns:1fr 1fr;}.w207alerts{grid-template-columns:1fr;}}'
+      + '@media (max-width:640px){'
+      + '.w207year{padding:16px 14px 14px;border-radius:16px;}'
+      + '.w207qs{margin-left:0;width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}'
+      + '.w207q{min-width:0;padding:5px 6px;}'
+      + '.w207q b{font-size:15px;}'
+      + '.w207q small{font-size:10px;}'
+      + '.w207q.now em{display:none;}'
+      + '.w207grid table,.w207grid tbody,.w207grid tr,.w207grid td{display:block;width:100%;}'
+      + '.w207grid thead{display:none;}'
+      + '.w207grid tr{border-top:1px solid rgba(16,63,57,.1);padding:8px 0;}'
+      + '.w207grid td{border:0;padding:3px 12px;}'
+      + '.w207grid td[data-l]:before{content:attr(data-l) ": ";font-size:10.5px;font-weight:700;color:' + MUTED + ';text-transform:uppercase;letter-spacing:.8px;}'
+      + '.w207grid td.now{background:rgba(220,165,39,.12);}'
+      + '.w207cov{grid-template-columns:1fr;}'
+      + '.w207yb .top{grid-template-columns:1fr;}'
+      + '.w207cps{grid-template-columns:1fr;}'
+      + '.w207chip{max-width:100%;}'
+      + '}';
+    document.head.appendChild(css7);
+  }
+
+  /* ---------- dates: the fiscal year starts October 1 ---------- */
+  function todayStr() {
+    if (window.__W207_TODAY) return String(window.__W207_TODAY);
+    var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function quarterOf(ds) {
+    var p = String(ds || todayStr()).slice(0, 10).split('-'), y = Number(p[0]), m = Number(p[1]) - 1;
+    var q = m >= 9 ? 1 : m <= 2 ? 2 : m <= 5 ? 3 : 4;
+    return { fy: 'FY' + String(m >= 9 ? y + 1 : y).slice(2), q: q };
+  }
+  function daysTo(ds) { var a = new Date(todayStr() + 'T12:00:00'), b = new Date(String(ds).slice(0, 10) + 'T12:00:00'); return Math.round((b - a) / 86400000); }
+  function inDays(n) { return n === 0 ? 'today' : n === 1 ? 'tomorrow' : n > 1 ? 'in ' + n + ' days' : n === -1 ? 'yesterday' : (-n) + ' days ago'; }
+  var Q_SPAN = { 1: 'Oct to Dec', 2: 'Jan to Mar', 3: 'Apr to Jun', 4: 'Jul to Sep' };
+
+  /* ---------- the rows ---------- */
+  function targetOf(gid, fy) { return S.targets.filter(function (t) { return String(t.goal_id) === String(gid) && t.fy === fy; })[0] || null; }
+  function cpsOfTarget(tid) { return S.checkpoints.filter(function (c) { return String(c.target_id) === String(tid); }).sort(function (a, b) { return a.quarter - b.quarter; }); }
+  function cpsOfGoal(gid) {
+    return S.checkpoints.filter(function (c) { return String(c.goal_id) === String(gid); }).sort(function (a, b) {
+      var ta = byId(S.targets, a.target_id) || {}, tb = byId(S.targets, b.target_id) || {};
+      return String(ta.fy).localeCompare(String(tb.fy)) || a.quarter - b.quarter;
+    });
+  }
+  function cpFy(c) { var t = c ? byId(S.targets, c.target_id) : null; return t ? t.fy : ''; }
+  function cpLabel(c) { return c ? (cpFy(c) + ' Q' + c.quarter) : 'A checkpoint'; }
+  function isLate(c) { return !!c && c.status !== 'done' && !!c.due_date && String(c.due_date).slice(0, 10) < todayStr(); }
+  function yearFy() {
+    var now = quarterOf().fy;
+    if (S.targets.some(function (t) { return t.fy === now; })) return now;
+    var fys = S.targets.map(function (t) { return t.fy; }).sort();
+    return fys.length ? fys[fys.length - 1] : now;
+  }
+  function yearState() {
+    var fy = yearFy(), tq = quarterOf(), today = todayStr();
+    var cps = S.checkpoints.filter(function (c) { return cpFy(c) === fy && byId(S.goals, c.goal_id); });
+    var open = cps.filter(function (c) { return c.status !== 'done' && String(c.due_date).slice(0, 10) >= today; }).sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)); });
+    var nextDue = open.length ? String(open[0].due_date).slice(0, 10) : null;
+    var late = S.checkpoints.filter(function (c) { return isLate(c) && byId(S.goals, c.goal_id); }).sort(function (a, b) { return String(a.due_date).localeCompare(String(b.due_date)); });
+    return { fy: fy, today: today, quarter: tq.fy === fy ? tq.q : null, nextDue: nextDue, next: open.filter(function (c) { return String(c.due_date).slice(0, 10) === nextDue; }), overdue: late, total: cps.length, done: cps.filter(function (c) { return c.status === 'done'; }).length };
+  }
+  function goalNum(gid) { var g = byId(S.goals, gid); return g ? g.number : ''; }
+  function pill(c) { return '<span class="w207pill s-' + stKey(c.status) + (isLate(c) ? ' late' : '') + '">' + E(isLate(c) ? 'Overdue' : (ST_LABEL[c.status] || c.status)) + '</span>'; }
+
+  /* ---------- the This year view, at the top of Goals ---------- */
+  function yearViewHtml() {
+    if (!S.targets.length) return '<div data-w207year></div>';
+    var Y = yearState(), plan = S.plan['year_' + Y.fy.toLowerCase()] || {};
+    var cps0 = S.checkpoints.filter(function (c) { return cpFy(c) === Y.fy; });
+    var qDue = {}; cps0.forEach(function (c) { if (!qDue[c.quarter] || String(c.due_date) > qDue[c.quarter]) qDue[c.quarter] = String(c.due_date).slice(0, 10); });
+    var qs = [1, 2, 3, 4].map(function (q) {
+      var past = Y.quarter != null ? q < Y.quarter : (qDue[q] && qDue[q] < Y.today);
+      return '<div class="w207q' + (Y.quarter === q ? ' now' : '') + (past ? ' past' : '') + '"><b>Q' + q + (Y.quarter === q ? '<em>Now</em>' : '') + '</b><small>' + E(Q_SPAN[q]) + (qDue[q] ? ' \u00b7 due ' + E(fmtDay(qDue[q]).replace(/, \d{4}$/, '')) : '') + '</small></div>';
+    }).join('');
+    var item = function (c) {
+      return '<div class="w207it" data-w207goto="' + c.goal_id + '" role="link" tabindex="0"><span class="w205num">' + E(goalNum(c.goal_id)) + '</span><span class="tx" data-w198skip>' + E(c.body) + '</span>' + pill(c) + '</div>';
+    };
+    var lateBox = Y.overdue.length
+      ? '<div class="w207box late" data-w207overdue><h3>' + I('flag') + ' Overdue (' + Y.overdue.length + ')</h3><p class="when">Past their due date and not done.</p>' + Y.overdue.map(function (c) { return item(c).replace('<span class="tx"', '<span class="tx" title="' + E(cpLabel(c) + ', due ' + fmtDay(c.due_date)) + '"'); }).join('') + '</div>'
+      : '<div class="w207box ok" data-w207overdue><h3>' + I('check') + ' Nothing overdue</h3><p class="when">Every checkpoint that has come due is done.</p></div>';
+    var nextBox = Y.nextDue
+      ? '<div class="w207box" data-w207next><h3>' + I('clock') + ' Due next</h3><p class="when">' + E(fmtDay(Y.nextDue)) + ' \u00b7 ' + E(inDays(daysTo(Y.nextDue))) + '</p>' + Y.next.map(item).join('') + '</div>'
+      : '<div class="w207box ok" data-w207next><h3>' + I('check') + ' Nothing left to come due</h3><p class="when">' + E(Y.fy) + '\u2019s checkpoints are done or past.</p></div>';
+    var rows = S.goals.map(function (g) {
+      var t = targetOf(g.id, Y.fy); if (!t) return '';
+      var cps = cpsOfTarget(t.id);
+      return '<tr data-w207goto="' + g.id + '" tabindex="0" role="link" aria-label="Open goal ' + E(g.number) + '">' +
+        '<td><span style="display:flex;gap:8px;align-items:center"><span class="w205num">' + E(g.number) + '</span><b data-w198skip>' + E(g.title) + '</b></span></td>' +
+        '<td data-l="' + E(Y.fy) + ' target" class="tg" data-w198skip>' + E(t.body) + '</td>' +
+        [1, 2, 3, 4].map(function (q) {
+          var c = cps.filter(function (x) { return x.quarter === q; })[0];
+          return '<td data-l="Q' + q + '" class="' + (Y.quarter === q ? 'now' : '') + (c && isLate(c) ? ' late' : '') + '">' + (c ? pill(c) + '<div data-w198skip>' + E(c.body) + '</div>' : '') + '</td>';
+        }).join('') +
+        '<td data-l="Owners" data-w198skip>' + E(t.owners || '') + '</td></tr>';
+    }).join('');
+    return '<section class="w207year" data-w207year aria-label="This year">' +
+      '<div class="hd"><div><div class="lab">This year</div><h2>' + E(Y.fy) + ' goals</h2><p class="sub">' + E(plan.title || ('This year\u2019s goals: ' + Y.fy)) + '</p></div><div class="w207qs" aria-label="Quarters">' + qs + '</div></div>' +
+      (plan.intro ? '<p class="sub" style="margin-top:10px">' + E(plan.intro) + '</p>' : '') +
+      '<div class="w207alerts">' + nextBox + lateBox + '</div>' +
+      '<div class="w207grid"><table><colgroup><col style="width:17%"><col style="width:17%"><col><col><col><col><col style="width:10%"></colgroup><thead><tr><th>Goal</th><th>' + E(Y.fy) + ' target</th>' + [1, 2, 3, 4].map(function (q) { return '<th class="' + (Y.quarter === q ? 'now' : '') + '">Q' + q + (qDue[q] ? ' (by ' + E(fmtDay(qDue[q]).replace(/, \d{4}$/, '')) + ')' : '') + '</th>'; }).join('') + '<th>Owners</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="note">' + E(Y.done + ' of ' + Y.total + ' checkpoints done. ') + (plan.note ? E(plan.note) : '') + '</p></section>';
+  }
+  function paintYear() {
+    var el = document.querySelector('#w205 [data-w207year]'); if (!el) return;
+    var t = document.createElement('div'); t.innerHTML = yearViewHtml(); var n = t.firstElementChild; if (n) el.replaceWith(n);
+  }
+  function goYear(gid) { go('#orggoals/goal/' + gid); setTimeout(function () { var b = document.querySelector('#w205 [data-w207yb="' + gid + '"]'); if (b) try { b.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) { /* fine */ } }, 500); }
+
+  /* ---------- a goal's year block: the target, who reports on it, the four checkpoints ---------- */
+  function cpCmtBtn(c) {
+    var n = S.comments.filter(function (x) { return String(x.checkpoint_id) === String(c.id); }).length;
+    return '<button type="button" class="w205cnt' + (n ? ' has' : '') + '" data-w207cpcmts="' + c.id + '" aria-label="Comments on this checkpoint (' + n + ')">' + I('chat') + (n ? n : '') + '</button>';
+  }
+  function cpHtml(c, g, Y) {
+    var can = canEdit(g), late = isLate(c), now = Y.quarter === c.quarter && cpFy(c) === Y.fy;
+    var k = key('checkpoint', c.id, 'status'), kd = key('checkpoint', c.id, 'due_date');
+    return '<div class="w207cp' + (now ? ' now' : '') + (late ? ' late' : '') + (c.status === 'done' ? ' done' : '') + '" data-w207cp="' + c.id + '">' +
+      '<div class="qh"><b>Q' + c.quarter + '</b>' + (now ? '<em>Now</em>' : '') + '<span class="sp" style="flex:1"></span>' +
+      '<select class="w207st s-' + stKey(c.status) + '" data-w205k="' + E(k) + '" aria-label="Q' + c.quarter + ' checkpoint status"' + (can ? '' : ' disabled') + '>' +
+      CP_ST.map(function (s0) { return '<option value="' + E(s0) + '"' + (s0 === c.status ? ' selected' : '') + '>' + E(ST_LABEL[s0] || s0) + '</option>'; }).join('') + '</select></div>' +
+      ed('checkpoint', c, 'body', { label: 'Q' + c.quarter + ' checkpoint', ph: 'Write the checkpoint' }) +
+      '<div class="ft"><span>Due</span><input type="date" class="w207due" data-w205k="' + E(kd) + '" value="' + E(String(c.due_date || '').slice(0, 10)) + '" aria-label="Q' + c.quarter + ' due date"' + (can ? '' : ' readonly tabindex="-1"') + ' />' +
+      (late ? '<span class="w207late">Overdue</span>' : '') + '</div>' +
+      '<div class="w205msft" style="margin:0" data-w207cpft="' + c.id + '">' + cpFootHtml(c) + '</div></div>';
+  }
+  function yearBlockHtml(g) {
+    var Y = yearState(), t = targetOf(g.id, Y.fy); if (!t) return '';
+    return '<div class="w205h4"><h4>This year (' + E(Y.fy) + ')</h4><span style="font-size:12px;color:' + MUTED + '">The yearly target and its quarterly checkpoints</span></div>' +
+      '<div class="w207yb" data-w207yb="' + g.id + '"><div class="top"><div><div class="w205lab">' + E(Y.fy) + ' target <span class="who" data-w205who="' + E(key('target', t.id, 'body')) + '" hidden></span></div>' + ed('target', t, 'body', { label: Y.fy + ' target', ph: 'Write the target' }) + '</div>' +
+      '<div><div class="w205lab">Owners who report on it <span class="who" data-w205who="' + E(key('target', t.id, 'owners')) + '" hidden></span></div>' + ed('target', t, 'owners', { label: Y.fy + ' owners', ph: 'Who reports on it' }) + '</div></div>' +
+      '<div class="w207cps">' + cpsOfTarget(t.id).map(function (c) { return cpHtml(c, g, Y); }).join('') + '</div></div>';
+  }
+  function afterYearSave(P) {
+    if (P.e !== 'checkpoint') return;
+    var c = byId(S.checkpoints, P.id), box = document.querySelector('#w205 [data-w207cp="' + P.id + '"]'); if (!c || !box) return;
+    var Y = yearState();
+    box.classList.toggle('done', c.status === 'done'); box.classList.toggle('late', isLate(c));
+    var sel = box.querySelector('select.w207st'); if (sel) sel.className = 'w207st s-' + stKey(c.status);
+    var ft = box.querySelector('.ft'), lt = ft && ft.querySelector('.w207late');
+    if (isLate(c) && ft && !lt) { var s0 = document.createElement('span'); s0.className = 'w207late'; s0.textContent = 'Overdue'; ft.appendChild(s0); }
+    if (!isLate(c) && lt) lt.remove();
+    void Y;
+  }
+  function cpFootHtml(c) {
+    var ps = S.projects.filter(function (p) { return String(p.checkpoint_id) === String(c.id); });
+    return ps.map(projChip).join('') + cpCmtBtn(c) + (canComment() ? '<button type="button" class="w205cnt" data-w207cplink="' + c.id + '" aria-label="Link a project to this checkpoint">' + I('link') + '</button>' : '');
+  }
+  function paintCpFoot(gid) { cpsOfGoal(gid).forEach(function (c) { var el = document.querySelector('#w205 [data-w207cpft="' + c.id + '"]'); if (el) el.innerHTML = cpFootHtml(c); }); }
+  function paintYearCounts(gid) {
+    cpsOfGoal(gid).forEach(function (c) { var b = document.querySelector('#w205 [data-w207cpcmts="' + c.id + '"]'); if (b) b.outerHTML = cpCmtBtn(c); });
+  }
+
+  /* ---------- the charitable activities ---------- */
+  function actOf(id) { return byId(S.acts, id); }
+  function gactsOf(gid) { return S.gacts.filter(function (a) { return String(a.goal_id) === String(gid); }).sort(function (a, b) { return (a.sort - b.sort) || (a.activity_id - b.activity_id); }); }
+  function actsMini(gid) { return '<span class="w207mini">' + gactsOf(gid).map(function (a) { var x = actOf(a.activity_id) || {}; return '<i title="' + E(a.activity_id + '. ' + (x.title || '') + (a.reason ? ' (' + a.reason + ')' : '')) + '">' + E(a.activity_id) + '</i>'; }).join('') + '</span>'; }
+  function actsHtml(g) {
+    var list = gactsOf(g.id), can = canEdit(g);
+    var note = can ? '<div class="w207note">' + ed('goal', g, 'activities_note', { label: 'Note on the charitable activities', ph: 'A note on the activities (optional)' }) + '</div>'
+      : (g.activities_note ? '<div class="w207note" data-w198skip>' + E(g.activities_note) + '</div>' : '');
+    return '<span class="lab">Charitable activities</span>' + list.map(function (a) {
+      var x = actOf(a.activity_id) || { title: '' };
+      return '<button type="button" class="w207chip" data-w207chip="' + g.id + ':' + a.activity_id + '" aria-expanded="false" title="' + E(a.activity_id + '. ' + x.title + (a.reason ? ': ' + a.reason : '')) + '"><b>' + E(a.activity_id) + '</b><span data-w198skip>' + E(x.title) + '</span></button>';
+    }).join('') + (list.length ? '' : '<span style="font-size:12.5px;color:' + FLAG + '">Not anchored on an activity yet.</span>') +
+      (can ? '<button type="button" class="w205chip add" data-w207manage="' + g.id + '">' + I('plus') + ' Activities</button>' : '') + note;
+  }
+  function paintActs(gid) {
+    var el = document.querySelector('#w205 [data-w207acts="' + gid + '"]'), g = byId(S.goals, gid); if (!el || !g) return;
+    var nk = key('goal', g.id, 'activities_note'), cur = fieldEl(nk), keep = cur && (S.dirty[nk] || document.activeElement === cur) ? cur.value : null, foc = cur && document.activeElement === cur;
+    el.innerHTML = actsHtml(g);
+    var n = fieldEl(nk); if (n) { if (keep != null) n.value = keep; grow(n); if (foc) n.focus(); }
+  }
+  function chipTip(el) {
+    var p = el.getAttribute('data-w207chip').split(':'), box = el.parentNode, open = el.getAttribute('aria-expanded') === 'true';
+    box.querySelectorAll('.w207tip').forEach(function (t) { t.remove(); });
+    box.querySelectorAll('[data-w207chip]').forEach(function (c) { c.setAttribute('aria-expanded', 'false'); });
+    if (open) return;
+    var a = S.gacts.filter(function (x) { return String(x.goal_id) === p[0] && String(x.activity_id) === p[1]; })[0], x = actOf(p[1]) || {};
+    var tip = document.createElement('div'); tip.className = 'w207tip'; tip.setAttribute('role', 'note');
+    tip.innerHTML = '<b>' + E(p[1] + '. ' + (x.title || '')) + '</b><br>' + (a && a.reason ? 'Why this goal serves it: <span data-w198skip>' + E(a.reason) + '</span>' : 'No reason written yet.');
+    el.setAttribute('aria-expanded', 'true');
+    var note = box.querySelector('.w207note'); if (note) box.insertBefore(tip, note); else box.appendChild(tip);
+  }
+  function coverage() { return S.acts.map(function (a) { return { act: a, goals: S.goals.filter(function (g) { return gactsOf(g.id).some(function (x) { return String(x.activity_id) === String(a.id); }); }) }; }); }
+  function coverageHtml() {
+    if (!S.acts.length) return '<div data-w207cov></div>';
+    var cov = coverage(), n = cov.filter(function (c) { return c.goals.length; }).length, plan = S.plan.activities || {};
+    return '<div data-w207cov><div class="w205sec"><h2>' + E(S.acts.length) + ' activities</h2><span class="hint">' + E(plan.intro || 'Every goal serves at least one of the charitable activities registered with the CRA.') + '</span><span class="sp"></span>' +
+      '<span class="w207covsum' + (n < S.acts.length ? ' gap' : '') + '">' + I(n < S.acts.length ? 'flag' : 'check') + ' ' + (n === S.acts.length ? 'All ' + n + ' covered' : n + ' of ' + S.acts.length + ' covered') + '</span></div>' +
+      '<div class="w207cov" aria-label="Charitable activities and the goals that serve them">' + cov.map(function (c) {
+        return '<div class="w207tile' + (c.goals.length ? '' : ' gap') + '"><span class="n">' + E(c.act.id) + '</span><span class="t" data-w198skip>' + E(c.act.title) + '</span><div class="gs">' +
+          (c.goals.length ? c.goals.map(function (g) { var a = gactsOf(g.id).filter(function (x) { return String(x.activity_id) === String(c.act.id); })[0]; return '<button type="button" data-w205jump="' + g.id + '" title="' + E('Goal ' + g.number + ': ' + g.title + (a && a.reason ? ' (' + a.reason + ')' : '')) + '" aria-label="Goal ' + E(g.number) + '"><span class="w205num">' + E(g.number) + '</span></button>'; }).join('') : 'No goal serves it yet') + '</div></div>';
+      }).join('') + '</div></div>';
+  }
+  function paintCoverage() { var el = document.querySelector('#w205 [data-w207cov]'); if (!el) return; var t = document.createElement('div'); t.innerHTML = coverageHtml(); var n = t.firstElementChild; if (n) el.replaceWith(n); }
+  function actsDrawer(st) {
+    var g = byId(S.goals, st.goal); if (!g) return drawerShell('Charitable activities', '', '');
+    var can = canEdit(g), on = {}; gactsOf(g.id).forEach(function (a) { on[a.activity_id] = a; });
+    var body = '<p style="font-size:13px;color:' + MUTED + ';margin:0 0 10px">' + E((S.plan.activities || {}).intro || '') + '</p><div class="w205pick w207pick">' + S.acts.map(function (x) {
+      var a = on[x.id];
+      return '<label class="' + (a ? 'on' : '') + '"><input type="checkbox" data-w207act="' + x.id + '"' + (a ? ' checked' : '') + (can ? '' : ' disabled') + ' /><span class="t"><span><b>' + E(x.id) + '.</b> ' + E(x.title) + '</span>' +
+        (a ? '<small>Why this goal serves it</small>' + ed('activity', a, 'reason', { label: 'Why goal ' + g.number + ' serves activity ' + x.id, ph: 'A few words, e.g. free, healthy meals' }) : '') + '</span></label>';
+    }).join('') + '</div>';
+    return drawerShell('Charitable activities', '<span data-w198skip>Goal ' + E(g.number) + ': ' + E(g.title) + '</span>', body, '<small style="color:' + MUTED + '">Tick the activities this goal serves and say why in a few words. It saves as you go; every change is in the goal\u2019s history.</small>');
+  }
+  function actToggle(gid, aid, on, el) {
+    if (el) el.disabled = true;
+    rpc('strategy_activity_set', { p_goal: Number(gid), p_activity: Number(aid), p_on: !!on, p_reason: null }).then(function (row) {
+      S.gacts = S.gacts.filter(function (a) { return !(String(a.goal_id) === String(gid) && String(a.activity_id) === String(aid)); });
+      if (row && !row.archived_at) { S.gacts.push(row); baseRow('activity', row, ['reason']); }
+      paintActs(gid); paintCoverage(); paintGlance(); if (S.drawer && S.drawer.kind === 'acts') paintDrawer();
+      toastS(on ? 'Activity added to the goal' : 'Activity taken off. History has Restore.');
+    }).catch(function (e) { if (el) { el.disabled = false; el.checked = !on; } toastS('Not changed: ' + errText(e)); });
+  }
+
+  /* the link sheet: a checkpoint of the chosen goal, optional */
+  function cpPickHtml(gg, st) {
+    var Y = yearState(), list = cpsOfGoal(gg.id); if (!list.length) return '';
+    return '<div class="w205grp">The checkpoint (optional)</div><div class="w205pick"><label class="' + (!st.cpPick ? 'on' : '') + '"><input type="radio" name="w207lc" data-w207pickc=""' + (!st.cpPick ? ' checked' : '') + ' /><span class="t">No checkpoint</span></label>' +
+      list.map(function (c) {
+        var sel = String(st.cpPick) === String(c.id);
+        return '<label class="' + (sel ? 'on' : '') + '"><input type="radio" name="w207lc" data-w207pickc="' + c.id + '"' + (sel ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(c.body) + '</span><small>' + E(cpLabel(c)) + ' \u00b7 due ' + E(fmtDay(c.due_date)) + (Y.quarter === c.quarter && cpFy(c) === Y.fy ? ' \u00b7 this quarter' : '') + '</small></span></label>';
+      }).join('') + '</div>';
+  }
+
   /* ---------- the page tours (wave122's engine): tour:orggoals (Goals), tour:strategylib (the library), tour:goalmap ---------- */
   function addTours() {
     try {
@@ -1271,13 +1658,17 @@
         T('#w205 .w205mast', 'Goals', 'Welfare Avenue\u2019s five organizational goals for FY27 to FY29, with a gated view to FY31. Departments own projects, and every project serves one of these goals.'),
         T('#w205 .w205hero', 'The mission first', 'Every goal serves the mission the board adopted in July 2026.', OPT),
         T('#w205 .w205status', 'Draft or approved', 'Until the board votes (Oct 19, 2026) the goals say Draft for board approval. An admin marks them approved after the vote.', OPT),
+        T('#w205 [data-w207year]', 'This year', 'This year\u2019s goals: each goal\u2019s target for the fiscal year and its four quarterly checkpoints. The current quarter is highlighted, Due next lists what comes due first, and anything past its date and not done is flagged Overdue. Click a row to open the goal.', OPT),
         T('#w205 [data-w205pres]', 'Who is here', 'The people on this page right now. On a goal, their faces show which goal they are in; a field someone is typing in says so.', OPT),
         T('#w205 [data-w205glance]', 'At a glance', 'One line per goal: the headline measure, the baseline, the FY29 and FY31 targets, the owners and the milestones done. Click a row to jump to the goal.', OPT),
+        T('#w205 [data-w207cov]', 'Our 8 charitable activities', 'The eight activities Welfare Avenue is registered for, and the goals that serve each one. A tile with no goal would be flagged; today all eight are covered.', OPT),
         T('#w205 .w205goal .w205ghd', 'A goal', 'Its number, its title and its status. If you own the goal (or you are an admin), click any text and type: it saves as you go, and Saved shows when it is in.', OPT),
         T('#w205 .w205goal .w205owners', 'Owners', 'One to three owners, one lead. Owners and admins edit the goal; everyone on staff reads it and comments.', OPT),
+        T('#w205 .w205goal .w207acts', 'Charitable activities', 'The registered activities this goal serves. Hover or tap a chip for why. Owners and admins add or take off an activity with + Activities.', OPT),
         T('#w205 .w205goal .w205two', 'SMART and Why', 'The goal as the board reads it, and why it matters.', OPT),
         T('#w205 .w205goal .w205meas', 'The targets', 'The headline measure, where we started, the 3-year target (FY29) and the 5-year target (FY31, only if the FY29 gate is met).', OPT),
         T('#w205 .w205goal .w205paths', 'Paths', 'How we get there. Owners add, change and remove paths.', OPT),
+        T('#w205 .w205goal .w207yb', 'This year\u2019s target', 'The goal\u2019s target for this fiscal year, who reports on it, and its Q1 to Q4 checkpoints. Owners set each checkpoint\u2019s status (not started, on track, at risk, done) and its due date; the speech bubble holds its comments and the link icon ties a project to it.', OPT),
         T('#w205 .w205goal .w205years', 'Milestones by year', 'Each fiscal year\u2019s milestones with their status (tap the circle). The projects serving a milestone sit under it; the speech bubble is its own comments.', OPT),
         T('#w205 .w205goal [data-w205projs]', 'Projects serving the goal', 'Departments link their projects here, to the goal or to one milestone. Link a project picks the project and the milestone.', OPT),
         T('#w205 .w205goal .w205gft', 'Comments and history', 'Comments are threaded; type @ to bring someone in. History lists every change, who made it and when; Restore puts an old version back.', OPT),
@@ -1399,8 +1790,10 @@
     var t = e.target; if (!inApp(t)) return;
     var k = t.getAttribute && t.getAttribute('data-w205k');
     if (k && t.tagName === 'SELECT') { t.className = t.className.replace(/\bs-\w+/, 's-' + stKey(t.value)); t.title = ST_LABEL[t.value] || t.value; return; }
-    if (t.hasAttribute('data-w205pickp') && S.drawer) { S.drawer.project = t.getAttribute('data-w205pickp'); var p = byId(S.projects, S.drawer.project); S.drawer.goalPick = S.drawer.goal || (p && p.goal_id) || null; S.drawer.msPick = p && String(p.goal_id) === String(S.drawer.goalPick) ? p.milestone_id : (S.drawer.ms || null); paintDrawer(); return; }
-    if (t.hasAttribute('data-w205pickg') && S.drawer) { S.drawer.goalPick = t.getAttribute('data-w205pickg'); S.drawer.msPick = null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickp') && S.drawer) { S.drawer.project = t.getAttribute('data-w205pickp'); var p = byId(S.projects, S.drawer.project); S.drawer.goalPick = S.drawer.goal || (p && p.goal_id) || null; S.drawer.msPick = p && String(p.goal_id) === String(S.drawer.goalPick) ? p.milestone_id : (S.drawer.ms || null); S.drawer.cpPick = S.drawer.cp || (p && String(p.goal_id) === String(S.drawer.goalPick) ? p.checkpoint_id : null) || null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickg') && S.drawer) { S.drawer.goalPick = t.getAttribute('data-w205pickg'); S.drawer.msPick = null; S.drawer.cpPick = null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w207pickc') && S.drawer) { S.drawer.cpPick = t.getAttribute('data-w207pickc') || null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w207act') && S.drawer) { actToggle(S.drawer.goal, t.getAttribute('data-w207act'), t.checked, t); return; }
     if (t.hasAttribute('data-w205pickm') && S.drawer) { S.drawer.msPick = t.getAttribute('data-w205pickm') || null; paintDrawer(); return; }
     if (t.hasAttribute('data-w205focus') && S.drawer) { ownerSet(S.drawer.goal, t.getAttribute('data-w205focus'), true, null, t.value); return; }
   });
@@ -1428,7 +1821,8 @@
     /* a title and a measure are one line: Enter saves and leaves, like a heading in a document */
     var k = t.getAttribute && t.getAttribute('data-w205k');
     if (k && e.key === 'Enter' && !e.shiftKey && /:(title|measure|baseline|target_fy29|target_fy31)$/.test(k)) { e.preventDefault(); t.blur(); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && t.matches('[data-w205jump],label[data-w205ownon]')) { e.preventDefault(); t.click(); }
+    if (k && e.key === 'Enter' && !e.shiftKey && /^(target|activity):.*:(owners|reason)$/.test(k)) { e.preventDefault(); t.blur(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && t.matches('[data-w205jump],label[data-w205ownon],[data-w207goto]')) { e.preventDefault(); t.click(); }
   });
   document.addEventListener('click', function (e) {
     var t = e.target; if (!inApp(t)) return;
@@ -1446,7 +1840,13 @@
       return;
     }
     if ((el = t.closest('[data-w205cmts]'))) { var p = el.getAttribute('data-w205cmts').split(':'); openDrawer({ kind: 'comments', goal: p[0], milestone: p[1] || null }); return; }
-    if ((el = t.closest('[data-w205cseg]'))) { S.drawer.milestone = el.getAttribute('data-w205cseg') || null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w205cseg]'))) { S.drawer.milestone = el.getAttribute('data-w205cseg') || null; S.drawer.checkpoint = null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w207cseg]'))) { S.drawer.checkpoint = el.getAttribute('data-w207cseg') || null; S.drawer.milestone = null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w207cpcmts]'))) { var cpc = byId(S.checkpoints, el.getAttribute('data-w207cpcmts')); if (cpc) openDrawer({ kind: 'comments', goal: cpc.goal_id, milestone: null, checkpoint: cpc.id }); return; }
+    if ((el = t.closest('[data-w207cplink]'))) { var cpl = byId(S.checkpoints, el.getAttribute('data-w207cplink')); if (cpl) openDrawer({ kind: 'link', goal: cpl.goal_id, ms: null, msPick: null, cp: cpl.id, cpPick: cpl.id, q: '' }); return; }
+    if ((el = t.closest('[data-w207manage]'))) { openDrawer({ kind: 'acts', goal: el.getAttribute('data-w207manage') }); return; }
+    if ((el = t.closest('[data-w207chip]'))) { chipTip(el); return; }
+    if ((el = t.closest('[data-w207goto]'))) { e.preventDefault(); goYear(el.getAttribute('data-w207goto')); return; }
     if ((el = t.closest('[data-w205replyto]'))) { S.drawer.replyTo = el.getAttribute('data-w205replyto') || null; paintDrawer(); var rt = document.querySelector('#w205drawer textarea[data-w205reply]'); if (rt) rt.focus(); return; }
     if ((el = t.closest('[data-w205sendreply]'))) { postComment(el.getAttribute('data-w205sendreply')); return; }
     if ((el = t.closest('[data-w205post]'))) { postComment(null); return; }
@@ -1457,7 +1857,7 @@
     if ((el = t.closest('[data-w205restore]'))) { el.disabled = true; restore(el.getAttribute('data-w205restore')); return; }
     if ((el = t.closest('[data-w205link]'))) { var lp = el.getAttribute('data-w205link').split(':'); openDrawer({ kind: 'link', goal: lp[0], ms: lp[1] || null, msPick: lp[1] || null, q: '' }); return; }
     if ((el = t.closest('[data-w205linkp]'))) { var pr = byId(S.projects, el.getAttribute('data-w205linkp')); openDrawer({ kind: 'link', goal: null, project: pr ? pr.id : null, goalPick: null, msPick: null }); return; }
-    if ((el = t.closest('[data-w205proj]'))) { var pj = byId(S.projects, el.getAttribute('data-w205proj')); if (!pj) return; if (!canComment()) { location.hash = '#project/' + pj.id; return; } openDrawer({ kind: 'link', goal: pj.goal_id, project: pj.id, goalPick: pj.goal_id, msPick: pj.milestone_id }); return; }
+    if ((el = t.closest('[data-w205proj]'))) { var pj = byId(S.projects, el.getAttribute('data-w205proj')); if (!pj) return; if (!canComment()) { location.hash = '#project/' + pj.id; return; } openDrawer({ kind: 'link', goal: pj.goal_id, project: pj.id, goalPick: pj.goal_id, msPick: pj.milestone_id, cpPick: pj.checkpoint_id }); return; }
     if ((el = t.closest('[data-w205dolink]'))) { doLink(false); return; }
     if ((el = t.closest('[data-w205unlink]'))) { doLink(true); return; }
     if ((el = t.closest('[data-w205addowner]'))) { openDrawer({ kind: 'owner', goal: el.getAttribute('data-w205addowner'), q: '' }); return; }
@@ -1579,6 +1979,7 @@
   window.w205 = {
     state: function () { return S; }, load: loadAll, paint: paint, show: show, route: route, save: save, flush: flushAll,
     remote: onRemote, presence: function (list) { S.presence = list || []; paintPresence(); }, canEdit: canEdit, canComment: canComment,
+    year: yearState, quarterOf: quarterOf,
     open: openDrawer, close: closeDrawer, progress: progress, key: key, live: function () { return { live: S.live, channel: !!S.channel }; }
   };
 })();

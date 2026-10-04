@@ -95,8 +95,10 @@
     var t = e.target; if (!inApp(t)) return;
     var k = t.getAttribute && t.getAttribute('data-w205k');
     if (k && t.tagName === 'SELECT') { t.className = t.className.replace(/\bs-\w+/, 's-' + stKey(t.value)); t.title = ST_LABEL[t.value] || t.value; return; }
-    if (t.hasAttribute('data-w205pickp') && S.drawer) { S.drawer.project = t.getAttribute('data-w205pickp'); var p = byId(S.projects, S.drawer.project); S.drawer.goalPick = S.drawer.goal || (p && p.goal_id) || null; S.drawer.msPick = p && String(p.goal_id) === String(S.drawer.goalPick) ? p.milestone_id : (S.drawer.ms || null); paintDrawer(); return; }
-    if (t.hasAttribute('data-w205pickg') && S.drawer) { S.drawer.goalPick = t.getAttribute('data-w205pickg'); S.drawer.msPick = null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickp') && S.drawer) { S.drawer.project = t.getAttribute('data-w205pickp'); var p = byId(S.projects, S.drawer.project); S.drawer.goalPick = S.drawer.goal || (p && p.goal_id) || null; S.drawer.msPick = p && String(p.goal_id) === String(S.drawer.goalPick) ? p.milestone_id : (S.drawer.ms || null); S.drawer.cpPick = S.drawer.cp || (p && String(p.goal_id) === String(S.drawer.goalPick) ? p.checkpoint_id : null) || null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w205pickg') && S.drawer) { S.drawer.goalPick = t.getAttribute('data-w205pickg'); S.drawer.msPick = null; S.drawer.cpPick = null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w207pickc') && S.drawer) { S.drawer.cpPick = t.getAttribute('data-w207pickc') || null; paintDrawer(); return; }
+    if (t.hasAttribute('data-w207act') && S.drawer) { actToggle(S.drawer.goal, t.getAttribute('data-w207act'), t.checked, t); return; }
     if (t.hasAttribute('data-w205pickm') && S.drawer) { S.drawer.msPick = t.getAttribute('data-w205pickm') || null; paintDrawer(); return; }
     if (t.hasAttribute('data-w205focus') && S.drawer) { ownerSet(S.drawer.goal, t.getAttribute('data-w205focus'), true, null, t.value); return; }
   });
@@ -124,7 +126,8 @@
     /* a title and a measure are one line: Enter saves and leaves, like a heading in a document */
     var k = t.getAttribute && t.getAttribute('data-w205k');
     if (k && e.key === 'Enter' && !e.shiftKey && /:(title|measure|baseline|target_fy29|target_fy31)$/.test(k)) { e.preventDefault(); t.blur(); return; }
-    if ((e.key === 'Enter' || e.key === ' ') && t.matches('[data-w205jump],label[data-w205ownon]')) { e.preventDefault(); t.click(); }
+    if (k && e.key === 'Enter' && !e.shiftKey && /^(target|activity):.*:(owners|reason)$/.test(k)) { e.preventDefault(); t.blur(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && t.matches('[data-w205jump],label[data-w205ownon],[data-w207goto]')) { e.preventDefault(); t.click(); }
   });
   document.addEventListener('click', function (e) {
     var t = e.target; if (!inApp(t)) return;
@@ -142,7 +145,13 @@
       return;
     }
     if ((el = t.closest('[data-w205cmts]'))) { var p = el.getAttribute('data-w205cmts').split(':'); openDrawer({ kind: 'comments', goal: p[0], milestone: p[1] || null }); return; }
-    if ((el = t.closest('[data-w205cseg]'))) { S.drawer.milestone = el.getAttribute('data-w205cseg') || null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w205cseg]'))) { S.drawer.milestone = el.getAttribute('data-w205cseg') || null; S.drawer.checkpoint = null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w207cseg]'))) { S.drawer.checkpoint = el.getAttribute('data-w207cseg') || null; S.drawer.milestone = null; S.drawer.replyTo = null; paintDrawer(); return; }
+    if ((el = t.closest('[data-w207cpcmts]'))) { var cpc = byId(S.checkpoints, el.getAttribute('data-w207cpcmts')); if (cpc) openDrawer({ kind: 'comments', goal: cpc.goal_id, milestone: null, checkpoint: cpc.id }); return; }
+    if ((el = t.closest('[data-w207cplink]'))) { var cpl = byId(S.checkpoints, el.getAttribute('data-w207cplink')); if (cpl) openDrawer({ kind: 'link', goal: cpl.goal_id, ms: null, msPick: null, cp: cpl.id, cpPick: cpl.id, q: '' }); return; }
+    if ((el = t.closest('[data-w207manage]'))) { openDrawer({ kind: 'acts', goal: el.getAttribute('data-w207manage') }); return; }
+    if ((el = t.closest('[data-w207chip]'))) { chipTip(el); return; }
+    if ((el = t.closest('[data-w207goto]'))) { e.preventDefault(); goYear(el.getAttribute('data-w207goto')); return; }
     if ((el = t.closest('[data-w205replyto]'))) { S.drawer.replyTo = el.getAttribute('data-w205replyto') || null; paintDrawer(); var rt = document.querySelector('#w205drawer textarea[data-w205reply]'); if (rt) rt.focus(); return; }
     if ((el = t.closest('[data-w205sendreply]'))) { postComment(el.getAttribute('data-w205sendreply')); return; }
     if ((el = t.closest('[data-w205post]'))) { postComment(null); return; }
@@ -153,7 +162,7 @@
     if ((el = t.closest('[data-w205restore]'))) { el.disabled = true; restore(el.getAttribute('data-w205restore')); return; }
     if ((el = t.closest('[data-w205link]'))) { var lp = el.getAttribute('data-w205link').split(':'); openDrawer({ kind: 'link', goal: lp[0], ms: lp[1] || null, msPick: lp[1] || null, q: '' }); return; }
     if ((el = t.closest('[data-w205linkp]'))) { var pr = byId(S.projects, el.getAttribute('data-w205linkp')); openDrawer({ kind: 'link', goal: null, project: pr ? pr.id : null, goalPick: null, msPick: null }); return; }
-    if ((el = t.closest('[data-w205proj]'))) { var pj = byId(S.projects, el.getAttribute('data-w205proj')); if (!pj) return; if (!canComment()) { location.hash = '#project/' + pj.id; return; } openDrawer({ kind: 'link', goal: pj.goal_id, project: pj.id, goalPick: pj.goal_id, msPick: pj.milestone_id }); return; }
+    if ((el = t.closest('[data-w205proj]'))) { var pj = byId(S.projects, el.getAttribute('data-w205proj')); if (!pj) return; if (!canComment()) { location.hash = '#project/' + pj.id; return; } openDrawer({ kind: 'link', goal: pj.goal_id, project: pj.id, goalPick: pj.goal_id, msPick: pj.milestone_id, cpPick: pj.checkpoint_id }); return; }
     if ((el = t.closest('[data-w205dolink]'))) { doLink(false); return; }
     if ((el = t.closest('[data-w205unlink]'))) { doLink(true); return; }
     if ((el = t.closest('[data-w205addowner]'))) { openDrawer({ kind: 'owner', goal: el.getAttribute('data-w205addowner'), q: '' }); return; }
@@ -275,6 +284,7 @@
   window.w205 = {
     state: function () { return S; }, load: loadAll, paint: paint, show: show, route: route, save: save, flush: flushAll,
     remote: onRemote, presence: function (list) { S.presence = list || []; paintPresence(); }, canEdit: canEdit, canComment: canComment,
+    year: yearState, quarterOf: quarterOf,
     open: openDrawer, close: closeDrawer, progress: progress, key: key, live: function () { return { live: S.live, channel: !!S.channel }; }
   };
 })();

@@ -56,14 +56,14 @@
   function glanceHtml() {
     if (!S.goals.length) return '';
     return '<div class="w205sec"><h2>The goals at a glance</h2><span class="hint">FY29 is the 3-year target; FY31 applies only if the FY29 gate is met.</span></div>' +
-      '<div class="w205glance" data-w205glance><table><thead><tr><th>Goal</th><th>Headline measure</th><th>Baseline</th><th>FY29 (3-year)</th><th>FY31 (5-year, gated)</th><th>Owners</th><th>Milestones</th></tr></thead><tbody>' +
+      '<div class="w205glance" data-w205glance><table><thead><tr><th>Goal</th><th>Headline measure</th><th>Baseline</th><th>FY29 (3-year)</th><th>FY31 (5-year, gated)</th><th>Owners</th><th>Charitable activities</th><th>Milestones</th></tr></thead><tbody>' +
       S.goals.map(function (g) {
         var pr = progress(g.id);
         return '<tr data-w205jump="' + g.id + '" tabindex="0" role="link" aria-label="Open goal ' + E(g.number) + '">' +
           '<td><span style="display:flex;gap:10px;align-items:center"><span class="w205num">' + E(g.number) + '</span><b data-w198skip>' + E(g.title) + '</b></span></td>' +
           '<td data-l="Measure" data-w198skip>' + E(g.measure) + '</td><td data-l="Baseline" data-w198skip>' + E(g.baseline) + '</td>' +
           '<td data-l="FY29" class="t29" data-w198skip>' + E(g.target_fy29) + '</td><td data-l="FY31" class="g31" data-w198skip>' + E(g.target_fy31) + '</td>' +
-          '<td data-l="Owners" data-w198skip>' + E(ownerNames(g.id)) + '</td><td data-l="Milestones">' + pr.done + ' of ' + pr.total + ' done</td></tr>';
+          '<td data-l="Owners" data-w198skip>' + E(ownerNames(g.id)) + '</td><td data-l="Activities">' + actsMini(g.id) + '</td><td data-l="Milestones">' + pr.done + ' of ' + pr.total + ' done</td></tr>';
       }).join('') + '</tbody></table></div>';
   }
   function paintGlance() { var el = document.querySelector('#w205 [data-w205glance]'); if (!el) return; var tmp = document.createElement('div'); tmp.innerHTML = glanceHtml(); var n = tmp.querySelector('[data-w205glance]'); if (n) el.innerHTML = n.innerHTML; }
@@ -135,6 +135,7 @@
       box.innerHTML = ps.map(projChip).join('') + cntBtn(g.id, m.id) + (canComment() ? '<button type="button" class="w205cnt" data-w205link="' + g.id + ':' + m.id + '" aria-label="Link a project to this milestone">' + I('link') + '</button>' : '');
     });
     var c = document.querySelector('#w205 [data-w205pcount="' + gid + '"]'); if (c) c.textContent = projOf(gid).length ? '(' + projOf(gid).length + ')' : '';
+    paintCpFoot(gid);
   }
   function paintCounts(gid) {
     var b = document.querySelector('#w205 [data-w205cmtsft="' + gid + '"]'); var n = commentsOf(gid).length;
@@ -150,6 +151,7 @@
       }).join('') + '</div>' +
       '<div class="w205h4"><h4>Paths</h4><span style="font-size:12px;color:' + MUTED + '">How we get there</span><span class="sp"></span>' + (canEdit(g) ? '<button type="button" class="w205btn sm ghost" data-w205addpath="' + g.id + '">' + I('plus') + ' Add a path</button>' : '') + '</div>' +
       '<div data-w205paths="' + g.id + '">' + pathsHtml(g) + '</div>' +
+      yearBlockHtml(g) +
       '<div class="w205h4"><h4>Milestones</h4><span style="font-size:12px;color:' + MUTED + '">By fiscal year (Oct 1 to Sep 30)</span></div>' +
       '<div class="w205years" data-w205years="' + g.id + '">' + yearsHtml(g) + '</div>' +
       '<div class="w205h4"><h4>Projects serving this goal <span data-w205pcount="' + g.id + '" style="font-family:' + BODY + ';font-size:13px;color:' + MUTED + ';text-transform:none">' + (projOf(g.id).length ? '(' + projOf(g.id).length + ')' : '') + '</span></h4></div>' +
@@ -163,6 +165,7 @@
       '<div class="side"><span class="w205pres" style="margin:0" data-w205gpres="' + g.id + '"></span>' + stSel('goal', g, 'status', GOAL_ST) + '<span class="w205saved" data-w205saved="' + g.id + '" aria-live="polite"></span>' +
       '<button type="button" class="w205fold" data-w205fold="' + g.id + '" aria-expanded="' + (folded ? 'false' : 'true') + '" aria-label="Fold or open this goal">' + I('chev') + '</button></div></div>' +
       '<div class="w205owners" data-w205owners="' + g.id + '">' + ownersHtml(g) + '</div>' +
+      '<div class="w207acts" data-w207acts="' + g.id + '">' + actsHtml(g) + '</div>' +
       '<div class="w205gbody" data-w205gbody="' + g.id + '">' + goalBodyHtml(g) + '</div>' +
       '<div class="w205gft"><button type="button" class="w205btn sm" data-w205cmtsft="' + g.id + '" data-w205cmts="' + g.id + '">' + I('chat') + ' Comments' + (n ? ' (' + n + ')' : '') + '</button>' +
       '<button type="button" class="w205btn sm" data-w205hist="' + g.id + '">' + I('clock') + ' History</button>' +
@@ -222,7 +225,7 @@
       return mastHtml('Goals', p.window || '') + heroHtml() + '<div class="w205empty"><b>No organizational goals yet</b>' + (S.err ? 'The goals could not be read (' + E(clip(S.err, 120)) + ').' : 'When the goals are written, they show here.') + '</div>';
     }
     return mastHtml('Goals', 'Five goals for FY27 to FY29, with a gated view to FY31. Departments own projects; each one serves a goal.') +
-      heroHtml() + statusHtml() + whyHtml() + glanceHtml() +
+      heroHtml() + statusHtml() + yearViewHtml() + whyHtml() + glanceHtml() + coverageHtml() +
       '<div class="w205sec"><h2>Goal by goal</h2><span class="hint">' + (S.goals.some(canEdit) ? 'Click any text to change it; it saves as you type.' : 'Owners keep these up to date.') + '</span></div>' +
       S.goals.map(goalHtml).join('') + roadHtml() + libPreviewHtml() + unlinkedHtml() +
       '<div class="w205more"><button type="button" class="w205tile" data-w205go="#goalmap"><b>Goal alignment</b><span>Every project and the goal it serves, on one map.</span></button>' +

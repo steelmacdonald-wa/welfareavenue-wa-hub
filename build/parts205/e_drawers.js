@@ -36,6 +36,7 @@
     else if (st.kind === 'link') html = linkDrawer(st);
     else if (st.kind === 'owner') html = ownerDrawer(st);
     else if (st.kind === 'doc') html = docDrawer(st);
+    else if (st.kind === 'acts') html = actsDrawer(st);
     d.innerHTML = html;
     if (keepVal) { var t2 = d.querySelector('textarea[data-w205cmt]'); if (t2) { t2.value = keepVal.v; if (keepVal.focus) { t2.focus(); try { t2.setSelectionRange(keepVal.s, keepVal.s); } catch (e) { /* fine */ } } } }
     Object.keys(keepReply).forEach(function (k) { var t = d.querySelector('textarea[data-w205reply="' + k + '"]'); if (t) t.value = keepReply[k]; });
@@ -55,25 +56,29 @@
   function commentsDrawer(st) {
     var g = byId(S.goals, st.goal) || byId(S.allGoals || [], st.goal);
     if (!g) return drawerShell('Comments', '', '<p>That goal is not here.</p>');
-    var ms = msOf(g.id), mid = st.milestone || null, can = canComment();
+    var ms = msOf(g.id), mid = st.milestone || null, cid = st.checkpoint || null, can = canComment();
     var all = commentsOf(g.id);
-    var roots = all.filter(function (c) { return !c.parent_id && (mid ? String(c.milestone_id) === String(mid) : true); });
-    var seg = '<div class="w205seg" role="tablist"><button type="button" role="tab" class="' + (!mid ? 'on' : '') + '" data-w205cseg="" aria-selected="' + (!mid) + '">Everything (' + all.length + ')</button>' +
+    var roots = all.filter(function (c) { return !c.parent_id && (cid ? String(c.checkpoint_id) === String(cid) : mid ? String(c.milestone_id) === String(mid) : true); });
+    var seg = '<div class="w205seg" role="tablist"><button type="button" role="tab" class="' + (!mid && !cid ? 'on' : '') + '" data-w205cseg="" aria-selected="' + (!mid && !cid) + '">Everything (' + all.length + ')</button>' +
+      cpsOfGoal(g.id).filter(function (c) { return all.some(function (x) { return String(x.checkpoint_id) === String(c.id); }) || String(c.id) === String(cid); }).map(function (c) {
+        var n = all.filter(function (x) { return String(x.checkpoint_id) === String(c.id); }).length;
+        return '<button type="button" role="tab" class="' + (String(c.id) === String(cid) ? 'on' : '') + '" data-w207cseg="' + c.id + '" title="' + E(c.body) + '" aria-selected="' + (String(c.id) === String(cid)) + '">' + E(cpLabel(c)) + ' (' + n + ')</button>';
+      }).join('') +
       ms.filter(function (m) { return all.some(function (c) { return String(c.milestone_id) === String(m.id); }) || String(m.id) === String(mid); }).map(function (m) {
         var n = all.filter(function (c) { return String(c.milestone_id) === String(m.id); }).length;
         return '<button type="button" role="tab" class="' + (String(m.id) === String(mid) ? 'on' : '') + '" data-w205cseg="' + m.id + '" title="' + E(m.body) + '" aria-selected="' + (String(m.id) === String(mid)) + '">' + E(m.fy) + ': ' + E(clip(m.body, 26)) + ' (' + n + ')</button>';
       }).join('') + '</div>';
     var threads = roots.map(function (c) {
       var reps = all.filter(function (r) { return String(r.parent_id) === String(c.id); });
-      var mm = c.milestone_id ? byId(S.milestones, c.milestone_id) : null;
-      return '<div class="w205th">' + (mm && !mid ? '<span class="w205ms-tag" data-w198skip>' + E(mm.fy) + ': ' + E(clip(mm.body, 40)) + '</span>' : '') + commentHtml(c, g.id, can) +
+      var mm = c.milestone_id ? byId(S.milestones, c.milestone_id) : null, cc = c.checkpoint_id ? byId(S.checkpoints, c.checkpoint_id) : null;
+      return '<div class="w205th">' + (mm && !mid ? '<span class="w205ms-tag" data-w198skip>' + E(mm.fy) + ': ' + E(clip(mm.body, 40)) + '</span>' : '') + (cc && !cid ? '<span class="w205ms-tag" data-w198skip>' + E(cpLabel(cc)) + ': ' + E(clip(cc.body, 40)) + '</span>' : '') + commentHtml(c, g.id, can) +
         (reps.length || String(st.replyTo) === String(c.id) ? '<div class="w205replies">' + reps.map(function (r) { return commentHtml(r, g.id, false); }).join('') +
           (String(st.replyTo) === String(c.id) ? '<div style="margin-top:10px"><textarea data-w205reply="' + c.id + '" data-w205cmt="reply" placeholder="Write a reply. Type @ to bring someone in." aria-label="Your reply" data-w205autofocus></textarea><div class="acts"><button type="button" class="w205btn sm pri" data-w205sendreply="' + c.id + '">Reply</button><button type="button" class="w205btn sm ghost" data-w205replyto="">Cancel</button></div></div>' : '') + '</div>' : '') + '</div>';
     }).join('');
-    var msNow = mid ? byId(S.milestones, mid) : null;
+    var msNow = mid ? byId(S.milestones, mid) : null, cpNow = cid ? byId(S.checkpoints, cid) : null;
     var body = seg + (threads || '<div class="w205empty"><b>No comments yet</b>' + (can ? 'Start the conversation: a question, a link, an @mention.' : 'When the team talks about this goal, it shows here.') + '</div>');
-    var foot = can ? '<textarea data-w205cmt="new" placeholder="' + (msNow ? 'Comment on this milestone' : 'Comment on this goal') + '. Type @ to bring someone in." aria-label="Your comment"' + (st.replyTo ? '' : ' data-w205autofocus') + '></textarea>' +
-      '<div class="acts"><small>' + (msNow ? 'On ' + E(msNow.fy) + ': ' + E(clip(msNow.body, 40)) : 'On the whole goal') + ' · Ctrl+Enter posts</small><span class="sp"></span><button type="button" class="w205btn pri sm" data-w205post="1">Post</button></div>' +
+    var foot = can ? '<textarea data-w205cmt="new" placeholder="' + (cpNow ? 'Comment on this checkpoint' : msNow ? 'Comment on this milestone' : 'Comment on this goal') + '. Type @ to bring someone in." aria-label="Your comment"' + (st.replyTo ? '' : ' data-w205autofocus') + '></textarea>' +
+      '<div class="acts"><small>' + (cpNow ? 'On ' + E(cpLabel(cpNow)) + ': ' + E(clip(cpNow.body, 40)) : msNow ? 'On ' + E(msNow.fy) + ': ' + E(clip(msNow.body, 40)) : 'On the whole goal') + ' · Ctrl+Enter posts</small><span class="sp"></span><button type="button" class="w205btn pri sm" data-w205post="1">Post</button></div>' +
       '<small style="display:block;color:' + MUTED + ';font-size:11px;margin-top:6px">People you @mention hear about it the way every Hub @mention works.</small>'
       : '<small style="color:' + MUTED + '">' + E(readOnlyWhy()) + '</small>';
     return drawerShell('Comments', '<span data-w198skip>Goal ' + E(g.number || '') + ': ' + E(g.title) + '</span>', body, foot);
@@ -83,11 +88,13 @@
     var ta = parent ? d.querySelector('textarea[data-w205reply="' + parent + '"]') : d.querySelector('textarea[data-w205cmt="new"]');
     var body = ta ? ta.value.trim() : ''; if (!body) { if (ta) ta.focus(); return; }
     var st = S.drawer, btn = d.querySelector(parent ? '[data-w205sendreply="' + parent + '"]' : '[data-w205post]'); if (btn) btn.disabled = true;
-    rpc('strategy_comment_add', { p_goal: Number(st.goal), p_milestone: parent ? null : (st.milestone ? Number(st.milestone) : null), p_parent: parent ? Number(parent) : null, p_body: body }).then(function (row) {
+    var pc = parent ? byId(S.comments, parent) : null, cpId = parent ? (pc && pc.checkpoint_id) : st.checkpoint;
+    (cpId ? rpc('strategy_checkpoint_comment_add', { p_checkpoint: Number(cpId), p_parent: parent ? Number(parent) : null, p_body: body })
+      : rpc('strategy_comment_add', { p_goal: Number(st.goal), p_milestone: parent ? null : (st.milestone ? Number(st.milestone) : null), p_parent: parent ? Number(parent) : null, p_body: body })).then(function (row) {
       if (row && row.id && !byId(S.comments, row.id)) S.comments.push(row);
       if (ta) ta.value = '';
       if (parent) st.replyTo = null;
-      paintDrawer(); paintCounts(st.goal);
+      paintDrawer(); paintCounts(st.goal); paintYearCounts(st.goal);
       toastS('Comment posted');
     }).catch(function (e) { toastS('Not posted: ' + errText(e)); if (btn) btn.disabled = false; });
   }
@@ -106,13 +113,16 @@
     if (h.entity === 'milestone') return h.field === 'added' ? 'added a milestone' : h.field === 'archived_at' ? (h.new_value ? 'removed a milestone' : 'brought back a milestone') : 'changed a milestone’s ' + (h.field === 'body' ? 'text' : f.replace(/^the /, ''));
     if (h.entity === 'path') return h.field === 'added' ? 'added a path' : h.field === 'archived_at' ? (h.new_value ? 'removed a path' : 'brought back a path') : 'changed a path';
     if (h.entity === 'owner') return h.field === 'added' ? 'added an owner' : h.field === 'removed' ? 'took an owner off' : h.field === 'is_lead' ? 'changed the lead' : 'changed an owner’s focus';
-    if (h.entity === 'project') return h.field === 'goal_id' ? (h.new_value ? 'linked a project' : 'unlinked a project') : 'moved a project to a milestone';
+    if (h.entity === 'project') return h.field === 'goal_id' ? (h.new_value ? 'linked a project' : 'unlinked a project') : h.field === 'checkpoint_id' ? (h.new_value ? 'linked a project to a checkpoint' : 'took a project off a checkpoint') : 'moved a project to a milestone';
+    if (h.entity === 'activity') return h.field === 'added' ? 'anchored the goal on a charitable activity' : h.field === 'archived_at' ? (h.new_value ? 'took a charitable activity off' : 'brought back a charitable activity') : 'changed why it serves a charitable activity';
+    if (h.entity === 'target') return h.field === 'owners' ? 'changed who reports on the yearly target' : 'changed the yearly target';
+    if (h.entity === 'checkpoint') return 'changed a checkpoint’s ' + (h.field === 'body' ? 'text' : h.field === 'due_date' ? 'due date' : f.replace(/^the /, ''));
     return 'changed ' + f;
   }
   function restorable(h) {
     if (h.entity === 'project') return canComment();
     var g = byId(S.goals, h.goal_id); if (!canEdit(g)) return false;
-    if (h.entity === 'goal') return ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'].indexOf(h.field) >= 0;
+    if (h.entity === 'goal') return ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date', 'activities_note'].indexOf(h.field) >= 0;
     return true;
   }
   function histVal(h, v) {
@@ -132,9 +142,11 @@
       var day = '', out = [];
       st.rows.forEach(function (h) {
         var dd = fmtDay(h.changed_at); if (dd !== day) { day = dd; out.push('<div class="w205hday">' + E(dd) + '</div>'); }
-        var ov = histVal(h, h.old_value), nv = histVal(h, h.new_value), simple = h.entity === 'project' || h.entity === 'owner' || h.field === 'added' || h.field === 'archived_at';
+        var ov = histVal(h, h.old_value), nv = histVal(h, h.new_value), simple = (h.entity === 'project' && h.field !== 'checkpoint_id') || h.entity === 'owner' || h.field === 'added' || (h.field === 'archived_at' && h.entity !== 'activity');
+        if (h.entity === 'activity' && h.field === 'archived_at') { simple = true; nv = h.new_value || h.old_value || ''; }
+        var cpx = h.entity === 'checkpoint' ? cpLabel(byId(S.checkpoints, h.entity_id)) : '';
         out.push('<div class="w205h" data-w205h="' + h.id + '"><div class="l1"><span><b data-w198skip>' + E(h.changed_by_name || h.changed_by || 'Someone') + '</b> ' + E(histLabel(h)) + '</span><span class="sp"></span><small>' + E(new Date(h.changed_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' })) + '</small></div>' +
-          (h.restored_from ? '<span class="rs">A restore</span>' : '') +
+          (h.restored_from ? '<span class="rs">A restore</span>' : '') + (cpx ? '<span class="w205ms-tag">' + E(cpx) + '</span>' : '') +
           (simple ? ((nv || ov) ? '<span class="nv" data-w198skip>' + E(nv || ov) + '</span>' : '') : (ov ? '<span class="ov" data-w198skip>' + E(ov) + '</span>' : '') + (nv ? '<span class="nv" data-w198skip>' + E(nv) + '</span>' : '<span class="nv"><i>cleared</i></span>')) +
           (restorable(h) ? '<div style="margin-top:6px"><button type="button" class="w205btn sm" data-w205restore="' + h.id + '">' + I('undo') + ' Restore</button></div>' : '') + '</div>');
       });
@@ -190,7 +202,8 @@
         return '<label class="' + (String(x.id) === String(goalSel) ? 'on' : '') + '"><input type="radio" name="w205lg" data-w205pickg="' + x.id + '"' + (String(x.id) === String(goalSel) ? ' checked' : '') + ' /><span class="w205num" style="width:24px;height:24px;font-size:13px">' + E(x.number) + '</span><span class="t" data-w198skip>' + E(x.title) + '</span></label>';
       }).join('') + '</div>' +
       (gg ? '<div class="w205grp">The milestone (optional)</div><div class="w205pick"><label class="' + (!st.msPick ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm=""' + (!st.msPick ? ' checked' : '') + ' /><span class="t">The goal as a whole</span></label>' +
-        msOf(gg.id).map(function (m) { return '<label class="' + (String(st.msPick) === String(m.id) ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm="' + m.id + '"' + (String(st.msPick) === String(m.id) ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(m.body) + '</span><small>' + E(m.fy) + '</small></span></label>'; }).join('') + '</div>' : '');
+        msOf(gg.id).map(function (m) { return '<label class="' + (String(st.msPick) === String(m.id) ? 'on' : '') + '"><input type="radio" name="w205lm" data-w205pickm="' + m.id + '"' + (String(st.msPick) === String(m.id) ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(m.body) + '</span><small>' + E(m.fy) + '</small></span></label>'; }).join('') + '</div>' : '') +
+      (gg ? cpPickHtml(gg, st) : '');
     var foot = '<div class="acts" style="margin:0">' + (curG ? '<button type="button" class="w205btn sm ghost" data-w205unlink="' + p.id + '">Unlink</button>' : '') + '<span class="sp"></span><button type="button" class="w205btn sm ghost" data-w205close="1">Cancel</button><button type="button" class="w205btn pri" data-w205dolink="1"' + (gg ? '' : ' disabled') + '>' + I('link') + ' Link it</button></div>';
     return drawerShell(curG ? 'Move or unlink a project' : 'Link a project', '<span data-w198skip>' + E(p.name) + '</span>', body, foot);
   }
@@ -198,14 +211,21 @@
     var st = S.drawer; if (!st || st.kind !== 'link' || !st.project) return;
     var p = byId(S.projects, st.project), g = unlink ? null : (st.goalPick != null ? st.goalPick : (st.goal || (p && p.goal_id)));
     var m = unlink ? null : (st.msPick || null);
+    var cp = unlink ? null : (st.cpPick || null);
     rpc('strategy_link_project', { p_project: Number(st.project), p_goal: g ? Number(g) : null, p_milestone: m ? Number(m) : null }).then(function () {
-      if (p) { p.goal_id = g ? Number(g) : null; p.milestone_id = m ? Number(m) : null; }
+      /* wave207: the checkpoint after the goal (moving the goal clears a checkpoint of another goal) */
+      var keep = p && p.checkpoint_id && cpsOfGoal(g).some(function (c) { return String(c.id) === String(p.checkpoint_id); }) ? p.checkpoint_id : null;
+      if (String(cp || '') === String(keep || '')) return null;
+      return rpc('strategy_link_checkpoint', { p_project: Number(st.project), p_checkpoint: cp ? Number(cp) : null });
+    }).then(function () {
+      if (p) { p.goal_id = g ? Number(g) : null; p.milestone_id = m ? Number(m) : null; p.checkpoint_id = cp ? Number(cp) : null; }
+      paintYear();
       closeDrawer();
       S.goals.forEach(function (x) { paintProjects(x.id); }); paintUnlinked();
       /* the shared project store (wave116i): Projects, the team pages and Goal alignment repaint from the same rows */
       try {
         var PS = window.__waProjects;
-        if (PS && PS.rows) { PS.rows.forEach(function (x) { if (String(x.id) === String(st.project)) { x.goal_id = g ? Number(g) : null; x.milestone_id = m ? Number(m) : null; } }); if (window.w116ProjectsChanged) window.w116ProjectsChanged(PS.rows); }
+        if (PS && PS.rows) { PS.rows.forEach(function (x) { if (String(x.id) === String(st.project)) { x.goal_id = g ? Number(g) : null; x.milestone_id = m ? Number(m) : null; x.checkpoint_id = cp ? Number(cp) : null; } }); if (window.w116ProjectsChanged) window.w116ProjectsChanged(PS.rows); }
         else if (window.w116Goals && window.w116Goals.refresh) window.w116Goals.refresh();
       } catch (e) { /* fine */ }
       toastS(unlink ? 'Unlinked' : 'Linked to goal ' + ((byId(S.goals, g) || {}).number || ''));

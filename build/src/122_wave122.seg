@@ -45,9 +45,7 @@
 (function () {
   if (window.__wa122) return; window.__wa122 = true;
   var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', FLAG = '#B3402F', TEAL = '#2A8C7A', PURPLE = '#6F64AB', INK = '#1F201E', STEM = '#2B6F55';
-  /* wave190: the brand's faces, as everywhere else in the Hub (wave114): Space Grotesk to read, Barlow Condensed for titles */
-  var SF = "'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
-  var DISP = "'Barlow Condensed','Arial Narrow','Helvetica Neue',Arial,sans-serif";
+  var SF = "-apple-system,BlinkMacSystemFont,'SF Pro Text','SF Pro Display','Inter','Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
   var DEPTS = ['opsmtl', 'progdev', 'opsto', 'marketing', 'fundraising', 'hr', 'board'];
   var KIND = {
     video: { l: 'Video', icon: 'play', c1: '#103F39', c2: '#2A8C7A' },
@@ -76,7 +74,7 @@
     { key: 'hub', name: 'Using the Hub', title: 'Using the Hub', blurb: 'Eight short modules on how the Hub turns meetings into work.', dept: null, required: true, cert_title: 'Hub Essentials', color: GREEN, icon: 'compass', sort: 20 },
     { key: 'tours', name: 'Hub page tours', title: 'Hub page tours', blurb: 'A guided walkthrough of every page of the Hub, section by section.', dept: null, required: false, cert_title: 'Hub Navigator', color: TEAL, icon: 'map', sort: 30 },
     { key: 'marketing', name: 'Marketing Strategy Package', title: 'Marketing strategy', blurb: 'The marketing strategy built for Welfare Avenue, module by module.', dept: 'marketing', required: false, cert_title: 'Marketing Strategy', color: PURPLE, icon: 'megaphone', sort: 40 },
-    { key: 'branding', name: 'Branding', title: 'Our brand', blurb: 'The Brand Guides, the essentials of our brand and a hard knowledge check: who we are, how we speak and how we look. For everyone.', dept: null, required: true, cert_title: 'Brand Ready', color: '#B9851B', icon: 'sparkle', sort: 15 },
+    { key: 'branding', name: 'Branding', title: 'Our brand', blurb: 'The brand refresh: what changed and why.', dept: 'marketing', required: false, cert_title: 'Brand Ready', color: '#B9851B', icon: 'sparkle', sort: 45 },
     { key: 'ops', name: 'Operations Basics', title: 'Operations basics', blurb: 'Running volunteers and ordering for a serving.', dept: 'opsmtl', required: false, cert_title: 'Operations Basics', color: STEM, icon: 'box', sort: 50 }
   ];
 
@@ -300,11 +298,6 @@
     + '.w122card .cv .dn{position:absolute;right:12px;bottom:12px;width:28px;height:28px;border-radius:50%;background:#FFFAF2;color:' + TEAL + ';display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.18);}'
     + '.w122card .cv .dn .w122ic{stroke-width:3;width:15px;height:15px;}'
     + '.w122card .cv img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55;mix-blend-mode:luminosity;}'
-    + '.w141plan{margin-top:26px;padding:14px 16px;border:1px dashed rgba(127,127,127,.45);border-radius:14px;background:rgba(220,165,39,.07);}'
-    + '.w141plan h3{font-size:16px;margin:0 0 4px;display:flex;gap:8px;align-items:center;}.w141plan h3 i{font-style:normal;font-size:12px;background:#DCA527;color:#1F201E;border-radius:10px;padding:1px 8px;}'
-    + '.w141pl{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid rgba(127,127,127,.18);}.w141pl .n{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:rgba(220,165,39,.2);flex:none;}'
-    + '.w141pl .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}.w141pl .tx span{font-size:12.5px;opacity:.75;}'
-    + '@media (max-width:560px){.w141pl{flex-wrap:wrap;}.w141pl .w122btn{width:100%;justify-content:center;}}'
     + '.w122card .bd{padding:13px 15px 15px;display:flex;flex-direction:column;gap:6px;flex:1;}'
     + '.w122card .bd b{font-size:15px;font-weight:650;line-height:1.3;letter-spacing:-.1px;color:' + INK + ';display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}'
     + '.w122card .bd .m{font-size:12.5px;color:#797773;line-height:1.4;}'
@@ -519,8 +512,6 @@
     + '#w122sheet .lnk2 .ar{margin-left:auto;color:#9a9893;}'
     + '#w122sheet .chfoot{display:flex;gap:10px;align-items:center;margin:34px 0 0;padding:18px 0 0;border-top:1px solid rgba(16,63,57,.08);}'
     + '#w122sheet .chfoot .sp{flex:1;}'
-    /* wave150: on a phone a long Next: chapter title wraps instead of pushing the page sideways */
-    + '@media (max-width:640px){#w122sheet .chfoot{flex-wrap:wrap;}#w122sheet .chfoot .w122btn{white-space:normal;max-width:100%;text-align:left;}}'
     + '#w122sheet .meta2{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:#797773;margin:18px 0 0;}'
     + '#w122sheet .meta2 span{display:inline-flex;align-items:center;gap:6px;}'
     + '#w122sheet .docbox{background:#FFFAF2;border-radius:22px;padding:22px;box-shadow:' + SH1 + ';display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 22px;}'
@@ -557,45 +548,6 @@
     + '#w122sheet .quiz .dots{display:flex;gap:6px;margin:0 0 16px;}'
     + '#w122sheet .quiz .dots i{flex:1;height:5px;border-radius:999px;background:rgba(16,63,57,.1);}'
     + '#w122sheet .quiz .dots i.ok{background:' + TEAL + ';}#w122sheet .quiz .dots i.no{background:' + FLAG + ';}#w122sheet .quiz .dots i.cur{background:' + GOLD + ';}'
-    /* wave150: the hard knowledge check (quiz.hard) */
-    + '#w122sheet .quiz .intro{background:#FFFAF2;border-radius:20px;padding:18px 20px;box-shadow:' + SH1 + ';margin:0 0 6px;}'
-    + '#w122sheet .quiz .intro p{margin:0 0 10px;font-size:15px;line-height:1.55;}'
-    + '#w122sheet .quiz .intro ul{margin:0;padding-left:20px;font-size:14.5px;line-height:1.6;}'
-    + '#w122sheet .quiz .why.miss{box-shadow:inset 0 0 0 1.5px rgba(179,64,47,.25);}'
-    + '#w122sheet .quiz .res .go{text-align:left;background:#FFFAF2;border-radius:18px;padding:14px 18px;box-shadow:' + SH1 + ';margin:0 auto 18px;max-width:560px;font-size:14.5px;line-height:1.5;}'
-    + '#w122sheet .quiz .res .go ul{margin:6px 0 0;padding-left:20px;}'
-    + '#w122sheet .quiz .res .acts2{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}'
-    + '#w122sheet .quiz .review{text-align:left;margin:22px auto 0;max-width:640px;display:flex;flex-direction:column;gap:10px;}'
-    + '#w122sheet .quiz .review h4{margin:0 0 2px;font-size:13px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:#797773;}'
-    + '#w122sheet .quiz .review .rv{background:#FFFAF2;border-radius:16px;padding:12px 16px;box-shadow:' + SH1 + ';font-size:14px;line-height:1.5;}'
-    + '#w122sheet .quiz .review .rv b{display:block;font-size:14.5px;margin:0 0 4px;}'
-    + '#w122sheet .quiz .review .rv .an{color:#1c6b5d;font-weight:700;}'
-    /* wave150: lesson blocks for the brand (swatches, figures, fonts) */
-    + '#w122sheet .w150sw{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:16px 0;}'
-    + '@media (max-width:860px){#w122sheet .w150sw{grid-template-columns:repeat(2,minmax(0,1fr));}}'
-    + '#w122sheet .w150sw .sw{border-radius:18px;padding:14px 14px 16px;min-height:150px;display:flex;flex-direction:column;gap:4px;box-shadow:inset 0 0 0 1px rgba(16,63,57,.12);}'
-    + '#w122sheet .w150sw .sw b{font-family:"Barlow Condensed",sans-serif;font-size:21px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;}'
-    + '#w122sheet .w150sw .sw .hx{font-size:12px;font-weight:700;letter-spacing:.5px;opacity:.85;}'
-    + '#w122sheet .w150sw .sw p{margin:6px 0 0;font-size:13px;line-height:1.4;}'
-    + '#w122sheet .w150sw .sw .u{margin-top:auto;font-size:11.5px;font-weight:700;opacity:.85;padding-top:8px;}'
-    + '#w122sheet .w150fig{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0;}'
-    + '#w122sheet .w150fig figure{margin:0;background:#FFFAF2;border-radius:18px;overflow:hidden;box-shadow:' + SH1 + ';display:flex;flex-direction:column;}'
-    + '#w122sheet .w150fig .im{height:130px;display:flex;align-items:center;justify-content:center;padding:18px;}'
-    + '#w122sheet .w150fig .im img{max-width:100%;max-height:100%;object-fit:contain;display:block;}'
-    + '#w122sheet .w150fig figcaption{padding:10px 14px 14px;font-size:13px;line-height:1.45;color:#4a4945;}'
-    /* wave167: photos in lessons (the Photo library), full width or two side by side */
-    + '#w122sheet figure.w167ph{margin:18px 0;border-radius:20px;overflow:hidden;box-shadow:' + SH1 + ';background:' + GREEN + ';position:relative;}'
-    + '#w122sheet figure.w167ph img{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;}'
-    + '#w122sheet figure.w167ph figcaption{position:absolute;left:0;right:0;bottom:0;padding:26px 16px 12px;background:linear-gradient(transparent,rgba(16,63,57,.88));color:#FFFAF2;font-size:12.5px;font-weight:600;letter-spacing:.2px;}'
-    + '#w122sheet .w167phs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0;}#w122sheet .w167phs figure.w167ph{margin:0;}#w122sheet .w167phs figure.w167ph img{aspect-ratio:4/3;}'
-    + '@media (max-width:600px){#w122sheet .w167phs{grid-template-columns:1fr;}}'
-    + '#w122sheet .w150fig figcaption b.t{display:block;font-size:14.5px;color:' + INK + ';margin:0 0 2px;}'
-    + '#w122sheet .w150ty{display:flex;flex-direction:column;gap:10px;margin:16px 0;}'
-    + '#w122sheet .w150ty .ty{background:#FFFAF2;border-radius:18px;padding:16px 18px;box-shadow:' + SH1 + ';}'
-    + '#w122sheet .w150ty .ty .sm{font-size:30px;line-height:1.15;color:' + GREEN + ';margin:0 0 10px;}'
-    + '#w122sheet .w150ty .ty .sm.body{font-size:17px;line-height:1.5;color:' + INK + ';}'
-    + '#w122sheet .w150ty .ty b{font-size:14px;margin-right:8px;}'
-    + '#w122sheet .w150ty .ty span{font-size:13px;color:#797773;}'
     /* path view + forms inside the sheet */
     + '#w122sheet .pitems{display:flex;flex-direction:column;gap:10px;margin:18px 0;}'
     + '#w122sheet .pitem{display:flex;gap:14px;align-items:center;background:#FFFAF2;border-radius:18px;padding:14px 16px;box-shadow:' + SH1 + ';cursor:pointer;transition:transform .2s ' + EASE + ';border:none;width:100%;font:inherit;color:inherit;text-align:left;}'
@@ -789,43 +741,7 @@
     + '.w122soprow .tx span{font-size:12px;color:var(--wa-muted,#797773);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
     + '.w122soprow > .w122ic{width:15px;height:15px;color:#a09d96;flex:none;}'
     + 'html.w122lock,html.w122lock body{overflow:hidden !important;}'
-    + '#toast{z-index:2147483300 !important;}'
-    /* wave190: the brand in the Avenue Academy. Titles in Barlow Condensed (uppercase, the green), reading in Space Grotesk
-       (SF above), the gold rule under a chapter, numbers in the display face, numbered steps and gold bullets in readings */
-    + '#w122 .w122hero h1,#w122 .w122sech h2,#w122 .w122onb .oh h2,#w122 .w122trk .th h3,#w122 .w122path .pc h3,#w122sheet .hd h2,#w122sheet .cht,#w122sheet .prose h3,#w122sheet .phero h3,#w122sheet .quiz .res h3,#w122sheet .w122sop h3,#w122cel h3,.w122tp .pop h4,.w122cert .c-title,.w122cert .c-path{font-family:' + DISP + ';text-transform:uppercase;font-weight:700;letter-spacing:.3px;}'
-    + '#w122 .w122hero h1{font-size:50px;line-height:.96;}'
-    + '@media (max-width:760px){#w122 .w122hero h1{font-size:40px;}}'
-    + '#w122 .w122sech h2{font-size:31px;line-height:1;color:' + GREEN + ';}'
-    + '#w122 .w122onb .oh h2{font-size:36px;line-height:.98;color:' + GREEN + ';}'
-    + '#w122 .w122onb.all .oh h2{font-size:27px;}'
-    + '#w122 .w122trk .th h3{font-size:20px;line-height:1;color:' + GREEN + ';}'
-    + '#w122 .w122path .pc h3{font-size:25px;line-height:1;}'
-    + '#w122sheet .hd h2{font-size:29px;line-height:1;color:' + GREEN + ';margin:7px 0 0;}'
-    + '@media (max-width:760px){#w122sheet .hd h2{font-size:25px;}}'
-    + '#w122sheet .chh{color:#8A5A0B;letter-spacing:1.6px;}'
-    + '#w122sheet .cht{font-size:44px;line-height:.96;color:' + GREEN + ';margin:0 0 22px;}'
-    + '#w122sheet .cht::after{content:"";display:block;width:56px;height:4px;border-radius:4px;background:' + GOLD + ';margin:14px 0 0;}'
-    + '@media (max-width:760px){#w122sheet .cht{font-size:35px;}}'
-    + '#w122sheet .prose{font-size:16px;line-height:1.66;}'
-    + '#w122sheet .prose .lead{font-size:19px;line-height:1.5;color:' + GREEN + ';}'
-    + '#w122sheet .prose h3{font-size:24px;line-height:1.02;color:' + GREEN + ';margin:32px 0 10px;}'
-    + '#w122sheet .prose h4{font-size:12.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#8A5A0B;margin:24px 0 8px;}'
-    + '#w122sheet .prose > :first-child{margin-top:0;}'
-    + '#w122sheet .prose ul li::marker{color:' + GOLD + ';}'
-    + '#w122sheet .prose ol.w190ol{list-style:none;counter-reset:w190;margin:4px 0 20px;padding:0;}'
-    + '#w122sheet .prose ol.w190ol > li{counter-increment:w190;position:relative;padding:1px 0 0 42px;margin:0 0 14px;min-height:28px;}'
-    + '#w122sheet .prose ol.w190ol > li::before{content:counter(w190);position:absolute;left:0;top:0;width:28px;height:28px;border-radius:50%;background:' + GREEN + ';color:' + CREAM + ';font-family:' + DISP + ';font-size:16px;font-weight:700;line-height:28px;text-align:center;}'
-    + '#w122sheet .prose ol.w190ol li ul{margin:8px 0 2px;padding-left:20px;}'
-    + '#w122sheet .prose ol.w190ol li ul li{margin:0 0 6px;}'
-    + '#w122sheet .stats b{font-family:' + DISP + ';font-size:40px;font-weight:700;letter-spacing:.2px;line-height:1;}'
-    + '#w122sheet .phero h3{font-size:38px;line-height:.98;}'
-    + '#w122sheet .quiz .res h3{font-size:34px;line-height:1;color:' + GREEN + ';}'
-    + '#w122sheet .w122sop h3{font-size:24px;line-height:1.02;color:' + GREEN + ';}'
-    + '#w122cel h3{font-size:36px;line-height:1;color:' + GREEN + ';}'
-    + '.w122tp .pop h4{font-size:23px;line-height:1.02;color:' + GREEN + ';}'
-    + '.w122cert .c-title{font-size:40px;letter-spacing:.6px;}'
-    + '.w122cert .c-path{font-size:26px;}'
-    + '@media (max-width:640px){.w122cert .c-title{font-size:28px;}.w122cert .c-path{font-size:20px;}}';
+    + '#toast{z-index:2147483300 !important;}';
   document.head.appendChild(css);
 
   /* ---------- state ---------- */
@@ -857,14 +773,6 @@
     return 'member';
   }
   function isLeader() { var r = role(); return r === 'admin' || r === 'leader'; }
-  /* planned trainings (wave141): listed in the Slack training lists but never made, or whose link did not come across; leaders fill them in */
-  function plannedIn(p) { return (A.trainings || []).filter(function (t) { return t.path_group === p.name && t.active !== false && t.body && t.body.planned; }).sort(function (a, b) { return String(a.title).localeCompare(String(b.title)); }); }
-  function plannedHtml(p) {
-    if (!isLeader()) return '';
-    var items = plannedIn(p); if (!items.length) return '';
-    return '<div class="w141plan" data-w141plan="' + E(p.key) + '"><h3>Planned trainings <i>' + items.length + '</i></h3><p class="snote">Only leaders see these: trainings the team listed in Slack but never made, or whose link did not come across. Add the content and it joins this Learning Avenue for everyone.</p>' +
-      items.map(function (t) { return '<div class="w141pl"><span class="n">' + ic('plus') + '</span><span class="tx"><b>' + E(t.title) + '</b><span>' + E((t.body && t.body.note) || t.description || 'No content yet.') + '</span></span><button class="w122btn soft sm" data-w141fill="' + E(t.id) + '">' + ic('edit') + ' Add the content</button></div>'; }).join('') + '</div>';
-  }
   function tabVisible(id) { var b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); return !!b && b.style.display !== 'none'; }
   function tabLabel(id) { var b = document.querySelector('#tabBar .tab[data-tab="' + id + '"]'); var t = b ? String(b.textContent || '').replace(/\s+/g, ' ').trim() : ''; if (!t) { try { t = (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[id]) || id; } catch (e) { t = id; } } return t; }
   function deptTab() { var d = me().dept; if (d && tabVisible(d)) return d; for (var i = 0; i < DEPTS.length; i++) if (tabVisible(DEPTS[i])) return DEPTS[i]; return null; }
@@ -908,7 +816,7 @@
     return 25;
   }
   function tourKeyOf(t) { var k = String(t && t.key || ''); return k.indexOf('tour:') === 0 ? k.slice(5) : null; }
-  function visibleT(t) { if (!t || t.active === false) return false; if (t.body && t.body.planned) return false; var tk = tourKeyOf(t); if (kindOf(t) === 'tour') return !!(tk && TOURS[tk] && tourAvail(tk)); return true; }
+  function visibleT(t) { if (!t || t.active === false) return false; var tk = tourKeyOf(t); if (kindOf(t) === 'tour') return !!(tk && TOURS[tk] && tourAvail(tk)); return true; }
   function embedOf(t) {
     var lid = loomId(t); if (lid) return 'https://www.loom.com/embed/' + lid + '?hide_owner=true&hide_share=true&hide_title=true&hideEmbedTopBar=true';
     var u = String(t.resource_url || ''), m;
@@ -1024,8 +932,8 @@
       return WA37.onbs.filter(function (o) { return o.status !== 'cancelled' && String(o.person_name || '').toLowerCase() === n; })[0] || null;
     } catch (e) { return null; }
   }
-  function orgState(oo) {
-    var o = oo || orgMine(); if (!o) return { has: false };   /* wave169: the plan sheet can show a preview's onboarding */
+  function orgState() {
+    var o = orgMine(); if (!o) return { has: false };
     var map = {}; try { map = wa37StepsFor(o.id) || {}; } catch (e) { map = {}; }
     var weeks = []; try { weeks = wa37Weeks() || []; } catch (e) { weeks = []; }
     var total = 0, done = 0, next = null, nextWeek = null, curWeek = null;
@@ -1160,9 +1068,8 @@
       (!done && pct > 0 ? '<div class="pb"><i style="width:' + pct + '%"></i></div>' : '') + '</div></button>';
   }
   function topHtml() {
-    return '<div class="w122top"><span class="crumb">Home &middot; Avenue Academy</span><span class="sp"></span>' +
+    return '<div class="w122top"><span class="crumb">People &middot; Avenue Academy</span><span class="sp"></span>' +
       (TOURS.academy ? '<button class="w122btn soft sm" data-w122tour="academy">' + ic('map') + ' Tour this page</button>' : '') +
-      (window.w169 && w169.can() ? '<button class="w122btn soft sm" data-w169assign="">' + ic('user') + ' Assign a training</button>' : '') +   /* wave169 */
       (isLeader() ? '<button class="w122btn soft sm" data-w122add="1">' + ic('plus') + ' Add a training</button><a class="w122btn soft sm" href="#hrcentre/training">' + ic('people') + ' HR training board</a>' : '') +
       '<button class="w122btn ghost sm" data-w122classic="1" title="The previous Training page">Classic view</button></div>';
   }
@@ -1215,12 +1122,11 @@
       }).join('') + '</div>';
     } else h += '<div class="empty">There are no policies waiting for you.</div>';
     h += '</div></div>';
-    if (isLeader() || (window.w169 && w169.can())) h += '<div class="hrrow"><span>HR tools:</span><a class="w122lnk" href="#hrcentre/onboarding">Onboarding board and master onboarding</a>' + (window.w169 ? '<button class="w122lnk" data-w169assign="">Assign a training</button><a class="w122lnk" href="#hrcentre/training">Trainings assigned to the organization</a>' : '<a class="w122lnk" href="#hrcentre/training">Assign trainings in bulk</a>') + '</div>';   /* wave169 */
+    if (isLeader()) h += '<div class="hrrow"><span>HR tools:</span><a class="w122lnk" href="#hrcentre/onboarding">Onboarding board and master plan</a><a class="w122lnk" href="#hrcentre/training">Assign trainings in bulk</a></div>';
     return h + '</section>';
   }
   function titleCase(s) { return String(s || '').toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }
   function pendingHtml(g) {
-    if (window.w194 && typeof w194.pendingHtml === 'function') { try { return w194.pendingHtml(g); } catch (e) { /* the earlier list below */ } }   /* wave194: open it, then close it */
     return '<div class="upd"><b>Updated since you finished (' + g.pending.length + ')</b>' + g.pending.map(function (t) {
       return '<div class="ur"><span>' + E(t.name) + '</span><button class="go" data-w122ack="' + E(t.id) + '" data-up="' + E(t.updated_at) + '">Got it</button></div>';
     }).join('') + '</div>';
@@ -1250,8 +1156,7 @@
     var seen = {}, out = [];
     function add(t, tag) { if (!t || seen[t.id] || !visibleT(t) || isDone(t.id)) return; seen[t.id] = 1; out.push({ t: t, tag: tag }); }
     var n = me().name.toLowerCase();
-    var hasMine = !!(window.w169 && window.w169.homeHtml);   /* wave169: assigned trainings have their own section, Assigned to you */
-    var mineRows = A.prog.filter(function (p) { return String(p.person_name).toLowerCase() === n && p.status !== 'done' && !(hasMine && (p.assignment_id || p.assigned_by)); });
+    var mineRows = A.prog.filter(function (p) { return String(p.person_name).toLowerCase() === n && p.status !== 'done'; });
     mineRows.filter(function (p) { return p.started_at || p.pct; }).sort(function (a, b) { return String(b.updated_at || '').localeCompare(String(a.updated_at || '')); })
       .forEach(function (p) { add(A.byId[String(p.training_id)], '<span class="tag">In progress</span>'); });
     mineRows.filter(function (p) { return p.assigned_by; }).forEach(function (p) { add(A.byId[String(p.training_id)]); });
@@ -1263,7 +1168,7 @@
   function nextHtml(s) {
     var list = upNext(s);
     if (!list.length) return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">You are all caught up. Explore a Learning Avenue or the library below.</div></div></div></section>';
-    return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">' + (window.w169 ? 'What you started, and what is recommended for you.' : 'What you started, what was assigned to you, and what is recommended.') + '</div></div></div>' +
+    return '<section class="w122sec" data-sec="next"><div class="w122sech"><div><h2>Up next</h2><div class="sub">What you started, what was assigned to you, and what is recommended.</div></div></div>' +
       '<div class="w122scroll">' + list.map(function (x) { return cardHtml(x.t, { tag: x.tag }); }).join('') + '</div></section>';
   }
   function pathsHtml(s) {
@@ -1370,7 +1275,7 @@
     if (!staffOk()) return '<div class="w122none">The Avenue Academy is available to staff accounts.</div>';
     if (A.err && !A.trainings.length) return topHtml() + '<div class="w122none">The Avenue Academy could not load (' + E(A.err) + '). <button class="w122lnk" data-w122reload="1">Try again</button></div>';
     var s = stats();
-    return topHtml() + onbHtml(s.onb) + (window.w169 && w169.homeHtml ? w169.homeHtml() : '') + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
+    return topHtml() + onbHtml(s.onb) + heroHtml(s) + nextHtml(s) + pathsHtml(s) + sopsHomeHtml() + toursHtml(s) + libHtml() + trophiesHtml(s) + feedHtml();
   }
   var paintQ = null;
   function paint() {
@@ -1435,7 +1340,7 @@
     if (p) { var items = pathItems(p); var i = items.indexOf(t); if (i >= 0) idx = ' &middot; ' + (i + 1) + ' of ' + items.length; }
     return '<div class="hd"><div class="hi"><div class="kk">' + kindChip(t) + (p ? '<span>' + E(p.title) + idx + '</span>' : (t.category ? '<span>' + E(t.category) + '</span>' : '')) +
       '<span>' + ic('clock') + ' ' + mins(minutesOf(t)) + '</span><span>' + ic('bolt') + ' ' + xpFor(t) + ' XP</span></div><h2>' + E(sub || t.title) + '</h2></div>' +
-      '<div class="acts">' + (t.id && window.w169 && w169.can() && kindOf(t) !== 'tour' ? '<button class="w122btn soft sm" data-w169assign="t:' + E(t.id) + '">' + ic('user') + ' Assign</button>' : (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '')) +   /* wave169 */
+      '<div class="acts">' + (isLeader() && t.id ? '<button class="w122btn soft sm" data-w122assign="1">' + ic('user') + ' Assign</button>' : '') +
       (kindOf(t) === 'sop' ? (t.id && canEditSop(t) ? '<button class="w122btn soft sm" data-w122sopedit="1">' + ic('edit') + ' Edit</button>' : '') : (isLeader() && t.id && kindOf(t) !== 'tour' && kindOf(t) !== 'lesson' ? '<button class="w122btn soft sm" data-w122edit="1">' + ic('edit') + ' Edit</button>' : '')) +
       '<button class="xb" data-w122x="1" title="Close (Esc)">' + ic('x') + '</button></div></div>';
   }
@@ -1465,11 +1370,7 @@
     if (R.kind === 'lesson' && !isDone(t.id)) markSeen(t, R.ch);
     renderSheet(); startTimer();
   }
-  function renderSheet() {   /* wave194: after each sheet, the gold bar on a step opened from Updated since you finished */
-    renderSheet0();
-    try { if (window.w194 && typeof w194.decorate === 'function') w194.decorate(document.querySelector('#w122sheet .sh'), R); } catch (e) { /* fine */ }
-  }
-  function renderSheet0() {
+  function renderSheet() {
     if (!R) return;
     var sh = showSheet();
     if (R.mode === 'path') return renderPath(sh);
@@ -1510,49 +1411,16 @@
     var desc = String(t.description || '').trim();
     return (desc ? articleText(desc) : '<p>This training has no written content yet.</p>') + relatedTours(t);
   }
-  /* wave190: a reading reads like a page. Blank lines make blocks. A block that starts Try it:, Done when:, Tip:, Note: (or
-     Good to know:) or Watch out: is a callout, Goal: is the lead, and a block that is only **bold** is a heading. Inside a
-     block, a line starting ## is a heading, a line that is only **bold** is a small heading, 1. lines are numbered steps (the - lines under one are its points), - lines are
-     bullets, and the other lines make a paragraph. Text written before wave190 reads as it did, numbered lists now numbered. */
-  var W190CALL = [[/^try it:\s*/i, 'try', 'bolt', 'Try it'], [/^done when:\s*/i, 'info', 'check', 'Done when'], [/^tip:\s*/i, 'tip', 'sparkle', 'Tip'], [/^(?:note|good to know):\s*/i, 'info', 'compass', 'Good to know'], [/^(?:watch out|careful):\s*/i, 'warn', 'flag', 'Watch out']];
   function articleText(text) {
-    return redact(text).replace(/\r\n?/g, '\n').split(/\n[ \t]*\n+/).map(function (p) {
+    return redact(text).split(/\n{2,}/).map(function (p) {
       var s = p.trim(); if (!s) return '';
-      for (var i = 0; i < W190CALL.length; i++) {
-        var c = W190CALL[i];
-        if (c[0].test(s)) { var t = s.replace(c[0], ''); t = t.charAt(0).toUpperCase() + t.slice(1); return '<div class="callout ' + c[1] + '">' + ic(c[2]) + '<div><b>' + c[3] + '</b>' + t.split('\n').map(md).join('<br>') + '</div></div>'; }
-      }
+      if (/^try it:/i.test(s)) return '<div class="callout try">' + ic('bolt') + '<div><b>Try it</b>' + md(s.replace(/^try it:\s*/i, '')) + '</div></div>';
+      if (/^done when:/i.test(s)) return '<div class="callout info">' + ic('check') + '<div><b>Done when</b>' + md(s.replace(/^done when:\s*/i, '')) + '</div></div>';
       if (/^goal:/i.test(s)) return '<p class="lead">' + md(s.replace(/^goal:\s*/i, '')) + '</p>';
-      var hb = /^\*\*([^*\n]+)\*\*\s*$/.exec(s); if (hb) return '<h3>' + md(hb[1].replace(/\s*:\s*$/, '')) + '</h3>';
-      return articleBlock(s.split('\n'));
+      var lines = s.split('\n');
+      if (lines.length > 1 && lines.every(function (l) { return /^\s*(?:[-\u2022*]|\d+[.)])\s+/.test(l); })) return '<ul>' + lines.map(function (l) { return '<li>' + md(l.replace(/^\s*(?:[-\u2022*]|\d+[.)])\s+/, '')) + '</li>'; }).join('') + '</ul>';
+      return '<p>' + lines.map(md).join('<br>') + '</p>';
     }).join('');
-  }
-  function articleBlock(lines) {
-    var out = [], para = [], list = null;
-    function endPara() { if (para.length) { out.push('<p>' + para.map(md).join('<br>') + '</p>'); para = []; } }
-    function endList() {
-      if (!list) return;
-      out.push('<' + list.tag + (list.tag === 'ol' ? ' class="w190ol"' + (list.start > 1 ? ' start="' + list.start + '" style="counter-reset:w190 ' + (list.start - 1) + '"' : '') : '') + '>' + list.items.map(function (it) {
-        return '<li>' + it.h + (it.sub.length ? '<ul>' + it.sub.map(function (x) { return '<li>' + x + '</li>'; }).join('') + '</ul>' : '') + '</li>';
-      }).join('') + '</' + list.tag + '>');
-      list = null;
-    }
-    lines.forEach(function (raw) {
-      var l = String(raw).replace(/\s+$/, ''), m;
-      if (!l.trim()) return;
-      if ((m = /^\s*#{1,6}\s+(.+)$/.exec(l))) { endPara(); endList(); out.push('<h3>' + md(m[1].replace(/\s+#+$/, '')) + '</h3>'); return; }
-      if ((m = /^\s*\*\*([^*]+)\*\*\s*$/.exec(l))) { endPara(); endList(); out.push('<h4>' + md(m[1].replace(/\s*:\s*$/, '')) + '</h4>'); return; }
-      if ((m = /^\s*(\d+)[.)]\s+(.*)$/.exec(l))) { endPara(); if (!list || list.tag !== 'ol') { endList(); list = { tag: 'ol', items: [], start: Number(m[1]) || 1 }; } list.items.push({ h: md(m[2]), sub: [] }); return; }
-      if ((m = /^\s*[-\u2022*]\s+(.*)$/.exec(l))) {
-        endPara();
-        if (list && list.tag === 'ol' && list.items.length) { list.items[list.items.length - 1].sub.push(md(m[1])); return; }
-        if (!list) list = { tag: 'ul', items: [] };
-        list.items.push({ h: md(m[1]), sub: [] }); return;
-      }
-      endList(); para.push(l.trim());
-    });
-    endPara(); endList();
-    return out.join('');
   }
   function relatedTours(t) {
     var keys = (t.body && t.body.tours) || [];
@@ -1602,10 +1470,6 @@
     if (!r || r.status !== 'done') patch.pct = Math.min(95, Math.round(100 * seen.length / Math.max(1, total)));
     saveProg(t, patch);
   }
-  /* wave150: helpers for the brand blocks. Pictures come only from the Hub's own public storage; fonts only from the brand pair. */
-  var HEX6 = /^#[0-9a-f]{6}$/i, OWN_IMG = /^https:\/\/zwnmulmnvopclzcvytce\.supabase\.co\/storage\/v1\/object\/public\/[\w./-]+$/;
-  var FONTS = { 'Barlow Condensed': "'Barlow Condensed',sans-serif", 'Space Grotesk': "'Space Grotesk',sans-serif" };
-  function lumOf(hx) { var n = parseInt(String(hx).slice(1), 16); return ((n >> 16 & 255) * 0.299 + (n >> 8 & 255) * 0.587 + (n & 255) * 0.114) / 255; }
   function blocksHtml(blocks) { return blocks.map(blockHtml).join(''); }
   function blockHtml(b) {
     switch (b.type) {
@@ -1630,82 +1494,13 @@
       case 'kinds': { var cols = { Partner: [GREEN, '#1d5a51'], Sponsor: ['#B9851B', '#D9A43A'], Collaborator: [PURPLE, '#8b80c9'] }; return '<div class="kinds">' + (b.items || []).map(function (x) { var c = cols[x.t] || [GREEN, TEAL]; return '<div class="k3" style="background:linear-gradient(145deg,' + c[0] + ',' + c[1] + ')"><span class="i">' + ic(x.icon || 'star') + '</span><b>' + E(x.t) + '</b><p>' + E(x.d) + '</p>' + (x.e ? '<div class="e">For example: ' + E(x.e) + '</div>' : '') + '</div>'; }).join('') + '</div>'; }
       case 'partners': return '<div class="pgroups">' + (b.groups || []).map(function (g) { return '<div class="pg"><h4>' + E(g.g) + '</h4><div class="pl">' + (g.items || []).map(function (x) { var st = String(x.s || ''); var cls = st.indexOf('New') === 0 ? 'New' : st; return '<div class="p"><b><span>' + E(x.n) + '</span><span class="w122st ' + E(cls) + '">' + E(st) + '</span></b><p>' + E(x.d) + '</p></div>'; }).join('') + '</div></div>'; }).join('') + '</div>';
       case 'stages': { var tc = { muted: '#9a9893', gold: GOLD, green: TEAL, purple: PURPLE, flag: FLAG }; return '<div class="stages">' + (b.items || []).map(function (x) { return '<div class="g"><i style="background:' + (tc[x.tone] || TEAL) + '"></i><b>' + E(x.t) + '</b><span>' + E(x.d) + '</span></div>'; }).join('') + '</div>'; }
-      /* wave150: colour swatches, pictures from the Hub's own storage, and type specimens */
-      case 'swatches': return '<div class="w150sw">' + (b.items || []).map(function (x) {
-        var hx = HEX6.test(String(x.hex || '')) ? String(x.hex).toUpperCase() : '#CCCCCC', dark = lumOf(hx) < 0.55;
-        return '<div class="sw" style="background:' + hx + ';color:' + (dark ? '#FFFAF2' : GREEN) + '"><b>' + E(x.n) + '</b><span class="hx">' + E(hx) + '</span>' + (x.d ? '<p>' + E(x.d) + '</p>' : '') + (x.use ? '<span class="u">' + E(x.use) + '</span>' : '') + '</div>';
-      }).join('') + '</div>';
-      case 'figures': return '<div class="w150fig">' + (b.items || []).filter(function (x) { return OWN_IMG.test(String(x.src || '')); }).map(function (x) {
-        var bg = HEX6.test(String(x.bg || '')) ? x.bg : '#FFFAF2';
-        return '<figure><div class="im" style="background:' + bg + '"><img src="' + E(x.src) + '" alt="' + E(x.alt || x.t || '') + '" loading="lazy"></div><figcaption>' + (x.t ? '<b class="t">' + E(x.t) + '</b>' : '') + (x.d ? md(x.d) : '') + '</figcaption></figure>';
-      }).join('') + '</div>';
-      case 'fonts': return '<div class="w150ty">' + (b.items || []).map(function (x) {
-        var fam = FONTS[x.f] || 'inherit';
-        return '<div class="ty"><div class="sm' + (x.body ? ' body' : '') + '" style="font-family:' + fam + (x.upper ? ';text-transform:uppercase;font-weight:600' : '') + '">' + E(x.sample || x.f) + '</div><b>' + E(x.f) + '</b><span>' + E(x.role || '') + '</span></div>';
-      }).join('') + '</div>';
-      /* wave167: photos from the Photo library (the Hub's own storage only), with where to hold the crop (fx, fy) and a caption */
-      case 'photo': return phHtml(b);
-      case 'photos': return '<div class="w167phs">' + (b.items || []).map(phHtml).join('') + '</div>';
-      /* wave191p: choose your servings (filled by wave191's onboarding module) */
-      case 'servings': return '<div class="w191onb" data-w191onbat="lesson"></div>';
       default: return b.text ? '<p>' + md(b.text) + '</p>' : '';
     }
-  }
-  function phHtml(x) {
-    if (!x || !OWN_IMG.test(String(x.src || ''))) return '';
-    var fx = Math.round(100 * (x.fx == null ? 0.5 : Number(x.fx))), fy = Math.round(100 * (x.fy == null ? 0.5 : Number(x.fy)));
-    return '<figure class="w167ph"><img src="' + E(x.src) + '" alt="' + E(x.alt || x.cap || '') + '" loading="lazy" style="object-position:' + fx + '% ' + fy + '%">' + (x.cap ? '<figcaption>' + E(x.cap) + '</figcaption>' : '') + '</figure>';
   }
   function linkCard(x) { return '<a class="lnk2" href="' + E(x.url) + '" target="_blank" rel="noopener"><span class="i">' + ic('doc') + '</span><span><b>' + E(x.t) + '</b><span>' + E(x.d || hostOf(x.url)) + '</span></span><span class="ar">' + ic('ext') + '</span></a>'; }
 
   /* ---------- the knowledge check ---------- */
-  /* wave150: the hard knowledge check (quiz.hard). Every attempt shuffles the questions and their answers; a wrong pick is not
-     revealed (it names the part of the source to check instead); the answers and the whys for anything missed are shown only
-     once the check is passed. quiz.source is the key of the training to go back to (the Brand Guides). */
-  function shuffled(n) { var a = []; for (var i = 0; i < n; i++) a.push(i); for (var j = n - 1; j > 0; j--) { var k = Math.floor(Math.random() * (j + 1)); var x = a[j]; a[j] = a[k]; a[k] = x; } return a; }
-  function hardNeed(q) { var n = (q.questions || []).length; return Math.min(n, Math.ceil(n * (q.pass || 0.8) - 1e-9)); }
-  function hardQuizHtml(t, q) {
-    var qs = q.questions || [], need = hardNeed(q);
-    if (!R.quiz || !R.quiz.hard) { R.quiz = { hard: true, started: !!R.qagain, i: 0, picks: [], order: shuffled(qs.length), opts: qs.map(function (x) { return shuffled((x.a || []).length); }) }; R.qagain = false; }
-    var Z = R.quiz, src = q.source ? A.byKey[q.source] : null;
-    var srcBtn = src && visibleT(src) && src.id !== t.id ? '<button class="w122btn soft" data-w122pitem="' + E(src.id) + '">' + ic('file') + ' Open ' + E(src.title) + '</button>' : '';
-    if (!Z.started) {
-      return '<div class="quiz hard"><div class="qn">Knowledge check</div><div class="qq">' + E(q.title || 'Ready when you are') + '</div><div class="intro">' + (q.intro ? '<p>' + md(q.intro) + '</p>' : '') +
-        '<ul><li>' + qs.length + ' questions, in a new order every attempt.</li><li>You need ' + need + ' right to pass.</li><li>A wrong answer is not revealed: you get the part of the guide to check instead. You see every answer once you pass.</li></ul></div>' +
-        '<div class="chfoot">' + srcBtn + '<span class="sp"></span><button class="w122btn gold" data-w122qstart="1">' + ic('star') + ' Start the check</button></div></div>';
-    }
-    if (Z.i >= qs.length) {
-      var missed = [], right = 0;
-      Z.order.forEach(function (qi, i) { if (Z.picks[i] === qs[qi].c) right++; else missed.push(qs[qi]); });
-      var pct = Math.round(100 * right / Math.max(1, qs.length)), pass = right >= need;
-      var head = '<div class="rg">' + ring(pct, 150, 12, pass ? TEAL : FLAG) + '<b>' + pct + '%</b></div><h3>' + (pass ? (missed.length ? 'You passed' : 'Perfect score!') : 'Almost there') + '</h3>';
-      if (!pass) {
-        var seen = {}, go = [];
-        missed.forEach(function (x) { var h = String(x.hint || '').trim(); if (h && !seen[h]) { seen[h] = 1; go.push(h); } });
-        return '<div class="quiz hard"><div class="res">' + head + '<p>' + right + ' of ' + qs.length + ' right. You need ' + need + ' to pass.</p>' +
-          (go.length ? '<div class="go"><b>Go back to these parts of the guide:</b><ul>' + go.map(function (h) { return '<li>' + E(h) + '</li>'; }).join('') + '</ul></div>' : '') +
-          '<div class="acts2"><button class="w122btn" data-w122qretry="1">' + ic('refresh') + ' Try again</button>' + srcBtn + '<button class="w122btn soft" data-w122ch="0">Review the lesson</button></div></div></div>';
-      }
-      return '<div class="quiz hard"><div class="res">' + head + '<p>' + right + ' of ' + qs.length + ' right. ' + (isDone(t.id) ? 'This lesson is complete.' : 'Complete the lesson to record it.') + '</p>' +
-        (isDone(t.id) ? '' : '<button class="w122btn" data-w122qfinish="' + pct + '">' + ic('check') + ' Complete the lesson</button>') +
-        (missed.length ? '<div class="review"><h4>What you missed</h4>' + missed.map(function (x) { return '<div class="rv"><b>' + E(x.q) + '</b><span class="an">' + E(x.a[x.c]) + '</span><br>' + E(x.why || '') + '</div>'; }).join('') + '</div>' : '') + '</div></div>';
-    }
-    var qi = Z.order[Z.i], cur = qs[qi], picked = Z.picks[Z.i];
-    var dots = Z.order.map(function (x, i) { return '<i class="' + (i < Z.i ? (Z.picks[i] === qs[x].c ? 'ok' : 'no') : i === Z.i ? 'cur' : '') + '"></i>'; }).join('');
-    var opts = (Z.opts[qi] || []).map(function (oi, pos) {
-      var cls = picked == null || oi !== picked ? '' : (oi === cur.c ? ' right' : ' wrong');
-      return '<button class="op' + cls + '" data-w122opt="' + oi + '"' + (picked != null ? ' disabled' : '') + '><span class="l">' + 'ABCDEF'[pos] + '</span><span>' + E(cur.a[oi]) + '</span></button>';
-    }).join('');
-    var fb = '';
-    if (picked != null) {
-      fb = picked === cur.c ? '<div class="why"><b>Right. </b>' + E(cur.why || '') + '</div>'
-        : '<div class="why miss"><b>Not quite. </b>' + (cur.hint ? 'Check ' + E(cur.hint) + '. ' : '') + 'The answer is shown once you pass.</div>';
-      fb += '<div class="chfoot"><span class="sp"></span><button class="w122btn" data-w122qnext="1">' + (Z.i + 1 < qs.length ? 'Next question' : 'See my score') + ' ' + ic('arrow') + '</button></div>';
-    }
-    return '<div class="quiz hard"><div class="dots">' + dots + '</div><div class="qn">Question ' + (Z.i + 1) + ' of ' + qs.length + '</div><div class="qq">' + E(cur.q) + '</div><div class="opts">' + opts + '</div>' + fb + '</div>';
-  }
   function quizHtml(t, q) {
-    if (q && q.hard) return hardQuizHtml(t, q);
     var qs = q.questions || [];
     if (!R.quiz) R.quiz = { i: 0, picks: [], shown: false, first: !(mine(t.id) && mine(t.id).data && mine(t.id).data.quizTries) };
     var Z = R.quiz;
@@ -1729,14 +1524,14 @@
   }
   function renderPath(sh) {
     var p = R.path, ps = pathState(p), col = p.color || GREEN, cert = A.myAwards['cert:' + p.key];
-    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts">' + (window.w169 && window.w169.can() && p.key !== 'tours' ? '<button class="w122btn soft sm" data-w169assign="p:' + E(p.key) + '">' + ic('user') + ' Assign</button>' : '') + '<button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
+    var html = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')">' + ic('map') + ' Learning Avenue</span><span>' + plural(ps.total, 'item') + '</span></div><h2>' + E(p.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="pr"><i style="width:' + ps.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap">' +
       '<div class="phero" style="background:linear-gradient(135deg,' + E(col) + ',' + E(shade(col)) + ')"><span class="big">' + ic(p.icon || 'book') + '</span><h3>' + E(p.title) + '</h3><p>' + E(p.blurb || '') + '</p><div class="bar"><i style="width:' + ps.pct + '%"></i></div><div style="font-size:13px">' + ps.done + ' of ' + ps.total + ' done' + (ps.minsLeft ? ' &middot; about ' + mins(ps.minsLeft) + ' left' : '') + '</div></div>' +
       (cert ? '<div class="callout tip">' + ic('seal') + '<div><b>Certified</b>You earned the ' + E(p.cert_title || p.title) + ' certificate on ' + E(fmtDate(cert.earned_at)) + '. <button class="w122lnk" data-w122cert="cert:' + E(p.key) + '">View it</button></div></div>' : '<div class="callout info">' + ic('seal') + '<div><b>' + E(p.cert_title || p.title) + ' certificate</b>Finish every item to earn it.</div></div>') +
       '<div class="pitems">' + ps.items.map(function (t, i) {
         var ok = isDone(t.id), k = KIND[kindOf(t)] || KIND.read;
         return '<button class="pitem' + (ok ? ' ok' : '') + '" data-w122pitem="' + E(t.id) + '"><span class="n">' + (ok ? ic('check') : (i + 1)) + '</span><span class="tx"><b>' + E(String(t.title).replace(/^Page tour:\s*/, '')) + '</b><span>' + E(k.l) + ' &middot; ' + mins(minutesOf(t)) + (ok ? ' &middot; done' : '') + '</span></span>' + ic('chev') + '</button>';
-      }).join('') + '</div>' + plannedHtml(p) + '</div></div></div>' +
+      }).join('') + '</div></div></div></div>' +
       '<div class="ft"><div class="st">' + (ps.complete ? '<span class="ok">' + ic('check') + ' Learning Avenue complete</span>' : ps.done + ' of ' + ps.total + ' done') + '</div><span class="sp"></span>' + (ps.next ? '<button class="w122btn" data-w122pitem="' + E(ps.next.id) + '">' + (ps.done ? 'Continue' : 'Start') + ': ' + E(String(ps.next.title).replace(/^Page tour:\s*/, '').slice(0, 40)) + ' ' + ic('arrow') + '</button>' : '') + '</div>';
     sh.innerHTML = html;
   }
@@ -1744,11 +1539,10 @@
   /* ---------- the onboarding plan ---------- */
   function openOnb() { stopTimer(); R = { mode: 'onb', secs: 0, open: {} }; renderSheet(); }
   function renderOnb(sh) {
-    var pv = window.__w169view || null, pvb = pv && window.w169 && typeof w169.banner === 'function' ? w169.banner() : '';   /* wave169: HR's preview */
-    var g = orgState(pv);
+    var g = orgState();
     if (!g.has) { sh.innerHTML = '<div class="hd"><div class="hi"><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div><div class="bd"><div class="main"><div class="wrap"><p class="prose">HR has not assigned your onboarding plan yet.</p></div></div></div>'; return; }
-    var inner = ''; try { inner = wa37Checklist(g.o, !pv) || ''; } catch (e) { inner = '<p>The plan could not load.</p>'; }
-    sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('list') + ' Onboarding</span><span>' + g.done + ' of ' + g.total + ' steps</span></div><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' + pvb +
+    var inner = ''; try { inner = wa37Checklist(g.o, true) || ''; } catch (e) { inner = '<p>The plan could not load.</p>'; }
+    sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('list') + ' Onboarding</span><span>' + g.done + ' of ' + g.total + ' steps</span></div><h2>Your onboarding plan</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="pr"><i style="width:' + g.pct + '%"></i></div><div class="bd"><div class="main"><div class="wrap"><div class="prose"><p>Work top to bottom and tick each step as you go. Big steps fold their details away; open a week to see everything in it. Lean on your onboarding channel whenever something is unclear.</p></div><div class="onbwrap">' + inner + '</div></div></div></div>' +
       '<div class="ft"><div class="st">' + (g.complete ? '<span class="ok">' + ic('check') + ' Complete</span>' : g.done + ' of ' + g.total + ' done') + '</div><span class="sp"></span><button class="w122btn" data-w122x="1">Done</button></div>';
     /* keep the weeks the person had open */
@@ -1762,7 +1556,6 @@
   }
   function certHtml(a) {
     var m = me();
-    if (window.w194 && typeof w194.certHtml === 'function') { try { return w194.certHtml(a, m, certNo(a, a.earned_at)); } catch (e) { /* the earlier certificate below */ } }   /* wave194 */
     return '<div class="w122cert"><div class="c-top">WELFARE AVENUE &middot; AVENUE ACADEMY</div><div class="c-title">Certificate of completion</div><div class="c-sub">This certifies that</div><div class="c-name">' + E(m.full || m.name) + '</div><div class="c-sub">has completed</div><div class="c-path">' + E(a.title) + '</div>' +
       '<div class="c-meta"><span>Awarded ' + E(fmtDate(a.earned_at)) + '</span><span>Certificate ' + E(certNo(a, a.earned_at)) + '</span></div><div class="c-seal">' + ic('seal') + '</div></div>';
   }
@@ -1771,11 +1564,9 @@
     sh.innerHTML = '<div class="hd"><div class="hi"><div class="kk"><span class="kd" style="background:linear-gradient(135deg,#B9851B,' + GOLD + ')">' + ic('seal') + ' Certificate</span></div><h2>' + E(a.title) + '</h2></div><div class="acts"><button class="xb" data-w122x="1">' + ic('x') + '</button></div></div>' +
       '<div class="bd"><div class="main"><div class="wrap wide">' + certHtml(a) + '</div></div></div>' +
       '<div class="ft"><div class="st">Earned ' + E(fmtDate(a.earned_at)) + '</div><span class="sp"></span>' + (shared ? '<span class="st">' + ic('check') + ' Shared with the team</span>' : '<button class="w122btn soft" data-w122share="' + E(a.award) + '">' + ic('megaphone') + ' Share with the team</button>') + '<button class="w122btn" data-w122print="' + E(a.award) + '">' + ic('print') + ' Print or save as PDF</button></div>';
-    try { if (window.w194 && typeof w194.certShown === 'function') w194.certShown(sh, a, me(), certNo(a, a.earned_at)); } catch (e) { /* fine */ }   /* wave194 */
   }
   function printCert(award) {
     var a = A.myAwards[award]; if (!a) return;
-    if (window.w194 && typeof w194.printCert === 'function') { try { w194.printCert(a, me(), certNo(a, a.earned_at)); return; } catch (e) { /* the earlier print below */ } }   /* wave194 */
     var w = window.open('', '_blank'); if (!w) { toastS('Allow pop-ups for the Hub to print the certificate'); return; }
     var certCss = (document.getElementById('wa122css') || {}).textContent || '';
     w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>' + E(a.title) + ' certificate</title><style>@page{size:A4 landscape;margin:12mm;}body{margin:0;background:#FFFAF2;display:flex;align-items:center;justify-content:center;min-height:100vh;}.w122cert{width:260mm;max-width:100%;}' +
@@ -1831,7 +1622,7 @@
       '<label>Link (video or document)<input type="url" data-f="resource_url" value="' + E(t.resource_url || '') + '" placeholder="https://www.loom.com/share/..."></label>' +
       '<div class="row2"><label>Topic<input type="text" list="w122cats" data-f="category" value="' + E(t.category || 'General') + '"><datalist id="w122cats">' + cats.map(function (c) { return '<option value="' + E(c) + '">'; }).join('') + '</datalist></label>' +
       '<label>Learning Avenue<select data-f="path_group"><option value="">None</option>' + paths.map(function (p) { return '<option value="' + E(p.name) + '"' + (t.path_group === p.name ? ' selected' : '') + '>' + E(p.title) + '</option>'; }).join('') + '</select></label></div>' +
-      '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, a line starting ## (or a line of its own in **bold**) is a heading, lines starting 1. or - make a list, and a paragraph starting Try it:, Done when:, Tip:, Good to know: or Watch out: becomes a highlighted box.">' + E(t.description || '') + '</textarea></label>' +
+      '<label>Description or the reading itself<textarea data-f="description" placeholder="What people will learn. For a reading, write it here: blank lines make paragraphs, and lines starting Try it: or Done when: become highlighted boxes.">' + E(t.description || '') + '</textarea></label>' +
       '</div></div></div></div><div class="ft">' + (!isNew ? '<button class="w122btn ghost" data-w122retire="1">Retire it</button>' : '') + '<span class="sp"></span><button class="w122btn soft" data-w122x="1">Cancel</button><button class="w122btn" data-w122save="1">' + ic('check') + ' Save</button></div>';
   }
   async function saveForm() {
@@ -1843,7 +1634,6 @@
     if (!row.source) row.source = 'hub';
     try {
       var res;
-      if (R.t && R.t.body && R.t.body.planned && (row.resource_url || (row.description && row.description !== (R.t.description || null)))) row.body = Object.assign({}, R.t.body, { planned: false, filled_at: nowIso(), filled_by: me().name });
       if (R.t) { res = await db.from('trainings').update(row).eq('id', R.t.id).select(); if (res.error) throw res.error; Object.keys(row).forEach(function (k) { R.t[k] = row[k]; }); toastS('Saved'); var keep = R.t; applyTrainings(A.trainings); openTraining(keep.id); }
       else {
         row.active = true; row.sort = 900;
@@ -1923,9 +1713,9 @@
   var TOURS = {
     chrome: { tab: 'mypage', icon: 'compass', hash: '#mypage', steps: [
       C('Welcome to the Hub', 'This two-minute tour shows the parts of the Hub that follow you on every page. Use the arrow keys or the buttons to move through it, and Esc to stop.'),
-      S('#w163bar || nav.wa-nav || #w114bar', 'The menu', 'Every Hub page lives here: Home, the Avenue Academy, the Executive dashboard, the Calendar and The Brain at the top, then Departments, Other Tools and Organization. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar. Strategy, the CRM and the other apps open from Apps at the bottom. On a phone, the bar at the bottom has Home, the Calendar, Ask, your team and Menu, which opens everything, with Find a page.'),
+      S('nav.wa-nav || #w114bar', 'The menu', 'Every page lives here: Home, the Executive dashboard and the Calendar at the top, then Departments, Goals and projects, Meetings, Requests and inbox, People, Resources and Admin. A department folds open to show its team\u2019s own pages, like Volunteering or the Content calendar.'),
       S('#globalSearch || .search-wrap', 'Search everything', 'Type a task, a person, a goal or a meeting and jump straight to it. It searches the whole Hub, not just the page you are on.', OPT),
-      S('#w192go || #w116jck', 'The Loop', 'Starting work for Welfare Avenue? Press I\u2019m in. Nothing is posted: the ring on your photo shows teammates you are around, and your hours are yours and HR\u2019s. When you finish, Close the loop shares what moved with your team.', OPT),   /* wave192 */
+      S('#w116jck', 'Check in', 'Starting a work session? Check in, and your hours on the Hub count from that moment. They show on your profile and in the HR centre.', OPT),
       S('.wa-toolbar .w115pill || #signOutBtn', 'Your account', 'Your name and the sign-out button live here.', OPT),
       S('#waChatBtn', 'Ask the Hub', 'Ask anything about what is happening at Welfare Avenue, or type a request or a task in plain words. It answers from the Hub\u2019s live data and asks you to confirm before it saves anything.', OPT),
       C('Help on every page', 'Most pages have a How this page works button, and every page has a guided tour like this one in the Avenue Academy.')
@@ -1985,7 +1775,25 @@
       S('#w111body .dash', 'Days to close, by team', 'How long tasks take from first raised to closed, per department. Shorter bars mean work moves faster.', OPT),
       S('#w111body table.wa-tbl', 'Open workload and aging', 'How much is open per team and how old it is. Old open work is the first thing to review in a team meeting.', OPT)
     ] },
-    /* wave205: the tours of Goals (orggoals), the Strategy Library (strategylib) and Goal alignment (goalmap) live in build/parts205/h_tours.js; Department goals is retired */
+    orggoals: { tab: 'orggoals', icon: 'flag', hash: '#orggoals', steps: [
+      S('#orggoals .w116ptop', 'Where we are going', 'The organization\u2019s yearly and multi-year goals. Department goals roll up into these.'),
+      S('#w116orghost .sum', 'At a glance', 'How many goals are in play, on track, or at risk.', OPT),
+      S('#w116orghost .tb', 'Filter and add', 'Switch the horizon, filter by status, or add a new organizational goal.', OPT),
+      S('#w116orghost article.w116og .hd', 'A goal', 'Each goal shows its horizon, status and owner. Click any part to edit it.', OPT),
+      S('#w116orghost article.w116og .w116smart', 'SMART', 'Specific, Measurable, Achievable, Relevant and Time-bound. Fill in each letter so everyone reads the goal the same way.', OPT),
+      S('#w116orghost article.w116og .w116win', 'What achieved looks like', 'Describe the day the goal is met. It keeps the goal honest.', OPT),
+      S('#w116orghost article.w116og .w116inv', 'Who is involved', 'The teams, department goals, projects and tasks that roll up into this goal.', OPT),
+      S('#w116orghost article.w116og .ft', 'Actions', 'Edit it, add a department goal under it, comment, or see it on the alignment map.', OPT)
+    ] },
+    goals: { tab: 'goals', icon: 'target', hash: '#goals', steps: [
+      S('#goals > .w118mast', 'Every team\u2019s goals', 'Quarterly goals for every team, with the projects and tasks that carry them.'),
+      S('#glBody .sum', 'At a glance', 'Goals in play this quarter, the ones at risk or past due, and the ones achieved.', OPT),
+      S('#glBody .chips', 'Filter by team', 'Show one team or all of them.', OPT),
+      S('#glBody .tb', 'Pick the quarter', 'This quarter, next quarter or all quarters. Our fiscal year starts October 1.', OPT),
+      S('#glBody .w116gg .gh', 'A team\u2019s goals', 'Each team folds open. Use + Add goal to add one.', OPT),
+      S('#glBody .w116ggrid', 'Goal cards', 'Status, due date and progress. Open a goal for its SMART detail, tasks and projects, and roll it up to an organizational goal.', OPT),
+      S('#glBody details.w116sug', 'Suggested goals', 'The AI suggests goals it hears in transcripts and board meetings. Nothing is added until someone accepts one.', OPT)
+    ] },
     projects: { tab: 'projects', icon: 'box', hash: '#projects', steps: [
       S('#projects .w116ptop', 'Every active project', 'Projects by team, with their status, lead and the goal they serve.'),
       S('#w116projhost .sum', 'At a glance', 'Active projects, open tasks in projects, and projects still without a lead.', OPT),
@@ -1994,12 +1802,22 @@
       S('#w116projhost .w116pc', 'A project card', 'Status, lead, owner team, linked goal and open tasks. Click it to open the project page.', OPT),
       S('#w116projhost p.note', 'One lead per project', 'Every project should have one lead: the person accountable for it.', OPT)
     ] },
+    goalmap: { tab: 'goalmap', icon: 'link', hash: '#goalmap', steps: [
+      S('#goalmap .w116ptop', 'How it all connects', 'Projects feed department goals, which feed organizational goals.'),
+      S('#w116maphost .sum', 'Gaps at a glance', 'Projects without a goal and goals without projects show up here.', OPT),
+      S('#w116maphost .chips', 'Filter by team', 'Focus the map on one team.', OPT),
+      S('#w116maphost .w116mcols > .w116mcol:nth-child(1)', 'Projects', 'The work underway. A project marked Link to a goal is not connected yet: click it to link it.', OPT),
+      S('#w116maphost .w116mcols > .w116mcol:nth-child(2)', 'Department goals', 'Quarterly goals per team, rolling up to the organization.', OPT),
+      S('#w116maphost .w116mcols > .w116mcol:nth-child(3)', 'Organizational goals', 'The yearly and multi-year direction.', OPT),
+      S('#w116maphost p.note', 'Try it', 'Hover anything to light up its chain; click it to pin it.', OPT)
+    ] },
     project: { tab: 'projects', icon: 'box', hash: function () { return '#project/' + projectId(); }, avail: function () { return !!projectId(); }, steps: [
       S('#projectpage .card > h2', 'A project page', 'One project\u2019s name, team and status.'),
       S('#projectpage .w27-desc', 'What it is', 'A short description of the project.', OPT),
       S('#w104', 'Progress and people', 'Tasks complete, the lead (the one person accountable) and the contributors. Change the lead here.', OPT),
-      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Tick one done, or move it to another project.', OPT),
+      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Push it to the bank from there too. Tick one done (Undo stays on the row for a few seconds), or move it to another project.', OPT),
       S('#projectpage .add-row', 'Add a task', 'Quick-add a task straight into the project.', OPT),
+      S('#projectpage [data-w207link]', 'Link existing tasks', 'Bring in tasks that already exist: search the team\u2019s open tasks (or every team\u2019s), tick the ones that belong here and link them. A task in another project moves.', OPT),
       S('#projectpage details.completed', 'Completed', 'Finished tasks keep their history.', OPT)
     ] },
     requests: { tab: 'requests', icon: 'chat', hash: '#requests/new', steps: [
@@ -2014,7 +1832,7 @@
       S('#transcripts > .w118mast', 'Meetings become work', 'Every meeting the Hub has read, and where to add the next one.'),
       S('#txDept', 'Pick the department', 'Choose the team the meeting belongs to, or Leadership to spread it across every team.', OPT),
       S('#txBody', 'Paste the transcript', 'Paste the full transcript from Otter, Plaud, Zoom or Meet. Add the date and a title if the Hub cannot read them from the text.', OPT),
-      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, confidential to the people you pick, or a one-on-one only the people in it see (not even admins). Ask the Hub answers from a restricted meeting only for the people who can see it.', OPT),
+      S('#w62type || #w62people', 'Who can see it', 'Everyone, leaders only, or confidential to the people you pick. Restricted meetings stay sealed, even from the assistant.', OPT),
       S('#txSave', 'Save and review', 'You get a preview of every task, closure, update, decision and mention the AI wants to file. Nothing saves until you approve it.', OPT),
       S('#txSearch || #txFilter', 'Find a meeting', 'Search the archive, or filter it by team.', OPT),
       S('#txList', 'The archive', 'Every transcript shows what it contributed. Use Reprocess if something did not land.', OPT)
@@ -2064,22 +1882,22 @@
       S('#w122 [data-sec="feed"]', 'Celebrate each other', 'What people across Welfare Avenue earned recently.', OPT)
     ] },
     volunteering: { tab: 'volunteering', icon: 'bowl', hash: '#volunteering', steps: [
-      /* wave191: the flow (This week, a serving's six stages, The team) */
-      S('#volunteering > .w118mast', 'Servings', 'This week, the calendar and every Montreal serving. The SOP, the volunteers, the recipes and the inventory are in the menu on the left.'),
-      S('#w191week', 'This week', 'Each serving coming up, the stage it is in and its next step for a person; then what is overdue, what has no owner and your own steps. A past serving the Hub could not settle asks whether it happened.', OPT),
-      S('#w106add', 'Add an event', 'Create a serving or a special event. It copies the master SOP so nothing is missed.', OPT),
-      S('#w119cal', 'The month', 'Every serving on a calendar.', OPT),
-      S('#volunteering .vl-grid', 'Every serving', 'Open one to plan it.', OPT),
-      S('#w191head', 'A serving', 'The date, the countdown, the format and the six stages: Plan, Recruit, Confirm, Prepare, Day of and Wrap up. The gold button is the next thing to do; More holds everything else.', { opt: 1, go: function () { var e = document.querySelector('#w191week [data-vlev]') || document.querySelector('#volunteering .vl-grid [data-vlev]') || document.querySelector('#volunteering [data-vlev]'); if (e) location.hash = '#volunteering/e/' + e.getAttribute('data-vlev'); } }),
-      S('#w191next', 'Next up', 'What needs a person now: the serving\u2019s gaps first (the format, short roles, people to confirm, the WhatsApp link), then the steps due soonest. Tick a step right here.', OPT),
-      S('#w191team', 'The team', 'Everyone on the roster, one column per role, against what a serving needs. Drag people between roles, or add them from the volunteer list.', OPT),
-      S('#w191stages', 'The stages', 'Each stage holds its cards and its steps, and the current one is open. A step marked Hub ticks itself once the thing has happened (a confirmation, an itinerary sent, the WhatsApp link pasted).', OPT),
-      S('#w191extra', 'Also for this serving', 'Tasks that came out of an operations meeting for this date.', OPT)
+      S('#volunteering > .w118mast', 'The serving programme', 'Events, volunteers and supplies for Montreal, end to end.'),
+      S('#volunteering .vl-sub', 'Sections', 'The calendar, the master program SOP, volunteers, inventory, recipes and texting volunteers.', OPT),
+      S('#w106add', 'Add an event', 'Create a serving or a special event. It copies the master SOP checklist so nothing is missed.', OPT),
+      S('#volunteering .vl-hero', 'The next event', 'The countdown, readiness and what still needs doing.', OPT),
+      S('#w119cal', 'The month', 'Every event on a calendar, with its readiness and gaps.', OPT),
+      S('#volunteering .vl-grid', 'Events', 'Each card shows readiness and gaps. Open one for its command centre.', OPT),
+      S('#w119 .mast', 'The event command centre', 'Date, countdown, venue, meals and two readiness rings: the checklist and the roster.', { opt: 1, go: function () { var e = document.querySelector('#volunteering .vl-grid [data-vlev]') || document.querySelector('#volunteering [data-vlev]'); if (e) location.hash = '#volunteering/e/' + e.getAttribute('data-vlev'); } }),
+      S('#w119 .next', 'What\u2019s next', 'The three most urgent unticked steps, each with a one-tap tick.', OPT),
+      S('#w119left', 'The checklist', 'Every step from the master SOP, grouped by phase. Tick as you go; owners follow the role assignments.', OPT),
+      S('#w119right', 'The roster board', 'One column per role. Drag volunteers between roles, or add them from the bench of available people.', OPT),
+      S('#w119rail', 'Side rail', 'The event summary, tasks that came from meetings, and cancelling the event.', OPT)
     ] },
     hrcentre: { tab: 'hrcentre', icon: 'people', hash: '#hrcentre', steps: [
       S('#hrcentre > .w118mast', 'HR centre', 'People records, hours, onboarding, training, hiring and policies in one place.'),
       S('#w116phero', 'At a glance', 'Headcount, hours, onboarding in flight and trainings outstanding. Click a tile to jump to it.', OPT),
-      S('#w46body .w47tabs || #w153rail .w153sec', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline. On a computer they are in the menu on the left.', OPT),
+      S('#w46body .w47tabs', 'Sections', 'People, Onboarding, Training, Recruitment, Commitment, Policies and Discipline.', OPT),
       S('#w116pshouts', 'Shout-outs', 'Good work, noticed. Add one for a teammate; Avenue Academy certificates can be shared here too.', OPT),
       S('#w116ppeople .grid || #w116ppeople', 'People', 'Everyone on the roster with their team, start date and hours this month.', OPT),
       S('#w103scope', 'Scope of work', 'What each person has been working on, from their check-ins.', OPT),
@@ -2087,15 +1905,13 @@
       S('#w93eng', 'Hub engagement', 'Who is using the Hub: last sign-in, visits and time on the Hub.', OPT)
     ] },
     finances: { tab: 'finances', icon: 'scale', hash: '#finances', steps: [
-      S('#finances > .w118mast', 'Finance', 'An app of its own, apart from Fundraising: the ledger, each team\u2019s budget and the finance work. The fiscal year runs October 1 to September 30.'),
+      S('#finances > .w118mast', 'Finances and budgeting', 'Statements, the ledger and budgets per team. The fiscal year runs October 1 to September 30.'),
       S('#finances .fin-head', 'The source', 'Which fiscal year you are looking at and where the budgets come from. Import a statement from here.', OPT),
       S('#w92pills', 'Time frame', 'Last fiscal year, this one, or the forecast.', OPT),
-      S('#w94nav || #w153rail .w153sec', 'Sections', 'The overview, the tasks, the trends, the money map, the budget against actual, and every transaction. On a computer they are in the menu on the left; the title changes with the section.', OPT),
+      S('#w94nav', 'Views', 'The overview, trends, the money map, budget against actual, and every transaction.', OPT),
       S('#finances .fin-kpis', 'The headline', 'Income, spending and net for the fiscal year so far.', OPT),
       S('#w92health', 'Nonprofit health', 'Standard charity-sector measures computed from the ledger, with guidelines for a young Canadian charity.', OPT),
-      S('#w164inbox', 'Requests and emails', 'Reimbursement and purchase requests sent to Finance, and the invoices and receipts the Hub inbox filed. #accounting-finance hears about the ones that need action.', OPT),
-      S('#w153rail .w153it[data-w153sec="tasks"] || #w94nav .w94tab[data-w94tab="tasks"]', 'Tasks', 'Finance\u2019s own board: bills to pay, receipts to file, reimbursements to approve. Invoices and receipts sent to hub@ land here as tasks, with the attachment.', OPT),
-      S('#w93tasks', 'Money work elsewhere', 'Tasks about money on the other teams\u2019 boards, in one list. They stay on those boards.', OPT),
+      S('#w93tasks', 'Finance tasks', 'Every finance task across the Hub in one list.', OPT),
       S('#w93meet', 'Finance meetings', 'The meetings where money was discussed.', OPT)
     ] },
     contentcal: { tab: 'contentcal', icon: 'grid', hash: '#contentcal', steps: [
@@ -2137,15 +1953,16 @@
       S('#importantinfo > .w118mast', 'Important info', 'Logins, links and documents the team reaches for most.'),
       S('#infoBody .pw-note', 'Logins', 'Everyone on staff sees the list. A password stays hidden until you press Request access and an admin approves it; then you can show and copy it. Whoever adds a login can always see it.', OPT),
       S('#infoBody .w134req', 'Requests (admins)', 'Admins see who asked for which login, and grant or decline it here. The number next to Important info in the menu says how many are waiting.', OPT),
+      H(/^Training videos/i, null, 'Training videos', 'Loom walkthroughs worth knowing, tagged by team. The full video library lives in the Avenue Academy.', { opt: 1, range: 1 }),
       H(/^Shared Google Drive/i, null, 'Shared drives', 'Team drives and document sets.', { opt: 1, range: 1 }),
       H(/^Other key links/i, null, 'Other key links', 'Decks, brand files and the other links everyone uses.', { opt: 1, range: 1 }),
-      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, a folder or a link, tagged to a team. Training videos go in the Avenue Academy.', OPT)
+      S('#infoBody .info-add', 'Add an entry', 'Staff can add a login, video, folder or link, tagged to a team.', OPT)
     ] },
     photos: { tab: 'photos', icon: 'sparkle', hash: '#photos', steps: [
       S('#photos .w116ptop', 'Photo library', 'Our photos, labelled and cleared for use. Each one says what it is cleared for before you post it.'),
       S('#w118cq || #photos .srch', 'Search', 'Search titles, alt text, captions, tags, places, sets and years.', OPT),
       S('#w118cscene', 'Scene and order', 'Filter by scene (serving, volunteers, food, media, portraits, setup) and choose the order.', OPT),
-      S('#photos .chips', 'Cleared for use', 'Ready is fine for public use (and only Ready photos can be a fundraising event\u2019s cover or a form\u2019s photo); Crop first names the edge to crop; Consent needed means someone recognizable has to agree before public use.', OPT),
+      S('#photos .chips', 'Cleared for use', 'Ready is fine for public use; Crop first names the edge to crop; Consent needed means someone recognizable has to agree before public use.', OPT),
       S('#photos .grid', 'The photos', 'Grouped by year, newest first. Open a photo for its alt text, caption and downloads, or to use it in the Create studio or a post.', OPT),
       S('#photos .add', 'Add photos', 'Staff can add photos: the Hub makes three sizes, strips location data and suggests labels for you to check.', OPT)
     ] },
@@ -2785,8 +2602,7 @@
     if ((el = t.closest('[data-w122undone]'))) { saveProg(R.t, { status: (mine(R.t.id) || {}).assigned_by ? 'assigned' : 'started', done_at: null, pct: 50 }).then(function () { renderSheet(); paintSoon(); }); return; }
     if ((el = t.closest('[data-w122opt]'))) { if (R.quiz && R.quiz.picks[R.quiz.i] == null) { R.quiz.picks[R.quiz.i] = Number(el.getAttribute('data-w122opt')); renderSheet(); } return; }
     if ((el = t.closest('[data-w122qnext]'))) { if (R.quiz) { R.quiz.i++; renderSheet(); } return; }
-    if ((el = t.closest('[data-w122qretry]'))) { var rr = mine(R.t.id) || {}; var dd = Object.assign({}, rr.data || {}); dd.quizTries = (Number(dd.quizTries) || 0) + 1; saveProg(R.t, { data: dd }); R.quiz = null; R.qagain = true; renderSheet(); return; }
-    if ((el = t.closest('[data-w122qstart]'))) { if (R.quiz && R.quiz.hard) { R.quiz.started = true; renderSheet(); } return; }
+    if ((el = t.closest('[data-w122qretry]'))) { var rr = mine(R.t.id) || {}; var dd = Object.assign({}, rr.data || {}); dd.quizTries = (Number(dd.quizTries) || 0) + 1; saveProg(R.t, { data: dd }); R.quiz = null; renderSheet(); return; }
     if ((el = t.closest('[data-w122qfinish]'))) {
       var sc = Number(el.getAttribute('data-w122qfinish')); var r0 = mine(R.t.id) || {}; var d0 = Object.assign({}, r0.data || {}); d0.quizTries = (Number(d0.quizTries) || 0) + 1;
       var bdy = lessonBody(R.t); d0.seen = (bdy.chapters || []).map(function (c) { return c.id; });
@@ -2798,7 +2614,6 @@
     if ((el = t.closest('[data-w122assignx]'))) { R.mode = 'view'; renderSheet(); return; }
     if ((el = t.closest('[data-w122assigngo]'))) { el.disabled = true; doAssign(); return; }
     if ((el = t.closest('[data-w122edit]'))) { openForm(R.t); return; }
-    if ((el = t.closest('[data-w141fill]'))) { var pt = A.byId[String(el.getAttribute('data-w141fill'))]; if (pt) openForm(pt); return; }
     if ((el = t.closest('[data-w122save]'))) { saveForm(); return; }
     if ((el = t.closest('[data-w122retire]'))) { if (window.confirm('Retire this training? It disappears from the Avenue Academy, and progress already recorded is kept.')) retire(); return; }
     if ((el = t.closest('[data-w122share]'))) { shareAward(el.getAttribute('data-w122share')); return; }

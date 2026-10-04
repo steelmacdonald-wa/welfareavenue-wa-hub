@@ -11,11 +11,15 @@
       q(db.from('goal_owners').select('*').order('sort')),
       q(db.from('goal_milestones').select('*').order('sort')),
       q(db.from('goal_paths').select('*').order('sort')),
-      q(db.from('projects').select('id,name,department,status,goal_id,milestone_id,leads,parent_id,workstream,banked_at').order('sort')),
+      q(db.from('projects').select('id,name,department,status,goal_id,milestone_id,checkpoint_id,leads,parent_id,workstream,banked_at').order('sort')),
       q(db.from('strategy_plan').select('*')),
       q(db.from('strategy_docs').select('*').order('sort')),
       q(db.from('goal_comments').select('*').order('created_at', { ascending: true })),
-      q(db.from('goal_wins').select('id,goal_id'))
+      q(db.from('goal_wins').select('id,goal_id')),
+      q(db.from('charitable_activities').select('*').order('sort')),
+      q(db.from('goal_activities').select('*').order('sort')),
+      q(db.from('goal_year_targets').select('*').order('sort')),
+      q(db.from('goal_checkpoints').select('*').order('quarter'))
     ]).then(function (r) {
       var all = (r[0].data || []);
       S.err = r[0].error ? (r[0].error.message || String(r[0].error)) : null;
@@ -30,21 +34,33 @@
       S.docs = (r[6].data || []).filter(function (d) { return !d.archived_at; });
       S.comments = r[7].data || [];
       S.wins = {}; (r[8].data || []).forEach(function (w) { S.wins[w.goal_id] = (S.wins[w.goal_id] || 0) + 1; });
+      S.acts = r[9].data || []; S.gacts = (r[10].data || []).filter(function (a) { return !a.archived_at; });
+      S.targets = (r[11].data || []).filter(function (t) { return !t.archived_at; }); S.checkpoints = (r[12].data || []).filter(function (c) { return !c.archived_at; });
       S.goals.forEach(baseGoal); S.milestones.forEach(function (m) { baseRow('milestone', m, ['body', 'status', 'fy']); }); S.paths.forEach(function (p) { baseRow('path', p, ['body']); });
+      ['activity', 'target', 'checkpoint'].forEach(function (e) { ENTS[e].list().forEach(function (row) { baseRow(e, row, ENTS[e].fields); }); });
       S.loaded = Date.now(); S.loading = null;
     });
     return S.loading;
   }
-  var GOAL_FIELDS = ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date'];
+  var GOAL_FIELDS = ['title', 'detail', 'why', 'measure', 'baseline', 'target_fy29', 'target_fy31', 'status', 'due_date', 'activities_note'];
+  /* every kind of row the page edits: its list in S and the fields autosave sends (wave207 adds activity, target, checkpoint) */
+  var ENTS = {
+    goal: { list: function () { return S.goals; }, fields: GOAL_FIELDS },
+    milestone: { list: function () { return S.milestones; }, fields: ['body', 'status', 'fy'] },
+    path: { list: function () { return S.paths; }, fields: ['body'] },
+    activity: { list: function () { return S.gacts; }, fields: ['reason'] },
+    target: { list: function () { return S.targets; }, fields: ['body', 'owners'] },
+    checkpoint: { list: function () { return S.checkpoints; }, fields: ['body', 'status', 'due_date'] }
+  };
   function key(e, id, f) { return e + ':' + id + ':' + f; }
   function baseGoal(g) { baseRow('goal', g, GOAL_FIELDS); }
   function baseRow(e, row, fields) { fields.forEach(function (f) { var k = key(e, row.id, f); if (!S.dirty[k]) S.base[k] = str(row[f]); }); }
   function goalOf(e, id) {
     if (e === 'goal') return byId(S.goals, id);
-    var row = e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id);
+    var row = rowOf(e, id);
     return row ? byId(S.goals, row.goal_id) : null;
   }
-  function rowOf(e, id) { return e === 'goal' ? byId(S.goals, id) : e === 'milestone' ? byId(S.milestones, id) : byId(S.paths, id); }
+  function rowOf(e, id) { return ENTS[e] ? byId(ENTS[e].list(), id) : null; }
   function msOf(gid) { return S.milestones.filter(function (m) { return String(m.goal_id) === String(gid); }).sort(function (a, b) { return (a.fy < b.fy ? -1 : a.fy > b.fy ? 1 : 0) || (a.sort - b.sort) || (a.id - b.id); }); }
   function pathsOf(gid) { return S.paths.filter(function (p) { return String(p.goal_id) === String(gid); }).sort(function (a, b) { return (a.sort - b.sort) || (a.id - b.id); }); }
   function ownersOf(gid) { return S.owners.filter(function (o) { return String(o.goal_id) === String(gid); }).sort(function (a, b) { return (b.is_lead ? 1 : 0) - (a.is_lead ? 1 : 0) || (a.sort - b.sort); }); }
@@ -66,7 +82,7 @@
   function errText(e) { var m = String((e && e.message) || e || 'Something went wrong'); return m.replace(/^Error:\s*/, ''); }
 
   /* ---------- autosave: one field at a time, debounced, with the per-field check ---------- */
-  function fieldEl(k) { return document.querySelector('#w205 [data-w205k="' + k + '"]'); }
+  function fieldEl(k) { return document.querySelector('#w205 [data-w205k="' + k + '"]') || document.querySelector('#w205drawer [data-w205k="' + k + '"]'); }
   function parseKey(k) { var p = k.split(':'); return { e: p[0], id: p[1], f: p.slice(2).join(':') }; }
   function schedule(k, ms) {
     clearTimeout(S.timers[k]);
@@ -155,6 +171,8 @@
       if (P.e === 'milestone' && P.f === 'status') { paintProgress(g.id); var ms = byId(S.milestones, P.id), box = document.querySelector('#w205 [data-w205ms="' + P.id + '"]'); if (box && ms) box.classList.toggle('done', ms.status === 'done'); paintGlance(); }
       if (P.e === 'goal' && P.f === 'status') { var sel = fieldEl(key('goal', g.id, 'status')); if (sel) sel.className = 'w205stsel s-' + stKey(g.status); }
       if (P.e === 'milestone' && P.f === 'fy') repaintGoal(g.id, true);
+      if (P.e === 'checkpoint' || P.e === 'target') { afterYearSave(P); paintYear(); }
+      if (P.e === 'activity') { paintActs(g.id); paintCoverage(); paintGlance(); }
     } catch (e) { /* cosmetic */ }
   }
   function stKey(s) { return String(s || 'not started').replace(/ (\w)/g, function (m, c) { return c.toUpperCase(); }).replace(/[^A-Za-z]/g, ''); }
@@ -162,10 +180,10 @@
 
   /* ---------- live: other people's saves and who is here ---------- */
   function onRemoteRow(e, row, kind) {
-    var fields = e === 'goal' ? GOAL_FIELDS : e === 'milestone' ? ['body', 'status', 'fy'] : ['body'];
+    var fields = ENTS[e].fields;
     var by = nameOf(row.updated_by);
     var mine = lower(row.updated_by) === myEmail();
-    var list = e === 'goal' ? S.goals : e === 'milestone' ? S.milestones : S.paths;
+    var list = ENTS[e].list();
     var cur = byId(list, row.id);
     if (e === 'goal') {
       if (!isActiveOrg(row)) { if (cur || row.retired_at) { S.loaded = 0; loadAll(true).then(paintSoon); } return; }
@@ -175,7 +193,7 @@
     if (e !== 'goal' && (row.archived_at || !cur)) {
       if (row.archived_at) { var i = list.indexOf(cur); if (i >= 0) list.splice(i, 1); }
       else list.push(row);
-      if (row.archived_at || !cur) { baseRow(e, row, fields); repaintGoal(row.goal_id, true); return; }
+      if (row.archived_at || !cur) { baseRow(e, row, fields); repaintGoal(row.goal_id, true); if (e === 'activity') { paintActs(row.goal_id); paintCoverage(); paintGlance(); } if (e === 'target' || e === 'checkpoint') paintYear(); if (S.drawer && S.drawer.kind === 'acts') paintDrawer(); return; }
     }
     fields.forEach(function (f) {
       var k = key(e, row.id, f), v = str(row[f]);
@@ -200,6 +218,9 @@
     if (table === 'goals') onRemoteRow('goal', row, ev);
     else if (table === 'goal_milestones') onRemoteRow('milestone', row, ev);
     else if (table === 'goal_paths') onRemoteRow('path', row, ev);
+    else if (table === 'goal_activities') onRemoteRow('activity', row, ev);
+    else if (table === 'goal_year_targets') onRemoteRow('target', row, ev);
+    else if (table === 'goal_checkpoints') onRemoteRow('checkpoint', row, ev);
     else if (table === 'goal_owners') {
       var o = byId(S.owners, row.id);
       if (row.removed_at) { if (o) S.owners.splice(S.owners.indexOf(o), 1); }
@@ -207,14 +228,14 @@
       paintOwners(row.goal_id);
     } else if (table === 'goal_comments') {
       var c = byId(S.comments, row.id); if (c) Object.assign(c, row); else S.comments.push(row);
-      paintCounts(row.goal_id);
+      paintCounts(row.goal_id); paintYear();
       if (S.drawer && S.drawer.kind === 'comments' && String(S.drawer.goal) === String(row.goal_id)) paintDrawer();
     } else if (table === 'projects') {
       var p = byId(S.projects, row.id);
       if (row.banked_at) { if (p) S.projects.splice(S.projects.indexOf(p), 1); }
       else if (p) Object.assign(p, row); else S.projects.push(row);
       S.goals.forEach(function (g) { paintProjects(g.id); });
-      paintUnlinked();
+      paintUnlinked(); paintYear();
       if (S.drawer && S.drawer.kind === 'link') paintDrawer();
     }
   }
@@ -250,7 +271,7 @@
     if (S.channel || typeof db === 'undefined' || !db || typeof db.channel !== 'function') return;
     try {
       var ch = db.channel('wa205-strategy', { config: { presence: { key: myKey() } } });
-      ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects'].forEach(function (t) {
+      ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects', 'goal_activities', 'goal_year_targets', 'goal_checkpoints'].forEach(function (t) {
         var opt = { event: '*', schema: 'public', table: t };
         if (t === 'goals') opt.filter = 'department=eq.org';
         ch.on('postgres_changes', opt, function (payload) { try { onRemote(t, payload); } catch (e) { console.warn('wave205 live', e); } });

@@ -81,8 +81,9 @@ async function run(b, who, width) {
   const before = r.w206.opened;
   await f.ev(() => document.querySelector('#projectpage .w27-task input[data-w27t="902"]').scrollIntoView({ block: 'center' }));
   await f.page.click('#projectpage .w27-task input[data-w27t="902"]'); await f.page.waitForTimeout(1300);
-  r = await f.ev(() => ({ d: !!(document.getElementById('w116dr') || {}).classList && document.getElementById('w116dr').classList.contains('open'), done: (window.__WAFIX.dept_tasks.find(t => t.id === 902) || {}).done, inDone: !!document.querySelector('#projectpage details.completed [data-w206open="902"]'), opened: window.w206.state().opened }));
-  ok(r.done === true && r.inDone && !r.d && r.opened === before, tag + ': ticking the checkbox still closes the task (wave27 save) and opens nothing');
+  r = await f.ev(() => ({ d: !!(document.getElementById('w116dr') || {}).classList && document.getElementById('w116dr').classList.contains('open'), done: (window.__WAFIX.dept_tasks.find(t => t.id === 902) || {}).done, inDone: !!document.querySelector('#projectpage details.completed [data-w206open="902"]') || !!document.querySelector('#projectpage .w27-task.done [data-w206open="902"]'), opened: window.w206.state().opened }));
+  ok(r.done === true && r.inDone && !r.d && r.opened === before, tag + ': ticking the checkbox closes the task (since wave207 through toggleTask, with Undo) and opens nothing');
+  await f.page.waitForTimeout(10500);
 
   /* completed list: open a done task */
   await f.ev(() => { var d = document.querySelector('#projectpage details.completed'); if (d) d.open = true; });

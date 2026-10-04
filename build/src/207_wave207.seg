@@ -1,0 +1,279 @@
+/* =====================================================================
+   WA v207 project tasks are department tasks (04/10/26)
+   =====================================================================
+   Steel (04/10/26): "I need the tasks of a project to [use] the data found on the home page of each department.
+   Individuals should be able to open the tasks the same way they find them in their department task page to edit
+   descriptions, due dates, assignees, push to the bank etc."
+   wave206 made every task title on #project/<id> open the team pages' own drawer (w116Board.open). This wave:
+   - Ticking a task on the project page goes through toggleTask, the save every team page uses (dept_tasks plus the
+     change_log line), with an Undo on the row for 10 seconds; the page then repaints in place (w206.repaint).
+   - Link existing tasks: staff open a picker that searches the team's open tasks (or every team's) not in this
+     project yet, tick them and link them (dept_tasks.project_id, a change_log line each). The Program Development
+     project made from a retired goal started empty while the team's related tasks sat in other projects; this is how
+     people move the right ones in, by hand (wave207 linked only the unambiguous cases in the database).
+   - A project made from a retired department goal (wave205's Make it a project) says so, and lists the team's projects
+     that serve the same goal, with their open tasks, so nobody reads "No tasks assigned yet" as the whole story.
+   - A project linked to a quarterly checkpoint (wave207, strategy_link_checkpoint) shows it under the goal line.
+   Wraps wa27RenderProject after 99, 100, 101, 104 and 206. Test hook: window.w207p.
+   ===================================================================== */
+(function () {
+  if (window.__wa207p) return; window.__wa207p = true;
+  var GREEN = '#103F39', CREAM = '#FFFAF2', GOLD = '#DCA527', PURPLE = '#6F64AB', MUTED = '#797773', FLAG = '#B3402F';
+  var BODY = "'Space Grotesk','Helvetica Neue',Arial,sans-serif", HEAD = "'Barlow Condensed','Arial Narrow',Arial,sans-serif";
+  var P = { ticks: 0, undos: 0, linked: 0, sheet: null, timers: {} };
+
+  function E(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toastS(m) { try { if (typeof toast === 'function') toast(m); } catch (e) { /* fine */ } }
+  function staffOk() { try { return typeof isStaff === 'function' && isStaff(); } catch (e) { return false; } }
+  function role() { try { return (typeof WA40_MINE !== 'undefined' && WA40_MINE && WA40_MINE.role) || ''; } catch (e) { return ''; } }
+  function boardMode() { try { return typeof MODE !== 'undefined' && MODE === 'board'; } catch (e) { return false; } }
+  function canLink() { return staffOk() && !boardMode() && role() !== 'viewer' && role() !== 'blocked'; }
+  function view() { try { return typeof WA27_VIEW !== 'undefined' ? WA27_VIEW : null; } catch (e) { return null; } }
+  function deptLabel(d) { try { return (typeof DEPT_LABEL !== 'undefined' && DEPT_LABEL[d]) || d || ''; } catch (e) { return d || ''; } }
+  function projName(id) { try { var p = typeof wa27Find === 'function' ? wa27Find(id) : null; return p ? (typeof wa27Name === 'function' ? wa27Name(p) : p.name) : ''; } catch (e) { return ''; } }
+  function who0() { try { return typeof who === 'function' ? who() : 'Hub'; } catch (e) { return 'Hub'; } }
+  function onProject() { return String(location.hash || '').indexOf('#project/') === 0; }
+  function repaint(ms) { try { if (window.w206 && window.w206.repaint) window.w206.repaint(ms == null ? 0 : ms); else if (view()) wa27RenderProject(view().ref, view().dept); } catch (e) { /* fine */ } }
+  function fmtDay(d) { try { return new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: 'numeric' }); } catch (e) { return String(d || ''); } }
+
+  var css = document.createElement('style'); css.id = 'wa207pcss';
+  css.textContent = ''
+    + '#projectpage .w207undo{margin-left:8px;font-size:12px;font-weight:700;color:' + GREEN + ';background:rgba(220,165,39,.22);border:0;border-radius:999px;padding:2px 10px;cursor:pointer;font-family:' + BODY + ';}'
+    + '#projectpage .w207undo:focus-visible{outline:2px solid ' + PURPLE + ';outline-offset:2px;}'
+    + '#projectpage .w207linkbtn{margin:10px 0 0;display:inline-flex;align-items:center;gap:6px;border:1px solid rgba(16,63,57,.22);background:' + CREAM + ';color:' + GREEN + ';border-radius:999px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:' + BODY + ';}'
+    + '#projectpage .w207linkbtn:hover{background:rgba(16,63,57,.06);}'
+    + '#projectpage .w207from{font-size:12.5px;border:1px solid rgba(111,100,171,.3);background:rgba(111,100,171,.06);border-radius:10px;padding:9px 12px;margin:0 0 14px;max-width:720px;line-height:1.5;}'
+    + '#projectpage .w207from a{color:' + GREEN + ';font-weight:600;cursor:pointer;}'
+    + '#projectpage .w207from .pj{display:inline-flex;gap:5px;align-items:center;border:1px solid rgba(16,63,57,.25);border-radius:8px;padding:1px 8px;margin:4px 4px 0 0;text-decoration:none;}'
+    + '#projectpage .w207cpl{font-size:12.5px;border:1px solid rgba(220,165,39,.55);background:rgba(220,165,39,.10);border-radius:9px;padding:7px 12px;margin:-6px 0 14px;max-width:720px;}'
+    + '#w207sheet{font-family:' + BODY + ';}'
+    + '#w207sheet h3{font-family:' + HEAD + ';font-size:24px;text-transform:uppercase;color:' + GREEN + ';margin:0 0 4px;}'
+    + '#w207sheet .bar{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0;}'
+    + '#w207sheet input[type=search]{flex:1 1 200px;min-width:0;padding:8px 10px;border:1px solid rgba(16,63,57,.25);border-radius:9px;font-size:14px;font-family:' + BODY + ';}'
+    + '#w207sheet select{padding:7px 8px;border:1px solid rgba(16,63,57,.25);border-radius:9px;font-size:13px;font-family:' + BODY + ';max-width:100%;}'
+    + '#w207list{max-height:min(52vh,420px);overflow-y:auto;border:1px solid rgba(16,63,57,.12);border-radius:10px;}'
+    + '#w207list label{display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-top:1px solid rgba(16,63,57,.08);cursor:pointer;font-size:13.5px;line-height:1.4;}'
+    + '#w207list label:first-child{border-top:0;}'
+    + '#w207list label:hover{background:rgba(16,63,57,.04);}'
+    + '#w207list input{margin-top:3px;accent-color:' + GREEN + ';flex:none;width:16px;height:16px;}'
+    + '#w207list .t{flex:1;min-width:0;overflow-wrap:anywhere;}'
+    + '#w207list small{display:block;color:' + MUTED + ';font-size:12px;margin-top:2px;}'
+    + '#w207list small b{color:' + FLAG + ';font-weight:600;}'
+    + '#w207sheet .ft{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;}'
+    + '#w207sheet .ft .sp{flex:1;}'
+    + '#w207sheet .go{background:' + GREEN + ';color:' + CREAM + ';border:0;border-radius:999px;padding:8px 16px;font-weight:700;font-size:13.5px;cursor:pointer;font-family:' + BODY + ';}'
+    + '#w207sheet .go[disabled]{opacity:.45;cursor:default;}'
+    + '#w207sheet .no{background:transparent;border:0;color:' + GREEN + ';font-weight:600;cursor:pointer;font-family:' + BODY + ';font-size:13.5px;}'
+    + '#w207sheet .empty{padding:18px;text-align:center;color:' + MUTED + ';font-size:13px;}';
+  document.head.appendChild(css);
+
+  /* ---------- ticking: toggleTask (the team pages' save) with Undo ---------- */
+  function rowOfDb(id) { try { return (typeof DB_TASKS !== 'undefined' && DB_TASKS || []).filter(function (t) { return String(t.id) === String(id); })[0] || null; } catch (e) { return null; } }
+  async function ensureRow(id) {
+    if (rowOfDb(id)) return;
+    try {
+      var r = await db.from('dept_tasks').select('*').eq('id', Number(id)).maybeSingle();
+      if (r && r.data && typeof DB_TASKS !== 'undefined' && Array.isArray(DB_TASKS)) DB_TASKS.push(r.data);
+    } catch (e) { /* toggleTask saves without it */ }
+  }
+  async function tick(chk) {
+    var id = Number(chk.getAttribute('data-w27t')), done = !!chk.checked, row = chk.closest('.w27-task');
+    if (!staffOk() || typeof toggleTask !== 'function') { chk.checked = !done; return false; }
+    chk.disabled = true;
+    await ensureRow(id);
+    var ok = false; try { ok = await toggleTask(id, done); } catch (e) { ok = false; }
+    chk.disabled = false;
+    if (!ok) { chk.checked = !done; return false; }
+    P.ticks++;
+    try { if (typeof wa27Load === 'function') wa27Load(true); } catch (e) { /* counts */ }
+    if (row) {
+      row.classList.toggle('done', done);
+      var old = row.querySelector('.w207undo'); if (old) old.remove();
+      var u = document.createElement('button'); u.type = 'button'; u.className = 'w207undo'; u.textContent = 'Undo';
+      u.setAttribute('data-w207undo', String(id)); u.setAttribute('data-w207to', done ? '0' : '1');
+      u.setAttribute('aria-label', done ? 'Undo: reopen this task' : 'Undo: mark it done again');
+      var meta = row.querySelector('.meta'); (meta || row).appendChild(u);
+    }
+    clearTimeout(P.timers[id]);
+    P.timers[id] = setTimeout(function () { delete P.timers[id]; if (onProject()) repaint(0); }, 10000);
+    return true;
+  }
+  async function undo(btn) {
+    var id = Number(btn.getAttribute('data-w207undo')), to = btn.getAttribute('data-w207to') === '1';
+    btn.disabled = true; clearTimeout(P.timers[id]); delete P.timers[id];
+    var ok = false; try { ok = await toggleTask(id, to); } catch (e) { ok = false; }
+    if (!ok) { btn.disabled = false; return; }
+    P.undos++;
+    try { if (typeof wa27Load === 'function') wa27Load(true); } catch (e) { /* counts */ }
+    repaint(0);
+  }
+  /* before wave27's own handler (on body): the project page's checkbox goes through toggleTask */
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest) return;
+    var chk = t.closest('#projectpage input[data-w27t]');
+    if (chk) { e.stopPropagation(); tick(chk); return; }
+    var u = t.closest('#projectpage [data-w207undo]');
+    if (u) { e.stopPropagation(); e.preventDefault(); undo(u); return; }
+    var lb = t.closest('#projectpage [data-w207link]');
+    if (lb) { e.stopPropagation(); e.preventDefault(); openSheet(); return; }
+    var pj = t.closest('#projectpage [data-w207proj]');
+    if (pj) { e.preventDefault(); location.hash = '#project/' + pj.getAttribute('data-w207proj'); return; }
+  }, true);
+
+  /* ---------- Link existing tasks ---------- */
+  async function openSheet() {
+    var v = view(); if (!v || v.ref === 'general' || !canLink()) return;
+    P.sheet = { project: Number(v.ref), dept: v.dept, team: v.dept, q: '', rows: null, picked: {}, err: null };
+    paintSheet();
+    try {
+      var r = await db.from('dept_tasks').select('id,title,department,project_id,subsection,owner,due_date,done,parent_task_id').eq('done', false).order('id', { ascending: false }).range(0, 999);
+      if (!P.sheet) return;
+      if (r && r.error) throw r.error;
+      P.sheet.rows = ((r && r.data) || []).filter(function (t) { return String(t.project_id || '') !== String(P.sheet.project); });
+    } catch (e) { if (P.sheet) P.sheet.err = String((e && e.message) || e); }
+    paintSheet();
+  }
+  function sheetRows() {
+    var s = P.sheet; if (!s || !s.rows) return [];
+    var q = s.q.trim().toLowerCase();
+    return s.rows.filter(function (t) {
+      if (s.team !== 'all' && t.department !== s.team) return false;
+      if (!q) return true;
+      return (String(t.title || '') + ' ' + (t.subsection || '') + ' ' + (t.owner || '') + ' #' + t.id + ' ' + projName(t.project_id)).toLowerCase().indexOf(q) >= 0;
+    });
+  }
+  function paintSheet(keepFocus) {
+    var s = P.sheet; if (!s) return;
+    var teams = []; try { teams = (typeof DEPT_ORDER !== 'undefined' ? DEPT_ORDER : []).slice(); } catch (e) { teams = []; }
+    if (teams.indexOf(s.dept) < 0) teams.unshift(s.dept);
+    var list = sheetRows(), n = Object.keys(s.picked).length;
+    var body = s.err ? '<div class="empty">The tasks could not be read (' + E(s.err.slice(0, 120)) + ').</div>'
+      : !s.rows ? '<div class="empty">Reading the open tasks\u2026</div>'
+      : !list.length ? '<div class="empty">' + (s.q ? 'No open task matches.' : 'No open task to link here.') + '</div>'
+      : list.slice(0, 200).map(function (t) {
+          var cur = t.project_id ? projName(t.project_id) : '';
+          return '<label><input type="checkbox" data-w207pick="' + t.id + '"' + (s.picked[t.id] ? ' checked' : '') + ' /><span class="t"><span data-w198skip>' + E(t.title) + '</span>' +
+            '<small>#' + t.id + ' \u00b7 ' + E(deptLabel(t.department)) + (t.subsection ? ' \u00b7 ' + E(t.subsection) : '') + (t.owner ? ' \u00b7 ' + E(t.owner) : '') + (t.due_date ? ' \u00b7 due ' + E(fmtDay(t.due_date)) : '') +
+            ' \u00b7 ' + (cur ? '<b>moves from ' + E(cur) + '</b>' : 'no project yet') + '</small></span></label>';
+        }).join('') + (list.length > 200 ? '<div class="empty">Showing 200 of ' + list.length + '. Search to narrow it.</div>' : '');
+    var html = '<div id="w207sheet" role="dialog" aria-modal="true" aria-labelledby="w207sh"><h3 id="w207sh">Link existing tasks</h3>' +
+      '<p class="read" style="margin:0">Open tasks not in <b data-w198skip>' + E(projName(s.project)) + '</b> yet. Tick the ones that belong here; a task in another project moves.</p>' +
+      '<div class="bar"><input type="search" id="w207q" placeholder="Search by title, workstream, owner or #number" aria-label="Search the open tasks" value="' + E(s.q) + '" />' +
+      '<select id="w207team" aria-label="Which team">' + teams.map(function (d) { return '<option value="' + E(d) + '"' + (s.team === d ? ' selected' : '') + '>' + E(deptLabel(d)) + (d === s.dept ? ' (this project\u2019s team)' : '') + '</option>'; }).join('') + '<option value="all"' + (s.team === 'all' ? ' selected' : '') + '>Every team</option></select></div>' +
+      '<div id="w207list">' + body + '</div>' +
+      '<div class="ft"><span style="font-size:12.5px;color:' + MUTED + '">' + (n ? n + ' picked' : 'Nothing picked yet') + '</span><span class="sp"></span><button type="button" class="no" data-w207close="1">Cancel</button><button type="button" class="go" data-w207do="1"' + (n ? '' : ' disabled') + '>Link ' + (n ? n + ' ' : '') + (n === 1 ? 'task' : 'tasks') + '</button></div></div>';
+    var box = document.getElementById('modalBox'), back = document.getElementById('modalBack'), open = box && back && back.style.display !== 'none' && box.querySelector('#w207sheet');
+    if (open) {
+      var lst = document.getElementById('w207list'), top = lst ? lst.scrollTop : 0;
+      open.outerHTML = html;
+      var l2 = document.getElementById('w207list'); if (l2) l2.scrollTop = top;
+    } else if (typeof openModal === 'function') openModal(html);
+    if (keepFocus) { var q = document.getElementById('w207q'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+    else if (!open) setTimeout(function () { var q = document.getElementById('w207q'); if (q) q.focus(); }, 40);
+  }
+  function closeSheet() { P.sheet = null; try { var el = document.getElementById('w207sheet'); if (el) { if (typeof closeModal === 'function') closeModal(); el.remove(); } } catch (e) { /* fine */ } }
+  async function doLink() {
+    var s = P.sheet; if (!s) return;
+    var ids = Object.keys(s.picked).map(Number); if (!ids.length) return;
+    var btn = document.querySelector('#w207sheet [data-w207do]'); if (btn) btn.disabled = true;
+    var before = {}; (s.rows || []).forEach(function (t) { if (s.picked[t.id]) before[t.id] = t.project_id || null; });
+    var r = await db.from('dept_tasks').update({ project_id: s.project, updated_by: who0(), updated_at: new Date().toISOString() }).in('id', ids);
+    if (r && r.error) { if (btn) btn.disabled = false; toastS('Not linked: ' + (r.error.message || r.error)); return; }
+    try {
+      await db.from('change_log').insert(ids.map(function (id) {
+        return { entity_type: 'dept_task', entity_id: String(id), field: 'project_id', old_value: before[id] == null ? null : String(before[id]), new_value: String(s.project) + ' (linked from the project page)', changed_by: who0() };
+      }));
+    } catch (e) { /* logging is best effort, as every task write */ }
+    try { if (typeof DB_TASKS !== 'undefined') DB_TASKS.forEach(function (t) { if (ids.indexOf(Number(t.id)) >= 0) t.project_id = s.project; }); } catch (e) { /* fine */ }
+    P.linked += ids.length;
+    closeSheet();
+    toastS(ids.length === 1 ? 'Task linked to the project' : ids.length + ' tasks linked to the project');
+    try { if (typeof wa27Load === 'function') await wa27Load(true); } catch (e) { /* counts */ }
+    repaint(0);
+  }
+  document.addEventListener('input', function (e) {
+    var t = e.target; if (!t || !P.sheet) return;
+    if (t.id === 'w207q') { P.sheet.q = t.value; clearTimeout(P.qT); P.qT = setTimeout(function () { paintSheet(true); }, 140); }
+  });
+  document.addEventListener('change', function (e) {
+    var t = e.target; if (!t || !P.sheet) return;
+    if (t.id === 'w207team') { P.sheet.team = t.value; paintSheet(); return; }
+    if (t.hasAttribute && t.hasAttribute('data-w207pick')) {
+      var id = t.getAttribute('data-w207pick'); if (t.checked) P.sheet.picked[id] = 1; else delete P.sheet.picked[id];
+      var n = Object.keys(P.sheet.picked).length, b = document.querySelector('#w207sheet [data-w207do]'), c = document.querySelector('#w207sheet .ft > span');
+      if (b) { b.disabled = !n; b.textContent = 'Link ' + (n ? n + ' ' : '') + (n === 1 ? 'task' : 'tasks'); }
+      if (c) c.textContent = n ? n + ' picked' : 'Nothing picked yet';
+    }
+  });
+  document.addEventListener('click', function (e) {
+    var t = e.target; if (!t || !t.closest || !P.sheet) return;
+    if (t.closest('#w207sheet [data-w207close]')) { closeSheet(); return; }
+    if (t.closest('#w207sheet [data-w207do]')) { doLink(); return; }
+    if (t.id === 'modalBack') P.sheet = null;
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && P.sheet && document.getElementById('w207sheet')) closeSheet(); });
+
+  /* ---------- the page: the Link button, where a project came from, its checkpoint ---------- */
+  var ORIGIN = {};
+  async function origin(pid) {
+    if (ORIGIN[pid] !== undefined) return ORIGIN[pid];
+    try {
+      var r = await db.from('goals').select('id,title,department,retired_at,maps_to_goal_id').eq('moved_to_project_id', Number(pid)).limit(1);
+      var g = r && r.data && r.data[0];
+      if (!g) { ORIGIN[pid] = null; return null; }
+      var log = await db.from('change_log').select('changed_at').eq('entity_type', 'goal').eq('entity_id', String(g.id)).eq('field', 'moved_to_project').order('changed_at', { ascending: false }).limit(1);
+      g.made_at = log && log.data && log.data[0] ? log.data[0].changed_at : null;
+      ORIGIN[pid] = g; return g;
+    } catch (e) { ORIGIN[pid] = null; return null; }
+  }
+  async function decorate() {
+    var sec = document.getElementById('projectpage'), v = view(); if (!sec || !v || v.ref === 'general') return;
+    var card = sec.querySelector('.card'); if (!card) return;
+    var p = typeof wa27Find === 'function' ? wa27Find(v.ref) : null; if (!p) return;
+    /* the Link existing tasks button, under the quick add (or under the open list for people without it) */
+    if (canLink() && !card.querySelector('[data-w207link]')) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'w207linkbtn'; b.setAttribute('data-w207link', '1');
+      b.innerHTML = '<span aria-hidden="true">+</span> Link existing tasks';
+      var add = card.querySelector('.add-row');
+      if (add) add.insertAdjacentElement('afterend', b);
+      else { var det = card.querySelector('details.completed'); if (det) det.insertAdjacentElement('beforebegin', b); else card.appendChild(b); }
+    }
+    /* a project made from a retired goal: say so, and show the team's projects on the same goal */
+    var g = await origin(p.id);
+    if (g && !card.querySelector('.w207from') && view() && String(view().ref) === String(p.id)) {
+      var sibs = (typeof WA27_PROJECTS !== 'undefined' ? WA27_PROJECTS : []).filter(function (x) { return x.department === p.department && String(x.id) !== String(p.id) && p.goal_id && String(x.goal_id) === String(p.goal_id); });
+      var counts = typeof WA27_COUNTS !== 'undefined' ? WA27_COUNTS : {};
+      var d = document.createElement('div'); d.className = 'w207from';
+      d.innerHTML = 'Made from the retired department goal <b data-w198skip>' + E(g.title.length > 90 ? g.title.slice(0, 88) + '\u2026' : g.title) + '</b>' + (g.made_at ? ' on ' + E(fmtDay(g.made_at)) : '') + ', so it started with no tasks. ' +
+        (canLink() ? 'Use Link existing tasks to bring in the team\u2019s tasks that belong here.' : 'The team links the tasks that belong here.') +
+        (sibs.length ? '<br>The team\u2019s other projects on the same goal: ' + sibs.map(function (x) { return '<a class="pj" href="#project/' + x.id + '" data-w207proj="' + x.id + '"><span data-w198skip>' + E(x.name) + '</span> <span style="opacity:.7">' + (counts['p' + x.id] || 0) + ' open</span></a>'; }).join('') : '');
+      var anchor = card.querySelector('.w27-goal') || card.querySelector('.w206ng') || card.querySelector('.w27-desc');
+      if (anchor) anchor.insertAdjacentElement('afterend', d);
+    }
+    /* the quarterly checkpoint it serves */
+    if (p.checkpoint_id && !card.querySelector('.w207cpl')) {
+      try {
+        var r = await db.from('goal_checkpoints').select('id,quarter,body,due_date,status,target_id').eq('id', Number(p.checkpoint_id)).maybeSingle();
+        var c = r && r.data;
+        if (c && !card.querySelector('.w207cpl')) {
+          var t = await db.from('goal_year_targets').select('fy').eq('id', Number(c.target_id)).maybeSingle();
+          var fy = t && t.data ? t.data.fy : '';
+          var el = document.createElement('div'); el.className = 'w207cpl';
+          el.innerHTML = 'Serves the checkpoint <b>' + E(fy + ' Q' + c.quarter) + '</b>: <span data-w198skip>' + E(c.body) + '</span> \u00b7 due ' + E(fmtDay(c.due_date));
+          var a2 = card.querySelector('.w207from') || card.querySelector('.w27-goal') || card.querySelector('.w206ng') || card.querySelector('.w27-desc');
+          if (a2) a2.insertAdjacentElement('afterend', el);
+        }
+      } catch (e) { /* the line is a courtesy */ }
+    }
+  }
+  if (typeof wa27RenderProject === 'function') {
+    var __rp207 = wa27RenderProject;
+    wa27RenderProject = async function () {
+      var out = await __rp207.apply(this, arguments);
+      try { await decorate(); } catch (e) { /* never break the page */ }
+      return out;
+    };
+  }
+
+  window.w207p = { state: function () { return { ticks: P.ticks, undos: P.undos, linked: P.linked, sheet: !!P.sheet, pending: Object.keys(P.timers).length }; }, open: openSheet, close: closeSheet, origin: origin };
+})();

@@ -109,8 +109,9 @@
       S('#projectpage .card > h2', 'A project page', 'One project’s name, team and status.'),
       S('#projectpage .w27-desc', 'What it is', 'A short description of the project.', OPT),
       S('#w104', 'Progress and people', 'Tasks complete, the lead (the one person accountable) and the contributors. Change the lead here.', OPT),
-      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Tick one done, or move it to another project.', OPT),
+      S('#projectpage .w27-task', 'Open tasks', 'Tasks from every team working on this project. Click a title to open the task, as on a team page: status, owner, assignees, due date, description, subtasks, comments and its history. Push it to the bank from there too. Tick one done (Undo stays on the row for a few seconds), or move it to another project.', OPT),
       S('#projectpage .add-row', 'Add a task', 'Quick-add a task straight into the project.', OPT),
+      S('#projectpage [data-w207link]', 'Link existing tasks', 'Bring in tasks that already exist: search the team’s open tasks (or every team’s), tick the ones that belong here and link them. A task in another project moves.', OPT),
       S('#projectpage details.completed', 'Completed', 'Finished tasks keep their history.', OPT)
     ] },
     requests: { tab: 'requests', icon: 'chat', hash: '#requests/new', steps: [
