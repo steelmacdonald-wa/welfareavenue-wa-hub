@@ -154,7 +154,7 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   ok(r.done === 1 && /1 of 6/.test(r.prog) && r.path, 'live: a milestone done and a new path arrive; progress moves (' + r.prog.slice(0, 40) + ')');
 
   /* presence: who is here and which goal they are in */
-  await f.ev(() => { window.__w205ps = { 'ian.odhiambo@welfareavenue.com': [{ email: 'ian.odhiambo@welfareavenue.com', name: 'Ian', goal: '101', field: 'goal:101:detail', at: Date.now() }], 'shima.butera@welfareavenue.com': [{ email: 'shima.butera@welfareavenue.com', name: 'Shima', goal: '102', field: null, at: Date.now() }], 'steel.macdonald@welfareavenue.com': [{ email: 'steel.macdonald@welfareavenue.com', name: 'Steel', goal: null }] }; window.__w205ch.fire('presence', 'sync'); });
+  await f.ev(() => { window.__w205ps = { m17: [{ mid: 17, name: 'Ian', goal: '101', field: 'goal:101:detail', at: Date.now() }], m3: [{ mid: 3, name: 'Shima', goal: '102', field: null, at: Date.now() }], m37: [{ mid: 37, name: 'Steel', goal: null }] }; window.__w205ch.fire('presence', 'sync'); });
   await f.page.waitForTimeout(150);
   r = await f.ev(() => ({ top: document.querySelectorAll('#w205 [data-w205pres] .avs > span').length, g1: document.querySelectorAll('[data-w205gpres="101"] .avs > span').length, g2: document.querySelectorAll('[data-w205gpres="102"] .avs > span').length, who: (document.querySelector('[data-w205who="goal:101:detail"]') || {}).textContent || '', hidden: (document.querySelector('[data-w205who="goal:101:detail"]') || {}).hidden, other: document.querySelector('[data-w205k="goal:101:detail"]').classList.contains('other') }));
   ok(r.top === 2, 'presence: two other people here (not me)');
@@ -164,7 +164,9 @@ const shot = async (f, name, full) => { if (SHOTS) await f.page.screenshot({ pat
   /* my own presence: focus moves into goal 4, the channel hears it */
   await f.page.click('[data-w205k="goal:104:measure"]'); await f.page.waitForTimeout(500);
   r = await f.ev(() => { var t = window.__w205ch.tracked; return t[t.length - 1] || {}; });
-  ok(String(r.goal) === '104' && r.field === 'goal:104:measure' && r.email === 'steel.macdonald@welfareavenue.com', 'presence: my place (goal 4, the headline measure) is shared on the channel');
+  ok(String(r.goal) === '104' && r.field === 'goal:104:measure' && r.mid === 37 && r.name === 'Steel' && !('email' in r) && JSON.stringify(r).indexOf('@') < 0, 'presence: my place (goal 4, the headline measure) is shared on the channel, with my roster id and first name, never an email');
+  r = await f.ev(() => window.__w205ch.opts && window.__w205ch.opts.config && window.__w205ch.opts.config.presence && window.__w205ch.opts.config.presence.key);
+  ok(r === 'm37', 'presence: the channel key is the roster id (m37), not an email');
 
   /* comments: threaded, on the goal and on a milestone, with @mentions through wave138 */
   await f.page.click('[data-w205cmtsft="101"]'); await f.page.waitForTimeout(400);

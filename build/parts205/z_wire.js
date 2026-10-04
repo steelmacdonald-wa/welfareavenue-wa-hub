@@ -1,19 +1,20 @@
 
   /* ---------- presence on the page ---------- */
-  function presName(p) { return p.name || nameOf(p.email); }
+  function presName(p) { var m = p.mid ? memberById(p.mid) : null; return (m && m.name) || p.name || 'Someone'; }
+  function presMember(p) { return (p.mid && memberById(p.mid)) || { name: presName(p) }; }
   function paintPresence() {
     var top = document.querySelector('#w205 [data-w205pres]');
     var people = S.presence;
     if (top) {
       top.innerHTML = '<span class="w205live' + (S.live ? '' : ' off') + '" title="' + (S.live ? 'Live: changes arrive as people make them' : 'Not live: changes show when you reload') + '"></span>' +
         (people.length ? '<span>Here now</span><span class="avs">' + people.slice(0, 8).map(function (p) {
-          var g = p.goal ? byId(S.goals, p.goal) : null, m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url };
-          return '<span title="' + E(presName(p) + (g ? ', in goal ' + g.number : '')) + '" data-w205who-e="' + E(p.email) + '">' + av(m, 26) + '</span>';
+          var g = p.goal ? byId(S.goals, p.goal) : null, m = presMember(p);
+          return '<span title="' + E(presName(p) + (g ? ', in goal ' + g.number : '')) + '">' + av(m, 26) + '</span>';
         }).join('') + '</span>' + (people.length > 8 ? '<span>+' + (people.length - 8) + '</span>' : '') : '<span>' + (S.live ? 'Just you here' : 'Offline view') + '</span>');
     }
     document.querySelectorAll('#w205 [data-w205gpres]').forEach(function (el) {
       var gid = el.getAttribute('data-w205gpres'), here = people.filter(function (p) { return String(p.goal) === String(gid); });
-      el.innerHTML = here.length ? '<span class="avs">' + here.map(function (p) { var m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url }; return '<span title="' + E(presName(p)) + ' is in this goal">' + av(m, 24) + '</span>'; }).join('') + '</span>' : '';
+      el.innerHTML = here.length ? '<span class="avs">' + here.map(function (p) { var m = presMember(p); return '<span title="' + E(presName(p)) + ' is in this goal">' + av(m, 24) + '</span>'; }).join('') + '</span>' : '';
     });
     document.querySelectorAll('#w205 [data-w205who]').forEach(function (el) {
       var k = el.getAttribute('data-w205who'), who = people.filter(function (p) { return p.field === k; }).map(presName);

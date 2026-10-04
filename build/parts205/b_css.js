@@ -303,7 +303,8 @@
       + '.w205glance tr{border-top:1px solid rgba(16,63,57,.1);padding:8px 0;}'
       + '.w205glance td{border:0;padding:3px 14px;}'
       + '.w205glance td[data-l]:before{content:attr(data-l) ": ";font-size:11px;font-weight:700;color:' + MUTED + ';text-transform:uppercase;letter-spacing:.8px;}'
-      + '.w205pres{margin-left:0;width:100%;}'
+      + '.w205mast .w205pres{margin-left:0;width:100%;}'
+      + '.w205ghd .side{gap:6px;}'
       + '.w205rm{opacity:1;}'
       + '#w205drawer{width:100vw;}'
       + '}';

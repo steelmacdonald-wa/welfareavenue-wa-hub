@@ -6,10 +6,10 @@ const OUT = process.env.OUT || '/mnt/user-data/outputs';
 const fs = require('fs'); fs.mkdirSync(OUT, { recursive: true });
 const INIT = `(function(){ var sb; Object.defineProperty(window, 'supabase', { configurable: true, get: function () { return sb; }, set: function (v) { sb = v; var cc = v && v.createClient; if (!cc || cc.__w) return;
   v.createClient = function () { var c = cc.apply(this, arguments); c.channel = function () { var ch = { h: [], on: function (t, f, cb) { ch.h.push({ t: t, f: f, cb: cb }); return ch; }, subscribe: function (cb) { setTimeout(function () { cb && cb('SUBSCRIBED'); }, 10); return ch; }, track: function () { return Promise.resolve('ok'); }, untrack: function () { return Promise.resolve('ok'); }, presenceState: function () { return window.__ps || {}; }, unsubscribe: function () { return Promise.resolve('ok'); } }; window.__ch = ch; return ch; }; c.removeChannel = function () { return Promise.resolve('ok'); }; return c; }; v.createClient.__w = true; } }); })();`;
-const PRES = `window.__ps = { 'ian.odhiambo@welfareavenue.com': [{ email: 'ian.odhiambo@welfareavenue.com', name: 'Ian', goal: '101', field: 'goal:101:detail', at: Date.now() }], 'suhaib.abdillahi@welfareavenue.com': [{ email: 'suhaib.abdillahi@welfareavenue.com', name: 'Suhaib', goal: '101', field: null, at: Date.now() }], 'shima.butera@welfareavenue.com': [{ email: 'shima.butera@welfareavenue.com', name: 'Shima', goal: '104', field: null, at: Date.now() }] }; window.__ch.h.forEach(function (x) { if (x.t === 'presence' && x.f.event === 'sync') x.cb({}); });`;
+const PRES = `window.__ps = { m17: [{ mid: 17, name: 'Ian', goal: '101', field: 'goal:101:detail', at: Date.now() }], m38: [{ mid: 38, name: 'Suhaib', goal: '101', field: null, at: Date.now() }], m3: [{ mid: 3, name: 'Shima', goal: '104', field: null, at: Date.now() }] }; window.__ch.h.forEach(function (x) { if (x.t === 'presence' && x.f.event === 'sync') x.cb({}); });`;
 (async () => {
   const b = await launch();
-  let f = await fresh(b, { who: 'admin', width: 1440, height: 900, hash: '#orggoals', fixture: build(), init: INIT, wait: 4500 });
+  let f = await fresh(b, { who: 'admin', width: 1920, height: 1000, hash: '#orggoals', fixture: build(), init: INIT, wait: 4500 });
   await f.ev(PRES); await f.page.waitForTimeout(300); await f.ev(() => window.scrollTo(0, 0)); await f.page.waitForTimeout(300);
   await f.page.screenshot({ path: OUT + '/w205-1-goals-desktop.png' });
   /* goal 1 open, with who is here and the comments */

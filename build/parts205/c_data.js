@@ -221,23 +221,27 @@
   var paintT = null;
   function paintSoon() { clearTimeout(paintT); paintT = setTimeout(function () { if (onPage()) paint(); }, 60); }
 
+  /* presence travels on a Realtime channel anyone holding the page's public key could listen to: it carries the roster id and
+     the first name only (as the public website does), never an email; who you are comes from the roster on each side */
+  var TAB = 't' + Math.random().toString(36).slice(2, 10);
+  function myKey() { var m = me(); return m.id ? 'm' + m.id : TAB; }
   function presenceMeta() {
     var m = me();
-    return { email: m.email, name: m.name, avatar_url: m.avatar_url || null, goal: S.focus.goal, field: S.focus.field, view: S.view, at: Date.now() };
+    return { mid: m.id || null, name: String(m.name || '').split(' ')[0], goal: S.focus.goal, field: S.focus.field, view: S.view, at: Date.now() };
   }
   function track() { try { if (S.channel && S.live) S.channel.track(presenceMeta()); } catch (e) { /* fine */ } }
   var trackT = null;
   function trackSoon() { clearTimeout(trackT); trackT = setTimeout(track, 250); }
   function readPresence() {
     var st = {}; try { st = S.channel && S.channel.presenceState ? S.channel.presenceState() : {}; } catch (e) { st = {}; }
-    var seen = {}, out = [];
+    var seen = {}, out = [], mine = me().id;
     Object.keys(st || {}).forEach(function (k) {
       (st[k] || []).forEach(function (m) {
-        var em = lower(m.email || k); if (!em || em === myEmail()) return;
-        if (!seen[em] || (m.at || 0) > (seen[em].at || 0)) seen[em] = m;
+        var id = m.mid ? 'm' + m.mid : k; if (!id || k === TAB || (mine && String(m.mid) === String(mine))) return;
+        if (!seen[id] || (m.at || 0) > (seen[id].at || 0)) seen[id] = m;
       });
     });
-    Object.keys(seen).forEach(function (em) { out.push(seen[em]); });
+    Object.keys(seen).forEach(function (id) { out.push(seen[id]); });
     out.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
     S.presence = out;
     paintPresence();
@@ -245,7 +249,7 @@
   function goLive() {
     if (S.channel || typeof db === 'undefined' || !db || typeof db.channel !== 'function') return;
     try {
-      var ch = db.channel('wa205-strategy', { config: { presence: { key: myEmail() || 'someone' } } });
+      var ch = db.channel('wa205-strategy', { config: { presence: { key: myKey() } } });
       ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects'].forEach(function (t) {
         var opt = { event: '*', schema: 'public', table: t };
         if (t === 'goals') opt.filter = 'department=eq.org';

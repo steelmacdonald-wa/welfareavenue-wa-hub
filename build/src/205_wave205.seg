@@ -408,7 +408,8 @@
       + '.w205glance tr{border-top:1px solid rgba(16,63,57,.1);padding:8px 0;}'
       + '.w205glance td{border:0;padding:3px 14px;}'
       + '.w205glance td[data-l]:before{content:attr(data-l) ": ";font-size:11px;font-weight:700;color:' + MUTED + ';text-transform:uppercase;letter-spacing:.8px;}'
-      + '.w205pres{margin-left:0;width:100%;}'
+      + '.w205mast .w205pres{margin-left:0;width:100%;}'
+      + '.w205ghd .side{gap:6px;}'
       + '.w205rm{opacity:1;}'
       + '#w205drawer{width:100vw;}'
       + '}';
@@ -637,23 +638,27 @@
   var paintT = null;
   function paintSoon() { clearTimeout(paintT); paintT = setTimeout(function () { if (onPage()) paint(); }, 60); }
 
+  /* presence travels on a Realtime channel anyone holding the page's public key could listen to: it carries the roster id and
+     the first name only (as the public website does), never an email; who you are comes from the roster on each side */
+  var TAB = 't' + Math.random().toString(36).slice(2, 10);
+  function myKey() { var m = me(); return m.id ? 'm' + m.id : TAB; }
   function presenceMeta() {
     var m = me();
-    return { email: m.email, name: m.name, avatar_url: m.avatar_url || null, goal: S.focus.goal, field: S.focus.field, view: S.view, at: Date.now() };
+    return { mid: m.id || null, name: String(m.name || '').split(' ')[0], goal: S.focus.goal, field: S.focus.field, view: S.view, at: Date.now() };
   }
   function track() { try { if (S.channel && S.live) S.channel.track(presenceMeta()); } catch (e) { /* fine */ } }
   var trackT = null;
   function trackSoon() { clearTimeout(trackT); trackT = setTimeout(track, 250); }
   function readPresence() {
     var st = {}; try { st = S.channel && S.channel.presenceState ? S.channel.presenceState() : {}; } catch (e) { st = {}; }
-    var seen = {}, out = [];
+    var seen = {}, out = [], mine = me().id;
     Object.keys(st || {}).forEach(function (k) {
       (st[k] || []).forEach(function (m) {
-        var em = lower(m.email || k); if (!em || em === myEmail()) return;
-        if (!seen[em] || (m.at || 0) > (seen[em].at || 0)) seen[em] = m;
+        var id = m.mid ? 'm' + m.mid : k; if (!id || k === TAB || (mine && String(m.mid) === String(mine))) return;
+        if (!seen[id] || (m.at || 0) > (seen[id].at || 0)) seen[id] = m;
       });
     });
-    Object.keys(seen).forEach(function (em) { out.push(seen[em]); });
+    Object.keys(seen).forEach(function (id) { out.push(seen[id]); });
     out.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
     S.presence = out;
     paintPresence();
@@ -661,7 +666,7 @@
   function goLive() {
     if (S.channel || typeof db === 'undefined' || !db || typeof db.channel !== 'function') return;
     try {
-      var ch = db.channel('wa205-strategy', { config: { presence: { key: myEmail() || 'someone' } } });
+      var ch = db.channel('wa205-strategy', { config: { presence: { key: myKey() } } });
       ['goals', 'goal_milestones', 'goal_paths', 'goal_owners', 'goal_comments', 'projects'].forEach(function (t) {
         var opt = { event: '*', schema: 'public', table: t };
         if (t === 'goals') opt.filter = 'department=eq.org';
@@ -1299,20 +1304,21 @@
   }
 
   /* ---------- presence on the page ---------- */
-  function presName(p) { return p.name || nameOf(p.email); }
+  function presName(p) { var m = p.mid ? memberById(p.mid) : null; return (m && m.name) || p.name || 'Someone'; }
+  function presMember(p) { return (p.mid && memberById(p.mid)) || { name: presName(p) }; }
   function paintPresence() {
     var top = document.querySelector('#w205 [data-w205pres]');
     var people = S.presence;
     if (top) {
       top.innerHTML = '<span class="w205live' + (S.live ? '' : ' off') + '" title="' + (S.live ? 'Live: changes arrive as people make them' : 'Not live: changes show when you reload') + '"></span>' +
         (people.length ? '<span>Here now</span><span class="avs">' + people.slice(0, 8).map(function (p) {
-          var g = p.goal ? byId(S.goals, p.goal) : null, m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url };
-          return '<span title="' + E(presName(p) + (g ? ', in goal ' + g.number : '')) + '" data-w205who-e="' + E(p.email) + '">' + av(m, 26) + '</span>';
+          var g = p.goal ? byId(S.goals, p.goal) : null, m = presMember(p);
+          return '<span title="' + E(presName(p) + (g ? ', in goal ' + g.number : '')) + '">' + av(m, 26) + '</span>';
         }).join('') + '</span>' + (people.length > 8 ? '<span>+' + (people.length - 8) + '</span>' : '') : '<span>' + (S.live ? 'Just you here' : 'Offline view') + '</span>');
     }
     document.querySelectorAll('#w205 [data-w205gpres]').forEach(function (el) {
       var gid = el.getAttribute('data-w205gpres'), here = people.filter(function (p) { return String(p.goal) === String(gid); });
-      el.innerHTML = here.length ? '<span class="avs">' + here.map(function (p) { var m = memberByEmail(p.email) || { name: presName(p), avatar_url: p.avatar_url }; return '<span title="' + E(presName(p)) + ' is in this goal">' + av(m, 24) + '</span>'; }).join('') + '</span>' : '';
+      el.innerHTML = here.length ? '<span class="avs">' + here.map(function (p) { var m = presMember(p); return '<span title="' + E(presName(p)) + ' is in this goal">' + av(m, 24) + '</span>'; }).join('') + '</span>' : '';
     });
     document.querySelectorAll('#w205 [data-w205who]').forEach(function (el) {
       var k = el.getAttribute('data-w205who'), who = people.filter(function (p) { return p.field === k; }).map(presName);
