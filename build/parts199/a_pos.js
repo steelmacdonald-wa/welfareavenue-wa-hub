@@ -105,7 +105,7 @@
       '<div class="w199links">' + (p && p.jd_url ? '<a class="w197b sm" href="' + E(p.jd_url) + '" target="_blank" rel="noopener">The job description</a>' : (p ? '<span class="w197pill mut">No JD in Drive yet</span>' : '')) +
       (p ? btn('The position', 'data-w199open="' + p.id + '"', 'sm') : '') +
       (cv && cv.url ? '<a class="w197b sm" href="' + E(cv.url) + '" target="_blank" rel="noopener">CV in Drive</a>' : (c.drive_file_id ? '<a class="w197b sm" href="https://drive.google.com/file/d/' + E(c.drive_file_id) + '/view" target="_blank" rel="noopener">CV in Drive</a>' : (p ? '<label class="w197b sm w199up">Upload their CV to Drive<input type="file" data-w199upc="' + c.id + '" accept=".pdf,.doc,.docx,.odt,.rtf,.txt,.png,.jpg,.jpeg" hidden></label>' : ''))) + '</div>' +
-      (window.w208 ? w208.sheetBits(c) : '');   /* wave208: the interview from the transcript archive, and its review */
+      (window.w209 ? w209.sheetBits(c) : '') + (window.w208 ? w208.sheetBits(c) : '');   /* wave209: a volunteer role moves to the Volunteer Manager; wave208: the interview from the transcript archive, and its review */
   }
 
   /* ---------- grades: each person gives 1 to 5 stars (Steel, 03/10/26: "grade applicants and have that show as well") ---------- */
@@ -216,7 +216,7 @@
 
   function sortGrade() { return !!P.sortGrade; }
   function gradeAvg(c) { var a = avgOf(c.id); return a ? a.avg : -1; }
-  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
+  function barBits() { setTimeout(bulkBar, 0); var n = cands().filter(notCalled).length; return (window.w209 ? w209.barBits() : '') + (P.selMode ? '' : btn('Select', 'data-w199a="selon"', 'sm')) + (window.w208 ? w208.barBits() : '') + '<label class="w199sortg"><input type="checkbox" id="w199notcalled"' + (P.notCalled ? ' checked' : '') + '> Not called yet' + (n ? ' (' + n + ')' : '') + '</label><label class="w199sortg"><input type="checkbox" id="w199sortg"' + (P.sortGrade ? ' checked' : '') + '> Best graded first</label>'; }
 
   /* ---------- interviews: a day and a time (Steel, 03/10/26: "Those in interview stage should have a day and time") ---------- */
   function ivText(t) { try { return new Date(t).toLocaleString('en-CA', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return ''; } }
