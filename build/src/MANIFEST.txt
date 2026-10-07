@@ -238,6 +238,8 @@
 210_wave210
 # 211_wave211: recruitment from the HR meeting (Steel, 06/10/26): Text: still interested? (sheet and selection bar), the offer letter at Offer (Google Doc in Recruitment > Offer Letters, PDF by email), From the CV (recruit-actions cv_read), and stage gates (w211g): Reviewing needs Handled by; Interview the position, a call logged (from Quo with its transcript, or by hand) and the day and time; Offer their email, the interview done and impressions; Hired the offer letter, the day they accepted and the start date; Declined/Withdrawn a reason. Add an applicant needs the CV's Google Drive link (filed into the Resumes folder). Built from build/parts211; hooks in parts197 moveTo, parts199 (cardBits, sheetBits, bulkBar, bulkApply) and parts209 (the form). Database objects keep wa210 names.
 211_wave211
+# 212_wave212: the HR centre (Valex and Steel, 06/10/26): brighter colours in the HR centre only (stage colours on Applications, coloured Overview tiles, stronger chips), the bell (what needs you), and time off that works (wave105 edited: wa_is_hr decides access, Log time off form, decline reason, totals and sick days left; the Overview counts 'requested'). Built from build/parts212; hook in parts197 mastHr.
+212_wave212
 # 213_wave213: the due-date check: on opening the Hub, a pop-up (that stays until saved) for the person's overdue, undated and meeting-dated open tasks, suggested from their team's next meeting (my_due_date_check, confirm_due_dates). Built from build/parts213.
 213_wave213
 # 164_wave164: Finance on its own (the team is Fundraising; the changes live in 001, 022, 024, 038, 093, 094, 110, 116, 116h, 118, 122, 123, 124, 127, 131, 140, 153); this segment draws the Finance page's section titles, its Tasks board and its team inbox.

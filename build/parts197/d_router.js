@@ -76,6 +76,7 @@
     var d = m.querySelector(':scope > p'); if (d && !same(d, p.d)) d.textContent = p.d;
     var acts = m.querySelector('.w197acts'); if (!acts) { acts = document.createElement('div'); acts.className = 'w197acts'; m.appendChild(acts); }
     var help = m.querySelector('.w43help'); if (help && help.parentNode !== acts) acts.appendChild(help);
+    if (window.w212) { try { w212.bell(acts); } catch (e) { /* fine */ } }   /* wave212: the bell */
     var want = MAIN[S.page] && (S.page !== 'team' || canHr()) ? MAIN[S.page] : null;
     var cur = acts.querySelector('[data-w197main]');
     if (!want && cur) cur.remove();
@@ -87,7 +88,7 @@
     function focus(sel) { var b = document.querySelector(sel); if (b) { try { b.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) { /* fine */ } try { b.focus(); } catch (e) { /* fine */ } return true; } return false; }
     if (k === 'reload') { loadCands(true).then(function () { paintBoard(); paintRail(); toastS('Applications up to date'); }); return; }
     if (k === 'addperson') { location.hash = '#adminpanel/people'; return; }
-    if (k === 'logto') { focus('#w105to select, #w105to input'); return; }
+    if (k === 'logto') { if (window.w105LogModal) { w105LogModal(); return; } focus('#w105to select, #w105to input'); return; }   /* wave212: a proper form */
     if (k === 'shout') { focus('#w116pshouts textarea, #w116pshouts input'); return; }
     if (k === 'assignonb') { focus('#w46body .w46sec[data-w197s~="onboarding"] select'); return; }
     if (k === 'preview') { click('#w46body .w169bar button'); return; }

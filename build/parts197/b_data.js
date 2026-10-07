@@ -29,7 +29,7 @@
     S.dLoading = (async function () {
       var res = await Promise.all([
         loadCands(force),
-        q(db.from('wa_timeoff').select('id,name,email,category,start_date,end_date,days,status,created_at').eq('status', 'pending').order('created_at', { ascending: true }).limit(50)),
+        q(db.from('wa_timeoff').select('id,name,email,category,start_date,end_date,days,status,created_at').eq('status', 'requested').order('created_at', { ascending: true }).limit(50)),   /* wave212: the requests are 'requested' (was 'pending', so the count was always 0) */
         q(db.from('wa_policies').select('key,title,required,active').eq('active', true)),
         q(db.from('wa_policy_signoffs').select('email,policy_key')),
         q(db.from('onboardings').select('id,member_id,person_name,status,started_at,completed_at').limit(200)),

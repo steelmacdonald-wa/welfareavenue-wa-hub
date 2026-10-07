@@ -80,6 +80,14 @@
   }
 
   /* ============ HR centre: time off ============ */
+  /* wave212 (Valex: "time off disappeared"): Time off is for the HR access list and the HR access profile (Samson), as the
+     database decides (wa_can_timeoff); policies and the discipline tracker stay with the HR access list */
+  async function w105CanTimeoff() {
+    if (window.__w105to !== undefined) return window.__w105to;
+    try { var q = await db.rpc('wa_can_timeoff'); window.__w105to = (q && !q.error && typeof q.data === 'boolean') ? q.data : await w105IsHR(); }
+    catch (e) { window.__w105to = await w105IsHR(); }
+    return window.__w105to;
+  }
   async function w105TimeCard(panel) {
     if (document.getElementById('w105to')) return;
     var card = document.createElement('div');
@@ -116,56 +124,81 @@
         p[t.category] = (p[t.category] || 0) + Number(t.days || 0);
       });
       var names = Object.keys(per).sort();
+      /* wave212: the running total per person, and the mental health and sick days left of 7 */
+      html += '<div class="w212toacts"><button class="btn mini" id="w212log">Log time off</button> <button class="btn ghost mini" id="w212mine">Request time off for myself</button></div>';
       if (names.length) {
-        html += '<h3 class="block">Approved days taken this ' + fy.label + '</h3><table><thead><tr><th>Person</th>' + Object.keys(TO_CATS).map(function (c) { return '<th>' + TO_CATS[c].split(' ')[0] + '</th>'; }).join('') + '</tr></thead><tbody>';
+        var cats = Object.keys(TO_CATS).filter(function (c) { return names.some(function (n) { return per[n][c]; }); });
+        html += '<h3 class="block">Days taken this ' + fy.label + ' (approved)</h3><div class="w212towrap"><table class="w212tot"><thead><tr><th>Person</th>' + cats.map(function (c) { return '<th>' + esc(TO_CATS[c]) + '</th>'; }).join('') + '<th>Total</th><th>Sick days left</th></tr></thead><tbody>';
         names.forEach(function (n) {
-          html += '<tr><td><b>' + esc(n) + '</b></td>' + Object.keys(TO_CATS).map(function (c) { return '<td>' + (per[n][c] || '') + '</td>'; }).join('') + '</tr>';
+          var tot = 0; Object.keys(per[n]).forEach(function (c) { tot += per[n][c]; });
+          var left = 7 - (per[n].sick || 0);
+          html += '<tr><td><b>' + esc(n) + '</b></td>' + cats.map(function (c) { return '<td>' + (per[n][c] || '') + '</td>'; }).join('') + '<td><b>' + tot + '</b></td><td' + (left <= 1 ? ' class="w212low"' : '') + '>' + left + ' of 7</td></tr>';
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
+      } else html += '<p class="read">No approved time off yet this ' + fy.label + '.</p>';
+      var past = rows.filter(function (t) { return t.status !== 'requested'; }).slice(0, 12);
+      if (past.length) {
+        html += '<details class="w212past"><summary>Recent decisions</summary><table><tbody>' + past.map(function (t) {
+          return '<tr><td><b>' + esc(t.name) + '</b><div class="w105mut">' + esc(TO_CATS[t.category] || t.category) + '</div></td><td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + ' <span class="w105mut">(' + t.days + 'd)</span></td><td>' + (t.status === 'approved' ? '<span class="w105ok">approved</span>' : '<span class="w105no">declined</span>') + (t.decline_reason ? '<div class="w105mut">' + esc(t.decline_reason) + '</div>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></details>';
       }
-      html += '<div class="w105form"><div><label>Person</label><select id="w105lp"></select></div>'
-        + '<div><label>Type</label><select id="w105lc">' + Object.keys(TO_CATS).map(function (c) { return '<option value="' + c + '">' + TO_CATS[c] + '</option>'; }).join('') + '</select></div>'
-        + '<div><label>From</label><input type="date" id="w105ls" /></div>'
-        + '<div><label>To</label><input type="date" id="w105le" /></div>'
-        + '<div><button class="btn mini" id="w105lgo">Log time off</button></div></div>'
-        + '<p class="w105mut" style="margin:6px 0 0">Handbook: vacation 4 to 6 weeks by tenure (plus volunteer bonus weeks), 7 mental health and sick days, 2 weeks bereavement. All time off is mutually exclusive.</p>';
+      html += '<p class="w105mut" style="margin:6px 0 0">Handbook: vacation 4 to 6 weeks by tenure (plus volunteer bonus weeks), 7 mental health and sick days, 2 weeks bereavement. All time off is mutually exclusive. New requests are sent to Valex and Samson on Slack.</p>';
       body.innerHTML = html;
-      try {
-        var rr = await db.from('team_members').select('name, email').eq('active', true).order('name');
-        var sel = document.getElementById('w105lp');
-        if (sel) sel.innerHTML = ((rr.data) || []).map(function (m) { return '<option value="' + esc((m.email || '').toLowerCase()) + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</option>'; }).join('');
-      } catch (e) { /* roster optional */ }
       body.querySelectorAll('[data-w105ap],[data-w105de]').forEach(function (b) {
         b.addEventListener('click', async function () {
           var ap = this.hasAttribute('data-w105ap');
           var id = Number(this.getAttribute(ap ? 'data-w105ap' : 'data-w105de'));
+          var patch = { status: ap ? 'approved' : 'declined', decided_by: w105Me().email, decided_at: new Date().toISOString() };
+          if (!ap) { var why = window.prompt('Why is it declined? (they will see this)'); if (why === null) return; why = String(why).trim(); if (!why) { toast('Say why it is declined'); return; } patch.decline_reason = why.slice(0, 300); }   /* wave212 */
           this.disabled = true;
-          var u = await db.from('wa_timeoff').update({ status: ap ? 'approved' : 'declined', decided_by: w105Me().email, decided_at: new Date().toISOString() }).eq('id', id);
+          var u = await db.from('wa_timeoff').update(patch).eq('id', id);
           if (u.error) { toast('Could not save the decision'); this.disabled = false; return; }
           toast(ap ? 'Approved' : 'Declined');
           w105TimeRender();
         });
       });
-      var go = document.getElementById('w105lgo');
-      if (go) go.addEventListener('click', async function () {
-        var sel2 = document.getElementById('w105lp');
-        var opt = sel2 && sel2.options[sel2.selectedIndex];
-        var s = (document.getElementById('w105ls') || {}).value, e = (document.getElementById('w105le') || {}).value;
-        if (!opt || !s || !e || e < s) { toast('Pick a person and valid dates'); return; }
-        this.disabled = true;
-        var ins = await db.from('wa_timeoff').insert({
-          email: opt.value || '', name: opt.getAttribute('data-name') || 'unknown',
-          category: (document.getElementById('w105lc') || {}).value || 'other',
-          start_date: s, end_date: e, days: w105Days(s, e),
-          status: 'approved', decided_by: w105Me().email, decided_at: new Date().toISOString()
-        });
-        this.disabled = false;
-        if (ins.error) { toast('Could not log it'); return; }
-        toast('Logged');
-        w105TimeRender();
-      });
+      var lg = document.getElementById('w212log'); if (lg) lg.addEventListener('click', function () { w105LogModal(); });
+      var mn = document.getElementById('w212mine'); if (mn) mn.addEventListener('click', function () { w105ReqModal(); });
     } catch (e) { body.innerHTML = '<p class="read">Could not load time off.</p>'; }
   }
+
+  /* wave212 (Valex, 06/10/26: the Log time off button only moved the cursor): a proper form, for anyone on the team */
+  async function w105LogModal() {
+    var ppl = [];
+    try { var rr = await db.from('team_members').select('name, email').eq('active', true).order('name'); ppl = (rr.data) || []; } catch (e) { ppl = []; }
+    openModal(
+      '<h3>Log time off</h3>' +
+      '<p class="read" style="margin:4px 0 8px">For time off agreed outside the Hub (a conversation, an email), or a request made for someone.</p>' +
+      '<label class="w101lbl">Person</label><select id="w212lp" style="width:100%;box-sizing:border-box"><option value="">Choose who</option>' + ppl.map(function (m) { return '<option value="' + esc((m.email || '').toLowerCase()) + '" data-name="' + esc(m.name) + '">' + esc(m.name) + '</option>'; }).join('') + '</select>' +
+      '<label class="w101lbl">Type</label><select id="w212lc" style="width:100%;box-sizing:border-box">' + Object.keys(TO_CATS).map(function (c) { return '<option value="' + c + '">' + TO_CATS[c] + '</option>'; }).join('') + '</select>' +
+      '<div id="w212lpol" class="w105mut" style="margin:4px 0 6px">' + esc(TO_POLICY.vacation) + '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div><label class="w101lbl">From</label><input type="date" id="w212ls" style="width:100%;box-sizing:border-box" /></div><div><label class="w101lbl">To</label><input type="date" id="w212le" style="width:100%;box-sizing:border-box" /></div></div>' +
+      '<p class="w105mut" id="w212ldays" style="margin:4px 0 0"></p>' +
+      '<label class="w101lbl">Note (optional)</label><input type="text" id="w212ln" maxlength="300" style="width:100%;box-sizing:border-box" />' +
+      '<label class="w101lbl">Status</label><select id="w212lst" style="width:100%;box-sizing:border-box"><option value="approved">Approved (already agreed)</option><option value="requested">A request to decide</option></select>' +
+      '<div style="margin-top:12px"><button class="btn" id="w212lgo">Save</button> <button class="btn ghost" id="w212lx">Cancel</button></div>'
+    );
+    var days = function () { var s = document.getElementById('w212ls').value, e = document.getElementById('w212le').value, o = document.getElementById('w212ldays'); o.textContent = s && e && e >= s ? w105Days(s, e) + ' day' + (w105Days(s, e) === 1 ? '' : 's') : ''; };
+    document.getElementById('w212ls').addEventListener('change', function () { var e = document.getElementById('w212le'); if (!e.value || e.value < this.value) e.value = this.value; days(); });
+    document.getElementById('w212le').addEventListener('change', days);
+    document.getElementById('w212lc').addEventListener('change', function () { document.getElementById('w212lpol').textContent = TO_POLICY[this.value] || ''; });
+    document.getElementById('w212lx').addEventListener('click', function () { closeModal(); });
+    document.getElementById('w212lgo').addEventListener('click', async function () {
+      var sel = document.getElementById('w212lp'), opt = sel.options[sel.selectedIndex];
+      var s = document.getElementById('w212ls').value, e = document.getElementById('w212le').value;
+      if (!sel.value) { toast('Choose who'); return; }
+      if (!s || !e || e < s) { toast('Pick valid dates'); return; }
+      var st = document.getElementById('w212lst').value, n = document.getElementById('w212ln').value.trim();
+      var row = { email: sel.value, name: opt.getAttribute('data-name') || 'unknown', category: document.getElementById('w212lc').value || 'other', start_date: s, end_date: e, days: w105Days(s, e), status: st, note: n || null };
+      if (st === 'approved') { row.decided_by = w105Me().email; row.decided_at = new Date().toISOString(); }
+      this.disabled = true;
+      var ins = await db.from('wa_timeoff').insert(row);
+      if (ins.error) { this.disabled = false; toast('Could not save it'); return; }
+      closeModal(); toast(st === 'approved' ? 'Time off logged' : 'Request added'); w105TimeRender();
+    });
+  }
+  window.w105LogModal = w105LogModal;
+  window.w105TimeRender = w105TimeRender;
 
   /* ============ HR centre: policies and sign-offs ============ */
   async function w105PolCard(panel) {
@@ -379,7 +412,7 @@
         + ' <span class="w105mut">Vacation runs 4 to 6 weeks by tenure; volunteering 4 times a year adds a week (up to two). 7 mental health and sick days a year.</span></p>';
       if (rows.length) {
         html += '<table><tbody>' + rows.slice(0, 8).map(function (t) {
-          var chip = t.status === 'approved' ? '<span class="w105ok">approved</span>' : (t.status === 'declined' ? '<span class="w105no">declined</span>' : '<span class="w105pend">waiting</span>');
+          var chip = t.status === 'approved' ? '<span class="w105ok">approved</span>' : (t.status === 'declined' ? '<span class="w105no">declined</span>' + (t.decline_reason ? ' <span class="w105mut">' + esc(t.decline_reason) + '</span>' : '') : '<span class="w105pend">waiting</span>');
           return '<tr><td>' + esc(TO_CATS[t.category] || t.category) + '</td><td>' + esc(t.start_date) + ' to ' + esc(t.end_date) + ' <span class="w105mut">(' + t.days + 'd)</span></td><td>' + chip + '</td></tr>';
         }).join('') + '</tbody></table>';
       }
@@ -433,12 +466,19 @@
   }
 
   /* ============ wiring ============ */
+  var w105HrBusy = false;   /* wave212: one build at a time (the observer can fire again while the access checks wait) */
   async function w105HrCards() {
+    if (w105HrBusy) return;
+    w105HrBusy = true;
+    try { await w105HrCardsNow(); } finally { w105HrBusy = false; }
+  }
+  async function w105HrCardsNow() {
     var panel = document.getElementById('hrcentre');
     if (!panel || !panel.children.length || panel.querySelector('#w52denied')) return;
     if (typeof isStaff !== 'function' || !isStaff()) return;
-    if (!(await w105IsHR())) return;
-    await w105TimeCard(panel);
+    var acc = await Promise.all([w105CanTimeoff(), w105IsHR()]);   /* wave212: both at once, so the cards come as soon as before */
+    if (acc[0]) await w105TimeCard(panel);
+    if (!acc[1]) return;
     await w105PolCard(panel);
     await w105DiscCard(panel);
   }

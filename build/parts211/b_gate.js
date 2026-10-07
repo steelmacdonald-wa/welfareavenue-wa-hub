@@ -33,8 +33,8 @@
   function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); }); }
   function P() { try { return w199.state(); } catch (e) { return { pos: [], calls: [] }; } }
   function cands() { try { return (window.w197 && w197.state().cands) || []; } catch (e) { return []; } }
-  function myName() { try { return (window.USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
-  function myEmail() { try { return String((window.USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
+  function myName() { try { return (typeof USER !== 'undefined' && USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
+  function myEmail() { try { return String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
   function callsOf(id) { return (P().calls || []).filter(function (k) { return String(k.candidate_id) === String(id); }); }
   function validEmail(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim()); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }

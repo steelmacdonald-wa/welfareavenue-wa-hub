@@ -26,7 +26,7 @@
   function cand(id) { return cands().filter(function (x) { return String(x.id) === String(id); })[0] || null; }
   function short(t) { try { return new Date(t).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } }
   function iso(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
-  function myName() { try { return (window.USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
+  function myName() { try { return (typeof USER !== 'undefined' && USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
   function answered(c) { var s = String((c && c.summary) || ''); return s.indexOf('✅ Still interested') === 0 ? 'yes' : (s.indexOf('❌ No longer interested') === 0 ? 'no' : ''); }
   async function fn(body) {
     var r = await db.functions.invoke('recruit-actions', { body: body });

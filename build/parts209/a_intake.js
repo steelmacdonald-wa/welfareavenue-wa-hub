@@ -156,7 +156,7 @@
         }
       }
       F.busy = false; shutForm();
-      try { await db.from('change_log').insert({ entity_type: r.to === 'volunteers' ? 'volunteer_application' : 'candidate', entity_id: String(r.application_id || r.candidate_id || ''), field: 'added_by_hand', old_value: null, new_value: name, changed_by: (window.USER && (USER.name || USER.email)) || null }); } catch (x) { /* audit */ }
+      try { await db.from('change_log').insert({ entity_type: r.to === 'volunteers' ? 'volunteer_application' : 'candidate', entity_id: String(r.application_id || r.candidate_id || ''), field: 'added_by_hand', old_value: null, new_value: name, changed_by: (typeof USER !== 'undefined' && USER && (USER.name || USER.email)) || null }); } catch (x) { /* audit */ }
       if (r.to === 'volunteers') {
         toastS(name + (r.duplicate ? ' was already in Applicants received' : ' added to Applicants received (Volunteer Manager)'));
         V.at = 0; if (onView()) { await load(true); paint(); } else counts();
@@ -278,7 +278,7 @@
     var n = document.querySelector('[data-w209note="' + id + '"]'), note = n ? n.value.trim() : '';
     try {
       var r = await db.rpc('wa209_vol_app_status', { p_id: Number(id), p_status: s, p_note: note || null }); if (r && r.error) throw r.error;
-      a.status = s; a.status_note = note || a.status_note; a.handled_by = (window.USER && (USER.name || USER.email)) || a.handled_by; a.handled_at = new Date().toISOString();
+      a.status = s; a.status_note = note || a.status_note; a.handled_by = (typeof USER !== 'undefined' && USER && (USER.name || USER.email)) || a.handled_by; a.handled_at = new Date().toISOString();
       V.n = (V.list || []).filter(isOpen).length; paint(); counts(true);
       toastS(a.name + ': ' + (s === 'welcomed' ? 'welcomed' : lbl(STATUS, s).toLowerCase()));
     } catch (e) { toastS('Could not save: ' + msgOf(e)); }

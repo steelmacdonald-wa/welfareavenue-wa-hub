@@ -26,7 +26,7 @@
   function cand(id) { return cands().filter(function (x) { return String(x.id) === String(id); })[0] || null; }
   function short(t) { try { return new Date(t).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }); } catch (e) { return ''; } }
   function iso(d) { var p = function (n) { return (n < 10 ? '0' : '') + n; }; return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); }
-  function myName() { try { return (window.USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
+  function myName() { try { return (typeof USER !== 'undefined' && USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
   function answered(c) { var s = String((c && c.summary) || ''); return s.indexOf('\u2705 Still interested') === 0 ? 'yes' : (s.indexOf('\u274c No longer interested') === 0 ? 'no' : ''); }
   async function fn(body) {
     var r = await db.functions.invoke('recruit-actions', { body: body });
@@ -242,8 +242,8 @@
   function members() { return (typeof DB_MEMBERS !== 'undefined' ? DB_MEMBERS : []).filter(function (m) { return m && m.active !== false && m.name && !/\btest\b/i.test(m.name); }); }
   function P() { try { return w199.state(); } catch (e) { return { pos: [], calls: [] }; } }
   function cands() { try { return (window.w197 && w197.state().cands) || []; } catch (e) { return []; } }
-  function myName() { try { return (window.USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
-  function myEmail() { try { return String((window.USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
+  function myName() { try { return (typeof USER !== 'undefined' && USER && (USER.name || USER.full_name)) || ''; } catch (e) { return ''; } }
+  function myEmail() { try { return String((typeof USER !== 'undefined' && USER && USER.email) || '').toLowerCase(); } catch (e) { return ''; } }
   function callsOf(id) { return (P().calls || []).filter(function (k) { return String(k.candidate_id) === String(id); }); }
   function validEmail(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim()); }
   function pad(n) { return (n < 10 ? '0' : '') + n; }

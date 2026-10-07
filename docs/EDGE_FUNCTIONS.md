@@ -150,3 +150,9 @@ The JSON behind hub.welfareavenue.com/i/<token>: GET shows the first name and ro
 
 ## storage-tidy (v1, 06/10/26)
 Moves content-images files from Flagfootball 2026/, Good photos/ or Gift basket drive/ into To delete/<group>/<original path> (action move) or back (action back), up to 100 a call; never deletes. x-wa-secret only. Used once on 06/10/26 to gather 295 unused files (videos 1.82 GB, originals 0.73 GB) for Steel to delete in the dashboard.
+
+## hr-notify (wave212, v1)
+x-wa-secret only (trigger trg_wa212_timeoff on wa_timeoff insert). {action: 'timeoff_requested', id}: a requested time off is DMed from the Hub bot to app_config hr_notify_emails (default Valex and Samson; never the requester), with the type, dates, days, note and a link to #hrcentre/timeoff. Logged in change_log (entity timeoff, field notified).
+
+## db-backup (v2, 06/10/26)
+Nightly export now gzipped (<day>/<table>.json.gz). mode compress_day {day}: rewrites a day's .json files as .json.gz, reading each back and checking it decompresses to the same bytes before removing the .json. restore_check reads either. Retention 30 days. Note: a day folder of more than 200 files is only partly pruned by the retention list (limit 200); harmless while folders are kept 30 days, worth raising if it matters.
